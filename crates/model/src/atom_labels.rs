@@ -5,6 +5,8 @@ use crate::{
     typography::{ScriptRun, TextStyle},
 };
 use serde::{Deserialize, Serialize};
+#[cfg(test)]
+mod placement_tests;
 pub mod refresh;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -497,6 +499,25 @@ pub(crate) const fn indicator_radii(height: f32) -> [f32; 5] {
     ]
 }
 
+/// How far automatic atom-number text extends outward beyond a one-character
+/// label. Short numbers keep their centred placement; longer attached text keeps
+/// that near edge and grows away from the atom. Generic ink bounds reserve it.
+pub(crate) fn outward_extent(width: f32, height: f32) -> f32 {
+    (width - height).max(0.) / 2.
+}
+
+/// Left-justify text on the right of its anchor and right-justify it on the
+/// left. Near-vertical candidates stay centred above or below the atom.
+fn justification(cos: f32) -> f32 {
+    if cos > 0.25 {
+        1.
+    } else if cos < -0.25 {
+        -1.
+    } else {
+        0.
+    }
+}
+
 /// Indicator visibility rules shared by `indicators` and generic ink bounds.
 /// The stereo rules ignore whether a CIP label is present.
 pub(crate) fn map_indicator_shown(a: &Atom, doc: &Document) -> bool {
@@ -511,8 +532,9 @@ pub(crate) fn bond_indicator_shown(b: &Bond, doc: &Document) -> bool {
     b.indicator.show.unwrap_or(doc.atom_labels.stereo)
 }
 
-/// Try outward positions first, then minimize label/bond collisions. Manual
-/// offsets remain exact. The same positions are used by canvas and all exports.
+/// Try outward positions first, then minimize label/bond collisions. Long
+/// atom-number text is justified away from the atom. Manual offsets remain
+/// exact. The same positions are used by canvas and all exports.
 pub fn indicators(doc: &Document) -> Vec<Indicator> {
     let mut labels = Vec::new();
     for a in doc.atoms.iter().filter(|a| doc.atom_visible(a.id)) {
@@ -566,6 +588,12 @@ pub fn indicators(doc: &Document) -> Vec<Indicator> {
                 .unwrap_or((a.position.offset(-3., -3.), a.position.offset(3., 3.)))
         })
         .collect();
+    // Free captions are fixed drawing objects, so automatic text avoids them.
+    occupied.extend(
+        doc.annotations
+            .iter()
+            .filter_map(crate::atom_text::text_ink_bounds),
+    );
     // Reserve all manual indicators first, including owners later in atom order.
     for (owner, text, offset, style) in &labels {
         if let Some(offset) = offset
@@ -594,6 +622,11 @@ pub fn indicators(doc: &Document) -> Vec<Indicator> {
         };
         let height = crate::style::DEFAULT.world(style.size_pt);
         let width = crate::style::styled_text_width(&text, height, &style);
+        let outward = if matches!(owner, Owner::Number(_)) {
+            outward_extent(width, height)
+        } else {
+            0.
+        };
         let bounds = |center: Point| {
             (
                 center.offset(-width / 2. - 3., -height / 2. - 3.),
@@ -627,7 +660,10 @@ pub fn indicators(doc: &Document) -> Vec<Indicator> {
             for radius in indicator_radii(height) {
                 for i in 0..24 {
                     let angle = preferred + i as f32 * std::f32::consts::TAU / 24.;
-                    let center = anchor.offset(radius * angle.cos(), radius * angle.sin());
+                    let center = anchor.offset(
+                        radius * angle.cos() + outward * justification(angle.cos()),
+                        radius * angle.sin(),
+                    );
                     let (lo, hi) = bounds(center);
                     let mut score = radius * 0.08 + i as f32 * 0.001;
                     for (a, b) in &occupied {
