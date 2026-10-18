@@ -23,6 +23,7 @@ fn collect(
     parent_opacity: f32,
     output: &mut Vec<Value>,
     sources: &HashMap<String, &[u8]>,
+    paper: [u8; 3],
 ) -> Result<(), String> {
     // Flattened text is a separate subtree: its cached absolute transforms do
     // not include the SVG viewBox. Compose local transforms while traversing.
@@ -30,9 +31,9 @@ fn collect(
     let opacity = (parent_opacity * group.opacity().get()).clamp(0., 1.);
     for node in group.children() {
         match node {
-            usvg::Node::Group(group) => collect(group, absolute, opacity, output, sources)?,
+            usvg::Node::Group(group) => collect(group, absolute, opacity, output, sources, paper)?,
             usvg::Node::Text(text) => {
-                collect(text.flattened(), absolute, opacity, output, sources)?
+                collect(text.flattened(), absolute, opacity, output, sources, paper)?
             }
             usvg::Node::Path(path) if path.is_visible() => {
                 let commands: Vec<Vec<f32>> = path
@@ -95,6 +96,27 @@ fn collect(
             _ => {}
         }
     }
+    // EMF has no soft masks. Paint a transparent drawing's atom-label halo
+    // knockout in the paper color over the masked ink instead.
+    if let Some(mask) = group.mask() {
+        for node in mask.root().children() {
+            if let usvg::Node::Group(halo) = node
+                && halo.id().starts_with("reshiki-label-halo")
+            {
+                let start = output.len();
+                collect(halo, absolute, 1., output, sources, paper)?;
+                let [r, g, b] = paper;
+                for value in output.iter_mut().skip(start) {
+                    if let Some(fill) = value.get_mut("fill").filter(|fill| fill.is_array()) {
+                        *fill = json!([r, g, b, 255]);
+                    }
+                    if let Some(stroke) = value.get_mut("stroke").and_then(Value::as_object_mut) {
+                        stroke.insert("color".into(), json!([r, g, b, 255]));
+                    }
+                }
+            }
+        }
+    }
     Ok(())
 }
 fn metafile_sources(doc: &Document) -> HashMap<String, &[u8]> {
@@ -141,6 +163,7 @@ pub fn print_snapshot(doc: &Document) -> Result<Vec<u8>, String> {
         1.,
         &mut primitives,
         &HashMap::new(),
+        doc.canvas_theme.background(),
     )?;
     let pages: Result<Vec<_>, String> = (0..layout.count())
         .map(|index| {
@@ -202,6 +225,7 @@ fn record_metafile(tree: &usvg::Tree, doc: &Document, file: bool) -> Result<Vec<
         1.,
         &mut primitives,
         &sources,
+        doc.canvas_theme.background(),
     )?;
     if partial_transparency(tree.root()) {
         return Err("EMF for Office cannot reliably preserve partial transparency. Use SVG, PDF or PNG, or set rear opacity to 0% or 100%.".into());

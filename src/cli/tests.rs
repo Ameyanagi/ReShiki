@@ -492,6 +492,21 @@ async fn unknown_commands_point_to_help() {
     );
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn version_prints_the_app_version_and_exits() {
+    let (code, out, err) = call(&["--version"]).await;
+    assert_eq!(code, SUCCESS);
+    assert_eq!(
+        out,
+        format!("reshiki {}\n", crate::updates::CURRENT_VERSION)
+    );
+    assert!(err.is_empty());
+    let (code, out, err) = call(&["--version", "x"]).await;
+    assert_eq!(code, USAGE);
+    assert!(out.is_empty());
+    assert_eq!(err, "reshiki: --version takes no arguments\n");
+}
+
 #[test]
 fn the_format_sets_are_the_ops_enums() {
     assert_eq!(input_formats(), IMPORT_FORMATS);

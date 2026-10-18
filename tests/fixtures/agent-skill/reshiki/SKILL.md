@@ -108,6 +108,7 @@ A Proposal is the JSON that `compose` lays out. [assets/proposal-schema.json](as
 - Put structures on their own in `molecules`, and reactants, products, `conditions` and the `arrow` in `reactions`. Use `sketch`, one diagram with explicit coordinates, only for drawings that SMILES layout cannot preserve, such as coordination complexes; `molecules` and `reactions` stay empty then.
 - `replace_ids` must be empty: `compose` always creates a new document.
 - Write valid SMILES yourself: ReShiki does not look up chemical names. `label` is the caption drawn under a structure; leave it empty for none.
+- `label` and `conditions` are drawn as typed: write formulas with Unicode subscripts and superscripts, such as `H₂SO₄` or `Pd(PPh₃)₄`, never `H2SO4`.
 - `composition` sets the arrangement, the columns and the figure width in points.
 - Follow the schema's `description` texts: they are the layout rules ReShiki's own assistant follows.
 
