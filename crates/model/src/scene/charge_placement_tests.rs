@@ -501,9 +501,10 @@ fn automatic_hydrogen_replacement_side_avoids_nearby_bonds() {
     doc.add_atom("O", Point::new(-35., 0.));
     let (n_text, h) = (charge_run(&doc, n, "N"), charge_run(&doc, n, "H"));
     assert!(h.y < n_text.y && (h.x - n_text.x).abs() < 0.1);
-    // An unrelated shaft above the N leaves only the lower side clear.
-    let left = doc.add_atom("C", Point::new(-40., -25.));
-    let right = doc.add_atom("C", Point::new(40., -25.));
+    // An unrelated shaft above the N leaves only the lower side clear, even
+    // though both of its ends lie far away.
+    let left = doc.add_atom("C", Point::new(-400., -25.));
+    let right = doc.add_atom("C", Point::new(400., -25.));
     doc.add_bond(left, right, 1, "plain");
     // Editing bonds clears computed hydrogen counts.
     doc.atom_mut(n).unwrap().label_h = 2;

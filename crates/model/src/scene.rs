@@ -599,12 +599,12 @@ fn push_hydrogens(
         };
         let mut parts = place(position);
         // Keep the bond-based side unless its ink meets a nearby label or
-        // charge; a replacement must also stay off nearby unrelated bonds.
+        // charge; a replacement must also stay off unrelated bonds.
         if a.display.hydrogen_position == H::Auto
             && let Some(labels) = nearby_label_ink(a, doc, size)
             && !clear_of(&parts, &labels, &[], size)
         {
-            let bonds = nearby_bonds(a, doc, size);
+            let bonds = unrelated_bonds(a, doc);
             let mut reserved = labels;
             reserved.extend(nearby_mark_ink(a, doc, size).unwrap_or_default());
             if let Some((side, placed)) = crate::atom_labels::appendage_alternatives(a, doc)
@@ -636,7 +636,7 @@ thread_local! {
     static MEASURING_NEARBY_LABELS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-/// Reach of the nearby labels and bonds that automatic hydrogens avoid.
+/// Reach of the nearby labels and marks that automatic hydrogens avoid.
 fn nearby(a: &Atom, other: &Atom, size: f32) -> bool {
     a.position.distance(other.position) < size * 5.
 }
@@ -691,29 +691,29 @@ fn nearby_mark_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, Po
     })
 }
 
-/// Visible bonds near `a` that do not end at it, with the distance from the
-/// center line to their outermost stroke edge.
-fn nearby_bonds(a: &Atom, doc: &Document, size: f32) -> Vec<(Point, Point, f32)> {
+/// Visible bonds that do not end at `a`, with the distance from the center
+/// line to their outermost stroke edge.
+fn unrelated_bonds(a: &Atom, doc: &Document) -> Vec<(Point, Point, f32)> {
     let style = &doc.drawing_style;
     let spacing = style.bond_length_world * style.bond_spacing_ratio;
     let ink = style.world(style.bold_width_pt).max(style.line_width()) / 2.;
     let positions: std::collections::HashMap<_, _> = doc
         .atoms
         .iter()
-        .map(|atom| (atom.id, (atom.position, nearby(a, atom, size))))
+        .map(|atom| (atom.id, atom.position))
         .collect();
     doc.bonds
         .iter()
         .filter(|b| b.a != a.id && b.b != a.id)
         .filter_map(|b| {
-            let (p, p_near) = positions.get(&b.a)?;
-            let (q, q_near) = positions.get(&b.b)?;
+            let p = positions.get(&b.a)?;
+            let q = positions.get(&b.b)?;
             let offset = match b.order {
                 2 | 3 | 4 | 7 => spacing,
                 6 => spacing * 1.5,
                 _ => 0.,
             };
-            ((p_near | q_near) && doc.bond_visible(b.a, b.b)).then_some((*p, *q, offset + ink))
+            doc.bond_visible(b.a, b.b).then_some((*p, *q, offset + ink))
         })
         .collect()
 }
