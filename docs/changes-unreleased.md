@@ -1,6 +1,6 @@
 # Unreleased changes
 
-- **Under review — Atom text grows away from the drawing:** a longer custom atom number now starts beside its atom on the open side and is left- or right-justified, so extra text extends outward instead of being centred over bonds; automatic placement also avoids free captions. Short numbers and manually positioned indicators keep their positions. [PR pending](https://github.com/Ameyanagi/ReShiki/pulls) · @Ameyanagi.
+- **Under review — Atom text grows away from the drawing:** a longer custom atom number now starts beside its atom on the open side and is left- or right-justified, so extra text extends outward instead of being centred over bonds; automatic placement also avoids free captions. Short numbers and manually positioned indicators keep their positions. [PR #354](https://github.com/Ameyanagi/ReShiki/pull/354) · @Ameyanagi.
 
 - **Merged — Intel Mac panic recovery:** preserve the allocation alignment required by the native unwinder so recoverable background panics do not crash the application. Native Intel comparison reproduces the original crash and passes with the corrected alignment; global-allocator regression coverage now runs on all six supported native targets. [Diagnostic evidence](https://github.com/Ameyanagi/ReShiki/actions/runs/38822804581) · [PR #328](https://github.com/Ameyanagi/ReShiki/pull/328) · @Ameyanagi.
 
