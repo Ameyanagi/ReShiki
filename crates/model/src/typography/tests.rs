@@ -171,3 +171,50 @@ fn stored_manual_label_ranges_reject_invalid_offsets_and_missing_text() {
         vec![(0..1, Script::Normal), (1..4, Script::Subscript)]
     );
 }
+
+#[test]
+fn wrapping_breaks_between_words_never_inside_one() {
+    use super::{TextFormat, layout};
+    let lines = |text: &str, width_pt: f32| {
+        let format = TextFormat {
+            width_pt: Some(width_pt),
+            ..TextFormat::default()
+        };
+        let layout = layout(text, &format);
+        let mut lines: Vec<(f32, String)> = vec![];
+        for fragment in &layout.fragments {
+            match lines.last_mut() {
+                Some((y, line)) if (*y - fragment.position.y).abs() < 0.001 => {
+                    line.push_str(&fragment.text);
+                }
+                _ => lines.push((fragment.position.y, fragment.text.clone())),
+            }
+        }
+        lines
+            .into_iter()
+            .map(|(_, line)| line.trim_end().to_owned())
+            .collect::<Vec<_>>()
+    };
+    // #313 and #329: a word wider than the box overflows it instead of
+    // being cut at an arbitrary character.
+    assert_eq!(lines("4-Bromoanisole", 30.), ["4-Bromoanisole"]);
+    assert_eq!(
+        lines("(2R)-2-hydroxypropanoic acid", 40.),
+        ["(2R)-2-hydroxypropanoic", "acid"]
+    );
+    // Measured, not hard-coded: glyph advances come from the system fonts.
+    let alpha_beta = layout("alpha beta ", &TextFormat::default()).width
+        * crate::style::DEFAULT.points_per_world();
+    assert_eq!(
+        lines("alpha beta alpha beta", alpha_beta + 0.5),
+        ["alpha beta", "alpha beta"]
+    );
+    // Text without spaces between words still wraps at CJK characters.
+    let cjk = lines("日本語の長い説明文です", 30.);
+    assert!(cjk.len() > 1);
+    assert_eq!(cjk.concat(), "日本語の長い説明文です");
+    // A voicing mark stays with its kana.
+    let kana = lines("ﾊﾞﾊﾞﾊﾞﾊﾞﾊﾞﾊﾞﾊﾞﾊﾞ", 12.);
+    assert!(kana.len() > 1);
+    assert!(kana.iter().all(|line| !line.starts_with('ﾞ')), "{kana:?}");
+}
