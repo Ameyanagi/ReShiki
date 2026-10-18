@@ -742,10 +742,17 @@ fn on_rail(primitive: &Primitive, gap: &Gap) -> bool {
         return true;
     };
     let off = |p: &Point| cross(gap.axis, delta(gap.origin, *p)) - rail.at(projection(*p, *gap));
-    // A line's ends lie on its own centerline, which tells crossed strokes
-    // apart even for a short piece near where they cross.
+    // Cuts keep a line's direction, which tells crossed strokes apart even
+    // for a short piece near where they cross, or one trimmed at a label.
     if let Primitive::Line(a, b, _) = primitive {
-        return off(a).abs().max(off(b).abs()) <= tolerance.min(rail.width);
+        let run = projection(*b, *gap) - projection(*a, *gap);
+        let slope = rail.at(1.) - rail.at(0.);
+        if run.abs() > 0.01
+            && ((cross(gap.axis, delta(*a, *b)) / run) - slope).abs() > slope.abs().max(0.05)
+        {
+            return false;
+        }
+        return ((off(a) + off(b)) * 0.5).abs() <= tolerance;
     }
     let points: Vec<Point> = match primitive {
         Primitive::Polygon(points) => points.clone(),

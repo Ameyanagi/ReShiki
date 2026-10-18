@@ -969,6 +969,57 @@ fn a_cut_crossed_stroke_keeps_ink_clear_of_a_second_front_bond() {
 }
 
 #[test]
+fn a_short_crossed_stroke_piece_where_the_strokes_cross_keeps_its_ink() {
+    let mut doc = Document::default();
+    doc.drawing_style.bond_spacing_ratio = 0.4;
+    let atoms = atoms_at(
+        &mut doc,
+        &[
+            (Point::new(-30., 0.), -20.),
+            (Point::new(30., 0.), -20.),
+            (Point::new(-40., 30.), 20.),
+            (Point::new(40., -50.), 20.),
+            (Point::new(-20., -16.), 20.),
+            (Point::new(40., 14.), 20.),
+        ],
+    );
+    doc.add_bond(atoms[0], atoms[1], 2, "wavy");
+    doc.add_bond(atoms[2], atoms[3], 1, "plain");
+    doc.add_bond(atoms[4], atoms[5], 1, "plain");
+    tag(&mut doc);
+    assert_occluded(&doc, "short piece");
+    let half = doc.drawing_style.bond_length_world * 0.2;
+    let p = Point::new(1.8, 1.8 * half / 30.);
+    assert!(
+        inks(&crate::scene::primitives(&doc))
+            .iter()
+            .any(|i| i.owner == Some(0) && i.shape.covers(p)),
+        "no rear ink at {p:?}"
+    );
+}
+
+#[test]
+fn a_crossed_rear_bond_trimmed_at_a_label_is_still_cut() {
+    let mut doc = Document::default();
+    let atoms = atoms_at(
+        &mut doc,
+        &[
+            (Point::new(-21., 0.), -20.),
+            (Point::new(21., 0.), -20.),
+            (Point::new(5., -30.), 20.),
+            (Point::new(5., 30.), 20.),
+        ],
+    );
+    let atom = doc.atom_mut(atoms[0]).unwrap();
+    atom.element = "N".into();
+    atom.no_implicit = true;
+    doc.add_bond(atoms[0], atoms[1], 2, "wavy");
+    doc.add_bond(atoms[2], atoms[3], 1, "plain");
+    tag(&mut doc);
+    assert_eq!(assert_occluded(&doc, "labelled crossed"), 2);
+}
+
+#[test]
 fn a_crossed_rear_bond_behind_a_ring_circle_is_cut_where_its_strokes_cross_it() {
     let mut doc = Document::default();
     doc.drawing_style.bond_spacing_ratio = 0.4;
