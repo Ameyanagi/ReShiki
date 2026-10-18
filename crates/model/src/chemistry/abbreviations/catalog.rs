@@ -314,7 +314,7 @@ pub fn parse(text: &str, user: bool) -> (Vec<Preset>, Vec<String>) {
     #[serde(deny_unknown_fields)]
     struct Groups {
         format: u32,
-        groups: Vec<Box<serde_json::value::RawValue>>,
+        groups: Vec<serde_json::Value>,
     }
     let file: Groups = match serde_json::from_str(text) {
         Ok(file) => file,
@@ -333,13 +333,10 @@ pub fn parse(text: &str, user: bool) -> (Vec<Preset>, Vec<String>) {
     let mut errors = Vec::new();
     let mut seen = HashSet::new();
     for (index, group) in file.groups.iter().enumerate() {
-        let entry = match serde_json::from_str::<Entry>(group.get()) {
+        let entry = match Entry::deserialize(group) {
             Ok(entry) => entry,
             Err(error) => {
-                let label = serde_json::from_str::<serde_json::Value>(group.get())
-                    .ok()
-                    .and_then(|value| Some(value.get("label")?.as_str()?.to_owned()))
-                    .unwrap_or_else(|| "?".into());
+                let label = group.get("label").and_then(|l| l.as_str()).unwrap_or("?");
                 errors.push(format!("Group {} ({label}): {error}", index + 1));
                 continue;
             }

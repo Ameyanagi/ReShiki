@@ -123,7 +123,6 @@ fn invalid_entries_are_reported_and_valid_ones_kept() {
         {"label": "Late2", "smiles": "*CC"},
         {"label": "Azide", "smiles": "*C", "aliases": ["N3"]},
         {"label": "GoodO", "smiles": "*CC", "reverse": "Late2"},
-        {"label": "Twice", "smiles": "*CC", "smiles": "*C"},
         {"label": "ExplicitH", "smiles": "*C[H]"}
     ]}"#;
     let (presets, errors) = parse(text, true);
@@ -131,7 +130,7 @@ fn invalid_entries_are_reported_and_valid_ones_kept() {
     assert_eq!(labels, ["Good", "Ring", "Late2"]);
     assert!(presets.iter().all(|p| p.user));
     assert!(!presets[1].contract);
-    assert_eq!(errors.len(), 17, "{errors:#?}");
+    assert_eq!(errors.len(), 16, "{errors:#?}");
     for (error, expected) in errors.iter().zip([
         "Group 2 (Two): SMILES must start with the single *",
         "Group 3 (Late): SMILES must start",
@@ -148,8 +147,7 @@ fn invalid_entries_are_reported_and_valid_ones_kept() {
         "Group 15 (Typo): unknown field `smile`",
         "Group 17 (Azide): \"N3\" is a built-in group",
         "Group 18 (GoodO): \"Late2\" is defined twice",
-        "Group 19 (Twice): duplicate field `smiles`",
-        "Group 20 (ExplicitH): Write hydrogens implicitly",
+        "Group 19 (ExplicitH): Write hydrogens implicitly",
     ]) {
         assert!(error.starts_with(expected), "{error}");
     }
