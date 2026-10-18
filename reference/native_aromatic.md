@@ -62,8 +62,8 @@ repository's `MIT OR Apache-2.0` license:
 
 These are the original recorded hashes in all three fixture headers. The current
 worker adds cubic controls only to CDXML export bounds; its aromaticity handler
-is unchanged. The current abbreviation module only adds presets, which no
-captured aromaticity request uses. The fixture headers, expected responses, record checksums and hash
+is unchanged. The current abbreviation module reads its presets from the catalog,
+whose additions no captured aromaticity request uses. The fixture headers, expected responses, record checksums and hash
 comparisons remain unchanged; a changed snapshot still fails the provenance check.
 
 There are separate macOS ARM64, Linux x64 and Windows x64 captures. Native corpus

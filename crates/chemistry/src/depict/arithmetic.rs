@@ -51,8 +51,15 @@ pub(super) fn cross(ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
 
 /// The pinned Mac ARM64 and Linux native functions request sin and cos
 /// together. glibc 2.35 can round its paired call differently from sin alone.
+/// The Windows ARM reference is the x64 wheel under emulation, which takes the
+/// CRT's non-FMA path. The ARM CRT's sine can differ in the last bit and flip
+/// a later tie, as it does for two OTBDPS tert-butyl methyls.
 pub(super) fn sin_cos(angle: f64) -> (f64, f64) {
-    if cfg!(any(
+    if cfg!(all(target_os = "windows", target_arch = "aarch64"))
+        && let Some(pair) = crate::windows_trigonometry::sin_cos(angle)
+    {
+        pair
+    } else if cfg!(any(
         all(target_os = "macos", target_arch = "aarch64"),
         all(
             target_os = "linux",
