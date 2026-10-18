@@ -425,7 +425,7 @@ fn clip_field(part: &Primitive, field: DepthField, keep: Side) -> Vec<Primitive>
 const REAR_FLATTEN_TOLERANCE: f32 = 0.02;
 const REAR_FLATTEN_DEPTH: u8 = 12;
 
-// Deliberate sibling of scientific/label_clearance.rs `flatten` (hypot, 1e-8 cutoff,
+// Deliberate sibling of scientific/label_halo.rs `flatten` (hypot, 1e-8 cutoff,
 // 0.03/depth 14, ignores commands before a Move); do not merge them.
 pub(super) fn flatten(commands: &[PathCommand]) -> Vec<Vec<Point>> {
     fn cubic(out: &mut Vec<Point>, p: Point, a: Point, b: Point, z: Point, depth: u8) {
