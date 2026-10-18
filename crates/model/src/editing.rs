@@ -241,44 +241,80 @@ pub fn analysis_document(doc: &Document, atoms: &[u64]) -> Document {
         6 => 8,
         _ => 0,
     };
-    // (valence kept, valence cut) per atom at a cut; `None` when a cut bond
-    // is aromatic, which has no whole valence.
-    let mut valence: HashMap<u64, (u32, Option<u32>)> = HashMap::new();
+    let number = |symbol: &str| {
+        crate::chemistry::ELEMENTS
+            .iter()
+            .position(|e| e.symbol == symbol)
+    };
+    let metal = |id| {
+        doc.atom(id)
+            .and_then(|a| number(&a.element))
+            .is_some_and(|n| !matches!(n, 0..=2 | 5..=10 | 14..=18 | 33..=36 | 52..=54 | 85..=86))
+    };
+    // Per kept atom: twice the valence kept and cut (`None` when a cut bond
+    // is aromatic, which has no whole valence), and whether a single bond to
+    // a metal is cut or kept.
+    #[derive(Default)]
+    struct Valence {
+        kept: u32,
+        cut: Option<u32>,
+        metal_cut: bool,
+        metal_kept: bool,
+    }
+    let mut valence: HashMap<u64, Valence> = HashMap::new();
     for b in &doc.bonds {
         for (atom, other) in [(b.a, b.b), (b.b, b.a)] {
-            if kept.contains(&atom) {
-                let entry = valence.entry(atom).or_insert((0, Some(0)));
-                if kept.contains(&other) {
-                    entry.0 += twice(b, atom);
-                } else {
-                    let cut = (!matches!(b.order, 4 | 7)).then(|| twice(b, atom));
-                    entry.1 = entry.1.zip(cut).map(|(sum, cut)| sum + cut);
-                }
+            if !kept.contains(&atom) {
+                continue;
+            }
+            let entry = valence.entry(atom).or_insert_with(|| Valence {
+                cut: Some(0),
+                ..Default::default()
+            });
+            let to_metal = b.order == 1 && metal(other);
+            if kept.contains(&other) {
+                entry.kept += twice(b, atom);
+                entry.metal_kept |= to_metal;
+            } else {
+                let cut = (!matches!(b.order, 4 | 7)).then(|| twice(b, atom));
+                entry.cut = entry.cut.zip(cut).map(|(sum, cut)| sum + cut);
+                entry.metal_cut |= to_metal;
             }
         }
     }
     for atom in part.atoms.iter_mut().filter(|a| a.no_implicit) {
-        let Some(&(bonds, cut)) = valence.get(&atom.id) else {
+        let Some(v) = valence.get(&atom.id).filter(|v| v.cut != Some(0)) else {
             continue;
         };
         // RDKit's largest valence for the charge-adjusted element; -1 (any)
         // for metals.
-        let largest = crate::chemistry::ELEMENTS
-            .iter()
-            .position(|e| e.symbol == atom.element)
+        let largest = number(&atom.element)
             .and_then(|n| usize::try_from(n as i32 - atom.charge).ok())
             .and_then(|n| crate::chemistry::ELEMENTS.get(n))
             .and_then(|e| e.valences.last())
             .map_or(-1, |v| *v);
-        match cut {
-            Some(0) => {}
-            // Preparation may reinterpret a capped atom that would exceed its
-            // valence, for example as a dative metal ligand or a charged
-            // nitro N, so such atoms recalculate their hydrogens instead.
-            Some(cut) if largest < 0 || (bonds + cut) / 2 + atom.explicit_h <= largest as u32 => {
-                atom.explicit_h += cut / 2
+        let fits = |kept: u32, cut: u32| {
+            largest < 0 || (kept + cut) / 2 + atom.explicit_h <= largest as u32
+        };
+        let (mut kept, Some(mut cut)) = (v.kept, v.cut) else {
+            atom.no_implicit = false;
+            continue;
+        };
+        // Preparation turns one single bond from a non-metal that exceeds its
+        // valence to a metal dative, taking no valence from the non-metal.
+        if !fits(kept, cut) && !metal(atom.id) {
+            if v.metal_cut {
+                cut -= 2;
+            } else if v.metal_kept {
+                kept -= 2;
             }
-            _ => atom.no_implicit = false,
+        }
+        if fits(kept, cut) {
+            atom.explicit_h += cut / 2;
+        } else {
+            // Preparation reinterprets other atoms that would exceed their
+            // valence, such as a neutral nitro N, so they recalculate.
+            atom.no_implicit = false;
         }
     }
     part

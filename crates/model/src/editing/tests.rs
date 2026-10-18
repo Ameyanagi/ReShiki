@@ -690,6 +690,16 @@ fn analysis_caps_fixed_hydrogen_atoms_only_at_cut_bonds() {
     }
     let part = analysis_document(&ammine, &[nitro, oxygens[0]]);
     assert_eq!(analyse(&part), [(1, 0), (0, 0)]);
+    // A fixed methylamine ligand cut from its carbon stays a dative H3N->Co.
+    let amine = ammine.add_atom("N", Point::new(-42., 0.));
+    let methyl = ammine.add_atom("C", Point::new(-84., 0.));
+    ammine.add_bond(amine, metal, 1, "plain");
+    ammine.add_bond(amine, methyl, 1, "plain");
+    let ligand = ammine.atom_mut(amine).unwrap();
+    (ligand.no_implicit, ligand.explicit_h) = (true, 2);
+    let part = analysis_document(&ammine, &[amine, metal]);
+    assert_eq!(part.atom(amine).unwrap().explicit_h, 3);
+    crate::chemistry::document::prepare(&part).unwrap();
 
     // Aromatic bonds have no whole valence: a typed NH in aromatic pyrrole
     // recalculates its hydrogens when cut.
