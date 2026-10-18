@@ -154,12 +154,13 @@ pub(crate) fn preserved_expansion_selection(
             ids.insert(arrow.id);
         }
     }
+    // A selected label brings its arrow, then the arrow brings all its labels.
     for label in &doc.arrow_labels {
-        if ids.contains(&label.arrow) || ids.contains(&label.annotation) {
+        if ids.contains(&label.annotation) {
             ids.insert(label.arrow);
-            ids.insert(label.annotation);
         }
     }
+    crate::arrow_labels::include_labels(doc, &mut ids);
     if doc
         .bonds
         .iter()
