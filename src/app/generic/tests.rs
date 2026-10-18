@@ -262,6 +262,58 @@ fn update_installs_one_expansion_tab_and_keeps_later_gate_side_effects() {
 }
 
 #[test]
+fn finished_expansion_settles_the_source_tab_status() {
+    let (mut app, completion) = pending_expansion();
+    let source = app.tab.id;
+    assert_eq!(app.status, "Expanding generic structures…");
+    let _ = app.update(completion);
+    app.select_tab(0);
+    assert_eq!(app.tab.id, source);
+    assert_eq!(app.status, "Expanded 2 concrete structures in a new tab");
+    assert!(!app.error);
+
+    // Another tab is in front when the expansion fails: the error shows there,
+    // and the source no longer claims that the expansion is running.
+    let (mut app, _) = pending_expansion();
+    let (source, epoch) = app.generic.pending.unwrap();
+    app.add_tab();
+    let _ = app.update(Message::Generic(Action::Expanded {
+        source,
+        epoch,
+        result: Box::new(Err("controlled expansion failure".into())),
+    }));
+    assert_eq!(app.status, "controlled expansion failure");
+    assert!(app.error);
+    app.select_tab(0);
+    assert_eq!(app.tab.id, source);
+    assert_eq!(app.status, "controlled expansion failure");
+    assert!(app.error);
+
+    // A discard settles a background source that showed an older error.
+    let (mut app, _) = pending_expansion();
+    let (source, epoch) = app.generic.pending.unwrap();
+    app.error = true;
+    app.add_tab();
+    app.discard_generic_expansion(source, epoch);
+    app.select_tab(0);
+    assert_eq!(app.tab.id, source);
+    assert_eq!(app.status, EXPANSION_DISCARDED);
+    assert!(!app.error);
+
+    // A source whose file was replaced since then keeps its newer status.
+    let (mut app, _) = pending_expansion();
+    let (source, epoch) = app.generic.pending.unwrap();
+    app.begin_file_epoch();
+    app.status = "Newer source warning".into();
+    app.error = true;
+    app.add_tab();
+    app.discard_generic_expansion(source, epoch);
+    app.select_tab(0);
+    assert_eq!(app.status, "Newer source warning");
+    assert!(app.error);
+}
+
+#[test]
 fn blocked_stale_expansion_does_not_clear_newer_pending_or_change_status() {
     let (mut app, _) = pending_expansion();
     let (source, epoch) = app.generic.pending.unwrap();

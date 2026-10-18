@@ -63,6 +63,11 @@ fn drawing_losses(
     {
         notices.push(notice);
     }
+    if matches!(format, "cdxml" | "cdx")
+        && let Some(notice) = crate::arrow_labels::export_notice(document)
+    {
+        notices.push(notice);
+    }
     // Preparation can change appearance, so rear opacity reads the source document.
     // CDXML/CDX rejects rear opacity in the writer before returning any notices.
     if matches!(format, "mol" | "smiles" | "inchi") && crate::rear_opacity::present(appearance) {
@@ -76,4 +81,49 @@ fn drawing_losses(
         }
     }
     notices
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        arrow_labels::{ArrowLabel, EXPORT_NOTICE, Side},
+        arrows::{ArrowStyle, Preset},
+        document::{Annotation, Arrow, Point},
+    };
+
+    #[test]
+    fn editable_exchange_reports_omitted_arrow_condition_links() {
+        let mut doc = Document::default();
+        doc.arrows.push(Arrow::new(
+            1,
+            Point::new(0., 0.),
+            Point::new(120., 0.),
+            Preset::Forward,
+            ArrowStyle::preset(Preset::Forward),
+        ));
+        doc.annotations.push(Annotation {
+            id: 2,
+            position: Point::new(40., -40.),
+            text: "heat".into(),
+            format: Default::default(),
+        });
+        doc.arrow_labels.push(ArrowLabel {
+            arrow: 1,
+            annotation: 2,
+            side: Side::Above,
+        });
+        doc.validate().unwrap();
+        let route = || Route::Prepared {
+            source: &doc,
+            figure_only: false,
+        };
+        for format in ["cdxml", "cdx"] {
+            assert!(notices(&doc, format, route()).contains(&EXPORT_NOTICE.to_owned()));
+        }
+        assert!(!notices(&doc, "mol", route()).contains(&EXPORT_NOTICE.to_owned()));
+        // The writer keeps the text and the arrow.
+        let xml = crate::exchange::drawing::write(&doc, Default::default()).unwrap();
+        assert!(xml.contains("<arrow") && xml.contains("heat"));
+    }
 }

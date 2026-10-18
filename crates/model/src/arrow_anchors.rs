@@ -2,7 +2,7 @@
 //! chemical meaning. Stored endpoints are reconciled before history/export.
 use crate::{
     arrows::{ArrowStyle, Preset},
-    document::{Arrow, Document, Point},
+    document::{Arrow, Bond, Document, Point},
     scientific::{AtomMark, MarkKind},
     style::DEFAULT,
 };
@@ -331,12 +331,18 @@ fn pick_with_ink(
     {
         return Some(Pick::Atom(id));
     }
+    let style = &doc.drawing_style;
+    // The widest band: a quadruple bond's outer rails plus a bold half width.
+    let reach = style.bond_length_world * style.bond_spacing_ratio * 1.5
+        + DEFAULT.world(style.bold_width_pt) / 2.
+        + radius;
+    let arcs = std::cell::OnceCell::new();
     doc.bonds
         .iter()
         .enumerate()
         .rev()
         .filter(|(_, b)| doc.bond_visible(b.a, b.b))
-        .find_map(|(index, bond)| {
+        .filter_map(|(index, bond)| {
             let (a, b) = if bond.a < bond.b {
                 (bond.a, bond.b)
             } else {
@@ -353,20 +359,125 @@ fn pick_with_ink(
             }
             let fraction = dot(delta(p, pa), v) / length;
             let q = pa.offset(v.x * fraction, v.y * fraction);
+            // Signed offset along the scene's rail normal of bond.a -> bond.b.
+            let sign = if bond.a == a { 1. } else { -1. };
+            let offset = sign * (v.x * (p.y - pa.y) - v.y * (p.x - pa.x)) / length.sqrt();
             // Reject remote candidates before any expensive visibility scene.
-            if !(0.0..=1.).contains(&fraction) || q.distance(p) > radius * 0.7 {
+            if !(0.0..=1.).contains(&fraction) || offset.abs() > reach {
                 return None;
             }
             let (start, end) = ink.segment(bond)?;
             let from = dot(delta(start, pa), v) / length;
             let to = dot(delta(end, pa), v) / length;
-            ((0.0..=1.).contains(&fraction)
-                && (from.min(to)..=from.max(to)).contains(&fraction)
-                && q.distance(p) <= radius * 0.7
+            // Position along the drawn segment, measured from bond.a.
+            let along = (fraction - from) / (to - from);
+            let drawn = start.distance(end);
+            // Like the scene, only a resolved ring arc replaces the rails.
+            let arc = bond.ring_arc
+                && arcs
+                    .get_or_init(|| crate::ring_arcs::uncut(doc))
+                    .contains(bond.a, bond.b);
+            let distance = bond_ink_distance(doc, bond, arc, offset, along, drawn, radius * 0.7)?;
+            ((from.min(to)..=from.max(to)).contains(&fraction)
                 && ink.label_hit(q, 0.).is_none()
                 && ink.bond(index, if bond.a == a { fraction } else { 1. - fraction }))
-            .then_some(Pick::Bond { a, b, fraction })
+            .then_some((distance, Pick::Bond { a, b, fraction }))
         })
+        // The nearest stroke wins, so a gap in a wider bond never beats ink
+        // under the pointer; ties keep the topmost bond.
+        .min_by(|x, y| x.0.total_cmp(&y.0))
+        .map(|(_, pick)| pick)
+}
+/// Distance from a point `offset` off the backbone, along the left normal of
+/// bond.a -> bond.b, to the bond's nearest drawn stroke. `along` is the
+/// pointer's position on the `drawn` (label-trimmed) segment, from bond.a.
+/// The bond qualifies anywhere within `tolerance` of its rail band, gaps
+/// included; `None` beyond. Rails mirror the scene's `push_bond_rails`:
+/// (offset, half width), with the secondary display on the second rail;
+/// a ring `arc` bond draws only its backbone.
+fn bond_ink_distance(
+    doc: &Document,
+    bond: &Bond,
+    arc: bool,
+    offset: f32,
+    along: f32,
+    drawn: f32,
+    tolerance: f32,
+) -> Option<f32> {
+    use crate::bonds::DoublePosition;
+    let style = &doc.drawing_style;
+    let s = style.bond_length_world * style.bond_spacing_ratio;
+    let (line, bold) = (
+        DEFAULT.world(style.line_width_pt),
+        DEFAULT.world(style.bold_width_pt),
+    );
+    let half = |display: &str| match display {
+        "bold" | "hashed" => bold / 2.,
+        // Wedges taper from a line width at bond.a.
+        "wedge" | "hash" | "hollow_wedge" => (line + along * (bold - line)) / 2.,
+        _ => line / 2.,
+    };
+    let p = half(&bond.display);
+    let q = bond.secondary_display.as_deref().map_or(p, half);
+    let distance = |rails: &[(f32, f32)]| {
+        let lo = rails
+            .iter()
+            .map(|(r, w)| r - w)
+            .fold(f32::INFINITY, f32::min);
+        let hi = rails
+            .iter()
+            .map(|(r, w)| r + w)
+            .fold(f32::NEG_INFINITY, f32::max);
+        ((lo - offset).max(offset - hi) <= tolerance).then(|| {
+            rails
+                .iter()
+                .map(|(r, w)| ((offset - r).abs() - w).max(0.))
+                .fold(f32::INFINITY, f32::min)
+        })
+    };
+    // A one-sided double's inner rail is shortened at both ends.
+    let trim = s * 0.75;
+    let inner = |side: f32| {
+        let rails = [(0., p), (s * side, q)];
+        distance(if (trim..=drawn - trim).contains(&(along * drawn)) {
+            &rails
+        } else {
+            &rails[..1]
+        })
+    };
+    let order = if arc { 1 } else { bond.order };
+    match (order, bond.display.as_str()) {
+        // Crossed double: two straight strokes swap sides along the bond.
+        (2, "wavy") => {
+            let r = s / 2. * (1. - 2. * along);
+            distance(&[(-r, p), (r, p)])
+        }
+        // The wave's envelope qualifies; the wave itself, a near-sine with the
+        // cycles and amplitude of `bonds::wavy_path`, ranks.
+        (_, "wavy") => {
+            let amplitude = (style.line_width() * 1.25).min(drawn / 6.);
+            let cycles = (drawn / (style.bond_length_world / 4.))
+                .round()
+                .clamp(1., 64.);
+            let wave = amplitude * (std::f32::consts::TAU * cycles * along).sin();
+            distance(&[(0., p + amplitude)]).map(|_| ((offset - wave).abs() - p).max(0.))
+        }
+        // Resolve an automatic side only near either possible rail.
+        (2 | 7, _) => {
+            distance(&[(-s, p.max(q)), (s, p.max(q))])?;
+            match crate::scene::effective_double_position(doc, bond) {
+                DoublePosition::Left => inner(-1.),
+                DoublePosition::Right => inner(1.),
+                DoublePosition::Auto | DoublePosition::Center => {
+                    distance(&[(-s / 2., p), (s / 2., q)])
+                }
+            }
+        }
+        (3, _) => distance(&[(-s, p), (0., q), (s, p)]),
+        (6, _) => distance(&[(-s * 1.5, p), (-s / 2., q), (s / 2., p), (s * 1.5, p)]),
+        // Aromatic inner rails are optional and one-sided; keep the backbone.
+        _ => distance(&[(0., p)]),
+    }
 }
 // Only new links require displayed ink. Target::center, Anchor::validate and
 // reconciliation must continue to retain links to temporarily hidden objects.
