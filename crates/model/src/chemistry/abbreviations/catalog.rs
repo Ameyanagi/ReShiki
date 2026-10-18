@@ -93,10 +93,10 @@ fn check_label(text: &str, what: &str, optional: bool) -> std::result::Result<()
         || text.chars().count() > 32
         || text
             .chars()
-            .any(|c| c.is_whitespace() || c.is_control() || ('\u{1c}'..='\u{1f}').contains(&c))
+            .any(|c| c.is_whitespace() || c.is_control() || c == ',')
     {
         return Err(format!(
-            "{what} \"{text}\" must be 1-32 characters without spaces"
+            "{what} \"{text}\" must be 1-32 characters without spaces or commas"
         ));
     }
     Ok(())
@@ -189,6 +189,9 @@ impl Preset {
 fn check_fragment(prepared: &Prepared) -> std::result::Result<(), String> {
     let state = &prepared.state;
     let graph = &state.graph;
+    if graph.atoms.iter().any(|atom| atom.radical_electrons > 0) {
+        return Err("Radicals are not supported in groups".into());
+    }
     // Replacement keeps the drawing's single attachment bond.
     if graph
         .bonds

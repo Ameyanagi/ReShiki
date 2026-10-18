@@ -55,13 +55,14 @@ fn bundled_entries_are_complete_and_rdkit_comparable() {
     }
 }
 
-/// A neutral bracket-hydrogen atom cannot match its deprotonated anion.
+/// A bracket hydrogen ([nH]) is a hydrogen-count query, as in RDKit, so a
+/// neutral NH ring matches neither its tautomer nor its anion.
 #[test]
-fn bracket_hydrogens_pin_the_neutral_charge() {
+fn bracket_hydrogens_are_matched_as_hydrogen_counts() {
     let entry = Entry {
-        label: "Pyr3".into(),
+        label: "Im4".into(),
         reverse: String::new(),
-        smiles: "*c1cc[nH]c1".into(),
+        smiles: "*c1nc[nH]c1".into(),
         formula: None,
         category: String::new(),
         names: Vec::new(),
@@ -69,8 +70,19 @@ fn bracket_hydrogens_pin_the_neutral_charge() {
         contract: true,
     };
     let preset = Preset::from_entry(entry, true).unwrap();
-    let nitrogen = preset.atoms.iter().find(|a| a.number == 7).unwrap();
-    assert_eq!(nitrogen.charge, Some(0));
+    for (smiles, expected) in [
+        ("Cc1nc[nH]c1", true),
+        ("Cc1[nH]cnc1", false),
+        ("Cc1nc[n-]c1", false),
+    ] {
+        let state = smiles::prepare(smiles).unwrap().state;
+        let hydrogens = super::super::total_hydrogens(&state);
+        let target = matcher::Target::new(&state.graph, &state.rings, &hydrogens).unwrap();
+        let found = target
+            .matches(&preset, &mut matcher::Work::default())
+            .unwrap();
+        assert_eq!(!found.is_empty(), expected, "{smiles}");
+    }
 }
 
 #[test]
@@ -103,14 +115,16 @@ fn invalid_entries_are_reported_and_valid_ones_kept() {
         {"label": "Chiral", "smiles": "*[C@H](F)Cl"},
         {"label": "Alias", "smiles": "*CC", "aliases": ["Good"]},
         {"label": "Ring", "smiles": "*C1CC1", "contract": false},
-        {"label": "Double", "smiles": "*=CC"}
+        {"label": "Double", "smiles": "*=CC"},
+        {"label": "Radical", "smiles": "*[CH2]"},
+        {"label": "A,B", "smiles": "*C"}
     ]}"#;
     let (presets, errors) = parse(text, true);
     let labels: Vec<_> = presets.iter().map(|p| p.label.as_str()).collect();
     assert_eq!(labels, ["Good", "Ring"]);
     assert!(presets.iter().all(|p| p.user));
     assert!(!presets[1].contract);
-    assert_eq!(errors.len(), 9, "{errors:#?}");
+    assert_eq!(errors.len(), 11, "{errors:#?}");
     for (error, expected) in errors.iter().zip([
         "Group 2 (Two): SMILES must start with the single *",
         "Group 3 (Late): SMILES must start",
@@ -121,6 +135,8 @@ fn invalid_entries_are_reported_and_valid_ones_kept() {
         "Group 8 (Chiral): Stereo",
         "Group 9 (Alias): \"Good\" is defined twice",
         "Group 11 (Double): The * attachment must use a single bond",
+        "Group 12 (Radical): Radicals are not supported",
+        "Group 13 (A,B): Label \"A,B\" must be 1-32 characters without spaces or commas",
     ]) {
         assert!(error.starts_with(expected), "{error}");
     }

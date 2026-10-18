@@ -16,6 +16,9 @@ pub(super) struct Atom {
     pub(super) charge: Option<i8>,
     degree: usize,
     rings: usize,
+    /// RDKit's bracket hydrogen count ([nH]); absent from bundled queries.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) hydrogens: Option<u8>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub(super) struct Bond {
@@ -33,7 +36,7 @@ const TYPED: [u8; 10] = [5, 6, 7, 8, 9, 15, 16, 17, 35, 53];
 /// written aromaticity, charge only when nonzero, explicit degree and ring
 /// count. Implicit single-or-aromatic bonds become order zero; a single bond
 /// between two aromatic atoms (the fluorene biaryl bond) stays an explicit single.
-/// Bundled SMILES avoid bracket hydrogens, which are approximated below.
+/// Bracket hydrogens become a total hydrogen count, as in RDKit.
 pub(super) fn query(state: &perception::State) -> Result<(Vec<Atom>, Vec<Bond>)> {
     let graph = &state.graph;
     let mut degree = vec![0usize; graph.atoms.len()];
@@ -64,17 +67,17 @@ pub(super) fn query(state: &perception::State) -> Result<(Vec<Atom>, Vec<Bond>)>
                     charge: None,
                     degree: degree.first().copied().unwrap_or(0),
                     rings: 0,
+                    hydrogens: None,
                 };
             }
             Atom {
                 number: atom.atomic_number,
                 aromatic: (atom.aromatic || TYPED.contains(&atom.atomic_number))
                     .then_some(atom.aromatic),
-                // RDKit keeps a bracket hydrogen count ([nH]) as a query. The
-                // native matcher has no hydrogen predicate, so such an atom
-                // instead pins its charge: degree and charge then fix its
-                // hydrogens, and a neutral [nH] never matches a pyrrolide [n-].
-                charge: (atom.charge != 0 || atom.explicit_hydrogens > 0).then_some(atom.charge),
+                charge: (atom.charge != 0).then_some(atom.charge),
+                // RDKit keeps a bracket hydrogen count ([nH]) as a total
+                // hydrogen query; it tells apart tautomers and anions.
+                hydrogens: (atom.explicit_hydrogens > 0).then_some(atom.explicit_hydrogens),
                 degree: degree.get(index).copied().unwrap_or(0),
                 rings: rings.get(index).copied().unwrap_or(0),
             }
@@ -164,10 +167,15 @@ pub(super) struct Target<'a> {
     adjacent: Vec<Vec<usize>>,
     bonds: HashMap<(usize, usize), u8>,
     ring_counts: Vec<usize>,
+    hydrogens: &'a [u32],
 }
 impl<'a> Target<'a> {
-    pub(super) fn new(graph: &'a Graph, cache: &RingCache) -> Result<Self> {
+    /// `hydrogens` holds each atom's total (explicit plus implicit) count.
+    pub(super) fn new(graph: &'a Graph, cache: &RingCache, hydrogens: &'a [u32]) -> Result<Self> {
         graph.validate().map_err(invalid)?;
+        if hydrogens.len() != graph.atoms.len() {
+            return Err(invalid("Hydrogen counts changed"));
+        }
         let mut adjacent = vec![Vec::new(); graph.atoms.len()];
         let mut bonds = HashMap::new();
         for bond in &graph.bonds {
@@ -212,11 +220,13 @@ impl<'a> Target<'a> {
             adjacent,
             bonds,
             ring_counts,
+            hydrogens,
         })
     }
 
     fn atom_matches(&self, query: &Atom, target: usize, dummy: bool) -> Result<bool> {
         let atom = at(&self.graph.atoms, target)?;
+        let hydrogens = *at(self.hydrogens, target)?;
         if dummy {
             return Ok(atom.atomic_number != 0);
         }
@@ -224,7 +234,10 @@ impl<'a> Target<'a> {
             && query.aromatic.is_none_or(|value| value == atom.aromatic)
             && query.charge.is_none_or(|value| value == atom.charge)
             && query.degree == at(&self.adjacent, target)?.len()
-            && query.rings == *at(&self.ring_counts, target)?)
+            && query.rings == *at(&self.ring_counts, target)?
+            && query
+                .hydrogens
+                .is_none_or(|count| u32::from(count) == hydrogens))
     }
 
     pub(super) fn matches(&self, preset: &Preset, work: &mut Work) -> Result<Vec<Vec<usize>>> {

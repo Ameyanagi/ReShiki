@@ -64,6 +64,23 @@ fn check_size(document: &Document) -> Result<()> {
     Ok(())
 }
 
+/// Explicit plus implicit hydrogens of each prepared atom.
+fn total_hydrogens(state: &crate::chemistry::stereo::perception::State) -> Vec<u32> {
+    state
+        .graph
+        .atoms
+        .iter()
+        .enumerate()
+        .map(|(index, atom)| {
+            u32::from(atom.explicit_hydrogens)
+                + state
+                    .valences
+                    .get(index)
+                    .map_or(0, |valence| valence.implicit_hydrogens)
+        })
+        .collect()
+}
+
 /// The original preset interface accepts terminal groups only. Desktop
 /// interchange also permits explicitly defined internal groups on one atom.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -201,7 +218,8 @@ pub fn find_with_policy(
         return Err(invalid("Selection size limit exceeded"));
     }
     let selected: HashSet<_> = selection.iter().copied().collect();
-    let target = matcher::Target::new(&molecule.state.graph, &molecule.state.rings)?;
+    let hydrogens = total_hydrogens(&molecule.state);
+    let target = matcher::Target::new(&molecule.state.graph, &molecule.state.rings, &hydrogens)?;
     let mut covered = HashSet::new();
     let mut first_atoms = HashSet::new();
     let mut tentative = Vec::new();
