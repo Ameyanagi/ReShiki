@@ -1,6 +1,6 @@
 # Unreleased changes
 
-- **Under review — Arrow length follows its condition text:** text typed or dropped above or below a straight reaction arrow attaches to it, stays centred and keeps the arrow at least as long as the text plus padding. Editing fitted text resyncs the length, hand-lengthened arrows are kept, and dragging the text away detaches it. `.rsk` files keep the link. [Arrow conditions](arrows.md#write-conditions-on-an-arrow) · PR pending · @Ameyanagi.
+- **Under review — Arrow length follows its condition text:** text typed or dropped above or below a straight reaction arrow attaches to it, stays centred and keeps the arrow at least as long as the text plus padding. Editing fitted text resyncs the length, hand-lengthened arrows are kept, and dragging the text away detaches it. `.rsk` files keep the link. [Arrow conditions](arrows.md#write-conditions-on-an-arrow) · [PR #359](https://github.com/Ameyanagi/ReShiki/pull/359) · @Ameyanagi.
 
 - **Merged — Intel Mac panic recovery:** preserve the allocation alignment required by the native unwinder so recoverable background panics do not crash the application. Native Intel comparison reproduces the original crash and passes with the corrected alignment; global-allocator regression coverage now runs on all six supported native targets. [Diagnostic evidence](https://github.com/Ameyanagi/ReShiki/actions/runs/38822804581) · [PR #328](https://github.com/Ameyanagi/ReShiki/pull/328) · @Ameyanagi.
 
