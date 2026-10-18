@@ -63,8 +63,9 @@ reversing the arrow carries its labels.
 Each side holds one label; use line breaks for several lines of conditions.
 Drag the text across the arrow to move it to the other side, or away from the
 arrow to detach it. Vertical arrows take labels on their left and right.
-Copying, cutting or deleting an arrow includes its condition text; copying or
-deleting the text alone leaves the arrow.
+Copy, Cut and **Delete** of an arrow include its condition text; copying or
+deleting the text alone leaves the arrow. The eraser removes only what it
+touches.
 
 ### Style an arrow
 

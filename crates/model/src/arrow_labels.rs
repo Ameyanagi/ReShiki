@@ -60,9 +60,23 @@ fn dot(a: Point, b: Point) -> f32 {
 fn sub(a: Point, b: Point) -> Point {
     Point::new(a.x - b.x, a.y - b.y)
 }
-/// Only straight, free arrows carry labels.
+/// Only straight, free arrows carry labels. **Straighten** keeps a control
+/// point on the shaft, which still counts as straight.
 pub fn supports(arrow: &Arrow) -> bool {
-    arrow.cubic.is_none() && arrow.control_point().is_none() && !arrow.is_attached()
+    arrow.cubic.is_none()
+        && !arrow.is_attached()
+        && arrow.control_point().is_none_or(|c| {
+            let len = arrow.start.distance(arrow.end);
+            let off_axis = if len > 1e-3 {
+                ((arrow.end.x - arrow.start.x) * (c.y - arrow.start.y)
+                    - (arrow.end.y - arrow.start.y) * (c.x - arrow.start.x))
+                    .abs()
+                    / len
+            } else {
+                c.distance(arrow.start)
+            };
+            off_axis <= 1e-3
+        })
 }
 fn frame(arrow: &Arrow) -> Option<Frame> {
     let len = arrow.start.distance(arrow.end);
@@ -356,6 +370,10 @@ fn layout(doc: &mut Document, before: &Document, id: u64) {
         if let Some(a) = doc.arrows.iter_mut().find(|a| a.id == id) {
             a.start = start;
             a.end = end;
+            // A straightened arrow keeps its control on the shaft.
+            if a.control.is_some() {
+                a.control = Some(start.lerp(end, 0.5));
+            }
         }
     }
     let Some(arrow) = doc.arrows.iter().find(|a| a.id == id) else {

@@ -262,6 +262,22 @@ fn bending_or_deleting_the_arrow_releases_text() {
 }
 
 #[test]
+fn straightened_arrows_keep_their_labels() {
+    let mut doc = scheme();
+    let id = type_text(&mut doc, "Pd/C, H2, EtOAc, rt", Point::new(60., -12.));
+    edit(&mut doc, |doc| {
+        doc.arrows[0].control = Some(Point::new(60., 40.));
+    });
+    assert!(doc.arrow_labels.is_empty());
+    edit(&mut doc, |doc| doc.arrows[0].straighten());
+    edit(&mut doc, |doc| doc.translate(&[id], 0., -2.));
+    assert_eq!(side(&doc, id), Some(Side::Above));
+    let a = arrow(&doc);
+    assert_eq!(a.control, Some(a.start.lerp(a.end, 0.5)));
+    assert!(supports(a));
+}
+
+#[test]
 fn deleting_the_text_removes_the_link() {
     let mut doc = scheme();
     let id = type_text(&mut doc, "Δ", Point::new(60., -12.));
