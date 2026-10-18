@@ -419,6 +419,7 @@ fn attach_inner(atom: &mut Atom, kind: SymbolKind, offset: Point) -> Result<(), 
         SymbolKind::CirclePlus|SymbolKind::CircleMinus|SymbolKind::Plus|SymbolKind::Minus=>{
             let delta=if matches!(kind,SymbolKind::CirclePlus|SymbolKind::Plus) {1} else {-1};
             atom.charge=atom.charge.saturating_add(delta).clamp(-8,8);
+            atom.display.hide_charge=false;
             atom.marks.retain(|m|!m.kind.charge());
             if matches!(kind,SymbolKind::CirclePlus|SymbolKind::CircleMinus) {MarkKind::CircledCharge} else {MarkKind::Charge}
         }

@@ -193,11 +193,11 @@ pub(super) fn add(
             .filter(|a| a.attachment == Some(Kind::MultiCenter))
             .flat_map(|a| std::iter::once(a.id).chain(a.centroid.iter().copied()))
             .collect();
-        let net: i32 = doc
+        let net: i64 = doc
             .atoms
             .iter()
             .filter(|a| a.id == id || rings.contains(&a.id))
-            .map(|a| a.charge)
+            .map(|a| i64::from(a.charge))
             .sum();
         if net <= 0 {
             let metal = result.atom_mut(id).ok_or("Missing ligand target")?;

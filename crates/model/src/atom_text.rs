@@ -226,6 +226,8 @@ fn apply_entry(
         a.no_implicit = true;
         a.label_h = h.hydrogens;
         a.charge = h.charge;
+        // An entered charge is shown, even where a shortcut hid one.
+        a.display.hide_charge = false;
     } else if mode != Mode::Text && element && new_element != "*" {
         a.explicit_h = 0;
         a.no_implicit = false;

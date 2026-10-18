@@ -146,6 +146,20 @@ fn pi_ligands_keep_metal_focus_real_ring_chemistry_and_multicenter_targets()
             .all(|t| !t.contains(['+', '−', '-']) && !t.starts_with('2')),
         "{texts:?}"
     );
+    // Changing the balanced charge by hand (ferrocenium) shows it.
+    let (oxidized, _) = hotkeys::atom_edit(&neutral, iron, "+", 42.).ok_or("Charge key")??;
+    let fe = oxidized.atom(iron).ok_or("iron")?;
+    assert!(fe.charge == 3 && !fe.display.hide_charge);
+    let typed = atom_text::apply(&neutral, iron, "Fe3+", Mode::Auto)?;
+    let fe = typed.atom(iron).ok_or("iron")?;
+    assert!(fe.charge == 3 && !fe.display.hide_charge);
+    let mut symbol = neutral.atom(iron).ok_or("iron")?.clone();
+    reshiki::scientific::attach(
+        &mut symbol,
+        reshiki::scientific::SymbolKind::Plus,
+        Point::default(),
+    )?;
+    assert!(symbol.charge == 3 && !symbol.display.hide_charge);
     // A charge the user entered and showed on the metal stays visible.
     let mut shown = Document::default();
     let anion = shown.add_atom("Fe", Point::default());
