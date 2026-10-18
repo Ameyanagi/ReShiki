@@ -146,7 +146,7 @@ fn write_impl(
     if document
         .atoms
         .iter()
-        .any(|a| a.charge != 0 && a.display.hide_charge && !ligands::hidden_charge(a))
+        .any(|a| a.charge != 0 && a.display.hide_charge && !ligands::hidden_charge(a, document))
     {
         return Err(invalid(
             "CDXML cannot yet preserve hidden charge labels. Show charges before editable export, or use ReShiki (.rsk), SVG, PNG or PDF. The chemical charges are retained.",
