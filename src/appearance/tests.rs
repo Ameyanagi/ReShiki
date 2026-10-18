@@ -190,7 +190,7 @@ async fn escape_closes_an_open_pick_list() {
     .expect("headless renderer");
     let size = Size::new(400., 300.);
     let mut cache = Cache::new();
-    let mut send = |event: Event, cursor: mouse::Cursor| {
+    let mut send = |events: &[Event], cursor: mouse::Cursor| {
         // The status bar shows a hover hint with each list.
         let view = iced::widget::tooltip(
             close_on_escape(
@@ -204,7 +204,7 @@ async fn escape_closes_an_open_pick_list() {
         let mut ui = UserInterface::build(view, size, std::mem::take(&mut cache), &mut renderer);
         let mut messages = Vec::new();
         let (_, statuses) = ui.update(
-            &[event],
+            events,
             cursor,
             &mut renderer,
             &mut iced::advanced::clipboard::Null,
@@ -229,27 +229,41 @@ async fn escape_closes_an_open_pick_list() {
     // Hovered throughout, so the hint shows beside the open menu.
     let at = iced::Point::new(10., 10.);
     let pointer = mouse::Cursor::Available(at);
-    let _ = send(
-        Event::Mouse(mouse::Event::CursorMoved { position: at }),
-        pointer,
-    );
-    let (_, opened) = send(
-        Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
-        pointer,
-    );
+    let moved = |position| Event::Mouse(mouse::Event::CursorMoved { position });
+    let press = || Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
+    let _ = send(&[moved(at)], pointer);
+    let (_, opened) = send(&[press()], pointer);
     assert_eq!(opened, [Msg::Open]);
     // The open menu takes Escape, so nothing behind it acts on the key, and
     // the list closes on the redraw that follows.
-    let (status, messages) = send(escape(), pointer);
+    let (status, messages) = send(&[escape()], pointer);
     assert!(messages.is_empty());
     assert_eq!(status, iced::event::Status::Captured);
-    let redraw = Event::Window(iced::window::Event::RedrawRequested(
-        std::time::Instant::now(),
-    ));
-    let (_, closed) = send(redraw, pointer);
+    let redraw = || {
+        Event::Window(iced::window::Event::RedrawRequested(
+            std::time::Instant::now(),
+        ))
+    };
+    let (_, closed) = send(&[redraw()], pointer);
     assert_eq!(closed, [Msg::Close]);
     // Closed: Escape reaches the app's own shortcut.
-    let (status, ignored) = send(escape(), pointer);
+    let (status, ignored) = send(&[escape()], pointer);
     assert!(ignored.is_empty());
     assert_eq!(status, iced::event::Status::Ignored);
+
+    // A click on the second item picks it, as a control for the batch below.
+    let pastel = iced::Point::new(10., 77.);
+    let on_pastel = mouse::Cursor::Available(pastel);
+    let (_, opened) = send(&[press()], pointer);
+    assert_eq!(opened, [Msg::Open]);
+    let (_, picked) = send(&[moved(pastel), press()], on_pastel);
+    assert!(picked.contains(&Msg::Pick("Pastel")), "{picked:?}");
+    // A click queued after Escape in the same batch picks nothing: the list
+    // closes once, and the current choice stays.
+    let _ = send(&[moved(at)], pointer);
+    let (_, opened) = send(&[press()], pointer);
+    assert_eq!(opened, [Msg::Open]);
+    let (_, batch) = send(&[escape(), moved(pastel), press()], on_pastel);
+    let (_, closed) = send(&[redraw()], pointer);
+    assert_eq!([batch, closed].concat(), [Msg::Close]);
 }
