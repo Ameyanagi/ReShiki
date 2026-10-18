@@ -17,6 +17,9 @@ pub struct Gap {
     /// For a multi-rail bond, the one rail (normal offset, tolerance) this
     /// gap cuts: its rails pass under the front ink at different places.
     rail: Option<(f32, f32)>,
+    /// Pieces the gap leaves shorter than this (a stroke width) are dropped,
+    /// so no dots or stubs remain.
+    min: f32,
 }
 fn cross(a: Point, b: Point) -> f32 {
     a.x * b.y - a.y * b.x
@@ -190,16 +193,83 @@ fn clearance(over: Stroke, origin: Point, axis: Point, rail: f32) -> Option<(f32
     let (low, high) = (a.0.max(b.0), a.1.min(b.1));
     (low <= high && low.is_finite() && high.is_finite()).then_some((low, high))
 }
+/// A front stroke's occlusion envelope: every point within `radius` of the
+/// rectangle spanning its rails (`band`) along its finite length.
+struct Envelope {
+    from: Point,
+    along: Point,
+    length: f32,
+    band: (f32, f32),
+    radius: f32,
+}
+impl Envelope {
+    fn distance(&self, p: Point) -> f32 {
+        let d = delta(self.from, p);
+        let x = d.x * self.along.x + d.y * self.along.y;
+        let y = cross(self.along, d);
+        let dx = (-x).max(x - self.length).max(0.);
+        let dy = (self.band.0 - y).max(y - self.band.1).max(0.);
+        dx.hypot(dy)
+    }
+    /// The interval of `origin + s·axis`, s in `range`, inside the envelope,
+    /// and its closest approach. Distance to a convex set is convex along a
+    /// line, so a ternary search finds the closest point and bisection the
+    /// two boundaries.
+    fn span(&self, origin: Point, axis: Point, (lo, hi): (f32, f32)) -> Option<(f32, f32, f32)> {
+        let at = |s: f32| self.distance(origin.offset(axis.x * s, axis.y * s));
+        let (mut a, mut b) = (lo, hi);
+        for _ in 0..48 {
+            let (m1, m2) = (a + (b - a) / 3., b - (b - a) / 3.);
+            if at(m1) < at(m2) {
+                b = m2;
+            } else {
+                a = m1;
+            }
+        }
+        let best = (a + b) * 0.5;
+        if at(best) > self.radius {
+            return None;
+        }
+        let edge = |mut inside: f32, mut outside: f32| {
+            if at(outside) <= self.radius {
+                return outside;
+            }
+            for _ in 0..24 {
+                let middle = (inside + outside) * 0.5;
+                if at(middle) <= self.radius {
+                    inside = middle;
+                } else {
+                    outside = middle;
+                }
+            }
+            inside
+        };
+        Some((edge(best, lo), edge(best, hi), best))
+    }
+}
 /// Sorted sweep avoids checking every pair of well-separated molecules.
 pub fn gaps(doc: &Document) -> Vec<Vec<Gap>> {
     gaps_with_opacity(doc, &crate::rear_opacity::Paint::new(doc))
 }
 
+/// Occlusion: every opaque rear rail loses the part inside a front stroke's
+/// envelope (its rails, padded by both half-widths and the 1.1 pt
+/// clearance). Front and rear follow XYZ depth along the overlap, so one rule
+/// covers crossings at any angle, near-parallel overlaps and overlaps beside
+/// atoms. Bonds sharing an atom meet there and never cut each other.
 pub(crate) fn gaps_with_opacity(
     doc: &Document,
     opacity: &crate::rear_opacity::Paint,
 ) -> Vec<Vec<Gap>> {
     let mut gaps = vec![vec![]; doc.bonds.len()];
+    let sides = Sides::new(doc);
+    let style = &doc.drawing_style;
+    // The farthest an envelope reaches past a centerline: outer quadruple
+    // rails, two bold half-widths and the clearance.
+    let pad = style.bond_length_world * style.bond_spacing_ratio * 1.5
+        + style.world(style.bold_width_pt)
+        + DEFAULT.world(1.1)
+        + 0.001;
     let mut segments: Vec<_> = doc
         .bonds
         .iter()
@@ -213,21 +283,24 @@ pub(crate) fn gaps_with_opacity(
         .collect();
     segments.sort_by(|(_, a, b), (_, c, d)| a.x.min(b.x).total_cmp(&c.x.min(d.x)));
     let mut active: Vec<(usize, Point, Point)> = vec![];
-    let sides = Sides::new(doc);
+    let rails: Vec<std::cell::OnceCell<Rails>> =
+        (0..doc.bonds.len()).map(|_| Default::default()).collect();
+    let rail = |index: usize| {
+        let bond = doc.bonds.get(index)?;
+        Some(rails.get(index)?.get_or_init(|| sides.rails(bond)))
+    };
     let mut budget = 200_000_usize;
     for (i, a, b) in segments {
-        // Rigid rotations can put the same ring vertex a few ulps outside a
-        // segment bound. Keep endpoint crossings through the broad phase.
-        active.retain(|(_, c, d)| c.x.max(d.x) + 0.001 >= a.x.min(b.x));
-        for (j, c, d) in &active {
+        active.retain(|(_, c, d)| c.x.max(d.x) + 2. * pad >= a.x.min(b.x));
+        for &(j, c, d) in &active {
+            if a.y.min(b.y) > c.y.max(d.y) + 2. * pad || a.y.max(b.y) < c.y.min(d.y) - 2. * pad {
+                continue;
+            }
             if budget == 0 {
                 return gaps;
             }
             budget -= 1;
-            if a.y.min(b.y) > c.y.max(d.y) + 0.001 || a.y.max(b.y) < c.y.min(d.y) - 0.001 {
-                continue;
-            }
-            let (Some(first), Some(second)) = (doc.bonds.get(i), doc.bonds.get(*j)) else {
+            let (Some(first), Some(second)) = (doc.bonds.get(i), doc.bonds.get(j)) else {
                 continue;
             };
             if [first.a, first.b]
@@ -236,77 +309,162 @@ pub(crate) fn gaps_with_opacity(
             {
                 continue;
             }
-            let ab = delta(a, b);
-            let cd = delta(*c, *d);
-            let ac = delta(a, *c);
-            let determinant = cross(ab, cd);
-            if determinant.abs() < 0.001 {
-                continue;
-            }
-            let t = cross(ac, cd) / determinant;
-            let u = cross(ac, ab) / determinant;
-            let crosses = |t: f32, projected: bool| {
-                (0.04..0.96).contains(&t) || projected && (-0.0001..=1.0001).contains(&t)
-            };
-            if !crosses(t, first.projection) || !crosses(u, second.projection) {
-                continue;
-            }
-            let first_over = depth::bond_over(doc, i, t, *j, u);
-            let (under, from, to, over) = if first_over {
-                (*j, *c, *d, first)
-            } else {
-                (i, a, b, second)
-            };
-            // Transparent ink cannot knock out the ink beneath it.
-            if opacity.bond(over, if first_over { t } else { u }) < 1. {
-                continue;
-            }
-            // Opacity-managed under-ink already carries its exact visibility
-            // interval. A conventional knockout would erase its faint base or
-            // make the transparent case wider than the physical occlusion.
-            if doc
-                .bonds
-                .get(under)
-                .is_some_and(|bond| opacity.manages_bond(bond))
-            {
-                continue;
-            }
-            let length = from.distance(to);
-            let (over_from, over_to) = if first_over { (a, b) } else { (*c, *d) };
-            let Some(under_bond) = doc.bonds.get(under) else {
-                continue;
-            };
-            if length < 0.001 {
-                continue;
-            }
-            let axis = Point::new((to.x - from.x) / length, (to.y - from.y) / length);
-            // Clear the whole front ink, including a double bond's side rail
-            // or an aromatic inner line, for every rail of the rear bond.
-            let ink = sides.rails(over);
-            let margin = ink.width * 0.5 + DEFAULT.world(1.1);
-            let front = Stroke {
-                from: over_from,
-                to: over_to,
-                ends: margin,
-                band: (ink.lo() - margin, ink.hi() + margin),
-            };
-            for (offset, rail) in sides.rails(under_bond).filters() {
-                if let Some((low, high)) = clearance(front, from, axis, offset)
-                    && let Some(list) = gaps.get_mut(under)
-                {
-                    list.push(Gap {
-                        origin: from,
-                        axis,
-                        low,
-                        high,
-                        rail,
-                    });
+            for (rear, front) in [((i, a, b), (j, c, d)), ((j, c, d), (i, a, b))] {
+                let (Some(under), Some(over)) = (rail(rear.0), rail(front.0)) else {
+                    continue;
+                };
+                let found = occlusion(doc, opacity, rear, under, front, over);
+                if let Some(list) = gaps.get_mut(rear.0) {
+                    list.extend(found);
                 }
             }
         }
         active.push((i, a, b));
     }
     gaps
+}
+
+/// Gaps in bond `rear` (index, from, to) where it lies behind `front`'s ink.
+fn occlusion(
+    doc: &Document,
+    opacity: &crate::rear_opacity::Paint,
+    (rear, from, to): (usize, Point, Point),
+    under: &Rails,
+    (front, over_from, over_to): (usize, Point, Point),
+    over: &Rails,
+) -> Vec<Gap> {
+    let (Some(rear_bond), Some(front_bond)) = (doc.bonds.get(rear), doc.bonds.get(front)) else {
+        return vec![];
+    };
+    // Opacity-managed under-ink already carries its exact visibility
+    // interval. A conventional knockout would erase its faint base or make
+    // the transparent case wider than the physical occlusion.
+    let (length, front_length) = (from.distance(to), over_from.distance(over_to));
+    if length < 0.001 || front_length < 0.001 || opacity.manages_bond(rear_bond) {
+        return vec![];
+    }
+    let axis = Point::new((to.x - from.x) / length, (to.y - from.y) / length);
+    let along = Point::new(
+        (over_to.x - over_from.x) / front_length,
+        (over_to.y - over_from.y) / front_length,
+    );
+    let envelope = Envelope {
+        from: over_from,
+        along,
+        length: front_length,
+        band: (over.lo(), over.hi()),
+        radius: (over.width + under.width) * 0.5 + DEFAULT.world(1.1),
+    };
+    let front_t = |p: Point| {
+        let d = delta(over_from, p);
+        ((d.x * along.x + d.y * along.y) / front_length).clamp(0., 1.)
+    };
+    let point = |offset: f32, s: f32| {
+        from.offset(axis.x * s - axis.y * offset, axis.y * s + axis.x * offset)
+    };
+    // Whether the front ink covers the rear rail at `s`, by XYZ depth there.
+    let behind = |offset: f32, s: f32| {
+        let t = (s / length).clamp(0., 1.);
+        depth::bond_over(doc, front, front_t(point(offset, s)), rear, t)
+    };
+    let range = (-under.width, length + under.width);
+    let mut spans = vec![];
+    for (offset, rail) in under.filters() {
+        let Some((low, high, best)) = envelope.span(point(offset, 0.), axis, range) else {
+            continue;
+        };
+        let near = front_t(point(offset, best));
+        // Transparent ink cannot knock out the ink beneath it.
+        if opacity.bond(front_bond, near) < 1. {
+            continue;
+        }
+        // Depth is linear in s between the points where either bond's
+        // parameter clamps to an end, so the hidden set within each piece is
+        // an interval touching a piece end: check those ends, then bisect.
+        let rate = axis.x * along.x + axis.y * along.y;
+        let base = delta(over_from, point(offset, 0.));
+        let base = base.x * along.x + base.y * along.y;
+        let mut stops = vec![low, high, 0., length];
+        if rate.abs() > 1e-6 {
+            stops.extend([-base / rate, (front_length - base) / rate]);
+        }
+        stops.retain(|s| (low..=high).contains(s));
+        stops.sort_by(f32::total_cmp);
+        stops.dedup();
+        // Flat drawings, layered or not, order bonds without XYZ depth; there
+        // only real crossings knock out ink, not bonds that merely pass close.
+        let flat = stops.iter().all(|s| {
+            let t = (s / length).clamp(0., 1.);
+            let z = depth::at(doc, rear_bond, t);
+            let front_z = depth::at(doc, front_bond, front_t(point(offset, *s)));
+            z.zip(front_z)
+                .is_none_or(|(z, front_z)| (z - front_z).abs() <= 0.001)
+        });
+        if flat && !centerlines_cross(from, to, over_from, over_to) {
+            continue;
+        }
+        let boundary = |hidden: f32, shown: f32| {
+            let (mut hidden, mut shown) = (hidden, shown);
+            for _ in 0..16 {
+                let middle = (hidden + shown) * 0.5;
+                if behind(offset, middle) {
+                    hidden = middle;
+                } else {
+                    shown = middle;
+                }
+            }
+            shown
+        };
+        let mut run: Option<f32> = None;
+        let mut previous = low;
+        for stop in stops {
+            match (run, behind(offset, stop)) {
+                (None, true) => {
+                    run = Some(if stop == low {
+                        low
+                    } else {
+                        boundary(stop, previous)
+                    })
+                }
+                (Some(start), false) => {
+                    spans.push((start, boundary(previous, stop), rail));
+                    run = None;
+                }
+                _ => {}
+            }
+            previous = stop;
+        }
+        if let Some(start) = run {
+            spans.push((start, high, rail));
+        }
+    }
+    // Pieces shorter than a painted stroke are dropped. Hashes and hollow
+    // wedges draw thin strokes across a bold-width envelope.
+    let stroke = if under.parallel {
+        under.width
+    } else {
+        doc.drawing_style.line_width().min(under.width)
+    };
+    spans
+        .into_iter()
+        .map(|(low, high, rail)| Gap {
+            origin: from,
+            axis,
+            low,
+            high,
+            rail,
+            min: stroke,
+        })
+        .collect()
+}
+fn centerlines_cross(a: Point, b: Point, c: Point, d: Point) -> bool {
+    let (ab, cd, ac) = (delta(a, b), delta(c, d), delta(a, c));
+    let determinant = cross(ab, cd);
+    if determinant.abs() < 0.001 {
+        return false;
+    }
+    let (t, u) = (cross(ac, cd) / determinant, cross(ac, ab) / determinant);
+    (-0.0001..=1.0001).contains(&t) && (-0.0001..=1.0001).contains(&u)
 }
 fn projection(p: Point, g: Gap) -> f32 {
     (p.x - g.origin.x) * g.axis.x + (p.y - g.origin.y) * g.axis.y
@@ -499,6 +657,25 @@ fn on_rail(primitive: &Primitive, gap: &Gap) -> bool {
         / points.len() as f32;
     (mean - offset).abs() <= tolerance
 }
+/// Extent of a bond piece along a gap's axis.
+fn span(primitive: &Primitive, gap: &Gap) -> f32 {
+    let points: Vec<Point> = match primitive {
+        Primitive::Line(a, b, _) => vec![*a, *b],
+        Primitive::Polygon(points) => points.clone(),
+        Primitive::Path { commands, .. } => commands
+            .iter()
+            .flat_map(crate::graphics::PathCommand::iter_points)
+            .collect(),
+        _ => return f32::INFINITY,
+    };
+    let (lo, hi) = points
+        .iter()
+        .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), p| {
+            let s = projection(*p, *gap);
+            (lo.min(s), hi.max(s))
+        });
+    hi - lo
+}
 /// Trim real geometry, leaving transparent gaps in vector and raster exports.
 pub fn cut(mut primitives: Vec<Primitive>, gaps: &[Gap]) -> Vec<Primitive> {
     for gap in gaps {
@@ -512,7 +689,15 @@ pub fn cut(mut primitives: Vec<Primitive>, gaps: &[Gap]) -> Vec<Primitive> {
                         | Primitive::Path { filled: false, .. }
                 ) && on_rail(p, gap)
                 {
-                    [half(p, *gap, gap.low, true), half(p, *gap, gap.high, false)]
+                    // Drop pieces the gap cuts down to less than a stroke
+                    // width, so no dots or stubs remain.
+                    let whole = span(p, gap);
+                    [half(p, *gap, gap.low, true), half(p, *gap, gap.high, false)].map(|piece| {
+                        piece.filter(|piece| {
+                            let length = span(piece, gap);
+                            length >= gap.min || length >= whole - 0.0001
+                        })
+                    })
                 } else {
                     [Some(p.clone()), None]
                 };

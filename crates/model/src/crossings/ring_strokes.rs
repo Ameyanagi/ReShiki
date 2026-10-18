@@ -324,6 +324,7 @@ pub(crate) fn ring_stroke_with(
                                 low,
                                 high,
                                 rail,
+                                min: rails.width,
                             },
                         ));
                     }

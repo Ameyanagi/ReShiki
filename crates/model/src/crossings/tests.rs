@@ -40,6 +40,56 @@ impl Shape {
         }
     }
 }
+impl Shape {
+    /// Distance from `p` to this ink; 0 inside it.
+    fn distance(&self, p: Point) -> f32 {
+        match self {
+            Self::Band(a, b, w) => {
+                let (s, n) = along(p, *a, *b);
+                let ds = (-s).max(s - a.distance(*b)).max(0.);
+                ds.hypot((n.abs() - w / 2.).max(0.))
+            }
+            Self::Area(points) if self.covers(p) || points.len() < 2 => {
+                if self.covers(p) {
+                    0.
+                } else {
+                    f32::INFINITY
+                }
+            }
+            Self::Area(points) => points
+                .iter()
+                .zip(points.iter().cycle().skip(1))
+                .map(|(a, b)| crate::graphics::segment_distance(p, *a, *b))
+                .fold(f32::INFINITY, f32::min),
+        }
+    }
+    /// Points on the ink, its edges included.
+    fn samples(&self) -> Vec<Point> {
+        match self {
+            Self::Band(a, b, w) => {
+                let length = a.distance(*b).max(1e-6);
+                let (ux, uy) = ((b.x - a.x) / length, (b.y - a.y) / length);
+                let steps = (length / 0.2).ceil() as usize;
+                (0..=steps)
+                    .flat_map(|k| {
+                        let s = length * k as f32 / steps as f32;
+                        [-0.5, 0., 0.5].map(|o| a.offset(ux * s - uy * o * w, uy * s + ux * o * w))
+                    })
+                    .collect()
+            }
+            Self::Area(points) => points
+                .iter()
+                .zip(points.iter().cycle().skip(1))
+                .flat_map(|(a, b)| {
+                    (0..8).map(move |k| {
+                        let t = k as f32 / 8.;
+                        a.offset((b.x - a.x) * t, (b.y - a.y) * t)
+                    })
+                })
+                .collect(),
+        }
+    }
+}
 /// Along-axis and normal coordinates of `p` relative to segment `a`→`b`.
 fn along(p: Point, a: Point, b: Point) -> (f32, f32) {
     let length = a.distance(b).max(1e-6);
@@ -342,6 +392,246 @@ fn assert_whiteout(doc: &Document, label: &str) -> usize {
         failures.join("\n")
     );
     checked
+}
+
+/// Depth of `bond` at the point of its centerline nearest `p`.
+fn depth_near(doc: &Document, bond: usize, p: Point) -> f32 {
+    let (a, b, za, zb) = ends(doc, bond);
+    let t = (along(p, a, b).0 / a.distance(b).max(1e-6)).clamp(0., 1.);
+    za + (zb - za) * t
+}
+
+/// Occlusion: wherever two bonds that share no atom come close, no opaque
+/// ink of the one behind (by XYZ depth there) lies within 0.5 pt of the ink
+/// of the one in front, at any angle and next to any atom. Faded rear ink
+/// painted beneath the front ink is allowed. Returns the close pairs checked.
+fn assert_occluded(doc: &Document, label: &str) -> usize {
+    let mut inks = inks(&crate::scene::primitives(doc));
+    // A multi-colored atom paints its underlay junction in one incident
+    // bond's color; give each filled piece to the incident bond whose
+    // centerline it hugs.
+    for ink in &mut inks {
+        if let (Some(owner), Shape::Area(points)) = (ink.owner, &ink.shape) {
+            let atoms = [doc.bonds[owner].a, doc.bonds[owner].b];
+            let distance = |bond: usize| {
+                let (a, b, ..) = ends(doc, bond);
+                points
+                    .iter()
+                    .map(|p| crate::graphics::segment_distance(*p, a, b))
+                    .fold(0., f32::max)
+            };
+            // Nearly collinear neighbors hug each other's centerlines too;
+            // only a clearly closer bond takes the piece.
+            ink.owner = (0..doc.bonds.len())
+                .filter(|i| {
+                    let bond = &doc.bonds[*i];
+                    atoms.contains(&bond.a) || atoms.contains(&bond.b)
+                })
+                .map(|i| (i, distance(i) + if i == owner { 0. } else { 0.5 }))
+                .min_by(|x, y| x.1.total_cmp(&y.1))
+                .map(|(i, _)| i);
+        }
+    }
+    let clearance = crate::style::DEFAULT.world(0.5);
+    let style = &doc.drawing_style;
+    let reach = 2. * style.bond_length_world * style.bond_spacing_ratio
+        + style.world(style.bold_width_pt)
+        + 1.;
+    let of = |bond: usize| -> Vec<&Ink> { inks.iter().filter(|i| i.owner == Some(bond)).collect() };
+    let mut failures = vec![];
+    let mut checked = 0;
+    for (r, rear_bond) in doc.bonds.iter().enumerate() {
+        let (a, b, ..) = ends(doc, r);
+        let rear = of(r);
+        for (f, front_bond) in doc.bonds.iter().enumerate() {
+            let (c, d, ..) = ends(doc, f);
+            if f == r
+                || [front_bond.a, front_bond.b]
+                    .iter()
+                    .any(|id| *id == rear_bond.a || *id == rear_bond.b)
+                || crate::graphics::segment_distance(a, c, d)
+                    .min(crate::graphics::segment_distance(b, c, d))
+                    .min(crate::graphics::segment_distance(c, a, b))
+                    .min(crate::graphics::segment_distance(d, a, b))
+                    > reach
+                    && crossing(a, b, c, d).is_none_or(|(t, u, _)| {
+                        !(0. ..=1.).contains(&t) || !(0. ..=1.).contains(&u)
+                    })
+            {
+                continue;
+            }
+            checked += 1;
+            let front = of(f);
+            let hit = rear.iter().find_map(|back| {
+                back.shape.samples().into_iter().find(|p| {
+                    depth_near(doc, r, *p) < depth_near(doc, f, *p) - 0.001
+                        && front.iter().any(|ink| {
+                            ink.shape.distance(*p) < clearance
+                                && !(back.faded && back.order < ink.order)
+                        })
+                })
+            });
+            if let Some(p) = hit {
+                failures.push(format!(
+                    "rear bond {r} (order {}) touches front bond {f} (order {}) at {p:?}",
+                    rear_bond.order, front_bond.order
+                ));
+            }
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "{label}: {} failures in {checked} close pairs:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+    checked
+}
+
+/// Every stroke piece a bond keeps is at least one stroke width long: no
+/// dots or stubs are left over from occlusion.
+fn assert_no_fragments(doc: &Document, label: &str) {
+    fn walk(primitive: &Primitive, out: &mut Vec<(usize, f32, f32)>) {
+        match primitive {
+            Primitive::Opacity { primitive, .. } => walk(primitive, out),
+            Primitive::Path {
+                commands,
+                style,
+                filled: false,
+            } if !commands.iter().any(|c| matches!(c, PathCommand::Cubic(..))) => {
+                if let Some(bond) = owner(style.stroke) {
+                    for path in flattened(commands) {
+                        let length = path.windows(2).map(|p| p[0].distance(p[1])).sum();
+                        out.push((bond, length, style.width()));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut pieces = vec![];
+    for primitive in crate::scene::primitives(doc) {
+        walk(&primitive, &mut pieces);
+    }
+    // An aromatic inner line's dashes are a tenth of a bond, however short.
+    let dash = |bond: usize, length: f32| {
+        let (a, b, ..) = ends(doc, bond);
+        doc.bonds[bond].order == 4 && (length - a.distance(b) * 0.1).abs() < 0.01
+    };
+    let short: Vec<_> = pieces
+        .iter()
+        .filter(|(bond, length, width)| *length < width * 0.99 && !dash(*bond, *length))
+        .map(|(bond, length, _)| format!("bond {bond}: {length}"))
+        .collect();
+    assert!(short.is_empty(), "{label}: short fragments {short:?}");
+}
+
+#[test]
+fn c60_rear_ink_is_occluded_by_front_ink_in_every_view() {
+    type Edit = fn(&mut Document);
+    let edits: [(&str, Edit); 3] = [
+        ("kekule", |_| {}),
+        ("aromatic", |doc| {
+            doc.bonds.iter_mut().for_each(|b| b.order = 4)
+        }),
+        ("inner lines", |doc| {
+            for bond in doc.bonds.iter_mut().filter(|b| b.order == 2) {
+                bond.order = 4;
+            }
+        }),
+    ];
+    for (name, edit) in edits {
+        let checked: usize = views(edit)
+            .map(|(doc, label)| {
+                let label = format!("{name} {label}");
+                let checked = assert_occluded(&doc, &label);
+                assert_no_fragments(&doc, &label);
+                checked
+            })
+            .sum();
+        assert!(checked > 100, "{name}: only {checked} close pairs");
+    }
+}
+
+#[test]
+fn a_nearly_parallel_rear_bond_is_hidden_behind_a_front_double_bond() {
+    // A rear single bond runs 5° off a front double bond, just behind it,
+    // never crossing its centerline, and reaches past its ends.
+    let mut doc = Document::default();
+    let (sin, cos) = 5_f32.to_radians().sin_cos();
+    let atoms: Vec<_> = [
+        (Point::new(-21., 0.), 20.),
+        (Point::new(21., 0.), 20.),
+        (Point::new(-40. * cos, 4. - 40. * sin), -20.),
+        (Point::new(40. * cos, 4. + 40. * sin), -20.),
+    ]
+    .into_iter()
+    .map(|(p, z)| {
+        let id = doc.add_atom("C", p);
+        doc.atom_mut(id).unwrap().depth = z;
+        id
+    })
+    .collect();
+    doc.add_bond(atoms[0], atoms[1], 2, "plain");
+    doc.add_bond(atoms[2], atoms[3], 1, "plain");
+    for position in [
+        crate::bonds::DoublePosition::Left,
+        crate::bonds::DoublePosition::Right,
+        crate::bonds::DoublePosition::Center,
+    ] {
+        doc.bonds[0].double_position = position;
+        let mut tagged = doc.clone();
+        tag(&mut tagged);
+        let label = format!("{position:?}");
+        assert_eq!(assert_occluded(&tagged, &label), 2);
+        assert_no_fragments(&tagged, &label);
+        let inks = inks(&crate::scene::primitives(&tagged));
+        let rear: Vec<_> = inks.iter().filter(|i| i.owner == Some(1)).collect();
+        let front: Vec<_> = inks.iter().filter(|i| i.owner == Some(0)).collect();
+        // Fully hidden where it overlaps; visible beyond the front bond.
+        for x in [-20., -10., 0., 8.] {
+            let p = Point::new(x, 4. + x * sin / cos);
+            assert!(
+                !rear.iter().any(|i| i.shape.covers(p)),
+                "{label}: rear ink at {p:?}"
+            );
+        }
+        for x in [-32., 32.] {
+            let p = Point::new(x, 4. + x * sin / cos);
+            assert!(
+                rear.iter().any(|i| i.shape.covers(p)),
+                "{label}: no rear ink at {p:?}"
+            );
+        }
+        let (from, to) = (Point::new(-21., 0.), Point::new(21., 0.));
+        assert!(front_continuous(&front, from, to, Point::new(0., 0.)));
+    }
+}
+
+#[test]
+fn parallel_bonds_tied_in_depth_at_one_end_still_occlude() {
+    // B lies in front of A except at their right ends, where depth ties.
+    let mut doc = Document::default();
+    let atoms: Vec<_> = [
+        (Point::new(0., 0.), 0.),
+        (Point::new(42., 0.), 42.),
+        (Point::new(0., 1.), 42.),
+        (Point::new(42., 1.), 42.),
+    ]
+    .into_iter()
+    .map(|(p, z)| {
+        let id = doc.add_atom("C", p);
+        doc.atom_mut(id).unwrap().depth = z;
+        id
+    })
+    .collect();
+    doc.add_bond(atoms[0], atoms[1], 1, "plain");
+    doc.add_bond(atoms[2], atoms[3], 1, "plain");
+    assert!(!super::gaps(&doc)[0].is_empty());
+    assert!(super::gaps(&doc)[1].is_empty());
+    tag(&mut doc);
+    assert_eq!(assert_occluded(&doc, "tied"), 2);
+    assert_no_fragments(&doc, "tied");
 }
 
 /// A whiteout clears only front ink that is there: a single bond keeps its

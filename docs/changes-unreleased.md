@@ -1,6 +1,6 @@
 # Unreleased changes
 
-- **Under review — Cleaner crossings on 3D cages:** on projected drawings such as C60, bonds behind the cage are cut clear of the front bonds, double-bond rails, aromatic inner lines and ring circles that pass over them, and front bonds stay whole, on the canvas and in SVG, PNG and PDF. [PR #356](https://github.com/Ameyanagi/ReShiki/pull/356) · @Ameyanagi.
+- **Under review — Cleaner crossings on 3D cages:** on projected drawings such as C60, bonds behind the cage are hidden wherever front bonds, double-bond rails, aromatic inner lines or ring circles cover them, at any crossing angle, along near-parallel overlaps and next to atoms, without leftover stubs, and front bonds stay whole, on the canvas and in SVG, PNG and PDF. [PR #356](https://github.com/Ameyanagi/ReShiki/pull/356) · @Ameyanagi.
 
 - **Merged — Intel Mac panic recovery:** preserve the allocation alignment required by the native unwinder so recoverable background panics do not crash the application. Native Intel comparison reproduces the original crash and passes with the corrected alignment; global-allocator regression coverage now runs on all six supported native targets. [Diagnostic evidence](https://github.com/Ameyanagi/ReShiki/actions/runs/38822804581) · [PR #328](https://github.com/Ameyanagi/ReShiki/pull/328) · @Ameyanagi.
 
