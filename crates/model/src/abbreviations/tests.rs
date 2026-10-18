@@ -28,3 +28,11 @@ fn abbreviation_containing_returns_the_first_member_match_or_none() {
     assert_eq!(doc.abbreviation_containing(3), Some(&second));
     assert_eq!(doc.abbreviation_containing(99), None);
 }
+
+#[test]
+fn reversed_charged_labels_anchor_on_their_atom() {
+    assert_eq!(anchor_range("Me3N+", true), 3..4);
+    assert_eq!(anchor_range("F3B-", true), 2..3);
+    assert_eq!(anchor_range("NMe3+", false), 0..1);
+    assert_eq!(anchor_range("TBSO", true), 3..4);
+}

@@ -404,18 +404,27 @@ fn abbreviation_label_runs(
     };
     let content = group.text(doc);
     let size = STYLE.world(style.size_pt);
-    let layout = crate::typography::layout(
-        content,
-        &crate::typography::TextFormat {
-            style: style.clone(),
-            ..Default::default()
-        },
-    );
-    let range = crate::abbreviations::anchor_range(content, group.faces_left(doc));
+    // A hyphen inside a name (2-Py, Indol-1-yl) is a separator, not a charge.
+    let spans = content
+        .char_indices()
+        .zip(content.chars().skip(1))
+        .filter(|&((_, c), next)| c == '-' && next.is_alphanumeric())
+        .map(|((start, _), _)| crate::typography::TextSpan {
+            start,
+            end: start + 1,
+            style: crate::typography::TextStyle {
+                formula: false,
+                ..style.clone()
+            },
+        })
+        .collect();
     let format = crate::typography::TextFormat {
         style: style.clone(),
+        spans,
         ..Default::default()
     };
+    let layout = crate::typography::layout(content, &format);
+    let range = crate::abbreviations::anchor_range(content, group.faces_left(doc));
     let before =
         crate::typography::layout(content.get(..range.start).unwrap_or_default(), &format).width;
     let through =

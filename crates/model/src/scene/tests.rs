@@ -318,6 +318,28 @@ fn group_labels_remain_visible_and_anchor_to_elements_at_every_angle() -> Result
     Ok(())
 }
 #[test]
+fn group_name_hyphens_stay_on_the_baseline() -> Result<(), String> {
+    use crate::typography::Script;
+    let mut doc = Document::default();
+    let n = doc.add_atom("N", Point::new(-70., 0.));
+    let a = doc.add_atom("C", Point::default());
+    doc.add_bond(n, a, 1, "plain");
+    doc = crate::atom_text::apply(&doc, a, "2-Py", crate::atom_text::Mode::Auto)?;
+    let runs = atom_label(doc.atom(a).ok_or("Anchor")?, &doc);
+    let mut text = String::new();
+    for run in &runs {
+        if let Primitive::Text {
+            text: value, style, ..
+        } = run
+        {
+            assert_eq!(style.script, Script::Normal, "{value}");
+            text.push_str(value);
+        }
+    }
+    assert_eq!(text, "2-Py");
+    Ok(())
+}
+#[test]
 fn svg_preserves_annotations_and_escapes_xml() {
     let mut d = Document::default();
     d.annotations.push(crate::document::Annotation {
