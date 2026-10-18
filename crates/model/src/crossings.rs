@@ -46,6 +46,15 @@ impl Rail {
         }
         self.offset.0 + (self.offset.1 - self.offset.0) * (s - self.span.0) / length
     }
+    /// The centerline of this rail of the bond from `from` along unit `axis`:
+    /// its point at distance 0 along the bond and its step per unit distance.
+    fn line(&self, from: Point, axis: Point) -> (Point, Point) {
+        let (offset, slope) = (self.at(0.), self.at(1.) - self.at(0.));
+        (
+            from.offset(-axis.y * offset, axis.x * offset),
+            Point::new(axis.x - axis.y * slope, axis.y + axis.x * slope),
+        )
+    }
 }
 pub(crate) struct Rails {
     strokes: Vec<Rail>,
@@ -215,11 +224,11 @@ struct Stroke {
     ends: f32,
     band: (f32, f32),
 }
-/// Parameter interval along the rail at normal offset `rail` of the under
-/// bond (`origin` + s·`axis`) that lies inside the over stroke's finite ink.
-/// Each rail meets the over ink at its own place, and the finite length keeps
-/// a shallow cut off ink that is not there.
-fn clearance(over: Stroke, origin: Point, axis: Point, rail: f32) -> Option<(f32, f32)> {
+/// Parameter interval along an under rail (`origin` + s·`direction`, see
+/// [`Rail::line`]) that lies inside the over stroke's finite ink. Each rail
+/// meets the over ink at its own place, and the finite length keeps a shallow
+/// cut off ink that is not there.
+fn clearance(over: Stroke, (origin, direction): (Point, Point)) -> Option<(f32, f32)> {
     let length = over.from.distance(over.to);
     if length < 0.001 {
         return None;
@@ -241,13 +250,13 @@ fn clearance(over: Stroke, origin: Point, axis: Point, rail: f32) -> Option<(f32
             Some((a.min(b), a.max(b)))
         }
     };
-    let start = delta(over.from, origin.offset(-axis.y * rail, axis.x * rail));
+    let start = delta(over.from, origin);
     let a = range(
         dot(start, along),
-        dot(axis, along),
+        dot(direction, along),
         (-over.ends, length + over.ends),
     )?;
-    let b = range(dot(start, normal), dot(axis, normal), over.band)?;
+    let b = range(dot(start, normal), dot(direction, normal), over.band)?;
     let (low, high) = (a.0.max(b.0), a.1.min(b.1));
     (low <= high && low.is_finite() && high.is_finite()).then_some((low, high))
 }
@@ -270,12 +279,11 @@ impl Envelope {
         for pass in [points.clone(), points.into_iter().rev().collect()] {
             let start = hull.len();
             for p in pass {
-                while hull.len() >= start + 2
-                    && cross(
-                        delta(hull[hull.len() - 2], hull[hull.len() - 1]),
-                        delta(hull[hull.len() - 2], p),
-                    ) <= 0.
-                {
+                while hull.len() >= start + 2 {
+                    let [.., a, b] = hull.as_slice() else { break };
+                    if cross(delta(*a, *b), delta(*a, p)) > 0. {
+                        break;
+                    }
                     hull.pop();
                 }
                 hull.push(p);
@@ -285,21 +293,12 @@ impl Envelope {
         Self { hull }
     }
     fn distance(&self, p: Point) -> f32 {
-        let n = self.hull.len();
-        let edge = |i: usize| (self.hull[i], self.hull[(i + 1) % n]);
-        if n >= 3
-            && (0..n).all(|i| {
-                let (a, b) = edge(i);
-                cross(delta(a, b), delta(a, p)) >= 0.
-            })
-        {
+        let edges = || self.hull.iter().zip(self.hull.iter().cycle().skip(1));
+        if self.hull.len() >= 3 && edges().all(|(a, b)| cross(delta(*a, *b), delta(*a, p)) >= 0.) {
             return 0.;
         }
-        (0..n)
-            .map(|i| {
-                let (a, b) = edge(i);
-                crate::graphics::segment_distance(p, a, b)
-            })
+        edges()
+            .map(|(a, b)| crate::graphics::segment_distance(p, *a, *b))
             .fold(f32::INFINITY, f32::min)
     }
     /// The interval of `origin + s·axis`, s in `range`, within `radius`,
@@ -466,12 +465,8 @@ fn occlusion(
     let mut spans = vec![];
     for (rail, filter) in under.filters() {
         // The rail's centerline, linear in the distance `s` along the bond.
-        let point = |s: f32| {
-            let offset = rail.at(s);
-            from.offset(axis.x * s - axis.y * offset, axis.y * s + axis.x * offset)
-        };
-        let slope = rail.at(1.) - rail.at(0.);
-        let direction = Point::new(axis.x - axis.y * slope, axis.y + axis.x * slope);
+        let (origin, direction) = rail.line(from, axis);
+        let point = |s: f32| origin.offset(direction.x * s, direction.y * s);
         // Whether the front ink covers the rear rail at `s`, by XYZ depth there.
         let behind = |s: f32| {
             let t = (s / length).clamp(0., 1.);
@@ -747,9 +742,10 @@ fn on_rail(primitive: &Primitive, gap: &Gap) -> bool {
         return true;
     };
     let off = |p: &Point| cross(gap.axis, delta(gap.origin, *p)) - rail.at(projection(*p, *gap));
-    // A line's ends lie on its centerline, which tells crossed strokes apart.
+    // A line's ends lie on its own centerline, which tells crossed strokes
+    // apart even for a short piece near where they cross.
     if let Primitive::Line(a, b, _) = primitive {
-        return (off(a).abs() + off(b).abs()) * 0.5 <= tolerance;
+        return off(a).abs().max(off(b).abs()) <= tolerance.min(rail.width);
     }
     let points: Vec<Point> = match primitive {
         Primitive::Polygon(points) => points.clone(),

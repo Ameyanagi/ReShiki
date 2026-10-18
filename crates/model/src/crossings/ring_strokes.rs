@@ -290,12 +290,7 @@ pub(crate) fn ring_stroke_with(
                     band: (-half, half),
                 };
                 for (line, rail) in rails.filters() {
-                    // A crossed stroke runs between its end offsets.
-                    let Some((low, high)) = [line.offset.0, line.offset.1]
-                        .into_iter()
-                        .filter_map(|offset| clearance(curve, a, axis, offset))
-                        .reduce(|x, y| (x.0.min(y.0), x.1.max(y.1)))
-                    else {
+                    let Some((low, high)) = clearance(curve, line.line(a, axis)) else {
                         continue;
                     };
                     let t = ((low + high) * 0.5 / length).clamp(0., 1.);

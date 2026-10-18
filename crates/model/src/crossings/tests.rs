@@ -937,6 +937,71 @@ fn a_crossed_rear_stroke_under_a_front_bond_leaves_the_other_stroke() {
 }
 
 #[test]
+fn a_cut_crossed_stroke_keeps_ink_clear_of_a_second_front_bond() {
+    // After the first cut, a piece of one diagonal near where the diagonals
+    // cross must not take the other diagonal's gap.
+    let mut doc = Document::default();
+    doc.drawing_style.bond_spacing_ratio = 0.4;
+    let atoms = atoms_at(
+        &mut doc,
+        &[
+            (Point::new(-30., 0.), -20.),
+            (Point::new(30., 0.), -20.),
+            (Point::new(-10., -30.), 20.),
+            (Point::new(-10., 30.), 20.),
+            (Point::new(0., -15.), 20.),
+            (Point::new(30., 15.), 20.),
+        ],
+    );
+    doc.add_bond(atoms[0], atoms[1], 2, "wavy");
+    doc.add_bond(atoms[2], atoms[3], 1, "plain");
+    doc.add_bond(atoms[4], atoms[5], 1, "plain");
+    tag(&mut doc);
+    assert_eq!(assert_occluded(&doc, "two fronts"), 6);
+    let half = doc.drawing_style.bond_length_world * 0.2;
+    let p = Point::new(8., 8. * half / 30.);
+    assert!(
+        inks(&crate::scene::primitives(&doc))
+            .iter()
+            .any(|i| i.owner == Some(0) && i.shape.covers(p)),
+        "no rear ink at {p:?}"
+    );
+}
+
+#[test]
+fn a_crossed_rear_bond_behind_a_ring_circle_is_cut_where_its_strokes_cross_it() {
+    let mut doc = Document::default();
+    doc.drawing_style.bond_spacing_ratio = 0.4;
+    let ring: Vec<_> = (0..6)
+        .map(|i| {
+            let angle = (i as f32 * 60.).to_radians();
+            (Point::new(42. * angle.cos(), 42. * angle.sin()), 0.)
+        })
+        .collect();
+    let ring = atoms_at(&mut doc, &ring);
+    for i in 0..6 {
+        doc.add_bond(ring[i], ring[(i + 1) % 6], 4, "plain");
+    }
+    let atoms = atoms_at(
+        &mut doc,
+        &[(Point::new(-30., 15.), -20.), (Point::new(30., 15.), -20.)],
+    );
+    doc.add_bond(atoms[0], atoms[1], 2, "wavy");
+    tag(&mut doc);
+    let inks = inks(&crate::scene::primitives(&doc));
+    let circle: Vec<_> = inks.iter().filter(|i| i.owner.is_none()).collect();
+    assert!(!circle.is_empty(), "no ring circle");
+    let clearance = crate::style::DEFAULT.world(0.5);
+    let hit = inks.iter().filter(|i| i.owner == Some(6)).find_map(|rear| {
+        rear.shape
+            .samples()
+            .into_iter()
+            .find(|p| circle.iter().any(|c| c.shape.distance(*p) < clearance))
+    });
+    assert_eq!(hit, None, "rear crossed stroke touches the ring circle");
+}
+
+#[test]
 fn a_rear_bond_is_hidden_between_widely_spaced_front_rails() {
     let mut doc = Document::default();
     doc.drawing_style.bond_spacing_ratio = 0.4;
