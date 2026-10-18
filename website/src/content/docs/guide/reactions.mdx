@@ -9,13 +9,26 @@ import Screenshot from "../../../components/Screenshot.astro";
 
 1. Draw or import the molecules. Put reactants on the left and products on the right.
 2. Choose the **arrow** tool. Click to place a fixed-length arrow pointing right, or drag to set its length and direction.
-3. Choose **Text** (**T**) and add conditions above the arrow.
+3. Choose **Text** (**T**), click above or below the arrow and type the conditions.
 4. Select related objects and use **Properties** to align them.
 
 <Screenshot
   src="/manual/reaction-scheme.png"
   alt="A complete esterification scheme with conditions above the reaction arrow."
 />
+
+## Keep conditions on the arrow
+
+Available in Nightly builds; not in ReShiki 0.12.0.
+
+Text you type or drop above or below a straight arrow attaches to it. The text stays centred on its side, and the arrow grows to fit the widest label with a little padding at each end.
+
+- Edit the text: an arrow fitted to the text grows or shrinks with it. An arrow you lengthened by hand keeps its length unless the text outgrows it.
+- Drag an end handle to lengthen the arrow. Shortening stops at the label width.
+- Move or rotate the arrow: its labels come along.
+- Drag the text across the arrow to switch sides, or away from it to detach it.
+
+Each side holds one label; press **Enter** in the text for more lines. Bending the arrow releases its labels. Only `.rsk` files keep the link; other formats keep the text where it is.
 
 ## Bend an arrow
 
