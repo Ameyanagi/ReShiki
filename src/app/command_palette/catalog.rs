@@ -362,63 +362,24 @@ const GROUP_NAMES: &[(&str, &str)] = &[
     ("CO2Et", "ethyl ester"),
 ];
 
-/// Element names for the symbols that people search for by name.
-const ELEMENT_NAMES: &[&str] = &[
-    "Hydrogen",
-    "Helium",
-    "Lithium",
-    "Beryllium",
-    "Boron",
-    "Carbon",
-    "Nitrogen",
-    "Oxygen",
-    "Fluorine",
-    "Neon",
-    "Sodium",
-    "Magnesium",
-    "Aluminium",
-    "Silicon",
-    "Phosphorus",
-    "Sulfur",
-    "Chlorine",
-    "Argon",
-    "Potassium",
-    "Calcium",
-    "Scandium",
-    "Titanium",
-    "Vanadium",
-    "Chromium",
-    "Manganese",
-    "Iron",
-    "Cobalt",
-    "Nickel",
-    "Copper",
-    "Zinc",
-    "Gallium",
-    "Germanium",
-    "Arsenic",
-    "Selenium",
-    "Bromine",
-    "Krypton",
-    "Rubidium",
-    "Strontium",
-    "Yttrium",
-    "Zirconium",
-    "Niobium",
-    "Molybdenum",
-    "Technetium",
-    "Ruthenium",
-    "Rhodium",
-    "Palladium",
-    "Silver",
-    "Cadmium",
-    "Indium",
-    "Tin",
-    "Antimony",
-    "Tellurium",
-    "Iodine",
-    "Xenon",
-];
+/// English element name for `symbol`, read from OPSIN's element token list
+/// (which names every element except hydrogen).
+fn element_name(symbol: &str) -> Option<String> {
+    if symbol == "H" {
+        return Some("Hydrogen".into());
+    }
+    let tag = format!("value=\"[{symbol}]\"");
+    include_str!("../../../crates/opsin/resources/xml/elementaryAtoms.xml")
+        .lines()
+        .find(|line| line.contains(&tag))
+        .and_then(|line| line.split('>').nth(1)?.split(['|', '<']).next())
+        .map(|name| {
+            let mut chars = name.chars();
+            chars.next().map_or_else(String::new, |first| {
+                first.to_uppercase().chain(chars).collect()
+            })
+        })
+}
 
 /// Every command; built when the palette opens, so toggles describe their
 /// current state and the template library is current.
@@ -519,8 +480,8 @@ fn inserts(app: &App) -> Vec<Command> {
             })),
         );
     }
-    for (index, symbol) in reshiki::editing::ELEMENTS.iter().enumerate() {
-        let name = ELEMENT_NAMES.get(index).copied().unwrap_or(symbol);
+    for symbol in reshiki::editing::ELEMENTS {
+        let name = element_name(symbol).unwrap_or_else(|| symbol.to_string());
         list.push(
             Command::new(
                 if name == *symbol {

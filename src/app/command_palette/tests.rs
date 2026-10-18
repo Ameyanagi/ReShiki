@@ -69,6 +69,45 @@ fn colon_opens_the_palette_and_benzene_inserts_one_undo_step() {
 }
 
 #[test]
+fn duplicate_titles_prefer_the_direct_insert() {
+    let mut app = app();
+    app.templates.library.templates = vec![reshiki::templates::Template {
+        id: "test:benzene".into(),
+        group: "Rings".into(),
+        name: "Benzene".into(),
+        smiles: "c1ccccc1".into(),
+        keywords: vec![],
+        note: String::new(),
+        document: reshiki::rings::Preset::Benzene.document(42., false),
+        anchor: Default::default(),
+    }];
+    search(&mut app, "benzene");
+    assert!(
+        app.commands
+            .catalog()
+            .iter()
+            .filter(|command| command.name == "Benzene")
+            .count()
+            > 1,
+        "the catalog lists Benzene as a direct insert, template and example"
+    );
+    let ranked = app.commands.ranked();
+    let mut names = std::collections::HashSet::new();
+    assert!(ranked.iter().all(|command| names.insert(&command.name)));
+    assert_eq!(top(&app).name, "Benzene");
+    assert!(matches!(
+        top(&app).run,
+        Run::Ring(Ring::Preset(reshiki::rings::Preset::Benzene))
+    ));
+    assert!(
+        ranked
+            .iter()
+            .any(|command| command.name == "Benzene (aromatic circle)"),
+        "distinct visible titles stay listed"
+    );
+}
+
+#[test]
 fn benzene_attaches_to_the_selected_atom_as_the_a_hotkey_does() {
     let mut app = app();
     let (a, _) = ethane(&mut app);
@@ -145,6 +184,14 @@ fn element_and_group_label_the_target_atom_or_insert_at_the_center() {
     assert_eq!((app.tool, app.element.as_str()), (Tool::Atom, "Pd"));
 }
 
+#[test]
+fn gold_finds_the_au_element_command() {
+    let mut app = app();
+    search(&mut app, "gold");
+    assert_eq!(top(&app).name, "Gold (Au)");
+    assert!(matches!(top(&app).run, Run::Element("Au")));
+}
+
 fn top_name_after(app: &App) -> Option<&str> {
     app.commands.open.then(|| top(app).name.as_str())
 }
@@ -202,6 +249,59 @@ fn unavailable_commands_stay_listed_and_do_nothing() {
     assert!(app.command_unavailable(top(&app)).is_some());
     let _ = app.update(Message::Commands(Action::Submit));
     assert!(app.error);
+}
+
+#[test]
+fn caption_and_graphic_selections_never_fall_back_to_pointer_or_hotspot() {
+    use reshiki::{
+        document::Annotation,
+        graphics::{Graphic, GraphicKind},
+    };
+    for keyboard in [false, true] {
+        let mut app = app();
+        let (a, b) = ethane(&mut app);
+        let caption = app.tab.doc.next_id();
+        app.tab.doc.annotations.push(Annotation {
+            id: caption,
+            position: Point::new(150., 100.),
+            text: "Caption".into(),
+            format: Default::default(),
+        });
+        let graphic = app.tab.doc.next_id();
+        app.tab.doc.graphics.push(Graphic::dragged(
+            graphic,
+            GraphicKind::Rectangle,
+            Point::new(200., 100.),
+            Point::new(250., 150.),
+            Default::default(),
+            Default::default(),
+            false,
+        ));
+        if !keyboard {
+            app.tab.keyboard_drawing.leave();
+        }
+        let before = app.tab.doc.clone();
+        for selected in [vec![caption], vec![graphic], vec![caption, graphic]] {
+            for (query, hotspot) in [
+                ("increase charge", Hotspot::Atom(a)),
+                ("radical", Hotspot::Atom(a)),
+                ("reverse bond direction", Hotspot::Bond(a, b)),
+            ] {
+                app.tab.selected = selected.clone();
+                app.tab.hover = Some((hotspot.point(&app.tab.doc).unwrap(), app.tab.file_epoch));
+                app.tab.keyboard_drawing.set_target(hotspot, &app.tab.doc);
+                search(&mut app, query);
+                assert_eq!(app.keyboard_target(), keyboard);
+                let reason = app.command_unavailable(top(&app)).expect(query);
+                let _ = app.update(Message::Commands(Action::Submit));
+                assert!(app.error);
+                assert_eq!(app.status, reason);
+                assert_eq!(app.tab.doc, before);
+                assert_eq!(app.tab.selected, selected);
+                assert!(!app.tab.history.can_undo());
+            }
+        }
+    }
 }
 
 #[test]

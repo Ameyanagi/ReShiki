@@ -136,7 +136,7 @@ impl App {
                 .collect(),
             pointed: false,
         };
-        if !target.atoms.is_empty() {
+        if !selected.is_empty() {
             return target;
         }
         let pointed = if self.keyboard_target() {
@@ -305,6 +305,13 @@ impl App {
                 })
                 .collect()
         };
+        // Catalog order puts direct actions before templates and examples.
+        let mut names = std::collections::HashSet::new();
+        scored.retain(|(_, i)| {
+            catalog
+                .get(*i)
+                .is_some_and(|c| names.insert(c.name.clone()))
+        });
         scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
         let best = scored.first().map_or(0, |(score, _)| *score);
         state.results = scored.into_iter().map(|(_, i)| i).collect();
@@ -337,6 +344,9 @@ impl App {
             ));
         }
         for (first, command) in rows {
+            if !names.insert(command.name.clone()) {
+                continue;
+            }
             let index = state.items.len();
             state.items.push(command);
             if first {
