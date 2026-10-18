@@ -34,7 +34,8 @@ pub(crate) enum Launch {
 /// Selects the launch mode from the arguments after the executable name.
 ///
 /// Only the first token is examined. Exactly `--mcp` or `--cli` selects a
-/// headless mode and keeps the remaining tokens verbatim; anything else,
+/// headless mode and keeps the remaining tokens verbatim, and `--version`
+/// runs as `reshiki --cli --version`; anything else,
 /// including no token, `--mcp=1`, `--MCP` or a later `--mcp`, is
 /// [`Launch::Gui`].
 ///
@@ -49,6 +50,9 @@ pub(crate) fn mode(args: impl IntoIterator<Item = OsString>) -> Launch {
     match args.next() {
         Some(first) if first == "--mcp" => Launch::Mcp(args.collect()),
         Some(first) if first == "--cli" => Launch::Cli(args.collect()),
+        Some(first) if first == "--version" => {
+            Launch::Cli(std::iter::once(first).chain(args).collect())
+        }
         _ => Launch::Gui,
     }
 }
