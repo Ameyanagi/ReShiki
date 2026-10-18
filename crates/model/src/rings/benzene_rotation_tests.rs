@@ -241,6 +241,18 @@ fn dragged_presets_start_at_the_press_and_keep_their_size() {
         alternate: false,
         connect: false,
     };
+    for radius in [0., -5.] {
+        assert!(
+            drawing
+                .place(
+                    &Document::default(),
+                    start,
+                    Some(start.offset(60., 0.)),
+                    radius
+                )
+                .is_err()
+        );
+    }
     let (doc, _) = drawing
         .place(&Document::default(), start, Some(start.offset(60., 0.)), 5.)
         .unwrap();

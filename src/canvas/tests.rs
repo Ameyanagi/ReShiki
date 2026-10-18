@@ -289,6 +289,7 @@ fn regular_ring_drag_snaps_its_rotation_from_empty_space_and_atoms() {
 
 #[test]
 fn regular_ring_drag_preview_and_release_agree_at_different_zooms() {
+    use iced::keyboard::Modifiers;
     let source = reshiki::rings::Preset::Regular.document(42., false);
     let a = source.atom(source.bonds[0].a).unwrap().position;
     let b = source.atom(source.bonds[0].b).unwrap().position;
@@ -330,7 +331,17 @@ fn regular_ring_drag_preview_and_release_agree_at_different_zooms() {
         styled.add_bond(a, b, 2, display);
         cases.push((styled, World::default(), World::new(0., 40.), false));
     }
-    for zoom in [0.5, 1., 2.5] {
+    // Empty canvas, off the 15° grid: snapped, or free with Option/Alt.
+    cases.push((
+        Document::default(),
+        World::default(),
+        World::new(40., -11.),
+        false,
+    ));
+    for (zoom, modifiers) in [0.5, 1., 2.5]
+        .into_iter()
+        .flat_map(|zoom| [(zoom, Modifiers::default()), (zoom, Modifiers::ALT)])
+    {
         for (source, anchor, end, rejected) in &cases {
             let mut canvas = chain_canvas(source, ChainMode::Straight);
             canvas.tool = Tool::Ring;
@@ -344,11 +355,15 @@ fn regular_ring_drag_preview_and_release_agree_at_different_zooms() {
                 150. + (end.y - anchor.y) * zoom,
             );
             let Edit::Ring(committed_anchor, committed_direction) =
-                pointer_gesture(&canvas, start, finish)
+                pointer_gesture_with(&canvas, start, finish, modifiers)
             else {
                 panic!("Ring drag must publish its attachment geometry");
             };
-            let (preview_anchor, preview_direction) = ring_gesture(*anchor, *end, true, 10. / zoom);
+            // The preview's gesture, as `placement.rs` computes it.
+            let attached = source.nearest(*anchor, 10. / zoom).is_some()
+                || reshiki::editing::nearest_bond(source, *anchor, 10. / zoom).is_some();
+            let (preview_anchor, preview_direction) =
+                canvas.ring_drag(*anchor, *end, attached, modifiers);
             let mut preview = source.clone();
             let expected = reshiki::editing::ring_oriented(
                 &mut preview,

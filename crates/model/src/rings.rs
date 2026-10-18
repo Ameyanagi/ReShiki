@@ -128,7 +128,9 @@ impl Drawing {
             return Err("The drawing is invalid.");
         }
         let part = self.preset.document(self.length, self.alternate);
+        // A nonpositive radius falls through to the attachment checks, which reject it.
         if let Some(toward) = direction.filter(|p| p.distance(point) > radius)
+            && radius > 0.
             && doc.nearest(point, radius).is_none()
             && editing::nearest_bond(doc, point, radius).is_none()
         {
