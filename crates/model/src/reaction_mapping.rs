@@ -372,6 +372,23 @@ fn lanes(doc: &Document, reaction: &Reaction, axis: Point) -> Vec<Lane> {
     lanes.sort_by(|a, b| (a.lo + a.hi).total_cmp(&(b.lo + b.hi)));
     lanes
 }
+/// Centre and size of a sign's visible `+`. A wide, aligned text frame or
+/// surrounding whitespace can place it anywhere inside the frame.
+fn glyph_box(a: &crate::document::Annotation) -> (Point, (f32, f32)) {
+    let natural = crate::typography::TextFormat {
+        width_pt: None,
+        ..a.format.clone()
+    };
+    let width = |text: &str| crate::typography::layout(text, &natural).width;
+    let layout = crate::typography::layout(&a.text, &a.format);
+    let x = layout.fragments.first().map_or(0., |f| f.position.x);
+    let lead = a.text.find('+').map_or("", |i| &a.text[..i]);
+    let sign = width("+");
+    let centre = a
+        .position
+        .offset(x + width(lead) + sign / 2., layout.height / 2.);
+    (centre, (sign, layout.height))
+}
 /// Move each product-side `+` with the gap it separated, so the list still
 /// reads `A + B` after alignment moves, rotates or reorders the participants.
 /// Only separators move; participants keep their fitted positions.
@@ -384,9 +401,8 @@ fn reflow_separators(before: &Document, after: &mut Document, reaction: &Reactio
         .filter_map(|id| before.annotations.iter().find(|a| a.id == *id))
         .filter(|a| a.text.trim() == "+")
         .map(|a| {
-            let (w, h) = a.size();
-            let centre = project(axis, a.position.offset(w / 2., h / 2.));
-            (a.id, centre, (w, h))
+            let (centre, size) = glyph_box(a);
+            (a.id, project(axis, centre), size)
         })
         .collect();
     let gap = |a: &Lane, b: &Lane| ((a.hi + b.lo) / 2., (a.mean + b.mean) / 2.);
@@ -414,11 +430,18 @@ fn reflow_separators(before: &Document, after: &mut Document, reaction: &Reactio
         else {
             continue;
         };
-        let (id, _, _) = free.swap_remove(index);
+        let (id, (along, _), (w, _)) = free.swap_remove(index);
         // Move with the gap, keeping the sign's offset from it, so text frame
-        // width and alignment never shift the visible glyph.
+        // width and alignment never shift the visible glyph. If that offset
+        // leaves a narrowed gap, centre the glyph in it instead.
         let to = gap(c, d);
-        let (t, n) = (to.0 - from.0, to.1 - from.1);
+        let target = along - from.0 + to.0;
+        let target = if (c.hi + w * 0.5..=d.lo - w * 0.5).contains(&target) {
+            target
+        } else {
+            to.0
+        };
+        let (t, n) = (target - along, to.1 - from.1);
         if let Some(annotation) = after.annotations.iter_mut().find(|a| a.id == id) {
             annotation.position = annotation
                 .position
