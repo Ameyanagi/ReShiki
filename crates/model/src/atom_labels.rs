@@ -587,6 +587,13 @@ pub fn indicators(doc: &Document) -> Vec<Indicator> {
         .iter()
         .filter_map(|b| Some((*positions.get(&b.a)?, *positions.get(&b.b)?)))
         .collect();
+    // Atoms hidden in collapsed groups cannot claim a map number.
+    let visible: Vec<_> = doc
+        .atoms
+        .iter()
+        .filter(|a| doc.atom_visible(a.id))
+        .map(|a| a.position)
+        .collect();
     let mut result = Vec::new();
     for (owner, text, offset, style) in labels {
         let Some(anchor) = owner.anchor(doc) else {
@@ -624,7 +631,8 @@ pub fn indicators(doc: &Document) -> Vec<Indicator> {
             };
             // A map number beside an element label reads as a subscript,
             // superscript or coefficient (O 3 → O₃), so stack it above or below.
-            // Any map number nearer another atom reads as that atom's.
+            // Any map number nearer another atom reads as that atom's, which is
+            // worse, so ownership outranks stacking.
             let mapping = match owner {
                 Owner::Mapping(id) => Some(
                     doc.atom(id)
@@ -646,10 +654,14 @@ pub fn indicators(doc: &Document) -> Vec<Indicator> {
                                 && center.x - width / 2. < b.x
                                 && center.x + width / 2. > a.x
                         });
-                        let distance = |p: &Point| (p.x - center.x).hypot(p.y - center.y);
-                        let owned = positions.values().all(|p| distance(p) >= distance(&anchor));
-                        if !stacked || !owned {
+                        let distance2 =
+                            |p: &Point| (p.x - center.x).powi(2) + (p.y - center.y).powi(2);
+                        let own = distance2(&anchor);
+                        if !stacked {
                             score += 500.;
+                        }
+                        if visible.iter().any(|p| distance2(p) < own) {
+                            score += 1000.;
                         }
                     }
                     for (a, b) in &occupied {
@@ -788,5 +800,6 @@ pub fn condensed_label(text: &str) -> Option<(&str, &str)> {
     }
     (item && groups.is_empty()).then_some((core, suffix))
 }
+
 #[cfg(test)]
 mod tests;

@@ -51,31 +51,30 @@ fn stacking_never_moves_a_map_number_nearer_another_atom() {
     );
 }
 
-#[test]
-fn a_stacked_label_map_does_not_push_a_carbon_map_beside_the_label() {
-    // Fully mapped O=C–C–C–C–C: map 6 must not end up beside the O.
+/// A fully mapped chain; the first bond has `first_order`.
+fn mapped_chain(atoms: &[(&str, f32, f32)], first_order: u8) -> Document {
     let mut doc = Document::default();
     doc.atom_labels.maps = true;
-    let points = [
-        (0., 0.),
-        (0., -42.),
-        (36.373_07, -63.),
-        (72.746_13, -42.),
-        (72.746_13, 0.),
-        (36.373_07, 21.),
-    ];
-    let ids: Vec<_> = points
+    let ids: Vec<_> = atoms
         .iter()
-        .zip(["O", "C", "C", "C", "C", "C"])
-        .map(|(&(x, y), e)| doc.add_atom(e, Point::new(x, y)))
+        .map(|&(e, x, y)| doc.add_atom(e, Point::new(x, y)))
         .collect();
     for (n, pair) in ids.windows(2).enumerate() {
-        doc.add_bond(pair[0], pair[1], if n == 0 { 2 } else { 1 }, "plain");
+        doc.add_bond(
+            pair[0],
+            pair[1],
+            if n == 0 { first_order } else { 1 },
+            "plain",
+        );
     }
     for (n, id) in ids.iter().enumerate() {
         doc.atom_mut(*id).unwrap().map_num = n as u32 + 1;
     }
-    for map in indicators(&doc) {
+    doc
+}
+
+fn assert_maps_nearest_their_atoms(doc: &Document) {
+    for map in indicators(doc) {
         let Owner::Mapping(owner) = map.owner else {
             continue;
         };
@@ -88,4 +87,74 @@ fn a_stacked_label_map_does_not_push_a_carbon_map_beside_the_label() {
             map.center
         );
     }
+}
+
+#[test]
+fn a_stacked_label_map_does_not_push_a_carbon_map_beside_the_label() {
+    // Fully mapped O=C–C–C–C–C: map 6 must not end up beside the O.
+    assert_maps_nearest_their_atoms(&mapped_chain(
+        &[
+            ("O", 0., 0.),
+            ("C", 0., -42.),
+            ("C", 36.373_07, -63.),
+            ("C", 72.746_13, -42.),
+            ("C", 72.746_13, 0.),
+            ("C", 36.373_07, 21.),
+        ],
+        2,
+    ));
+}
+
+#[test]
+fn ownership_outranks_stacking_when_both_cannot_hold() {
+    // The O's map cannot both stack on the label and stay nearest the O:
+    // staying nearest wins.
+    assert_maps_nearest_their_atoms(&mapped_chain(
+        &[
+            ("C", 0., 0.),
+            ("C", 21., 36.373_067),
+            ("O", 42., 72.746_13),
+            ("C", 63., 109.119_2),
+            ("C", 84., 72.746_13),
+            ("C", 63., 36.373_067),
+            ("C", 84., 0.),
+        ],
+        1,
+    ));
+}
+
+#[test]
+fn atoms_hidden_in_a_collapsed_group_do_not_claim_map_numbers() {
+    let (mut doc, _) = mapped("O", &[Point::new(42., 0.)]);
+    let anchor = doc.add_atom("C", Point::new(84., 0.));
+    let mut members = vec![anchor];
+    for y in [-60., 60.] {
+        let near = doc.add_atom("C", Point::new(42., y));
+        let far = doc.add_atom("C", Point::new(0., y));
+        doc.add_bond(anchor, near, 1, "plain");
+        doc.add_bond(near, far, 1, "plain");
+        members.extend([near, far]);
+    }
+    doc.abbreviations.push(crate::abbreviations::Abbreviation {
+        label_style: None,
+        label_color_override: false,
+        highlight: None,
+        alignment: Default::default(),
+        label: "R".into(),
+        reverse_label: "R".into(),
+        anchor,
+        members,
+    });
+    let oxygen = &doc.atoms[0];
+    let map = indicators(&doc)
+        .into_iter()
+        .find(|i| i.owner == Owner::Mapping(oxygen.id))
+        .unwrap();
+    let (lo, hi) = crate::scene::atom_label_ink_bounds(oxygen, &doc).unwrap();
+    let (top, bottom) = (map.origin.y, map.origin.y + map.height);
+    assert!(
+        bottom <= lo.y || top >= hi.y,
+        "map {:?} not stacked on label {lo:?}..{hi:?}",
+        map.center
+    );
 }
