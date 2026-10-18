@@ -101,3 +101,32 @@ fn generated_paint_bounds_contain_extreme_highlights_and_joined_bonds() {
         assert_eq!(source, before);
     }
 }
+
+#[test]
+fn atom_bounds_cover_long_automatic_numbers_on_either_side() {
+    for open_x in [1., -1.] {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", Point::new(0., 0.));
+        for y in [-15., 15.] {
+            let b = doc.add_atom("C", Point::new(-26. * open_x, y));
+            doc.add_bond(a, b, 1, "plain");
+        }
+        doc.atom_mut(a).unwrap().display.number = Some(crate::atom_labels::Number {
+            text: "attached caption text".into(),
+            offset: None,
+            style: crate::atom_labels::number_style(),
+        });
+        let (lo, hi) = atom_bounds(doc.atom(a).unwrap(), &doc).unwrap().unwrap();
+        let [label] = crate::atom_labels::indicators(&doc).try_into().unwrap();
+        for (ink_lo, ink_hi) in
+            crate::style::text_ink_boxes(&label.text, label.height, &label.style)
+        {
+            let ink_lo = label.origin.offset(ink_lo.x, ink_lo.y);
+            let ink_hi = label.origin.offset(ink_hi.x, ink_hi.y);
+            assert!(
+                lo.x <= ink_lo.x && lo.y <= ink_lo.y && ink_hi.x <= hi.x && ink_hi.y <= hi.y,
+                "{open_x}: {ink_lo:?}..{ink_hi:?} outside {lo:?}..{hi:?}"
+            );
+        }
+    }
+}
