@@ -10,7 +10,7 @@ use crate::chemistry::{
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashSet},
-    sync::{Arc, OnceLock},
+    sync::{Arc, OnceLock, PoisonError, RwLock},
 };
 
 /// The bundled catalog, in detection tie-break order.
@@ -328,22 +328,75 @@ fn builtin() -> Result<&'static Catalog> {
     .map_err(Error::clone)
 }
 
+/// The bundled catalog merged with the user's groups, when there are any.
+static ACTIVE: RwLock<Option<Catalog>> = RwLock::new(None);
+
 /// The active catalog in detection tie-break order.
 pub fn presets() -> Result<Catalog> {
+    if let Some(catalog) = ACTIVE
+        .read()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+    {
+        return Ok(catalog.clone());
+    }
     builtin().cloned()
+}
+
+/// Install the text of the user's catalog file, or remove user groups with
+/// `None`. Invalid entries are skipped and returned as messages; the valid
+/// ones and the bundled catalog stay available.
+pub fn set_user(text: Option<&str>) -> Vec<String> {
+    let (user, mut errors) = text.map(|text| parse(text, true)).unwrap_or_default();
+    match builtin() {
+        Ok(builtin) => {
+            let merged = (!user.is_empty()).then(|| merge(builtin, user));
+            *ACTIVE.write().unwrap_or_else(PoisonError::into_inner) = merged;
+        }
+        Err(error) => errors.insert(0, error.to_string()),
+    }
+    errors
+}
+
+/// A user group replaces the bundled group with the same label in its
+/// place, keeping the tie-break order; other user groups follow the bundled ones.
+fn merge(builtin: &[Arc<Preset>], user: Vec<Preset>) -> Catalog {
+    let mut user: Vec<_> = user.into_iter().map(Arc::new).collect();
+    let mut merged: Vec<_> = builtin
+        .iter()
+        .map(
+            |preset| match user.iter().position(|u| u.label == preset.label) {
+                Some(index) => user.remove(index),
+                None => preset.clone(),
+            },
+        )
+        .collect();
+    merged.extend(user);
+    merged.into()
 }
 
 /// Find the group created by a typed spelling. The flag is true for an alias.
 pub fn lookup(text: &str) -> Result<Option<(Arc<Preset>, bool)>> {
-    Ok(presets()?.iter().find_map(|preset| {
-        if preset.label == text {
-            Some((preset.clone(), false))
-        } else if preset.aliases.iter().any(|alias| alias == text) {
-            Some((preset.clone(), true))
-        } else {
-            None
-        }
-    }))
+    Ok(lookup_in(&presets()?, text))
+}
+
+/// User groups win over a bundled label or alias with the same spelling.
+fn lookup_in(catalog: &[Arc<Preset>], text: &str) -> Option<(Arc<Preset>, bool)> {
+    let find = |user: bool| {
+        catalog
+            .iter()
+            .filter(|preset| preset.user == user)
+            .find_map(|preset| {
+                if preset.label == text {
+                    Some((preset.clone(), false))
+                } else if preset.aliases.iter().any(|alias| alias == text) {
+                    Some((preset.clone(), true))
+                } else {
+                    None
+                }
+            })
+    };
+    find(true).or_else(|| find(false))
 }
 
 #[cfg(test)]

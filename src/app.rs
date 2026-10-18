@@ -482,6 +482,12 @@ impl App {
             template_index: 0,
             templates: template_library::State::load(),
         };
+        if let Some(message) = abbreviations::load_user_catalog()
+            && app.recovered.is_empty()
+        {
+            app.status = message;
+            app.error = true;
+        }
         let task = app.open_startup(startup);
         #[cfg(any(windows, target_os = "linux"))]
         let task = task.chain(Task::done(Message::Desktop(desktop::Action::Ready)));

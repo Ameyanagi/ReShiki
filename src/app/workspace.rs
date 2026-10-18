@@ -1958,6 +1958,13 @@ impl App {
                 "Select a connected fragment whose outside bonds meet one selected atom. A custom name does not change its chemistry.",
                 if self.tab.selected.is_empty() { "Select a connected fragment first" } else { "Enter a label first" },
             ),
+            item(
+                "Define abbreviation from selection",
+                action(A::Define),
+                !self.tab.selected.is_empty() && !label.is_empty(),
+                "Saves the selected group and its one outside bond to your abbreviations, so typing this label on any endpoint creates it.",
+                if self.tab.selected.is_empty() { "Select a group with one bond to the rest of the drawing" } else { "Enter a label first" },
+            ),
             horizontal_line(),
         ].spacing(10);
         for group in selected {
