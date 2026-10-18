@@ -21,6 +21,7 @@ pub(crate) enum Command {
         json: bool,
     },
     Info,
+    Version,
     Tools,
     Schema(Schema),
     Skill(Skill),
@@ -110,6 +111,13 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
     let lossy = name.to_string_lossy();
     if matches!(lossy.as_ref(), "--help" | "-h") {
         return help(rest);
+    }
+    if lossy == "--version" {
+        return if rest.is_empty() {
+            Ok(Command::Version)
+        } else {
+            Err("--version takes no arguments".into())
+        };
     }
     let spec = commands::find(&lossy).ok_or_else(|| unknown_command(&lossy))?;
     match spec.name {

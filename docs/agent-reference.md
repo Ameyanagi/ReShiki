@@ -623,7 +623,7 @@ Extensions accepted by `file_open` and `file_save`; a dash means unsupported.
 | --- | --- |
 | `operation_api` | 1 |
 | `engine_protocol` | 1 |
-| `document` | 26 |
+| `document` | 27 |
 
 ## Proposal
 

@@ -47,6 +47,19 @@ fn headless_modes_keep_the_rest_verbatim() {
     }
 }
 
+#[test]
+fn version_runs_headless_instead_of_opening_the_app() {
+    assert_eq!(
+        mode(args(&["--version"])),
+        Launch::Cli(args(&["--version"]))
+    );
+    assert_eq!(
+        mode(args(&["--version", "x"])),
+        Launch::Cli(args(&["--version", "x"]))
+    );
+    assert_eq!(mode(args(&["--open", "--version"])), Launch::Gui);
+}
+
 #[cfg(unix)]
 #[test]
 fn non_utf8_tokens_are_compared_and_kept_as_bytes() {

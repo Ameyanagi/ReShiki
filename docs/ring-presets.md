@@ -10,15 +10,15 @@ In 0.9.0, **Benzene**, six-membered **Aromatic circle**, and aromatic templates 
 
 The main palette has separate **Chair A**, **Chair B** and **Cyclopentadiene** tools. Their contextual picker switches between these and the existing regular ring tool. Properties shows a fitted molecular preview. The canvas previews transient bonds in green; committed bonds use black JACS styling.
 
-- Click empty space to place a ring centered at the pointer. Drag from that center to rotate it before committing.
-- Click a compatible atom to share it, or a single/double bond to fuse. Drag from the target to choose the attachment side. Existing atoms and coordinates remain unchanged; new edges match the local bond length.
-- Hold Alt/Option on an atom to attach the whole ring through a new single bond. The default direction uses the available angular gap; a drag chooses the direction. This mode also supports eligible nitrogen/oxygen attachment atoms. It does not replace an element with carbon.
+- Click empty space to place a ring centered at the pointer. Drag on empty space instead to place the ring's first atom at the press point with its first bond pointing at the pointer, the ring on the counter-clockwise side. The direction snaps to 15° steps; hold Option/Alt to rotate freely. The ring keeps its usual bond length either way; dragging never scales it.
+- Click a compatible atom to share it, or a single/double bond to fuse. Drag from the target to choose the attachment side; a drag from an atom aims the ring in 15° steps, or freely with Option/Alt. Existing atoms and coordinates remain unchanged; new edges match the local bond length.
+- Hold Alt/Option on an atom to attach the whole ring through a new single bond. The default direction uses the available angular gap; a drag chooses the direction freely. This mode also supports eligible nitrogen/oxygen attachment atoms. It does not replace an element with carbon.
 - Hold Shift with Cyclopentadiene to move its two nonadjacent double bonds by one edge.
 - Each placement is one Undo step. Escape, focus loss or release outside the canvas cancels a drag. Invalid chemistry leaves the document unchanged and explains the failed attachment.
 
 Chair geometry uses three unit edge vectors and their opposites, giving six equal-length edges and two inward corners. A/B are mirrored **2D drawing projections**. They do not assign stereochemistry or encode a conformational transition. The stored result is a normal molecular graph, so labels, bonds, selection, grouping, native save and molecular/drawing exports remain editable. Cleanup may redraw the ring as a regular polygon.
 
-The existing regular 3–8 member tool retains its previous interaction. Alt connection and freely rotated placement described here apply to the three new presets. General aromatic fusion, attachment at stereocenters/mapped or explicit-H sites, axial/equatorial substitution controls and 3D conformer operations remain incomplete.
+The regular 3–8 member tool rotates the same way when dragged on empty space or from an atom; a drag from empty space released on an atom or bond still attaches there. Alt connection applies to the presets. General aromatic fusion, attachment at stereocenters/mapped or explicit-H sites, axial/equatorial substitution controls and 3D conformer operations remain incomplete.
 
 ## Catalog
 

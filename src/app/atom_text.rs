@@ -535,7 +535,7 @@ impl App {
         }
         content = content.push(text(if state.members.is_some() {
                 "The selected atoms define this group. Its formula and bonds are retained; expand it to edit the structure."
-            } else { atom_text::description(&state.input, state.mode) })
+            } else { atom_text::description(&state.input, &state.scripts(), state.mode) })
                 .size(12)
                 .style(muted_text));
         if state.members.is_some() || self.tab.doc.abbreviation(state.id).is_some() {
