@@ -454,9 +454,9 @@ fn charged_label_shapes_normalization_and_existing_errors() -> Result<(), String
 fn charged_elements_have_specific_guidance_and_text_mode_stays_literal() -> Result<(), String> {
     const CHARGED: &str = "An element with the typed charge. Hydrogens are not added; type the element alone to restore automatic hydrogens.";
     const HYDRIDE: &str = "An atom with the entered hydrogen count. Checking chemistry will not rewrite this label. Type the element alone to restore automatic hydrogens.";
-    assert_eq!(description("Pd2+", Mode::Auto), CHARGED);
-    assert_eq!(description("NH4+", Mode::Auto), HYDRIDE);
-    assert_eq!(description("NH0+", Mode::Auto), HYDRIDE);
+    assert_eq!(description("Pd2+", &[], Mode::Auto), CHARGED);
+    assert_eq!(description("NH4+", &[], Mode::Auto), HYDRIDE);
+    assert_eq!(description("NH0+", &[], Mode::Auto), HYDRIDE);
     let mut source = Document::default();
     let id = source.add_atom("Pd", Point::default());
     let result = apply(&source, id, "Pd2+", Mode::Text)?;
@@ -465,7 +465,7 @@ fn charged_elements_have_specific_guidance_and_text_mode_stays_literal() -> Resu
     assert_eq!(atom.charge, 0);
     assert_eq!(atom.display.variable.as_deref(), Some("Pd2+"));
     assert_eq!(
-        description("Pd2+", Mode::Text),
+        description("Pd2+", &[], Mode::Text),
         "Text on a dummy atom; existing bonds stay connected."
     );
     Ok(())
@@ -656,4 +656,44 @@ fn boc_is_a_real_expandable_group_and_invalid_input_is_atomic()
     assert!(apply(&doc, endpoint, "Boc", Mode::Auto).is_err());
     assert!(apply(&doc, endpoint, "Boc", Mode::Text).is_ok());
     Ok(())
+}
+
+#[test]
+fn finite_repeat_labels_are_described_as_repeats_not_dummy_text() {
+    const REPEAT: &str = "A repeat of one atom over the typed count range. Expand generic structures generates each count.";
+    for label in ["[CH2]1-3", "CH2 1-3", "(O)2"] {
+        assert_eq!(description(label, &[], Mode::Auto), REPEAT, "{label}");
+    }
+    assert_eq!(
+        description("[CH2]1-3", &[], Mode::Text),
+        "Text on a dummy atom; existing bonds stay connected."
+    );
+    // The helper promises a repeat exactly when Apply creates a link node.
+    let mut doc = Document::default();
+    let ids = [0.0, 30.0, 60.0].map(|x| doc.add_atom("C", Point::new(x, 0.0)));
+    doc.add_bond(ids[0], ids[1], 1, "plain");
+    doc.add_bond(ids[1], ids[2], 1, "plain");
+    for label in [
+        "[CH2]1-3", "CH2 1-3", "(O)2", "[R]1-2", "[CH2]n", "NH4-2", "[Et]1-3", "[OMe]1-3",
+        "[Cp]1-3", "[]1-3",
+    ] {
+        let linked = apply(&doc, ids[1], label, Mode::Auto)
+            .is_ok_and(|result| !result.generic.links.is_empty());
+        assert_eq!(
+            description(label, &[], Mode::Auto) == REPEAT,
+            linked,
+            "{label}"
+        );
+    }
+    // Manually formatted text is applied as text, never as a link node.
+    let lowered = [ScriptRun {
+        start: 3,
+        end: 4,
+        script: Script::Subscript,
+    }];
+    assert!(
+        apply_with_scripts(&doc, ids[1], "[CH2]1-3", &lowered, Mode::Auto)
+            .is_ok_and(|result| result.generic.links.is_empty())
+    );
+    assert_ne!(description("[CH2]1-3", &lowered, Mode::Auto), REPEAT);
 }

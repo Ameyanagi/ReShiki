@@ -1450,8 +1450,9 @@ impl App {
                 hover_hint(
                     text(self.selection_summary()).size(11).style(muted_text),
                     format!(
-                        "Click a bond's middle to select it; Shift-click adds. {} selects the whole drawing.",
-                        keys(Modifiers::COMMAND, "A")
+                        "Click a bond's middle to select it; Shift-click adds. {} selects the whole drawing.\nRotate: drag the round handle (Shift: 15° steps) · {}",
+                        keys(Modifiers::COMMAND, "A"),
+                        super::shortcuts::rotation_keys()
                     ),
                     tooltip::Position::Bottom,
                 )

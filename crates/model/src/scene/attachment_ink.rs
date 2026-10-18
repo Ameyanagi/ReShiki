@@ -211,7 +211,7 @@ fn intersects_fraction(part: &Primitive, origin: Point, axis: Point, at: f32) ->
                         && path.windows(2).any(|line| range(line, style.width() * 0.5)))
             })
         }
-        Primitive::Picture(_) | Primitive::Text { .. } => false,
+        Primitive::Picture(_) | Primitive::Text { .. } | Primitive::Halo { .. } => false,
     }
 }
 
