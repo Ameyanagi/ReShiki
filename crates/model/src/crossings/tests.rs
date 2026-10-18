@@ -875,6 +875,88 @@ fn side_positioned_crossed_doubles_cut_and_are_cut_like_centered_ones() {
     }
 }
 
+/// Atoms at the given positions and depths.
+fn atoms_at(doc: &mut Document, atoms: &[(Point, f32)]) -> Vec<u64> {
+    atoms
+        .iter()
+        .map(|(p, z)| {
+            let id = doc.add_atom("C", *p);
+            doc.atom_mut(id).unwrap().depth = *z;
+            id
+        })
+        .collect()
+}
+
+#[test]
+fn widely_spaced_crossed_rear_strokes_are_cut_where_they_cross_the_front_bond() {
+    // At wide spacing the diagonals cross the front bond away from where
+    // parallel rails at their end offsets would.
+    let mut doc = Document::default();
+    doc.drawing_style.bond_spacing_ratio = 0.4;
+    let (sin, cos) = 40_f32.to_radians().sin_cos();
+    let atoms = atoms_at(
+        &mut doc,
+        &[
+            (Point::new(-30., 0.), -20.),
+            (Point::new(30., 0.), -20.),
+            (Point::new(-30. * cos, -30. * sin), 20.),
+            (Point::new(30. * cos, 30. * sin), 20.),
+        ],
+    );
+    doc.add_bond(atoms[0], atoms[1], 2, "wavy");
+    doc.add_bond(atoms[2], atoms[3], 1, "plain");
+    tag(&mut doc);
+    assert_eq!(assert_occluded(&doc, "wide crossed"), 2);
+}
+
+#[test]
+fn an_omitted_inner_rail_hides_nothing() {
+    // A short positioned double draws no inner rail; a rear bond where that
+    // rail would be, beyond the drawn rail's reach, stays whole.
+    let mut doc = Document::default();
+    let spacing = doc.drawing_style.bond_length_world * doc.drawing_style.bond_spacing_ratio;
+    let atoms = atoms_at(
+        &mut doc,
+        &[
+            (Point::new(-4., 0.), 20.),
+            (Point::new(4., 0.), 20.),
+            (Point::new(-20., spacing), -20.),
+            (Point::new(20., spacing), -20.),
+        ],
+    );
+    doc.add_bond(atoms[0], atoms[1], 2, "plain");
+    doc.add_bond(atoms[2], atoms[3], 1, "plain");
+    doc.bonds[0].double_position = crate::bonds::DoublePosition::Right;
+    assert!(super::gaps(&doc)[1].is_empty());
+}
+
+#[test]
+fn a_thin_inner_rail_keeps_its_own_width() {
+    // A bold double with a plain inner rail clears and prunes that rail by
+    // its plain width.
+    let mut doc = Document::default();
+    let atoms = atoms_at(
+        &mut doc,
+        &[
+            (Point::new(-30., 0.), -20.),
+            (Point::new(30., 0.), -20.),
+            (Point::new(15., -30.), 20.),
+            (Point::new(15., 30.), 20.),
+        ],
+    );
+    doc.add_bond(atoms[0], atoms[1], 2, "bold");
+    doc.add_bond(atoms[2], atoms[3], 1, "plain");
+    doc.bonds[0].double_position = crate::bonds::DoublePosition::Right;
+    doc.bonds[0].secondary_display = Some("plain".into());
+    let style = &doc.drawing_style;
+    let (thin, bold) = (style.line_width(), style.world(style.bold_width_pt));
+    let mut widths: Vec<_> = super::gaps(&doc)[0].iter().map(|g| g.min).collect();
+    widths.sort_by(f32::total_cmp);
+    assert_eq!(widths, [thin, bold]);
+    tag(&mut doc);
+    assert_eq!(assert_occluded(&doc, "thin inner rail"), 2);
+}
+
 #[test]
 fn a_nearly_edge_on_warped_ring_keeps_its_depth_gradient() {
     // A slightly warped aromatic ring seen almost edge-on: its circle lies

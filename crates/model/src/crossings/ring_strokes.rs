@@ -223,7 +223,7 @@ pub(crate) fn ring_stroke_with(
         let axis = Point::new(ab.x / length, ab.y / length);
         // A front double bond's side rail must clear the curve too.
         let rails = sides.rails(bond);
-        let margin = rails.width * 0.5 + DEFAULT.world(1.1);
+        let margin = rails.width() * 0.5 + DEFAULT.world(1.1);
         let (lo, hi) = (rails.lo() - margin, rails.hi() + margin);
         let layer = depth::layer(doc, bond, &ring.atoms, projected);
         let front = |t: f32| {
@@ -289,8 +289,13 @@ pub(crate) fn ring_stroke_with(
                     ends: half,
                     band: (-half, half),
                 };
-                for (offset, rail) in rails.filters() {
-                    let Some((low, high)) = clearance(curve, a, axis, offset) else {
+                for (line, rail) in rails.filters() {
+                    // A crossed stroke runs between its end offsets.
+                    let Some((low, high)) = [line.offset.0, line.offset.1]
+                        .into_iter()
+                        .filter_map(|offset| clearance(curve, a, axis, offset))
+                        .reduce(|x, y| (x.0.min(y.0), x.1.max(y.1)))
+                    else {
                         continue;
                     };
                     let t = ((low + high) * 0.5 / length).clamp(0., 1.);
@@ -324,7 +329,7 @@ pub(crate) fn ring_stroke_with(
                                 low,
                                 high,
                                 rail,
-                                min: rails.width,
+                                min: line.width,
                             },
                         ));
                     }
