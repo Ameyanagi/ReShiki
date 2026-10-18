@@ -61,21 +61,19 @@ fn sub(a: Point, b: Point) -> Point {
     Point::new(a.x - b.x, a.y - b.y)
 }
 /// Only straight, free arrows carry labels. **Straighten** keeps a control
-/// point on the shaft, which still counts as straight.
+/// point on the shaft, which still counts as straight. An arrow collapsed to
+/// a point has no axis to bend away from; `layout` restores its length.
 pub fn supports(arrow: &Arrow) -> bool {
     arrow.cubic.is_none()
         && !arrow.is_attached()
         && arrow.control_point().is_none_or(|c| {
             let len = arrow.start.distance(arrow.end);
-            let off_axis = if len > 1e-3 {
-                ((arrow.end.x - arrow.start.x) * (c.y - arrow.start.y)
+            len <= 1e-3
+                || ((arrow.end.x - arrow.start.x) * (c.y - arrow.start.y)
                     - (arrow.end.y - arrow.start.y) * (c.x - arrow.start.x))
                     .abs()
                     / len
-            } else {
-                c.distance(arrow.start)
-            };
-            off_axis <= 1e-3
+                    <= 1e-3
         })
 }
 fn frame(arrow: &Arrow) -> Option<Frame> {

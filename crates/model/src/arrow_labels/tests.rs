@@ -415,3 +415,36 @@ fn collapsing_an_end_onto_the_other_stops_at_the_label() {
     assert!(arrow(&doc).end.x > start.x);
     assert!((length(&doc) - minimum_length(&doc, ARROW).unwrap()).abs() < 1e-3);
 }
+
+#[test]
+fn expansion_selection_takes_every_label_of_a_selected_labels_arrow() {
+    let mut doc = scheme();
+    let above = type_text(&mut doc, "Pd/C", Point::new(60., -12.));
+    let below = type_text(&mut doc, "rt", Point::new(60., 14.));
+    for order in [false, true] {
+        if order {
+            doc.arrow_labels.reverse();
+        }
+        for picked in [above, below] {
+            let part = crate::editing::preserved_expansion_selection(&doc, &[picked]).unwrap();
+            assert_eq!(part.arrow_labels.len(), 2);
+            assert_eq!(part.annotations.len(), 2);
+            assert_eq!(part.arrows.len(), 1);
+        }
+    }
+}
+
+#[test]
+fn collapsing_a_straightened_arrow_keeps_its_label() {
+    let mut doc = scheme();
+    let id = type_text(&mut doc, "H2O", Point::new(60., -12.));
+    edit(&mut doc, |doc| doc.arrows[0].straighten());
+    let start = arrow(&doc).start;
+    edit(&mut doc, |doc| doc.arrows[0].edit_handle(1, start));
+    assert_eq!(side(&doc, id), Some(Side::Above));
+    let a = arrow(&doc);
+    assert_eq!(a.start, start);
+    assert!(a.end.x > start.x);
+    assert_eq!(a.control, Some(a.start.lerp(a.end, 0.5)));
+    assert!((length(&doc) - minimum_length(&doc, ARROW).unwrap()).abs() < 1e-3);
+}
