@@ -2548,6 +2548,49 @@ fn mechanism_attachment_92_mark_drag_preview_resolves_same_geometry_as_commit() 
 }
 
 #[test]
+fn arrow_end_drag_preview_keeps_condition_labels_like_the_commit() {
+    let mut doc = Document::default();
+    doc.arrows.push(reshiki::document::Arrow::new(
+        1,
+        World::new(0., 0.),
+        World::new(120., 0.),
+        reshiki::arrows::Preset::Forward,
+        reshiki::arrows::ArrowStyle::preset(reshiki::arrows::Preset::Forward),
+    ));
+    let before = doc.clone();
+    let mut text = reshiki::document::Annotation {
+        id: 2,
+        position: World::default(),
+        text: "Pd/C, H2, EtOAc, rt".into(),
+        format: Default::default(),
+    };
+    let (w, h) = text.size();
+    text.position = World::new(60. - w / 2., -12. - h / 2.);
+    doc.annotations.push(text);
+    let _ = reshiki::transaction::reconcile(&mut doc, before).unwrap();
+    assert_eq!(doc.arrow_labels.len(), 1);
+    let minimum = reshiki::arrow_labels::minimum_length(&doc, 1).unwrap();
+    let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+    let start = doc.arrows[0].start;
+    let canvas = chain_canvas(&doc, ChainMode::Straight);
+    let state = State {
+        gesture: Some(Gesture::ArrowHandle { id: 1, index: 1 }),
+        cursor: Some(canvas.camera.screen(start.offset(5., 0.), bounds)),
+        ..Default::default()
+    };
+    let preview = canvas.pointer_preview_document(&state, bounds);
+    let arrow = &preview.arrows[0];
+    assert_eq!(preview.arrow_labels, doc.arrow_labels);
+    assert_eq!(arrow.start, start);
+    assert!(arrow.end.x > start.x);
+    assert!((arrow.start.distance(arrow.end) - minimum).abs() < 1e-3);
+    let mut committed = doc.clone();
+    committed.arrows[0].end = arrow.end;
+    let _ = reshiki::transaction::reconcile(&mut committed, doc.clone()).unwrap();
+    assert_eq!(preview.annotations, committed.annotations);
+}
+
+#[test]
 fn readable_foreground_orbital_labels_select_the_atom_and_other_filled_graphics_keep_precedence() {
     use reshiki::{
         graphics::GraphicKind, palette::Color, scene::Primitive, scientific::OrbitalKind,
