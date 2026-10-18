@@ -319,3 +319,36 @@ fn keyboard_navigation_moves_within_results_and_never_runs_commands() {
     let _ = app.update(Message::ToggleHelp);
     assert!(app.help_open && app.help.query.is_empty());
 }
+
+#[test]
+fn canvas_tool_keys_say_when_keyboard_drawing_takes_them() {
+    // Keyboard drawing is on by default, and at an empty hotspot these keys
+    // start a drawing instead of choosing a tool, so their rows must say so.
+    let shift = crate::app::shortcuts::keys(Modifiers::SHIFT, "");
+    for entry in entries()
+        .iter()
+        .filter(|e| e.scope == registry::Scope::Canvas)
+    {
+        let taken = entry.keys.split(" / ").any(|key| {
+            let key = key.strip_prefix(shift.as_str()).unwrap_or(key);
+            key.chars().count() == 1 && crate::app::keyboard_drawing::starts_drawing(key)
+        });
+        assert_eq!(
+            taken,
+            entry.description.contains("keyboard drawing off"),
+            "{}",
+            entry.name
+        );
+    }
+}
+
+#[test]
+fn shift_search_keeps_modifiers_with_their_key() {
+    let named = |name: &str| entries().iter().find(|e| e.name == name).unwrap();
+    // In "C / l" Shift belongs to C, so Shift+L is Lithium, not Chlorine.
+    assert!(search::score(named("Lithium"), "shift l").is_some());
+    assert!(search::score(named("Chlorine"), "shift l").is_none());
+    assert!(search::score(named("Chlorine"), "shift c").is_some());
+    // Modifiers written once before a list apply to each key.
+    assert!(search::score(named("Align / distribute"), "cmd shift alt c").is_some());
+}
