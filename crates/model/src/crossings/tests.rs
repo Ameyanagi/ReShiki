@@ -910,6 +910,59 @@ fn widely_spaced_crossed_rear_strokes_are_cut_where_they_cross_the_front_bond() 
 }
 
 #[test]
+fn a_crossed_rear_stroke_under_a_front_bond_leaves_the_other_stroke() {
+    let mut doc = Document::default();
+    doc.drawing_style.bond_spacing_ratio = 0.4;
+    let half = doc.drawing_style.bond_length_world * 0.2;
+    let atoms = atoms_at(
+        &mut doc,
+        &[
+            (Point::new(-30., 0.), -20.),
+            (Point::new(30., 0.), -20.),
+            (Point::new(-30., -half), 20.),
+            (Point::new(30., half), 20.),
+        ],
+    );
+    doc.add_bond(atoms[0], atoms[1], 2, "wavy");
+    doc.add_bond(atoms[2], atoms[3], 1, "plain");
+    tag(&mut doc);
+    assert_eq!(assert_occluded(&doc, "crossed under"), 2);
+    let inks = inks(&crate::scene::primitives(&doc));
+    // On the stroke from (-30, half) to (30, -half), clear of the front bond.
+    let p = Point::new(-20., half * 2. / 3.);
+    assert!(
+        inks.iter().any(|i| i.owner == Some(0) && i.shape.covers(p)),
+        "no rear ink at {p:?}"
+    );
+}
+
+#[test]
+fn a_rear_bond_is_hidden_between_widely_spaced_front_rails() {
+    let mut doc = Document::default();
+    doc.drawing_style.bond_spacing_ratio = 0.4;
+    let atoms = atoms_at(
+        &mut doc,
+        &[
+            (Point::new(-30., 0.), 20.),
+            (Point::new(30., 0.), 20.),
+            (Point::new(0., -30.), -20.),
+            (Point::new(0., 30.), -20.),
+        ],
+    );
+    doc.add_bond(atoms[0], atoms[1], 2, "plain");
+    doc.add_bond(atoms[2], atoms[3], 1, "plain");
+    doc.bonds[0].double_position = crate::bonds::DoublePosition::Center;
+    tag(&mut doc);
+    let inks = inks(&crate::scene::primitives(&doc));
+    assert!(
+        !inks
+            .iter()
+            .any(|i| i.owner == Some(1) && i.shape.covers(Point::new(0., 0.))),
+        "rear ink between the front rails"
+    );
+}
+
+#[test]
 fn an_omitted_inner_rail_hides_nothing() {
     // A short positioned double draws no inner rail; a rear bond where that
     // rail would be, beyond the drawn rail's reach, stays whole.
