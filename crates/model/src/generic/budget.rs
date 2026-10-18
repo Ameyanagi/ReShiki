@@ -53,6 +53,7 @@ pub(super) fn charge_validation(doc: &Document, work: &mut Work) -> Result<(), S
         .saturating_add(doc.groups.len())
         .saturating_add(doc.abbreviations.len())
         .saturating_add(doc.molecule_names.len())
+        .saturating_add(doc.arrow_labels.len())
         .saturating_add(doc.reactions.len())
         .saturating_add(doc.arrows.len())
         .saturating_add(doc.ring_fills.len())
@@ -118,6 +119,16 @@ pub(super) fn charge_validation(doc: &Document, work: &mut Work) -> Result<(), S
             );
         }
     }
+    // Each link looks up its text, caption links and arrow.
+    cost = cost.saturating_add(
+        doc.arrow_labels.len().saturating_mul(
+            doc.annotations
+                .len()
+                .saturating_add(doc.molecule_names.len())
+                .saturating_add(doc.arrows.len())
+                .saturating_add(1),
+        ),
+    );
     for name in &doc.molecule_names {
         cost = cost
             .saturating_add(doc.annotations.len())
@@ -217,6 +228,7 @@ impl Presentation {
             annotations,
             molecule_names,
             arrows,
+            arrow_labels,
             graphics,
             groups,
             reactions,
@@ -313,6 +325,10 @@ impl Presentation {
                 .saturating_add(usize::from(a.start_anchor.is_some()))
                 .saturating_add(usize::from(a.end_anchor.is_some()));
         }
+        work.charge(arrow_labels.len())?;
+        copy = copy.saturating_add(records::<crate::arrow_labels::ArrowLabel>(
+            arrow_labels.len(),
+        ));
         for name in molecule_names {
             work.charge(1)?;
             named_members = named_members.saturating_add(name.atoms.len());

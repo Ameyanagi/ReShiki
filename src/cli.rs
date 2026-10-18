@@ -150,6 +150,9 @@ async fn run_command(
         }
         Command::Skill(skill) => skill::run(skill, out),
         Command::Info => info(out, err).await,
+        Command::Version => {
+            writeln!(out, "reshiki {}", crate::updates::CURRENT_VERSION).map_err(CliError::Stdout)
+        }
         Command::Convert(convert) => convert::run(convert, out, err, terminal).await,
         Command::Render(render) => render::run(render, out, err, terminal).await,
         Command::Compose(compose) => compose::run(compose, out, err, terminal).await,
