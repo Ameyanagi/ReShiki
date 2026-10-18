@@ -977,7 +977,7 @@ pub(crate) fn double_position(faces: &FaceIndex<'_>, bond: &Bond) -> crate::bond
         position => position,
     }
 }
-fn automatic_double_side(faces: &FaceIndex<'_>, bond: &Bond) -> Option<f32> {
+pub(crate) fn automatic_double_side(faces: &FaceIndex<'_>, bond: &Bond) -> Option<f32> {
     if matches!(bond.order, 2 | 7)
         && let Some(side) = faces.automatic_side(bond)
     {
