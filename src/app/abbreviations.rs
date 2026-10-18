@@ -177,6 +177,18 @@ impl App {
         let reverse = self.abbreviations.reverse_label.trim().to_owned();
         let defined = catalog::from_selection(&self.tab.doc, &self.tab.selected, &label, &reverse)?;
         let path = user_catalog_path()?;
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        // Hold the lock from read to write, so another ReShiki window saving
+        // at the same time cannot drop this group. Dropping it unlocks.
+        let lock = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(path.with_extension("json.lock"))
+            .and_then(|file| file.lock().map(|()| file))
+            .map_err(|e| format!("Could not lock your abbreviations file: {e}"))?;
         let existing = match std::fs::read_to_string(&path) {
             Ok(text) => Some(text),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
@@ -210,10 +222,8 @@ impl App {
         }
         let mut doc = self.tab.doc.clone();
         doc.contract(&defined.members, &label, &reverse)?;
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-        }
         reshiki::storage::write_atomic(&path, text.as_bytes())?;
+        drop(lock);
         let skipped = catalog::set_user(Some(&text));
         self.abbreviations.catalog_warning = catalog_warning(&skipped, &path);
         self.tab.doc = doc;
