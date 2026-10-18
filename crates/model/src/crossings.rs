@@ -64,17 +64,15 @@ pub(crate) struct Rails {
     separate: bool,
 }
 impl Rails {
-    fn offsets(&self) -> impl Iterator<Item = f32> + '_ {
-        self.strokes.iter().flat_map(|r| [r.offset.0, r.offset.1])
-    }
-    fn lo(&self) -> f32 {
-        self.offsets().fold(0., f32::min)
-    }
-    fn hi(&self) -> f32 {
-        self.offsets().fold(0., f32::max)
-    }
-    fn width(&self) -> f32 {
-        self.strokes.iter().map(|r| r.width).fold(0., f32::max)
+    /// The band of offsets the strokes' ink covers, each by its own width.
+    fn band(&self) -> (f32, f32) {
+        self.strokes.iter().fold((0., 0.), |(lo, hi), r| {
+            let half = r.width * 0.5;
+            (
+                lo.min(r.offset.0.min(r.offset.1) - half),
+                hi.max(r.offset.0.max(r.offset.1) + half),
+            )
+        })
     }
     /// Each stroke with its gap filter; a single rail needs none.
     fn filters(&self) -> Vec<(Rail, Option<(Rail, f32)>)> {
@@ -142,13 +140,24 @@ impl<'d> Sides<'d> {
         };
         let spacing = style.bond_length_world * style.bond_spacing_ratio;
         let strokes = match bond.order {
-            2 if display == "wavy" => [-spacing / 2., spacing / 2.]
-                .map(|from| Rail {
-                    offset: (from, -from),
-                    crossed: true,
-                    ..rail(0., width)
-                })
-                .to_vec(),
+            2 if display == "wavy" => {
+                // The diagonals run between the label-trimmed ends.
+                let span = self
+                    .doc
+                    .atom(bond.a)
+                    .zip(crate::scene::bond_segment(self.doc, bond, None))
+                    .map_or((0., length), |(a, (start, end))| {
+                        (a.position.distance(start), a.position.distance(end))
+                    });
+                [-spacing / 2., spacing / 2.]
+                    .map(|from| Rail {
+                        span,
+                        offset: (from, -from),
+                        width,
+                        crossed: true,
+                    })
+                    .to_vec()
+            }
             2 | 7 => match crate::scene::double_position(self.faces(), bond) {
                 side @ (Left | Right) => {
                     let offset = if side == Left { -spacing } else { spacing };

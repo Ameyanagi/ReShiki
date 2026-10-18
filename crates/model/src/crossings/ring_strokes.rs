@@ -223,8 +223,8 @@ pub(crate) fn ring_stroke_with(
         let axis = Point::new(ab.x / length, ab.y / length);
         // A front double bond's side rail must clear the curve too.
         let rails = sides.rails(bond);
-        let margin = rails.width() * 0.5 + DEFAULT.world(1.1);
-        let (lo, hi) = (rails.lo() - margin, rails.hi() + margin);
+        let (lo, hi) = rails.band();
+        let (lo, hi) = (lo - DEFAULT.world(1.1), hi + DEFAULT.world(1.1));
         let layer = depth::layer(doc, bond, &ring.atoms, projected);
         let front = |t: f32| {
             if layer == rank.0

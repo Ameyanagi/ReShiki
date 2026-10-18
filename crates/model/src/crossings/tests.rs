@@ -1029,6 +1029,30 @@ fn a_crossed_rear_bond_trimmed_at_a_label_is_still_cut() {
 }
 
 #[test]
+fn a_short_crossed_rear_bond_between_labels_is_cut_where_its_strokes_are() {
+    let mut doc = Document::default();
+    doc.drawing_style.bond_spacing_ratio = 0.4;
+    let atoms = atoms_at(
+        &mut doc,
+        &[
+            (Point::new(-15., 0.), -20.),
+            (Point::new(15., 0.), -20.),
+            (Point::new(-30., 7.), 20.),
+            (Point::new(30., 7.), 20.),
+        ],
+    );
+    for atom in &atoms[..2] {
+        let atom = doc.atom_mut(*atom).unwrap();
+        atom.element = "N".into();
+        atom.no_implicit = true;
+    }
+    doc.add_bond(atoms[0], atoms[1], 2, "wavy");
+    doc.add_bond(atoms[2], atoms[3], 1, "plain");
+    tag(&mut doc);
+    assert_eq!(assert_occluded(&doc, "short labelled crossed"), 2);
+}
+
+#[test]
 fn shallow_crossed_rear_strokes_keep_their_own_gaps() {
     let mut doc = Document::default();
     doc.drawing_style.bond_spacing_ratio = 0.05;
@@ -1075,6 +1099,37 @@ fn a_bold_inner_rail_widens_clearance_only_around_itself() {
     doc.bonds[0].double_position = crate::bonds::DoublePosition::Center;
     doc.bonds[0].secondary_display = Some("bold".into());
     assert!(super::gaps(&doc)[1].is_empty());
+}
+
+#[test]
+fn a_bold_inner_rail_widens_ring_circle_clearance_only_on_its_side() {
+    let mut doc = Document::default();
+    let ring: Vec<_> = (0..6)
+        .map(|i| {
+            let angle = (i as f32 * 60.).to_radians();
+            (Point::new(42. * angle.cos(), 42. * angle.sin()), -20.)
+        })
+        .collect();
+    let ring = atoms_at(&mut doc, &ring);
+    for i in 0..6 {
+        doc.add_bond(ring[i], ring[(i + 1) % 6], 4, "plain");
+    }
+    let atoms = atoms_at(
+        &mut doc,
+        &[(Point::new(-40., 0.), 20.), (Point::new(40., 0.), 20.)],
+    );
+    doc.add_bond(atoms[0], atoms[1], 2, "plain");
+    let front = doc.bonds.len() - 1;
+    doc.bonds[front].double_position = crate::bonds::DoublePosition::Center;
+    doc.bonds[front].secondary_display = Some("bold".into());
+    tag(&mut doc);
+    let p = Point::new(-27.344, -9.107);
+    assert!(
+        inks(&crate::scene::primitives(&doc))
+            .iter()
+            .any(|i| i.owner.is_none() && i.shape.distance(p) < 0.5),
+        "ring circle cut at {p:?}"
+    );
 }
 
 #[test]
