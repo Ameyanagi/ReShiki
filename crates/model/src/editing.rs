@@ -246,11 +246,16 @@ pub fn analysis_document(doc: &Document, atoms: &[u64]) -> Document {
             .iter()
             .position(|e| e.symbol == symbol)
     };
-    let metal = |id| {
-        doc.atom(id)
-            .and_then(|a| number(&a.element))
-            .is_some_and(|n| !matches!(n, 0..=2 | 5..=10 | 14..=18 | 33..=36 | 52..=54 | 85..=86))
-    };
+    let metals: HashSet<u64> = doc
+        .atoms
+        .iter()
+        .filter(|a| {
+            number(&a.element).is_some_and(
+                |n| !matches!(n, 0..=2 | 5..=10 | 14..=18 | 33..=36 | 52..=54 | 85..=86),
+            )
+        })
+        .map(|a| a.id)
+        .collect();
     // Per kept atom: twice the valence kept and cut (`None` when a cut bond
     // is aromatic, which has no whole valence), and whether a single bond to
     // a metal is cut or kept.
@@ -271,7 +276,7 @@ pub fn analysis_document(doc: &Document, atoms: &[u64]) -> Document {
                 cut: Some(0),
                 ..Default::default()
             });
-            let to_metal = b.order == 1 && metal(other);
+            let to_metal = b.order == 1 && metals.contains(&other);
             if kept.contains(&other) {
                 entry.kept += twice(b, atom);
                 entry.metal_kept |= to_metal;
@@ -302,7 +307,7 @@ pub fn analysis_document(doc: &Document, atoms: &[u64]) -> Document {
         };
         // Preparation turns one single bond from a non-metal that exceeds its
         // valence to a metal dative, taking no valence from the non-metal.
-        if !fits(kept, cut) && !metal(atom.id) {
+        if !fits(kept, cut) && !metals.contains(&atom.id) {
             if v.metal_cut {
                 cut -= 2;
             } else if v.metal_kept {
