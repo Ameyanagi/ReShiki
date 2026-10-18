@@ -46,11 +46,13 @@ checks each complete request against the current schema instead of regenerating
 expected outputs after Rust implementation changes. Python reference-source
 hashes and the complete record stream checksum are checked on replay.
 
-Replay hashes the retained historical template input, CDX codec, arrow codec and
-worker sources rather than their evolving live files. The source archives contain
+Replay hashes the retained historical template input, abbreviation presets, CDX
+codec, arrow codec and worker sources rather than their evolving live files. The source archives contain
 exact ReShiki bytes from commit `51fa0991da2507bb00b27c1b420e807468de6423`, under the
 repository's `MIT OR Apache-2.0` license:
 
+- `aromatic-abbreviations-source.py.gz` retains `reference/engine/abbreviations.py`,
+  decompressed SHA256 `df9a6ee91f677d96a1c5ad8e7023e55e277bc782e05c7cd06ac1fba38cfe57c7`.
 - `aromatic-cdx-exchange-source.py.gz` retains `reference/engine/cdx_exchange.py`,
   decompressed SHA256 `adae04ccfb5a2a98cca1f11617f608ebc1d4b5af7061523026efd3dc79c5ebd4`.
 - `aromatic-arrows-exchange-source.py.gz` retains `reference/engine/arrows_exchange.py`,
@@ -60,7 +62,8 @@ repository's `MIT OR Apache-2.0` license:
 
 These are the original recorded hashes in all three fixture headers. The current
 worker adds cubic controls only to CDXML export bounds; its aromaticity handler
-is unchanged. The fixture headers, expected responses, record checksums and hash
+is unchanged. The current abbreviation module only adds presets, which no
+captured aromaticity request uses. The fixture headers, expected responses, record checksums and hash
 comparisons remain unchanged; a changed snapshot still fails the provenance check.
 
 There are separate macOS ARM64, Linux x64 and Windows x64 captures. Native corpus
