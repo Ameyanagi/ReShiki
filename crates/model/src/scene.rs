@@ -658,7 +658,8 @@ fn nearby_label_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, P
     measuring(|| {
         doc.atoms
             .iter()
-            .filter(|other| other.id != a.id && nearby(a, other, size))
+            .filter(|other| other.id != a.id && doc.atom_visible(other.id))
+            .filter(|other| nearby(a, other, size))
             .flat_map(|other| label_ink_boxes(&atom_label_runs(other, doc)))
             .collect()
     })
@@ -669,7 +670,8 @@ fn nearby_mark_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, Po
     measuring(|| {
         doc.atoms
             .iter()
-            .filter(|other| !other.marks.is_empty() && nearby(a, other, size))
+            .filter(|other| !other.marks.is_empty() && doc.atom_visible(other.id))
+            .filter(|other| nearby(a, other, size))
             .flat_map(|other| crate::scientific::styled_mark_parts(other, &doc.drawing_style))
             .filter_map(|part| {
                 let pad = part.style.width() * 0.5;
@@ -689,8 +691,12 @@ fn nearby_mark_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, Po
     })
 }
 
-/// Visible bonds near `a` that do not end at it.
-fn nearby_bonds(a: &Atom, doc: &Document, size: f32) -> Vec<(Point, Point)> {
+/// Visible bonds near `a` that do not end at it, with the distance from the
+/// center line to their outermost stroke edge.
+fn nearby_bonds(a: &Atom, doc: &Document, size: f32) -> Vec<(Point, Point, f32)> {
+    let style = &doc.drawing_style;
+    let spacing = style.bond_length_world * style.bond_spacing_ratio;
+    let ink = style.world(style.bold_width_pt).max(style.line_width()) / 2.;
     let positions: std::collections::HashMap<_, _> = doc
         .atoms
         .iter()
@@ -702,16 +708,21 @@ fn nearby_bonds(a: &Atom, doc: &Document, size: f32) -> Vec<(Point, Point)> {
         .filter_map(|b| {
             let (p, p_near) = positions.get(&b.a)?;
             let (q, q_near) = positions.get(&b.b)?;
-            ((p_near | q_near) && doc.bond_visible(b.a, b.b)).then_some((*p, *q))
+            let offset = match b.order {
+                2 | 3 | 4 | 7 => spacing,
+                6 => spacing * 1.5,
+                _ => 0.,
+            };
+            ((p_near | q_near) && doc.bond_visible(b.a, b.b)).then_some((*p, *q, offset + ink))
         })
         .collect()
 }
 
-/// Whether ink, padded by a small gap, misses the label boxes and bond shafts.
+/// Whether ink, padded by a small gap, misses the label boxes and bond strokes.
 fn clear_of(
     parts: &[Primitive],
     labels: &[(Point, Point)],
-    bonds: &[(Point, Point)],
+    bonds: &[(Point, Point, f32)],
     size: f32,
 ) -> bool {
     let gap = size * 0.12;
@@ -720,9 +731,10 @@ fn clear_of(
         labels
             .iter()
             .all(|(a, b)| hi.x <= a.x || lo.x >= b.x || hi.y <= a.y || lo.y >= b.y)
-            && !bonds
-                .iter()
-                .any(|&(p, q)| crate::atom_labels::segment_hits_rect(p, q, lo, hi))
+            && !bonds.iter().any(|&(p, q, pad)| {
+                let (lo, hi) = (lo.offset(-pad, -pad), hi.offset(pad, pad));
+                crate::atom_labels::segment_hits_rect(p, q, lo, hi)
+            })
     })
 }
 

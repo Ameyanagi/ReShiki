@@ -454,19 +454,31 @@ fn automatic_hydrogens_avoid_nearby_unbonded_labels_and_charges() {
         "../../../../tests/fixtures/coordination/co-en3-before.rsk"
     ))
     .unwrap();
-    let overlaps = |doc: &Document, a: u64, b: u64| {
-        let other = atom_label_ink_boxes(doc.atom(b).unwrap(), doc);
-        atom_label_ink_boxes(doc.atom(a).unwrap(), doc)
-            .iter()
-            .any(|(lo, hi)| {
-                other
-                    .iter()
-                    .any(|(a, b)| hi.x > a.x && lo.x < b.x && hi.y > a.y && lo.y < b.y)
+    // Only the H and count ink moves; the element symbols and the metal's
+    // charge stay where they are, and their spacing depends on the font.
+    let hydrogen_ink = |doc: &Document, id: u64| {
+        let runs: Vec<_> = atom_label_runs(doc.atom(id).unwrap(), doc)
+            .into_iter()
+            .filter(|run| {
+                matches!(run, Primitive::Text { text, .. }
+                    if text == "H" || text.chars().all(|c| c.is_ascii_digit()))
             })
+            .collect();
+        label_ink_boxes(&runs)
     };
     for a in &doc.atoms {
-        for b in doc.atoms.iter().filter(|b| b.id > a.id) {
-            assert!(!overlaps(&doc, a.id, b.id), "Labels {} and {}", a.id, b.id);
+        for b in doc.atoms.iter().filter(|b| b.id != a.id) {
+            let other = atom_label_ink_boxes(b, &doc);
+            assert!(
+                !hydrogen_ink(&doc, a.id).iter().any(|(lo, hi)| {
+                    other
+                        .iter()
+                        .any(|(p, q)| hi.x > p.x && lo.x < q.x && hi.y > p.y && lo.y < q.y)
+                }),
+                "Hydrogens of {} meet label {}",
+                a.id,
+                b.id
+            );
         }
     }
     // The upper-right NH₂ (atom 2) stacks its H₂ above rather than toward Co.
@@ -518,4 +530,67 @@ fn automatic_hydrogen_replacement_side_avoids_atom_marks() {
     });
     let (n_text, h) = (charge_run(&doc, n, "N"), charge_run(&doc, n, "H"));
     assert!(h.y > n_text.y && (h.x - n_text.x).abs() < 0.1);
+}
+
+/// Marks on atoms hidden in a collapsed abbreviation are not drawn, so they
+/// must not block a replacement side.
+#[test]
+fn automatic_hydrogen_replacement_side_ignores_hidden_marks() {
+    let mut doc = Document::default();
+    let n = doc.add_atom("N", Point::new(0., 0.));
+    let c = doc.add_atom("C", Point::new(60., 0.));
+    doc.add_bond(n, c, 1, "plain");
+    doc.add_atom("O", Point::new(-35., 0.));
+    let anchor = doc.add_atom("C", Point::new(400., 0.));
+    let hidden = doc.add_atom("C", Point::new(0., -28.));
+    doc.add_bond(anchor, hidden, 1, "plain");
+    doc.atom_mut(hidden).unwrap().marks.push(AtomMark {
+        id: None,
+        kind: MarkKind::LonePairBar,
+        offset: Point::default(),
+        angle: 0.,
+        size_pt: None,
+    });
+    doc.abbreviations.push(
+        serde_json::from_value(serde_json::json!({
+            "label": "Me",
+            "anchor": anchor,
+            "members": [anchor, hidden],
+        }))
+        .unwrap(),
+    );
+    doc.atom_mut(n).unwrap().label_h = 2;
+    let (n_text, h) = (charge_run(&doc, n, "N"), charge_run(&doc, n, "H"));
+    assert!(h.y < n_text.y && (h.x - n_text.x).abs() < 0.1);
+}
+
+/// The outer stroke of a multiple bond blocks a replacement side even when
+/// its center line clears the hydrogens.
+#[test]
+fn automatic_hydrogen_replacement_side_avoids_outer_bond_strokes() {
+    let mut doc = Document::default();
+    let n = doc.add_atom("N", Point::new(0., 0.));
+    let c = doc.add_atom("C", Point::new(60., 0.));
+    doc.add_bond(n, c, 1, "plain");
+    doc.atom_mut(n).unwrap().label_h = 2;
+    doc.add_atom("O", Point::new(-35., 0.));
+    let label = atom_label_runs(doc.atom(n).unwrap(), &doc);
+    let size = doc.drawing_style.font_size();
+    let top = label_ink_boxes(&label[1..])
+        .iter()
+        .map(|(lo, _)| lo.y)
+        .fold(f32::INFINITY, f32::min);
+    let style = &doc.drawing_style;
+    let spacing = style.bond_length_world * style.bond_spacing_ratio;
+    // Just above the padded hydrogen ink, but within one bond spacing of it.
+    let y = top - size * 0.12 - spacing * 0.5;
+    let left = doc.add_atom("C", Point::new(-40., y));
+    let right = doc.add_atom("C", Point::new(40., y));
+    for (order, above) in [(1, true), (2, false)] {
+        doc.bonds.retain(|b| b.a != left);
+        doc.add_bond(left, right, order, "plain");
+        doc.atom_mut(n).unwrap().label_h = 2;
+        let (n_text, h) = (charge_run(&doc, n, "N"), charge_run(&doc, n, "H"));
+        assert_eq!(h.y < n_text.y, above, "order {order}");
+    }
 }
