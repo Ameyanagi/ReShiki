@@ -80,6 +80,13 @@ impl App {
     pub(super) fn discard_generic_expansion(&mut self, source: TabId, epoch: u64) {
         if self.generic.pending == Some((source, epoch)) {
             self.generic.pending = None;
+            // A replaced source keeps its newer status.
+            self.in_tab(source, |app| {
+                if app.tab.file_epoch == epoch {
+                    app.status = EXPANSION_DISCARDED.into();
+                    app.error = false;
+                }
+            });
             self.status = EXPANSION_DISCARDED.into();
             self.error = false;
         }
@@ -178,16 +185,28 @@ impl App {
                     self.status = "Expansion source was closed or replaced".into();
                     return Task::none();
                 }
+                // The source tab keeps its own status, which still says the
+                // expansion is running, so settle it even when it is behind.
+                // A failure is reported in front, as before, and on the source.
+                let failed = |app: &mut Self, message: String| {
+                    app.in_tab(source, |app| app.generic_failed(message.clone()));
+                    app.generic_failed(message)
+                };
                 match *result {
                     Ok(prepared) => {
                         // Cheap action clones share one capability. Consume before
                         // opening a tab; replay/lock errors must not create an output.
                         let insertion = match reshiki::transaction::take_expansion(prepared) {
                             Ok(insertion) => insertion,
-                            Err(error) => return self.generic_failed(error.message()),
+                            Err(error) => return failed(self, error.message().into()),
                         };
                         let count = insertion.count();
                         let bounds = insertion.bounds();
+                        self.in_tab(source, |app| {
+                            app.status =
+                                format!("Expanded {count} concrete structures in a new tab");
+                            app.error = false;
+                        });
                         self.add_tab();
                         let before = self.tab.doc.clone();
                         let reconciled = match reshiki::transaction::install_expansion(
@@ -196,7 +215,7 @@ impl App {
                             insertion,
                         ) {
                             Ok(reconciled) => reconciled,
-                            Err(error) => return self.generic_failed(error.message()),
+                            Err(error) => return failed(self, error.message().into()),
                         };
                         self.tab.cleanup = None;
                         self.tab.erase_stroke = false;
@@ -209,7 +228,7 @@ impl App {
                             format!("Expanded {count} concrete structures in a new drawing");
                         self.error = false;
                     }
-                    Err(error) => return self.generic_failed(error),
+                    Err(error) => return failed(self, error),
                 }
             }
         }

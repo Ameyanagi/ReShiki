@@ -127,3 +127,57 @@ pub(crate) fn rotation_drag(
         preview,
     }
 }
+
+/// The rotation handle turns freely, also with Alt/Option held; only Shift
+/// snaps to 15° steps. Real canvas events, so the modifiers are the ones the
+/// drag reads.
+#[test]
+fn rotation_handle_is_free_unless_shift_snaps() {
+    use keyboard::Modifiers;
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", World::new(-20., -10.));
+    let b = doc.add_atom("C", World::new(20., 10.));
+    doc.add_bond(a, b, 1, "plain");
+    let selected = [a, b];
+    let camera = Camera::default();
+    let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(800., 600.));
+    let selection = SelectionBox::new(&doc, &selected, camera, bounds).unwrap();
+    let (lo, hi) = scene::selection_bounds(&doc, &selected).unwrap();
+    let top = camera.screen(World::new((lo.x + hi.x) * 0.5, lo.y), bounds);
+    let grip = Point::new(top.x, top.y - 40.);
+    assert_eq!(selection.hit(grip), Some(Handle::Rotate));
+    let pivot = camera.screen(selection.pivot, bounds);
+    let (s, c) = 22_f32.to_radians().sin_cos();
+    let v = grip - pivot;
+    let end = Point::new(pivot.x + v.x * c - v.y * s, pivot.y + v.x * s + v.y * c);
+    for (modifiers, expected) in [
+        (Modifiers::default(), 22.),
+        (Modifiers::ALT, 22.),
+        (Modifiers::SHIFT, 15.),
+    ] {
+        let mut canvas = tests::chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::Select;
+        canvas.selected = &selected;
+        canvas.camera = camera;
+        let mut state = State::default();
+        let mut release = None;
+        for event in [
+            Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)),
+            Event::Mouse(mouse::Event::CursorMoved { position: grip }),
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            Event::Mouse(mouse::Event::CursorMoved { position: end }),
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+        ] {
+            release = canvas
+                .update(&mut state, &event, bounds, mouse::Cursor::Unavailable)
+                .and_then(|action| action.into_inner().0);
+        }
+        let Some(Edit::Transform { rotation, .. }) = release else {
+            panic!("{modifiers:?}: release must publish a rotation, got {release:?}");
+        };
+        assert!(
+            (rotation - expected).abs() < 0.01,
+            "{modifiers:?}: {rotation} != {expected}"
+        );
+    }
+}

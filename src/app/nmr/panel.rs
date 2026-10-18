@@ -2,7 +2,7 @@
 //! A single body scrolls when the window cannot fit even the first full row.
 //! The docked report is plain inspector content and does not use this panel.
 use super::Message;
-use super::palette::{MAX_SIZE, PANEL_PADDING, PREFERRED_ROWS};
+use super::palette::{MAX_SIZE, PANEL_PADDING};
 use iced::advanced::{
     Clipboard, Layout, Shell, Widget, layout, mouse, overlay, renderer,
     widget::{Operation, Tree, tree},
@@ -17,6 +17,9 @@ const GAP: f32 = 8.;
 // inside the content as well as in the preferred height, so a rounded-down
 // end offset cannot clip the final row's fractional-pixel lower edge.
 pub(super) const CONTENT_END_INSET: f32 = 2.;
+// Iced draws its default 10px vertical scrollbar over the right edge of the
+// content. Inset the plot and table past it, so it never covers "δ / ppm".
+pub(super) const SCROLLBAR_GUTTER: f32 = 12.;
 // The panel measures result rows by this accessibility id prefix; the view
 // builds every result row id from it. It is a macro so the row id's format
 // string keeps the prefix as a literal piece (same capacity estimate and
@@ -48,13 +51,21 @@ struct Panel<'a> {
 
 #[derive(Default)]
 struct Rows(Vec<Rectangle>);
+impl Rows {
+    /// A row ending past the tallest palette content makes the preferred
+    /// height reach the cap, so no later row can change it.
+    fn full(&self) -> bool {
+        self.0
+            .last()
+            .is_some_and(|row| row.y + row.height >= MAX_CONTENT_HEIGHT)
+    }
+}
 impl Operation for Rows {
     fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
-        // The height policy reads only the first row and row PREFERRED_ROWS
-        // (or the last row when there are fewer), so stop once those are
-        // known. A column operates every child in one traversal, so the rows
-        // after them sit behind their own boundary (see table_row).
-        if self.0.len() < PREFERRED_ROWS {
+        // The height policy reads the first and last rows, so stop once a
+        // row reaches the height cap. A column operates every child in one
+        // traversal, so each row sits behind its own boundary (see table_row).
+        if !self.full() {
             operate(self);
         }
     }
@@ -64,7 +75,7 @@ impl Operation for Rows {
         _: Rectangle,
         state: &mut dyn Any,
     ) {
-        if self.0.len() < PREFERRED_ROWS
+        if !self.full()
             && let Some(node) = state.downcast_ref::<reshiki::accessibility::Node>()
             && node.id.starts_with(SITE_ID_PREFIX)
         {
@@ -73,22 +84,18 @@ impl Operation for Rows {
     }
 }
 
-/// The results table's row `index`. Rows after the first PREFERRED_ROWS ask
-/// to be traversed before they operate: the height measurement holds every
-/// row it reads by then and declines, so it never builds their accessibility
-/// nodes. Every other operation traverses into them as before.
-pub(super) fn table_row(index: usize, row: Button<'_, Message>) -> Element<'_, Message> {
-    if index < PREFERRED_ROWS {
-        row.into()
-    } else {
-        Element::new(LaterRow(row))
-    }
+/// A results table row. It asks to be traversed before it operates: once a
+/// row reaches the height cap, the height measurement declines, so it never
+/// builds the later rows' accessibility nodes. Every other operation
+/// traverses into them as before.
+pub(super) fn table_row(row: Button<'_, Message>) -> Element<'_, Message> {
+    Element::new(TableRow(row))
 }
 
 /// The row's own tree, layout, drawing and events behind a traverse boundary.
-struct LaterRow<'a>(Button<'a, Message>);
+struct TableRow<'a>(Button<'a, Message>);
 
-impl Widget<Message, Theme, Renderer> for LaterRow<'_> {
+impl Widget<Message, Theme, Renderer> for TableRow<'_> {
     fn tag(&self) -> tree::Tag {
         self.0.tag()
     }
@@ -182,14 +189,14 @@ struct Heights {
     preferred: f32,
 }
 
+/// The palette opens tall enough for every measured row; the caller caps it.
 fn heights(fixed: f32, natural_body: f32, rows: &[Rectangle]) -> Heights {
-    let body_height = |count: usize| {
-        rows.get(count.saturating_sub(1).min(rows.len().saturating_sub(1)))
-            .map_or(natural_body, |row| row.y + row.height + CONTENT_END_INSET)
+    let body_height = |row: Option<&Rectangle>| {
+        row.map_or(natural_body, |row| row.y + row.height + CONTENT_END_INSET)
     };
     Heights {
-        minimum: fixed + body_height(1),
-        preferred: fixed + body_height(PREFERRED_ROWS),
+        minimum: fixed + body_height(rows.first()),
+        preferred: fixed + body_height(rows.last()),
     }
 }
 

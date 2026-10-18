@@ -503,6 +503,20 @@ pub fn formula_script(previous: char, c: char, lowered: bool) -> Script {
     }
 }
 
+/// Whether a line may wrap between `before` and `after`: after whitespace, or
+/// next to a CJK character, which needs no spaces between words, but never
+/// before a kana voicing mark.
+fn breaks_between(before: char, after: char) -> bool {
+    !matches!(after, '\u{3099}'..='\u{309C}' | '\u{FF9E}' | '\u{FF9F}')
+        && (before.is_whitespace() || cjk(before) || cjk(after))
+}
+
+fn cjk(c: char) -> bool {
+    matches!(c,
+        '\u{2E80}'..='\u{9FFF}' | '\u{AC00}'..='\u{D7AF}' | '\u{F900}'..='\u{FAFF}'
+            | '\u{FF00}'..='\u{FFEF}' | '\u{20000}'..='\u{3FFFF}')
+}
+
 /// One layout feeds canvas, hit testing, selection, SVG, PDF and PNG.
 pub fn layout(text: &str, format: &TextFormat) -> Layout {
     let mut lines: Vec<Vec<(char, TextStyle, f32)>> = vec![vec![]];
@@ -510,10 +524,13 @@ pub fn layout(text: &str, format: &TextFormat) -> Layout {
     let mut width = 0.0;
     let mut formula_digit = false;
     let mut previous = ' ';
+    // Characters kept on the line at its last allowed break.
+    let mut break_at = None;
     for (index, c) in text.char_indices() {
         if c == '\n' {
             lines.push(vec![]);
             width = 0.0;
+            break_at = None;
             previous = ' ';
             formula_digit = false;
             continue;
@@ -527,15 +544,20 @@ pub fn layout(text: &str, format: &TextFormat) -> Layout {
         let (family, advance) = style::glyph_metrics(c, &s);
         s.family = family.into();
         let advance = advance * s.size();
+        if let Some(line) = lines.last()
+            && line
+                .last()
+                .is_some_and(|(last, _, _)| breaks_between(*last, c))
+        {
+            break_at = Some(line.len());
+        }
+        // Break only between words (or around CJK characters); a word wider
+        // than the box overflows it instead of being cut mid-word.
         if max_width.is_some_and(|limit| width + advance > limit)
-            && lines.last().is_some_and(|line| !line.is_empty())
+            && let Some(split) = break_at.take()
             && let Some(line) = lines.last_mut()
         {
-            let overflow = line
-                .iter()
-                .rposition(|(c, _, _)| c.is_whitespace())
-                .map(|split| line.split_off(split + 1))
-                .unwrap_or_default();
+            let overflow = line.split_off(split);
             width = overflow.iter().map(|(_, _, w)| w).sum();
             lines.push(overflow);
         }
