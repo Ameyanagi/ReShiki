@@ -2,18 +2,21 @@
 use crate::{
     document::{Document, Point},
     scene::Primitive,
-    style::{DEFAULT, DrawingStyle},
+    style::DEFAULT,
 };
 mod depth;
 pub use depth::bond_over;
 mod ring_strokes;
-pub(crate) use ring_strokes::ring_stroke;
+pub(crate) use ring_strokes::{ring_stroke, ring_stroke_with};
 #[derive(Debug, Clone, Copy)]
 pub struct Gap {
     origin: Point,
     axis: Point,
     low: f32,
     high: f32,
+    /// For a multi-rail bond, the one rail (normal offset, tolerance) this
+    /// gap cuts: its rails pass under the front ink at different places.
+    rail: Option<(f32, f32)>,
 }
 fn cross(a: Point, b: Point) -> f32 {
     a.x * b.y - a.y * b.x
@@ -21,114 +24,161 @@ fn cross(a: Point, b: Point) -> f32 {
 fn delta(a: Point, b: Point) -> Point {
     Point::new(b.x - a.x, b.y - a.y)
 }
-/// Outermost rail centerlines across a bond's scene normal (-uy, ux), and
-/// the stroke width.
-#[derive(Clone, Copy)]
-struct Rails {
-    lo: f32,
-    hi: f32,
+/// Rail centerline offsets across a bond's scene normal (-uy, ux), as the
+/// scene draws them, and the stroke width.
+pub(crate) struct Rails {
+    offsets: Vec<f32>,
     width: f32,
 }
-/// Where the scene places a bond's second rail: on one side (`Some(±1.)`),
-/// centered (`None`), or absent (`Some(0.)`, an aromatic bond drawn as one
-/// line beside its ring circle).
-type Side = Option<f32>;
-fn rails(bond: &crate::document::Bond, style: &DrawingStyle, side: Side) -> Rails {
-    let display = bond.base_display();
-    let width = if ["bold", "wedge", "hollow_wedge", "hashed", "hash"].contains(&display) {
-        style.world(style.bold_width_pt)
-    } else {
-        style.line_width()
-    };
-    let spacing = style.bond_length_world * style.bond_spacing_ratio;
-    let (lo, hi) = match (bond.order, side) {
-        (2 | 4 | 7, Some(side)) => ((side * spacing).min(0.), (side * spacing).max(0.)),
-        (2 | 4 | 7, None) => (-spacing / 2., spacing / 2.),
-        (3, _) => (-spacing, spacing),
-        (6, _) => (-spacing * 1.5, spacing * 1.5),
-        _ => (0., 0.),
-    };
-    Rails { lo, hi, width }
+impl Rails {
+    fn lo(&self) -> f32 {
+        self.offsets.iter().copied().fold(0., f32::min)
+    }
+    fn hi(&self) -> f32 {
+        self.offsets.iter().copied().fold(0., f32::max)
+    }
+    /// Each rail offset with its gap filter; a single rail needs none.
+    fn filters(&self) -> Vec<(f32, Option<(f32, f32)>)> {
+        let mut nearest = f32::INFINITY;
+        for (i, a) in self.offsets.iter().enumerate() {
+            for b in self.offsets.iter().skip(i + 1) {
+                nearest = nearest.min((a - b).abs());
+            }
+        }
+        self.offsets
+            .iter()
+            .map(|q| (*q, (self.offsets.len() > 1).then_some((*q, nearest * 0.5))))
+            .collect()
+    }
 }
-/// Resolve rail sides lazily: most crossings involve only single bonds.
-struct Sides<'d> {
+/// Resolves where the scene puts each bond's rails, lazily: most crossings
+/// involve only single bonds.
+pub(crate) struct Sides<'d> {
     doc: &'d Document,
     faces: std::cell::OnceCell<crate::scene::projected_bonds::FaceIndex<'d>>,
-    /// `None` keeps aromatic bonds centered instead of finding ring circles.
-    circles: Option<std::cell::OnceCell<Vec<crate::aromatic::Circle>>>,
+    circles: std::cell::OnceCell<Vec<crate::aromatic::Circle>>,
 }
 impl<'d> Sides<'d> {
-    fn new(doc: &'d Document) -> Self {
+    pub(crate) fn new(doc: &'d Document) -> Self {
         Self {
             doc,
             faces: Default::default(),
-            circles: Some(Default::default()),
-        }
-    }
-    /// Per-circle callers skip the whole-document circle search.
-    fn doubles(doc: &'d Document) -> Self {
-        Self {
-            circles: None,
-            ..Self::new(doc)
+            circles: Default::default(),
         }
     }
     fn faces(&self) -> &crate::scene::projected_bonds::FaceIndex<'d> {
         self.faces
             .get_or_init(|| crate::scene::projected_bonds::FaceIndex::new(self.doc))
     }
-    /// Mirrors the scene's rail placement: a positioned or face-resolved
-    /// double keeps its second rail on one side, and an aromatic bond
-    /// without a ring circle draws its inner line toward the ring.
+    /// Mirrors the scene's rails: a positioned or face-resolved double keeps
+    /// its second rail on one side (foreshortened within a projected face),
+    /// and an aromatic bond without a ring circle draws its inner line
+    /// toward the ring.
     fn rails(&self, bond: &crate::document::Bond) -> Rails {
-        use crate::bonds::DoublePosition::{Left, Right};
-        let side = match bond.order {
-            2 | 7 => match crate::scene::double_position(self.faces(), bond) {
-                Left => Some(-1.),
-                Right => Some(1.),
-                _ => None,
-            },
-            4 => self.circles.as_ref().map(|circles| {
-                if circles
-                    .get_or_init(|| crate::aromatic::circles(self.doc))
-                    .iter()
-                    .any(|c| c.contains_bond(bond.a, bond.b))
-                {
-                    0.
-                } else {
-                    crate::scene::automatic_double_side(self.faces(), bond).unwrap_or(1.)
-                }
-            }),
-            _ => None,
+        use crate::bonds::DoublePosition::{Auto, Left, Right};
+        let style = &self.doc.drawing_style;
+        let display = bond.base_display();
+        let width = if ["bold", "wedge", "hollow_wedge", "hashed", "hash"].contains(&display) {
+            style.world(style.bold_width_pt)
+        } else {
+            style.line_width()
         };
-        rails(bond, &self.doc.drawing_style, side)
+        let spacing = style.bond_length_world * style.bond_spacing_ratio;
+        let offsets = match bond.order {
+            2 | 7 => match crate::scene::double_position(self.faces(), bond) {
+                side @ (Left | Right) => {
+                    let offset = if side == Left { -spacing } else { spacing };
+                    match self.projected(bond, offset, width, bond.double_position == Auto) {
+                        Some(Some(projected)) => vec![0., projected],
+                        Some(None) => vec![0.],
+                        None => vec![0., offset],
+                    }
+                }
+                _ => vec![-spacing / 2., spacing / 2.],
+            },
+            4 if self
+                .circles
+                .get_or_init(|| crate::aromatic::circles(self.doc))
+                .iter()
+                .any(|c| c.contains_bond(bond.a, bond.b)) =>
+            {
+                vec![0.]
+            }
+            4 => {
+                let side = crate::scene::automatic_double_side(self.faces(), bond).unwrap_or(1.);
+                vec![0., side * spacing]
+            }
+            3 => vec![-spacing, 0., spacing],
+            6 => vec![-spacing * 1.5, -spacing * 0.5, spacing * 0.5, spacing * 1.5],
+            _ => vec![0.],
+        };
+        Rails { offsets, width }
+    }
+    /// The screen offset of an automatic double bond's rail within its
+    /// projected face: `None` keeps the 2D offset, `Some(None)` omits it.
+    fn projected(
+        &self,
+        bond: &crate::document::Bond,
+        offset: f32,
+        width: f32,
+        automatic: bool,
+    ) -> Option<Option<f32>> {
+        if !automatic {
+            return None;
+        }
+        let a = self.doc.atom(bond.a)?.position;
+        let b = self.doc.atom(bond.b)?.position;
+        let length = a.distance(b).max(0.001);
+        let rail = self
+            .faces()
+            .rail_depth(bond, a, b, offset, 0., width / 2.)?;
+        Some(rail.map(|rail| cross(delta(a, b), delta(a, rail.points.0)) / length))
     }
 }
-/// Interval along the under bond's unit axis, relative to where the two
-/// centerlines cross, that clears every over-ink offset in `over_band`
-/// (across the over bond's normal) for every under rail in `under_rails`.
-/// Offset rails cross the over ink away from the centerline crossing, so
-/// a symmetric cut leaves side rails of double bonds touching.
-fn clearance(
-    over: Point,
-    under: Point,
-    over_band: (f32, f32),
-    under_rails: (f32, f32),
-) -> (f32, f32) {
-    let normal = Point::new(-over.y, over.x);
-    let sine = normal.x * under.x + normal.y * under.y;
-    // Nearly parallel bonds keep the established bounded cut.
-    let sine = sine.signum() * sine.abs().max(0.15);
-    let cosine = -normal.x * under.y + normal.y * under.x;
-    let mut low = f32::INFINITY;
-    let mut high = f32::NEG_INFINITY;
-    for o in [over_band.0, over_band.1] {
-        for q in [under_rails.0, under_rails.1] {
-            let s = (o - q * cosine) / sine;
-            low = low.min(s);
-            high = high.max(s);
-        }
+/// Ink of a straight stroke: the segment `from`→`to`, padded by `ends` along
+/// it, covering offsets `band` across its normal (-uy, ux).
+#[derive(Clone, Copy)]
+struct Stroke {
+    from: Point,
+    to: Point,
+    ends: f32,
+    band: (f32, f32),
+}
+/// Parameter interval along the rail at normal offset `rail` of the under
+/// bond (`origin` + s·`axis`) that lies inside the over stroke's finite ink.
+/// Each rail meets the over ink at its own place, and the finite length keeps
+/// a shallow cut off ink that is not there.
+fn clearance(over: Stroke, origin: Point, axis: Point, rail: f32) -> Option<(f32, f32)> {
+    let length = over.from.distance(over.to);
+    if length < 0.001 {
+        return None;
     }
-    (low, high)
+    let along = Point::new(
+        (over.to.x - over.from.x) / length,
+        (over.to.y - over.from.y) / length,
+    );
+    let normal = Point::new(-along.y, along.x);
+    let dot = |a: Point, b: Point| a.x * b.x + a.y * b.y;
+    // Solve lo <= start + s·rate <= hi for s.
+    let range = |start: f32, rate: f32, (lo, hi): (f32, f32)| {
+        if rate.abs() < 1e-6 {
+            (lo..=hi)
+                .contains(&start)
+                .then_some((f32::NEG_INFINITY, f32::INFINITY))
+        } else {
+            let (a, b) = ((lo - start) / rate, (hi - start) / rate);
+            Some((a.min(b), a.max(b)))
+        }
+    };
+    let start = delta(over.from, origin.offset(-axis.y * rail, axis.x * rail));
+    let a = range(
+        dot(start, along),
+        dot(axis, along),
+        (-over.ends, length + over.ends),
+    )?;
+    let b = range(dot(start, normal), dot(axis, normal), over.band)?;
+    let (low, high) = (a.0.max(b.0), a.1.min(b.1));
+    (low <= high && low.is_finite() && high.is_finite()).then_some((low, high))
 }
 /// Sorted sweep avoids checking every pair of well-separated molecules.
 pub fn gaps(doc: &Document) -> Vec<Vec<Gap>> {
@@ -192,10 +242,10 @@ pub(crate) fn gaps_with_opacity(
                 continue;
             }
             let first_over = depth::bond_over(doc, i, t, *j, u);
-            let (under, from, to, parameter, over) = if first_over {
-                (*j, *c, *d, u, first)
+            let (under, from, to, over) = if first_over {
+                (*j, *c, *d, first)
             } else {
-                (i, a, b, t, second)
+                (i, a, b, second)
             };
             // Transparent ink cannot knock out the ink beneath it.
             if opacity.bond(over, if first_over { t } else { u }) < 1. {
@@ -213,36 +263,35 @@ pub(crate) fn gaps_with_opacity(
             }
             let length = from.distance(to);
             let (over_from, over_to) = if first_over { (a, b) } else { (*c, *d) };
-            let over_length = over_from.distance(over_to);
-            if length < 0.001 || over_length < 0.001 {
-                continue;
-            }
-            let axis = Point::new((to.x - from.x) / length, (to.y - from.y) / length);
-            let over_axis = Point::new(
-                (over_to.x - over_from.x) / over_length,
-                (over_to.y - over_from.y) / over_length,
-            );
             let Some(under_bond) = doc.bonds.get(under) else {
                 continue;
             };
+            if length < 0.001 {
+                continue;
+            }
+            let axis = Point::new((to.x - from.x) / length, (to.y - from.y) / length);
             // Clear the whole front ink, including a double bond's side rail
             // or an aromatic inner line, for every rail of the rear bond.
             let ink = sides.rails(over);
             let margin = ink.width * 0.5 + DEFAULT.world(1.1);
-            let rear = sides.rails(under_bond);
-            let (low, high) = clearance(
-                over_axis,
-                axis,
-                (ink.lo - margin, ink.hi + margin),
-                (rear.lo, rear.hi),
-            );
-            if let Some(list) = gaps.get_mut(under) {
-                list.push(Gap {
-                    origin: from,
-                    axis,
-                    low: parameter * length + low,
-                    high: parameter * length + high,
-                });
+            let front = Stroke {
+                from: over_from,
+                to: over_to,
+                ends: margin,
+                band: (ink.lo() - margin, ink.hi() + margin),
+            };
+            for (offset, rail) in sides.rails(under_bond).filters() {
+                if let Some((low, high)) = clearance(front, from, axis, offset)
+                    && let Some(list) = gaps.get_mut(under)
+                {
+                    list.push(Gap {
+                        origin: from,
+                        axis,
+                        low,
+                        high,
+                        rail,
+                    });
+                }
             }
         }
         active.push((i, a, b));
@@ -416,6 +465,30 @@ fn half(primitive: &Primitive, g: Gap, bound: f32, below: bool) -> Option<Primit
         _ => Some(primitive.clone()),
     }
 }
+/// Whether a bond piece lies on the rail a gap cuts.
+fn on_rail(primitive: &Primitive, gap: &Gap) -> bool {
+    let Some((offset, tolerance)) = gap.rail else {
+        return true;
+    };
+    let points: Vec<Point> = match primitive {
+        Primitive::Line(a, b, _) => vec![*a, *b],
+        Primitive::Polygon(points) => points.clone(),
+        Primitive::Path { commands, .. } => commands
+            .iter()
+            .flat_map(crate::graphics::PathCommand::iter_points)
+            .collect(),
+        _ => return true,
+    };
+    if points.is_empty() {
+        return true;
+    }
+    let mean = points
+        .iter()
+        .map(|p| cross(gap.axis, delta(gap.origin, *p)))
+        .sum::<f32>()
+        / points.len() as f32;
+    (mean - offset).abs() <= tolerance
+}
 /// Trim real geometry, leaving transparent gaps in vector and raster exports.
 pub fn cut(mut primitives: Vec<Primitive>, gaps: &[Gap]) -> Vec<Primitive> {
     for gap in gaps {
@@ -427,7 +500,8 @@ pub fn cut(mut primitives: Vec<Primitive>, gaps: &[Gap]) -> Vec<Primitive> {
                     Primitive::Line(..)
                         | Primitive::Polygon(_)
                         | Primitive::Path { filled: false, .. }
-                ) {
+                ) && on_rail(p, gap)
+                {
                     [half(p, *gap, gap.low, true), half(p, *gap, gap.high, false)]
                 } else {
                     [Some(p.clone()), None]

@@ -344,6 +344,37 @@ fn assert_whiteout(doc: &Document, label: &str) -> usize {
     checked
 }
 
+/// A whiteout clears only front ink that is there: a single bond keeps its
+/// ink wherever no other bond's rails and clearance reach, even at a shallow
+/// crossing.
+fn assert_cuts_stay_near_front_ink(doc: &Document, label: &str) {
+    let inks = inks(&crate::scene::primitives(doc));
+    let style = &doc.drawing_style;
+    let reach = style.bond_length_world * style.bond_spacing_ratio
+        + style.line_width()
+        + crate::style::DEFAULT.world(1.1)
+        + 1.;
+    for (index, bond) in doc.bonds.iter().enumerate().filter(|(_, b)| b.order == 1) {
+        let (a, b, ..) = ends(doc, index);
+        for k in 3..=17 {
+            let p = a.offset((b.x - a.x) * k as f32 / 20., (b.y - a.y) * k as f32 / 20.);
+            let clear = doc.bonds.iter().enumerate().all(|(other, o)| {
+                let (c, d, ..) = ends(doc, other);
+                other == index
+                    || [o.a, o.b].iter().any(|id| *id == bond.a || *id == bond.b)
+                    || crate::graphics::segment_distance(p, c, d) > reach
+            });
+            assert!(
+                !clear
+                    || inks
+                        .iter()
+                        .any(|ink| ink.owner == Some(index) && ink.shape.covers(p)),
+                "{label}: bond {index} lost ink at {p:?}, away from every front bond"
+            );
+        }
+    }
+}
+
 fn c60() -> Document {
     serde_json::from_str(include_str!(
         "../../../../tests/fixtures/rear-opacity/c60-rear-opacity-100.rsk"
@@ -376,7 +407,10 @@ fn views(edit: impl Fn(&mut Document)) -> impl Iterator<Item = (Document, String
 #[test]
 fn c60_double_bonds_stay_continuous_over_cut_rear_bonds_in_every_view() {
     let checked: usize = views(|_| {})
-        .map(|(doc, label)| assert_whiteout(&doc, &label))
+        .map(|(doc, label)| {
+            assert_cuts_stay_near_front_ink(&doc, &label);
+            assert_whiteout(&doc, &label)
+        })
         .sum();
     assert!(checked > 40, "only {checked} crossings");
 }
@@ -453,4 +487,41 @@ fn rear_double_bond_rails_clear_a_front_bond_at_an_oblique_crossing() {
         }
         assert_whiteout(&swapped, &format!("swapped {position:?}"));
     }
+}
+
+#[test]
+fn a_ring_circle_cut_behind_keeps_the_same_bond_in_front_elsewhere() {
+    // A tilted double bond passes behind one side of a flat aromatic circle
+    // and in front of the other, both at a shallow angle.
+    let mut doc = Document::default();
+    let ring: Vec<_> = (0..6)
+        .map(|k| {
+            let angle = (k as f32 * 60.).to_radians();
+            doc.add_atom(
+                "C",
+                Point::new(72.883_6 * angle.cos(), 72.883_6 * angle.sin()),
+            )
+        })
+        .collect();
+    for k in 0..6 {
+        doc.add_bond(ring[k], ring[(k + 1) % 6], 4, "plain");
+    }
+    let a = doc.add_atom("C", Point::new(-21., 49.5));
+    let b = doc.add_atom("C", Point::new(21., 49.5));
+    doc.atom_mut(a).unwrap().depth = -20.;
+    doc.atom_mut(b).unwrap().depth = 20.;
+    doc.add_bond(a, b, 2, "plain");
+    doc.bonds[6].double_position = crate::bonds::DoublePosition::Center;
+    tag(&mut doc);
+    let inks = inks(&crate::scene::primitives(&doc));
+    let bond: Vec<&Ink> = inks.iter().filter(|i| i.owner == Some(6)).collect();
+    let circle: Vec<&Ink> = inks.iter().filter(|i| i.owner.is_none()).collect();
+    let (from, to) = (Point::new(-21., 49.5), Point::new(21., 49.5));
+    // The circle runs between the rails near the top, so the bond is cut
+    // where it lies behind (x < 0) and stays whole where it is in front.
+    let at = Point::new(8., 49.5);
+    assert!(front_continuous(&bond, from, to, at));
+    assert_eq!(rear_touches(&bond, &circle, at, 6., &[]), None);
+    let at = Point::new(-8., 49.5);
+    assert_eq!(rear_touches(&circle, &bond, at, 6., &[from, to]), None);
 }

@@ -1,5 +1,5 @@
 //! Crossing clearance for cubic aromatic circles and partial ring curves.
-use super::{Gap, Sides, clearance, cross, delta, depth};
+use super::{Gap, Sides, Stroke, clearance, cross, delta, depth};
 use crate::{
     aromatic::Circle,
     document::{Document, Point},
@@ -125,8 +125,19 @@ fn cut_curve(commands: &[PathCommand], mask: Mask) -> Vec<PathCommand> {
 pub(crate) fn ring_stroke(
     doc: &Document,
     ring: &Circle,
+    stroke: Primitive,
+    opacity: &crate::rear_opacity::Paint,
+) -> (Primitive, Vec<(usize, Gap)>) {
+    ring_stroke_with(doc, ring, stroke, opacity, &Sides::new(doc))
+}
+
+/// [`ring_stroke`] sharing one rail lookup across a scene's ring strokes.
+pub(crate) fn ring_stroke_with(
+    doc: &Document,
+    ring: &Circle,
     mut stroke: Primitive,
     opacity: &crate::rear_opacity::Paint,
+    sides: &Sides<'_>,
 ) -> (Primitive, Vec<(usize, Gap)>) {
     let Primitive::Path {
         commands,
@@ -170,7 +181,6 @@ pub(crate) fn ring_stroke(
     // Resolve endpoints once instead of scanning all atoms for every ring/bond
     // pair. Reject distant segments before checking abbreviation visibility.
     let atoms: std::collections::HashMap<_, _> = doc.atoms.iter().map(|a| (a.id, a)).collect();
-    let sides = Sides::doubles(doc);
     for (index, bond) in doc.bonds.iter().enumerate() {
         if ring.contains_bond(bond.a, bond.b) {
             continue;
@@ -203,9 +213,8 @@ pub(crate) fn ring_stroke(
             let t = cross(ac, cd) / determinant;
             let u = cross(ac, ab) / determinant;
             if (0.04..0.96).contains(&t) && (0.0..=1.0).contains(&u) {
-                let edge_length = c.distance(*d).max(0.0001);
-                let sine = determinant.abs() / (length * edge_length);
-                hits.push((t, sine, Point::new(cd.x / edge_length, cd.y / edge_length)));
+                let sine = determinant.abs() / (length * c.distance(*d)).max(0.0001);
+                hits.push((t, sine));
             }
         }
         if hits.is_empty() {
@@ -215,7 +224,7 @@ pub(crate) fn ring_stroke(
         // A front double bond's side rail must clear the curve too.
         let rails = sides.rails(bond);
         let margin = rails.width * 0.5 + DEFAULT.world(1.1);
-        let (lo, hi) = (rails.lo - margin, rails.hi + margin);
+        let (lo, hi) = (rails.lo() - margin, rails.hi() + margin);
         let layer = depth::layer(doc, bond, &ring.atoms, projected);
         let front = |t: f32| {
             if layer == rank.0
@@ -228,7 +237,7 @@ pub(crate) fn ring_stroke(
             }
             (layer, index) > rank
         };
-        hits.retain(|(t, ..)| {
+        hits.retain(|(t, _)| {
             if front(*t) {
                 opacity.bond(bond, *t) >= 1.
             } else {
@@ -238,7 +247,7 @@ pub(crate) fn ring_stroke(
         if hits.is_empty() {
             continue;
         }
-        if hits.iter().all(|(t, ..)| front(*t)) {
+        if hits.iter().all(|(t, _)| front(*t)) {
             *commands = cut_curve(
                 commands,
                 Mask {
@@ -250,38 +259,75 @@ pub(crate) fn ring_stroke(
                 },
             );
         } else {
-            for (t, sine, edge) in hits {
-                if front(t) {
-                    // A single bond can pass in front of the far side and
-                    // behind the near side. Cut only this foreground crossing.
-                    let half = hi.max(-lo);
-                    let reach = (half + doc.drawing_style.world(style.width_pt)) / sine.max(0.15);
-                    let low = (t * length - reach).max(0.);
-                    let high = (t * length + reach).min(length);
-                    *commands = cut_curve(
-                        commands,
-                        Mask {
-                            origin: a.offset(axis.x * low, axis.y * low),
-                            axis,
-                            length: high - low,
-                            lo,
-                            hi,
-                        },
-                    );
-                    continue;
-                }
-                // Clear the curve for every rail of a rear double bond.
-                let half = doc.drawing_style.world(style.width_pt) * 0.5 + DEFAULT.world(1.1);
-                let (low, high) = clearance(edge, axis, (-half, half), (rails.lo, rails.hi));
-                gaps.push((
-                    index,
-                    Gap {
-                        origin: a,
+            for (t, sine) in hits.iter().copied().filter(|(t, _)| front(*t)) {
+                // A single bond can pass in front of the far side and
+                // behind the near side. Cut only this foreground crossing.
+                let half = hi.max(-lo);
+                let reach = (half + doc.drawing_style.world(style.width_pt)) / sine.max(0.15);
+                let low = (t * length - reach).max(0.);
+                let high = (t * length + reach).min(length);
+                *commands = cut_curve(
+                    commands,
+                    Mask {
+                        origin: a.offset(axis.x * low, axis.y * low),
                         axis,
-                        low: t * length + low,
-                        high: t * length + high,
+                        length: high - low,
+                        lo,
+                        hi,
                     },
-                ));
+                );
+            }
+            // Clear the curve for every rail of the bond where it lies
+            // behind. Each flattened piece of the curve clears only its own
+            // finite ink, so a cut never reaches a crossing in front.
+            let half = doc.drawing_style.world(style.width_pt) * 0.5 + DEFAULT.world(1.1);
+            for edge in paths.iter().flat_map(|path| path.windows(2)) {
+                let [c, d] = edge else { continue };
+                let curve = Stroke {
+                    from: *c,
+                    to: *d,
+                    ends: half,
+                    band: (-half, half),
+                };
+                for (offset, rail) in rails.filters() {
+                    let Some((low, high)) = clearance(curve, a, axis, offset) else {
+                        continue;
+                    };
+                    let t = ((low + high) * 0.5 / length).clamp(0., 1.);
+                    if high < 0. || low > length || front(t) {
+                        continue;
+                    }
+                    // Stop the cut where the bond comes in front of the ring.
+                    let in_front = |s: f32| front((s / length).clamp(0., 1.));
+                    let clip = |mut inside: f32, mut outside: f32| {
+                        if !in_front(outside) {
+                            return outside;
+                        }
+                        for _ in 0..12 {
+                            let middle = (inside + outside) * 0.5;
+                            if in_front(middle) {
+                                outside = middle;
+                            } else {
+                                inside = middle;
+                            }
+                        }
+                        inside
+                    };
+                    let middle = t * length;
+                    let (low, high) = (clip(middle, low), clip(middle, high));
+                    if opacity.owned_at(doc, &ring.atoms, a.offset(ab.x * t, ab.y * t)) >= 1. {
+                        gaps.push((
+                            index,
+                            Gap {
+                                origin: a,
+                                axis,
+                                low,
+                                high,
+                                rail,
+                            },
+                        ));
+                    }
+                }
             }
         }
     }
