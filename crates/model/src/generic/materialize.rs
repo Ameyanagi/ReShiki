@@ -136,7 +136,8 @@ pub(super) fn group(doc: &Document, id: u64, label: &str) -> Result<Document, St
         .display
         .set_variable(None);
     if label != "OPh" {
-        let mut result = crate::chemistry::abbreviations::replace(&clean, &[id], label)
+        // Alternatives always use bundled definitions; see is_bundled_group_label.
+        let mut result = crate::chemistry::abbreviations::replace_bundled(&clean, &[id], label)
             .map_err(|e| e.to_string())?;
         result.expand_abbreviations(&[id]);
         return Ok(result);

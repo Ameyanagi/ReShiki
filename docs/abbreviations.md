@@ -140,4 +140,4 @@ group replaces it. An entry that cannot be used, such as an invalid SMILES or a
 formula that does not match, is skipped. The status bar then names the first
 problem and the file; the other groups still load. Drawings never depend on the
 file: a saved drawing keeps every atom of a group, so it opens the same way on a
-computer without your groups.
+computer without your groups. For the same reason, generic alternative lists such as `[OMe,OBn]` accept only bundled groups and always use their bundled definitions.

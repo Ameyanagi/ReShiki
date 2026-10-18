@@ -196,7 +196,8 @@ impl Preset {
 /// Spellings that typing resolves before the catalog: elements and the
 /// groups built in code (N3, MgBr, Cp) or from fixed formulas (OCH3).
 fn reserved(spelling: &str) -> bool {
-    crate::editing::ELEMENTS.contains(&spelling)
+    spelling == "*"
+        || crate::editing::ELEMENTS.contains(&spelling)
         || crate::common_groups::LABELS.contains(&spelling)
         || crate::ligands::LABELS.contains(&spelling)
         || crate::atom_text::is_formula_group(spelling)

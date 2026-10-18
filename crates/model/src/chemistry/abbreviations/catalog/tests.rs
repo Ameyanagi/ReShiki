@@ -172,7 +172,7 @@ fn user_groups_win_label_clashes_and_keep_the_bundled_order() {
 /// but never created under them.
 #[test]
 fn user_groups_cannot_take_reserved_spellings() {
-    for spelling in ["N3", "MgBr", "Cp", "OCH3", "C2H5", "Fe", "Np"] {
+    for spelling in ["N3", "MgBr", "Cp", "OCH3", "C2H5", "Fe", "Np", "*"] {
         let text = format!(
             r#"{{"format": 1, "groups": [{{"label": "{spelling}", "smiles": "*OC"}},
             {{"label": "Fine", "smiles": "*OC", "aliases": ["{spelling}"]}}]}}"#
