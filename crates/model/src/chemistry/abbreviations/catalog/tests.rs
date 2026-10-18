@@ -76,7 +76,7 @@ fn bracket_hydrogens_are_matched_as_hydrogen_counts() {
         ("Cc1nc[n-]c1", false),
     ] {
         let state = smiles::prepare(smiles).unwrap().state;
-        let hydrogens = super::super::total_hydrogens(&state);
+        let hydrogens = matcher::total_hydrogens(&state);
         let target = matcher::Target::new(&state.graph, &state.rings, &hydrogens).unwrap();
         let found = target
             .matches(&preset, &mut matcher::Work::default())

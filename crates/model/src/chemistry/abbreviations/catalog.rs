@@ -66,6 +66,9 @@ pub struct Preset {
     pub smiles: String,
     pub(super) atoms: Vec<matcher::Atom>,
     pub(super) bonds: Vec<matcher::Bond>,
+    /// Charge, radicals, isotope and hydrogens each matched atom must have.
+    #[serde(skip)]
+    pub(super) composition: Vec<matcher::Composition>,
     #[serde(skip)]
     pub category: String,
     #[serde(skip)]
@@ -148,6 +151,7 @@ impl Preset {
             smiles: entry.smiles,
             atoms,
             bonds,
+            composition: matcher::compositions(&prepared.state),
             category: entry.category,
             names: entry.names,
             aliases: entry.aliases,

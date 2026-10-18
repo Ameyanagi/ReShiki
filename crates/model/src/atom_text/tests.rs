@@ -786,3 +786,76 @@ fn the_public_group_list_covers_every_typed_group() {
     }
     assert!(!crate::abbreviations::is_group_label("NotAGroup"));
 }
+
+/// An `outside`-carbon chain on N(charge)–C(=O)–O–C(CH3)3.
+fn carbamate(outside: usize, charge: i32) -> Document {
+    let mut doc = Document::default();
+    let mut previous: Option<u64> = None;
+    let mut x = 0.;
+    let mut chain = |doc: &mut Document, element: &str| {
+        let id = doc.add_atom(element, Point::new(x, 0.));
+        x += 42.;
+        if let Some(previous) = previous {
+            doc.add_bond(previous, id, 1, "plain");
+        }
+        previous = Some(id);
+        id
+    };
+    for _ in 0..outside {
+        chain(&mut doc, "C");
+    }
+    let nitrogen = chain(&mut doc, "N");
+    let carbonyl = chain(&mut doc, "C");
+    chain(&mut doc, "O");
+    let quaternary = chain(&mut doc, "C");
+    chain(&mut doc, "C");
+    doc.atom_mut(nitrogen).unwrap().charge = charge;
+    let oxygen = doc.add_atom("O", Point::new(0., 42.));
+    doc.add_bond(carbonyl, oxygen, 2, "plain");
+    for y in [-42., 42.] {
+        let methyl = doc.add_atom("C", Point::new(0., y));
+        doc.add_bond(quaternary, methyl, 1, "plain");
+    }
+    doc
+}
+
+fn contracted(doc: &Document) -> Result<Vec<(String, usize)>, Box<dyn std::error::Error>> {
+    let molecule = crate::chemistry::document::prepare(doc)?;
+    let found = crate::chemistry::abbreviations::find(doc, &molecule, &[], None)?;
+    Ok(found
+        .abbreviations
+        .iter()
+        .map(|group| (group.label.clone(), group.members.len()))
+        .collect())
+}
+
+#[test]
+fn contraction_falls_back_when_a_larger_group_cannot_apply()
+-> Result<(), Box<dyn std::error::Error>> {
+    // CNC(=O)OC(C)(C)C: NHBoc loses its outside methyl to Me, so Boc and Me
+    // apply, as they did before NHBoc existed. Likewise with an ethyl.
+    let expected = |a: usize, b: &str, c: usize| vec![("Boc".to_owned(), a), (b.to_owned(), c)];
+    assert_eq!(contracted(&carbamate(1, 0))?, expected(7, "Me", 1));
+    assert_eq!(contracted(&carbamate(2, 0))?, expected(7, "Et", 2));
+    Ok(())
+}
+
+#[test]
+fn contraction_never_hides_charge_or_isotopes() -> Result<(), Box<dyn std::error::Error>> {
+    // C[N-]C(=O)OC(C)(C)C and its cation keep the charged nitrogen visible.
+    for charge in [-1, 1] {
+        let found = contracted(&carbamate(1, charge))?;
+        assert!(found.iter().all(|(label, _)| label != "NHBoc"), "{found:?}");
+    }
+    // A 13C methyl is not an ordinary tert-butyl methyl.
+    let mut doc = carbamate(1, 0);
+    doc.atoms.last_mut().unwrap().isotope = 13;
+    let found = contracted(&doc)?;
+    assert!(
+        found
+            .iter()
+            .all(|(label, _)| label != "Boc" && label != "NHBoc"),
+        "{found:?}"
+    );
+    Ok(())
+}
