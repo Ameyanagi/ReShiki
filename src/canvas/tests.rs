@@ -179,22 +179,101 @@ fn rulers_exclude_editing_and_pointer_coordinates_use_the_inset_paper() {
 
 #[test]
 fn free_ring_preset_drag_keeps_its_start_as_rotation_anchor() {
+    use iced::keyboard::Modifiers;
     let doc = Document::default();
     let canvas = MoleculeCanvas {
         tool: Tool::RingPreset(reshiki::rings::Preset::ChairUp),
         ..chain_canvas(&doc, ChainMode::Straight)
     };
+    let close = |a: World, b: World| a.distance(b) < 0.001;
+    let Edit::RingPreset(_, anchor, Some(direction), false, false) =
+        pointer_gesture(&canvas, Point::new(200., 150.), Point::new(200., 80.))
+    else {
+        panic!("a free preset drag must orient the ring");
+    };
+    assert_eq!(anchor, World::default());
+    assert!(close(direction, World::new(0., -70.)));
+    // Rotation snaps to 15° steps about the press; Option/Alt rotates freely.
+    let end = Point::new(270., 140.);
+    let Edit::RingPreset(_, anchor, Some(snapped), false, false) =
+        pointer_gesture(&canvas, Point::new(200., 150.), end)
+    else {
+        panic!("a free preset drag must orient the ring");
+    };
+    assert_eq!(anchor, World::default());
+    let length = 70_f32.hypot(10.);
+    let angle = (-15_f32).to_radians();
+    assert!(close(
+        snapped,
+        World::new(length * angle.cos(), length * angle.sin())
+    ));
     assert!(matches!(
-        pointer_gesture(&canvas, Point::new(200., 150.), Point::new(200., 80.)),
+        pointer_gesture_with(&canvas, Point::new(200., 150.), end, Modifiers::ALT),
         Edit::RingPreset(
-            reshiki::rings::Preset::ChairUp,
+            _,
             World { x: 0., y: 0. },
-            Some(World { x: 0., y: -70. }),
-            false,
+            Some(World { x: 70., y: -10. }),
+            true,
             false
         )
     ));
     assert!(doc.atoms.is_empty());
+}
+
+#[test]
+fn regular_ring_drag_snaps_its_rotation_from_empty_space_and_atoms() {
+    use iced::keyboard::Modifiers;
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", World::new(-100., 0.));
+    let b = doc.add_atom("C", World::new(-142., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    let canvas = MoleculeCanvas {
+        tool: Tool::Ring,
+        ring_size: 6,
+        ..chain_canvas(&doc, ChainMode::Straight)
+    };
+    let close = |a: World, b: World| a.distance(b) < 0.001;
+    let at = |angle: f32, length: f32, origin: World| {
+        let angle = angle.to_radians();
+        origin.offset(length * angle.cos(), length * angle.sin())
+    };
+    // Empty canvas: the ring starts at the press; its first bond follows the
+    // pointer in 15° steps, and Option/Alt keeps the exact direction.
+    let end = Point::new(260., 128.);
+    let raw = World::new(60., -22.);
+    let Edit::Ring(anchor, Some(snapped)) = pointer_gesture(&canvas, Point::new(200., 150.), end)
+    else {
+        panic!("a free ring drag must orient the ring");
+    };
+    assert_eq!(anchor, World::default());
+    assert!(close(
+        snapped,
+        at(-15., raw.distance(World::default()), anchor)
+    ));
+    assert!(matches!(
+        pointer_gesture_with(&canvas, Point::new(200., 150.), end, Modifiers::ALT),
+        Edit::Ring(World { x: 0., y: 0. }, Some(direction)) if direction == raw
+    ));
+    let mut placed = doc.clone();
+    let ids =
+        reshiki::editing::ring_oriented(&mut placed, anchor, 6, false, 10., Some(snapped)).unwrap();
+    let position = |id: u64| placed.atom(id).unwrap().position;
+    assert!(close(position(ids[0]), anchor));
+    assert!(close(position(ids[1]), at(-15., 42., anchor)));
+    // From an atom the ring's direction snaps about the atom itself.
+    let origin = doc.atom(a).unwrap().position;
+    let Edit::Ring(anchor, Some(snapped)) =
+        pointer_gesture(&canvas, Point::new(102., 151.), Point::new(102., 221.))
+    else {
+        panic!("a ring dragged from an atom must orient the ring");
+    };
+    assert_eq!(anchor, World::new(-98., 1.));
+    let raw = World::new(-98., 71.);
+    assert!(close(snapped, at(90., origin.distance(raw), origin)));
+    assert!(matches!(
+        pointer_gesture_with(&canvas, Point::new(102., 151.), Point::new(102., 221.), Modifiers::ALT),
+        Edit::Ring(_, Some(direction)) if direction == raw
+    ));
 }
 
 #[test]
