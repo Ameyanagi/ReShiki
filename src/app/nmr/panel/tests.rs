@@ -124,9 +124,10 @@ fn row_measurement_stops_once_a_row_reaches_the_height_cap() {
     rows.traverse(&mut |_| traversed = true);
     assert!(traversed);
 
-    // Rows at 0, 200, 400 and 600 (ending at 620, the cap); later rows
-    // cannot change the capped preferred height.
-    for index in 0..7 {
+    // Rows every 100px: more than the old four are measured, and the
+    // seventh, ending at 620 (the cap), is the last; later rows cannot
+    // change the capped preferred height.
+    for index in 0..9 {
         let mut node = reshiki::accessibility::Node {
             id: format!("{SITE_ID_PREFIX}13C.{index}"),
             name: "Result row".into(),
@@ -136,12 +137,17 @@ fn row_measurement_stops_once_a_row_reaches_the_height_cap() {
             checked: None,
             expanded: None,
             value: None,
-            bounds: row(index as f32 * 200.),
+            bounds: row(index as f32 * 100.),
             visible_bounds: None,
         };
         rows.custom(None, Rectangle::default(), &mut node);
     }
-    assert_eq!(rows.0, vec![row(0.), row(200.), row(400.), row(600.)]);
+    assert_eq!(
+        rows.0,
+        (0..7)
+            .map(|index| row(index as f32 * 100.))
+            .collect::<Vec<_>>()
+    );
     rows.traverse(&mut |_| panic!("A full measurement must not descend"));
 }
 
@@ -199,8 +205,8 @@ async fn row_measurement_skips_later_rows_in_a_column() {
     )
     .await
     .unwrap();
-    // 200px rows: the fourth ends past the 620px content cap.
-    let (count, measured_rows) = (7, 4);
+    // 100px rows: the seventh is the first to end past the 620px content cap.
+    let (count, measured_rows) = (9, 7);
     let mut table = Column::new();
     for index in 0..count {
         table = table.push(Space::new().height(1).width(Length::Fill));
@@ -211,7 +217,7 @@ async fn row_measurement_skips_later_rows_in_a_column() {
                 text("Row"),
             )
             .width(Length::Fill)
-            .height(200)
+            .height(100)
             .on_press(Message::Nmr(super::super::Action::SelectRow(index))),
         ));
     }
