@@ -2,7 +2,6 @@
 
 use super::Draft;
 use crate::canvas::hit::{bond_target_with, bond_target_with_text, plane_endpoint};
-use crate::canvas::snapping::ring_gesture;
 use crate::canvas::{Gesture, MoleculeCanvas, State, Tool, delocalized_ring_size, layered, rgb};
 use iced::widget::canvas::{Path, Stroke};
 use iced::{Color, Point, Rectangle};
@@ -130,7 +129,8 @@ impl MoleculeCanvas<'_> {
             };
             match &state.gesture {
                 Some(Gesture::Ring { start, attached }) => {
-                    let (anchor, direction) = ring_gesture(*start, end, *attached, radius);
+                    let (anchor, direction) =
+                        self.ring_drag(*start, end, *attached, state.modifiers);
                     match placement(anchor, direction) {
                         Ok((doc, ids)) => {
                             *preview = Cow::Owned(doc);
@@ -170,11 +170,12 @@ impl MoleculeCanvas<'_> {
             let end = self
                 .camera
                 .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
-            let (anchor, direction) = if let Some(Gesture::Ring { start, .. }) = &state.gesture {
-                ring_gesture(*start, end, true, 10. / self.camera.zoom)
-            } else {
-                (end, None)
-            };
+            let (anchor, direction) =
+                if let Some(Gesture::Ring { start, attached }) = &state.gesture {
+                    self.ring_drag(*start, end, *attached, state.modifiers)
+                } else {
+                    (end, None)
+                };
             let drawing = reshiki::rings::Drawing {
                 preset,
                 length: self.bond_drawing.length,
@@ -195,7 +196,7 @@ impl MoleculeCanvas<'_> {
                     *ring_selection = Some(ids);
                     *template_notice = Some((
                         format!(
-                            "{preset} · Drag to orient · Alt connects by a bond · Escape cancels"
+                            "{preset} · Drag rotates in 15° steps · Option/Alt rotates freely and connects from an atom · Escape cancels"
                         ),
                         true,
                     ));
@@ -362,11 +363,12 @@ impl MoleculeCanvas<'_> {
             let end = self
                 .camera
                 .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
-            let (anchor, direction) = if let Some(Gesture::Ring { start, .. }) = &state.gesture {
-                ring_gesture(*start, end, true, 10. / self.camera.zoom)
-            } else {
-                (end, None)
-            };
+            let (anchor, direction) =
+                if let Some(Gesture::Ring { start, attached }) = &state.gesture {
+                    self.ring_drag(*start, end, *attached, state.modifiers)
+                } else {
+                    (end, None)
+                };
             match reshiki::editing::ring_placement(
                 preview,
                 anchor,

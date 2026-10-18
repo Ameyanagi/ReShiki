@@ -1113,9 +1113,22 @@ impl Attachment<'_> {
             if source_length < 0.001 {
                 continue;
             }
-            let rotations = if direction.is_some_and(|p| p.distance(point) > radius) {
+            let rotations = if let Some(aim) = direction.filter(|p| p.distance(point) > radius) {
+                // 15° steps, plus the rotation aiming the template exactly at
+                // the pointer so a free drag is not quantized.
+                let others = part.atoms.iter().filter(|a| a.id != source.id);
+                let count = others.clone().count().max(1) as f32;
+                let (x, y) = others.fold((0., 0.), |(x, y), a| {
+                    (
+                        x + a.position.x - source.position.x,
+                        y + a.position.y - source.position.y,
+                    )
+                });
+                let exact = (aim.y - target.position.y).atan2(aim.x - target.position.x)
+                    - (y / count).atan2(x / count);
                 (0..24)
                     .map(|step| step as f32 * std::f32::consts::TAU / 24.)
+                    .chain([exact])
                     .collect()
             } else {
                 shared_atom_rotations(doc, target, part, source)

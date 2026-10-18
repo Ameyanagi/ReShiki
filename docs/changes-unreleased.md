@@ -1,5 +1,6 @@
 # Unreleased changes
 
+- **Under review — Ring drag rotation:** drag with a ring tool to place its first atom at the press and turn the ring in 15° steps toward the pointer, from empty space or an atom; hold Option/Alt to rotate freely at the same size. [PR #355](https://github.com/Ameyanagi/ReShiki/pull/355) · @Ameyanagi.
 - **Under review — Atom text grows away from the drawing:** a longer custom atom number now starts beside its atom on the open side and is left- or right-justified, so extra text extends outward instead of being centred over bonds; automatic placement also avoids free captions. Short numbers and manually positioned indicators keep their positions. [PR #354](https://github.com/Ameyanagi/ReShiki/pull/354) · @Ameyanagi.
 - **Under review — Word-aware caption wrapping and `reshiki --version`:** wrapped text breaks only between words, or next to CJK characters, so generated name captions and `compose` labels such as `4-Bromoanisole` are never cut mid-word; a word wider than its box overflows it instead. `reshiki --version` and `reshiki --cli --version` print the version and exit without opening a window, and the Agent Skill and CLI guide tell agents to write formulas in labels and conditions with Unicode subscripts. [PR #343](https://github.com/Ameyanagi/ReShiki/pull/343) · @Ameyanagi.
 

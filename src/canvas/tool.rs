@@ -86,11 +86,15 @@ impl Tool {
             Self::Atom => {
                 "Click to add or replace an atom · Drag from an atom to add it with a bond"
             }
-            Self::Ring | Self::RingPreset(Preset::Regular) => "Click or drag to attach",
-            Self::RingPreset(Preset::Cyclopentadiene) => {
-                "Click or drag to attach · Option/Alt connects · Shift swaps double bonds"
+            Self::Ring | Self::RingPreset(Preset::Regular) => {
+                "Click to place or attach · Drag rotates in 15° steps · Option/Alt rotates freely"
             }
-            Self::RingPreset(_) => "Click or drag to attach · Option/Alt connects by a bond",
+            Self::RingPreset(Preset::Cyclopentadiene) => {
+                "Click to place or attach · Drag rotates in 15° steps · Option/Alt rotates freely or connects · Shift swaps double bonds"
+            }
+            Self::RingPreset(_) => {
+                "Click to place or attach · Drag rotates in 15° steps · Option/Alt rotates freely or connects by a bond"
+            }
             Self::Template => "Click to place or attach · Drag to orient · Escape cancels",
             Self::Arrow => {
                 "Click to place or change an arrow · Click again to switch · Drag to draw"
