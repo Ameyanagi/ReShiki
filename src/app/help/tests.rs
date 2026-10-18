@@ -173,6 +173,13 @@ fn search_ranks_names_keys_and_synonyms() {
     assert_eq!(top("cyclohexane").name, "Saturated ring tool (3–8)");
     assert_eq!(top("naphth").name, "Fuse benzene");
     assert_eq!(top("wdg").name, "Wedge");
+    assert_eq!(top("nphth").name, "Fuse benzene");
+    // Ranges include their middle keys; uppercase keys are Shift-letter.
+    assert_eq!(top("shift+5").name, "Saturated ring tool (3–8)");
+    assert_eq!(top("⇧6").name, "Saturated ring tool (3–8)");
+    assert_eq!(top("cmd 5").name, "Go to tab");
+    assert_eq!(top("⇧p").name, "Phenyl (Ph)");
+    assert_eq!(top("shift P").name, "Phenyl (Ph)");
     // Key chords: exact case first, so "r" and "R" differ.
     assert_eq!(top("r").keys, "r");
     assert!(position("r", "Ring tool") < position("r", "Variable R"));

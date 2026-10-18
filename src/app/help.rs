@@ -149,11 +149,12 @@ impl App {
         let selected = current.and_then(|i| entries().get(i));
         let name = match selected {
             Some(entry) => format!(
-                "Search shortcuts; {} results; selected {}, {}, {}",
+                "Search shortcuts; {} results; selected {}, {}, {}: {}",
                 results.len(),
                 entry.name,
                 entry.keys,
-                entry.scope.label()
+                entry.scope.label(),
+                entry.description
             ),
             None => "Search shortcuts; no results".into(),
         };

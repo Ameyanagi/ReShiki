@@ -56,6 +56,26 @@ fn key_tokens(text: &str) -> Vec<String> {
 /// the original so case can break ties ("r" before "R").
 fn chord_terms(keys: &str) -> Vec<String> {
     let mut terms = key_tokens(keys);
+    // Ranges such as ⇧3–⇧8 or ⌘1–⌘8 include the keys between their ends.
+    let chars: Vec<char> = keys.chars().collect();
+    for (i, _) in chars.iter().enumerate().filter(|(_, c)| **c == '–') {
+        let first = i.checked_sub(1).and_then(|j| chars.get(j)?.to_digit(10));
+        let last = chars
+            .iter()
+            .skip(i + 1)
+            .find(|c| !modifier(**c) && !c.is_alphabetic() && **c != '+')
+            .and_then(|c| c.to_digit(10));
+        if let (Some(first), Some(last)) = (first, last) {
+            terms.extend((first + 1..last).map(|d| d.to_string()));
+        }
+    }
+    // An uppercase contextual key is Shift-letter.
+    let shifted = terms
+        .iter()
+        .any(|t| t.len() == 1 && t.chars().all(|c| c.is_ascii_uppercase()));
+    if shifted {
+        terms.push("⇧".into());
+    }
     for token in terms.clone() {
         for (symbol, words) in MODIFIERS {
             if token == *symbol || words.iter().any(|w| token.eq_ignore_ascii_case(w)) {
@@ -107,9 +127,17 @@ fn token_score(entry: &Entry, chord: &[String], token: &str) -> u32 {
             best = best.max(5 * weight);
         }
     }
-    if best == 0 && lower.chars().count() > 2 && subsequence(&lower, &name) {
-        // Fewer words in the name means a closer match.
-        best = 4 + 4 / words(&name).count().max(1) as u32;
+    // Letters in order within one word, as "wdg" in "wedge". A name with
+    // fewer words is a closer match.
+    if best == 0 && lower.chars().count() > 2 {
+        let in_word = |text: &str| words(text).any(|word| subsequence(&lower, &word));
+        if in_word(&name) {
+            best = 4 + 4 / words(&name).count().max(1) as u32;
+        } else if in_word(&synonyms) {
+            best = 3;
+        } else if in_word(&description) {
+            best = 2;
+        }
     }
     best
 }

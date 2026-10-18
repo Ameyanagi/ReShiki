@@ -858,8 +858,8 @@ fn bond_entries() -> Vec<Entry> {
         (
             "z",
             "Fuse diene",
-            "Fuse a cyclohexadiene ring on the bond",
-            &["diene"],
+            "Fuse a cyclopentadiene ring on the bond",
+            &["diene", "cyclopentadiene"],
         ),
         (
             "9 / 0",
