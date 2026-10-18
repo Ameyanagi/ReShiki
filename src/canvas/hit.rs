@@ -184,26 +184,50 @@ fn hit_object_with_orbital(
     r: f32,
     foreground_orbital: bool,
 ) -> Option<u64> {
+    let mark = || {
+        doc.atoms
+            .iter()
+            .rev()
+            .find(|a| {
+                doc.atom_visible(a.id)
+                    && reshiki::scientific::styled_mark_parts(a, &doc.drawing_style)
+                        .iter()
+                        .any(|part| {
+                            reshiki::graphics::flattened(&part.commands)
+                                .iter()
+                                .any(|points| {
+                                    points.windows(2).any(
+                                        |q| matches!(q, [a, b] if distance_to_segment(p, *a, *b) < r),
+                                    )
+                                })
+                        })
+            })
+            .map(|a| a.id)
+    };
     // Only precompute label ownership when a foreground orbital may need to
     // pass through it. Ordinary foreground graphics retain their fast path.
     let orbital_label = foreground_orbital.then(|| reshiki::scene::atom_label_hit(doc, p, 0.));
-    // A label an orbital reaches is painted right above the topmost front
-    // orbital reaching it; graphics stacked at or below that point lie under
-    // the visible label, which must reach the atom that owns it.
-    let label_rank = orbital_label.flatten().map(|atom| {
-        reshiki::scientific::orbital_label_halos(doc)
-            .atoms
-            .into_iter()
-            .find(|(id, _)| *id == atom)
-            .and_then(|(_, above)| above)
-            .and_then(|orbital| {
-                doc.graphics
-                    .iter()
-                    .enumerate()
-                    .find(|(_, g)| g.id == orbital)
-                    .map(|(i, g)| (g.layer, i))
-            })
-    });
+    // A label an orbital reaches, with its attached marks, is painted right
+    // above the topmost front orbital reaching it; graphics stacked at or
+    // below that point lie under the visible label or mark, which must reach
+    // the atom that owns it.
+    let label_rank = orbital_label
+        .flatten()
+        .or_else(|| foreground_orbital.then(mark).flatten())
+        .and_then(|atom| {
+            reshiki::scientific::orbital_label_halos(doc)
+                .atoms
+                .into_iter()
+                .find(|(id, _)| *id == atom)
+                .and_then(|(_, above)| above)
+        })
+        .and_then(|orbital| {
+            doc.graphics
+                .iter()
+                .enumerate()
+                .find(|(_, g)| g.id == orbital)
+                .map(|(i, g)| (g.layer, i))
+        });
     let graphic = |front| {
         doc.graphics
             .iter()
@@ -212,35 +236,14 @@ fn hit_object_with_orbital(
                 (g.layer >= 0) == front
                     && !(orbital_label.flatten().is_some()
                         && matches!(g.kind, reshiki::graphics::GraphicKind::Orbital(_)))
-                    && !label_rank
-                        .flatten()
-                        .is_some_and(|rank| (g.layer, *i) <= rank)
+                    && !label_rank.is_some_and(|rank| (g.layer, *i) <= rank)
                     && g.hit(p, r)
             })
             .max_by_key(|(i, g)| (g.layer, *i))
             .map(|(_, g)| g.id)
     };
     graphic(true)
-        .or_else(|| {
-            doc.atoms
-                .iter()
-                .rev()
-                .find(|a| {
-                    doc.atom_visible(a.id)
-                        && reshiki::scientific::styled_mark_parts(a, &doc.drawing_style)
-                            .iter()
-                            .any(|part| {
-                                reshiki::graphics::flattened(&part.commands)
-                                    .iter()
-                                    .any(|points| {
-                                        points.windows(2).any(
-                                    |q| matches!(q, [a, b] if distance_to_segment(p, *a, *b) < r),
-                                )
-                                    })
-                            })
-                })
-                .map(|a| a.id)
-        })
+        .or_else(mark)
         // A visible atom label owns its H/isotope/charge appendages when
         // selecting, just as it does for hover shortcuts. Keep the exact label
         // bounds so adjacent bonds remain targetable; growth still uses nearest.

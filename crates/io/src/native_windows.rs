@@ -107,11 +107,11 @@ fn collect(
                 collect(halo, absolute, 1., output, sources, paper)?;
                 let [r, g, b] = paper;
                 for value in output.iter_mut().skip(start) {
-                    if value["fill"].is_array() {
-                        value["fill"] = json!([r, g, b, 255]);
+                    if let Some(fill) = value.get_mut("fill").filter(|fill| fill.is_array()) {
+                        *fill = json!([r, g, b, 255]);
                     }
-                    if value["stroke"].is_object() {
-                        value["stroke"]["color"] = json!([r, g, b, 255]);
+                    if let Some(stroke) = value.get_mut("stroke").and_then(Value::as_object_mut) {
+                        stroke.insert("color".into(), json!([r, g, b, 255]));
                     }
                 }
             }

@@ -411,3 +411,36 @@ fn each_haloed_label_stacks_by_the_orbitals_that_reach_it() {
     );
     assert!(halos[1] > cover);
 }
+
+#[test]
+fn labels_with_zero_rear_opacity_are_not_raised_over_orbitals() {
+    let mut doc = Document::from_json(include_bytes!(
+        "../../../../tests/fixtures/rear-opacity/c60-rear-opacity-25.rsk"
+    ))
+    .unwrap();
+    let ids = doc.all_ids();
+    crate::depth_appearance::set_rear_opacity(&mut doc, &ids, 0.).unwrap();
+    let paint = crate::rear_opacity::Paint::new(&doc);
+    let hidden = ids
+        .iter()
+        .copied()
+        .find(|id| paint.atom(*id) == 0.)
+        .unwrap();
+    let exposed = ids
+        .iter()
+        .copied()
+        .find(|id| paint.atom(*id) == 1.)
+        .unwrap();
+    for id in [hidden, exposed] {
+        let atom = doc.atom_mut(id).unwrap();
+        atom.element = "O".into();
+        atom.no_implicit = true;
+        let at = atom.position;
+        tool(false)
+            .place(&mut doc, at, at.offset(0., -42.), false, 10.)
+            .unwrap();
+    }
+    let halos = orbital_label_halos(&doc);
+    assert!(halos.contains(exposed));
+    assert!(!halos.contains(hidden), "No label is drawn at zero opacity");
+}

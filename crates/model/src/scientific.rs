@@ -17,10 +17,11 @@ pub(crate) use label_halo::orbital_halos;
 pub use label_halo::{LABEL_HALO_PT, OrbitalHalos, label_halo_radius};
 
 /// The atom labels orbitals reach, from the document's own label ink.
-/// Editable exchange stacks them above the orbital as the scene does.
+/// Editable exchange and hit-testing stack them as the scene does.
 pub fn orbital_label_halos(doc: &crate::document::Document) -> OrbitalHalos {
+    let opacity = crate::rear_opacity::Paint::new(doc);
     orbital_halos(doc, &doc.graphics, |atom| {
-        if doc.atom_visible(atom.id) {
+        if doc.atom_visible(atom.id) && opacity.atom(atom.id) > 0. {
             crate::scene::atom_label_ink_boxes(atom, doc)
         } else {
             Vec::new()
