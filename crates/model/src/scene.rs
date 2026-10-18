@@ -610,7 +610,7 @@ fn push_hydrogens(
         let h_width = frame.text_width("H", size);
         let width = h_width + frame.text_width(&count, small);
         use crate::atom_labels::HydrogenPosition as H;
-        let position = crate::atom_labels::appendage_position(a, doc);
+        let mut position = crate::atom_labels::appendage_position(a, doc);
         let mut parts = vec![frame.text(Point::default(), "H".into(), size)];
         if !count.is_empty() {
             parts.push(frame.text(Point::new(h_width, size * 0.40), count, small));
@@ -623,14 +623,38 @@ fn push_hydrogens(
                 }
             }
         }
-        place_appendage(
-            &cursor.runs,
-            &mut parts,
-            (origin, element_width),
-            (width, isotope_width),
-            size,
-            position,
-        );
+        let place = |position| {
+            let mut parts = parts.clone();
+            place_appendage(
+                &cursor.runs,
+                &mut parts,
+                (origin, element_width),
+                (width, isotope_width),
+                size,
+                position,
+            );
+            parts
+        };
+        let mut parts = place(position);
+        // Keep the bond-based side unless its ink meets a nearby label or
+        // charge; a replacement must also stay off unrelated bonds.
+        if a.display.hydrogen_position == H::Auto
+            && let Some(labels) = nearby_label_ink(a, doc, size)
+            && !clear_of(&parts, &labels, &[], size)
+        {
+            let bonds = unrelated_bonds(a, doc);
+            let mut reserved = labels;
+            reserved.extend(nearby_mark_ink(a, doc, size).unwrap_or_default());
+            if let Some((side, placed)) = crate::atom_labels::appendage_alternatives(a, doc)
+                .into_iter()
+                .filter(|side| *side != position)
+                .map(|side| (side, place(side)))
+                .find(|(_, placed)| clear_of(placed, &reserved, &bonds, size))
+            {
+                position = side;
+                parts = placed;
+            }
+        }
         if matches!(position, H::Above | H::Below) {
             if let Some(Primitive::Text { position, .. }) = parts.first() {
                 cursor.mark_y = position.y;
@@ -642,6 +666,150 @@ fn push_hydrogens(
             cursor.right += width;
         }
     }
+}
+
+thread_local! {
+    /// Set while measuring neighboring labels for hydrogen placement, so their
+    /// own automatic hydrogens keep the bond-based side instead of recursing.
+    static MEASURING_NEARBY_LABELS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Reach of the nearby labels and marks that automatic hydrogens avoid.
+fn nearby(a: &Atom, other: &Atom, size: f32) -> bool {
+    a.position.distance(other.position) < size * 5.
+}
+
+/// Measure other labels or marks, or `None` while already measuring, so
+/// neighbors (and marks placed around this label) do not recurse.
+fn measuring<T>(measure: impl FnOnce() -> T) -> Option<T> {
+    if MEASURING_NEARBY_LABELS.with(|flag| flag.replace(true)) {
+        return None;
+    }
+    let measured = measure();
+    MEASURING_NEARBY_LABELS.with(|flag| flag.set(false));
+    Some(measured)
+}
+
+/// Ink of other atoms' labels and charges near `a` (for example an unbonded
+/// metal's 3+).
+fn nearby_label_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, Point)>> {
+    measuring(|| {
+        doc.atoms
+            .iter()
+            .filter(|other| other.id != a.id && doc.atom_visible(other.id))
+            .filter(|other| nearby(a, other, size))
+            .flat_map(|other| label_ink_boxes(&atom_label_runs(other, doc)))
+            .collect()
+    })
+}
+
+/// Extents of the explicit marks on `a` and its nearby atoms.
+fn nearby_mark_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, Point)>> {
+    measuring(|| {
+        doc.atoms
+            .iter()
+            .filter(|other| !other.marks.is_empty() && doc.atom_visible(other.id))
+            .filter(|other| nearby(a, other, size))
+            .flat_map(|other| crate::scientific::styled_mark_parts(other, &doc.drawing_style))
+            .filter_map(|part| {
+                let pad = part.style.width() * 0.5;
+                part.commands
+                    .iter()
+                    .flat_map(crate::graphics::PathCommand::iter_points)
+                    .map(|p| (p, p))
+                    .reduce(|(lo, hi), (p, _)| {
+                        (
+                            Point::new(lo.x.min(p.x), lo.y.min(p.y)),
+                            Point::new(hi.x.max(p.x), hi.y.max(p.y)),
+                        )
+                    })
+                    .map(|(lo, hi)| (lo.offset(-pad, -pad), hi.offset(pad, pad)))
+            })
+            .collect()
+    })
+}
+
+/// The drawn strokes of visible bonds that do not end at `a`, each with how
+/// far its ink reaches beyond the stroke's center line.
+fn unrelated_bonds(a: &Atom, doc: &Document) -> Vec<(Point, Point, f32)> {
+    use crate::bonds::DoublePosition as P;
+    let style = &doc.drawing_style;
+    let spacing = style.bond_length_world * style.bond_spacing_ratio;
+    let positions: std::collections::HashMap<_, _> = doc
+        .atoms
+        .iter()
+        .map(|atom| (atom.id, atom.position))
+        .collect();
+    let faces = std::cell::OnceCell::new();
+    let faces = || faces.get_or_init(|| FaceIndex::new(doc));
+    doc.bonds
+        .iter()
+        .filter(|b| b.a != a.id && b.b != a.id && doc.bond_visible(b.a, b.b))
+        .filter_map(|b| Some((b, *positions.get(&b.a)?, *positions.get(&b.b)?)))
+        .flat_map(|(b, p, q)| {
+            // Each stroke's start and end offsets along the normal, as
+            // `push_bond` and `push_bond_rails` draw them.
+            let wavy = b.display == "wavy";
+            let rails = |offsets: &[f32]| offsets.iter().map(|o| (*o, *o)).collect::<Vec<_>>();
+            let strokes = match b.order {
+                // A wavy double bond is two strokes crossing at the middle.
+                2 if wavy => vec![(spacing / 2., -spacing / 2.), (-spacing / 2., spacing / 2.)],
+                2 | 7 => match double_position(faces(), b) {
+                    P::Left => rails(&[0., -spacing]),
+                    P::Right => rails(&[0., spacing]),
+                    _ => rails(&[-spacing / 2., spacing / 2.]),
+                },
+                3 => rails(&[-spacing, 0., spacing]),
+                4 => rails(&[
+                    0.,
+                    spacing * automatic_double_side(faces(), b).unwrap_or(1.),
+                ]),
+                6 => rails(&[-spacing * 1.5, -spacing * 0.5, spacing * 0.5, spacing * 1.5]),
+                _ => rails(&[0.]),
+            };
+            let bold = matches!(
+                b.display.as_str(),
+                "bold" | "wedge" | "hash" | "hashed" | "hollow_wedge"
+            ) || b.secondary_display.as_deref() == Some("bold");
+            let ink = if bold {
+                style.world(style.bold_width_pt) / 2.
+            } else if wavy && b.order != 2 {
+                // The wave's amplitude.
+                style.line_width() * 1.75
+            } else {
+                style.line_width() / 2.
+            };
+            let length = p.distance(q).max(0.001);
+            let (nx, ny) = (-(q.y - p.y) / length, (q.x - p.x) / length);
+            strokes.into_iter().map(move |(from, to)| {
+                (
+                    p.offset(nx * from, ny * from),
+                    q.offset(nx * to, ny * to),
+                    ink,
+                )
+            })
+        })
+        .collect()
+}
+
+/// Whether ink, padded by a small gap, misses the label boxes and bond strokes.
+fn clear_of(
+    parts: &[Primitive],
+    labels: &[(Point, Point)],
+    bonds: &[(Point, Point, f32)],
+    size: f32,
+) -> bool {
+    let gap = size * 0.12;
+    label_ink_boxes(parts).into_iter().all(|(lo, hi)| {
+        let (lo, hi) = (lo.offset(-gap, -gap), hi.offset(gap, gap));
+        labels
+            .iter()
+            .all(|(a, b)| hi.x <= a.x || lo.x >= b.x || hi.y <= a.y || lo.y >= b.y)
+            && !bonds.iter().any(|&(p, q, pad)| {
+                let (lo, hi) = (lo.offset(-pad, -pad), hi.offset(pad, pad));
+                crate::atom_labels::segment_hits_rect(p, q, lo, hi)
+            })
+    })
 }
 
 /// The mass number, raised before the element symbol.
