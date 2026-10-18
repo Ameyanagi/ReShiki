@@ -210,24 +210,28 @@ fn hit_object_with_orbital(
     // A label an orbital reaches, with its attached marks, is painted right
     // above the topmost front orbital reaching it; graphics stacked at or
     // below that point lie under the visible label or mark, which must reach
-    // the atom that owns it.
-    let label_rank = orbital_label
+    // the atom that owns it. A label and another atom's mark may overlap, so
+    // the higher of the two counts.
+    let raised: Vec<_> = foreground_orbital
+        .then(|| [orbital_label.flatten(), mark()])
+        .into_iter()
         .flatten()
-        .or_else(|| foreground_orbital.then(mark).flatten())
-        .and_then(|atom| {
-            reshiki::scientific::orbital_label_halos(doc)
-                .atoms
-                .into_iter()
-                .find(|(id, _)| *id == atom)
-                .and_then(|(_, above)| above)
-        })
-        .and_then(|orbital| {
+        .flatten()
+        .collect();
+    let label_rank = (!raised.is_empty())
+        .then(|| reshiki::scientific::orbital_label_halos(doc).atoms)
+        .into_iter()
+        .flatten()
+        .filter(|(id, _)| raised.contains(id))
+        .filter_map(|(_, above)| above)
+        .filter_map(|orbital| {
             doc.graphics
                 .iter()
                 .enumerate()
                 .find(|(_, g)| g.id == orbital)
                 .map(|(i, g)| (g.layer, i))
-        });
+        })
+        .max();
     let graphic = |front| {
         doc.graphics
             .iter()
