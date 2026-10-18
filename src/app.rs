@@ -482,11 +482,13 @@ impl App {
             template_index: 0,
             templates: template_library::State::load(),
         };
-        if let Some(message) = abbreviations::load_user_catalog()
-            && app.recovered.is_empty()
-        {
-            app.status = message;
-            app.error = true;
+        if let Some(message) = abbreviations::load_user_catalog() {
+            if app.recovered.is_empty() {
+                app.status = message.clone();
+                app.error = true;
+            }
+            // Opening a drawing replaces the status; the panel keeps it.
+            app.abbreviations.catalog_warning = Some(message);
         }
         let task = app.open_startup(startup);
         #[cfg(any(windows, target_os = "linux"))]

@@ -65,6 +65,15 @@ non-FMA sine/cosine paths for attachment rotations. Other targets retain their
 native math. The adaptation rejects nonfinite values and angles outside ±2π; two
 finite `atan2` values cannot produce a rotation outside that range.
 
+The depiction port's paired sine/cosine uses the same adaptation on Windows ARM,
+falling back to the host CRT only outside that domain. With the ARM CRT, one
+rounding flips the order of two OTBDPS tert-butyl methyls relative to the
+Windows ARM capture
+([run 39126121166](https://github.com/Ameyanagi/ReShiki/actions/runs/39126121166/job/117671632003)).
+Running the port on Apple Silicon with Windows ARM's unfused arithmetic
+reproduces that failure with the host sine, and matches all 62 Windows ARM
+templates within the 1e-9 test bound with the adaptation, OTBDPS bit for bit.
+
 `abbreviation_trigonometry_reference.py` captures 42,567 independent native
 sine/cosine pairs, including quadrant boundaries, signed zeros, subnormals,
 dense and random angles. The checked-in binary contains big-endian f64 bit

@@ -126,6 +126,13 @@ impl Preset {
         let prepared =
             smiles::prepare(&entry.smiles).map_err(|error| format!("Invalid SMILES: {error}"))?;
         check_fragment(&prepared)?;
+        // A removed [H] atom would leave an explicit count on its neighbor,
+        // which the query reads as a bracket hydrogen count.
+        if smiles::parse(&entry.smiles)
+            .is_ok_and(|parsed| parsed.graph.atoms.iter().any(|a| a.atomic_number == 1))
+        {
+            return Err("Write hydrogens implicitly or as bracket counts, not as [H]".into());
+        }
         let (atoms, bonds) = matcher::query(&prepared.state).map_err(|e| e.to_string())?;
         let formula = substituent_formula(&prepared)?;
         if let Some(expected) = &entry.formula
@@ -216,6 +223,10 @@ fn check_fragment(prepared: &Prepared) -> std::result::Result<(), String> {
     if graph.atoms.iter().any(|atom| atom.radical_electrons > 0) {
         return Err("Radicals are not supported in groups".into());
     }
+    // Matching ignores isotopes, so the label would also claim ordinary atoms.
+    if graph.atoms.iter().any(|atom| atom.isotope != 0) {
+        return Err("Isotopes are not supported in groups".into());
+    }
     // Replacement keeps the drawing's single attachment bond.
     if graph
         .bonds
@@ -239,6 +250,13 @@ fn check_fragment(prepared: &Prepared) -> std::result::Result<(), String> {
     {
         return Err("Only one * attachment point is allowed".into());
     }
+    check_annotations(state)
+}
+
+/// Stereo, atom maps and enhanced-stereo groups do not survive as a group.
+pub(super) fn check_annotations(
+    state: &crate::chemistry::stereo::perception::State,
+) -> std::result::Result<(), String> {
     if state
         .metadata
         .atoms
@@ -250,6 +268,14 @@ fn check_fragment(prepared: &Prepared) -> std::result::Result<(), String> {
             .iter()
             .any(|b| b.stereo != 0 || !b.stereo_atoms.is_empty())
         || !state.metadata.groups.is_empty()
+        // A wavy bond on a non-stereo atom sets only its direction.
+        || state.directions.iter().any(|d| {
+            matches!(
+                d,
+                crate::chemistry::kekulize::Direction::Unknown
+                    | crate::chemistry::kekulize::Direction::EitherDouble
+            )
+        })
     {
         return Err("Stereo and atom-map annotations are not supported in groups".into());
     }
@@ -303,7 +329,14 @@ fn substituent_formula(prepared: &Prepared) -> std::result::Result<String, Strin
 /// Parse a catalog file. Each invalid entry is reported with its position
 /// and label; the valid entries are still returned.
 pub fn parse(text: &str, user: bool) -> (Vec<Preset>, Vec<String>) {
-    let file: File = match serde_json::from_str(text) {
+    // Groups are decoded one at a time so one malformed entry is skipped alone.
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Groups {
+        format: u32,
+        groups: Vec<serde_json::Value>,
+    }
+    let file: Groups = match serde_json::from_str(text) {
         Ok(file) => file,
         Err(error) => return (Vec::new(), vec![format!("Invalid catalog file: {error}")]),
     };
@@ -319,10 +352,20 @@ pub fn parse(text: &str, user: bool) -> (Vec<Preset>, Vec<String>) {
     let mut presets = Vec::new();
     let mut errors = Vec::new();
     let mut seen = HashSet::new();
-    for (index, entry) in file.groups.into_iter().enumerate() {
+    for (index, group) in file.groups.iter().enumerate() {
+        let entry = match Entry::deserialize(group) {
+            Ok(entry) => entry,
+            Err(error) => {
+                let label = group.get("label").and_then(|l| l.as_str()).unwrap_or("?");
+                errors.push(format!("Group {} ({label}): {error}", index + 1));
+                continue;
+            }
+        };
         let name = format!("Group {} ({})", index + 1, entry.label);
+        // Labels, aliases and reverse labels all identify a group on import.
         let spellings = std::iter::once(entry.label.clone())
             .chain(entry.aliases.iter().cloned())
+            .chain((!entry.reverse.is_empty()).then(|| entry.reverse.clone()))
             .collect::<Vec<_>>();
         if let Some(clash) = spellings.iter().find(|s| seen.contains(*s)) {
             errors.push(format!("{name}: \"{clash}\" is defined twice"));

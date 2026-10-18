@@ -70,6 +70,30 @@ fn ambiguous_attachments_and_bad_labels_are_refused() {
 }
 
 #[test]
+fn a_wavy_double_bond_is_refused_rather_than_dropped() {
+    let mut doc = Document::default();
+    let outside = doc.add_atom("C", Point::new(0., 0.));
+    let first = doc.add_atom("C", Point::new(42., 0.));
+    let second = doc.add_atom("C", Point::new(63., 36.));
+    let last = doc.add_atom("C", Point::new(105., 36.));
+    doc.add_bond(outside, first, 1, "plain");
+    doc.add_bond(first, second, 2, "wavy");
+    doc.add_bond(second, last, 1, "plain");
+    let error = from_selection(&doc, &[first, second, last], "Prop", "").unwrap_err();
+    assert!(error.contains("Stereo"), "{error}");
+    // A wavy single bond to a tert-butyl methyl is refused too.
+    let (mut doc, _, members) = pivalate();
+    let bond = doc
+        .bonds
+        .iter_mut()
+        .find(|b| (b.a, b.b) == (members[3], members[4]))
+        .unwrap();
+    bond.display = "wavy".into();
+    let error = from_selection(&doc, &members, "OPv", "").unwrap_err();
+    assert!(error.contains("Stereo"), "{error}");
+}
+
+#[test]
 fn saving_adds_or_replaces_by_label_and_keeps_other_entries() {
     let entry = |label: &str, smiles: &str| Entry {
         label: label.into(),
@@ -94,4 +118,14 @@ fn saving_adds_or_replaces_by_label_and_keeps_other_entries() {
     // One group per line, like the bundled catalog.
     assert_eq!(replaced.lines().count(), 7);
     assert!(upsert(Some("{ not json"), entry("C1", "*C")).is_err());
+    // An entry skipped at startup is kept and does not block saving.
+    let skipped = r#"{"format": 1, "groups": [{"label": "Typo", "smile": "*C"}]}"#;
+    let saved = upsert(Some(skipped), entry("D1", "*CC")).unwrap();
+    assert!(
+        saved.contains(r#"{"label":"Typo","smile":"*C"}"#),
+        "{saved}"
+    );
+    let (presets, errors) = parse(&saved, true);
+    assert_eq!(presets.len(), 1);
+    assert_eq!(errors.len(), 1, "{errors:?}");
 }

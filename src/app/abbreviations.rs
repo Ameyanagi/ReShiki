@@ -18,6 +18,8 @@ pub struct State {
     pub preset: String,
     pub label: String,
     pub reverse_label: String,
+    /// Skipped user entries, kept in the panel after the status line changes.
+    pub catalog_warning: Option<String>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -25,6 +27,7 @@ impl Default for State {
             preset: "OMe".into(),
             label: String::new(),
             reverse_label: String::new(),
+            catalog_warning: None,
         }
     }
 }
@@ -152,6 +155,10 @@ pub(super) fn load_user_catalog() -> Option<String> {
         Err(error) => return Some(format!("Could not read {}: {error}", path.display())),
     };
     let errors = reshiki::chemistry::abbreviations::set_user(Some(&text));
+    catalog_warning(&errors, &path)
+}
+
+fn catalog_warning(errors: &[String], path: &std::path::Path) -> Option<String> {
     let first = errors.first()?;
     Some(format!(
         "Your abbreviations file skipped {} group{}: {first} ({})",
@@ -175,11 +182,31 @@ impl App {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
             Err(error) => return Err(format!("Could not read {}: {error}", path.display())),
         };
+        let smiles = defined.entry.smiles.clone();
         let text = catalog::upsert(existing.as_deref(), defined.entry)?;
-        // Check the new file before writing it, so a bad save never lands on disk.
-        let (_, errors) = catalog::parse(&text, true);
-        if let Some(error) = errors.first() {
-            return Err(error.clone());
+        // Check the new file before writing it, so a bad save never lands on
+        // disk: the new group must load and no group that loaded before may be
+        // lost. Entries already skipped at startup stay as they were.
+        let before = existing
+            .as_deref()
+            .map(|text| catalog::parse(text, true).0)
+            .unwrap_or_default();
+        let (after, errors) = catalog::parse(&text, true);
+        let loads = |name: &str| after.iter().any(|p| p.label == name);
+        let failed = if after.iter().any(|p| p.label == label && p.smiles == smiles) {
+            before
+                .iter()
+                .map(|p| p.label.as_str())
+                .find(|old| *old != label && !loads(old))
+        } else {
+            Some(label.as_str())
+        };
+        if let Some(name) = failed {
+            let tag = format!("({name})");
+            return Err(errors
+                .into_iter()
+                .find(|error| error.contains(&tag))
+                .unwrap_or_else(|| format!("Could not save {label}")));
         }
         let mut doc = self.tab.doc.clone();
         doc.contract(&defined.members, &label, &reverse)?;
@@ -187,7 +214,8 @@ impl App {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
         reshiki::storage::write_atomic(&path, text.as_bytes())?;
-        catalog::set_user(Some(&text));
+        let skipped = catalog::set_user(Some(&text));
+        self.abbreviations.catalog_warning = catalog_warning(&skipped, &path);
         self.tab.doc = doc;
         Ok(format!(
             "Saved {label} to your abbreviations · Type it on any endpoint · {}",
