@@ -145,7 +145,7 @@ fn invalid_entries_are_reported_and_valid_ones_kept() {
         "Group 13 (A,B): Label \"A,B\" must be 1-32 characters without spaces or commas",
         "Group 14 (Heavy): Isotopes are not supported",
         "Group 15 (Typo): unknown field `smile`",
-        "Group 17 (Azide): \"N3\" is a built-in group",
+        "Group 17 (Azide): \"N3\" already means an element or a built-in group",
         "Group 18 (GoodO): \"Late2\" is defined twice",
         "Group 19 (ExplicitH): Write hydrogens implicitly",
     ]) {

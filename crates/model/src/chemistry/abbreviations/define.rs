@@ -1,5 +1,5 @@
 //! Turn a drawn fragment into a catalog entry for the user's own groups.
-use super::catalog::{Entry, FORMAT, File, Preset};
+use super::catalog::{Entry, FORMAT, Preset};
 use crate::{
     chemistry::{document, smiles},
     document::Document,
@@ -120,6 +120,8 @@ pub fn from_selection(
         .cloned()
         .collect();
     let molecule = document::prepare(&part).map_err(|e| format!("Check the fragment: {e}"))?;
+    // SMILES output drops wavy and unknown stereo, so check before writing it.
+    super::catalog::check_annotations(&molecule.state)?;
     let root = molecule
         .ids
         .iter()
@@ -159,14 +161,20 @@ const ATTACHMENT: &str = "Select a fragment with exactly one single bond to the 
 or include one * attachment atom";
 
 /// Add or replace (by label) one entry in the text of a user catalog file,
-/// keeping the other entries and their order. An unreadable file is an error
-/// rather than something to overwrite.
+/// keeping the other entries, including skipped ones, in their order.
+/// An unreadable file is an error rather than something to overwrite.
 pub fn upsert(existing: Option<&str>, entry: Entry) -> Result<String, String> {
-    let mut file = match existing.filter(|text| !text.trim().is_empty()) {
-        Some(text) => serde_json::from_str::<File>(text).map_err(|e| {
+    #[derive(serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Rows {
+        format: u32,
+        groups: Vec<serde_json::Value>,
+    }
+    let file = match existing.filter(|text| !text.trim().is_empty()) {
+        Some(text) => serde_json::from_str::<Rows>(text).map_err(|e| {
             format!("Your abbreviation file is not valid ({e}); fix or move it first")
         })?,
-        None => File {
+        None => Rows {
             format: FORMAT,
             groups: Vec::new(),
         },
@@ -177,12 +185,16 @@ pub fn upsert(existing: Option<&str>, entry: Entry) -> Result<String, String> {
             file.format
         ));
     }
-    match file.groups.iter_mut().find(|g| g.label == entry.label) {
-        Some(slot) => *slot = entry,
-        None => file.groups.push(entry),
+    let mut groups = file.groups;
+    let row = serde_json::to_value(&entry).map_err(|e| e.to_string())?;
+    match groups
+        .iter_mut()
+        .find(|old| old.get("label").and_then(|l| l.as_str()) == Some(entry.label.as_str()))
+    {
+        Some(slot) => *slot = row,
+        None => groups.push(row),
     }
-    let rows = file
-        .groups
+    let rows = groups
         .iter()
         .map(|g| serde_json::to_string(g).map(|row| format!("    {row}")))
         .collect::<Result<Vec<_>, _>>()

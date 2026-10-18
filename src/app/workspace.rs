@@ -1967,6 +1967,13 @@ impl App {
             ),
             horizontal_line(),
         ].spacing(10);
+        if let Some(warning) = &self.abbreviations.catalog_warning {
+            body = body.push(
+                text(warning)
+                    .size(11)
+                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61))),
+            );
+        }
         for group in selected {
             let atoms = group
                 .members

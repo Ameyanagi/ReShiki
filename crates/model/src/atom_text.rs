@@ -94,8 +94,10 @@ fn apply_entry(
         return Err("Use a single line of printable text".into());
     }
     let text = text.trim();
+    // A catalog label such as 2-Py or Indol-1-yl is never a link-node range.
     if allow_generic
         && mode != Mode::Text
+        && !known_group(text)
         && let Some(candidate) = crate::generic::apply_label(doc, id, text)?
     {
         return Ok(candidate);

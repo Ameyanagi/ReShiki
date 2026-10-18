@@ -72,7 +72,7 @@ group is one new entry; no separate geometry file is needed. The optional
 `"contract": false` for a group that should only be created by typing, never
 found by **Contract common groups**. Groups cannot carry stereochemistry,
 isotopes, radicals or `[H]` atoms, and attach through one single bond. Every
-label, alias and reverse label must be unique and cannot reuse N3 or MgBr.
+label, alias and reverse label must be unique.
 
 When groups overlap, **Contract common groups** prefers the larger group, for
 example NHBoc over Boc. Groups of the same size are tried in catalog order.

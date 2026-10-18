@@ -245,6 +245,13 @@ fn check_fragment(prepared: &Prepared) -> std::result::Result<(), String> {
     {
         return Err("Only one * attachment point is allowed".into());
     }
+    check_annotations(state)
+}
+
+/// Stereo, atom maps and enhanced-stereo groups do not survive as a group.
+pub(super) fn check_annotations(
+    state: &crate::chemistry::stereo::perception::State,
+) -> std::result::Result<(), String> {
     if state
         .metadata
         .atoms
@@ -256,6 +263,14 @@ fn check_fragment(prepared: &Prepared) -> std::result::Result<(), String> {
             .iter()
             .any(|b| b.stereo != 0 || !b.stereo_atoms.is_empty())
         || !state.metadata.groups.is_empty()
+        // A wavy bond on a non-stereo atom sets only its direction.
+        || state.directions.iter().any(|d| {
+            matches!(
+                d,
+                crate::chemistry::kekulize::Direction::Unknown
+                    | crate::chemistry::kekulize::Direction::EitherDouble
+            )
+        })
     {
         return Err("Stereo and atom-map annotations are not supported in groups".into());
     }
@@ -347,13 +362,6 @@ pub fn parse(text: &str, user: bool) -> (Vec<Preset>, Vec<String>) {
             .chain(entry.aliases.iter().cloned())
             .chain((!entry.reverse.is_empty()).then(|| entry.reverse.clone()))
             .collect::<Vec<_>>();
-        if let Some(clash) = spellings
-            .iter()
-            .find(|s| crate::common_groups::LABELS.contains(&s.as_str()))
-        {
-            errors.push(format!("{name}: \"{clash}\" is a built-in group"));
-            continue;
-        }
         if let Some(clash) = spellings.iter().find(|s| seen.contains(*s)) {
             errors.push(format!("{name}: \"{clash}\" is defined twice"));
             continue;
