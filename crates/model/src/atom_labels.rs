@@ -194,9 +194,9 @@ fn horizontal_side(directions: &[Point]) -> Option<bool> {
     (sum_x.abs() > 0.1 && sum_x.abs() >= sum_y.abs() * vertical_cone).then_some(sum_x > 0.)
 }
 
-/// The side a generic label ([Cl,Br,I], a link node) with one horizontal bond
-/// meets that bond with, so the text extends away from the molecule. None
-/// keeps it centered: no bond, a vertical bond, or two or more bonds.
+/// The side a generic label such as [Cl,Br,I] with one horizontal bond meets
+/// that bond with, so the text extends away from the molecule. None keeps it
+/// centered: no bond, a vertical bond, or two or more bonds (every link node).
 pub(crate) fn generic_label_side(atom: &Atom, doc: &Document) -> Option<bool> {
     if !doc.generic.owns_label(atom.id) {
         return None;

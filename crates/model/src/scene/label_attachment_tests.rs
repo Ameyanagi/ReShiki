@@ -252,6 +252,9 @@ fn generic_labels_stay_centered_on_vertical_or_internal_bonds() -> Result<(), St
         let (lo, hi) = atom_label_ink_bounds(atom, doc).ok_or("Ink")?;
         let x = atom.position.x;
         assert!((x - lo.x - (hi.x - x)).abs() < 2., "{lo:?} {hi:?}");
+        for bond in &doc.bonds {
+            assert!(bond_segment(doc, bond, None).is_some(), "{lo:?} {hi:?}");
+        }
         Ok(())
     };
     let mut doc = Document::default();
@@ -259,11 +262,17 @@ fn generic_labels_stay_centered_on_vertical_or_internal_bonds() -> Result<(), St
     let other = doc.add_atom("C", Point::new(40., 62.));
     doc.add_bond(other, id, 1, "plain");
     centered(&apply(&doc, id, "[Cl,Br,I]", Mode::Auto)?, id)?;
-    let mut doc = Document::default();
-    let id = doc.add_atom("C", Point::new(0., 0.));
-    for x in [-42., 42.] {
-        let other = doc.add_atom("C", Point::new(x, 0.));
-        doc.add_bond(other, id, 1, "plain");
+    // A link node always has two bonds, so it never takes the one-bond side.
+    for text in ["[Cl,Br,I]", "[CH2]1-3"] {
+        let mut doc = Document::default();
+        let id = doc.add_atom("C", Point::new(0., 0.));
+        for x in [-42., 42.] {
+            let other = doc.add_atom("C", Point::new(x, 0.));
+            doc.add_bond(other, id, 1, "plain");
+        }
+        let doc = apply(&doc, id, text, Mode::Auto)?;
+        assert!(doc.generic.owns_label(id), "{text}");
+        centered(&doc, id)?;
     }
-    centered(&apply(&doc, id, "[Cl,Br,I]", Mode::Auto)?, id)
+    Ok(())
 }

@@ -1,5 +1,7 @@
 # Unreleased changes
 
+- **Under review — Generic labels sit beside their bond:** an alternative list such as `[Cl,Br,I]` with a single horizontal bond now meets the bond with its near edge, so the text extends away from the molecule instead of being centered over the bond. Vertical alternative lists and internal generic labels, including link nodes, stay centered. [Atom labels](atom-labels.md) · [PR #365](https://github.com/Ameyanagi/ReShiki/pull/365) · @Ameyanagi.
+
 - **Under review — Bonds meet the attachment atom in text labels:** in multi-atom labels such as MeO, AcS or SPh on a sugar's anomeric carbon, the bond now meets the O or S instead of the middle of the label; nicknames such as Me, Ac and Ph never take the bond. A new **Bond attachment (text labels)** setting chooses flush left, centered, flush right or a specific character; the first three round-trip through ChemDraw files as label justification. [Atom labels](atom-labels.md) · [PR #360](https://github.com/Ameyanagi/ReShiki/pull/360) · @Ameyanagi.
 
 - **Merged — Intel Mac panic recovery:** preserve the allocation alignment required by the native unwinder so recoverable background panics do not crash the application. Native Intel comparison reproduces the original crash and passes with the corrected alignment; global-allocator regression coverage now runs on all six supported native targets. [Diagnostic evidence](https://github.com/Ameyanagi/ReShiki/actions/runs/38822804581) · [PR #328](https://github.com/Ameyanagi/ReShiki/pull/328) · @Ameyanagi.
