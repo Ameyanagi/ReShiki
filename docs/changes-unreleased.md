@@ -1,5 +1,7 @@
 # Unreleased changes
 
+- **Under review — Shortcut finder:** Help (F1 or Cmd/Ctrl+Shift+/) is now a searchable list of every shortcut by action, key, description or synonym, showing where each applies, with live before/after drawings for atom and bond keys made by the keys' own edits. Selecting a row never runs the command. [Shortcuts guide](contextual-shortcuts.md) · [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357) · @Ameyanagi.
+
 - **Merged — Intel Mac panic recovery:** preserve the allocation alignment required by the native unwinder so recoverable background panics do not crash the application. Native Intel comparison reproduces the original crash and passes with the corrected alignment; global-allocator regression coverage now runs on all six supported native targets. [Diagnostic evidence](https://github.com/Ameyanagi/ReShiki/actions/runs/38822804581) · [PR #328](https://github.com/Ameyanagi/ReShiki/pull/328) · @Ameyanagi.
 
 - **Merged — Nightly Windows startup:** use Direct3D 12 consistently during automatic adapter discovery and renderer initialization, retaining explicit backend preferences and the Tiny Skia fallback. The candidate opens the editor in the Windows sandbox that reproduced the original startup failure. Installer antivirus detections remain under vendor review; this is not an antivirus-clearance claim. [Investigation and limits](release-0.12.0-windows-security.md) · [PR #327](https://github.com/Ameyanagi/ReShiki/pull/327) · @Ameyanagi.
