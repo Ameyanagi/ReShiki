@@ -275,6 +275,12 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
             _ => return None,
         });
     }
+    // `:` has no drawing meaning, so it opens the command palette over any
+    // target. Focused text fields capture it before this runs.
+    // Some layouts type it with Shift and a digit, so check it first.
+    if matches!(modified, Key::Character(c) if c == ":") {
+        return Some(Message::Commands(super::command_palette::Action::Open));
+    }
     if mods == Modifiers::SHIFT
         && let Key::Character(digit) = key
         && let [digit @ b'3'..=b'8'] = digit.as_bytes()
@@ -456,11 +462,8 @@ impl App {
         }
     }
 
-    pub(super) fn context_key(&mut self, key: &str) -> Task<Message> {
-        self.sync_keyboard_drawing();
-        if self.tool.selects() && self.tab.keyboard_drawing.active() {
-            return self.keyboard_context_key(key);
-        }
+    /// The atom, or else the bond, under the pointer.
+    pub(super) fn hovered_target(&self) -> (Option<u64>, Option<(u64, u64)>) {
         let point = self
             .tab
             .hover
@@ -482,6 +485,15 @@ impl App {
         } else {
             None
         };
+        (hovered_atom, hovered_bond)
+    }
+
+    pub(super) fn context_key(&mut self, key: &str) -> Task<Message> {
+        self.sync_keyboard_drawing();
+        if self.tool.selects() && self.tab.keyboard_drawing.active() {
+            return self.keyboard_context_key(key);
+        }
+        let (hovered_atom, hovered_bond) = self.hovered_target();
         let atom = hovered_atom.or_else(|| {
             if hovered_bond.is_none() {
                 match self.tab.selected.as_slice() {
@@ -535,7 +547,7 @@ impl App {
         self.context_key_resolved(key, atom, bond, true, false)
     }
 
-    fn context_key_resolved(
+    pub(super) fn context_key_resolved(
         &mut self,
         key: &str,
         atom: Option<u64>,

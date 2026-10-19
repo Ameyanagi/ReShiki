@@ -602,6 +602,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::InsertInput
         | Message::ToggleHelp
         | Message::Help(..)
+        | Message::Commands(..)
         | Message::OpenShortcutExamples
         | Message::Viewport(..)
         | Message::Canvas(..)

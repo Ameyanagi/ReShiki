@@ -75,6 +75,11 @@ mod view;
 mod worker;
 
 impl App {
+    /// A finished report that Copy and Export can use.
+    pub(super) fn nmr_has_report(&self) -> bool {
+        self.tab.nmr.job.result.is_some()
+    }
+
     pub(super) fn nmr_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Open => return self.nmr_open(),
