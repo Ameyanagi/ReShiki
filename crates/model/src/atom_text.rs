@@ -47,17 +47,19 @@ impl std::fmt::Display for Mode {
         })
     }
 }
-pub fn description(text: &str, mode: Mode) -> &'static str {
-    if mode != Mode::Text && text.contains(',') {
+/// Describes what Apply creates. Manual script runs in Automatic mode keep the
+/// text out of the generic grammar, as in [`apply_with_scripts`].
+pub fn description(text: &str, runs: &[ScriptRun], mode: Mode) -> &'static str {
+    let generic = mode == Mode::Group || mode == Mode::Auto && runs.is_empty();
+    if generic && text.contains(',') {
         "A finite list of element or chemical group alternatives. Expand generic structures generates each combination."
     } else if mode == Mode::Text {
         "Text on a dummy atom; existing bonds stay connected."
+    } else if generic && repeat_label(text.trim()) {
+        "A repeat of one atom over the typed count range. Expand generic structures generates each count."
     } else if crate::ligands::LABELS.contains(&text.trim()) {
         "A real Cp (C5H5−) or Cp* (C10H15−) ligand with a five-center attachment. Metal charge stays as entered."
-    } else if formula_group(text.trim()).is_some()
-        || mode == Mode::Group
-        || known_group(text.trim()) && !ELEMENTS.contains(&text.trim())
-    {
+    } else if mode == Mode::Group || group_label(text.trim()) {
         "A real chemical group. Expand it later from Abbreviations. Requires a single-bond endpoint."
     } else if let Ok(Some(explicit)) = hydride::parse(text.trim()) {
         if explicit.charged_element {
@@ -70,6 +72,27 @@ pub fn description(text: &str, mode: Mode) -> &'static str {
     } else {
         "Text on a dummy atom; existing bonds stay connected."
     }
+}
+
+/// Automatic entry turns these labels into a chemical group, not one atom.
+fn group_label(text: &str) -> bool {
+    formula_group(text).is_some() || known_group(text) && !ELEMENTS.contains(&text)
+}
+
+/// The finite link-node spelling that Apply turns into a repeat of one atom
+/// (`[CH2]1-3`). Apply rejects groups, ligands and invalid atom labels there.
+fn repeat_label(text: &str) -> bool {
+    let Ok(Some((label, range))) = crate::generic::split_link_label(text) else {
+        return false;
+    };
+    let label = label.trim();
+    matches!(
+        crate::generic::RepeatCount::parse(range),
+        Ok(crate::generic::RepeatCount::Finite { .. })
+    ) && (1..=32).contains(&label.chars().count())
+        && !group_label(label)
+        && !crate::ligands::LABELS.contains(&label)
+        && (ELEMENTS.contains(&label) || label == "*" || hydride::parse(label).is_ok())
 }
 
 /// Text in the charged element or hydride grammar (Pd2+, NH4-2) is one
@@ -233,6 +256,8 @@ fn apply_entry(
         a.no_implicit = true;
         a.label_h = h.hydrogens;
         a.charge = h.charge;
+        // An entered charge is shown, even where a shortcut hid one.
+        a.display.hide_charge = false;
     } else if mode != Mode::Text && element && new_element != "*" {
         a.explicit_h = 0;
         a.no_implicit = false;
@@ -302,20 +327,29 @@ pub fn apply_with_scripts(
 fn manual_chemical_entry(text: &str, runs: &[ScriptRun]) -> Result<Option<String>, String> {
     if let Some(chemical) = manual_chemical_text(text, runs) {
         let element = ELEMENTS.contains(&chemical.as_str()) || chemical == "*";
+        let digit = |c: char| {
+            c.is_ascii_digit()
+                || ('₀'..='₉').contains(&c)
+                || matches!(c, '⁰' | '¹' | '²' | '³' | '⁴' | '⁵' | '⁶' | '⁷' | '⁸' | '⁹')
+        };
+        let lowered = |run: &ScriptRun| {
+            text.get(run.start..run.end)
+                .filter(|_| run.script == Script::Subscript)
+        };
+        // Lowered counts in a known group (CO2Me) are its ordinary formula
+        // look, so the label stays the real group rather than dummy text.
+        if !element
+            && (known_group(&chemical) || formula_group(&chemical).is_some())
+            && runs
+                .iter()
+                .all(|run| lowered(run).is_some_and(|s| s.chars().all(digit)))
+        {
+            return Ok(Some(chemical));
+        }
         // A manually lowered digit is a count, never an element charge.
-        let lowered_count = runs.iter().any(|run| {
-            run.script == Script::Subscript
-                && text.get(run.start..run.end).is_some_and(|s| {
-                    s.chars().any(|c| {
-                        c.is_ascii_digit()
-                            || ('₀'..='₉').contains(&c)
-                            || matches!(
-                                c,
-                                '⁰' | '¹' | '²' | '³' | '⁴' | '⁵' | '⁶' | '⁷' | '⁸' | '⁹'
-                            )
-                    })
-                })
-        });
+        let lowered_count = runs
+            .iter()
+            .any(|run| lowered(run).is_some_and(|s| s.chars().any(digit)));
         let lowered_element_count = lowered_count
             && chemical
                 .find(|c: char| !c.is_ascii_alphabetic())

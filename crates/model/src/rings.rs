@@ -128,6 +128,14 @@ impl Drawing {
             return Err("The drawing is invalid.");
         }
         let part = self.preset.document(self.length, self.alternate);
+        // A nonpositive radius falls through to the attachment checks, which reject it.
+        if let Some(toward) = direction.filter(|p| p.distance(point) > radius)
+            && radius > 0.
+            && doc.nearest(point, radius).is_none()
+            && editing::nearest_bond(doc, point, radius).is_none()
+        {
+            return dragged(doc, part, point, toward);
+        }
         let attach = |part: &Document| templates::place(doc, part, point, direction, radius);
         if !self.connect {
             // Like the atom shortcut, share a terminal carbon when it has room
@@ -238,6 +246,53 @@ impl Drawing {
         selected.push(target_id);
         Ok((result, selected))
     }
+}
+
+/// A ring dragged out on empty canvas. Its lowest edge, ordered so the ring
+/// lies counter-clockwise of it on screen, starts at `start` and points at
+/// `toward`. Only the orientation follows the pointer; the size never changes.
+fn dragged(
+    doc: &Document,
+    mut part: Document,
+    start: Point,
+    toward: Point,
+) -> Result<(Document, Vec<u64>), &'static str> {
+    if [start.x, start.y, toward.x, toward.y]
+        .iter()
+        .any(|v| !v.is_finite())
+    {
+        return Err("Invalid attachment geometry.");
+    }
+    let count = part.atoms.len().max(1) as f32;
+    let center = Point::new(
+        part.atoms.iter().map(|a| a.position.x).sum::<f32>() / count,
+        part.atoms.iter().map(|a| a.position.y).sum::<f32>() / count,
+    );
+    let position = |id| part.atom(id).map(|a| a.position);
+    // Lowest midpoint first (screen y grows downward), then leftmost; the
+    // rounding keeps the tie between symmetric edges stable.
+    let (a, b) = part
+        .bonds
+        .iter()
+        .filter_map(|bond| Some((position(bond.a)?, position(bond.b)?)))
+        .max_by(|(a, b), (c, d)| {
+            let low = |p: &Point, q: &Point| ((p.y + q.y) * 500.).round() as i64;
+            low(a, b)
+                .cmp(&low(c, d))
+                .then((c.x + d.x).total_cmp(&(a.x + b.x)))
+        })
+        .ok_or("This ring has no edge to orient.")?;
+    let cross = (b.x - a.x) * (center.y - a.y) - (b.y - a.y) * (center.x - a.x);
+    let (a, b) = if cross > 0. { (b, a) } else { (a, b) };
+    let angle = (toward.y - start.y).atan2(toward.x - start.x) - (b.y - a.y).atan2(b.x - a.x);
+    let ids = part.all_ids();
+    editing::transform_about(&mut part, &ids, a, 1., angle.to_degrees());
+    let mut result = doc.clone();
+    let added = editing::append(&mut result, &part, Point::new(start.x - a.x, start.y - a.y));
+    if added.len() != ids.len() {
+        return Err("The ring could not be inserted.");
+    }
+    Ok((result, added))
 }
 
 /// A selected simple cycle, excluding exocyclic bonds and nonchemical anchors.

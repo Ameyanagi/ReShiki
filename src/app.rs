@@ -1020,6 +1020,7 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
         && a.annotations == b.annotations
         && a.molecule_names == b.molecule_names
         && a.arrows == b.arrows
+        && a.arrow_labels == b.arrow_labels
         && a.graphics == b.graphics
         && a.groups == b.groups
         && a.reactions == b.reactions

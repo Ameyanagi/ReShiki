@@ -413,11 +413,21 @@ fn file_shortcuts() -> Element<'static, Message> {
             ),
             (
                 format!(
-                    "{} arrows / {} arrows",
-                    keys(alt, ""),
-                    keys(alt | shift, "")
+                    "{}/{} / {}/{}",
+                    keys(alt, "Left"),
+                    keys(alt, "Right"),
+                    keys(alt, "Up"),
+                    keys(alt, "Down")
                 ),
-                "Rotate / 3D tilt selection",
+                "Rotate selection 1° / 15°",
+            ),
+            (
+                format!("{} arrows", keys(alt | shift, "")),
+                "3D tilt selection",
+            ),
+            (
+                "Drag round handle".into(),
+                "Rotate freely; Shift snaps to 15°",
             ),
             (
                 format!("Arrows / {} arrows", keys(shift, "")),

@@ -116,6 +116,48 @@ async fn exported_cp_retains_charge_and_closed_curve_without_forced_carbon_label
     Ok(())
 }
 
+/// Issue #317: the shortcut's hidden Fe²⁺ survives editable CDX export.
+#[tokio::test]
+async fn shortcut_ferrocene_exports_hidden_metal_charge() -> anyhow::Result<()> {
+    let mut source = Document::default();
+    let iron = source.add_atom("Fe", Default::default());
+    for _ in 0..2 {
+        source = reshiki::hotkeys::atom_edit(&source, iron, "j", 42.)
+            .context("Cp shortcut")?
+            .map_err(anyhow::Error::msg)?
+            .0;
+    }
+    let xml = reshiki::exchange::drawing::write(&source, Default::default())?;
+    let tree = roxmltree::Document::parse(&xml)?;
+    let fe = tree
+        .descendants()
+        .find(|n| n.has_tag_name("n") && n.attribute("Element") == Some("26"))
+        .context("Fe node")?;
+    ensure!(fe.attribute("Charge") == Some("2"));
+    ensure!(tree.descendants().any(|n| {
+        n.has_tag_name("graphic")
+            && n.attribute("SymbolType") == Some("Plus")
+            && n.attribute("Visible") == Some("no")
+            && n.children()
+                .any(|r| r.has_tag_name("represent") && r.attribute("object") == fe.attribute("id"))
+    }));
+    let bytes = reshiki::exchange::to_cdx(&xml).map_err(anyhow::Error::msg)?;
+    let response = LocalEngine::default()
+        .request(Request::import("cdx", &STANDARD.encode(bytes)))
+        .await
+        .map_err(anyhow::Error::msg)?;
+    let doc = response.document.context("Imported ferrocene")?;
+    let fe = doc.atoms.iter().find(|a| a.element == "Fe").context("Fe")?;
+    ensure!(fe.charge == 2 && fe.display.hide_charge);
+    let cp = doc
+        .atoms
+        .iter()
+        .filter(|a| a.charge == -1 && a.display.hide_charge);
+    ensure!(cp.count() == 2);
+    ensure!(doc.atoms.iter().map(|a| a.charge).sum::<i32>() == 0);
+    Ok(())
+}
+
 #[tokio::test]
 async fn external_gallery_with_legacy_caption_heights_is_rejected() -> anyhow::Result<()> {
     let data = include_bytes!("fixtures/ligand-exchange/gallery-returned.cdx");

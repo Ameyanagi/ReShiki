@@ -1,7 +1,8 @@
 //! Where a pointer gesture lands (move deltas under bond constraints and smart guides, arrow ends, ring/template anchors, chain plans), shared by event handling and the drag preview so a preview equals the committed edit.
 
+use super::pick::PICK_RADIUS_PX;
 use super::smart_guides::{self, Axis, Guide};
-use super::{Edit, MoleculeCanvas, State, World, command_held, movement};
+use super::{Edit, MoleculeCanvas, State, Tool, World, command_held, movement};
 use iced::{Point, Rectangle};
 use reshiki::chains::{self, BondDrawing, ChainDrawing};
 
@@ -106,6 +107,57 @@ impl MoleculeCanvas<'_> {
         };
         let targets = layout.targets(view, copies);
         Some((layout, targets))
+    }
+    /// A ring tool drag: the anchor and the point that orients the ring, shared
+    /// by the preview and release. From empty canvas the ring's first atom
+    /// stays at the press and its first bond follows the pointer; from an atom
+    /// the pointer aims the ring. Both snap to 15° steps unless Option/Alt (or
+    /// free angles) rotates freely; the ring size never changes. On a bond the
+    /// pointer only picks the side. The regular ring tool still attaches where
+    /// a drag from empty space is released on an atom or bond.
+    pub(super) fn ring_drag(
+        &self,
+        start: World,
+        end: World,
+        attached: bool,
+        modifiers: iced::keyboard::Modifiers,
+    ) -> (World, Option<World>) {
+        let radius = self.camera.world_len(PICK_RADIUS_PX);
+        if !attached
+            && self.tool == Tool::Ring
+            && (self.doc.nearest(end, radius).is_some()
+                || reshiki::editing::nearest_bond(self.doc, end, radius).is_some())
+        {
+            return (end, None);
+        }
+        if start.distance(end) <= radius {
+            return (start, None);
+        }
+        let atom = self
+            .doc
+            .nearest(start, radius)
+            .and_then(|id| self.doc.atom(id))
+            .map(|a| a.position);
+        if attached && atom.is_none() {
+            return (start, Some(end));
+        }
+        let origin = atom.unwrap_or(start);
+        if origin.distance(end) <= radius {
+            return (start, None);
+        }
+        let snap = self.bond_drawing.fixed_angles && !modifiers.alt();
+        // Only the angle matters. Keep the aim beyond the hit radius of an
+        // off-center press, so the model never mistakes the drag for a click.
+        let aim = arrow_endpoint(origin, end, snap);
+        let length = origin.distance(aim);
+        if length >= 2. * radius {
+            return (start, Some(aim));
+        }
+        let reach = 2. * radius / length.max(f32::EPSILON);
+        (
+            start,
+            Some(origin.offset((aim.x - origin.x) * reach, (aim.y - origin.y) * reach)),
+        )
     }
     pub(super) fn template_gesture(
         &self,

@@ -35,6 +35,14 @@ pub enum Primitive {
         color: [u8; 3],
         style: crate::typography::TextStyle,
     },
+    /// Paper-colored ink spread `radius` around the shapes of `primitives`
+    /// (atom labels drawn right after it), covering everything painted before.
+    /// Without a background, backends knock that earlier ink out instead, so
+    /// whatever lies behind the drawing shows through the halo.
+    Halo {
+        radius: f32,
+        primitives: Vec<Primitive>,
+    },
 }
 fn visible(a: &Atom, doc: &Document) -> bool {
     crate::atom_labels::visible(a, doc)
@@ -225,8 +233,23 @@ fn atom_label_runs_with_charge_layout(
     let element_width = layout
         .as_ref()
         .map_or_else(|| text_width(label, size), |layout| layout.width);
+    // A centered alternative list is wider than a bond and covers the parent
+    // ring. Like a contracted group, it grows away from its single bond with
+    // the near bracket on the atom.
+    let anchor_x = match list_extends_left(a, doc).filter(|_| condensed.is_none()) {
+        Some(left) => {
+            let edge = if left {
+                label.chars().next_back()
+            } else {
+                label.chars().next()
+            };
+            let half = edge.map_or(0., |c| text_width(c.encode_utf8(&mut [0; 4]), size) / 2.);
+            if left { element_width - half } else { half }
+        }
+        None => element_width / 2.0,
+    };
     let origin = a.position.offset(
-        -element_width / 2.0,
+        -anchor_x,
         -crate::style::label_vertical_center(
             if layout.is_some() { &normal } else { label },
             size,
@@ -297,6 +320,21 @@ fn atom_label_runs_with_charge_layout(
         place_automatic_charge(a, doc, frame, core, charge);
     }
     cursor.runs
+}
+
+/// For an alternative-list atom with one visible bond that leaves sideways,
+/// whether its label extends left (the bond leaves to the right).
+fn list_extends_left(a: &Atom, doc: &Document) -> Option<bool> {
+    if a.element != "*" || !doc.generic.alternatives.iter().any(|s| s.atom == a.id) {
+        return None;
+    }
+    let mut neighbors = doc
+        .bonds
+        .iter()
+        .filter(|b| (b.a == a.id || b.b == a.id) && doc.bond_visible(b.a, b.b))
+        .filter_map(|b| doc.atom(if b.a == a.id { b.b } else { b.a }));
+    let dx = neighbors.next()?.position.x - a.position.x;
+    (neighbors.next().is_none() && dx.abs() > 0.1).then_some(dx > 0.)
 }
 
 /// Source ranges remain unchanged for exchange; only drawn charge glyphs are
@@ -581,7 +619,7 @@ fn push_hydrogens(
         let h_width = frame.text_width("H", size);
         let width = h_width + frame.text_width(&count, small);
         use crate::atom_labels::HydrogenPosition as H;
-        let position = crate::atom_labels::appendage_position(a, doc);
+        let mut position = crate::atom_labels::appendage_position(a, doc);
         let mut parts = vec![frame.text(Point::default(), "H".into(), size)];
         if !count.is_empty() {
             parts.push(frame.text(Point::new(h_width, size * 0.40), count, small));
@@ -594,14 +632,38 @@ fn push_hydrogens(
                 }
             }
         }
-        place_appendage(
-            &cursor.runs,
-            &mut parts,
-            (origin, element_width),
-            (width, isotope_width),
-            size,
-            position,
-        );
+        let place = |position| {
+            let mut parts = parts.clone();
+            place_appendage(
+                &cursor.runs,
+                &mut parts,
+                (origin, element_width),
+                (width, isotope_width),
+                size,
+                position,
+            );
+            parts
+        };
+        let mut parts = place(position);
+        // Keep the bond-based side unless its ink meets a nearby label or
+        // charge; a replacement must also stay off unrelated bonds.
+        if a.display.hydrogen_position == H::Auto
+            && let Some(labels) = nearby_label_ink(a, doc, size)
+            && !clear_of(&parts, &labels, &[], size)
+        {
+            let bonds = unrelated_bonds(a, doc);
+            let mut reserved = labels;
+            reserved.extend(nearby_mark_ink(a, doc, size).unwrap_or_default());
+            if let Some((side, placed)) = crate::atom_labels::appendage_alternatives(a, doc)
+                .into_iter()
+                .filter(|side| *side != position)
+                .map(|side| (side, place(side)))
+                .find(|(_, placed)| clear_of(placed, &reserved, &bonds, size))
+            {
+                position = side;
+                parts = placed;
+            }
+        }
         if matches!(position, H::Above | H::Below) {
             if let Some(Primitive::Text { position, .. }) = parts.first() {
                 cursor.mark_y = position.y;
@@ -613,6 +675,150 @@ fn push_hydrogens(
             cursor.right += width;
         }
     }
+}
+
+thread_local! {
+    /// Set while measuring neighboring labels for hydrogen placement, so their
+    /// own automatic hydrogens keep the bond-based side instead of recursing.
+    static MEASURING_NEARBY_LABELS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Reach of the nearby labels and marks that automatic hydrogens avoid.
+fn nearby(a: &Atom, other: &Atom, size: f32) -> bool {
+    a.position.distance(other.position) < size * 5.
+}
+
+/// Measure other labels or marks, or `None` while already measuring, so
+/// neighbors (and marks placed around this label) do not recurse.
+fn measuring<T>(measure: impl FnOnce() -> T) -> Option<T> {
+    if MEASURING_NEARBY_LABELS.with(|flag| flag.replace(true)) {
+        return None;
+    }
+    let measured = measure();
+    MEASURING_NEARBY_LABELS.with(|flag| flag.set(false));
+    Some(measured)
+}
+
+/// Ink of other atoms' labels and charges near `a` (for example an unbonded
+/// metal's 3+).
+fn nearby_label_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, Point)>> {
+    measuring(|| {
+        doc.atoms
+            .iter()
+            .filter(|other| other.id != a.id && doc.atom_visible(other.id))
+            .filter(|other| nearby(a, other, size))
+            .flat_map(|other| label_ink_boxes(&atom_label_runs(other, doc)))
+            .collect()
+    })
+}
+
+/// Extents of the explicit marks on `a` and its nearby atoms.
+fn nearby_mark_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, Point)>> {
+    measuring(|| {
+        doc.atoms
+            .iter()
+            .filter(|other| !other.marks.is_empty() && doc.atom_visible(other.id))
+            .filter(|other| nearby(a, other, size))
+            .flat_map(|other| crate::scientific::styled_mark_parts(other, &doc.drawing_style))
+            .filter_map(|part| {
+                let pad = part.style.width() * 0.5;
+                part.commands
+                    .iter()
+                    .flat_map(crate::graphics::PathCommand::iter_points)
+                    .map(|p| (p, p))
+                    .reduce(|(lo, hi), (p, _)| {
+                        (
+                            Point::new(lo.x.min(p.x), lo.y.min(p.y)),
+                            Point::new(hi.x.max(p.x), hi.y.max(p.y)),
+                        )
+                    })
+                    .map(|(lo, hi)| (lo.offset(-pad, -pad), hi.offset(pad, pad)))
+            })
+            .collect()
+    })
+}
+
+/// The drawn strokes of visible bonds that do not end at `a`, each with how
+/// far its ink reaches beyond the stroke's center line.
+fn unrelated_bonds(a: &Atom, doc: &Document) -> Vec<(Point, Point, f32)> {
+    use crate::bonds::DoublePosition as P;
+    let style = &doc.drawing_style;
+    let spacing = style.bond_length_world * style.bond_spacing_ratio;
+    let positions: std::collections::HashMap<_, _> = doc
+        .atoms
+        .iter()
+        .map(|atom| (atom.id, atom.position))
+        .collect();
+    let faces = std::cell::OnceCell::new();
+    let faces = || faces.get_or_init(|| FaceIndex::new(doc));
+    doc.bonds
+        .iter()
+        .filter(|b| b.a != a.id && b.b != a.id && doc.bond_visible(b.a, b.b))
+        .filter_map(|b| Some((b, *positions.get(&b.a)?, *positions.get(&b.b)?)))
+        .flat_map(|(b, p, q)| {
+            // Each stroke's start and end offsets along the normal, as
+            // `push_bond` and `push_bond_rails` draw them.
+            let wavy = b.display == "wavy";
+            let rails = |offsets: &[f32]| offsets.iter().map(|o| (*o, *o)).collect::<Vec<_>>();
+            let strokes = match b.order {
+                // A wavy double bond is two strokes crossing at the middle.
+                2 if wavy => vec![(spacing / 2., -spacing / 2.), (-spacing / 2., spacing / 2.)],
+                2 | 7 => match double_position(faces(), b) {
+                    P::Left => rails(&[0., -spacing]),
+                    P::Right => rails(&[0., spacing]),
+                    _ => rails(&[-spacing / 2., spacing / 2.]),
+                },
+                3 => rails(&[-spacing, 0., spacing]),
+                4 => rails(&[
+                    0.,
+                    spacing * automatic_double_side(faces(), b).unwrap_or(1.),
+                ]),
+                6 => rails(&[-spacing * 1.5, -spacing * 0.5, spacing * 0.5, spacing * 1.5]),
+                _ => rails(&[0.]),
+            };
+            let bold = matches!(
+                b.display.as_str(),
+                "bold" | "wedge" | "hash" | "hashed" | "hollow_wedge"
+            ) || b.secondary_display.as_deref() == Some("bold");
+            let ink = if bold {
+                style.world(style.bold_width_pt) / 2.
+            } else if wavy && b.order != 2 {
+                // The wave's amplitude.
+                style.line_width() * 1.75
+            } else {
+                style.line_width() / 2.
+            };
+            let length = p.distance(q).max(0.001);
+            let (nx, ny) = (-(q.y - p.y) / length, (q.x - p.x) / length);
+            strokes.into_iter().map(move |(from, to)| {
+                (
+                    p.offset(nx * from, ny * from),
+                    q.offset(nx * to, ny * to),
+                    ink,
+                )
+            })
+        })
+        .collect()
+}
+
+/// Whether ink, padded by a small gap, misses the label boxes and bond strokes.
+fn clear_of(
+    parts: &[Primitive],
+    labels: &[(Point, Point)],
+    bonds: &[(Point, Point, f32)],
+    size: f32,
+) -> bool {
+    let gap = size * 0.12;
+    label_ink_boxes(parts).into_iter().all(|(lo, hi)| {
+        let (lo, hi) = (lo.offset(-gap, -gap), hi.offset(gap, gap));
+        labels
+            .iter()
+            .all(|(a, b)| hi.x <= a.x || lo.x >= b.x || hi.y <= a.y || lo.y >= b.y)
+            && !bonds.iter().any(|&(p, q, pad)| {
+                let (lo, hi) = (lo.offset(-pad, -pad), hi.offset(pad, pad));
+                crate::atom_labels::segment_hits_rect(p, q, lo, hi)
+            })
+    })
 }
 
 /// The mass number, raised before the element symbol.
@@ -986,7 +1192,7 @@ pub(crate) fn double_position(faces: &FaceIndex<'_>, bond: &Bond) -> crate::bond
         position => position,
     }
 }
-fn automatic_double_side(faces: &FaceIndex<'_>, bond: &Bond) -> Option<f32> {
+pub(crate) fn automatic_double_side(faces: &FaceIndex<'_>, bond: &Bond) -> Option<f32> {
     if matches!(bond.order, 2 | 7)
         && let Some(side) = faces.automatic_side(bond)
     {
@@ -1061,10 +1267,10 @@ pub fn primitives_with_opacity(
     let doc = inputs.doc();
     let style = &doc.drawing_style;
     let mut out = vec![];
-    let orbital_label_boxes = orbital_label_boxes(doc, &inputs.labels().runs, opacity);
     let mut graphics: Vec<_> = doc.graphics.iter().collect();
     graphics.sort_by_key(|g| g.layer);
-    push_underlays(&mut out, doc, &graphics, opacity, &orbital_label_boxes);
+    let halos = orbital_halos(doc, &graphics, &inputs.labels().runs, opacity);
+    push_underlays(&mut out, doc, &graphics, opacity);
     let rings = push_ring_strokes(&mut out, doc, opacity);
     let pass = BondPass::new(&inputs);
     let doc = pass.doc;
@@ -1096,41 +1302,71 @@ pub fn primitives_with_opacity(
     if opacity.has_visibility() {
         paint_rear_before_front(&mut out, bond_paint_start);
     }
-    push_atom_labels(&mut out, doc, &pass.labels.runs, opacity);
+    let runs = &pass.labels.runs;
+    push_atom_labels(&mut out, doc, runs, opacity, &halos);
+    push_label_halo(&mut out, doc, runs, opacity, &halos.above(None));
     push_arrows_and_annotations(&mut out, doc);
-    out.extend(
-        graphics
-            .iter()
-            .filter(|g| g.layer >= 0)
-            .flat_map(|graphic| graphic_primitive(graphic, &orbital_label_boxes)),
-    );
+    for graphic in graphics.iter().filter(|g| g.layer >= 0) {
+        out.extend(graphic_primitive(graphic));
+        if halos.front.contains(&graphic.id) {
+            push_label_halo(&mut out, doc, runs, opacity, &halos.above(Some(graphic.id)));
+        }
+    }
     out
 }
 
-/// Visible label ink that orbital lobes keep clear of; empty without orbitals.
-fn orbital_label_boxes(
+/// Orbitals keep complete lobes. The labels they reach are drawn above the
+/// topmost one reaching each, readable inside a paper-colored halo.
+fn push_label_halo(
+    out: &mut Vec<Primitive>,
     doc: &Document,
+    runs: &std::collections::HashMap<u64, Vec<Primitive>>,
+    opacity: &crate::rear_opacity::Paint,
+    haloed: &[u64],
+) {
+    let haloed: Vec<_> = haloed.iter().filter_map(|id| doc.atom(*id)).collect();
+    let labels: Vec<_> = haloed
+        .iter()
+        .flat_map(|a| atom_label_parts(doc, runs, opacity, a))
+        .collect();
+    if labels.is_empty() {
+        return;
+    }
+    // A glyph-shaped halo leaves wide counters (the middle of an O) open;
+    // also cover the middle of every glyph's ink box.
+    let middles = haloed
+        .iter()
+        .filter_map(|a| runs.get(&a.id))
+        .flat_map(|runs| label_ink_boxes(runs))
+        .map(|(lo, hi)| {
+            let inset = (hi.x - lo.x).min(hi.y - lo.y) * 0.25;
+            let (lo, hi) = (lo.offset(inset, inset), hi.offset(-inset, -inset));
+            Primitive::Polygon(vec![lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y)])
+        });
+    out.push(Primitive::Halo {
+        radius: crate::scientific::label_halo_radius(),
+        primitives: labels.iter().cloned().chain(middles).collect(),
+    });
+    out.extend(labels);
+}
+
+/// Visible labels the orbitals reach; empty without orbitals.
+fn orbital_halos(
+    doc: &Document,
+    graphics: &[&crate::graphics::Graphic],
     labels: &std::collections::HashMap<u64, Vec<Primitive>>,
     opacity: &crate::rear_opacity::Paint,
-) -> Vec<(Point, Point)> {
-    if doc
-        .graphics
-        .iter()
-        .any(|graphic| matches!(graphic.kind, crate::graphics::GraphicKind::Orbital(_)))
-    {
-        doc.atoms
-            .iter()
-            .filter(|atom| doc.atom_visible(atom.id) && opacity.atom(atom.id) > 0.)
-            .flat_map(|atom| {
-                labels
-                    .get(&atom.id)
-                    .map(|runs| label_ink_boxes(runs))
-                    .unwrap_or_default()
-            })
-            .collect()
-    } else {
-        Vec::new()
-    }
+) -> crate::scientific::OrbitalHalos {
+    crate::scientific::orbital_halos(doc, graphics.iter().copied(), |atom| {
+        if doc.atom_visible(atom.id) && opacity.atom(atom.id) > 0. {
+            labels
+                .get(&atom.id)
+                .map(|runs| label_ink_boxes(runs))
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        }
+    })
 }
 
 /// Projection tip orientation is independent of dative donor→acceptor
@@ -1163,19 +1399,11 @@ fn paint_rear_before_front(out: &mut Vec<Primitive>, start: usize) {
     out.extend(front);
 }
 
-fn graphic_primitive(
-    g: &&crate::graphics::Graphic,
-    label_boxes: &[(Point, Point)],
-) -> Vec<Primitive> {
+fn graphic_primitive(g: &&crate::graphics::Graphic) -> Vec<Primitive> {
     if g.kind == crate::graphics::GraphicKind::Picture {
         vec![Primitive::Picture((*g).clone())]
     } else {
-        let parts = if matches!(g.kind, crate::graphics::GraphicKind::Orbital(_)) {
-            crate::scientific::readable_orbital_parts(g, label_boxes)
-        } else {
-            g.parts()
-        };
-        parts
+        g.parts()
             .into_iter()
             .map(|p| Primitive::Path {
                 commands: p.commands,
@@ -1190,13 +1418,12 @@ fn push_underlays(
     doc: &Document,
     graphics: &[&crate::graphics::Graphic],
     opacity: &crate::rear_opacity::Paint,
-    label_boxes: &[(Point, Point)],
 ) {
     out.extend(
         graphics
             .iter()
             .filter(|g| g.layer < 0)
-            .flat_map(|graphic| graphic_primitive(graphic, label_boxes)),
+            .flat_map(graphic_primitive),
     );
     for fill in &doc.ring_fills {
         out.extend(opacity.owned_parts(
@@ -1241,6 +1468,7 @@ fn push_ring_strokes(
     // Retain every ring here so its other edges do not gain fallback dashes.
     let circles = crate::aromatic::circles(doc);
     let mut crossing_gaps = crate::crossings::gaps_with_opacity(doc, opacity);
+    let sides = crate::crossings::Sides::new(doc);
     for circle in circles.iter().filter(|c| !arcs.intersects(c)) {
         for part in circle.graphic().parts() {
             let stroke = Primitive::Path {
@@ -1248,7 +1476,8 @@ fn push_ring_strokes(
                 style: part.style,
                 filled: part.filled,
             };
-            let (stroke, gaps) = crate::crossings::ring_stroke(doc, circle, stroke, ring_opacity());
+            let (stroke, gaps) =
+                crate::crossings::ring_stroke_with(doc, circle, stroke, ring_opacity(), &sides);
             out.extend(opacity.owned_parts(doc, &circle.atoms, vec![stroke]));
             for (index, gap) in gaps {
                 if let Some(gaps) = crossing_gaps.get_mut(index) {
@@ -1391,19 +1620,10 @@ fn push_atom_labels(
     doc: &Document,
     labels: &std::collections::HashMap<u64, Vec<Primitive>>,
     opacity: &crate::rear_opacity::Paint,
+    haloed: &crate::scientific::OrbitalHalos,
 ) {
-    for a in doc.atoms.iter().filter(|a| doc.atom_visible(a.id)) {
-        let mut parts: Vec<_> = labels.get(&a.id).into_iter().flatten().cloned().collect();
-        parts.extend(
-            crate::scientific::styled_mark_parts(a, &doc.drawing_style)
-                .into_iter()
-                .map(|p| Primitive::Path {
-                    commands: p.commands,
-                    style: p.style,
-                    filled: p.filled,
-                }),
-        );
-        out.extend(opacity.atom_parts(a.id, parts));
+    for a in doc.atoms.iter().filter(|a| !haloed.contains(a.id)) {
+        out.extend(atom_label_parts(doc, labels, opacity, a));
     }
     for indicator in crate::atom_labels::indicators(doc) {
         use crate::atom_labels::Owner;
@@ -1420,6 +1640,28 @@ fn push_atom_labels(
             alpha,
         ));
     }
+}
+/// A visible atom's label runs and attached marks under its rear opacity.
+fn atom_label_parts(
+    doc: &Document,
+    labels: &std::collections::HashMap<u64, Vec<Primitive>>,
+    opacity: &crate::rear_opacity::Paint,
+    a: &Atom,
+) -> Vec<Primitive> {
+    if !doc.atom_visible(a.id) {
+        return Vec::new();
+    }
+    let mut parts: Vec<_> = labels.get(&a.id).into_iter().flatten().cloned().collect();
+    parts.extend(
+        crate::scientific::styled_mark_parts(a, &doc.drawing_style)
+            .into_iter()
+            .map(|p| Primitive::Path {
+                commands: p.commands,
+                style: p.style,
+                filled: p.filled,
+            }),
+    );
+    opacity.atom_parts(a.id, parts)
 }
 fn push_arrows_and_annotations(out: &mut Vec<Primitive>, doc: &Document) {
     for unit in &doc.generic.repeats {
@@ -2059,6 +2301,8 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
             }
             Primitive::Line(a, b, _) => points.extend([*a, *b]),
             Primitive::Polygon(p) => points.extend(p),
+            // The haloed labels follow it; the margin covers the halo.
+            Primitive::Halo { .. } => {}
             Primitive::Text {
                 position,
                 text,
