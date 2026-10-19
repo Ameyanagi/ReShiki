@@ -1253,6 +1253,40 @@ fn mechanism_attachment_312_head_clears_mitered_bold_junction() {
     assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
 }
 #[test]
+fn mechanism_attachment_312_head_clears_mitered_side_double_backbone() {
+    // A side double bond's backbone is mitered like a single bond.
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for degrees in [295f32, 355.] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, 2, "bold");
+    }
+    for bond in &mut d.bonds {
+        bond.double_position = crate::bonds::DoublePosition::Right;
+    }
+    let id = lone_pair_arrow_to(&mut d, c);
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let gap = head_ink_gap(&d, arrow);
+    assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
+}
+#[test]
+fn mechanism_attachment_312_head_clears_hatch_stroke() {
+    // Hatches span the bold width and are then stroked, so their caps
+    // reach past it.
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for (degrees, display) in [(154f32, "hashed"), (200., "plain")] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, 1, display);
+    }
+    let id = lone_pair_arrow_to(&mut d, c);
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let gap = head_ink_gap(&d, arrow);
+    assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
+}
+#[test]
 fn mechanism_attachment_312_tiny_head_inside_a_miter_fill_is_detected() {
     // A head small enough to sit inside the filled miter touches none of its
     // edges or strokes.

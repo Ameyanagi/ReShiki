@@ -236,16 +236,14 @@ fn clearance(doc: &Document, target: &Target, direction: Point) -> Option<f32> {
 /// Half the displayed stroke width of a bond line.
 fn half_stroke(doc: &Document, display: &str) -> f32 {
     let style = &doc.drawing_style;
-    DEFAULT.world(
-        if matches!(
-            display,
-            "bold" | "wedge" | "hash" | "hashed" | "hollow_wedge"
-        ) {
-            style.bold_width_pt
-        } else {
-            style.line_width_pt
-        },
-    ) * 0.5
+    let line = DEFAULT.world(style.line_width_pt) * 0.5;
+    let bold = DEFAULT.world(style.bold_width_pt) * 0.5;
+    match display {
+        "bold" | "wedge" => bold,
+        // Hatches and hollow outlines span the bold width, then are stroked.
+        "hash" | "hashed" | "hollow_wedge" => bold + line,
+        _ => line,
+    }
 }
 impl Pick {
     pub fn center(&self, doc: &Document) -> Option<Point> {
@@ -574,6 +572,8 @@ fn bond_ink(
                 .to_vec(),
             _ => vec![(0., 0., 0.)],
         };
+        // A side double bond's backbone is joined like a single bond.
+        let joinable = !matches!(bond.order, 2 | 7) || rails.first() == Some(&(0., 0., 0.));
         let u = unit(delta(z, a));
         let n = Point::new(-u.y, u.x);
         let wave = if wavy && bond.order != 2 {
@@ -603,7 +603,7 @@ fn bond_ink(
         // A joined bond is filled as a mitered outline, which can reach past
         // its stroke on the far side of a narrow junction.
         if matches!(bond.display.as_str(), "plain" | "bold" | "wedge")
-            && !matches!(bond.order, 2 | 7)
+            && joinable
             && joins.needed(bond)
             && let Some((start, end)) = crate::scene::bond_segment(doc, bond, None)
         {
