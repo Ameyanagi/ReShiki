@@ -151,26 +151,29 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
             shell.capture_event();
             return;
         }
+        // Help owns the keyboard: closing and row movement first, then its
+        // search field and buttons. Nothing reaches file commands or the drawing.
         if self.help_open
             && !self.atom_text_open
             && let Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) = event
         {
-            if matches!(key, keyboard::Key::Named(keyboard::key::Named::Escape))
-                || super::help::is_shortcut(key, *modifiers)
-            {
-                shell.publish(Message::ToggleHelp);
+            if let Some(message) = super::help::modal_key(key, *modifiers) {
+                shell.publish(message);
+            } else {
+                let untyped = without_command_text(event);
+                self.content.as_widget_mut().update(
+                    tree,
+                    untyped.as_ref().unwrap_or(event),
+                    layout,
+                    cursor,
+                    renderer,
+                    clipboard,
+                    shell,
+                    viewport,
+                );
             }
-            if !matches!(
-                key,
-                keyboard::Key::Named(
-                    keyboard::key::Named::Enter
-                        | keyboard::key::Named::Space
-                        | keyboard::key::Named::Tab
-                )
-            ) {
-                shell.capture_event();
-                return;
-            }
+            shell.capture_event();
+            return;
         }
         // Cancel the visible style draft before a focused input consumes
         // Escape only to unfocus. Modal dialogs above keep their own priority.
