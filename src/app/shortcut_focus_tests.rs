@@ -1669,6 +1669,74 @@ async fn command_palette_tab_cycles_the_filter_from_the_search_field() {
     assert_eq!(app.commands.query, "bonds", "the search field keeps focus");
 }
 
+/// Clicking a filter chip hands focus back to the search field, so typing
+/// edits the query and Enter runs the selected command.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn command_palette_chip_click_keeps_typing_in_the_search_field() {
+    use super::command_palette::Action;
+    use iced::advanced::widget::operation::Outcome;
+    use iced::futures::StreamExt;
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Commands(Action::Open));
+    let _ = app.update(Message::Commands(Action::Query("bond".into())));
+    let field = ui.input(&app, "command-palette-search").0;
+    ui.click(&mut app, field.center());
+    let chip = ui
+        .semantics(&app)
+        .nodes
+        .into_iter()
+        .find(|node| node.id == "command-palette-filter-bond")
+        .expect("Bond chip")
+        .bounds;
+    for event in [
+        mouse::Event::CursorMoved {
+            position: chip.center(),
+        },
+        mouse::Event::ButtonPressed(mouse::Button::Left),
+        mouse::Event::ButtonReleased(mouse::Button::Left),
+    ] {
+        let cursor = mouse::Cursor::Available(chip.center());
+        let (_, messages) = ui.event(&app, Event::Mouse(event), cursor);
+        for message in messages {
+            // Run the widget operations the update returns, as the event loop does.
+            let Some(mut stream) = iced_runtime::task::into_stream(app.update(message)) else {
+                continue;
+            };
+            while let Some(action) = stream.next().await {
+                let iced_runtime::Action::Widget(operation) = action else {
+                    continue;
+                };
+                let mut current = Some(operation);
+                while let Some(mut operation) = current.take() {
+                    ui.inspect(&app, operation.as_mut());
+                    if let Outcome::Chain(next) = operation.finish() {
+                        current = Some(next);
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(app.commands.filter.map(|c| c.label()), Some("Bond"));
+    for (key, code, text) in [
+        (Key::Character("s".into()), Code::KeyS, Some("s")),
+        (Key::Named(Named::Enter), Code::Enter, None),
+    ] {
+        let (_, messages) = ui.event(
+            &app,
+            press(key, code, Modifiers::empty(), text),
+            mouse::Cursor::Unavailable,
+        );
+        apply(&mut app, messages);
+        if text.is_some() {
+            assert_eq!(app.commands.query, "bonds");
+        }
+    }
+    assert!(!app.commands.open, "Enter ran the selected command");
+}
+
 /// Every command row is a named button that assistive technology can press.
 #[tokio::test]
 #[ignore = "Opt-in renderer input check"]

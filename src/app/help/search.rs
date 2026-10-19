@@ -248,13 +248,16 @@ pub(crate) fn score(entry: &impl Searchable, query: &str) -> Option<u32> {
     Some(total)
 }
 
-/// Whether every query word starts a word of the name, not only of the
-/// synonyms or description: "ring" names Ring tool but not New drawing. The
-/// palette ranks these first.
-pub(crate) fn in_name(entry: &impl Searchable, query: &str) -> bool {
+/// Whether every query word starts a word of the name or is a key of the
+/// chord, not only a synonym or description match: "ring" names Ring tool but
+/// not New drawing, and "v" is Select tool's key. The palette ranks these first.
+pub(crate) fn in_name_or_keys(entry: &impl Searchable, query: &str) -> bool {
+    let keys: Vec<String> = (chord_terms(entry.keys()).concat().iter())
+        .map(|term| term.to_lowercase())
+        .collect();
     query_tokens(query).iter().all(|token| {
         let token = token.to_lowercase();
-        words(entry.name()).any(|word| word.starts_with(&token))
+        keys.contains(&token) || words(entry.name()).any(|word| word.starts_with(&token))
     })
 }
 

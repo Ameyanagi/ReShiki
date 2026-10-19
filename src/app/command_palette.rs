@@ -271,7 +271,8 @@ impl App {
             }
             Action::Filter(filter) => {
                 self.commands.set_filter(filter);
-                return scroll_to_top();
+                // A clicked chip takes focus; typing stays in the search.
+                return Task::batch([scroll_to_top(), iced::widget::operation::focus(SEARCH)]);
             }
             Action::Cycle(step) => {
                 let state = &mut self.commands;
@@ -295,6 +296,11 @@ impl App {
                 );
             }
             Action::Run(index) => {
+                let state = &mut self.commands;
+                if let Some(position) = state.results.iter().position(|i| *i == index) {
+                    // The clicked row shows why it cannot run.
+                    state.selected = position;
+                }
                 if let Some(command) = self.commands.items.get(index).cloned() {
                     return self.run_command(command);
                 }
@@ -328,18 +334,18 @@ impl App {
         let state = &mut self.commands;
         state.items.truncate(state.catalog);
         let catalog = &state.items;
-        // (score, index, tier): an exact alias, then name matches, then the rest.
+        // (score, index, tier): an exact alias or recent command, then name or
+        // key matches, then the rest.
         let mut scored: Vec<(u32, usize, u8)> = if query.is_empty() {
             catalog
                 .iter()
                 .enumerate()
                 .map(|(i, command)| {
                     let recent = state.recent.iter().position(|name| *name == command.name);
-                    let score = match recent {
-                        Some(age) => 1000 - age as u32,
-                        None => boost(command.category),
-                    };
-                    (score, i, 0)
+                    match recent {
+                        Some(age) => (1000 - age as u32, i, 2),
+                        None => (boost(command.category), i, 0),
+                    }
                 })
                 .collect()
         } else {
@@ -361,7 +367,7 @@ impl App {
                         return Some((10_000, i, 2));
                     }
                     let score = search::score(command, query)?;
-                    let tier = search::in_name(command, query) as u8;
+                    let tier = search::in_name_or_keys(command, query) as u8;
                     Some((score + boost(command.category), i, tier))
                 })
                 .collect()
@@ -378,11 +384,16 @@ impl App {
             })
         });
         let blocked = |i: usize| blocked.get(i).copied().unwrap_or(false);
-        // An exact alias ranks first even when it cannot run, to say why.
-        scored.sort_by_key(|&(score, i, tier)| {
-            (tier < 2 && blocked(i), Reverse(tier), Reverse(score), i)
-        });
+        // An exact alias or recent command ranks first even when it cannot
+        // run, to say why.
+        let late = |i: usize, tier: u8| tier < 2 && blocked(i);
+        scored.sort_by_key(|&(score, i, tier)| (late(i, tier), Reverse(tier), Reverse(score), i));
         let best = scored.iter().map(|(score, ..)| *score).max().unwrap_or(0);
+        // Where the rows that cannot run begin.
+        let mut split = scored
+            .iter()
+            .filter(|(_, i, tier)| !late(*i, *tier))
+            .count();
         state.hits = scored.into_iter().map(|(_, i, _)| i).collect();
         let mut rows = vec![];
         if let Some(command) = extra {
@@ -412,17 +423,24 @@ impl App {
                 ),
             ));
         }
-        for (first, command) in rows {
+        // Query rows rank among the others by whether they can run too.
+        let rows: Vec<_> = (rows.into_iter())
+            .map(|(first, c)| (first, self.need_unavailable(c.need, &target).is_some(), c))
+            .collect();
+        let state = &mut self.commands;
+        for (first, blocked, command) in rows {
             if !names.insert(command.name.clone()) {
                 continue;
             }
             let index = state.items.len();
             state.items.push(command);
-            if first {
-                state.hits.insert(0, index);
-            } else {
-                state.hits.push(index);
-            }
+            let at = match (first, blocked) {
+                (true, false) => 0,
+                (false, true) => state.hits.len(),
+                _ => split,
+            };
+            split += usize::from(!blocked);
+            state.hits.insert(at, index);
         }
         let filter = state.filter;
         state.set_filter(filter);
@@ -700,7 +718,10 @@ impl App {
             chips = chips.push(
                 reshiki::accessibility::button(
                     format!("command-palette-filter-{}", label.to_lowercase()),
-                    format!("{label}, {count} results"),
+                    format!(
+                        "{label}, {count} result{}",
+                        if count == 1 { "" } else { "s" }
+                    ),
                     text(format!("{label} {count}")).size(12),
                 )
                 .padding([2, 8])
@@ -817,6 +838,11 @@ fn name_spans(name: &str, query: &str) -> Vec<Span<'static>> {
     let mut emphasised = false;
     for (c, matched) in name.chars().zip(matched(name, query)) {
         if matched != emphasised && !run.is_empty() {
+            // cosmic-text shapes an ASCII word in the font of its first
+            // letter; a word joiner sends the word through the per-letter path.
+            if !c.is_whitespace() && !run.ends_with(char::is_whitespace) {
+                run.push('\u{2060}');
+            }
             let text = std::mem::take(&mut run);
             spans.push(iced::widget::span(text).font_maybe(emphasised.then_some(bold)));
         }
@@ -844,18 +870,19 @@ fn matched(name: &str, query: &str) -> Vec<bool> {
             .or_else(|| (0..name.len()).find(|&i| word.len() > 1 && at(i)));
         let picks: Vec<usize> = match found {
             Some(i) => (i..i + word.len()).collect(),
-            None if word.len() > 2 => {
-                let mut letters = word.iter().peekable();
-                let picks: Vec<usize> = (name.iter().enumerate())
-                    .filter(|(_, c)| letters.next_if_eq(c).is_some())
-                    .map(|(i, _)| i)
-                    .collect();
-                if picks.len() == word.len() {
-                    picks
-                } else {
-                    vec![]
-                }
-            }
+            // Letters in order within one word, as search matches them.
+            None if word.len() > 2 => (0..name.len())
+                .filter(|&i| start(i))
+                .find_map(|first| {
+                    let mut letters = word.iter().peekable();
+                    let picks: Vec<usize> = (name.iter().enumerate().skip(first))
+                        .take_while(|(_, c)| c.is_alphanumeric())
+                        .filter(|(_, c)| letters.next_if_eq(c).is_some())
+                        .map(|(i, _)| i)
+                        .collect();
+                    (picks.len() == word.len()).then_some(picks)
+                })
+                .unwrap_or_default(),
             None => vec![],
         };
         for i in picks {

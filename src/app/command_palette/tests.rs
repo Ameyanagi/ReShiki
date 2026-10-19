@@ -777,13 +777,13 @@ fn tab_cycles_the_category_filter_and_a_new_query_resets_it() {
 #[test]
 fn unavailable_commands_rank_after_available_ones() {
     let mut app = app();
-    for query in ["copy", "charge", "bond", "select", "nmr"] {
+    // Rows the query creates rank by availability too.
+    for query in ["copy", "charge", "bond", "select", "nmr", "rotate 30"] {
         search(&mut app, query);
         let state = &app.commands;
         let blocked: Vec<_> = state
             .results
             .iter()
-            .filter(|i| **i < state.catalog)
             .map(|i| app.command_unavailable(&state.items[*i]).is_some())
             .collect();
         assert!(blocked.contains(&true), "{query}: some cannot run");
@@ -792,6 +792,19 @@ fn unavailable_commands_rank_after_available_ones() {
     // An exact alias still ranks first, to say why it cannot run.
     search(&mut app, "noh");
     assert_eq!(top(&app).name, "Clear highlights");
+    // So does a recent command on an empty query.
+    let (a, b) = ethane(&mut app);
+    app.tab.selected = vec![a, b];
+    run(&mut app, "copy");
+    assert!(!app.commands.open, "copy ran");
+    app.tab.selected.clear();
+    open(&mut app);
+    assert_eq!(top(&app).name, "Copy");
+    // Clicking a row that cannot run selects it, to show why.
+    search(&mut app, "copy");
+    let copy = row(&app, "Copy");
+    let _ = app.update(Message::Commands(Action::Run(copy)));
+    assert_eq!(top(&app).name, "Copy");
 }
 
 #[test]
@@ -814,6 +827,9 @@ fn name_matches_outrank_synonym_and_description_matches() {
         .map(|c| c.name.as_str())
         .collect();
     assert_eq!(ranked[..2], ["Big wedges", "Alpha"]);
+    // A shortcut key typed exactly ranks with the name matches.
+    search(&mut app, "v");
+    assert_eq!(top(&app).name, "Select tool");
 }
 
 #[test]
@@ -860,8 +876,13 @@ fn matched_letters_are_emphasised() {
     assert_eq!(marks("Solid wedge bond", "wdg"), "      ^ ^^      ");
     assert_eq!(marks("Ångström Ölefin", "öle"), "         ^^^   ");
     assert_eq!(marks("Benzene", "x"), "       ");
+    assert_eq!(marks("Invert selection", "inverse"), " ".repeat(16));
     let spans = name_spans("Double bond", "bond");
     let text: Vec<_> = spans.iter().map(|s| s.text.as_ref()).collect();
     assert_eq!(text, ["Double ", "bond"]);
     assert!(spans[0].font.is_none() && spans[1].font.is_some());
+    // A match inside a word is split off with a word joiner.
+    let spans = name_spans("Bring bond forward", "ring");
+    let text: Vec<_> = spans.iter().map(|s| s.text.as_ref()).collect();
+    assert_eq!(text, ["B\u{2060}", "ring", " bond forward"]);
 }
