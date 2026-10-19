@@ -1653,6 +1653,35 @@ async fn command_palette_rows_are_named_buttons() {
         rows.iter()
             .all(|row| row.role == reshiki::accessibility::Role::Button && !row.name.is_empty())
     );
+    // Ids follow commands, not positions: a narrower search keeps Benzene's id.
+    let benzene = rows[0].id.clone();
+    let _ = app.update(Message::Commands(super::command_palette::Action::Query(
+        "benzene ring".into(),
+    )));
+    let snapshot = ui.semantics(&app);
+    assert!(
+        snapshot
+            .nodes
+            .iter()
+            .filter(|node| node.id == benzene)
+            .all(|node| node.name == "Benzene")
+    );
+    let named = |query: &str, ui: &mut Ui, app: &mut App| {
+        let _ = app.update(Message::Commands(super::command_palette::Action::Query(
+            query.into(),
+        )));
+        ui.semantics(app)
+            .nodes
+            .into_iter()
+            .find(|node| node.name.starts_with("Insert structure named"))
+            .map(|node| node.id)
+    };
+    let aspirin = named("hexanoic acid", &mut ui, &mut app).unwrap();
+    let caffeine = named("heptanoic acid", &mut ui, &mut app).unwrap();
+    assert_ne!(
+        aspirin, caffeine,
+        "a query-created row changes identity with its query"
+    );
 }
 
 /// The context row's Rotate field: click it, type an angle and press Enter

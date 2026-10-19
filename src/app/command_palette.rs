@@ -595,8 +595,16 @@ impl App {
                 continue;
             };
             let reason = self.command_unavailable(command);
+            // A stable identity, so a queued assistive press never lands on
+            // a different command after the results change: the catalog
+            // index, or the title of a row the query created.
+            let id = if index < state.catalog {
+                format!("command-palette-row-{index}")
+            } else {
+                format!("command-palette-row-query-{}", command.name)
+            };
             list = list.push(list_row(
-                format!("command-palette-row-{position}"),
+                id,
                 &command.hint(),
                 command.name.clone(),
                 reason.unwrap_or(&command.detail).to_owned(),
