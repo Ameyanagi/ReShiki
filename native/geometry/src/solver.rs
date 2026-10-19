@@ -641,7 +641,7 @@ fn minimized(
         .map_err(|error| error.to_string())?;
     require(
         outcome.iterations() <= request.max_iterations,
-        "unexpected force-field optimizer status",
+        "force-field optimizer exceeded its iteration limit",
     )?;
     if let Some(origin) = origin {
         let restored: Vec<_> = field

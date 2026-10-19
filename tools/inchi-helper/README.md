@@ -2,9 +2,10 @@
 
 The helper uses `cosmolkit-inchi = 0.5.0` (InChI 1.07.5) from
 [Ameyanagi/COSMolKit](https://github.com/Ameyanagi/COSMolKit), pinned to commit
-`501f7b234031ba4d87461e14d0947c77a7d1a631`. That commit is upstream COSMolKit v0.5.0, which
-includes the heavy-element hydrogen table, perchlorate match ordering, RDKit's
-explicit unknown-stereo handling and string terminators for long inputs. See its
+`501f7b234031ba4d87461e14d0947c77a7d1a631`. That commit is upstream COSMolKit v0.5.0
+(`3cb27d5`) plus one Cargo submodule setting. The release includes the
+heavy-element hydrogen table, perchlorate match ordering, RDKit's explicit
+unknown-stereo handling and string terminators for long inputs. See its
 [fork notes](https://github.com/Ameyanagi/COSMolKit/blob/501f7b234031ba4d87461e14d0947c77a7d1a631/FORK.md).
 The application supplies ReShiki's existing Rust property-cache, Kekulé,
 sanitation, hydrogen-removal and stereochemistry routines through its toolkit

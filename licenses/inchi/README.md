@@ -4,10 +4,10 @@ Runtime generation and import use `cosmolkit-inchi = 0.5.0`, a pure Rust source
 port of InChI 1.07.5 and the RDKit adapter, from the
 [Ameyanagi/COSMolKit fork](https://github.com/Ameyanagi/COSMolKit).
 Cargo.toml and Cargo.lock pin commit `501f7b234031ba4d87461e14d0947c77a7d1a631`
-and the transitive dependency graph. That commit is upstream COSMolKit v0.5.0,
-which includes the earlier hydrogen, perchlorate, unknown-stereo and
-string-buffer compatibility corrections; the fork's `FORK.md` documents its only
-change, a Cargo submodule setting. The COSMolKit MIT license is retained under
+and the transitive dependency graph. That commit is upstream COSMolKit v0.5.0
+(`3cb27d5`) plus one Cargo submodule setting, documented in the fork's
+`FORK.md`. The release includes the earlier hydrogen, perchlorate,
+unknown-stereo and string-buffer compatibility corrections. The COSMolKit MIT license is retained under
 `licenses/rust/` at the original source revision. COSMolKit 0.5.0 ships no
 separate RDKit notice with this crate; RDKit's BSD notice for the adapter is
 retained in `licenses/rdkit/INCHI-ADAPTER`. Release notice collection includes
