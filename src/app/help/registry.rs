@@ -333,6 +333,13 @@ pub(crate) fn entries() -> Vec<Entry> {
             &["scale", "stretch", "size"],
         ),
         entry(
+            "Drag round handle",
+            "Rotate freely",
+            "Drag the round handle to rotate the selection; hold Shift to snap to 15°",
+            Selection,
+            &["turn", "spin", "angle"],
+        ),
+        entry(
             "Drag",
             "Smart guides",
             "Snap to other objects' edges, centers and equal gaps",

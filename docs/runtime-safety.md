@@ -115,7 +115,7 @@ Enforced in `crates/chemistry/src/nmr.rs`, `crates/io/src/nmr.rs` and `src/app/n
 
 Enforced in `crates/model/src/generic/limits.rs`, `Limits` in `crates/model/src/generic.rs`, `crates/model/src/generic/budget.rs` and `src/app/generic.rs`:
 
-- Each request has one work allowance of 5,000,000 units (`Limits::default`). Every stage pays from it before it copies or scans, and it never resets.
+- Each request has one work allowance of 50,000,000 units (`Limits::default`). Every stage pays from it before it copies or scans, and it never resets.
 - An expansion has at most 500 candidate products and 100,000 atoms in total, counted before duplicates are removed.
 - The source has at most 100,000 atoms and 300,000 bonds.
 - A drawing has at most 10,000 definitions, 118 choices per site, repeat counts from 1 to 1000, and 100,000 repeat members and crossing bonds in all. Labels have at most 64 characters (`MAX_LABEL_CHARS`).

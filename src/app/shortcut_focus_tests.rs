@@ -1628,3 +1628,82 @@ async fn command_palette_search_field_types_colon() {
     assert!(app.commands.open);
     assert_eq!(app.commands.query, ":w");
 }
+
+/// The context row's Rotate field: click it, type an angle and press Enter
+/// to rotate the selection by exactly that angle as one Undo step.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn context_row_rotation_field_applies_a_typed_angle() {
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.inspector_open = false;
+    app.appearance.arrange_controls = true;
+    app.tool = crate::canvas::Tool::Select;
+    app.tab.doc = serde_json::from_str(include_str!(
+        "../../tests/fixtures/pyrrole-rotation-drift.rsk"
+    ))
+    .unwrap();
+    app.tab.selected = app.tab.doc.all_ids();
+    app.tab.saved = app.tab.doc.clone();
+    app.tab.history = super::History::default();
+    app.tab.busy = false;
+    app.sync_numeric_transforms();
+    let drawing = app.tab.doc.clone();
+    let mut expected = drawing.clone();
+    let ids = expected.expand_abbreviation_selection(&app.tab.selected);
+    reshiki::editing::transform(
+        &mut expected,
+        &ids,
+        reshiki::editing::Transform::Rotate(7.5),
+    );
+    assert_eq!(ui.input_value(&app, "arrange-rotation"), "0");
+    let bounds = ui.input(&app, "arrange-rotation").0;
+    assert!(ui.viewport.contains(bounds.center()), "{bounds:?}");
+    ui.click(&mut app, bounds.center());
+    assert!(ui.input(&app, "arrange-rotation").1);
+    let primary = if cfg!(target_os = "macos") {
+        Modifiers::LOGO
+    } else {
+        Modifiers::CTRL
+    };
+    let mut events = vec![
+        Event::Keyboard(keyboard::Event::ModifiersChanged(primary)),
+        press(Key::Character("a".into()), Code::KeyA, primary, Some("a")),
+        Event::Keyboard(keyboard::Event::ModifiersChanged(Modifiers::empty())),
+    ];
+    for (text, code) in [
+        ("7", Code::Digit7),
+        (".", Code::Period),
+        ("5", Code::Digit5),
+    ] {
+        events.push(press(
+            Key::Character(text.into()),
+            code,
+            Modifiers::empty(),
+            Some(text),
+        ));
+    }
+    for event in events {
+        let (_, messages) = ui.event(&app, event, mouse::Cursor::Unavailable);
+        apply(&mut app, messages);
+    }
+    assert_eq!(ui.input_value(&app, "arrange-rotation"), "7.5");
+    assert_eq!(app.tab.doc, drawing, "Typing is only a draft");
+    let (_, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::Enter),
+            Code::Enter,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    apply(&mut app, messages);
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc, expected);
+    assert_eq!(ui.input_value(&app, "arrange-rotation"), "0");
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, drawing);
+    assert!(!app.tab.history.can_undo());
+}

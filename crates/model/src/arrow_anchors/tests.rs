@@ -791,3 +791,176 @@ fn manual_cold_cage_attachment_queries_report_surviving_ink() {
         }
     }
 }
+#[test]
+fn double_bond_strokes_are_arrow_targets_not_only_the_gap() {
+    // Issue #330: acetone-style terminal C=O at 225% zoom (8 px pick radius).
+    let mut d = Document::default();
+    let length = d.drawing_style.bond_length_world;
+    let c = d.add_atom("C", Point::new(0., 0.));
+    let o = d.add_atom("O", Point::new(length, 0.));
+    d.add_bond(c, o, 2, "plain");
+    let radius = 8. / 2.25;
+    let half = length * d.drawing_style.bond_spacing_ratio / 2.;
+    let mid = length / 2.;
+    for y in [0., -half, half] {
+        assert!(
+            matches!(
+                pick(&d, Point::new(mid, y), radius),
+                Some(Pick::Bond { .. })
+            ),
+            "stroke at offset {y} was not a target"
+        );
+    }
+    assert_eq!(pick(&d, Point::new(mid, length * 0.5), radius), None);
+
+    // A one-sided double bond is hit on its rail, not on its empty side.
+    let spacing = half * 2.;
+    let mut sided = d.clone();
+    sided.bonds[0].double_position = crate::bonds::DoublePosition::Left;
+    let hit = |y: f32| pick(&sided, Point::new(mid, y), radius).is_some();
+    assert!(hit(0.) && hit(-spacing / 2.) && hit(-spacing));
+    assert!(!hit(spacing));
+
+    // A bold secondary rail is targetable across its whole width.
+    let mut bold = d.clone();
+    bold.bonds[0].secondary_display = Some("bold".into());
+    assert_eq!(pick(&d, Point::new(mid, half + 5.), radius), None);
+    assert!(pick(&bold, Point::new(mid, half + 5.), radius).is_some());
+
+    // The widened band never steals a click on a nearby single bond's ink,
+    // including on the thin side of a bold-secondary double bond.
+    let s = bold.add_atom("C", Point::new(0., -6.));
+    let t = bold.add_atom("C", Point::new(length, -6.));
+    bold.add_bond(s, t, 1, "plain");
+    bold.bonds.swap(0, 1);
+    assert!(matches!(
+        pick(&bold, Point::new(mid, -6.), radius),
+        Some(Pick::Bond { a, b, .. }) if a == s && b == t
+    ));
+    let s = d.add_atom("C", Point::new(0., -6.));
+    let t = d.add_atom("C", Point::new(length, -6.));
+    d.add_bond(s, t, 1, "plain");
+    d.bonds.swap(0, 1);
+    assert!(matches!(
+        pick(&d, Point::new(mid, -6.), radius),
+        Some(Pick::Bond { a, b, .. }) if a == s && b == t
+    ));
+
+    // A single bond inside a later quadruple bond's rail gap keeps its clicks.
+    let mut q = Document::default();
+    let s = q.add_atom("C", Point::new(0., spacing));
+    let t = q.add_atom("C", Point::new(length, spacing));
+    q.add_bond(s, t, 1, "plain");
+    let qa = q.add_atom("C", Point::new(0., 0.));
+    let qb = q.add_atom("C", Point::new(length, 0.));
+    q.add_bond(qa, qb, 6, "plain");
+    assert!(matches!(
+        pick(&q, Point::new(mid, spacing), radius),
+        Some(Pick::Bond { a, b, .. }) if a == s && b == t
+    ));
+}
+#[test]
+fn nearby_bonds_rank_by_their_drawn_ink() {
+    // Each case draws a plain single bond at `y` first and the shaped bond
+    // along y = 0 later; a false zero distance would let the later bond win.
+    let single_wins = |order: u8, display: &str, y: f32, at: Point| {
+        let mut d = Document::default();
+        let length = d.drawing_style.bond_length_world;
+        let s = d.add_atom("C", Point::new(0., y));
+        let t = d.add_atom("C", Point::new(length, y));
+        d.add_bond(s, t, 1, "plain");
+        let a = d.add_atom("C", Point::new(0., 0.));
+        let b = d.add_atom("C", Point::new(length, 0.));
+        d.add_bond(a, b, order, display);
+        d.bonds[1].double_position = crate::bonds::DoublePosition::Left;
+        match pick(&d, at, 2.) {
+            Some(Pick::Bond { a, .. }) => a == s,
+            other => panic!("expected a bond at {at:?}, got {other:?}"),
+        }
+    };
+    let style = Document::default().drawing_style;
+    let spacing = style.bond_length_world * style.bond_spacing_ratio;
+    // Beyond the shortened end of a one-sided double's inner rail.
+    assert!(single_wins(2, "plain", -spacing, Point::new(3., -spacing)));
+    // Beside the narrow end of a wedge.
+    assert!(single_wins(1, "wedge", 2.6, Point::new(10., 2.6)));
+    // Beside a wave's trough the single bond wins; on its crest the wave does.
+    assert!(single_wins(1, "wavy", 2.9, Point::new(18.375, 2.9)));
+    assert!(!single_wins(1, "wavy", 3.5, Point::new(23.625, 2.1875)));
+    // Hashed bars keep a constant bold width.
+    assert!(!single_wins(1, "hashed", 4., Point::new(7.291667, 2.4)));
+
+    // A double bond under a resolved ring arc draws only its backbone.
+    let mut d = Document::default();
+    let length = d.drawing_style.bond_length_world;
+    let s = d.add_atom("C", Point::new(0., 3.));
+    let t = d.add_atom("C", Point::new(length, 3.));
+    d.add_bond(s, t, 1, "plain");
+    let h = length * 3f32.sqrt() / 2.;
+    let ring: Vec<_> = [
+        (0., 0.),
+        (length, 0.),
+        (length * 1.5, -h),
+        (length, -h * 2.),
+        (0., -h * 2.),
+        (-length / 2., -h),
+    ]
+    .into_iter()
+    .map(|(x, y)| d.add_atom("C", Point::new(x, y)))
+    .collect();
+    for (i, &a) in ring.iter().enumerate() {
+        d.add_bond(
+            a,
+            ring[(i + 1) % 6],
+            if i % 2 == 0 { 2 } else { 1 },
+            "plain",
+        );
+    }
+    assert_eq!(
+        crate::ring_arcs::toggle(&mut d, &[ring[5], ring[0], ring[1], ring[2]]),
+        Ok(true)
+    );
+    // Centred rails would leave the pointer nearer the single bond.
+    d.bonds[1].double_position = crate::bonds::DoublePosition::Center;
+    let ring_bond = Some(Pick::Bond {
+        a: ring[0],
+        b: ring[1],
+        fraction: 0.5,
+    });
+    assert_eq!(pick(&d, Point::new(length / 2., 0.), 8. / 2.25), ring_bond);
+    // A ring_arc flag left on a bond with no resolved arc keeps its rails.
+    let spacing_half = spacing / 2.;
+    let mut open = Document::default();
+    let a = open.add_atom("C", Point::new(0., 0.));
+    let b = open.add_atom("C", Point::new(length, 0.));
+    open.add_bond(a, b, 2, "plain");
+    open.bonds[0].ring_arc = true;
+    assert!(pick(&open, Point::new(length / 2., spacing_half), 8. / 2.25).is_some());
+
+    // A bold quadruple bond's outer ink stays a target with tight spacing.
+    let mut quad = Document::default();
+    quad.drawing_style.bond_spacing_ratio = 0.05;
+    let a = quad.add_atom("C", Point::new(0., 0.));
+    let b = quad.add_atom("C", Point::new(length, 0.));
+    quad.add_bond(a, b, 6, "bold");
+    let style = &quad.drawing_style;
+    let edge = style.bond_length_world * style.bond_spacing_ratio * 1.5
+        + DEFAULT.world(style.bold_width_pt) / 2.;
+    assert!(pick(&quad, Point::new(length / 2., edge - 0.1), 8. / 2.25).is_some());
+
+    // A crossed C=O crosses at the middle of its label-trimmed segment.
+    let mut d = Document::default();
+    let length = d.drawing_style.bond_length_world;
+    let s = d.add_atom("C", Point::new(0., 1.2));
+    let t = d.add_atom("C", Point::new(length, 1.2));
+    d.add_bond(s, t, 1, "plain");
+    let c = d.add_atom("C", Point::new(0., 0.));
+    let o = d.add_atom("O", Point::new(length, 0.));
+    d.add_bond(c, o, 2, "wavy");
+    let (start, end) = crate::scene::bond_segment(&d, &d.bonds[1], None).unwrap();
+    let cross = Point::new((start.x + end.x) / 2., (start.y + end.y) / 2.);
+    assert!(matches!(
+        pick(&d, cross, 2.),
+        Some(Pick::Bond { a, b, .. }) if a == c && b == o
+    ));
+}

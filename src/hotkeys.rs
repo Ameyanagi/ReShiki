@@ -241,6 +241,8 @@ pub fn atom_edit(
                     .checked_add(if key == "+" { 1 } else { -1 })
                     .filter(|charge| (-15..=15).contains(charge))
                     .ok_or("Charge limit reached")?;
+                // An entered charge is shown, even where a shortcut hid one.
+                atom.display.hide_charge = false;
             }
             "2" => {
                 // Secondary carbon becomes a ketone. A terminal carbon becomes

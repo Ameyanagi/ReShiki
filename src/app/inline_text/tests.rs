@@ -351,3 +351,43 @@ fn popup_stays_in_view_at_document_edges_with_long_labels() {
         }
     }
 }
+
+#[test]
+fn text_tool_conditions_attach_to_an_arrow_and_drag_away_detaches() {
+    use reshiki::{
+        arrow_labels::Side,
+        arrows::{ArrowStyle, Preset},
+        document::Arrow,
+    };
+    let mut app = app();
+    app.tab.doc.arrows.push(Arrow::new(
+        1,
+        Point::new(0., 0.),
+        Point::new(80., 0.),
+        Preset::Forward,
+        ArrowStyle::preset(Preset::Forward),
+    ));
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::Tool(Tool::Text));
+    // The text tool puts the top-left corner at the click.
+    let _ = app.update(Message::Canvas(CanvasEdit::Click(Point::new(10., -60.))));
+    type_text(&mut app, "Pd/C, H2, EtOAc, rt");
+    let _ = app.update(Message::InlineText(Action::Finish(true)));
+    let doc = &app.tab.doc;
+    let id = doc.annotations[0].id;
+    assert_eq!(doc.arrow_labels.len(), 1);
+    assert_eq!(doc.arrow_labels[0].side, Side::Above);
+    let width = doc.annotations[0].size().0;
+    let arrow = &doc.arrows[0];
+    assert!(arrow.start.distance(arrow.end) > width);
+    let mid = arrow.start.lerp(arrow.end, 0.5);
+    assert!((doc.annotations[0].position.x + width / 2. - mid.x).abs() < 1e-3);
+    let attached = app.tab.doc.clone();
+
+    let _ = app.update(Message::Canvas(CanvasEdit::Move(vec![id], 0., -400.)));
+    assert!(app.tab.doc.arrow_labels.is_empty());
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, attached);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}

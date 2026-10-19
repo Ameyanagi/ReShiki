@@ -90,10 +90,11 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
         .expand_abbreviation_selection(&ids)
         .into_iter()
         .collect();
-    let ids: HashSet<_> =
+    let mut ids: HashSet<_> =
         crate::molecule_names::include_annotations(doc, &ids.iter().copied().collect::<Vec<_>>())
             .into_iter()
             .collect();
+    crate::arrow_labels::include_labels(doc, &mut ids);
     let mut part = doc.clone();
     part.molecule_names.retain(|name| {
         ids.contains(&name.annotation) && name.atoms.iter().all(|id| ids.contains(id))
@@ -153,6 +154,13 @@ pub(crate) fn preserved_expansion_selection(
             ids.insert(arrow.id);
         }
     }
+    // A selected label brings its arrow, then the arrow brings all its labels.
+    for label in &doc.arrow_labels {
+        if ids.contains(&label.annotation) {
+            ids.insert(label.arrow);
+        }
+    }
+    crate::arrow_labels::include_labels(doc, &mut ids);
     if doc
         .bonds
         .iter()
@@ -197,6 +205,8 @@ pub(crate) fn preserved_expansion_selection(
         .retain(|r| r.ids().iter().all(|id| ids.contains(id)));
     part.molecule_names
         .retain(|n| ids.contains(&n.annotation) && n.atoms.iter().all(|id| ids.contains(id)));
+    part.arrow_labels
+        .retain(|l| ids.contains(&l.arrow) && ids.contains(&l.annotation));
     part.generic.alternatives.retain(|a| ids.contains(&a.atom));
     part.generic.links.retain(|a| ids.contains(&a.atom));
     part.generic.repeats.retain(|r| {
@@ -224,10 +234,104 @@ pub fn analysis_atoms(doc: &Document, selected: &[u64]) -> Vec<u64> {
         .collect()
 }
 
-/// The fragment analyzed for `atoms`, without cached computed labels.
+/// The fragment analyzed for `atoms`, without cached computed labels. Cut
+/// covalent bonds are capped with hydrogens. Atoms with a fixed hydrogen
+/// count, such as an imported ChemDraw label, get explicit ones, so the open
+/// valences do not read as radicals while intended radicals stay.
 pub fn analysis_document(doc: &Document, atoms: &[u64]) -> Document {
     let mut part = selection(doc, atoms);
     crate::atom_labels::clear_computed(&mut part);
+    let kept: HashSet<_> = part.atoms.iter().map(|a| a.id).collect();
+    // Twice the valence `b` gives `atom`, as in the chemistry graph: a
+    // dative bond gives none to its donor `a`, a hydrogen bond none at all.
+    let twice = |b: &crate::document::Bond, atom: u64| match b.order {
+        1..=3 => u32::from(b.order) * 2,
+        4 | 7 => 3,
+        5 if atom == b.b => 2,
+        6 => 8,
+        _ => 0,
+    };
+    let number = |symbol: &str| {
+        crate::chemistry::ELEMENTS
+            .iter()
+            .position(|e| e.symbol == symbol)
+    };
+    let metals: HashSet<u64> = doc
+        .atoms
+        .iter()
+        .filter(|a| {
+            number(&a.element).is_some_and(
+                |n| !matches!(n, 0..=2 | 5..=10 | 14..=18 | 33..=36 | 52..=54 | 85..=86),
+            )
+        })
+        .map(|a| a.id)
+        .collect();
+    // Per kept atom: twice the valence kept and cut (`None` when a cut bond
+    // is aromatic, which has no whole valence), and whether a single bond to
+    // a metal is cut or kept.
+    #[derive(Default)]
+    struct Valence {
+        kept: u32,
+        cut: Option<u32>,
+        metal_cut: bool,
+        metal_kept: bool,
+    }
+    let mut valence: HashMap<u64, Valence> = HashMap::new();
+    for b in &doc.bonds {
+        for (atom, other) in [(b.a, b.b), (b.b, b.a)] {
+            if !kept.contains(&atom) {
+                continue;
+            }
+            let entry = valence.entry(atom).or_insert_with(|| Valence {
+                cut: Some(0),
+                ..Default::default()
+            });
+            let to_metal = b.order == 1 && metals.contains(&other);
+            if kept.contains(&other) {
+                entry.kept += twice(b, atom);
+                entry.metal_kept |= to_metal;
+            } else {
+                let cut = (!matches!(b.order, 4 | 7)).then(|| twice(b, atom));
+                entry.cut = entry.cut.zip(cut).map(|(sum, cut)| sum + cut);
+                entry.metal_cut |= to_metal;
+            }
+        }
+    }
+    for atom in part.atoms.iter_mut().filter(|a| a.no_implicit) {
+        let Some(v) = valence.get(&atom.id).filter(|v| v.cut != Some(0)) else {
+            continue;
+        };
+        // RDKit's largest valence for the charge-adjusted element; -1 (any)
+        // for metals.
+        let largest = number(&atom.element)
+            .and_then(|n| usize::try_from(n as i32 - atom.charge).ok())
+            .and_then(|n| crate::chemistry::ELEMENTS.get(n))
+            .and_then(|e| e.valences.last())
+            .map_or(-1, |v| *v);
+        let fits = |kept: u32, cut: u32| {
+            largest < 0 || (kept + cut) / 2 + atom.explicit_h <= largest as u32
+        };
+        let (mut kept, Some(mut cut)) = (v.kept, v.cut) else {
+            atom.no_implicit = false;
+            continue;
+        };
+        // Preparation turns one single bond from a non-metal that exceeds its
+        // valence to a metal dative, taking no valence from the non-metal.
+        if !fits(kept, cut) && !metals.contains(&atom.id) {
+            if v.metal_cut {
+                cut -= 2;
+            } else if v.metal_kept {
+                kept -= 2;
+            }
+        }
+        if fits(kept, cut) {
+            atom.explicit_h += cut / 2;
+        } else {
+            // Preparation reinterprets other atoms that would exceed their
+            // valence, such as a neutral nitro N, so they recalculate.
+            atom.no_implicit = false;
+        }
+    }
     part
 }
 
@@ -311,6 +415,10 @@ fn mapped_append_part(
             let mapped = mapping.get(atom).copied()?;
             *atom = mapped;
         }
+    }
+    for label in &mut part.arrow_labels {
+        label.arrow = mapping.get(&label.arrow).copied()?;
+        label.annotation = mapping.get(&label.annotation).copied()?;
     }
     part.depth_appearance = crate::depth_appearance::remap(&source.depth_appearance, &mapping);
     for a in &mut part.atoms {
@@ -417,6 +525,7 @@ pub(crate) fn extend_append_part(doc: &mut Document, part: Document) {
     doc.annotations.extend(part.annotations);
     doc.molecule_names.extend(part.molecule_names);
     doc.arrows.extend(part.arrows);
+    doc.arrow_labels.extend(part.arrow_labels);
     doc.graphics.extend(part.graphics);
     doc.groups.extend(part.groups);
     doc.abbreviations.extend(part.abbreviations);
@@ -726,9 +835,15 @@ pub fn groups(doc: &Document, ids: &[u64]) -> Vec<Vec<u64>> {
                 .collect()
         })
         .collect();
+    let labels: Vec<Vec<_>> = doc
+        .arrow_labels
+        .iter()
+        .map(|l| vec![l.arrow, l.annotation])
+        .collect();
     let memberships: Vec<&[u64]> = attachments
         .iter()
         .chain(&captions)
+        .chain(&labels)
         .map(Vec::as_slice)
         .chain(doc.groups.iter().map(|g| g.members.as_slice()))
         .collect();
@@ -1387,6 +1502,20 @@ fn attached_ring_vertices(
     } else {
         neighbors.iter().map(|p| p.distance(anchor)).sum::<f32>() / neighbors.len() as f32
     };
+    // A drag on empty canvas: the first bond runs from the press toward the
+    // pointer and the ring lies counter-clockwise of it on screen.
+    if atom.is_none()
+        && let Some(toward) = direction.filter(|d| d.distance(p) > radius)
+    {
+        let mut angle = (toward.y - p.y).atan2(toward.x - p.x);
+        let mut vertex = p;
+        for _ in 0..n {
+            ids.push(result.add_atom("C", vertex));
+            vertex = vertex.offset(length * angle.cos(), length * angle.sin());
+            angle -= std::f32::consts::TAU / n as f32;
+        }
+        return;
+    }
     let r = length / (2.0 * (std::f32::consts::PI / n as f32).sin());
     // The center belongs in the open angular gap, opposite the substituent
     // at a terminal atom. Never assume that the ring lies to its left.

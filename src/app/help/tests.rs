@@ -324,13 +324,15 @@ fn keyboard_navigation_moves_within_results_and_never_runs_commands() {
 fn canvas_tool_keys_say_when_keyboard_drawing_takes_them() {
     // Keyboard drawing is on by default, and at an empty hotspot these keys
     // start a drawing instead of choosing a tool, so their rows must say so.
-    let shift = crate::app::shortcuts::keys(Modifiers::SHIFT, "");
+    // "⇧" on macOS, "Shift+" elsewhere.
+    let shifted = crate::app::shortcuts::keys(Modifiers::SHIFT, "E");
+    let shift = shifted.strip_suffix('E').unwrap_or(&shifted);
     for entry in entries()
         .iter()
         .filter(|e| e.scope == registry::Scope::Canvas)
     {
         let taken = entry.keys.split(" / ").any(|key| {
-            let key = key.strip_prefix(shift.as_str()).unwrap_or(key);
+            let key = key.strip_prefix(shift).unwrap_or(key);
             key.chars().count() == 1 && crate::app::keyboard_drawing::starts_drawing(key)
         });
         assert_eq!(
