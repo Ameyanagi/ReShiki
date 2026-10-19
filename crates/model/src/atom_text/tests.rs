@@ -924,9 +924,9 @@ fn every_bundled_spelling_types_as_its_group() -> Result<(), Box<dyn std::error:
                 "{spelling} is an atom label"
             );
             assert!(
-                description(spelling, mode).starts_with("A real chemical group"),
+                description(spelling, &[], mode).starts_with("A real chemical group"),
                 "{spelling}: {}",
-                description(spelling, mode)
+                description(spelling, &[], mode)
             );
             let mut doc = Document::default();
             let methyl = doc.add_atom("C", Point::new(0., 0.));
