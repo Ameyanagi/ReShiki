@@ -1,0 +1,16 @@
+Before: PR #366 at 46c06d5a, built unchanged with 'nix build' on each platform.
+
+== amearch (x86_64)
+error: hash mismatch in fixed-output derivation '/nix/store/…-COSMolKit-252a1f3.drv':
+         specified: sha256-RSzO5Q59vlDkve2XQMJeqJpQnMyFht4WvZ9AhwemQuo=
+            got:    sha256-M5GaqvXMfoBBzNs+L05/uANnd77DHP3mgt6Om6rZcxY=
+
+== dgx1 (aarch64)
+error: hash mismatch in fixed-output derivation '/nix/store/…-COSMolKit-252a1f3.drv':
+         specified: sha256-RSzO5Q59vlDkve2XQMJeqJpQnMyFht4WvZ9AhwemQuo=
+            got:    sha256-M5GaqvXMfoBBzNs+L05/uANnd77DHP3mgt6Om6rZcxY=
+
+== macOS arm64
+error: hash mismatch in fixed-output derivation '/nix/store/…-COSMolKit-252a1f3.drv':
+         specified: sha256-RSzO5Q59vlDkve2XQMJeqJpQnMyFht4WvZ9AhwemQuo=
+            got:    sha256-M5GaqvXMfoBBzNs+L05/uANnd77DHP3mgt6Om6rZcxY=
