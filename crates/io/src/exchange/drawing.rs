@@ -146,7 +146,7 @@ fn write_impl(
     if document
         .atoms
         .iter()
-        .any(|a| a.charge != 0 && a.display.hide_charge && !ligands::hidden_charge(a))
+        .any(|a| a.charge != 0 && a.display.hide_charge && !ligands::hidden_charge(a, document))
     {
         return Err(invalid(
             "CDXML cannot yet preserve hidden charge labels. Show charges before editable export, or use ReShiki (.rsk), SVG, PNG or PDF. The chemical charges are retained.",
@@ -266,6 +266,7 @@ fn write_impl(
     w.crossings(middle)?;
     w.groups()?;
     w.abbreviations()?;
+    w.orbitals_behind_labels()?;
     // Abbreviations move bonds into nested fragments. Native areas must be
     // created beside their final bond owners.
     w.ring_fills()?;
@@ -543,6 +544,58 @@ impl<'a> Writer<'a> {
             .get(&id)
             .map(|i| (i + 3).to_string())
             .ok_or_else(|| invalid("Missing drawing atom ID"))
+    }
+    /// Orbitals keep complete lobes. A front orbital reaching an atom label
+    /// goes just behind the molecule, so every reader (and a re-import, where
+    /// the curves become plain paths) draws the labels over it. No halo shapes
+    /// are written; they would become stray editable objects.
+    fn orbitals_behind_labels(&mut self) -> Result<()> {
+        let halos = crate::scientific::orbital_label_halos(self.doc);
+        for id in halos.front {
+            let Some(orbital) = self
+                .objects
+                .iter()
+                .find(|(object, _)| *object == id)
+                .map(|(_, key)| *key)
+            else {
+                continue;
+            };
+            let mut molecule = None;
+            let keys = self.tree.descendants(self.page)?;
+            for &key in &keys {
+                if self.tree.node(key)?.tag == "fragment"
+                    && let Some(z) = self.z(key)?
+                {
+                    molecule = Some(molecule.map_or(z, |m: usize| m.min(z)));
+                }
+            }
+            let Some(molecule) = molecule else {
+                return Ok(());
+            };
+            let lowered = self.tree.descendants(orbital)?;
+            for key in keys {
+                if let Some(z) = self.z(key)? {
+                    let z = if lowered.contains(&key) {
+                        molecule
+                    } else if z >= molecule {
+                        z + 1
+                    } else {
+                        continue;
+                    };
+                    self.tree.set(key, "Z", z.to_string())?;
+                }
+            }
+        }
+        Ok(())
+    }
+    fn z(&self, key: Key) -> Result<Option<usize>> {
+        self.tree
+            .get(key, "Z")?
+            .map(|z| {
+                z.parse::<usize>()
+                    .map_err(|_| invalid("Invalid stacking order"))
+            })
+            .transpose()
     }
     fn atom_node(&self, id: u64) -> Result<Key> {
         self.atom_indices

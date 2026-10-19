@@ -91,20 +91,7 @@ fn draw_primitives_with_opacity(
                 style,
                 filled,
             } => {
-                let path = Path::new(|b| {
-                    for c in commands {
-                        match c {
-                            PathCommand::Move(p) => b.move_to(camera.screen(*p, bounds)),
-                            PathCommand::Line(p) => b.line_to(camera.screen(*p, bounds)),
-                            PathCommand::Cubic(a, z, p) => b.bezier_curve_to(
-                                camera.screen(*a, bounds),
-                                camera.screen(*z, bounds),
-                                camera.screen(*p, bounds),
-                            ),
-                            PathCommand::Close => b.close(),
-                        }
-                    }
-                });
+                let path = world_path(commands, camera, bounds);
                 if *filled && let Some(c) = style.fill {
                     frame.fill(&path, alpha(rgb(c.rgb())));
                 }
@@ -123,6 +110,9 @@ fn draw_primitives_with_opacity(
                 } else {
                     frame.stroke(&dashes::dashed(&path, &dashes), stroke);
                 }
+            }
+            Primitive::Halo { radius, primitives } => {
+                draw_halo(frame, primitives, camera, bounds, *radius)
             }
             Primitive::Line(a, b, width) => frame.stroke(
                 &Path::line(camera.screen(*a, bounds), camera.screen(*b, bounds)),
@@ -191,4 +181,106 @@ fn draw_primitives_with_opacity(
             }
         }
     }
+}
+
+/// Paper-colored label halos: each label shape filled and stroked `radius` wider.
+fn draw_halo(
+    frame: &mut layered::Frame<'_>,
+    primitives: &[Primitive],
+    camera: Camera,
+    bounds: Rectangle,
+    radius: f32,
+) {
+    let spread = |width: f32| {
+        Stroke::default()
+            .with_color(Color::WHITE)
+            .with_width((width + 2. * radius) * camera.zoom)
+            .with_line_cap(canvas::LineCap::Round)
+            .with_line_join(canvas::LineJoin::Round)
+    };
+    for primitive in primitives {
+        match primitive {
+            Primitive::Opacity { primitive, .. } => draw_halo(
+                frame,
+                std::slice::from_ref(primitive.as_ref()),
+                camera,
+                bounds,
+                radius,
+            ),
+            Primitive::Path {
+                commands,
+                style,
+                filled,
+            } => {
+                let path = world_path(commands, camera, bounds);
+                if *filled && style.fill.is_some() {
+                    frame.fill(&path, Color::WHITE);
+                }
+                let width = if style.width_pt > 0. {
+                    style.width()
+                } else {
+                    0.
+                };
+                frame.stroke(&path, spread(width));
+            }
+            Primitive::Line(a, b, width) => frame.stroke(
+                &Path::line(camera.screen(*a, bounds), camera.screen(*b, bounds)),
+                spread(*width),
+            ),
+            Primitive::Polygon(points) => {
+                let path = Path::new(|builder| {
+                    if let Some(p) = points.first() {
+                        builder.move_to(camera.screen(*p, bounds));
+                        for p in points.iter().skip(1) {
+                            builder.line_to(camera.screen(*p, bounds));
+                        }
+                        builder.close();
+                    }
+                });
+                frame.fill(&path, Color::WHITE);
+                frame.stroke(&path, spread(0.));
+            }
+            Primitive::Text {
+                position,
+                text,
+                size,
+                color,
+                style,
+            } => {
+                let paths = if let Some(cache) = frame.text_cache {
+                    cache
+                        .borrow_mut()
+                        .get(text, *size, camera.zoom, *color, style)
+                } else {
+                    std::rc::Rc::new(text_cache::outline(text, *size, camera.zoom, *color, style))
+                };
+                let at = camera.screen(*position, bounds);
+                let transform =
+                    iced::widget::canvas::path::lyon_path::math::Transform::translation(at.x, at.y);
+                for (path, _) in &paths.paths {
+                    let path = path.transform(&transform);
+                    frame.fill(&path, Color::WHITE);
+                    frame.stroke(&path, spread(0.));
+                }
+            }
+            Primitive::Picture(_) | Primitive::Halo { .. } => {}
+        }
+    }
+}
+
+fn world_path(commands: &[PathCommand], camera: Camera, bounds: Rectangle) -> Path {
+    Path::new(|b| {
+        for c in commands {
+            match c {
+                PathCommand::Move(p) => b.move_to(camera.screen(*p, bounds)),
+                PathCommand::Line(p) => b.line_to(camera.screen(*p, bounds)),
+                PathCommand::Cubic(a, z, p) => b.bezier_curve_to(
+                    camera.screen(*a, bounds),
+                    camera.screen(*z, bounds),
+                    camera.screen(*p, bounds),
+                ),
+                PathCommand::Close => b.close(),
+            }
+        }
+    })
 }

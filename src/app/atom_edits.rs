@@ -70,6 +70,7 @@ impl App {
         for id in &self.tab.selected {
             if let Some(a) = self.tab.doc.atom_mut(*id) {
                 a.charge = a.charge.saturating_add(delta).clamp(-8, 8);
+                a.display.hide_charge = false;
                 a.explicit_h = 0;
                 a.no_implicit = false;
             }

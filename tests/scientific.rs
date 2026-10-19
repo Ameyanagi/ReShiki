@@ -270,7 +270,7 @@ fn vector_fill_at(commands: &[reshiki::graphics::PathCommand], point: Point) -> 
 }
 
 #[tokio::test]
-async fn orbital_label_clearance_survives_editable_vector_exchange() {
+async fn complete_orbital_lobes_and_labels_above_them_survive_editable_vector_exchange() {
     let engine = LocalEngine::default();
     let source = engine
         .request(Request::import_smiles("C[15NH3+]"))
@@ -297,6 +297,33 @@ async fn orbital_label_clearance_survives_editable_vector_exchange() {
             let mut request = Request::molecule("export", doc.clone());
             request.format = Some(format.into());
             let exported = engine.request(request).await.unwrap().output.unwrap();
+            if format == "cdxml" {
+                // The orbital reaching N goes behind the molecule.
+                let z = |element: &str| {
+                    element
+                        .split_once(" Z=\"")
+                        .and_then(|(_, rest)| rest.split_once('"'))
+                        .map(|(z, _)| z.parse::<usize>().unwrap())
+                };
+                let elements: Vec<_> = exported.split('<').collect();
+                let n_z = elements
+                    .iter()
+                    .find(|element| element.starts_with("n ") && element.contains("Element=\"7\""))
+                    .and_then(|element| z(element))
+                    .unwrap();
+                let orbital_z = elements
+                    .iter()
+                    .filter(|element| {
+                        element.starts_with("curve ") || element.starts_with("graphic ")
+                    })
+                    .filter_map(|element| z(element))
+                    .max()
+                    .unwrap();
+                assert!(
+                    n_z > orbital_z,
+                    "{phase:?}: N Z={n_z} orbital Z={orbital_z}"
+                );
+            }
             let imported = engine
                 .request(Request::import(format, &exported))
                 .await
@@ -311,6 +338,10 @@ async fn orbital_label_clearance_survives_editable_vector_exchange() {
             assert_eq!(imported_n.charge, 1);
             assert_eq!(imported_n.isotope, 15);
             assert!(!imported.graphics.is_empty());
+            assert!(
+                imported.graphics.iter().all(|graphic| graphic.layer < 0),
+                "{phase:?}/{format}: the orbital curves re-import behind the labelled molecule"
+            );
             assert_eq!(
                 imported
                     .graphics
@@ -320,14 +351,16 @@ async fn orbital_label_clearance_survives_editable_vector_exchange() {
                 *phase != Phase::Open,
                 "Exchange must retain the outline versus filled phase",
             );
-            for graphic in &imported.graphics {
-                for part in graphic.parts().iter().filter(|part| part.filled) {
-                    assert!(
-                        !vector_fill_at(&part.commands, imported_n.position),
-                        "{phase:?}/{format} orbital fill must retain a transparent gap at N"
-                    );
-                }
-            }
+            assert_eq!(
+                imported
+                    .graphics
+                    .iter()
+                    .flat_map(|graphic| graphic.parts())
+                    .filter(|part| part.filled)
+                    .any(|part| vector_fill_at(&part.commands, imported_n.position)),
+                *phase != Phase::Open,
+                "{phase:?}/{format} orbital fill stays complete under N"
+            );
             assert_eq!(
                 doc, before,
                 "Preparing exports must not move atoms or orbital frames"
@@ -394,7 +427,7 @@ fn rear_orbital_scene_paths(doc: &Document) -> Vec<(Vec<reshiki::graphics::PathC
 }
 
 #[test]
-fn composed_rear_atom_label_clears_orbital_ink_only_when_it_is_painted() {
+fn composed_rear_atom_label_gets_a_halo_over_complete_lobes_only_when_it_is_painted() {
     let (source, hidden) = rear_orbital_fixture();
     let center = source.atom(hidden).unwrap().position;
     let raw: Vec<_> = source
@@ -417,22 +450,17 @@ fn composed_rear_atom_label_clears_orbital_ink_only_when_it_is_painted() {
         let before = doc.clone();
         let paths = rear_orbital_scene_paths(&doc);
         assert!(!paths.is_empty(), "Must observe actual orbital scene ink");
-        let fill_at = |point| {
-            paths
-                .iter()
-                .any(|(path, fill)| *fill && vector_fill_at(path, point))
-        };
-        assert_eq!(fill_at(center), alpha == 0., "Rear label alpha {alpha}");
-        assert!(
-            fill_at(center.offset(20., 0.)),
-            "Clearance must not erase the orbital"
+        assert_eq!(
+            paths, raw,
+            "Lobes stay complete at rear label alpha {alpha}"
         );
-        if alpha == 0. {
-            assert_eq!(
-                paths, raw,
-                "An invisible label must leave the original vectors exact"
-            );
-        }
+        assert_eq!(
+            reshiki::scene::primitives(&doc)
+                .iter()
+                .any(|primitive| matches!(primitive, reshiki::scene::Primitive::Halo { .. })),
+            alpha > 0.,
+            "Only a painted label gets a halo (alpha {alpha})"
+        );
         let svg = reshiki::scene::svg(&doc);
         assert_eq!(svg.contains(">C</text>"), alpha > 0.);
         assert_eq!(
@@ -484,9 +512,10 @@ fn composed_rear_orbital_editable_copy_restores_labels_and_matches_opaque_export
         let paths = rear_orbital_scene_paths(&opaque);
         assert!(paths.iter().any(|(_, fill)| *fill));
         assert!(
-            !paths
+            paths
                 .iter()
-                .any(|(path, fill)| *fill && vector_fill_at(path, center))
+                .any(|(path, fill)| *fill && vector_fill_at(path, center)),
+            "Lobes stay complete under the restored label"
         );
         assert_eq!(
             doc, before,

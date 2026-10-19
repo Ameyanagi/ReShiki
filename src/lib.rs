@@ -20,12 +20,12 @@ static ALLOCATOR: allocation_metrics::MeasuredAllocator<std::alloc::System> =
     allocation_metrics::MeasuredAllocator::new(std::alloc::System);
 
 pub use reshiki_model::{
-    abbreviations, aromatic, arrow_anchors, arrows, atom_labels, atom_text, attachments, bonds,
-    canvas_theme, chains, color_contrast, common_groups, crossings, depth_appearance, document,
-    editing, erasing, generic, graphics, grouping, haworth, highlights, joining, ligands,
-    molecule_names, pages, palette, pictures, projection, reaction_mapping, reactions,
-    rear_opacity, ring_arcs, ring_fills, rings, scene, scientific, selection_region, storage,
-    style, templates, theme_files, theme_generator, transaction, typography,
+    abbreviations, aromatic, arrow_anchors, arrow_labels, arrows, atom_labels, atom_text,
+    attachments, bonds, canvas_theme, chains, color_contrast, common_groups, crossings,
+    depth_appearance, document, editing, erasing, generic, graphics, grouping, haworth, highlights,
+    joining, ligands, molecule_names, pages, palette, pictures, projection, reaction_mapping,
+    reactions, rear_opacity, ring_arcs, ring_fills, rings, scene, scientific, selection_region,
+    storage, style, templates, theme_files, theme_generator, transaction, typography,
 };
 
 pub use reshiki_agent::envelope;

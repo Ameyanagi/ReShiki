@@ -17,6 +17,8 @@ mod memory_tests;
 
 /// Size of the proportional lock beside H.
 const LOCK: f32 = 20.;
+/// Width of the context row's Rotate field.
+pub(super) const ROTATION_FIELD: f32 = 58.;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Field {
@@ -375,6 +377,27 @@ fn transform_candidate(
     document.validate()
 }
 
+/// A field's input, shared by the inspector and the context row so both edit
+/// the same draft and Enter applies only that field.
+fn field_input<'a>(
+    state: &State,
+    id: &'static str,
+    field: Field,
+    enabled: bool,
+) -> reshiki::accessibility::TextInput<'a, Message> {
+    reshiki::accessibility::text_input(
+        id,
+        format!("{} ({})", field.name(), field.unit()),
+        "",
+        state.value(field),
+    )
+    .style(crate::appearance::input_style)
+    .on_input_maybe(
+        enabled.then_some(move |value| Message::NumericTransform(Action::Input(field, value))),
+    )
+    .on_submit_maybe(enabled.then_some(Message::NumericTransform(Action::Apply(field))))
+}
+
 impl App {
     pub(super) fn begin_numeric_transform(
         &mut self,
@@ -562,6 +585,32 @@ impl App {
         }
     }
 
+    /// The Rotate field again, beside the context row's Rotate 180° button.
+    /// It shares the inspector field's draft, and Enter applies only it.
+    pub(super) fn rotation_field(&self, enabled: bool) -> Element<'_, Message> {
+        let field = Field::Rotation;
+        let input = field_input(
+            &self.tab.numeric_transforms,
+            "arrange-rotation",
+            field,
+            enabled,
+        );
+        hover_hint(
+            container(accessible_unit_field(input, field.unit())).width(ROTATION_FIELD),
+            if enabled {
+                format!(
+                    "Rotate by an exact angle · Enter applies\n{} · {}",
+                    field.hint(),
+                    super::shortcuts::rotation_keys()
+                )
+            } else {
+                "Rotate by angle · Select objects first".to_owned()
+            },
+            tooltip::Position::Bottom,
+        )
+        .into()
+    }
+
     /// Rotate | Scale and W 🔒 H, with tilt under More and one Apply.
     pub(super) fn numeric_transform_panel(&self) -> Element<'_, Message> {
         let state = &self.tab.numeric_transforms;
@@ -573,18 +622,7 @@ impl App {
             } else {
                 selected
             };
-            let input = reshiki::accessibility::text_input(
-                field.id(),
-                format!("{} ({})", field.name(), field.unit()),
-                "",
-                state.value(field),
-            )
-            .style(crate::appearance::input_style)
-            .on_input_maybe(
-                enabled
-                    .then_some(move |value| Message::NumericTransform(Action::Input(field, value))),
-            )
-            .on_submit_maybe(enabled.then_some(Message::NumericTransform(Action::Apply(field))));
+            let input = field_input(state, field.id(), field, enabled);
             row![
                 container(label).width(label_width),
                 hover_hint(

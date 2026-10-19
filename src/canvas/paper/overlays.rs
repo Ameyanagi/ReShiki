@@ -6,6 +6,7 @@ use crate::canvas::hit::{
 use crate::canvas::overlay::{ACCENT, ACCENT_STRONG, ACCENT_TINT};
 use crate::canvas::{
     Gesture, Handle, MoleculeCanvas, SelectionBox, State, Tool, World, layered, markers, pick, rgb,
+    selection,
 };
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Rectangle, Vector, keyboard, mouse};
@@ -607,8 +608,32 @@ impl MoleculeCanvas<'_> {
                 let end = self
                     .camera
                     .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
-                drag.selection
-                    .draw(frame, drag.values(end, state.modifiers.shift()).1);
+                let angle = drag.values(end, state.modifiers.shift()).1;
+                drag.selection.draw(frame, angle);
+                let [readout, hint] = selection::rotation_readout(angle);
+                let position = Point::new(
+                    (p.x - bounds.x + 16.).clamp(4., (bounds.width - 260.).max(4.)),
+                    (p.y - bounds.y + 18.).clamp(4., (bounds.height - 42.).max(4.)),
+                );
+                frame.fill_rectangle(
+                    position - Vector::new(4., 3.),
+                    iced::Size::new(256., 39.),
+                    Color::WHITE,
+                );
+                frame.fill_text(canvas::Text {
+                    content: readout,
+                    position,
+                    color: rgb([30, 100, 85]),
+                    size: 12.into(),
+                    ..Default::default()
+                });
+                frame.fill_text(canvas::Text {
+                    content: hint,
+                    position: position + Vector::new(0., 17.),
+                    color: rgb([92, 102, 112]),
+                    size: 11.into(),
+                    ..Default::default()
+                });
             } else {
                 let selection = if let Some(translation) = cached {
                     state
