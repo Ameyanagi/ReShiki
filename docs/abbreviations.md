@@ -43,4 +43,36 @@ group remain unsupported.
 
 Cp and Cp* additionally retain full cyclopentadienyl/pentamethylcyclopentadienyl ligand graphs and typed multi-center attachment points, contributing C5H5− and C10H15−. Formula counts exclude the handles; coordination valence and complex identifiers remain unsupported. Editable CDXML/CDX expands these haptic groups when nested attachment definitions cannot survive resaving. Nested nicknames remain unsupported. Editable export rejects abbreviated groups carrying internal atom indicators rather than losing those indicators; expand them first. Labels do not introduce invented elements or replace the underlying structure with text.
 
-Verification covers native save/reopen, reversed labels, selection/copy/delete/Undo, full molecular identity through cleanup and editable exchange, all 31 preset definitions, and an independently saved native binary fixture. Desktop exchange displayed MeO–phenyl–NH–Boc and expanded its chemical labels to the full 16-atom structure.
+Verification covers native save/reopen, reversed labels, selection/copy/delete/Undo, full molecular identity through cleanup and editable exchange, every catalog definition, and an independently saved native binary fixture. Desktop exchange displayed MeO–phenyl–NH–Boc and expanded its chemical labels to the full 16-atom structure.
+
+## The group catalog
+
+All typed and detected groups come from one file,
+[`catalog.json`](https://github.com/Ameyanagi/ReShiki/blob/main/crates/model/src/chemistry/abbreviations/catalog.json).
+Each entry gives the label, an optional reversed label, a SMILES string whose
+first atom is the `*` attachment point, the substituent formula, a category and
+full names:
+
+```json
+{
+  "label": "OTBS",
+  "reverse": "TBSO",
+  "smiles": "*O[Si](C)(C)C(C)(C)C",
+  "formula": "C6H15OSi",
+  "category": "silyl",
+  "names": ["tert-butyldimethylsilyl ether"]
+}
+```
+
+ReShiki reads each SMILES when it loads the catalog. It derives the atoms and bonds, the
+matching rules for **Contract common groups** and the formula from it. The
+layout comes from the same 2D depiction that SMILES import uses. Adding a
+group is one new entry; no separate geometry file is needed. The optional
+`aliases` list adds other typed spellings, such as TBDMS for TBS. Set
+`"contract": false` for a group that should only be created by typing, never
+found by **Contract common groups**. Groups cannot carry stereochemistry,
+isotopes, radicals or `[H]` atoms, and attach through one single bond. Every
+label, alias and reverse label must be unique and cannot reuse N3 or MgBr.
+
+When groups overlap, **Contract common groups** prefers the larger group, for
+example NHBoc over Boc. Groups of the same size are tried in catalog order.

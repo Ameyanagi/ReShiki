@@ -307,6 +307,10 @@ jobs:
         run: cargo test --release --locked -p reshiki-process-heap --no-default-features --features allocation-metrics --test global_allocator_unwind --target ${{ matrix.target }}
       - name: Test the Rust geometry crate with the locked COSMolKit source
         run: cargo test --locked -p reshiki-geometry --features cosmolkit-core/op-contracts-strict --target ${{ matrix.target }}
+      - name: Compare abbreviation layouts with the frozen RDKit captures
+        # The catalog lays groups out with the native depiction port at run
+        # time; this replaces the former per-platform capture workflow.
+        run: "cargo test --locked -p reshiki-model --lib --target ${{ matrix.target }} chemistry::abbreviations::"
       - name: Check native Rust naming backend and process portability
         run: cargo check --locked -p opsin -p reshiki-process --all-targets --target ${{ matrix.target }}
       - name: Test the native Rust naming backend and process limits on the matching host

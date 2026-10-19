@@ -76,70 +76,72 @@ impl std::fmt::Display for LabelAlignment {
     }
 }
 
-pub const PRESETS: &[&str] = &[
-    "OMe",
-    "OEt",
-    "Me",
-    "Et",
-    "nPr",
-    "iPr",
-    "nBu",
-    "tBu",
-    "Ph",
-    "Bn",
-    "Boc",
-    "Cbz",
-    "Fmoc",
-    "Ac",
-    "OAc",
-    "Bz",
-    "OBz",
-    "Ts",
-    "OTs",
-    "Ms",
-    "OMs",
-    "TMS",
-    "TBS",
-    "TBDPS",
-    "OTBDPS",
-    "CF3",
-    "CN",
-    "NO2",
-    "CO2H",
-    "CO2Me",
-    "CO2Et",
-    "OBn",
-    "PMB",
-    "OPMB",
-    "OTBS",
-    "TIPS",
-    "OTIPS",
-    "TES",
-    "OTES",
-    "Piv",
-    "OPiv",
-    "Lev",
-    "OLev",
-    "Tol",
-    "SPh",
-    "STol",
-    "SEt",
-    "NPhth",
-    "Troc",
-    "NHTroc",
-    "NHBoc",
-    "NHAc",
-    "Tr",
-    "OTr",
-    "MOM",
-    "OMOM",
-    "Tf",
-    "OTf",
-    "All",
-    "OAll",
-    "CCl3",
-    "OC(NH)CCl3",
-];
+/// Whether typing this text on an endpoint creates a real chemical group: a
+/// catalog label or alias, or one of the separately built common groups.
+pub fn is_group_label(text: &str) -> bool {
+    crate::common_groups::LABELS.contains(&text)
+        || crate::chemistry::abbreviations::lookup(text)
+            .ok()
+            .flatten()
+            .is_some()
+}
+
+/// Every typed spelling that creates a chemical group, catalog order first.
+pub fn group_labels() -> Vec<String> {
+    groups()
+        .flat_map(|group| std::iter::once(group.label).chain(group.aliases))
+        .collect()
+}
+
+/// One insertable chemical group, for menus and the command palette.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GroupInfo {
+    pub label: String,
+    pub reverse_label: String,
+    /// Other typed spellings that create the same group.
+    pub aliases: Vec<String>,
+    /// Full names and search terms, such as "tert-butyldimethylsilyl".
+    pub names: Vec<String>,
+    pub category: String,
+    /// Hill formula of the substituent, without the attachment.
+    pub formula: String,
+    /// Defined in the user's own catalog file.
+    pub user: bool,
+}
+
+/// The active group catalog (bundled plus user groups) followed by the
+/// separately built groups. Typing any `label` or alias on an endpoint, or
+/// passing it to `atom_text::apply`, creates that group.
+pub fn groups() -> impl Iterator<Item = GroupInfo> {
+    let catalog = crate::chemistry::abbreviations::presets().unwrap_or_else(|_| Vec::new().into());
+    let presets = catalog
+        .iter()
+        .map(|preset| GroupInfo {
+            label: preset.label.clone(),
+            reverse_label: preset.reverse_label.clone(),
+            aliases: preset.aliases.clone(),
+            names: preset.names.clone(),
+            category: preset.category.clone(),
+            formula: preset.formula.clone(),
+            user: preset.user,
+        })
+        .collect::<Vec<_>>();
+    let built = [
+        ("N3", "", "azido", "nitrogen", "N3"),
+        ("MgBr", "BrMg", "bromomagnesio", "metal", "BrMg"),
+    ]
+    .into_iter()
+    .map(|(label, reverse, name, category, formula)| GroupInfo {
+        label: label.into(),
+        reverse_label: reverse.into(),
+        aliases: Vec::new(),
+        names: vec![name.into()],
+        category: category.into(),
+        formula: formula.into(),
+        user: false,
+    });
+    presets.into_iter().chain(built)
+}
 
 // Build connectivity once for a batch of abbreviations. Only member adjacency
 // is visited by each check; unrelated page content is not rescanned per atom.

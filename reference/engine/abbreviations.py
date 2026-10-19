@@ -1,78 +1,24 @@
 """Chemical abbreviations retain their complete molecular graph and stable IDs."""
 
 import copy
+import json
 import math
+from pathlib import Path
 
 from rdkit import Chem
 from rdkit.Chem import rdAbbreviations, rdDepictor, rdqueries
 
 # The leading dummy is the sole outside attachment; it is not part of the label.
-PRESETS = {
-    "OMe": ("*OC", "MeO"),
-    "OEt": ("*OCC", "EtO"),
-    "Me": ("*C", ""),
-    "Et": ("*CC", ""),
-    "nPr": ("*CCC", ""),
-    "iPr": ("*C(C)C", ""),
-    "nBu": ("*CCCC", ""),
-    "tBu": ("*C(C)(C)C", ""),
-    "Ph": ("*c1ccccc1", ""),
-    "Bn": ("*Cc1ccccc1", ""),
-    "Boc": ("*C(=O)OC(C)(C)C", ""),
-    "Cbz": ("*C(=O)OCc1ccccc1", ""),
-    "Fmoc": ("*C(=O)OCC1c2ccccc2-c2ccccc21", ""),
-    "Ac": ("*C(C)=O", ""),
-    "OAc": ("*OC(C)=O", "AcO"),
-    "Bz": ("*C(=O)c1ccccc1", ""),
-    "OBz": ("*OC(=O)c1ccccc1", "BzO"),
-    "Ts": ("*S(=O)(=O)c1ccc(C)cc1", ""),
-    "OTs": ("*OS(=O)(=O)c1ccc(C)cc1", "TsO"),
-    "Ms": ("*S(C)(=O)=O", ""),
-    "OMs": ("*OS(C)(=O)=O", "MsO"),
-    "TMS": ("*[Si](C)(C)C", ""),
-    "TBS": ("*[Si](C)(C)C(C)(C)C", ""),
-    "TBDPS": ("*[Si](c1ccccc1)(c1ccccc1)C(C)(C)C", ""),
-    "OTBDPS": ("*O[Si](c1ccccc1)(c1ccccc1)C(C)(C)C", "TBDPSO"),
-    "CF3": ("*C(F)(F)F", "F3C"),
-    "CN": ("*C#N", "NC"),
-    "NO2": ("*[N+](=O)[O-]", "O2N"),
-    "CO2H": ("*C(=O)O", "HO2C"),
-    "CO2Me": ("*C(=O)OC", "MeO2C"),
-    "CO2Et": ("*C(=O)OCC", "EtO2C"),
-    # Carbohydrate and protecting-group nicknames. Phthaloyl (Phth) bonds
-    # twice to its nitrogen, so only the monovalent NPhth imide is defined.
-    "OBn": ("*OCc1ccccc1", "BnO"),
-    "PMB": ("*Cc1ccc(OC)cc1", ""),
-    "OPMB": ("*OCc1ccc(OC)cc1", "PMBO"),
-    "OTBS": ("*O[Si](C)(C)C(C)(C)C", "TBSO"),
-    "TIPS": ("*[Si](C(C)C)(C(C)C)C(C)C", ""),
-    "OTIPS": ("*O[Si](C(C)C)(C(C)C)C(C)C", "TIPSO"),
-    "TES": ("*[Si](CC)(CC)CC", ""),
-    "OTES": ("*O[Si](CC)(CC)CC", "TESO"),
-    "Piv": ("*C(=O)C(C)(C)C", ""),
-    "OPiv": ("*OC(=O)C(C)(C)C", "PivO"),
-    "Lev": ("*C(=O)CCC(C)=O", ""),
-    "OLev": ("*OC(=O)CCC(C)=O", "LevO"),
-    "Tol": ("*c1ccc(C)cc1", ""),
-    "SPh": ("*Sc1ccccc1", "PhS"),
-    "STol": ("*Sc1ccc(C)cc1", "TolS"),
-    "SEt": ("*SCC", "EtS"),
-    "NPhth": ("*N1C(=O)c2ccccc2C1=O", "PhthN"),
-    "Troc": ("*C(=O)OCC(Cl)(Cl)Cl", ""),
-    "NHTroc": ("*NC(=O)OCC(Cl)(Cl)Cl", "TrocHN"),
-    "NHBoc": ("*NC(=O)OC(C)(C)C", "BocHN"),
-    "NHAc": ("*NC(C)=O", "AcHN"),
-    "Tr": ("*C(c1ccccc1)(c1ccccc1)c1ccccc1", ""),
-    "OTr": ("*OC(c1ccccc1)(c1ccccc1)c1ccccc1", "TrO"),
-    "MOM": ("*COC", ""),
-    "OMOM": ("*OCOC", "MOMO"),
-    "Tf": ("*S(=O)(=O)C(F)(F)F", ""),
-    "OTf": ("*OS(=O)(=O)C(F)(F)F", "TfO"),
-    "All": ("*CC=C", ""),
-    "OAll": ("*OCC=C", "AllO"),
-    "CCl3": ("*C(Cl)(Cl)Cl", "Cl3C"),
-    "OC(NH)CCl3": ("*OC(=N)C(Cl)(Cl)Cl", "Cl3CC(NH)O"),
-}
+# The production catalog is the single source: label -> (SMILES, reverse label).
+CATALOG = json.loads(
+    (
+        Path(__file__).resolve().parents[2]
+        / "crates/model/src/chemistry/abbreviations/catalog.json"
+    ).read_text(encoding="utf-8")
+)["groups"]
+PRESETS = {group["label"]: (group["smiles"], group.get("reverse", "")) for group in CATALOG}
+# Groups that Contract all skips unless they are requested by label.
+NAMED_ONLY = {group["label"] for group in CATALOG if not group.get("contract", True)}
 
 
 def validate(doc):
@@ -172,7 +118,11 @@ def arbitrate(mol, definitions, withdrawn):
 
 
 def find(doc, mol, selection, label=None):
-    available = [(name, *data) for name, data in PRESETS.items() if not label or name == label]
+    available = [
+        (name, *data)
+        for name, data in PRESETS.items()
+        if (name == label if label else name not in NAMED_ONLY)
+    ]
     if not available:
         raise ValueError("Unknown abbreviation")
     # Prefer complete protecting groups over smaller groups within them.

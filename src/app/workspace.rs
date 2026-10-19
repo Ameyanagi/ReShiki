@@ -1906,11 +1906,9 @@ impl App {
             .iter()
             .filter(|g| g.members.iter().any(|id| self.tab.selected.contains(id)))
             .collect();
-        let choices: Vec<String> = reshiki::abbreviations::PRESETS
-            .iter()
-            .chain(reshiki::common_groups::LABELS.iter())
-            .chain(reshiki::ligands::LABELS)
-            .map(|s| (*s).into())
+        let choices: Vec<String> = reshiki::abbreviations::group_labels()
+            .into_iter()
+            .chain(reshiki::ligands::LABELS.iter().map(|s| (*s).into()))
             .collect();
         // Disabled commands say what they need.
         let item = |label, message: Message, enabled: bool, hint, reason| {

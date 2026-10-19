@@ -141,30 +141,23 @@ fn replacement_documents_and_final_chemistry_match_original_worker() -> anyhow::
     let mut lines = BufReader::new(child.stdout.take().context("Missing oracle output")?).lines();
     let header: Value = serde_json::from_str(&lines.next().context("Missing geometry header")??)?;
     assert_eq!(header["rdkit_version"], RDKIT_VERSION);
-    let data = match (std::env::consts::OS, std::env::consts::ARCH) {
-        ("macos", "aarch64") => {
-            include_str!("../crates/model/src/chemistry/abbreviations/geometry-macos-aarch64.json")
-        }
-        ("linux", "x86_64") => {
-            include_str!("../crates/model/src/chemistry/abbreviations/geometry-linux-x86_64.json")
-        }
-        ("linux", "aarch64") => {
-            include_str!("../crates/model/src/chemistry/abbreviations/geometry-linux-aarch64.json")
-        }
-        ("windows", "x86_64") => {
-            include_str!("../crates/model/src/chemistry/abbreviations/geometry-windows-x86_64.json")
-        }
-        ("windows", "aarch64") => {
-            include_str!(
-                "../crates/model/src/chemistry/abbreviations/geometry-windows-aarch64.json"
-            )
-        }
-        target => anyhow::bail!("Unsupported reference ABI: {target:?}"),
-    };
-    let geometry: Value = serde_json::from_str(data)?;
+    // The catalog lays out each group with ReShiki's own depiction port; it
+    // must reproduce a fresh RDKit Compute2DCoords of the same SMILES.
+    let catalog = abbreviations::presets()?;
+    let templates = catalog
+        .iter()
+        .map(|preset| {
+            Ok(serde_json::json!({
+                "label": preset.label,
+                "smiles": preset.smiles,
+                "positions": preset.positions()?,
+            }))
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    let geometry = serde_json::json!({"rdkit_version": RDKIT_VERSION, "templates": templates});
     assert!(
         header == geometry,
-        "Pinned geometry changed: {:?}",
+        "Own depiction differs from RDKit: {:?}",
         difference(&header, &geometry, "geometry")
     );
     let mut count = 0;
@@ -283,7 +276,7 @@ async fn replacement_uses_the_actual_request_and_response_numeric_contract() -> 
     let mut cases = 0;
     let mut input_regressions = 0;
     let mut output_regressions = 0;
-    for preset in abbreviations::presets()? {
+    for preset in abbreviations::presets()?.iter() {
         for (origin, outside) in [
             ((0.1, -0.2), (25.3, 33.4)),
             ((21.25, -17.5), (-3.95, 16.1)),
