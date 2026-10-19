@@ -89,6 +89,49 @@ impl Plane {
             .then_some(plane)
     }
 
+    /// Least-squares plane through a slightly warped 3D ring, such as an
+    /// optimized fullerene face whose atoms miss the exact fit by more than
+    /// its tolerance. Without it, rear cage rings fall back to bond index
+    /// order and can cut front bonds. A ring projected to a line keeps its
+    /// mean depth; a ring without depth variation stays undecided.
+    pub(super) fn least_squares(doc: &Document, ids: &[u64]) -> Option<Self> {
+        let atoms: Option<Vec<_>> = ids.iter().map(|id| doc.atom(*id)).collect();
+        let atoms = atoms?;
+        let n = atoms.len() as f32;
+        if atoms.len() < 3 {
+            return None;
+        }
+        let origin = Point::new(
+            atoms.iter().map(|a| a.position.x).sum::<f32>() / n,
+            atoms.iter().map(|a| a.position.y).sum::<f32>() / n,
+        );
+        let z = atoms.iter().map(|a| a.depth).sum::<f32>() / n;
+        if atoms.iter().all(|a| (a.depth - z).abs() < 0.001) {
+            return None;
+        }
+        let (mut xx, mut xy, mut yy, mut xz, mut yz) = (0., 0., 0., 0., 0.);
+        for a in &atoms {
+            let (x, y, w) = (
+                a.position.x - origin.x,
+                a.position.y - origin.y,
+                a.depth - z,
+            );
+            xx += x * x;
+            xy += x * y;
+            yy += y * y;
+            xz += x * w;
+            yz += y * w;
+        }
+        let det = xx * yy - xy * xy;
+        // Only a ring collapsed to a line has no depth gradient to fit.
+        let (dx, dy) = if det > 1e-6 * (xx + yy).powi(2) {
+            ((xz * yy - yz * xy) / det, (yz * xx - xz * xy) / det)
+        } else {
+            (0., 0.)
+        };
+        Some(Self { origin, z, dx, dy })
+    }
+
     pub(super) fn at(&self, p: Point) -> f32 {
         self.z + (p.x - self.origin.x) * self.dx + (p.y - self.origin.y) * self.dy
     }
