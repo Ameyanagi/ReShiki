@@ -641,3 +641,127 @@ fn selection_and_paste_preserve_manual_label_scripts() {
     assert_eq!(pasted.display, source.atom(id).unwrap().display);
     destination.validate().unwrap();
 }
+
+#[test]
+fn analysis_caps_fixed_hydrogen_atoms_only_at_cut_bonds() {
+    // ChemDraw labels carry NumHydrogens, imported as fixed hydrogens (#334):
+    // formamide, H2N-CHO, with every count fixed.
+    let mut doc = Document::default();
+    let n = doc.add_atom("N", Point::default());
+    let c = doc.add_atom("C", Point::new(42., 0.));
+    let o = doc.add_atom("O", Point::new(84., 0.));
+    doc.add_bond(n, c, 1, "plain");
+    doc.add_bond(c, o, 2, "plain");
+    for atom in &mut doc.atoms {
+        atom.no_implicit = true;
+        atom.explicit_h = [(n, 2), (c, 1)]
+            .into_iter()
+            .find_map(|(id, h)| (id == atom.id).then_some(h))
+            .unwrap_or(0);
+    }
+    // (hydrogens, radical electrons) per atom.
+    let analyse = |part: &Document| {
+        let molecule = crate::chemistry::document::prepare(part).unwrap();
+        let state = &molecule.state;
+        state
+            .graph
+            .atoms
+            .iter()
+            .zip(&state.valences)
+            .map(|(a, v)| {
+                (
+                    u32::from(a.explicit_hydrogens) + v.implicit_hydrogens,
+                    a.radical_electrons,
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(analyse(&analysis_document(&doc, &[n])), [(3, 0)]);
+    let part = analysis_document(&doc, &[c, o]);
+    assert_eq!(analyse(&part), [(2, 0), (0, 0)]);
+    assert_eq!(part.atom(o).unwrap(), doc.atom(o).unwrap());
+    // A cut dative bond removes no donor valence, so its count is unchanged.
+    let metal = doc.add_atom("Co", Point::new(0., 42.));
+    doc.add_bond(n, metal, 5, "plain");
+    doc.atom_mut(metal).unwrap().no_implicit = true;
+    let part = analysis_document(&doc, &[n, c, o]);
+    assert_eq!(part.atom(n).unwrap(), doc.atom(n).unwrap());
+    assert_eq!(analysis_document(&doc, &[metal]).atoms[0].explicit_h, 1);
+    assert_eq!(analyse(&analysis_document(&doc, &[n, c, o]))[0], (2, 0));
+
+    // A fixed count that leaves a radical keeps it: a typed CH2 end of
+    // ethane is an ethyl radical, so alone it is a methyl radical.
+    let mut ethyl = Document::default();
+    let a = ethyl.add_atom("C", Point::default());
+    let b = ethyl.add_atom("C", Point::new(42., 0.));
+    ethyl.add_bond(a, b, 1, "plain");
+    let typed = ethyl.atom_mut(b).unwrap();
+    (typed.no_implicit, typed.explicit_h) = (true, 2);
+    assert_eq!(analyse(&ethyl), [(3, 0), (2, 1)]);
+    assert_eq!(analyse(&analysis_document(&ethyl, &[b])), [(3, 1)]);
+
+    // A fixed NH3 singly bonded to a metal is a dative ligand after
+    // preparation, so it gains no hydrogen when cut.
+    let mut ammine = Document::default();
+    let n = ammine.add_atom("N", Point::default());
+    let metal = ammine.add_atom("Co", Point::new(42., 0.));
+    ammine.add_bond(n, metal, 1, "plain");
+    let ligand = ammine.atom_mut(n).unwrap();
+    (ligand.no_implicit, ligand.explicit_h) = (true, 3);
+    assert_eq!(analyse(&analysis_document(&ammine, &[n])), [(3, 0)]);
+    // A fixed CH2 on a metal keeps a covalent bond and its radical.
+    let methylene = ammine.add_atom("C", Point::new(84., 0.));
+    ammine.add_bond(metal, methylene, 1, "plain");
+    let carbon = ammine.atom_mut(methylene).unwrap();
+    (carbon.no_implicit, carbon.explicit_h) = (true, 2);
+    assert_eq!(analyse(&analysis_document(&ammine, &[methylene])), [(3, 1)]);
+    // Only one bond of a bridging chloride becomes dative.
+    let chloride = ammine.add_atom("Cl", Point::new(42., 42.));
+    let iron = ammine.add_atom("Fe", Point::new(84., 42.));
+    ammine.add_bond(metal, chloride, 1, "plain");
+    ammine.add_bond(chloride, iron, 1, "plain");
+    ammine.atom_mut(chloride).unwrap().no_implicit = true;
+    assert_eq!(analyse(&analysis_document(&ammine, &[chloride])), [(1, 0)]);
+    // A neutral pentavalent nitro N on a metal is reinterpreted by
+    // preparation, so capping it would exceed its valence: it recalculates.
+    let nitro = ammine.add_atom("N", Point::new(0., 84.));
+    let oxygens = [(-42., 126.), (42., 126.)].map(|(x, y)| ammine.add_atom("O", Point::new(x, y)));
+    ammine.add_bond(metal, nitro, 1, "plain");
+    for oxygen in oxygens {
+        ammine.add_bond(nitro, oxygen, 2, "plain");
+    }
+    for id in [nitro, oxygens[0], oxygens[1]] {
+        ammine.atom_mut(id).unwrap().no_implicit = true;
+    }
+    let part = analysis_document(&ammine, &[nitro, oxygens[0]]);
+    assert_eq!(analyse(&part), [(1, 0), (0, 0)]);
+    // A fixed methylamine ligand cut from its carbon stays a dative H3N->Co.
+    let amine = ammine.add_atom("N", Point::new(-42., 0.));
+    let methyl = ammine.add_atom("C", Point::new(-84., 0.));
+    ammine.add_bond(amine, metal, 1, "plain");
+    ammine.add_bond(amine, methyl, 1, "plain");
+    let ligand = ammine.atom_mut(amine).unwrap();
+    (ligand.no_implicit, ligand.explicit_h) = (true, 2);
+    let part = analysis_document(&ammine, &[amine, metal]);
+    assert_eq!(part.atom(amine).unwrap().explicit_h, 3);
+    crate::chemistry::document::prepare(&part).unwrap();
+
+    // Aromatic bonds have no whole valence: a typed NH in aromatic pyrrole
+    // recalculates its hydrogens when cut.
+    let mut pyrrole = Document::default();
+    let ring: Vec<_> = (0..5)
+        .map(|i| {
+            let angle = std::f32::consts::TAU * i as f32 / 5.;
+            pyrrole.add_atom(
+                if i == 0 { "N" } else { "C" },
+                Point::new(36. * angle.cos(), 36. * angle.sin()),
+            )
+        })
+        .collect();
+    for (i, &a) in ring.iter().enumerate() {
+        pyrrole.add_bond(a, ring[(i + 1) % 5], 4, "plain");
+    }
+    let nh = pyrrole.atom_mut(ring[0]).unwrap();
+    (nh.no_implicit, nh.explicit_h) = (true, 1);
+    assert_eq!(analyse(&analysis_document(&pyrrole, &[ring[0]])), [(3, 0)]);
+}
