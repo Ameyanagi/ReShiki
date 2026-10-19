@@ -415,13 +415,13 @@ impl App {
             },
             Run::Group(label) => {
                 match target.atom() {
-                    Some(id) => self.label_atom(id, label, Mode::Group),
+                    Some(id) => self.label_atom(id, &label, Mode::Group),
                     None => {
                         // A lone group at the center: one carbon, labeled as the
                         // group hotkey labels an atom, committed as one step.
                         let mut doc = self.tab.doc.clone();
                         let id = doc.add_atom("C", self.tab.camera.center);
-                        let result = reshiki::hotkeys::label_edit(&doc, id, label, Mode::Group)
+                        let result = reshiki::hotkeys::label_edit(&doc, id, &label, Mode::Group)
                             .map(|(doc, id)| (doc, vec![id]));
                         if self.commit_hotkey(result, &format!("{label} added")) {
                             self.tab.labels_dirty = true;

@@ -110,7 +110,7 @@ pub(crate) enum Run {
     /// Relabel the target atom, or choose the atom tool for this element.
     Element(&'static str),
     /// Label the target atom as this group, or add the group at the center.
-    Group(&'static str),
+    Group(String),
     Ring(Ring),
     /// A library template by index and its id, checked when run.
     Template(usize, String),
@@ -328,40 +328,6 @@ const ATOM_KEYS: &[(&str, &str, &str, &str)] = &[
     ),
 ];
 
-const GROUP_NAMES: &[(&str, &str)] = &[
-    ("OMe", "methoxy methyl ether"),
-    ("OEt", "ethoxy ethyl ether"),
-    ("Me", "methyl"),
-    ("Et", "ethyl"),
-    ("nPr", "n-propyl propyl"),
-    ("iPr", "isopropyl"),
-    ("nBu", "n-butyl butyl"),
-    ("tBu", "tert-butyl t-butyl"),
-    ("Ph", "phenyl aryl"),
-    ("Bn", "benzyl"),
-    ("Boc", "tert-butoxycarbonyl protecting group"),
-    ("Cbz", "benzyloxycarbonyl z protecting group"),
-    ("Fmoc", "fluorenylmethoxycarbonyl protecting group"),
-    ("Ac", "acetyl"),
-    ("OAc", "acetoxy acetate"),
-    ("Bz", "benzoyl"),
-    ("OBz", "benzoyloxy benzoate"),
-    ("Ts", "tosyl toluenesulfonyl"),
-    ("OTs", "tosylate"),
-    ("Ms", "mesyl methanesulfonyl"),
-    ("OMs", "mesylate"),
-    ("TMS", "trimethylsilyl"),
-    ("TBS", "tert-butyldimethylsilyl tbdms"),
-    ("TBDPS", "tert-butyldiphenylsilyl"),
-    ("OTBDPS", "tert-butyldiphenylsilyl ether"),
-    ("CF3", "trifluoromethyl"),
-    ("CN", "cyano nitrile"),
-    ("NO2", "nitro"),
-    ("CO2H", "carboxylic acid carboxyl cooh"),
-    ("CO2Me", "methyl ester"),
-    ("CO2Et", "ethyl ester"),
-];
-
 /// English element name for `symbol`, read from OPSIN's element token list
 /// (which names every element except hydrogen).
 fn element_name(symbol: &str) -> Option<String> {
@@ -462,22 +428,24 @@ fn inserts(app: &App) -> Vec<Command> {
             Message::Example(example.1),
         ));
     }
-    for label in reshiki::abbreviations::PRESETS {
-        let names = GROUP_NAMES
-            .iter()
-            .find(|(l, _)| l == label)
-            .map_or("", |(_, names)| names);
+    for group in reshiki::abbreviations::groups() {
+        let keys = key_list(|k| {
+            reshiki::hotkeys::atom_label(k).map(|(l, _)| l) == Some(group.label.as_str())
+        });
         list.push(
             Command::new(
-                *label,
+                group.label.clone(),
                 Insert,
                 "Label the selected or pointed atom as this group, or add it at the center",
-                &format!("group abbreviation substituent {names}"),
-                Run::Group(label),
+                &format!(
+                    "group abbreviation substituent {} {} {}",
+                    group.category,
+                    group.names.join(" "),
+                    group.aliases.join(" ")
+                ),
+                Run::Group(group.label),
             )
-            .keys(key_list(|k| {
-                reshiki::hotkeys::atom_label(k).map(|(l, _)| l) == Some(label)
-            })),
+            .keys(keys),
         );
     }
     for symbol in reshiki::editing::ELEMENTS {
