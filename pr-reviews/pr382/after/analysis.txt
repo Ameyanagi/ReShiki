@@ -1,0 +1,4 @@
+morpholino: formula=CH3* smiles=*C mass=15.035
+2-thienyl: formula=CH3* smiles=*C mass=15.035
+MeO: formula=C2H6O smiles=COC mass=46.069
+NC: formula=C2H3N smiles=CC#N mass=41.053

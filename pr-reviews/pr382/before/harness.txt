@@ -1,0 +1,19 @@
+== morpholino
+editor description: Text on a dummy atom; existing bonds stay connected.
+editor suggestion: (none; origin/main has no suggestion)
+Apply: atom element="*" variable=Some("morpholino")
+saved: morpholino.rsk
+== 2-thienyl
+editor description: Text on a dummy atom; existing bonds stay connected.
+editor suggestion: (none; origin/main has no suggestion)
+Apply: ERROR A link node requires a finite number range
+== MeO
+editor description: Text on a dummy atom; existing bonds stay connected.
+editor suggestion: (none; origin/main has no suggestion)
+Apply: atom element="*" variable=Some("MeO")
+saved: MeO.rsk
+== NC
+editor description: Text on a dummy atom; existing bonds stay connected.
+editor suggestion: (none; origin/main has no suggestion)
+Apply: atom element="*" variable=Some("NC")
+saved: NC.rsk

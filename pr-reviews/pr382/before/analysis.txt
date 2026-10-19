@@ -1,0 +1,4 @@
+morpholino: formula=CH3* smiles=*C mass=15.035
+2-thienyl: no drawing (Apply failed, see harness.txt)
+MeO: formula=CH3* smiles=*C mass=15.035
+NC: formula=CH3* smiles=*C mass=15.035

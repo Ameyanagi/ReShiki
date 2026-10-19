@@ -1,0 +1,20 @@
+== morpholino
+editor description: Text on a dummy atom; existing bonds stay connected.
+editor suggestion: Some("Did you mean Morph?")
+Apply: atom element="*" variable=Some("morpholino")
+saved: morpholino.rsk
+== 2-thienyl
+editor description: Text on a dummy atom; existing bonds stay connected.
+editor suggestion: Some("Did you mean 2-Thienyl?")
+Apply: atom element="*" variable=Some("2-thienyl")
+saved: 2-thienyl.rsk
+== MeO
+editor description: A real chemical group. Expand it later from Abbreviations. Requires a single-bond endpoint.
+editor suggestion: None
+Apply: group label="OMe" reverse_label="MeO" members=2
+saved: MeO.rsk
+== NC
+editor description: A real chemical group. Expand it later from Abbreviations. Requires a single-bond endpoint.
+editor suggestion: None
+Apply: group label="CN" reverse_label="NC" members=2
+saved: NC.rsk
