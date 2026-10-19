@@ -12,7 +12,7 @@ fn failed_embedding_ids_are_skipped_without_losing_valid_conformers() {
 
 #[test]
 fn retries_require_failure_evidence_and_preserve_successful_ensembles() {
-    let mut parameters = EmbedParameters::etkdg_v3();
+    let mut parameters = EmbedParams::etkdg_v3();
     parameters.failures = vec![0; EmbedFailureCause::EndOfEnum as usize];
     parameters.failures[EmbedFailureCause::ExceededTimeout as usize] = 1;
     assert_eq!(

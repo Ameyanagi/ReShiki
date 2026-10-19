@@ -2,11 +2,11 @@
 use super::{
     ForceField, MAX_COORDINATES, Operation, Request, Response, cage::Cage, valid_coordinate,
 };
-use cosmolkit_core::{
-    AddHsParams, AtomSpec, BondOrder, BondSpec, BondStereo, ChiralTag, Element, EmbedFailureCause,
-    EmbedMultipleConfsResult, EmbedParameters, MmffMolProperties, MmffVariant, MolecularForceField,
-    Molecule, MoleculeBuilder, embed_multiple_confs_result, mmff_get_molecule_force_field,
-    uff_get_molecule_force_field, uff_has_all_molecule_params,
+use cosmolkit::{
+    AddHsParams, AtomId, AtomSpec, BondOrder, BondSpec, BondStereo, ChiralTag, Element,
+    EmbedFailureCause, EmbedMultipleConfsResult, EmbedParams, ForceFieldMinimizeParams,
+    MmffForceFieldParams, MmffPropertiesParams, MmffVariant, MolecularForceField, Molecule,
+    MoleculeBuilder, PropertyValue, StructureTagParams, UffForceFieldParams,
 };
 
 type Result<T> = std::result::Result<T, String>;
@@ -53,7 +53,8 @@ fn molecule(request: &Request) -> Result<Molecule> {
             .with_no_implicit(atom.no_implicit)
             .with_aromatic(atom.aromatic)
             .with_chiral_tag(tag)
-            .with_prop(ORIGINAL_INDEX, index.to_string());
+            .with_prop(ORIGINAL_INDEX, index as u32)
+            .map_err(|error| error.to_string())?;
         if atom.isotope != 0 {
             spec = spec.with_isotope(atom.isotope as u16);
         }
@@ -120,7 +121,7 @@ fn molecule(request: &Request) -> Result<Molecule> {
 
 fn with_hydrogens(mol: &Molecule, original_count: usize, add_coords: bool) -> Result<Molecule> {
     let mol = mol
-        .with_hydrogens_with_params(AddHsParams {
+        .with_hydrogens_with_params(&AddHsParams {
             add_coords,
             ..Default::default()
         })
@@ -140,7 +141,7 @@ fn validate_original_order(mol: &Molecule, original_count: usize) -> Result<()> 
     )?;
     for (index, atom) in mol.atoms().iter().take(original_count).enumerate() {
         require(
-            atom.prop(ORIGINAL_INDEX) == Some(index.to_string().as_str()),
+            matches!(atom.prop(ORIGINAL_INDEX), Some(PropertyValue::UInt(value)) if *value as usize == index),
             "hydrogen expansion changed original atom ordering",
         )?;
     }
@@ -173,25 +174,29 @@ fn hydrogen_parents(mol: &Molecule, original_count: usize) -> Result<Vec<usize>>
     Ok(result)
 }
 
-fn prepare_field_graph(mol: Molecule, field: ForceField) -> Result<Molecule> {
+fn check_field_parameters(mol: &Molecule, field: ForceField) -> Result<()> {
     if field == ForceField::UFF {
         require(
-            uff_has_all_molecule_params(&mol).map_err(|error| error.to_string())?,
+            mol.uff_has_all_molecule_params()
+                .map_err(|error| error.to_string())?,
             "UFF parameters are unavailable for this molecule",
-        )?;
-        Ok(mol)
+        )
     } else {
-        let properties =
-            MmffMolProperties::new(&mol, variant(field).as_rdkit_str(), 0).map_err(|error| {
+        // COSMolKit 0.5 keeps MMFF's kekulized, MMFF-aromatic graph private:
+        // each field build prepares it on a detached copy. ETKDG and cage
+        // admission therefore see the sanitized graph, as with UFF and as in
+        // RDKit's usual embed-then-MMFF workflow.
+        let properties = mol
+            .mmff_properties_with_params(&MmffPropertiesParams {
+                mmff_variant: variant(field).as_rdkit_str().into(),
+            })
+            .map_err(|error| {
                 format!("MMFF parameters are unavailable for this molecule: {error}")
             })?;
         require(
             properties.is_valid(),
             "MMFF parameters are unavailable for this molecule",
-        )?;
-        // MMFF prepares its own aromaticity graph; ETKDG and the field must use
-        // that same calculation graph. It never leaves this worker.
-        Ok(properties.molecule)
+        )
     }
 }
 
@@ -203,28 +208,25 @@ fn variant(field: ForceField) -> MmffVariant {
     }
 }
 
+// Thresholds are explicit: COSMolKit's defaults cut off nonbonded terms
+// (MMFF 100, UFF 10), while this solver keeps every interaction.
 fn force_field(mol: &Molecule, field: ForceField) -> Result<MolecularForceField> {
-    let result = if field == ForceField::UFF {
-        uff_get_molecule_force_field(mol, f64::INFINITY, 0, true)
-            .map_err(|error| error.to_string())?
+    if field == ForceField::UFF {
+        mol.uff_force_field_with_params(&UffForceFieldParams::new(None, f64::INFINITY, true))
+            .map_err(|error| format!("UFF force field is unavailable for this molecule: {error}"))
     } else {
-        mmff_get_molecule_force_field(mol, variant(field), f64::INFINITY, 0, true)
-            .map_err(|error| error.to_string())?
-    };
-    result.ok_or_else(|| {
-        format!(
-            "{} parameters are unavailable for this molecule",
-            if field == ForceField::UFF {
-                "UFF"
-            } else {
-                "MMFF"
-            }
-        )
-    })
+        mol.mmff_force_field_with_params(&MmffForceFieldParams::new(
+            None,
+            variant(field).as_rdkit_str().into(),
+            f64::INFINITY,
+            true,
+        ))
+        .map_err(|error| format!("MMFF force field is unavailable for this molecule: {error}"))
+    }
 }
 
-fn energy(field: &mut MolecularForceField) -> Result<f64> {
-    let value = field.energy();
+fn energy(field: &MolecularForceField) -> Result<f64> {
+    let value = field.energy().map_err(|error| error.to_string())?;
     require(value.is_finite(), "force field produced a nonfinite energy")?;
     Ok(value)
 }
@@ -279,9 +281,12 @@ impl StereoExpectation {
         validate_coordinates(mol, coordinates)?;
         if !self.atoms.is_empty() {
             let derived = mol
-                .with_only_3d_conformer(coordinates.to_vec(), true)
+                .with_only_3d_conformer(rows(coordinates))
                 .map_err(|error| error.to_string())?
-                .with_chiral_tags_from_structure(0, true)
+                .with_chiral_tags_from_structure_with_params(&StructureTagParams {
+                    conformer_id: 0,
+                    replace_existing_tags: true,
+                })
                 .map_err(|error| error.to_string())?;
             for &(index, expected) in &self.atoms {
                 require(
@@ -311,6 +316,10 @@ impl StereoExpectation {
         }
         Ok(())
     }
+}
+
+fn rows(coordinates: &[[f64; 3]]) -> Vec<Vec<f64>> {
+    coordinates.iter().map(|point| point.to_vec()).collect()
 }
 
 fn sub(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
@@ -419,7 +428,7 @@ fn existing_coordinates(
         "starting geometry is flat, dimensionless, or has insufficient 3D extent",
     )?;
     let positioned = original
-        .with_only_3d_conformer(request.coordinates.clone(), true)
+        .with_only_3d_conformer(rows(&request.coordinates))
         .map_err(|error| error.to_string())?;
     let expanded = with_hydrogens(&positioned, request.atoms.len(), true)?;
     require(
@@ -442,21 +451,21 @@ fn existing_coordinates(
     Ok(coordinates)
 }
 
-fn embedding_parameters(request: &Request) -> EmbedParameters {
-    let mut parameters = EmbedParameters::etkdg_v3();
+fn embedding_parameters(request: &Request) -> EmbedParams {
+    let mut parameters = EmbedParams::etkdg_v3();
     parameters.random_seed = request.seed;
     parameters.num_threads = 1;
     parameters.max_iterations = 100;
     parameters.timeout = 10;
     parameters.enforce_chirality = true;
     parameters.prune_rms_thresh = 0.1;
-    parameters.clear_confs = true;
+    parameters.clear_conformers = true;
     parameters.enable_sequential_random_seeds = true;
     parameters.track_failures = true;
     parameters
 }
 
-fn embedding_failures(parameters: &EmbedParameters) -> String {
+fn embedding_failures(parameters: &EmbedParams) -> String {
     parameters
         .failures
         .iter()
@@ -480,7 +489,7 @@ enum EmbeddingRetry {
 }
 
 fn embedding_retry(
-    parameters: &EmbedParameters,
+    parameters: &EmbedParams,
     ids: &[i32],
     conformers: u32,
 ) -> Option<EmbeddingRetry> {
@@ -518,7 +527,7 @@ fn embed(
     request: &Request,
     cage: Option<&Cage>,
     diagnostics: &mut Vec<String>,
-) -> Result<(EmbedMultipleConfsResult, EmbedParameters, &'static str)> {
+) -> Result<(EmbedMultipleConfsResult, &'static str)> {
     let mut parameters = embedding_parameters(request);
     let mut method = "Rust ETKDGv3";
     let mut calls = 0;
@@ -530,34 +539,37 @@ fn embed(
         let mut trial = parameters.clone();
         trial.max_iterations = 1;
         trial.prune_rms_thresh = -1.;
-        let result =
-            embed_multiple_confs_result(mol, 1, &mut trial).map_err(|error| error.to_string())?;
+        // The embedder returns its failure counters in the run parameters.
+        let trial = mol
+            .with_3d_conformers_result_with_params(1, &trial)
+            .map_err(|error| error.to_string())?;
         calls += 1;
-        let planarity_rejected = result.conf_ids.is_empty()
-            && trial.failures[EmbedFailureCause::EtkMinimization as usize] == 1;
+        let planarity_rejected = trial.conf_ids.is_empty()
+            && trial.params.failures[EmbedFailureCause::EtkMinimization as usize] == 1;
         if planarity_rejected {
             parameters.use_basic_knowledge = false;
             method = "Rust cage ETDG";
             diagnostics.push(format!(
                 "initialization=cage-ETDG; closed sp2 carbon cage; ETKDGv3 planarity trial rejected; trial_attempt_limit=1; trial_failure_counters={}; basic_knowledge=false; experimental_torsions=true",
-                embedding_failures(&trial)
+                embedding_failures(&trial.params)
             ));
         }
     }
     loop {
         calls += 1;
-        let embedded = embed_multiple_confs_result(mol, conformers, &mut parameters)
+        let embedded = mol
+            .with_3d_conformers_result_with_params(conformers, &parameters)
             .map_err(|error| error.to_string())?;
         // Each call retains its 100-attempt/10-second limits; the disposable
         // worker also bounds the entire operation. Count the cage pilot here.
         if calls >= 3 {
-            return Ok((embedded, parameters, method));
+            return Ok((embedded, method));
         }
-        match embedding_retry(&parameters, &embedded.conf_ids, conformers) {
+        match embedding_retry(&embedded.params, &embedded.conf_ids, conformers) {
             Some(EmbeddingRetry::WithoutBasicKnowledge) => {
                 diagnostics.push(format!(
                     "initialization=ETDG-fallback; requested={}; actual_count={conformers}; seed={}; prior_embedding_failure_counters={}; basic_knowledge=false; experimental_torsions=true; embedding_call_limit=3",
-                    request.conformers, request.seed, embedding_failures(&parameters)
+                    request.conformers, request.seed, embedding_failures(&embedded.params)
                 ));
                 parameters.use_basic_knowledge = false;
                 method = "Rust ETDG fallback";
@@ -565,14 +577,14 @@ fn embed(
             Some(EmbeddingRetry::SingleConformer) => {
                 diagnostics.push(format!(
                     "initialization=single-conformer; requested={}; prior_actual_count={conformers}; actual_count=1; seed={}; prior_embedding_failure_counters={}; embedding_call_limit=3",
-                    request.conformers, request.seed, embedding_failures(&parameters)
+                    request.conformers, request.seed, embedding_failures(&embedded.params)
                 ));
                 conformers = 1;
                 // With no existing conformers, this has no pruning effect and
                 // avoids needless symmetry matching for a sole retry candidate.
                 parameters.prune_rms_thresh = -1.;
             }
-            None => return Ok((embedded, parameters, method)),
+            None => return Ok((embedded, method)),
         }
     }
 }
@@ -594,13 +606,19 @@ fn minimized(
 ) -> Result<Candidate> {
     expected.validate(mol, coordinates)?;
     let positioned = mol
-        .with_only_3d_conformer(coordinates.to_vec(), true)
+        .with_only_3d_conformer(rows(coordinates))
         .map_err(|error| error.to_string())?;
     let mut field = force_field(&positioned, request.field)?;
+    let fixed: Vec<_> = request
+        .fixed_atoms
+        .iter()
+        .copied()
+        .map(AtomId::new)
+        .collect();
     field
-        .set_fixed_points(&request.fixed_atoms)
+        .set_fixed_atoms_(&fixed)
         .map_err(|error| error.to_string())?;
-    let initial = energy(&mut field)?;
+    let initial = energy(&field)?;
     if let Some(origin) = origin {
         require(
             request.fixed_atoms.is_empty(),
@@ -611,14 +629,18 @@ fn minimized(
             .map(|&point| sub(point, origin))
             .collect();
         field
-            .set_positions(&centered)
+            .set_positions_(&centered)
             .map_err(|error| error.to_string())?;
     }
-    let status = field
-        .minimize(request.max_iterations as usize, 1e-4, 1e-6)
+    let outcome = field
+        .minimize_with_params_(&ForceFieldMinimizeParams::new(
+            request.max_iterations,
+            1e-4,
+            1e-6,
+        ))
         .map_err(|error| error.to_string())?;
     require(
-        status == 0 || status == 1,
+        outcome.iterations() <= request.max_iterations,
         "unexpected force-field optimizer status",
     )?;
     if let Some(origin) = origin {
@@ -628,10 +650,10 @@ fn minimized(
             .map(|point| std::array::from_fn(|axis| point[axis] + origin[axis]))
             .collect();
         field
-            .set_positions(&restored)
+            .set_positions_(&restored)
             .map_err(|error| error.to_string())?;
     }
-    let final_energy = energy(&mut field)?;
+    let final_energy = energy(&field)?;
     require(
         final_energy <= initial + 1e-6,
         "force-field minimization increased the energy",
@@ -652,7 +674,7 @@ fn minimized(
         coordinates: result,
         initial_energy: initial,
         energy: final_energy,
-        converged: status == 0,
+        converged: outcome.converged(),
     })
 }
 
@@ -660,7 +682,7 @@ pub(super) fn solve(request: &Request) -> Result<Response> {
     let original = molecule(request)?;
     let mol = with_hydrogens(&original, request.atoms.len(), false)?;
     let expected = StereoExpectation::new(&mol)?;
-    let mol = prepare_field_graph(mol, request.field)?;
+    check_field_parameters(&mol, request.field)?;
     let cage = Cage::from_molecule(&mol);
     validate_original_order(&mol, request.atoms.len())?;
     let parents = hydrogen_parents(&mol, request.atoms.len())?;
@@ -716,9 +738,8 @@ pub(super) fn solve(request: &Request) -> Result<Response> {
                 )),
             }
         }
-        let (embedded, parameters, method) =
-            embed(&mol, request, cage.as_ref(), &mut response.diagnostics)?;
-        let failures = embedding_failures(&parameters);
+        let (embedded, method) = embed(&mol, request, cage.as_ref(), &mut response.diagnostics)?;
+        let failures = embedding_failures(&embedded.params);
         let embedded_count = valid_conformer_ids(&embedded.conf_ids).count();
         let failed_embedding_ids = embedded.conf_ids.len() - embedded_count;
         require(
@@ -801,13 +822,16 @@ pub(super) fn solve(request: &Request) -> Result<Response> {
             cage.validate(&mol, &request.coordinates)?;
         }
         let positioned = mol
-            .with_only_3d_conformer(request.coordinates.clone(), true)
+            .with_only_3d_conformer(rows(&request.coordinates))
             .map_err(|error| error.to_string())?;
-        let mut field = force_field(&positioned, request.field)?;
-        response.energy = energy(&mut field)?;
+        let field = force_field(&positioned, request.field)?;
+        response.energy = energy(&field)?;
         response.initial_energy = response.energy;
         response.coordinates = field.positions();
-        let gradient = field.gradient();
+        // Unconstrained: the physical derivative, whatever atoms a caller fixes.
+        let gradient = field
+            .gradient_unconstrained()
+            .map_err(|error| error.to_string())?;
         require(
             gradient.len() == mol.num_atoms()
                 && gradient.iter().flatten().all(|value| value.is_finite()),
