@@ -33,7 +33,6 @@ pub(crate) enum Category {
 }
 
 impl Category {
-    #[cfg(test)]
     pub(crate) const ALL: [Self; 8] = [
         Self::Insert,
         Self::Bond,

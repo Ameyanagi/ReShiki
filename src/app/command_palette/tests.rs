@@ -31,6 +31,16 @@ fn run(app: &mut App, query: &str) {
     let _ = app.update(Message::Commands(Action::Submit));
 }
 
+/// The items index of the listed row with this name.
+fn row(app: &App, name: &str) -> usize {
+    let state = &app.commands;
+    *state
+        .results
+        .iter()
+        .find(|i| state.items[**i].name == name)
+        .unwrap_or_else(|| panic!("{name} is listed"))
+}
+
 fn top(app: &App) -> &Command {
     app.commands.current().expect("a result")
 }
@@ -302,18 +312,25 @@ fn caption_and_graphic_selections_never_fall_back_to_pointer_or_hotspot() {
         }
         let before = app.tab.doc.clone();
         for selected in [vec![caption], vec![graphic], vec![caption, graphic]] {
-            for (query, hotspot) in [
-                ("increase charge", Hotspot::Atom(a)),
-                ("radical", Hotspot::Atom(a)),
-                ("reverse bond direction", Hotspot::Bond(a, b)),
+            for (query, name, hotspot) in [
+                ("increase charge", "Increase charge", Hotspot::Atom(a)),
+                ("radical", "Radical", Hotspot::Atom(a)),
+                (
+                    "reverse bond direction",
+                    "Reverse bond direction",
+                    Hotspot::Bond(a, b),
+                ),
             ] {
                 app.tab.selected = selected.clone();
                 app.tab.hover = Some((hotspot.point(&app.tab.doc).unwrap(), app.tab.file_epoch));
                 app.tab.keyboard_drawing.set_target(hotspot, &app.tab.doc);
                 search(&mut app, query);
                 assert_eq!(app.keyboard_target(), keyboard);
-                let reason = app.command_unavailable(top(&app)).expect(query);
-                let _ = app.update(Message::Commands(Action::Submit));
+                // Unavailable commands rank below available ones, so pick it by name.
+                let index = row(&app, name);
+                let command = app.commands.items[index].clone();
+                let reason = app.command_unavailable(&command).expect(query);
+                let _ = app.update(Message::Commands(Action::Run(index)));
                 assert!(app.error);
                 assert_eq!(app.status, reason);
                 assert_eq!(app.tab.doc, before);
@@ -700,4 +717,172 @@ fn palette_partial_redraws_preserve_unchanged_pixels() {
             );
         }
     }
+}
+
+#[test]
+fn tab_cycles_the_category_filter_and_a_new_query_resets_it() {
+    assert!(matches!(
+        modal_key(&Key::Named(Named::Tab), Modifiers::empty()),
+        Some(Message::Commands(Action::Cycle(1)))
+    ));
+    assert!(matches!(
+        modal_key(&Key::Named(Named::Tab), Modifiers::SHIFT),
+        Some(Message::Commands(Action::Cycle(-1)))
+    ));
+    let mut app = app();
+    search(&mut app, "bond");
+    let categories: Vec<_> = app
+        .commands
+        .categories()
+        .into_iter()
+        .map(|(c, _)| c)
+        .collect();
+    assert!(categories.len() > 1, "{categories:?}");
+    let all = app.commands.results.len();
+    let cycle = |app: &mut App, step| {
+        let _ = app.update(Message::Commands(Action::Cycle(step)));
+        app.commands.filter
+    };
+    for &category in &categories {
+        assert_eq!(cycle(&mut app, 1), Some(category));
+        assert!(app.commands.ranked().iter().all(|c| c.category == category));
+        assert_eq!(app.commands.selected, 0);
+    }
+    assert_eq!(cycle(&mut app, 1), None, "Tab wraps back to All");
+    assert_eq!(app.commands.results.len(), all);
+    assert_eq!(
+        cycle(&mut app, -1),
+        categories.last().copied(),
+        "Shift+Tab wraps"
+    );
+    // A chip filters directly; a query without that category shows all again.
+    let _ = app.update(Message::Commands(Action::Filter(Some(Category::Bond))));
+    assert_eq!(top(&app).category, Category::Bond);
+    let _ = app.update(Message::Commands(Action::Query("double bond".into())));
+    assert_eq!(
+        app.commands.filter,
+        Some(Category::Bond),
+        "still has bond hits"
+    );
+    let _ = app.update(Message::Commands(Action::Query("zoom in".into())));
+    assert_eq!(app.commands.filter, None);
+    assert_eq!(top(&app).name, "Zoom in");
+    // Opening again starts unfiltered.
+    let _ = app.update(Message::Commands(Action::Filter(Some(Category::View))));
+    assert_eq!(app.commands.filter, Some(Category::View));
+    open(&mut app);
+    assert_eq!(app.commands.filter, None);
+}
+
+#[test]
+fn unavailable_commands_rank_after_available_ones() {
+    let mut app = app();
+    // Rows the query creates rank by availability too.
+    for query in ["copy", "charge", "bond", "select", "nmr", "rotate 30"] {
+        search(&mut app, query);
+        let state = &app.commands;
+        let blocked: Vec<_> = state
+            .results
+            .iter()
+            .map(|i| app.command_unavailable(&state.items[*i]).is_some())
+            .collect();
+        assert!(blocked.contains(&true), "{query}: some cannot run");
+        assert!(blocked.is_sorted(), "{query}: available first");
+    }
+    // An exact alias still ranks first, to say why it cannot run.
+    search(&mut app, "noh");
+    assert_eq!(top(&app).name, "Clear highlights");
+    // So does a recent command on an empty query.
+    let (a, b) = ethane(&mut app);
+    app.tab.selected = vec![a, b];
+    run(&mut app, "copy");
+    assert!(!app.commands.open, "copy ran");
+    app.tab.selected.clear();
+    open(&mut app);
+    assert_eq!(top(&app).name, "Copy");
+    // Clicking a row that cannot run selects it, to show why.
+    search(&mut app, "copy");
+    let copy = row(&app, "Copy");
+    let _ = app.update(Message::Commands(Action::Run(copy)));
+    assert_eq!(top(&app).name, "Copy");
+}
+
+#[test]
+fn name_matches_outrank_synonym_and_description_matches() {
+    let mut app = app();
+    open(&mut app);
+    let command =
+        |name: &str, synonyms| Command::new(name, Category::Edit, "", synonyms, Run::Send(vec![]));
+    // A whole synonym scores above a name prefix, but the name ranks first.
+    let items = vec![command("Alpha", "wedge"), command("Big wedges", "")];
+    assert!(search::score(&items[0], "wedge") > search::score(&items[1], "wedge"));
+    let state = &mut app.commands;
+    state.catalog = items.len();
+    state.items = items;
+    let _ = app.update(Message::Commands(Action::Query("wedge".into())));
+    let ranked: Vec<_> = app
+        .commands
+        .ranked()
+        .iter()
+        .map(|c| c.name.as_str())
+        .collect();
+    assert_eq!(ranked[..2], ["Big wedges", "Alpha"]);
+    // A shortcut key typed exactly ranks with the name matches.
+    search(&mut app, "v");
+    assert_eq!(top(&app).name, "Select tool");
+}
+
+#[test]
+fn page_home_and_end_move_the_selection() {
+    for (key, step) in [
+        (Named::PageDown, PAGE),
+        (Named::PageUp, -PAGE),
+        (Named::Home, isize::MIN),
+        (Named::End, isize::MAX),
+    ] {
+        assert!(matches!(
+            modal_key(&Key::Named(key), Modifiers::empty()),
+            Some(Message::Commands(Action::Move(s))) if s == step
+        ));
+    }
+    let mut app = app();
+    search(&mut app, "ring");
+    let last = app.commands.results.len() - 1;
+    assert!(last > 2 * PAGE as usize);
+    let mut step = |step| {
+        let _ = app.update(Message::Commands(Action::Move(step)));
+        app.commands.selected
+    };
+    assert_eq!(step(PAGE), PAGE as usize);
+    assert_eq!(step(PAGE), 2 * PAGE as usize);
+    assert_eq!(step(-PAGE), PAGE as usize);
+    assert_eq!(step(isize::MAX), last);
+    assert_eq!(step(PAGE), last, "stops at the end");
+    assert_eq!(step(isize::MIN), 0);
+    assert_eq!(step(-PAGE), 0, "stops at the start");
+}
+
+#[test]
+fn matched_letters_are_emphasised() {
+    let marks = |name, query| -> String {
+        matched(name, query)
+            .into_iter()
+            .map(|m| if m { '^' } else { ' ' })
+            .collect()
+    };
+    assert_eq!(marks("Double bond", "bond"), "       ^^^^");
+    assert_eq!(marks("Double bond", "do bo"), "^^     ^^  ");
+    assert_eq!(marks("Thiophene", "phen"), "    ^^^^ ");
+    assert_eq!(marks("Solid wedge bond", "wdg"), "      ^ ^^      ");
+    assert_eq!(marks("Ångström Ölefin", "öle"), "         ^^^   ");
+    assert_eq!(marks("Benzene", "x"), "       ");
+    assert_eq!(marks("Invert selection", "inverse"), " ".repeat(16));
+    let spans = name_spans("Double bond", "bond");
+    let text: Vec<_> = spans.iter().map(|s| s.text.as_ref()).collect();
+    assert_eq!(text, ["Double ", "bond"]);
+    assert!(spans[0].font.is_none() && spans[1].font.is_some());
+    // A match inside a word is split off with a word joiner.
+    let spans = name_spans("Bring bond forward", "ring");
+    let text: Vec<_> = spans.iter().map(|s| s.text.as_ref()).collect();
+    assert_eq!(text, ["B\u{2060}", "ring", " bond forward"]);
 }
