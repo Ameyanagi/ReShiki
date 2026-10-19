@@ -237,6 +237,7 @@ fn finished_errors_keep_details_and_choose_dock_summaries_from_their_kind() {
     const PARSER_REJECTION: &str = "The OPSIN Rust port could not interpret this name unambiguously: unsupported optical rotation";
     const DAEMONIZING_LAUNCHER: &str = "Local worker exited without closing its response pipes; daemonizing launchers are unsupported";
     const UNSUPPORTED: &str = "Unsupported or ambiguous name. Try a more specific name.";
+    const SALT_DETAIL: &str = "Local naming supports one connected molecule; disconnected salts and mixtures are unsupported";
     const FAILED: &str = "Could not import this name. See Details.";
     for (error, kind, detail, summary) in [
         (
@@ -262,6 +263,12 @@ fn finished_errors_keep_details_and_choose_dock_summaries_from_their_kind() {
             NoticeKind::Unsupported,
             "The OPSIN Rust port returned no molecular structure",
             UNSUPPORTED,
+        ),
+        (
+            naming::Error::Disconnected(SALT_DETAIL.into()),
+            NoticeKind::Disconnected,
+            SALT_DETAIL,
+            SALT,
         ),
         (
             naming::Error::Worker("Could not start bounded local naming worker".into()),
@@ -290,6 +297,65 @@ fn finished_errors_keep_details_and_choose_dock_summaries_from_their_kind() {
         assert_eq!(app.tab.doc, before);
         assert!(!app.tab.history.can_undo());
     }
+}
+
+const SALT: &str = "Salts and mixtures aren't supported yet. Draw the ions, or paste SMILES under Import → Structure.";
+
+/// The real parser path: salts get their own summary, while unknown names
+/// keep the unsupported-or-ambiguous one.
+#[tokio::test]
+async fn actual_salt_names_explain_the_salt_limit_and_unknown_names_stay_ambiguous() {
+    for (name, kind, summary) in [
+        ("sodium chloride", NoticeKind::Disconnected, SALT),
+        ("sodium acetate", NoticeKind::Disconnected, SALT),
+        (
+            "reshiki-no-such-chemical-name-50",
+            NoticeKind::Unsupported,
+            "Unsupported or ambiguous name. Try a more specific name.",
+        ),
+    ] {
+        let mut app = ready();
+        let _ = app.naming_action(Action::Name(name.into()));
+        let before = app.tab.doc.clone();
+        let _ = app.insert_input();
+        let ticket = app.tab.naming.pending.unwrap().ticket();
+        let error = resolve_preview(app.engine.clone(), name.into(), naming::Cancel::default())
+            .await
+            .expect_err(name);
+        let _ = app.naming_action(Action::Finished(ticket, Box::new(Err(error))));
+        let notice = app.tab.naming.notice.as_ref().unwrap();
+        assert_eq!(notice.kind, kind, "{name}");
+        assert_eq!(notice.summary(), summary, "{name}");
+        assert!(!notice.detail.is_empty(), "{name}");
+        assert_eq!(app.tab.doc, before, "{name}");
+        assert!(!app.tab.history.can_undo(), "{name}");
+    }
+}
+
+/// The salt summary points to Import → Structure; it must accept the ions.
+#[tokio::test]
+async fn structure_import_inserts_the_salt_smiles_the_summary_suggests() -> Result<(), String> {
+    let mut app = ready();
+    let _ = app.import_action(import::Action::InputKind(InputKind::Structure));
+    app.imports.set_text("[Na+].[Cl-]");
+    let revision = app.tab.revision;
+    let result = app
+        .engine
+        .request(crate::app::input_request(&app.imports.input.text()))
+        .await;
+    let _ = app.engine_done(revision, crate::app::Job::Insert, result);
+    assert!(!app.error, "{}", app.status);
+    let mut elements = app
+        .tab
+        .doc
+        .atoms
+        .iter()
+        .map(|atom| atom.element.as_str())
+        .collect::<Vec<_>>();
+    elements.sort_unstable();
+    assert_eq!(elements, ["Cl", "Na"]);
+    assert!(app.tab.doc.bonds.is_empty());
+    Ok(())
 }
 
 #[tokio::test]
