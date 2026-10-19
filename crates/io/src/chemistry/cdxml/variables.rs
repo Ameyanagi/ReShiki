@@ -11,6 +11,7 @@ use std::collections::HashMap;
 pub(crate) struct Variable {
     text: String,
     scripts: Vec<ScriptRun>,
+    attachment: crate::atom_labels::LabelAttachment,
 }
 pub(crate) struct Variables(pub HashMap<u32, Variable>);
 
@@ -82,6 +83,19 @@ pub(crate) fn drawing_variables(xml: &str) -> Result<(String, Variables)> {
             && (node.attr("Element") == Some("0") || missing_element)
         {
             let mut label = String::new();
+            // The text's justification, else one inherited from its node,
+            // fragment, page or document.
+            let mut owner = tree.children(index, "t")?.first().copied().or(Some(index));
+            let mut justification = None;
+            while let Some(current) = owner.filter(|_| justification.is_none()) {
+                let element = tree.node(current)?;
+                justification = element.attr("LabelJustification").map(str::to_owned);
+                owner = element.parent;
+            }
+            let attachment = justification
+                .as_deref()
+                .map(crate::atom_labels::LabelAttachment::from_cdxml)
+                .unwrap_or_default();
             for text in tree.children(index, "t")? {
                 for run in tree.children(text, "s")? {
                     label.push_str(&tree.node(run)?.text);
@@ -100,6 +114,7 @@ pub(crate) fn drawing_variables(xml: &str) -> Result<(String, Variables)> {
                         Variable {
                             text: label,
                             scripts: Vec::new(),
+                            attachment,
                         },
                     );
                     if missing_element {
@@ -137,6 +152,7 @@ pub(crate) fn drawing_variables(xml: &str) -> Result<(String, Variables)> {
             Variable {
                 text: label,
                 scripts: Vec::new(),
+                attachment: Default::default(),
             },
         );
     }
@@ -183,6 +199,7 @@ impl Variables {
                 let atom = document.atom_mut(id).ok_or(super::Error::Limit)?;
                 atom.display.set_variable(Some(label.text.clone()));
                 atom.display.label_scripts = label.scripts.clone();
+                atom.display.label_attachment = label.attachment;
                 atom.element = "*".into();
                 atom.no_implicit = true;
                 atom.label_h = 0;
