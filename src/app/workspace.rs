@@ -706,7 +706,7 @@ impl App {
             .padding([5, 10])
             .on_press(Message::ToggleHelp)
             .style(control(self.help_open)),
-            "Help · F1",
+            format!("Help · {}", super::help::registry::finder_keys()),
             tooltip::Position::Right,
         )
     }
