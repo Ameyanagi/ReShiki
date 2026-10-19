@@ -66,6 +66,60 @@ def validate(doc):
             raise ValueError("An abbreviation must be connected")
 
 
+def composition(atom):
+    """What a label asserts about an atom; contraction must not hide it."""
+    return (
+        atom.GetFormalCharge(),
+        atom.GetNumRadicalElectrons(),
+        atom.GetIsotope(),
+        atom.GetTotalNumHs(),
+    )
+
+
+def restrict(definition, smiles):
+    """Match only atoms whose composition equals the definition's."""
+    template = Chem.MolFromSmiles(smiles)
+    for atom, expected in zip(definition.mol.GetAtoms(), template.GetAtoms()):
+        if atom.GetIdx() == 0:
+            continue
+        charge, radicals, isotope, hydrogens = composition(expected)
+        for query in (
+            rdqueries.FormalChargeEqualsQueryAtom(charge),
+            rdqueries.NumRadicalElectronsEqualsQueryAtom(radicals),
+            rdqueries.IsotopeEqualsQueryAtom(isotope),
+            rdqueries.HCountEqualsQueryAtom(hydrogens),
+        ):
+            atom.ExpandQuery(query)
+
+
+def arbitrate(mol, definitions, withdrawn):
+    """RDKit's findApplicableAbbreviationMatches overlap rules (maxCoverage 1.0)."""
+    try:
+        mol.GetRingInfo().NumRings()
+    except RuntimeError:  # Uninitialized, as findApplicableAbbreviationMatches handles.
+        mol = Chem.Mol(mol)
+        Chem.FastFindRings(mol)
+    covered, first, reserved = set(), {}, []
+    for index, definition in enumerate(definitions):
+        if definition.mol.GetNumAtoms() > mol.GetNumAtoms():
+            continue
+        for match in mol.GetSubstructMatches(
+            definition.mol, uniquify=True, useChirality=False, maxMatches=1000
+        ):
+            if (index, match) in withdrawn or match[1] in first or covered & set(match[1:]):
+                continue
+            covered.update(match[1:])
+            first[match[1]] = len(reserved)
+            reserved.append((index, match))
+    accepted = [(i, m) for i, m in reserved if m[0] not in first]
+    # Only a group dropped because of a later, smaller group is withdrawn.
+    rejected = next(
+        ((i, m) for order, (i, m) in enumerate(reserved) if m[0] in first and first[m[0]] > order),
+        None,
+    )
+    return accepted, rejected
+
+
 def find(doc, mol, selection, label=None):
     available = [
         (name, *data)
@@ -79,6 +133,8 @@ def find(doc, mol, selection, label=None):
     definitions = rdAbbreviations.ParseAbbreviations(
         "\n".join(f"{name} {smiles}" for name, smiles, _ in available)
     )
+    for definition, (_, smiles, _) in zip(definitions, available):
+        restrict(definition, smiles)
     result = copy.deepcopy(doc)
     groups = result.setdefault("abbreviations", [])
     used = {i for g in groups for i in g["members"]}
@@ -98,11 +154,26 @@ def find(doc, mol, selection, label=None):
             for atom in definition.mol.GetAtoms():
                 if atom.GetIdx() != 0:  # The outside attachment need not be selected.
                     atom.ExpandQuery(rdqueries.HasPropQueryAtom(marker))
+    # RDKit drops a group whose outside atom became another group's attachment.
+    # When a later, smaller group causes that, the larger group's atoms stay
+    # bare (methyl-NHBoc lost both Boc and Me). Withdraw the first such group
+    # and arbitrate again; the first pass must equal RDKit.
+    withdrawn = set()
+    accepted, rejected = arbitrate(mol, definitions, withdrawn)
     labeled = rdAbbreviations.LabelMolAbbreviations(mol, definitions, 1.0)
-    for g in Chem.GetMolSubstanceGroups(labeled):
-        members = [ids[i] for i in g.GetAtoms()]
-        points = list(g.GetAttachPoints())
-        if not members or len(points) != 1 or used.intersection(members):
+    native = [
+        (g.GetProp("LABEL"), list(g.GetAtoms()), [p.aIdx for p in g.GetAttachPoints()])
+        for g in Chem.GetMolSubstanceGroups(labeled)
+    ]
+    assert native == [(definitions[i].label, list(m[1:]), [m[1]]) for i, m in accepted], (
+        "Arbitration differs from RDKit"
+    )
+    while rejected:
+        withdrawn.add(rejected)
+        accepted, rejected = arbitrate(mol, definitions, withdrawn)
+    for index, match in accepted:
+        members = [ids[i] for i in match[1:]]
+        if used.intersection(members):
             continue
         if any(
             atoms[i].get("isotope")
@@ -113,12 +184,12 @@ def find(doc, mol, selection, label=None):
             for i in members
         ):
             continue
-        name = g.GetProp("LABEL")
+        name = definitions[index].label
         groups.append(
             dict(
                 label=name,
                 reverse_label=PRESETS[name][1],
-                anchor=ids[points[0].aIdx],
+                anchor=ids[match[1]],
                 members=members,
             )
         )

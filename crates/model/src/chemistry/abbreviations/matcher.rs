@@ -20,6 +20,51 @@ pub(super) struct Atom {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) hydrogens: Option<u8>,
 }
+/// What a label silently asserts about each atom: formal charge, unpaired
+/// electrons, isotope and total hydrogens. Detection only claims atoms whose
+/// composition equals the definition's, so contracting never hides chemistry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct Composition {
+    charge: i8,
+    radicals: u8,
+    isotope: u16,
+    hydrogens: u32,
+}
+
+/// Explicit plus implicit hydrogens of each prepared atom.
+pub(super) fn total_hydrogens(state: &perception::State) -> Vec<u32> {
+    state
+        .graph
+        .atoms
+        .iter()
+        .enumerate()
+        .map(|(index, atom)| {
+            u32::from(atom.explicit_hydrogens)
+                + state
+                    .valences
+                    .get(index)
+                    .map_or(0, |valence| valence.implicit_hydrogens)
+        })
+        .collect()
+}
+
+/// The composition of every atom of a prepared definition, dummy included.
+pub(super) fn compositions(state: &perception::State) -> Vec<Composition> {
+    let hydrogens = total_hydrogens(state);
+    state
+        .graph
+        .atoms
+        .iter()
+        .zip(hydrogens)
+        .map(|(atom, hydrogens)| Composition {
+            charge: atom.charge,
+            radicals: atom.radical_electrons,
+            isotope: atom.isotope,
+            hydrogens,
+        })
+        .collect()
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub(super) struct Bond {
     pub(super) a: usize,
@@ -143,7 +188,10 @@ pub(super) fn validate(preset: &Preset) -> Result<()> {
             return Err(invalid("Invalid preset atom or traversal"));
         }
     }
-    if *at(&degree, 0)? != 1 || !pairs.contains(&(0, 1)) {
+    if *at(&degree, 0)? != 1
+        || !pairs.contains(&(0, 1))
+        || preset.composition.len() != preset.atoms.len()
+    {
         return Err(invalid("Invalid preset attachment"));
     }
     Ok(())
@@ -156,7 +204,7 @@ impl Default for Work {
     }
 }
 impl Work {
-    fn spend(&mut self, count: usize) -> Result<()> {
+    pub(super) fn spend(&mut self, count: usize) -> Result<()> {
         self.0 = self.0.checked_sub(count).ok_or(Error::WorkLimit)?;
         Ok(())
     }
@@ -224,7 +272,13 @@ impl<'a> Target<'a> {
         })
     }
 
-    fn atom_matches(&self, query: &Atom, target: usize, dummy: bool) -> Result<bool> {
+    fn atom_matches(
+        &self,
+        query: &Atom,
+        composition: &Composition,
+        target: usize,
+        dummy: bool,
+    ) -> Result<bool> {
         let atom = at(&self.graph.atoms, target)?;
         let hydrogens = *at(self.hydrogens, target)?;
         if dummy {
@@ -237,7 +291,14 @@ impl<'a> Target<'a> {
             && query.rings == *at(&self.ring_counts, target)?
             && query
                 .hydrogens
-                .is_none_or(|count| u32::from(count) == hydrogens))
+                .is_none_or(|count| u32::from(count) == hydrogens)
+            && *composition
+                == Composition {
+                    charge: atom.charge,
+                    radicals: atom.radical_electrons,
+                    isotope: atom.isotope,
+                    hydrogens,
+                })
     }
 
     pub(super) fn matches(&self, preset: &Preset, work: &mut Work) -> Result<Vec<Vec<usize>>> {
@@ -257,7 +318,12 @@ impl<'a> Target<'a> {
                 continue;
             };
             if mapping.contains(&Some(candidate))
-                || !self.atom_matches(at(&preset.atoms, depth)?, candidate, depth == 0)?
+                || !self.atom_matches(
+                    at(&preset.atoms, depth)?,
+                    at(&preset.composition, depth)?,
+                    candidate,
+                    depth == 0,
+                )?
             {
                 continue;
             }
