@@ -644,6 +644,22 @@ fn inside(p: Point, outline: &[Point]) -> bool {
         % 2
         == 1
 }
+/// Distance between segments `pq` and `ab`; zero when they cross.
+fn segment_gap(p: Point, q: Point, a: Point, b: Point) -> f32 {
+    use crate::graphics::segment_distance;
+    let turn = |o: Point, u: Point, v: Point| (u.x - o.x) * (v.y - o.y) - (u.y - o.y) * (v.x - o.x);
+    if turn(p, q, a) * turn(p, q, b) < 0. && turn(a, b, p) * turn(a, b, q) < 0. {
+        return 0.;
+    }
+    [
+        segment_distance(p, a, b),
+        segment_distance(q, a, b),
+        segment_distance(a, p, q),
+        segment_distance(b, p, q),
+    ]
+    .into_iter()
+    .fold(f32::MAX, f32::min)
+}
 /// Chooses the arrival direction at an atom, and any extra end gap, so the
 /// arrowhead lying along that direction stays off bond ink. Candidates face
 /// the source within [`OPEN_APPROACH`] and are reached from the default
@@ -671,17 +687,45 @@ fn open_approach(
     let touches = |d: Point, extra: f32| {
         let tip = clearance(doc, &Target::Atom { atom }, d).unwrap_or(0.) + gap + pen + extra;
         let length = head_length.min(start.distance(center.offset(d.x * tip, d.y * tip)) * 0.4);
-        // Neighboring sample disks overlap, so no line slips between them.
-        let samples = (length / pen.max(0.01)).ceil().max(8.) as usize;
-        (0..=samples).any(|i| {
-            let t = i as f32 / samples as f32;
-            let s = tip + length * t;
-            let p = center.offset(d.x * s, d.y * s);
+        // `lateral` follows the offset normal the arrow renderer uses.
+        let at =
+            |s: f32, lateral: f32| center.offset(d.x * s + d.y * lateral, d.y * s - d.x * lateral);
+        let hits = |p: Point, reach: f32| {
             lines.iter().any(|(first, last, half)| {
                 let v = delta(*last, *first);
                 let along = (dot(delta(p, *first), v) / dot(v, v)).clamp(0., 1.);
-                p.distance(first.offset(v.x * along, v.y * along)) < head_width * t + half + pen
+                p.distance(first.offset(v.x * along, v.y * along)) < reach + half
             }) || fills.iter().any(|outline| inside(p, outline))
+        };
+        // Neighboring sample disks overlap, so no line slips between them.
+        let samples = (length / pen.max(0.01)).ceil().max(8.) as usize;
+        let axis = (0..=samples).any(|i| {
+            let t = i as f32 / samples as f32;
+            hits(at(tip + length * t, 0.), head_width * t + pen)
+        });
+        // A solid half head fills a barb from the tip on one shaft edge out
+        // to a wing `width` past the other edge, then back to the neck.
+        axis || style.barb(style.head).is_some_and(|(side, width)| {
+            let neck = tip + length * (1. - style.head_notch);
+            let corners = [
+                at(tip, side * pen),
+                at(tip + length, -side * width),
+                at(neck, -side * pen),
+            ];
+            let edges = || corners.iter().zip(&corners[1..]);
+            let lines = lines.iter().map(|(a, b, half)| (*a, *b, *half));
+            let fill_edges = fills.iter().flat_map(|outline| {
+                outline
+                    .iter()
+                    .zip(outline.iter().cycle().skip(1))
+                    .map(|(a, b)| (*a, *b, 0.))
+            });
+            lines
+                .chain(fill_edges)
+                .any(|(a, b, half)| edges().any(|(p, q)| segment_gap(*p, *q, a, b) <= half))
+                || corners
+                    .iter()
+                    .any(|p| fills.iter().any(|outline| inside(*p, outline)))
         })
     };
     let score = |d: Point| {

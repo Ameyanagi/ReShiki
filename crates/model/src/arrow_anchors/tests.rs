@@ -934,11 +934,8 @@ fn mechanism_attachment_312_clear_default_arrival_is_unchanged() {
         unit(Point::new(-1., 0.7)),
     );
 }
-/// Smallest gap between the arrowhead outline and rendered bond ink.
+/// Smallest gap between the modelled arrowhead outline and rendered bond ink.
 fn head_ink_gap(d: &Document, arrow: &Arrow) -> f32 {
-    use crate::{graphics::PathCommand, scene::Primitive};
-    let mut bare = d.clone();
-    bare.arrows.clear();
     let style = arrow.appearance();
     let axis = unit(delta(arrow.cubic.unwrap()[1], arrow.end));
     let n = Point::new(-axis.y, axis.x);
@@ -961,6 +958,34 @@ fn head_ink_gap(d: &Document, arrow: &Arrow) -> f32 {
             })
         })
         .collect();
+    ink_gap(d, &samples) - DEFAULT.world(style.width_pt) * 0.5
+}
+/// Smallest gap between the filled arrowhead outlines `arrow` renders and
+/// rendered bond ink.
+fn rendered_head_ink_gap(d: &Document, arrow: &Arrow) -> f32 {
+    use crate::graphics::PathCommand;
+    let mut samples = Vec::new();
+    for path in arrow.paths().into_iter().filter(|p| p.filled) {
+        let mut outline = Vec::new();
+        for command in path.commands {
+            match command {
+                PathCommand::Move(p) | PathCommand::Line(p) => outline.push(p),
+                PathCommand::Cubic(_, _, p) => outline.push(p),
+                PathCommand::Close => {}
+            }
+        }
+        for (p, q) in outline.iter().zip(outline.iter().cycle().skip(1)) {
+            samples.extend((0..=128).map(|k| p.lerp(*q, k as f32 / 128.)));
+        }
+    }
+    assert!(!samples.is_empty(), "arrow renders no filled head");
+    ink_gap(d, &samples)
+}
+/// Smallest gap between `samples` and the bond ink rendered without arrows.
+fn ink_gap(d: &Document, samples: &[Point]) -> f32 {
+    use crate::{graphics::PathCommand, scene::Primitive};
+    let mut bare = d.clone();
+    bare.arrows.clear();
     let segment = |p: Point, a: Point, b: Point| {
         let v = delta(b, a);
         let t = (dot(delta(p, a), v) / dot(v, v).max(0.00001)).clamp(0., 1.);
@@ -1005,15 +1030,19 @@ fn head_ink_gap(d: &Document, arrow: &Arrow) -> f32 {
             .fold(f32::MAX, f32::min);
         if inside { -edge } else { edge }
     };
-    let pen = DEFAULT.world(style.width_pt) * 0.5;
-    samples
-        .iter()
-        .flat_map(|p| {
-            let lines = lines.iter().map(|(a, b, w)| segment(*p, *a, *b) - w);
-            lines.chain(polygons.iter().map(|q| polygon_gap(*p, q)))
-        })
-        .fold(f32::MAX, f32::min)
-        - pen
+    let mut worst = (f32::MAX, Point::default());
+    for p in samples {
+        for g in lines
+            .iter()
+            .map(|(a, b, w)| segment(*p, *a, *b) - w)
+            .chain(polygons.iter().map(|q| polygon_gap(*p, q)))
+        {
+            if g < worst.0 {
+                worst = (g, *p);
+            }
+        }
+    }
+    worst.0
 }
 #[test]
 fn mechanism_attachment_312_lone_pair_to_acetone_head_clears_rendered_bonds() {
@@ -1293,6 +1322,32 @@ fn mechanism_attachment_312_bond_ink_covers_plain_dative_head() {
             assert!(covered, "{acceptor}: head corner {p:?} outside bond ink");
         }
     }
+}
+#[test]
+fn mechanism_attachment_312_fishhook_barb_clears_rendered_bonds() {
+    // A thick shaft widens the solid half head's barb past its configured
+    // half-width; the search must keep the drawn barb off the bonds.
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for degrees in [110f32, 180.] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, 1, "plain");
+    }
+    let o = d.add_atom("O", Point::new(-120., 0.));
+    scientific::attach(
+        d.atom_mut(o).unwrap(),
+        SymbolKind::LonePair,
+        Point::new(25., 0.),
+    )
+    .unwrap();
+    let source = pick(&d, Point::new(-95., 0.), 2.).unwrap();
+    let mut style = ArrowStyle::preset(Preset::Fishhook);
+    (style.width_pt, style.head_width_pt, style.head_length_pt) = (4., 0.25, 0.5);
+    let id = create(&mut d, &source, &Pick::Atom(c), Preset::Fishhook, style).unwrap();
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let gap = rendered_head_ink_gap(&d, arrow);
+    assert!(gap > 0., "fishhook barb overlaps bond ink by {}", -gap);
 }
 #[test]
 fn double_bond_strokes_are_arrow_targets_not_only_the_gap() {
