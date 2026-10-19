@@ -133,7 +133,7 @@ fn preview_entry(doc: &mut Document, atom: u64, text: &str, allow_generic: bool)
     if text.is_empty() {
         return Err(());
     }
-    if allow_generic {
+    if allow_generic && !super::catalog_text(text) {
         if let Some((choices, excluded)) = crate::generic::alternative(text).map_err(|_| ())? {
             if choices.iter().enumerate().any(|(index, choice)| {
                 choices
@@ -170,12 +170,13 @@ fn preview_entry(doc: &mut Document, atom: u64, text: &str, allow_generic: bool)
         || super::formula_group(text).is_some()
         || !element && super::known_group(text)
     {
+        let (label, reverse_label) = preview_group_names(text).ok_or(())?;
         doc.abbreviations.push(crate::abbreviations::Abbreviation {
             label_style: None,
             label_color_override: false,
             highlight: None,
-            label: text.to_owned(),
-            reverse_label: preview_group_reverse_label(text).ok_or(())?,
+            label,
+            reverse_label,
             anchor: atom,
             members: vec![atom],
             alignment: Default::default(),
@@ -205,23 +206,24 @@ fn preview_entry(doc: &mut Document, atom: u64, text: &str, allow_generic: bool)
     Ok(())
 }
 
-fn preview_group_reverse_label(text: &str) -> Option<String> {
+/// The stored label and reverse label of a typed group, as Apply makes them.
+fn preview_group_names(text: &str) -> Option<(String, String)> {
+    use crate::chemistry::abbreviations::Spelling;
+    let typed = |reverse: &str| Some((text.to_owned(), reverse.to_owned()));
     if let Some((_, reverse)) = super::formula_group(text) {
-        return Some(reverse.into());
+        return typed(reverse);
     }
     match text {
-        "Cp" | "Cp*" => Some(text.into()),
-        "MgBr" => Some("BrMg".into()),
-        "N3" => Some(String::new()),
+        "Cp" | "Cp*" => typed(text),
+        "MgBr" => typed("BrMg"),
+        "N3" => typed(""),
         _ => crate::chemistry::abbreviations::lookup(text)
             .ok()
             .flatten()
-            .map(|(preset, alias)| {
-                if alias {
-                    String::new()
-                } else {
-                    preset.reverse_label.clone()
-                }
+            .map(|(preset, spelling)| match spelling {
+                Spelling::Label => (text.to_owned(), preset.reverse_label.clone()),
+                Spelling::Alias => (text.to_owned(), String::new()),
+                Spelling::Reverse => (preset.label.clone(), preset.reverse_label.clone()),
             }),
     }
 }

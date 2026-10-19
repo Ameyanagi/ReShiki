@@ -967,6 +967,147 @@ fn every_bundled_spelling_types_as_its_group() -> Result<(), Box<dyn std::error:
     Ok(())
 }
 
+/// CH3–C with the endpoint carbon's ID.
+fn ethane() -> (Document, u64) {
+    let mut doc = Document::default();
+    let methyl = doc.add_atom("C", Point::new(0., 0.));
+    let endpoint = doc.add_atom("C", Point::new(42., 0.));
+    doc.add_bond(methyl, endpoint, 1, "plain");
+    (doc, endpoint)
+}
+
+#[test]
+fn typed_reverse_spellings_make_their_group() -> Result<(), Box<dyn std::error::Error>> {
+    for (typed, label) in [
+        ("MeO", "OMe"),
+        ("TBSO", "OTBS"),
+        ("NC", "CN"),
+        ("O2N", "NO2"),
+        ("ON", "NO"),
+        ("(HO)2B", "B(OH)2"),
+        ("(EtO)3Si", "Si(OEt)3"),
+    ] {
+        let (doc, endpoint) = ethane();
+        let reversed = apply(&doc, endpoint, typed, Mode::Auto)?;
+        let canonical = apply(&doc, endpoint, label, Mode::Auto)?;
+        let group = reversed.abbreviation(endpoint).ok_or(typed)?;
+        assert_eq!(
+            (group.label.as_str(), group.reverse_label.as_str()),
+            (label, typed)
+        );
+        assert_eq!(formula(&reversed)?, formula(&canonical)?, "{typed}");
+    }
+    Ok(())
+}
+
+/// Every bundled reverse spelling, typed on CH3–C, creates its group under
+/// the group's label, as the loop above does for labels and aliases.
+#[test]
+fn every_bundled_reverse_spelling_types_as_its_group() -> Result<(), Box<dyn std::error::Error>> {
+    let catalog = crate::chemistry::abbreviations::presets()?;
+    let mut checked = 0;
+    for preset in catalog.iter().filter(|p| !p.user) {
+        let reverse = preset.reverse_label.as_str();
+        if reverse.is_empty() {
+            continue;
+        }
+        assert!(!ELEMENTS.contains(&reverse), "{reverse} is an element");
+        assert!(
+            !matches!(hydride::parse(reverse), Ok(Some(_))),
+            "{reverse} is an atom label"
+        );
+        assert!(
+            description(reverse, &[], Mode::Auto).starts_with("A real chemical group"),
+            "{reverse}: {}",
+            description(reverse, &[], Mode::Auto)
+        );
+        let (doc, endpoint) = ethane();
+        let labelled =
+            apply(&doc, endpoint, reverse, Mode::Auto).map_err(|e| format!("{reverse}: {e}"))?;
+        let group = labelled.abbreviation(endpoint).ok_or(reverse)?;
+        assert_eq!(
+            (group.label.as_str(), group.reverse_label.as_str()),
+            (preset.label.as_str(), reverse)
+        );
+        assert_eq!(group.members.len(), preset.atom_count(), "{reverse}");
+        assert_eq!(
+            formula(&labelled)?,
+            methyl_formula(&preset.formula),
+            "{reverse}"
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 214);
+    Ok(())
+}
+
+#[test]
+fn names_with_locants_never_reach_the_link_node_parser() -> Result<(), Box<dyn std::error::Error>> {
+    for name in ["2-thienyl", "propan-2-yl", "4-methoxyphenyl"] {
+        let (doc, endpoint) = ethane();
+        let result = apply(&doc, endpoint, name, Mode::Auto)?;
+        assert!(result.generic.links.is_empty(), "{name}");
+        let atom = result.atom(endpoint).ok_or(name)?;
+        assert_eq!(
+            (atom.element.as_str(), atom.display.variable.as_deref()),
+            ("*", Some(name))
+        );
+    }
+    // Every catalog name, typed as written, is suggested and stays text.
+    for name in crate::abbreviations::groups().flat_map(|g| g.names) {
+        let (doc, endpoint) = ethane();
+        let applied = apply(&doc, endpoint, &name, Mode::Auto);
+        if name.chars().count() > 32 {
+            assert_eq!(
+                applied.err().as_deref(),
+                Some("Enter 1–32 characters for the atom label")
+            );
+            continue;
+        }
+        let result = applied.map_err(|e| format!("{name}: {e}"))?;
+        assert!(result.generic.links.is_empty(), "{name}");
+        assert!(result.generic.alternatives.is_empty(), "{name}");
+        assert!(suggestion(&name, Mode::Auto).is_some(), "{name}");
+        assert!(
+            description(&name, &[], Mode::Auto).starts_with("Text on a dummy atom"),
+            "{name}: {}",
+            description(&name, &[], Mode::Auto)
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn catalog_names_suggest_their_labels_without_making_the_group() -> Result<(), String> {
+    assert_eq!(
+        suggestion("morpholino", Mode::Auto).as_deref(),
+        Some("Did you mean Morph?")
+    );
+    assert_eq!(
+        suggestion("Acetyl", Mode::Auto).as_deref(),
+        Some("Did you mean Ac or COMe?")
+    );
+    assert_eq!(suggestion("morpholino", Mode::Text), None);
+    assert_eq!(suggestion("Morph", Mode::Auto), None);
+    assert_eq!(suggestion("MOrph", Mode::Auto), None);
+    let (doc, endpoint) = ethane();
+    let typed = apply(&doc, endpoint, "morpholino", Mode::Auto)?;
+    assert!(typed.abbreviations.is_empty());
+    // Labels stay case-sensitive: MOrph is text, not the Morph group.
+    let typed = apply(&doc, endpoint, "MOrph", Mode::Auto)?;
+    assert!(typed.abbreviations.is_empty());
+    assert_eq!(
+        typed
+            .atom(endpoint)
+            .ok_or("atom")?
+            .display
+            .variable
+            .as_deref(),
+        Some("MOrph")
+    );
+    Ok(())
+}
+
 /// An `outside`-carbon chain on N(charge)–C(=O)–O–C(CH3)3.
 fn carbamate(outside: usize, charge: i32) -> Document {
     let mut doc = Document::default();

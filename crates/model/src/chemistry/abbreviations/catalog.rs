@@ -446,33 +446,53 @@ fn merge(builtin: &[Arc<Preset>], user: Vec<Preset>) -> Catalog {
     merged.into()
 }
 
-/// Find the group created by a typed spelling. The flag is true for an alias.
-pub fn lookup(text: &str) -> Result<Option<(Arc<Preset>, bool)>> {
+/// How a typed spelling named its group.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Spelling {
+    Label,
+    /// An alias keeps the typed spelling, without a reverse.
+    Alias,
+    /// A reverse spelling (`MeO`) makes the group under its own label (`OMe`).
+    Reverse,
+}
+
+/// Find the group created by a typed spelling.
+pub fn lookup(text: &str) -> Result<Option<(Arc<Preset>, Spelling)>> {
     Ok(lookup_in(&presets()?, text))
 }
 
 /// Find a spelling in the bundled catalog only, ignoring user overrides.
-pub fn lookup_bundled(text: &str) -> Result<Option<(Arc<Preset>, bool)>> {
+pub fn lookup_bundled(text: &str) -> Result<Option<(Arc<Preset>, Spelling)>> {
     Ok(lookup_in(builtin()?, text))
 }
 
-/// User groups win over a bundled label or alias with the same spelling.
-fn lookup_in(catalog: &[Arc<Preset>], text: &str) -> Option<(Arc<Preset>, bool)> {
-    let find = |user: bool| {
+/// User groups win over a bundled label or alias with the same spelling, and
+/// any label or alias wins over a reverse spelling, as CDXML import does.
+fn lookup_in(catalog: &[Arc<Preset>], text: &str) -> Option<(Arc<Preset>, Spelling)> {
+    let find = |user: bool, reverse: bool| {
         catalog
             .iter()
             .filter(|preset| preset.user == user)
             .find_map(|preset| {
-                if preset.label == text {
-                    Some((preset.clone(), false))
-                } else if preset.aliases.iter().any(|alias| alias == text) {
-                    Some((preset.clone(), true))
+                let spelling = if reverse {
+                    (!preset.reverse_label.is_empty() && preset.reverse_label == text)
+                        .then_some(Spelling::Reverse)
+                } else if preset.label == text {
+                    Some(Spelling::Label)
                 } else {
-                    None
-                }
+                    preset
+                        .aliases
+                        .iter()
+                        .any(|alias| alias == text)
+                        .then_some(Spelling::Alias)
+                };
+                spelling.map(|spelling| (preset.clone(), spelling))
             })
     };
-    find(true).or_else(|| find(false))
+    find(true, false)
+        .or_else(|| find(false, false))
+        .or_else(|| find(true, true))
+        .or_else(|| find(false, true))
 }
 
 #[cfg(test)]

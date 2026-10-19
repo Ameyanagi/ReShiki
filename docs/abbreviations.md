@@ -24,7 +24,13 @@ Each action is one Undo step. Native version-10 documents preserve custom names 
 
 The catalog holds 359 groups with 52 alternative spellings. Typing one of these
 labels on an endpoint creates the real group, so formula and mass match the
-expanded structure:
+expanded structure. A reverse spelling, such as MeO, AcO, BnO, TBSO, NC or
+(HO)2B, also makes its group (OMe, OAc, OBn, OTBS, CN, B(OH)2), which then
+shows whichever spelling suits the side its bond leaves from. A user group
+whose label is spelled like a bundled reverse spelling takes precedence.
+Labels are case-sensitive, so MOrph is text and not Morph. Full names, such
+as morpholino, 2-thienyl or acetyl, stay text; the label editor suggests
+the label to type instead ("Did you mean Morph?").
 
 | Category         | Groups | Examples                                                                    |
 | ---------------- | -----: | --------------------------------------------------------------------------- |

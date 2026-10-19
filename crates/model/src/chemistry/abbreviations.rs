@@ -10,7 +10,8 @@ mod replacement;
 use super::{RDKIT_VERSION, document::Molecule};
 use crate::{abbreviations::Abbreviation, document::Document};
 pub use catalog::{
-    BUILTIN, Catalog, Entry, FORMAT, File, Preset, lookup, lookup_bundled, parse, presets, set_user,
+    BUILTIN, Catalog, Entry, FORMAT, File, Preset, Spelling, lookup, lookup_bundled, parse,
+    presets, set_user,
 };
 pub use define::{Defined, from_selection, upsert};
 pub use replacement::{Error as ReplacementError, replace, replace_bundled, replace_with_policy};

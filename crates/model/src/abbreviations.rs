@@ -104,6 +104,21 @@ pub fn group_labels() -> Vec<String> {
         .collect()
 }
 
+/// Labels of the groups whose full name or search term is this text, ignoring
+/// case (`acetyl` names both Ac and COMe). Names are never typed as labels.
+pub fn named(text: &str) -> Vec<String> {
+    let text = text.trim().to_lowercase();
+    let mut labels = Vec::new();
+    for group in groups() {
+        if group.names.iter().any(|name| name.to_lowercase() == text)
+            && !labels.contains(&group.label)
+        {
+            labels.push(group.label);
+        }
+    }
+    labels
+}
+
 /// One insertable chemical group, for menus and the command palette.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GroupInfo {

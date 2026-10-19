@@ -29,6 +29,25 @@ fn trailing_charges_bypass_bare_link_ranges() -> Result<(), String> {
 }
 
 #[test]
+fn unbracketed_link_labels_need_a_label_and_a_finite_range() {
+    for (text, expected) in [
+        ("C1-3", Some(("C", "1-3"))),
+        ("CH2 1-3", Some(("CH2", " 1-3"))),
+        ("CH2 0-3", Some(("CH2", " 0-3"))),
+        ("[CH2]1-3", Some(("CH2", "1-3"))),
+        ("{CH2}n", Some(("CH2", "n"))),
+        ("2-thienyl", None),
+        ("propan-2-yl", None),
+        ("4-methoxyphenyl", None),
+        ("1-3", None),
+        ("C1-n", None),
+        ("CH2", None),
+    ] {
+        assert_eq!(super::split_link_label(text), Ok(expected), "{text}");
+    }
+}
+
+#[test]
 fn alternative_lists_keep_prefixes_isotopes_and_choice_kinds() {
     for (text, choices, excluded) in [
         (

@@ -538,6 +538,11 @@ impl App {
             } else { atom_text::description(&state.input, &state.scripts(), state.mode) })
                 .size(12)
                 .style(muted_text));
+        if state.members.is_none()
+            && let Some(suggestion) = atom_text::suggestion(&state.input, state.mode)
+        {
+            content = content.push(text(suggestion).size(12));
+        }
         if state.members.is_some() || self.tab.doc.abbreviation(state.id).is_some() {
             content = content.push(
                 reshiki::accessibility::text_input(
