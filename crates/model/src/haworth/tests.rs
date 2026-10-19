@@ -86,3 +86,97 @@ fn sugar_label_ring_intersection_check_detects_real_overlap() -> anyhow::Result<
     assert!(label_ring_intersections(&doc)?.contains(&(9, 4, 5)));
     Ok(())
 }
+
+/// The horizontal extent of an atom's label ink.
+fn ink_span(doc: &Document, id: u64) -> anyhow::Result<(f32, f32)> {
+    use anyhow::Context;
+    let boxes = crate::scene::atom_label_ink_boxes(doc.atom(id).context("Label atom")?, doc);
+    anyhow::ensure!(!boxes.is_empty(), "atom {id} has no label ink");
+    Ok(boxes.iter().fold((f32::MAX, f32::MIN), |(lo, hi), (a, b)| {
+        (lo.min(a.x), hi.max(b.x))
+    }))
+}
+
+/// Applies typed text to an atom and returns its group's drawn text and alignment.
+fn typed_group(
+    doc: &Document,
+    id: u64,
+    text: &str,
+) -> anyhow::Result<(Document, String, crate::abbreviations::LabelAlignment)> {
+    use anyhow::Context;
+    let result = crate::atom_text::apply(doc, id, text, crate::atom_text::Mode::Auto)
+        .map_err(anyhow::Error::msg)?;
+    let group = result.abbreviation(id).context("Typed group")?;
+    let drawn = group.text(&result).to_owned();
+    let alignment = group.alignment;
+    Ok((result, drawn, alignment))
+}
+
+// Glucose atom IDs: C1 is 1 with its OH oxygen 7; C4 is 4 with the HO oxygen 10.
+const C1_OXYGEN: u64 = 7;
+const C4_OXYGEN: u64 = 10;
+
+#[test]
+fn groups_replacing_the_left_c4_hydroxyl_keep_its_side() -> anyhow::Result<()> {
+    use crate::abbreviations::LabelAlignment;
+    let doc = sugar_document(Sugar::Glucose, Anomer::Alpha, 42.).map_err(anyhow::Error::msg)?;
+    let (ho_left, ho_right) = ink_span(&doc, C4_OXYGEN)?;
+    for (typed, drawn) in [("OBn", "BnO"), ("OMe", "MeO"), ("OCH3", "H3CO")] {
+        let (result, text, alignment) = typed_group(&doc, C4_OXYGEN, typed)?;
+        assert_eq!((text.as_str(), alignment), (drawn, LabelAlignment::Right));
+        // O stays at the bond; the rest extends left past the original H,
+        // by at most half a bond length per glyph beyond HO's two.
+        let (left, right) = ink_span(&result, C4_OXYGEN)?;
+        assert!(
+            (right - ho_right).abs() < 0.5,
+            "{typed}: {right} vs {ho_right}"
+        );
+        let extra = drawn.chars().count().saturating_sub(2) as f32;
+        assert!(
+            left <= ho_left && ho_left - left < 21. * extra,
+            "{typed}: {left} vs {ho_left}"
+        );
+        assert!(label_ring_intersections(&result)?.is_empty(), "{typed}");
+    }
+    Ok(())
+}
+
+#[test]
+fn groups_typed_at_the_anomeric_hydroxyl_turn_to_the_free_side() -> anyhow::Result<()> {
+    use crate::abbreviations::LabelAlignment;
+    let doc = sugar_document(Sugar::Glucose, Anomer::Alpha, 42.).map_err(anyhow::Error::msg)?;
+    let (oh_left, oh_right) = ink_span(&doc, C1_OXYGEN)?;
+    // Typed MeO is the OMe group, read away from the ring; OMe and SPh are unchanged.
+    for (typed, drawn) in [("MeO", "OMe"), ("OMe", "OMe"), ("SPh", "SPh")] {
+        let (result, text, alignment) = typed_group(&doc, C1_OXYGEN, typed)?;
+        assert_eq!((text.as_str(), alignment), (drawn, LabelAlignment::Auto));
+        let (left, right) = ink_span(&result, C1_OXYGEN)?;
+        assert!((left - oh_left).abs() < 2. && right >= oh_right, "{typed}");
+        assert!(label_ring_intersections(&result)?.is_empty(), "{typed}");
+    }
+    Ok(())
+}
+
+#[test]
+fn retyping_a_group_keeps_its_alignment() -> anyhow::Result<()> {
+    use crate::abbreviations::LabelAlignment;
+    let doc = sugar_document(Sugar::Glucose, Anomer::Alpha, 42.).map_err(anyhow::Error::msg)?;
+    for (id, alignment) in [
+        (C4_OXYGEN, LabelAlignment::Left),
+        (C4_OXYGEN, LabelAlignment::Center),
+        (C1_OXYGEN, LabelAlignment::Right),
+        (C1_OXYGEN, LabelAlignment::Auto),
+        (C1_OXYGEN, LabelAlignment::Above),
+    ] {
+        let (mut grouped, _, _) = typed_group(&doc, id, "OBn")?;
+        grouped
+            .abbreviations
+            .iter_mut()
+            .find(|g| g.anchor == id)
+            .ok_or_else(|| anyhow::anyhow!("OBn group"))?
+            .alignment = alignment;
+        let (_, _, retyped) = typed_group(&grouped, id, "OMe")?;
+        assert_eq!(retyped, alignment, "{id}");
+    }
+    Ok(())
+}

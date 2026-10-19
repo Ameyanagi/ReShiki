@@ -361,7 +361,13 @@ impl App {
                         if let Some(group) =
                             doc.abbreviations.iter_mut().find(|g| g.anchor == state.id)
                         {
-                            group.alignment = state.alignment;
+                            // A new group keeps the side the model chose
+                            // from the label it replaced.
+                            if state.members.is_some()
+                                || self.tab.doc.abbreviation(state.id).is_some()
+                            {
+                                group.alignment = state.alignment;
+                            }
                             if state.members.is_some()
                                 || state.reverse_edited
                                 || self

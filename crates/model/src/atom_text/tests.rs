@@ -1061,6 +1061,29 @@ fn every_bundled_reverse_spelling_types_as_its_group() -> Result<(), Box<dyn std
     Ok(())
 }
 
+/// On a horizontal bond the replaced label already faces the same way as the
+/// group, so the group keeps Auto alignment on either side.
+#[test]
+fn groups_typed_on_horizontal_bonds_stay_automatic() -> Result<(), Box<dyn std::error::Error>> {
+    use crate::abbreviations::LabelAlignment;
+    let (right_end, endpoint) = ethane();
+    let mut left_end = Document::default();
+    let start = left_end.add_atom("C", Point::new(0., 0.));
+    let methyl = left_end.add_atom("C", Point::new(42., 0.));
+    left_end.add_bond(start, methyl, 1, "plain");
+    for (doc, id, drawn) in [(right_end, endpoint, "OMe"), (left_end, start, "MeO")] {
+        for typed in ["OMe", "MeO"] {
+            let result = apply(&doc, id, typed, Mode::Auto)?;
+            let group = result.abbreviation(id).ok_or(typed)?;
+            assert_eq!(
+                (group.text(&result), group.alignment),
+                (drawn, LabelAlignment::Auto)
+            );
+        }
+    }
+    Ok(())
+}
+
 #[test]
 fn names_with_locants_never_reach_the_link_node_parser() -> Result<(), Box<dyn std::error::Error>> {
     for name in ["2-thienyl", "propan-2-yl", "4-methoxyphenyl"] {
