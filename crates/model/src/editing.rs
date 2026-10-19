@@ -234,10 +234,104 @@ pub fn analysis_atoms(doc: &Document, selected: &[u64]) -> Vec<u64> {
         .collect()
 }
 
-/// The fragment analyzed for `atoms`, without cached computed labels.
+/// The fragment analyzed for `atoms`, without cached computed labels. Cut
+/// covalent bonds are capped with hydrogens. Atoms with a fixed hydrogen
+/// count, such as an imported ChemDraw label, get explicit ones, so the open
+/// valences do not read as radicals while intended radicals stay.
 pub fn analysis_document(doc: &Document, atoms: &[u64]) -> Document {
     let mut part = selection(doc, atoms);
     crate::atom_labels::clear_computed(&mut part);
+    let kept: HashSet<_> = part.atoms.iter().map(|a| a.id).collect();
+    // Twice the valence `b` gives `atom`, as in the chemistry graph: a
+    // dative bond gives none to its donor `a`, a hydrogen bond none at all.
+    let twice = |b: &crate::document::Bond, atom: u64| match b.order {
+        1..=3 => u32::from(b.order) * 2,
+        4 | 7 => 3,
+        5 if atom == b.b => 2,
+        6 => 8,
+        _ => 0,
+    };
+    let number = |symbol: &str| {
+        crate::chemistry::ELEMENTS
+            .iter()
+            .position(|e| e.symbol == symbol)
+    };
+    let metals: HashSet<u64> = doc
+        .atoms
+        .iter()
+        .filter(|a| {
+            number(&a.element).is_some_and(
+                |n| !matches!(n, 0..=2 | 5..=10 | 14..=18 | 33..=36 | 52..=54 | 85..=86),
+            )
+        })
+        .map(|a| a.id)
+        .collect();
+    // Per kept atom: twice the valence kept and cut (`None` when a cut bond
+    // is aromatic, which has no whole valence), and whether a single bond to
+    // a metal is cut or kept.
+    #[derive(Default)]
+    struct Valence {
+        kept: u32,
+        cut: Option<u32>,
+        metal_cut: bool,
+        metal_kept: bool,
+    }
+    let mut valence: HashMap<u64, Valence> = HashMap::new();
+    for b in &doc.bonds {
+        for (atom, other) in [(b.a, b.b), (b.b, b.a)] {
+            if !kept.contains(&atom) {
+                continue;
+            }
+            let entry = valence.entry(atom).or_insert_with(|| Valence {
+                cut: Some(0),
+                ..Default::default()
+            });
+            let to_metal = b.order == 1 && metals.contains(&other);
+            if kept.contains(&other) {
+                entry.kept += twice(b, atom);
+                entry.metal_kept |= to_metal;
+            } else {
+                let cut = (!matches!(b.order, 4 | 7)).then(|| twice(b, atom));
+                entry.cut = entry.cut.zip(cut).map(|(sum, cut)| sum + cut);
+                entry.metal_cut |= to_metal;
+            }
+        }
+    }
+    for atom in part.atoms.iter_mut().filter(|a| a.no_implicit) {
+        let Some(v) = valence.get(&atom.id).filter(|v| v.cut != Some(0)) else {
+            continue;
+        };
+        // RDKit's largest valence for the charge-adjusted element; -1 (any)
+        // for metals.
+        let largest = number(&atom.element)
+            .and_then(|n| usize::try_from(n as i32 - atom.charge).ok())
+            .and_then(|n| crate::chemistry::ELEMENTS.get(n))
+            .and_then(|e| e.valences.last())
+            .map_or(-1, |v| *v);
+        let fits = |kept: u32, cut: u32| {
+            largest < 0 || (kept + cut) / 2 + atom.explicit_h <= largest as u32
+        };
+        let (mut kept, Some(mut cut)) = (v.kept, v.cut) else {
+            atom.no_implicit = false;
+            continue;
+        };
+        // Preparation turns one single bond from a non-metal that exceeds its
+        // valence to a metal dative, taking no valence from the non-metal.
+        if !fits(kept, cut) && !metals.contains(&atom.id) {
+            if v.metal_cut {
+                cut -= 2;
+            } else if v.metal_kept {
+                kept -= 2;
+            }
+        }
+        if fits(kept, cut) {
+            atom.explicit_h += cut / 2;
+        } else {
+            // Preparation reinterprets other atoms that would exceed their
+            // valence, such as a neutral nitro N, so they recalculate.
+            atom.no_implicit = false;
+        }
+    }
     part
 }
 

@@ -185,6 +185,19 @@ impl ArrowStyle {
         }
         s
     }
+    /// Side (1 left, -1 right) and drawn width of the barb of a solid half
+    /// head, widened so it stays visible beside a thick shaft.
+    pub(crate) fn barb(&self, kind: Head) -> Option<(f32, f32)> {
+        let side = match kind {
+            Head::Left => 1.,
+            Head::Right => -1.,
+            _ => return None,
+        };
+        let width = DEFAULT
+            .world(self.head_width_pt)
+            .max(DEFAULT.world(self.width_pt) * 0.75);
+        (self.shape == HeadShape::Solid).then_some((side, width))
+    }
     pub fn validate(&self) -> Result<(), String> {
         for (label, n, lo, hi) in [
             ("Arrow line width", self.width_pt, 0.1, 12.),
@@ -733,9 +746,7 @@ impl Arrow {
         kind: Head,
     ) -> Option<(Vec<PathCommand>, f32)> {
         use PathCommand::{Close, Line, Move};
-        if s.shape != HeadShape::Solid || !matches!(kind, Head::Left | Head::Right) {
-            return None;
-        }
+        let (side, width) = s.barb(kind)?;
         let sign = (to - from).signum();
         let span = (to - from).abs();
         let direction = self.shaft_tangent(to, sign < 0.);
@@ -743,7 +754,6 @@ impl Arrow {
         let length = DEFAULT
             .world(s.head_length_pt)
             .min(self.point(from).distance(self.point(to)) * 0.4);
-        let width = DEFAULT.world(s.head_width_pt).max(radius * 1.5);
         let speed = self
             .offset_velocity(to, offset)
             .distance(Point::default())
@@ -753,7 +763,6 @@ impl Arrow {
         } else {
             to - sign * (length * (1. - s.head_notch) / speed).min(span * 0.4)
         };
-        let side = if kind == Head::Left { 1. } else { -1. };
         let inner = offset + side * sign * radius;
         let outer = offset - side * sign * radius;
         // Continue the shaft's unbarbed edge all the way to the tip. Closing

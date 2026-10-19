@@ -556,6 +556,10 @@ impl App {
             }
             return Task::none();
         }
+        // `?` over a target opens its properties; anywhere else it opens Help.
+        if key == "?" && atom.is_none() && bond.is_none() {
+            return self.update(Message::ToggleHelp);
+        }
         if ["/", "?", "=", "Enter"].contains(&key) {
             if key == "Enter"
                 && !explicit
@@ -670,7 +674,10 @@ impl App {
     /// Keys without a contextual chemistry action keep their ordinary drawing
     /// tool behavior, including Text, chain and graphic shortcuts.
     pub(super) fn empty_context_key(&mut self, key: &str) -> Task<Message> {
-        if ["/", "?", "=", "Enter"].contains(&key) {
+        if key == "?" {
+            return self.update(Message::ToggleHelp);
+        }
+        if ["/", "=", "Enter"].contains(&key) {
             return self.update(Message::Inspector(InspectorTab::Properties));
         }
         // No contextual action: select a drawing tool. Preserve useful nonconflicting aliases.
