@@ -778,7 +778,14 @@ async fn help_returns_keyboard_focus_and_preserves_the_underlying_input_selectio
             let _ = app.update(message);
             assert!(app.help_open);
             let modal = ui.snapshot(&app);
-            assert_eq!(modal.nodes.len(), 3);
+            // Four controls plus one named button per result row.
+            let rows = modal
+                .nodes
+                .iter()
+                .filter(|node| node.id.starts_with("help-row-"))
+                .count();
+            assert!(rows > 0);
+            assert_eq!(modal.nodes.len() - rows, 4);
             assert!(modal.nodes.iter().all(|node| node.id.starts_with("help-")));
             assert!(matches!(
                 ui.activate(&app, "help-open"),
@@ -791,7 +798,13 @@ async fn help_returns_keyboard_focus_and_preserves_the_underlying_input_selectio
 
             // Modal traversal stays inside Help, including wrapping and reverse
             // traversal, without unfocusing the inert opener underneath it.
-            for id in ["help-close", "help-examples", "help-done", "help-close"] {
+            for id in [
+                "help-close",
+                "help-search",
+                "help-examples",
+                "help-done",
+                "help-close",
+            ] {
                 ui.tab(&app, false);
                 ui.assert_focused(&app, id);
             }

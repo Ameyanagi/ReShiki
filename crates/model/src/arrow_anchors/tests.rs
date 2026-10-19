@@ -791,6 +791,624 @@ fn manual_cold_cage_attachment_queries_report_surviving_ink() {
         }
     }
 }
+/// Smallest angle between the arrival tangent at `end` and a bond leaving `atom`.
+fn head_bond_clearance(d: &Document, arrow: &Arrow, atom: u64) -> f32 {
+    let center = d.atom(atom).unwrap().position;
+    let head = unit(delta(arrow.cubic.unwrap()[1], arrow.end));
+    d.bonds
+        .iter()
+        .filter(|b| b.a == atom || b.b == atom)
+        .map(|b| {
+            let other = d.atom(if b.a == atom { b.b } else { b.a }).unwrap();
+            dot(head, unit(delta(other.position, center)))
+                .clamp(-1., 1.)
+                .acos()
+                .to_degrees()
+        })
+        .fold(180., f32::min)
+}
+fn lone_pair_arrow_to(d: &mut Document, destination: u64) -> u64 {
+    lone_pair_arrow_from(d, -120., destination)
+}
+/// Arrow from a lone pair 25 units right of an O at `(x, 0)`.
+fn lone_pair_arrow_from(d: &mut Document, x: f32, destination: u64) -> u64 {
+    let o = d.add_atom("O", Point::new(x, 0.));
+    scientific::attach(
+        d.atom_mut(o).unwrap(),
+        SymbolKind::LonePair,
+        Point::new(25., 0.),
+    )
+    .unwrap();
+    let source = pick(d, Point::new(x + 25., 0.), 2.).unwrap();
+    assert!(matches!(source, Pick::LonePair { .. }));
+    create(
+        d,
+        &source,
+        &Pick::Atom(destination),
+        Preset::Curved,
+        ArrowStyle::preset(Preset::Curved),
+    )
+    .unwrap()
+}
+#[test]
+fn mechanism_attachment_312_lone_pair_to_carbonyl_head_clears_methyl_bond() {
+    // Methoxide lone pair left of acetone; the default arrival direction runs
+    // exactly along one C-CH3 bond, which put the arrowhead on that bond.
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    let along = 0.7f32.atan2(-1.);
+    for (k, symbol, order) in [(0., "C", 1), (1., "C", 1), (2., "O", 2)] {
+        let angle = along + k * 2. * std::f32::consts::FRAC_PI_3;
+        let n = d.add_atom(symbol, Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, order, "plain");
+    }
+    let id = lone_pair_arrow_to(&mut d, c);
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let clearance = head_bond_clearance(&d, arrow, c);
+    assert!(
+        clearance > 55.,
+        "arrowhead within {clearance} deg of a bond"
+    );
+    // The head still approaches from the source side.
+    assert!(arrow.cubic.unwrap()[1].x < arrow.end.x);
+}
+#[test]
+fn mechanism_attachment_312_pi_bond_to_own_oxygen_head_clears_the_bond() {
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    let o = d.add_atom("O", Point::new(0., -42.));
+    d.add_bond(c, o, 2, "plain");
+    let (a, b) = if c < o { (c, o) } else { (o, c) };
+    let id = create(
+        &mut d,
+        &Pick::Bond {
+            a,
+            b,
+            fraction: 0.5,
+        },
+        &Pick::Atom(o),
+        Preset::Curved,
+        ArrowStyle::preset(Preset::Curved),
+    )
+    .unwrap();
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let clearance = head_bond_clearance(&d, arrow, o);
+    assert!(
+        clearance > 55.,
+        "arrowhead within {clearance} deg of the C=O bond"
+    );
+    assert!(head_ink_gap(&d, arrow) > 0.);
+}
+#[test]
+fn mechanism_attachment_312_bond_avoidance_keeps_approach_on_source_side() {
+    // The widest gap lies behind the target; the arrival must not swing there.
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for degrees in [80f32, 190., 310.] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, 1, "plain");
+    }
+    let id = lone_pair_arrow_to(&mut d, c);
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let arrival = unit(delta(arrow.cubic.unwrap()[1], arrow.end));
+    assert!(
+        arrival.x < 0.,
+        "arrival {arrival:?} turned behind the target"
+    );
+    assert!(head_bond_clearance(&d, arrow, c) > 50.);
+    assert!(head_ink_gap(&d, arrow) > 0.);
+}
+#[test]
+fn mechanism_attachment_312_bond_avoidance_stays_in_the_default_opening() {
+    // The default arrives between bonds at 120 and 180 degrees; a wider gap
+    // past the 120-degree bond must not pull the shaft across that bond.
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for degrees in [120f32, 180.] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, 1, "plain");
+    }
+    let id = lone_pair_arrow_to(&mut d, c);
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let arrival = unit(delta(arrow.cubic.unwrap()[1], arrow.end));
+    let degrees = arrival.y.atan2(arrival.x).to_degrees();
+    assert!(
+        (120.0..=180.).contains(&degrees),
+        "arrival {degrees} deg left the opening between the bonds"
+    );
+    assert!(head_bond_clearance(&d, arrow, c) > 25.);
+}
+#[test]
+fn mechanism_attachment_312_clear_default_arrival_is_unchanged() {
+    // A destination whose bonds are already clear keeps the default arrival.
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    let n = d.add_atom("C", Point::new(42., 0.));
+    d.add_bond(c, n, 1, "plain");
+    let id = lone_pair_arrow_to(&mut d, c);
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    near(
+        unit(delta(arrow.cubic.unwrap()[1], arrow.end)),
+        unit(Point::new(-1., 0.7)),
+    );
+}
+/// Smallest gap between the modelled arrowhead outline and rendered bond ink.
+fn head_ink_gap(d: &Document, arrow: &Arrow) -> f32 {
+    let style = arrow.appearance();
+    let axis = unit(delta(arrow.cubic.unwrap()[1], arrow.end));
+    let n = Point::new(-axis.y, axis.x);
+    let length = DEFAULT
+        .world(style.head_length_pt)
+        .min(arrow.start.distance(arrow.end) * 0.4);
+    let half = DEFAULT.world(style.head_width_pt);
+    let base = arrow.end.offset(axis.x * length, axis.y * length);
+    let corners = [
+        arrow.end,
+        base.offset(n.x * half, n.y * half),
+        base.offset(-n.x * half, -n.y * half),
+    ];
+    let samples: Vec<Point> = (0..3)
+        .flat_map(|i| {
+            let (p, q) = (corners[i], corners[(i + 1) % 3]);
+            (0..=128).map(move |k| {
+                let t = k as f32 / 128.;
+                p.offset((q.x - p.x) * t, (q.y - p.y) * t)
+            })
+        })
+        .collect();
+    ink_gap(d, &samples) - DEFAULT.world(style.width_pt) * 0.5
+}
+/// Smallest gap between the filled arrowhead outlines `arrow` renders and
+/// rendered bond ink.
+fn rendered_head_ink_gap(d: &Document, arrow: &Arrow) -> f32 {
+    use crate::graphics::PathCommand;
+    let mut samples = Vec::new();
+    for path in arrow.paths().into_iter().filter(|p| p.filled) {
+        let mut outline = Vec::new();
+        for command in path.commands {
+            match command {
+                PathCommand::Move(p) | PathCommand::Line(p) => outline.push(p),
+                PathCommand::Cubic(_, _, p) => outline.push(p),
+                PathCommand::Close => {}
+            }
+        }
+        for (p, q) in outline.iter().zip(outline.iter().cycle().skip(1)) {
+            samples.extend((0..=128).map(|k| p.lerp(*q, k as f32 / 128.)));
+        }
+    }
+    assert!(!samples.is_empty(), "arrow renders no filled head");
+    ink_gap(d, &samples)
+}
+/// Smallest gap between `samples` and the bond ink rendered without arrows.
+fn ink_gap(d: &Document, samples: &[Point]) -> f32 {
+    use crate::{graphics::PathCommand, scene::Primitive};
+    let mut bare = d.clone();
+    bare.arrows.clear();
+    let segment = |p: Point, a: Point, b: Point| {
+        let v = delta(b, a);
+        let t = (dot(delta(p, a), v) / dot(v, v).max(0.00001)).clamp(0., 1.);
+        p.distance(a.offset(v.x * t, v.y * t))
+    };
+    // Stroked lines as (a, b, half width); filled bond shapes as polygons.
+    let mut lines = Vec::new();
+    let mut polygons: Vec<Vec<Point>> = Vec::new();
+    for primitive in crate::scene::primitives(&bare) {
+        match primitive {
+            Primitive::Line(a, b, width) => lines.push((a, b, width / 2.)),
+            Primitive::Polygon(points) => polygons.push(points),
+            Primitive::Path {
+                commands,
+                filled: true,
+                ..
+            } => {
+                for command in commands {
+                    match command {
+                        PathCommand::Move(p) => polygons.push(vec![p]),
+                        PathCommand::Line(p) | PathCommand::Cubic(_, _, p) => {
+                            polygons.last_mut().unwrap().push(p);
+                        }
+                        PathCommand::Close => {}
+                    }
+                }
+            }
+            Primitive::Path {
+                commands,
+                style,
+                filled: false,
+            } => {
+                let half = DEFAULT.world(style.width_pt) / 2.;
+                for contour in crate::graphics::flattened(&commands) {
+                    lines.extend(contour.windows(2).map(|w| (w[0], w[1], half)));
+                }
+            }
+            _ => {}
+        }
+    }
+    let polygon_gap = |p: Point, points: &[Point]| {
+        let edges = || points.iter().zip(points.iter().cycle().skip(1));
+        let inside = edges()
+            .filter(|(a, b)| {
+                (a.y > p.y) != (b.y > p.y) && p.x < a.x + (p.y - a.y) / (b.y - a.y) * (b.x - a.x)
+            })
+            .count()
+            % 2
+            == 1;
+        let edge = edges()
+            .map(|(a, b)| segment(p, *a, *b))
+            .fold(f32::MAX, f32::min);
+        if inside { -edge } else { edge }
+    };
+    let mut worst = (f32::MAX, Point::default());
+    for p in samples {
+        for g in lines
+            .iter()
+            .map(|(a, b, w)| segment(*p, *a, *b) - w)
+            .chain(polygons.iter().map(|q| polygon_gap(*p, q)))
+        {
+            if g < worst.0 {
+                worst = (g, *p);
+            }
+        }
+    }
+    worst.0
+}
+#[test]
+fn mechanism_attachment_312_lone_pair_to_acetone_head_clears_rendered_bonds() {
+    // Acetone drawn with C=O up; the default arrival from a nucleophile on
+    // the left ran along the lower-left methyl bond.
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for (degrees, symbol, order) in [(270f32, "O", 2), (150., "C", 1), (30., "C", 1)] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom(symbol, Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, order, "plain");
+    }
+    let id = lone_pair_arrow_to(&mut d, c);
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let gap = head_ink_gap(&d, arrow);
+    assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
+}
+#[test]
+fn mechanism_attachment_312_head_clears_bold_bond_width() {
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for (degrees, display) in [(130f32, "plain"), (190., "bold")] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, 1, display);
+    }
+    let id = lone_pair_arrow_to(&mut d, c);
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let gap = head_ink_gap(&d, arrow);
+    assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
+}
+#[test]
+fn mechanism_attachment_312_head_clears_aromatic_dashed_rail() {
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for (degrees, order) in [(25f32, 4), (180., 1)] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, order, "plain");
+    }
+    let id = lone_pair_arrow_to(&mut d, c);
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let gap = head_ink_gap(&d, arrow);
+    assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
+}
+#[test]
+fn mechanism_attachment_312_search_never_steps_off_a_sampled_bond() {
+    // A search step lands exactly on the 195-degree bond; it must stop there
+    // rather than cross into the next opening.
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    let preferred = 0.7f32.atan2(-1.).to_degrees();
+    for degrees in [preferred - 25., preferred + 50.] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, 1, "plain");
+    }
+    let id = lone_pair_arrow_to(&mut d, c);
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let arrival = unit(delta(arrow.cubic.unwrap()[1], arrow.end));
+    let degrees = arrival.y.atan2(arrival.x).to_degrees().rem_euclid(360.);
+    assert!(
+        (preferred - 25.0..=preferred + 50.).contains(&degrees),
+        "arrival {degrees} deg left the opening between the bonds"
+    );
+}
+#[test]
+fn mechanism_attachment_312_short_arrow_scores_its_shortened_head() {
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for (degrees, order) in [(50f32, 2), (175., 1), (300., 1)] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, order, "plain");
+    }
+    d.bonds[0].double_position = crate::bonds::DoublePosition::Center;
+    let id = lone_pair_arrow_from(&mut d, -55., c);
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let gap = head_ink_gap(&d, arrow);
+    assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
+}
+#[test]
+fn mechanism_attachment_312_projected_dative_uses_its_drawn_width() {
+    let mut d = Document::default();
+    d.drawing_style.bold_width_pt = 2.6;
+    let c = d.add_atom("C", Point::new(0., 0.));
+    let angle = 100f32.to_radians();
+    let donor = d.add_atom("N", Point::new(42. * angle.cos(), 42. * angle.sin()));
+    let side = d.add_atom("C", Point::new(-42., 0.));
+    d.add_bond(c, donor, 5, "wedge_end");
+    d.bonds[0].projection = true;
+    d.add_bond(c, side, 1, "plain");
+    let id = lone_pair_arrow_to(&mut d, c);
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let gap = head_ink_gap(&d, arrow);
+    assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
+}
+#[test]
+fn mechanism_attachment_312_head_clears_crossed_wavy_double_bond() {
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for (degrees, order, display) in [(70f32, 2, "wavy"), (160., 1, "plain"), (280., 1, "plain")] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, order, display);
+    }
+    d.bonds[0].double_position = crate::bonds::DoublePosition::Left;
+    let id = lone_pair_arrow_to(&mut d, c);
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let gap = head_ink_gap(&d, arrow);
+    assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
+}
+#[test]
+fn mechanism_attachment_312_long_thin_head_is_checked_along_its_length() {
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for (degrees, order) in [(269f32, 3), (126., 1)] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, order, "plain");
+    }
+    let o = d.add_atom("O", Point::new(-240., 0.));
+    scientific::attach(
+        d.atom_mut(o).unwrap(),
+        SymbolKind::LonePair,
+        Point::new(25., 0.),
+    )
+    .unwrap();
+    let source = pick(&d, Point::new(-215., 0.), 2.).unwrap();
+    let mut style = ArrowStyle::preset(Preset::Curved);
+    (style.head_length_pt, style.head_width_pt, style.width_pt) = (24., 0.25, 0.6);
+    let id = create(&mut d, &source, &Pick::Atom(c), Preset::Curved, style).unwrap();
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let gap = head_ink_gap(&d, arrow);
+    assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
+}
+#[test]
+fn mechanism_attachment_312_head_clears_bold_secondary_rail() {
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for (degrees, order) in [(43f32, 2), (159., 1)] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, order, "plain");
+    }
+    d.bonds[0].double_position = crate::bonds::DoublePosition::Center;
+    d.bonds[0].secondary_display = Some("bold".into());
+    let id = lone_pair_arrow_to(&mut d, c);
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let gap = head_ink_gap(&d, arrow);
+    assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
+}
+#[test]
+fn mechanism_attachment_312_aromatic_rail_ignores_saved_position() {
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for (degrees, order) in [(30f32, 4), (180., 1)] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, order, "plain");
+    }
+    d.bonds[0].double_position = crate::bonds::DoublePosition::Left;
+    let id = lone_pair_arrow_to(&mut d, c);
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let gap = head_ink_gap(&d, arrow);
+    assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
+}
+#[test]
+fn mechanism_attachment_312_short_side_double_bond_does_not_panic() {
+    // The set-back inner rail of a side double bond has no length here.
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    let n = d.add_atom("C", Point::new(4., 0.));
+    d.add_bond(c, n, 2, "plain");
+    d.bonds[0].double_position = crate::bonds::DoublePosition::Right;
+    lone_pair_arrow_to(&mut d, c);
+}
+#[test]
+fn mechanism_attachment_312_head_clears_double_bond_rails() {
+    // A centered C=O beside the opening: angles from bond centre lines alone
+    // would put the head on a rail.
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for (degrees, order) in [(70f32, 2), (160., 1), (280., 1)] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, order, "plain");
+    }
+    let id = lone_pair_arrow_to(&mut d, c);
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let gap = head_ink_gap(&d, arrow);
+    assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
+}
+#[test]
+fn mechanism_attachment_312_head_clears_mitered_bold_junction() {
+    // The outer miter of a narrow bold V points straight at the default
+    // arrival, past both strokes.
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for degrees in [295f32, 355.] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, 1, "bold");
+    }
+    let id = lone_pair_arrow_to(&mut d, c);
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let gap = head_ink_gap(&d, arrow);
+    assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
+}
+#[test]
+fn mechanism_attachment_312_head_clears_mitered_side_double_backbone() {
+    // A side double bond's backbone is mitered like a single bond.
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for degrees in [295f32, 355.] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, 2, "bold");
+    }
+    for bond in &mut d.bonds {
+        bond.double_position = crate::bonds::DoublePosition::Right;
+    }
+    let id = lone_pair_arrow_to(&mut d, c);
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let gap = head_ink_gap(&d, arrow);
+    assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
+}
+#[test]
+fn mechanism_attachment_312_head_clears_hatch_stroke() {
+    // Hatches span the bold width and are then stroked, so their caps
+    // reach past it.
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for (degrees, display) in [(154f32, "hashed"), (200., "plain")] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, 1, display);
+    }
+    let id = lone_pair_arrow_to(&mut d, c);
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let gap = head_ink_gap(&d, arrow);
+    assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
+}
+#[test]
+fn mechanism_attachment_312_head_clears_joined_hollow_wedge_outline() {
+    // Two hollow wedges meeting at their wide ends share a mitered corner
+    // that reaches past either wedge's own width.
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for degrees in [295f32, 355.] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(n, c, 1, "hollow_wedge");
+    }
+    let id = lone_pair_arrow_to(&mut d, c);
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let gap = head_ink_gap(&d, arrow);
+    assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
+}
+#[test]
+fn mechanism_attachment_312_tiny_head_inside_a_miter_fill_is_detected() {
+    // A head small enough to sit inside the filled miter touches none of its
+    // edges or strokes.
+    let mut d = Document::default();
+    d.drawing_style.bold_width_pt = 2.742857;
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for degrees in [320f32, 350.] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, 1, "bold");
+    }
+    let o = d.add_atom("O", Point::new(-120., 0.));
+    scientific::attach(
+        d.atom_mut(o).unwrap(),
+        SymbolKind::LonePair,
+        Point::new(25., 0.),
+    )
+    .unwrap();
+    let source = pick(&d, Point::new(-95., 0.), 2.).unwrap();
+    let mut style = ArrowStyle::preset(Preset::Curved);
+    (style.width_pt, style.head_length_pt, style.head_width_pt) = (0.1, 0.5, 0.25);
+    let id = create(&mut d, &source, &Pick::Atom(c), Preset::Curved, style).unwrap();
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let gap = head_ink_gap(&d, arrow);
+    assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
+}
+#[test]
+fn mechanism_attachment_312_search_finds_a_clear_direction_between_coarse_steps() {
+    // The only clear arrival (about 142.5 degrees) lies between 5-degree steps.
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for degrees in [128.5f32, 156.5] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, 1, "plain");
+    }
+    let id = lone_pair_arrow_to(&mut d, c);
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let gap = head_ink_gap(&d, arrow);
+    assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
+}
+#[test]
+fn mechanism_attachment_312_bond_ink_covers_plain_dative_head() {
+    // The filled head drawn at the acceptor is much wider than the dative
+    // line, and starts past the acceptor's label when it has one.
+    for acceptor in ["C", "Pd"] {
+        let mut d = Document::default();
+        let c = d.add_atom(acceptor, Point::new(0., 0.));
+        let donor = d.add_atom("N", Point::new(-30., 30.));
+        d.add_bond(donor, c, 5, "plain");
+        let (_, lines, _) = bond_ink(&d, c, Point::new(0., 0.));
+        let corners: Vec<Point> = crate::scene::primitives(&d)
+            .into_iter()
+            .filter_map(|p| match p {
+                crate::scene::Primitive::Polygon(points) if points.len() == 3 => Some(points),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+        assert_eq!(corners.len(), 3, "{acceptor}: one drawn dative head");
+        for p in corners {
+            let covered = lines.iter().any(|(a, b, half)| {
+                let v = delta(*b, *a);
+                let t = (dot(delta(p, *a), v) / dot(v, v)).clamp(0., 1.);
+                p.distance(a.offset(v.x * t, v.y * t)) <= half + 0.01
+            });
+            assert!(covered, "{acceptor}: head corner {p:?} outside bond ink");
+        }
+    }
+}
+#[test]
+fn mechanism_attachment_312_fishhook_barb_clears_rendered_bonds() {
+    // A thick shaft widens the solid half head's barb past its configured
+    // half-width; the search must keep the drawn barb off the bonds.
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for degrees in [110f32, 180.] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, 1, "plain");
+    }
+    let o = d.add_atom("O", Point::new(-120., 0.));
+    scientific::attach(
+        d.atom_mut(o).unwrap(),
+        SymbolKind::LonePair,
+        Point::new(25., 0.),
+    )
+    .unwrap();
+    let source = pick(&d, Point::new(-95., 0.), 2.).unwrap();
+    let mut style = ArrowStyle::preset(Preset::Fishhook);
+    (style.width_pt, style.head_width_pt, style.head_length_pt) = (4., 0.25, 0.5);
+    let id = create(&mut d, &source, &Pick::Atom(c), Preset::Fishhook, style).unwrap();
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let gap = rendered_head_ink_gap(&d, arrow);
+    assert!(gap > 0., "fishhook barb overlaps bond ink by {}", -gap);
+}
 #[test]
 fn double_bond_strokes_are_arrow_targets_not_only_the_gap() {
     // Issue #330: acetone-style terminal C=O at 225% zoom (8 px pick radius).

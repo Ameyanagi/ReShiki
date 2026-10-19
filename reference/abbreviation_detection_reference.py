@@ -1,7 +1,8 @@
 """Independent RDKit abbreviation oracle and pinned native query export.
 
-Regenerate the production catalog with --write-presets. Expected detection and
-validation call the Python reference functions, never Rust or its data. Selection
+The header exports RDKit's adjusted query for every catalog entry; the Rust test
+compares it with the queries ReShiki derives from the same SMILES. Expected
+detection and validation call the Python reference functions, never Rust code. Selection
 eligibility deliberately precedes overlap arbitration in both implementations.
 """
 
@@ -155,13 +156,6 @@ def reorder_bonds(mol, order):
 
 def main():
     RDLogger.DisableLog("rdApp.*")
-    if "--write-presets" in sys.argv:
-        path = (
-            Path(__file__).resolve().parents[1]
-            / "crates/model/src/chemistry/abbreviations/presets.json"
-        )
-        path.write_text(json.dumps(catalog(), indent=2) + "\n")
-        return
     print(json.dumps(catalog()))
     rng = random.Random(48361)
     for label, (smiles, _) in abbreviations.PRESETS.items():
@@ -218,8 +212,10 @@ def main():
         if found.get("abbreviations"):
             found["abbreviations"][0]["label"] = "Custom"
             emit(f"custom-existing/{label}", original, found)
-    for left, (a, _) in abbreviations.PRESETS.items():
-        for right, (b, _) in abbreviations.PRESETS.items():
+    for left in abbreviations.CORE:
+        a = abbreviations.PRESETS[left][0]
+        for right in abbreviations.CORE:
+            b = abbreviations.PRESETS[right][0]
             mol = Chem.MolFromSmiles(f"N({a[1:]}){b[1:]}")
             assert mol is not None, (left, right)
             for chosen in [None, left, right]:
@@ -238,6 +234,15 @@ def main():
         "CC(C)C",
         "CC(C)(C)C",
         "COc1ccc(NC(=O)OC(C)(C)C)cc1",
+        "CNC(=O)OC(C)(C)C",
+        "CCNC(=O)OC(C)(C)C",
+        "C[N-]C(=O)OC(C)(C)C",
+        "C[NH2+]C(=O)OC(C)(C)C",
+        "OB(O)C1CCCCC1",
+        "[O-]B(O)C1CCCCC1",
+        "CP(C)C1CCCCC1",
+        "C[PH+](C)C1CCCCC1",
+        "COC(=O)C[13CH3]",
         "CC(=O)[O-]",
         "[CH2]C",
         "[CH2-]C",

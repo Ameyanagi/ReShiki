@@ -6,6 +6,7 @@
     "output/**",
     "assets/**",
     "tests/fixtures/**",
+    "crates/model/src/chemistry/abbreviations/catalog.json",
     "docs/agent-reference.md",
     "vendor/usvg/**",
     "vendor/svg2pdf/**",

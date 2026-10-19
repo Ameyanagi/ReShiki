@@ -789,30 +789,31 @@ fn label_names(tree: &Tree, text: usize) -> Result<(String, String)> {
     for span in tree.children(text, "s")? {
         label.push_str(&tree.node(span)?.text);
     }
-    let mut reverse_label = String::new();
-    // Other presets have no alternate spelling and leave both strings alone.
-    for (name, reverse) in [
-        ("OMe", "MeO"),
-        ("OEt", "EtO"),
-        ("OAc", "AcO"),
-        ("OBz", "BzO"),
-        ("OTs", "TsO"),
-        ("OMs", "MsO"),
-        ("OTBDPS", "TBDPSO"),
-        ("CF3", "F3C"),
-        ("CN", "NC"),
-        ("NO2", "O2N"),
-        ("CO2H", "HO2C"),
-        ("CO2Me", "MeO2C"),
-        ("CO2Et", "EtO2C"),
-    ] {
-        if label == name || label == reverse {
-            label = name.into();
-            reverse_label = reverse.into();
-            break;
-        }
+    let presets = crate::chemistry::abbreviations::presets()
+        .map_err(|error| Error::Invalid(error.to_string()))?;
+    Ok(group_names(&presets, label))
+}
+
+/// An exact label wins, user groups first as typing does; otherwise a reversed
+/// spelling maps back to its group. Other text keeps no reverse spelling.
+fn group_names(
+    presets: &[std::sync::Arc<crate::chemistry::abbreviations::Preset>],
+    label: String,
+) -> (String, String) {
+    let exact = |user: bool| presets.iter().find(|p| p.user == user && p.label == label);
+    let reversed = |user: bool| {
+        presets
+            .iter()
+            .find(|p| p.user == user && !p.reverse_label.is_empty() && p.reverse_label == label)
+    };
+    match exact(true)
+        .or_else(|| exact(false))
+        .or_else(|| reversed(true))
+        .or_else(|| reversed(false))
+    {
+        Some(preset) => (preset.label.clone(), preset.reverse_label.clone()),
+        None => (label, String::new()),
     }
-    Ok((label, reverse_label))
 }
 
 /// Python's .8g spelling, including exponent padding and signed zero.

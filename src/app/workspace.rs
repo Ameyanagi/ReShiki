@@ -706,7 +706,7 @@ impl App {
             .padding([5, 10])
             .on_press(Message::ToggleHelp)
             .style(control(self.help_open)),
-            "Help · F1",
+            format!("Help · {}", super::help::registry::finder_keys()),
             tooltip::Position::Right,
         )
     }
@@ -1906,11 +1906,9 @@ impl App {
             .iter()
             .filter(|g| g.members.iter().any(|id| self.tab.selected.contains(id)))
             .collect();
-        let choices: Vec<String> = reshiki::abbreviations::PRESETS
-            .iter()
-            .chain(reshiki::common_groups::LABELS.iter())
-            .chain(reshiki::ligands::LABELS)
-            .map(|s| (*s).into())
+        let choices: Vec<String> = reshiki::abbreviations::group_labels()
+            .into_iter()
+            .chain(reshiki::ligands::LABELS.iter().map(|s| (*s).into()))
             .collect();
         // Disabled commands say what they need.
         let item = |label, message: Message, enabled: bool, hint, reason| {
@@ -1961,8 +1959,22 @@ impl App {
                 "Select a connected fragment whose outside bonds meet one selected atom. A custom name does not change its chemistry.",
                 if self.tab.selected.is_empty() { "Select a connected fragment first" } else { "Enter a label first" },
             ),
+            item(
+                "Define abbreviation from selection",
+                action(A::Define),
+                !self.tab.selected.is_empty() && !label.is_empty(),
+                "Saves the selected group and its one outside bond to your abbreviations, so typing this label on any endpoint creates it.",
+                if self.tab.selected.is_empty() { "Select a group with one bond to the rest of the drawing" } else { "Enter a label first" },
+            ),
             horizontal_line(),
         ].spacing(10);
+        if let Some(warning) = &self.abbreviations.catalog_warning {
+            body = body.push(
+                text(warning)
+                    .size(11)
+                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61))),
+            );
+        }
         for group in selected {
             let atoms = group
                 .members
@@ -2069,27 +2081,37 @@ impl App {
             .placeholder("Mixed")
             .text_size(12)
             .width(Length::Fill),
-            text("Display settings keep the molecular composition intact.")
-                .size(11)
-                .style(muted_text),
-            horizontal_line(),
-            section("ATOM NUMBERS"),
-            row![
-                crate::appearance::text_input("1, atom1, a, α…", &self.tab.labels.seed)
-                    .on_input(|s| Message::Labels(A::Seed(s)))
-                    .on_submit(Message::Labels(A::Number))
-                    .size(12)
-                    .padding(7),
-                command("Number", Message::Labels(A::Number))
-                    .on_press_maybe((!ids.is_empty()).then_some(Message::Labels(A::Number)))
-            ]
-            .spacing(5),
-            text("Sequence follows atom creation/import order.")
-                .size(11)
-                .style(muted_text),
-            command("Clear numbers", Message::Labels(A::ClearNumbers)),
         ]
         .spacing(9);
+        if let Some(attachment) = self.label_attachment_picker(&atoms) {
+            body = body
+                .push(text("Bond attachment (text labels)").size(12))
+                .push(attachment);
+        }
+        body = body.push(
+            column![
+                text("Display settings keep the molecular composition intact.")
+                    .size(11)
+                    .style(muted_text),
+                horizontal_line(),
+                section("ATOM NUMBERS"),
+                row![
+                    crate::appearance::text_input("1, atom1, a, α…", &self.tab.labels.seed)
+                        .on_input(|s| Message::Labels(A::Seed(s)))
+                        .on_submit(Message::Labels(A::Number))
+                        .size(12)
+                        .padding(7),
+                    command("Number", Message::Labels(A::Number))
+                        .on_press_maybe((!ids.is_empty()).then_some(Message::Labels(A::Number)))
+                ]
+                .spacing(5),
+                text("Sequence follows atom creation/import order.")
+                    .size(11)
+                    .style(muted_text),
+                command("Clear numbers", Message::Labels(A::ClearNumbers)),
+            ]
+            .spacing(9),
+        );
         if ids.len() == 1 {
             body = body.push(text("Custom atom number").size(12)).push(
                 row![

@@ -1,45 +1,27 @@
 """Chemical abbreviations retain their complete molecular graph and stable IDs."""
 
 import copy
+import json
 import math
+from pathlib import Path
 
 from rdkit import Chem
 from rdkit.Chem import rdAbbreviations, rdDepictor, rdqueries
 
 # The leading dummy is the sole outside attachment; it is not part of the label.
-PRESETS = {
-    "OMe": ("*OC", "MeO"),
-    "OEt": ("*OCC", "EtO"),
-    "Me": ("*C", ""),
-    "Et": ("*CC", ""),
-    "nPr": ("*CCC", ""),
-    "iPr": ("*C(C)C", ""),
-    "nBu": ("*CCCC", ""),
-    "tBu": ("*C(C)(C)C", ""),
-    "Ph": ("*c1ccccc1", ""),
-    "Bn": ("*Cc1ccccc1", ""),
-    "Boc": ("*C(=O)OC(C)(C)C", ""),
-    "Cbz": ("*C(=O)OCc1ccccc1", ""),
-    "Fmoc": ("*C(=O)OCC1c2ccccc2-c2ccccc21", ""),
-    "Ac": ("*C(C)=O", ""),
-    "OAc": ("*OC(C)=O", "AcO"),
-    "Bz": ("*C(=O)c1ccccc1", ""),
-    "OBz": ("*OC(=O)c1ccccc1", "BzO"),
-    "Ts": ("*S(=O)(=O)c1ccc(C)cc1", ""),
-    "OTs": ("*OS(=O)(=O)c1ccc(C)cc1", "TsO"),
-    "Ms": ("*S(C)(=O)=O", ""),
-    "OMs": ("*OS(C)(=O)=O", "MsO"),
-    "TMS": ("*[Si](C)(C)C", ""),
-    "TBS": ("*[Si](C)(C)C(C)(C)C", ""),
-    "TBDPS": ("*[Si](c1ccccc1)(c1ccccc1)C(C)(C)C", ""),
-    "OTBDPS": ("*O[Si](c1ccccc1)(c1ccccc1)C(C)(C)C", "TBDPSO"),
-    "CF3": ("*C(F)(F)F", "F3C"),
-    "CN": ("*C#N", "NC"),
-    "NO2": ("*[N+](=O)[O-]", "O2N"),
-    "CO2H": ("*C(=O)O", "HO2C"),
-    "CO2Me": ("*C(=O)OC", "MeO2C"),
-    "CO2Et": ("*C(=O)OCC", "EtO2C"),
-}
+# The production catalog is the single source: label -> (SMILES, reverse label).
+CATALOG = json.loads(
+    (
+        Path(__file__).resolve().parents[2]
+        / "crates/model/src/chemistry/abbreviations/catalog.json"
+    ).read_text(encoding="utf-8")
+)["groups"]
+PRESETS = {group["label"]: (group["smiles"], group.get("reverse", "")) for group in CATALOG}
+# Pairwise oracle cases use the 62 groups bundled before the catalog grew,
+# which keeps their count bounded; every group still gets the linear cases.
+CORE = list(PRESETS)[:62]
+# Groups that Contract all skips unless they are requested by label.
+NAMED_ONLY = {group["label"] for group in CATALOG if not group.get("contract", True)}
 
 
 def validate(doc):
@@ -84,8 +66,66 @@ def validate(doc):
             raise ValueError("An abbreviation must be connected")
 
 
+def composition(atom):
+    """What a label asserts about an atom; contraction must not hide it."""
+    return (
+        atom.GetFormalCharge(),
+        atom.GetNumRadicalElectrons(),
+        atom.GetIsotope(),
+        atom.GetTotalNumHs(),
+    )
+
+
+def restrict(definition, smiles):
+    """Match only atoms whose composition equals the definition's."""
+    template = Chem.MolFromSmiles(smiles)
+    for atom, expected in zip(definition.mol.GetAtoms(), template.GetAtoms()):
+        if atom.GetIdx() == 0:
+            continue
+        charge, radicals, isotope, hydrogens = composition(expected)
+        for query in (
+            rdqueries.FormalChargeEqualsQueryAtom(charge),
+            rdqueries.NumRadicalElectronsEqualsQueryAtom(radicals),
+            rdqueries.IsotopeEqualsQueryAtom(isotope),
+            rdqueries.HCountEqualsQueryAtom(hydrogens),
+        ):
+            atom.ExpandQuery(query)
+
+
+def arbitrate(mol, definitions, withdrawn):
+    """RDKit's findApplicableAbbreviationMatches overlap rules (maxCoverage 1.0)."""
+    try:
+        mol.GetRingInfo().NumRings()
+    except RuntimeError:  # Uninitialized, as findApplicableAbbreviationMatches handles.
+        mol = Chem.Mol(mol)
+        Chem.FastFindRings(mol)
+    covered, first, reserved = set(), {}, []
+    for index, definition in enumerate(definitions):
+        if definition.mol.GetNumAtoms() > mol.GetNumAtoms():
+            continue
+        for match in mol.GetSubstructMatches(
+            definition.mol, uniquify=True, useChirality=False, maxMatches=1000
+        ):
+            if (index, match) in withdrawn or match[1] in first or covered & set(match[1:]):
+                continue
+            covered.update(match[1:])
+            first[match[1]] = len(reserved)
+            reserved.append((index, match))
+    accepted = [(i, m) for i, m in reserved if m[0] not in first]
+    # Only a group dropped because of a later, smaller group is withdrawn.
+    rejected = next(
+        ((i, m) for order, (i, m) in enumerate(reserved) if m[0] in first and first[m[0]] > order),
+        None,
+    )
+    return accepted, rejected
+
+
 def find(doc, mol, selection, label=None):
-    available = [(name, *data) for name, data in PRESETS.items() if not label or name == label]
+    available = [
+        (name, *data)
+        for name, data in PRESETS.items()
+        if (name == label if label else name not in NAMED_ONLY)
+    ]
     if not available:
         raise ValueError("Unknown abbreviation")
     # Prefer complete protecting groups over smaller groups within them.
@@ -93,6 +133,8 @@ def find(doc, mol, selection, label=None):
     definitions = rdAbbreviations.ParseAbbreviations(
         "\n".join(f"{name} {smiles}" for name, smiles, _ in available)
     )
+    for definition, (_, smiles, _) in zip(definitions, available):
+        restrict(definition, smiles)
     result = copy.deepcopy(doc)
     groups = result.setdefault("abbreviations", [])
     used = {i for g in groups for i in g["members"]}
@@ -112,11 +154,26 @@ def find(doc, mol, selection, label=None):
             for atom in definition.mol.GetAtoms():
                 if atom.GetIdx() != 0:  # The outside attachment need not be selected.
                     atom.ExpandQuery(rdqueries.HasPropQueryAtom(marker))
+    # RDKit drops a group whose outside atom became another group's attachment.
+    # When a later, smaller group causes that, the larger group's atoms stay
+    # bare (methyl-NHBoc lost both Boc and Me). Withdraw the first such group
+    # and arbitrate again; the first pass must equal RDKit.
+    withdrawn = set()
+    accepted, rejected = arbitrate(mol, definitions, withdrawn)
     labeled = rdAbbreviations.LabelMolAbbreviations(mol, definitions, 1.0)
-    for g in Chem.GetMolSubstanceGroups(labeled):
-        members = [ids[i] for i in g.GetAtoms()]
-        points = list(g.GetAttachPoints())
-        if not members or len(points) != 1 or used.intersection(members):
+    native = [
+        (g.GetProp("LABEL"), list(g.GetAtoms()), [p.aIdx for p in g.GetAttachPoints()])
+        for g in Chem.GetMolSubstanceGroups(labeled)
+    ]
+    assert native == [(definitions[i].label, list(m[1:]), [m[1]]) for i, m in accepted], (
+        "Arbitration differs from RDKit"
+    )
+    while rejected:
+        withdrawn.add(rejected)
+        accepted, rejected = arbitrate(mol, definitions, withdrawn)
+    for index, match in accepted:
+        members = [ids[i] for i in match[1:]]
+        if used.intersection(members):
             continue
         if any(
             atoms[i].get("isotope")
@@ -127,12 +184,12 @@ def find(doc, mol, selection, label=None):
             for i in members
         ):
             continue
-        name = g.GetProp("LABEL")
+        name = definitions[index].label
         groups.append(
             dict(
                 label=name,
                 reverse_label=PRESETS[name][1],
-                anchor=ids[points[0].aIdx],
+                anchor=ids[match[1]],
                 members=members,
             )
         )
@@ -207,15 +264,23 @@ def replace(doc, selection, label, to_document):
     rw = Chem.RWMol(template)
     rw.RemoveAtom(dummy.GetIdx())
     fragment = rw.GetMol()
+    added_hydrogen = False
     for a in fragment.GetAtoms():
         if a.HasProp("reshiki_id") and int(a.GetProp("reshiki_id")) == target:
             a.SetNoImplicit(False)
             a.SetNumRadicalElectrons(0)
+            # A standalone N-linked azole needs its NH written to kekulize;
+            # the restored attachment bond replaces it again below.
+            if a.GetIsAromatic() and a.GetAtomicNum() != 6:
+                a.SetNumExplicitHs(a.GetNumExplicitHs() + 1)
+                added_hydrogen = True
     Chem.SanitizeMol(fragment)
     part = to_document(fragment)
     for a in part["atoms"]:
         if a["id"] == target and atoms[target].get("text_style"):
             a["text_style"] = copy.deepcopy(atoms[target]["text_style"])
+        if a["id"] == target and added_hydrogen:
+            a["explicit_h"] = max(0, a.get("explicit_h", 0) - 1)
     result = copy.deepcopy(doc)
     result["atoms"] = [a for a in result["atoms"] if a["id"] not in remove] + part["atoms"]
     result["bonds"] = [b for b in result["bonds"] if not ({b["a"], b["b"]} <= remove)] + part[

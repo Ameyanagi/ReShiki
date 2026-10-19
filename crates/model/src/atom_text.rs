@@ -1,12 +1,11 @@
 //! Text at an atom endpoint: an element, a real collapsed group, or a named dummy.
 use crate::{
-    abbreviations::PRESETS,
     document::Document,
     editing::ELEMENTS,
     typography::{Script, ScriptRun},
 };
 fn known_group(text: &str) -> bool {
-    PRESETS.contains(&text) || crate::common_groups::LABELS.contains(&text)
+    crate::abbreviations::is_group_label(text)
 }
 mod hydride;
 pub use hydride::entry;
@@ -15,6 +14,11 @@ pub use from_text::{
     TEXT_TOO_LONG, text_atom_position, text_atom_refusal, text_first_glyph_center, text_ink_bounds,
     text_to_atom,
 };
+
+/// Whether text is one of the fixed condensed spellings below.
+pub(crate) fn is_formula_group(text: &str) -> bool {
+    formula_group(text).is_some()
+}
 
 /// Unambiguous condensed spellings of existing structural definitions.
 fn formula_group(text: &str) -> Option<(&'static str, &'static str)> {
@@ -113,8 +117,10 @@ fn apply_entry(
         return Err("Use a single line of printable text".into());
     }
     let text = text.trim();
+    // A catalog label such as 2-Py or Indol-1-yl is never a link-node range.
     if allow_generic
         && mode != Mode::Text
+        && !known_group(text)
         && let Some(candidate) = crate::generic::apply_label(doc, id, text)?
     {
         return Ok(candidate);
@@ -173,11 +179,12 @@ fn apply_entry(
         if let Some(atom) = clean.atom_mut(id) {
             atom.display.set_variable(None);
         }
-        let mut result = crate::chemistry::abbreviations::replace(
-            &clean,
-            &selected,
-            formula.map(|f| f.0).unwrap_or(text),
-        )
+        let mut result = match formula {
+            Some((label, _)) => {
+                crate::chemistry::abbreviations::replace_bundled(&clean, &selected, label)
+            }
+            None => crate::chemistry::abbreviations::replace(&clean, &selected, text),
+        }
         .map_err(|e| format!("{e}. Choose Text label to use the text without a chemical group."))?;
         // The template is planar; retain the original anchor's position and depth.
         let anchor = result

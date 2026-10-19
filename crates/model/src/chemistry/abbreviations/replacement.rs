@@ -1,7 +1,8 @@
-//! Replace a selected endpoint using fixed native template geometry. Chemistry
-//! preparation and drawing reconstruction remain Rust calculations; the final
-//! whole-document check and full CIP labels are the caller's responsibility.
-use super::{AttachmentPolicy, Preset, check_size, presets, validate_with_policy};
+//! Replace a selected endpoint using the catalog template geometry, which is
+//! ReShiki's own depiction of the group SMILES. Chemistry preparation and
+//! drawing reconstruction remain Rust calculations; the final whole-document
+//! check and full CIP labels are the caller's responsibility.
+use super::{AttachmentPolicy, Preset, check_size, lookup, lookup_bundled, validate_with_policy};
 #[cfg(all(target_os = "windows", target_arch = "aarch64"))]
 use crate::chemistry::windows_trigonometry as trigonometry;
 use crate::{
@@ -18,11 +19,7 @@ use crate::{
     document::Document,
 };
 
-use serde::Deserialize;
-use std::{
-    collections::{HashMap, HashSet},
-    sync::OnceLock,
-};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -89,69 +86,11 @@ fn native_hypot(x: f64, y: f64) -> f64 {
     norm / scale
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Geometry {
-    label: String,
-    smiles: String,
-    positions: Vec<Point3>,
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Geometries {
-    rdkit_version: String,
-    templates: Vec<Geometry>,
-}
-fn geometry_json() -> &'static str {
-    match (std::env::consts::OS, std::env::consts::ARCH) {
-        // Both Mac builds use these fixed drawing templates. Intel has no
-        // pinned RDKit wheel; this reuses the recorded Apple Silicon positions,
-        // not a claimed independent Intel reference capture.
-        ("macos", "aarch64" | "x86_64") => include_str!("geometry-macos-aarch64.json"),
-        ("linux", "x86_64") => include_str!("geometry-linux-x86_64.json"),
-        ("linux", "aarch64") => include_str!("geometry-linux-aarch64.json"),
-        ("windows", "x86_64") => include_str!("geometry-windows-x86_64.json"),
-        // The x64 reference worker produces different low bits under ARM emulation.
-        ("windows", "aarch64") => include_str!("geometry-windows-aarch64.json"),
-        _ => "",
-    }
-}
-
-fn geometries() -> Result<&'static [Geometry]> {
-    static DATA: OnceLock<std::result::Result<Geometries, String>> = OnceLock::new();
-    DATA.get_or_init(|| {
-        if geometry_json().is_empty() {
-            return Err("Preset geometry is unavailable for this target ABI".into());
-        }
-        let data: Geometries =
-            serde_json::from_str(geometry_json()).map_err(|error| error.to_string())?;
-        let presets = presets().map_err(|error| error.to_string())?;
-        if data.rdkit_version != RDKIT_VERSION || data.templates.len() != presets.len() {
-            return Err("Template geometry version or count mismatch".into());
-        }
-        for (template, preset) in data.templates.iter().zip(presets) {
-            if template.label != preset.label
-                || template.smiles != preset.smiles
-                || template.positions.len() != preset.atoms.len()
-                || template
-                    .positions
-                    .iter()
-                    .any(|p| !p.x.is_finite() || !p.y.is_finite() || p.z != 0.0)
-            {
-                return Err("Invalid template geometry".into());
-            }
-        }
-        Ok(data)
-    })
-    .as_ref()
-    .map(|data| data.templates.as_slice())
-    .map_err(|error| Error::Definition(error.clone()))
-}
-
 /// Restore the fixed fragment's chemistry after deleting its outside dummy.
 /// No template contains stereo tags, so its full CIP result is provably empty;
 /// this condition is checked before supplying empty labels to reconstruction.
-fn fragment(preset: &Preset) -> Result<perception::State> {
+/// Also returns whether the attachment atom received a temporary hydrogen.
+fn fragment(preset: &Preset) -> Result<(perception::State, bool)> {
     let prepared = smiles::prepare(&preset.smiles)?;
     if at(&prepared.state.graph.atoms, 0)?.atomic_number != 0
         || prepared
@@ -191,6 +130,13 @@ fn fragment(preset: &Preset) -> Result<perception::State> {
         .ok_or_else(|| Error::Definition("Missing attachment atom".into()))?;
     root.no_implicit = false;
     root.radical_electrons = 0;
+    // An aromatic N-linked azole (pyrrol-1-yl, imidazol-1-yl...) needs its
+    // hydrogen written while it stands alone, or the ring cannot kekulize.
+    // build_replacement_part removes it again once the bond is restored.
+    let added_hydrogen = root.aromatic && root.atomic_number != 6;
+    if added_hydrogen {
+        root.explicit_hydrogens += 1;
+    }
     let bonds = graph
         .bonds
         .into_iter()
@@ -208,7 +154,7 @@ fn fragment(preset: &Preset) -> Result<perception::State> {
         &vec![Direction::None; graph.bonds.len()],
     )?;
     let properties = perception::Properties::unspecified(&sanitized.graph);
-    Ok(perception::State {
+    let state = perception::State {
         graph: sanitized.graph,
         metadata: sanitized.metadata,
         directions: sanitized.directions,
@@ -220,7 +166,8 @@ fn fragment(preset: &Preset) -> Result<perception::State> {
             atoms: sanitized.rings,
         },
         properties,
-    })
+    };
+    Ok((state, added_hydrogen))
 }
 
 /// Mirror the original replacement edit. It retains the existing attachment ID,
@@ -241,10 +188,35 @@ pub fn replace_with_policy(
         return crate::common_groups::replace(document, selection, label)
             .map_err(Error::Definition);
     }
-    let preset = presets()?
-        .iter()
-        .find(|p| p.label == label)
-        .ok_or(Error::Label)?;
+    let found = lookup(label)?.ok_or(Error::Label)?;
+    replace_preset(document, selection, label, found, policy)
+}
+
+/// Replace with the bundled definition even when the user's catalog
+/// overrides that label. Fixed spellings (OCH3 as OMe) and groups built from
+/// another group (MgBr from Et) must keep their own chemistry.
+pub fn replace_bundled(document: &Document, selection: &[u64], label: &str) -> Result<Document> {
+    if crate::common_groups::LABELS.contains(&label) {
+        return crate::common_groups::replace(document, selection, label)
+            .map_err(Error::Definition);
+    }
+    let found = lookup_bundled(label)?.ok_or(Error::Label)?;
+    replace_preset(
+        document,
+        selection,
+        label,
+        found,
+        AttachmentPolicy::Terminal,
+    )
+}
+
+fn replace_preset(
+    document: &Document,
+    selection: &[u64],
+    label: &str,
+    (preset, alias): (std::sync::Arc<Preset>, bool),
+    policy: AttachmentPolicy,
+) -> Result<Document> {
     check_size(document)?;
     if selection.len() > 100_000 {
         return Err(Error::Selection);
@@ -279,12 +251,9 @@ pub fn replace_with_policy(
     {
         return Err(Error::Attachment);
     }
-    let geometry = geometries()?
-        .iter()
-        .find(|g| g.label == label)
-        .ok_or_else(|| Error::Definition("Missing geometry".into()))?;
-    let root = at(&geometry.positions, 1)?;
-    let dummy = at(&geometry.positions, 0)?;
+    let geometry = preset.positions()?;
+    let root = at(geometry, 1)?;
+    let dummy = at(geometry, 0)?;
     let original_angle = (-(dummy.y - root.y)).atan2(dummy.x - root.x);
     // Requests pass through serde_json::Value before encoding, which promotes
     // the exact f32 value to f64 before the worker receives its coordinates.
@@ -322,15 +291,20 @@ pub fn replace_with_policy(
     }
     let (ids, positions) =
         place_replacement_atoms(document, geometry, target, root, &origin, scale, (c, s))?;
-    let part = build_replacement_part(preset, ids, positions, target, anchor)?;
+    let part = build_replacement_part(&preset, ids, positions, target, anchor)?;
     let (mut result, members) = splice_replacement(document, part, &remove, target);
     result.abbreviations.push(Abbreviation {
         label_style: old.and_then(|g| g.label_style.clone()),
         label_color_override: old.is_some_and(|g| g.label_color_override),
         highlight,
         alignment: Default::default(),
+        // An alias keeps the typed spelling; its reverse is not defined.
         label: label.into(),
-        reverse_label: preset.reverse_label.clone(),
+        reverse_label: if alias {
+            String::new()
+        } else {
+            preset.reverse_label.clone()
+        },
         anchor: target,
         members,
     });
@@ -345,7 +319,7 @@ pub fn replace_with_policy(
 
 fn place_replacement_atoms(
     document: &Document,
-    geometry: &Geometry,
+    geometry: &[Point3],
     target: u64,
     root: &Point3,
     origin: &Point3,
@@ -365,9 +339,9 @@ fn place_replacement_atoms(
         .max()
         .unwrap_or(0);
     let mut next_id = u128::from(maximum) + 1;
-    let mut ids = Vec::with_capacity(geometry.positions.len() - 1);
-    let mut positions = Vec::with_capacity(geometry.positions.len() - 1);
-    for (index, point) in geometry.positions.iter().enumerate().skip(1) {
+    let mut ids = Vec::with_capacity(geometry.len() - 1);
+    let mut positions = Vec::with_capacity(geometry.len() - 1);
+    for (index, point) in geometry.iter().enumerate().skip(1) {
         let identifier = if index == 1 {
             u128::from(target)
         } else {
@@ -397,11 +371,12 @@ fn build_replacement_part(
     target: u64,
     anchor: &crate::document::Atom,
 ) -> Result<Document> {
+    let (state, added_hydrogen) = fragment(preset)?;
     let molecule = Molecule {
         rdkit_version: RDKIT_VERSION,
         ids,
         positions,
-        state: fragment(preset)?,
+        state,
     };
     let drawing = document::for_import(&molecule, false, &vec![None; molecule.ids.len()])?;
     let state = &drawing.molecule().state;
@@ -437,6 +412,11 @@ fn build_replacement_part(
         if atom.id == target {
             atom.text_style = anchor.text_style.clone();
             atom.display.highlight = anchor.display.highlight;
+            // Reconstruction may kekulize the root, so track the hydrogen
+            // itself rather than the aromatic flag.
+            if added_hydrogen {
+                atom.explicit_h = atom.explicit_h.saturating_sub(1);
+            }
         }
     }
     Ok(part)

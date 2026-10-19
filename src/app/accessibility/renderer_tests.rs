@@ -76,7 +76,14 @@ async fn changed_surfaces_expose_live_controls_and_mask_foreground_backgrounds()
         assert!(!tree.nodes.iter().any(|node| node.id == "transform-tilt-x"));
         app.help_open = true;
         let help = snapshot(&app, &mut renderer, size);
-        assert_eq!(help.nodes.len(), 3);
+        // Four controls plus one named button per result row.
+        let rows = help
+            .nodes
+            .iter()
+            .filter(|node| node.id.starts_with("help-row-"))
+            .count();
+        assert!(rows > 0);
+        assert_eq!(help.nodes.len() - rows, 4);
         assert!(help.nodes.iter().all(|node| node.id.starts_with("help-")));
         app.help_open = false;
         let _ = app.context_action(super::super::context_menu::Action::Open(

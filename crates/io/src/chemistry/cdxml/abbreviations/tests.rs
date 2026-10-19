@@ -484,3 +484,28 @@ fn many_abbreviations(count: usize) -> String {
     text.push_str("</fragment></page></CDXML>");
     text
 }
+
+#[test]
+fn imported_labels_prefer_a_user_group_spelled_like_a_reversed_label() {
+    let mut catalog = crate::chemistry::abbreviations::presets().unwrap().to_vec();
+    let (user, errors) = crate::chemistry::abbreviations::parse(
+        r#"{"format": 1, "groups": [{"label": "MeO", "smiles": "*CF"}]}"#,
+        true,
+    );
+    assert!(errors.is_empty(), "{errors:?}");
+    catalog.extend(user.into_iter().map(std::sync::Arc::new));
+    assert_eq!(
+        group_names(&catalog, "MeO".into()),
+        ("MeO".into(), String::new())
+    );
+    // Without the user group, the bundled reversed spelling still maps back.
+    let bundled = crate::chemistry::abbreviations::presets().unwrap();
+    assert_eq!(
+        group_names(&bundled, "MeO".into()),
+        ("OMe".into(), "MeO".into())
+    );
+    assert_eq!(
+        group_names(&bundled, "Xyz".into()),
+        ("Xyz".into(), String::new())
+    );
+}

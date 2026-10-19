@@ -24,6 +24,7 @@ mod canvas_edit;
 mod cleanup;
 mod clipboard;
 mod color_popover;
+mod command_palette;
 mod context_menu;
 mod depth_appearance;
 mod dispatch;
@@ -196,6 +197,8 @@ pub enum Message {
     Naming(naming::Action),
     InsertInput,
     ToggleHelp,
+    Help(help::Action),
+    Commands(command_palette::Action),
     OpenShortcutExamples,
     Viewport(iced::Size),
     Canvas(Edit),
@@ -396,6 +399,8 @@ pub struct App {
     inspector_open: bool,
     inspector_tab: InspectorTab,
     help_open: bool,
+    help: help::State,
+    commands: command_palette::State,
     viewport: iced::Size,
     template_index: usize,
     templates: template_library::State,
@@ -478,10 +483,20 @@ impl App {
             inspector_open: true,
             inspector_tab: InspectorTab::Properties,
             help_open: false,
+            help: help::State::default(),
+            commands: command_palette::State::default(),
             viewport: iced::Size::new(850.0, 600.0),
             template_index: 0,
             templates: template_library::State::load(),
         };
+        if let Some(message) = abbreviations::load_user_catalog() {
+            if app.recovered.is_empty() {
+                app.status = message.clone();
+                app.error = true;
+            }
+            // Opening a drawing replaces the status; the panel keeps it.
+            app.abbreviations.catalog_warning = Some(message);
+        }
         let task = app.open_startup(startup);
         #[cfg(any(windows, target_os = "linux"))]
         let task = task.chain(Task::done(Message::Desktop(desktop::Action::Ready)));
@@ -976,10 +991,18 @@ impl App {
 
     pub fn view(&self) -> Element<'_, Message> {
         reshiki::accessibility::focus_scope(file_shortcuts::wrap(
-            self.with_updates(self.with_assistant_image(self.with_nmr(
+            // The command palette sits above the floating NMR panel so its
+            // modal also keeps that panel from taking clicks.
+            self.with_updates(self.with_assistant_image(self.with_commands(self.with_nmr(
                 self.with_atom_text(self.with_help(self.with_palette(self.workspace()))),
-            ))),
-            self.help_open,
+            )))),
+            if self.help_open {
+                Some(help::modal_key)
+            } else if self.commands.open {
+                Some(command_palette::modal_key)
+            } else {
+                None
+            },
             self.assistant.viewed_image.is_some(),
             self.updates.open,
             self.tab.atom_text.is_some(),

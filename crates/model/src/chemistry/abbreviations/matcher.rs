@@ -4,28 +4,154 @@ use super::{Error, Preset, Result, at, invalid};
 use crate::chemistry::{
     graph::Graph,
     rings,
-    stereo::perception::{RingCache, RingKind},
+    stereo::perception::{self, RingCache, RingKind},
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub(super) struct Atom {
-    number: u8,
+    pub(super) number: u8,
     aromatic: Option<bool>,
-    charge: Option<i8>,
+    pub(super) charge: Option<i8>,
     degree: usize,
     rings: usize,
+    /// RDKit's bracket hydrogen count ([nH]); absent from bundled queries.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) hydrogens: Option<u8>,
 }
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
+/// What a label silently asserts about each atom: formal charge, unpaired
+/// electrons, isotope and total hydrogens. Detection only claims atoms whose
+/// composition equals the definition's, so contracting never hides chemistry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct Composition {
+    charge: i8,
+    radicals: u8,
+    isotope: u16,
+    hydrogens: u32,
+}
+
+/// Explicit plus implicit hydrogens of each prepared atom.
+pub(super) fn total_hydrogens(state: &perception::State) -> Vec<u32> {
+    state
+        .graph
+        .atoms
+        .iter()
+        .enumerate()
+        .map(|(index, atom)| {
+            u32::from(atom.explicit_hydrogens)
+                + state
+                    .valences
+                    .get(index)
+                    .map_or(0, |valence| valence.implicit_hydrogens)
+        })
+        .collect()
+}
+
+/// The composition of every atom of a prepared definition, dummy included.
+pub(super) fn compositions(state: &perception::State) -> Vec<Composition> {
+    let hydrogens = total_hydrogens(state);
+    state
+        .graph
+        .atoms
+        .iter()
+        .zip(hydrogens)
+        .map(|(atom, hydrogens)| Composition {
+            charge: atom.charge,
+            radicals: atom.radical_electrons,
+            isotope: atom.isotope,
+            hydrogens,
+        })
+        .collect()
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub(super) struct Bond {
-    a: usize,
-    b: usize,
+    pub(super) a: usize,
+    pub(super) b: usize,
     /// Zero is the implicit SMARTS single-or-aromatic predicate.
     order: u8,
 }
+/// Elements that RDKit's SMARTS reader types as aliphatic or aromatic even in
+/// brackets. Other bracket elements (Si, Sn, Mg...) match on atomic number only.
+const TYPED: [u8; 10] = [5, 6, 7, 8, 9, 15, 16, 17, 35, 53];
+
+/// Derive the adjusted abbreviation query from a prepared `*`-first SMILES.
+/// This reproduces RDKit ParseAbbreviations for the catalog's SMILES style:
+/// written aromaticity, charge only when nonzero, explicit degree and ring
+/// count. Implicit single-or-aromatic bonds become order zero; a single bond
+/// between two aromatic atoms (the fluorene biaryl bond) stays an explicit single.
+/// Bracket hydrogens become a total hydrogen count, as in RDKit.
+pub(super) fn query(state: &perception::State) -> Result<(Vec<Atom>, Vec<Bond>)> {
+    let graph = &state.graph;
+    let mut degree = vec![0usize; graph.atoms.len()];
+    for bond in &graph.bonds {
+        for index in [bond.a, bond.b] {
+            *degree
+                .get_mut(index)
+                .ok_or_else(|| invalid("Invalid preset endpoint"))? += 1;
+        }
+    }
+    let mut rings = vec![0usize; graph.atoms.len()];
+    for ring in &state.rings.atoms {
+        for &index in ring {
+            *rings
+                .get_mut(index)
+                .ok_or_else(|| invalid("Invalid preset ring"))? += 1;
+        }
+    }
+    let atoms = graph
+        .atoms
+        .iter()
+        .enumerate()
+        .map(|(index, atom)| {
+            if index == 0 {
+                return Atom {
+                    number: 0,
+                    aromatic: None,
+                    charge: None,
+                    degree: degree.first().copied().unwrap_or(0),
+                    rings: 0,
+                    hydrogens: None,
+                };
+            }
+            Atom {
+                number: atom.atomic_number,
+                aromatic: (atom.aromatic || TYPED.contains(&atom.atomic_number))
+                    .then_some(atom.aromatic),
+                charge: (atom.charge != 0).then_some(atom.charge),
+                // RDKit keeps a bracket hydrogen count ([nH]) as a total
+                // hydrogen query; it tells apart tautomers and anions.
+                hydrogens: (atom.explicit_hydrogens > 0).then_some(atom.explicit_hydrogens),
+                degree: degree.get(index).copied().unwrap_or(0),
+                rings: rings.get(index).copied().unwrap_or(0),
+            }
+        })
+        .collect();
+    let bonds = graph
+        .bonds
+        .iter()
+        .map(|bond| {
+            let aromatic = |index: usize| {
+                index != 0 && graph.atoms.get(index).is_some_and(|atom| atom.aromatic)
+            };
+            let order = match bond.order {
+                4 => 0,
+                1 if aromatic(bond.a) && aromatic(bond.b) => 1,
+                1 => 0,
+                order @ (2 | 3) => order,
+                _ => return Err(invalid("Unsupported preset bond order")),
+            };
+            Ok(Bond {
+                a: bond.a,
+                b: bond.b,
+                order,
+            })
+        })
+        .collect::<Result<_>>()?;
+    Ok((atoms, bonds))
+}
+
 pub(super) fn validate(preset: &Preset) -> Result<()> {
     if !(2..=32).contains(&preset.atoms.len())
         || preset.bonds.len() > 40
@@ -62,7 +188,10 @@ pub(super) fn validate(preset: &Preset) -> Result<()> {
             return Err(invalid("Invalid preset atom or traversal"));
         }
     }
-    if *at(&degree, 0)? != 1 || !pairs.contains(&(0, 1)) {
+    if *at(&degree, 0)? != 1
+        || !pairs.contains(&(0, 1))
+        || preset.composition.len() != preset.atoms.len()
+    {
         return Err(invalid("Invalid preset attachment"));
     }
     Ok(())
@@ -75,7 +204,7 @@ impl Default for Work {
     }
 }
 impl Work {
-    fn spend(&mut self, count: usize) -> Result<()> {
+    pub(super) fn spend(&mut self, count: usize) -> Result<()> {
         self.0 = self.0.checked_sub(count).ok_or(Error::WorkLimit)?;
         Ok(())
     }
@@ -86,10 +215,15 @@ pub(super) struct Target<'a> {
     adjacent: Vec<Vec<usize>>,
     bonds: HashMap<(usize, usize), u8>,
     ring_counts: Vec<usize>,
+    hydrogens: &'a [u32],
 }
 impl<'a> Target<'a> {
-    pub(super) fn new(graph: &'a Graph, cache: &RingCache) -> Result<Self> {
+    /// `hydrogens` holds each atom's total (explicit plus implicit) count.
+    pub(super) fn new(graph: &'a Graph, cache: &RingCache, hydrogens: &'a [u32]) -> Result<Self> {
         graph.validate().map_err(invalid)?;
+        if hydrogens.len() != graph.atoms.len() {
+            return Err(invalid("Hydrogen counts changed"));
+        }
         let mut adjacent = vec![Vec::new(); graph.atoms.len()];
         let mut bonds = HashMap::new();
         for bond in &graph.bonds {
@@ -134,11 +268,19 @@ impl<'a> Target<'a> {
             adjacent,
             bonds,
             ring_counts,
+            hydrogens,
         })
     }
 
-    fn atom_matches(&self, query: &Atom, target: usize, dummy: bool) -> Result<bool> {
+    fn atom_matches(
+        &self,
+        query: &Atom,
+        composition: &Composition,
+        target: usize,
+        dummy: bool,
+    ) -> Result<bool> {
         let atom = at(&self.graph.atoms, target)?;
+        let hydrogens = *at(self.hydrogens, target)?;
         if dummy {
             return Ok(atom.atomic_number != 0);
         }
@@ -146,7 +288,17 @@ impl<'a> Target<'a> {
             && query.aromatic.is_none_or(|value| value == atom.aromatic)
             && query.charge.is_none_or(|value| value == atom.charge)
             && query.degree == at(&self.adjacent, target)?.len()
-            && query.rings == *at(&self.ring_counts, target)?)
+            && query.rings == *at(&self.ring_counts, target)?
+            && query
+                .hydrogens
+                .is_none_or(|count| u32::from(count) == hydrogens)
+            && *composition
+                == Composition {
+                    charge: atom.charge,
+                    radicals: atom.radical_electrons,
+                    isotope: atom.isotope,
+                    hydrogens,
+                })
     }
 
     pub(super) fn matches(&self, preset: &Preset, work: &mut Work) -> Result<Vec<Vec<usize>>> {
@@ -166,7 +318,12 @@ impl<'a> Target<'a> {
                 continue;
             };
             if mapping.contains(&Some(candidate))
-                || !self.atom_matches(at(&preset.atoms, depth)?, candidate, depth == 0)?
+                || !self.atom_matches(
+                    at(&preset.atoms, depth)?,
+                    at(&preset.composition, depth)?,
+                    candidate,
+                    depth == 0,
+                )?
             {
                 continue;
             }

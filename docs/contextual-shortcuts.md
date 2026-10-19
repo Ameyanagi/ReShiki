@@ -1,6 +1,46 @@
 # Shortcuts and editable examples
 
-Open **Help** at the bottom of the tool strip, or press **F1**, then choose **Open shortcut examples**. This opens **one editable drawing** in a tab named **Shortcut examples** in the current window. If an unchanged examples tab is already open, it comes to the front. **Save** asks for a location for your own copy. It contains nine sections of labeled structures made with the same operations as the keyboard shortcuts.
+## Find a shortcut
+
+Open **Help** at the bottom of the tool strip, or press **?** (away from atoms and bonds; over one, **?** opens its properties), **F1** or **Cmd/Ctrl+Shift+/** (Cmd+? on macOS). **Cmd/Ctrl+/** remains **Fit drawing**. Help is a searchable list of every shortcut. Type part of an action, description or key: **wedge**, **boc**, **ring**, **⇧R** or **shift r** all work, and a few synonyms per entry such as **stereo** or **naphthalene** find the matching key. Lowercase and uppercase keys rank separately, so **r** lists the ring tool first and **R** the saturated/aromatic toggle.
+
+Each row shows the keys as the menus show them (symbols on macOS, words elsewhere), the action, a one-line description and where it applies: atom, bond, selection, empty canvas, keyboard drawing or anywhere. **Up/Down** (or Page Up/Page Down) move the selection, **Enter** or a click selects a row, and **Escape** closes Help. Selecting a row never runs the command; Help is a reference only.
+
+For atom and bond keys, the preview pane draws a small chain before and after the key, made live by ReShiki's own drawing code from the same edit the key performs. The atom or bond the key acts on is highlighted in the **Before** drawing.
+
+## Run a command
+
+Press **:** to open the **command palette**. Over an atom or bond **:** opens it too, since it has no drawing meaning there; inside a text field, **:** is typed as usual. Type part of a command and press **Enter** (or click a row) to run it; unlike Help, the palette runs the command and closes. **Up/Down** move, **Escape** closes. Each row shows its shortcut, if it has one, so the palette also teaches the keys.
+
+The palette searches the same way as Help. It lists:
+
+- **Insert**: rings (cyclopropane to cyclooctane, benzene, chairs, cyclopentadiene, Haworth rings), the template library, the import examples, every abbreviation preset (OMe, Boc, Ph, Ts, TBS…, also found by name such as **methoxy** or **tosyl**) and every element (by symbol or name, such as **bromine**).
+- **Bond** and **Atom** edits: every bond style (single, double, triple, wedges, wavy, bold, dashed, dative, hydrogen bond…), double-bond line position, bond direction and depth, charge, radicals and the contextual atom keys (extend chain, carbonyl, tert-butyl, Cp ligand…).
+- **Edit**, **Analyze**, **File**, **View** and **Tool** commands from the menus, toolbar and panels: undo, flips, rotation, alignment, clean up, 3D optimization, **Predict NMR**, formula and properties, naming, reaction roles and mapping, save, export formats, copy formats, zoom, guides, themes, journal styles, every inspector panel and every drawing tool.
+
+Commands act on the **selection**; with nothing selected, on the atom or bond under the pointer (or the keyboard-drawing hotspot). **double bond** makes the selected bonds double; with no bond, it chooses the double-bond tool. **benzene** attaches a ring to the selected atom or fuses it to the selected bond the same way the **a** key does, and otherwise adds it at the center of the view and selects it. Every edit is one Undo step. A command that needs a target it does not have stays listed, greyed, with the reason. With an empty search, recently run commands come first; commands for the current target rank higher.
+
+Some commands take a value after their word: **rotate 30**, **zoom 150**, **charge -1**, **element Pd**, **font size 12**, **bond length 14**, **ring 7** and **chain 5**. When nothing matches well, the palette offers to insert the text as a chemical name (**ibuprofen**) or, if it is valid SMILES, as SMILES (**c1ccccc1O**).
+
+Vim-style commands rank first when typed exactly:
+
+| Command                    | Action                                          |
+| -------------------------- | ----------------------------------------------- |
+| :w                         | Save                                            |
+| :w _name_ / :sav / :saveas | Save as (the location is chosen in the dialog)  |
+| :q                         | Close the tab, asking to save changes           |
+| :q!                        | Close the tab without saving                    |
+| :wq / :x                   | Save, then close the tab                        |
+| :qa                        | Close the window, asking about each unsaved tab |
+| :e / :e _name_             | Open (the file is chosen in the dialog)         |
+| :tabnew / :new / :enew     | New drawing                                     |
+| :tabn / :tabp              | Next / previous tab                             |
+| :u / :red                  | Undo / redo                                     |
+| :noh                       | Clear highlight colors from the selection       |
+
+## Editable examples
+
+In Help, choose **Open shortcut examples**. This opens **one editable drawing** in a tab named **Shortcut examples** in the current window. If an unchanged examples tab is already open, it comes to the front. **Save** asks for a location for your own copy. It contains nine sections of labeled structures made with the same operations as the keyboard shortcuts.
 
 [Download the shortcut examples (.rsk)](../assets/examples/shortcut-examples.rsk). This is a single document, not a template collection. Open it with **Open**, or double-click the downloaded file. The gallery uses the normal unbounded canvas, without print pages or a page-navigation panel.
 
@@ -217,7 +257,8 @@ bond and tool actions. Ring palette hover hints show one tool-selection key.
 
 | Keys                      | Action                                                                      |
 | ------------------------- | --------------------------------------------------------------------------- |
-| F1                        | Help and editable examples                                                  |
+| ? / F1 / Cmd/Ctrl+Shift+/ | Searchable shortcut finder and editable examples                            |
+| :                         | Command palette: search for a command and run it                            |
 | Cmd/Ctrl+N / O / S        | New / open, each in a new tab / save                                        |
 | Cmd/Ctrl+Shift+S          | Save as                                                                     |
 | Cmd/Ctrl+W                | Close tab                                                                   |

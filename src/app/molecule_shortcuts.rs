@@ -151,6 +151,7 @@ impl App {
             if self.tab.inline_text.is_some()
                 || self.tab.atom_text.is_some()
                 || self.help_open
+                || self.commands.open
                 || self.updates.open
             {
                 return None;
