@@ -997,6 +997,26 @@ fn typed_reverse_spellings_make_their_group() -> Result<(), Box<dyn std::error::
         );
         assert_eq!(formula(&reversed)?, formula(&canonical)?, "{typed}");
     }
+    // A lowered count keeps a reverse spelling chemical, as it does a label.
+    let (doc, endpoint) = ethane();
+    let lowered = [ScriptRun {
+        start: 3,
+        end: 4,
+        script: Script::Subscript,
+    }];
+    let typed = apply_with_scripts(&doc, endpoint, "MeO2C", &lowered, Mode::Auto)?;
+    let group = typed.abbreviation(endpoint).ok_or("MeO2C")?;
+    assert_eq!(
+        (group.label.as_str(), group.reverse_label.as_str()),
+        ("CO2Me", "MeO2C")
+    );
+    // Retyping the reverse spelling on that group keeps the same group.
+    let retyped = apply(&typed, endpoint, "MeO2C", Mode::Auto)?;
+    assert_eq!(formula(&retyped)?, formula(&typed)?);
+    assert_eq!(
+        retyped.abbreviation(endpoint).map(|g| g.label.as_str()),
+        Some("CO2Me")
+    );
     Ok(())
 }
 
