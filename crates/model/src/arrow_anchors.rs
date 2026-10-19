@@ -673,6 +673,79 @@ fn segment_gap(p: Point, q: Point, a: Point, b: Point) -> f32 {
     .into_iter()
     .fold(f32::MAX, f32::min)
 }
+/// Bond ink an arriving arrowhead must stay off.
+struct HeadInk {
+    lines: Vec<InkLine>,
+    fills: Vec<Vec<Point>>,
+}
+impl HeadInk {
+    /// Ink of the bonds at each of `atoms`.
+    fn around(doc: &Document, atoms: impl IntoIterator<Item = u64>) -> Self {
+        let mut ink = Self {
+            lines: Vec::new(),
+            fills: Vec::new(),
+        };
+        for atom in atoms {
+            let Some(center) = doc.atom(atom).map(|a| a.position) else {
+                continue;
+            };
+            let (_, lines, fills) = bond_ink(doc, atom, center);
+            ink.lines.extend(lines);
+            ink.fills.extend(fills);
+        }
+        ink
+    }
+    /// Samples a head with its tip at `tip`, lying along `d` toward the shaft,
+    /// from the tip back to its widest base; like the drawn head, it is
+    /// shortened on a short arrow from `start` but keeps its width.
+    fn touches(&self, tip: Point, d: Point, start: Point, style: &ArrowStyle) -> bool {
+        let (lines, fills) = (&self.lines, &self.fills);
+        let head_length = DEFAULT.world(style.head_length_pt);
+        let head_width = DEFAULT.world(style.head_width_pt);
+        let pen = DEFAULT.world(style.width_pt) * 0.5;
+        let length = head_length.min(start.distance(tip) * 0.4);
+        // `lateral` follows the offset normal the arrow renderer uses.
+        let at =
+            |s: f32, lateral: f32| tip.offset(d.x * s + d.y * lateral, d.y * s - d.x * lateral);
+        let hits = |p: Point, reach: f32| {
+            lines.iter().any(|(first, last, half)| {
+                let v = delta(*last, *first);
+                let along = (dot(delta(p, *first), v) / dot(v, v)).clamp(0., 1.);
+                p.distance(first.offset(v.x * along, v.y * along)) < reach + half
+            }) || fills.iter().any(|outline| inside(p, outline))
+        };
+        // Neighboring sample disks overlap, so no line slips between them.
+        let samples = (length / pen.max(0.01)).ceil().max(8.) as usize;
+        let axis = (0..=samples).any(|i| {
+            let t = i as f32 / samples as f32;
+            hits(at(length * t, 0.), head_width * t + pen)
+        });
+        // A solid half head fills a barb from the tip on one shaft edge out
+        // to a wing `width` past the other edge, then back to the neck.
+        axis || style.barb(style.head).is_some_and(|(side, width)| {
+            let neck = length * (1. - style.head_notch);
+            let corners = [
+                at(0., side * pen),
+                at(length, -side * width),
+                at(neck, -side * pen),
+            ];
+            let edges = || corners.iter().zip(&corners[1..]);
+            let lines = lines.iter().map(|(a, b, half)| (*a, *b, *half));
+            let fill_edges = fills.iter().flat_map(|outline| {
+                outline
+                    .iter()
+                    .zip(outline.iter().cycle().skip(1))
+                    .map(|(a, b)| (*a, *b, 0.))
+            });
+            lines
+                .chain(fill_edges)
+                .any(|(a, b, half)| edges().any(|(p, q)| segment_gap(*p, *q, a, b) <= half))
+                || corners
+                    .iter()
+                    .any(|p| fills.iter().any(|outline| inside(*p, outline)))
+        })
+    }
+}
 /// Chooses the arrival direction at an atom, and any extra end gap, so the
 /// arrowhead lying along that direction stays off bond ink. Candidates face
 /// the source within [`OPEN_APPROACH`] and are reached from the default
@@ -692,54 +765,11 @@ fn open_approach(
         return (preferred, 0.);
     };
     let (bonds, lines, fills) = bond_ink(doc, atom, center);
-    let head_length = DEFAULT.world(style.head_length_pt);
-    let head_width = DEFAULT.world(style.head_width_pt);
+    let ink = HeadInk { lines, fills };
     let pen = DEFAULT.world(style.width_pt) * 0.5;
-    // Samples the head from its tip back to its widest base; like the drawn
-    // head, it is shortened on a short arrow but keeps its width.
     let touches = |d: Point, extra: f32| {
         let tip = clearance(doc, &Target::Atom { atom }, d).unwrap_or(0.) + gap + pen + extra;
-        let length = head_length.min(start.distance(center.offset(d.x * tip, d.y * tip)) * 0.4);
-        // `lateral` follows the offset normal the arrow renderer uses.
-        let at =
-            |s: f32, lateral: f32| center.offset(d.x * s + d.y * lateral, d.y * s - d.x * lateral);
-        let hits = |p: Point, reach: f32| {
-            lines.iter().any(|(first, last, half)| {
-                let v = delta(*last, *first);
-                let along = (dot(delta(p, *first), v) / dot(v, v)).clamp(0., 1.);
-                p.distance(first.offset(v.x * along, v.y * along)) < reach + half
-            }) || fills.iter().any(|outline| inside(p, outline))
-        };
-        // Neighboring sample disks overlap, so no line slips between them.
-        let samples = (length / pen.max(0.01)).ceil().max(8.) as usize;
-        let axis = (0..=samples).any(|i| {
-            let t = i as f32 / samples as f32;
-            hits(at(tip + length * t, 0.), head_width * t + pen)
-        });
-        // A solid half head fills a barb from the tip on one shaft edge out
-        // to a wing `width` past the other edge, then back to the neck.
-        axis || style.barb(style.head).is_some_and(|(side, width)| {
-            let neck = tip + length * (1. - style.head_notch);
-            let corners = [
-                at(tip, side * pen),
-                at(tip + length, -side * width),
-                at(neck, -side * pen),
-            ];
-            let edges = || corners.iter().zip(&corners[1..]);
-            let lines = lines.iter().map(|(a, b, half)| (*a, *b, *half));
-            let fill_edges = fills.iter().flat_map(|outline| {
-                outline
-                    .iter()
-                    .zip(outline.iter().cycle().skip(1))
-                    .map(|(a, b)| (*a, *b, 0.))
-            });
-            lines
-                .chain(fill_edges)
-                .any(|(a, b, half)| edges().any(|(p, q)| segment_gap(*p, *q, a, b) <= half))
-                || corners
-                    .iter()
-                    .any(|p| fills.iter().any(|outline| inside(*p, outline)))
-        })
+        ink.touches(center.offset(d.x * tip, d.y * tip), d, start, style)
     };
     let score = |d: Point| {
         let extra = (0..=8)
@@ -847,7 +877,7 @@ pub fn create(
         }
         _ => unit(Point::new(chord.x - chord.y * 0.7, chord.y + chord.x * 0.7)),
     };
-    let gap = DEFAULT.world(1.2);
+    let gap = end_gap();
     let pen = DEFAULT.world(style.width_pt) * 0.5;
     let mut candidate = doc.clone();
     let mut start_anchor = Anchor {
@@ -912,6 +942,71 @@ pub fn create(
     candidate.validate()?;
     *doc = candidate;
     Ok(id)
+}
+/// Clearance an attached end keeps beyond its target ink.
+fn end_gap() -> f32 {
+    DEFAULT.world(1.2)
+}
+/// Moves arrow handle `index` to `p`. Aiming an attached end then keeps its
+/// head off bond ink, as [`aim_end`] describes.
+pub fn edit_handle(doc: &mut Document, arrow: u64, index: usize, p: Point) {
+    let Some(a) = doc.arrows.iter_mut().find(|a| a.id == arrow) else {
+        return;
+    };
+    a.edit_handle(index, p);
+    if crate::arrows::ArrowHandle::from_index(index) == Some(crate::arrows::ArrowHandle::Arrival) {
+        aim_end(doc, arrow);
+    }
+}
+/// After the user aims an end attached to an atom or bond, keeps the head,
+/// which lies along the aimed tangent, off that target's bond ink. The aim
+/// is never rotated: the end only backs away along the target's projection
+/// direction by the smallest extra gap (up to another end gap) that clears
+/// the ink, or by that whole cap when none does. The tangent is preserved.
+pub fn aim_end(doc: &mut Document, arrow: u64) {
+    let Some(a) = doc.arrows.iter().find(|a| a.id == arrow) else {
+        return;
+    };
+    let (Some(anchor), Some([_, control])) = (a.end_anchor.as_ref(), a.cubic) else {
+        return;
+    };
+    if matches!(anchor.target, Target::LonePair { .. }) || control.distance(a.end) < 0.00001 {
+        return;
+    }
+    let style = a.appearance();
+    let pen = DEFAULT.world(style.width_pt) * 0.5;
+    let d = unit(delta(control, a.end));
+    let gap = end_gap();
+    let mut anchor = Anchor {
+        direction: d,
+        gap,
+        ..anchor.clone()
+    };
+    let (Some(center), Some(push), Some(tip)) = (
+        anchor.target.center(doc),
+        projection_direction(doc, &anchor.target, d),
+        anchor.resolved(doc, pen),
+    ) else {
+        return;
+    };
+    let ink = HeadInk::around(doc, anchor.target.atoms());
+    let extra = (0..=8)
+        .map(|i| gap * i as f32 / 8.)
+        .find(|e| !ink.touches(tip.offset(push.x * e, push.y * e), d, a.start, &style))
+        .unwrap_or(gap);
+    // The endpoint already clears `gap`, so the larger gap resolves in place.
+    let end = tip.offset(push.x * extra, push.y * extra);
+    anchor.gap = gap + extra;
+    anchor.offset = delta(end, center);
+    let Some(a) = doc.arrows.iter_mut().find(|a| a.id == arrow) else {
+        return;
+    };
+    let shift = delta(end, a.end);
+    if let Some([_, c]) = a.cubic.as_mut() {
+        *c = c.offset(shift.x, shift.y);
+    }
+    a.end = end;
+    a.end_anchor = Some(anchor);
 }
 /// Absolute resolution is idempotent: an already transformed endpoint has no
 /// displacement to apply twice. Missing targets detach at their cached position.
