@@ -436,6 +436,41 @@ fn label_edits_and_indicator_drags_are_atomic_and_do_not_change_chemistry() {
 }
 
 #[test]
+fn bond_attachment_applies_to_text_labels_in_scope_as_one_undo_step() {
+    use atom_labels::{Action, Scope};
+    use reshiki::atom_labels::LabelAttachment;
+    let (mut app, _) = App::new();
+    let _ = app.update(Message::New);
+    let text = app.tab.doc.add_atom("*", Point::default());
+    app.tab
+        .doc
+        .atom_mut(text)
+        .unwrap()
+        .display
+        .set_variable(Some("MeO".into()));
+    let oxygen = app.tab.doc.add_atom("O", Point::new(30., 0.));
+    app.tab.history = History::default();
+    let original = app.tab.doc.clone();
+    app.tab.labels.scope = Scope::Selection;
+    app.tab.selected = vec![text, oxygen];
+    let atoms: Vec<_> = app.tab.doc.atoms.iter().collect();
+    assert!(app.label_attachment_picker(&atoms).is_some());
+    let element_only: Vec<_> = app.tab.doc.atom(oxygen).into_iter().collect();
+    assert!(app.label_attachment_picker(&element_only).is_none());
+    app.label_action(Action::Attachment(LabelAttachment::Character(0)));
+    let attachment = |app: &App, id| app.tab.doc.atom(id).unwrap().display.label_attachment;
+    assert_eq!(attachment(&app, text), LabelAttachment::Character(0));
+    assert_eq!(attachment(&app, oxygen), LabelAttachment::Auto);
+    assert!(!chemistry_changed(&original, &app.tab.doc));
+    app.label_action(Action::ResetOverrides);
+    assert_eq!(attachment(&app, text), LabelAttachment::Auto);
+    let _ = app.update(Message::Undo);
+    assert_eq!(attachment(&app, text), LabelAttachment::Character(0));
+    let _ = app.update(Message::Undo);
+    assert!(same_drawing(&app.tab.doc, &original));
+}
+
+#[test]
 fn invalid_edit_is_rolled_back_without_an_undo_entry() {
     let (mut app, _) = App::new();
     let _ = app.update(Message::New);
