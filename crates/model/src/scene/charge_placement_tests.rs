@@ -445,3 +445,198 @@ fn implicit_carbon_charge_and_genuinely_covered_short_bonds_are_not_repositioned
         );
     }
 }
+
+/// Issue #337: unjoined en donors around Co³⁺ keep their automatic H₂ clear
+/// of the metal's 3+ and of each other; a manual side is still honored.
+#[test]
+fn automatic_hydrogens_avoid_nearby_unbonded_labels_and_charges() {
+    let mut doc: Document = serde_json::from_str(include_str!(
+        "../../../../tests/fixtures/coordination/co-en3-before.rsk"
+    ))
+    .unwrap();
+    // Only the H and count ink moves; the element symbols and the metal's
+    // charge stay where they are, and their spacing depends on the font.
+    let hydrogen_ink = |doc: &Document, id: u64| {
+        let runs: Vec<_> = atom_label_runs(doc.atom(id).unwrap(), doc)
+            .into_iter()
+            .filter(|run| {
+                matches!(run, Primitive::Text { text, .. }
+                    if text == "H" || text.chars().all(|c| c.is_ascii_digit()))
+            })
+            .collect();
+        label_ink_boxes(&runs)
+    };
+    for a in &doc.atoms {
+        for b in doc.atoms.iter().filter(|b| b.id != a.id) {
+            let other = atom_label_ink_boxes(b, &doc);
+            assert!(
+                !hydrogen_ink(&doc, a.id).iter().any(|(lo, hi)| {
+                    other
+                        .iter()
+                        .any(|(p, q)| hi.x > p.x && lo.x < q.x && hi.y > p.y && lo.y < q.y)
+                }),
+                "Hydrogens of {} meet label {}",
+                a.id,
+                b.id
+            );
+        }
+    }
+    // The upper-right NH₂ (atom 2) stacks its H₂ above rather than toward Co.
+    let n = charge_run(&doc, 2, "N");
+    let h = charge_run(&doc, 2, "H");
+    assert!(h.y < n.y && (h.x - n.x).abs() < 0.1, "N {n:?}, H {h:?}");
+    doc.atom_mut(2).unwrap().display.hydrogen_position = HydrogenPosition::Left;
+    assert!(charge_run(&doc, 2, "H").x < n.x);
+}
+
+/// A replacement side must not put the hydrogens across an unrelated bond.
+#[test]
+fn automatic_hydrogen_replacement_side_avoids_nearby_bonds() {
+    let mut doc = Document::default();
+    let n = doc.add_atom("N", Point::new(0., 0.));
+    let c = doc.add_atom("C", Point::new(60., 0.));
+    doc.add_bond(n, c, 1, "plain");
+    doc.atom_mut(n).unwrap().label_h = 2;
+    // A free O label blocks the usual left-hand H2.
+    doc.add_atom("O", Point::new(-35., 0.));
+    let (n_text, h) = (charge_run(&doc, n, "N"), charge_run(&doc, n, "H"));
+    assert!(h.y < n_text.y && (h.x - n_text.x).abs() < 0.1);
+    // An unrelated shaft above the N leaves only the lower side clear, even
+    // though both of its ends lie far away.
+    let left = doc.add_atom("C", Point::new(-400., -25.));
+    let right = doc.add_atom("C", Point::new(400., -25.));
+    doc.add_bond(left, right, 1, "plain");
+    // Editing bonds clears computed hydrogen counts.
+    doc.atom_mut(n).unwrap().label_h = 2;
+    let h = charge_run(&doc, n, "H");
+    assert!(h.y > n_text.y && (h.x - n_text.x).abs() < 0.1);
+}
+
+/// A replacement side must not cover an explicit mark on the atom.
+#[test]
+fn automatic_hydrogen_replacement_side_avoids_atom_marks() {
+    let mut doc = Document::default();
+    let n = doc.add_atom("N", Point::new(0., 0.));
+    let c = doc.add_atom("C", Point::new(60., 0.));
+    doc.add_bond(n, c, 1, "plain");
+    doc.add_atom("O", Point::new(-35., 0.));
+    let atom = doc.atom_mut(n).unwrap();
+    atom.label_h = 2;
+    atom.marks.push(AtomMark {
+        id: None,
+        kind: MarkKind::LonePairBar,
+        offset: Point::new(0., -28.),
+        angle: 0.,
+        size_pt: None,
+    });
+    let (n_text, h) = (charge_run(&doc, n, "N"), charge_run(&doc, n, "H"));
+    assert!(h.y > n_text.y && (h.x - n_text.x).abs() < 0.1);
+}
+
+/// Marks on atoms hidden in a collapsed abbreviation are not drawn, so they
+/// must not block a replacement side.
+#[test]
+fn automatic_hydrogen_replacement_side_ignores_hidden_marks() {
+    let mut doc = Document::default();
+    let n = doc.add_atom("N", Point::new(0., 0.));
+    let c = doc.add_atom("C", Point::new(60., 0.));
+    doc.add_bond(n, c, 1, "plain");
+    doc.add_atom("O", Point::new(-35., 0.));
+    let anchor = doc.add_atom("C", Point::new(400., 0.));
+    let hidden = doc.add_atom("C", Point::new(0., -28.));
+    doc.add_bond(anchor, hidden, 1, "plain");
+    doc.atom_mut(hidden).unwrap().marks.push(AtomMark {
+        id: None,
+        kind: MarkKind::LonePairBar,
+        offset: Point::default(),
+        angle: 0.,
+        size_pt: None,
+    });
+    doc.abbreviations.push(
+        serde_json::from_value(serde_json::json!({
+            "label": "Me",
+            "anchor": anchor,
+            "members": [anchor, hidden],
+        }))
+        .unwrap(),
+    );
+    doc.atom_mut(n).unwrap().label_h = 2;
+    let (n_text, h) = (charge_run(&doc, n, "N"), charge_run(&doc, n, "H"));
+    assert!(h.y < n_text.y && (h.x - n_text.x).abs() < 0.1);
+}
+
+/// The outer stroke of a multiple bond blocks a replacement side even when
+/// its center line clears the hydrogens, at the rail offsets actually drawn.
+#[test]
+fn automatic_hydrogen_replacement_side_avoids_outer_bond_strokes() {
+    use crate::bonds::DoublePosition;
+    let mut doc = Document::default();
+    let n = doc.add_atom("N", Point::new(0., 0.));
+    let c = doc.add_atom("C", Point::new(60., 0.));
+    doc.add_bond(n, c, 1, "plain");
+    doc.atom_mut(n).unwrap().label_h = 2;
+    doc.add_atom("O", Point::new(-35., 0.));
+    let label = atom_label_runs(doc.atom(n).unwrap(), &doc);
+    let size = doc.drawing_style.font_size();
+    let top = label_ink_boxes(&label[1..])
+        .iter()
+        .map(|(lo, _)| lo.y)
+        .fold(f32::INFINITY, f32::min);
+    let style = &doc.drawing_style;
+    let spacing = style.bond_length_world * style.bond_spacing_ratio;
+    // A centered double bond's rails (half a spacing out) clear the padded
+    // hydrogen ink; a rail a full spacing toward it does not.
+    let y = top - size * 0.12 - spacing * 0.5 - style.line_width();
+    let left = doc.add_atom("C", Point::new(-40., y));
+    let right = doc.add_atom("C", Point::new(40., y));
+    let above = |doc: &mut Document, order, position| {
+        doc.bonds.retain(|b| b.a != left);
+        doc.add_bond(left, right, order, "plain");
+        doc.bonds.last_mut().unwrap().double_position = position;
+        doc.atom_mut(n).unwrap().label_h = 2;
+        charge_run(doc, n, "H").y < charge_run(doc, n, "N").y
+    };
+    assert!(above(&mut doc, 1, DoublePosition::Auto));
+    assert!(above(&mut doc, 2, DoublePosition::Center));
+    assert!(above(&mut doc, 2, DoublePosition::Auto));
+    assert!(!above(&mut doc, 3, DoublePosition::Auto));
+    // Exactly one side puts the second rail toward the hydrogens.
+    assert_ne!(
+        above(&mut doc, 2, DoublePosition::Left),
+        above(&mut doc, 2, DoublePosition::Right)
+    );
+}
+
+/// A wavy double bond's two strokes cross, so near its ends they reach both
+/// sides whatever its double position says.
+#[test]
+fn automatic_hydrogen_replacement_side_avoids_crossed_wavy_double_bonds() {
+    use crate::bonds::DoublePosition;
+    let mut doc = Document::default();
+    let n = doc.add_atom("N", Point::new(0., 0.));
+    let c = doc.add_atom("C", Point::new(60., 0.));
+    doc.add_bond(n, c, 1, "plain");
+    doc.atom_mut(n).unwrap().label_h = 2;
+    doc.add_atom("O", Point::new(-35., 0.));
+    let label = atom_label_runs(doc.atom(n).unwrap(), &doc);
+    let size = doc.drawing_style.font_size();
+    let top = label_ink_boxes(&label[1..])
+        .iter()
+        .map(|(lo, _)| lo.y)
+        .fold(f32::INFINITY, f32::min);
+    let style = &doc.drawing_style;
+    let spacing = style.bond_length_world * style.bond_spacing_ratio;
+    // The center line, and a rail on the far side, clear the hydrogens; the
+    // crossing stroke's end above the N does not.
+    let y = top - size * 0.12 - spacing * 0.25;
+    let start = doc.add_atom("C", Point::new(0., y));
+    let end = doc.add_atom("C", Point::new(80., y));
+    for position in [DoublePosition::Left, DoublePosition::Right] {
+        doc.bonds.retain(|b| b.a != start);
+        doc.add_bond(start, end, 2, "wavy");
+        doc.bonds.last_mut().unwrap().double_position = position;
+        doc.atom_mut(n).unwrap().label_h = 2;
+        let (n_text, h) = (charge_run(&doc, n, "N"), charge_run(&doc, n, "H"));
+        assert!(h.y > n_text.y, "{position:?}");
+    }
+}
