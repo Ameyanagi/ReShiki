@@ -962,7 +962,8 @@ pub fn edit_handle(doc: &mut Document, arrow: u64, index: usize, p: Point) {
 /// which lies along the aimed tangent, off that target's bond ink. The aim
 /// is never rotated: the end only backs away along the target's projection
 /// direction by the smallest extra gap (up to another end gap) that clears
-/// the ink, or by that whole cap when none does. The tangent is preserved.
+/// the ink, or not at all when none does, as on arrival. The tangent is
+/// preserved.
 pub fn aim_end(doc: &mut Document, arrow: u64) {
     let Some(a) = doc.arrows.iter().find(|a| a.id == arrow) else {
         return;
@@ -1005,7 +1006,7 @@ pub fn aim_end(doc: &mut Document, arrow: u64) {
     let extra = (0..=8)
         .map(|i| gap * i as f32 / 8.)
         .find(|e| !ink.touches(tip.offset(push.x * e, push.y * e), d, a.start, &style))
-        .unwrap_or(gap);
+        .unwrap_or(0.);
     // The endpoint already clears `gap`, so the larger gap resolves in place.
     let end = tip.offset(push.x * extra, push.y * extra);
     anchor.gap = gap + extra;

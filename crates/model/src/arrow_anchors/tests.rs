@@ -1657,16 +1657,17 @@ fn mechanism_attachment_379_clear_aim_leaves_the_arrow_unchanged() {
     assert_eq!((a.start, a.end, a.cubic), (b.start, b.end, b.cubic));
 }
 #[test]
-fn mechanism_attachment_379_aim_along_a_bond_keeps_the_aim_and_capped_gap() {
+fn mechanism_attachment_379_aim_along_a_bond_keeps_the_aim_and_base_gap() {
     let (d, c, id) = acetone_arrow();
-    // Straight down the C=O bond: no gap clears it, and the aim never turns.
+    // Straight down the C=O bond: no gap clears it, so the end keeps the
+    // base gap, as on arrival, and the aim never turns.
     let mut aimed = d.clone();
     edit_handle(&mut aimed, id, 4, aim(&d, id, 270.));
     let a = arrow(&aimed, id);
     near(arrival(a), Point::new(0., -1.));
     let anchor = a.end_anchor.as_ref().unwrap();
     assert_eq!(anchor.target, Target::Atom { atom: c });
-    assert!((anchor.gap - 2. * end_gap()).abs() < 0.0001);
+    assert!((anchor.gap - end_gap()).abs() < 0.0001);
     let once = aimed.clone();
     reconcile(&mut aimed);
     assert_eq!(aimed, once);
