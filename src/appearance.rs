@@ -1,4 +1,5 @@
 //! Application chrome only. Document page colors live in canvas_theme.
+use iced::advanced::{Clipboard, Layout, Shell, layout, overlay, renderer, widget};
 use iced::{Color, Theme};
 use serde::{Deserialize, Serialize};
 
@@ -389,3 +390,235 @@ pub fn secondary(
 
 #[cfg(test)]
 mod tests;
+
+/// Closes an open drop-down list on Escape, like the app's own popovers.
+/// iced's pick list ignores the key. Its open menu takes Escape first, so
+/// nothing behind it (the drawing, a style draft) acts on the key; the list
+/// then closes on the next event, as a press it did not get from its menu.
+pub fn close_on_escape<'a, Message: 'a>(
+    content: impl Into<iced::Element<'a, Message>>,
+) -> iced::Element<'a, Message> {
+    iced::Element::new(CloseOnEscape(content.into()))
+}
+
+struct CloseOnEscape<'a, Message>(iced::Element<'a, Message>);
+
+/// Set by the open menu on Escape; the list closes on the next update.
+struct Closing(bool);
+
+impl<Message> widget::Widget<Message, Theme, iced::Renderer> for CloseOnEscape<'_, Message> {
+    fn size(&self) -> iced::Size<iced::Length> {
+        self.0.as_widget().size()
+    }
+    fn size_hint(&self) -> iced::Size<iced::Length> {
+        self.0.as_widget().size_hint()
+    }
+    fn tag(&self) -> widget::tree::Tag {
+        widget::tree::Tag::of::<Closing>()
+    }
+    fn state(&self) -> widget::tree::State {
+        widget::tree::State::new(Closing(false))
+    }
+    fn children(&self) -> Vec<widget::Tree> {
+        vec![widget::Tree::new(&self.0)]
+    }
+    fn diff(&self, tree: &mut widget::Tree) {
+        tree.diff_children(std::slice::from_ref(&self.0));
+    }
+    fn layout(
+        &mut self,
+        tree: &mut widget::Tree,
+        renderer: &iced::Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
+        let Some(child) = tree.children.first_mut() else {
+            return layout::Node::default();
+        };
+        self.0.as_widget_mut().layout(child, renderer, limits)
+    }
+    fn draw(
+        &self,
+        tree: &widget::Tree,
+        renderer: &mut iced::Renderer,
+        theme: &Theme,
+        style: &renderer::Style,
+        layout: Layout<'_>,
+        cursor: iced::mouse::Cursor,
+        viewport: &iced::Rectangle,
+    ) {
+        if let Some(child) = tree.children.first() {
+            self.0
+                .as_widget()
+                .draw(child, renderer, theme, style, layout, cursor, viewport);
+        }
+    }
+    fn operate(
+        &mut self,
+        tree: &mut widget::Tree,
+        layout: Layout<'_>,
+        renderer: &iced::Renderer,
+        operation: &mut dyn widget::Operation,
+    ) {
+        if let Some(child) = tree.children.first_mut() {
+            self.0
+                .as_widget_mut()
+                .operate(child, layout, renderer, operation);
+        }
+    }
+    fn update(
+        &mut self,
+        tree: &mut widget::Tree,
+        event: &iced::Event,
+        layout: Layout<'_>,
+        cursor: iced::mouse::Cursor,
+        renderer: &iced::Renderer,
+        clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, Message>,
+        viewport: &iced::Rectangle,
+    ) {
+        let Some(child) = tree.children.first_mut() else {
+            return;
+        };
+        let closing = tree.state.downcast_mut::<Closing>();
+        if std::mem::replace(&mut closing.0, false) {
+            // An open list closes on a press its menu did not take. Without a
+            // cursor, a closed list ignores it.
+            let mut messages = Vec::new();
+            self.0.as_widget_mut().update(
+                child,
+                &iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
+                layout,
+                iced::mouse::Cursor::Unavailable,
+                renderer,
+                clipboard,
+                &mut Shell::new(&mut messages),
+                viewport,
+            );
+            messages.into_iter().for_each(|m| shell.publish(m));
+            // The menu is gone: lay out the overlays left, such as a hint.
+            shell.invalidate_layout();
+            shell.request_redraw();
+        }
+        self.0.as_widget_mut().update(
+            child, event, layout, cursor, renderer, clipboard, shell, viewport,
+        );
+    }
+    fn mouse_interaction(
+        &self,
+        tree: &widget::Tree,
+        layout: Layout<'_>,
+        cursor: iced::mouse::Cursor,
+        viewport: &iced::Rectangle,
+        renderer: &iced::Renderer,
+    ) -> iced::mouse::Interaction {
+        tree.children
+            .first()
+            .map_or_else(Default::default, |child| {
+                self.0
+                    .as_widget()
+                    .mouse_interaction(child, layout, cursor, viewport, renderer)
+            })
+    }
+    fn overlay<'b>(
+        &'b mut self,
+        tree: &'b mut widget::Tree,
+        layout: Layout<'b>,
+        renderer: &iced::Renderer,
+        viewport: &iced::Rectangle,
+        translation: iced::Vector,
+    ) -> Option<overlay::Element<'b, Message, Theme, iced::Renderer>> {
+        let menu = self.0.as_widget_mut().overlay(
+            tree.children.first_mut()?,
+            layout,
+            renderer,
+            viewport,
+            translation,
+        )?;
+        let closing = &mut tree.state.downcast_mut::<Closing>().0;
+        Some(overlay::Element::new(Box::new(EscapeMenu {
+            menu,
+            closing,
+        })))
+    }
+}
+
+struct EscapeMenu<'b, Message> {
+    menu: overlay::Element<'b, Message, Theme, iced::Renderer>,
+    closing: &'b mut bool,
+}
+
+impl<Message> overlay::Overlay<Message, Theme, iced::Renderer> for EscapeMenu<'_, Message> {
+    fn layout(&mut self, renderer: &iced::Renderer, bounds: iced::Size) -> layout::Node {
+        self.menu.as_overlay_mut().layout(renderer, bounds)
+    }
+    fn draw(
+        &self,
+        renderer: &mut iced::Renderer,
+        theme: &Theme,
+        style: &renderer::Style,
+        layout: Layout<'_>,
+        cursor: iced::mouse::Cursor,
+    ) {
+        self.menu
+            .as_overlay()
+            .draw(renderer, theme, style, layout, cursor);
+    }
+    fn operate(
+        &mut self,
+        layout: Layout<'_>,
+        renderer: &iced::Renderer,
+        operation: &mut dyn widget::Operation,
+    ) {
+        self.menu
+            .as_overlay_mut()
+            .operate(layout, renderer, operation);
+    }
+    fn update(
+        &mut self,
+        event: &iced::Event,
+        layout: Layout<'_>,
+        cursor: iced::mouse::Cursor,
+        renderer: &iced::Renderer,
+        clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, Message>,
+    ) {
+        use iced::keyboard::{Event::KeyPressed, Key, key::Named};
+        // Closing: later events in the batch go to the list, which closes first.
+        if *self.closing {
+            return;
+        }
+        if let iced::Event::Keyboard(KeyPressed {
+            key: Key::Named(Named::Escape),
+            ..
+        }) = event
+        {
+            *self.closing = true;
+            shell.capture_event();
+            shell.request_redraw();
+            return;
+        }
+        self.menu
+            .as_overlay_mut()
+            .update(event, layout, cursor, renderer, clipboard, shell);
+    }
+    fn mouse_interaction(
+        &self,
+        layout: Layout<'_>,
+        cursor: iced::mouse::Cursor,
+        renderer: &iced::Renderer,
+    ) -> iced::mouse::Interaction {
+        self.menu
+            .as_overlay()
+            .mouse_interaction(layout, cursor, renderer)
+    }
+    fn overlay<'c>(
+        &'c mut self,
+        layout: Layout<'c>,
+        renderer: &iced::Renderer,
+    ) -> Option<overlay::Element<'c, Message, Theme, iced::Renderer>> {
+        self.menu.as_overlay_mut().overlay(layout, renderer)
+    }
+    fn index(&self) -> f32 {
+        self.menu.as_overlay().index()
+    }
+}

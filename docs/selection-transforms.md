@@ -1,10 +1,18 @@
 # Selection resize and rotation handles
 
-Updated 2026-10-02.
+Updated 2026-10-18.
 
 With Select active, selected structures have a teal bounding box with four square corner handles and a circular rotation handle above the box. Double-click an atom to select its connected molecule, or use Cmd/Ctrl+A to select all objects and activate Select. A lone selected atom keeps its circle without a transform box.
 
-Drag a corner to resize proportionally about the opposite corner. Crossing the opposite corner clamps to a small positive scale instead of reflecting the molecule. Drag the circular handle to rotate about the selection center; hold Shift to snap to 15° increments. The rotation box follows the live preview and returns to an axis-aligned bound on release. Escape or window focus loss cancels the drag. Completed drags create one Undo step, and clicking a handle without moving creates none.
+Drag a corner to resize proportionally about the opposite corner. Crossing the opposite corner clamps to a small positive scale instead of reflecting the molecule. Drag the circular handle to rotate freely about the selection center; hold Shift to snap to 15° increments. Alt/Option does not change the drag, which is already free. While dragging, a readout beside the pointer shows the angle being applied (positive is clockwise, as in the numeric Rotate field) and the step keys: Shift for 15° steps, Alt/Option+Left/Right to rotate by 1°, and Alt/Option+Up/Down by 15°. Plain arrow keys still move the selection. The rotation box follows the live preview and returns to an axis-aligned bound on release. Escape or window focus loss cancels the drag. Completed drags create one Undo step, and clicking a handle without moving creates none.
+
+To rotate by an exact angle without opening the inspector, type it in the
+**°** field after Rotate 180° at the right end of the Select context row and
+press Enter. The field shares its draft with **Properties → Transform →
+Rotate**, applies the same relative, clockwise-positive rotation as one Undo
+step, and resets to 0 afterwards. Its tooltip, and the tooltip of the
+selection summary, list the step-rotation keys. When the row is too narrow it
+folds into **Arrange ▾**, which omits the field; use the inspector field then.
 
 Double-click the rotation handle to focus **Properties → Transform → Rotate**,
 or a corner to focus **Scale**. Double-click a side handle for **W**, or a top or

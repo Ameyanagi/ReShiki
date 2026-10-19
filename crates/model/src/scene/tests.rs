@@ -777,3 +777,36 @@ fn ring_double_bonds_keep_a_continuous_outer_edge() {
         3
     );
 }
+
+#[test]
+fn sideways_alternative_lists_grow_away_from_their_bond() {
+    use crate::{
+        atom_text::{Mode, apply},
+        document::{Document, Point},
+    };
+    // Issue #316: Clean up puts 4-chlorophenol's substituents left and right.
+    // Centered lists covered the ring between them (x = -24..24).
+    let mut doc = Document::default();
+    let ids: Vec<_> = [(-48., 0.), (-24., 0.), (24., 0.), (48., 0.), (24., -48.)]
+        .into_iter()
+        .map(|(x, y)| doc.add_atom("C", Point::new(x, y)))
+        .collect();
+    for (a, b) in [(0, 1), (1, 2), (2, 3), (2, 4)] {
+        doc.add_bond(ids[a], ids[b], 1, "plain");
+    }
+    let doc = apply(&doc, ids[0], "[Cl,Br,I]", Mode::Auto).unwrap();
+    let doc = apply(&doc, ids[3], "[OMe,OPh]", Mode::Auto).unwrap();
+    let doc = apply(&doc, ids[4], "[F,Cl]", Mode::Auto).unwrap();
+    let bounds = |id| {
+        let atom = doc.atom(id).unwrap();
+        assert_eq!(atom.element, "*");
+        super::atom_label_ink_bounds(atom, &doc).unwrap()
+    };
+    let (_, left) = bounds(ids[0]);
+    assert!(left.x < -28., "{left:?}");
+    let (right, _) = bounds(ids[3]);
+    assert!(right.x > 28., "{right:?}");
+    // A list on a vertical bond stays centered over its atom.
+    let (lo, hi) = bounds(ids[4]);
+    assert!(((lo.x + hi.x) / 2. - 24.).abs() < 1., "{lo:?} {hi:?}");
+}

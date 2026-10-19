@@ -48,6 +48,7 @@ impl MoleculeCanvas<'_> {
         self.preview_pointer_edits(&mut draft, state, bounds);
         let mut doc = draft.preview.into_owned();
         reshiki::arrow_anchors::reconcile(&mut doc);
+        reshiki::arrow_labels::reconcile(&mut doc, self.doc);
         doc
     }
 
@@ -59,7 +60,8 @@ impl MoleculeCanvas<'_> {
         cursor: mouse::Cursor,
     ) {
         self.draw_background(frame, state, bounds);
-        let mut draft = Draft::new(self.joining.map(|(j, _)| &j.base).unwrap_or(self.doc));
+        let base = self.joining.map(|(j, _)| &j.base).unwrap_or(self.doc);
+        let mut draft = Draft::new(base);
         self.preview_tilt(&mut draft, state, bounds);
         self.preview_chain(&mut draft, frame, state, bounds);
         self.preview_pointer_edits(&mut draft, state, bounds);
@@ -74,6 +76,8 @@ impl MoleculeCanvas<'_> {
         self.preview_bond(&mut draft, frame, state, bounds);
         if let Cow::Owned(doc) = &mut draft.preview {
             reshiki::arrow_anchors::reconcile(doc);
+            // Show condition labels and the length clamp as the commit will.
+            reshiki::arrow_labels::reconcile(doc, base);
         }
         let Draft {
             mut preview,

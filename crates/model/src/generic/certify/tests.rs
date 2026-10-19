@@ -65,7 +65,7 @@ fn prepared_union_publication_inherits_claims_without_identity_and_rejects_tampe
     oversized.annotations.push(crate::document::Annotation {
         id: oversized.next_id(),
         position: Point::default(),
-        text: "x".repeat(3_000_000),
+        text: "x".repeat(Limits::default().max_work),
         format: Default::default(),
     });
     probe::reset();

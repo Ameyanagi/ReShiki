@@ -218,6 +218,10 @@ jobs:
         # Exercise the actual application widgets, including the Tiny Skia fallback.
         # Native desktop timing and accessibility acceptance remain separate.
         run: cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::tool_palette_pointer_gestures_and_keyboard_activation_have_one_owner -- --exact --ignored
+      - name: Test rendered drop-down Escape on Windows
+        if: runner.os == 'Windows'
+        # Escape closes the status-bar journal and theme lists (#336).
+        run: cargo test --locked --no-default-features --bin reshiki appearance::tests::escape_closes_an_open_pick_list -- --exact --ignored
       - name: Test rendered figure export labels on Windows
         if: runner.os == 'Windows'
         # Keep the renderer-dependent AX check explicit; ordinary menu state

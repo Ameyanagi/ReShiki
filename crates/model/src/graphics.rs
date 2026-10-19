@@ -582,7 +582,7 @@ pub fn segment_distance(p: Point, a: Point, b: Point) -> f32 {
     p.distance(a.offset(dx * t.clamp(0., 1.), dy * t.clamp(0., 1.)))
 }
 // windows(2): an unclosed contour has no closing edge, unlike the closed-contour tests in
-// scientific/label_clearance.rs `contains` and mark_placement.rs `intersects`.
+// scientific/label_halo.rs `contains` and mark_placement.rs `intersects`.
 fn inside_polygon(p: Point, path: &[Point]) -> bool {
     let mut inside = false;
     for pair in path.windows(2) {

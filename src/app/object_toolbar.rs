@@ -8,8 +8,13 @@ use reshiki::editing::{Arrange, Transform};
 const MENU_BUTTON: f32 = 38.;
 const ICON_BUTTON: f32 = 30.;
 const GAP: f32 = 2.;
-/// Width of the full group: three menu buttons, a divider and three icon buttons.
-pub(super) const GROUP_WIDTH: f32 = 3. * MENU_BUTTON + 11. + 3. * ICON_BUTTON + 6. * GAP;
+/// Width of the full group: three menu buttons, a divider, three icon buttons
+/// and the Rotate field.
+pub(super) const GROUP_WIDTH: f32 = 3. * MENU_BUTTON
+    + 11.
+    + 3. * ICON_BUTTON
+    + super::numeric_transforms::ROTATION_FIELD
+    + 7. * GAP;
 /// Width of the collapsed `Arrange ▾` button.
 pub(super) const COMPACT_WIDTH: f32 = 80.;
 
@@ -303,7 +308,9 @@ impl App {
                 tooltip::Position::Bottom,
             ));
         }
-        group.into()
+        group
+            .push(self.rotation_field(Command::Rotate.enabled(self, objects)))
+            .into()
     }
 }
 
