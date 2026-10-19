@@ -1672,6 +1672,25 @@ fn mechanism_attachment_379_aim_along_a_bond_keeps_the_aim_and_capped_gap() {
     assert_eq!(aimed, once);
 }
 #[test]
+fn mechanism_attachment_379_repeated_aims_do_not_pile_up_gap() {
+    let (mut d, _, id) = acetone_arrow();
+    let center = Point::new(0., 0.);
+    let mut reach = Vec::new();
+    // Re-aim along the same rays, down the C=O bond and toward it, again
+    // and again: the end must settle, not back away a cap per edit.
+    for degrees in [270f32, 270., 235., 235., 270., 270.] {
+        let p = aim(&d, id, degrees);
+        edit_handle(&mut d, id, 4, p);
+        let anchor = arrow(&d, id).end_anchor.as_ref().unwrap();
+        assert!(anchor.gap <= 2. * end_gap() + 0.0001);
+        reach.push(arrow(&d, id).end.distance(center));
+    }
+    assert!((reach[0] - reach[1]).abs() < 0.001, "{reach:?}");
+    assert!((reach[2] - reach[3]).abs() < 0.001, "{reach:?}");
+    assert!((reach[4] - reach[5]).abs() < 0.001, "{reach:?}");
+    assert!((reach[0] - reach[4]).abs() < 0.001, "{reach:?}");
+}
+#[test]
 fn mechanism_attachment_379_aimed_bond_end_keeps_target_aim_and_stability() {
     let mut d = Document::default();
     let c = d.add_atom("C", Point::new(0., 0.));

@@ -977,13 +977,25 @@ pub fn aim_end(doc: &mut Document, arrow: u64) {
     let pen = DEFAULT.world(style.width_pt) * 0.5;
     let d = unit(delta(control, a.end));
     let gap = end_gap();
+    let (Some(center), Some(old_push)) = (
+        anchor.target.center(doc),
+        projection_direction(doc, &anchor.target, anchor.direction),
+    ) else {
+        return;
+    };
+    // Drop the extra gap an earlier arrival added, so repeated aims never
+    // pile padding past the cap; the base gap along the old side remains.
+    let old_extra = (anchor.gap - gap).max(0.);
+    let base = a
+        .end
+        .offset(-old_push.x * old_extra, -old_push.y * old_extra);
     let mut anchor = Anchor {
+        offset: delta(base, center),
         direction: d,
         gap,
         ..anchor.clone()
     };
-    let (Some(center), Some(push), Some(tip)) = (
-        anchor.target.center(doc),
+    let (Some(push), Some(tip)) = (
         projection_direction(doc, &anchor.target, d),
         anchor.resolved(doc, pen),
     ) else {
