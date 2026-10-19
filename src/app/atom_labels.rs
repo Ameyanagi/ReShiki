@@ -1,5 +1,5 @@
 use super::*;
-use reshiki::atom_labels::{self as labels, Carbons, HydrogenPosition, Number};
+use reshiki::atom_labels::{self as labels, Carbons, HydrogenPosition, LabelAttachment, Number};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Scope {
@@ -38,6 +38,7 @@ pub enum Action {
     Hydrogens(bool),
     Charges(bool),
     Position(HydrogenPosition),
+    Attachment(LabelAttachment),
     Stereo(bool),
     Seed(String),
     Number,
@@ -133,6 +134,17 @@ impl App {
                     .filter(|a| ids.contains(&a.id))
                 {
                     a.display.hydrogen_position = value;
+                }
+            }
+            Action::Attachment(value) => {
+                for a in self
+                    .tab
+                    .doc
+                    .atoms
+                    .iter_mut()
+                    .filter(|a| ids.contains(&a.id) && labels::free_text(a, &before))
+                {
+                    a.display.label_attachment = value;
                 }
             }
             Action::Stereo(value) => {
@@ -296,6 +308,7 @@ impl App {
                     a.display.hide_charge = false;
                     a.display.hydrogens = None;
                     a.display.hydrogen_position = HydrogenPosition::Auto;
+                    a.display.label_attachment = LabelAttachment::Auto;
                     a.display.stereo.show = None;
                     a.display.mapping.show = None;
                 }
@@ -312,5 +325,58 @@ impl App {
         }
         self.changed(before);
         Ok(())
+    }
+
+    /// Which glyph of the text labels in scope meets their bonds; None when
+    /// the scope has no text label.
+    pub(super) fn label_attachment_picker<'a>(
+        &self,
+        atoms: &[&reshiki::document::Atom],
+    ) -> Option<Element<'a, Message>> {
+        let labeled: Vec<_> = atoms
+            .iter()
+            .filter(|a| labels::free_text(a, &self.tab.doc))
+            .collect();
+        let current = labeled.first()?.display.label_attachment;
+        let mut choices: Vec<_> = LabelAttachment::SIDES
+            .into_iter()
+            .map(|value| AttachmentChoice(value, value.to_string()))
+            .collect();
+        if let [atom] = labeled.as_slice()
+            && let Some(text) = &atom.display.variable
+        {
+            choices.extend(text.chars().zip(0..32u8).map(|(c, index)| {
+                let value = LabelAttachment::Character(index);
+                AttachmentChoice(value, format!("{value}: {c}"))
+            }));
+        }
+        let selected = labeled
+            .iter()
+            .all(|a| a.display.label_attachment == current)
+            .then(|| {
+                choices
+                    .iter()
+                    .find(|choice| choice.0 == current)
+                    .cloned()
+                    .unwrap_or_else(|| AttachmentChoice(current, current.to_string()))
+            });
+        Some(
+            crate::appearance::pick_list(choices, selected, |choice: AttachmentChoice| {
+                Message::Labels(Action::Attachment(choice.0))
+            })
+            .placeholder("Mixed")
+            .text_size(12)
+            .width(iced::Length::Fill)
+            .into(),
+        )
+    }
+}
+
+/// A bond-attachment menu entry: flush sides, then each character of one label.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AttachmentChoice(LabelAttachment, String);
+impl std::fmt::Display for AttachmentChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.1)
     }
 }
