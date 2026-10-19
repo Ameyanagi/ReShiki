@@ -1,0 +1,19 @@
+name: sodium chloride
+  naming::Error: Some(Rejected("Local naming supports one connected molecule; disconnected salts and mixtures are unsupported"))
+  NoticeKind: Unsupported
+  Summary (visible): Unsupported or ambiguous name. Try a more specific name.
+  Details text: Local naming supports one connected molecule; disconnected salts and mixtures are unsupported
+  Drawing atoms after Insert: 0
+name: sodium acetate
+  naming::Error: Some(Rejected("Local naming supports one connected molecule; disconnected salts and mixtures are unsupported"))
+  NoticeKind: Unsupported
+  Summary (visible): Unsupported or ambiguous name. Try a more specific name.
+  Details text: Local naming supports one connected molecule; disconnected salts and mixtures are unsupported
+  Drawing atoms after Insert: 0
+name: reshiki-no-such-chemical-name-50
+  naming::Error: Some(Rejected("The OPSIN Rust port could not interpret this name unambiguously with complete stereochemistry: reshiki-no-such-chemical-name-50 is unparsable due to the following being uninterpretable: reshiki-no-such-chemical-name-50 The following was not parseable: eshiki-no-such-chemical-name-50"))
+  NoticeKind: Unsupported
+  Summary (visible): Unsupported or ambiguous name. Try a more specific name.
+  Details text: The OPSIN Rust port could not interpret this name unambiguously with complete stereochemistry: reshiki-no-such-chemical-name-50 is unparsable due to the following being uninterpretable: reshiki-no-such-chemical-name-50 The following was not parseable: eshiki-no-such-chemical-name-50
+  Drawing atoms after Insert: 0
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1097 filtered out; finished in 5.29s
