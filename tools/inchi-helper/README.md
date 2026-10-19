@@ -1,11 +1,11 @@
 # Rust InChI worker
 
-The helper uses `cosmolkit-inchi = 0.3.0` (InChI 1.07.5) from
+The helper uses `cosmolkit-inchi = 0.5.0` (InChI 1.07.5) from
 [Ameyanagi/COSMolKit](https://github.com/Ameyanagi/COSMolKit), pinned to commit
-`3a437849dcd28319b1a3cdf02d7897a7ee200cb2`. The fork corrects the heavy-element
-hydrogen table, preserves perchlorate match ordering and ports RDKit's explicit
-unknown-stereo handling. It also reserves string terminators for long inputs. See its
-[compatibility notes](https://github.com/Ameyanagi/COSMolKit/blob/3a437849dcd28319b1a3cdf02d7897a7ee200cb2/crates/cosmolkit-inchi/FORK.md).
+`501f7b234031ba4d87461e14d0947c77a7d1a631`. That commit is upstream COSMolKit v0.5.0, which
+includes the heavy-element hydrogen table, perchlorate match ordering, RDKit's
+explicit unknown-stereo handling and string terminators for long inputs. See its
+[fork notes](https://github.com/Ameyanagi/COSMolKit/blob/501f7b234031ba4d87461e14d0947c77a7d1a631/FORK.md).
 The application supplies ReShiki's existing Rust property-cache, Kekulé,
 sanitation, hydrogen-removal and stereochemistry routines through its toolkit
 traits. No InChI C source, FFI binding, native archive, RDKit installation or
