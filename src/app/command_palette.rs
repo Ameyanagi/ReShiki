@@ -302,7 +302,14 @@ impl App {
                     state.selected = position;
                 }
                 if let Some(command) = self.commands.items.get(index).cloned() {
-                    return self.run_command(command);
+                    let task = self.run_command(command);
+                    // A clicked row takes focus; while the palette stays open
+                    // because the command cannot run, typing stays in the search.
+                    return if self.commands.open {
+                        Task::batch([task, iced::widget::operation::focus(SEARCH)])
+                    } else {
+                        task
+                    };
                 }
             }
             Action::Submit => {

@@ -1669,39 +1669,28 @@ async fn command_palette_tab_cycles_the_filter_from_the_search_field() {
     assert_eq!(app.commands.query, "bonds", "the search field keeps focus");
 }
 
-/// Clicking a filter chip hands focus back to the search field, so typing
-/// edits the query and Enter runs the selected command.
-#[tokio::test]
-#[ignore = "Opt-in renderer input check"]
-async fn command_palette_chip_click_keeps_typing_in_the_search_field() {
-    use super::command_palette::Action;
+/// Click the control with this accessibility id and run the widget
+/// operations its messages return, as the event loop does.
+async fn click_running_tasks(ui: &mut Ui, app: &mut App, id: &str) {
     use iced::advanced::widget::operation::Outcome;
     use iced::futures::StreamExt;
-    let mut ui = Ui::new().await;
-    let (mut app, _) = App::new();
-    app.tab.busy = false;
-    let _ = app.update(Message::Commands(Action::Open));
-    let _ = app.update(Message::Commands(Action::Query("bond".into())));
-    let field = ui.input(&app, "command-palette-search").0;
-    ui.click(&mut app, field.center());
-    let chip = ui
-        .semantics(&app)
+    let bounds = ui
+        .semantics(app)
         .nodes
         .into_iter()
-        .find(|node| node.id == "command-palette-filter-bond")
-        .expect("Bond chip")
+        .find(|node| node.id == id)
+        .unwrap_or_else(|| panic!("{id}"))
         .bounds;
     for event in [
         mouse::Event::CursorMoved {
-            position: chip.center(),
+            position: bounds.center(),
         },
         mouse::Event::ButtonPressed(mouse::Button::Left),
         mouse::Event::ButtonReleased(mouse::Button::Left),
     ] {
-        let cursor = mouse::Cursor::Available(chip.center());
-        let (_, messages) = ui.event(&app, Event::Mouse(event), cursor);
+        let cursor = mouse::Cursor::Available(bounds.center());
+        let (_, messages) = ui.event(app, Event::Mouse(event), cursor);
         for message in messages {
-            // Run the widget operations the update returns, as the event loop does.
             let Some(mut stream) = iced_runtime::task::into_stream(app.update(message)) else {
                 continue;
             };
@@ -1711,7 +1700,7 @@ async fn command_palette_chip_click_keeps_typing_in_the_search_field() {
                 };
                 let mut current = Some(operation);
                 while let Some(mut operation) = current.take() {
-                    ui.inspect(&app, operation.as_mut());
+                    ui.inspect(app, operation.as_mut());
                     if let Outcome::Chain(next) = operation.finish() {
                         current = Some(next);
                     }
@@ -1719,6 +1708,22 @@ async fn command_palette_chip_click_keeps_typing_in_the_search_field() {
             }
         }
     }
+}
+
+/// Clicking a filter chip hands focus back to the search field, so typing
+/// edits the query and Enter runs the selected command.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn command_palette_chip_click_keeps_typing_in_the_search_field() {
+    use super::command_palette::Action;
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Commands(Action::Open));
+    let _ = app.update(Message::Commands(Action::Query("bond".into())));
+    let field = ui.input(&app, "command-palette-search").0;
+    ui.click(&mut app, field.center());
+    click_running_tasks(&mut ui, &mut app, "command-palette-filter-bond").await;
     assert_eq!(app.commands.filter.map(|c| c.label()), Some("Bond"));
     for (key, code, text) in [
         (Key::Character("s".into()), Code::KeyS, Some("s")),
@@ -1735,6 +1740,49 @@ async fn command_palette_chip_click_keeps_typing_in_the_search_field() {
         }
     }
     assert!(!app.commands.open, "Enter ran the selected command");
+}
+
+/// Clicking a row that cannot run keeps the palette open with typing in the
+/// search field.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn command_palette_unavailable_row_click_keeps_typing_in_the_search_field() {
+    use super::command_palette::Action;
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Commands(Action::Open));
+    let _ = app.update(Message::Commands(Action::Query("bring bond".into())));
+    let field = ui.input(&app, "command-palette-search").0;
+    ui.click(&mut app, field.center());
+    let first = app.commands.current().expect("a result").clone();
+    assert!(
+        app.command_unavailable(&first).is_some(),
+        "an empty drawing has no bond to bring forward"
+    );
+    let index = app
+        .commands
+        .catalog()
+        .iter()
+        .position(|c| c.name == first.name)
+        .expect("a catalog row");
+    click_running_tasks(&mut ui, &mut app, &format!("command-palette-row-{index}")).await;
+    assert!(app.commands.open, "the palette stays open");
+    let (_, messages) = ui.event(
+        &app,
+        press(
+            Key::Character("s".into()),
+            Code::KeyS,
+            Modifiers::empty(),
+            Some("s"),
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    apply(&mut app, messages);
+    assert_eq!(
+        app.commands.query, "bring bonds",
+        "the search field keeps focus"
+    );
 }
 
 /// Every command row is a named button that assistive technology can press.
