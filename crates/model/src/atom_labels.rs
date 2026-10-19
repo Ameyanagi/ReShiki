@@ -160,12 +160,29 @@ pub(crate) fn attachment_range(
     if attachment.is_auto() && directions.len() > 1 {
         return None;
     }
+    attachment.range(text, horizontal_side(&directions))
+}
+
+/// Where the bonds arrive from: Some(true) the right, Some(false) the left,
+/// None within 22.5 degrees of vertical.
+fn horizontal_side(directions: &[Point]) -> Option<bool> {
     let sum_x = directions.iter().map(|p| p.x).sum::<f32>();
     let sum_y = directions.iter().map(|p| p.y).sum::<f32>();
     let vertical_cone = (22.5_f32).to_radians().tan();
-    let side =
-        (sum_x.abs() > 0.1 && sum_x.abs() >= sum_y.abs() * vertical_cone).then_some(sum_x > 0.);
-    attachment.range(text, side)
+    (sum_x.abs() > 0.1 && sum_x.abs() >= sum_y.abs() * vertical_cone).then_some(sum_x > 0.)
+}
+
+/// The side a generic label such as [Cl,Br,I] with one horizontal bond meets
+/// that bond with, so the text extends away from the molecule. None keeps it
+/// centered: no bond, a vertical bond, or two or more bonds (every link node).
+pub(crate) fn generic_label_side(atom: &Atom, doc: &Document) -> Option<bool> {
+    if !doc.generic.owns_label(atom.id) {
+        return None;
+    }
+    match bond_directions(atom, doc).as_slice() {
+        directions @ [_] => horizontal_side(directions),
+        _ => None,
+    }
 }
 
 /// Resolve the side of an atom-label appendage without changing chemistry or

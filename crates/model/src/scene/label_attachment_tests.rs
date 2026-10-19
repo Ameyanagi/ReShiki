@@ -222,3 +222,60 @@ fn changing_the_text_resets_a_character_attachment_only() {
     display.label_attachment = LabelAttachment::Character(32);
     assert!(display.validate().is_err());
 }
+
+#[test]
+fn generic_labels_meet_a_horizontal_bond_with_their_near_edge() -> Result<(), String> {
+    for text in ["[Cl,Br,I]", "[OMe,OPh]"] {
+        for from_left in [true, false] {
+            let (doc, id) = labeled(text, Mode::Auto, from_left)?;
+            assert!(doc.generic.owns_label(id), "{text}");
+            let atom = doc.atom(id).ok_or("Atom")?;
+            let (lo, hi) = atom_label_ink_bounds(atom, &doc).ok_or("Ink")?;
+            let bond = doc.bonds.first().ok_or("Bond")?;
+            let (start, end) = bond_segment(&doc, bond, None).ok_or("Visible bond")?;
+            let (near, far) = (start.x.min(end.x), start.x.max(end.x));
+            let x = atom.position.x;
+            if from_left {
+                // The text extends right, away from the molecule.
+                assert!(lo.x >= x - 0.01 && hi.x > x + 1., "{text}: {lo:?} {hi:?}");
+                assert!(far < lo.x, "{text}: bond {near}..{far} enters {lo:?}");
+            } else {
+                assert!(hi.x <= x + 0.01 && lo.x < x - 1., "{text}: {lo:?} {hi:?}");
+                assert!(near > hi.x, "{text}: bond {near}..{far} enters {hi:?}");
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn generic_labels_stay_centered_on_vertical_or_internal_bonds() -> Result<(), String> {
+    let centered = |doc: &Document, id| -> Result<(), String> {
+        let atom = doc.atom(id).ok_or("Atom")?;
+        let (lo, hi) = atom_label_ink_bounds(atom, doc).ok_or("Ink")?;
+        let x = atom.position.x;
+        assert!((x - lo.x - (hi.x - x)).abs() < 2., "{lo:?} {hi:?}");
+        for bond in &doc.bonds {
+            assert!(bond_segment(doc, bond, None).is_some(), "{lo:?} {hi:?}");
+        }
+        Ok(())
+    };
+    let mut doc = Document::default();
+    let id = doc.add_atom("C", Point::new(40., 20.));
+    let other = doc.add_atom("C", Point::new(40., 62.));
+    doc.add_bond(other, id, 1, "plain");
+    centered(&apply(&doc, id, "[Cl,Br,I]", Mode::Auto)?, id)?;
+    // A link node always has two bonds, so it never takes the one-bond side.
+    for text in ["[Cl,Br,I]", "[CH2]1-3"] {
+        let mut doc = Document::default();
+        let id = doc.add_atom("C", Point::new(0., 0.));
+        for x in [-120., 120.] {
+            let other = doc.add_atom("C", Point::new(x, 0.));
+            doc.add_bond(other, id, 1, "plain");
+        }
+        let doc = apply(&doc, id, text, Mode::Auto)?;
+        assert!(doc.generic.owns_label(id), "{text}");
+        centered(&doc, id)?;
+    }
+    Ok(())
+}

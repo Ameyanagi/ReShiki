@@ -240,29 +240,22 @@ fn atom_label_runs_with_charge_layout(
     let attached = (free_text && condensed.is_none())
         .then(|| crate::atom_labels::attachment_range(a, doc, label))
         .flatten();
-    // A centered alternative list is wider than a bond and covers the parent
-    // ring. Like a contracted group, it grows away from its single bond with
-    // the near bracket on the atom.
-    let list_left = list_extends_left(a, doc).filter(|_| condensed.is_none());
-    let anchor_x = match (attached, list_left) {
-        (Some(range), _) => {
-            let width = |end: usize| match scripts.as_ref().filter(|_| layout.is_some()) {
-                Some(scripts) => free_label_layout(label, scripts, 0..end, &style).width,
-                None => text_width(label.get(..end).unwrap_or_default(), size),
-            };
-            (width(range.start) + width(range.end)) / 2.
-        }
-        (None, Some(left)) => {
-            let edge = if left {
-                label.chars().next_back()
-            } else {
-                label.chars().next()
-            };
-            let half = edge.map_or(0., |c| text_width(c.encode_utf8(&mut [0; 4]), size) / 2.);
-            if left { element_width - half } else { half }
-        }
-        (None, None) => element_width / 2.,
+    // A generic label meets its single horizontal bond with its near edge.
+    let generic_side = (internal_group.is_none() && condensed.is_none())
+        .then(|| crate::atom_labels::generic_label_side(a, doc))
+        .flatten();
+    let centered = match generic_side {
+        Some(true) => element_width,
+        Some(false) => 0.,
+        None => element_width / 2.,
     };
+    let anchor_x = attached.map_or(centered, |range| {
+        let width = |end: usize| match scripts.as_ref().filter(|_| layout.is_some()) {
+            Some(scripts) => free_label_layout(label, scripts, 0..end, &style).width,
+            None => text_width(label.get(..end).unwrap_or_default(), size),
+        };
+        (width(range.start) + width(range.end)) / 2.
+    });
     let origin = a.position.offset(
         -anchor_x,
         -crate::style::label_vertical_center(
@@ -335,21 +328,6 @@ fn atom_label_runs_with_charge_layout(
         place_automatic_charge(a, doc, frame, core, charge);
     }
     cursor.runs
-}
-
-/// For an alternative-list atom with one visible bond that leaves sideways,
-/// whether its label extends left (the bond leaves to the right).
-fn list_extends_left(a: &Atom, doc: &Document) -> Option<bool> {
-    if a.element != "*" || !doc.generic.alternatives.iter().any(|s| s.atom == a.id) {
-        return None;
-    }
-    let mut neighbors = doc
-        .bonds
-        .iter()
-        .filter(|b| (b.a == a.id || b.b == a.id) && doc.bond_visible(b.a, b.b))
-        .filter_map(|b| doc.atom(if b.a == a.id { b.b } else { b.a }));
-    let dx = neighbors.next()?.position.x - a.position.x;
-    (neighbors.next().is_none() && dx.abs() > 0.1).then_some(dx > 0.)
 }
 
 /// Source ranges remain unchanged for exchange; only drawn charge glyphs are
