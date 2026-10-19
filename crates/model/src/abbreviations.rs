@@ -108,12 +108,19 @@ pub fn group_labels() -> Vec<String> {
 /// case (`acetyl` names both Ac and COMe). Names are never typed as labels.
 pub fn named(text: &str) -> Vec<String> {
     let text = text.trim().to_lowercase();
-    let mut labels = Vec::new();
-    for group in groups() {
-        if group.names.iter().any(|name| name.to_lowercase() == text)
-            && !labels.contains(&group.label)
-        {
-            labels.push(group.label);
+    // Searched by reference: the editor asks on every redraw.
+    let catalog = crate::chemistry::abbreviations::presets().unwrap_or_else(|_| Vec::new().into());
+    let presets = catalog.iter().flat_map(|preset| {
+        preset
+            .names
+            .iter()
+            .map(|name| (preset.label.as_str(), name.as_str()))
+    });
+    let built = BUILT_IN.iter().map(|(label, _, name, ..)| (*label, *name));
+    let mut labels: Vec<String> = Vec::new();
+    for (label, name) in presets.chain(built) {
+        if name.to_lowercase() == text && !labels.iter().any(|l| l == label) {
+            labels.push(label.to_owned());
         }
     }
     labels
@@ -135,6 +142,12 @@ pub struct GroupInfo {
     pub user: bool,
 }
 
+/// Groups built into ReShiki rather than its catalog: label, reverse label,
+/// name, category and formula.
+const BUILT_IN: [(&str, &str, &str, &str, &str); 2] = [
+    ("N3", "", "azido", "nitrogen", "N3"),
+    ("MgBr", "BrMg", "bromomagnesio", "metal", "BrMg"),
+];
 /// The active group catalog (bundled plus user groups) followed by the
 /// separately built groups. Typing any `label` or alias on an endpoint, or
 /// passing it to `atom_text::apply`, creates that group.
@@ -152,20 +165,17 @@ pub fn groups() -> impl Iterator<Item = GroupInfo> {
             user: preset.user,
         })
         .collect::<Vec<_>>();
-    let built = [
-        ("N3", "", "azido", "nitrogen", "N3"),
-        ("MgBr", "BrMg", "bromomagnesio", "metal", "BrMg"),
-    ]
-    .into_iter()
-    .map(|(label, reverse, name, category, formula)| GroupInfo {
-        label: label.into(),
-        reverse_label: reverse.into(),
-        aliases: Vec::new(),
-        names: vec![name.into()],
-        category: category.into(),
-        formula: formula.into(),
-        user: false,
-    });
+    let built = BUILT_IN
+        .into_iter()
+        .map(|(label, reverse, name, category, formula)| GroupInfo {
+            label: label.into(),
+            reverse_label: reverse.into(),
+            aliases: Vec::new(),
+            names: vec![name.into()],
+            category: category.into(),
+            formula: formula.into(),
+            user: false,
+        });
     presets.into_iter().chain(built)
 }
 
