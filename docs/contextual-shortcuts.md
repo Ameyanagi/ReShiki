@@ -1,6 +1,16 @@
 # Shortcuts and editable examples
 
-Open **Help** at the bottom of the tool strip, or press **F1**, then choose **Open shortcut examples**. This opens **one editable drawing** in a tab named **Shortcut examples** in the current window. If an unchanged examples tab is already open, it comes to the front. **Save** asks for a location for your own copy. It contains nine sections of labeled structures made with the same operations as the keyboard shortcuts.
+## Find a shortcut
+
+Open **Help** at the bottom of the tool strip, or press **?** (away from atoms and bonds; over one, **?** opens its properties), **F1** or **Cmd/Ctrl+Shift+/** (Cmd+? on macOS). **Cmd/Ctrl+/** remains **Fit drawing**. Help is a searchable list of every shortcut. Type part of an action, description or key: **wedge**, **boc**, **ring**, **⇧R** or **shift r** all work, and a few synonyms per entry such as **stereo** or **naphthalene** find the matching key. Lowercase and uppercase keys rank separately, so **r** lists the ring tool first and **R** the saturated/aromatic toggle.
+
+Each row shows the keys as the menus show them (symbols on macOS, words elsewhere), the action, a one-line description and where it applies: atom, bond, selection, empty canvas, keyboard drawing or anywhere. **Up/Down** (or Page Up/Page Down) move the selection, **Enter** or a click selects a row, and **Escape** closes Help. Selecting a row never runs the command; Help is a reference only.
+
+For atom and bond keys, the preview pane draws a small chain before and after the key, made live by ReShiki's own drawing code from the same edit the key performs. The atom or bond the key acts on is highlighted in the **Before** drawing.
+
+## Editable examples
+
+In Help, choose **Open shortcut examples**. This opens **one editable drawing** in a tab named **Shortcut examples** in the current window. If an unchanged examples tab is already open, it comes to the front. **Save** asks for a location for your own copy. It contains nine sections of labeled structures made with the same operations as the keyboard shortcuts.
 
 [Download the shortcut examples (.rsk)](../assets/examples/shortcut-examples.rsk). This is a single document, not a template collection. Open it with **Open**, or double-click the downloaded file. The gallery uses the normal unbounded canvas, without print pages or a page-navigation panel.
 
@@ -217,7 +227,7 @@ bond and tool actions. Ring palette hover hints show one tool-selection key.
 
 | Keys                      | Action                                                                      |
 | ------------------------- | --------------------------------------------------------------------------- |
-| F1                        | Help and editable examples                                                  |
+| ? / F1 / Cmd/Ctrl+Shift+/ | Searchable shortcut finder and editable examples                            |
 | Cmd/Ctrl+N / O / S        | New / open, each in a new tab / save                                        |
 | Cmd/Ctrl+Shift+S          | Save as                                                                     |
 | Cmd/Ctrl+W                | Close tab                                                                   |

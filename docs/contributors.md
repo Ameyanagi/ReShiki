@@ -4,6 +4,9 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
+Under review: @Ameyanagi — searchable shortcut finder with live before/after
+examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).
+
 Merged for nightly builds: @Ameyanagi — Intel Mac panic recovery and native global-allocator
 regression coverage in [PR #328](https://github.com/Ameyanagi/ReShiki/pull/328).
 
