@@ -597,11 +597,15 @@ impl App {
             let reason = self.command_unavailable(command);
             // A stable identity, so a queued assistive press never lands on
             // a different command after the results change: the catalog
-            // index, or the title of a row the query created.
+            // index, or a hash of the title of a row the query created
+            // (bounded, since native ids are limited to 256 bytes).
             let id = if index < state.catalog {
                 format!("command-palette-row-{index}")
             } else {
-                format!("command-palette-row-query-{}", command.name)
+                use std::hash::{Hash, Hasher};
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                command.name.hash(&mut hasher);
+                format!("command-palette-row-query-{:016x}", hasher.finish())
             };
             list = list.push(list_row(
                 id,

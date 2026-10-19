@@ -1676,12 +1676,19 @@ async fn command_palette_rows_are_named_buttons() {
             .find(|node| node.name.starts_with("Insert structure named"))
             .map(|node| node.id)
     };
-    let aspirin = named("hexanoic acid", &mut ui, &mut app).unwrap();
-    let caffeine = named("heptanoic acid", &mut ui, &mut app).unwrap();
+    let hexanoic = named("hexanoic acid", &mut ui, &mut app).unwrap();
+    let heptanoic = named("heptanoic acid", &mut ui, &mut app).unwrap();
     assert_ne!(
-        aspirin, caffeine,
+        hexanoic, heptanoic,
         "a query-created row changes identity with its query"
     );
+    // A long pasted query keeps every id within the native 256-byte limit.
+    let long = named(&"C".repeat(400), &mut ui, &mut app).unwrap();
+    assert!(long.len() <= 256, "{long}");
+    let snapshot = ui.semantics(&app);
+    reshiki::accessibility::tree::NativeTree::default()
+        .update(&snapshot, "ReShiki", ui.viewport, 1.)
+        .expect("a long query keeps the native accessibility tree");
 }
 
 /// The context row's Rotate field: click it, type an angle and press Enter
