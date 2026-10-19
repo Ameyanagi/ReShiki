@@ -22,17 +22,35 @@ Properties → Chemical abbreviations provides compact labels while retaining th
 
 Each action is one Undo step. Native version-10 documents preserve custom names and reversed labels. SVG, PDF and PNG display the abbreviated drawing. Editable binary/XML exchange carries explicit nested chemical fragments; imported labels can expand back to real atoms. Common reversed labels are recognized on import. Custom reversed spellings are native-only.
 
-The ordinary subset supports 62 common presets, including carbohydrate and
-protecting-group nicknames: OBn, PMB/OPMB, OTBS, TIPS/OTIPS, TES/OTES,
-Piv/OPiv, Lev/OLev, Tol, SPh, STol, SEt, NPhth, Troc/NHTroc, NHBoc, NHAc,
-Tr/OTr, MOM/OMOM, Tf/OTf, All/OAll, CCl3 and the trichloroacetimidate
-OC(NH)CCl3. Typing one of these labels on an endpoint creates the real group,
-so formula and mass match the expanded structure. Phthaloyl (Phth) bonds twice
-to its nitrogen; use NPhth for the phthalimido group. TBDPS (tert-butyldiphenylsilyl)
-attaches through silicon; OTBDPS attaches through oxygen and displays as TBDPSO
-when the parent bond is on its right. Both can also be entered with **Enter** in
-Automatic or Chemical abbreviation mode. Expanding them reveals the real
-Si(phenyl)₂–tert-butyl or O–Si(phenyl)₂–tert-butyl structure.
+The catalog holds 359 groups with 52 alternative spellings. Typing one of these
+labels on an endpoint creates the real group, so formula and mass match the
+expanded structure:
+
+| Category         | Groups | Examples                                                                    |
+| ---------------- | -----: | --------------------------------------------------------------------------- |
+| Protecting group |     79 | Boc, Cbz, Fmoc, Alloc, Teoc, PMB, DMB, DMTr, Mtt, SEM, THP, Dde, ivDde, Acm |
+| Carbonyl         |     42 | CHO, COMe, CO2tBu, CO2Bn, CONH2, CONMe2, CON(OMe)Me, OSu                    |
+| Sulfonyl         |     34 | Ts, Ns, pNs, Pbf, Mtr, SO2Ph, SO3H, Tf, OTf, NTf2                           |
+| Nitrogen         |     31 | NMe2, NEt2, NHMe, NHPh, NCO, NCS, Morph, Pip, Pyrr                          |
+| Alkyl            |     27 | sBu, iBu, cPr, cHex (Cy), neoPent, Vinyl, Prenyl, Propargyl                 |
+| Heteroaryl       |     25 | 2-Py, 3-Py, 4-Py, 2-Thienyl, 2-Furyl, Im, Bt, PT, BT                        |
+| Aryl             |     24 | Mes, Dipp, Tripp, PMP, oTol, C6F5, 4-CF3C6H4, 1-Naph                        |
+| Halogen          |     20 | CF3, CHF2, OCF3, SCF3, SF5, C2F5, CCl3                                      |
+| Silyl            |     19 | TMS, TES, TBS (TBDMS), TIPS, TBDPS, OTMS, CCTMS                             |
+| Phosphorus       |     15 | PPh2, PCy2, PtBu2, P(O)Ph2, P(O)(OEt)2, PPh3+                               |
+| Sulfur           |     14 | SMe, SPh, SAc, SBn, SOMe, SePh                                              |
+| Metal            |     11 | SnBu3, SnMe3, ZnCl, MgCl, GeMe3                                             |
+| Alkoxy           |     10 | OMe, OEt, OPh, OtBu, OiPr                                                   |
+| Boron            |      8 | Bpin, B(OH)2, Bnep, Bcat, BMIDA, Bdan, BF3-                                 |
+
+The bundled catalog file lists every label with its full names. Phthaloyl
+(Phth) bonds twice to its nitrogen; use NPhth for the phthalimido group. TBDPS
+(tert-butyldiphenylsilyl) attaches through silicon; OTBDPS attaches through
+oxygen and displays as TBDPSO when the parent bond is on its right. Groups can
+also be entered with **Enter** in Automatic or Chemical abbreviation mode. Ac
+and Ts are also element symbols, so Automatic mode types actinium and
+tennessine; choose Chemical abbreviation for acetyl and tosyl. Expanding TBDPS or OTBDPS
+reveals the real Si(phenyl)₂–tert-butyl or O–Si(phenyl)₂–tert-butyl structure.
 
 Internal groups can have several
 external bonds when they all connect to the same attachment atom. Editable
@@ -76,6 +94,13 @@ label, alias and reverse label must be unique.
 
 When groups overlap, **Contract common groups** prefers the larger group, for
 example NHBoc over Boc. Groups of the same size are tried in catalog order.
+
+Of the bundled groups, the protecting, silyl, sulfonyl, boron, tin and
+phosphorus groups and the original 62 are found by **Contract common groups**.
+Skeleton groups added later, such as rings, heteroaryls, amines, amides and
+alkyl chains, are typed only, so contracting a drawing does not hide its
+skeleton. A group that duplicates another's structure under a different label,
+such as COMe for Ac or CO2tBu for Boc, is also typed only.
 
 ## Your own groups
 

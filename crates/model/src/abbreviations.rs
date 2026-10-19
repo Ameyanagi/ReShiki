@@ -347,8 +347,12 @@ pub(crate) fn anchor_range(text: &str, left: bool) -> std::ops::Range<usize> {
     if let Some(range) = atom_anchor(text, left) {
         return range;
     }
+    // A reversed charged label (Me3N+) attaches through its atom, not the sign.
     let character = if left {
-        text.char_indices().next_back()
+        text.char_indices()
+            .rev()
+            .find(|(_, c)| !matches!(c, '+' | '-' | '−'))
+            .or_else(|| text.char_indices().next_back())
     } else {
         text.char_indices().next()
     };

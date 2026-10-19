@@ -212,8 +212,10 @@ def main():
         if found.get("abbreviations"):
             found["abbreviations"][0]["label"] = "Custom"
             emit(f"custom-existing/{label}", original, found)
-    for left, (a, _) in abbreviations.PRESETS.items():
-        for right, (b, _) in abbreviations.PRESETS.items():
+    for left in abbreviations.CORE:
+        a = abbreviations.PRESETS[left][0]
+        for right in abbreviations.CORE:
+            b = abbreviations.PRESETS[right][0]
             mol = Chem.MolFromSmiles(f"N({a[1:]}){b[1:]}")
             assert mol is not None, (left, right)
             for chosen in [None, left, right]:
@@ -236,6 +238,10 @@ def main():
         "CCNC(=O)OC(C)(C)C",
         "C[N-]C(=O)OC(C)(C)C",
         "C[NH2+]C(=O)OC(C)(C)C",
+        "OB(O)C1CCCCC1",
+        "[O-]B(O)C1CCCCC1",
+        "CP(C)C1CCCCC1",
+        "C[PH+](C)C1CCCCC1",
         "COC(=O)C[13CH3]",
         "CC(=O)[O-]",
         "[CH2]C",

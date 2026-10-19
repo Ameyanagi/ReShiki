@@ -235,7 +235,8 @@ def main():
         initial = document(Chem.MolFromSmiles("NCC"))
         doc = abbreviations.replace(initial, [7], old, worker.to_document)
         selected = doc["abbreviations"][0]["members"]
-        for new in abbreviations.PRESETS:
+        # Every group replaces OMe; other pairs use the original 62.
+        for new in abbreviations.PRESETS if old == "OMe" else abbreviations.CORE:
             emit(f"old-to-new/{old}/{new}", doc, selected, new, True)
         # Set semantics for existing group selection includes duplicates and order.
         emit(f"old-group-reversed/{old}", doc, list(reversed(selected)), "Me")

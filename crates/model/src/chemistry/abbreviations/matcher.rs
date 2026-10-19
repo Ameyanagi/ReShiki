@@ -67,8 +67,8 @@ pub(super) fn compositions(state: &perception::State) -> Vec<Composition> {
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub(super) struct Bond {
-    a: usize,
-    b: usize,
+    pub(super) a: usize,
+    pub(super) b: usize,
     /// Zero is the implicit SMARTS single-or-aromatic predicate.
     order: u8,
 }

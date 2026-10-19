@@ -89,3 +89,36 @@ fn own_depiction_reproduces_the_frozen_rdkit_captures() {
         }
     }
 }
+
+/// N-linked aromatic roots (azolyl, pyridinium) borrow a hydrogen while the
+/// template stands alone; it must not survive once the bond is restored.
+#[test]
+fn aromatic_nitrogen_roots_attach_without_an_extra_hydrogen() {
+    for smiles in ["*n1cccc1", "*n1ccnc1", "*[n+]1ccccc1"] {
+        let entry = crate::chemistry::abbreviations::Entry {
+            label: "Ring".into(),
+            reverse: String::new(),
+            smiles: smiles.into(),
+            formula: None,
+            category: String::new(),
+            names: Vec::new(),
+            aliases: Vec::new(),
+            contract: true,
+        };
+        let preset = std::sync::Arc::new(Preset::from_entry(entry, true).unwrap());
+        let mut input = Document::default();
+        let anchor = input.add_atom("C", Point::new(0.0, 0.0));
+        let neighbor = input.add_atom("C", Point::new(42.0, 0.0));
+        input.add_bond(anchor, neighbor, 1, "plain");
+        let output = replace_preset(
+            &input,
+            &[anchor],
+            "Ring",
+            (preset, false),
+            AttachmentPolicy::Terminal,
+        )
+        .unwrap_or_else(|error| panic!("{smiles}: {error}"));
+        assert_eq!(output.atom(anchor).unwrap().explicit_h, 0, "{smiles}");
+        document::prepare(&output).unwrap_or_else(|error| panic!("{smiles}: {error}"));
+    }
+}

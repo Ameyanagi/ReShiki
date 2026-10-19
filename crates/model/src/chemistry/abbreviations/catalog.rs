@@ -198,6 +198,11 @@ impl Preset {
             .map_err(|error| invalid(format!("{}: {error}", self.label)))
     }
 
+    /// Atoms in the group, not counting the attachment.
+    pub fn atom_count(&self) -> usize {
+        self.atoms.len() - 1
+    }
+
     /// Typed spellings: the label first, then aliases.
     pub fn spellings(&self) -> impl Iterator<Item = &str> {
         std::iter::once(self.label.as_str()).chain(self.aliases.iter().map(String::as_str))

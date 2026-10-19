@@ -855,6 +855,118 @@ fn the_public_group_list_covers_every_typed_group() {
     assert!(!crate::abbreviations::is_group_label("NotAGroup"));
 }
 
+/// Hill formula of CH3–R from the catalog's independently written formula
+/// of R, so a typed group is checked against the hand-written composition.
+fn methyl_formula(group: &str) -> String {
+    let (body, charge) = match group.find(['+', '-']) {
+        Some(index) => group.split_at(index),
+        None => (group, ""),
+    };
+    let mut counts = std::collections::BTreeMap::<String, u32>::new();
+    let mut chars = body.chars().peekable();
+    while let Some(c) = chars.next() {
+        let mut symbol = c.to_string();
+        while let Some(&next) = chars.peek().filter(|n| n.is_ascii_lowercase()) {
+            symbol.push(next);
+            chars.next();
+        }
+        let mut digits = String::new();
+        while let Some(&next) = chars.peek().filter(|n| n.is_ascii_digit()) {
+            digits.push(next);
+            chars.next();
+        }
+        *counts.entry(symbol).or_default() += digits.parse().unwrap_or(1);
+    }
+    *counts.entry("C".into()).or_default() += 1;
+    *counts.entry("H".into()).or_default() += 3;
+    let mut text = String::new();
+    for symbol in ["C", "H"] {
+        if let Some(count) = counts.remove(symbol) {
+            text.push_str(symbol);
+            if count > 1 {
+                text.push_str(&count.to_string());
+            }
+        }
+    }
+    for (symbol, count) in counts {
+        text.push_str(&symbol);
+        if count > 1 {
+            text.push_str(&count.to_string());
+        }
+    }
+    text + charge
+}
+
+/// Every bundled label and alias, typed on the endpoint of CH3–C, creates
+/// its group with the catalog formula. Groups that Contract may find are
+/// found again after expansion. No spelling takes over an element or an
+/// atom-with-hydrogens label such as NH2.
+#[test]
+fn every_bundled_spelling_types_as_its_group() -> Result<(), Box<dyn std::error::Error>> {
+    let catalog = crate::chemistry::abbreviations::presets()?;
+    let mut checked = 0;
+    for preset in catalog.iter() {
+        for spelling in preset.spellings() {
+            // Acetyl and tosyl predate the catalog: "Ac" and "Ts" alone type
+            // actinium and tennessine, so these groups need Chemical
+            // abbreviation mode. No other spelling may shadow an element.
+            let mode = if ["Ac", "Ts"].contains(&spelling) {
+                Mode::Group
+            } else {
+                Mode::Auto
+            };
+            assert!(
+                mode == Mode::Group || !ELEMENTS.contains(&spelling),
+                "{spelling} is an element"
+            );
+            assert!(
+                !matches!(hydride::parse(spelling), Ok(Some(_))),
+                "{spelling} is an atom label"
+            );
+            assert!(
+                description(spelling, &[], mode).starts_with("A real chemical group"),
+                "{spelling}: {}",
+                description(spelling, &[], mode)
+            );
+            let mut doc = Document::default();
+            let methyl = doc.add_atom("C", Point::new(0., 0.));
+            let endpoint = doc.add_atom("C", Point::new(42., 0.));
+            doc.add_bond(methyl, endpoint, 1, "plain");
+            let labelled =
+                apply(&doc, endpoint, spelling, mode).map_err(|e| format!("{spelling}: {e}"))?;
+            let group = labelled.abbreviation(endpoint).ok_or(spelling)?;
+            assert_eq!(group.label, spelling);
+            assert_eq!(group.members.len(), preset.atom_count(), "{spelling}");
+            assert_eq!(
+                formula(&labelled)?,
+                methyl_formula(&preset.formula),
+                "{spelling}"
+            );
+            checked += 1;
+        }
+        if !preset.contract {
+            continue;
+        }
+        let mut doc = Document::default();
+        let methyl = doc.add_atom("C", Point::new(0., 0.));
+        let endpoint = doc.add_atom("C", Point::new(42., 0.));
+        doc.add_bond(methyl, endpoint, 1, "plain");
+        let mut expanded = apply(&doc, endpoint, &preset.label, Mode::Group)?;
+        expanded.expand_abbreviations(&[endpoint]);
+        let molecule = crate::chemistry::document::prepare(&expanded)?;
+        let found =
+            crate::chemistry::abbreviations::find(&expanded, &molecule, &[], Some(&preset.label))?;
+        assert_eq!(
+            found.abbreviations.len(),
+            1,
+            "{} not found again",
+            preset.label
+        );
+    }
+    assert!(checked > 350, "{checked}");
+    Ok(())
+}
+
 /// An `outside`-carbon chain on N(charge)–C(=O)–O–C(CH3)3.
 fn carbamate(outside: usize, charge: i32) -> Document {
     let mut doc = Document::default();
@@ -925,5 +1037,52 @@ fn contraction_never_hides_charge_or_isotopes() -> Result<(), Box<dyn std::error
             .all(|(label, _)| label != "Boc" && label != "NHBoc"),
         "{found:?}"
     );
+    Ok(())
+}
+
+/// Cyclohexyl–X(Y)Z with X carrying `charge` and the given hydrogens.
+fn cyclohexyl(center: &str, charge: i32, hydrogens: u32, arms: [(&str, i32); 2]) -> Document {
+    let mut doc = Document::default();
+    let ring: Vec<_> = (0..6)
+        .map(|i| {
+            let angle = i as f32 * std::f32::consts::FRAC_PI_3;
+            doc.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()))
+        })
+        .collect();
+    for (i, &atom) in ring.iter().enumerate() {
+        doc.add_bond(atom, ring[(i + 1) % 6], 1, "plain");
+    }
+    let x = doc.add_atom(center, Point::new(84., 0.));
+    doc.add_bond(ring[0], x, 1, "plain");
+    let atom = doc.atom_mut(x).unwrap();
+    atom.charge = charge;
+    atom.explicit_h = hydrogens;
+    for (index, (element, charge)) in arms.into_iter().enumerate() {
+        let arm = doc.add_atom(element, Point::new(126., index as f32 * 42. - 21.));
+        doc.atom_mut(arm).unwrap().charge = charge;
+        doc.add_bond(x, arm, 1, "plain");
+    }
+    doc
+}
+
+#[test]
+fn boronic_acids_and_phosphines_contract_only_when_neutral()
+-> Result<(), Box<dyn std::error::Error>> {
+    let labels = |doc: &Document| -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        Ok(contracted(doc)?
+            .into_iter()
+            .map(|(label, _)| label)
+            .collect())
+    };
+    let boronic = cyclohexyl("B", 0, 0, [("O", 0), ("O", 0)]);
+    assert!(labels(&boronic)?.contains(&"B(OH)2".to_owned()));
+    // C1CCCCC1B(O)[O-] keeps its boronate charge and single OH visible.
+    let boronate = cyclohexyl("B", 0, 0, [("O", 0), ("O", -1)]);
+    assert!(!labels(&boronate)?.contains(&"B(OH)2".to_owned()));
+    let phosphine = cyclohexyl("P", 0, 0, [("C", 0), ("C", 0)]);
+    assert!(labels(&phosphine)?.contains(&"PMe2".to_owned()));
+    // C1CCCCC1[PH+](C)C keeps its P–H and positive charge visible.
+    let phosphonium = cyclohexyl("P", 1, 1, [("C", 0), ("C", 0)]);
+    assert!(!labels(&phosphonium)?.contains(&"PMe2".to_owned()));
     Ok(())
 }
