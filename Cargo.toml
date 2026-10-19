@@ -138,10 +138,22 @@ opt-level = 3
 [profile.dev.package.cosmolkit-core]
 opt-level = 3
 
+[profile.dev.package.cosmolkit-cx]
+opt-level = 3
+
 [profile.dev.package.cosmolkit-forcefields]
 opt-level = 3
 
 [profile.dev.package.cosmolkit-model]
+opt-level = 3
+
+[profile.dev.package.cosmolkit-ringdecomposer]
+opt-level = 3
+
+[profile.dev.package.cosmolkit-search]
+opt-level = 3
+
+[profile.dev.package.cosmolkit-smiles]
 opt-level = 3
 
 [profile.dev.package.cosmolkit-stereo]
@@ -173,10 +185,22 @@ opt-level = 3
 [profile.test.package.cosmolkit-core]
 opt-level = 3
 
+[profile.test.package.cosmolkit-cx]
+opt-level = 3
+
 [profile.test.package.cosmolkit-forcefields]
 opt-level = 3
 
 [profile.test.package.cosmolkit-model]
+opt-level = 3
+
+[profile.test.package.cosmolkit-ringdecomposer]
+opt-level = 3
+
+[profile.test.package.cosmolkit-search]
+opt-level = 3
+
+[profile.test.package.cosmolkit-smiles]
 opt-level = 3
 
 [profile.test.package.cosmolkit-stereo]
