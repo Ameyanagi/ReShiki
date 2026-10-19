@@ -84,6 +84,10 @@
                 | grep -F '"inchi":"InChI=1S/C6H6O/c7-6-4-2-1-3-5-6/h1-5,7H"'
               $out/bin/reshiki --cli convert --smiles 'CCO' -o $TMPDIR/ethanol.png
               test -s $TMPDIR/ethanol.png
+              ${lib.optionalString stdenv.hostPlatform.isDarwin ''
+                grep -q '<string>dev.reshiki.editor</string>' $out/Applications/ReShiki.app/Contents/Info.plist
+                test -x $out/Applications/ReShiki.app/Contents/MacOS/reshiki
+              ''}
               runHook postInstallCheck
             '';
 
@@ -107,9 +111,28 @@
               ' "$out/share/licenses/reshiki" "$TMPDIR/metadata.json"
             '';
 
-            postFixup = lib.optionalString stdenv.hostPlatform.isLinux ''
-              patchelf --add-rpath ${lib.makeLibraryPath runtimeLibs} $out/bin/reshiki
-            '';
+            postFixup =
+              if stdenv.hostPlatform.isLinux then
+                ''
+                  patchelf --add-rpath ${lib.makeLibraryPath runtimeLibs} $out/bin/reshiki
+                ''
+              else
+                # nix-darwin and home-manager link Applications/*.app into the
+                # Applications folder. The binary moves after fixup so it stays
+                # stripped and signed; bin/reshiki keeps the command line.
+                ''
+                  app=$out/Applications/ReShiki.app
+                  python3 -c '
+                  import sys
+                  from pathlib import Path
+                  sys.path.insert(0, "scripts")
+                  from build_release import bundle_metadata
+                  bundle_metadata(Path(sys.argv[1]))
+                  ' "$app"
+                  install -d $app/Contents/MacOS
+                  mv $out/bin/reshiki $app/Contents/MacOS/reshiki
+                  ln -s ../Applications/ReShiki.app/Contents/MacOS/reshiki $out/bin/reshiki
+                '';
 
             desktopItems = lib.optionals stdenv.hostPlatform.isLinux [
               (pkgs.makeDesktopItem {

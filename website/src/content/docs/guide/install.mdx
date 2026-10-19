@@ -51,7 +51,7 @@ nix run github:Ameyanagi/ReShiki
 nix profile install github:Ameyanagi/ReShiki
 ```
 
-Update with `nix profile upgrade`; the in-app updater only replaces downloaded releases. On Linux outside NixOS, ReShiki needs your system's GPU driver; if it reports that no graphics adapter was found, start it through [nixGL](https://github.com/nix-community/nixGL). On a Mac, Nix installs a command-line `reshiki` executable rather than an app in Applications; use the DMG for the usual Mac app.
+Update with `nix profile upgrade`; the in-app updater only replaces downloaded releases. On Linux outside NixOS, ReShiki needs your system's GPU driver; if it reports that no graphics adapter was found, start it through [nixGL](https://github.com/nix-community/nixGL). On a Mac, the package contains **ReShiki.app** and the `reshiki` command: nix-darwin and home-manager add the app to your Applications folder; with `nix profile install`, find it in `~/.nix-profile/Applications`. The DMG remains the signed, notarized Mac app.
 
 ### File compatibility
 

@@ -452,6 +452,23 @@ def mac_bundle(destination, profile, *, target=None):
         build /= target
     shutil.copy2(build / profile / "reshiki", staged)
     staged.replace(executable)
+    resources = bundle_metadata(destination)
+    # A rebuilt development bundle must retire only the former app-owned payload.
+    for old in (
+        "Contents/Resources/chemistry",
+        "Contents/MacOS/reshiki-inchi-helper",
+        "Contents/MacOS/reshiki-clipboard",
+        "Contents/Helpers/ReShiki Print.app",
+    ):
+        remove_owned_path(destination / old)
+    notices(resources / "Licenses")
+    # Development/manual builds; release signing replaces the ad-hoc signature.
+    run(["codesign", "--force", "--deep", "--sign", "-", destination])
+    return destination
+
+
+def bundle_metadata(destination):
+    """Write ReShiki.app's Info.plist and icon; the Nix flake reuses this."""
     info = dict(
         CFBundleName="ReShiki",
         CFBundleDisplayName="ReShiki",
@@ -488,18 +505,7 @@ def mac_bundle(destination, profile, *, target=None):
     shutil.copy2(ROOT / "assets/branding/reshiki.icns", resources / "ReShiki.icns")
     with (destination / "Contents/Info.plist").open("wb") as stream:
         plistlib.dump(info, stream)
-    # A rebuilt development bundle must retire only the former app-owned payload.
-    for old in (
-        "Contents/Resources/chemistry",
-        "Contents/MacOS/reshiki-inchi-helper",
-        "Contents/MacOS/reshiki-clipboard",
-        "Contents/Helpers/ReShiki Print.app",
-    ):
-        remove_owned_path(destination / old)
-    notices(resources / "Licenses")
-    # Development/manual builds; release signing replaces the ad-hoc signature.
-    run(["codesign", "--force", "--deep", "--sign", "-", destination])
-    return destination
+    return resources
 
 
 def archive(folder, output):

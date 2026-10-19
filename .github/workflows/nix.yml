@@ -7,6 +7,8 @@ on:
       - flake.lock
       - Cargo.lock
       - "**/Cargo.toml"
+      - scripts/build_release.py
+      - scripts/license_notices.py
       - .github/workflows/nix.yml
   pull_request:
     paths:
@@ -14,6 +16,8 @@ on:
       - flake.lock
       - Cargo.lock
       - "**/Cargo.toml"
+      - scripts/build_release.py
+      - scripts/license_notices.py
       - .github/workflows/nix.yml
   workflow_dispatch:
 permissions:
