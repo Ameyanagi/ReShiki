@@ -1629,6 +1629,46 @@ async fn command_palette_search_field_types_colon() {
     assert_eq!(app.commands.query, ":w");
 }
 
+/// Tab in the search field cycles the category filter; focus and typing stay
+/// in the field.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn command_palette_tab_cycles_the_filter_from_the_search_field() {
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Commands(super::command_palette::Action::Open));
+    let _ = app.update(Message::Commands(super::command_palette::Action::Query(
+        "bond".into(),
+    )));
+    let field = ui.input(&app, "command-palette-search").0;
+    ui.click(&mut app, field.center());
+    let mut filters = vec![];
+    for modifiers in [Modifiers::empty(), Modifiers::empty(), Modifiers::SHIFT] {
+        let (status, messages) = ui.event(
+            &app,
+            press(Key::Named(Named::Tab), Code::Tab, modifiers, None),
+            mouse::Cursor::Unavailable,
+        );
+        assert_eq!(status, iced::event::Status::Captured, "{messages:?}");
+        apply(&mut app, messages);
+        filters.push(app.commands.filter.map(|c| c.label()));
+    }
+    assert_eq!(filters, [Some("Insert"), Some("Bond"), Some("Insert")]);
+    let (_, messages) = ui.event(
+        &app,
+        press(
+            Key::Character("s".into()),
+            Code::KeyS,
+            Modifiers::empty(),
+            Some("s"),
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    apply(&mut app, messages);
+    assert_eq!(app.commands.query, "bonds", "the search field keeps focus");
+}
+
 /// Every command row is a named button that assistive technology can press.
 #[tokio::test]
 #[ignore = "Opt-in renderer input check"]
@@ -1653,6 +1693,19 @@ async fn command_palette_rows_are_named_buttons() {
         rows.iter()
             .all(|row| row.role == reshiki::accessibility::Role::Button && !row.name.is_empty())
     );
+    // The filter chips are named toggle buttons; the active one is All.
+    let chips: Vec<_> = snapshot
+        .nodes
+        .iter()
+        .filter(|node| node.id.starts_with("command-palette-filter-"))
+        .map(|node| (node.role, node.name.as_str()))
+        .collect();
+    let all = format!("All, {} results", app.commands.ranked().len());
+    assert_eq!(chips.first().map(|chip| chip.1), Some(all.as_str()));
+    assert!(chips.len() > 1, "{chips:?}");
+    assert!(chips.iter().all(|(role, name)| {
+        *role == reshiki::accessibility::Role::ToggleButton && name.ends_with(" results")
+    }));
     // Ids follow commands, not positions: a narrower search keeps Benzene's id.
     let benzene = rows[0].id.clone();
     let _ = app.update(Message::Commands(super::command_palette::Action::Query(

@@ -332,26 +332,21 @@ fn result_row(index: usize, entry: &'static Entry, selected: bool) -> Element<'s
         entry.description.into(),
         entry.scope.label(),
         selected,
-        true,
         Message::Help(Action::Select(index)),
     )
 }
 
-/// One result row, shared with the command palette. A disabled row is muted
-/// and its description says why.
-#[allow(clippy::too_many_arguments)]
-pub(super) fn list_row(
+/// One result row: chord, name and description, and scope.
+fn list_row(
     id: String,
     keys: &str,
     name: String,
     description: String,
     scope: &str,
     selected: bool,
-    enabled: bool,
     on_press: Message,
 ) -> Element<'static, Message> {
     let label = name.clone();
-    let name = text(name).size(13);
     let body = container(
         row![
             container(if keys.is_empty() {
@@ -361,11 +356,7 @@ pub(super) fn list_row(
             })
             .width(150),
             column![
-                if enabled {
-                    name
-                } else {
-                    name.style(muted_text)
-                },
+                text(name).size(13),
                 text(description).size(11).style(muted_text),
             ]
             .spacing(2)
@@ -375,9 +366,20 @@ pub(super) fn list_row(
         .spacing(10)
         .align_y(Alignment::Center),
     )
-    .padding([6, 8])
-    .width(Length::Fill)
-    .style(move |theme| {
+    .padding([6, 8]);
+    row_button(id, label, body, selected, on_press)
+}
+
+/// A result row's selection highlight and named button, shared with the
+/// command palette's compact rows.
+pub(super) fn row_button(
+    id: String,
+    label: String,
+    body: iced::widget::Container<'static, Message>,
+    selected: bool,
+    on_press: Message,
+) -> Element<'static, Message> {
+    let body = body.width(Length::Fill).style(move |theme| {
         crate::appearance::container(
             theme,
             container::Style {

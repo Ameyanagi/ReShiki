@@ -248,6 +248,16 @@ pub(crate) fn score(entry: &impl Searchable, query: &str) -> Option<u32> {
     Some(total)
 }
 
+/// Whether every query word starts a word of the name, not only of the
+/// synonyms or description: "ring" names Ring tool but not New drawing. The
+/// palette ranks these first.
+pub(crate) fn in_name(entry: &impl Searchable, query: &str) -> bool {
+    query_tokens(query).iter().all(|token| {
+        let token = token.to_lowercase();
+        words(entry.name()).any(|word| word.starts_with(&token))
+    })
+}
+
 /// Registry indexes in ranked order; an empty query keeps registry order.
 pub(crate) fn rank(entries: &[impl Searchable], query: &str) -> Vec<usize> {
     let mut scored: Vec<_> = entries
