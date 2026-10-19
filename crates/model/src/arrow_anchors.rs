@@ -616,6 +616,19 @@ fn bond_ink(
             );
             fills.push(outline);
         }
+        // A hollow wedge strokes its (possibly mitered) outline, unfilled.
+        if bond.display == "hollow_wedge"
+            && let Some((start, end)) = crate::scene::bond_segment(doc, bond, None)
+        {
+            let outline = joins.polygon(bond, start, end);
+            let half = style.line_width() * 0.5;
+            lines.extend(
+                outline
+                    .iter()
+                    .zip(outline.iter().cycle().skip(1))
+                    .map(|(p, q)| (*p, *q, half)),
+            );
+        }
         // A plain dative also fills its head at the label-trimmed acceptor
         // end; a line as wide as the head's base covers that triangle.
         if bond.is_dative()

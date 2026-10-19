@@ -1013,6 +1013,16 @@ fn ink_gap(d: &Document, samples: &[Point]) -> f32 {
                     }
                 }
             }
+            Primitive::Path {
+                commands,
+                style,
+                filled: false,
+            } => {
+                let half = DEFAULT.world(style.width_pt) / 2.;
+                for contour in crate::graphics::flattened(&commands) {
+                    lines.extend(contour.windows(2).map(|w| (w[0], w[1], half)));
+                }
+            }
             _ => {}
         }
     }
@@ -1280,6 +1290,22 @@ fn mechanism_attachment_312_head_clears_hatch_stroke() {
         let angle = degrees.to_radians();
         let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
         d.add_bond(c, n, 1, display);
+    }
+    let id = lone_pair_arrow_to(&mut d, c);
+    let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+    let gap = head_ink_gap(&d, arrow);
+    assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
+}
+#[test]
+fn mechanism_attachment_312_head_clears_joined_hollow_wedge_outline() {
+    // Two hollow wedges meeting at their wide ends share a mitered corner
+    // that reaches past either wedge's own width.
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for degrees in [295f32, 355.] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(n, c, 1, "hollow_wedge");
     }
     let id = lone_pair_arrow_to(&mut d, c);
     let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
