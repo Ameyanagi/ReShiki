@@ -15,7 +15,10 @@ pub fn write(source: &Document) -> Result<(String, Vec<String>)> {
     let mut curves = 0;
     let mut perspective = 0;
     for atom in &mut document.atoms {
-        if atom.charge != 0 && atom.display.hide_charge && !super::ligands::hidden_charge(atom) {
+        if atom.charge != 0
+            && atom.display.hide_charge
+            && !super::ligands::hidden_charge(atom, source)
+        {
             atom.display.hide_charge = false;
             charges += 1;
         }

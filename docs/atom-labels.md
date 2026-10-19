@@ -60,8 +60,11 @@ an inspector error. Unassigned centers have no label.
 Indicators start at 7.5 pt Arial; stereo labels are italic. Change their size or
 apply the current toolbar font/color. **Position numbers & stereo labels**
 shows handles: drag a number or stereo indicator, then Escape to finish. Each
-drag is one Undo step. Automatic positions consider nearby labels and bonds;
-Restore automatic positions removes manual offsets. Copying, grouping and
+drag is one Undo step. Automatic positions consider nearby labels, captions and
+bonds. A custom number longer than one character starts beside its atom on the
+open side and is left- or right-justified so extra text runs away from the
+structure; above or below an atom it stays centred. Restore automatic positions
+removes manual offsets; a dragged indicator keeps its exact position. Copying, grouping and
 transforming a structure retain indicator ownership.
 
 Canvas, SVG, PDF and PNG share the indicator geometry. Drawing exports refresh

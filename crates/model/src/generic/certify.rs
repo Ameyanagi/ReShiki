@@ -147,6 +147,7 @@ pub(super) fn certify_translation(
         annotations,
         molecule_names,
         arrows,
+        arrow_labels,
         graphics,
         groups,
         reactions,
@@ -261,6 +262,10 @@ pub(super) fn certify_translation(
     }
     for r in reactions {
         r.remap(&inverse).ok_or("Missing reaction remap")?;
+    }
+    for l in arrow_labels {
+        undo(&mut l.arrow)?;
+        undo(&mut l.annotation)?;
     }
     for n in molecule_names {
         undo(&mut n.annotation)?;

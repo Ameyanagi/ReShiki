@@ -108,8 +108,6 @@ pub(crate) mod pen;
 use reshiki::scene::{Primitive, primitives};
 #[cfg(test)]
 use smart_guides::{Axis, Guide};
-#[cfg(test)]
-use snapping::ring_gesture;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransformField {
