@@ -438,7 +438,8 @@ fn inserts(app: &App) -> Vec<Command> {
                 Insert,
                 "Label the selected or pointed atom as this group, or add it at the center",
                 &format!(
-                    "group abbreviation substituent {} {}",
+                    "group abbreviation substituent {} {} {}",
+                    group.category,
                     group.names.join(" "),
                     group.aliases.join(" ")
                 ),

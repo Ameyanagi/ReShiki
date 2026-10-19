@@ -197,6 +197,21 @@ fn gold_finds_the_au_element_command() {
     assert!(matches!(top(&app).run, Run::Element("Au")));
 }
 
+#[test]
+fn groups_are_found_by_their_catalog_category() {
+    let mut app = app();
+    search(&mut app, "protecting group");
+    let ranked: Vec<_> = app
+        .commands
+        .ranked()
+        .iter()
+        .map(|c| c.name.as_str())
+        .collect();
+    for label in ["Boc", "Cbz", "Fmoc"] {
+        assert!(ranked.contains(&label), "{label} in {ranked:?}");
+    }
+}
+
 fn top_name_after(app: &App) -> Option<&str> {
     app.commands.open.then(|| top(app).name.as_str())
 }
