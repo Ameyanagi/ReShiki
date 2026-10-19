@@ -274,39 +274,67 @@ impl Abbreviation {
     }
 }
 
-/// The bond belongs to an element glyph, never to a following subscript.
-/// Nicknames that are not formulas retain their edge-character alignment.
-pub(crate) fn anchor_range(text: &str, left: bool) -> std::ops::Range<usize> {
-    let mut tokens = Vec::new();
-    let mut chars = text.char_indices().peekable();
-    let mut formula = true;
-    while let Some((start, c)) = chars.next() {
-        if !c.is_ascii_uppercase() {
-            formula = false;
-            break;
+/// Substituent nicknames inside a label. They never take the bond, even when
+/// they spell an element symbol (Ac, Pr, Ts, Ar).
+pub const NICKNAMES: &[&str] = &[
+    "Ac", "All", "Ar", "Bn", "Boc", "Bu", "Bz", "Cbz", "Cy", "Et", "Fmoc", "iBu", "iPr", "Me",
+    "MEM", "Mes", "MOM", "Ms", "nBu", "nPr", "Ns", "Ph", "Piv", "PMB", "Pr", "sBu", "SEM", "TBDPS",
+    "TBS", "tBu", "TES", "Tf", "THP", "TIPS", "TMS", "Tol", "Tr", "Ts",
+];
+
+/// Element glyphs a bond can meet, in reading order: nicknames, H, counts,
+/// brackets, charge signs and a charge separator space are skipped. None when the text is not a formula.
+fn atom_glyphs(text: &str) -> Option<Vec<std::ops::Range<usize>>> {
+    let mut atoms = Vec::new();
+    let mut i = 0;
+    while let Some(rest) = text.get(i..).filter(|rest| !rest.is_empty()) {
+        let c = rest.chars().next()?;
+        if c.is_ascii_digit() || ('₀'..='₉').contains(&c) || "()[]+-−⁺⁻ ".contains(c) {
+            i += c.len_utf8();
+            continue;
         }
-        let mut end = start + c.len_utf8();
-        if let Some(&(i, c)) = chars.peek().filter(|(_, c)| c.is_ascii_lowercase()) {
-            end = i + c.len_utf8();
-            chars.next();
-        }
-        let symbol = text.get(start..end).unwrap_or_default();
-        if !crate::editing::ELEMENTS.contains(&symbol) {
-            formula = false;
-            break;
-        }
-        if symbol != "H" {
-            tokens.push(start..end);
-        }
-        while chars
-            .peek()
-            .is_some_and(|(_, c)| c.is_ascii_digit() || ('₀'..='₉').contains(c))
-        {
-            chars.next();
+        let nickname = NICKNAMES
+            .iter()
+            .filter(|n| rest.starts_with(**n))
+            .map(|n| n.len())
+            .max()
+            .unwrap_or(0);
+        let element = [2, 1]
+            .into_iter()
+            .find(|&n| {
+                c.is_ascii_uppercase()
+                    && rest
+                        .get(..n)
+                        .is_some_and(|s| crate::editing::ELEMENTS.contains(&s))
+            })
+            .unwrap_or(0);
+        if element > nickname {
+            if rest.get(..element) != Some("H") {
+                atoms.push(i..i + element);
+            }
+            i += element;
+        } else if nickname > 0 {
+            i += nickname;
+        } else {
+            return None;
         }
     }
-    if formula && let Some(range) = if left { tokens.last() } else { tokens.first() } {
-        return range.clone();
+    Some(atoms)
+}
+
+/// The attachment atom's glyph, never a following subscript or a nickname
+/// (O in MeO, S in AcS). `left` labels read toward a bond on their right, so
+/// the last atom attaches. None when the text names no atom (Boc, Ar, M).
+pub(crate) fn atom_anchor(text: &str, left: bool) -> Option<std::ops::Range<usize>> {
+    let atoms = atom_glyphs(text)?;
+    if left { atoms.last() } else { atoms.first() }.cloned()
+}
+
+/// The bond belongs to an element glyph, never to a following subscript.
+/// Text without an atom keeps its edge-character alignment.
+pub(crate) fn anchor_range(text: &str, left: bool) -> std::ops::Range<usize> {
+    if let Some(range) = atom_anchor(text, left) {
+        return range;
     }
     let character = if left {
         text.char_indices().next_back()

@@ -29,6 +29,7 @@ fn display(value: NativeAtomDisplay) -> Result<AtomDisplay> {
         carbons: Some(value.carbons),
         hydrogens: Some(value.hydrogens),
         hydrogen_position: value.hydrogen_position,
+        label_attachment: Default::default(),
         stereo: indicator(value.stereo)?,
         mapping: Default::default(),
         number: value

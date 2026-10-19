@@ -23,6 +23,29 @@ it. Condensed display labels such as CCl₂ and NMe use the same placement logic
 keeping the attachment element at the vertex and subscripts with their label.
 Unknown names remain intact. See the [internal-label examples and scope](changes/automatic-hydrogen.md).
 
+Bonds meet the attachment atom inside a multi-atom text label (MeO, AcS,
+SPh), not the label's center. Automatic attachment skips substituent
+nicknames (Me, Ac, Bn, Ph, TBS…), hydrogens and counts, and uses the atom
+nearest the bonds: the first atom when they arrive from the left, the last
+when they arrive from the right (the first atom for vertical bonds). Text
+naming no atom (Boc, M) stays centered, as does text whose other letters
+would lie between the atom and a horizontal bond (MeO bonded from the left),
+which would otherwise hide the bond. Automatic labels with two or more bonds
+stay centered too. Contracted groups use the same rule on their displayed spelling, so
+a group without a reverse spelling still attaches at its anchor (OAc read
+from the right attaches at O, not at Ac). **Bond attachment (text labels)**
+overrides it per atom: **Centered** centers the label, **Flush left**/**Flush right** attach at the first or
+last atom, and **Character N** at that character. Native files store the
+choice as `label_attachment`; editable CDXML/CDX clipboard data writes and reads
+flush left/center/right as the text's `LabelJustification` (CDXML/CDX file
+export still refuses free text labels). A chosen character has no ChemDraw equivalent and
+is native only; changing the text returns it to Automatic.
+
+Alternative lists such as `[Cl,Br,I]` with a single horizontal bond meet it
+with their near edge, so the text extends away from the molecule and the bond
+is trimmed at the label instead of running through it. Vertical and internal
+generic labels, including link nodes, stay centered.
+
 Number assigns one sequence in creation/import order. Starts include `1`,
 `atom1`, `a`, `A`, `α` and `Α`; letter sequences continue beyond the alphabet.
 A single selected atom also accepts a custom number such as `Cα` or `12a`.

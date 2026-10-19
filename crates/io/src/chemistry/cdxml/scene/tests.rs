@@ -130,6 +130,25 @@ fn element_charge_labels_keep_the_chemical_import_path_without_manual_scripts() 
     assert!(atom.display.label_scripts.is_empty());
 }
 
+#[test]
+fn selected_chemdraw_amine_nitrogen_is_capped_with_hydrogens() {
+    // ChemDraw writes NumHydrogens="0" on a labeled tertiary amine N (#334).
+    let imported = import_cdxml(
+        "<CDXML BondLength='30'><page><fragment id='1'><n id='2' p='0 0'/><n id='3' p='30 0' Element='7' NumHydrogens='0'><t><s>N</s></t></n><n id='4' p='45 26'/><n id='5' p='45 -26'/><b B='2' E='3'/><b B='3' E='4'/><b B='3' E='5'/></fragment></page></CDXML>",
+    )
+    .unwrap();
+    let doc = &imported.document;
+    let n = doc.atoms.iter().find(|a| a.element == "N").unwrap();
+    assert!(n.no_implicit);
+    let part = reshiki_model::editing::analysis_document(doc, &[n.id]);
+    let molecule = reshiki_model::chemistry::document::prepare(&part).unwrap();
+    let atom = &molecule.state.graph.atoms[0];
+    assert_eq!(atom.radical_electrons, 0);
+    let hydrogens =
+        u32::from(atom.explicit_hydrogens) + molecule.state.valences[0].implicit_hydrogens;
+    assert_eq!(hydrogens, 3);
+}
+
 enum Fault {
     /// Inserted into the prepared expanded XML.
     Inject(&'static str),
