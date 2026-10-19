@@ -140,7 +140,7 @@ pub fn family(tool: Tool) -> Option<Family> {
         _ => None,
     }
 }
-fn bond_tool(preset: BondPreset) -> Tool {
+pub(super) fn bond_tool(preset: BondPreset) -> Tool {
     match preset {
         BondPreset::Single => Tool::Bond(1),
         BondPreset::Double => Tool::Bond(2),
@@ -151,7 +151,7 @@ fn bond_tool(preset: BondPreset) -> Tool {
         _ => Tool::StyledBond(preset),
     }
 }
-fn graphic_options(family: Family) -> Vec<(String, GraphicOption)> {
+pub(super) fn graphic_options(family: Family) -> Vec<(String, GraphicOption)> {
     use GraphicKind as G;
     let mut options = Vec::new();
     let kinds: &[G] = match family {

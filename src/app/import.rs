@@ -31,13 +31,13 @@ const STRUCTURES: [(&str, &str); 6] = [
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct Example(&'static str, &'static str);
+pub(super) struct Example(pub(super) &'static str, pub(super) &'static str);
 impl std::fmt::Display for Example {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.0)
     }
 }
-const EXAMPLES: [Example; 4] = [
+pub(super) const EXAMPLES: [Example; 4] = [
     Example("Ethanol", "CCO"),
     Example("Benzene", "c1ccccc1"),
     Example("Aspirin", "CC(=O)Oc1ccccc1C(=O)O"),

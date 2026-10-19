@@ -44,7 +44,7 @@ pub enum FigureFormat {
 }
 impl FigureFormat {
     /// Menu order: vector formats, then raster.
-    const ALL: &'static [Self] = &[
+    pub(super) const ALL: &'static [Self] = &[
         Self::Svg,
         Self::SvgOffice,
         Self::Pdf,
@@ -58,7 +58,7 @@ impl FigureFormat {
             _ => "Vector",
         }
     }
-    fn code(self) -> &'static str {
+    pub(super) fn code(self) -> &'static str {
         match self {
             Self::Pdf => "pdf",
             Self::Svg => "svg",
@@ -104,8 +104,8 @@ pub enum ChemicalFormat {
     Cdxml,
 }
 impl ChemicalFormat {
-    const ALL: [Self; 4] = [Self::Mol, Self::Smiles, Self::Inchi, Self::Cdxml];
-    fn code(self) -> &'static str {
+    pub(super) const ALL: [Self; 4] = [Self::Mol, Self::Smiles, Self::Inchi, Self::Cdxml];
+    pub(super) fn code(self) -> &'static str {
         match self {
             Self::Mol => "mol",
             Self::Smiles => "smiles",

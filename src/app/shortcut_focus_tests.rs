@@ -1164,6 +1164,7 @@ async fn keyboard_drawing_mode_keeps_real_fields_in_charge_of_typing_arrows_and_
             ("N", Code::KeyN, Modifiers::SHIFT),
             ("[", Code::BracketLeft, Modifiers::empty()),
             ("]", Code::BracketRight, Modifiers::empty()),
+            (":", Code::Semicolon, Modifiers::SHIFT),
         ] {
             let (status, messages) = ui.event(
                 &app,
@@ -1178,7 +1179,10 @@ async fn keyboard_drawing_mode_keeps_real_fields_in_charge_of_typing_arrows_and_
             assert!(
                 !messages.iter().any(|message| matches!(
                     message,
-                    Message::ContextKey(_) | Message::KeyboardDrawing(_) | Message::Shortcut(_)
+                    Message::ContextKey(_)
+                        | Message::KeyboardDrawing(_)
+                        | Message::Shortcut(_)
+                        | Message::Commands(_)
                 )),
                 "{panel}: {messages:?}"
             );
@@ -1594,6 +1598,97 @@ async fn join_chord_stays_in_real_fields_and_coordinates_selected_en_after_blur(
             assert_eq!(app.tab.doc, completed);
         }
     }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn command_palette_search_field_types_colon() {
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Commands(super::command_palette::Action::Open));
+    let field = ui.input(&app, "command-palette-search").0;
+    ui.click(&mut app, field.center());
+    for (text, code, modifiers) in [
+        (":", Code::Semicolon, Modifiers::SHIFT),
+        ("w", Code::KeyW, Modifiers::empty()),
+    ] {
+        let (status, messages) = ui.event(
+            &app,
+            press(Key::Character(text.into()), code, modifiers, Some(text)),
+            mouse::Cursor::Unavailable,
+        );
+        assert_eq!(
+            status,
+            iced::event::Status::Captured,
+            "{text}: {messages:?}"
+        );
+        apply(&mut app, messages);
+    }
+    assert!(app.commands.open);
+    assert_eq!(app.commands.query, ":w");
+}
+
+/// Every command row is a named button that assistive technology can press.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn command_palette_rows_are_named_buttons() {
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Commands(super::command_palette::Action::Open));
+    let _ = app.update(Message::Commands(super::command_palette::Action::Query(
+        "benzene".into(),
+    )));
+    let snapshot = ui.semantics(&app);
+    assert!(snapshot.duplicate_ids.is_empty());
+    let rows: Vec<_> = snapshot
+        .nodes
+        .iter()
+        .filter(|node| node.id.starts_with("command-palette-row-"))
+        .collect();
+    assert!(!rows.is_empty());
+    assert_eq!(rows[0].name, "Benzene");
+    assert!(
+        rows.iter()
+            .all(|row| row.role == reshiki::accessibility::Role::Button && !row.name.is_empty())
+    );
+    // Ids follow commands, not positions: a narrower search keeps Benzene's id.
+    let benzene = rows[0].id.clone();
+    let _ = app.update(Message::Commands(super::command_palette::Action::Query(
+        "benzene ring".into(),
+    )));
+    let snapshot = ui.semantics(&app);
+    assert!(
+        snapshot
+            .nodes
+            .iter()
+            .filter(|node| node.id == benzene)
+            .all(|node| node.name == "Benzene")
+    );
+    let named = |query: &str, ui: &mut Ui, app: &mut App| {
+        let _ = app.update(Message::Commands(super::command_palette::Action::Query(
+            query.into(),
+        )));
+        ui.semantics(app)
+            .nodes
+            .into_iter()
+            .find(|node| node.name.starts_with("Insert structure named"))
+            .map(|node| node.id)
+    };
+    let hexanoic = named("hexanoic acid", &mut ui, &mut app).unwrap();
+    let heptanoic = named("heptanoic acid", &mut ui, &mut app).unwrap();
+    assert_ne!(
+        hexanoic, heptanoic,
+        "a query-created row changes identity with its query"
+    );
+    // A long pasted query keeps every id within the native 256-byte limit.
+    let long = named(&"C".repeat(400), &mut ui, &mut app).unwrap();
+    assert!(long.len() <= 256, "{long}");
+    let snapshot = ui.semantics(&app);
+    reshiki::accessibility::tree::NativeTree::default()
+        .update(&snapshot, "ReShiki", ui.viewport, 1.)
+        .expect("a long query keeps the native accessibility tree");
 }
 
 /// The context row's Rotate field: click it, type an angle and press Enter

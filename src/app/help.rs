@@ -14,7 +14,7 @@ use std::sync::LazyLock;
 
 mod examples;
 pub(super) mod registry;
-mod search;
+pub(super) mod search;
 
 use registry::{Entry, Example};
 
@@ -95,6 +95,7 @@ impl App {
             return Task::none();
         }
         self.palette = None;
+        self.commands.open = false;
         self.help = State::default();
         iced::widget::operation::focus(SEARCH)
     }
@@ -143,7 +144,6 @@ impl App {
             // and closes, so its inert focus and text selection survive.
             return stack![base].into();
         }
-        let base = reshiki::accessibility::inert(base);
         let results = self.help.results();
         let current = self.help.current(&results);
         let selected = current.and_then(|i| entries().get(i));
@@ -182,8 +182,7 @@ impl App {
                     .style(muted_text),
             );
         }
-        let popup = container(
-            column![
+        let popup = column![
                 row![
                     column![
                         text("Help & shortcuts").size(22),
@@ -241,12 +240,26 @@ impl App {
                 .spacing(12)
                 .align_y(Alignment::Center),
             ]
-            .spacing(16),
-        )
+            .spacing(16);
+        modal(base, popup.into(), 900., 650., Message::ToggleHelp)
+    }
+}
+
+/// A centered dialog over a dimmed, inert workspace; clicking outside it
+/// sends `dismiss`. Help and the command palette share it.
+pub(super) fn modal<'a>(
+    base: Element<'a, Message>,
+    content: Element<'a, Message>,
+    width: f32,
+    height: f32,
+    dismiss: Message,
+) -> Element<'a, Message> {
+    let base = reshiki::accessibility::inert(base);
+    let popup = container(content)
         .padding(24)
-        .width(900)
-        .height(650)
-        .max_height(650)
+        .width(width)
+        .height(height)
+        .max_height(height)
         .style(|theme| {
             crate::appearance::container(
                 theme,
@@ -266,33 +279,32 @@ impl App {
                 },
             )
         });
-        stack![
-            base,
-            opaque(
-                mouse_area(
-                    container(Space::new())
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .style(|theme| crate::appearance::container(
-                            theme,
-                            container::Style {
-                                background: Some(Color::from_rgba8(25, 35, 40, 0.18).into()),
-                                ..Default::default()
-                            }
-                        ))
-                )
-                .on_press(Message::ToggleHelp)
-            ),
-            container(opaque(popup))
-                .padding(24)
-                .center_x(Length::Fill)
-                .center_y(Length::Fill),
-        ]
-        .into()
-    }
+    stack![
+        base,
+        opaque(
+            mouse_area(
+                container(Space::new())
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .style(|theme| crate::appearance::container(
+                        theme,
+                        container::Style {
+                            background: Some(Color::from_rgba8(25, 35, 40, 0.18).into()),
+                            ..Default::default()
+                        }
+                    ))
+            )
+            .on_press(dismiss)
+        ),
+        container(opaque(popup))
+            .padding(24)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill),
+    ]
+    .into()
 }
 
-fn chord(keys: &str, size: u32) -> Element<'static, Message> {
+pub(super) fn chord(keys: &str, size: u32) -> Element<'static, Message> {
     container(rich_text(super::shortcuts::spans(keys)).size(size))
         .padding([3, 6])
         .style(|theme| {
@@ -313,19 +325,52 @@ fn chord(keys: &str, size: u32) -> Element<'static, Message> {
 }
 
 fn result_row(index: usize, entry: &'static Entry, selected: bool) -> Element<'static, Message> {
+    list_row(
+        format!("help-row-{index}"),
+        &entry.keys,
+        entry.name.into(),
+        entry.description.into(),
+        entry.scope.label(),
+        selected,
+        true,
+        Message::Help(Action::Select(index)),
+    )
+}
+
+/// One result row, shared with the command palette. A disabled row is muted
+/// and its description says why.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn list_row(
+    id: String,
+    keys: &str,
+    name: String,
+    description: String,
+    scope: &str,
+    selected: bool,
+    enabled: bool,
+    on_press: Message,
+) -> Element<'static, Message> {
+    let label = name.clone();
+    let name = text(name).size(13);
     let body = container(
         row![
-            container(chord(&entry.keys, 11)).width(150),
+            container(if keys.is_empty() {
+                Space::new().into()
+            } else {
+                chord(keys, 11)
+            })
+            .width(150),
             column![
-                text(entry.name).size(13),
-                text(entry.description).size(11).style(muted_text),
+                if enabled {
+                    name
+                } else {
+                    name.style(muted_text)
+                },
+                text(description).size(11).style(muted_text),
             ]
             .spacing(2)
             .width(Length::Fill),
-            text(entry.scope.label())
-                .size(11)
-                .style(muted_text)
-                .width(96),
+            text(scope.to_owned()).size(11).style(muted_text).width(96),
         ]
         .spacing(10)
         .align_y(Alignment::Center),
@@ -346,9 +391,17 @@ fn result_row(index: usize, entry: &'static Entry, selected: bool) -> Element<'s
             },
         )
     });
-    mouse_area(body)
-        .on_press(Message::Help(Action::Select(index)))
-        .interaction(iced::mouse::Interaction::Pointer)
+    // A named button, so assistive technology can reach and press every row;
+    // arrow keys, not Tab, move between rows. The container above draws it.
+    reshiki::accessibility::button(id, label, body)
+        .padding(0)
+        .width(Length::Fill)
+        .style(|theme, _| iced::widget::button::Style {
+            text_color: theme.palette().text,
+            ..Default::default()
+        })
+        .on_press(on_press)
+        .tab_stop(false)
         .into()
 }
 

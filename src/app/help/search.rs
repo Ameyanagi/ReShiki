@@ -1,9 +1,37 @@
-//! Fuzzy ranking over the shortcut registry.
+//! Fuzzy ranking over the shortcut registry and the command palette.
 //!
 //! Every query word must match the entry somewhere. A key typed exactly as
 //! the chord shows it ranks first, then whole words in the name, synonyms and
 //! description, then prefixes, substrings and finally letters in order.
 use super::registry::Entry;
+
+/// What the matcher reads from a row: Help's shortcuts and the palette's
+/// commands share one ranking.
+pub(crate) trait Searchable {
+    fn keys(&self) -> &str;
+    fn name(&self) -> &str;
+    fn synonyms(&self) -> String;
+    fn description(&self) -> &str;
+    fn scope(&self) -> &str;
+}
+
+impl Searchable for Entry {
+    fn keys(&self) -> &str {
+        &self.keys
+    }
+    fn name(&self) -> &str {
+        self.name
+    }
+    fn synonyms(&self) -> String {
+        self.synonyms.join(" ")
+    }
+    fn description(&self) -> &str {
+        self.description
+    }
+    fn scope(&self) -> &str {
+        self.scope.label()
+    }
+}
 
 /// Modifier symbols and the words people type for them, both ways round,
 /// so "shift r", "⇧r" and "Shift+R" find the same chord on every platform.
@@ -123,7 +151,7 @@ fn subsequence(needle: &str, haystack: &str) -> bool {
     needle.chars().all(|n| chars.any(|h| h == n))
 }
 
-fn token_score(entry: &Entry, chord: &[String], token: &str) -> u32 {
+fn token_score(entry: &impl Searchable, chord: &[String], token: &str) -> u32 {
     let lower = token.to_lowercase();
     let mut best = 0;
     for term in chord {
@@ -133,10 +161,10 @@ fn token_score(entry: &Entry, chord: &[String], token: &str) -> u32 {
             best = best.max(80);
         }
     }
-    let name = entry.name.to_lowercase();
-    let synonyms = entry.synonyms.join(" ").to_lowercase();
-    let description = entry.description.to_lowercase();
-    let scope = entry.scope.label().to_lowercase();
+    let name = entry.name().to_lowercase();
+    let synonyms = entry.synonyms().to_lowercase();
+    let description = entry.description().to_lowercase();
+    let scope = entry.scope().to_lowercase();
     let fields: [(&str, u32); 4] = [(&name, 4), (&synonyms, 3), (&description, 2), (&scope, 1)];
     for (text, weight) in fields {
         for word in words(text) {
@@ -198,10 +226,10 @@ fn query_tokens(query: &str) -> Vec<String> {
 }
 
 /// The score of one entry, or None when some query word matches nothing.
-pub(crate) fn score(entry: &Entry, query: &str) -> Option<u32> {
+pub(crate) fn score(entry: &impl Searchable, query: &str) -> Option<u32> {
     let tokens = query_tokens(query);
     // Every query word must match within one alternative of the chord.
-    let mut total = chord_terms(&entry.keys)
+    let mut total = chord_terms(entry.keys())
         .iter()
         .filter_map(|chord| {
             tokens
@@ -211,7 +239,7 @@ pub(crate) fn score(entry: &Entry, query: &str) -> Option<u32> {
         })
         .max()?;
     let query = query.trim().to_lowercase();
-    let name = entry.name.to_lowercase();
+    let name = entry.name().to_lowercase();
     if !query.is_empty() && name == query {
         total += 40;
     } else if query.chars().count() > 1 && name.starts_with(&query) {
@@ -221,7 +249,7 @@ pub(crate) fn score(entry: &Entry, query: &str) -> Option<u32> {
 }
 
 /// Registry indexes in ranked order; an empty query keeps registry order.
-pub(crate) fn rank(entries: &[Entry], query: &str) -> Vec<usize> {
+pub(crate) fn rank(entries: &[impl Searchable], query: &str) -> Vec<usize> {
     let mut scored: Vec<_> = entries
         .iter()
         .enumerate()

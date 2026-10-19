@@ -16,9 +16,13 @@ use iced::{Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector, key
 /// shortcuts never type their letter; Enter applies a field and leaves it, so
 /// Undo and Redo then act on the drawing; while a field is focused, Undo and
 /// Redo do nothing, and arrow keys remain in the text field.
+/// Keys a modal dialog (Help or the command palette) takes before its
+/// search field.
+pub type ModalKeys = fn(&keyboard::Key, keyboard::Modifiers) -> Option<Message>;
+
 pub fn wrap(
     content: Element<'_, Message>,
-    help_open: bool,
+    modal: Option<ModalKeys>,
     image_open: bool,
     updates_open: bool,
     atom_text_open: bool,
@@ -26,7 +30,7 @@ pub fn wrap(
 ) -> Element<'_, Message> {
     Element::new(FileShortcuts {
         content,
-        help_open,
+        modal,
         image_open,
         updates_open,
         atom_text_open,
@@ -36,7 +40,7 @@ pub fn wrap(
 
 struct FileShortcuts<'a> {
     content: Element<'a, Message>,
-    help_open: bool,
+    modal: Option<ModalKeys>,
     image_open: bool,
     updates_open: bool,
     atom_text_open: bool,
@@ -151,13 +155,14 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
             shell.capture_event();
             return;
         }
-        // Help owns the keyboard: closing and row movement first, then its
-        // search field and buttons. Nothing reaches file commands or the drawing.
-        if self.help_open
+        // Help and the command palette own the keyboard: closing and row
+        // movement first, then the search field and buttons. Nothing reaches
+        // file commands or the drawing.
+        if let Some(modal_key) = self.modal
             && !self.atom_text_open
             && let Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) = event
         {
-            if let Some(message) = super::help::modal_key(key, *modifiers) {
+            if let Some(message) = modal_key(key, *modifiers) {
                 shell.publish(message);
             } else {
                 let untyped = without_command_text(event);
