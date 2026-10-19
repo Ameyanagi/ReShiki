@@ -1629,6 +1629,32 @@ async fn command_palette_search_field_types_colon() {
     assert_eq!(app.commands.query, ":w");
 }
 
+/// Every command row is a named button that assistive technology can press.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn command_palette_rows_are_named_buttons() {
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Commands(super::command_palette::Action::Open));
+    let _ = app.update(Message::Commands(super::command_palette::Action::Query(
+        "benzene".into(),
+    )));
+    let snapshot = ui.semantics(&app);
+    assert!(snapshot.duplicate_ids.is_empty());
+    let rows: Vec<_> = snapshot
+        .nodes
+        .iter()
+        .filter(|node| node.id.starts_with("command-palette-row-"))
+        .collect();
+    assert!(!rows.is_empty());
+    assert_eq!(rows[0].name, "Benzene");
+    assert!(
+        rows.iter()
+            .all(|row| row.role == reshiki::accessibility::Role::Button && !row.name.is_empty())
+    );
+}
+
 /// The context row's Rotate field: click it, type an angle and press Enter
 /// to rotate the selection by exactly that angle as one Undo step.
 #[tokio::test]

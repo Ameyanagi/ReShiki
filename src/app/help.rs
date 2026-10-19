@@ -326,6 +326,7 @@ pub(super) fn chord(keys: &str, size: u32) -> Element<'static, Message> {
 
 fn result_row(index: usize, entry: &'static Entry, selected: bool) -> Element<'static, Message> {
     list_row(
+        format!("help-row-{index}"),
         &entry.keys,
         entry.name.into(),
         entry.description.into(),
@@ -338,7 +339,9 @@ fn result_row(index: usize, entry: &'static Entry, selected: bool) -> Element<'s
 
 /// One result row, shared with the command palette. A disabled row is muted
 /// and its description says why.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn list_row(
+    id: String,
     keys: &str,
     name: String,
     description: String,
@@ -347,6 +350,7 @@ pub(super) fn list_row(
     enabled: bool,
     on_press: Message,
 ) -> Element<'static, Message> {
+    let label = name.clone();
     let name = text(name).size(13);
     let body = container(
         row![
@@ -387,9 +391,17 @@ pub(super) fn list_row(
             },
         )
     });
-    mouse_area(body)
+    // A named button, so assistive technology can reach and press every row;
+    // arrow keys, not Tab, move between rows. The container above draws it.
+    reshiki::accessibility::button(id, label, body)
+        .padding(0)
+        .width(Length::Fill)
+        .style(|theme, _| iced::widget::button::Style {
+            text_color: theme.palette().text,
+            ..Default::default()
+        })
         .on_press(on_press)
-        .interaction(iced::mouse::Interaction::Pointer)
+        .tab_stop(false)
         .into()
 }
 

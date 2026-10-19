@@ -92,8 +92,13 @@ fn duplicate_titles_prefer_the_direct_insert() {
         "the catalog lists Benzene as a direct insert, template and example"
     );
     let ranked = app.commands.ranked();
-    let mut names = std::collections::HashSet::new();
-    assert!(ranked.iter().all(|command| names.insert(&command.name)));
+    let benzene: Vec<_> = ranked.iter().filter(|c| c.name == "Benzene").collect();
+    assert!(
+        matches!(benzene.as_slice(), [direct, saved]
+            if matches!(direct.run, Run::Ring(_))
+                && matches!(&saved.run, Run::Template(_, id) if id == "test:benzene")),
+        "the built-in template and example repeat the direct insert; the saved template stays"
+    );
     assert_eq!(top(&app).name, "Benzene");
     assert!(matches!(
         top(&app).run,

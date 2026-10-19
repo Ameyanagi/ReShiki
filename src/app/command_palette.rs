@@ -305,12 +305,16 @@ impl App {
                 })
                 .collect()
         };
-        // Catalog order puts direct actions before templates and examples.
+        // Catalog order puts direct actions before templates and examples, so
+        // a repeated built-in title keeps the direct action. Saved templates
+        // always stay: they may hold a different structure under the same
+        // name, and their rows name the collection.
         let mut names = std::collections::HashSet::new();
         scored.retain(|(_, i)| {
-            catalog
-                .get(*i)
-                .is_some_and(|c| names.insert(c.name.clone()))
+            catalog.get(*i).is_some_and(|c| {
+                matches!(&c.run, Run::Template(_, id) if !id.starts_with("builtin:"))
+                    || names.insert(c.name.clone())
+            })
         });
         scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
         let best = scored.first().map_or(0, |(score, _)| *score);
@@ -592,6 +596,7 @@ impl App {
             };
             let reason = self.command_unavailable(command);
             list = list.push(list_row(
+                format!("command-palette-row-{position}"),
                 &command.hint(),
                 command.name.clone(),
                 reason.unwrap_or(&command.detail).to_owned(),
