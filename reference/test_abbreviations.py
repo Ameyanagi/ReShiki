@@ -78,10 +78,12 @@ class Abbreviations(unittest.TestCase):
         ids = [a["id"] for a in d["atoms"]]
         result = run(operation="abbreviate", document=d, selected_ids=ids)
         self.assertEqual(result["analysis"]["inchikey"], original["analysis"]["inchikey"])
-        self.assertEqual({g["label"] for g in result["document"]["abbreviations"]}, {"Boc", "OMe"})
+        self.assertEqual(
+            {g["label"] for g in result["document"]["abbreviations"]}, {"NHBoc", "OMe"}
+        )
         self.assertEqual(len(result["document"]["atoms"]), len(d["atoms"]))
         whole = run(operation="abbreviate", format="find", document=d, selected_ids=[])
-        self.assertEqual({g["label"] for g in whole["document"]["abbreviations"]}, {"Boc", "OMe"})
+        self.assertEqual({g["label"] for g in whole["document"]["abbreviations"]}, {"NHBoc", "OMe"})
         self.assertEqual(whole["analysis"]["inchikey"], original["analysis"]["inchikey"])
         partial = run(operation="abbreviate", document=d, selected_ids=[ids[0]])
         # Selecting just the methoxy carbon now permits the eligible Me match;

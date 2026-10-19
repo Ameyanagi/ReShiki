@@ -790,25 +790,15 @@ fn label_names(tree: &Tree, text: usize) -> Result<(String, String)> {
         label.push_str(&tree.node(span)?.text);
     }
     let mut reverse_label = String::new();
-    // Other presets have no alternate spelling and leave both strings alone.
-    for (name, reverse) in [
-        ("OMe", "MeO"),
-        ("OEt", "EtO"),
-        ("OAc", "AcO"),
-        ("OBz", "BzO"),
-        ("OTs", "TsO"),
-        ("OMs", "MsO"),
-        ("OTBDPS", "TBDPSO"),
-        ("CF3", "F3C"),
-        ("CN", "NC"),
-        ("NO2", "O2N"),
-        ("CO2H", "HO2C"),
-        ("CO2Me", "MeO2C"),
-        ("CO2Et", "EtO2C"),
-    ] {
-        if label == name || label == reverse {
-            label = name.into();
-            reverse_label = reverse.into();
+    // Presets without an alternate spelling leave both strings alone.
+    let presets = crate::chemistry::abbreviations::presets()
+        .map_err(|error| Error::Invalid(error.to_string()))?;
+    for preset in presets {
+        if label == preset.label
+            || !preset.reverse_label.is_empty() && label == preset.reverse_label
+        {
+            label.clone_from(&preset.label);
+            reverse_label.clone_from(&preset.reverse_label);
             break;
         }
     }

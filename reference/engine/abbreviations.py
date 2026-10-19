@@ -39,6 +39,39 @@ PRESETS = {
     "CO2H": ("*C(=O)O", "HO2C"),
     "CO2Me": ("*C(=O)OC", "MeO2C"),
     "CO2Et": ("*C(=O)OCC", "EtO2C"),
+    # Carbohydrate and protecting-group nicknames. Phthaloyl (Phth) bonds
+    # twice to its nitrogen, so only the monovalent NPhth imide is defined.
+    "OBn": ("*OCc1ccccc1", "BnO"),
+    "PMB": ("*Cc1ccc(OC)cc1", ""),
+    "OPMB": ("*OCc1ccc(OC)cc1", "PMBO"),
+    "OTBS": ("*O[Si](C)(C)C(C)(C)C", "TBSO"),
+    "TIPS": ("*[Si](C(C)C)(C(C)C)C(C)C", ""),
+    "OTIPS": ("*O[Si](C(C)C)(C(C)C)C(C)C", "TIPSO"),
+    "TES": ("*[Si](CC)(CC)CC", ""),
+    "OTES": ("*O[Si](CC)(CC)CC", "TESO"),
+    "Piv": ("*C(=O)C(C)(C)C", ""),
+    "OPiv": ("*OC(=O)C(C)(C)C", "PivO"),
+    "Lev": ("*C(=O)CCC(C)=O", ""),
+    "OLev": ("*OC(=O)CCC(C)=O", "LevO"),
+    "Tol": ("*c1ccc(C)cc1", ""),
+    "SPh": ("*Sc1ccccc1", "PhS"),
+    "STol": ("*Sc1ccc(C)cc1", "TolS"),
+    "SEt": ("*SCC", "EtS"),
+    "NPhth": ("*N1C(=O)c2ccccc2C1=O", "PhthN"),
+    "Troc": ("*C(=O)OCC(Cl)(Cl)Cl", ""),
+    "NHTroc": ("*NC(=O)OCC(Cl)(Cl)Cl", "TrocHN"),
+    "NHBoc": ("*NC(=O)OC(C)(C)C", "BocHN"),
+    "NHAc": ("*NC(C)=O", "AcHN"),
+    "Tr": ("*C(c1ccccc1)(c1ccccc1)c1ccccc1", ""),
+    "OTr": ("*OC(c1ccccc1)(c1ccccc1)c1ccccc1", "TrO"),
+    "MOM": ("*COC", ""),
+    "OMOM": ("*OCOC", "MOMO"),
+    "Tf": ("*S(=O)(=O)C(F)(F)F", ""),
+    "OTf": ("*OS(=O)(=O)C(F)(F)F", "TfO"),
+    "All": ("*CC=C", ""),
+    "OAll": ("*OCC=C", "AllO"),
+    "CCl3": ("*C(Cl)(Cl)Cl", "Cl3C"),
+    "OC(NH)CCl3": ("*OC(=N)C(Cl)(Cl)Cl", "Cl3CC(NH)O"),
 }
 
 
@@ -84,6 +117,60 @@ def validate(doc):
             raise ValueError("An abbreviation must be connected")
 
 
+def composition(atom):
+    """What a label asserts about an atom; contraction must not hide it."""
+    return (
+        atom.GetFormalCharge(),
+        atom.GetNumRadicalElectrons(),
+        atom.GetIsotope(),
+        atom.GetTotalNumHs(),
+    )
+
+
+def restrict(definition, smiles):
+    """Match only atoms whose composition equals the definition's."""
+    template = Chem.MolFromSmiles(smiles)
+    for atom, expected in zip(definition.mol.GetAtoms(), template.GetAtoms()):
+        if atom.GetIdx() == 0:
+            continue
+        charge, radicals, isotope, hydrogens = composition(expected)
+        for query in (
+            rdqueries.FormalChargeEqualsQueryAtom(charge),
+            rdqueries.NumRadicalElectronsEqualsQueryAtom(radicals),
+            rdqueries.IsotopeEqualsQueryAtom(isotope),
+            rdqueries.HCountEqualsQueryAtom(hydrogens),
+        ):
+            atom.ExpandQuery(query)
+
+
+def arbitrate(mol, definitions, withdrawn):
+    """RDKit's findApplicableAbbreviationMatches overlap rules (maxCoverage 1.0)."""
+    try:
+        mol.GetRingInfo().NumRings()
+    except RuntimeError:  # Uninitialized, as findApplicableAbbreviationMatches handles.
+        mol = Chem.Mol(mol)
+        Chem.FastFindRings(mol)
+    covered, first, reserved = set(), {}, []
+    for index, definition in enumerate(definitions):
+        if definition.mol.GetNumAtoms() > mol.GetNumAtoms():
+            continue
+        for match in mol.GetSubstructMatches(
+            definition.mol, uniquify=True, useChirality=False, maxMatches=1000
+        ):
+            if (index, match) in withdrawn or match[1] in first or covered & set(match[1:]):
+                continue
+            covered.update(match[1:])
+            first[match[1]] = len(reserved)
+            reserved.append((index, match))
+    accepted = [(i, m) for i, m in reserved if m[0] not in first]
+    # Only a group dropped because of a later, smaller group is withdrawn.
+    rejected = next(
+        ((i, m) for order, (i, m) in enumerate(reserved) if m[0] in first and first[m[0]] > order),
+        None,
+    )
+    return accepted, rejected
+
+
 def find(doc, mol, selection, label=None):
     available = [(name, *data) for name, data in PRESETS.items() if not label or name == label]
     if not available:
@@ -93,6 +180,8 @@ def find(doc, mol, selection, label=None):
     definitions = rdAbbreviations.ParseAbbreviations(
         "\n".join(f"{name} {smiles}" for name, smiles, _ in available)
     )
+    for definition, (_, smiles, _) in zip(definitions, available):
+        restrict(definition, smiles)
     result = copy.deepcopy(doc)
     groups = result.setdefault("abbreviations", [])
     used = {i for g in groups for i in g["members"]}
@@ -112,11 +201,26 @@ def find(doc, mol, selection, label=None):
             for atom in definition.mol.GetAtoms():
                 if atom.GetIdx() != 0:  # The outside attachment need not be selected.
                     atom.ExpandQuery(rdqueries.HasPropQueryAtom(marker))
+    # RDKit drops a group whose outside atom became another group's attachment.
+    # When a later, smaller group causes that, the larger group's atoms stay
+    # bare (methyl-NHBoc lost both Boc and Me). Withdraw the first such group
+    # and arbitrate again; the first pass must equal RDKit.
+    withdrawn = set()
+    accepted, rejected = arbitrate(mol, definitions, withdrawn)
     labeled = rdAbbreviations.LabelMolAbbreviations(mol, definitions, 1.0)
-    for g in Chem.GetMolSubstanceGroups(labeled):
-        members = [ids[i] for i in g.GetAtoms()]
-        points = list(g.GetAttachPoints())
-        if not members or len(points) != 1 or used.intersection(members):
+    native = [
+        (g.GetProp("LABEL"), list(g.GetAtoms()), [p.aIdx for p in g.GetAttachPoints()])
+        for g in Chem.GetMolSubstanceGroups(labeled)
+    ]
+    assert native == [(definitions[i].label, list(m[1:]), [m[1]]) for i, m in accepted], (
+        "Arbitration differs from RDKit"
+    )
+    while rejected:
+        withdrawn.add(rejected)
+        accepted, rejected = arbitrate(mol, definitions, withdrawn)
+    for index, match in accepted:
+        members = [ids[i] for i in match[1:]]
+        if used.intersection(members):
             continue
         if any(
             atoms[i].get("isotope")
@@ -127,12 +231,12 @@ def find(doc, mol, selection, label=None):
             for i in members
         ):
             continue
-        name = g.GetProp("LABEL")
+        name = definitions[index].label
         groups.append(
             dict(
                 label=name,
                 reverse_label=PRESETS[name][1],
-                anchor=ids[points[0].aIdx],
+                anchor=ids[match[1]],
                 members=members,
             )
         )

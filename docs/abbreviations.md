@@ -16,13 +16,19 @@ override, and Undo/Redo restores it. See the [illustrated PR review](changes-pr1
 Properties → Chemical abbreviations provides compact labels while retaining the complete atom/bond graph. Formula, mass, SMILES and molecular identity use the full structure.
 
 - Select one terminal atom and choose a common group such as OMe, Boc, Ph, TBS, TBDPS or OTBDPS, then **Replace selected endpoint**. This changes the chemistry and preserves the outside connecting bond.
-- **Contract common groups** finds supported groups in the selected atoms, or the whole drawing when nothing is selected.
+- **Contract common groups** finds supported groups in the selected atoms, or the whole drawing when nothing is selected. A group only claims atoms whose charge, unpaired electrons, isotope and hydrogen count match its definition, so a charged or labelled atom stays visible. When a larger group cannot apply because a smaller group takes its outside atom, the smaller candidates are used instead (MeNHBoc contracts to Boc and Me).
 - Select a connected fragment whose outside bonds all meet the same selected atom, enter a name and optional reversed label, and choose **Contract selection**. This changes presentation only.
 - **Expand selected** or **Expand all** restores the internal atoms for editing. A collapsed group selects, moves, copies and deletes as a unit. Individual atom-property changes require expansion.
 
 Each action is one Undo step. Native version-10 documents preserve custom names and reversed labels. SVG, PDF and PNG display the abbreviated drawing. Editable binary/XML exchange carries explicit nested chemical fragments; imported labels can expand back to real atoms. Common reversed labels are recognized on import. Custom reversed spellings are native-only.
 
-The ordinary subset supports 31 common presets. TBDPS (tert-butyldiphenylsilyl)
+The ordinary subset supports 62 common presets, including carbohydrate and
+protecting-group nicknames: OBn, PMB/OPMB, OTBS, TIPS/OTIPS, TES/OTES,
+Piv/OPiv, Lev/OLev, Tol, SPh, STol, SEt, NPhth, Troc/NHTroc, NHBoc, NHAc,
+Tr/OTr, MOM/OMOM, Tf/OTf, All/OAll, CCl3 and the trichloroacetimidate
+OC(NH)CCl3. Typing one of these labels on an endpoint creates the real group,
+so formula and mass match the expanded structure. Phthaloyl (Phth) bonds twice
+to its nitrogen; use NPhth for the phthalimido group. TBDPS (tert-butyldiphenylsilyl)
 attaches through silicon; OTBDPS attaches through oxygen and displays as TBDPSO
 when the parent bond is on its right. Both can also be entered with **Enter** in
 Automatic or Chemical abbreviation mode. Expanding them reveals the real

@@ -1,0 +1,56 @@
+{
+  "source_commit": "dd352da2cc697258f23b46b9f6193576a50c9fef",
+  "capture_run": "https://github.com/Ameyanagi/ReShiki/actions/runs/39077956792",
+  "captures": {
+    "macos-aarch64": {
+      "commit": "dd352da2cc697258f23b46b9f6193576a50c9fef",
+      "run": "39077956792",
+      "host": "macOS-14.8.9-arm64-arm-64bit",
+      "machine": "arm64",
+      "python": "3.12.10 (v3.12.10:0cc81280367, Apr  8 2025, 08:46:59) [Clang 13.0.0 (clang-1300.0.29.30)]",
+      "rdkit": "2026.03.6",
+      "capture_sha256": "42bed7dac4fd0d9e708d39bd95d7bf5509b09ba5274fb22c2c735756698ed8ac",
+      "file_sha256": "42bed7dac4fd0d9e708d39bd95d7bf5509b09ba5274fb22c2c735756698ed8ac"
+    },
+    "linux-x86_64": {
+      "commit": "dd352da2cc697258f23b46b9f6193576a50c9fef",
+      "run": "39077956792",
+      "host": "Linux-6.8.0-1064-azure-x86_64-with-glibc2.35",
+      "machine": "x86_64",
+      "python": "3.12.13 (main, Aug  7 2026, 02:25:39) [Clang 22.1.3 ]",
+      "rdkit": "2026.03.6",
+      "capture_sha256": "142fabf3eeb905610b474fe6415964c971877f19050cfbb8511e5af38c67620f",
+      "file_sha256": "142fabf3eeb905610b474fe6415964c971877f19050cfbb8511e5af38c67620f"
+    },
+    "linux-aarch64": {
+      "commit": "dd352da2cc697258f23b46b9f6193576a50c9fef",
+      "run": "39077956792",
+      "host": "Linux-6.17.0-1022-azure-aarch64-with-glibc2.39",
+      "machine": "aarch64",
+      "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+      "rdkit": "2026.03.6",
+      "capture_sha256": "e0a27f19f4594d06f8d9e7a009b9109810e8432094c454bfab1f438f3806f45a",
+      "file_sha256": "e0a27f19f4594d06f8d9e7a009b9109810e8432094c454bfab1f438f3806f45a"
+    },
+    "windows-x86_64": {
+      "commit": "dd352da2cc697258f23b46b9f6193576a50c9fef",
+      "run": "39077956792",
+      "host": "Windows-2022Server-10.0.20348-SP0",
+      "machine": "AMD64",
+      "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+      "rdkit": "2026.03.6",
+      "capture_sha256": "0522353bf3256742a319222d766b50b0e330f7e08bd89b8f78f2efec0ae0287e",
+      "file_sha256": "22173e86a48bf22befa33cf12f0d8e8fd121c2893add58fedc72414e9bd19fa5"
+    },
+    "windows-aarch64": {
+      "commit": "dd352da2cc697258f23b46b9f6193576a50c9fef",
+      "run": "39077956792",
+      "host": "Windows-11-10.0.26200-SP0",
+      "machine": "ARM64",
+      "python": "3.12.13 (main, Aug  7 2026, 02:26:41) [MSC v.1944 64 bit (AMD64)]",
+      "rdkit": "2026.03.6",
+      "capture_sha256": "a0b161178910ec341bff73b54e502b07e896dcf739036429fd48f91b890cab3f",
+      "file_sha256": "c6810ed07b0e96fca5a8102bffc2786ec7142e69866707484d747103af6b9376"
+    }
+  }
+}

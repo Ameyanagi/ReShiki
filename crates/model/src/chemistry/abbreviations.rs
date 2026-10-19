@@ -76,6 +76,9 @@ pub struct Preset {
     pub smiles: String,
     atoms: Vec<matcher::Atom>,
     bonds: Vec<matcher::Bond>,
+    /// Derived from the SMILES at load; not part of the native query.
+    #[serde(skip)]
+    composition: Vec<matcher::Composition>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -87,17 +90,20 @@ struct Data {
 pub fn presets() -> Result<&'static [Preset]> {
     static DATA: OnceLock<Result<Data>> = OnceLock::new();
     DATA.get_or_init(|| {
-        let data: Data = serde_json::from_str(include_str!("abbreviations/presets.json"))
+        let mut data: Data = serde_json::from_str(include_str!("abbreviations/presets.json"))
             .map_err(|error| invalid(format!("Invalid preset data: {error}")))?;
         if data.rdkit_version != RDKIT_VERSION
             || data.presets.len() != crate::abbreviations::PRESETS.len()
         {
             return Err(invalid("Preset data version or count mismatch"));
         }
-        for (preset, expected) in data.presets.iter().zip(crate::abbreviations::PRESETS) {
+        for (preset, expected) in data.presets.iter_mut().zip(crate::abbreviations::PRESETS) {
             if preset.label != *expected || preset.smiles.is_empty() {
                 return Err(invalid("Invalid preset definition"));
             }
+            let prepared = super::smiles::prepare(&preset.smiles)
+                .map_err(|error| invalid(format!("{}: {error}", preset.label)))?;
+            preset.composition = matcher::compositions(&prepared.state);
             matcher::validate(preset)?;
         }
         Ok(data)
@@ -241,11 +247,10 @@ pub fn find_with_policy(
         return Err(invalid("Selection size limit exceeded"));
     }
     let selected: HashSet<_> = selection.iter().copied().collect();
-    let target = matcher::Target::new(&molecule.state.graph, &molecule.state.rings)?;
-    let mut covered = HashSet::new();
-    let mut first_atoms = HashSet::new();
-    let mut tentative = Vec::new();
+    let hydrogens = matcher::total_hydrogens(&molecule.state);
+    let target = matcher::Target::new(&molecule.state.graph, &molecule.state.rings, &hydrogens)?;
     let mut work = matcher::Work::default();
+    let mut candidates = Vec::new();
     for preset in available {
         // maxCoverage=1.0 is exclusive; the dummy does not count as coverage.
         if preset.atoms.len() > molecule.ids.len() {
@@ -263,19 +268,49 @@ pub fn find_with_policy(
                     continue;
                 }
             }
-            let anchor = *at(&mapping, 1)?;
-            if first_atoms.contains(&anchor)
+            candidates.push((preset, mapping));
+        }
+    }
+    // Native arbitration reserves atoms for each larger group first, then
+    // drops a group whose outside atom became another group's attachment.
+    // When a later, smaller group causes that, the larger group's reserved
+    // atoms stay bare (methyl-NHBoc lost both Boc and Me). Withdraw the first
+    // such group and arbitrate again, so its smaller candidates still apply.
+    let mut withdrawn = vec![false; candidates.len()];
+    let tentative = loop {
+        work.spend(candidates.len())?;
+        let mut covered = HashSet::new();
+        let mut first_atoms = HashMap::new();
+        let mut reserved = Vec::new();
+        for (index, (_, mapping)) in candidates.iter().enumerate() {
+            let anchor = *at(mapping, 1)?;
+            if *at(&withdrawn, index)?
+                || first_atoms.contains_key(&anchor)
                 || mapping.iter().skip(1).any(|atom| covered.contains(atom))
             {
                 continue;
             }
             covered.extend(mapping.iter().skip(1).copied());
-            first_atoms.insert(anchor);
-            if !first_atoms.contains(at(&mapping, 0)?) {
-                tentative.push((preset, mapping));
+            first_atoms.insert(anchor, index);
+            reserved.push(index);
+        }
+        let mut accepted = Vec::new();
+        let mut rejected = None;
+        for index in reserved {
+            let (preset, mapping) = at(&candidates, index)?;
+            match first_atoms.get(at(mapping, 0)?) {
+                None => accepted.push((*preset, mapping)),
+                Some(&later) if later > index && rejected.is_none() => rejected = Some(index),
+                Some(_) => {}
             }
         }
-    }
+        let Some(index) = rejected else {
+            break accepted;
+        };
+        *withdrawn
+            .get_mut(index)
+            .ok_or_else(|| invalid("Missing candidate"))? = true;
+    };
     let mut result = document.clone();
     let mut used: HashSet<_> = result
         .abbreviations
@@ -283,9 +318,6 @@ pub fn find_with_policy(
         .flat_map(|group| group.members.iter().copied())
         .collect();
     for (preset, mapping) in tentative {
-        if first_atoms.contains(at(&mapping, 0)?) {
-            continue;
-        }
         let members = mapping
             .iter()
             .skip(1)
@@ -308,7 +340,7 @@ pub fn find_with_policy(
         if excluded {
             continue;
         }
-        let anchor = *at(&molecule.ids, *at(&mapping, 1)?)?;
+        let anchor = *at(&molecule.ids, *at(mapping, 1)?)?;
         used.extend(&members);
         result.abbreviations.push(Abbreviation {
             label_style: None,

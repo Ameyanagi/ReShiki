@@ -725,3 +725,169 @@ fn finite_repeat_labels_are_described_as_repeats_not_dummy_text() {
     );
     assert_ne!(description("[CH2]1-3", &lowered, Mode::Auto), REPEAT);
 }
+
+fn formula(doc: &Document) -> Result<String, Box<dyn std::error::Error>> {
+    let molecule = crate::chemistry::document::prepare(doc)?;
+    let facts: Vec<_> = molecule
+        .state
+        .graph
+        .atoms
+        .iter()
+        .zip(&molecule.state.valences)
+        .map(|(a, v)| crate::chemistry::AtomFacts {
+            atomic_number: a.atomic_number,
+            isotope: a.isotope,
+            charge: a.charge,
+            hydrogens: (u32::from(a.explicit_hydrogens) + v.implicit_hydrogens) as u8,
+            radical_electrons: a.radical_electrons,
+        })
+        .collect();
+    Ok(crate::chemistry::properties(&facts)?.formula)
+}
+
+#[test]
+fn protecting_group_labels_are_real_groups_that_expand_and_contract()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Formulas of the methyl compound CH3-R, written out independently.
+    for (label, reverse, expected) in [
+        ("OBn", "BnO", "C8H10O"),
+        ("PMB", "", "C9H12O"),
+        ("OPMB", "PMBO", "C9H12O2"),
+        ("OTBS", "TBSO", "C7H18OSi"),
+        ("TIPS", "", "C10H24Si"),
+        ("OTIPS", "TIPSO", "C10H24OSi"),
+        ("TES", "", "C7H18Si"),
+        ("OTES", "TESO", "C7H18OSi"),
+        ("Piv", "", "C6H12O"),
+        ("OPiv", "PivO", "C6H12O2"),
+        ("Lev", "", "C6H10O2"),
+        ("OLev", "LevO", "C6H10O3"),
+        ("Tol", "", "C8H10"),
+        ("SPh", "PhS", "C7H8S"),
+        ("STol", "TolS", "C8H10S"),
+        ("SEt", "EtS", "C3H8S"),
+        ("NPhth", "PhthN", "C9H7NO2"),
+        ("Troc", "", "C4H5Cl3O2"),
+        ("NHTroc", "TrocHN", "C4H6Cl3NO2"),
+        ("NHBoc", "BocHN", "C6H13NO2"),
+        ("NHAc", "AcHN", "C3H7NO"),
+        ("Tr", "", "C20H18"),
+        ("OTr", "TrO", "C20H18O"),
+        ("MOM", "", "C3H8O"),
+        ("OMOM", "MOMO", "C3H8O2"),
+        ("Tf", "", "C2H3F3O2S"),
+        ("OTf", "TfO", "C2H3F3O3S"),
+        ("All", "", "C4H8"),
+        ("OAll", "AllO", "C4H8O"),
+        ("CCl3", "Cl3C", "C2H3Cl3"),
+        ("OC(NH)CCl3", "Cl3CC(NH)O", "C3H4Cl3NO"),
+        ("N3", "", "CH3N3"),
+    ] {
+        let mut doc = Document::default();
+        let methyl = doc.add_atom("C", Point::new(0., 0.));
+        let endpoint = doc.add_atom("C", Point::new(42., 0.));
+        doc.add_bond(methyl, endpoint, 1, "plain");
+        let labelled = apply(&doc, endpoint, label, Mode::Auto)?;
+        let group = labelled.abbreviation(endpoint).ok_or(label)?.clone();
+        assert_eq!(
+            (group.label.as_str(), group.reverse_label.as_str()),
+            (label, reverse)
+        );
+        assert_eq!(formula(&labelled)?, expected, "{label}");
+
+        let mut expanded = labelled.clone();
+        assert_eq!(expanded.expand_abbreviations(&[endpoint]), 1);
+        assert!(expanded.abbreviations.is_empty());
+        assert_eq!(formula(&expanded)?, expected, "{label} expanded");
+        if label == "N3" {
+            continue; // A separately built group, not a detectable preset.
+        }
+        let molecule = crate::chemistry::document::prepare(&expanded)?;
+        let contracted =
+            crate::chemistry::abbreviations::find(&expanded, &molecule, &[], Some(label))?;
+        let [found] = contracted.abbreviations.as_slice() else {
+            panic!("{label} was not detected again after expansion");
+        };
+        assert_eq!(
+            (found.label.as_str(), found.reverse_label.as_str()),
+            (label, reverse)
+        );
+        // p-Tolyl on methyl is symmetric, so compare the group size, not IDs.
+        assert_eq!(found.members.len(), group.members.len(), "{label}");
+        assert_eq!(formula(&contracted)?, expected, "{label} contracted");
+    }
+    Ok(())
+}
+
+/// An `outside`-carbon chain on N(charge)–C(=O)–O–C(CH3)3.
+fn carbamate(outside: usize, charge: i32) -> Document {
+    let mut doc = Document::default();
+    let mut previous: Option<u64> = None;
+    let mut x = 0.;
+    let mut chain = |doc: &mut Document, element: &str| {
+        let id = doc.add_atom(element, Point::new(x, 0.));
+        x += 42.;
+        if let Some(previous) = previous {
+            doc.add_bond(previous, id, 1, "plain");
+        }
+        previous = Some(id);
+        id
+    };
+    for _ in 0..outside {
+        chain(&mut doc, "C");
+    }
+    let nitrogen = chain(&mut doc, "N");
+    let carbonyl = chain(&mut doc, "C");
+    chain(&mut doc, "O");
+    let quaternary = chain(&mut doc, "C");
+    chain(&mut doc, "C");
+    doc.atom_mut(nitrogen).unwrap().charge = charge;
+    let oxygen = doc.add_atom("O", Point::new(0., 42.));
+    doc.add_bond(carbonyl, oxygen, 2, "plain");
+    for y in [-42., 42.] {
+        let methyl = doc.add_atom("C", Point::new(0., y));
+        doc.add_bond(quaternary, methyl, 1, "plain");
+    }
+    doc
+}
+
+fn contracted(doc: &Document) -> Result<Vec<(String, usize)>, Box<dyn std::error::Error>> {
+    let molecule = crate::chemistry::document::prepare(doc)?;
+    let found = crate::chemistry::abbreviations::find(doc, &molecule, &[], None)?;
+    Ok(found
+        .abbreviations
+        .iter()
+        .map(|group| (group.label.clone(), group.members.len()))
+        .collect())
+}
+
+#[test]
+fn contraction_falls_back_when_a_larger_group_cannot_apply()
+-> Result<(), Box<dyn std::error::Error>> {
+    // CNC(=O)OC(C)(C)C: NHBoc loses its outside methyl to Me, so Boc and Me
+    // apply, as they did before NHBoc existed. Likewise with an ethyl.
+    let expected = |a: usize, b: &str, c: usize| vec![("Boc".to_owned(), a), (b.to_owned(), c)];
+    assert_eq!(contracted(&carbamate(1, 0))?, expected(7, "Me", 1));
+    assert_eq!(contracted(&carbamate(2, 0))?, expected(7, "Et", 2));
+    Ok(())
+}
+
+#[test]
+fn contraction_never_hides_charge_or_isotopes() -> Result<(), Box<dyn std::error::Error>> {
+    // C[N-]C(=O)OC(C)(C)C and its cation keep the charged nitrogen visible.
+    for charge in [-1, 1] {
+        let found = contracted(&carbamate(1, charge))?;
+        assert!(found.iter().all(|(label, _)| label != "NHBoc"), "{found:?}");
+    }
+    // A 13C methyl is not an ordinary tert-butyl methyl.
+    let mut doc = carbamate(1, 0);
+    doc.atoms.last_mut().unwrap().isotope = 13;
+    let found = contracted(&doc)?;
+    assert!(
+        found
+            .iter()
+            .all(|(label, _)| label != "Boc" && label != "NHBoc"),
+        "{found:?}"
+    );
+    Ok(())
+}
