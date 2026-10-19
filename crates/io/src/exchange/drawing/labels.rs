@@ -210,6 +210,13 @@ impl Writer<'_> {
                     style.formula |= condensed;
                     Vec::new()
                 };
+                // ChemDraw's flush justification matches the attachment side;
+                // a chosen character has no ChemDraw equivalent and stays native.
+                let justification = a
+                    .display
+                    .label_attachment
+                    .cdxml()
+                    .map(|value| ("LabelJustification", value.to_owned()));
                 let text = self.text(
                     node,
                     label,
@@ -218,7 +225,7 @@ impl Writer<'_> {
                         spans,
                         ..Default::default()
                     },
-                    [("p", self.position(a.position))],
+                    std::iter::once(("p", self.position(a.position))).chain(justification),
                 )?;
                 if manual {
                     // Standard object names survive CDX without adding a

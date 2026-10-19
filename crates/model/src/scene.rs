@@ -214,9 +214,13 @@ fn atom_label_runs_with_charge_layout(
                 .iter()
                 .any(|(_, script)| *script != crate::typography::Script::Normal)
     });
+    // A free text label: its bonds meet the attachment glyph (O in MeO).
+    let free_text = internal_group.is_none() && crate::atom_labels::free_text(a, doc);
+    let attachment = a.display.label_attachment;
     let condensed = (internal_group.is_some() || a.element == "*" || is_link)
         .then(|| crate::atom_labels::condensed_label(label))
-        .flatten();
+        .flatten()
+        .filter(|_| !free_text || attachment.is_auto());
     let core_end = condensed.map_or(label.len(), |(core, _)| core.len());
     let layout = scripts
         .as_ref()
@@ -233,11 +237,22 @@ fn atom_label_runs_with_charge_layout(
     let element_width = layout
         .as_ref()
         .map_or_else(|| text_width(label, size), |layout| layout.width);
+    let attached = (free_text && condensed.is_none())
+        .then(|| crate::atom_labels::attachment_range(a, doc, label))
+        .flatten();
     // A centered alternative list is wider than a bond and covers the parent
     // ring. Like a contracted group, it grows away from its single bond with
     // the near bracket on the atom.
-    let anchor_x = match list_extends_left(a, doc).filter(|_| condensed.is_none()) {
-        Some(left) => {
+    let list_left = list_extends_left(a, doc).filter(|_| condensed.is_none());
+    let anchor_x = match (attached, list_left) {
+        (Some(range), _) => {
+            let width = |end: usize| match scripts.as_ref().filter(|_| layout.is_some()) {
+                Some(scripts) => free_label_layout(label, scripts, 0..end, &style).width,
+                None => text_width(label.get(..end).unwrap_or_default(), size),
+            };
+            (width(range.start) + width(range.end)) / 2.
+        }
+        (None, Some(left)) => {
             let edge = if left {
                 label.chars().next_back()
             } else {
@@ -246,7 +261,7 @@ fn atom_label_runs_with_charge_layout(
             let half = edge.map_or(0., |c| text_width(c.encode_utf8(&mut [0; 4]), size) / 2.);
             if left { element_width - half } else { half }
         }
-        None => element_width / 2.0,
+        (None, None) => element_width / 2.,
     };
     let origin = a.position.offset(
         -anchor_x,
@@ -2334,6 +2349,8 @@ pub fn svg_with_background(doc: &Document) -> String {
 
 #[cfg(test)]
 mod charge_placement_tests;
+#[cfg(test)]
+mod label_attachment_tests;
 #[cfg(test)]
 mod label_parity_tests;
 #[cfg(test)]
