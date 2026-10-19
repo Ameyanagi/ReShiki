@@ -581,3 +581,108 @@ fn a_cleanup_preview_arriving_under_the_palette_still_lets_it_close() {
         "closing leaves the preview to apply or cancel"
     );
 }
+
+/// Windows draws with Tiny Skia, whose shadow pass ignores the damage clip
+/// (see `appearance::surface_shadow`); the palette must leave pixels outside
+/// a hover or caret redraw untouched.
+#[cfg(windows)]
+#[test]
+fn palette_partial_redraws_preserve_unchanged_pixels() {
+    use iced::advanced::{graphics::Viewport, layout, mouse, widget::Tree};
+    use iced::{Color, Length, widget::Space};
+    use resvg::tiny_skia::{Mask, Pixmap};
+
+    for mode in [
+        crate::appearance::Mode::Light,
+        crate::appearance::Mode::Dark,
+    ] {
+        let mut app = app();
+        app.appearance.mode = mode;
+        search(&mut app, "benzene");
+        let size = iced::Size::new(1040., 680.);
+        let bounds = iced::Rectangle::with_size(size);
+        let mut renderer = iced::Renderer::Secondary(iced_tiny_skia::Renderer::new(
+            iced::Font::default(),
+            iced::Pixels(16.),
+        ));
+        let mut view =
+            app.with_commands(Space::new().width(Length::Fill).height(Length::Fill).into());
+        let mut tree = Tree::new(view.as_widget());
+        let node =
+            view.as_widget_mut()
+                .layout(&mut tree, &renderer, &layout::Limits::new(size, size));
+        view.as_widget_mut().update(
+            &mut tree,
+            &iced::Event::Window(iced::window::Event::RedrawRequested(
+                std::time::Instant::now(),
+            )),
+            iced::advanced::Layout::new(&node),
+            mouse::Cursor::Unavailable,
+            &renderer,
+            &mut iced::advanced::clipboard::Null,
+            &mut iced::advanced::Shell::new(&mut Vec::new()),
+            &bounds,
+        );
+        view.as_widget().draw(
+            &tree,
+            &mut renderer,
+            &app.theme(),
+            &iced::advanced::renderer::Style::default(),
+            iced::advanced::Layout::new(&node),
+            mouse::Cursor::Unavailable,
+            &bounds,
+        );
+        // A hover redraw on a result row near the dialog's edge.
+        let damage = iced::Rectangle {
+            x: 300.,
+            y: 200.,
+            width: 40.,
+            height: 40.,
+        };
+        let iced::Renderer::Secondary(mut renderer) = renderer else {
+            panic!("partial-redraw regression requires the software renderer");
+        };
+        for scale in [1., 1.25, 2.] {
+            let width = (size.width * scale) as u32;
+            let height = (size.height * scale) as u32;
+            let viewport = Viewport::with_physical_size(iced::Size::new(width, height), scale);
+            let mut pixels = Pixmap::new(width, height).unwrap();
+            let mut mask = Mask::new(width, height).unwrap();
+            renderer.draw(
+                &mut pixels.as_mut(),
+                &mut mask,
+                &viewport,
+                &[bounds],
+                Color::WHITE,
+            );
+            let original = pixels.clone();
+            for _ in 0..16 {
+                renderer.draw(
+                    &mut pixels.as_mut(),
+                    &mut mask,
+                    &viewport,
+                    &[damage],
+                    Color::WHITE,
+                );
+            }
+            let physical_damage = damage * scale;
+            let changed = pixels
+                .pixels()
+                .iter()
+                .zip(original.pixels())
+                .enumerate()
+                .filter(|(index, (actual, expected))| {
+                    let point = iced::Point::new(
+                        (*index % width as usize) as f32,
+                        (*index / width as usize) as f32,
+                    );
+                    !physical_damage.contains(point) && actual != expected
+                })
+                .count();
+            assert_eq!(
+                changed, 0,
+                "{mode:?}, scale {scale}: partial redraws changed pixels outside damage"
+            );
+        }
+    }
+}
