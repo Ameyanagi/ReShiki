@@ -548,3 +548,31 @@ fn review_fixes_for_targets_parameters_and_stale_rows() {
     assert_eq!(selected, vec![a, b]);
     assert!(!app.tab.selected.contains(&far));
 }
+
+#[test]
+fn a_cleanup_preview_arriving_under_the_palette_still_lets_it_close() {
+    let mut app = app();
+    open(&mut app);
+    assert!(app.commands.open);
+    app.tab.cleanup = Some(crate::app::CleanupPreview {
+        job: crate::app::cleanup::CleanupJob {
+            options: Default::default(),
+            selection: vec![],
+            serial: app.tab.cleanup_serial,
+            epoch: app.tab.file_epoch,
+        },
+        warnings: vec![],
+        document: app.tab.doc.clone(),
+        analysis: None,
+        revision: app.tab.revision,
+        epoch: app.tab.file_epoch,
+        original: false,
+    });
+    // Escape, the close button and clicks outside all send Close.
+    let _ = app.update(Message::Commands(Action::Close));
+    assert!(!app.commands.open);
+    assert!(
+        app.tab.cleanup.is_some(),
+        "closing leaves the preview to apply or cancel"
+    );
+}

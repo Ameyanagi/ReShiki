@@ -1,8 +1,8 @@
 //! Modal gates that run before message dispatch. Their order decides which modal surface wins.
 use super::{
-    App, InspectorTab, Message, atom_text, cleanup, color_popover, document_styles, generic,
-    import, inline_text, joining, object_toolbar, optimization, results, tabs, template_library,
-    theme_generator, updates, view_settings,
+    App, InspectorTab, Message, atom_text, cleanup, color_popover, command_palette,
+    document_styles, generic, import, inline_text, joining, object_toolbar, optimization, results,
+    tabs, template_library, theme_generator, updates, view_settings,
 };
 use crate::canvas::{self, Edit, Tool};
 use iced::Task;
@@ -367,7 +367,8 @@ impl App {
                         | cleanup::Action::Scope(_)
                         | cleanup::Action::Orientation(_),
                 )
-            ) || preview_passthrough(&message)
+            ) || matches!(message, Message::Commands(command_palette::Action::Close))
+                || preview_passthrough(&message)
                 || results::admitted(results::Modal::Cleanup, &message))
                 && !self.answers_save_dialog(&message)
             {

@@ -983,8 +983,10 @@ impl App {
 
     pub fn view(&self) -> Element<'_, Message> {
         reshiki::accessibility::focus_scope(file_shortcuts::wrap(
-            self.with_updates(self.with_assistant_image(self.with_nmr(self.with_atom_text(
-                self.with_help(self.with_commands(self.with_palette(self.workspace()))),
+            // The command palette sits above the floating NMR panel so its
+            // modal also keeps that panel from taking clicks.
+            self.with_updates(self.with_assistant_image(self.with_commands(self.with_nmr(
+                self.with_atom_text(self.with_help(self.with_palette(self.workspace()))),
             )))),
             if self.help_open {
                 Some(help::modal_key)
