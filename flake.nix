@@ -42,6 +42,7 @@
             nativeBuildInputs = with pkgs; [
               pkg-config
               patchelf
+              python3
               copyDesktopItems
             ];
             buildInputs = with pkgs; [
@@ -54,8 +55,21 @@
             doCheck = false;
 
             postInstall = ''
-              install -Dm644 assets/branding/app-icon-light.png \
-                $out/share/icons/hicolor/1254x1254/apps/reshiki.png
+              for size in 16 24 32 48 64 128 256 512 1024; do
+                install -Dm644 assets/branding/exports/light/icon-$size.png \
+                  $out/share/icons/hicolor/''${size}x''${size}/apps/reshiki.png
+              done
+
+              # NOTICE requires the license texts in binary distributions; reuse
+              # the release builder's aggregation over the vendored crates.
+              cargo metadata --format-version 1 --locked --offline > "$TMPDIR/metadata.json"
+              python3 -c '
+              import json, sys
+              from pathlib import Path
+              sys.path.insert(0, "scripts")
+              from license_notices import write_notices
+              write_notices(Path("."), Path(sys.argv[1]), json.load(open(sys.argv[2])))
+              ' "$out/share/licenses/reshiki" "$TMPDIR/metadata.json"
             '';
 
             postFixup = ''
@@ -67,7 +81,7 @@
                 name = "reshiki";
                 desktopName = "ReShiki";
                 comment = "Chemical drawing";
-                exec = "reshiki %F";
+                exec = "reshiki --open %f";
                 icon = "reshiki";
                 categories = [
                   "Science"
