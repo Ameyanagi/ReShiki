@@ -35,4 +35,9 @@ fn reversed_charged_labels_anchor_on_their_atom() {
     assert_eq!(anchor_range("F3B-", true), 2..3);
     assert_eq!(anchor_range("NMe3+", false), 0..1);
     assert_eq!(anchor_range("TBSO", true), 3..4);
+    // Isothiocyanate and thiocyanate reverse to distinct spellings that end
+    // in their attachment atom.
+    assert_eq!(anchor_range("S=C=N", true), 4..5);
+    let thiocyanate = "N≡CS";
+    assert_eq!(&thiocyanate[anchor_range(thiocyanate, true)], "S");
 }
