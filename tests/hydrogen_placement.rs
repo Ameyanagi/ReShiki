@@ -69,9 +69,12 @@ fn manual_positions_override_automatic_placement_and_terminal_labels_stay_inline
         assert_direction(&doc, position);
     }
     doc.atoms[0].display.hydrogen_position = H::Auto;
+    // Remove detached carbons too: their labels would be nearby obstacles.
     doc.bonds.pop();
+    doc.atoms.truncate(2);
     assert_direction(&doc, H::Left);
     doc.bonds.clear();
+    doc.atoms.truncate(1);
     assert_direction(&doc, H::Right);
 }
 

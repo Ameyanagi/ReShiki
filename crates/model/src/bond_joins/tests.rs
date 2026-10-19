@@ -1,5 +1,31 @@
 use super::*;
 
+/// Whether ink of the bond between `own` at `p` (depth `z`) lies in the
+/// occlusion envelope of a bond in front of it that shares no atom with it:
+/// there rear ink is cut clear of the front ink, so the corner of a ring seen
+/// nearly edge-on may open.
+fn occluded(doc: &Document, own: &[u64], p: Point, z: f32) -> bool {
+    let style = &doc.drawing_style;
+    let width = |b: &crate::document::Bond| {
+        if b.display == "plain" {
+            style.line_width()
+        } else {
+            style.world(style.bold_width_pt)
+        }
+    };
+    let widest = doc.bonds.iter().map(width).fold(0., f32::max);
+    doc.bonds.iter().any(|b| {
+        let (a, end) = (doc.atom(b.a).unwrap(), doc.atom(b.b).unwrap());
+        !own.contains(&b.a)
+            && !own.contains(&b.b)
+            && a.depth.max(end.depth) > z
+            && crate::graphics::segment_distance(p, a.position, end.position)
+                // The 1.1 pt clearance, plus a quarter point for the pixel
+                // at the edge of the cut.
+                < (width(b) + widest) * 0.5 + crate::style::DEFAULT.world(1.35)
+    })
+}
+
 #[test]
 fn ring_corners_remain_opaque_across_sizes_widths_orientations_and_tilts() {
     for members in 3..=8 {
@@ -57,6 +83,16 @@ fn ring_corners_remain_opaque_across_sizes_widths_orientations_and_tilts() {
                         &mut pixmap.as_mut(),
                     );
                     for atom in &doc.atoms {
+                        // Only a front bond sharing no atom with an incident
+                        // bond can cut that bond's corner here.
+                        if doc
+                            .bonds
+                            .iter()
+                            .filter(|b| b.a == atom.id || b.b == atom.id)
+                            .any(|b| occluded(&doc, &[b.a, b.b], atom.position, atom.depth))
+                        {
+                            continue;
+                        }
                         let x = ((atom.position.x - bounds[0]) * tree.size().width() * scale
                             / bounds[2])
                             .floor() as u32;
@@ -215,10 +251,19 @@ fn rasterized_joins_have_ink_on_both_sides_of_the_shared_vertex() {
         let sx = tree.size().width() * scale / bounds[2];
         let sy = tree.size().height() * scale / bounds[3];
         for b in &doc.bonds {
-            let a = doc.atom(b.a).unwrap().position;
-            let z = doc.atom(b.b).unwrap().position;
+            let (a, za) = (
+                doc.atom(b.a).unwrap().position,
+                doc.atom(b.a).unwrap().depth,
+            );
+            let (z, zz) = (
+                doc.atom(b.b).unwrap().position,
+                doc.atom(b.b).unwrap().depth,
+            );
             for t in [0.02, 0.98] {
                 let p = Point::new(a.x + (z.x - a.x) * t, a.y + (z.y - a.y) * t);
+                if occluded(&doc, &[b.a, b.b], p, za + (zz - za) * t) {
+                    continue;
+                }
                 let x = ((p.x - bounds[0]) * sx).round() as u32;
                 let y = ((p.y - bounds[1]) * sy).round() as u32;
                 if pixmap.pixel(x, y).unwrap().alpha() <= 200 {

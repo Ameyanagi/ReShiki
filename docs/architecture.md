@@ -354,7 +354,7 @@ Bond Z order is presentation metadata. A bounded sweep detects unconnected cross
 | `limits.rs`, `errors.rs`, `graph.rs`, `geometry.rs` | Shared bounds (also used by reshiki-io), refusal text, ordered adjacency and bounds helpers       |
 | `probe.rs`                                          | Stage counters for tests; a no-op in production builds                                            |
 
-The budget rule is: charge before you clone or scan; one allowance per request; never reset. A request gets one `Work` allowance (`Limits::default().max_work`, 5,000,000 units). Every stage debits that counter before it copies a document, scans ink or measures labels, and no stage starts a fresh budget. Running out rejects the whole request; nothing is installed.
+The budget rule is: charge before you clone or scan; one allowance per request; never reset. A request gets one `Work` allowance (`Limits::default().max_work`, 50,000,000 units). Every stage debits that counter before it copies a document, scans ink or measures labels, and no stage starts a fresh budget. Running out rejects the whole request; nothing is installed.
 
 Insertion has two phases, so the UI thread never runs the expansion (`src/app/generic.rs`):
 
