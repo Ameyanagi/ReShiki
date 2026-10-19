@@ -889,11 +889,7 @@ pub fn create(
     let start = start_anchor
         .resolved(&candidate, pen)
         .ok_or("Missing arrow source")?;
-    let back = Point::new(-chord.x, -chord.y);
-    let preferred = unit(Point::new(
-        -chord.x - chord.y * 0.7,
-        -chord.y + chord.x * 0.7,
-    ));
+    let (preferred, back) = arrival_hints(chord);
     let (end_direction, end_extra) = match destination {
         Pick::Bond { .. } => (
             bond_direction(destination, back).ok_or("Missing destination bond")?,
@@ -943,6 +939,37 @@ pub fn create(
     *doc = candidate;
     Ok(id)
 }
+/// The preferred and the straight-back arrival directions for an arrow
+/// whose targets lie along `chord`.
+fn arrival_hints(chord: Point) -> (Point, Point) {
+    let preferred = unit(Point::new(
+        -chord.x - chord.y * 0.7,
+        -chord.y + chord.x * 0.7,
+    ));
+    (preferred, Point::new(-chord.x, -chord.y))
+}
+/// Where a newly drawn arrow would end on its attached end target: aims
+/// start from here, so an end depends only on its current aim.
+fn default_end(doc: &Document, arrow: &Arrow, pen: f32) -> Option<Point> {
+    let anchor = arrow.end_anchor.as_ref()?;
+    let center = anchor.target.center(doc)?;
+    let (direction, extra) = match anchor.target {
+        Target::Atom { atom } => {
+            let source = arrow.start_anchor.as_ref()?.target.center(doc)?;
+            let (preferred, back) = arrival_hints(unit(delta(center, source)));
+            let style = arrow.appearance();
+            open_approach(doc, atom, preferred, back, arrow.start, &style, end_gap())
+        }
+        _ => (anchor.direction, 0.),
+    };
+    Anchor {
+        offset: Point::default(),
+        direction,
+        gap: end_gap() + extra,
+        ..anchor.clone()
+    }
+    .resolved(doc, pen)
+}
 /// Clearance an attached end keeps beyond its target ink.
 fn end_gap() -> f32 {
     DEFAULT.world(1.2)
@@ -978,18 +1005,11 @@ pub fn aim_end(doc: &mut Document, arrow: u64) {
     let pen = DEFAULT.world(style.width_pt) * 0.5;
     let d = unit(delta(control, a.end));
     let gap = end_gap();
-    let (Some(center), Some(old_push)) = (
-        anchor.target.center(doc),
-        projection_direction(doc, &anchor.target, anchor.direction),
-    ) else {
+    let (Some(center), Some(base)) = (anchor.target.center(doc), default_end(doc, a, pen)) else {
         return;
     };
-    // Drop the extra gap an earlier arrival added, so repeated aims never
-    // pile padding past the cap; the base gap along the old side remains.
-    let old_extra = (anchor.gap - gap).max(0.);
-    let base = a
-        .end
-        .offset(-old_push.x * old_extra, -old_push.y * old_extra);
+    // Start from the default end, never from an earlier aim, so repeated aims
+    // carry over neither extra gap nor a sideways offset.
     let mut anchor = Anchor {
         offset: delta(base, center),
         direction: d,

@@ -1737,3 +1737,19 @@ fn mechanism_attachment_379_other_handles_do_not_reaim() {
     edit_handle(&mut edited, id, 3, p);
     assert_eq!(edited, bare_edit(&d, id, 3, p));
 }
+#[test]
+fn mechanism_attachment_379_an_aimed_end_depends_only_on_its_aim() {
+    let (mut d, _, id) = acetone_arrow();
+    let mut first = None;
+    // Swinging the aim around and back must not walk the end away: the same
+    // aim always lands on the same end.
+    for degrees in [235f32, 300., 180., 235., 330., 150., 200., 260., 235.] {
+        let p = aim(&d, id, degrees);
+        edit_handle(&mut d, id, 4, p);
+        let a = arrow(&d, id);
+        if degrees == 235. {
+            let end = (a.end, a.end_anchor.clone());
+            assert_eq!(*first.get_or_insert(end.clone()), end, "{degrees}");
+        }
+    }
+}
