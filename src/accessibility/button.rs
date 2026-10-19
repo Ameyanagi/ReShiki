@@ -19,6 +19,7 @@ pub struct Button<'a, Message> {
     checked: Option<bool>,
     expanded: Option<bool>,
     value: Option<String>,
+    tab_stop: bool,
 }
 
 pub fn button<'a, Message: Clone + 'static>(
@@ -34,6 +35,7 @@ pub fn button<'a, Message: Clone + 'static>(
         checked: None,
         expanded: None,
         value: None,
+        tab_stop: true,
     }
 }
 
@@ -82,6 +84,12 @@ impl<'a, Message: Clone + 'static> Button<'a, Message> {
     }
     pub fn value(mut self, value: impl Into<String>) -> Self {
         self.value = Some(value.into());
+        self
+    }
+    /// False leaves the button out of Tab traversal (list rows that arrow
+    /// keys move through); it stays named and natively pressable.
+    pub fn tab_stop(mut self, tab_stop: bool) -> Self {
+        self.tab_stop = tab_stop;
         self
     }
 }
@@ -169,7 +177,7 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for Button<'_, M
     ) {
         let state = tree.state.downcast_mut::<State>();
         let id = Id::from(self.id.clone());
-        if self.action.is_some() {
+        if self.action.is_some() && self.tab_stop {
             operation.custom(Some(&id), layout.bounds(), &mut super::ButtonFocus);
             operation.focusable(Some(&id), layout.bounds(), state);
         } else {

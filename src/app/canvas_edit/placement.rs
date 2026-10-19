@@ -252,7 +252,7 @@ impl App {
         }
         self.changed(before);
     }
-    pub(super) fn place_ring_preset(
+    pub(in crate::app) fn place_ring_preset(
         &mut self,
         preset: reshiki::rings::Preset,
         anchor: Point,
@@ -285,7 +285,7 @@ impl App {
         }
         self.changed(before);
     }
-    pub(super) fn place_ring(
+    pub(in crate::app) fn place_ring(
         &mut self,
         anchor: Point,
         direction: Option<Point>,
