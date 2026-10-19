@@ -789,20 +789,31 @@ fn label_names(tree: &Tree, text: usize) -> Result<(String, String)> {
     for span in tree.children(text, "s")? {
         label.push_str(&tree.node(span)?.text);
     }
-    let mut reverse_label = String::new();
-    // Presets without an alternate spelling leave both strings alone.
     let presets = crate::chemistry::abbreviations::presets()
         .map_err(|error| Error::Invalid(error.to_string()))?;
-    for preset in presets.iter() {
-        if label == preset.label
-            || !preset.reverse_label.is_empty() && label == preset.reverse_label
-        {
-            label.clone_from(&preset.label);
-            reverse_label.clone_from(&preset.reverse_label);
-            break;
-        }
+    Ok(group_names(&presets, label))
+}
+
+/// An exact label wins, user groups first as typing does; otherwise a reversed
+/// spelling maps back to its group. Other text keeps no reverse spelling.
+fn group_names(
+    presets: &[std::sync::Arc<crate::chemistry::abbreviations::Preset>],
+    label: String,
+) -> (String, String) {
+    let exact = |user: bool| presets.iter().find(|p| p.user == user && p.label == label);
+    let reversed = |user: bool| {
+        presets
+            .iter()
+            .find(|p| p.user == user && !p.reverse_label.is_empty() && p.reverse_label == label)
+    };
+    match exact(true)
+        .or_else(|| exact(false))
+        .or_else(|| reversed(true))
+        .or_else(|| reversed(false))
+    {
+        Some(preset) => (preset.label.clone(), preset.reverse_label.clone()),
+        None => (label, String::new()),
     }
-    Ok((label, reverse_label))
 }
 
 /// Python's .8g spelling, including exponent padding and signed zero.
