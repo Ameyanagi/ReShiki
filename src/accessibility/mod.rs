@@ -17,7 +17,7 @@ pub use button::{Button, button};
 pub use editor::editor;
 pub use inert::inert;
 pub use operations::{Activate, Collect, SetValue, Snapshot};
-pub use scope::{FocusControl, focus_scope};
+pub use scope::{FocusControl, focus_scope, focus_scope_with};
 pub use text_input::{TextInput, text_input};
 
 use iced::Rectangle;

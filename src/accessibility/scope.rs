@@ -14,10 +14,19 @@ use iced::{Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector, key
 pub fn focus_scope<'a, Message: 'a>(
     content: impl Into<Element<'a, Message>>,
 ) -> Element<'a, Message> {
-    Element::new(Scope(content.into()))
+    focus_scope_with(content, true)
 }
 
-struct Scope<'a, Message>(Element<'a, Message>);
+/// As `focus_scope`; with `traverse` false, Tab reaches the content instead,
+/// for a modal that gives Tab its own meaning.
+pub fn focus_scope_with<'a, Message: 'a>(
+    content: impl Into<Element<'a, Message>>,
+    traverse: bool,
+) -> Element<'a, Message> {
+    Element::new(Scope(content.into(), traverse))
+}
+
+struct Scope<'a, Message>(Element<'a, Message>, bool);
 
 #[derive(Clone)]
 struct Target {
@@ -374,11 +383,13 @@ impl<Message> Widget<Message, Theme, Renderer> for Scope<'_, Message> {
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        if traverse_key(event, |operation| {
-            self.0
-                .as_widget_mut()
-                .operate(tree, layout, renderer, operation)
-        }) {
+        if self.1
+            && traverse_key(event, |operation| {
+                self.0
+                    .as_widget_mut()
+                    .operate(tree, layout, renderer, operation)
+            })
+        {
             shell.capture_event();
             shell.request_redraw();
             return;
