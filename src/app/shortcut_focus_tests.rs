@@ -1629,6 +1629,162 @@ async fn command_palette_search_field_types_colon() {
     assert_eq!(app.commands.query, ":w");
 }
 
+/// Tab in the search field cycles the category filter; focus and typing stay
+/// in the field.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn command_palette_tab_cycles_the_filter_from_the_search_field() {
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Commands(super::command_palette::Action::Open));
+    let _ = app.update(Message::Commands(super::command_palette::Action::Query(
+        "bond".into(),
+    )));
+    let field = ui.input(&app, "command-palette-search").0;
+    ui.click(&mut app, field.center());
+    let mut filters = vec![];
+    for modifiers in [Modifiers::empty(), Modifiers::empty(), Modifiers::SHIFT] {
+        let (status, messages) = ui.event(
+            &app,
+            press(Key::Named(Named::Tab), Code::Tab, modifiers, None),
+            mouse::Cursor::Unavailable,
+        );
+        assert_eq!(status, iced::event::Status::Captured, "{messages:?}");
+        apply(&mut app, messages);
+        filters.push(app.commands.filter.map(|c| c.label()));
+    }
+    assert_eq!(filters, [Some("Insert"), Some("Bond"), Some("Insert")]);
+    let (_, messages) = ui.event(
+        &app,
+        press(
+            Key::Character("s".into()),
+            Code::KeyS,
+            Modifiers::empty(),
+            Some("s"),
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    apply(&mut app, messages);
+    assert_eq!(app.commands.query, "bonds", "the search field keeps focus");
+}
+
+/// Click the control with this accessibility id and run the widget
+/// operations its messages return, as the event loop does.
+async fn click_running_tasks(ui: &mut Ui, app: &mut App, id: &str) {
+    use iced::advanced::widget::operation::Outcome;
+    use iced::futures::StreamExt;
+    let bounds = ui
+        .semantics(app)
+        .nodes
+        .into_iter()
+        .find(|node| node.id == id)
+        .unwrap_or_else(|| panic!("{id}"))
+        .bounds;
+    for event in [
+        mouse::Event::CursorMoved {
+            position: bounds.center(),
+        },
+        mouse::Event::ButtonPressed(mouse::Button::Left),
+        mouse::Event::ButtonReleased(mouse::Button::Left),
+    ] {
+        let cursor = mouse::Cursor::Available(bounds.center());
+        let (_, messages) = ui.event(app, Event::Mouse(event), cursor);
+        for message in messages {
+            let Some(mut stream) = iced_runtime::task::into_stream(app.update(message)) else {
+                continue;
+            };
+            while let Some(action) = stream.next().await {
+                let iced_runtime::Action::Widget(operation) = action else {
+                    continue;
+                };
+                let mut current = Some(operation);
+                while let Some(mut operation) = current.take() {
+                    ui.inspect(app, operation.as_mut());
+                    if let Outcome::Chain(next) = operation.finish() {
+                        current = Some(next);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Clicking a filter chip hands focus back to the search field, so typing
+/// edits the query and Enter runs the selected command.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn command_palette_chip_click_keeps_typing_in_the_search_field() {
+    use super::command_palette::Action;
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Commands(Action::Open));
+    let _ = app.update(Message::Commands(Action::Query("bond".into())));
+    let field = ui.input(&app, "command-palette-search").0;
+    ui.click(&mut app, field.center());
+    click_running_tasks(&mut ui, &mut app, "command-palette-filter-bond").await;
+    assert_eq!(app.commands.filter.map(|c| c.label()), Some("Bond"));
+    for (key, code, text) in [
+        (Key::Character("s".into()), Code::KeyS, Some("s")),
+        (Key::Named(Named::Enter), Code::Enter, None),
+    ] {
+        let (_, messages) = ui.event(
+            &app,
+            press(key, code, Modifiers::empty(), text),
+            mouse::Cursor::Unavailable,
+        );
+        apply(&mut app, messages);
+        if text.is_some() {
+            assert_eq!(app.commands.query, "bonds");
+        }
+    }
+    assert!(!app.commands.open, "Enter ran the selected command");
+}
+
+/// Clicking a row that cannot run keeps the palette open with typing in the
+/// search field.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn command_palette_unavailable_row_click_keeps_typing_in_the_search_field() {
+    use super::command_palette::Action;
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Commands(Action::Open));
+    let _ = app.update(Message::Commands(Action::Query("bring bond".into())));
+    let field = ui.input(&app, "command-palette-search").0;
+    ui.click(&mut app, field.center());
+    let first = app.commands.current().expect("a result").clone();
+    assert!(
+        app.command_unavailable(&first).is_some(),
+        "an empty drawing has no bond to bring forward"
+    );
+    let index = app
+        .commands
+        .catalog()
+        .iter()
+        .position(|c| c.name == first.name)
+        .expect("a catalog row");
+    click_running_tasks(&mut ui, &mut app, &format!("command-palette-row-{index}")).await;
+    assert!(app.commands.open, "the palette stays open");
+    let (_, messages) = ui.event(
+        &app,
+        press(
+            Key::Character("s".into()),
+            Code::KeyS,
+            Modifiers::empty(),
+            Some("s"),
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    apply(&mut app, messages);
+    assert_eq!(
+        app.commands.query, "bring bonds",
+        "the search field keeps focus"
+    );
+}
+
 /// Every command row is a named button that assistive technology can press.
 #[tokio::test]
 #[ignore = "Opt-in renderer input check"]
@@ -1653,6 +1809,19 @@ async fn command_palette_rows_are_named_buttons() {
         rows.iter()
             .all(|row| row.role == reshiki::accessibility::Role::Button && !row.name.is_empty())
     );
+    // The filter chips are named toggle buttons; the active one is All.
+    let chips: Vec<_> = snapshot
+        .nodes
+        .iter()
+        .filter(|node| node.id.starts_with("command-palette-filter-"))
+        .map(|node| (node.role, node.name.as_str()))
+        .collect();
+    let all = format!("All, {} results", app.commands.ranked().len());
+    assert_eq!(chips.first().map(|chip| chip.1), Some(all.as_str()));
+    assert!(chips.len() > 1, "{chips:?}");
+    assert!(chips.iter().all(|(role, name)| {
+        *role == reshiki::accessibility::Role::ToggleButton && name.ends_with(" results")
+    }));
     // Ids follow commands, not positions: a narrower search keeps Benzene's id.
     let benzene = rows[0].id.clone();
     let _ = app.update(Message::Commands(super::command_palette::Action::Query(

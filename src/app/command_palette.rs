@@ -3,14 +3,16 @@
 //! the path its button, menu or key already uses, so an edit is one undo step.
 use super::{
     App, Message, Pending,
-    help::{list_row, modal, search},
+    help::{chord, modal, row_button, search},
     workspace::{control, muted_text},
 };
 use crate::canvas::Edit;
 use iced::keyboard::{Key, Modifiers, key::Named};
-use iced::widget::{Space, column, row, scrollable, stack, text};
-use iced::{Alignment, Element, Length, Task};
+use iced::widget::text::{Span, Wrapping};
+use iced::widget::{Space, column, container, rich_text, row, scrollable, stack, text};
+use iced::{Alignment, Element, Font, Length, Task};
 use reshiki::{atom_text::Mode, document::Point, keyboard_drawing::Target as Hotspot};
+use std::cmp::Reverse;
 
 pub(super) mod catalog;
 use catalog::{Category, Command, Need, Ring, Run};
@@ -18,6 +20,8 @@ use catalog::{Category, Command, Need, Ring, Run};
 const SEARCH: &str = "command-palette-search";
 const RESULTS: &str = "command-palette-results";
 const RECENT: usize = 8;
+/// Rows that fit the list, for Page Up and Page Down.
+const PAGE: isize = 10;
 /// A whole word of a command's name scores 60; weaker best matches also
 /// offer to insert the query as a chemical name or SMILES.
 const STRONG: u32 = 60;
@@ -29,6 +33,10 @@ pub enum Action {
     Query(String),
     /// Move the selection by this many rows, stopping at either end.
     Move(isize),
+    /// Show one category's results, or all, as its chip does.
+    Filter(Option<Category>),
+    /// Step through the filter chips, wrapping, as Tab and Shift+Tab do.
+    Cycle(isize),
     /// Run this row of the current items, as a click does.
     Run(usize),
     /// Run the selected row, as Enter does.
@@ -42,8 +50,12 @@ pub(super) struct State {
     /// The catalog, then rows made from this query.
     items: Vec<Command>,
     catalog: usize,
-    /// Ranked indexes into `items`.
+    /// Ranked indexes into `items`, in every category.
+    hits: Vec<usize>,
+    /// The hits in the filtered category.
     results: Vec<usize>,
+    /// The category chip; None shows all.
+    pub(super) filter: Option<Category>,
     /// The selected position in `results`.
     selected: usize,
     /// Names of recently run commands, newest first.
@@ -67,12 +79,46 @@ impl State {
     pub(super) fn catalog(&self) -> &[Command] {
         self.items.get(..self.catalog).unwrap_or_default()
     }
+    fn query(&self) -> &str {
+        self.query.trim().trim_start_matches(':').trim()
+    }
+    /// Categories with hits and their counts, in catalog order.
+    fn categories(&self) -> Vec<(Category, usize)> {
+        Category::ALL
+            .into_iter()
+            .map(|category| {
+                let hits = self.hits.iter().filter(|i| self.in_category(**i, category));
+                (category, hits.count())
+            })
+            .filter(|(_, count)| *count > 0)
+            .collect()
+    }
+    fn in_category(&self, index: usize, category: Category) -> bool {
+        self.items
+            .get(index)
+            .is_some_and(|c| c.category == category)
+    }
+    /// Show one category's hits, or all of them when it has none.
+    fn set_filter(&mut self, filter: Option<Category>) {
+        self.filter = filter.filter(|f| self.categories().iter().any(|(c, _)| c == f));
+        self.results = (self.hits.iter().copied())
+            .filter(|i| self.filter.is_none_or(|f| self.in_category(*i, f)))
+            .collect();
+        self.selected = 0;
+    }
 }
 
-/// Keys the palette takes before its search field: closing and moving.
+/// Keys the palette takes before its search field: closing, filtering and
+/// moving.
 pub(super) fn modal_key(key: &Key, modifiers: Modifiers) -> Option<Message> {
     if matches!(key, Key::Named(Named::Escape)) {
         return Some(Message::Commands(Action::Close));
+    }
+    if matches!(key, Key::Named(Named::Tab))
+        && !(modifiers.control() || modifiers.alt() || modifiers.logo())
+    {
+        let step = if modifiers.shift() { -1 } else { 1 };
+        return Some(Message::Commands(Action::Cycle(step)));
     }
     if !modifiers.is_empty() {
         return None;
@@ -80,8 +126,10 @@ pub(super) fn modal_key(key: &Key, modifiers: Modifiers) -> Option<Message> {
     let step = match key {
         Key::Named(Named::ArrowUp) => -1,
         Key::Named(Named::ArrowDown) => 1,
-        Key::Named(Named::PageUp) => -8,
-        Key::Named(Named::PageDown) => 8,
+        Key::Named(Named::PageUp) => -PAGE,
+        Key::Named(Named::PageDown) => PAGE,
+        Key::Named(Named::Home) => isize::MIN,
+        Key::Named(Named::End) => isize::MAX,
         _ => return None,
     };
     Some(Message::Commands(Action::Move(step)))
@@ -165,8 +213,11 @@ impl App {
 
     /// Why a command cannot run now; the palette shows it greyed with this.
     pub(super) fn command_unavailable(&self, command: &Command) -> Option<&'static str> {
-        let target = self.command_target();
-        match command.need {
+        self.need_unavailable(command.need, &self.command_target())
+    }
+
+    fn need_unavailable(&self, need: Need, target: &Target) -> Option<&'static str> {
+        match need {
             Need::Nothing => None,
             Need::Selection => self
                 .tab
@@ -205,6 +256,7 @@ impl App {
                 let state = &mut self.commands;
                 state.open = true;
                 state.query.clear();
+                state.filter = None;
                 state.catalog = items.len();
                 state.items = items;
                 self.rank_commands();
@@ -215,10 +267,21 @@ impl App {
             Action::Query(query) => {
                 self.commands.query = query;
                 self.rank_commands();
-                return iced::widget::operation::snap_to(
-                    RESULTS,
-                    iced::widget::operation::RelativeOffset::START,
-                );
+                return scroll_to_top();
+            }
+            Action::Filter(filter) => {
+                self.commands.set_filter(filter);
+                // A clicked chip takes focus; typing stays in the search.
+                return Task::batch([scroll_to_top(), iced::widget::operation::focus(SEARCH)]);
+            }
+            Action::Cycle(step) => {
+                let state = &mut self.commands;
+                let mut chips = vec![None];
+                chips.extend(state.categories().into_iter().map(|(c, _)| Some(c)));
+                let at = chips.iter().position(|c| *c == state.filter).unwrap_or(0) as isize;
+                let next = (at + step).rem_euclid(chips.len() as isize) as usize;
+                state.set_filter(chips.get(next).copied().flatten());
+                return scroll_to_top();
             }
             Action::Move(step) => {
                 let state = &mut self.commands;
@@ -233,8 +296,20 @@ impl App {
                 );
             }
             Action::Run(index) => {
+                let state = &mut self.commands;
+                if let Some(position) = state.results.iter().position(|i| *i == index) {
+                    // The clicked row shows why it cannot run.
+                    state.selected = position;
+                }
                 if let Some(command) = self.commands.items.get(index).cloned() {
-                    return self.run_command(command);
+                    let task = self.run_command(command);
+                    // A clicked row takes focus; while the palette stays open
+                    // because the command cannot run, typing stays in the search.
+                    return if self.commands.open {
+                        Task::batch([task, iced::widget::operation::focus(SEARCH)])
+                    } else {
+                        task
+                    };
                 }
             }
             Action::Submit => {
@@ -256,30 +331,28 @@ impl App {
             Category::Insert | Category::Tool if target.atoms.is_empty() => 10,
             _ => 0,
         };
-        let query = self
-            .commands
-            .query
-            .trim()
-            .trim_start_matches(':')
-            .trim()
-            .to_owned();
+        let query = self.commands.query().to_owned();
         let query = query.as_str();
         let extra = catalog::parameterised(self, query);
+        // Commands that cannot run now go below those that can.
+        let blocked: Vec<bool> = (self.commands.catalog().iter())
+            .map(|c| self.need_unavailable(c.need, &target).is_some())
+            .collect();
         let state = &mut self.commands;
         state.items.truncate(state.catalog);
-        state.selected = 0;
         let catalog = &state.items;
-        let mut scored: Vec<(u32, usize)> = if query.is_empty() {
+        // (score, index, tier): an exact alias or recent command, then name or
+        // key matches, then the rest.
+        let mut scored: Vec<(u32, usize, u8)> = if query.is_empty() {
             catalog
                 .iter()
                 .enumerate()
                 .map(|(i, command)| {
                     let recent = state.recent.iter().position(|name| *name == command.name);
-                    let score = match recent {
-                        Some(age) => 1000 - age as u32,
-                        None => boost(command.category),
-                    };
-                    (score, i)
+                    match recent {
+                        Some(age) => (1000 - age as u32, i, 2),
+                        None => (boost(command.category), i, 0),
+                    }
                 })
                 .collect()
         } else {
@@ -298,10 +371,11 @@ impl App {
                                 _ => false,
                             };
                     if alias {
-                        return Some((10_000, i));
+                        return Some((10_000, i, 2));
                     }
                     let score = search::score(command, query)?;
-                    Some((score + boost(command.category), i))
+                    let tier = search::in_name_or_keys(command, query) as u8;
+                    Some((score + boost(command.category), i, tier))
                 })
                 .collect()
         };
@@ -310,15 +384,24 @@ impl App {
         // always stay: they may hold a different structure under the same
         // name, and their rows name the collection.
         let mut names = std::collections::HashSet::new();
-        scored.retain(|(_, i)| {
+        scored.retain(|(_, i, _)| {
             catalog.get(*i).is_some_and(|c| {
                 matches!(&c.run, Run::Template(_, id) if !id.starts_with("builtin:"))
                     || names.insert(c.name.clone())
             })
         });
-        scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
-        let best = scored.first().map_or(0, |(score, _)| *score);
-        state.results = scored.into_iter().map(|(_, i)| i).collect();
+        let blocked = |i: usize| blocked.get(i).copied().unwrap_or(false);
+        // An exact alias or recent command ranks first even when it cannot
+        // run, to say why.
+        let late = |i: usize, tier: u8| tier < 2 && blocked(i);
+        scored.sort_by_key(|&(score, i, tier)| (late(i, tier), Reverse(tier), Reverse(score), i));
+        let best = scored.iter().map(|(score, ..)| *score).max().unwrap_or(0);
+        // Where the rows that cannot run begin.
+        let mut split = scored
+            .iter()
+            .filter(|(_, i, tier)| !late(*i, *tier))
+            .count();
+        state.hits = scored.into_iter().map(|(_, i, _)| i).collect();
         let mut rows = vec![];
         if let Some(command) = extra {
             rows.push((true, command));
@@ -347,18 +430,27 @@ impl App {
                 ),
             ));
         }
-        for (first, command) in rows {
+        // Query rows rank among the others by whether they can run too.
+        let rows: Vec<_> = (rows.into_iter())
+            .map(|(first, c)| (first, self.need_unavailable(c.need, &target).is_some(), c))
+            .collect();
+        let state = &mut self.commands;
+        for (first, blocked, command) in rows {
             if !names.insert(command.name.clone()) {
                 continue;
             }
             let index = state.items.len();
             state.items.push(command);
-            if first {
-                state.results.insert(0, index);
-            } else {
-                state.results.push(index);
-            }
+            let at = match (first, blocked) {
+                (true, false) => 0,
+                (false, true) => state.hits.len(),
+                _ => split,
+            };
+            split += usize::from(!blocked);
+            state.hits.insert(at, index);
         }
+        let filter = state.filter;
+        state.set_filter(filter);
     }
 
     fn run_command(&mut self, command: Command) -> Task<Message> {
@@ -589,12 +681,12 @@ impl App {
         .on_submit(Message::Commands(Action::Submit))
         .size(14)
         .padding(8);
+        let query = state.query();
         let mut list = column![].spacing(2);
         for (position, &index) in state.results.iter().enumerate() {
             let Some(command) = state.items.get(index) else {
                 continue;
             };
-            let reason = self.command_unavailable(command);
             // A stable identity, so a queued assistive press never lands on
             // a different command after the results change: the catalog
             // index, or a hash of the title of a row the query created
@@ -607,14 +699,12 @@ impl App {
                 command.name.hash(&mut hasher);
                 format!("command-palette-row-query-{:016x}", hasher.finish())
             };
-            list = list.push(list_row(
+            list = list.push(result_row(
                 id,
-                &command.hint(),
-                command.name.clone(),
-                reason.unwrap_or(&command.detail).to_owned(),
-                command.category.label(),
+                command,
+                query,
                 position == state.selected,
-                reason.is_none(),
+                self.command_unavailable(command).is_none(),
                 Message::Commands(Action::Run(index)),
             ));
         }
@@ -625,6 +715,33 @@ impl App {
                     .style(muted_text),
             );
         }
+        let mut chips = row![].spacing(6);
+        let categories = state.categories().into_iter();
+        let all = (None, "All", state.hits.len());
+        for (filter, label, count) in std::iter::once(all)
+            .chain(categories.map(|(category, count)| (Some(category), category.label(), count)))
+        {
+            let active = state.filter == filter;
+            chips = chips.push(
+                reshiki::accessibility::button(
+                    format!("command-palette-filter-{}", label.to_lowercase()),
+                    format!(
+                        "{label}, {count} result{}",
+                        if count == 1 { "" } else { "s" }
+                    ),
+                    text(format!("{label} {count}")).size(12),
+                )
+                .padding([2, 8])
+                .style(control(active))
+                .checked(active)
+                .on_press(Message::Commands(Action::Filter(filter)))
+                .tab_stop(false),
+            );
+        }
+        // The selected command's description, or why it cannot run.
+        let detail = current
+            .map(|c| self.command_unavailable(c).unwrap_or(&c.detail).to_owned())
+            .unwrap_or_default();
         let content = column![
             row![
                 text("Commands").size(22),
@@ -642,11 +759,15 @@ impl App {
             ]
             .align_y(Alignment::Center),
             search,
+            chips,
             scrollable(list.padding([0, 12]))
                 .id(RESULTS)
                 .width(Length::Fill)
                 .height(Length::Fill),
-            text("↑ ↓ move · ↩ runs · Esc closes · Acts on the selection, else the pointed atom or bond")
+            container(text(detail).size(12).wrapping(Wrapping::None))
+                .width(Length::Fill)
+                .clip(true),
+            text("↑ ↓ move · Tab filters · ↩ runs · Esc closes · Acts on the selection, else the pointed atom or bond")
                 .size(12)
                 .style(muted_text),
         ]
@@ -659,6 +780,125 @@ impl App {
             Message::Commands(Action::Close),
         )
     }
+}
+
+fn scroll_to_top() -> Task<Message> {
+    iced::widget::operation::snap_to(RESULTS, iced::widget::operation::RelativeOffset::START)
+}
+
+/// One compact row: the name with the query's matches in bold, its category,
+/// and its key hint at the right. A row that cannot run now is muted.
+fn result_row(
+    id: String,
+    command: &Command,
+    query: &str,
+    selected: bool,
+    enabled: bool,
+    on_press: Message,
+) -> Element<'static, Message> {
+    let name = rich_text(name_spans(&command.name, query))
+        .size(13)
+        .wrapping(Wrapping::None);
+    let keys = command.hint();
+    let body = container(
+        row![
+            container(
+                row![
+                    if enabled {
+                        name
+                    } else {
+                        name.style(muted_text)
+                    },
+                    text(command.category.label())
+                        .size(11)
+                        .style(muted_text)
+                        .wrapping(Wrapping::None),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
+            )
+            .width(Length::Fill)
+            .clip(true),
+            if keys.is_empty() {
+                Space::new().into()
+            } else {
+                chord(&keys, 11)
+            },
+        ]
+        .spacing(10)
+        .align_y(Alignment::Center),
+    )
+    .padding([0, 8])
+    .height(28)
+    .align_y(Alignment::Center);
+    row_button(id, command.name.clone(), body, selected, on_press)
+}
+
+/// `name` split into runs, the characters the query matches in bold.
+fn name_spans(name: &str, query: &str) -> Vec<Span<'static>> {
+    let bold = Font {
+        weight: iced::font::Weight::Bold,
+        ..Font::with_name(reshiki::style::ui_font_family())
+    };
+    let mut spans = vec![];
+    let mut run = String::new();
+    let mut emphasised = false;
+    for (c, matched) in name.chars().zip(matched(name, query)) {
+        if matched != emphasised && !run.is_empty() {
+            // cosmic-text shapes an ASCII word in the font of its first
+            // letter; a word joiner sends the word through the per-letter path.
+            if !c.is_whitespace() && !run.ends_with(char::is_whitespace) {
+                run.push('\u{2060}');
+            }
+            let text = std::mem::take(&mut run);
+            spans.push(iced::widget::span(text).font_maybe(emphasised.then_some(bold)));
+        }
+        emphasised = matched;
+        run.push(c);
+    }
+    if !run.is_empty() {
+        spans.push(iced::widget::span(run).font_maybe(emphasised.then_some(bold)));
+    }
+    spans
+}
+
+/// Which characters of `name` each query word matches, ignoring case: at a
+/// word start, else anywhere, else its letters in order.
+fn matched(name: &str, query: &str) -> Vec<bool> {
+    let fold = |c: char| c.to_lowercase().next().unwrap_or(c);
+    let name: Vec<char> = name.chars().map(fold).collect();
+    let mut marks = vec![false; name.len()];
+    for word in query.split_whitespace() {
+        let word: Vec<char> = word.chars().map(fold).collect();
+        let at = |i: usize| name.get(i..).is_some_and(|rest| rest.starts_with(&word));
+        let start = |i: usize| i == 0 || name.get(i - 1).is_some_and(|c| !c.is_alphanumeric());
+        let found = (0..name.len())
+            .find(|&i| start(i) && at(i))
+            .or_else(|| (0..name.len()).find(|&i| word.len() > 1 && at(i)));
+        let picks: Vec<usize> = match found {
+            Some(i) => (i..i + word.len()).collect(),
+            // Letters in order within one word, as search matches them.
+            None if word.len() > 2 => (0..name.len())
+                .filter(|&i| start(i))
+                .find_map(|first| {
+                    let mut letters = word.iter().peekable();
+                    let picks: Vec<usize> = (name.iter().enumerate().skip(first))
+                        .take_while(|(_, c)| c.is_alphanumeric())
+                        .filter(|(_, c)| letters.next_if_eq(c).is_some())
+                        .map(|(i, _)| i)
+                        .collect();
+                    (picks.len() == word.len()).then_some(picks)
+                })
+                .unwrap_or_default(),
+            None => vec![],
+        };
+        for i in picks {
+            if let Some(mark) = marks.get_mut(i) {
+                *mark = true;
+            }
+        }
+    }
+    marks
 }
 
 #[cfg(test)]

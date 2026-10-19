@@ -990,28 +990,34 @@ impl App {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        reshiki::accessibility::focus_scope(file_shortcuts::wrap(
-            // The command palette sits above the floating NMR panel so its
-            // modal also keeps that panel from taking clicks.
-            self.with_updates(self.with_assistant_image(self.with_commands(self.with_nmr(
-                self.with_atom_text(self.with_help(self.with_palette(self.workspace()))),
-            )))),
-            if self.help_open {
-                Some(help::modal_key)
-            } else if self.commands.open {
-                Some(command_palette::modal_key)
-            } else {
-                None
-            },
-            self.assistant.viewed_image.is_some(),
-            self.updates.open,
-            self.tab.atom_text.is_some(),
-            self.inspector_open
-                && self.inspector_tab == InspectorTab::DrawingStyle
-                && self.tab.styles.editor.is_some()
-                && self.tab.inline_text.is_none()
-                && self.context_menu.is_none(),
-        ))
+        // The command palette's Tab cycles its filter, unless a dialog is over it.
+        let traverse =
+            !self.commands.open || self.updates.open || self.assistant.viewed_image.is_some();
+        reshiki::accessibility::focus_scope_with(
+            file_shortcuts::wrap(
+                // The command palette sits above the floating NMR panel so its
+                // modal also keeps that panel from taking clicks.
+                self.with_updates(self.with_assistant_image(self.with_commands(self.with_nmr(
+                    self.with_atom_text(self.with_help(self.with_palette(self.workspace()))),
+                )))),
+                if self.help_open {
+                    Some(help::modal_key)
+                } else if self.commands.open {
+                    Some(command_palette::modal_key)
+                } else {
+                    None
+                },
+                self.assistant.viewed_image.is_some(),
+                self.updates.open,
+                self.tab.atom_text.is_some(),
+                self.inspector_open
+                    && self.inspector_tab == InspectorTab::DrawingStyle
+                    && self.tab.styles.editor.is_some()
+                    && self.tab.inline_text.is_none()
+                    && self.context_menu.is_none(),
+            ),
+            traverse,
+        )
     }
 }
 

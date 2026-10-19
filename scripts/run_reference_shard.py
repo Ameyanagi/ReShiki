@@ -42,6 +42,7 @@ WORKSPACE_TARGET_SHARDS = {
     ("reshiki-agent", "headless"): 0,
     ("reshiki-mcp", "panic_hook"): 0,
     ("reshiki-mcp", "transcripts"): 0,
+    ("reshiki-process-heap", "global_allocator_unwind"): 0,
     # The OPSIN Rust port's integration tests (about two minutes in total).
     ("opsin", "assembly_methods"): 0,
     ("opsin", "carbohydrates"): 0,
@@ -95,18 +96,21 @@ def integration_targets(metadata: object) -> list[str]:
     matches = [p for p in packages if isinstance(p, dict) and p.get("name") == "reshiki"]
     if len(matches) != 1 or matches[0].get("id") not in members:
         raise ValueError("Cargo metadata must contain one reshiki workspace package")
-    for package in packages:
-        if (
-            isinstance(package, dict)
-            and package.get("id") in members
-            and package.get("name") != "reshiki"
-            and any(
-                "test" in target.get("kind", [])
-                and (package.get("name"), target.get("name")) not in WORKSPACE_TARGET_SHARDS
-                for target in package.get("targets", [])
-            )
-        ):
-            raise ValueError("New workspace integration tests need an explicit shard assignment")
+    unassigned = sorted(
+        f"{package.get('name')}::{target.get('name')}"
+        for package in packages
+        if isinstance(package, dict)
+        and package.get("id") in members
+        and package.get("name") != "reshiki"
+        for target in package.get("targets", [])
+        if "test" in target.get("kind", [])
+        and (package.get("name"), target.get("name")) not in WORKSPACE_TARGET_SHARDS
+    )
+    if unassigned:
+        raise ValueError(
+            "New workspace integration tests need an explicit shard assignment: "
+            + ", ".join(unassigned)
+        )
     targets = matches[0].get("targets")
     if not isinstance(targets, list):
         raise ValueError("Cargo metadata is missing reshiki targets")
