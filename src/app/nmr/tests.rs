@@ -544,6 +544,24 @@ impl NmrUi {
         commands.children().last().unwrap().bounds()
     }
     fn scroll_results(&mut self, app: &App, lines: f32) {
+        let position = self.results_viewport(app).center();
+        let (_, messages) = self.events(
+            app,
+            &[
+                iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }),
+                iced::Event::Mouse(iced::mouse::Event::WheelScrolled {
+                    delta: iced::mouse::ScrollDelta::Lines { x: 0., y: lines },
+                }),
+            ],
+            iced::mouse::Cursor::Available(position),
+        );
+        assert!(
+            !messages
+                .iter()
+                .any(|message| matches!(message, Message::Canvas(_)))
+        );
+    }
+    fn results_viewport(&mut self, app: &App) -> iced::Rectangle {
         use iced::advanced::widget::{Id, Operation, operation::Scrollable};
         #[derive(Default)]
         struct Body(Option<iced::Rectangle>);
@@ -566,22 +584,7 @@ impl NmrUi {
         }
         let mut body = Body::default();
         self.operate(app, &mut body);
-        let position = body.0.expect("Production results scroll viewport").center();
-        let (_, messages) = self.events(
-            app,
-            &[
-                iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }),
-                iced::Event::Mouse(iced::mouse::Event::WheelScrolled {
-                    delta: iced::mouse::ScrollDelta::Lines { x: 0., y: lines },
-                }),
-            ],
-            iced::mouse::Cursor::Available(position),
-        );
-        assert!(
-            !messages
-                .iter()
-                .any(|message| matches!(message, Message::Canvas(_)))
-        );
+        body.0.expect("Production results scroll viewport")
     }
     fn activate(&mut self, app: &App, id: &str) -> Option<Message> {
         use iced::advanced::widget::{Operation, operation};
@@ -1137,6 +1140,70 @@ async fn compact_nmr_scrolls_to_later_sites_without_scrolling_the_drawing() {
     );
     assert_eq!(app.tab.camera.zoom, camera.zoom);
     assert_eq!(app.tab.camera.center, camera.center);
+}
+
+/// 4-methoxybenzaldehyde, COc1ccc(C=O)cc1, drawn with Kekulé bonds.
+fn anisaldehyde() -> App {
+    let mut app = app();
+    app.tab.doc = Document::default();
+    let doc = &mut app.tab.doc;
+    let ring: Vec<u64> = (0..6)
+        .map(|index| {
+            let angle = std::f32::consts::FRAC_PI_3 * index as f32;
+            doc.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()))
+        })
+        .collect();
+    for index in 0..6 {
+        let order = if index % 2 == 0 { 2 } else { 1 };
+        doc.add_bond(ring[index], ring[(index + 1) % 6], order, "plain");
+    }
+    let oxygen = doc.add_atom("O", Point::new(84., 0.));
+    let methyl = doc.add_atom("C", Point::new(126., 0.));
+    let formyl = doc.add_atom("C", Point::new(-84., 0.));
+    let carbonyl = doc.add_atom("O", Point::new(-126., 0.));
+    doc.add_bond(ring[0], oxygen, 1, "plain");
+    doc.add_bond(oxygen, methyl, 1, "plain");
+    doc.add_bond(ring[3], formyl, 1, "plain");
+    doc.add_bond(formyl, carbonyl, 2, "plain");
+    app.tab.selected.clear();
+    app.tab.busy = false;
+    app
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer default palette fit and scrollbar gutter check"]
+async fn default_palette_shows_every_row_that_fits_beside_the_scrollbar() {
+    let mut app = anisaldehyde();
+    let mut ui = NmrUi::new(Size::new(1280., 820.)).await;
+    ui.redraw(&mut app);
+    let _ = app.nmr_action(Action::Predict(Nucleus::H1));
+    finish_prediction(&mut app);
+    ui.redraw(&mut app);
+    assert!(app.tab.nmr.plot && !app.tab.nmr.palette.resized);
+    let rows = app.tab.nmr.job.result.as_ref().unwrap().rows.len();
+    assert!(rows > 4, "More rows than the old four-row default: {rows}");
+
+    // Iced's default vertical scrollbar is 10px wide at the viewport's right
+    // edge; result rows and plot markers must stay left of it.
+    let body = ui.results_viewport(&app);
+    let scrollbar = body.x + body.width - 10.;
+    let snapshot = ui.snapshot(&app);
+    let sites = snapshot
+        .nodes
+        .iter()
+        .filter(|n| n.id.starts_with("nmr.site.1H."));
+    assert_eq!(sites.clone().count(), rows);
+    let markers = snapshot
+        .nodes
+        .iter()
+        .filter(|n| n.id.starts_with("nmr.marker.1H."));
+    for node in sites.chain(markers) {
+        fully_visible(node);
+        assert!(
+            node.bounds.x + node.bounds.width <= scrollbar + 0.01,
+            "Scrollbar at {scrollbar} covers {node:?}"
+        );
+    }
 }
 
 fn ethyl_acetate() -> App {

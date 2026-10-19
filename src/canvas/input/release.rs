@@ -1,8 +1,8 @@
 //! Pointer releases: finish the active gesture as one edit.
 
 use crate::canvas::hit::{bond_target_with_text, hit_object, plane_endpoint, region_selection};
-use crate::canvas::pick::{CLICK_SLOP_PX, DRAG_SLOP_PX, HANDLE_PICK_PX, PICK_RADIUS_PX};
-use crate::canvas::snapping::{arrow_endpoint, ring_gesture};
+use crate::canvas::pick::{CLICK_SLOP_PX, DRAG_SLOP_PX, HANDLE_PICK_PX};
+use crate::canvas::snapping::arrow_endpoint;
 use crate::canvas::{
     Edit, Gesture, HandleClick, MoleculeCanvas, State, Tool, TransformDrag, World,
     delocalized_ring_size, tilt,
@@ -302,18 +302,14 @@ impl MoleculeCanvas<'_> {
         if !inside {
             return ControlFlow::Break(Action::request_redraw().and_capture());
         }
-        let (anchor, direction) = ring_gesture(
-            start,
-            p,
-            attached || self.tool == Tool::Template || matches!(self.tool, Tool::RingPreset(_)),
-            self.camera.world_len(PICK_RADIUS_PX),
-        );
+        if self.tool == Tool::Template {
+            let (anchor, direction) = self.template_gesture(start, p, state.modifiers);
+            return ControlFlow::Continue(Edit::Template(anchor, direction));
+        }
+        let (anchor, direction) = self.ring_drag(start, p, attached, state.modifiers);
         ControlFlow::Continue(
             if let Some(size) = delocalized_ring_size(self.tool, self.ring_size, state.modifiers) {
                 Edit::DelocalizedRing(anchor, direction, size)
-            } else if self.tool == Tool::Template {
-                let (anchor, direction) = self.template_gesture(start, p, state.modifiers);
-                Edit::Template(anchor, direction)
             } else if let Tool::RingPreset(preset) = self.tool {
                 Edit::RingPreset(
                     preset,

@@ -218,7 +218,8 @@ pub const REAR_OPACITY: u32 = 22;
 /// | 24 | EMF sources, cubic arrows, target links and rear opacity integrated (#297). |
 /// | 25 | Linked molecule-name captions and reaction atom-map labels (#298). |
 /// | 26 | Generic structures and coordination joining (#300; 0.12.0). |
-pub const VERSION: u32 = 26;
+/// | 27 | Condition text attached to reaction arrows. |
+pub const VERSION: u32 = 27;
 
 fn newer_version(version: u64) -> String {
     format!(
@@ -270,6 +271,9 @@ pub struct Document {
     pub molecule_names: Vec<crate::molecule_names::MoleculeName>,
     #[serde(default)]
     pub arrows: Vec<Arrow>,
+    /// Text owned by an arrow; older readers keep the text but not the link.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub arrow_labels: Vec<crate::arrow_labels::ArrowLabel>,
     #[serde(default)]
     pub graphics: Vec<crate::graphics::Graphic>,
     #[serde(default)]
@@ -299,6 +303,7 @@ impl Default for Document {
             annotations: vec![],
             molecule_names: vec![],
             arrows: vec![],
+            arrow_labels: vec![],
             graphics: vec![],
             groups: vec![],
             reactions: vec![],
@@ -513,6 +518,7 @@ impl Document {
         crate::molecule_names::prune(self);
         self.arrows.retain(|a| !ids.contains(&a.id));
         self.graphics.retain(|a| !ids.contains(&a.id));
+        crate::arrow_labels::prune(self);
         crate::projection::prune_centroids(self);
         crate::ring_fills::prune(self);
         crate::depth_appearance::prune(self);
@@ -581,12 +587,14 @@ impl Document {
             annotations,
             molecule_names,
             arrows,
+            arrow_labels,
             graphics,
             groups,
             reactions,
             recent_colors: _,
         } = self;
         atoms.clear();
+        arrow_labels.clear();
         bonds.clear();
         annotations.clear();
         arrows.clear();
@@ -618,12 +626,14 @@ impl Document {
             annotations,
             molecule_names,
             arrows,
+            arrow_labels,
             graphics,
             groups,
             reactions,
             recent_colors: _,
         } = self;
         !atoms.is_empty()
+            || !arrow_labels.is_empty()
             || !bonds.is_empty()
             || !annotations.is_empty()
             || !arrows.is_empty()
@@ -777,6 +787,7 @@ impl Document {
             a.format.validate(&a.text)?;
         }
         crate::molecule_names::validate(self)?;
+        crate::arrow_labels::validate(self)?;
         for graphic in &self.graphics {
             graphic.validate()?;
         }

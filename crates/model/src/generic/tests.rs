@@ -286,7 +286,10 @@ fn generic_native_group_validation_is_prepaid_for_every_expansion_scope() {
     use crate::{document::Annotation, grouping::Group};
 
     let mut source = atom_text::apply(&chain(&["*", "C"]), 1, "[C,N]", Mode::Auto).unwrap();
-    for i in 0..2000_u64 {
+    // Enough two-member groups that the squared member count exceeds the
+    // default allowance on its own.
+    let groups = (Limits::default().max_work as f64).sqrt() as u64 / 2 + 1;
+    for i in 0..groups {
         let first = 3 + i * 3;
         for id in [first, first + 1] {
             source.annotations.push(Annotation {
@@ -1363,4 +1366,44 @@ fn native_current_version_preserves_generic_units_and_still_reads_version19() {
     );
     // Clipboard and recovery copies use the same established current gate.
     assert_eq!(source.current().version, crate::document::VERSION);
+}
+
+/// 4-Chlorophenol as Clean up lays it out (Cl left, O right) with an
+/// alternative list on each substituent, as in issue #316.
+fn halophenol_lists() -> Document {
+    let mut source = Document::default();
+    let ring: Vec<_> = [0_f32, 60., 120., 180., 240., 300.]
+        .into_iter()
+        .map(|deg| {
+            let (sin, cos) = deg.to_radians().sin_cos();
+            source.add_atom("C", Point::new(24. * cos, 24. * sin))
+        })
+        .collect();
+    for i in 0..6 {
+        let order = if i % 2 == 0 { 2 } else { 1 };
+        source.add_bond(ring[i], ring[(i + 1) % 6], order, "plain");
+    }
+    let oxygen = source.add_atom("O", Point::new(48., 0.));
+    source.add_bond(ring[0], oxygen, 1, "plain");
+    let chlorine = source.add_atom("Cl", Point::new(-48., 0.));
+    source.add_bond(ring[3], chlorine, 1, "plain");
+    let source = atom_text::apply(&source, chlorine, "[Cl,Br,I]", Mode::Auto).unwrap();
+    atom_text::apply(&source, oxygen, "[OMe,OPh]", Mode::Auto).unwrap()
+}
+
+#[test]
+fn small_ring_bearing_list_product_expands_within_default_work() {
+    let source = halophenol_lists();
+    let all = source.all_ids();
+    for selected in [&[][..], all.as_slice()] {
+        let prepared = prepare_expansion_input(&source, selected, Limits::default())
+            .and_then(expand_prepared)
+            .unwrap();
+        assert_eq!(prepared.count(), 6);
+    }
+    let products = expand_drawings(&source, Limits::default()).unwrap();
+    let mut atoms: Vec<_> = products.iter().map(|p| p.document.atoms.len()).collect();
+    atoms.sort();
+    // Three 4-haloanisoles and three 4-halophenyl phenyl ethers.
+    assert_eq!(atoms, [9, 9, 9, 14, 14, 14]);
 }

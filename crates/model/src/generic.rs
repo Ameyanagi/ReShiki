@@ -306,7 +306,7 @@ impl Default for Limits {
         Self {
             max_outputs: MAX_OUTPUTS,
             max_total_atoms: MAX_SOURCE_ATOMS,
-            max_work: 5_000_000,
+            max_work: 50_000_000,
         }
     }
 }

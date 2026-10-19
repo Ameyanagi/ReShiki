@@ -90,10 +90,11 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
         .expand_abbreviation_selection(&ids)
         .into_iter()
         .collect();
-    let ids: HashSet<_> =
+    let mut ids: HashSet<_> =
         crate::molecule_names::include_annotations(doc, &ids.iter().copied().collect::<Vec<_>>())
             .into_iter()
             .collect();
+    crate::arrow_labels::include_labels(doc, &mut ids);
     let mut part = doc.clone();
     part.molecule_names.retain(|name| {
         ids.contains(&name.annotation) && name.atoms.iter().all(|id| ids.contains(id))
@@ -153,6 +154,13 @@ pub(crate) fn preserved_expansion_selection(
             ids.insert(arrow.id);
         }
     }
+    // A selected label brings its arrow, then the arrow brings all its labels.
+    for label in &doc.arrow_labels {
+        if ids.contains(&label.annotation) {
+            ids.insert(label.arrow);
+        }
+    }
+    crate::arrow_labels::include_labels(doc, &mut ids);
     if doc
         .bonds
         .iter()
@@ -197,6 +205,8 @@ pub(crate) fn preserved_expansion_selection(
         .retain(|r| r.ids().iter().all(|id| ids.contains(id)));
     part.molecule_names
         .retain(|n| ids.contains(&n.annotation) && n.atoms.iter().all(|id| ids.contains(id)));
+    part.arrow_labels
+        .retain(|l| ids.contains(&l.arrow) && ids.contains(&l.annotation));
     part.generic.alternatives.retain(|a| ids.contains(&a.atom));
     part.generic.links.retain(|a| ids.contains(&a.atom));
     part.generic.repeats.retain(|r| {
@@ -312,6 +322,10 @@ fn mapped_append_part(
             *atom = mapped;
         }
     }
+    for label in &mut part.arrow_labels {
+        label.arrow = mapping.get(&label.arrow).copied()?;
+        label.annotation = mapping.get(&label.annotation).copied()?;
+    }
     part.depth_appearance = crate::depth_appearance::remap(&source.depth_appearance, &mapping);
     for a in &mut part.atoms {
         // A pasted fragment keeps its source appearance when document defaults differ.
@@ -417,6 +431,7 @@ pub(crate) fn extend_append_part(doc: &mut Document, part: Document) {
     doc.annotations.extend(part.annotations);
     doc.molecule_names.extend(part.molecule_names);
     doc.arrows.extend(part.arrows);
+    doc.arrow_labels.extend(part.arrow_labels);
     doc.graphics.extend(part.graphics);
     doc.groups.extend(part.groups);
     doc.abbreviations.extend(part.abbreviations);
@@ -726,9 +741,15 @@ pub fn groups(doc: &Document, ids: &[u64]) -> Vec<Vec<u64>> {
                 .collect()
         })
         .collect();
+    let labels: Vec<Vec<_>> = doc
+        .arrow_labels
+        .iter()
+        .map(|l| vec![l.arrow, l.annotation])
+        .collect();
     let memberships: Vec<&[u64]> = attachments
         .iter()
         .chain(&captions)
+        .chain(&labels)
         .map(Vec::as_slice)
         .chain(doc.groups.iter().map(|g| g.members.as_slice()))
         .collect();
@@ -1387,6 +1408,20 @@ fn attached_ring_vertices(
     } else {
         neighbors.iter().map(|p| p.distance(anchor)).sum::<f32>() / neighbors.len() as f32
     };
+    // A drag on empty canvas: the first bond runs from the press toward the
+    // pointer and the ring lies counter-clockwise of it on screen.
+    if atom.is_none()
+        && let Some(toward) = direction.filter(|d| d.distance(p) > radius)
+    {
+        let mut angle = (toward.y - p.y).atan2(toward.x - p.x);
+        let mut vertex = p;
+        for _ in 0..n {
+            ids.push(result.add_atom("C", vertex));
+            vertex = vertex.offset(length * angle.cos(), length * angle.sin());
+            angle -= std::f32::consts::TAU / n as f32;
+        }
+        return;
+    }
     let r = length / (2.0 * (std::f32::consts::PI / n as f32).sin());
     // The center belongs in the open angular gap, opposite the substituent
     // at a terminal atom. Never assume that the ring lies to its left.

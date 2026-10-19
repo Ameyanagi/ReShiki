@@ -173,3 +173,100 @@ fn nearby_atom_with_room_is_merged() {
 fn nearby_saturated_atom_is_rejected() {
     assert!(fuse_toward_vertex(&crowded_vertex(3)).is_err());
 }
+
+#[test]
+fn dragged_presets_start_at_the_press_and_keep_their_size() {
+    let start = Point::new(10., -5.);
+    let lengths = |doc: &Document| {
+        let mut lengths: Vec<_> = doc
+            .bonds
+            .iter()
+            .map(|b| {
+                let length = doc
+                    .atom(b.a)
+                    .unwrap()
+                    .position
+                    .distance(doc.atom(b.b).unwrap().position);
+                (length * 1000.).round() as i64
+            })
+            .collect();
+        lengths.sort_unstable();
+        lengths
+    };
+    for &preset in Preset::ALL {
+        for degrees in [0_f32, -45., 105.] {
+            let (dx, dy) = (degrees.to_radians().cos(), degrees.to_radians().sin());
+            let toward = start.offset(80. * dx, 80. * dy);
+            let drawing = Drawing {
+                preset,
+                length: 42.,
+                alternate: false,
+                connect: false,
+            };
+            let (doc, ids) = drawing
+                .place(&Document::default(), start, Some(toward), 5.)
+                .unwrap();
+            let part = preset.document(42., false);
+            assert_eq!(ids.len(), part.all_ids().len());
+            assert_eq!(lengths(&doc), lengths(&part), "{preset} keeps its size");
+            let first = doc
+                .atoms
+                .iter()
+                .find(|a| a.position.distance(start) < 0.01)
+                .expect("the first atom sits at the press");
+            // The first bond points at the pointer.
+            assert!(doc.bonds.iter().any(|b| {
+                let other = match (b.a == first.id, b.b == first.id) {
+                    (true, _) => b.b,
+                    (_, true) => b.a,
+                    _ => return false,
+                };
+                let p = doc.atom(other).unwrap().position;
+                let (vx, vy) = (p.x - start.x, p.y - start.y);
+                (vx * dy - vy * dx).abs() < 0.01 && vx * dx + vy * dy > 0.
+            }));
+            // The ring lies counter-clockwise of that bond on screen (y down).
+            let n = doc.atoms.len() as f32;
+            let center = Point::new(
+                doc.atoms.iter().map(|a| a.position.x).sum::<f32>() / n,
+                doc.atoms.iter().map(|a| a.position.y).sum::<f32>() / n,
+            );
+            assert!(dx * (center.y - start.y) - dy * (center.x - start.x) < 0.);
+        }
+    }
+    // Dragging right keeps a Haworth ring's default orientation.
+    let drawing = Drawing {
+        preset: Preset::HaworthSix,
+        length: 42.,
+        alternate: false,
+        connect: false,
+    };
+    for radius in [0., -5.] {
+        assert!(
+            drawing
+                .place(
+                    &Document::default(),
+                    start,
+                    Some(start.offset(60., 0.)),
+                    radius
+                )
+                .is_err()
+        );
+    }
+    let (doc, _) = drawing
+        .place(&Document::default(), start, Some(start.offset(60., 0.)), 5.)
+        .unwrap();
+    let part = Preset::HaworthSix.document(42., false);
+    let shift = Point::new(
+        doc.atoms[0].position.x - part.atoms[0].position.x,
+        doc.atoms[0].position.y - part.atoms[0].position.y,
+    );
+    for (placed, source) in doc.atoms.iter().zip(&part.atoms) {
+        assert!(
+            placed
+                .position
+                .distance(source.position.offset(shift.x, shift.y))
+                < 0.01
+        );
+    }
+}
