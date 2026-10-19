@@ -9,6 +9,7 @@
       systems = [
         "x86_64-linux"
         "aarch64-linux"
+        "aarch64-darwin"
       ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
     in
@@ -17,6 +18,7 @@
         default = self.packages.${pkgs.stdenv.hostPlatform.system}.reshiki;
         reshiki =
           let
+            inherit (pkgs) lib stdenv;
             # Libraries winit/wgpu open at runtime with dlopen.
             runtimeLibs = with pkgs; [
               wayland
@@ -31,34 +33,67 @@
           in
           pkgs.rustPlatform.buildRustPackage {
             pname = "reshiki";
-            inherit ((builtins.fromTOML (builtins.readFile ./Cargo.toml)).package) version;
-            src = self;
+            inherit ((lib.importTOML ./Cargo.toml).package) version;
+            # Documentation and the website are not build inputs; leaving them
+            # out keeps docs-only commits from rebuilding the package.
+            src = lib.fileset.toSource {
+              root = ./.;
+              fileset = lib.fileset.difference ./. (
+                lib.fileset.unions [
+                  ./docs
+                  ./website
+                  ./.github
+                  ./flake.nix
+                  ./flake.lock
+                ]
+              );
+            };
+            # Git dependencies are fetched at the rev pinned in Cargo.lock, so
+            # bumping COSMolKit needs no hash update here.
             cargoLock = {
               lockFile = ./Cargo.lock;
-              # Update when the COSMolKit rev in Cargo.lock changes.
-              outputHashes."cosmolkit-core-0.3.0" = "sha256-RSzO5Q59vlDkve2XQMJeqJpQnMyFht4WvZ9AhwemQuo=";
+              allowBuiltinFetchGit = true;
             };
-
-            nativeBuildInputs = with pkgs; [
-              pkg-config
-              patchelf
-              python3
-              copyDesktopItems
-            ];
-            buildInputs = with pkgs; [
-              gtk3
-              libxkbcommon
-              wayland
+            # The app relaunches itself for InChI, naming and geometry work;
+            # the retired reshiki-inchi-helper must not ship.
+            cargoBuildFlags = [
+              "--bin"
+              "reshiki"
             ];
 
-            # Most suites need the Python/RDKit reference.
+            nativeBuildInputs = [
+              pkgs.pkg-config
+              pkgs.python3
+            ]
+            ++ lib.optionals stdenv.hostPlatform.isLinux [ pkgs.copyDesktopItems ];
+            buildInputs = lib.optionals stdenv.hostPlatform.isLinux [
+              pkgs.gtk3
+              pkgs.libxkbcommon
+              pkgs.wayland
+            ];
+
+            # Most suites need the Python/RDKit reference; the install check
+            # below runs the shipped binary instead.
             doCheck = false;
+            doInstallCheck = true;
+            installCheckPhase = ''
+              runHook preInstallCheck
+              export HOME=$TMPDIR
+              # InChI goes through the app's own worker mode.
+              $out/bin/reshiki --cli analyze --smiles 'c1ccccc1O' \
+                | grep -F '"inchi":"InChI=1S/C6H6O/c7-6-4-2-1-3-5-6/h1-5,7H"'
+              $out/bin/reshiki --cli convert --smiles 'CCO' -o $TMPDIR/ethanol.png
+              test -s $TMPDIR/ethanol.png
+              runHook postInstallCheck
+            '';
 
             postInstall = ''
-              for size in 16 24 32 48 64 128 256 512 1024; do
-                install -Dm644 assets/branding/exports/light/icon-$size.png \
-                  $out/share/icons/hicolor/''${size}x''${size}/apps/reshiki.png
-              done
+              ${lib.optionalString stdenv.hostPlatform.isLinux ''
+                for size in 16 24 32 48 64 128 256 512 1024; do
+                  install -Dm644 assets/branding/exports/light/icon-$size.png \
+                    $out/share/icons/hicolor/''${size}x''${size}/apps/reshiki.png
+                done
+              ''}
 
               # NOTICE requires the license texts in binary distributions; reuse
               # the release builder's aggregation over the vendored crates.
@@ -72,11 +107,11 @@
               ' "$out/share/licenses/reshiki" "$TMPDIR/metadata.json"
             '';
 
-            postFixup = ''
-              patchelf --add-rpath ${pkgs.lib.makeLibraryPath runtimeLibs} $out/bin/reshiki
+            postFixup = lib.optionalString stdenv.hostPlatform.isLinux ''
+              patchelf --add-rpath ${lib.makeLibraryPath runtimeLibs} $out/bin/reshiki
             '';
 
-            desktopItems = [
+            desktopItems = lib.optionals stdenv.hostPlatform.isLinux [
               (pkgs.makeDesktopItem {
                 name = "reshiki";
                 desktopName = "ReShiki";
@@ -94,7 +129,7 @@
             meta = {
               description = "Molecular drawing workspace";
               homepage = "https://reshiki.com";
-              license = with pkgs.lib.licenses; [
+              license = with lib.licenses; [
                 mit
                 asl20
               ];
@@ -102,6 +137,10 @@
               platforms = systems;
             };
           };
+      });
+
+      checks = forAllSystems (pkgs: {
+        reshiki = self.packages.${pkgs.stdenv.hostPlatform.system}.reshiki;
       });
     };
 }
