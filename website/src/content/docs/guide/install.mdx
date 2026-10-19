@@ -42,6 +42,17 @@ Upgrading from an earlier version? Open your existing `.reshiki` and `.moruno` d
 
 Starting with 0.9.0, Mac supports Apple Silicon and Intel on macOS 14+. Windows requires Windows 10/11 on x64 or Windows 11 on ARM64. Linux builds target Ubuntu 22.04+ on x64 and 24.04+ on ARM.
 
+### Nix
+
+On Linux (x64 and ARM) and Apple Silicon Macs, you can build ReShiki from source with [Nix](https://nixos.org):
+
+```sh
+nix run github:Ameyanagi/ReShiki
+nix profile install github:Ameyanagi/ReShiki
+```
+
+Update with `nix profile upgrade`; the in-app updater only replaces downloaded releases. On Linux outside NixOS, ReShiki needs your system's GPU driver; if it reports that no graphics adapter was found, start it through [nixGL](https://github.com/nix-community/nixGL). On a Mac, the package contains **ReShiki.app** and the `reshiki` command: nix-darwin and home-manager add the app to your Applications folder; with `nix profile install`, find it in `~/.nix-profile/Applications`. The DMG remains the signed, notarized Mac app.
+
 ### File compatibility
 
 ReShiki 0.12.0 saves drawings in a newer format, even when they use no new feature. ReShiki 0.11.0 and earlier cannot open them. ReShiki 0.11.0 asks you to update. If you share files with people on 0.11.0, keep a copy saved by 0.11.0.
