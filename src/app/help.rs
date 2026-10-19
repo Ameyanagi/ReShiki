@@ -1,22 +1,142 @@
+//! Help: a searchable reference of every shortcut, with a live before/after
+//! drawing for contextual keys. Selecting a row only shows it; it never runs
+//! the command.
 use super::{
     App, Message,
-    shortcuts::keys,
     workspace::{control, muted_text},
 };
+use iced::keyboard::{Key, Modifiers, key::Named};
 use iced::widget::{
     Space, column, container, mouse_area, opaque, rich_text, row, scrollable, stack, text,
 };
-use iced::{Alignment, Border, Color, Element, Length, keyboard::Modifiers};
+use iced::{Alignment, Border, Color, Element, Length, Task};
+use std::sync::LazyLock;
 
-pub(super) fn is_shortcut(key: &iced::keyboard::Key, modifiers: iced::keyboard::Modifiers) -> bool {
-    modifiers.is_empty()
-        && matches!(
-            key,
-            iced::keyboard::Key::Named(iced::keyboard::key::Named::F1)
-        )
+mod examples;
+pub(super) mod registry;
+mod search;
+
+use registry::{Entry, Example};
+
+const SEARCH: &str = "help-search";
+const RESULTS: &str = "help-results";
+
+static ENTRIES: LazyLock<Vec<Entry>> = LazyLock::new(registry::entries);
+
+pub(super) fn entries() -> &'static [Entry] {
+    &ENTRIES
+}
+
+/// F1, or Command+? (Command+Shift+/). Command+/ is Fit.
+pub(super) fn is_shortcut(key: &Key, modifiers: Modifiers) -> bool {
+    (modifiers.is_empty() && matches!(key, Key::Named(Named::F1)))
+        || (modifiers == Modifiers::COMMAND | Modifiers::SHIFT
+            && matches!(key, Key::Character(c) if c == "/" || c == "?"))
+}
+
+/// Keys Help takes before its search field: closing and moving the selection.
+pub(super) fn modal_key(key: &Key, modifiers: Modifiers) -> Option<Message> {
+    if matches!(key, Key::Named(Named::Escape)) || is_shortcut(key, modifiers) {
+        return Some(Message::ToggleHelp);
+    }
+    if !modifiers.is_empty() {
+        return None;
+    }
+    let step = match key {
+        Key::Named(Named::ArrowUp) => -1,
+        Key::Named(Named::ArrowDown) => 1,
+        Key::Named(Named::PageUp) => -8,
+        Key::Named(Named::PageDown) => 8,
+        _ => return None,
+    };
+    Some(Message::Help(Action::Move(step)))
+}
+
+#[derive(Debug, Clone)]
+pub enum Action {
+    Query(String),
+    /// Move the selection by this many rows, stopping at either end.
+    Move(isize),
+    /// Select a registry entry; it is only shown, never run.
+    Select(usize),
+}
+
+#[derive(Debug, Default)]
+pub(super) struct State {
+    pub(super) query: String,
+    /// A registry index; None selects the best match.
+    selected: Option<usize>,
+}
+
+impl State {
+    pub(super) fn results(&self) -> Vec<usize> {
+        search::rank(entries(), &self.query)
+    }
+    /// The selected row's position among `results`.
+    pub(super) fn position(&self, results: &[usize]) -> Option<usize> {
+        self.selected
+            .and_then(|selected| results.iter().position(|i| *i == selected))
+            .or((!results.is_empty()).then_some(0))
+    }
+    /// The selected registry index.
+    fn current(&self, results: &[usize]) -> Option<usize> {
+        self.position(results).and_then(|p| results.get(p).copied())
+    }
+    #[cfg(test)]
+    pub(super) fn selected(&self) -> Option<&'static Entry> {
+        self.current(&self.results()).and_then(|i| entries().get(i))
+    }
 }
 
 impl App {
+    pub(super) fn toggle_help(&mut self) -> Task<Message> {
+        self.help_open = !self.help_open;
+        if !self.help_open {
+            return Task::none();
+        }
+        self.palette = None;
+        self.help = State::default();
+        iced::widget::operation::focus(SEARCH)
+    }
+
+    pub(super) fn help_action(&mut self, action: Action) -> Task<Message> {
+        if !self.help_open {
+            return Task::none();
+        }
+        match action {
+            Action::Query(query) => {
+                self.help.query = query;
+                self.help.selected = None;
+                iced::widget::operation::snap_to(
+                    RESULTS,
+                    iced::widget::operation::RelativeOffset::START,
+                )
+            }
+            Action::Select(index) => {
+                if index < entries().len() {
+                    self.help.selected = Some(index);
+                }
+                Task::none()
+            }
+            Action::Move(step) => {
+                let results = self.help.results();
+                let Some(position) = self.help.position(&results) else {
+                    return Task::none();
+                };
+                let last = results.len().saturating_sub(1);
+                let position = position.saturating_add_signed(step).min(last);
+                self.help.selected = results.get(position).copied();
+                iced::widget::operation::snap_to(
+                    RESULTS,
+                    iced::widget::operation::RelativeOffset {
+                        x: 0.,
+                        y: position as f32 / last.max(1) as f32,
+                    },
+                )
+            }
+        }
+    }
+
     pub(super) fn with_help<'a>(&'a self, base: Element<'a, Message>) -> Element<'a, Message> {
         if !self.help_open {
             // Keep the workspace at the same child position while Help opens
@@ -24,21 +144,50 @@ impl App {
             return stack![base].into();
         }
         let base = reshiki::accessibility::inert(base);
-        let drawing = drawing_shortcuts();
-        let editing = editing_shortcuts();
-        let context = context_shortcuts();
-        let files = file_shortcuts();
-        let examples = help_examples();
-        let body = column![examples, drawing, context, editing, files]
-            .spacing(24)
-            .width(Length::Fill)
-            .padding([0, 12]);
+        let results = self.help.results();
+        let current = self.help.current(&results);
+        let selected = current.and_then(|i| entries().get(i));
+        let name = match selected {
+            Some(entry) => format!(
+                "Search shortcuts; {} results; selected {}, {}, {}: {}",
+                results.len(),
+                entry.name,
+                entry.keys,
+                entry.scope.label(),
+                entry.description
+            ),
+            None => "Search shortcuts; no results".into(),
+        };
+        let search = reshiki::accessibility::text_input(
+            SEARCH,
+            name,
+            "Search by action, key or description (e.g. wedge, ⇧R, ring)",
+            &self.help.query,
+        )
+        .style(crate::appearance::input_style)
+        .on_input(|query| Message::Help(Action::Query(query)))
+        .on_submit_maybe(current.map(|i| Message::Help(Action::Select(i))))
+        .size(14)
+        .padding(8);
+        let mut list = column![].spacing(2);
+        for &index in &results {
+            if let Some(entry) = entries().get(index) {
+                list = list.push(result_row(index, entry, Some(index) == current));
+            }
+        }
+        if results.is_empty() {
+            list = list.push(
+                text("No shortcut matches. Try a key such as r, a command such as copy, or a group such as Boc.")
+                    .size(12)
+                    .style(muted_text),
+            );
+        }
         let popup = container(
             column![
                 row![
                     column![
                         text("Help & shortcuts").size(22),
-                        text("Quick reference for drawing and editing")
+                        text("Search keys and commands; select one to see what it does")
                             .size(12)
                             .style(muted_text)
                     ]
@@ -57,12 +206,29 @@ impl App {
                 ]
                 .align_y(Alignment::Center)
                 .spacing(12),
-                scrollable(body).height(Length::Fill),
+                search,
                 row![
-                    text("Hold a tool or click its corner for more options.")
+                    scrollable(list.padding([0, 12]))
+                        .id(RESULTS)
+                        .width(Length::Fill)
+                        .height(Length::Fill),
+                    preview(selected),
+                ]
+                .spacing(16)
+                .height(Length::Fill),
+                row![
+                    text("↑ ↓ move · Esc closes · Uppercase means Shift-letter · Reference only: nothing runs")
                         .size(12)
-                        .style(muted_text),
-                    Space::new().width(Length::Fill),
+                        .style(muted_text)
+                        .width(Length::Fill),
+                    reshiki::accessibility::button(
+                        "help-examples",
+                        "Open shortcut examples: one editable drawing with labeled examples, in a new tab",
+                        text("Open shortcut examples").size(13)
+                    )
+                    .padding([7, 14])
+                    .on_press(Message::OpenShortcutExamples)
+                    .style(control(false)),
                     reshiki::accessibility::button(
                         "help-done",
                         "Done; close Help and shortcuts",
@@ -75,10 +241,10 @@ impl App {
                 .spacing(12)
                 .align_y(Alignment::Center),
             ]
-            .spacing(22),
+            .spacing(16),
         )
         .padding(24)
-        .width(720)
+        .width(900)
         .height(650)
         .max_height(650)
         .style(|theme| {
@@ -124,335 +290,126 @@ impl App {
         ]
         .into()
     }
-    pub(super) fn toggle_help(&mut self) {
-        self.help_open = !self.help_open;
-        if self.help_open {
-            self.palette = None;
-        }
-    }
 }
 
-fn shortcut(keys: &str, label: &'static str) -> Element<'static, Message> {
-    row![
-        text(label).size(12).width(Length::Fill),
-        container(rich_text(super::shortcuts::spans(keys)).size(11))
-            .padding([3, 6])
-            .style(|theme| crate::appearance::container(
+fn chord(keys: &str, size: u32) -> Element<'static, Message> {
+    container(rich_text(super::shortcuts::spans(keys)).size(size))
+        .padding([3, 6])
+        .style(|theme| {
+            crate::appearance::container(
                 theme,
                 container::Style {
                     background: Some(Color::from_rgb8(245, 247, 249).into()),
                     border: Border {
                         radius: 4.into(),
                         width: 1.,
-                        color: Color::from_rgb8(224, 228, 233)
+                        color: Color::from_rgb8(224, 228, 233),
                     },
                     ..Default::default()
-                }
-            )),
+                },
+            )
+        })
+        .into()
+}
+
+fn result_row(index: usize, entry: &'static Entry, selected: bool) -> Element<'static, Message> {
+    let body = container(
+        row![
+            container(chord(&entry.keys, 11)).width(150),
+            column![
+                text(entry.name).size(13),
+                text(entry.description).size(11).style(muted_text),
+            ]
+            .spacing(2)
+            .width(Length::Fill),
+            text(entry.scope.label())
+                .size(11)
+                .style(muted_text)
+                .width(96),
+        ]
+        .spacing(10)
+        .align_y(Alignment::Center),
+    )
+    .padding([6, 8])
+    .width(Length::Fill)
+    .style(move |theme| {
+        crate::appearance::container(
+            theme,
+            container::Style {
+                background: selected.then(|| Color::from_rgb8(225, 240, 236).into()),
+                border: Border {
+                    radius: 6.into(),
+                    width: if selected { 1. } else { 0. },
+                    color: Color::from_rgb8(17, 126, 108),
+                },
+                ..Default::default()
+            },
+        )
+    });
+    mouse_area(body)
+        .on_press(Message::Help(Action::Select(index)))
+        .interaction(iced::mouse::Interaction::Pointer)
+        .into()
+}
+
+fn drawing(label: &'static str, doc: reshiki::document::Document) -> Element<'static, Message> {
+    column![
+        text(label).size(11).style(muted_text),
+        crate::canvas::layered::canvas(crate::canvas::OwnedDrawingPreview(doc))
+            .width(Length::Fill)
+            .height(100),
     ]
-    .spacing(8)
-    .align_y(Alignment::Center)
+    .spacing(3)
     .into()
 }
 
-fn group(title: &'static str, shortcuts: &[(String, &'static str)]) -> Element<'static, Message> {
-    let mut body = column![text(title).size(14)].spacing(8);
-    for (keys, label) in shortcuts {
-        body = body.push(shortcut(keys, label));
+fn preview(entry: Option<&'static Entry>) -> Element<'static, Message> {
+    let mut pane = column![].spacing(10).width(300);
+    if let Some(entry) = entry {
+        pane = pane.push(
+            column![
+                chord(&entry.keys, 14),
+                text(entry.name).size(17),
+                text(entry.description).size(12),
+                text(format!("Applies to: {}", entry.scope.label()))
+                    .size(11)
+                    .style(muted_text),
+            ]
+            .spacing(6),
+        );
+        pane = pane.push(match entry.example {
+            Some(example) => match examples::render(example) {
+                Ok((before, after)) => {
+                    let (target, key) = match example {
+                        Example::Atom(key) => ("highlighted atom", key),
+                        Example::Bond(key) => ("highlighted bond", key),
+                    };
+                    column![
+                        drawing("Before", before),
+                        text(format!(
+                            "Point at the {target} (or move the keyboard hotspot there) and press {key}"
+                        ))
+                        .size(11)
+                        .style(muted_text),
+                        drawing("After", after),
+                    ]
+                    .spacing(6)
+                    .into()
+                }
+                Err(error) => text(format!("Example unavailable: {error}"))
+                    .size(11)
+                    .style(muted_text)
+                    .into(),
+            },
+            None => Element::from(
+                text("This shortcut chooses a tool or acts on the view, a file or the selection; there is no drawing to preview.")
+                    .size(11)
+                    .style(muted_text),
+            ),
+        });
     }
-    body.into()
-}
-
-fn shortcut_label(message: Message) -> String {
-    super::shortcuts::label(&message).unwrap_or_default()
-}
-
-fn drawing_shortcuts() -> Element<'static, Message> {
-    let (command, shift, alt) = (Modifiers::COMMAND, Modifiers::SHIFT, Modifiers::ALT);
-    group(
-        "Drawing tools",
-        &[
-            ("Space / l".into(), "Select / Lasso"),
-            ("x / 1".into(), "Single bond"),
-            ("2 / 3 / 4".into(), "Double / Triple / Quadruple"),
-            (keys(shift, "X"), "Straight chain"),
-            (
-                format!("{}–{}", keys(shift, "3"), keys(shift, "8")),
-                "Saturated 3–8-membered ring tools",
-            ),
-            (
-                format!("r / {}", keys(shift, "R")),
-                "Ring / Toggle saturated–aromatic (same size)",
-            ),
-            (
-                format!("e / t / {}", keys(shift, "T")),
-                "Arrow / Text / Brackets",
-            ),
-            (
-                format!("j / {}", keys(shift, "J")),
-                "Benzene / Cyclopentadiene",
-            ),
-            ("F1".into(), "Keyboard shortcuts"),
-            (
-                "F8".into(),
-                "Keyboard drawing on/off; orange hotspot shows the active atom or bond",
-            ),
-            (
-                "Arrows / Shift-arrows in keyboard drawing".into(),
-                "Navigate atom–bond–atom / skip to the same target kind",
-            ),
-            (
-                "[ / ] in keyboard drawing".into(),
-                "Mark an atom / connect the active atom to the marked atom",
-            ),
-            (
-                "} in keyboard drawing".into(),
-                "Coordinate the marked donor to the active metal",
-            ),
-            (
-                format!("{} drag", keys(alt, "")),
-                "Draw or move freely, without bond constraints, smart guides or orbital snapping",
-            ),
-            (
-                format!("{}-click with a ring tool", keys(command, "")),
-                "Place the delocalized circle form",
-            ),
-            (
-                "a with an aromatic ring selected".into(),
-                "Toggle circle / alternating bonds",
-            ),
-            (
-                "Atoms: drag from an existing atom".into(),
-                "Add the chosen element with a single bond",
-            ),
-            ("Esc".into(), "Return to selection"),
-        ],
-    )
-}
-
-fn editing_shortcuts() -> Element<'static, Message> {
-    let (command, shift) = (Modifiers::COMMAND, Modifiers::SHIFT);
-    group(
-        "Selection & arrangement",
-        &[
-            (
-                format!(
-                    "{} / {} / {}",
-                    shortcut_label(Message::Copy(true)),
-                    shortcut_label(Message::Copy(false)),
-                    shortcut_label(Message::Paste)
-                ),
-                "Cut / Copy / Paste",
-            ),
-            (shortcut_label(Message::SelectAll), "Select all"),
-            (shortcut_label(Message::Group), "Group"),
-            (shortcut_label(Message::Ungroup), "Ungroup"),
-            (shortcut_label(Message::InvertSelection), "Invert selection"),
-            (
-                "Drag an object".into(),
-                "Snap to other objects' edges, centers and equal gaps (smart guides)",
-            ),
-            (
-                format!("{} drag", keys(command, "")),
-                "Drag a copy, leaving the original in place; the copy snaps too",
-            ),
-            (
-                format!("{} drag", keys(command | shift, "")),
-                "Drag a copy along one axis, snapping along it",
-            ),
-            (
-                format!("Release {}, then Esc", keys(command, "")),
-                "Cancel a copy drag",
-            ),
-            (
-                format!("{} drag", keys(shift, "")),
-                "Move horizontally or vertically only, snapping along that axis",
-            ),
-            (
-                keys(command | shift, "Right"),
-                "Reaction arrow and molecule copy",
-            ),
-            (
-                "Space with Select active".into(),
-                "Select the most recently edited molecule",
-            ),
-            (
-                format!(
-                    "{} / {}",
-                    shortcut_label(Message::Undo),
-                    shortcut_label(Message::Redo)
-                ),
-                "Undo / Redo",
-            ),
-            (shortcut_label(Message::Delete), "Delete selection"),
-            (
-                keys(Modifiers::empty(), "Enter"),
-                "Edit selected atom label (M, L, X, Boc…)",
-            ),
-        ],
-    )
-}
-
-fn context_shortcuts() -> iced::widget::Column<'static, Message> {
-    column![
-        text("Under the pointer or keyboard hotspot (case-sensitive)").size(14),
-        shortcut("1 / 2 / 3", "Bond: single / double / triple"),
-        shortcut("b / w / h / y", "Bond: bold / wedge / hashed wedge / wavy"),
-        shortcut(
-            "d / D / B / H",
-            "Bond: dashed / partial double / bold double / hashed"
-        ),
-        shortcut("l / c / r", "Double line: left / center / right"),
-        shortcut("c n o s p f h", "Atom: C N O S P F H"),
-        shortcut("b / C / B / i / L / S", "Atom: Br / Cl / B / I / Li / Si"),
-        shortcut("m / e / y / P", "Atom: Me / Et / Boc / Ph"),
-        shortcut("M / Z", "Atom: MgBr / N₃ (complete chemical groups)"),
-        shortcut(
-            "j / J on an atom",
-            "Tilted Cp / arene ligand; repeat at a metal to add another"
-        ),
-        shortcut(
-            "A / E / F / H / N / O / Q",
-            "Ac / CO₂Me / CF₃ / Cbz / NO₂ / OMe / Fmoc"
-        ),
-        shortcut("d / + / −", "Atom: deuterium / increase / decrease charge"),
-        shortcut("r / x", "Atom: variable R / X"),
-        shortcut(
-            "0 / 1 / 2 / 8 / z",
-            "Atom: branch / chain / carbonyl / =CH₂ / alkyne"
-        ),
-        shortcut(
-            "3 / 6 / 7 / v / u",
-            "Atom: phenyl / 6-ring / 5-ring / 3-ring / 4-ring"
-        ),
-        shortcut("9 / K / k", "Atom: dimethyl / tert-butyl / sulfonyl"),
-        shortcut(
-            "v / 4–8 / a / z / 9 / 0",
-            "Bond: fuse rings / benzene / diene / chairs"
-        ),
-        shortcut(
-            &format!("g / ? / {}", keys(Modifiers::empty(), "Enter")),
-            "Select / Properties / Edit atom label"
-        ),
-        text(
-            "Uppercase means Shift-letter. Repeat 2 on a double bond to cycle its line placement."
-        )
-        .size(12)
-        .style(muted_text),
-    ]
-    .spacing(8)
-}
-
-fn file_shortcuts() -> Element<'static, Message> {
-    let (command, shift, alt) = (Modifiers::COMMAND, Modifiers::SHIFT, Modifiers::ALT);
-    // Windows also takes Alt+K alone; both zoom modifiers work on macOS.
-    let aromatic = if cfg!(windows) {
-        keys(alt, "K")
-    } else {
-        keys(command | alt, "K")
-    };
-    let zoom = if cfg!(target_os = "macos") {
-        format!(
-            "{} / {} scroll",
-            keys(command, ""),
-            keys(Modifiers::CTRL, "")
-        )
-    } else {
-        format!("{} scroll", keys(command, ""))
-    };
-    group(
-        "Files and commands",
-        &[
-            (
-                format!("{} / {}", keys(command, "N"), keys(command, "O")),
-                "New / Open, each in a new tab",
-            ),
-            (keys(command, "S"), "Save"),
-            (keys(command, "W"), "Close tab"),
-            (
-                format!(
-                    "{} / {}",
-                    keys(Modifiers::CTRL, "Tab"),
-                    keys(Modifiers::CTRL | shift, "Tab")
-                ),
-                "Next / previous tab",
-            ),
-            (
-                format!(
-                    "{}–{} / {}",
-                    keys(command, "1"),
-                    keys(command, "8"),
-                    keys(command, "9")
-                ),
-                "Tab 1–8 / last tab",
-            ),
-            (
-                format!("{} / {}", keys(command, "I"), keys(command | shift, "E")),
-                "Import / Export",
-            ),
-            (keys(command, "P"), "Print"),
-            (keys(command, "J"), super::joining::JOIN_COMMAND_HINT),
-            (keys(command | shift, "K"), "Clean up"),
-            (
-                shortcut_label(Message::Optimization(super::optimization::Action::Begin)),
-                "Generate an optimized 3D conformer",
-            ),
-            (
-                format!("{} / {}", keys(command, "L"), keys(command, "E")),
-                "Fixed bond length / angles",
-            ),
-            (aromatic, "Aromatic circle / alternating bonds"),
-            (keys(command, "D"), "Copy CDXML text"),
-            (
-                format!(
-                    "{} / {}",
-                    keys(command | alt, "C"),
-                    keys(command | alt, "O")
-                ),
-                "Copy chemical text / MOL text",
-            ),
-            (
-                format!(
-                    "{}/{} / {}/{}",
-                    keys(alt, "Left"),
-                    keys(alt, "Right"),
-                    keys(alt, "Up"),
-                    keys(alt, "Down")
-                ),
-                "Rotate selection 1° / 15°",
-            ),
-            (
-                format!("{} arrows", keys(alt | shift, "")),
-                "3D tilt selection",
-            ),
-            (
-                "Drag round handle".into(),
-                "Rotate freely; Shift snaps to 15°",
-            ),
-            (
-                format!("Arrows / {} arrows", keys(shift, "")),
-                "Nudge 1 / 10 units, never snapping",
-            ),
-            ("Drag side handle".into(), "Change width or height"),
-            ("Drag corner handle".into(), "Resize proportionally"),
-            (
-                "Scroll / side-scroll".into(),
-                "Pan the canvas vertically / horizontally",
-            ),
-            (zoom, "Zoom at the pointer"),
-        ],
-    )
-}
-
-fn help_examples() -> iced::widget::Column<'static, Message> {
-    column![
-        reshiki::accessibility::button("help-examples", "Open shortcut examples", text("Open shortcut examples").size(14))
-            .padding([10, 16])
-            .on_press(Message::OpenShortcutExamples)
-            .style(control(true)),
-        text("One editable drawing with labeled examples. Opens in a tab; double-click a structure to select it, then copy and paste into your drawing. Save creates your own copy.")
-            .size(12).style(muted_text),
-    ].spacing(8)
+    // Clip rather than squeeze: the footer keeps the examples action.
+    pane.clip(true).into()
 }
 
 #[cfg(test)]

@@ -89,7 +89,8 @@ impl App {
                 }
             }
             Message::InsertInput => return Some(self.insert_input()),
-            Message::ToggleHelp => self.toggle_help(),
+            Message::ToggleHelp => return Some(self.toggle_help()),
+            Message::Help(action) => return Some(self.help_action(action)),
             Message::OpenShortcutExamples if self.pending.is_some() => {}
             Message::OpenShortcutExamples => return Some(self.open_shortcut_examples()),
             Message::Viewport(size) => self.set_viewport(size),

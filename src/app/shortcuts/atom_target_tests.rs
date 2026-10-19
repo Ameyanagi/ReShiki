@@ -1360,3 +1360,22 @@ fn atom_label_editor_blocks_every_contextual_character_hotkey() {
         assert!(!app.tab.history.can_undo());
     }
 }
+
+#[test]
+fn question_mark_opens_help_away_from_targets_and_properties_over_them() {
+    let (mut app, target, _) = fixture("N");
+    hover(&mut app, Point::new(900., 900.));
+    key(&mut app, "?");
+    assert!(app.help_open, "? over empty canvas opens Help");
+    // Inside Help, `?` types into its search field; Escape closes it.
+    let _ = app.update(Message::ToggleHelp);
+
+    let position = app.tab.doc.atom(target).unwrap().position;
+    hover(&mut app, position);
+    key(&mut app, "?");
+    assert!(
+        !app.help_open,
+        "? over an atom keeps opening its properties"
+    );
+    assert_eq!(app.tab.selected, vec![target]);
+}
