@@ -1,5 +1,6 @@
 use super::{App, InspectorTab, Job, Message, Request, Tool};
 use iced::Task;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -9,6 +10,7 @@ pub enum Action {
     Replace,
     Find,
     Contract,
+    Define,
     Expand,
     ExpandAll,
 }
@@ -16,6 +18,8 @@ pub struct State {
     pub preset: String,
     pub label: String,
     pub reverse_label: String,
+    /// Skipped user entries, kept in the panel after the status line changes.
+    pub catalog_warning: Option<String>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -23,6 +27,7 @@ impl Default for State {
             preset: "OMe".into(),
             label: String::new(),
             reverse_label: String::new(),
+            catalog_warning: None,
         }
     }
 }
@@ -92,6 +97,19 @@ impl App {
                 self.tool = Tool::Select;
                 self.status = "Fragment abbreviated · All atoms and bonds retained · Expand restores the drawing".into();
             }
+            Action::Define => match self.define_user_group() {
+                Ok(message) => {
+                    self.changed(before);
+                    self.tool = Tool::Select;
+                    self.status = message;
+                    self.error = false;
+                }
+                Err(error) => {
+                    self.status = error;
+                    self.error = true;
+                    return Task::none();
+                }
+            },
             Action::Expand | Action::ExpandAll => {
                 let ids = if matches!(action, Action::ExpandAll) {
                     self.tab.doc.all_ids()
@@ -109,5 +127,109 @@ impl App {
         }
         self.inspector_tab = InspectorTab::Abbreviations;
         Task::none()
+    }
+}
+
+/// The user's own groups, in the bundled catalog's JSON format.
+pub(super) fn user_catalog_path() -> Result<PathBuf, String> {
+    let root = std::env::var_os("RESHIKI_DATA_DIR")
+        .map(PathBuf::from)
+        .or_else(|| {
+            directories_next::ProjectDirs::from("dev", "reshiki", "ReShiki")
+                .map(|d| d.data_local_dir().to_owned())
+        })
+        .ok_or("No application data directory")?;
+    Ok(root.join("abbreviations.json"))
+}
+
+/// Install the user's groups at startup. Returns a status message when the
+/// file exists but some entries could not be used; the app still starts.
+pub(super) fn load_user_catalog() -> Option<String> {
+    if cfg!(test) {
+        return None;
+    }
+    let path = user_catalog_path().ok()?;
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(error) => return Some(format!("Could not read {}: {error}", path.display())),
+    };
+    let errors = reshiki::chemistry::abbreviations::set_user(Some(&text));
+    catalog_warning(&errors, &path)
+}
+
+fn catalog_warning(errors: &[String], path: &std::path::Path) -> Option<String> {
+    let first = errors.first()?;
+    Some(format!(
+        "Your abbreviations file skipped {} group{}: {first} ({})",
+        errors.len(),
+        if errors.len() == 1 { "" } else { "s" },
+        path.display()
+    ))
+}
+
+impl App {
+    /// Save the selected fragment as a user group, then show it collapsed
+    /// under that label. The drawing keeps every atom; only the label changes.
+    fn define_user_group(&mut self) -> Result<String, String> {
+        use reshiki::chemistry::abbreviations as catalog;
+        let label = self.abbreviations.label.trim().to_owned();
+        let reverse = self.abbreviations.reverse_label.trim().to_owned();
+        let defined = catalog::from_selection(&self.tab.doc, &self.tab.selected, &label, &reverse)?;
+        let path = user_catalog_path()?;
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        // Hold the lock from read to write, so another ReShiki window saving
+        // at the same time cannot drop this group. Dropping it unlocks.
+        let lock = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(path.with_extension("json.lock"))
+            .and_then(|file| file.lock().map(|()| file))
+            .map_err(|e| format!("Could not lock your abbreviations file: {e}"))?;
+        let existing = match std::fs::read_to_string(&path) {
+            Ok(text) => Some(text),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => return Err(format!("Could not read {}: {error}", path.display())),
+        };
+        let smiles = defined.entry.smiles.clone();
+        let text = catalog::upsert(existing.as_deref(), defined.entry)?;
+        // Check the new file before writing it, so a bad save never lands on
+        // disk: the new group must load and no group that loaded before may be
+        // lost. Entries already skipped at startup stay as they were.
+        let before = existing
+            .as_deref()
+            .map(|text| catalog::parse(text, true).0)
+            .unwrap_or_default();
+        let (after, errors) = catalog::parse(&text, true);
+        let loads = |name: &str| after.iter().any(|p| p.label == name);
+        let failed = if after.iter().any(|p| p.label == label && p.smiles == smiles) {
+            before
+                .iter()
+                .map(|p| p.label.as_str())
+                .find(|old| *old != label && !loads(old))
+        } else {
+            Some(label.as_str())
+        };
+        if let Some(name) = failed {
+            let tag = format!("({name})");
+            return Err(errors
+                .into_iter()
+                .find(|error| error.contains(&tag))
+                .unwrap_or_else(|| format!("Could not save {label}")));
+        }
+        let mut doc = self.tab.doc.clone();
+        doc.contract(&defined.members, &label, &reverse)?;
+        reshiki::storage::write_atomic(&path, text.as_bytes())?;
+        drop(lock);
+        let skipped = catalog::set_user(Some(&text));
+        self.abbreviations.catalog_warning = catalog_warning(&skipped, &path);
+        self.tab.doc = doc;
+        Ok(format!(
+            "Saved {label} to your abbreviations · Type it on any endpoint · {}",
+            path.display()
+        ))
     }
 }

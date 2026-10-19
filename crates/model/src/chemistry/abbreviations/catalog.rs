@@ -10,7 +10,7 @@ use crate::chemistry::{
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashSet},
-    sync::{Arc, OnceLock},
+    sync::{Arc, OnceLock, PoisonError, RwLock},
 };
 
 /// The bundled catalog, in detection tie-break order.
@@ -114,6 +114,15 @@ impl Preset {
         for alias in &entry.aliases {
             check_label(alias, "Alias", false)?;
         }
+        if user
+            && let Some(spelling) = std::iter::once(&entry.label)
+                .chain(&entry.aliases)
+                .find(|spelling| reserved(spelling))
+        {
+            return Err(format!(
+                "\"{spelling}\" already means an element or a built-in group; choose another label"
+            ));
+        }
         if entry.smiles.matches('*').count() != 1 || !entry.smiles.starts_with('*') {
             return Err("SMILES must start with the single * attachment point".into());
         }
@@ -195,6 +204,16 @@ impl Preset {
     }
 }
 
+/// Spellings that typing resolves before the catalog: elements and the
+/// groups built in code (N3, MgBr, Cp) or from fixed formulas (OCH3).
+fn reserved(spelling: &str) -> bool {
+    spelling == "*"
+        || crate::editing::ELEMENTS.contains(&spelling)
+        || crate::common_groups::LABELS.contains(&spelling)
+        || crate::ligands::LABELS.contains(&spelling)
+        || crate::atom_text::is_formula_group(spelling)
+}
+
 /// Reject what a planar collapsed group cannot carry: stereo, atom maps,
 /// enhanced-stereo groups, or a second fragment.
 fn check_fragment(prepared: &Prepared) -> std::result::Result<(), String> {
@@ -230,6 +249,13 @@ fn check_fragment(prepared: &Prepared) -> std::result::Result<(), String> {
     {
         return Err("Only one * attachment point is allowed".into());
     }
+    check_annotations(state)
+}
+
+/// Stereo, atom maps and enhanced-stereo groups do not survive as a group.
+pub(super) fn check_annotations(
+    state: &crate::chemistry::stereo::perception::State,
+) -> std::result::Result<(), String> {
     if state
         .metadata
         .atoms
@@ -241,6 +267,14 @@ fn check_fragment(prepared: &Prepared) -> std::result::Result<(), String> {
             .iter()
             .any(|b| b.stereo != 0 || !b.stereo_atoms.is_empty())
         || !state.metadata.groups.is_empty()
+        // A wavy bond on a non-stereo atom sets only its direction.
+        || state.directions.iter().any(|d| {
+            matches!(
+                d,
+                crate::chemistry::kekulize::Direction::Unknown
+                    | crate::chemistry::kekulize::Direction::EitherDouble
+            )
+        })
     {
         return Err("Stereo and atom-map annotations are not supported in groups".into());
     }
@@ -332,13 +366,6 @@ pub fn parse(text: &str, user: bool) -> (Vec<Preset>, Vec<String>) {
             .chain(entry.aliases.iter().cloned())
             .chain((!entry.reverse.is_empty()).then(|| entry.reverse.clone()))
             .collect::<Vec<_>>();
-        if let Some(clash) = spellings
-            .iter()
-            .find(|s| crate::common_groups::LABELS.contains(&s.as_str()))
-        {
-            errors.push(format!("{name}: \"{clash}\" is a built-in group"));
-            continue;
-        }
         if let Some(clash) = spellings.iter().find(|s| seen.contains(*s)) {
             errors.push(format!("{name}: \"{clash}\" is defined twice"));
             continue;
@@ -367,22 +394,80 @@ fn builtin() -> Result<&'static Catalog> {
     .map_err(Error::clone)
 }
 
+/// The bundled catalog merged with the user's groups, when there are any.
+static ACTIVE: RwLock<Option<Catalog>> = RwLock::new(None);
+
 /// The active catalog in detection tie-break order.
 pub fn presets() -> Result<Catalog> {
+    if let Some(catalog) = ACTIVE
+        .read()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+    {
+        return Ok(catalog.clone());
+    }
     builtin().cloned()
+}
+
+/// Install the text of the user's catalog file, or remove user groups with
+/// `None`. Invalid entries are skipped and returned as messages; the valid
+/// ones and the bundled catalog stay available.
+pub fn set_user(text: Option<&str>) -> Vec<String> {
+    let (user, mut errors) = text.map(|text| parse(text, true)).unwrap_or_default();
+    match builtin() {
+        Ok(builtin) => {
+            let merged = (!user.is_empty()).then(|| merge(builtin, user));
+            *ACTIVE.write().unwrap_or_else(PoisonError::into_inner) = merged;
+        }
+        Err(error) => errors.insert(0, error.to_string()),
+    }
+    errors
+}
+
+/// A user group replaces the bundled group with the same label in its
+/// place, keeping the tie-break order; other user groups follow the bundled ones.
+fn merge(builtin: &[Arc<Preset>], user: Vec<Preset>) -> Catalog {
+    let mut user: Vec<_> = user.into_iter().map(Arc::new).collect();
+    let mut merged: Vec<_> = builtin
+        .iter()
+        .map(
+            |preset| match user.iter().position(|u| u.label == preset.label) {
+                Some(index) => user.remove(index),
+                None => preset.clone(),
+            },
+        )
+        .collect();
+    merged.extend(user);
+    merged.into()
 }
 
 /// Find the group created by a typed spelling. The flag is true for an alias.
 pub fn lookup(text: &str) -> Result<Option<(Arc<Preset>, bool)>> {
-    Ok(presets()?.iter().find_map(|preset| {
-        if preset.label == text {
-            Some((preset.clone(), false))
-        } else if preset.aliases.iter().any(|alias| alias == text) {
-            Some((preset.clone(), true))
-        } else {
-            None
-        }
-    }))
+    Ok(lookup_in(&presets()?, text))
+}
+
+/// Find a spelling in the bundled catalog only, ignoring user overrides.
+pub fn lookup_bundled(text: &str) -> Result<Option<(Arc<Preset>, bool)>> {
+    Ok(lookup_in(builtin()?, text))
+}
+
+/// User groups win over a bundled label or alias with the same spelling.
+fn lookup_in(catalog: &[Arc<Preset>], text: &str) -> Option<(Arc<Preset>, bool)> {
+    let find = |user: bool| {
+        catalog
+            .iter()
+            .filter(|preset| preset.user == user)
+            .find_map(|preset| {
+                if preset.label == text {
+                    Some((preset.clone(), false))
+                } else if preset.aliases.iter().any(|alias| alias == text) {
+                    Some((preset.clone(), true))
+                } else {
+                    None
+                }
+            })
+    };
+    find(true).or_else(|| find(false))
 }
 
 #[cfg(test)]

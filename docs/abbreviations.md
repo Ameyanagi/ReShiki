@@ -72,7 +72,73 @@ group is one new entry; no separate geometry file is needed. The optional
 `"contract": false` for a group that should only be created by typing, never
 found by **Contract common groups**. Groups cannot carry stereochemistry,
 isotopes, radicals or `[H]` atoms, and attach through one single bond. Every
-label, alias and reverse label must be unique and cannot reuse N3 or MgBr.
+label, alias and reverse label must be unique.
 
 When groups overlap, **Contract common groups** prefers the larger group, for
 example NHBoc over Boc. Groups of the same size are tried in catalog order.
+
+## Your own groups
+
+You can add groups of your own. They work like the bundled ones: typing the
+label on an endpoint creates the real atoms, and **Contract common groups**
+finds them.
+
+### Define a group from the drawing
+
+1. Draw the group attached to any atom, for example the group on a methyl carbon.
+2. Select the atoms of the group only. The selection must have exactly one
+   single bond to the rest of the drawing; that bond becomes the attachment.
+   You can instead draw a `*` atom on a single bond and include it in the
+   selection as the attachment point.
+3. Open **Properties → Labels & chemistry → Chemical abbreviations**. Under
+   **Name a selected fragment**, enter the label and, optionally, the label
+   to show when the bond leaves on the right.
+4. Choose **Define abbreviation from selection**.
+
+ReShiki saves the group to your abbreviations file and shows the selection
+collapsed under the new label, in one Undo step. Undo restores the drawing; the
+saved group stays in the file. Saving a label again replaces the earlier group
+with that label. Groups with stereochemistry, more than 31 atoms or more than
+one attachment cannot be saved.
+
+### The abbreviations file
+
+Your groups live in `abbreviations.json` in the ReShiki data folder:
+
+| System  | Location                                                                             |
+| ------- | ------------------------------------------------------------------------------------ |
+| macOS   | `~/Library/Application Support/dev.reshiki.ReShiki/abbreviations.json`               |
+| Windows | `%LOCALAPPDATA%\reshiki\ReShiki\data\abbreviations.json`                             |
+| Linux   | `$XDG_DATA_HOME/reshiki/abbreviations.json`, by default in `~/.local/share/reshiki/` |
+| Any     | `$RESHIKI_DATA_DIR/abbreviations.json` when `RESHIKI_DATA_DIR` is set                |
+
+It uses the same format as the bundled catalog, so you can also edit it by
+hand or share it:
+
+```json
+{
+  "format": 1,
+  "groups": [
+    {
+      "label": "OTBDPS2",
+      "reverse": "TBDPS2O",
+      "smiles": "*O[Si](c1ccccc1)(c1ccccc1)C(C)(C)C",
+      "formula": "C16H19OSi",
+      "category": "user",
+      "names": ["my silyl ether"]
+    }
+  ]
+}
+```
+
+Only `label` and `smiles` are required. `smiles` must start with the single
+`*` attachment point, joined by a single bond. Labels are 1–32 characters without spaces and cannot be an element symbol or a spelling ReShiki builds itself (N3, MgBr, Cp, OCH3). If you give
+a `formula`, ReShiki checks it against the SMILES. `aliases`, `names`,
+`category` and `"contract": false` work as in the bundled catalog.
+
+ReShiki reads the file when it starts. A group with the same label as a bundled
+group replaces it. An entry that cannot be used, such as an invalid SMILES or a
+formula that does not match, is skipped. The status bar then names the first
+problem and the file; the other groups still load. Drawings never depend on the
+file: a saved drawing keeps every atom of a group, so it opens the same way on a
+computer without your groups. For the same reason, generic alternative lists such as `[OMe,OBn]` accept only bundled groups and always use their bundled definitions.

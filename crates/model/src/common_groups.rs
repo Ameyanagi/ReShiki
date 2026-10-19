@@ -1,5 +1,5 @@
 //! Additional complete groups, built from the established endpoint replacement.
-use crate::{chemistry::abbreviations::replace as replace_base, document::Document};
+use crate::{chemistry::abbreviations::replace_bundled as replace_base, document::Document};
 pub const LABELS: &[&str] = &["MgBr", "N3"];
 
 pub fn replace(doc: &Document, selection: &[u64], label: &str) -> Result<Document, String> {

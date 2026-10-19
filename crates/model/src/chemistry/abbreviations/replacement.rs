@@ -2,7 +2,7 @@
 //! ReShiki's own depiction of the group SMILES. Chemistry preparation and
 //! drawing reconstruction remain Rust calculations; the final whole-document
 //! check and full CIP labels are the caller's responsibility.
-use super::{AttachmentPolicy, Preset, check_size, lookup, validate_with_policy};
+use super::{AttachmentPolicy, Preset, check_size, lookup, lookup_bundled, validate_with_policy};
 #[cfg(all(target_os = "windows", target_arch = "aarch64"))]
 use crate::chemistry::windows_trigonometry as trigonometry;
 use crate::{
@@ -179,7 +179,35 @@ pub fn replace_with_policy(
         return crate::common_groups::replace(document, selection, label)
             .map_err(Error::Definition);
     }
-    let (preset, alias) = lookup(label)?.ok_or(Error::Label)?;
+    let found = lookup(label)?.ok_or(Error::Label)?;
+    replace_preset(document, selection, label, found, policy)
+}
+
+/// Replace with the bundled definition even when the user's catalog
+/// overrides that label. Fixed spellings (OCH3 as OMe) and groups built from
+/// another group (MgBr from Et) must keep their own chemistry.
+pub fn replace_bundled(document: &Document, selection: &[u64], label: &str) -> Result<Document> {
+    if crate::common_groups::LABELS.contains(&label) {
+        return crate::common_groups::replace(document, selection, label)
+            .map_err(Error::Definition);
+    }
+    let found = lookup_bundled(label)?.ok_or(Error::Label)?;
+    replace_preset(
+        document,
+        selection,
+        label,
+        found,
+        AttachmentPolicy::Terminal,
+    )
+}
+
+fn replace_preset(
+    document: &Document,
+    selection: &[u64],
+    label: &str,
+    (preset, alias): (std::sync::Arc<Preset>, bool),
+    policy: AttachmentPolicy,
+) -> Result<Document> {
     check_size(document)?;
     if selection.len() > 100_000 {
         return Err(Error::Selection);

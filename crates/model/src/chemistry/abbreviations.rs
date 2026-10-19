@@ -4,12 +4,16 @@
 //! Copyright (C) 2020 Greg Landrum and T5 Informatics GmbH; RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
 mod catalog;
+mod define;
 mod matcher;
 mod replacement;
 use super::{RDKIT_VERSION, document::Molecule};
 use crate::{abbreviations::Abbreviation, document::Document};
-pub use catalog::{BUILTIN, Catalog, Entry, FORMAT, File, Preset, lookup, parse, presets};
-pub use replacement::{Error as ReplacementError, replace, replace_with_policy};
+pub use catalog::{
+    BUILTIN, Catalog, Entry, FORMAT, File, Preset, lookup, lookup_bundled, parse, presets, set_user,
+};
+pub use define::{Defined, from_selection, upsert};
+pub use replacement::{Error as ReplacementError, replace, replace_bundled, replace_with_policy};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, thiserror::Error)]

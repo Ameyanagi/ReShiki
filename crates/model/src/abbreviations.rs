@@ -86,6 +86,17 @@ pub fn is_group_label(text: &str) -> bool {
             .is_some()
 }
 
+/// A group label whose bundled definition generic alternatives may use.
+/// Alternatives store only the label, so they never depend on a user's
+/// own catalog and mean the same chemistry on every computer.
+pub fn is_bundled_group_label(text: &str) -> bool {
+    crate::common_groups::LABELS.contains(&text)
+        || crate::chemistry::abbreviations::lookup_bundled(text)
+            .ok()
+            .flatten()
+            .is_some()
+}
+
 /// Every typed spelling that creates a chemical group, catalog order first.
 pub fn group_labels() -> Vec<String> {
     groups()

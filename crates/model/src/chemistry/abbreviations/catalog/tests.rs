@@ -145,7 +145,7 @@ fn invalid_entries_are_reported_and_valid_ones_kept() {
         "Group 13 (A,B): Label \"A,B\" must be 1-32 characters without spaces or commas",
         "Group 14 (Heavy): Isotopes are not supported",
         "Group 15 (Typo): unknown field `smile`",
-        "Group 17 (Azide): \"N3\" is a built-in group",
+        "Group 17 (Azide): \"N3\" already means an element or a built-in group",
         "Group 18 (GoodO): \"Late2\" is defined twice",
         "Group 19 (ExplicitH): Write hydrogens implicitly",
     ]) {
@@ -153,4 +153,44 @@ fn invalid_entries_are_reported_and_valid_ones_kept() {
     }
     assert!(parse("{", true).1[0].starts_with("Invalid catalog file"));
     assert!(parse(r#"{"format": 2, "groups": []}"#, true).1[0].contains("format 2"));
+}
+
+#[test]
+fn user_groups_win_label_clashes_and_keep_the_bundled_order() {
+    let builtin = builtin().unwrap();
+    let text = r#"{"format": 1, "groups": [
+        {"label": "TBS", "smiles": "*[Si](CC)(CC)CC"},
+        {"label": "Mine", "smiles": "*CC(F)(F)F", "aliases": ["TBDMS"]}
+    ]}"#;
+    let (user, errors) = parse(text, true);
+    assert!(errors.is_empty(), "{errors:?}");
+    let merged = merge(builtin, user);
+    assert_eq!(merged.len(), builtin.len() + 1);
+    let position = |catalog: &[Arc<Preset>]| catalog.iter().position(|p| p.label == "TBS");
+    assert_eq!(position(&merged), position(builtin));
+    let (tbs, alias) = lookup_in(&merged, "TBS").unwrap();
+    assert!(tbs.user && !alias);
+    assert_eq!(tbs.smiles, "*[Si](CC)(CC)CC");
+    // A user alias wins over the bundled alias with the same spelling.
+    let (mine, alias) = lookup_in(&merged, "TBDMS").unwrap();
+    assert!(mine.user && alias);
+    assert_eq!(mine.label, "Mine");
+    assert_eq!(merged.last().unwrap().label, "Mine");
+    assert!(lookup_in(builtin, "Mine").is_none());
+}
+
+/// Typing resolves these before the catalog, so a user group could be saved
+/// but never created under them.
+#[test]
+fn user_groups_cannot_take_reserved_spellings() {
+    for spelling in ["N3", "MgBr", "Cp", "OCH3", "C2H5", "Fe", "Np", "*"] {
+        let text = format!(
+            r#"{{"format": 1, "groups": [{{"label": "{spelling}", "smiles": "*OC"}},
+            {{"label": "Fine", "smiles": "*OC", "aliases": ["{spelling}"]}}]}}"#
+        );
+        let (presets, errors) = parse(&text, true);
+        assert!(presets.is_empty(), "{spelling}");
+        assert_eq!(errors.len(), 2, "{spelling}: {errors:?}");
+        assert!(errors[0].contains("already means"), "{errors:?}");
+    }
 }
