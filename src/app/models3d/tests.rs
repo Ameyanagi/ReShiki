@@ -737,3 +737,25 @@ fn every_style_flattens_from_the_3d_view() {
         assert_eq!(app.tab.doc.models[0].style, style);
     }
 }
+
+#[test]
+fn the_structure_note_names_the_current_style() {
+    let (mut app, atoms) = with_model(Display::ThreeD);
+    let note = |app: &App| subtitle(app.pending(&atoms), app.tab.doc.models.first());
+    assert_eq!(
+        note(&app),
+        "Ball & stick · Chemistry and atom IDs stay the same"
+    );
+    for (style, label) in [
+        (Style::Stick, "Stick"),
+        (Style::Wireframe, "Wireframe"),
+        (Style::SpaceFilling, "Space-filling"),
+    ] {
+        set(&mut app, Setting::Style(style));
+        assert_eq!(
+            note(&app),
+            format!("{label} · Chemistry and atom IDs stay the same")
+        );
+    }
+    assert!(app.structure_section().is_some());
+}

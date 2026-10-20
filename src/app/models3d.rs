@@ -456,13 +456,7 @@ impl App {
                     .into()
             }),)
             .spacing(4),
-            text(if pending.is_some() {
-                "Generating the conformer · ETKDG, then MMFF94s"
-            } else {
-                "Ball & stick · Chemistry and atom IDs stay the same"
-            })
-            .size(11)
-            .style(muted_text),
+            text(subtitle(pending, model)).size(11).style(muted_text),
         ]
         .spacing(6);
         // The 2D layout the drawing returns to, while the model is shown.
@@ -650,6 +644,16 @@ impl App {
             ),
         )
     }
+}
+
+/// The Structure section's note: the generation in flight, or the model's
+/// style (ball & stick before there is a model).
+fn subtitle(pending: Option<Display>, model: Option<&models3d::Model3d>) -> String {
+    if pending.is_some() {
+        return "Generating the conformer · ETKDG, then MMFF94s".into();
+    }
+    let style = model.map_or(Style::BallStick, |m| m.style);
+    format!("{} · Chemistry and atom IDs stay the same", name(style))
 }
 
 fn name(style: Style) -> &'static str {
