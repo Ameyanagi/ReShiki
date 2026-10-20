@@ -312,6 +312,9 @@ fn size_factor(
     Ok(factor)
 }
 
+/// Why sizes refuse a selection holding a molecule shown only as a 3D model.
+pub(crate) const RESIZE_SHOWN_IN_3D: &str = "Switch to 2D to resize the drawing";
+
 fn transform_candidate(
     document: &mut Document,
     selected: &[u64],
@@ -336,6 +339,10 @@ fn transform_candidate(
             }
             let degrees = value % 360.;
             if degrees != 0. {
+                // A molecule shown only in 3D rolls its model, keeping its
+                // hidden drawing.
+                reshiki::models3d::roll(document, &ids, degrees);
+                let ids = reshiki::models3d::without_hidden(document, &ids);
                 editing::transform(document, &ids, Transform::Rotate(degrees));
             }
         }
@@ -362,6 +369,11 @@ fn transform_candidate(
         Field::Width | Field::Height | Field::Scale => {
             if value <= 0. {
                 return Err("Enter a size or percentage greater than zero".into());
+            }
+            // As on the canvas, where such a selection has no resize handles:
+            // the hidden drawing of a molecule shown only in 3D keeps its size.
+            if ids.iter().any(|id| reshiki::models3d::hides(document, *id)) {
+                return Err(RESIZE_SHOWN_IN_3D.into());
             }
             let (lo, hi) = reshiki::scene::selection_bounds(document, &ids)
                 .ok_or("Select objects to resize")?;

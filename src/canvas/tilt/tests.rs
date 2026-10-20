@@ -79,3 +79,52 @@ fn tilts_past_75_degrees_turn_and_a_full_turn_restores_positions() {
     }
     assert!(!turned.atoms.is_empty() && close(&turned, &original));
 }
+
+#[test]
+fn a_molecule_shown_only_in_3d_turns_its_model_and_keeps_its_drawing() {
+    use reshiki::editing::{Transform, transform};
+    use reshiki::models3d::Display;
+    let atoms = |doc: &Document, ids: [u64; 2]| {
+        ids.map(|id| {
+            let a = doc.atom(id).unwrap();
+            (a.position.x, a.position.y, a.depth)
+        })
+    };
+    for display in [Display::TwoD, Display::Both, Display::ThreeD] {
+        let (doc, molecule, drawn) = shown(display);
+        let hidden = display == Display::ThreeD;
+        let mixed = [molecule, drawn].concat();
+        assert!(available(&doc, &molecule) && available(&doc, &mixed));
+        let tilts: [fn(&mut Document, &[u64]); 3] = [
+            |doc, ids| apply(doc, ids, 30., 20.),
+            |doc, ids| transform(doc, ids, Transform::TiltX(15.)),
+            |doc, ids| transform(doc, ids, Transform::TiltY(-15.)),
+        ];
+        for tilt in tilts {
+            for ids in [&molecule[..], &mixed] {
+                let mut tilted = doc.clone();
+                tilt(&mut tilted, ids);
+                assert_ne!(tilted, doc, "{display:?}");
+                assert_eq!(
+                    atoms(&tilted, molecule) == atoms(&doc, molecule),
+                    hidden,
+                    "{display:?}"
+                );
+                assert_eq!(
+                    tilted.models[0].rotation != doc.models[0].rotation,
+                    hidden,
+                    "{display:?}"
+                );
+            }
+            // The drawn pair turns about its own centre, as if tilted alone.
+            let mut both = doc.clone();
+            tilt(&mut both, &mixed);
+            let mut alone = doc.clone();
+            tilt(&mut alone, &drawn);
+            assert_ne!(atoms(&both, drawn), atoms(&doc, drawn));
+            if hidden {
+                assert_eq!(atoms(&both, drawn), atoms(&alone, drawn));
+            }
+        }
+    }
+}

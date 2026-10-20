@@ -89,6 +89,10 @@ impl MoleculeCanvas<'_> {
                     ControlFlow::Break(action) => return Some(action),
                 }
             }
+            Gesture::Turn(turn) => match self.release_turn(state, turn, position, bounds) {
+                ControlFlow::Continue(edit) => edit,
+                ControlFlow::Break(action) => return Some(action),
+            },
             Gesture::Tilt(drag) => match self.release_tilt(state, drag, position, inside) {
                 ControlFlow::Continue(edit) => edit,
                 ControlFlow::Break(action) => return Some(action),
@@ -247,7 +251,8 @@ impl MoleculeCanvas<'_> {
                     && last.position.distance(position) < 4.
                     && now.duration_since(last.at).as_millis() < 450
             });
-            if repeated {
+            // The numeric Scale field scales the drawing, never a model frame.
+            if repeated && !drag.resizes_models() {
                 return ControlFlow::Break(
                     Action::publish(Edit::BeginTransform(drag.handle.field())).and_capture(),
                 );
@@ -418,7 +423,7 @@ impl MoleculeCanvas<'_> {
             },
         )
     }
-    fn release_move(
+    pub(in crate::canvas) fn release_move(
         &self,
         state: &mut State,
         start: World,

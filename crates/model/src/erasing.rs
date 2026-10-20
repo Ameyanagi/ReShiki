@@ -2,6 +2,7 @@
 use crate::{
     document::{Document, Point},
     graphics::{PathCommand, flattened},
+    models3d::Display,
 };
 
 fn distance(p: Point, a: Point, b: Point) -> f32 {
@@ -52,11 +53,11 @@ pub fn stroke(doc: &mut Document, from: Point, to: Point, radius: f32) {
     let mut ids: Vec<_> = doc
         .atoms
         .iter()
-        .filter(|a| doc.atom_visible(a.id) && distance(a.position, from, to) <= radius)
+        .filter(|a| doc.atom_drawn(a.id) && distance(a.position, from, to) <= radius)
         .map(|a| a.id)
         .collect();
     // Atom labels and attached marks belong to the atom, even away from its center.
-    for atom in doc.atoms.iter().filter(|a| doc.atom_visible(a.id)) {
+    for atom in doc.atoms.iter().filter(|a| doc.atom_drawn(a.id)) {
         if crate::scene::atom_label_bounds(atom, doc)
             .is_some_and(|(lo, hi)| box_hit(lo, hi, from, to, radius))
             || crate::scientific::styled_mark_parts(atom, &doc.drawing_style)
@@ -64,6 +65,21 @@ pub fn stroke(doc: &mut Document, from: Point, to: Point, radius: f32) {
                 .any(|part| path_hit(&part.commands, from, to, radius))
         {
             ids.push(atom.id);
+        }
+    }
+    // A shown model erases its whole molecule; its hidden 2D drawing stays out of reach.
+    for model in doc.models.iter().filter(|m| m.display != Display::TwoD) {
+        let Some((balls, sticks)) = crate::models3d::balls_and_sticks(doc, model) else {
+            continue;
+        };
+        if balls
+            .iter()
+            .any(|(c, r)| distance(*c, from, to) <= r + radius)
+            || sticks
+                .iter()
+                .any(|(a, b, half)| crossed(from, to, *a, *b, radius + half))
+        {
+            ids.extend(model.atoms.iter().map(|a| a.id));
         }
     }
     ids.extend(
@@ -100,7 +116,7 @@ pub fn stroke(doc: &mut Document, from: Point, to: Point, radius: f32) {
     let bonds: Vec<_> = doc
         .bonds
         .iter()
-        .filter(|b| doc.bond_visible(b.a, b.b))
+        .filter(|b| doc.bond_drawn(b.a, b.b))
         .filter(|b| {
             doc.atom(b.a)
                 .zip(doc.atom(b.b))

@@ -780,6 +780,8 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
         nmr: None,
         optimizer: None,
         keyboard_target: None,
+        model_bar: None,
+        morph: None,
         element: "C",
         joining: None,
         hidden_annotation: None,
@@ -927,6 +929,47 @@ fn tilt_click_selects_a_molecule_without_rotating_and_blank_drag_selects() -> Re
         assert_eq!(ids, expected);
     }
     Ok(())
+}
+
+#[test]
+fn tilt_drag_on_a_molecule_shown_only_in_3d_tilts_it() {
+    use reshiki::models3d::Display;
+    for display in [Display::Both, Display::ThreeD] {
+        let (doc, molecule, drawn) = tilt::shown(display);
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::Tilt;
+        let mixed = [molecule, drawn].concat();
+        for (selected, expected) in [
+            (&[][..], &molecule[..]),
+            (&molecule[..], &molecule[..]),
+            (&mixed[..], &mixed[..]),
+        ] {
+            canvas.selected = selected;
+            let mut state = State::default();
+            for event in [
+                mouse::Event::CursorMoved {
+                    position: Point::new(200., 180.),
+                },
+                mouse::Event::ButtonPressed(mouse::Button::Left),
+                mouse::Event::CursorMoved {
+                    position: Point::new(230., 200.),
+                },
+            ] {
+                tilt_pointer(&canvas, &mut state, event);
+            }
+            let edit = tilt_pointer(
+                &canvas,
+                &mut state,
+                mouse::Event::ButtonReleased(mouse::Button::Left),
+            );
+            let Some(Edit::Tilt { mut ids, x, y }) = edit else {
+                panic!("{display:?} {selected:?}: expected a tilt, got {edit:?}");
+            };
+            ids.sort_unstable();
+            assert_eq!(ids, expected, "{display:?}");
+            assert_eq!((x, y), (-10., 15.));
+        }
+    }
 }
 
 #[test]
@@ -1647,6 +1690,107 @@ fn filled_background_leaves_atoms_and_bonds_selectable() {
     assert_eq!(hit_selection(&doc, World::new(0., 30.), 5.), vec![3]);
     doc.graphics[0].layer = 1;
     assert_eq!(hit_selection(&doc, World::default(), 5.), vec![3]);
+}
+
+#[test]
+fn a_3d_model_takes_clicks_over_what_it_is_painted_above() {
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", World::new(-20., 0.));
+    let b = doc.add_atom("O", World::new(20., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    let atoms = [(a, [-0.7, 0., 0.]), (b, [0.7, 0., 0.])]
+        .map(|(id, xyz)| reshiki::models3d::Placed { id, xyz })
+        .to_vec();
+    let model = reshiki::models3d::Model3d::new(
+        &doc,
+        atoms,
+        vec![],
+        reshiki::models3d::ForceField::Mmff94s,
+    );
+    doc.models.push(model);
+    reshiki::models3d::set_display(&mut doc, 0, reshiki::models3d::Display::ThreeD);
+    let mut g = Graphic::dragged(
+        3,
+        reshiki::graphics::GraphicKind::Rectangle,
+        World::new(-50., -50.),
+        World::new(50., 50.),
+        GraphicStyle::default(),
+        BracketSides::Both,
+        false,
+    );
+    g.layer = -1;
+    g.style.fill = Some(reshiki::palette::Color::Custom([220, 239, 233]));
+    doc.graphics.push(g);
+    assert_eq!(hit_selection(&doc, World::new(0., 8.), 5.), vec![a, b]);
+    doc.graphics[0].layer = 1;
+    assert_eq!(hit_selection(&doc, World::new(0., 8.), 5.), vec![3]);
+}
+
+#[test]
+fn edit_points_skips_marks_and_indicators_of_a_molecule_shown_in_3d() {
+    use reshiki::models3d::{Display, set_display};
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", World::new(-20., 0.));
+    let b = doc.add_atom("O", World::new(20., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    let atom = doc.atom_mut(a).unwrap();
+    atom.display.number = Some(reshiki::atom_labels::Number {
+        text: "1".into(),
+        offset: None,
+        style: reshiki::atom_labels::number_style(),
+    });
+    atom.marks.push(reshiki::scientific::AtomMark {
+        id: Some(1),
+        kind: reshiki::scientific::MarkKind::LonePair,
+        offset: World::new(-15., -15.),
+        angle: 0.,
+        size_pt: None,
+    });
+    let atoms = [(a, [-0.7, 0., 0.]), (b, [0.7, 0., 0.])]
+        .map(|(id, xyz)| reshiki::models3d::Placed { id, xyz })
+        .to_vec();
+    let model = reshiki::models3d::Model3d::new(
+        &doc,
+        atoms,
+        vec![],
+        reshiki::models3d::ForceField::Mmff94s,
+    );
+    doc.models.push(model);
+    let [indicator] = reshiki::atom_labels::indicators(&doc).try_into().unwrap();
+    let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+    let selected = [a, b];
+    let press = |doc: &Document, at: World| {
+        let mut canvas = chain_canvas(doc, ChainMode::Straight);
+        canvas.tool = Tool::EditPoints;
+        canvas.selected = &selected;
+        let mut state = State::default();
+        let cursor = canvas.camera.screen(at, bounds);
+        canvas.update(
+            &mut state,
+            &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            bounds,
+            mouse::Cursor::Available(cursor),
+        );
+        state.gesture
+    };
+    let mark = World::new(-35., -15.);
+    for display in [Display::TwoD, Display::Both, Display::ThreeD] {
+        set_display(&mut doc, 0, display);
+        let hidden = display == Display::ThreeD;
+        assert_eq!(
+            matches!(press(&doc, mark), Some(Gesture::AtomMark { .. })),
+            !hidden,
+            "{display:?}"
+        );
+        assert_eq!(
+            matches!(
+                press(&doc, indicator.center),
+                Some(Gesture::AtomIndicator { .. })
+            ),
+            !hidden,
+            "{display:?}"
+        );
+    }
 }
 
 #[test]

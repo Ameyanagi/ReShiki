@@ -43,6 +43,63 @@ pub enum Primitive {
         radius: f32,
         primitives: Vec<Primitive>,
     },
+    /// A shaded 3D-model ball: a two-point radial gradient from a circle of
+    /// `radius × models3d::FOCAL_RADIUS` at `focal` out to the disc. Colors
+    /// are exact; no canvas theme changes them.
+    Sphere {
+        center: Point,
+        radius: f32,
+        focal: Point,
+        stops: Vec<(f32, [u8; 3])>,
+        outline: Option<Outline>,
+    },
+    /// A shaded 3D-model bond half: `corners` filled with a linear gradient
+    /// from `from` to `to`, in exact colors. The outline strokes the two long
+    /// sides, corners 0–1 and 3–2.
+    ShadedQuad {
+        corners: [Point; 4],
+        from: Point,
+        to: Point,
+        stops: Vec<(f32, [u8; 3])>,
+        outline: Option<Outline>,
+    },
+    /// A mitered 3D-model stick half: `points` filled with a linear gradient
+    /// from `from` to `to`, in exact colors, without an outline.
+    ShadedPolygon {
+        points: Vec<Point>,
+        from: Point,
+        to: Point,
+        stops: Vec<(f32, [u8; 3])>,
+    },
+    /// The outer edge of the 3D-model sticks drawn after it: every polygon
+    /// stroked as one shape with round joins, so where strokes overlap they
+    /// do not darken. The fills drawn over it leave only the outside half.
+    Contour {
+        polygons: Vec<Vec<Point>>,
+        outline: Outline,
+    },
+    /// A 3D-model wireframe half-bond: a round-capped line in an exact color.
+    Wire {
+        from: Point,
+        to: Point,
+        width: f32,
+        color: [u8; 3],
+    },
+    /// A 3D model's soft background card: a rounded rectangle in exact colors.
+    Card {
+        lo: Point,
+        hi: Point,
+        radius: f32,
+        fill: [u8; 3],
+        outline: Outline,
+    },
+}
+/// An exact, translucent stroke around a 3D-model shape.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Outline {
+    pub color: [u8; 3],
+    pub alpha: f32,
+    pub width: f32,
 }
 fn visible(a: &Atom, doc: &Document) -> bool {
     crate::atom_labels::visible(a, doc)
@@ -80,6 +137,9 @@ pub fn atom_label_ink_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)>
 /// Keep this separate from geometric nearest-atom searches used for bond growth.
 pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
     doc.atoms.iter().rev().find_map(|atom| {
+        if crate::models3d::hides(doc, atom.id) {
+            return None;
+        }
         // Empty corners between a symbol and its stacked H/isotope/charge
         // must not hide a neighboring atom or bond from pointer targeting.
         label_ink_boxes(&atom_label(atom, doc))
@@ -1015,6 +1075,9 @@ pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<
             Owner::BondStereo(a, b) if owners.get(&a) == owners.get(&b) => a,
             Owner::BondStereo(..) => continue,
         };
+        if crate::models3d::hides(doc, id) {
+            continue;
+        }
         let corner = label.origin.offset(label.width, label.height);
         grow(id, &mut [label.origin, corner].into_iter());
     }
@@ -1023,10 +1086,25 @@ pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<
         let (lo, hi) = g.bounds();
         grow(g.id, &mut [lo, hi].into_iter());
     }
+    for model in doc
+        .models
+        .iter()
+        .filter(|m| m.display != crate::models3d::Display::TwoD)
+    {
+        if let Some(id) = model
+            .atoms
+            .iter()
+            .map(|a| a.id)
+            .find(|id| owners.contains_key(id))
+            && let Some(corners) = crate::models3d::frame_corners(doc, model)
+        {
+            grow(id, &mut corners.into_iter());
+        }
+    }
     for atom in doc
         .atoms
         .iter()
-        .filter(|a| owners.contains_key(&a.id) && doc.atom_visible(a.id))
+        .filter(|a| owners.contains_key(&a.id) && doc.atom_drawn(a.id))
     {
         grow(atom.id, &mut std::iter::once(atom.position));
         for part in crate::scientific::styled_mark_parts(atom, &doc.drawing_style) {
@@ -1048,7 +1126,7 @@ pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<
     let mut highlight_joins = None;
     for bond in &doc.bonds {
         if bond.highlight.is_some()
-            && doc.bond_visible(bond.a, bond.b)
+            && doc.bond_drawn(bond.a, bond.b)
             && owners
                 .get(&bond.a)
                 .is_some_and(|owner| Some(owner) == owners.get(&bond.b))
@@ -1272,16 +1350,20 @@ fn ring_center(doc: &Document, from: u64, to: u64) -> Option<Point> {
 /// Drawing primitives with colors in canonical light-canvas bytes; renderers
 /// apply the canvas conversion once.
 pub fn primitives(doc: &Document) -> Vec<Primitive> {
-    let opacity = crate::rear_opacity::Paint::new(doc);
-    primitives_with_opacity(doc, &opacity)
+    let flat = crate::models3d::drawn(doc);
+    let opacity = crate::rear_opacity::Paint::new(&flat);
+    primitives_with_opacity(doc, &flat, &opacity)
 }
-/// Drawing primitives using shared rear-opacity paint. `opacity` must be
-/// `rear_opacity::Paint::new` of this same raw, unmaterialized document.
+/// Drawing primitives using shared rear-opacity paint. `flat` must be
+/// [`crate::models3d::drawn`] of this same raw, unmaterialized document, and
+/// `opacity` its `rear_opacity::Paint::new`: atoms shown as 3D models are not
+/// painted in 2D.
 pub fn primitives_with_opacity(
-    doc: &Document,
+    raw: &Document,
+    flat: &Document,
     opacity: &crate::rear_opacity::Paint,
 ) -> Vec<Primitive> {
-    let inputs = BondInputs::prepare(doc, opacity, Resolve::Scene);
+    let inputs = BondInputs::prepare(flat, opacity, Resolve::Scene);
     let doc = inputs.doc();
     let style = &doc.drawing_style;
     let mut out = vec![];
@@ -1323,6 +1405,7 @@ pub fn primitives_with_opacity(
     let runs = &pass.labels.runs;
     push_atom_labels(&mut out, doc, runs, opacity, &halos);
     push_label_halo(&mut out, doc, runs, opacity, &halos.above(None));
+    out.extend(crate::models3d::primitives(raw));
     push_arrows_and_annotations(&mut out, doc);
     for graphic in graphics.iter().filter(|g| g.layer >= 0) {
         out.extend(graphic_primitive(graphic));
@@ -2321,6 +2404,37 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
             Primitive::Polygon(p) => points.extend(p),
             // The haloed labels follow it; the margin covers the halo.
             Primitive::Halo { .. } => {}
+            Primitive::Sphere {
+                center,
+                radius,
+                outline,
+                ..
+            } => {
+                let r = radius + outline.map_or(0., |o| o.width / 2.);
+                points.extend([center.offset(-r, -r), center.offset(r, r)]);
+            }
+            Primitive::ShadedQuad { corners, .. } => points.extend(corners),
+            Primitive::ShadedPolygon { points: p, .. } => points.extend(p),
+            Primitive::Contour { polygons, outline } => {
+                let r = outline.width / 2.;
+                for p in polygons.iter().flatten() {
+                    points.extend([p.offset(-r, -r), p.offset(r, r)]);
+                }
+            }
+            Primitive::Wire {
+                from, to, width, ..
+            } => {
+                let r = width / 2.;
+                for p in [from, to] {
+                    points.extend([p.offset(-r, -r), p.offset(r, r)]);
+                }
+            }
+            Primitive::Card {
+                lo, hi, outline, ..
+            } => {
+                let r = outline.width / 2.;
+                points.extend([lo.offset(-r, -r), hi.offset(r, r)]);
+            }
             Primitive::Text {
                 position,
                 text,
@@ -2353,6 +2467,11 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
 /// The themed drawing with a transparent surround, for compositing and geometry checks.
 pub fn svg(doc: &Document) -> String {
     svg::render_svg(doc, false)
+}
+/// Part of a scene alone over `lo..hi`, for rasterizing it the way figure
+/// export does: the canvas paints 3D models this way.
+pub fn svg_part(drawing: &[Primitive], lo: Point, hi: Point) -> String {
+    svg::render_part(drawing.to_vec(), lo, hi)
 }
 /// A figure carries the canvas background when exported or copied.
 pub fn svg_with_background(doc: &Document) -> String {

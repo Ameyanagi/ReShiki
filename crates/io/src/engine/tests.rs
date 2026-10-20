@@ -209,3 +209,66 @@ fn typed_text_formats_follow_cheap_markers() {
         assert_eq!(text_format(text), format, "{text}");
     }
 }
+
+#[tokio::test]
+async fn cleanup_keeps_the_hidden_drawing_of_a_molecule_shown_in_3d() {
+    use crate::cleanup::{Options, Scope};
+    use crate::document::Point;
+    use crate::models3d::{Display, ForceField, Model3d, Placed, set_display};
+    let mut doc = Document::default();
+    // A crooked ethanol shown only in 3D, and a crooked drawn methanol.
+    let c1 = doc.add_atom("C", Point::new(0., 0.));
+    let c2 = doc.add_atom("C", Point::new(10., -40.));
+    let o = doc.add_atom("O", Point::new(15., 5.));
+    doc.add_bond(c1, c2, 1, "plain");
+    doc.add_bond(c2, o, 1, "plain");
+    let c3 = doc.add_atom("C", Point::new(200., 0.));
+    let o2 = doc.add_atom("O", Point::new(205., 9.));
+    doc.add_bond(c3, o2, 1, "plain");
+    let atoms = [
+        (c1, [-1.2, -0.2, 0.1]),
+        (c2, [0.1, 0.5, -0.1]),
+        (o, [1.2, -0.3, 0.2]),
+    ]
+    .map(|(id, xyz)| Placed { id, xyz })
+    .to_vec();
+    let model = Model3d::new(&doc, atoms, vec![], ForceField::Mmff94s);
+    doc.models.push(model);
+    doc.require_version(crate::document::MODELS_3D);
+    assert!(set_display(&mut doc, 0, Display::ThreeD));
+    let engine = LocalEngine::default();
+    let clean = |scope, selected: Vec<u64>| {
+        let mut request = Request::molecule("clean", doc.clone());
+        request.selected_ids = Some(selected);
+        request.cleanup = Some(Options {
+            scope,
+            ..Options::default()
+        });
+        engine.request(request)
+    };
+    let refused = clean(Scope::SelectedMolecules, vec![c1, c2, o]).await;
+    assert!(
+        refused
+            .unwrap_err()
+            .to_string()
+            .contains("Switch to 2D to clean up the drawing")
+    );
+    let cleaned = clean(Scope::Drawing, vec![]).await.unwrap();
+    let after = cleaned.document.unwrap();
+    for id in [c1, c2, o] {
+        assert_eq!(
+            after.atom(id).unwrap().position,
+            doc.atom(id).unwrap().position
+        );
+    }
+    assert_ne!(
+        after.atom(o2).unwrap().position,
+        doc.atom(o2).unwrap().position
+    );
+    assert!(
+        cleaned
+            .warnings
+            .iter()
+            .any(|w| w.contains("shown in 3D kept unchanged"))
+    );
+}

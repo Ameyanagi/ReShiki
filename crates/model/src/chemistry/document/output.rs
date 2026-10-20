@@ -498,12 +498,16 @@ fn reconstruct(
     )?;
     let ordered = ordered_bonds(base, &bonds_by_pair, e)?;
     let (bonds, bond_indices) = reconstruct_bonds(&work, molecule, ordered, e)?;
-    let document = Document {
+    let mut document = Document {
         version: crate::document::EDITOR_BASELINE,
         atoms,
         bonds,
         ..base.cloned().unwrap_or_default()
     };
+    // Kept 3D models still need the version that validates them.
+    if !document.models.is_empty() {
+        document.require_version(crate::document::MODELS_3D);
+    }
     Ok(Drawing {
         molecule: work,
         document,

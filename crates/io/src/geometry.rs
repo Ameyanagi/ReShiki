@@ -80,6 +80,15 @@ impl ForceField {
         }
     }
 }
+impl From<ForceField> for crate::models3d::ForceField {
+    fn from(field: ForceField) -> Self {
+        match field {
+            ForceField::Mmff94 => Self::Mmff94,
+            ForceField::Mmff94s => Self::Mmff94s,
+            ForceField::Uff => Self::Uff,
+        }
+    }
+}
 impl std::fmt::Display for ForceField {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.name())
@@ -181,6 +190,7 @@ impl Prepared {
         part.groups.clear();
         part.reactions.clear();
         part.ring_fills.clear();
+        part.models.clear();
         part.abbreviations
             .retain(|a| a.members.iter().all(|id| selected.contains(id)));
         for atom in &part.atoms {
@@ -277,6 +287,88 @@ impl Prepared {
     }
     pub fn ids(&self) -> &[u64] {
         &self.ids
+    }
+    /// The same molecule without the drawing's retained depth, so generation
+    /// always embeds fresh conformers instead of relaxing the drawing's own 3D
+    /// coordinates. Only for generation: [`Self::view_frame`] needs the depth.
+    pub fn without_retained_depth(mut self) -> Self {
+        for p in &mut self.drawing_positions {
+            p.z = 0.;
+        }
+        self
+    }
+    /// A 3D model of this molecule from a generated conformer: drawing atoms
+    /// by ID, then force-field hydrogens with their parents. The drawing and
+    /// its atom identities are unchanged.
+    pub fn model(&self, optimized: &Optimized) -> Result<crate::models3d::Model3d, Error> {
+        let conformer = &optimized.conformer;
+        conformer.validate(self.ids.len())?;
+        let xyz = |p: &Point3| [p.x as f32, p.y as f32, p.z as f32];
+        let atoms = self
+            .ids
+            .iter()
+            .zip(&conformer.positions)
+            .map(|(id, p)| crate::models3d::Placed {
+                id: *id,
+                xyz: xyz(p),
+            })
+            .collect();
+        let hydrogens = conformer
+            .hydrogen_parents
+            .iter()
+            .zip(conformer.positions.iter().skip(self.ids.len()))
+            .map(|(parent, p)| {
+                Ok(crate::models3d::Hydrogen {
+                    parent: *self
+                        .ids
+                        .get(*parent)
+                        .ok_or(Error::Coordinates("Missing hydrogen parent"))?,
+                    xyz: xyz(p),
+                })
+            })
+            .collect::<Result<_, Error>>()?;
+        Ok(crate::models3d::Model3d::new(
+            &self.source,
+            atoms,
+            hydrogens,
+            optimized.force_field.into(),
+        ))
+    }
+    /// The drawing flattened from `model` as it is turned now, like 3D
+    /// optimize's projection: each atom at its projected place, keeping the
+    /// drawing's scale and centre, with its depth retained.
+    pub fn flattened(&self, model: &crate::models3d::Model3d) -> Result<Document, Error> {
+        let positions = self
+            .ids
+            .iter()
+            .map(|id| {
+                let [x, y, z] = model
+                    .atoms
+                    .iter()
+                    .find(|a| a.id == *id)
+                    .ok_or(Error::Coordinates("Missing model atom"))?
+                    .xyz
+                    .map(f64::from);
+                Ok(Point3 { x, y, z })
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+        let drawing = view::center(&self.drawing_positions)?;
+        let frame = ViewFrame {
+            rotation: Rotation::from_quaternion(model.rotation.map(f64::from)),
+            model_center: view::center(&positions)?,
+            drawing_center: crate::document::Point::new(
+                (drawing.x * self.units) as f32,
+                (-drawing.y * self.units) as f32,
+            ),
+            depth_center: 0.,
+            units_per_angstrom: self.units,
+        };
+        let conformer = Conformer {
+            original_atom_count: positions.len(),
+            positions,
+            hydrogen_parents: vec![],
+        };
+        self.document(&conformer, &frame)
     }
     pub fn index(&self, id: u64) -> Option<usize> {
         self.ids.iter().position(|a| *a == id)

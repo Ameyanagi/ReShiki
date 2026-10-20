@@ -9,6 +9,122 @@ Cl at an atom or empty hotspot. Choose Select/Lasso with the tool buttons;
 the current tab between hotspot drawing and classic contextual controls.
 Commands that do not fit in the context row are in its **⋯** menu.
 
+## Show a molecule as a 3D model
+
+Select one molecule and choose **2D**, **3D** or **Both** on the small
+**Show as** bar above the selection, or at the top of **Properties → Structure**
+(also **Show as** in the right-click menu and **Show as 3D model** in the
+command palette). The bar shows while a whole molecule is selected with Select
+or Lasso and hides during any drag; it sits above the selection box and its
+rotation handle, or below them at the top of the window, and when neither fits
+it stays inside the canvas over the selection. **3D** draws the molecule as a
+model (ball & stick unless **Properties → 3D model** picks another style) in
+place of its drawing, **Both** puts the model one bond length to its right, and
+**2D** shows the drawing again. The first switch generates the conformer in the
+background with the same worker as 3D optimize (fresh ETKDG conformers, then
+MMFF94s); a result for a drawing that changed meanwhile is discarded. Later
+switches reuse the stored model, and each switch is one Undo step. When a model
+first appears (2D → 3D or 2D → Both), a 0.75 s morph moves the atoms from the
+drawing into 3D while the hydrogens grow out of their atoms. It only redraws
+the canvas and never delays input; ReShiki has no reduced-motion setting yet.
+
+The model links to the molecule by atom ID. It never changes chemistry, atom IDs
+or the 2D layout, which is kept for switching back. Clicking or lassoing the
+model selects the molecule, so moving, aligning, copying and Duplicate carry it
+along; while the molecule is shown in 3D, its hidden 2D atoms cannot be picked.
+A chemical edit to the molecule (element, charge, bonds or stereo) removes the
+model.
+
+The model sits in a square frame that holds it in any rotation, so the frame,
+its handles and the bar stay put while the model turns. On the canvas, a model
+that is not selected moves like any object. Once its molecule is selected:
+
+- **drag inside the frame** to rotate it like a trackball (0.01 radian per
+  pixel about the screen axes);
+- **Shift-drag** to roll it about the view axis;
+- **double-click** to reset the view to the opening principal-axes view;
+- drag **within 8 px of the frame edge**, or with Alt or Cmd/Ctrl, to move or
+  copy it as usual;
+- drag a **corner handle** to resize the frame, which scales the model about
+  the opposite corner and leaves the 2D drawing as it is. Edge handles are
+  hidden for a selection of shown models, and a selection mixing a shown model
+  with other objects has no resize handles.
+
+Each rotation, reset and resize is one Undo step, and the canvas preview is the
+committed result.
+
+The **3D tilt** tool, its X/Y step commands (right-click → **3D tilt**, the
+Alt+Shift+arrow keys and the command palette) and the **Tilt X / Tilt Y**
+transform fields turn a molecule shown only in 3D by turning its model, with
+the same rotation as dragging inside the frame: vertical movement turns it
+about X and horizontal movement about Y, at the tilt's 0.5° per pixel, and
+Shift snaps to 15°. Its hidden 2D drawing stays as it is. In a selection
+that also holds drawn atoms or shapes, the model turns and the rest tilts,
+together as one Undo step, and the preview is the committed result. A
+molecule shown as **Both** tilts its visible 2D drawing and leaves the model
+alone.
+
+The selection box's rotation handle, **Rotate 180°**, the Alt/Option+arrow
+rotate steps and the **Rotate** transform field roll a model shown only in 3D
+about the view axis, clockwise as they turn a drawing, and its frame stays in
+place; the other selected objects turn as before, in the same Undo step, and
+the preview is the committed result. Editing never changes the hidden 2D
+drawing of such a molecule: Flip, which would make the model the other
+enantiomer, Scale/W/H, Clean up, 3D optimize, reference align/stretch and Join
+say **Switch to 2D** instead, a mixed selection flips just its other objects,
+and rings, joins and fused templates never attach to the hidden atoms.
+
+### 2D layout
+
+While a model is shown, **Properties → Structure → 2D layout** chooses what the
+**2D** buttons return to. **Original drawing** (the default) restores the
+layout you drew. **From the 3D view** flattens the model as it is turned now
+into the 2D drawing, like 3D optimize's projection: atoms keep their IDs and
+drawn stereo, the drawing keeps its bond-length scale and centre, and far bonds
+are lighter through **Automatic depth**. The right-click **Show as** menu and
+the command palette also offer **2D from the 3D view** directly. Each flatten is
+one Undo step that also switches the molecule to 2D; the model is kept, and
+shown in 3D again it is back in the same frame, at the same place and size.
+
+The choice belongs to each model and is saved with it. A flattened model also
+keeps the layout you drew (positions, depth, stored stereo and depth
+appearance), so **Original drawing**, or **Show as → 2D drawing**, brings it
+back, also after saving and reopening. Choosing **Original drawing** brings it
+back at once, in the same Undo step, so while that choice shows, the 2D atoms
+(and the 2D half of **Both**) are always the layout you drew. Choosing the display that is already
+shown changes nothing.
+
+While the model is shown, **Properties → 3D model** sets how it looks:
+
+- **Style:** **Ball & stick** (the default), **Stick** (thick bonds mitered
+  at the atoms: neighbouring sticks share one border, a free end is rounded,
+  and only the outer edge of the tubes is outlined; an atom with no shown
+  bonds is a disc), **Wireframe** (thin lines in the atom colours; an atom with no
+  shown bonds is a dot) or **Space-filling** (balls at van der Waals radii).
+- **Look:** **Flat · journal** (thin dark outlines; on a dark canvas a soft
+  light rim) or **Glossy · slides**
+  (brighter highlights, no outlines).
+- **Hydrogens:** **All**, **Polar** (only those on N, O and S) or **None**.
+  A molecule made only of hydrogens always shows them.
+- **Depth fade** mixes farther atoms toward the background, and
+  **Perspective** sets how strongly nearer atoms are enlarged.
+- **Background:** **None** or **Soft card**, a rounded card behind the model:
+  light grey on a light canvas, the background lightened a little on a dark
+  one.
+- **Reset view** turns the model back to its opening view.
+
+The model's colours follow the drawing's colour theme and canvas: each
+element uses the theme's element swatch (Publication, which has none, uses
+Presentation's), so a dark canvas gets the theme's dark tones, and a user
+theme's swatches apply too. Where the theme greys hydrogen like carbon
+(Presentation, Pastel), hydrogen is a light grey that stays lighter than
+carbon; Jmol keeps its white hydrogen. An element without a swatch keeps the
+prototype's grey.
+
+Each change is one Undo step; dragging a slider is one step when you release
+it. The canvas draws the model with the same renderer as PNG export, so the
+shading looks the same at any zoom.
+
 ## Preview an optimized molecule
 
 The preview opens the right **Properties** panel. Force-field, pin, view, and

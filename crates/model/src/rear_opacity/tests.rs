@@ -584,7 +584,10 @@ fn assert_ring_paint_parity(doc: &Document) -> (usize, usize) {
     assert_eq!(old_arcs.bonds, new_arcs.bonds);
     assert_eq!(
         format!("{:?}", crate::scene::primitives(doc)),
-        format!("{:?}", crate::scene::primitives_with_opacity(doc, &raw))
+        format!(
+            "{:?}",
+            crate::scene::primitives_with_opacity(doc, doc, &raw)
+        )
     );
     (circle_parts, new_arcs.primitives.len())
 }

@@ -13,6 +13,8 @@ use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Section {
+    Structure,
+    Model3d,
     Bonds,
     BondDirection,
     Atoms,
@@ -523,6 +525,12 @@ impl App {
             body = body.push(text(format!(
                 "{} atom label(s) have low contrast against the canvas or a ring fill. Adjust the label or fill color.", color_issues.len()
             )).size(11).style(muted_text));
+        }
+        if let Some(section) = self.structure_section() {
+            body = body.push(section);
+        }
+        if let Some(section) = self.model_section() {
+            body = body.push(section);
         }
         let molecular_first = self.tab.selected.is_empty()
             || self.property_key().is_some_and(|key| !key.atoms.is_empty());

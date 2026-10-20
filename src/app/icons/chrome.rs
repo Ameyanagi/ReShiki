@@ -125,3 +125,35 @@ pub(super) fn lock(f: &mut Frame<'_>, ink: Color, locked: bool) {
     });
     f.stroke(&shackle, Stroke::default().with_width(1.4).with_color(ink));
 }
+
+/// The prototype's 3D-model style pictograms, scaled from 30 × 22 to 24 × 24.
+pub(super) fn model_style(f: &mut Frame<'_>, ink: Color, style: reshiki::models3d::Style) {
+    use reshiki::models3d::Style;
+    let at = |x: f32, y: f32| Point::new(x * 0.8, y * 0.8 + 3.2);
+    let zigzag = Path::new(|p| {
+        p.move_to(at(4., 16.));
+        p.line_to(at(12., 8.));
+        p.line_to(at(20., 15.));
+        p.line_to(at(27., 7.));
+    });
+    let round = |width: f32| {
+        Stroke::default()
+            .with_width(width)
+            .with_color(ink)
+            .with_line_cap(iced::widget::canvas::LineCap::Round)
+            .with_line_join(iced::widget::canvas::LineJoin::Round)
+    };
+    match style {
+        Style::BallStick => {
+            f.stroke(&Path::line(at(7., 15.), at(23., 7.)), round(2.));
+            f.fill(&Path::circle(at(7., 15.), 4.), ink);
+            f.fill(&Path::circle(at(23., 7.), 3.2), ink);
+        }
+        Style::Stick => f.stroke(&zigzag, round(3.6)),
+        Style::Wireframe => f.stroke(&zigzag, round(1.3)),
+        Style::SpaceFilling => {
+            f.fill(&Path::circle(at(11., 12.), 5.6), Color { a: 0.55, ..ink });
+            f.fill(&Path::circle(at(19., 10.), 5.6), ink);
+        }
+    }
+}

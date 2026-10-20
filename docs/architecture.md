@@ -132,7 +132,7 @@ Leaf crates depend on no layer crate; only `reshiki-windows` uses another leaf, 
 | `crates/model/src/style.rs` and `assets/drawing_style.json` | Shared JACS / ACS defaults, publication units and font advances                |
 | `reference/engine/worker.py`                                | Independent Python/RDKit reference, enabled by `rdkit-reference`               |
 
-Document coordinates use screen-style positive-down Y, with 28 world units per RDKit coordinate unit. The default single bond is 42 world units, representing 14.4 publication points in the JACS / ACS preset. The camera never changes stored coordinates or export size. Native documents are saved as JSON format version 26 and accept versions 1–26 when reading; see [document format versions](#document-format-versions). Version 17 stores theme palette colors by name and custom colors as displayed; reading an older dark-canvas drawing converts its custom colors once to the lightness-flipped values it showed. Version 16 embeds custom themes and version 15 adds explicit reaction roles tied to arrow and atom IDs. A drawing from a newer ReShiki reports the document version it needs instead of a parse error. Version 14 adds validated per-document drawing settings; the physical coordinate scale remains fixed at 14.4/42 points per world unit. New presentation fields prompted version increments so older editors reject unsupported documents. History and camera are session state.
+Document coordinates use screen-style positive-down Y, with 28 world units per RDKit coordinate unit. The default single bond is 42 world units, representing 14.4 publication points in the JACS / ACS preset. The camera never changes stored coordinates or export size. Native documents are saved as JSON format version 28 and accept versions 1–28 when reading; see [document format versions](#document-format-versions). Version 17 stores theme palette colors by name and custom colors as displayed; reading an older dark-canvas drawing converts its custom colors once to the lightness-flipped values it showed. Version 16 embeds custom themes and version 15 adds explicit reaction roles tied to arrow and atom IDs. A drawing from a newer ReShiki reports the document version it needs instead of a parse error. Version 14 adds validated per-document drawing settings; the physical coordinate scale remains fixed at 14.4/42 points per world unit. New presentation fields prompted version increments so older editors reject unsupported documents. History and camera are session state.
 
 Atoms retain formal charge, isotope, explicit-H count, implicit-H policy, map number and tetrahedral winding. Winding refers to an explicit ordered list of stable neighbor IDs. Molecule preparation compensates for neighbor permutations, preventing array reordering from reversing a stereocenter. Double-bond stereo stores its reference atoms separately. Topology edits invalidate affected stereo and derived labels; a background refresh recomputes chemistry. Explicit Check also refreshes computed properties.
 
@@ -142,7 +142,8 @@ Atoms retain formal charge, isotope, explicit-H count, implicit-H policy, map nu
 reads, and every saved file is marked with it. Its doc comment holds the table
 below; update both together. ReShiki 0.12.0 saves version 26. ReShiki 0.11.0
 reads versions up to 19, so it cannot open a drawing saved by 0.12.0 and reports
-the version it needs.
+the version it needs. Every file is now saved as version 28, with or without a
+3D model, so 0.12.0 cannot open it either.
 
 | Version | Added                                                                           |
 | ------- | ------------------------------------------------------------------------------- |
@@ -165,6 +166,8 @@ the version it needs.
 | 24      | EMF sources, cubic arrows, target links and rear opacity integrated (#297).     |
 | 25      | Linked molecule-name captions and reaction atom-map labels (#298).              |
 | 26      | Generic structures and coordination joining (#300; 0.12.0).                     |
+| 27      | Condition text attached to reaction arrows.                                     |
+| 28      | 3D models of structures (#386).                                                 |
 
 ## Chemistry requests
 
@@ -177,6 +180,8 @@ Iced tasks keep chemistry work off the UI thread. A document revision prevents l
 ## Rendering and interaction
 
 Both the canvas and SVG consume the same vector primitives. Canvas text is emitted as glyph outlines to maintain drawing order. SVG retains editable text and depends on compatible fonts in the viewer. Label placement and collision handling are still approximate.
+
+A 3D model (`crates/model/src/models3d.rs`, #386) stores one molecule's conformer, linked by atom ID, beside or in place of its 2D drawing. The scene paints it as `Sphere`, `ShadedQuad`, `ShadedPolygon`, `Contour`, `Wire` and `Card` primitives in exact colors, back to front, in four styles; Stick miters each atom's half-bonds into one `ShadedPolygon` apiece, sorted by screen angle around the atom, with a single `Contour` stroke of them all behind the fills; a hydrogen growing in during the 2D → 3D morph is wrapped in `Opacity`. SVG writes native radial and linear gradients. Iced has no radial gradient, so the canvas (`src/canvas/models3d/tiles.rs`) rasterizes model primitives with resvg from the same SVG at twice the logical resolution, matching PNG export. It draws them as 512-pixel tiles on a grid fixed to the drawing, small enough for Iced to upload in the same frame. Each visible tile renders only the primitives that reach it and is cached by their content, so panning reuses tiles and editing one model keeps the others'; the cache holds at most 128 MB. While a molecule is shown in 3D, its 2D atoms leave the painted scene, rear-opacity paint, picking, selection regions, markers and erasing (`Document::atom_drawn`), and the model's frame selects the molecule. The frame is a square around the model's bounding sphere, so it does not change while the model turns. A chemical edit to the molecule drops the model in `transaction::reconcile`. MOL, CDX/CDXML and SMILES export the 2D atoms and omit models. `src/canvas/models3d.rs` turns a selected model (`models3d::turn`, previewed and committed alike), draws the floating Show as bar and plays the 2D → 3D morph by setting the unsaved `Model3d::morph` on the canvas's drawing copy, redrawing only the canvas. "From the 3D view" flattens a model through `geometry::Prepared::flattened`, the projection 3D optimize applies.
 
 Pointer motion is read from each event, rather than only Iced's latest cursor snapshot. This matters when multiple move/press/release events arrive in a single batch. The desktop drag test found this issue; a regression test now reproduces that event sequence.
 

@@ -42,6 +42,7 @@ impl App {
             Message::Host(_) => {}
             Message::KeyboardDrawing(action) => return Some(self.keyboard_drawing_action(action)),
             Message::Optimization(action) => return Some(self.optimization_action(action)),
+            Message::Models3d(action) => return Some(self.models3d_action(action)),
             Message::DepthAppearance(action) => return Some(self.depth_appearance_action(action)),
             Message::DrawingStyle(action) => return Some(self.drawing_style_action(action)),
             Message::Imports(action) => return Some(self.import_action(action)),
@@ -144,6 +145,9 @@ impl App {
             Message::Canvas(Edit::BeginTransform(field)) => {
                 return Some(self.begin_numeric_transform(field));
             }
+            Message::Canvas(Edit::ShowAs(display)) => {
+                return Some(self.models3d_action(self.show_as(display)));
+            }
             Message::Canvas(edit) => {
                 if let Some(task) = self.optimization_edit(edit.clone()) {
                     return Some(task);
@@ -215,6 +219,7 @@ impl App {
     pub(super) fn update_document_result(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Optimization(action) => return self.optimization_action(action),
+            Message::Models3d(action) => return self.models3d_action(action),
             Message::Nmr(action) => return self.nmr_action(action),
             Message::LabelsReady(key, result) => self.labels_ready(key, result),
             Message::Mapping(action) => return self.mapping_action(action),

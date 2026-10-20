@@ -232,6 +232,7 @@ impl Presentation {
             graphics,
             groups,
             reactions,
+            models,
             recent_colors,
         } = doc;
         fn records<T>(n: usize) -> usize {
@@ -337,6 +338,13 @@ impl Presentation {
                 .saturating_add(records::<u64>(name.atoms.len()))
                 .saturating_add(name.smiles.len())
                 .saturating_add(name.text.len());
+        }
+        for m in models {
+            work.charge(1)?;
+            copy = copy
+                .saturating_add(std::mem::size_of::<crate::models3d::Model3d>())
+                .saturating_add(records::<crate::models3d::Placed>(m.atoms.len()))
+                .saturating_add(records::<crate::models3d::Hydrogen>(m.hydrogens.len()));
         }
         for g in graphics {
             work.charge(1)?;

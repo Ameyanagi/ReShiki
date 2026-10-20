@@ -16,6 +16,8 @@ enum Completion {
     Engine,
     /// Optimization(WorkerDone).
     Optimization,
+    /// Models3d(Generated).
+    Models3d,
     /// Nmr(Finished | Exported).
     Nmr,
     /// Exported.
@@ -83,6 +85,7 @@ impl Completion {
         match self {
             Self::Engine
             | Self::Optimization
+            | Self::Models3d
             | Self::Nmr
             | Self::Export
             | Self::FigureExport
@@ -150,7 +153,10 @@ const NOWHERE: Admission = Admission {
 
 fn admission(completion: Completion) -> Admission {
     match completion {
+        // Models3d drops its result itself while a modal is open, so its
+        // pending job is cleared in every modal.
         Completion::Engine
+        | Completion::Models3d
         | Completion::Nmr
         | Completion::Export
         | Completion::FigureExport
@@ -376,6 +382,15 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::ExportMenu(..) => None,
             }
         }
+        Message::Models3d(action) => match action {
+            super::models3d::Action::Generated(..) => Some(Completion::Models3d),
+            super::models3d::Action::Show(..)
+            | super::models3d::Action::Set(..)
+            | super::models3d::Action::SlideEnd
+            | super::models3d::Action::Unchanged
+            | super::models3d::Action::Flatten
+            | super::models3d::Action::Layout(..) => None,
+        },
         Message::Optimization(action) => {
             use super::optimization::Action;
             match action {
