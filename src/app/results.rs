@@ -149,7 +149,10 @@ const NOWHERE: Admission = Admission {
 
 fn admission(completion: Completion) -> Admission {
     match completion {
+        // Models3d drops its result itself while a modal is open, so its
+        // pending job is cleared in every modal.
         Completion::Engine
+        | Completion::Models3d
         | Completion::Nmr
         | Completion::Export
         | Completion::FigureExport
@@ -177,7 +180,6 @@ fn admission(completion: Completion) -> Admission {
             updates_dialog: true,
         },
         Completion::Optimization
-        | Completion::Models3d
         | Completion::DrawingStyle
         | Completion::Labels
         | Completion::Mapping

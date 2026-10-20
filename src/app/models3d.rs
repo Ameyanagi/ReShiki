@@ -38,14 +38,19 @@ impl App {
         match action {
             Action::Show(display) => self.show_model(display),
             Action::Generated(key, result) => {
-                let current = Key {
-                    serial: key.serial,
-                    ..self.model_key()
-                };
                 let Some(job) = self.tab.model_job.take_if(|job| job.key == key) else {
                     return Task::none();
                 };
-                if key != current {
+                if key != self.model_key() {
+                    self.status = "Drawing changed · 3D model not applied".into();
+                    self.error = false;
+                    return Task::none();
+                }
+                // A preview or label editor owns the drawing; adding a model
+                // under it would cancel or outdate it.
+                if self.tab.drawing_edit_active() {
+                    self.status = "3D model not applied · Choose 3D again after this edit".into();
+                    self.error = false;
                     return Task::none();
                 }
                 let model = result.and_then(|optimized| {
@@ -74,6 +79,20 @@ impl App {
         }
     }
 
+    /// The display a still-current generation for these atoms will show.
+    fn pending(&self, atoms: &[u64]) -> Option<Display> {
+        self.tab
+            .model_job
+            .as_ref()
+            .filter(|job| {
+                let ids = job.prepared.ids();
+                job.key == self.model_key()
+                    && ids.len() == atoms.len()
+                    && atoms.iter().all(|id| ids.contains(id))
+            })
+            .map(|job| job.display)
+    }
+
     /// The selected molecule and the index of its model, if it has one.
     pub(super) fn selected_model(&self) -> Option<(Vec<u64>, Option<usize>)> {
         let atoms = models3d::selected_molecule(&self.tab.doc, &self.tab.selected)?;
@@ -94,16 +113,25 @@ impl App {
             return Task::none();
         };
         if let Some(index) = index {
-            self.tab.model_job = None;
             let before = self.tab.doc.clone();
             if models3d::set_display(&mut self.tab.doc, index, display) {
                 self.changed(before);
                 self.status = status(display).into();
+                // Showing another molecule differently leaves a generation
+                // in flight valid.
+                let key = self.model_key();
+                if let Some(job) = &mut self.tab.model_job {
+                    job.key = key;
+                }
             }
             return Task::none();
         }
         if display == Display::TwoD {
-            self.tab.model_job = None;
+            if self.pending(&atoms).is_some() {
+                self.tab.model_job = None;
+                self.status = "3D model cancelled · Drawing unchanged".into();
+                self.error = false;
+            }
             return Task::none();
         }
         let prepared = match Prepared::new(&self.tab.doc, &atoms) {
@@ -158,11 +186,11 @@ impl App {
 
     /// Show as 2D / 3D / Both for one selected molecule.
     pub(super) fn structure_section(&self) -> Option<Element<'_, Message>> {
-        let (_, index) = self.selected_model()?;
+        let (atoms, index) = self.selected_model()?;
         let current = index
             .and_then(|i| self.tab.doc.models.get(i))
             .map_or(Display::TwoD, |m| m.display);
-        let pending = self.tab.model_job.as_ref().map(|job| job.display);
+        let pending = self.pending(&atoms);
         let enabled = !self.tab.busy && self.tab.optimization.is_none();
         Some(
             self.inspector_section(

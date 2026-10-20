@@ -247,3 +247,60 @@ fn a_background_tab_keeps_its_model_and_receives_its_result() {
     assert_eq!(app.tab.id, source);
     assert_eq!(displays(&app.tab.doc), [Display::ThreeD]);
 }
+
+#[test]
+fn cancelling_and_stale_results_say_so() {
+    let (mut app, atoms, _) = drawing();
+    show(&mut app, Display::ThreeD);
+    assert_eq!(app.pending(&atoms), Some(Display::ThreeD));
+    show(&mut app, Display::TwoD);
+    assert!(app.tab.model_job.is_none());
+    assert!(app.status.contains("cancelled"), "{}", app.status);
+
+    show(&mut app, Display::ThreeD);
+    let (key, result) = generated(&app);
+    let before = app.tab.doc.clone();
+    app.tab.doc.atom_mut(atoms[0]).unwrap().position = Point::new(-5., 3.);
+    app.changed(before);
+    assert_eq!(
+        app.pending(&atoms),
+        None,
+        "a stale job is not shown as pending"
+    );
+    let _ = app.update(Message::Models3d(Action::Generated(key, Ok(result))));
+    assert!(app.tab.doc.models.is_empty());
+    assert!(app.status.contains("not applied"), "{}", app.status);
+}
+
+#[test]
+fn a_job_belongs_to_its_molecule() {
+    let (mut app, atoms) = with_model(Display::Both);
+    let water = app.tab.doc.atoms[3].id;
+    app.tab.selected = vec![water];
+    show(&mut app, Display::ThreeD);
+    assert_eq!(app.pending(&[water]), Some(Display::ThreeD));
+    assert_eq!(app.pending(&atoms), None);
+
+    // Switching the other molecule keeps the generation in flight.
+    app.tab.selected = vec![atoms[0]];
+    show(&mut app, Display::TwoD);
+    assert_eq!(app.pending(&[water]), Some(Display::ThreeD));
+    let (key, result) = generated(&app);
+    let _ = app.update(Message::Models3d(Action::Generated(key, Ok(result))));
+    assert_eq!(displays(&app.tab.doc), [Display::TwoD, Display::ThreeD]);
+}
+
+#[test]
+fn a_result_during_a_modal_edit_is_dropped_and_not_left_pending() {
+    let (mut app, atoms, _) = drawing();
+    show(&mut app, Display::ThreeD);
+    let (key, result) = generated(&app);
+    let _ = app.update(Message::AtomText(super::super::atom_text::Action::Begin(
+        Some(atoms[0]),
+    )));
+    assert!(app.tab.atom_text.is_some());
+    let _ = app.update(Message::Models3d(Action::Generated(key, Ok(result))));
+    assert!(app.tab.model_job.is_none());
+    assert!(app.tab.doc.models.is_empty());
+    assert!(app.status.contains("not applied"), "{}", app.status);
+}
