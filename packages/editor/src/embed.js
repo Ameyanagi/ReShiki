@@ -6,6 +6,8 @@ const FRAME = new URL("./frame.html", import.meta.url);
 export function embed(element, options = {}) {
   const frameUrl = new URL(options.frameUrl ?? FRAME, location.href);
   const frame = document.createElement("iframe");
+  // A frame on another origin needs these to copy and paste.
+  frame.allow = "clipboard-read; clipboard-write";
   frame.src = frameUrl.href;
   frame.title = options.title ?? "ReShiki editor";
   frame.style.cssText = "display: block; width: 100%; height: 100%; border: 0";
