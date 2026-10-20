@@ -188,6 +188,21 @@ fn a_double_click_restores_the_opening_view() {
 }
 
 #[test]
+fn a_short_drag_inside_a_selected_model_is_a_click() {
+    let (doc, atoms) = drawing();
+    let canvas = canvas(&doc, &atoms);
+    let c = frame_center(&canvas);
+    let mut state = State::default();
+    // Under the 3 px turn threshold: the preview stays put, so must the commit.
+    let (preview, edit) = drag(&canvas, &mut state, c, &[c + Vector::new(2., 0.)]);
+    assert_eq!(preview, Some(doc.models[0].rotation));
+    assert!(
+        matches!(edit, Some(Edit::Select(_) | Edit::SelectAt(..))),
+        "{edit:?}"
+    );
+}
+
+#[test]
 fn corner_handles_resize_the_frame_and_edges_are_hidden() {
     let (doc, atoms) = drawing();
     let canvas = canvas(&doc, &atoms);

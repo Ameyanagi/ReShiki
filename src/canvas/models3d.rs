@@ -325,7 +325,6 @@ impl MoleculeCanvas<'_> {
         state: &mut State,
         turn: Turn,
         position: Point,
-        p: World,
         bounds: Rectangle,
     ) -> ControlFlow<Action<Edit>, Edit> {
         let roll = state.modifiers.shift();
@@ -350,7 +349,16 @@ impl MoleculeCanvas<'_> {
                 atoms: turn.atoms,
             });
         }
-        self.release_move(state, turn.start, turn.atoms, turn.clicked, p, bounds)
+        // Below the turn threshold the release is a click: it selects at the
+        // press and never moves the molecule.
+        self.release_move(
+            state,
+            turn.start,
+            turn.atoms,
+            turn.clicked,
+            turn.start,
+            bounds,
+        )
     }
 
     /// The model morphing from its drawing into 3D, and how far along it is.
