@@ -391,6 +391,42 @@ fn each_model_setting_is_one_undo_step_and_a_slider_drag_is_one() {
 }
 
 #[test]
+fn a_slider_change_without_release_does_not_join_later_steps() {
+    let (mut app, _) = with_model(Display::ThreeD);
+    let start = frames(&app);
+    // Arrow keys and Ctrl+wheel change a slider without a release.
+    set(&mut app, Setting::DepthFade(0.4));
+    set(&mut app, Setting::Style(Style::Wireframe));
+    set(&mut app, Setting::Perspective(0.5));
+    let _ = app.update(Message::Models3d(Action::SlideEnd));
+    assert_eq!(frames(&app), start + 3);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.models[0].style, Style::Wireframe);
+
+    // Nor does Undo leave a drag to join.
+    set(&mut app, Setting::DepthFade(0.2));
+    let _ = app.update(Message::Undo);
+    set(&mut app, Setting::Perspective(0.1));
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.models[0].style, Style::Wireframe);
+}
+
+#[test]
+fn changing_a_model_keeps_another_generation_in_flight() {
+    let (mut app, atoms) = with_model(Display::Both);
+    let water = app.tab.doc.atoms[3].id;
+    app.tab.selected = vec![water];
+    show(&mut app, Display::ThreeD);
+    let (key, result) = generated(&app);
+    app.tab.selected = vec![atoms[0]];
+    set(&mut app, Setting::Style(Style::Stick));
+    set(&mut app, Setting::DepthFade(0.3));
+    assert_eq!(app.pending(&[water]), Some(Display::ThreeD));
+    let _ = app.update(Message::Models3d(Action::Generated(key, Ok(result))));
+    assert_eq!(displays(&app.tab.doc), [Display::Both, Display::ThreeD]);
+}
+
+#[test]
 fn reset_view_restores_the_opening_view() {
     let (mut app, _) = with_model(Display::Both);
     let opening = app.tab.doc.models[0].rotation;

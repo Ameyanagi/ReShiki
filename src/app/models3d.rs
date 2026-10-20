@@ -8,6 +8,7 @@ use super::workspace::{accessible_command, control, muted_text};
 use super::{App, Message, document_tab::TabId, inspector::Section};
 use iced::widget::{Space, canvas, column, row, slider, text};
 use iced::{Alignment, Element, Length, Task};
+use reshiki::document::Document;
 use reshiki::geometry::{Client, ForceField, Optimized, Prepared};
 use reshiki::models3d::{self, Background, Display, Hydrogens, Look, Style};
 use std::sync::Arc;
@@ -62,7 +63,7 @@ impl App {
                 Task::none()
             }
             Action::SlideEnd => {
-                self.tab.model_sliding = false;
+                self.tab.model_sliding = None;
                 Task::none()
             }
             Action::Generated(key, result) => {
@@ -144,17 +145,8 @@ impl App {
             let before = self.tab.doc.clone();
             if models3d::set_display(&mut self.tab.doc, index, display) {
                 let previous = before.models.get(index).map(|m| m.display);
-                let current = self.model_key();
-                self.changed(before);
+                self.commit_model(before, false);
                 self.status = status(display, previous.unwrap_or(Display::TwoD));
-                // Showing another molecule differently leaves a generation
-                // in flight valid (unless it was already stale).
-                let next = self.model_key();
-                if let Some(job) = &mut self.tab.model_job
-                    && job.current == current
-                {
-                    job.current = next;
-                }
             }
             return Task::none();
         }
@@ -224,11 +216,27 @@ impl App {
             Setting::Perspective(value) => model.perspective = value.clamp(0., 1.),
             Setting::ResetView => model.rotation = reset.unwrap_or(model.rotation),
         }
-        if matches!(setting, Setting::DepthFade(_) | Setting::Perspective(_)) {
-            self.changed_continuing(before, self.tab.model_sliding);
-            self.tab.model_sliding = true;
+        // A drag continues only while nothing else has been committed.
+        let sliding = matches!(setting, Setting::DepthFade(_) | Setting::Perspective(_));
+        let continuing = sliding && self.tab.model_sliding == Some((self.tab.revision, index));
+        self.commit_model(before, continuing);
+        self.tab.model_sliding = sliding.then_some((self.tab.revision, index));
+    }
+
+    /// Changing how one molecule is shown leaves a generation in flight for
+    /// another valid (unless it was already stale).
+    fn commit_model(&mut self, before: Document, continuing: bool) {
+        let current = self.model_key();
+        if continuing {
+            self.changed_continuing(before, true);
         } else {
             self.changed(before);
+        }
+        let next = self.model_key();
+        if let Some(job) = &mut self.tab.model_job
+            && job.current == current
+        {
+            job.current = next;
         }
     }
 
