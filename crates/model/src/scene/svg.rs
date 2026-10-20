@@ -258,6 +258,49 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                     ));
                 }
             }
+            Primitive::ShadedPolygon {
+                points,
+                from,
+                to,
+                stops,
+            } => {
+                let (defs, id) = gradient(
+                    frame,
+                    "linearGradient",
+                    &format!(
+                        "x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\"",
+                        from.x, from.y, to.x, to.y
+                    ),
+                    &stops,
+                );
+                s.push_str(&format!(
+                    "{defs}<polygon points=\"{}\" fill=\"url(#{id})\"/>",
+                    points
+                        .iter()
+                        .map(|p| format!("{},{}", p.x, p.y))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                ));
+            }
+            Primitive::Contour { polygons, outline } => {
+                let path: String = polygons
+                    .iter()
+                    .filter_map(|polygon| {
+                        let (first, rest) = polygon.split_first()?;
+                        let mut d = format!("M{} {}", first.x, first.y);
+                        for p in rest {
+                            d.push_str(&format!(" L{} {}", p.x, p.y));
+                        }
+                        d.push_str(" Z ");
+                        Some(d)
+                    })
+                    .collect();
+                s.push_str(&format!(
+                    "<path d=\"{}\" fill=\"none\" stroke-linejoin=\"round\"{}/>",
+                    path.trim_end(),
+                    outline_paint(Some(outline))
+                ));
+            }
             Primitive::Wire {
                 from,
                 to,
@@ -399,6 +442,8 @@ fn push_halo(s: &mut String, primitives: &[Primitive], radius: f32, color: &str)
             | Primitive::Halo { .. }
             | Primitive::Sphere { .. }
             | Primitive::ShadedQuad { .. }
+            | Primitive::ShadedPolygon { .. }
+            | Primitive::Contour { .. }
             | Primitive::Wire { .. }
             | Primitive::Card { .. } => {}
         }

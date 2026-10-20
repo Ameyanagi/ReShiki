@@ -327,3 +327,41 @@ fn a_stick_has_no_seam_where_its_halves_meet() {
         }
     }
 }
+
+/// Neighbouring sticks meet at a joint without a pale seam along their
+/// shared border: at 1200 dpi every pixel around the middle carbon is
+/// opaque, whatever the view.
+#[test]
+fn a_stick_joint_has_no_seam_between_its_sticks() {
+    let mut doc = model(Style::Stick);
+    for rotation in [
+        doc.models[0].rotation,
+        reshiki::models3d::turn(doc.models[0].rotation, 37., 11., false),
+        reshiki::models3d::turn(doc.models[0].rotation, -23., 52., true),
+    ] {
+        doc.models[0].rotation = rotation;
+        let (balls, sticks) = reshiki::models3d::balls_and_sticks(&doc, &doc.models[0]).unwrap();
+        let joint = balls[1].0;
+        let width = sticks
+            .iter()
+            .find(|(a, ..)| a.distance(joint) < 1e-3)
+            .unwrap()
+            .2;
+        let run = scene::primitives(&doc);
+        let scale = 1200. / 72.;
+        let lo = joint.offset(-2. * width, -2. * width);
+        let side = (4. * width * scale).ceil() as u32;
+        let image = pixels(&run, lo, scale, side, side).unwrap();
+        for i in -9..=9 {
+            for j in -9..=9 {
+                let p = joint.offset(i as f32 * 0.1 * width, j as f32 * 0.1 * width);
+                if p.distance(joint) > 0.9 * width {
+                    continue;
+                }
+                let (x, y) = (((p.x - lo.x) * scale) as u32, ((p.y - lo.y) * scale) as u32);
+                let alpha = image[((y * side + x) * 4 + 3) as usize];
+                assert_eq!(alpha, 255, "{rotation:?} at {i}, {j}");
+            }
+        }
+    }
+}

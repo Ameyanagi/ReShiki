@@ -71,6 +71,8 @@ pub(in crate::canvas) fn is_model(primitive: &Primitive) -> bool {
             p,
             Primitive::Sphere { .. }
                 | Primitive::ShadedQuad { .. }
+                | Primitive::ShadedPolygon { .. }
+                | Primitive::Contour { .. }
                 | Primitive::Wire { .. }
                 | Primitive::Card { .. }
         ),

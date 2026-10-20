@@ -794,29 +794,10 @@ fn counts(parts: &[Primitive]) -> (usize, usize, usize) {
 
 #[test]
 fn each_style_draws_the_prototype_shapes() {
+    // Stick: every half-bond is its share of the joints, without balls.
     let (_, stick) = styled(|m| m.style = Style::Stick);
-    assert_eq!(counts(&stick), (5, 8, 0));
-    assert!(stick.iter().all(|p| matches!(
-        p,
-        Primitive::Sphere { outline: None, .. } | Primitive::ShadedQuad { outline: None, .. }
-    )));
-    // Stick joints are as wide as the sticks.
-    let joints: Vec<_> = stick
-        .iter()
-        .filter_map(|p| match p {
-            Primitive::Sphere { radius, .. } => Some(*radius),
-            _ => None,
-        })
-        .collect();
-    let half = stick
-        .iter()
-        .find_map(|p| match p {
-            Primitive::ShadedQuad { corners, .. } => Some(corners[0].distance(corners[3]) / 2.),
-            _ => None,
-        })
-        .unwrap();
-    let largest = joints.iter().copied().fold(0., f32::max);
-    assert!((half / largest - 1.).abs() < 0.2, "{half} {joints:?}");
+    assert_eq!(counts(&stick), (0, 0, 0));
+    assert_eq!(polygons(&stick).len(), 8);
 
     let (doc, wire) = styled(|m| m.style = Style::Wireframe);
     assert_eq!(counts(&wire), (0, 0, 8));
@@ -1056,39 +1037,285 @@ fn both_halves_of_a_bond_meet_with_continuous_shading() {
     }
 }
 
-/// Under full perspective each stick tapers to its own joint's width, so
-/// none sticks out past the far joint.
+/// Stick halves: the shaded polygons, each with the projected centre of the
+/// atom it starts at.
+fn polygons(parts: &[Primitive]) -> Vec<Vec<Point>> {
+    parts
+        .iter()
+        .filter_map(|p| match p {
+            Primitive::ShadedPolygon { points, .. } => Some(points.clone()),
+            Primitive::Opacity { primitive, .. } => match primitive.as_ref() {
+                Primitive::ShadedPolygon { points, .. } => Some(points.clone()),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+fn at_atom(doc: &Document, polygon: &[Point]) -> Point {
+    let (balls, _) = balls_and_sticks(doc, &doc.models[0]).unwrap();
+    // Each half reaches its atom's centre, give or take the overlap.
+    let near = |c: &Point| {
+        polygon
+            .iter()
+            .map(|p| p.distance(*c))
+            .fold(f32::MAX, f32::min)
+    };
+    balls
+        .iter()
+        .map(|(c, _)| *c)
+        .min_by(|a, b| near(a).total_cmp(&near(b)))
+        .unwrap()
+}
+
+/// A carbon with three hydrogens in the screen plane, 120° apart.
+fn trigonal(edit: impl Fn(&mut Model3d)) -> Document {
+    let arm = |degrees: f32| {
+        let (s, c) = degrees.to_radians().sin_cos();
+        [1.1 * c, 1.1 * s, 0.]
+    };
+    lone(
+        &[("C", [0., 0., 0.])],
+        &[arm(90.), arm(210.), arm(330.)],
+        |m| {
+            m.style = Style::Stick;
+            m.rotation = [1., 0., 0., 0.];
+            m.perspective = 0.;
+            edit(m);
+        },
+    )
+}
+
+/// Neighbouring sticks share one border on their bisector, so three bonds
+/// make a joint with exactly three borders that tile the turn around the
+/// atom; each half reaches only a sliver past a border, under its neighbour,
+/// so no seam shows. A free end is a round cap as wide as the stick.
 #[test]
-fn sticks_end_as_wide_as_their_joints_under_perspective() {
-    let (_, parts) = styled(|m| {
+fn stick_joints_share_borders_and_nothing_overlaps() {
+    let doc = trigonal(|_| {});
+    let parts = primitives(&doc);
+    assert_eq!(counts(&parts), (0, 0, 0), "no balls on the joints");
+    let shapes = polygons(&parts);
+    assert_eq!(shapes.len(), 6);
+    let carbon = view_point(&doc, 0);
+    let mut borders: Vec<Point> = vec![];
+    let mut turn = 0.;
+    let hw = shapes[0][0].distance(*shapes[0].last().unwrap()) / 2.;
+    // On the bisector where the two edges meet, hw / sin 60°, then moved
+    // the overlap across it.
+    let (miter, overlap) = (hw / 60f32.to_radians().sin(), hw * OVERLAP);
+    for shape in shapes.iter().filter(|p| at_atom(&doc, p) == carbon) {
+        // Middle edge, a border on each side, the centre twice: six points.
+        assert_eq!(shape.len(), 6, "{shape:?}");
+        let (left, right) = (shape[1], shape[4]);
+        for centre in [shape[2], shape[3]] {
+            assert!((centre.distance(carbon) - overlap).abs() < 1e-3);
+        }
+        for border in [left, right] {
+            let d = border.distance(carbon);
+            assert!((d - miter.hypot(overlap)).abs() < 1e-3, "{d} {hw}");
+            borders.push(border);
+        }
+        let angle = |p: Point| (p.y - carbon.y).atan2(p.x - carbon.x);
+        turn += (angle(left) - angle(right)).rem_euclid(std::f32::consts::TAU);
+    }
+    // Each border meets its neighbour's from the other side.
+    for border in &borders {
+        let partners = borders
+            .iter()
+            .filter(|b| (b.distance(*border) - 2. * overlap).abs() < 1e-3)
+            .count();
+        assert_eq!(partners, 1, "{borders:?}");
+    }
+    let sliver = 6. * (overlap / miter).atan();
+    let tau = std::f32::consts::TAU;
+    assert!(turn > tau && turn < tau + sliver + 1e-3, "{turn}");
+    // Each hydrogen end is a half circle of the stick's half width.
+    for shape in shapes.iter().filter(|p| at_atom(&doc, p) != carbon) {
+        let atom = at_atom(&doc, shape);
+        let cap: Vec<_> = shape[1..shape.len() - 1]
+            .iter()
+            .filter(|p| p.distance(atom) > 1e-4)
+            .collect();
+        assert!(cap.len() > 8, "{cap:?}");
+        assert!(
+            cap.iter().all(|p| (p.distance(atom) - hw).abs() < 1e-3),
+            "{cap:?} {hw}"
+        );
+    }
+}
+
+/// A short neighbour (a bond seen nearly end-on) or a narrow gap does not
+/// bend a long stick's edge: it runs on straight, then turns in to the
+/// shared border.
+#[test]
+fn a_short_neighbour_leaves_a_long_stick_straight() {
+    let doc = lone(
+        &[("C", [0., 0., 0.])],
+        &[[1.5, 0., 0.], [0.12, 0.2, 1.]],
+        |m| {
+            m.style = Style::Stick;
+            m.rotation = [1., 0., 0., 0.];
+            m.perspective = 0.;
+        },
+    );
+    let parts = primitives(&doc);
+    let carbon = view_point(&doc, 0);
+    let long = polygons(&parts)
+        .into_iter()
+        .filter(|p| at_atom(&doc, p) == carbon)
+        .max_by(|a, b| a[0].distance(carbon).total_cmp(&b[0].distance(carbon)))
+        .unwrap();
+    // Screen y points down: the short neighbour is on the right-hand side,
+    // the last points. Every point of that side but the shared border lies
+    // on the edge line through the middle corner, parallel to the axis.
+    let corner = long[long.len() - 1];
+    let hw = long[0].distance(corner) / 2.;
+    let edge = long[long.len() - 2];
+    assert!((edge.y - corner.y).abs() < 1e-3, "{long:?}");
+    assert!(((corner.y - carbon.y).abs() - hw).abs() < 1e-3);
+}
+
+/// The projected centre of point `i` of the first model.
+fn view_point(doc: &Document, i: usize) -> Point {
+    let view = View::new(doc, &doc.models[0]).unwrap();
+    view.project(view.rotated[i]).0
+}
+
+/// Flat sticks have one outline: a single stroke of every shape behind all
+/// fills, so only the outer edge of the tube shows. Glossy has none.
+#[test]
+fn stick_outline_is_one_stroke_behind_every_shape() {
+    let doc = trigonal(|_| {});
+    let parts = primitives(&doc);
+    let Some(Primitive::Contour {
+        polygons: rims,
+        outline,
+    }) = parts.first()
+    else {
+        panic!("the outline comes first: {parts:?}");
+    };
+    assert_eq!(*rims, polygons(&parts));
+    let line = (doc.models[0].size / 400.).clamp(0.6, 1.1);
+    assert_eq!((outline.width, outline.alpha), (line * 2., 0.85));
+    assert_eq!(
+        parts
+            .iter()
+            .filter(|p| matches!(p, Primitive::Contour { .. }))
+            .count(),
+        1
+    );
+    let svg = scene::svg(&doc);
+    let stroke = svg.find("stroke-linejoin=\"round\"").unwrap();
+    assert!(stroke < svg.find("<polygon").unwrap());
+    assert_eq!(svg.matches("<linearGradient").count(), 6);
+    let (_, glossy) = styled(|m| {
+        m.style = Style::Stick;
+        m.look = Look::Glossy;
+    });
+    assert!(
+        !glossy
+            .iter()
+            .any(|p| matches!(p, Primitive::Contour { .. }))
+    );
+    // The outline counts toward the drawing's bounds.
+    let (lo, _) = scene::bounds(&parts);
+    let leftmost = rims.iter().flatten().map(|p| p.x).fold(f32::MAX, f32::min);
+    assert!(lo.x <= leftmost - line + 1e-4);
+}
+
+/// An atom without a stick on screen is a round disc: one with its bonds
+/// hidden, or two atoms seen along their bond.
+#[test]
+fn stick_atoms_without_sticks_on_screen_are_discs() {
+    let water = lone(
+        &[("O", [0., 0., 0.])],
+        &[[0.76, 0.59, 0.], [-0.76, 0.59, 0.]],
+        |m| {
+            m.style = Style::Stick;
+            m.show_hydrogens = Hydrogens::None;
+        },
+    );
+    let parts = primitives(&water);
+    assert_eq!(counts(&parts), (1, 0, 0));
+    assert!(polygons(&parts).is_empty());
+    let Some(Primitive::Contour { polygons: rims, .. }) = parts.first() else {
+        panic!("the disc is outlined: {parts:?}");
+    };
+    let Some(Primitive::Sphere { center, radius, .. }) = parts.get(1) else {
+        panic!("a disc: {parts:?}");
+    };
+    assert!(
+        rims[0]
+            .iter()
+            .all(|p| (p.distance(*center) - radius).abs() < 1e-3)
+    );
+    let end_on = lone(&[("C", [0., 0., -0.7]), ("O", [0., 0., 0.7])], &[], |m| {
+        m.style = Style::Stick;
+        m.rotation = [1., 0., 0., 0.];
+    });
+    let parts = primitives(&end_on);
+    assert_eq!(counts(&parts), (2, 0, 0));
+    assert!(polygons(&parts).is_empty());
+    // Turned a little, the bond shows again as two short halves.
+    let tilted = lone(&[("C", [0., 0., -0.7]), ("O", [0.3, 0., 0.7])], &[], |m| {
+        m.style = Style::Stick;
+        m.rotation = [1., 0., 0., 0.];
+    });
+    let parts = primitives(&tilted);
+    assert_eq!((counts(&parts), polygons(&parts).len()), ((0, 0, 0), 2));
+}
+
+/// Under full perspective each stick's round cap is as wide as the stick at
+/// its own atom, near the middle's width.
+#[test]
+fn sticks_taper_to_their_joints_under_perspective() {
+    let (doc, parts) = styled(|m| {
         m.style = Style::Stick;
         m.perspective = 1.;
     });
-    let joints: Vec<_> = parts
+    let mut caps = vec![];
+    for shape in polygons(&parts) {
+        let atom = at_atom(&doc, &shape);
+        // The free ends: the two hydrogens.
+        if !shape.iter().any(|p| p.distance(atom) < 1e-4) {
+            continue;
+        }
+        let middle = shape[0].distance(shape[shape.len() - 1]) / 2.;
+        let cap: Vec<_> = shape[1..shape.len() - 1]
+            .iter()
+            .map(|p| p.distance(atom))
+            .filter(|d| *d > 1e-4)
+            .collect();
+        assert!(cap.iter().all(|d| (d - cap[0]).abs() < 1e-3), "{cap:?}");
+        assert!((cap[0] - middle).abs() < middle * 0.3, "{cap:?} {middle}");
+        caps.push(cap[0]);
+    }
+    assert_eq!(caps.len(), 2);
+    assert!(
+        (caps[0] - caps[1]).abs() > 1e-3,
+        "perspective changes the widths"
+    );
+}
+
+/// During the morph the hydrogens' halves and their outline fade in.
+#[test]
+fn stick_hydrogens_fade_in_with_their_outline() {
+    let (_, parts) = styled(|m| {
+        m.style = Style::Stick;
+        m.morph = Some(0.3);
+    });
+    let faded: Vec<_> = parts
         .iter()
         .filter_map(|p| match p {
-            Primitive::Sphere { center, radius, .. } => Some((*center, *radius)),
+            Primitive::Opacity { primitive, .. } => Some(primitive.as_ref()),
             _ => None,
         })
         .collect();
-    let mut widths = HashSet::new();
-    for p in &parts {
-        let Primitive::ShadedQuad { corners, .. } = p else {
-            continue;
-        };
-        let start = Point::new(
-            (corners[0].x + corners[3].x) / 2.,
-            (corners[0].y + corners[3].y) / 2.,
-        );
-        let (_, radius) = joints
-            .iter()
-            .find(|(c, _)| c.distance(start) < 1e-3)
-            .expect("each stick starts at a joint");
-        let half = corners[0].distance(corners[3]) / 2.;
-        assert!((half - radius).abs() < 1e-3, "{half} {radius}");
-        widths.insert(half.to_bits());
-    }
-    assert!(widths.len() > 1, "perspective changes the widths");
+    // Two hydrogen halves and one outline of them.
+    assert_eq!(faded.len(), 3);
+    assert!(matches!(faded[0], Primitive::Contour { polygons, .. } if polygons.len() == 2));
+    assert!(matches!(parts[0], Primitive::Contour { ref polygons, .. } if polygons.len() == 6));
 }
 
 #[test]

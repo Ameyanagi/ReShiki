@@ -75,8 +75,10 @@ shown changes nothing.
 
 While the model is shown, **Properties → 3D model** sets how it looks:
 
-- **Style:** **Ball & stick** (the default), **Stick** (thick bonds joined at
-  the atoms), **Wireframe** (thin lines in the atom colours; an atom with no
+- **Style:** **Ball & stick** (the default), **Stick** (thick bonds mitered
+  at the atoms: neighbouring sticks share one border, a free end is rounded,
+  and only the outer edge of the tubes is outlined; an atom with no shown
+  bonds is a disc), **Wireframe** (thin lines in the atom colours; an atom with no
   shown bonds is a dot) or **Space-filling** (balls at van der Waals radii).
 - **Look:** **Flat · journal** (thin dark outlines) or **Glossy · slides**
   (brighter highlights, no outlines).

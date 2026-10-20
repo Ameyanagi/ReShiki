@@ -63,6 +63,21 @@ pub enum Primitive {
         stops: Vec<(f32, [u8; 3])>,
         outline: Option<Outline>,
     },
+    /// A mitered 3D-model stick half: `points` filled with a linear gradient
+    /// from `from` to `to`, in exact colors, without an outline.
+    ShadedPolygon {
+        points: Vec<Point>,
+        from: Point,
+        to: Point,
+        stops: Vec<(f32, [u8; 3])>,
+    },
+    /// The outer edge of the 3D-model sticks drawn after it: every polygon
+    /// stroked as one shape with round joins, so where strokes overlap they
+    /// do not darken. The fills drawn over it leave only the outside half.
+    Contour {
+        polygons: Vec<Vec<Point>>,
+        outline: Outline,
+    },
     /// A 3D-model wireframe half-bond: a round-capped line in an exact color.
     Wire {
         from: Point,
@@ -2374,6 +2389,13 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
                 points.extend([center.offset(-r, -r), center.offset(r, r)]);
             }
             Primitive::ShadedQuad { corners, .. } => points.extend(corners),
+            Primitive::ShadedPolygon { points: p, .. } => points.extend(p),
+            Primitive::Contour { polygons, outline } => {
+                let r = outline.width / 2.;
+                for p in polygons.iter().flatten() {
+                    points.extend([p.offset(-r, -r), p.offset(r, r)]);
+                }
+            }
             Primitive::Wire {
                 from, to, width, ..
             } => {

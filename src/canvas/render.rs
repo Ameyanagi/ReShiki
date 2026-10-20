@@ -130,6 +130,8 @@ fn draw_primitives_with_opacity(
             }
             Primitive::Sphere { .. }
             | Primitive::ShadedQuad { .. }
+            | Primitive::ShadedPolygon { .. }
+            | Primitive::Contour { .. }
             | Primitive::Wire { .. }
             | Primitive::Card { .. } => {}
             Primitive::Line(a, b, width) => frame.stroke(
@@ -285,6 +287,8 @@ fn draw_halo(
             | Primitive::Halo { .. }
             | Primitive::Sphere { .. }
             | Primitive::ShadedQuad { .. }
+            | Primitive::ShadedPolygon { .. }
+            | Primitive::Contour { .. }
             | Primitive::Wire { .. }
             | Primitive::Card { .. } => {}
         }
