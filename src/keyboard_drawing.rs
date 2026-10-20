@@ -81,6 +81,7 @@ impl Direction {
 
 fn visible_atom(doc: &Document, id: u64) -> bool {
     doc.atom(id).is_some_and(|atom| atom.centroid.is_empty())
+        && !crate::models3d::hides(doc, id)
         && !doc
             .abbreviations
             .iter()
@@ -102,7 +103,11 @@ fn hotspots(doc: &Document) -> Vec<Target> {
     let visible: HashSet<_> = doc
         .atoms
         .iter()
-        .filter(|atom| atom.centroid.is_empty() && !hidden.contains(&atom.id))
+        .filter(|atom| {
+            atom.centroid.is_empty()
+                && !hidden.contains(&atom.id)
+                && !crate::models3d::hides(doc, atom.id)
+        })
         .map(|atom| atom.id)
         .collect();
     doc.atoms

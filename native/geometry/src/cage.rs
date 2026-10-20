@@ -1,7 +1,8 @@
 //! Conservative admission of closed sp2 carbon cages and their geometry.
 //! This near-convex envelope is a supported calculation domain, not a proof
 //! that every fullerene geometry outside it is chemically invalid.
-use cosmolkit_core::{Hybridization, Molecule, symmetrize_sssr};
+use cosmolkit::{Hybridization, Molecule};
+use cosmolkit_core::{RingSearchParams, symmetrized_sssr};
 
 pub(super) struct Cage {
     faces: Vec<Vec<usize>>,
@@ -26,7 +27,7 @@ impl Cage {
         if degree.iter().any(|&count| count != 3) {
             return None;
         }
-        let rings = symmetrize_sssr(mol).ok()?;
+        let rings = symmetrized_sssr(mol.topology(), &RingSearchParams::default()).ok()?;
         if rings.atom_rings().len() != mol.num_bonds() - mol.num_atoms() + 2
             || rings
                 .atom_rings()

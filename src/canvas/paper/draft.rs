@@ -26,6 +26,7 @@ impl MoleculeCanvas<'_> {
             );
             tilt::apply(preview.to_mut(), &drag.ids, x, y);
             *ring_selection = Some(drag.ids.clone());
+            let (x, y) = (tilt::wrap(x), tilt::wrap(y));
             *template_notice = Some((
                 format!("3D tilt · X {x:+.0}° · Y {y:+.0}° · Shift snaps · Escape cancels"),
                 true,
@@ -152,9 +153,7 @@ impl MoleculeCanvas<'_> {
                 } else {
                     end
                 };
-                if let Some(a) = preview.to_mut().arrows.iter_mut().find(|a| a.id == *id) {
-                    a.edit_handle(*index, end);
-                }
+                reshiki::arrow_anchors::edit_handle(preview.to_mut(), *id, *index, end);
             }
             if let Some(Gesture::Draw { start, .. }) = &state.gesture
                 && self.tool == Tool::Arrow

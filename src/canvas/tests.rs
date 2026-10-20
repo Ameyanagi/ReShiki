@@ -1685,6 +1685,73 @@ fn a_3d_model_takes_clicks_over_what_it_is_painted_above() {
 }
 
 #[test]
+fn edit_points_skips_marks_and_indicators_of_a_molecule_shown_in_3d() {
+    use reshiki::models3d::{Display, set_display};
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", World::new(-20., 0.));
+    let b = doc.add_atom("O", World::new(20., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    let atom = doc.atom_mut(a).unwrap();
+    atom.display.number = Some(reshiki::atom_labels::Number {
+        text: "1".into(),
+        offset: None,
+        style: reshiki::atom_labels::number_style(),
+    });
+    atom.marks.push(reshiki::scientific::AtomMark {
+        id: Some(1),
+        kind: reshiki::scientific::MarkKind::LonePair,
+        offset: World::new(-15., -15.),
+        angle: 0.,
+        size_pt: None,
+    });
+    let atoms = [(a, [-0.7, 0., 0.]), (b, [0.7, 0., 0.])]
+        .map(|(id, xyz)| reshiki::models3d::Placed { id, xyz })
+        .to_vec();
+    let model = reshiki::models3d::Model3d::new(
+        &doc,
+        atoms,
+        vec![],
+        reshiki::models3d::ForceField::Mmff94s,
+    );
+    doc.models.push(model);
+    let [indicator] = reshiki::atom_labels::indicators(&doc).try_into().unwrap();
+    let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+    let selected = [a, b];
+    let press = |doc: &Document, at: World| {
+        let mut canvas = chain_canvas(doc, ChainMode::Straight);
+        canvas.tool = Tool::EditPoints;
+        canvas.selected = &selected;
+        let mut state = State::default();
+        let cursor = canvas.camera.screen(at, bounds);
+        canvas.update(
+            &mut state,
+            &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            bounds,
+            mouse::Cursor::Available(cursor),
+        );
+        state.gesture
+    };
+    let mark = World::new(-35., -15.);
+    for display in [Display::TwoD, Display::Both, Display::ThreeD] {
+        set_display(&mut doc, 0, display);
+        let hidden = display == Display::ThreeD;
+        assert_eq!(
+            matches!(press(&doc, mark), Some(Gesture::AtomMark { .. })),
+            !hidden,
+            "{display:?}"
+        );
+        assert_eq!(
+            matches!(
+                press(&doc, indicator.center),
+                Some(Gesture::AtomIndicator { .. })
+            ),
+            !hidden,
+            "{display:?}"
+        );
+    }
+}
+
+#[test]
 fn graphic_and_curve_point_drags_publish_one_edit_and_do_not_mutate_preview() {
     let doc = Document::default();
     let style = GraphicStyle::default();
@@ -2686,6 +2753,53 @@ fn mechanism_attachment_92_mark_drag_preview_resolves_same_geometry_as_commit() 
     atom.marks[0].offset = World::new(target.x - atom.position.x, target.y - atom.position.y);
     let _ = reshiki::transaction::reconcile(&mut committed, doc).unwrap();
     assert_eq!(preview, committed);
+}
+
+#[test]
+fn mechanism_attachment_379_aimed_end_preview_matches_the_commit() {
+    let mut doc = Document::default();
+    let c = doc.add_atom("C", World::new(0., 0.));
+    for (degrees, symbol, order) in [(270f32, "O", 2), (150., "C", 1), (30., "C", 1)] {
+        let (s, k) = degrees.to_radians().sin_cos();
+        let n = doc.add_atom(symbol, World::new(42. * k, 42. * s));
+        doc.add_bond(c, n, order, "plain");
+    }
+    let o = doc.add_atom("O", World::new(-120., 0.));
+    reshiki::scientific::attach(
+        doc.atom_mut(o).unwrap(),
+        reshiki::scientific::SymbolKind::LonePair,
+        World::new(25., 0.),
+    )
+    .unwrap();
+    let source = reshiki::arrow_anchors::pick(&doc, World::new(-95., 0.), 2.).unwrap();
+    let id = reshiki::arrow_anchors::create(
+        &mut doc,
+        &source,
+        &reshiki::arrow_anchors::Pick::Atom(c),
+        reshiki::arrows::Preset::Curved,
+        reshiki::arrows::ArrowStyle::preset(reshiki::arrows::Preset::Curved),
+    )
+    .unwrap();
+    let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+    let canvas = chain_canvas(&doc, ChainMode::Straight);
+    // Drag the arrival square up-left, toward the C=O axis.
+    let end = doc.arrows[0].end;
+    let screen = canvas.camera.screen(end.offset(-11.5, -16.4), bounds);
+    let target = canvas.camera.world(screen, bounds);
+    let state = State {
+        gesture: Some(Gesture::ArrowHandle { id, index: 4 }),
+        cursor: Some(screen),
+        ..Default::default()
+    };
+    let preview = canvas.pointer_preview_document(&state, bounds);
+    let mut committed = doc.clone();
+    reshiki::arrow_anchors::edit_handle(&mut committed, id, 4, target);
+    let _ = reshiki::transaction::reconcile(&mut committed, doc.clone()).unwrap();
+    assert_eq!(preview, committed);
+    // The aimed end backed away from the bond ink rather than staying put.
+    let mut bare = doc.clone();
+    bare.arrows[0].edit_handle(4, target);
+    assert_ne!(preview.arrows[0].end, bare.arrows[0].end);
 }
 
 #[test]

@@ -11,6 +11,19 @@ The real saved file is committed as
 Automatic can resolve to a concrete justification on save, so an imported
 explicit value is retained rather than guessed back to Auto.
 
+On 2026-10-20 (issue #378), ChemDraw 26.1 showed that the node's
+`LabelDisplay` carries the Text choice: its saves of MeO on ethane
+(`label-justification-*.cdxml` in the same folder) write
+`LabelDisplay="Left|Center|Right"` on the node, while the text's
+`LabelAlignment` stays `Right` for every choice. Pasted clipboard data
+without `LabelDisplay` came back laid out as Automatic (Flush Right for that
+MeO, Flush Left for Boc) whatever `LabelJustification`, `Justification` or
+`LabelAlignment` said. With it, Flush Left, Centered and Flush Right MeO and
+Flush Left, Centered, Flush Right and Stacked Above Boc came back unchanged,
+so editable exports now write it for explicit choices. Automatic groups stay
+without it; Automatic and Character N text labels write
+`LabelDisplay="Auto"`.
+
 With Object → Fixed Lengths and Fixed Angles both enabled, dragging the endpoint
 of a 30 pt bond produced 29.99934 pt at 30.00073°. Holding Option during the
 same drag produced 73.79024 pt at 26.56505°. The scratch documents and measured
