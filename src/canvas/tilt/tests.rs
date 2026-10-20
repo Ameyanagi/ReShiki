@@ -95,6 +95,8 @@ fn a_molecule_shown_in_3d_or_both_turns_its_model_and_keeps_its_drawing() {
         let modelled = display != Display::TwoD;
         let mixed = [molecule, drawn].concat();
         assert!(available(&doc, &molecule) && available(&doc, &mixed));
+        // One atom turns a shown model; a lone drawn atom has nothing to tilt.
+        assert_eq!(available(&doc, &molecule[..1]), modelled, "{display:?}");
         let tilts: [fn(&mut Document, &[u64]); 3] = [
             |doc, ids| apply(doc, ids, 30., 20.),
             |doc, ids| transform(doc, ids, Transform::TiltX(15.)),

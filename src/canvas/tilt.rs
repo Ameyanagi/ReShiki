@@ -17,7 +17,7 @@ pub(crate) fn available(doc: &Document, ids: &[u64]) -> bool {
         .count()
         >= 2
         || doc.graphics.iter().any(|g| ids.contains(&g.id))
-        || ids.iter().any(|id| reshiki::models3d::hides(doc, *id))
+        || reshiki::models3d::shows_3d(doc, &ids)
 }
 
 #[derive(Debug)]

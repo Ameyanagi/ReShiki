@@ -966,7 +966,13 @@ fn tilt_drag_on_a_molecule_shown_in_3d_or_both_tilts_it() {
                 panic!("{display:?} {selected:?}: expected a tilt, got {edit:?}");
             };
             ids.sort_unstable();
-            assert_eq!(ids, expected, "{display:?}");
+            // Pressing a drawn atom of a molecule shown as Both tilts that atom,
+            // which turns its whole model.
+            if display == Display::Both && selected.is_empty() {
+                assert!(!ids.is_empty() && ids.iter().all(|id| molecule.contains(id)));
+            } else {
+                assert_eq!(ids, expected, "{display:?}");
+            }
             assert_eq!((x, y), (-10., 15.));
         }
     }
