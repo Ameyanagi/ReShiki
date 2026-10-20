@@ -5,6 +5,7 @@ mod draft;
 #[cfg(test)]
 mod orbital_tests;
 mod overlays;
+pub(super) use overlays::OrbitGuideCache;
 mod placement;
 
 use super::render::{draw_document, draw_primitives};

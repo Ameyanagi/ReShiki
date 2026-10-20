@@ -11,9 +11,13 @@ use crate::canvas::{
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Rectangle, Vector, keyboard, mouse};
 use reshiki::arrows::ArrowHandle;
-use reshiki::document::Document;
+use reshiki::document::{Atom, Bond, Document};
 use reshiki::graphics::{Graphic, GraphicKind, PathCommand, PathHandle};
+use reshiki::scientific::{AtomMark, MarkKind};
+use reshiki::style::DrawingStyle;
+use std::cell::RefCell;
 use std::ops::ControlFlow;
+use std::rc::Rc;
 
 enum HandleShape {
     Circle(f32),
@@ -227,9 +231,10 @@ impl MoleculeCanvas<'_> {
         };
         // The guide and its dots are the committed placements, so the dragged
         // mark always sits on them; steps blocked by a bond are left out.
-        let (runs, snaps) = reshiki::scientific::mark_orbit_guide(preview, atom, mark);
+        let guide = orbit_guide(&state.orbit_guide, preview, atom, mark);
+        let (runs, snaps) = &*guide;
         let path = Path::new(|b| {
-            for run in &runs {
+            for run in runs {
                 for (i, p) in run.iter().enumerate() {
                     let p = self.camera.screen(*p, bounds);
                     if i == 0 { b.move_to(p) } else { b.line_to(p) }
@@ -249,7 +254,7 @@ impl MoleculeCanvas<'_> {
             },
         );
         for p in snaps {
-            let p = self.camera.screen(p, bounds);
+            let p = self.camera.screen(*p, bounds);
             frame.fill(&Path::circle(p, 1.6), Color { a: 0.7, ..ACCENT });
         }
     }
@@ -815,4 +820,63 @@ fn badge(
         font: iced::Font::with_name(reshiki::style::ui_font_family()),
         ..Default::default()
     });
+}
+
+/// An attached mark's orbit guide: its runs and snap dots in world space.
+pub(in crate::canvas) type OrbitGuide = (Vec<Vec<World>>, Vec<World>);
+
+/// The guide last drawn, kept while a drag only moves the mark round it.
+#[derive(Default)]
+pub(in crate::canvas) struct OrbitGuideCache(Option<(OrbitInputs, Rc<OrbitGuide>)>);
+
+/// Everything the guide depends on: the atom and its label, its bonds and
+/// their far atoms, the mark's kind and size, and the style. Where the
+/// pointer puts the mark (its offset, and a lone pair's turn) is left out.
+#[derive(PartialEq)]
+struct OrbitInputs {
+    atom: Atom,
+    mark: AtomMark,
+    bonds: Vec<Bond>,
+    neighbors: Vec<Atom>,
+    style: DrawingStyle,
+}
+
+pub(in crate::canvas) fn orbit_guide(
+    cache: &RefCell<OrbitGuideCache>,
+    doc: &Document,
+    atom: &Atom,
+    mark: &AtomMark,
+) -> Rc<OrbitGuide> {
+    let mut owner = atom.clone();
+    owner.marks.retain(|m| m != mark);
+    let mut placed = mark.clone();
+    placed.offset = World::default();
+    if matches!(placed.kind, MarkKind::LonePair | MarkKind::LonePairBar) {
+        placed.angle = 0.;
+    }
+    let bonds: Vec<_> = doc
+        .bonds
+        .iter()
+        .filter(|b| b.a == atom.id || b.b == atom.id)
+        .cloned()
+        .collect();
+    let inputs = OrbitInputs {
+        atom: owner,
+        mark: placed,
+        neighbors: bonds
+            .iter()
+            .filter_map(|b| doc.atom(if b.a == atom.id { b.b } else { b.a }).cloned())
+            .collect(),
+        bonds,
+        style: doc.drawing_style.clone(),
+    };
+    let mut cache = cache.borrow_mut();
+    if let Some((cached, guide)) = &cache.0
+        && *cached == inputs
+    {
+        return Rc::clone(guide);
+    }
+    let guide = Rc::new(reshiki::scientific::mark_orbit_guide(doc, atom, mark));
+    cache.0 = Some((inputs, Rc::clone(&guide)));
+    guide
 }

@@ -259,6 +259,7 @@ pub struct State {
     scene: std::cell::RefCell<cache::SceneCache>,
     grid: std::cell::RefCell<GridCache>,
     text: std::cell::RefCell<text_cache::TextCache>,
+    orbit_guide: std::cell::RefCell<paper::OrbitGuideCache>,
     gesture: Option<Gesture>,
     relaxation: Option<optimization::Drag>,
     cursor: Option<Point>,
