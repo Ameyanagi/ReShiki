@@ -58,7 +58,7 @@ impl MoleculeCanvas<'_> {
                     target,
                 }
             }
-            Gesture::Graphic { start } => match self.release_graphic(state, start, p, inside) {
+            Gesture::Graphic { start, .. } => match self.release_graphic(state, start, p, inside) {
                 ControlFlow::Continue(edit) => edit,
                 ControlFlow::Break(action) => return Some(action),
             },
@@ -68,11 +68,17 @@ impl MoleculeCanvas<'_> {
                     ControlFlow::Break(action) => return Some(action),
                 }
             }
-            Gesture::AtomMark { id, index } => {
-                if !inside {
+            Gesture::AtomMark { id, index, start } => {
+                // A click on the handle leaves the mark where it was.
+                if !inside || start.distance(p) < self.camera.world_len(DRAG_SLOP_PX) {
                     return Some(Action::request_redraw().and_capture());
                 }
-                Edit::AtomMark(id, index, p)
+                Edit::AtomMark(
+                    id,
+                    index,
+                    p,
+                    state.modifiers.alt() || state.modifiers.shift(),
+                )
             }
             Gesture::AtomIndicator { owner } => Edit::AtomIndicator(owner, p),
             Gesture::GraphicPoint { id, index } => Edit::GraphicPoint(id, index, p),
@@ -169,7 +175,10 @@ impl MoleculeCanvas<'_> {
         {
             return ControlFlow::Break(Action::request_redraw().and_capture());
         }
-        let constrain = state.modifiers.shift() || self.graphics.constrain;
+        let constrain = match self.tool {
+            Tool::Graphic(kind) => self.graphic_constrain(kind, state.modifiers),
+            _ => state.modifiers.shift() || self.graphics.constrain,
+        };
         ControlFlow::Continue(
             if matches!(self.tool, Tool::Graphic(GraphicKind::Orbital(_))) {
                 Edit::Orbital(

@@ -12,15 +12,24 @@ to the page. Orbitals are editable drawing shapes that can snap to an atom.
    and bars, radical ions, H-dot and H-dash, attachment diamond, star, wave and
    bead, and single and double daggers.
 2. With **Attach to atoms** on, click an atom to add the mark. Drag from the
-   atom to place the mark at a chosen offset.
+   atom to choose its side: the mark orbits the atom in 15° steps, just
+   outside the label with the same gap a click uses. Hold Option/Alt or Shift
+   to place it at any offset.
 3. To adjust marks later, select the atom and choose **Position atom marks**.
-   Drag a mark's handle to move it. **Rotate** turns a mark by 45°, and
-   **Remove** deletes it.
+   Drag a mark's handle to move it around the same orbit; Option/Alt or Shift
+   frees it. While dragging, a dashed line shows the orbit and dots show the
+   15° positions it can take. **Rotate** turns a mark by 45°, and **Remove**
+   deletes it.
+
+A lone pair or bar always turns across the line from the atom, so its two
+dots sit side by side around the label, also when placed freely. Charges and
+radicals stay upright.
 
 Charges and radicals change the atom's chemistry, and ReShiki refreshes its
 hydrogen label and unpaired electrons. Lone pairs and bars are annotations
 only. Marks move, copy and transform with their atom, take the atom label's
-color, and each edit is one Undo step.
+color, and each edit is one Undo step. Rotating or flipping a molecule turns
+its lone pairs with it; charges stay upright.
 
 ### Draw an orbital
 
@@ -62,8 +71,19 @@ charge or radical state.
 Click-created lone pairs and bars sit just outside the visible label ink, with
 a modest gap scaled to its font size. New placements try the top, left, bottom
 and right sides, avoiding nearby label ink, bonds and existing atom marks.
-Pairs beside the label turn vertically. Dragging from an atom keeps the exact
-requested offset; existing saved marks do not move when labels or styles change.
+Pairs beside the label turn vertically. A dragged mark's orbit follows the
+label at the same gap a click uses, measured from the label's outline: each
+glyph counts as a rounded rectangle fitted to its outline (O is nearly round,
+while N and H keep the corners their stems reach), and the glyphs together
+form one convex shape, so OH reads as one rounded label with its hydrogen.
+The mark counts as one shape too, so a lone pair keeps the gap like the box a
+click measures. The gap therefore stays even all the way round, and straight
+up is exactly where a click puts a pair. Steps where the mark would touch one
+of the atom's bonds are skipped: the drag lands on the nearest clear step, and
+the guide leaves those steps out. Other marks are not avoided, so dragging one
+mark onto another is allowed. A free (Option/Alt or Shift) drag keeps the
+exact requested offset, bonds included; existing saved marks do not move when
+labels or styles change.
 
 **Snap to atoms** controls orbital node snapping independently of
 chemical-symbol attachment. The choice stays selected when switching tools in
@@ -120,8 +140,9 @@ the whole lobe without a halo.
   chemistry. Positioned multiple-charge marks, combined radical-ion marks, bars
   and colored attached marks require `.rsk`/SVG/PDF/PNG; unsupported per-symbol
   CDXML overrides are rejected. External saves can discard ownership of distant
-  marks, so export requires marks within 1.05 label sizes of their owner and
-  closer to that atom than any other atom. A visible atom label and hydrogen
+  marks, so export requires marks within 1.05 label sizes of their owner's
+  label ink (of the atom itself when it has no label), so orbited marks beside
+  hydrogens still export, and closer to that atom than any other atom. A visible atom label and hydrogen
   count are written explicitly.
 - Template attachment rejects marked or radical anchor atoms; free insertion of
   these templates keeps their full drawing.

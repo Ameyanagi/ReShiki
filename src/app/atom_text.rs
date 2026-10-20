@@ -361,16 +361,24 @@ impl App {
                         if let Some(group) =
                             doc.abbreviations.iter_mut().find(|g| g.anchor == state.id)
                         {
-                            group.alignment = state.alignment;
+                            let old = self.tab.doc.abbreviation(state.id);
                             if state.members.is_some()
                                 || state.reverse_edited
-                                || self
-                                    .tab
-                                    .doc
-                                    .abbreviation(state.id)
-                                    .is_some_and(|g| g.label == group.label)
+                                || old.is_some_and(|g| g.label == group.label)
                             {
                                 group.reverse_label = state.reverse.trim().into();
+                            }
+                            // A new group keeps the placement of the label it
+                            // replaced, except that one without a reverse
+                            // spelling (ONp) cannot take Right, which turns it.
+                            if state.members.is_some()
+                                || old.is_some_and(|g| {
+                                    g.label == group.label
+                                        || !group.reverse_label.is_empty()
+                                        || state.alignment != LabelAlignment::Right
+                                })
+                            {
+                                group.alignment = state.alignment;
                             }
                         }
                         if let Err(error) = doc.validate() {

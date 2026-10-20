@@ -145,7 +145,8 @@ pub enum Edit {
     /// as the live preview uses them; a chemical symbol's attachment is separate.
     Orbital(World, World, bool, bool),
     GraphicPoint(u64, usize, World),
-    AtomMark(u64, usize, World),
+    /// The pointer and whether Option/Alt or Shift freed the orbit.
+    AtomMark(u64, usize, World, bool),
     AtomIndicator(reshiki::atom_labels::Owner, World),
     ArrowHandle(u64, usize, World),
     ArrowClick(u64),
@@ -260,6 +261,7 @@ pub struct State {
     scene: std::cell::RefCell<cache::SceneCache>,
     grid: std::cell::RefCell<GridCache>,
     text: std::cell::RefCell<text_cache::TextCache>,
+    orbit_guide: std::cell::RefCell<paper::OrbitGuideCache>,
     gesture: Option<Gesture>,
     relaxation: Option<optimization::Drag>,
     cursor: Option<Point>,
@@ -300,6 +302,9 @@ enum Gesture {
     },
     Graphic {
         start: World,
+        /// A charge or radical's label hydrogens, worked out once per drag
+        /// and keyed on the document revision so Undo mid-drag recomputes them.
+        hydrogens: std::cell::RefCell<(u64, std::cell::OnceCell<Option<u32>>)>,
     },
     AtomIndicator {
         owner: reshiki::atom_labels::Owner,
@@ -307,6 +312,7 @@ enum Gesture {
     AtomMark {
         id: u64,
         index: usize,
+        start: World,
     },
     GraphicPoint {
         id: u64,
@@ -404,6 +410,8 @@ pub struct GraphicOptions<'a> {
     pub attach: bool,
     pub snap: bool,
     pub bracket_sides: BracketSides,
+    /// The document revision, which invalidates per-drag caches.
+    pub revision: u64,
 }
 
 impl Default for GraphicOptions<'_> {
@@ -418,6 +426,7 @@ impl Default for GraphicOptions<'_> {
             attach: false,
             snap: false,
             bracket_sides: Default::default(),
+            revision: 0,
         }
     }
 }

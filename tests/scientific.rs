@@ -252,6 +252,56 @@ async fn attached_charges_and_radicals_recalculate_hydrogens_and_exchange() {
 }
 
 #[tokio::test]
+async fn orbited_lone_pairs_beside_hydrogens_round_trip_through_cdxml() {
+    let engine = LocalEngine::default();
+    let mut doc = engine
+        .request(Request::import_smiles("CO"))
+        .await
+        .unwrap()
+        .document
+        .unwrap();
+    let o = doc.atoms.iter().position(|a| a.element == "O").unwrap();
+    let pos = doc.atoms[o].position;
+    drawing(GraphicKind::Symbol(SymbolKind::LonePair))
+        .place(&mut doc, pos, pos, false, 10.)
+        .unwrap();
+    // The OH label points away from carbon, so these orbit around its H.
+    let side = if doc.atoms[1 - o].position.x < pos.x {
+        1.
+    } else {
+        -1.
+    };
+    for degrees in [0_f32, 30.] {
+        let (s, c) = degrees.to_radians().sin_cos();
+        let mut doc = doc.clone();
+        let atom = &doc.atoms[o];
+        let to = pos.offset(side * 40. * c, -40. * s);
+        let mark = scientific::orbit_mark(&doc, atom, &atom.marks[0], to, false);
+        doc.atoms[o].marks[0] = mark.clone();
+        let mut request = Request::molecule("export", doc);
+        request.format = Some("cdxml".into());
+        let xml = engine.request(request).await.unwrap().output.unwrap();
+        let imported = engine
+            .request(Request::import("cdxml", &xml))
+            .await
+            .unwrap()
+            .document
+            .unwrap();
+        let atom = imported.atoms.iter().find(|a| a.element == "O").unwrap();
+        assert!(
+            atom.marks[0].offset.distance(mark.offset) < 0.01,
+            "{degrees}°"
+        );
+        let turn = (atom.marks[0].angle - mark.angle).rem_euclid(180.);
+        assert!(
+            turn.min(180. - turn) < 0.01,
+            "{degrees}°: {}",
+            atom.marks[0].angle
+        );
+    }
+}
+
+#[tokio::test]
 async fn mixed_phase_graphics_export_as_grouped_colored_vectors() {
     let engine = LocalEngine::default();
     let mut doc = Document::default();
