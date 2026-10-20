@@ -221,7 +221,7 @@ fn tiles_together_match_the_whole_model() {
         let world = |x: i64, y: i64| World::new(x as f32 / scale, y as f32 / scale);
         for tile in &tiles {
             let [x0, y0, x1, y1] = tile.rect;
-            let part: Vec<_> = tile.parts.iter().map(|&i| run[i].clone()).collect();
+            let part = primitives(&run, &tile.parts);
             let size = ((x1 - x0) as u32, (y1 - y0) as u32);
             let image = pixels(&part, world(x0, y0), scale, size.0, size.1).unwrap();
             let whole = pixels(&run, world(x0, y0), scale, size.0, size.1).unwrap();
@@ -249,6 +249,52 @@ fn tiles_together_match_the_whole_model() {
             );
         }
     }
+}
+
+/// A tile's contour holds exactly the bond outlines reaching it, as one
+/// stroke: flat sticks draw every outline in one contour, and no tile copies
+/// them all.
+#[test]
+fn a_tile_contour_holds_only_the_outlines_reaching_it() {
+    let doc = model(Style::Stick);
+    let run = scene::primitives(&doc);
+    let (index, all) = run
+        .iter()
+        .enumerate()
+        .find_map(|(i, p)| contour(p).map(|polygons| (i, polygons.to_vec())))
+        .expect("flat sticks draw a contour");
+    let (lo, hi) = scene::bounds(&run);
+    let camera = Camera {
+        center: World::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.),
+        zoom: 6.,
+    };
+    let scale = camera.zoom * OVERSAMPLE;
+    let tiles = plan(&run, camera, Rectangle::with_size(Size::new(2000., 2000.)));
+    let mut fewer = false;
+    for tile in &tiles {
+        let [x0, y0, x1, y1] = tile.rect.map(|v| v as f32);
+        let contours: Vec<_> = primitives(&run, &tile.parts)
+            .into_iter()
+            .filter(|p| contour(p).is_some())
+            .collect();
+        assert!(contours.len() <= 1, "one stroke per tile: {:?}", tile.rect);
+        let kept = contours.first().and_then(contour).unwrap_or_default();
+        for (j, polygon) in all.iter().enumerate() {
+            let (lo, hi) = scene::bounds(&[keep_polygons(&run[index], &[j])]);
+            let reaches = ((lo.x - MARGIN) * scale).floor() < x1
+                && ((hi.x + MARGIN) * scale).ceil() + 1. > x0
+                && ((lo.y - MARGIN) * scale).floor() < y1
+                && ((hi.y + MARGIN) * scale).ceil() + 1. > y0;
+            assert_eq!(
+                kept.contains(polygon),
+                reaches,
+                "{:?} polygon {j}",
+                tile.rect
+            );
+        }
+        fewer |= !kept.is_empty() && kept.len() < all.len();
+    }
+    assert!(fewer, "some tile holds fewer outlines than the model");
 }
 
 /// During the 2D → 3D morph the fading hydrogens stay in the model's run of

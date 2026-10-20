@@ -7,6 +7,7 @@ use iced::advanced::image::Handle;
 use iced::widget::canvas;
 use iced::{Point, Rectangle, Size};
 use reshiki::scene::{self, Primitive};
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -79,22 +80,77 @@ pub(in crate::canvas) fn is_model(primitive: &Primitive) -> bool {
     }
 }
 
+/// A primitive of a run, or one polygon of a contour in it.
+type Part = (usize, Option<usize>);
+
 /// A visible tile: its key, its device-pixel rectangle (the grid cell cut to
-/// what it shows) and the primitives reaching it, in order. The key covers
-/// only those primitives, so editing one model leaves another's tiles cached.
+/// what it shows) and the parts reaching it, in order. The key covers only
+/// those parts, so editing one model leaves another's tiles cached.
 struct Tile {
     key: u64,
     rect: [i64; 4],
-    parts: Vec<usize>,
+    parts: Vec<Part>,
+}
+
+/// A contour's polygons, also while it fades in.
+fn contour(primitive: &Primitive) -> Option<&[Vec<World>]> {
+    match primitive {
+        Primitive::Opacity { primitive, .. } => contour(primitive),
+        Primitive::Contour { polygons, .. } => Some(polygons),
+        _ => None,
+    }
+}
+
+/// `primitive` with only the contour polygons in `keep`.
+fn keep_polygons(primitive: &Primitive, keep: &[usize]) -> Primitive {
+    match primitive {
+        Primitive::Opacity { alpha, primitive } => Primitive::Opacity {
+            alpha: *alpha,
+            primitive: Box::new(keep_polygons(primitive, keep)),
+        },
+        Primitive::Contour { polygons, outline } => Primitive::Contour {
+            polygons: keep
+                .iter()
+                .filter_map(|&i| polygons.get(i).cloned())
+                .collect(),
+            outline: *outline,
+        },
+        p => p.clone(),
+    }
+}
+
+/// The primitives of `parts`: a contour's polygons reaching a tile stay one
+/// stroke, so where they overlap they still do not darken.
+fn primitives(run: &[Primitive], parts: &[Part]) -> Vec<Primitive> {
+    parts
+        .chunk_by(|a, b| a.0 == b.0)
+        .filter_map(|chunk| {
+            let &(i, polygon) = chunk.first()?;
+            let p = run.get(i)?;
+            Some(match polygon {
+                None => p.clone(),
+                Some(_) => keep_polygons(p, &chunk.iter().filter_map(|c| c.1).collect::<Vec<_>>()),
+            })
+        })
+        .collect()
 }
 
 fn plan(run: &[Primitive], camera: Camera, bounds: Rectangle) -> Vec<Tile> {
     let scale = camera.zoom * OVERSAMPLE;
     let device = |p: World| [p.x * scale, p.y * scale];
+    // A contour strokes every bond's outline at once; each polygon is its own
+    // part so a tile copies and renders only the outlines reaching it.
     let parts: Vec<_> = run
         .iter()
-        .map(|p| {
-            let (lo, hi) = scene::bounds(std::slice::from_ref(p));
+        .enumerate()
+        .flat_map(|(i, p)| match contour(p) {
+            Some(polygons) => (0..polygons.len())
+                .map(|j| ((i, Some(j)), Cow::Owned(keep_polygons(p, &[j]))))
+                .collect(),
+            None => vec![((i, None), Cow::Borrowed(p))],
+        })
+        .map(|(part, p)| {
+            let (lo, hi) = scene::bounds(std::slice::from_ref(&*p));
             let ([x0, y0], [x1, y1]) = (
                 device(lo.offset(-MARGIN, -MARGIN)),
                 device(hi.offset(MARGIN, MARGIN)),
@@ -105,6 +161,7 @@ fn plan(run: &[Primitive], camera: Camera, bounds: Rectangle) -> Vec<Tile> {
             (
                 [x0.floor(), y0.floor(), x1.ceil() + 1., y1.ceil() + 1.].map(|v| v as i64),
                 hasher.finish(),
+                part,
             )
         })
         .collect();
@@ -118,7 +175,7 @@ fn plan(run: &[Primitive], camera: Camera, bounds: Rectangle) -> Vec<Tile> {
             scale.to_bits().hash(&mut hasher);
             let mut rect = [i64::MAX, i64::MAX, i64::MIN, i64::MIN];
             let mut reaching = vec![];
-            for (i, (b, key)) in parts.iter().enumerate() {
+            for (b, key, part) in &parts {
                 if b[0] < cell[2] && b[2] > cell[0] && b[1] < cell[3] && b[3] > cell[1] {
                     key.hash(&mut hasher);
                     rect = [
@@ -127,7 +184,7 @@ fn plan(run: &[Primitive], camera: Camera, bounds: Rectangle) -> Vec<Tile> {
                         rect[2].max(b[2]),
                         rect[3].max(b[3]),
                     ];
-                    reaching.push(i);
+                    reaching.push(*part);
                 }
             }
             if reaching.is_empty() {
@@ -177,12 +234,13 @@ pub(in crate::canvas) fn draw(
         let [x0, y0, x1, y1] = tile.rect;
         let size = [(x1 - x0) as u32, (y1 - y0) as u32];
         let render = || {
-            let part: Vec<_> = tile
-                .parts
-                .iter()
-                .filter_map(|&i| run.get(i).cloned())
-                .collect();
-            pixels(&part, world(x0, y0), scale, size[0], size[1])
+            pixels(
+                &primitives(run, &tile.parts),
+                world(x0, y0),
+                scale,
+                size[0],
+                size[1],
+            )
         };
         let Some(handle) = TILES.with_borrow_mut(|cache| cache.get(tile.key, size, render)) else {
             continue;
