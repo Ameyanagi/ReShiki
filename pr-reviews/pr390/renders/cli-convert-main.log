@@ -1,0 +1,8 @@
+== main svg
+{"api":{"operation_api":1,"stability":"experimental"},"experimental":true,"receipt":{"byte_len":3767,"detail":null,"format":"svg"}}
+== main png
+reshiki: warning: PNG: 1303 × 1126 pixels at 1200 dpi
+{"api":{"operation_api":1,"stability":"experimental"},"experimental":true,"receipt":{"byte_len":118662,"detail":"PNG: 1303 × 1126 pixels at 1200 dpi","format":"png"}}
+== main pdf
+{"api":{"operation_api":1,"stability":"experimental"},"experimental":true,"receipt":{"byte_len":9684,"detail":null,"format":"pdf"}}
+reshiki: error: Could not open document: This drawing was made with a newer version of ReShiki (document version 28). Update ReShiki to open it.

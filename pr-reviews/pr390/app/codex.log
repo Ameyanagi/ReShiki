@@ -1,0 +1,565 @@
+Reading additional input from stdin...
+OpenAI Codex v0.162.1
+--------
+workdir: /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2
+model: gpt-6-astra
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: xhigh
+reasoning summaries: none
+session id: 01a15781-adaa-7942-a28f-e6e2e3fab799
+--------
+user
+You are running local UI verification for Claude on macOS. Use computer use (screenshots, mouse, keyboard).
+
+Repository (branch feat/3d-models-1a, already built): /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2
+App binary: /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2/target/debug/reshiki
+Artifact directory (save ALL screenshots and the report here): /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1a/app
+
+Do NOT rebuild. Launch the binary directly (e.g. run it in the background from a shell: `/Users/.../target/debug/reshiki &`). It opens the ReShiki molecular drawing window. If another ReShiki window from a different build is already open, leave it alone and work only in the window you launched.
+
+Feature under test: the Properties (inspector) panel has a new "Structure" section with a "Show as" control offering 2D / 3D / Both. It appears when exactly one molecule is selected. Choosing 3D generates an MMFF94s conformer in a background worker (status bar says "Generating 3D model · MMFF94s") and then shows the molecule as a ball & stick model (shaded spheres and bonds) inside a frame. Both shows the 2D drawing and the 3D model together. 2D goes back to the plain drawing. Each switch is one Undo step (Cmd+Z).
+
+Flow:
+1. Launch the app. Screenshot: 01-launched.png.
+2. Insert caffeine: open the structure import panel (look for an Import / Insert structure control in the toolbar or sidebar; it has a text box with placeholder "Paste SMILES, reaction SMILES, InChI, MOL, RXN or CDXML"). Type exactly: CN1C=NC2=C1C(=O)N(C(=O)N2C)C  then press Cmd+Enter (or click Insert). Expect the caffeine structure on the canvas, selected. Screenshot: 02-caffeine-inserted.png.
+3. Make sure caffeine (the whole molecule) is selected (Select tool; Cmd+A selects all). Find the Structure section in the Properties panel on the right (scroll the panel if needed). Expect "2D" active. Screenshot including canvas and the Structure section: 03-structure-section-2d.png.
+4. Click "3D". Screenshot right away if you can catch the "Generating" state: 04a-generating.png (optional). Wait until the status bar no longer says Generating (a few seconds). Expect: the molecule drawn as a 3D ball & stick model in a frame, 2D drawing hidden, "3D" active in the Structure section. Screenshot: 04-3d.png. Also zoom into the model if it is small (do not change the drawing) and take 04b-3d-closeup.png.
+5. Click "Both". Expect: 2D drawing and 3D model both visible; "Both" active. Screenshot: 05-both.png.
+6. Click "2D". Expect: plain 2D drawing only; "2D" active. Screenshot: 06-2d.png.
+7. Press Cmd+Z once (Undo). Expect: back to Both (the previous state). Screenshot: 07-undo.png.
+For every screenshot also note the status bar text and the window title (unsaved marker).
+
+Constraints:
+- Stay read-only toward the user's environment: do not close or quit other applications, do not change system settings, do not edit any files in the repository, do not save the drawing anywhere except optionally into the artifact directory.
+- When done, quit only the ReShiki instance you launched (choose "Don't Save" if asked).
+
+Write report.md into the artifact directory: for each step, what you did, observed vs expected (including status bar text), the screenshot filename, and a pass/fail verdict. End with anything you could not verify and why, and any visual oddities you noticed (overlaps, clipping, wrong colours, frame placement, labels left over on hidden atoms, etc.).
+codex
+I’ll launch the specified binary, verify the 2D → 3D → Both → 2D → Undo flow with screenshots, and write the report in the artifact directory. I’ll keep track of the launched instance so I can quit only that one afterward.
+exec
+/bin/zsh -lc "pwd && rg --files -g AGENTS.md -g '"'!target'"' -g '"'!node_modules'"' -g '"'!vendor'"' . /Users/shiranui/dev 2>/dev/null | head -80" in /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2
+ succeeded in 0ms:
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+import subprocess, json
+repo=Path('/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2')
+for p in [repo, *repo.parents]:
+    f=p/'AGENTS.md'
+    if f.is_file():
+        print(str(f)+'\\n'+f.read_text())
+art=Path('/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1a/app')
+art.mkdir(parents=True,exist_ok=True)
+print('EXISTING_ARTIFACTS', [p.name for p in art.iterdir()])
+print('REPO_BRANCH', subprocess.check_output(['git','branch','--show-current'],cwd=repo,text=True).strip())
+print('REPO_STATUS', subprocess.check_output(['git','status','--porcelain'],cwd=repo,text=True))
+print('EXISTING_RESHIKI_PROCESSES')
+for line in subprocess.check_output(['ps','-axo','pid=,comm='],text=True).splitlines():
+    if 'reshiki' in line.lower(): print(line)
+log=(art/'app-launch.log').open('ab')
+p=subprocess.Popen([str(repo/'target/debug/reshiki')],cwd=repo,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
+(art/'launched-process.json').write_text(json.dumps({'pid':p.pid,'binary':str(repo/'target/debug/reshiki')},indent=2)+'\\n')
+print('LAUNCHED_PID',p.pid)
+PY" in /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2
+ succeeded in 158ms:
+EXISTING_ARTIFACTS ['codex.log', 'prompt.md']
+REPO_BRANCH feat/3d-models-1a
+REPO_STATUS 
+EXISTING_RESHIKI_PROCESSES
+70359 /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/main-target/debug/build/aws-lc-sys-b6496336fe6251c1/build-script-main
+71794 /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_d5366978-b17-2/target/debug/deps/structure_oracle-750aa22096213690
+LAUNCHED_PID 72808
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (failed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+import subprocess
+art=Path('/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1a/app')
+print((art/'app-launch.log').read_text())
+print(subprocess.run(['ps','-p','72808','-o','pid=,stat=,comm='],capture_output=True,text=True).stdout)
+PY" in /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2
+ succeeded in 10ms:
+
+72808 Ss   /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2/target/debug/reshiki
+
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+codex
+The requested build is open with an empty canvas. Its title is “Untitled — ReShiki”; the bottom bar shows a “Recovery draft” notice, which I’m leaving untouched. I’m opening Import and inserting the supplied caffeine SMILES.
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+codex
+Caffeine inserted successfully and is selected as 14 atoms and 15 bonds, with formula C8H10N4O2. The expected Structure section is missing from the Properties panel, including after scrolling to the bottom. I’m checking selection behavior and having a read-only worker check the section’s visibility conditions before calling this a failure.
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (failed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+codex
+I found that the computer-use tool had opened the installed ReShiki app when it could not bind to the bare executable. That explains the missing controls. I’m separating those screenshots from the test evidence, closing the extra instance, and checking why the requested process has not appeared in the app inventory.
+mcp: cua_repl/js started
+mcp: cua_repl/js (failed)
+exec
+/bin/zsh -lc "python3 - <<'PY'
+import subprocess
+from pathlib import Path
+print(subprocess.run(['ps','-p','72808,73776','-o','pid=,ppid=,stat=,etime=,comm='],capture_output=True,text=True).stdout)
+art=Path('/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1a/app')
+for p in art.glob('0*.png'):
+    p.rename(art/('wrong-instance-'+p.name))
+print('Preserved screenshots with wrong-instance- prefix')
+PY" in /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2
+ succeeded in 0ms:
+72808     1 Ss   02:17 /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2/target/debug/reshiki
+
+Preserved screenshots with wrong-instance- prefix
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+import subprocess
+repo=Path('/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2')
+print(subprocess.run(['rg','-n','fn main|run_native|Command::|relaunch|LaunchServices|single_instance','src/main.rs','src/app.rs'],cwd=repo,capture_output=True,text=True).stdout)
+print('BINARY FILE',subprocess.run(['file',str(repo/'target/debug/reshiki')],capture_output=True,text=True).stdout)
+PY" in /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2
+ succeeded in 0ms:
+src/main.rs:40:fn main() -> iced::Result {
+
+BINARY FILE /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2/target/debug/reshiki: Mach-O 64-bit executable arm64
+
+
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+p=Path('/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2/src/main.rs')
+print(p.read_text()[:12500])
+PY" in /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2
+ succeeded in 0ms:
+#![forbid(unsafe_code)]
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable,
+        clippy::todo,
+        clippy::unimplemented,
+        clippy::indexing_slicing
+    )
+)]
+
+mod app;
+mod appearance;
+mod branding;
+mod canvas;
+#[cfg(any(windows, target_os = "linux"))]
+mod desktop;
+mod launch;
+#[cfg(windows)]
+mod rendering;
+mod session;
+#[cfg(any(windows, test))]
+mod window_fit;
+
+#[cfg(not(test))]
+#[global_allocator]
+static ALLOCATOR: reshiki_process_heap::BoundedHeap = reshiki_process_heap::BoundedHeap;
+
+#[cfg(test)]
+pub(crate) use reshiki_process_heap::allocation_metrics;
+#[cfg(test)]
+#[global_allocator]
+static ALLOCATOR: allocation_metrics::MeasuredAllocator<reshiki_process_heap::BoundedHeap> =
+    allocation_metrics::MeasuredAllocator::new(reshiki_process_heap::BoundedHeap);
+
+fn main() -> iced::Result {
+    // Worker modes enter before graphics, AppKit/Office registration or Tokio.
+    // Relaunching this executable keeps deadlines and memory failures isolated.
+    match std::env::args_os()
+        .nth(1)
+        .as_deref()
+        .and_then(reshiki::workers::run)
+    {
+        Some(0) => return Ok(()),
+        Some(code) => std::process::exit(code),
+        None => {}
+    }
+    // Headless modes enter before Office registration, graphics, Apple events
+    // and the std::env::args() checks below.
+    match launch::mode(std::env::args_os().skip(1)) {
+        launch::Launch::Gui => {}
+        launch::Launch::Mcp(args) => launch::mcp(args),
+        launch::Launch::Cli(args) => launch::cli(args),
+    }
+    #[cfg(windows)]
+    {
+        if launch::gui_flag(std::env::args_os().skip(1), "--graphics-info") {
+            println!("{}", rendering::diagnostics());
+            return Ok(());
+        }
+        if launch::gui_flag(std::env::args_os().skip(1), "--ole-server") {
+            let result = reshiki_windows::run_office_server(|bytes| {
+                let document = reshiki::document::Document::from_json(bytes)?;
+                reshiki::export::office_preview(&document)
+            });
+            if let Err(error) = result {
+                eprintln!("Office integration failed: {error}");
+            }
+            return Ok(());
+        }
+    }
+    if launch::gui_flag(std::env::args_os().skip(1), "--engine-check") {
+        let runtime = match tokio::runtime::Runtime::new() {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                use std::io::Write;
+                let _ = writeln!(
+                    std::io::stderr(),
+                    "Could not start chemistry runtime: {error}"
+                );
+                std::process::exit(1);
+            }
+        };
+        match runtime.block_on(async {
+            let engine = reshiki::engine::LocalEngine::default();
+            let imported = engine
+                .request(reshiki::engine::Request::import_smiles("CCO"))
+                .await?;
+            let document = imported
+                .document
+                .ok_or("Chemistry import returned no drawing")?;
+            engine
+                .request(reshiki::engine::Request::molecule("analyze", document))
+                .await
+        }) {
+            Ok(response) => {
+                use std::io::Write;
+                if let Err(error) = serde_json::to_writer_pretty(std::io::stdout(), &response) {
+                    let _ = writeln!(
+                        std::io::stderr(),
+                        "Could not write engine response: {error}"
+                    );
+                    std::process::exit(1);
+                }
+                return Ok(());
+            }
+            Err(error) => {
+                use std::io::Write;
+                let _ = writeln!(std::io::stderr(), "{error}");
+                std::process::exit(1);
+            }
+        }
+    }
+    let startup = session::parse(std::env::args_os().skip(1));
+    #[cfg(any(windows, target_os = "linux"))]
+    let _desktop = {
+        let args = std::env::args_os().skip(1).collect::<Vec<_>>();
+        match desktop::launch(&args, &startup) {
+            desktop::LaunchOutcome::Continue(mut host) => {
+                if let Some(events) = host.as_mut().and_then(desktop::GuiHost::take_events) {
+                    app::install_desktop_events(events);
+                }
+                host
+            }
+            desktop::LaunchOutcome::Exit(code) => std::process::exit(code),
+        }
+    };
+    #[cfg(windows)]
+    reshiki_windows::enable_office_embedding();
+    #[cfg(windows)]
+    rendering::configure();
+    #[cfg(target_os = "macos")]
+    let _document_events = match reshiki_macos::install_document_events() {
+        Ok((handler, events)) => {
+            app::install_document_events(events);
+            Some(handler)
+        }
+        Err(error) => {
+            eprintln!("Could not register macOS document events: {error}");
+            None
+        }
+    };
+    // The inline editor can shape a new font before the drawing reaches the
+    // canvas. Install variable-weight aliases before either creates text buffers.
+    canvas::prepare_fonts();
+    // iced boots the app once; the closure hands it the arguments parsed above.
+    let boot = move || app::App::with_startup(startup.clone());
+    let result = iced::application(boot, app::App::update, app::App::view)
+        .default_font(iced::Font::with_name(reshiki::style::ui_font_family()))
+        .title(app::App::title)
+        .theme(app::App::theme)
+        .subscription(app::App::subscription)
+        .window(iced::window::Settings {
+            visible: !cfg!(any(target_os = "macos", windows)),
+            size: iced::Size::new(1280.0, 820.0),
+            // Windows fits the hidden real HWND before publishing its accessible
+            // tree/showing it. A fixed logical minimum would defeat that fit.
+            min_size: (!cfg!(windows)).then_some(iced::Size::new(1040.0, 680.0)),
+            icon: branding::window_icon(),
+            ..Default::default()
+        })
+        .exit_on_close_request(false)
+        .antialiasing(true)
+        .centered()
+        .run();
+    #[cfg(target_os = "macos")]
+    if let Err(error) = reshiki_macos::accessibility::shutdown() {
+        eprintln!("{error}");
+    }
+    #[cfg(windows)]
+    if let Err(error) = reshiki_windows::accessibility::shutdown() {
+        eprintln!("{error}");
+    }
+    result
+}
+
+
+codex
+The requested binary is running normally, but it has no macOS bundle ID, so the computer-use tool cannot identify it. I’ll put a small app wrapper in the artifact directory that points to the same executable, then relaunch it directly. This gives the tool a unique app identity without rebuilding or changing repository files.
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+import os,signal,plistlib,subprocess,json
+art=Path('/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1a/app')
+repo=Path('/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2')
+binary=repo/'target/debug/reshiki'
+original=json.loads((art/'launched-process.json').read_text())
+check=subprocess.run(['ps','-p',str(original['pid']),'-o','comm='],capture_output=True,text=True).stdout.strip()
+if check==str(binary): os.kill(original['pid'],signal.SIGTERM)
+app=art/'ReShiki Verification.app'
+contents=app/'Contents'
+(contents/'MacOS').mkdir(parents=True,exist_ok=True)
+(contents/'MacOS'/'reshiki').symlink_to(binary)
+with (contents/'Info.plist').open('wb') as f:
+    plistlib.dump({'CFBundleExecutable':'reshiki','CFBundleIdentifier':'dev.reshiki.verification.ev3861a','CFBundleName':'ReShiki Verification','CFBundleDisplayName':'ReShiki Verification','CFBundlePackageType':'APPL','CFBundleVersion':'1','NSHighResolutionCapable':True},f)
+with (art/'app-launch.log').open('ab') as log:
+    p=subprocess.Popen([str(contents/'MacOS'/'reshiki')],cwd=repo,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
+(art/'launched-process.json').write_text(json.dumps({'pid':p.pid,'binary':str(binary),'launch_path':str(contents/'MacOS'/'reshiki'),'original_pid':original['pid'],'original_stopped':True},indent=2)+'\\n')
+print('WRAPPER',str(app))
+print('LAUNCHED_PID',p.pid)
+PY" in /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2
+ succeeded in 0ms:
+WRAPPER /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1a/app/ReShiki Verification.app
+LAUNCHED_PID 80959
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+import subprocess,hashlib,json
+repo=Path('/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2')
+art=Path('/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1a/app')
+binary=repo/'target/debug/reshiki'
+wrapper=art/'ReShiki Verification.app/Contents/MacOS/reshiki'
+print('SYMLINK_TARGET',wrapper.resolve())
+print('SAME_FILE',wrapper.samefile(binary))
+print(subprocess.run(['ps','-p','72808,73776,80959','-o','pid=,comm='],capture_output=True,text=True).stdout)
+evidence={'binary':str(binary),'wrapper':str(wrapper),'same_file':wrapper.samefile(binary),'sha256':hashlib.file_digest(binary.open('rb'),'sha256').hexdigest()}
+(art/'binary-verification.json').write_text(json.dumps(evidence,indent=2)+'\\n')
+print(evidence)
+PY" in /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2
+ exited 1 in 0ms:
+SYMLINK_TARGET /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2/target/debug/reshiki
+SAME_FILE True
+80959 /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1a/app/ReShiki Verification.app/Contents/MacOS/reshiki
+
+Traceback (most recent call last):
+  File "<stdin>", line 10, in <module>
+AttributeError: module 'hashlib' has no attribute 'file_digest'
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+codex
+The verified build now shows Structure with 2D, 3D, and Both controls; 2D is active. I’m testing 3D generation next, then the display switches and the single Undo back to Both.
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+codex
+The requested flow passed: 3D shows a shaded ball-and-stick model, Both shows the two representations side by side, 2D hides the model, and one Cmd+Z restores Both. Generation finished before the first screenshot, so I couldn’t capture the temporary “Generating” message. I’m reviewing the screenshots for visual issues and writing the report before quitting the test instance.
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+import subprocess,hashlib,json
+repo=Path('/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2')
+art=Path('/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1a/app')
+binary=repo/'target/debug/reshiki'
+wrapper=art/'ReShiki Verification.app/Contents/MacOS/reshiki'
+h=hashlib.sha256()
+with binary.open('rb') as f:
+    for chunk in iter(lambda:f.read(1024*1024),b''): h.update(chunk)
+evidence={'binary':str(binary),'wrapper':str(wrapper),'same_file':wrapper.samefile(binary),'sha256':h.hexdigest()}
+(art/'binary-verification.json').write_text(json.dumps(evidence,indent=2)+'\\n')
+processes=subprocess.run(['ps','-p','72808,73776,80959','-o','pid=,comm='],capture_output=True,text=True).stdout
+status=subprocess.check_output(['git','status','--porcelain'],cwd=repo,text=True)
+summary={'tracked_launched_processes_remaining':processes.strip(),'git_status_porcelain':status,'app_log_bytes':(art/'app-launch.log').stat().st_size}
+(art/'cleanup-verification.json').write_text(json.dumps(summary,indent=2)+'\\n')
+print('BINARY_VERIFICATION',evidence)
+print('CLEANUP',summary)
+print('SCREENSHOTS',sorted(p.name for p in art.glob('*.png')))
+PY" in /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2
+ succeeded in 142ms:
+BINARY_VERIFICATION {'binary': '/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2/target/debug/reshiki', 'wrapper': '/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1a/app/ReShiki Verification.app/Contents/MacOS/reshiki', 'same_file': True, 'sha256': '66b2f9ed1eab2645d830d8a6fc8a32640c52644fc26180becb4c8e80d1c08f4f'}
+CLEANUP {'tracked_launched_processes_remaining': '', 'git_status_porcelain': '', 'app_log_bytes': 0}
+SCREENSHOTS ['01-launched.png', '02-caffeine-inserted.png', '03-structure-section-2d.png', '04-3d.png', '04a-immediate-3d.png', '04b-3d-closeup.png', '05-both.png', '06-2d.png', '07-undo.png', 'wrong-instance-01-launched.png', 'wrong-instance-02-caffeine-inserted.png', 'wrong-instance-03-structure-section-2d.png', 'wrong-instance-03a-properties-selected.png', 'wrong-instance-03b-properties-scrolled.png', 'wrong-instance-03c-selection-recheck.png', 'wrong-instance-03d-molecule-double-click.png']
+
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+art=Path('/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1a/app')
+report='''**ReShiki 3D structure display — local macOS UI verification**
+
+Date: 2026-10-20 (Asia/Tokyo). Branch: "'`feat/3d-models-1a`.
+
+**Result: PASS for the requested display sequence and final single-step Undo.** Caffeine imports, Structure offers 2D / 3D / Both, 3D replaces the drawing with a shaded ball-and-stick model, Both presents the two representations side by side, 2D hides the model, and one Cmd+Z restores Both. The transient Generating state was too brief to capture, so its exact wording and the MMFF94s worker cannot be confirmed from the UI evidence.
+
+Repository: `/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2`
+
+Executable: `/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2/target/debug/reshiki`
+
+All UI interactions used computer use: mouse clicks, keyboard input, accessibility observations, and native screenshots. No rebuild or repository edit was performed. The working tree was clean before and after verification. No drawing was saved.
+
+**Launch adaptation and instance isolation**
+
+The exact bare executable was first launched directly as PID 72808. The computer-use tool could not bind to its executable path. A fallback app-name lookup inadvertently opened the installed ReShiki as PID 73776; that instance lacked the feature. These early screenshots were preserved with the `wrong-instance-` prefix and excluded from feature verdicts. That extra instance was quit via Cmd+Q. The original unbundled test process was then stopped by its tracked PID.
+
+To make the specified executable identifiable to computer use, an artifact-only `ReShiki Verification.app` wrapper was created with a unique bundle ID, `dev.reshiki.verification.ev3861a`. Its `Contents/MacOS/reshiki` is a symlink to the exact requested binary. That executable symlink was launched directly from a shell subprocess as PID 80959; no application source, binary contents, or system settings were changed. Filesystem `samefile` verification returned true. The wrapper remains in this artifact directory for auditability. All unprefixed screenshots below belong to this verified test instance.
+
+Binary SHA-256: `66b2f9ed1eab2645d830d8a6fc8a32640c52644fc26180becb4c8e80d1c08f4f`.
+
+**Requested steps and evidence**
+
+Every screenshot includes the native window title and bottom status bar. A persistent `Recovery draft` notice with `Restore` and `Dismiss` buttons appears at the left of the status bar throughout; neither button was used. The status column below records the additional operation message. The remaining bar shows `JACS / ACS`, `Publication`, `View`, zoom controls, and `Fit`.
+
+| Step / verdict | Action and observed versus expected | Screenshot | Operation status bar text | Window title / unsaved marker | Zoom |
+|---|---|---|---|---|---|
+| 1 — PASS, with launch adaptation above | Launched the supplied binary through the artifact wrapper. Empty molecular drawing window, Properties panel visible, no Structure section without a selected molecule. | [01-launched.png](01-launched.png) | No operation message; `Recovery draft` notice only. | `Untitled — ReShiki`; no unsaved dot. | 100% |
+| 2 — PASS | Opened toolbar Import, entered exactly `CN1C=NC2=C1C(=O)N(C(=O)N2C)C`, and pressed Cmd+Enter. Caffeine appeared selected on the canvas; input was detected as SMILES. | [02-caffeine-inserted.png](02-caffeine-inserted.png) | `Inserted structure · Drag to position · Delete or Undo to remove` | `Untitled • — ReShiki`; unsaved dot present. | 238% |
+| 3 — PASS | Opened Properties, clicked Select, and pressed Cmd+A. Inspector reported `14 atoms · 15 bonds`, molecular formula `C8H10N4O2`, and an expanded Structure section above Molecular properties. 2D was active; 3D and Both inactive. | [03-structure-section-2d.png](03-structure-section-2d.png) | `Inserted structure · Drag to position · Delete or Undo to remove` | `Untitled • — ReShiki`; unsaved dot present. | 238% |
+| 4 immediate capture — PASS for completed 3D; Generating UNVERIFIED | Clicked 3D and took the first available screenshot immediately. Generation had already completed: 3D was active, a shaded ball-and-stick model replaced the 2D drawing, and no 2D N/O labels remained. This file is deliberately named immediate-3d, not generating. | [04a-immediate-3d.png](04a-immediate-3d.png) | `Shown as 3D model · Undo restores the 2D drawing` | `Untitled • — ReShiki`; unsaved dot present. | 238% |
+| 4 fitted view — PASS | Clicked Fit to show the whole model and its rectangular frame. Model uses gray, blue, red, and white atom spheres with shaded bonds; 3D remains active, 2D drawing hidden. No Generating message remained. | [04-3d.png](04-3d.png) | `Shown as 3D model · Undo restores the 2D drawing` | `Untitled • — ReShiki`; unsaved dot present. | 158% |
+| 4 close-up — PASS | Clicked the zoom-plus control twice, changing only the viewport. All molecular geometry remains visible at the larger scale, allowing inspection of sphere shading, bond connections, and colors. | [04b-3d-closeup.png](04b-3d-closeup.png) | `Shown as 3D model · Undo restores the 2D drawing` | `Untitled • — ReShiki`; unsaved dot present. | 247% |
+| 5 — PASS | Clicked Both and then Fit. Plain 2D caffeine appears on the left, with the 3D model on the right, inside a full shared selection frame. Both is active. The two representations do not overlap. | [05-both.png](05-both.png) | `Shown as 2D and 3D · Undo restores the previous view` | `Untitled • — ReShiki`; unsaved dot present. | 124% |
+| 6 — PASS | Clicked 2D. Only the original 2D drawing remains, with a smaller selection box. The 3D model is hidden and 2D is active. | [06-2d.png](06-2d.png) | `Shown as 2D · Undo restores the 3D model` | `Untitled • — ReShiki`; unsaved dot present. | 124% |
+| 7 — PASS | Pressed Cmd+Z exactly once after step 6. Both representations returned in their previous positions, and Both became active. Redo became available. | [07-undo.png](07-undo.png) | `History restored` | `Untitled • — ReShiki`; unsaved dot present. | 124% |
+
+The final accessibility snapshot, [07-undo-accessibility.txt](07-undo-accessibility.txt), independently records 2D off, 3D off, and Both on.
+
+**Cleanup — PASS**
+
+After the final screenshot, sent Cmd+Q to the uniquely bound verification instance. It exited; no save prompt appeared. The three tracked processes launched during this task (72808, 73776, and 80959) were all absent afterward. Other applications were not quit or closed. See [cleanup-verification.json](cleanup-verification.json), [binary-verification.json](binary-verification.json), and [launched-process.json](launched-process.json). `app-launch.log` remained empty.
+
+**Excluded diagnostic screenshots**
+
+These screenshots are from the inadvertently opened installed application, not the requested build. They are retained to preserve every screenshot and are not used to pass or fail the new feature. All show `Recovery draft / Restore / Dismiss`; the additional status and title are recorded individually below.
+
+| Screenshot | What was observed | Operation status bar text | Window title / unsaved marker | Zoom |
+|---|---|---|---|---|
+| [wrong-instance-01-launched.png](wrong-instance-01-launched.png) | Empty installed-app canvas. | No operation message. | `Untitled — ReShiki`; no unsaved dot. | 100% |
+| [wrong-instance-02-caffeine-inserted.png](wrong-instance-02-caffeine-inserted.png) | Caffeine imported and selected. | `Inserted structure · Drag to position · Delete or Undo to remove` | `Untitled • — ReShiki`; unsaved dot present. | 238% |
+| [wrong-instance-03a-properties-selected.png](wrong-instance-03a-properties-selected.png) | Properties top with 14 atoms / 15 bonds selected, no Structure section. | `Inserted structure · Drag to position · Delete or Undo to remove` | `Untitled • — ReShiki`; unsaved dot present. | 238% |
+| [wrong-instance-03b-properties-scrolled.png](wrong-instance-03b-properties-scrolled.png) | Inspector scrolled to its bottom, no Structure section. | `Inserted structure · Drag to position · Delete or Undo to remove` | `Untitled • — ReShiki`; unsaved dot present. | 238% |
+| [wrong-instance-03c-selection-recheck.png](wrong-instance-03c-selection-recheck.png) | Keyboard drawing disabled; molecule still selected. | `Keyboard drawing off` | `Untitled • — ReShiki`; unsaved dot present. | 238% |
+| [wrong-instance-03-structure-section-2d.png](wrong-instance-03-structure-section-2d.png) | Full compact inspector after Select and Cmd+A; no Structure section. | `Keyboard drawing off` | `Untitled • — ReShiki`; unsaved dot present. | 238% |
+| [wrong-instance-03d-molecule-double-click.png](wrong-instance-03d-molecule-double-click.png) | Whole-molecule double-click selection produced the same inspector. | `Keyboard drawing off` | `Untitled • — ReShiki`; unsaved dot present. | 238% |
+
+**Not verified and visual observations**
+
+- The optional `Generating 3D model · MMFF94s` state was not captured: the model was already rendered in the immediate post-click screenshot. No `04a-generating.png` is supplied. The specific force field and background-worker execution were not verified by the UI test; successful rendering alone does not establish those implementation details.
+- The bare executable could not be controlled directly through the computer-use tool. The feature was verified with the same executable reached through an artifact-only app-bundle symlink. The root cause of bare-app visibility/binding was not established.
+- The required final single Undo was verified. Undo boundaries for the earlier 2D→3D and 3D→Both switches were not separately exercised. Multiple-molecule selection behavior, rotation, export, and saving were outside this flow.
+- At 247% zoom, several bond shafts and their outlines visibly extend into the front faces of atom spheres toward their centers, especially at the central fused-ring carbon and methyl carbons. This produces visible seams on the shaded spheres. Bonds remain connected; this is a rendering observation rather than a confirmed geometry error.
+- The model frame extends beyond the canvas vertically in the immediate 238% view and deliberate 247% close-up. Fit at 158% shows the entire frame and model without clipping. Both at 124% also fits fully, with no representation overlap or inspector obstruction.
+- The orange keyboard-drawing crosshair remains at an empty canvas position. In the fitted 3D screenshot a small part is clipped at the top canvas boundary. It is distinct from chemistry labels. No leftover 2D atom labels or 2D bonds were visible over the 3D-only model.
+- After Undo, 2D retains a teal hover/focus outline beneath the pointer while Both has the active fill. Accessibility confirms only Both is active; the canvas agrees.
+- Step 6 status says `Undo restores the 3D model`, even though the prior state is Both. Actual Undo correctly restores Both; the wording is less specific than the restored state.
+- The Structure card provides the three requested controls, but it does not visibly show a literal `Show as` label. Its helper text reads `Ball & stick · Chemistry and atom IDs stay the same`.
+- The collapsed Molecular properties card shows `Selection · C8H10N4O2` before generating 3D, then only `Selection` in the later screenshots. The card was not expanded to investigate this summary change.
+- Atom colors and shading are consistent: carbon gray, nitrogen blue, oxygen red, hydrogen white. No unexpected colors, disconnected visible bonds, 2D/3D overlap, or persistent model remnant after switching to 2D was observed.
+'"'''
+(art/'report.md').write_text(report)
+required=['01-launched.png','02-caffeine-inserted.png','03-structure-section-2d.png','04-3d.png','04b-3d-closeup.png','05-both.png','06-2d.png','07-undo.png','report.md']
+for name in required:
+    p=art/name
+    print(name,p.stat().st_size)
+missing=[p.name for p in art.glob('*.png') if p.name not in report]
+print('SCREENSHOTS_MISSING_FROM_REPORT',missing)
+PY" in /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2
+ succeeded in 0ms:
+01-launched.png 243804
+02-caffeine-inserted.png 345326
+03-structure-section-2d.png 390936
+04-3d.png 367254
+04b-3d-closeup.png 395441
+05-both.png 387416
+06-2d.png 345443
+07-undo.png 384510
+report.md 11606
+SCREENSHOTS_MISSING_FROM_REPORT []
+
+codex
+Verification complete. **The 2D → 3D → Both → 2D → Cmd+Z flow passed**, including restoring Both with one Undo.
+
+The [report.md](</private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1a/app/report.md>) includes all screenshot links, per-step verdicts, status-bar text, window titles, and visual observations.
+
+- Generation completed before the immediate screenshot, so the temporary “Generating 3D model · MMFF94s” message remains unverified.
+- Close-up review found visible bond seams on some atom spheres; no leftover 2D labels appeared in 3D mode.
+- Computer use required an artifact-only app wrapper pointing to the exact supplied executable. No rebuild or repository changes were made.
+- All ReShiki instances launched during this task were closed. No drawing was saved.
+tokens used
+115,687
+Verification complete. **The 2D → 3D → Both → 2D → Cmd+Z flow passed**, including restoring Both with one Undo.
+
+The [report.md](</private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1a/app/report.md>) includes all screenshot links, per-step verdicts, status-bar text, window titles, and visual observations.
+
+- Generation completed before the immediate screenshot, so the temporary “Generating 3D model · MMFF94s” message remains unverified.
+- Close-up review found visible bond seams on some atom spheres; no leftover 2D labels appeared in 3D mode.
+- Computer use required an artifact-only app wrapper pointing to the exact supplied executable. No rebuild or repository changes were made.
+- All ReShiki instances launched during this task were closed. No drawing was saved.

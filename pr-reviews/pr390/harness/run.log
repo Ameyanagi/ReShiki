@@ -1,0 +1,5 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.06s
+     Running `target/debug/examples/ev386_harness /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2/target/debug/reshiki /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1a/renders`
+imported 14 atoms, 15 bonds, version 15
+MMFF94s energy -107.915 -> -123.494, converged true
+model: 14 atoms, 10 hydrogens

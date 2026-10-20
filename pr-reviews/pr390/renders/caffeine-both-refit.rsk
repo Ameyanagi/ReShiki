@@ -1,0 +1,696 @@
+{
+  "atom_labels": {
+    "carbons": "skeletal",
+    "hydrogens": true,
+    "stereo": false
+  },
+  "version": 28,
+  "atoms": [
+    {
+      "id": 1,
+      "element": "C",
+      "position": {
+        "x": 94.60934,
+        "y": 37.615337
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 3
+    },
+    {
+      "id": 2,
+      "element": "N",
+      "position": {
+        "x": 68.34313,
+        "y": 4.8420815
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 3,
+      "element": "C",
+      "position": {
+        "x": 79.418365,
+        "y": -35.671364
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 1
+    },
+    {
+      "id": 4,
+      "element": "N",
+      "position": {
+        "x": 44.310226,
+        "y": -58.723877
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 5,
+      "element": "C",
+      "position": {
+        "x": 11.536968,
+        "y": -32.457672
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 6,
+      "element": "C",
+      "position": {
+        "x": 26.390121,
+        "y": 6.8282523
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 7,
+      "element": "C",
+      "position": {
+        "x": -0.20590915,
+        "y": 39.334423
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 8,
+      "element": "O",
+      "position": {
+        "x": 14.647244,
+        "y": 78.620346
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 9,
+      "element": "N",
+      "position": {
+        "x": -41.655094,
+        "y": 32.55467
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 10,
+      "element": "C",
+      "position": {
+        "x": -56.508247,
+        "y": -6.7312546
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 11,
+      "element": "O",
+      "position": {
+        "x": -97.957436,
+        "y": -13.511008
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 12,
+      "element": "N",
+      "position": {
+        "x": -29.912216,
+        "y": -39.237427
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 13,
+      "element": "C",
+      "position": {
+        "x": -44.76537,
+        "y": -78.523346
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 3
+    },
+    {
+      "id": 14,
+      "element": "C",
+      "position": {
+        "x": -68.25113,
+        "y": 65.06084
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 3
+    }
+  ],
+  "bonds": [
+    {
+      "z_order": 0,
+      "a": 1,
+      "b": 2,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 2,
+      "b": 3,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 3,
+      "b": 4,
+      "order": 2,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 4,
+      "b": 5,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 5,
+      "b": 6,
+      "order": 2,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 6,
+      "b": 7,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 7,
+      "b": 8,
+      "order": 2,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 7,
+      "b": 9,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 9,
+      "b": 10,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 10,
+      "b": 11,
+      "order": 2,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 10,
+      "b": 12,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 12,
+      "b": 13,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 9,
+      "b": 14,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 6,
+      "b": 2,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 12,
+      "b": 5,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "annotations": [],
+  "arrows": [],
+  "graphics": [],
+  "groups": [],
+  "models": [
+    {
+      "display": "both",
+      "atoms": [
+        {
+          "id": 1,
+          "xyz": [
+            3.2239172,
+            0.54263926,
+            -0.753071
+          ]
+        },
+        {
+          "id": 2,
+          "xyz": [
+            2.1083033,
+            -0.31744024,
+            -0.45026508
+          ]
+        },
+        {
+          "id": 3,
+          "xyz": [
+            2.1534507,
+            -1.6782551,
+            -0.29918396
+          ]
+        },
+        {
+          "id": 4,
+          "xyz": [
+            0.96404165,
+            -2.1767404,
+            -0.025324747
+          ]
+        },
+        {
+          "id": 5,
+          "xyz": [
+            0.13934635,
+            -1.0928129,
+            -0.0027475925
+          ]
+        },
+        {
+          "id": 6,
+          "xyz": [
+            0.8111037,
+            0.06353524,
+            -0.25980148
+          ]
+        },
+        {
+          "id": 7,
+          "xyz": [
+            0.18307167,
+            1.3378575,
+            -0.295142
+          ]
+        },
+        {
+          "id": 8,
+          "xyz": [
+            0.79786533,
+            2.3743916,
+            -0.52785194
+          ]
+        },
+        {
+          "id": 9,
+          "xyz": [
+            -1.1896002,
+            1.2718315,
+            -0.03868777
+          ]
+        },
+        {
+          "id": 10,
+          "xyz": [
+            -1.9204413,
+            0.095607325,
+            0.23139785
+          ]
+        },
+        {
+          "id": 11,
+          "xyz": [
+            -3.135524,
+            0.13935508,
+            0.44644928
+          ]
+        },
+        {
+          "id": 12,
+          "xyz": [
+            -1.2120779,
+            -1.1064253,
+            0.24372202
+          ]
+        },
+        {
+          "id": 13,
+          "xyz": [
+            -1.8894906,
+            -2.361458,
+            0.51335007
+          ]
+        },
+        {
+          "id": 14,
+          "xyz": [
+            -1.9461385,
+            2.508546,
+            -0.046340693
+          ]
+        }
+      ],
+      "hydrogens": [
+        {
+          "parent": 1,
+          "xyz": [
+            3.0220456,
+            1.055416,
+            -1.6967652
+          ]
+        },
+        {
+          "parent": 1,
+          "xyz": [
+            4.1322536,
+            -0.058018632,
+            -0.8473647
+          ]
+        },
+        {
+          "parent": 1,
+          "xyz": [
+            3.3407197,
+            1.2612399,
+            0.06192671
+          ]
+        },
+        {
+          "parent": 3,
+          "xyz": [
+            3.0669796,
+            -2.251344,
+            -0.39764312
+          ]
+        },
+        {
+          "parent": 13,
+          "xyz": [
+            -1.4469429,
+            -2.8226287,
+            1.4020011
+          ]
+        },
+        {
+          "parent": 13,
+          "xyz": [
+            -2.9586303,
+            -2.2182992,
+            0.69032407
+          ]
+        },
+        {
+          "parent": 13,
+          "xyz": [
+            -1.7637506,
+            -3.0272477,
+            -0.3463833
+          ]
+        },
+        {
+          "parent": 14,
+          "xyz": [
+            -2.4206114,
+            2.6408596,
+            0.9316546
+          ]
+        },
+        {
+          "parent": 14,
+          "xyz": [
+            -1.3250217,
+            3.3815048,
+            -0.26105264
+          ]
+        },
+        {
+          "parent": 14,
+          "xyz": [
+            -2.7348692,
+            2.4378862,
+            -0.802659
+          ]
+        }
+      ],
+      "rotation": [
+        0.11823921,
+        0.9602455,
+        -0.14346388,
+        -0.20824541
+      ],
+      "offset": {
+        "x": 246.03372,
+        "y": 0.0
+      },
+      "size": 286.0612,
+      "style": "ball_stick",
+      "look": "flat",
+      "depth_fade": 0.35,
+      "perspective": 0.2,
+      "force_field": "mmff94s"
+    }
+  ]
+}

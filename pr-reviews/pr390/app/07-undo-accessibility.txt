@@ -1,0 +1,75 @@
+Window: "Untitled • — ReShiki", App: ReShiki Verification.
+0 standard window Untitled • — ReShiki, Secondary Actions: Raise
+	1 container
+		2 button About ReShiki; check for updates, ID: header-about
+		3 button New · ⌘N, ID: header-new
+		4 button Open · ⌘O, ID: header-open
+		5 button Save · ⌘S, ID: header-save
+		6 button Save as · ⇧⌘S, ID: header-save-as
+		7 button Undo · ⌘Z, ID: header-undo
+		8 button Redo · ⇧⌘Z, ID: header-redo
+		9 button Assistant, ID: header-assistant
+		10 button Import, ID: header-import
+		11 button Check drawing, ID: header-check
+		12 button Clean up…, ID: header-cleanup
+		13 button Export, ID: header-export
+		14 button Show or hide inspector, ID: header-inspector
+		15 button Text and object color, ID: style-color-menu
+		16 toggle button (settable, boolean) Select / move · Escape or toolbar, Value: on, ID: tool-Select
+		17 toggle button (settable, boolean) Lasso select · Toolbar, Value: off, ID: tool-Lasso
+		18 toggle button (settable, boolean) 3D tilt, Value: off, ID: tool-Tilt
+		19 toggle button (settable, boolean) Eraser, Value: off, ID: tool-Erase
+		20 toggle button (settable, boolean) Atom label · C · c, Value: off, ID: tool-Atom
+		21 toggle button (settable, boolean) Single bond · 1, Value: off, ID: tool-Bond(1)
+		22 toggle button (settable, boolean) Double bond · 2, Value: off, ID: tool-Bond(2)
+		23 toggle button (settable, boolean) Triple bond · 3, Value: off, ID: tool-Bond(3)
+		24 toggle button (settable, boolean) Solid wedge, Value: off, ID: tool-Wedge
+		25 toggle button (settable, boolean) 6-membered · ⇧6, Value: off, ID: tool-Ring
+		26 toggle button (settable, boolean) Straight chain · ⇧X · Drag a regular zigzag toward the pointer, Value: off, ID: tool-Chain(Straight)
+		27 toggle button (settable, boolean) Snaking chain · Steer while dragging · Retrace to shorten, Value: off, ID: tool-Chain(Snaking)
+		28 toggle button (settable, boolean) Forward · e, Value: off, ID: tool-Arrow
+		29 toggle button (settable, boolean) Text label · t, Value: off, ID: tool-Text
+		30 toggle button (settable, boolean) Rectangle, Value: off, ID: tool-Graphic(Rectangle)
+		31 toggle button (settable, boolean) Ellipse, Value: off, ID: tool-Graphic(Ellipse)
+		32 toggle button (settable, boolean) Brackets · ⇧T, Value: off, ID: tool-Graphic(Brackets)
+		33 toggle button (settable, boolean) Graphic line, Value: off, ID: tool-Graphic(Line)
+		34 toggle button (settable, boolean) Bézier curve, Value: off, ID: tool-Graphic(Curve)
+		35 toggle button (settable, boolean) Pen path, Value: off, ID: tool-Graphic(Path)
+		36 toggle button (settable, boolean) Arc, Value: off, ID: tool-Graphic(Arc)
+		37 toggle button (settable, boolean) Circled plus · ⇧E, Value: off, ID: tool-Graphic(Symbol(CirclePlus))
+		38 toggle button (settable, boolean) p orbital · ⇧G, Value: off, ID: tool-Graphic(Orbital(P))
+		39 toggle button (settable, boolean) C · c, Value: off, ID: element-C
+		40 toggle button (settable, boolean) N · n, Value: off, ID: element-N
+		41 toggle button (settable, boolean) O · o, Value: off, ID: element-O
+		42 toggle button (settable, boolean) *, Value: off, ID: element-*
+		43 button Help and keyboard shortcuts, ID: help-open
+		44 toggle button (settable, boolean) Leave keyboard drawing · F8 · Active Empty drawing position, Value: on, ID: keyboard-done
+		45 button (disabled) Choose an atom with arrows or the mouse before marking · [, ID: keyboard-mark
+		46 button (disabled) Mark an atom with [ before connecting · ], ID: keyboard-connect
+		47 button (disabled) Mark a donor N/O/S/P with [, choose a metal, then } for a directed dative contact in place, ID: keyboard-coordinate
+		48 button ID: context-overflow, More: 3D optimize…, Join selected atoms or bonds, Merge selected atoms, Move & attach…, Coordinate in place…, Group
+		49 button (disabled) Align, ID: arrange-menu-AlignObjects
+		50 button (disabled) Distribute, ID: arrange-menu-Distribute
+		51 button Order, ID: arrange-menu-Order
+		52 button Flip horizontal, ID: arrange-flip-horizontal
+		53 button Flip vertical, ID: arrange-flip-vertical
+		54 button Rotate 180°, ID: arrange-rotate
+		55 text field (settable) Rotation (°), Value: 0, ID: arrange-rotation
+		56 button Structure: expanded, ID: inspector-section-Structure
+		57 toggle button (settable, boolean) Show the 2D drawing, Value: off, ID: structure-show-2D
+		58 toggle button (settable, boolean) Show the 3D model in place, Value: off, ID: structure-show-3D
+		59 toggle button (settable, boolean) Show the 2D drawing and the 3D model, Value: on, ID: structure-show-Both
+		60 button Molecular properties: collapsed, ID: inspector-section-Molecule
+		61 button Bond appearance: expanded, ID: inspector-section-Bonds
+		62 button Crossings & direction: collapsed, ID: inspector-section-BondDirection
+		63 button Atom details: collapsed, ID: inspector-section-Atoms
+		64 button Transform: collapsed, ID: inspector-section-Transform
+		65 button Grouping & frames: collapsed, ID: inspector-section-Groups
+	66 close button
+	67 full screen button Help: this button also has an action to zoom the window, Secondary Actions: zoom the window
+	68 minimize button
+	69 text Untitled • — ReShiki
+70 menu bar
+	71 ReShiki Verification
+
+The focused UI element is 57 toggle button (settable, boolean) Show the 2D drawing, Value: off, ID: structure-show-2D
