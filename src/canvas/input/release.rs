@@ -265,7 +265,7 @@ impl MoleculeCanvas<'_> {
             return ControlFlow::Break(Action::request_redraw().and_capture());
         }
         let (x, y) = drag.angles(position, state.modifiers.shift());
-        ControlFlow::Continue(if x == 0. && y == 0. {
+        ControlFlow::Continue(if tilt::wrap(x) == 0. && tilt::wrap(y) == 0. {
             Edit::Select(drag.ids)
         } else {
             Edit::Tilt {

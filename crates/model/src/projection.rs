@@ -97,9 +97,14 @@ pub fn prune_centroids(doc: &mut Document) {
 }
 
 /// Rotate the retained XYZ positions, preserving topology and stereo descriptors.
-/// Labels stay upright. Positive depth faces the viewer.
+/// Labels stay upright. Positive depth faces the viewer. Any finite angle is
+/// accepted; whole turns are no-ops.
 pub fn tilt(doc: &mut Document, ids: &[u64], degrees: f32, around_x: bool) {
-    if !degrees.is_finite() || degrees.abs() > 85. || degrees == 0. {
+    if !degrees.is_finite() {
+        return;
+    }
+    let degrees = degrees % 360.;
+    if degrees == 0. {
         return;
     }
     let ids = doc.expand_abbreviation_selection(ids);

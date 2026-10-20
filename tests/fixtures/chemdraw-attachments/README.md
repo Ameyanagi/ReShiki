@@ -19,3 +19,7 @@ ChemDraw code or template library is included.
   nested multi-center definitions in collapsed Cp* labels. Reject missing
   definitions; new editable exports expand haptic groups to avoid this loss.
 - `hidden-dummy`: hidden unspecified wildcard with its two connected bonds.
+- `label-justification-flush-left`, `-centered`, `-flush-right`, `-auto`: drawn
+  in ChemDraw 26.1.0.6801 on 2026-10-20 (issue #378). Ethane with a MeO text
+  label on one end, set with Text → Flush Left / Centered / Flush Right /
+  Automatic and saved. ChemDraw reads the flush-right MeO as a methoxy fragment.

@@ -149,9 +149,7 @@ impl App {
                 }
             }
             Edit::ArrowHandle(id, index, p) => {
-                if let Some(a) = self.tab.doc.arrows.iter_mut().find(|a| a.id == id) {
-                    a.edit_handle(index, p);
-                }
+                reshiki::arrow_anchors::edit_handle(&mut self.tab.doc, id, index, p);
             }
             Edit::GraphicPoint(id, index, p) => {
                 self.tab.path_point = Some((id, index));
