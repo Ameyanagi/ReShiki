@@ -54,6 +54,7 @@ Right-click a molecule and choose **Chemical names…**. ReShiki selects the mol
 ## What is supported
 
 - ReShiki rejects an ambiguous name with a reason. It also rejects names with unsupported stereo, relative or racemic descriptors, radicals, polymers, queries and disconnected salts. A rejected name leaves the drawing unchanged.
+- A salt or mixture name such as `sodium chloride` says so: "Salts and mixtures aren't supported yet. Draw the ions, or paste SMILES under Import → Structure." For example, paste `[Na+].[Cl-]` under **Structure**.
 - Optical rotation signs are not turned into R or S. The one exception is `(+)-lactic acid`, which reads as (S)-lactic acid, `(2S)-2-hydroxypropanoic acid`.
 - Generated names cover neutral organic molecules of C, N, O and halogens with up to 64 heavy atoms and at most one ring. Charged and isotope-labeled molecules give an error.
 - Generated names are systematic. They are not always the preferred IUPAC name.

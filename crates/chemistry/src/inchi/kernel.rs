@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 mod tests;
 
 pub const VERSION: &str = "1.07.5";
-pub const CRATE_VERSION: &str = "0.3.0";
+pub const CRATE_VERSION: &str = "0.5.0";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -396,7 +396,13 @@ impl MolToInchiToolkit for Toolkit {
         &mut self,
         molecule: &mut InchiMolecule,
         mark_atoms_bonds: bool,
+        canonical: bool,
     ) -> Result<(), InchiToolkitError> {
+        // InChI generation mirrors RDKit's non-canonical Kekulize(m, false,
+        // false); this kernel assigns in atom order and has no canonical ranks.
+        if canonical {
+            return Err(error("Canonical kekulization is unsupported"));
+        }
         let mut state = self.refresh(molecule)?;
         if state.rings.kind == RingKind::None {
             let found = rings::perceive(&state.graph, rings::Options::default()).map_err(error)?;

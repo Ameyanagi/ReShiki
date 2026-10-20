@@ -83,7 +83,7 @@ impl Field {
     fn hint(self) -> &'static str {
         match self {
             Self::Rotation => "Relative · positive is clockwise",
-            Self::TiltX | Self::TiltY => "Relative · tilts atoms and shapes, up to ±85° per change",
+            Self::TiltX | Self::TiltY => "Relative · tilts atoms and shapes in 3D",
             Self::Width | Self::Height => "Includes labels; fonts and line widths stay fixed",
             Self::Scale => "Relative · scales coordinates uniformly",
         }
@@ -340,21 +340,24 @@ fn transform_candidate(
             }
         }
         Field::TiltX | Field::TiltY => {
-            if value.abs() > 85. {
-                return Err("Enter a tilt between −85° and 85° per change".into());
+            if value.abs() > 36_000. {
+                return Err("Enter a tilt between −36000° and 36000°".into());
             }
             if !crate::canvas::tilt::available(document, &ids) {
                 return Err("Select at least two atoms or a shape to tilt".into());
             }
-            editing::transform(
-                document,
-                &ids,
-                if field == Field::TiltX {
-                    Transform::TiltX(value)
-                } else {
-                    Transform::TiltY(value)
-                },
-            );
+            let degrees = value % 360.;
+            if degrees != 0. {
+                editing::transform(
+                    document,
+                    &ids,
+                    if field == Field::TiltX {
+                        Transform::TiltX(degrees)
+                    } else {
+                        Transform::TiltY(degrees)
+                    },
+                );
+            }
         }
         Field::Width | Field::Height | Field::Scale => {
             if value <= 0. {
