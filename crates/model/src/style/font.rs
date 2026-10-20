@@ -31,6 +31,71 @@ pub(super) fn load_bundled(db: &mut resvg::usvg::fontdb::Database) {
     }
 }
 
+/// Points along a glyph outline, in font units, with curves sampled.
+#[derive(Default)]
+pub(super) struct Outline {
+    points: Vec<(f32, f32)>,
+}
+
+impl Outline {
+    fn last(&self) -> (f32, f32) {
+        self.points.last().copied().unwrap_or_default()
+    }
+
+    /// The largest corner radius, up to half the shorter side, whose rounded
+    /// rectangle over `bbox` still holds every outline point.
+    pub(super) fn corner_radius(&self, bbox: ttf_parser::Rect) -> f32 {
+        let (x0, y0, x1, y1) = (
+            f32::from(bbox.x_min),
+            f32::from(bbox.y_min),
+            f32::from(bbox.x_max),
+            f32::from(bbox.y_max),
+        );
+        let mut radius = 0.5 * (x1 - x0).min(y1 - y0);
+        for &(x, y) in &self.points {
+            let (left, right) = ((x - x0).max(0.), (x1 - x).max(0.));
+            let (low, high) = ((y - y0).max(0.), (y1 - y).max(0.));
+            for (u, v) in [(left, low), (right, low), (left, high), (right, high)] {
+                // A point u, v in from a corner lies inside the rounded
+                // rectangle exactly when the radius is at most this.
+                radius = radius.min(u + v + (2. * u * v).sqrt());
+            }
+        }
+        radius.max(0.)
+    }
+}
+
+impl ttf_parser::OutlineBuilder for Outline {
+    fn move_to(&mut self, x: f32, y: f32) {
+        self.points.push((x, y));
+    }
+    fn line_to(&mut self, x: f32, y: f32) {
+        self.points.push((x, y));
+    }
+    fn quad_to(&mut self, x1: f32, y1: f32, x: f32, y: f32) {
+        let (x0, y0) = self.last();
+        for i in 1..=8 {
+            let t = i as f32 / 8.;
+            let (a, b, c) = ((1. - t) * (1. - t), 2. * t * (1. - t), t * t);
+            self.points
+                .push((a * x0 + b * x1 + c * x, a * y0 + b * y1 + c * y));
+        }
+    }
+    fn curve_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x: f32, y: f32) {
+        let (x0, y0) = self.last();
+        for i in 1..=8 {
+            let t = i as f32 / 8.;
+            let s = 1. - t;
+            let (a, b, c, d) = (s * s * s, 3. * s * s * t, 3. * s * t * t, t * t * t);
+            self.points.push((
+                a * x0 + b * x1 + c * x2 + d * x,
+                a * y0 + b * y1 + c * y2 + d * y,
+            ));
+        }
+    }
+    fn close(&mut self) {}
+}
+
 #[cfg(test)]
 #[path = "font/tests.rs"]
 mod tests;

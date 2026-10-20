@@ -110,6 +110,52 @@ impl Refresh {
     }
 }
 
+/// The hydrogens atom `id`'s label shows once the labels refresh, worked out
+/// for its own molecule only, so placing a mark can allow for them at once.
+pub fn label_hydrogens(document: &Document, id: u64) -> Option<u32> {
+    let mut adjacent = HashMap::<u64, Vec<u64>>::new();
+    for (a, b) in document.bonds.iter().map(|b| (b.a, b.b)).chain(
+        document
+            .atoms
+            .iter()
+            .flat_map(|a| a.centroid.iter().map(move |id| (a.id, *id))),
+    ) {
+        adjacent.entry(a).or_default().push(b);
+        adjacent.entry(b).or_default().push(a);
+    }
+    let mut members = std::collections::HashSet::from([id]);
+    let mut pending = vec![id];
+    while let Some(at) = pending.pop() {
+        for &next in adjacent.get(&at).into_iter().flatten() {
+            if members.insert(next) {
+                pending.push(next);
+            }
+        }
+    }
+    let molecule = Document {
+        generic: document.generic.clone(),
+        atoms: document
+            .atoms
+            .iter()
+            .filter(|a| members.contains(&a.id))
+            .cloned()
+            .collect(),
+        bonds: document
+            .bonds
+            .iter()
+            .filter(|b| members.contains(&b.a))
+            .cloned()
+            .collect(),
+        ..Document::default()
+    };
+    let (components, _) = components(&molecule);
+    let computed = compute(components.first()?).ok()?;
+    computed
+        .atoms
+        .into_iter()
+        .find_map(|(atom, h, _)| (atom == id).then_some(h))
+}
+
 fn compute(source: &Document) -> Result<Computed, String> {
     // The complete drawing was validated before splitting it into components.
     // Attachment/centroid components have no ordinary molecular graph to

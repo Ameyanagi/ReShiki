@@ -11,9 +11,13 @@ use crate::canvas::{
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Rectangle, Vector, keyboard, mouse};
 use reshiki::arrows::ArrowHandle;
-use reshiki::document::Document;
+use reshiki::document::{Atom, Bond, Document};
 use reshiki::graphics::{Graphic, GraphicKind, PathCommand, PathHandle};
+use reshiki::scientific::{AtomMark, MarkKind};
+use reshiki::style::DrawingStyle;
+use std::cell::RefCell;
 use std::ops::ControlFlow;
+use std::rc::Rc;
 
 enum HandleShape {
     Circle(f32),
@@ -74,6 +78,17 @@ impl MoleculeCanvas<'_> {
             attach: self.graphics.attach,
             snap_orbitals: self.graphics.snap && !modifiers.alt(),
         }
+    }
+
+    /// Shift constrains a graphic; Option/Alt also frees an attached mark's orbit.
+    pub(in crate::canvas) fn graphic_constrain(
+        &self,
+        kind: GraphicKind,
+        modifiers: keyboard::Modifiers,
+    ) -> bool {
+        modifiers.shift()
+            || self.graphics.constrain
+            || (matches!(kind, GraphicKind::Symbol(_)) && modifiers.alt())
     }
 
     pub(super) fn draw_arrow_targets(
@@ -154,7 +169,7 @@ impl MoleculeCanvas<'_> {
             return;
         };
         let start = match state.gesture {
-            Some(Gesture::Graphic { start }) => start,
+            Some(Gesture::Graphic { start, .. }) => start,
             None => {
                 let Some(cursor) = state.cursor.filter(|cursor| bounds.contains(*cursor)) else {
                     return;
@@ -174,6 +189,73 @@ impl MoleculeCanvas<'_> {
                 &Path::circle(center, 8.),
                 Stroke::default().with_width(1.5).with_color(ACCENT),
             );
+        }
+    }
+
+    /// The orbit and snap positions of an attached mark being dragged.
+    pub(super) fn draw_mark_orbit(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        state: &State,
+        preview: &Document,
+        bounds: Rectangle,
+    ) {
+        let (id, index) = match (&state.gesture, self.tool) {
+            (Some(Gesture::AtomMark { id, index, .. }), _) => (*id, Some(*index)),
+            // A new mark dragged out with the symbol tool is the one the
+            // committed atom lacks.
+            (Some(Gesture::Graphic { start, .. }), Tool::Graphic(GraphicKind::Symbol(_)))
+                if self.graphics.attach =>
+            {
+                let Some(id) = self
+                    .doc
+                    .nearest(*start, self.camera.world_len(pick::PICK_RADIUS_PX))
+                else {
+                    return;
+                };
+                let old = self.doc.atom(id).map(|a| &a.marks);
+                let index = preview.atom(id).and_then(|a| {
+                    a.marks
+                        .iter()
+                        .position(|m| old.is_none_or(|old| !old.iter().any(|o| o.id == m.id)))
+                });
+                (id, index)
+            }
+            _ => return,
+        };
+        let Some((atom, mark)) = preview
+            .atom(id)
+            .and_then(|a| Some((a, a.marks.get(index?)?)))
+        else {
+            return;
+        };
+        // The guide and its dots are the committed placements, so the dragged
+        // mark always sits on them; steps blocked by a bond are left out.
+        let guide = orbit_guide(&state.orbit_guide, preview, atom, mark);
+        let (runs, snaps) = &*guide;
+        let path = Path::new(|b| {
+            for run in runs {
+                for (i, p) in run.iter().enumerate() {
+                    let p = self.camera.screen(*p, bounds);
+                    if i == 0 { b.move_to(p) } else { b.line_to(p) }
+                }
+            }
+        });
+        frame.stroke(
+            &path,
+            Stroke {
+                line_dash: canvas::LineDash {
+                    segments: &[3., 4.],
+                    offset: 0,
+                },
+                ..Stroke::default()
+                    .with_width(1.)
+                    .with_color(Color { a: 0.5, ..ACCENT })
+            },
+        );
+        for p in snaps {
+            let p = self.camera.screen(*p, bounds);
+            frame.fill(&Path::circle(p, 1.6), Color { a: 0.7, ..ACCENT });
         }
     }
 
@@ -338,7 +420,12 @@ impl MoleculeCanvas<'_> {
                 .iter()
                 .filter(|a| selected.contains(&a.id) && preview.atom_visible(a.id))
             {
-                for m in &a.marks {
+                // A hidden charge has no handle, so it keeps its place.
+                for m in a
+                    .marks
+                    .iter()
+                    .filter(|m| reshiki::scientific::mark_drawn(a, m))
+                {
                     let center = self
                         .camera
                         .screen(a.position.offset(m.offset.x, m.offset.y), bounds);
@@ -738,4 +825,71 @@ fn badge(
         font: iced::Font::with_name(reshiki::style::ui_font_family()),
         ..Default::default()
     });
+}
+
+/// An attached mark's orbit guide: its runs and snap dots in world space.
+pub(in crate::canvas) type OrbitGuide = (Vec<Vec<World>>, Vec<World>);
+
+/// The guide last drawn, kept while a drag only moves the mark round it.
+#[derive(Default)]
+pub(in crate::canvas) struct OrbitGuideCache(Option<(OrbitInputs, Rc<OrbitGuide>)>);
+
+/// Everything the guide depends on: the atom and its label (an abbreviation's
+/// too), its bonds and their far atoms, the mark's kind and size, and the
+/// style. Where the
+/// pointer puts the mark (its offset, and a lone pair's turn) is left out.
+#[derive(PartialEq)]
+struct OrbitInputs {
+    atom: Atom,
+    mark: AtomMark,
+    bonds: Vec<Bond>,
+    neighbors: Vec<Atom>,
+    abbreviations: Vec<reshiki::abbreviations::Abbreviation>,
+    style: DrawingStyle,
+}
+
+pub(in crate::canvas) fn orbit_guide(
+    cache: &RefCell<OrbitGuideCache>,
+    doc: &Document,
+    atom: &Atom,
+    mark: &AtomMark,
+) -> Rc<OrbitGuide> {
+    let mut owner = atom.clone();
+    owner.marks.retain(|m| m != mark);
+    let mut placed = mark.clone();
+    placed.offset = World::default();
+    if matches!(placed.kind, MarkKind::LonePair | MarkKind::LonePairBar) {
+        placed.angle = 0.;
+    }
+    let bonds: Vec<_> = doc
+        .bonds
+        .iter()
+        .filter(|b| b.a == atom.id || b.b == atom.id)
+        .cloned()
+        .collect();
+    let inputs = OrbitInputs {
+        atom: owner,
+        mark: placed,
+        neighbors: bonds
+            .iter()
+            .filter_map(|b| doc.atom(if b.a == atom.id { b.b } else { b.a }).cloned())
+            .collect(),
+        bonds,
+        abbreviations: doc
+            .abbreviations
+            .iter()
+            .filter(|a| a.anchor == atom.id || a.members.contains(&atom.id))
+            .cloned()
+            .collect(),
+        style: doc.drawing_style.clone(),
+    };
+    let mut cache = cache.borrow_mut();
+    if let Some((cached, guide)) = &cache.0
+        && *cached == inputs
+    {
+        return Rc::clone(guide);
+    }
+    let guide = Rc::new(reshiki::scientific::mark_orbit_guide(doc, atom, mark));
+    cache.0 = Some((inputs, Rc::clone(&guide)));
+    guide
 }

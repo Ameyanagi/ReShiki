@@ -776,8 +776,31 @@ fn map_positions(
                 *offset = Point::new(moved.x - position.x, moved.y - position.y);
             }
             for mark in &mut a.marks {
+                let before = mark.offset;
                 let moved = convert(a.position.offset(mark.offset.x, mark.offset.y));
                 mark.offset = Point::new(moved.x - position.x, moved.y - position.y);
+                // Lone pairs turn with the molecule; charges stay upright.
+                if matches!(
+                    mark.kind,
+                    crate::scientific::MarkKind::LonePair
+                        | crate::scientific::MarkKind::LonePairBar
+                ) {
+                    let direction = |p: Point| p.y.atan2(p.x).to_degrees();
+                    mark.angle = if before.x.hypot(before.y) > 1e-6
+                        && mark.offset.x.hypot(mark.offset.y) > 1e-6
+                    {
+                        // Keep the pair's turn from its atom-to-mark direction,
+                        // so unequal stretching leaves it across that direction.
+                        let (x, y) = (vector(Point::new(1., 0.)), vector(Point::new(0., 1.)));
+                        let mirrored = x.x * y.y - x.y * y.x < 0.;
+                        let turn = mark.angle - direction(before);
+                        direction(mark.offset) + if mirrored { -turn } else { turn }
+                    } else {
+                        let (s, c) = mark.angle.to_radians().sin_cos();
+                        direction(vector(Point::new(c, s)))
+                    }
+                    .rem_euclid(360.);
+                }
             }
             a.position = position;
         }
