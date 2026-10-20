@@ -284,6 +284,11 @@ pub(crate) fn open_url(url: &str) -> Result<(), String> {
         .map_err(|_| "Could not open the link".into())
 }
 
+/// Ask with the browser's OK/Cancel prompt; true for OK.
+pub(crate) fn confirm(message: &str) -> bool {
+    web_sys::window().is_some_and(|window| window.confirm_with_message(message).unwrap_or(false))
+}
+
 fn clipboard() -> Option<web_sys::Clipboard> {
     Some(web_sys::window()?.navigator().clipboard())
 }

@@ -73,9 +73,17 @@ fn save_answer(result: rfd::MessageDialogResult) -> Message {
         Answer::No => Message::Discard,
         Answer::Custom(label) if label == SAVE => Message::Save,
         Answer::Custom(label) if label == DONT_SAVE => Message::Discard,
-        // The browser asks with confirm(): OK saves, Cancel keeps editing.
+        // The browser asks with confirm(), which has two buttons: OK saves,
+        // and Cancel asks again whether to discard the changes.
         #[cfg(target_arch = "wasm32")]
         Answer::Ok => Message::Save,
+        #[cfg(target_arch = "wasm32")]
+        _ if crate::web::confirm(
+            "Close without saving? OK discards your changes; Cancel keeps editing.",
+        ) =>
+        {
+            Message::Discard
+        }
         _ => Message::Cancel,
     }
 }
