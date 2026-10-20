@@ -931,6 +931,47 @@ fn tilt_click_selects_a_molecule_without_rotating_and_blank_drag_selects() -> Re
 }
 
 #[test]
+fn tilt_drag_on_a_molecule_shown_only_in_3d_tilts_it() {
+    use reshiki::models3d::Display;
+    for display in [Display::Both, Display::ThreeD] {
+        let (doc, molecule, drawn) = tilt::shown(display);
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::Tilt;
+        let mixed = [molecule, drawn].concat();
+        for (selected, expected) in [
+            (&[][..], &molecule[..]),
+            (&molecule[..], &molecule[..]),
+            (&mixed[..], &mixed[..]),
+        ] {
+            canvas.selected = selected;
+            let mut state = State::default();
+            for event in [
+                mouse::Event::CursorMoved {
+                    position: Point::new(200., 180.),
+                },
+                mouse::Event::ButtonPressed(mouse::Button::Left),
+                mouse::Event::CursorMoved {
+                    position: Point::new(230., 200.),
+                },
+            ] {
+                tilt_pointer(&canvas, &mut state, event);
+            }
+            let edit = tilt_pointer(
+                &canvas,
+                &mut state,
+                mouse::Event::ButtonReleased(mouse::Button::Left),
+            );
+            let Some(Edit::Tilt { mut ids, x, y }) = edit else {
+                panic!("{display:?} {selected:?}: expected a tilt, got {edit:?}");
+            };
+            ids.sort_unstable();
+            assert_eq!(ids, expected, "{display:?}");
+            assert_eq!((x, y), (-10., 15.));
+        }
+    }
+}
+
+#[test]
 fn aromatic_ring_interior_opens_its_menu_and_starts_tilt_without_prior_selection()
 -> Result<(), String> {
     let mut doc = Document::default();

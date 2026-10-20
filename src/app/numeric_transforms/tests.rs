@@ -939,3 +939,54 @@ fn numeric_size_apply_latency() {
     println!("1002 atoms, inward-label fallback: {:?}", start.elapsed());
     assert!((extent(&changed, &ids, Field::Width).unwrap() - target).abs() < 0.005);
 }
+
+#[test]
+fn tilts_turn_a_model_shown_only_in_3d_as_one_undo_step() {
+    use crate::canvas::{Edit, tilt};
+    let (doc, molecule, drawn) = tilt::shown(reshiki::models3d::Display::ThreeD);
+    let positions = |doc: &Document, ids: [u64; 2]| {
+        ids.map(|id| {
+            let a = doc.atom(id).unwrap();
+            (a.position, a.depth)
+        })
+    };
+    let mixed = [molecule, drawn].concat();
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = doc.clone();
+    let frames = app.tab.history.undo_frames().count();
+    let check = |app: &mut App, ids: &[u64], expected: Document| {
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(app.tab.doc, expected);
+        assert_eq!(positions(&app.tab.doc, molecule), positions(&doc, molecule));
+        assert_ne!(app.tab.doc.models[0].rotation, doc.models[0].rotation);
+        assert_eq!(
+            positions(&app.tab.doc, drawn) != positions(&doc, drawn),
+            ids.len() > 2
+        );
+        assert_eq!(app.tab.history.undo_frames().count(), frames + 1);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, doc);
+    };
+    for ids in [&molecule[..], &mixed] {
+        // A drag commits what its preview showed: the same tilt.
+        let mut preview = doc.clone();
+        tilt::apply(&mut preview, ids, -10., 15.);
+        app.edit(Edit::Tilt {
+            ids: ids.to_vec(),
+            x: -10.,
+            y: 15.,
+        });
+        check(&mut app, ids, preview);
+        // Step commands from the menu, keys and palette.
+        app.tab.selected = ids.to_vec();
+        let mut stepped = doc.clone();
+        reshiki::editing::transform(&mut stepped, ids, Transform::TiltX(15.));
+        let _ = app.update(Message::Transform(Transform::TiltX(15.)));
+        check(&mut app, ids, stepped);
+        // The inspector tilt field.
+        let typed = transformed(&doc, ids, Field::TiltY, "30", false).unwrap();
+        assert_eq!(positions(&typed, molecule), positions(&doc, molecule));
+        assert_ne!(typed.models[0].rotation, doc.models[0].rotation);
+    }
+}

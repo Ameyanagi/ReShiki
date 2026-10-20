@@ -1480,3 +1480,52 @@ fn hidden_indicator_owners_and_group_labels_are_out_of_reach() {
     assert!(!Owner::BondStereo(atoms[0], atoms[1]).drawn(&doc));
     assert!(Owner::Number(methane).drawn(&doc));
 }
+
+#[test]
+fn tilt_turns_a_model_shown_only_in_3d_in_the_drawing_s_sense() {
+    use crate::projection;
+    let close = |a: [f32; 4], b: [f32; 4]| a.iter().zip(b).all(|(a, b)| (a - b).abs() < 1e-5);
+    for display in [Display::TwoD, Display::Both, Display::ThreeD] {
+        let (doc, atoms, methane) = if display == Display::TwoD {
+            drawing()
+        } else {
+            shown(display)
+        };
+        let mut tilted = doc.clone();
+        let ids = [atoms.clone(), vec![methane]].concat();
+        projection::tilt(&mut tilted, &ids, 30., true);
+        projection::tilt(&mut tilted, &ids, -20., false);
+        let hidden = display == Display::ThreeD;
+        let drawing = |d: &Document| {
+            atoms
+                .iter()
+                .map(|id| d.atom(*id).map(|a| (a.position, a.depth)))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(drawing(&tilted) == drawing(&doc), hidden, "{display:?}");
+        // X then Y, as one drag of `turn` (0.01 radian per pixel) would.
+        let expected = if hidden {
+            turn(
+                doc.models[0].rotation,
+                -20f32.to_radians() * 100.,
+                -30f32.to_radians() * 100.,
+                false,
+            )
+        } else {
+            doc.models[0].rotation
+        };
+        assert!(close(tilted.models[0].rotation, expected), "{display:?}");
+    }
+    // A positive X tilt sends the top away and a positive Y tilt the right
+    // side, for the model as for the 2D drawing.
+    let (mut doc, atoms, _) = shown(Display::ThreeD);
+    for (around_x, toward) in [(true, [0., 1., 0.]), (false, [1., 0., 0.])] {
+        doc.models[0].rotation = [1., 0., 0., 0.];
+        tilt(&mut doc, &atoms, 30., around_x);
+        assert!(rotate(doc.models[0].rotation, toward)[2] < -0.4);
+    }
+    let (mut flat, atoms, _) = drawing();
+    projection::tilt(&mut flat, &atoms, 30., true);
+    let [c1, c2, _] = [0, 1, 2].map(|i| flat.atom(atoms[i]).unwrap().depth);
+    assert!(c2 < c1, "the top carbon goes away");
+}

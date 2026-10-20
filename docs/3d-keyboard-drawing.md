@@ -53,6 +53,17 @@ that is not selected moves like any object. Once its molecule is selected:
 Each rotation, reset and resize is one Undo step, and the canvas preview is the
 committed result.
 
+The **3D tilt** tool, its X/Y step commands (right-click → **3D tilt**, the
+Alt+Shift+arrow keys and the command palette) and the **Tilt X / Tilt Y**
+transform fields turn a molecule shown only in 3D by turning its model, with
+the same rotation as dragging inside the frame: vertical movement turns it
+about X and horizontal movement about Y, at the tilt's 0.5° per pixel, and
+Shift snaps to 15°. Its hidden 2D drawing stays as it is. In a selection
+that also holds drawn atoms or shapes, the model turns and the rest tilts,
+together as one Undo step, and the preview is the committed result. A
+molecule shown as **Both** tilts its visible 2D drawing and leaves the model
+alone.
+
 ### 2D layout
 
 While a model is shown, **Properties → Structure → 2D layout** chooses what the
