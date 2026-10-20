@@ -555,6 +555,8 @@ fn completion(message: &Message) -> Option<Completion> {
                 Action::Request(..) | Action::Poll => None,
             }
         }
+        #[cfg(target_arch = "wasm32")]
+        Message::Host(_) => None,
         #[cfg(target_os = "macos")]
         Message::MacFiles(action) => {
             use super::macos_files::Action;

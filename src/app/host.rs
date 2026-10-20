@@ -1,0 +1,20 @@
+//! Requests from the page that hosts the browser editor; see web.rs.
+use super::{App, Message};
+use crate::web::Request;
+use iced::Task;
+
+impl App {
+    pub(super) fn host_request(&mut self, request: Request) -> Task<Message> {
+        match request {
+            Request::Load(doc) => self.show_opened(*doc, None),
+            Request::Snapshot(id) => crate::web::reply(id, self.tab.doc.clone()),
+            Request::Close => return iced::exit(),
+        }
+        Task::none()
+    }
+
+    /// The drawing in front and its revision, which changes with every edit.
+    pub(crate) fn revision(&self) -> (u64, u64) {
+        (self.tab.id.0, self.tab.revision)
+    }
+}

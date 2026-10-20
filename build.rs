@@ -93,6 +93,11 @@ fn main() -> anyhow::Result<()> {
         );
         println!("cargo:rustc-link-arg-bin=reshiki={}", resource.display());
     }
+    // The browser editor runs InChI on the page's thread; give it the desktop
+    // InChI worker's 32 MiB stack rather than wasm's default 1 MiB.
+    if env::var("CARGO_CFG_TARGET_ARCH").as_deref() == Ok("wasm32") {
+        println!("cargo:rustc-link-arg-bin=reshiki=-zstack-size=33554432");
+    }
     Ok(())
 }
 

@@ -19,10 +19,13 @@ mod branding;
 mod canvas;
 #[cfg(any(windows, target_os = "linux"))]
 mod desktop;
+#[cfg(not(target_arch = "wasm32"))]
 mod launch;
 #[cfg(windows)]
 mod rendering;
 mod session;
+#[cfg(target_arch = "wasm32")]
+mod web;
 #[cfg(any(windows, test))]
 mod window_fit;
 
@@ -37,6 +40,7 @@ pub(crate) use reshiki_process_heap::allocation_metrics;
 static ALLOCATOR: allocation_metrics::MeasuredAllocator<reshiki_process_heap::BoundedHeap> =
     allocation_metrics::MeasuredAllocator::new(reshiki_process_heap::BoundedHeap);
 
+#[cfg(not(target_arch = "wasm32"))]
 fn main() -> iced::Result {
     // Worker modes enter before graphics, AppKit/Office registration or Tokio.
     // Relaunching this executable keeps deadlines and memory failures isolated.
@@ -144,17 +148,9 @@ fn main() -> iced::Result {
             None
         }
     };
-    // The inline editor can shape a new font before the drawing reaches the
-    // canvas. Install variable-weight aliases before either creates text buffers.
-    canvas::prepare_fonts();
-    // iced boots the app once; the closure hands it the arguments parsed above.
-    let boot = move || app::App::with_startup(startup.clone());
-    let result = iced::application(boot, app::App::update, app::App::view)
-        .default_font(iced::Font::with_name(reshiki::style::ui_font_family()))
-        .title(app::App::title)
-        .theme(app::App::theme)
-        .subscription(app::App::subscription)
-        .window(iced::window::Settings {
+    let result = run(
+        startup,
+        iced::window::Settings {
             visible: !cfg!(any(target_os = "macos", windows)),
             size: iced::Size::new(1280.0, 820.0),
             // Windows fits the hidden real HWND before publishing its accessible
@@ -162,11 +158,9 @@ fn main() -> iced::Result {
             min_size: (!cfg!(windows)).then_some(iced::Size::new(1040.0, 680.0)),
             icon: branding::window_icon(),
             ..Default::default()
-        })
-        .exit_on_close_request(false)
-        .antialiasing(true)
-        .centered()
-        .run();
+        },
+        true,
+    );
     #[cfg(target_os = "macos")]
     if let Err(error) = reshiki_macos::accessibility::shutdown() {
         eprintln!("{error}");
@@ -176,4 +170,40 @@ fn main() -> iced::Result {
         eprintln!("{error}");
     }
     result
+}
+
+/// The browser build starts nothing on load; the page mounts the editor with
+/// `mount` (see web.rs).
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    web::start();
+}
+
+/// Run the editor in `window` until it closes, multisampling its geometry when
+/// `antialiasing` is set.
+fn run(
+    startup: session::Arguments,
+    window: iced::window::Settings,
+    antialiasing: bool,
+) -> iced::Result {
+    // The inline editor can shape a new font before the drawing reaches the
+    // canvas. Install variable-weight aliases before either creates text buffers.
+    canvas::prepare_fonts();
+    // iced boots the app once; the closure hands it the arguments parsed above.
+    let boot = move || app::App::with_startup(startup.clone());
+    // In the browser, the host page's requests and change callback join in.
+    #[cfg(not(target_arch = "wasm32"))]
+    let (update, subscription) = (app::App::update, app::App::subscription);
+    #[cfg(target_arch = "wasm32")]
+    let (update, subscription) = (web::update, web::subscription);
+    iced::application(boot, update, app::App::view)
+        .default_font(iced::Font::with_name(reshiki::style::ui_font_family()))
+        .title(app::App::title)
+        .theme(app::App::theme)
+        .subscription(subscription)
+        .window(window)
+        .exit_on_close_request(false)
+        .antialiasing(antialiasing)
+        .centered()
+        .run()
 }

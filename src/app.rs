@@ -48,6 +48,8 @@ mod generic;
 mod graphics;
 mod help;
 mod history;
+#[cfg(target_arch = "wasm32")]
+mod host;
 mod icons;
 mod import;
 mod inline_text;
@@ -307,6 +309,9 @@ pub enum Message {
     OfficePrepared(crate::session::Binding, files::Opened),
     #[cfg(any(windows, target_os = "linux"))]
     Desktop(desktop::Action),
+    /// A request from the page hosting the browser editor.
+    #[cfg(target_arch = "wasm32")]
+    Host(crate::web::Request),
     #[cfg(target_os = "macos")]
     MacFiles(macos_files::Action),
     Tabs(tabs::Action),
@@ -832,6 +837,10 @@ impl App {
         #[cfg(any(windows, target_os = "linux"))]
         if let Message::Desktop(action) = message {
             return ControlFlow::Break(self.desktop_update(action));
+        }
+        #[cfg(target_arch = "wasm32")]
+        if let Message::Host(request) = message {
+            return ControlFlow::Break(self.host_request(request));
         }
         if let Message::Accessibility(action) = message {
             return ControlFlow::Break(self.accessibility_action(action));

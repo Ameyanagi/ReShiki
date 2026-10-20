@@ -2,6 +2,20 @@ use super::{App, Document, Job, Message, Point, Tool, editing, input_request};
 use iced::Task;
 use reshiki::clipboard::{CopyFormat, CopyOutcome, PasteOutcome, PreparedCopy};
 
+// Plain text goes through iced's clipboard, or the page's in the browser.
+#[cfg(not(target_arch = "wasm32"))]
+use iced::clipboard::{read as read_text, write as write_text};
+
+#[cfg(target_arch = "wasm32")]
+fn write_text<T: 'static>(text: String) -> Task<T> {
+    Task::future(crate::web::write_text(text)).discard()
+}
+
+#[cfg(target_arch = "wasm32")]
+fn read_text() -> Task<Option<String>> {
+    Task::future(crate::web::read_text())
+}
+
 #[derive(Debug, Clone)]
 pub struct CopyAsKey {
     pub epoch: u64,
@@ -131,7 +145,7 @@ impl App {
                 self.error = true;
                 return Task::none();
             };
-            return iced::clipboard::write(text)
+            return write_text(text)
                 .chain(Task::done(Message::CopyAsWritten(key, Ok(copy.notices))));
         }
         Task::perform(reshiki::clipboard::write_prepared(copy), move |result| {
@@ -385,7 +399,7 @@ impl App {
                 "Selection copied"
             }
             .into();
-            return iced::clipboard::write(format!("{}{json}", editing::CLIPBOARD_PREFIX));
+            return write_text(format!("{}{json}", editing::CLIPBOARD_PREFIX));
         }
         Task::none()
     }
@@ -394,7 +408,7 @@ impl App {
         if reshiki::clipboard::available() {
             return self.paste_native(false);
         }
-        iced::clipboard::read().map(Message::Pasted)
+        read_text().map(Message::Pasted)
     }
 
     pub(super) fn copy_smiles(&mut self) -> Task<Message> {
@@ -403,7 +417,7 @@ impl App {
             return Task::none();
         }
         if let Some(a) = self.property_analysis() {
-            return iced::clipboard::write(a.smiles.clone());
+            return write_text(a.smiles.clone());
         }
         Task::none()
     }
