@@ -595,6 +595,15 @@ impl App {
                     return Task::none();
                 }
             };
+            // Optimizing would rewrite the hidden drawing of a molecule shown
+            // only as a 3D model.
+            if let Some(reason) =
+                reshiki::models3d::refusal(&self.tab.doc, prepared.ids(), "optimize")
+            {
+                self.status = reason;
+                self.error = true;
+                return Task::none();
+            }
             let selected = self
                 .tab
                 .doc

@@ -490,6 +490,20 @@ pub fn hides(doc: &Document, id: u64) -> bool {
         .any(|m| m.display == Display::ThreeD && m.contains(id))
 }
 
+/// `ids` without the atoms shown only as 3D models. Edits that reshape the
+/// drawing (rotate, flip, resize, clean up) keep those molecules' hidden 2D
+/// drawing; moving them is fine, since their models move with them.
+pub fn without_hidden(doc: &Document, ids: &[u64]) -> Vec<u64> {
+    ids.iter().copied().filter(|id| !hides(doc, *id)).collect()
+}
+
+/// The status for an edit that would only reach molecules shown as 3D models,
+/// such as "Switch to 2D to rotate the drawing" for `verb` "rotate".
+pub fn refusal(doc: &Document, ids: &[u64], verb: &str) -> Option<String> {
+    (ids.iter().any(|id| hides(doc, *id)) && without_hidden(doc, ids).is_empty())
+        .then(|| format!("Switch to 2D to {verb} the drawing"))
+}
+
 impl Document {
     /// [`Self::atom_visible`] and not shown as a 3D model: the atoms that
     /// picking, selection regions, markers and erasing can reach.
@@ -919,6 +933,24 @@ pub fn tilt(doc: &mut Document, ids: &[u64], degrees: f32, around_x: bool) {
         .filter(|m| m.display == Display::ThreeD && ids.iter().any(|id| m.contains(*id)))
     {
         model.rotation = turn(model.rotation, dx, dy, false);
+    }
+}
+
+/// Roll each model shown only in 3D that holds one of `ids` by `degrees`
+/// about the view axis, clockwise on screen as the rotation handle, Rotate and
+/// the Rotate field turn a 2D drawing. The frame stays where it is.
+pub fn roll(doc: &mut Document, ids: &[u64], degrees: f32) {
+    if !degrees.is_finite() || degrees % 360. == 0. {
+        return;
+    }
+    // `turn` takes screen pixels of 0.01 radian; a positive roll is clockwise.
+    let pixels = (degrees % 360.).to_radians() * 100.;
+    for model in doc
+        .models
+        .iter_mut()
+        .filter(|m| m.display == Display::ThreeD && ids.iter().any(|id| m.contains(*id)))
+    {
+        model.rotation = turn(model.rotation, pixels, 0., true);
     }
 }
 

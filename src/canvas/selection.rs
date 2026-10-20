@@ -56,10 +56,15 @@ impl SelectionBox {
             return None;
         }
         let (lo, hi) = scene::selection_bounds(doc, ids)?;
+        // Rotation turns what is drawn about its own centre, and rolls the
+        // models of molecules shown only in 3D in place.
+        let drawn = reshiki::models3d::without_hidden(doc, ids);
+        let turning = if drawn.is_empty() { ids } else { &drawn };
         Some(Self {
             corners: [lo, World::new(hi.x, lo.y), hi, World::new(lo.x, hi.y)],
             // Derived centroid markers still have a box even without a rotation site.
-            pivot: editing::rotation_center(doc, ids).unwrap_or_else(|| editing::center(doc, ids)),
+            pivot: editing::rotation_center(doc, turning)
+                .unwrap_or_else(|| editing::center(doc, turning)),
             camera,
             bounds,
             resizable: models || !reshiki::models3d::shows_3d(doc, ids),
@@ -212,6 +217,15 @@ pub fn rotation_readout(angle: f32) -> [String; 2] {
     ]
 }
 
+/// The rotation handle's transform, in its preview and commit alike: what is
+/// drawn turns about `pivot`, and a molecule shown only in 3D rolls its model
+/// instead of turning its hidden drawing.
+pub(crate) fn rotate(doc: &mut Document, ids: &[u64], pivot: World, scale: f32, degrees: f32) {
+    reshiki::models3d::roll(doc, ids, degrees);
+    let drawn = reshiki::models3d::without_hidden(doc, ids);
+    editing::transform_about(doc, &drawn, pivot, scale, degrees);
+}
+
 #[derive(Debug)]
 pub(super) struct TransformDrag {
     pub ids: Vec<u64>,
@@ -329,7 +343,7 @@ impl TransformDrag {
         } else if self.resizes_models() {
             reshiki::models3d::resize(doc, &self.ids, self.pivot, scale);
         } else {
-            editing::transform_about(doc, &self.ids, self.pivot, scale, rotation);
+            rotate(doc, &self.ids, self.pivot, scale, rotation);
         }
     }
 

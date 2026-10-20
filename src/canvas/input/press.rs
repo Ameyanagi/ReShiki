@@ -186,10 +186,15 @@ impl MoleculeCanvas<'_> {
                 .filter(|a| self.selected.contains(&a.id) && self.doc.atom_drawn(a.id))
             {
                 if let Some(index) = a.marks.iter().position(|m| {
-                    a.position.offset(m.offset.x, m.offset.y).distance(p)
-                        < self.camera.world_len(HANDLE_PICK_PX)
+                    reshiki::scientific::mark_drawn(a, m)
+                        && a.position.offset(m.offset.x, m.offset.y).distance(p)
+                            < self.camera.world_len(HANDLE_PICK_PX)
                 }) {
-                    state.gesture = Some(Gesture::AtomMark { id: a.id, index });
+                    state.gesture = Some(Gesture::AtomMark {
+                        id: a.id,
+                        index,
+                        start: p,
+                    });
                     return Some(Action::request_redraw().and_capture());
                 }
             }
@@ -318,7 +323,10 @@ impl MoleculeCanvas<'_> {
                     dragged: false,
                 })
             }
-            Tool::Graphic(_) => Some(Gesture::Graphic { start: p }),
+            Tool::Graphic(_) => Some(Gesture::Graphic {
+                start: p,
+                hydrogens: Default::default(),
+            }),
             Tool::EditPoints => {
                 return Some(Action::publish(Edit::Select(hit)).and_capture());
             }

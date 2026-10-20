@@ -80,7 +80,8 @@ pub fn edges(doc: &Document, selected: &[u64]) -> Vec<Edge> {
     let mut out: Vec<_> = doc
         .bonds
         .iter()
-        .filter(|b| ids.contains(&b.a) && ids.contains(&b.b) && doc.bond_visible(b.a, b.b))
+        // A bond hidden in a 3D model is no reference: its drawing never changes.
+        .filter(|b| ids.contains(&b.a) && ids.contains(&b.b) && doc.bond_drawn(b.a, b.b))
         .map(|b| Edge::Bond(b.a, b.b))
         .collect();
     for graphic in doc.graphics.iter().filter(|g| ids.contains(&g.id)) {
@@ -204,6 +205,11 @@ pub fn rotate(
         return Err("Enter a finite pivot and angle".into());
     }
     let ids = scope(doc, ids, false)?;
+    if let Some(reason) = crate::models3d::refusal(doc, &ids, "rotate") {
+        return Err(reason);
+    }
+    // Whole molecules shown only in 3D keep their hidden drawing.
+    let ids = crate::models3d::without_hidden(doc, &ids);
     let mut candidate = doc.clone();
     let ids = if duplicate {
         let part = super::selection(doc, &ids);
@@ -272,6 +278,12 @@ impl Stretch {
             })
         {
             return Err("Stretch an ordinary bond between two atom sites".into());
+        }
+        if [fixed, moving]
+            .iter()
+            .any(|id| crate::models3d::hides(doc, *id))
+        {
+            return Err("Switch to 2D to stretch the drawing".into());
         }
         let (a, b) = doc
             .atom(fixed)

@@ -1183,8 +1183,16 @@ fn attached_marks_are_single_history_edits_and_removal_updates_chemistry() {
     assert_eq!(app.tab.doc, before);
     let _ = app.update(Message::Redo);
     assert_eq!(app.tab.doc, attached);
-    app.edit(Edit::AtomMark(id, 0, Point::new(-30., 20.)));
+    app.edit(Edit::AtomMark(id, 0, Point::new(-30., 20.), true));
     assert_eq!(app.tab.doc.atoms[0].marks[0].offset, Point::new(-30., 20.));
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, attached);
+    // Without Option/Alt or Shift the charge orbits upright in 15° steps.
+    app.edit(Edit::AtomMark(id, 0, Point::new(-30., 20.), false));
+    let mark = &app.tab.doc.atoms[0].marks[0];
+    let direction = mark.offset.y.atan2(mark.offset.x).to_degrees();
+    assert!((direction - 150.).abs() < 1e-3, "{direction}");
+    assert_eq!(mark.angle, 0.);
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, attached);
     let _ = app.update(Message::RemoveMark(id, 0));

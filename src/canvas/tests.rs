@@ -815,6 +815,7 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
             attach: true,
             snap: true,
             bracket_sides: BracketSides::Both,
+            revision: 0,
         },
         bond_drawing: Default::default(),
         chain_drawing: Default::default(),
@@ -2783,17 +2784,43 @@ fn mechanism_attachment_92_mark_drag_preview_resolves_same_geometry_as_commit() 
     let target = World::new(-7., -45.);
     let canvas = chain_canvas(&doc, ChainMode::Straight);
     let screen = canvas.camera.screen(target, bounds);
+    let atom = doc.atom(2).unwrap();
+    let start = atom
+        .position
+        .offset(atom.marks[0].offset.x, atom.marks[0].offset.y);
     let state = State {
-        gesture: Some(Gesture::AtomMark { id: 2, index: 0 }),
+        gesture: Some(Gesture::AtomMark {
+            id: 2,
+            index: 0,
+            start,
+        }),
         cursor: Some(screen),
         ..Default::default()
     };
     let preview = canvas.pointer_preview_document(&state, bounds);
     let mut committed = doc.clone();
-    let atom = committed.atom_mut(2).unwrap();
-    atom.marks[0].offset = World::new(target.x - atom.position.x, target.y - atom.position.y);
-    let _ = reshiki::transaction::reconcile(&mut committed, doc).unwrap();
+    let atom = committed.atom(2).unwrap();
+    let placed = reshiki::scientific::orbit_mark(&committed, atom, &atom.marks[0], target, false);
+    committed.atom_mut(2).unwrap().marks[0] = placed;
+    let _ = reshiki::transaction::reconcile(&mut committed, doc.clone()).unwrap();
     assert_eq!(preview, committed);
+    // A click on the handle neither previews nor commits a move.
+    let at = canvas.camera.screen(start.offset(0.5, 0.), bounds);
+    let mut state = State {
+        cursor: Some(at),
+        ..state
+    };
+    let preview = canvas.pointer_preview_document(&state, bounds);
+    assert_eq!(preview.atom(2).unwrap().marks, doc.atom(2).unwrap().marks);
+    let edit = canvas
+        .update(
+            &mut state,
+            &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            bounds,
+            mouse::Cursor::Available(at),
+        )
+        .and_then(|a| a.into_inner().0);
+    assert!(edit.is_none(), "{edit:?}");
 }
 
 #[test]

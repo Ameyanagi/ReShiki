@@ -141,11 +141,19 @@ impl App {
                     );
                 }
             }
-            Edit::AtomMark(id, index, p) => {
-                if let Some(a) = self.tab.doc.atom_mut(id)
-                    && let Some(mark) = a.marks.get_mut(index)
+            Edit::AtomMark(id, index, p, free) => {
+                if let Some(a) = self.tab.doc.atom(id)
+                    && let Some(mark) = a.marks.get(index)
                 {
-                    mark.offset = Point::new(p.x - a.position.x, p.y - a.position.y);
+                    let placed = reshiki::scientific::orbit_mark(&self.tab.doc, a, mark, p, free);
+                    if let Some(mark) = self
+                        .tab
+                        .doc
+                        .atom_mut(id)
+                        .and_then(|a| a.marks.get_mut(index))
+                    {
+                        *mark = placed;
+                    }
                 }
             }
             Edit::ArrowHandle(id, index, p) => {
@@ -171,7 +179,8 @@ impl App {
                 scale,
                 rotation,
             } => {
-                editing::transform_about(&mut self.tab.doc, &ids, pivot, scale, rotation);
+                // A molecule shown only in 3D rolls its model instead.
+                crate::canvas::rotate(&mut self.tab.doc, &ids, pivot, scale, rotation);
                 self.tab.selected = ids;
             }
             Edit::Tilt { ids, x, y } => {
@@ -179,7 +188,8 @@ impl App {
                 self.tab.selected = ids;
             }
             Edit::ScaleAxes { ids, pivot, x, y } => {
-                editing::scale_axes_about(&mut self.tab.doc, &ids, pivot, x, y);
+                let drawn = reshiki::models3d::without_hidden(&self.tab.doc, &ids);
+                editing::scale_axes_about(&mut self.tab.doc, &drawn, pivot, x, y);
                 self.tab.selected = ids;
             }
             edit @ (Edit::ModelView { .. } | Edit::ResizeModels { .. }) => {

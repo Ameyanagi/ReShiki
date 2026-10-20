@@ -1,5 +1,5 @@
-//! Initial click placement only. Stored and dragged marks never pass through
-//! this search, so editing a label cannot move an existing annotation.
+//! Click placement and the orbit of a dragged mark. Stored marks never pass
+//! through these, so editing a label cannot move an existing annotation.
 use super::{AtomMark, MarkKind, Part, styled_mark_parts};
 use crate::{
     document::{Atom, Document, Point},
@@ -15,21 +15,144 @@ struct Obstacle {
     filled: bool,
 }
 
-pub(super) fn lone_pair(doc: &Document, atom: &Atom, kind: MarkKind) -> (Point, f32) {
+fn font_gap(doc: &Document, atom: &Atom) -> (f32, f32) {
     let font_pt = atom
         .text_style
         .as_ref()
         .map_or(doc.drawing_style.font_size_pt, |style| style.size_pt);
     // The pair sits 7% of the label's font size outside its ink.
-    let gap = doc.drawing_style.world(font_pt * 0.07);
+    (font_pt, doc.drawing_style.world(font_pt * 0.07))
+}
+
+/// Lone pairs turn their dots across the atom-to-mark direction (degrees).
+pub(super) fn tangent(mut mark: AtomMark, degrees: f32) -> AtomMark {
+    if matches!(mark.kind, MarkKind::LonePair | MarkKind::LonePairBar) {
+        mark.angle = (degrees + 90.).rem_euclid(360.);
+    }
+    mark
+}
+
+/// The mark centered in each direction (degrees) at the click gap outside
+/// the owner's label ink, and whether it there clears the atom's bonds.
+///
+/// Each glyph counts as the rounded rectangle `text_ink_shapes` fits to it,
+/// so the gap stays even around round letters like O yet clears the corners
+/// of N or H. Gaps are measured between convex outlines: the label's (so OH
+/// reads as one rounded shape and the orbit never dips between glyphs) and
+/// the mark's (so a lone pair keeps the gap like the box a click measures).
+pub(super) fn orbit(
+    doc: &Document,
+    atom: &Atom,
+    mark: &AtomMark,
+    directions: impl IntoIterator<Item = f32>,
+) -> Vec<(AtomMark, bool)> {
+    let (font_pt, gap) = font_gap(doc, atom);
+    let style = &doc.drawing_style;
+    // Separations are found along these normals, 1° apart.
+    let normals: Vec<(f32, f32)> = (0..360)
+        .map(|i| {
+            let (s, c) = (i as f32).to_radians().sin_cos();
+            (c, s)
+        })
+        .collect();
+    let dot = |(c, s): (f32, f32), q: Point| q.x * c + q.y * s;
+    // How far the label's outline reaches along each normal.
+    let shapes = crate::scene::atom_label_ink_shapes(atom, doc);
+    let label: Vec<f32> = normals
+        .iter()
+        .map(|&(c, s)| {
+            if shapes.is_empty() {
+                return dot((c, s), atom.position) + style.world(font_pt * 0.35);
+            }
+            shapes
+                .iter()
+                .map(|&((lo, hi), radius)| {
+                    let (lo, hi) = (lo.offset(radius, radius), hi.offset(-radius, -radius));
+                    (lo.x * c).max(hi.x * c) + (lo.y * s).max(hi.y * s) + radius
+                })
+                .fold(f32::NEG_INFINITY, f32::max)
+        })
+        .collect();
+    // Drawn bond spans with their half widths, including parallel lines.
+    let spacing = style.bond_length_world * style.bond_spacing_ratio;
+    let bonds: Vec<_> = doc
+        .bonds
+        .iter()
+        .filter(|bond| bond.a == atom.id || bond.b == atom.id)
+        .filter_map(|bond| {
+            let (a, b) = crate::scene::bond_segment(doc, bond, None)?;
+            let wide = bond.stereo.is_some() || bond.display != "plain";
+            let width = style.world(if wide {
+                style.bold_width_pt.max(style.line_width_pt)
+            } else {
+                style.line_width_pt
+            });
+            let parallel = matches!(bond.order, 2 | 3 | 4 | 6 | 7);
+            Some((a, b, width * 0.5 + if parallel { spacing } else { 0. }))
+        })
+        .collect();
+    let mut single = atom.clone();
+    single.position = Point::new(0., 0.);
+    directions
+        .into_iter()
+        .map(|degrees| {
+            let (s, c) = degrees.to_radians().sin_cos();
+            let mut placed = tangent(mark.clone(), degrees);
+            placed.offset = Point::new(0., 0.);
+            single.marks = vec![placed.clone()];
+            let parts = styled_mark_parts(&single, style);
+            let pad = parts
+                .iter()
+                .map(|part| part.style.width() * 0.5)
+                .fold(0., f32::max);
+            let ink: Vec<Point> = parts
+                .iter()
+                .flat_map(|part| flattened(&part.commands))
+                .flatten()
+                .collect();
+            // How far the mark reaches back against each normal.
+            let back: Vec<f32> = normals
+                .iter()
+                .map(|&n| {
+                    ink.iter()
+                        .map(|&q| -dot(n, q))
+                        .fold(f32::NEG_INFINITY, f32::max)
+                })
+                .collect();
+            // Centered at p, the mark clears the label along normal n by
+            // n·p - back - label; along the ray that first reaches the gap at:
+            let need = gap + pad;
+            let radius = normals
+                .iter()
+                .zip(back.iter().zip(&label))
+                .filter(|&(&n, _)| dot(n, Point::new(c, s)) > 1e-3)
+                .map(|(&n, (back, label))| {
+                    (need + back + label - dot(n, atom.position)) / dot(n, Point::new(c, s))
+                })
+                .fold(f32::INFINITY, f32::min)
+                .max(0.);
+            placed.offset = Point::new(radius * c, radius * s);
+            let center = atom.position.offset(placed.offset.x, placed.offset.y);
+            let clear = bonds.iter().all(|&(a, b, half)| {
+                normals
+                    .iter()
+                    .zip(&back)
+                    .map(|(&n, back)| dot(n, center) - back - dot(n, a).max(dot(n, b)))
+                    .fold(f32::NEG_INFINITY, f32::max)
+                    >= need + half
+            });
+            (placed, clear)
+        })
+        .collect()
+}
+
+pub(super) fn lone_pair(doc: &Document, atom: &Atom, kind: MarkKind) -> (Point, f32) {
+    let (font_pt, gap) = font_gap(doc, atom);
     let owner_ink = crate::scene::atom_label_ink_boxes(atom, doc);
     // Anchor the pair to the glyph nearest the atom center. Hydrogens and
     // superscripts remain obstacles, rather than pulling the pair toward H
     // or an isotope when another side of the heteroatom is clear.
-    let nearest = owner_ink
-        .iter()
-        .map(|&bounds| box_distance(bounds, atom.position))
-        .fold(f32::INFINITY, f32::min);
+    let nearest = nearest_ink(&owner_ink, atom.position);
     let anchor_ink: Vec<_> = owner_ink
         .iter()
         .copied()
@@ -169,6 +292,11 @@ pub(super) fn bounds(parts: &[Part]) -> Box2 {
         }
     }
     (lo, hi)
+}
+fn nearest_ink(ink: &[Box2], point: Point) -> f32 {
+    ink.iter()
+        .map(|&bounds| box_distance(bounds, point))
+        .fold(f32::INFINITY, f32::min)
 }
 fn box_distance((lo, hi): Box2, point: Point) -> f32 {
     point.distance(Point::new(

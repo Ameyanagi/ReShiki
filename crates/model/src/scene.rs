@@ -158,6 +158,31 @@ pub(crate) fn atom_label_ink_boxes(a: &Atom, doc: &Document) -> Vec<(Point, Poin
     label_ink_boxes(&atom_label(a, doc))
 }
 
+/// Each label glyph's ink box with the corner radius its outline leaves free.
+pub(crate) fn atom_label_ink_shapes(a: &Atom, doc: &Document) -> Vec<((Point, Point), f32)> {
+    atom_label(a, doc)
+        .iter()
+        .flat_map(|run| match run {
+            Primitive::Text {
+                position,
+                text,
+                size,
+                style,
+                ..
+            } => crate::style::text_ink_shapes(text, *size, style)
+                .into_iter()
+                .map(|((lo, hi), radius)| {
+                    (
+                        (position.offset(lo.x, lo.y), position.offset(hi.x, hi.y)),
+                        radius,
+                    )
+                })
+                .collect(),
+            _ => Vec::new(),
+        })
+        .collect()
+}
+
 fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
     atom_label_runs(a, doc)
         .into_iter()

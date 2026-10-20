@@ -35,6 +35,7 @@ pub fn coordinate_atoms(source: &Document, donor: u64, metal: u64) -> Result<Coo
     if crate::generic::touches(source, &[donor, metal]) {
         return Err(crate::generic::JOIN_NOTICE.into());
     }
+    super::shown_in_3d(source, &[donor, metal])?;
     for a in [d, m] {
         if !a.centroid.is_empty() || a.attachment.is_some() {
             const NOTICE: &str = "Coordination in place requires single chemical atoms; centroids and multi-center/variable attachment points are unsupported here.";

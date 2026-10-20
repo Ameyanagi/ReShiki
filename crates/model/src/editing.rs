@@ -785,8 +785,31 @@ fn map_positions(
                 *offset = Point::new(moved.x - position.x, moved.y - position.y);
             }
             for mark in &mut a.marks {
+                let before = mark.offset;
                 let moved = convert(a.position.offset(mark.offset.x, mark.offset.y));
                 mark.offset = Point::new(moved.x - position.x, moved.y - position.y);
+                // Lone pairs turn with the molecule; charges stay upright.
+                if matches!(
+                    mark.kind,
+                    crate::scientific::MarkKind::LonePair
+                        | crate::scientific::MarkKind::LonePairBar
+                ) {
+                    let direction = |p: Point| p.y.atan2(p.x).to_degrees();
+                    mark.angle = if before.x.hypot(before.y) > 1e-6
+                        && mark.offset.x.hypot(mark.offset.y) > 1e-6
+                    {
+                        // Keep the pair's turn from its atom-to-mark direction,
+                        // so unequal stretching leaves it across that direction.
+                        let (x, y) = (vector(Point::new(1., 0.)), vector(Point::new(0., 1.)));
+                        let mirrored = x.x * y.y - x.y * y.x < 0.;
+                        let turn = mark.angle - direction(before);
+                        direction(mark.offset) + if mirrored { -turn } else { turn }
+                    } else {
+                        let (s, c) = mark.angle.to_radians().sin_cos();
+                        direction(vector(Point::new(c, s)))
+                    }
+                    .rem_euclid(360.);
+                }
             }
             a.position = position;
         }
@@ -1772,6 +1795,10 @@ pub fn snap_ring(doc: &mut Document, ids: &[u64], delta: Point, radius: f32) -> 
         points: Vec<Point>,
     }
     let ring = isolated_ring(doc, ids)?;
+    // A ring shown as a 3D model keeps its hidden drawing.
+    if ring.iter().any(|id| crate::models3d::hides(doc, *id)) {
+        return None;
+    }
     let mut targets = None;
     let mut best: Option<Candidate> = None;
     for (a, b) in ring
@@ -1797,6 +1824,9 @@ pub fn snap_ring(doc: &mut Document, ids: &[u64], delta: Point, radius: f32) -> 
                         || ids.contains(&bond.b)
                         || bond.order != 1
                         || bond.display != "plain"
+                        // Nor fuses onto a bond hidden in a 3D model.
+                        || crate::models3d::hides(doc, bond.a)
+                        || crate::models3d::hides(doc, bond.b)
                     {
                         return None;
                     }
@@ -1855,7 +1885,7 @@ pub fn snap_ring(doc: &mut Document, ids: &[u64], delta: Point, radius: f32) -> 
                     score += (p.distance(moved) / length).powi(2) * 0.1;
                     if !source.contains(id) {
                         for other in &doc.atoms {
-                            if !ids.contains(&other.id) {
+                            if !ids.contains(&other.id) && !crate::models3d::hides(doc, other.id) {
                                 score +=
                                     (0.6 - p.distance(other.position) / length).max(0.0).powi(2)
                                         * 1000.0;
