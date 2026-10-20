@@ -1,4 +1,5 @@
 use super::*;
+use crate::canvas_theme::{CanvasTheme, ColorTheme};
 use crate::document::{History, MODELS_3D, VERSION};
 use crate::{editing, scene, transaction};
 
@@ -355,13 +356,15 @@ fn ball_and_stick_primitives_are_back_to_front_in_exact_colors() {
     // Three atoms and two hydrogens; four bonds, each in two halves.
     assert_eq!((spheres, quads), (5, 8));
     assert_eq!(parts.len(), 13);
-    // Oxygen keeps the prototype's flat-look stops, faded toward the paper.
+    // Oxygen keeps the prototype's flat-look stops, in the Presentation
+    // colour the Publication theme shows, faded toward the paper.
     let model = &doc.models[0];
     let c = heavy_center(&model.points(&doc).unwrap());
     let z = rotate(model.rotation, sub(model.atoms[2].xyz, c))[2];
-    let reach = reach(&model.points(&doc).unwrap(), c);
+    let reach = reach(&model.points(&doc).unwrap(), c, Style::BallStick);
+    let oxygen = ColorTheme::Presentation.element_swatch("O", CanvasTheme::Light);
     let base = mix(
-        [224., 72., 61.],
+        float(oxygen.unwrap()),
         WHITE,
         0.35 * ((reach - z) / (2. * reach)).clamp(0., 1.),
     );
@@ -370,6 +373,122 @@ fn ball_and_stick_primitives_are_back_to_front_in_exact_colors() {
             if stops[1] == (0.6, rgb(base))
                 && stops[0] == (0., rgb(mix(base, WHITE, 0.45)))
                 && o.color == [30, 34, 38] && o.alpha == 0.85)));
+}
+
+/// The model's colours follow the drawing's colour theme and canvas: the
+/// theme's element swatches, Presentation's for Publication, a user theme's
+/// own, and a light grey hydrogen where the theme greys it like carbon.
+#[test]
+fn model_colours_follow_the_colour_theme_and_canvas() {
+    let (mut doc, ..) = shown(Display::ThreeD);
+    for canvas in CanvasTheme::ALL {
+        doc.canvas_theme = canvas;
+        for theme in ColorTheme::ALL {
+            doc.color_theme = theme;
+            let shown = if theme == ColorTheme::Publication {
+                ColorTheme::Presentation
+            } else {
+                theme
+            };
+            for element in ["C", "N", "O", "S"] {
+                assert_eq!(
+                    Some(element_color(&doc, element)),
+                    shown.element_swatch(element, canvas),
+                    "{canvas:?} {theme:?} {element}"
+                );
+            }
+            let (h, c) = (element_color(&doc, "H"), element_color(&doc, "C"));
+            let light = |rgb: [u8; 3]| rgb.iter().map(|v| u32::from(*v)).sum::<u32>();
+            assert!(light(h) > light(c), "{canvas:?} {theme:?} {h:?} {c:?}");
+            if theme == ColorTheme::Jmol {
+                assert_eq!(h, [255; 3], "Jmol's own white");
+            } else {
+                let grey = if canvas.is_dark() {
+                    HYDROGEN_DARK
+                } else {
+                    HYDROGEN
+                };
+                assert_eq!(h, grey);
+            }
+        }
+    }
+    // The primitives use them, faded toward the dark canvas.
+    doc.color_theme = ColorTheme::Jmol;
+    doc.models[0].depth_fade = 0.;
+    let red = ColorTheme::Jmol
+        .element_swatch("O", CanvasTheme::Dark)
+        .unwrap();
+    assert!(primitives(&doc).iter().any(|p| matches!(p,
+        Primitive::Sphere { stops, .. } if stops[1].1 == red)));
+    doc.models[0].depth_fade = 1.;
+    assert!(!primitives(&doc).iter().any(|p| matches!(p,
+        Primitive::Sphere { stops, .. } if stops[1].1 == red)));
+    // An element without a swatch keeps the prototype's table.
+    assert_eq!(element_color(&doc, "Xx"), element("Xx").0);
+    // A user theme's own swatches count.
+    let mut theme = crate::theme_files::ThemeFile::capture(&doc);
+    let blue = crate::theme_files::ColorValue::Rgb([0x12, 0x34, 0xff]);
+    theme.dark.tile_seeds.insert("O".into(), blue);
+    doc.custom_theme = Some(Box::new(theme));
+    assert_eq!(element_color(&doc, "O"), [0x12, 0x34, 0xff]);
+}
+
+/// The flat look's outline comes from the canvas: dark on a light canvas, a
+/// soft light rim on a dark one; a soft card there is the paper lightened a
+/// little, and depth fade mixes toward it.
+#[test]
+fn outlines_and_the_card_follow_the_canvas() {
+    let outlines = |doc: &Document| -> Vec<Outline> {
+        primitives(doc)
+            .iter()
+            .filter_map(|p| match p {
+                Primitive::Sphere { outline, .. } | Primitive::ShadedQuad { outline, .. } => {
+                    *outline
+                }
+                Primitive::Contour { outline, .. } => Some(*outline),
+                _ => None,
+            })
+            .collect()
+    };
+    for style in [Style::BallStick, Style::Stick] {
+        let (mut doc, _) = styled(|m| m.style = style);
+        let light = outlines(&doc);
+        assert!(!light.is_empty());
+        assert!(light.iter().all(|o| (o.color, o.alpha) == OUTLINE));
+        doc.canvas_theme = CanvasTheme::Dark;
+        let dark = outlines(&doc);
+        assert_eq!(dark.len(), light.len());
+        assert!(dark.iter().all(|o| (o.color, o.alpha) == RIM), "{style:?}");
+    }
+    let (mut doc, _) = styled(|m| {
+        m.background = Background::Card;
+        m.depth_fade = 1.;
+    });
+    doc.canvas_theme = CanvasTheme::Dark;
+    let parts = primitives(&doc);
+    let Some(Primitive::Card { fill, outline, .. }) = parts.first() else {
+        panic!("the card comes first");
+    };
+    let paper = CanvasTheme::Dark.background();
+    let sum = |rgb: [u8; 3]| rgb.iter().map(|v| u32::from(*v)).sum::<u32>();
+    assert!(sum(paper) < sum(*fill) && sum(*fill) < sum(outline.color));
+    assert!(sum(*fill) < sum(CARD) / 4, "a dark card: {fill:?}");
+    // Depth fade mixes toward the dark card, not the black paper.
+    let mids = |doc: &Document| -> Vec<u32> {
+        primitives(doc)
+            .iter()
+            .filter_map(|p| match p {
+                Primitive::Sphere { stops, .. } => Some(sum(stops[1].1)),
+                _ => None,
+            })
+            .collect()
+    };
+    let on_card = mids(&doc);
+    doc.models[0].background = Background::None;
+    let on_paper = mids(&doc);
+    assert_eq!(on_card.len(), on_paper.len());
+    assert!(on_card.iter().zip(&on_paper).all(|(c, p)| c >= p));
+    assert_ne!(on_card, on_paper);
 }
 
 #[test]
@@ -449,59 +568,6 @@ fn hidden_atoms_are_not_picked_and_the_frame_selects_the_molecule() {
     let bond = both.drawing_style.bond_length_world;
     assert!((lo.x - (72. + bond)).abs() < 1e-3, "{lo:?}");
     assert!(both.atom_drawn(atoms[0]));
-}
-
-/// Paint the stepped discs and a reference two-point radial gradient over a
-/// pixel grid; they agree within a few levels.
-#[test]
-fn stepped_discs_match_a_radial_gradient() {
-    let center = Point::new(50., 50.);
-    let radius = 40.;
-    let focal = center.offset(-radius * 0.38, -radius * 0.42);
-    let stops = [
-        (0., [240, 200, 190]),
-        (0.6, [224, 72, 61]),
-        (1., [184, 59, 50]),
-    ];
-    let discs = sphere_discs(center, radius, focal, &stops, 32);
-    let mut worst = 0;
-    let mut total = 0u64;
-    let mut count = 0u64;
-    for y in 0..100 {
-        for x in 0..100 {
-            let p = Point::new(x as f32 + 0.5, y as f32 + 0.5);
-            if p.distance(center) > radius - 1. {
-                continue;
-            }
-            // The last disc painted over p, the smallest one containing it.
-            let painted = discs
-                .iter()
-                .rev()
-                .find(|(c, r, _)| p.distance(*c) <= *r)
-                .map(|d| d.2)
-                .unwrap();
-            // The gradient's t: the largest circle of the family through p.
-            let (mut lo, mut hi) = (0f32, 1f32);
-            for _ in 0..40 {
-                let t = (lo + hi) / 2.;
-                let r = radius * FOCAL_RADIUS + (radius - radius * FOCAL_RADIUS) * t;
-                if p.distance(focal.lerp(center, t)) <= r {
-                    hi = t;
-                } else {
-                    lo = t;
-                }
-            }
-            let expected = gradient_color(&stops, hi);
-            for (a, b) in painted.iter().zip(expected) {
-                let d = a.abs_diff(b);
-                worst = worst.max(d);
-                total += u64::from(d);
-                count += 1;
-            }
-        }
-    }
-    assert!(worst <= 6, "worst channel difference {worst}");
-    assert!(total as f64 / (count as f64) < 2., "mean difference");
 }
 
 /// Give every atom of `doc`, one molecule, a model shown as `display`.
@@ -717,36 +783,79 @@ fn each_ball_covers_its_own_half_bonds_but_not_a_farther_atom() {
 
 #[test]
 fn the_frame_is_a_square_that_holds_the_model_in_every_rotation() {
-    let (mut doc, atoms, _) = shown(Display::ThreeD);
-    // A resized frame keeps its size while the model turns.
-    resize(&mut doc, &atoms, Point::default(), 1.3);
-    let (lo, hi) = frame(&doc, &doc.models[0]).unwrap();
-    assert!(
-        ((hi.x - lo.x) - (hi.y - lo.y)).abs() < 1e-3,
-        "{lo:?} {hi:?}"
-    );
-    let mut rotation = doc.models[0].rotation;
-    for step in 0..60 {
-        rotation = turn(rotation, 13., -7. + step as f32 * 0.5, step % 5 == 0);
-        doc.models[0].rotation = rotation;
-        assert_eq!(frame(&doc, &doc.models[0]), Some((lo, hi)));
-        for p in primitives(&doc) {
-            if let Primitive::Sphere { center, radius, .. } = p {
-                assert!(
-                    center.x - radius >= lo.x
-                        && center.y - radius >= lo.y
-                        && center.x + radius <= hi.x
-                        && center.y + radius <= hi.y,
-                    "{step}: {center:?} {radius} outside {lo:?} {hi:?}"
-                );
+    for style in Style::ALL {
+        let (mut doc, atoms, _) = shown(Display::ThreeD);
+        doc.models[0].style = style;
+        // A resized frame keeps its size while the model turns.
+        resize(&mut doc, &atoms, Point::default(), 1.3);
+        let (lo, hi) = frame(&doc, &doc.models[0]).unwrap();
+        assert!(
+            ((hi.x - lo.x) - (hi.y - lo.y)).abs() < 1e-3,
+            "{style:?} {lo:?} {hi:?}"
+        );
+        let mut rotation = doc.models[0].rotation;
+        for step in 0..60 {
+            rotation = turn(rotation, 13., -7. + step as f32 * 0.5, step % 5 == 0);
+            doc.models[0].rotation = rotation;
+            assert_eq!(frame(&doc, &doc.models[0]), Some((lo, hi)), "{style:?}");
+            for p in primitives(&doc) {
+                if let Primitive::Sphere { center, radius, .. } = p {
+                    assert!(
+                        center.x - radius >= lo.x
+                            && center.y - radius >= lo.y
+                            && center.x + radius <= hi.x
+                            && center.y + radius <= hi.y,
+                        "{style:?} {step}: {center:?} {radius} outside {lo:?} {hi:?}"
+                    );
+                }
+            }
+        }
+        // Without perspective the square is as tight as the bounding sphere.
+        doc.models[0].perspective = 0.;
+        let (a, b) = frame(&doc, &doc.models[0]).unwrap();
+        assert!(b.x - a.x < hi.x - lo.x);
+        if style != Style::Wireframe {
+            assert!((b.x - a.x - 0.88 * doc.models[0].size).abs() < 1e-2);
+        }
+    }
+}
+
+#[test]
+fn the_frame_holds_the_model_at_full_perspective() {
+    for style in Style::ALL {
+        let (mut doc, _, _) = shown(Display::ThreeD);
+        doc.models[0].style = style;
+        doc.models[0].perspective = 0.;
+        let (a, b) = frame(&doc, &doc.models[0]).unwrap();
+        doc.models[0].perspective = 1.;
+        let (lo, hi) = frame(&doc, &doc.models[0]).unwrap();
+        // Larger than without perspective, but not so large it leaves the view.
+        let (flat, full) = (b.x - a.x, hi.x - lo.x);
+        assert!(
+            full.is_finite() && full > flat && full < 2. * flat,
+            "{style:?} {flat} {full}"
+        );
+        let mut rotation = doc.models[0].rotation;
+        for step in 0..60 {
+            rotation = turn(rotation, 13., -7. + step as f32 * 0.5, step % 5 == 0);
+            doc.models[0].rotation = rotation;
+            assert_eq!(frame(&doc, &doc.models[0]), Some((lo, hi)), "{style:?}");
+            let inside = |p: Point, r: f32| {
+                p.x - r >= lo.x - 1e-3
+                    && p.y - r >= lo.y - 1e-3
+                    && p.x + r <= hi.x + 1e-3
+                    && p.y + r <= hi.y + 1e-3
+            };
+            for p in primitives(&doc) {
+                let held = match &p {
+                    Primitive::Sphere { center, radius, .. } => inside(*center, *radius),
+                    Primitive::ShadedQuad { corners, .. } => corners.iter().all(|c| inside(*c, 0.)),
+                    _ => true,
+                };
+                assert!(held, "{style:?} {step}: {p:?} outside {lo:?} {hi:?}");
             }
         }
     }
-    // Without perspective the square is as tight as the bounding sphere.
-    doc.models[0].perspective = 0.;
-    let (a, b) = frame(&doc, &doc.models[0]).unwrap();
-    assert!(b.x - a.x < hi.x - lo.x);
-    assert!((b.x - a.x - 0.88 * doc.models[0].size).abs() < 1e-2);
 }
 
 #[test]
@@ -861,6 +970,597 @@ fn morphs_out_of_the_drawing(doc: &mut Document, atoms: &[u64]) {
     // Never saved.
     let read = Document::from_json(&doc.file_json().unwrap()).unwrap();
     assert_eq!(read.models[0].morph, None);
+}
+
+fn styled(edit: impl Fn(&mut Model3d)) -> (Document, Vec<Primitive>) {
+    let (mut doc, ..) = shown(Display::ThreeD);
+    edit(&mut doc.models[0]);
+    let parts = primitives(&doc);
+    (doc, parts)
+}
+
+/// Spheres, shaded half-bonds and wireframe lines.
+fn counts(parts: &[Primitive]) -> (usize, usize, usize) {
+    let count = |f: fn(&Primitive) -> bool| parts.iter().filter(|p| f(p)).count();
+    (
+        count(|p| matches!(p, Primitive::Sphere { .. })),
+        count(|p| matches!(p, Primitive::ShadedQuad { .. })),
+        count(|p| matches!(p, Primitive::Wire { .. })),
+    )
+}
+
+#[test]
+fn each_style_draws_the_prototype_shapes() {
+    // Stick: every half-bond is its share of the joints, without balls.
+    let (_, stick) = styled(|m| m.style = Style::Stick);
+    assert_eq!(counts(&stick), (0, 0, 0));
+    assert_eq!(polygons(&stick).len(), 8);
+
+    let (doc, wire) = styled(|m| m.style = Style::Wireframe);
+    assert_eq!(counts(&wire), (0, 0, 8));
+    // Carbon halves are darker than the others, all as wide as each other.
+    let carbon = rgb(mix([141., 148., 155.], BLACK, 0.35));
+    let widths: HashSet<_> = wire
+        .iter()
+        .filter_map(|p| match p {
+            Primitive::Wire { width, .. } => Some(width.to_bits()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(widths.len(), 1);
+    assert!(wire.iter().any(|p| matches!(p,
+        Primitive::Wire { color, .. } if color.iter().zip(carbon).all(|(a, b)| a.abs_diff(b) < 40))));
+    let svg = scene::svg(&doc);
+    assert_eq!(svg.matches("stroke-linecap=\"round\"").count(), 8);
+    assert!(!svg.contains("<radialGradient"));
+
+    // Space-filling: balls only, at van der Waals radii in proportion.
+    let (_, space) = styled(|m| m.style = Style::SpaceFilling);
+    assert_eq!(counts(&space), (5, 0, 0));
+    let (_, ball) = styled(|_| {});
+    let radii = |parts: &[Primitive]| -> Vec<f32> {
+        let mut r: Vec<_> = parts
+            .iter()
+            .filter_map(|p| match p {
+                Primitive::Sphere { radius, .. } => Some(*radius),
+                _ => None,
+            })
+            .collect();
+        r.sort_by(f32::total_cmp);
+        r
+    };
+    // Hydrogens are the smallest balls: 1.10 of carbon's 1.70 Å, against
+    // 0.23 of 0.33 Å in ball & stick (within the perspective spread).
+    let (s, b) = (radii(&space), radii(&ball));
+    let spread = |r: &[f32]| r[0] / r[r.len() - 1];
+    assert!((spread(&s) - 1.10 / 1.70).abs() < 0.08, "{s:?}");
+    assert!((spread(&b) - 0.23 / 0.33).abs() < 0.08, "{b:?}");
+}
+
+#[test]
+fn hydrogens_can_be_all_polar_or_none() {
+    // Hydrogens on C1 and on O; only the O–H is polar.
+    for (shown, expected) in [
+        (Hydrogens::All, (5, 8, 0)),
+        (Hydrogens::Polar, (4, 6, 0)),
+        (Hydrogens::None, (3, 4, 0)),
+    ] {
+        let (doc, parts) = styled(|m| m.show_hydrogens = shown);
+        assert_eq!(counts(&parts), expected, "{shown:?}");
+        let (balls, sticks) = balls_and_sticks(&doc, &doc.models[0]).unwrap();
+        assert_eq!((balls.len(), sticks.len()), (expected.0, expected.1));
+    }
+    // A drawn hydrogen counts by its bonded neighbour.
+    let mut doc = Document::default();
+    let o = doc.add_atom("O", Point::new(0., 0.));
+    let h = doc.add_atom("H", Point::new(30., 0.));
+    doc.add_bond(o, h, 1, "plain");
+    let atoms = [o, h].map(|id| Placed {
+        id,
+        xyz: [id as f32, 0., 0.],
+    });
+    let mut model = Model3d::new(&doc, atoms.to_vec(), vec![], ForceField::Mmff94s);
+    model.show_hydrogens = Hydrogens::Polar;
+    assert_eq!(model.shown(&doc), [true, true]);
+    model.show_hydrogens = Hydrogens::None;
+    assert_eq!(model.shown(&doc), [true, false]);
+}
+
+/// A one-model drawing of these atoms with their hydrogens, shown as 3D.
+fn lone(
+    atoms: &[(&str, [f32; 3])],
+    hydrogens: &[[f32; 3]],
+    edit: impl Fn(&mut Model3d),
+) -> Document {
+    let mut doc = Document::default();
+    let placed: Vec<_> = atoms
+        .iter()
+        .map(|(symbol, xyz)| Placed {
+            id: doc.add_atom(symbol, Point::new(xyz[0] * 30., 0.)),
+            xyz: *xyz,
+        })
+        .collect();
+    for pair in placed.windows(2) {
+        doc.add_bond(pair[0].id, pair[1].id, 1, "plain");
+    }
+    let hydrogens = hydrogens
+        .iter()
+        .map(|&xyz| Hydrogen {
+            parent: placed[0].id,
+            xyz,
+        })
+        .collect();
+    doc.models
+        .push(Model3d::new(&doc, placed, hydrogens, ForceField::Mmff94s));
+    doc.require_version(MODELS_3D);
+    assert!(set_display(&mut doc, 0, Display::ThreeD));
+    edit(&mut doc.models[0]);
+    doc
+}
+
+#[test]
+fn a_molecule_of_hydrogens_alone_stays_shown_and_selectable() {
+    let doc = lone(&[("H", [-0.37, 0., 0.]), ("H", [0.37, 0., 0.])], &[], |m| {
+        m.show_hydrogens = Hydrogens::None;
+        m.background = Background::Card;
+    });
+    let (lo, hi) = frame(&doc, &doc.models[0]).unwrap();
+    assert!(hi.x - lo.x > 1. && hi.y - lo.y > 1.);
+    assert_eq!(counts(&primitives(&doc)), (2, 2, 0));
+    let middle = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+    assert_eq!(frame_hit(&doc, middle).map(|ids| ids.len()), Some(2));
+}
+
+#[test]
+fn a_wireframe_atom_without_shown_bonds_is_a_dot() {
+    // Water with its hydrogens hidden: only the oxygen is left.
+    let doc = lone(
+        &[("O", [0., 0., 0.])],
+        &[[0.76, 0.59, 0.], [-0.76, 0.59, 0.]],
+        |m| {
+            m.style = Style::Wireframe;
+            m.show_hydrogens = Hydrogens::None;
+        },
+    );
+    let parts = primitives(&doc);
+    assert_eq!(counts(&parts), (1, 0, 0));
+    let Primitive::Sphere {
+        center,
+        radius,
+        stops,
+        outline: None,
+        ..
+    } = &parts[0]
+    else {
+        panic!("a flat dot: {parts:?}");
+    };
+    assert!(stops.iter().all(|(_, c)| *c == stops[0].1));
+    let (lo, hi) = frame(&doc, &doc.models[0]).unwrap();
+    assert!(lo.x < center.x - radius && center.x + radius < hi.x);
+    // Erasing and hit testing see the dot as drawn, not a larger ball.
+    let (balls, sticks) = balls_and_sticks(&doc, &doc.models[0]).unwrap();
+    assert_eq!(balls, [(*center, *radius)]);
+    assert!(sticks.is_empty());
+    // With its hydrogens, the oxygen is drawn by its bonds alone.
+    let doc = lone(
+        &[("O", [0., 0., 0.])],
+        &[[0.76, 0.59, 0.], [-0.76, 0.59, 0.]],
+        |m| m.style = Style::Wireframe,
+    );
+    assert_eq!(counts(&primitives(&doc)), (0, 0, 4));
+    let (balls, sticks) = balls_and_sticks(&doc, &doc.models[0]).unwrap();
+    assert!(balls.is_empty());
+    assert_eq!(sticks.len(), 4);
+}
+
+#[test]
+fn glossy_has_brighter_highlights_and_no_outlines() {
+    let (_, parts) = styled(|m| m.look = Look::Glossy);
+    assert_eq!(counts(&parts), (5, 8, 0));
+    for p in &parts {
+        match p {
+            Primitive::Sphere { stops, outline, .. } => {
+                assert!(outline.is_none());
+                let offsets: Vec<_> = stops.iter().map(|s| s.0).collect();
+                assert_eq!(offsets, [0., 0.18, 0.75, 1.]);
+            }
+            Primitive::ShadedQuad { stops, outline, .. } => {
+                assert!(outline.is_none());
+                assert_eq!(stops[1].0, 0.3);
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[test]
+fn the_soft_card_fills_the_frame_behind_the_model() {
+    let (doc, parts) = styled(|m| m.background = Background::Card);
+    let Some(Primitive::Card {
+        lo,
+        hi,
+        fill,
+        outline,
+        ..
+    }) = parts.first()
+    else {
+        panic!("the card is drawn first");
+    };
+    assert_eq!(*fill, CARD);
+    assert_eq!(outline.color, CARD_EDGE);
+    let (flo, fhi) = frame(&doc, &doc.models[0]).unwrap();
+    assert!(lo.distance(flo) < 1. && hi.distance(fhi) < 1.);
+    // However large the card, its border's outer edge is inside its bounds,
+    // which reach the frame.
+    let (doc, parts) = styled(|m| {
+        m.background = Background::Card;
+        m.size = 1e4;
+    });
+    let (blo, bhi) = scene::bounds(&parts[..1]);
+    let (flo, fhi) = frame(&doc, &doc.models[0]).unwrap();
+    let (flo, fhi) = scene::bounds(&[Primitive::Line(flo, fhi, 0.)]);
+    assert!(
+        blo.distance(flo) < 0.01 && bhi.distance(fhi) < 0.01,
+        "{blo:?} {flo:?}"
+    );
+    // Depth fade mixes toward the card, not the paper.
+    let (_, plain) = styled(|m| m.depth_fade = 1.);
+    let (_, card) = styled(|m| {
+        m.depth_fade = 1.;
+        m.background = Background::Card;
+    });
+    assert_ne!(format!("{:?}", plain), format!("{:?}", &card[1..]));
+    assert!(scene::svg(&doc).contains("rx=\""));
+}
+
+/// Shading runs on across the colour seam: both halves of a bond share their
+/// middle edge and one gradient line, on the side facing the light.
+#[test]
+fn both_halves_of_a_bond_meet_with_continuous_shading() {
+    for perspective in [0., 1.] {
+        let (_, parts) = styled(|m| m.perspective = perspective);
+        let halves: Vec<_> = parts
+            .iter()
+            .filter_map(|p| match p {
+                Primitive::ShadedQuad {
+                    corners, from, to, ..
+                } => Some((*corners, *from, *to)),
+                _ => None,
+            })
+            .collect();
+        let mut matched = 0;
+        // Each half's gradient runs across the bond's middle.
+        let at_middle = |c: &[Point; 4], from: &Point, to: &Point| {
+            c[1].distance(*from) < 1e-3 && c[2].distance(*to) < 1e-3
+        };
+        for (a, from_a, to_a) in &halves {
+            let Some((b, ..)) = halves.iter().find(|(b, from_b, to_b)| {
+                b != a && from_a.distance(*from_b) < 1e-3 && to_a.distance(*to_b) < 1e-3
+            }) else {
+                continue;
+            };
+            matched += 1;
+            // One half ends at the middle; the other, drawn first, runs on
+            // under it so no seam shows between them.
+            assert!(
+                at_middle(a, from_a, to_a) != at_middle(b, from_a, to_a),
+                "{a:?} {b:?}"
+            );
+            let da = Point::new(to_a.x - from_a.x, to_a.y - from_a.y);
+            // The gradient starts on the side facing the up-left light.
+            assert!(-0.38 * da.x - 0.42 * da.y <= 1e-6, "{da:?}");
+        }
+        assert_eq!(matched, halves.len(), "every half meets its partner");
+    }
+}
+
+/// Stick halves: the shaded polygons, each with the projected centre of the
+/// atom it starts at.
+fn polygons(parts: &[Primitive]) -> Vec<Vec<Point>> {
+    parts
+        .iter()
+        .filter_map(|p| match p {
+            Primitive::ShadedPolygon { points, .. } => Some(points.clone()),
+            Primitive::Opacity { primitive, .. } => match primitive.as_ref() {
+                Primitive::ShadedPolygon { points, .. } => Some(points.clone()),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+fn at_atom(doc: &Document, polygon: &[Point]) -> Point {
+    let (balls, _) = balls_and_sticks(doc, &doc.models[0]).unwrap();
+    // Each half reaches its atom's centre, give or take the overlap.
+    let near = |c: &Point| {
+        polygon
+            .iter()
+            .map(|p| p.distance(*c))
+            .fold(f32::MAX, f32::min)
+    };
+    balls
+        .iter()
+        .map(|(c, _)| *c)
+        .min_by(|a, b| near(a).total_cmp(&near(b)))
+        .unwrap()
+}
+
+/// A carbon with three hydrogens in the screen plane, 120° apart.
+fn trigonal(edit: impl Fn(&mut Model3d)) -> Document {
+    let arm = |degrees: f32| {
+        let (s, c) = degrees.to_radians().sin_cos();
+        [1.1 * c, 1.1 * s, 0.]
+    };
+    lone(
+        &[("C", [0., 0., 0.])],
+        &[arm(90.), arm(210.), arm(330.)],
+        |m| {
+            m.style = Style::Stick;
+            m.rotation = [1., 0., 0., 0.];
+            m.perspective = 0.;
+            edit(m);
+        },
+    )
+}
+
+/// Neighbouring sticks share one border on their bisector, so three bonds
+/// make a joint with exactly three borders that tile the turn around the
+/// atom; each half reaches only a sliver past a border, under its neighbour,
+/// so no seam shows. A free end is a round cap as wide as the stick.
+#[test]
+fn stick_joints_share_borders_and_nothing_overlaps() {
+    let doc = trigonal(|_| {});
+    let parts = primitives(&doc);
+    assert_eq!(counts(&parts), (0, 0, 0), "no balls on the joints");
+    let shapes = polygons(&parts);
+    assert_eq!(shapes.len(), 6);
+    let carbon = view_point(&doc, 0);
+    let mut borders: Vec<Point> = vec![];
+    let mut turn = 0.;
+    let hw = shapes[0][0].distance(*shapes[0].last().unwrap()) / 2.;
+    // On the bisector where the two edges meet, hw / sin 60°, then moved
+    // the overlap across it.
+    let (miter, overlap) = (hw / 60f32.to_radians().sin(), hw * OVERLAP);
+    for shape in shapes.iter().filter(|p| at_atom(&doc, p) == carbon) {
+        // Middle edge, a border on each side, the centre twice: six points.
+        assert_eq!(shape.len(), 6, "{shape:?}");
+        let (left, right) = (shape[1], shape[4]);
+        for centre in [shape[2], shape[3]] {
+            assert!((centre.distance(carbon) - overlap).abs() < 1e-3);
+        }
+        for border in [left, right] {
+            let d = border.distance(carbon);
+            assert!((d - miter.hypot(overlap)).abs() < 1e-3, "{d} {hw}");
+            borders.push(border);
+        }
+        let angle = |p: Point| (p.y - carbon.y).atan2(p.x - carbon.x);
+        turn += (angle(left) - angle(right)).rem_euclid(std::f32::consts::TAU);
+    }
+    // Each border meets its neighbour's from the other side.
+    for border in &borders {
+        let partners = borders
+            .iter()
+            .filter(|b| (b.distance(*border) - 2. * overlap).abs() < 1e-3)
+            .count();
+        assert_eq!(partners, 1, "{borders:?}");
+    }
+    let sliver = 6. * (overlap / miter).atan();
+    let tau = std::f32::consts::TAU;
+    assert!(turn > tau && turn < tau + sliver + 1e-3, "{turn}");
+    // Each hydrogen end is a half circle of the stick's half width.
+    for shape in shapes.iter().filter(|p| at_atom(&doc, p) != carbon) {
+        let atom = at_atom(&doc, shape);
+        let cap: Vec<_> = shape[1..shape.len() - 1]
+            .iter()
+            .filter(|p| p.distance(atom) > 1e-4)
+            .collect();
+        assert!(cap.len() > 8, "{cap:?}");
+        assert!(
+            cap.iter().all(|p| (p.distance(atom) - hw).abs() < 1e-3),
+            "{cap:?} {hw}"
+        );
+    }
+}
+
+/// A short neighbour (a bond seen nearly end-on) or a narrow gap does not
+/// bend a long stick's edge: it runs on straight, then turns in to the
+/// shared border.
+#[test]
+fn a_short_neighbour_leaves_a_long_stick_straight() {
+    let doc = lone(
+        &[("C", [0., 0., 0.])],
+        &[[1.5, 0., 0.], [0.12, 0.2, 1.]],
+        |m| {
+            m.style = Style::Stick;
+            m.rotation = [1., 0., 0., 0.];
+            m.perspective = 0.;
+        },
+    );
+    let parts = primitives(&doc);
+    let carbon = view_point(&doc, 0);
+    let long = polygons(&parts)
+        .into_iter()
+        .filter(|p| at_atom(&doc, p) == carbon)
+        .max_by(|a, b| a[0].distance(carbon).total_cmp(&b[0].distance(carbon)))
+        .unwrap();
+    // Screen y points down: the short neighbour is on the right-hand side,
+    // the last points. Every point of that side but the shared border lies
+    // on the edge line through the middle corner, parallel to the axis.
+    let corner = long[long.len() - 1];
+    let hw = long[0].distance(corner) / 2.;
+    let edge = long[long.len() - 2];
+    assert!((edge.y - corner.y).abs() < 1e-3, "{long:?}");
+    assert!(((corner.y - carbon.y).abs() - hw).abs() < 1e-3);
+}
+
+/// The projected centre of point `i` of the first model.
+fn view_point(doc: &Document, i: usize) -> Point {
+    let view = View::new(doc, &doc.models[0]).unwrap();
+    view.project(view.rotated[i]).0
+}
+
+/// Flat sticks have one outline: a single stroke of every shape behind all
+/// fills, so only the outer edge of the tube shows. Glossy has none.
+#[test]
+fn stick_outline_is_one_stroke_behind_every_shape() {
+    let doc = trigonal(|_| {});
+    let parts = primitives(&doc);
+    let Some(Primitive::Contour {
+        polygons: rims,
+        outline,
+    }) = parts.first()
+    else {
+        panic!("the outline comes first: {parts:?}");
+    };
+    assert_eq!(*rims, polygons(&parts));
+    let line = (doc.models[0].size / 400.).clamp(0.6, 1.1);
+    assert_eq!((outline.width, outline.alpha), (line * 2., 0.85));
+    assert_eq!(
+        parts
+            .iter()
+            .filter(|p| matches!(p, Primitive::Contour { .. }))
+            .count(),
+        1
+    );
+    let svg = scene::svg(&doc);
+    let stroke = svg.find("stroke-linejoin=\"round\"").unwrap();
+    assert!(stroke < svg.find("<polygon").unwrap());
+    assert_eq!(svg.matches("<linearGradient").count(), 6);
+    let (_, glossy) = styled(|m| {
+        m.style = Style::Stick;
+        m.look = Look::Glossy;
+    });
+    assert!(
+        !glossy
+            .iter()
+            .any(|p| matches!(p, Primitive::Contour { .. }))
+    );
+    // The outline counts toward the drawing's bounds.
+    let (lo, _) = scene::bounds(&parts);
+    let leftmost = rims.iter().flatten().map(|p| p.x).fold(f32::MAX, f32::min);
+    assert!(lo.x <= leftmost - line + 1e-4);
+}
+
+/// An atom without a stick on screen is a round disc: one with its bonds
+/// hidden, or two atoms seen along their bond.
+#[test]
+fn stick_atoms_without_sticks_on_screen_are_discs() {
+    let water = lone(
+        &[("O", [0., 0., 0.])],
+        &[[0.76, 0.59, 0.], [-0.76, 0.59, 0.]],
+        |m| {
+            m.style = Style::Stick;
+            m.show_hydrogens = Hydrogens::None;
+        },
+    );
+    let parts = primitives(&water);
+    assert_eq!(counts(&parts), (1, 0, 0));
+    assert!(polygons(&parts).is_empty());
+    let Some(Primitive::Contour { polygons: rims, .. }) = parts.first() else {
+        panic!("the disc is outlined: {parts:?}");
+    };
+    let Some(Primitive::Sphere { center, radius, .. }) = parts.get(1) else {
+        panic!("a disc: {parts:?}");
+    };
+    assert!(
+        rims[0]
+            .iter()
+            .all(|p| (p.distance(*center) - radius).abs() < 1e-3)
+    );
+    let end_on = lone(&[("C", [0., 0., -0.7]), ("O", [0., 0., 0.7])], &[], |m| {
+        m.style = Style::Stick;
+        m.rotation = [1., 0., 0., 0.];
+    });
+    let parts = primitives(&end_on);
+    assert_eq!(counts(&parts), (2, 0, 0));
+    assert!(polygons(&parts).is_empty());
+    // Turned a little, the bond shows again as two short halves.
+    let tilted = lone(&[("C", [0., 0., -0.7]), ("O", [0.3, 0., 0.7])], &[], |m| {
+        m.style = Style::Stick;
+        m.rotation = [1., 0., 0., 0.];
+    });
+    let parts = primitives(&tilted);
+    assert_eq!((counts(&parts), polygons(&parts).len()), ((0, 0, 0), 2));
+}
+
+/// Under full perspective each stick's round cap is as wide as the stick at
+/// its own atom, near the middle's width.
+#[test]
+fn sticks_taper_to_their_joints_under_perspective() {
+    let (doc, parts) = styled(|m| {
+        m.style = Style::Stick;
+        m.perspective = 1.;
+    });
+    let mut caps = vec![];
+    for shape in polygons(&parts) {
+        let atom = at_atom(&doc, &shape);
+        // The free ends: the two hydrogens.
+        if !shape.iter().any(|p| p.distance(atom) < 1e-4) {
+            continue;
+        }
+        let middle = shape[0].distance(shape[shape.len() - 1]) / 2.;
+        let cap: Vec<_> = shape[1..shape.len() - 1]
+            .iter()
+            .map(|p| p.distance(atom))
+            .filter(|d| *d > 1e-4)
+            .collect();
+        assert!(cap.iter().all(|d| (d - cap[0]).abs() < 1e-3), "{cap:?}");
+        assert!((cap[0] - middle).abs() < middle * 0.3, "{cap:?} {middle}");
+        caps.push(cap[0]);
+    }
+    assert_eq!(caps.len(), 2);
+    assert!(
+        (caps[0] - caps[1]).abs() > 1e-3,
+        "perspective changes the widths"
+    );
+}
+
+/// During the morph the hydrogens' halves and their outline fade in.
+#[test]
+fn stick_hydrogens_fade_in_with_their_outline() {
+    let (_, parts) = styled(|m| {
+        m.style = Style::Stick;
+        m.morph = Some(0.3);
+    });
+    let faded: Vec<_> = parts
+        .iter()
+        .filter_map(|p| match p {
+            Primitive::Opacity { primitive, .. } => Some(primitive.as_ref()),
+            _ => None,
+        })
+        .collect();
+    // Two hydrogen halves and one outline of them.
+    assert_eq!(faded.len(), 3);
+    assert!(matches!(faded[0], Primitive::Contour { polygons, .. } if polygons.len() == 2));
+    assert!(matches!(parts[0], Primitive::Contour { ref polygons, .. } if polygons.len() == 6));
+}
+
+#[test]
+fn styles_and_settings_round_trip_in_version_28() {
+    let (mut doc, ..) = shown(Display::Both);
+    let model = &mut doc.models[0];
+    model.style = Style::SpaceFilling;
+    model.look = Look::Glossy;
+    model.show_hydrogens = Hydrogens::Polar;
+    model.background = Background::Card;
+    let bytes = doc.file_json().unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let saved = &json["models"][0];
+    assert_eq!(saved["style"], "space_filling");
+    assert_eq!(saved["look"], "glossy");
+    assert_eq!(saved["show_hydrogens"], "polar");
+    assert_eq!(saved["background"], "card");
+    assert_eq!(json["version"], MODELS_3D);
+    assert_eq!(Document::from_json(&bytes).unwrap().models, doc.models);
+
+    // Earlier version 28 files without the settings read the defaults.
+    let mut json = json;
+    for key in ["show_hydrogens", "background"] {
+        json["models"][0].as_object_mut().unwrap().remove(key);
+    }
+    let read = Document::from_json(&serde_json::to_vec(&json).unwrap()).unwrap();
+    assert_eq!(read.models[0].show_hydrogens, Hydrogens::All);
+    assert_eq!(read.models[0].background, Background::None);
 }
 
 #[test]

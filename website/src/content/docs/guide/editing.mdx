@@ -47,7 +47,7 @@ To fade the bonds behind the front face of a 3D molecule such as C60, open **Pro
 
 Select a whole molecule and use the small **Show as** bar above it, or open **Properties → Structure**, or right-click it and choose **Show as**:
 
-- **3D** replaces the drawing with a ball & stick model.
+- **3D** replaces the drawing with a 3D model, ball & stick unless you pick another style.
 - **Both** puts the model beside the drawing.
 - **2D** shows the drawing again.
 
@@ -63,6 +63,19 @@ Once the model is selected:
 Drag the frame's edge, or a model that is not selected, to move it. The **3D tilt** tool and its X/Y step commands also turn a model shown as **3D**, the same way as dragging inside its frame, and leave its 2D drawing as it is; anything else selected tilts with it. With **Both**, tilt turns the 2D drawing. The rotation handle, **Rotate 180°** and the **Rotate** field roll a model shown as **3D** in place. Flipping, resizing it with **Scale**, cleaning it up or joining it would change its hidden drawing, so ReShiki asks you to switch to 2D first; in a mixed selection only the other objects flip. Each rotation, tilt and resize is one Undo step.
 
 To go back to 2D, **Properties → Structure → 2D layout** offers **Original drawing**, the layout you drew, or **From the 3D view**, which flattens the model as it is turned now, with far bonds lighter, like **3D optimize…**. **Show as → 2D from the 3D view** in the right-click menu does the same. Each molecule keeps its own choice, and a flattened molecule keeps the layout you drew, so **Original drawing** brings it back, even after saving and reopening.
+
+While the model is shown, **Properties → 3D model** changes how it looks:
+
+- **Style:** **Ball & stick**, **Stick** (tubes joined with clean mitered joints), **Wireframe** or **Space-filling**.
+- **Look:** **Flat · journal**, with thin outlines (a soft light rim on a dark canvas), or **Glossy · slides**.
+- **Hydrogens:** **All**, **Polar** (on N, O and S) or **None**.
+- **Depth fade** and **Perspective** sliders.
+- **Background:** **None** or **Soft card**.
+- **Reset view** shows the model's opening view again.
+
+The model's colours follow the drawing's colour theme (**Publication** uses the **Presentation** colours) and the light or dark canvas.
+
+Each change, including one slider drag, is one Undo step.
 
 A `.rsk` file keeps the model. PNG, SVG and PDF show it as vector shapes. MOL, CDX/CDXML and SMILES contain the 2D structure only. Files saved by this version need this version or later to open.
 

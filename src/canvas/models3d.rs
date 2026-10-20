@@ -1,5 +1,6 @@
 //! 3D models on the paper (#386): turning a selected model, the 2D → 3D morph
 //! and the floating Show as bar above a selected molecule.
+//! [`tiles`] draws the models themselves as resvg image tiles.
 use super::hit::hit_selection;
 use super::pick::{DRAG_SLOP_PX, PICK_RADIUS_PX};
 use super::{Edit, MoleculeCanvas, State, World, command_held, layered, rgb};
@@ -8,6 +9,9 @@ use iced::{Color, Point, Rectangle, Size, Vector};
 use reshiki::models3d::{self, Display};
 use std::ops::ControlFlow;
 use std::time::{Duration, Instant};
+
+mod tiles;
+pub(super) use tiles::{draw, is_model};
 
 /// Screen pixels inside a frame's edge that still move the model.
 const EDGE_PX: f32 = 8.;

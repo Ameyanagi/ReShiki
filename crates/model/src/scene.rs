@@ -63,6 +63,36 @@ pub enum Primitive {
         stops: Vec<(f32, [u8; 3])>,
         outline: Option<Outline>,
     },
+    /// A mitered 3D-model stick half: `points` filled with a linear gradient
+    /// from `from` to `to`, in exact colors, without an outline.
+    ShadedPolygon {
+        points: Vec<Point>,
+        from: Point,
+        to: Point,
+        stops: Vec<(f32, [u8; 3])>,
+    },
+    /// The outer edge of the 3D-model sticks drawn after it: every polygon
+    /// stroked as one shape with round joins, so where strokes overlap they
+    /// do not darken. The fills drawn over it leave only the outside half.
+    Contour {
+        polygons: Vec<Vec<Point>>,
+        outline: Outline,
+    },
+    /// A 3D-model wireframe half-bond: a round-capped line in an exact color.
+    Wire {
+        from: Point,
+        to: Point,
+        width: f32,
+        color: [u8; 3],
+    },
+    /// A 3D model's soft background card: a rounded rectangle in exact colors.
+    Card {
+        lo: Point,
+        hi: Point,
+        radius: f32,
+        fill: [u8; 3],
+        outline: Outline,
+    },
 }
 /// An exact, translucent stroke around a 3D-model shape.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -2384,6 +2414,27 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
                 points.extend([center.offset(-r, -r), center.offset(r, r)]);
             }
             Primitive::ShadedQuad { corners, .. } => points.extend(corners),
+            Primitive::ShadedPolygon { points: p, .. } => points.extend(p),
+            Primitive::Contour { polygons, outline } => {
+                let r = outline.width / 2.;
+                for p in polygons.iter().flatten() {
+                    points.extend([p.offset(-r, -r), p.offset(r, r)]);
+                }
+            }
+            Primitive::Wire {
+                from, to, width, ..
+            } => {
+                let r = width / 2.;
+                for p in [from, to] {
+                    points.extend([p.offset(-r, -r), p.offset(r, r)]);
+                }
+            }
+            Primitive::Card {
+                lo, hi, outline, ..
+            } => {
+                let r = outline.width / 2.;
+                points.extend([lo.offset(-r, -r), hi.offset(r, r)]);
+            }
             Primitive::Text {
                 position,
                 text,
@@ -2416,6 +2467,11 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
 /// The themed drawing with a transparent surround, for compositing and geometry checks.
 pub fn svg(doc: &Document) -> String {
     svg::render_svg(doc, false)
+}
+/// Part of a scene alone over `lo..hi`, for rasterizing it the way figure
+/// export does: the canvas paints 3D models this way.
+pub fn svg_part(drawing: &[Primitive], lo: Point, hi: Point) -> String {
+    svg::render_part(drawing.to_vec(), lo, hi)
 }
 /// A figure carries the canvas background when exported or copied.
 pub fn svg_with_background(doc: &Document) -> String {

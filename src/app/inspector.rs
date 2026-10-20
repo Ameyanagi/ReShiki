@@ -14,6 +14,7 @@ use std::collections::{HashMap, HashSet};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Section {
     Structure,
+    Model3d,
     Bonds,
     BondDirection,
     Atoms,
@@ -526,6 +527,9 @@ impl App {
             )).size(11).style(muted_text));
         }
         if let Some(section) = self.structure_section() {
+            body = body.push(section);
+        }
+        if let Some(section) = self.model_section() {
             body = body.push(section);
         }
         let molecular_first = self.tab.selected.is_empty()

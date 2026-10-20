@@ -18,7 +18,8 @@ command palette). The bar shows while a whole molecule is selected with Select
 or Lasso and hides during any drag; it sits above the selection box and its
 rotation handle, or below them at the top of the window, and when neither fits
 it stays inside the canvas over the selection. **3D** draws the molecule as a
-ball & stick model in place of its drawing, **Both** puts the model one bond length to its right, and
+model (ball & stick unless **Properties → 3D model** picks another style) in
+place of its drawing, **Both** puts the model one bond length to its right, and
 **2D** shows the drawing again. The first switch generates the conformer in the
 background with the same worker as 3D optimize (fresh ETKDG conformers, then
 MMFF94s); a result for a drawing that changed meanwhile is discarded. Later
@@ -92,6 +93,37 @@ back, also after saving and reopening. Choosing **Original drawing** brings it
 back at once, in the same Undo step, so while that choice shows, the 2D atoms
 (and the 2D half of **Both**) are always the layout you drew. Choosing the display that is already
 shown changes nothing.
+
+While the model is shown, **Properties → 3D model** sets how it looks:
+
+- **Style:** **Ball & stick** (the default), **Stick** (thick bonds mitered
+  at the atoms: neighbouring sticks share one border, a free end is rounded,
+  and only the outer edge of the tubes is outlined; an atom with no shown
+  bonds is a disc), **Wireframe** (thin lines in the atom colours; an atom with no
+  shown bonds is a dot) or **Space-filling** (balls at van der Waals radii).
+- **Look:** **Flat · journal** (thin dark outlines; on a dark canvas a soft
+  light rim) or **Glossy · slides**
+  (brighter highlights, no outlines).
+- **Hydrogens:** **All**, **Polar** (only those on N, O and S) or **None**.
+  A molecule made only of hydrogens always shows them.
+- **Depth fade** mixes farther atoms toward the background, and
+  **Perspective** sets how strongly nearer atoms are enlarged.
+- **Background:** **None** or **Soft card**, a rounded card behind the model:
+  light grey on a light canvas, the background lightened a little on a dark
+  one.
+- **Reset view** turns the model back to its opening view.
+
+The model's colours follow the drawing's colour theme and canvas: each
+element uses the theme's element swatch (Publication, which has none, uses
+Presentation's), so a dark canvas gets the theme's dark tones, and a user
+theme's swatches apply too. Where the theme greys hydrogen like carbon
+(Presentation, Pastel), hydrogen is a light grey that stays lighter than
+carbon; Jmol keeps its white hydrogen. An element without a swatch keeps the
+prototype's grey.
+
+Each change is one Undo step; dragging a slider is one step when you release
+it. The canvas draws the model with the same renderer as PNG export, so the
+shading looks the same at any zoom.
 
 ## Preview an optimized molecule
 

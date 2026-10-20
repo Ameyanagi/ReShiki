@@ -4,14 +4,15 @@
 //! job per tab, whose result is dropped when the drawing changed meanwhile.
 //! Each switch, including the one that adds the model, is one Undo step, and
 //! so is each turn or resize of a model on the canvas.
+use super::icons::{Glyph, Icon};
 use super::workspace::{accessible_command, control, muted_text};
 use super::{App, Message, document_tab::TabId, inspector::Section};
 use crate::canvas::Edit;
-use iced::widget::{column, row, text};
-use iced::{Element, Length, Task};
+use iced::widget::{Space, canvas, column, row, slider, text};
+use iced::{Alignment, Element, Length, Task};
 use reshiki::document::Document;
 use reshiki::geometry::{Client, ForceField, Optimized, Prepared};
-use reshiki::models3d::{self, Display, Layout};
+use reshiki::models3d::{self, Background, Display, Hydrogens, Layout, Look, Style};
 use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,6 +31,24 @@ pub(crate) enum Action {
     /// The 2D layout that the 2D buttons of the bar and the section use.
     Layout(Layout),
     Generated(Key, Result<Arc<Optimized>, String>),
+    /// Change the selected model; each change is one Undo step, and a slider
+    /// drag is one step until [`Action::SlideEnd`].
+    Set(Setting),
+    SlideEnd,
+    /// The button of what is shown already: it keeps its selected look
+    /// rather than looking disabled, and changes nothing.
+    Unchanged,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum Setting {
+    Style(Style),
+    Look(Look),
+    Hydrogens(Hydrogens),
+    Background(Background),
+    DepthFade(f32),
+    Perspective(f32),
+    ResetView,
 }
 
 /// The generation in flight; dropping it aborts the worker.
@@ -48,6 +67,15 @@ impl App {
     pub(super) fn models3d_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Show(display) => self.show_model(display),
+            Action::Set(setting) => {
+                self.set_model(setting);
+                Task::none()
+            }
+            Action::SlideEnd => {
+                self.tab.model_sliding = None;
+                Task::none()
+            }
+            Action::Unchanged => Task::none(),
             Action::Flatten => {
                 self.flatten_model();
                 Task::none()
@@ -63,7 +91,7 @@ impl App {
                     let restored = layout == Layout::Original
                         && models3d::restore_drawing(&mut self.tab.doc, index);
                     if self.tab.doc != before {
-                        self.commit_view(before);
+                        self.commit_model(before, false);
                         if restored && !self.error {
                             self.status = "Original 2D drawing restored".into();
                         }
@@ -153,19 +181,6 @@ impl App {
         }
     }
 
-    /// Commit a change to the models' displays, views or frames. A generation
-    /// in flight for another molecule stays valid (unless already stale).
-    fn commit_view(&mut self, before: Document) {
-        let current = self.model_key();
-        self.changed(before);
-        let next = self.model_key();
-        if let Some(job) = &mut self.tab.model_job
-            && job.current == current
-        {
-            job.current = next;
-        }
-    }
-
     /// A turn or a frame resize from the canvas.
     pub(super) fn model_edit(&mut self, edit: Edit) {
         let before = self.tab.doc.clone();
@@ -181,7 +196,7 @@ impl App {
             }
             _ => return,
         }
-        self.commit_view(before);
+        self.commit_model(before, false);
     }
 
     fn show_model(&mut self, display: Display) -> Task<Message> {
@@ -210,7 +225,7 @@ impl App {
                     }
                 }
                 models3d::set_display(&mut self.tab.doc, index, display);
-                self.commit_view(before);
+                self.commit_model(before, false);
                 if !self.error {
                     self.status = if restore {
                         "Original 2D drawing restored".into()
@@ -264,6 +279,62 @@ impl App {
         task
     }
 
+    fn set_model(&mut self, setting: Setting) {
+        if self.tab.busy || self.tab.drawing_edit_active() {
+            return;
+        }
+        let Some((_, Some(index))) = self.selected_model() else {
+            return;
+        };
+        let before = self.tab.doc.clone();
+        let reset = before
+            .models
+            .get(index)
+            .map(|model| model.initial_view(&before));
+        let Some(model) = self.tab.doc.models.get_mut(index) else {
+            return;
+        };
+        match setting {
+            Setting::Style(style) => model.style = style,
+            Setting::Look(look) => model.look = look,
+            Setting::Hydrogens(shown) => model.show_hydrogens = shown,
+            Setting::Background(background) => model.background = background,
+            Setting::DepthFade(value) => model.depth_fade = value.clamp(0., 1.),
+            Setting::Perspective(value) => model.perspective = value.clamp(0., 1.),
+            Setting::ResetView => model.rotation = reset.unwrap_or(model.rotation),
+        }
+        // The active choice again changes nothing and adds no Undo step.
+        if self.tab.doc == before {
+            return;
+        }
+        // A drag continues only on the same slider while nothing else has
+        // been committed.
+        let sliding = matches!(setting, Setting::DepthFade(_) | Setting::Perspective(_))
+            .then(|| (self.tab.revision, index, std::mem::discriminant(&setting)));
+        let continuing = sliding.is_some() && self.tab.model_sliding == sliding;
+        self.commit_model(before, continuing);
+        self.tab.model_sliding =
+            sliding.map(|(_, index, slider)| (self.tab.revision, index, slider));
+    }
+
+    /// Commit a change to the models' displays, views, frames or styles. A
+    /// generation in flight for another molecule stays valid (unless already
+    /// stale).
+    fn commit_model(&mut self, before: Document, continuing: bool) {
+        let current = self.model_key();
+        if continuing {
+            self.changed_continuing(before, true);
+        } else {
+            self.changed(before);
+        }
+        let next = self.model_key();
+        if let Some(job) = &mut self.tab.model_job
+            && job.current == current
+        {
+            job.current = next;
+        }
+    }
+
     /// Show the selected molecule as 2D, flattened from its model as turned
     /// now with far bonds lighter, as 3D optimize's projection does.
     fn flatten_model(&mut self) {
@@ -311,7 +382,7 @@ impl App {
         match flat {
             Ok(doc) => {
                 let before = std::mem::replace(&mut self.tab.doc, doc);
-                self.commit_view(before);
+                self.commit_model(before, false);
                 if !self.error {
                     self.status = format!(
                         "Shown as 2D from the 3D view · Undo restores {}",
@@ -405,19 +476,17 @@ impl App {
                     .checked(active)
                     .style(control(active))
                     .width(Length::Fill)
-                    .on_press_maybe(
-                        (enabled && !active).then(|| Message::Models3d(self.show_as(display))),
-                    )
+                    .on_press_maybe(enabled.then(|| {
+                        Message::Models3d(if active {
+                            Action::Unchanged
+                        } else {
+                            self.show_as(display)
+                        })
+                    }))
                     .into()
             }),)
             .spacing(4),
-            text(if pending.is_some() {
-                "Generating the conformer · ETKDG, then MMFF94s"
-            } else {
-                "Ball & stick · Chemistry and atom IDs stay the same"
-            })
-            .size(11)
-            .style(muted_text),
+            text(subtitle(pending, model)).size(11).style(muted_text),
         ]
         .spacing(6);
         // The 2D layout the drawing returns to, while the model is shown.
@@ -451,6 +520,187 @@ impl App {
             );
         }
         Some(self.inspector_section(Section::Structure, "Structure", "", true, body))
+    }
+}
+
+impl App {
+    /// Style, look and view of the selected molecule's model while it is shown.
+    pub(super) fn model_section(&self) -> Option<Element<'_, Message>> {
+        let model = self.tab.doc.models.get(self.selected_model()?.1?)?;
+        if model.display == Display::TwoD {
+            return None;
+        }
+        let enabled = !self.tab.busy && self.tab.optimization.is_none();
+        let set = move |setting| enabled.then_some(Message::Models3d(Action::Set(setting)));
+        let choice = |id: String, name: &str, label: &'static str, active: bool, setting| {
+            accessible_command(format!("model-{id}"), name, label)
+                .checked(active)
+                .style(control(active))
+                .width(Length::Fill)
+                .on_press_maybe(set(setting))
+        };
+        let field = |label: &'static str, content: Element<'static, Message>| {
+            column![text(label).size(12), content].spacing(4)
+        };
+        let [ball, stick, wire, space] = Style::ALL.map(|style| {
+            let active = model.style == style;
+            reshiki::accessibility::button(
+                format!("model-style-{}", slug(style)),
+                format!("{} style", name(style)),
+                row![
+                    canvas(Glyph(Icon::ModelStyle(style), true))
+                        .width(24)
+                        .height(24),
+                    text(name(style)).size(12)
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center),
+            )
+            .checked(active)
+            .style(control(active))
+            .padding([3, 6])
+            .width(Length::Fill)
+            .on_press_maybe(set(Setting::Style(style)))
+        });
+        let segments = |options: Vec<(String, &'static str, &'static str, bool, Setting)>| {
+            row(options
+                .into_iter()
+                .map(|(id, name, label, active, setting)| {
+                    choice(id, name, label, active, setting).into()
+                }))
+            .spacing(4)
+            .into()
+        };
+        let slider_field = |label: &'static str, value: f32, setting: fn(f32) -> Setting| {
+            column![
+                row![
+                    text(label).size(12),
+                    Space::new().width(Length::Fill),
+                    text(format!("{:.0}%", value * 100.))
+                        .size(12)
+                        .style(muted_text)
+                ],
+                slider(0_f32..=100., value * 100., move |v| {
+                    Message::Models3d(Action::Set(setting(v / 100.)))
+                })
+                .step(1_f32)
+                .on_release(Message::Models3d(Action::SlideEnd)),
+            ]
+            .spacing(4)
+        };
+        let look = |look: Look, id: &str, name, label| {
+            (
+                format!("look-{id}"),
+                name,
+                label,
+                model.look == look,
+                Setting::Look(look),
+            )
+        };
+        let hydrogens = |shown: Hydrogens, label, name| {
+            (
+                format!("hydrogens-{label}"),
+                name,
+                label,
+                model.show_hydrogens == shown,
+                Setting::Hydrogens(shown),
+            )
+        };
+        let background = |background: Background, id: &str, name, label| {
+            (
+                format!("background-{id}"),
+                name,
+                label,
+                model.background == background,
+                Setting::Background(background),
+            )
+        };
+        Some(
+            self.inspector_section(
+                Section::Model3d,
+                "3D model",
+                name(model.style),
+                true,
+                column![
+                    field(
+                        "Style",
+                        column![row![ball, stick].spacing(4), row![wire, space].spacing(4)]
+                            .spacing(4)
+                            .into()
+                    ),
+                    field(
+                        "Look",
+                        segments(vec![
+                            look(
+                                Look::Flat,
+                                "flat",
+                                "Flat look, for journals",
+                                "Flat · journal"
+                            ),
+                            look(
+                                Look::Glossy,
+                                "glossy",
+                                "Glossy look, for slides",
+                                "Glossy · slides"
+                            ),
+                        ])
+                    ),
+                    field(
+                        "Hydrogens",
+                        segments(vec![
+                            hydrogens(Hydrogens::All, "All", "Show all hydrogens"),
+                            hydrogens(Hydrogens::Polar, "Polar", "Show hydrogens on N, O and S"),
+                            hydrogens(Hydrogens::None, "None", "Hide hydrogens"),
+                        ])
+                    ),
+                    slider_field("Depth fade", model.depth_fade, Setting::DepthFade),
+                    slider_field("Perspective", model.perspective, Setting::Perspective),
+                    field(
+                        "Background",
+                        segments(vec![
+                            background(Background::None, "none", "No background", "None"),
+                            background(
+                                Background::Card,
+                                "card",
+                                "Soft card background",
+                                "Soft card"
+                            ),
+                        ])
+                    ),
+                    accessible_command("model-reset-view", "Reset the 3D view", "Reset view")
+                        .on_press_maybe(set(Setting::ResetView)),
+                ]
+                .spacing(10),
+            ),
+        )
+    }
+}
+
+/// The Structure section's note: the generation in flight, or the model's
+/// style (ball & stick before there is a model).
+fn subtitle(pending: Option<Display>, model: Option<&models3d::Model3d>) -> String {
+    if pending.is_some() {
+        return "Generating the conformer · ETKDG, then MMFF94s".into();
+    }
+    let style = model.map_or(Style::BallStick, |m| m.style);
+    format!("{} · Chemistry and atom IDs stay the same", name(style))
+}
+
+fn name(style: Style) -> &'static str {
+    match style {
+        Style::BallStick => "Ball & stick",
+        Style::Stick => "Stick",
+        Style::Wireframe => "Wireframe",
+        Style::SpaceFilling => "Space-filling",
+    }
+}
+
+fn slug(style: Style) -> &'static str {
+    match style {
+        Style::BallStick => "ball-stick",
+        Style::Stick => "stick",
+        Style::Wireframe => "wireframe",
+        Style::SpaceFilling => "space-filling",
     }
 }
 

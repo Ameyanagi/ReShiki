@@ -189,7 +189,11 @@ async fn structure_section_buttons_show_the_molecule() -> Result<(), String> {
         );
         let mut activate = reshiki::accessibility::Activate::<Message>::new(id);
         ui.operate(&renderer, &mut operation::black_box(&mut activate));
+        // The shown display's button stays pressable, with its selected
+        // look, and changes nothing.
         match activate.finish() {
+            operation::Outcome::Some(Message::Models3d(Action::Unchanged))
+                if display == Display::TwoD => {}
             operation::Outcome::Some(Message::Models3d(Action::Show(shown))) => {
                 assert_eq!(shown, display)
             }
@@ -330,6 +334,157 @@ fn the_status_names_the_view_undo_restores() {
         app.status,
         "Shown as 2D and 3D · Undo restores the 3D model"
     );
+}
+
+fn set(app: &mut App, setting: Setting) {
+    let _ = app.update(Message::Models3d(Action::Set(setting)));
+}
+
+/// The active style, look, hydrogens, background or display chosen again
+/// keeps the drawing and adds no Undo step.
+#[test]
+fn choosing_what_is_active_again_changes_nothing() {
+    let (mut app, _) = with_model(Display::ThreeD);
+    let (start, doc, revision) = (frames(&app), app.tab.doc.clone(), app.tab.revision);
+    let depth = doc.models[0].depth_fade;
+    for setting in [
+        Setting::Style(Style::BallStick),
+        Setting::Look(Look::Flat),
+        Setting::Hydrogens(Hydrogens::All),
+        Setting::Background(Background::None),
+        Setting::DepthFade(depth),
+    ] {
+        set(&mut app, setting);
+    }
+    show(&mut app, Display::ThreeD);
+    let _ = app.update(Message::Models3d(Action::Unchanged));
+    assert_eq!(frames(&app), start);
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(app.tab.doc, doc);
+}
+
+#[test]
+fn each_model_setting_is_one_undo_step_and_a_slider_drag_is_one() {
+    let (mut app, _) = with_model(Display::ThreeD);
+    let original = app.tab.doc.models[0].clone();
+    let start = frames(&app);
+    set(&mut app, Setting::Style(Style::SpaceFilling));
+    set(&mut app, Setting::Look(Look::Glossy));
+    set(&mut app, Setting::Hydrogens(Hydrogens::Polar));
+    set(&mut app, Setting::Background(Background::Card));
+    set(&mut app, Setting::Background(Background::Card));
+    assert_eq!(
+        frames(&app),
+        start + 4,
+        "repeating a choice records nothing"
+    );
+    // A drag sends many values, then the release.
+    for value in [0.4, 0.5, 0.6] {
+        set(&mut app, Setting::DepthFade(value));
+    }
+    let _ = app.update(Message::Models3d(Action::SlideEnd));
+    for value in [0.1, 0.0] {
+        set(&mut app, Setting::Perspective(value));
+    }
+    let _ = app.update(Message::Models3d(Action::SlideEnd));
+    assert_eq!(frames(&app), start + 6);
+    let model = &app.tab.doc.models[0];
+    assert_eq!(
+        (
+            model.style,
+            model.look,
+            model.show_hydrogens,
+            model.background
+        ),
+        (
+            Style::SpaceFilling,
+            Look::Glossy,
+            Hydrogens::Polar,
+            Background::Card
+        )
+    );
+    assert_eq!((model.depth_fade, model.perspective), (0.6, 0.));
+    assert_eq!(app.tab.doc.version, reshiki::document::MODELS_3D);
+
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.models[0].perspective, original.perspective);
+    assert_eq!(app.tab.doc.models[0].depth_fade, 0.6);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.models[0].depth_fade, original.depth_fade);
+    for _ in 0..4 {
+        let _ = app.update(Message::Undo);
+    }
+    assert_eq!(app.tab.doc.models[0], original);
+}
+
+#[test]
+fn a_slider_change_without_release_does_not_join_later_steps() {
+    let (mut app, _) = with_model(Display::ThreeD);
+    let start = frames(&app);
+    // Arrow keys and Ctrl+wheel change a slider without a release.
+    set(&mut app, Setting::DepthFade(0.4));
+    set(&mut app, Setting::Style(Style::Wireframe));
+    set(&mut app, Setting::Perspective(0.5));
+    let _ = app.update(Message::Models3d(Action::SlideEnd));
+    assert_eq!(frames(&app), start + 3);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.models[0].style, Style::Wireframe);
+
+    // Nor does Undo leave a drag to join.
+    set(&mut app, Setting::DepthFade(0.2));
+    let _ = app.update(Message::Undo);
+    set(&mut app, Setting::Perspective(0.1));
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.models[0].style, Style::Wireframe);
+}
+
+#[test]
+fn different_sliders_without_release_are_separate_steps() {
+    let (mut app, _) = with_model(Display::ThreeD);
+    let start = frames(&app);
+    let (fade, perspective) = (
+        app.tab.doc.models[0].depth_fade,
+        app.tab.doc.models[0].perspective,
+    );
+    // Arrow keys on Depth fade, then on Perspective, with no release between.
+    set(&mut app, Setting::DepthFade(0.4));
+    set(&mut app, Setting::DepthFade(0.5));
+    set(&mut app, Setting::Perspective(0.6));
+    set(&mut app, Setting::Perspective(0.7));
+    assert_eq!(frames(&app), start + 2);
+    let _ = app.update(Message::Undo);
+    let model = &app.tab.doc.models[0];
+    assert_eq!((model.depth_fade, model.perspective), (0.5, perspective));
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.models[0].depth_fade, fade);
+}
+
+#[test]
+fn changing_a_model_keeps_another_generation_in_flight() {
+    let (mut app, atoms) = with_model(Display::Both);
+    let water = app.tab.doc.atoms[3].id;
+    app.tab.selected = vec![water];
+    show(&mut app, Display::ThreeD);
+    let (key, result) = generated(&app);
+    app.tab.selected = vec![atoms[0]];
+    set(&mut app, Setting::Style(Style::Stick));
+    set(&mut app, Setting::DepthFade(0.3));
+    assert_eq!(app.pending(&[water]), Some(Display::ThreeD));
+    let _ = app.update(Message::Models3d(Action::Generated(key, Ok(result))));
+    assert_eq!(displays(&app.tab.doc), [Display::Both, Display::ThreeD]);
+}
+
+#[test]
+fn reset_view_restores_the_opening_view() {
+    let (mut app, _) = with_model(Display::Both);
+    let opening = app.tab.doc.models[0].rotation;
+    let before = app.tab.doc.clone();
+    app.tab.doc.models[0].rotation = [0., 1., 0., 0.];
+    app.changed(before);
+    let start = frames(&app);
+    set(&mut app, Setting::ResetView);
+    assert_eq!(app.tab.doc.models[0].rotation, opening);
+    assert_eq!(frames(&app), start + 1);
 }
 
 #[test]
@@ -591,6 +746,67 @@ fn showing_the_current_display_again_changes_nothing() {
 }
 
 #[test]
+fn the_model_section_shows_only_while_the_model_does() {
+    let (mut app, _) = with_model(Display::Both);
+    assert!(app.model_section().is_some());
+    show(&mut app, Display::TwoD);
+    assert!(app.model_section().is_none());
+    // Without a selected molecule nothing changes.
+    app.tab.selected.clear();
+    let start = frames(&app);
+    set(&mut app, Setting::Style(Style::Wireframe));
+    assert_eq!(frames(&app), start);
+    assert_eq!(app.tab.doc.models[0].style, Style::BallStick);
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer 3D model section controls"]
+async fn model_section_controls_change_the_model() -> Result<(), String> {
+    use iced::advanced::{renderer::Headless, widget::Operation, widget::operation};
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .ok_or("No renderer")?;
+    let (app, _) = with_model(Display::ThreeD);
+    for (id, setting) in [
+        (
+            "model-style-space-filling",
+            Setting::Style(Style::SpaceFilling),
+        ),
+        ("model-look-glossy", Setting::Look(Look::Glossy)),
+        (
+            "model-hydrogens-Polar",
+            Setting::Hydrogens(Hydrogens::Polar),
+        ),
+        (
+            "model-background-card",
+            Setting::Background(Background::Card),
+        ),
+        ("model-reset-view", Setting::ResetView),
+    ] {
+        let section = app.model_section().ok_or("No 3D model section")?;
+        let mut ui = iced_runtime::UserInterface::build(
+            section,
+            iced::Size::new(288., 600.),
+            iced_runtime::user_interface::Cache::new(),
+            &mut renderer,
+        );
+        let mut activate = reshiki::accessibility::Activate::<Message>::new(id);
+        ui.operate(&renderer, &mut operation::black_box(&mut activate));
+        match activate.finish() {
+            operation::Outcome::Some(Message::Models3d(Action::Set(chosen))) => {
+                assert_eq!(chosen, setting)
+            }
+            _ => return Err(format!("{id} did not change the model")),
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn the_bar_shows_above_a_whole_selected_molecule_and_the_morph_starts_from_2d() {
     let (mut app, atoms, water) = drawing();
     assert_eq!(app.model_bar(), None, "one atom is not the molecule");
@@ -633,4 +849,40 @@ fn the_bar_shows_above_a_whole_selected_molecule_and_the_morph_starts_from_2d() 
     let _ = app.update(Message::Undo);
     let _ = app.update(Message::Redo);
     assert_eq!(app.model_morph(), None);
+}
+
+#[test]
+fn every_style_flattens_from_the_3d_view() {
+    for style in Style::ALL {
+        let (mut app, _) = with_model(Display::ThreeD);
+        set(&mut app, Setting::Style(style));
+        let drawn = app.tab.doc.atoms.clone();
+        let _ = app.update(Message::Models3d(Action::Flatten));
+        assert!(!app.error, "{style:?}: {}", app.status);
+        assert_eq!(displays(&app.tab.doc), [Display::TwoD], "{style:?}");
+        assert_ne!(app.tab.doc.atoms, drawn, "{style:?}");
+        assert_eq!(app.tab.doc.models[0].style, style);
+    }
+}
+
+#[test]
+fn the_structure_note_names_the_current_style() {
+    let (mut app, atoms) = with_model(Display::ThreeD);
+    let note = |app: &App| subtitle(app.pending(&atoms), app.tab.doc.models.first());
+    assert_eq!(
+        note(&app),
+        "Ball & stick · Chemistry and atom IDs stay the same"
+    );
+    for (style, label) in [
+        (Style::Stick, "Stick"),
+        (Style::Wireframe, "Wireframe"),
+        (Style::SpaceFilling, "Space-filling"),
+    ] {
+        set(&mut app, Setting::Style(style));
+        assert_eq!(
+            note(&app),
+            format!("{label} · Chemistry and atom IDs stay the same")
+        );
+    }
+    assert!(app.structure_section().is_some());
 }
