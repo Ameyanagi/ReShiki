@@ -258,6 +258,16 @@ pub fn text_atom_refusal(doc: &Document, id: u64) -> Option<String> {
 
 /// Return a complete candidate and its new atom ID; errors leave `doc` intact.
 pub fn text_to_atom(doc: &Document, id: u64) -> Result<(Document, u64), String> {
+    text_to_atom_toward(doc, id, None)
+}
+
+/// [`text_to_atom`] for a bond about to be drawn to `toward`, so NC and OCN
+/// are read from that bond as if it already existed.
+pub fn text_to_atom_toward(
+    doc: &Document,
+    id: u64,
+    toward: Option<Point>,
+) -> Result<(Document, u64), String> {
     #[cfg(test)]
     CONVERSION_ENTRIES.with(|entries| entries.set(entries.get() + 1));
     if let Some(reason) = text_atom_refusal(doc, id) {
@@ -274,9 +284,20 @@ pub fn text_to_atom(doc: &Document, id: u64) -> Result<(Document, u64), String> 
     let runs = manual_runs(annotation);
     let mut candidate = doc.clone();
     let atom = candidate.add_atom("*", position);
+    // A stand-in for the bond's far end, removed once the entry is decided.
+    let far = toward
+        .filter(|_| super::sided(&annotation.text))
+        .map(|toward| {
+            let far = candidate.add_atom("C", toward);
+            candidate.add_bond(atom, far, 1, "plain");
+            far
+        });
     let mut candidate = apply_with_scripts(&candidate, atom, &annotation.text, &runs, Mode::Auto)
         .or_else(|_| apply_with_scripts(&candidate, atom, &annotation.text, &runs, Mode::Text))
         .map_err(|_| TEXT_TOO_LONG.to_owned())?;
+    if let Some(far) = far {
+        candidate.delete(&[far]);
+    }
     candidate
         .atom_mut(atom)
         .ok_or("The atom is no longer available")?

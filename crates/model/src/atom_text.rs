@@ -58,7 +58,7 @@ pub use hydride::entry;
 mod from_text;
 pub use from_text::{
     TEXT_TOO_LONG, text_atom_position, text_atom_refusal, text_first_glyph_center, text_ink_bounds,
-    text_to_atom,
+    text_to_atom, text_to_atom_toward,
 };
 
 /// Whether text is one of the fixed condensed spellings below.
