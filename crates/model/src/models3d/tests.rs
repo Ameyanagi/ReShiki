@@ -368,6 +368,64 @@ fn model_colours_follow_the_colour_theme_and_canvas() {
     assert_eq!(element_color(&doc, "O"), [0x12, 0x34, 0xff]);
 }
 
+/// The flat look's outline comes from the canvas: dark on a light canvas, a
+/// soft light rim on a dark one; a soft card there is the paper lightened a
+/// little, and depth fade mixes toward it.
+#[test]
+fn outlines_and_the_card_follow_the_canvas() {
+    let outlines = |doc: &Document| -> Vec<Outline> {
+        primitives(doc)
+            .iter()
+            .filter_map(|p| match p {
+                Primitive::Sphere { outline, .. } | Primitive::ShadedQuad { outline, .. } => {
+                    *outline
+                }
+                Primitive::Contour { outline, .. } => Some(*outline),
+                _ => None,
+            })
+            .collect()
+    };
+    for style in [Style::BallStick, Style::Stick] {
+        let (mut doc, _) = styled(|m| m.style = style);
+        let light = outlines(&doc);
+        assert!(!light.is_empty());
+        assert!(light.iter().all(|o| (o.color, o.alpha) == OUTLINE));
+        doc.canvas_theme = CanvasTheme::Dark;
+        let dark = outlines(&doc);
+        assert_eq!(dark.len(), light.len());
+        assert!(dark.iter().all(|o| (o.color, o.alpha) == RIM), "{style:?}");
+    }
+    let (mut doc, _) = styled(|m| {
+        m.background = Background::Card;
+        m.depth_fade = 1.;
+    });
+    doc.canvas_theme = CanvasTheme::Dark;
+    let parts = primitives(&doc);
+    let Some(Primitive::Card { fill, outline, .. }) = parts.first() else {
+        panic!("the card comes first");
+    };
+    let paper = CanvasTheme::Dark.background();
+    let sum = |rgb: [u8; 3]| rgb.iter().map(|v| u32::from(*v)).sum::<u32>();
+    assert!(sum(paper) < sum(*fill) && sum(*fill) < sum(outline.color));
+    assert!(sum(*fill) < sum(CARD) / 4, "a dark card: {fill:?}");
+    // Depth fade mixes toward the dark card, not the black paper.
+    let mids = |doc: &Document| -> Vec<u32> {
+        primitives(doc)
+            .iter()
+            .filter_map(|p| match p {
+                Primitive::Sphere { stops, .. } => Some(sum(stops[1].1)),
+                _ => None,
+            })
+            .collect()
+    };
+    let on_card = mids(&doc);
+    doc.models[0].background = Background::None;
+    let on_paper = mids(&doc);
+    assert_eq!(on_card.len(), on_paper.len());
+    assert!(on_card.iter().zip(&on_paper).all(|(c, p)| c >= p));
+    assert_ne!(on_card, on_paper);
+}
+
 #[test]
 fn spheres_are_sorted_by_depth() {
     let (mut doc, atoms, _) = shown(Display::ThreeD);

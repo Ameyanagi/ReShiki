@@ -265,6 +265,10 @@ const STICK_RADIUS: f32 = 0.16;
 const WIRE_RADIUS: f32 = 0.02;
 const CARD: [u8; 3] = [0xf4, 0xf6, 0xf8];
 const CARD_EDGE: [u8; 3] = [0xe3, 0xe7, 0xea];
+/// The flat look's outline on a light canvas, and the soft light rim that
+/// replaces it on a dark one: colour and opacity.
+const OUTLINE: ([u8; 3], f32) = ([30, 34, 38], 0.85);
+const RIM: ([u8; 3], f32) = ([225, 232, 238], 0.55);
 /// The radial gradient's inner circle, as a fraction of the ball radius.
 pub const FOCAL_RADIUS: f32 = 0.05;
 
@@ -1431,19 +1435,30 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     });
     let bonds = sticks(doc, model, &view.shown)?;
     let (rotated, reach, style) = (&view.rotated, view.reach, model.style);
+    let paper = doc.canvas_theme.background();
+    let dark = doc.canvas_theme.is_dark();
+    // On a dark canvas the card is the paper lightened a little.
+    let (card, card_edge) = if dark {
+        let lighter = |t| rgb(mix(float(paper), WHITE, t));
+        (lighter(0.08), lighter(0.16))
+    } else {
+        (CARD, CARD_EDGE)
+    };
     let backdrop = match model.background {
-        Background::None => doc.canvas_theme.background(),
-        Background::Card => CARD,
+        Background::None => paper,
+        Background::Card => card,
     };
     let fade = |z: f32| model.depth_fade * ((reach - z) / (2. * reach)).clamp(0., 1.);
     let line = (model.size / 400.).clamp(0.6, 1.1);
     let glossy = model.look == Look::Glossy;
     let outline = |width| {
-        (!glossy).then_some(Outline {
-            color: [30, 34, 38],
-            alpha: 0.85,
-            width,
-        })
+        (!glossy)
+            .then_some(if dark { RIM } else { OUTLINE })
+            .map(|(color, alpha)| Outline {
+                color,
+                alpha,
+                width,
+            })
     };
     if model.background == Background::Card {
         let (lo, hi) = view.bounds();
@@ -1453,9 +1468,9 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             lo: lo.offset(inset, inset),
             hi: hi.offset(-inset, -inset),
             radius: (model.size * 10. / 340.).min((hi.x - lo.x).min(hi.y - lo.y) / 2.),
-            fill: CARD,
+            fill: card,
             outline: Outline {
-                color: CARD_EDGE,
+                color: card_edge,
                 alpha: 1.,
                 width,
             },
