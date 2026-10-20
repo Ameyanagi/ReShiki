@@ -224,6 +224,15 @@ impl App {
                 .selected
                 .is_empty()
                 .then_some("Select something first"),
+            Need::Resizable => self.need_unavailable(Need::Selection, target).or_else(|| {
+                let ids = self
+                    .tab
+                    .doc
+                    .expand_abbreviation_selection(&self.tab.selected);
+                (ids.iter()
+                    .any(|id| reshiki::models3d::hides(&self.tab.doc, *id)))
+                .then_some(super::numeric_transforms::RESIZE_SHOWN_IN_3D)
+            }),
             Need::Molecule => self
                 .tab
                 .doc

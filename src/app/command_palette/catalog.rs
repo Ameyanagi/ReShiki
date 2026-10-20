@@ -64,6 +64,8 @@ impl Category {
 pub(crate) enum Need {
     Nothing,
     Selection,
+    /// A selection the Scale field can resize: none of it shown only in 3D.
+    Resizable,
     Molecule,
     Bond,
     Atom,
@@ -1558,7 +1560,7 @@ fn command_with(app: &App, word: Word, number: Option<f32>, value: &str) -> Opti
                 Message::NumericTransform(numeric_transforms::Action::Apply(Field::Scale)),
             ]),
         )
-        .need(Need::Selection),
+        .need(Need::Resizable),
         (Word::Zoom, Some(n)) if n > 0. => send(
             format!("Zoom to {n}%"),
             Category::View,

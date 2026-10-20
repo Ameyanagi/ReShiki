@@ -954,6 +954,16 @@ fn command_word_prefixes_take_a_value() {
             "{query}"
         );
     }
+    // Scale greys out, with the field's reason, for a molecule shown only in 3D.
+    let (doc, molecule, _) = crate::canvas::tilt::shown(reshiki::models3d::Display::ThreeD);
+    app.tab.doc = doc;
+    app.tab.selected = molecule.to_vec();
+    search(&mut app, "scale 150");
+    assert_eq!(
+        app.command_unavailable(top(&app)),
+        Some(crate::app::numeric_transforms::RESIZE_SHOWN_IN_3D)
+    );
+    let mut app = self::app();
     let named = |app: &App, query| catalog::parameterised(app, query).map(|c| c.name);
     assert_eq!(named(&app, "tilt up 20").unwrap(), "Tilt selection up 20°");
     assert_eq!(named(&app, "zo 150").unwrap(), "Zoom to 150%");
