@@ -132,8 +132,9 @@ the whole lobe without a halo.
   chemistry. Positioned multiple-charge marks, combined radical-ion marks, bars
   and colored attached marks require `.rsk`/SVG/PDF/PNG; unsupported per-symbol
   CDXML overrides are rejected. External saves can discard ownership of distant
-  marks, so export requires marks within 1.05 label sizes of their owner and
-  closer to that atom than any other atom. A visible atom label and hydrogen
+  marks, so export requires marks within 1.05 label sizes of their owner's
+  label ink (of the atom itself when it has no label), so orbited marks beside
+  hydrogens still export, and closer to that atom than any other atom. A visible atom label and hydrogen
   count are written explicitly.
 - Template attachment rejects marked or radical anchor atoms; free insertion of
   these templates keeps their full drawing.
