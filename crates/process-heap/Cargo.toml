@@ -7,3 +7,7 @@ description = "Bounded allocator for isolated ReShiki worker processes"
 
 [features]
 allocation-metrics = []
+
+# std's clock is unavailable in the browser.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-time = "1"

@@ -2,6 +2,8 @@
 //! Requests resolve from a memory snapshot refreshed at most once per second.
 //! A small, bounded lookup probe
 //! measures this executable's effective throughput; processor count is not used.
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
 use std::{
     collections::BTreeMap,
     hint::black_box,
@@ -9,8 +11,10 @@ use std::{
         Arc, Mutex, OnceLock,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
-    time::{Duration, Instant},
+    time::Duration,
 };
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 
 mod platform;
 

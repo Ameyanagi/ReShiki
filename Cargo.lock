@@ -3916,6 +3916,9 @@ dependencies = [
 [[package]]
 name = "reshiki-process-heap"
 version = "0.1.0"
+dependencies = [
+ "web-time",
+]
 
 [[package]]
 name = "reshiki-windows"
