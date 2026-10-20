@@ -141,11 +141,19 @@ impl App {
                     );
                 }
             }
-            Edit::AtomMark(id, index, p) => {
-                if let Some(a) = self.tab.doc.atom_mut(id)
-                    && let Some(mark) = a.marks.get_mut(index)
+            Edit::AtomMark(id, index, p, free) => {
+                if let Some(a) = self.tab.doc.atom(id)
+                    && let Some(mark) = a.marks.get(index)
                 {
-                    mark.offset = Point::new(p.x - a.position.x, p.y - a.position.y);
+                    let placed = reshiki::scientific::orbit_mark(&self.tab.doc, a, mark, p, free);
+                    if let Some(mark) = self
+                        .tab
+                        .doc
+                        .atom_mut(id)
+                        .and_then(|a| a.marks.get_mut(index))
+                    {
+                        *mark = placed;
+                    }
                 }
             }
             Edit::ArrowHandle(id, index, p) => {
