@@ -81,11 +81,9 @@ impl Bar {
         let above = selection.y - 12. - 34. - 10. - height;
         let below = selection.y + selection.height + 12. + 8.;
         let lowest = (paper.height - height - 4.).max(4.);
-        let y = if above >= 4. {
-            above
-        } else {
-            below.min(lowest)
-        };
+        // Whichever side it takes, it stays inside the canvas, even when the
+        // selection lies above or below it.
+        let y = if above >= 4. { above } else { below }.clamp(4., lowest);
         let x = (selection.center_x() - width / 2.).clamp(4., (paper.width - width - 4.).max(4.));
         let panel = Rectangle::new(Point::new(x, y), Size::new(width, height));
         let mut left = x + BAR_PADDING + label + 4.;

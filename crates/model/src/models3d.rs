@@ -182,6 +182,11 @@ pub struct Drawn {
     pub bonds: Vec<DrawnBond>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub depth_appearance: Vec<Scope>,
+    /// The centre of the molecule's 2D atoms when this layout was kept, so
+    /// that the layout comes back wherever the molecule has been moved,
+    /// transformed or pasted since, centred on it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub at: Option<Point>,
 }
 
 impl Drawn {
@@ -212,14 +217,29 @@ impl Drawn {
                 })
                 .collect(),
             depth_appearance: crate::depth_appearance::remap(&doc.depth_appearance, &own),
+            at: layout_center(doc, model),
         }
     }
 
-    /// Put this layout back on the drawing.
-    fn restore(self, doc: &mut Document) {
+    /// This layout, kept while `model`'s molecule is drawn as it is now.
+    pub fn kept(self, doc: &Document, model: &Model3d) -> Self {
+        Self {
+            at: layout_center(doc, model),
+            ..self
+        }
+    }
+
+    /// Put this layout back on the drawing, moved as far as the molecule
+    /// moved since it was kept.
+    fn restore(self, doc: &mut Document, model: &Model3d) {
+        let (dx, dy) = match (self.at, layout_center(doc, model)) {
+            (Some(at), Some(now)) => (now.x - at.x, now.y - at.y),
+            _ => (0., 0.),
+        };
         let ids: Vec<_> = self.atoms.iter().map(|a| a.0).collect();
         for (id, position, depth, stereo) in self.atoms {
             if let Some(atom) = doc.atom_mut(id) {
+                let position = position.offset(dx, dy);
                 (atom.position, atom.depth, atom.stereo) = (position, depth, stereo);
             }
         }
@@ -583,15 +603,15 @@ impl View<'_> {
             })
     }
     /// Move each point a fraction `e` of the way from its flat start: a drawing
-    /// atom's place in the 2D drawing (centred on the frame), or for a
+    /// atom's place in the 2D drawing, wherever the frame is, or for a
     /// force-field hydrogen its parent's.
     fn morph(&mut self, doc: &Document, model: &Model3d, e: f32) {
-        let center = self.origin.offset(-model.offset.x, -model.offset.y);
+        let origin = self.origin;
         let flat = |id| {
             doc.atom(id).map_or([0.; 3], |a| {
                 [
-                    (a.position.x - center.x) / self.scale,
-                    -(a.position.y - center.y) / self.scale,
+                    (a.position.x - origin.x) / self.scale,
+                    -(a.position.y - origin.y) / self.scale,
                     0.,
                 ]
             })
@@ -706,10 +726,14 @@ pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
 /// flattened; returns whether the drawing changed. The frame stays put.
 pub fn restore_drawing(doc: &mut Document, index: usize) -> bool {
     let origin = doc.models.get(index).and_then(|m| frame_origin(doc, m));
-    let Some(drawn) = doc.models.get_mut(index).and_then(|m| m.drawn.take()) else {
+    let Some(model) = doc.models.get_mut(index) else {
         return false;
     };
-    drawn.restore(doc);
+    let Some(drawn) = model.drawn.take() else {
+        return false;
+    };
+    let model = model.clone();
+    drawn.restore(doc, &model);
     if let Some(origin) = origin {
         keep_place(doc, index, origin);
     }
@@ -946,6 +970,7 @@ pub fn validate(doc: &Document) -> Result<(), String> {
             || !(0. ..=1.).contains(&m.perspective)
             || m.drawn.as_ref().is_some_and(|d| {
                 d.atoms.len() != ids.len()
+                    || d.at.is_some_and(|p| !p.is_finite())
                     || d.atoms
                         .iter()
                         .any(|(id, p, z, _)| !ids.contains(id) || !p.is_finite() || !z.is_finite())
