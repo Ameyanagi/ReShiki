@@ -51,7 +51,7 @@ impl MoleculeCanvas<'_> {
             let end = self
                 .camera
                 .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
-            if let (Some(Gesture::Graphic { start }), Tool::Graphic(kind)) =
+            if let (Some(Gesture::Graphic { start, hydrogens }), Tool::Graphic(kind)) =
                 (&state.gesture, self.tool)
             {
                 if kind == GraphicKind::Path {
@@ -89,12 +89,13 @@ impl MoleculeCanvas<'_> {
                             true,
                         ));
                     }
-                    if let Ok(id) = drawing.place(
+                    if let Ok(id) = drawing.place_with(
                         preview.to_mut(),
                         *start,
                         end,
                         self.graphic_constrain(kind, state.modifiers),
                         self.camera.world_len(pick::PICK_RADIUS_PX),
+                        hydrogens,
                     ) {
                         *ring_selection = Some(vec![id]);
                     }

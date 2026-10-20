@@ -24,7 +24,10 @@ fn orbital_preview_commit_and_temporary_bypass_agree_at_every_zoom() {
                 let start = World::new(4. / zoom, 0.);
                 let end = start.offset(7., -42.);
                 let mut state = State {
-                    gesture: Some(Gesture::Graphic { start }),
+                    gesture: Some(Gesture::Graphic {
+                        start,
+                        hydrogens: Default::default(),
+                    }),
                     cursor: Some(canvas.camera.screen(end, bounds)),
                     modifiers,
                     ..Default::default()
@@ -110,6 +113,7 @@ fn lone_pair_click_and_drag_previews_match_the_exact_committed_marks() {
             let mut state = State {
                 gesture: Some(Gesture::Graphic {
                     start: World::default(),
+                    hydrogens: Default::default(),
                 }),
                 cursor: Some(canvas.camera.screen(end, bounds)),
                 modifiers,
@@ -206,11 +210,25 @@ fn a_mark_drag_builds_its_orbit_guide_once_and_rebuilds_it_on_real_changes() {
         );
     }
     // Its label, bonds, size or style changing rebuilds it.
-    let edits: [&dyn Fn(&mut Document); 4] = [
+    let edits: [&dyn Fn(&mut Document); 6] = [
         &|d| d.atom_mut(o).unwrap().label_h = 0,
         &|d| d.atoms[0].position.y += 10.,
         &|d| d.atom_mut(o).unwrap().marks[0].size_pt = Some(20.),
         &|d| d.drawing_style.font_size_pt += 2.,
+        // An abbreviation's label, and then its alignment, set the orbit too.
+        &|d| {
+            d.abbreviations.push(reshiki::abbreviations::Abbreviation {
+                label_style: None,
+                label_color_override: false,
+                highlight: None,
+                label: "OMe".into(),
+                reverse_label: "MeO".into(),
+                anchor: o,
+                members: vec![o],
+                alignment: Default::default(),
+            })
+        },
+        &|d| d.abbreviations[0].alignment = reshiki::abbreviations::LabelAlignment::Right,
     ];
     for edit in edits {
         let before = guide(&doc);
@@ -223,4 +241,37 @@ fn a_mark_drag_builds_its_orbit_guide_once_and_rebuilds_it_on_real_changes() {
             reshiki::scientific::mark_orbit_guide(&doc, atom, &atom.marks[0])
         );
     }
+}
+
+#[test]
+fn a_charge_drag_preview_keeps_its_label_hydrogens_for_the_whole_drag() {
+    let mut doc = Document::default();
+    let c = doc.add_atom("C", World::new(-42., 0.));
+    let n = doc.add_atom("N", World::default());
+    doc.add_bond(c, n, 1, "plain");
+    let bounds = Rectangle::with_size(iced::Size::new(600., 400.));
+    let mut canvas = crate::canvas::tests::chain_canvas(&doc, reshiki::chains::ChainMode::Straight);
+    canvas.tool = Tool::Graphic(GraphicKind::Symbol(reshiki::scientific::SymbolKind::Plus));
+    let mut state = State {
+        gesture: Some(Gesture::Graphic {
+            start: World::default(),
+            hydrogens: Default::default(),
+        }),
+        ..Default::default()
+    };
+    let mut frame = |end: World| {
+        state.cursor = Some(canvas.camera.screen(end, bounds));
+        let mut preview = Draft::new(&doc);
+        canvas.preview_pointer_edits(&mut preview, &state, bounds);
+        let Some(Gesture::Graphic { hydrogens, .. }) = &mut state.gesture else {
+            unreachable!()
+        };
+        let memo = hydrogens.get().copied();
+        // Swap in a stale memo: a frame that recomputed would not show it.
+        *hydrogens = std::cell::OnceCell::from(Some(7));
+        (preview.preview.atom(n).unwrap().label_h, memo)
+    };
+    // The first frame works out NH3+ once and keeps it for the drag.
+    assert_eq!(frame(World::new(10., -20.)), (3, Some(Some(3))));
+    assert_eq!(frame(World::new(-5., 20.)), (7, Some(Some(7))));
 }

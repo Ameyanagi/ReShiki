@@ -300,6 +300,8 @@ enum Gesture {
     },
     Graphic {
         start: World,
+        /// A charge or radical's label hydrogens, worked out once per drag.
+        hydrogens: std::cell::OnceCell<Option<u32>>,
     },
     AtomIndicator {
         owner: reshiki::atom_labels::Owner,

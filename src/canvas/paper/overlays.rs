@@ -169,7 +169,7 @@ impl MoleculeCanvas<'_> {
             return;
         };
         let start = match state.gesture {
-            Some(Gesture::Graphic { start }) => start,
+            Some(Gesture::Graphic { start, .. }) => start,
             None => {
                 let Some(cursor) = state.cursor.filter(|cursor| bounds.contains(*cursor)) else {
                     return;
@@ -204,7 +204,7 @@ impl MoleculeCanvas<'_> {
             (Some(Gesture::AtomMark { id, index, .. }), _) => (*id, Some(*index)),
             // A new mark dragged out with the symbol tool is the one the
             // committed atom lacks.
-            (Some(Gesture::Graphic { start }), Tool::Graphic(GraphicKind::Symbol(_)))
+            (Some(Gesture::Graphic { start, .. }), Tool::Graphic(GraphicKind::Symbol(_)))
                 if self.graphics.attach =>
             {
                 let Some(id) = self
@@ -829,8 +829,9 @@ pub(in crate::canvas) type OrbitGuide = (Vec<Vec<World>>, Vec<World>);
 #[derive(Default)]
 pub(in crate::canvas) struct OrbitGuideCache(Option<(OrbitInputs, Rc<OrbitGuide>)>);
 
-/// Everything the guide depends on: the atom and its label, its bonds and
-/// their far atoms, the mark's kind and size, and the style. Where the
+/// Everything the guide depends on: the atom and its label (an abbreviation's
+/// too), its bonds and their far atoms, the mark's kind and size, and the
+/// style. Where the
 /// pointer puts the mark (its offset, and a lone pair's turn) is left out.
 #[derive(PartialEq)]
 struct OrbitInputs {
@@ -838,6 +839,7 @@ struct OrbitInputs {
     mark: AtomMark,
     bonds: Vec<Bond>,
     neighbors: Vec<Atom>,
+    abbreviations: Vec<reshiki::abbreviations::Abbreviation>,
     style: DrawingStyle,
 }
 
@@ -868,6 +870,12 @@ pub(in crate::canvas) fn orbit_guide(
             .filter_map(|b| doc.atom(if b.a == atom.id { b.b } else { b.a }).cloned())
             .collect(),
         bonds,
+        abbreviations: doc
+            .abbreviations
+            .iter()
+            .filter(|a| a.anchor == atom.id || a.members.contains(&atom.id))
+            .cloned()
+            .collect(),
         style: doc.drawing_style.clone(),
     };
     let mut cache = cache.borrow_mut();

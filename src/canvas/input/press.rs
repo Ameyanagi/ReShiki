@@ -314,7 +314,10 @@ impl MoleculeCanvas<'_> {
                     dragged: false,
                 })
             }
-            Tool::Graphic(_) => Some(Gesture::Graphic { start: p }),
+            Tool::Graphic(_) => Some(Gesture::Graphic {
+                start: p,
+                hydrogens: Default::default(),
+            }),
             Tool::EditPoints => {
                 return Some(Action::publish(Edit::Select(hit)).and_capture());
             }

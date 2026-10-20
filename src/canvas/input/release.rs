@@ -58,7 +58,7 @@ impl MoleculeCanvas<'_> {
                     target,
                 }
             }
-            Gesture::Graphic { start } => match self.release_graphic(state, start, p, inside) {
+            Gesture::Graphic { start, .. } => match self.release_graphic(state, start, p, inside) {
                 ControlFlow::Continue(edit) => edit,
                 ControlFlow::Break(action) => return Some(action),
             },

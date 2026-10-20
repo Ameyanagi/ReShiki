@@ -162,6 +162,34 @@ fn charge_and_radical_click_defaults_keep_their_existing_placement() {
 }
 
 #[test]
+fn a_charge_drag_works_out_its_label_hydrogens_once_and_reuses_them() {
+    // Methylamine's N: a plus leaves it NH3+, so the first preview fills the memo.
+    let mut doc = Document::default();
+    let c = doc.add_atom("C", p(-42., 0.));
+    let n = doc.add_atom("N", p(0., 0.));
+    doc.add_bond(c, n, 1, "plain");
+    let hydrogens = OnceCell::new();
+    let drag = |doc: &Document, end: Point, hydrogens: &OnceCell<Option<u32>>| {
+        let mut preview = doc.clone();
+        tool(SymbolKind::Plus)
+            .place_with(&mut preview, p(0., 0.), end, false, 10., hydrogens)
+            .unwrap();
+        preview.atom(n).unwrap().label_h
+    };
+    assert_eq!(drag(&doc, p(10., -20.), &hydrogens), 3);
+    assert_eq!(hydrogens.get(), Some(&Some(3)));
+    // Later frames take the memo instead of recomputing (a stale value shows it).
+    let stale = OnceCell::from(Some(7));
+    assert_eq!(drag(&doc, p(-5., 20.), &stale), 7);
+    // `place` itself still computes afresh.
+    let mut committed = doc.clone();
+    tool(SymbolKind::Plus)
+        .place(&mut committed, p(0., 0.), p(-5., 20.), false, 10.)
+        .unwrap();
+    assert_eq!(committed.atom(n).unwrap().label_h, 3);
+}
+
+#[test]
 fn a_hydrogen_above_or_beside_the_owner_does_not_pull_a_new_pair_away_from_the_heteroatom() {
     use crate::atom_labels::HydrogenPosition;
     for position in [

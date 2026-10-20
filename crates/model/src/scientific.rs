@@ -6,6 +6,7 @@ use crate::{
     style::DEFAULT,
 };
 use serde::{Deserialize, Serialize};
+use std::cell::OnceCell;
 
 mod label_halo;
 mod mark_placement;
@@ -604,6 +605,19 @@ impl Drawing {
         constrain: bool,
         radius: f32,
     ) -> Result<u64, String> {
+        self.place_with(doc, start, end, constrain, radius, &OnceCell::new())
+    }
+    /// [`Self::place`], reusing `hydrogens` for a charge or radical's label
+    /// so a drag's previews work out the molecule's chemistry only once.
+    pub fn place_with(
+        &self,
+        doc: &mut crate::document::Document,
+        start: Point,
+        end: Point,
+        constrain: bool,
+        radius: f32,
+        hydrogens: &OnceCell<Option<u32>>,
+    ) -> Result<u64, String> {
         if let GraphicKind::Symbol(kind) = self.kind
             && self.attach
             && let Some(id) = doc.nearest(start, radius)
@@ -655,7 +669,8 @@ impl Drawing {
             if !matches!(kind, SymbolKind::LonePair | SymbolKind::LonePairBar) {
                 doc.invalidate_chemistry(&[id]);
                 // Orbit the label the refresh will show, hydrogens included.
-                let hydrogens = crate::atom_labels::refresh::label_hydrogens(doc, id);
+                let hydrogens = *hydrogens
+                    .get_or_init(|| crate::atom_labels::refresh::label_hydrogens(doc, id));
                 if let Some((atom, h)) = doc.atom_mut(id).zip(hydrogens) {
                     atom.label_h = h;
                 }
