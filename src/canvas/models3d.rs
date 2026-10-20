@@ -1,6 +1,6 @@
-//! 3D models on the canvas (#386). Iced has no radial gradient, so each run of
-//! model primitives is rasterized at device resolution by resvg from the same
-//! SVG that figure export renders, then drawn as cached image tiles: smooth
+//! 3D models on the canvas (#386). Iced has no radial gradient, so model
+//! primitives are rasterized at device resolution by resvg from the same SVG
+//! that figure export renders, then drawn as cached image tiles: smooth
 //! shading at any zoom and the same pixels as PNG export.
 use super::{Camera, World, layered};
 use iced::advanced::image::Handle;
@@ -8,23 +8,59 @@ use iced::widget::canvas;
 use iced::{Point, Rectangle, Size};
 use reshiki::scene::{self, Primitive};
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 /// Device pixels per logical pixel: Retina exactly, downsampled on 1× screens.
 const OVERSAMPLE: f32 = 2.;
-/// Larger models are rasterized only where the paper shows them.
-const MAX_PIXELS: f32 = 3000. * 3000.;
-/// Images kept for redraws and zoom steps back.
-const CACHED: usize = 4;
-/// Tile side in device pixels. Iced uploads images of 2 MB or more on a
-/// worker and skips them until then, so a new zoom would flash blank.
-const TILE: u32 = 512;
+/// Tile side in device pixels, on a grid fixed to the drawing so a pan
+/// reuses its tiles. Iced uploads images of 2 MB or more on a worker and
+/// skips them until then, so a new zoom would flash blank.
+const TILE: i64 = 512;
+/// Tile pixels kept for redraws, pans and zoom steps back.
+const BUDGET: usize = 128 << 20;
+/// Drawing units around each primitive's bounds: its outline and edge.
+const MARGIN: f32 = 1.;
 
-/// A tile's offset and size in device pixels within the model image.
-type Tile = ([u32; 4], Handle);
+/// Rendered tiles by content key: the image, its bytes and when last drawn.
+#[derive(Default)]
+struct Cache {
+    tiles: HashMap<u64, (Handle, usize, u64)>,
+    bytes: usize,
+    clock: u64,
+}
+
+impl Cache {
+    fn get(
+        &mut self,
+        key: u64,
+        size: [u32; 2],
+        render: impl FnOnce() -> Option<Vec<u8>>,
+    ) -> Option<Handle> {
+        self.clock += 1;
+        if let Some(tile) = self.tiles.get_mut(&key) {
+            tile.2 = self.clock;
+            return Some(tile.0.clone());
+        }
+        let pixels = render()?;
+        let bytes = pixels.len();
+        let handle = Handle::from_rgba(size[0], size[1], pixels);
+        self.tiles.insert(key, (handle.clone(), bytes, self.clock));
+        self.bytes += bytes;
+        while self.bytes > BUDGET {
+            let Some(oldest) = self.tiles.iter().min_by_key(|(_, t)| t.2).map(|(k, _)| *k) else {
+                break;
+            };
+            if let Some((_, bytes, _)) = self.tiles.remove(&oldest) {
+                self.bytes -= bytes;
+            }
+        }
+        Some(handle)
+    }
+}
 
 thread_local! {
-    static IMAGES: RefCell<Vec<(u64, Vec<Tile>)>> = const { RefCell::new(Vec::new()) };
+    static TILES: RefCell<Cache> = RefCell::default();
 }
 
 pub(super) fn is_model(primitive: &Primitive) -> bool {
@@ -37,7 +73,78 @@ pub(super) fn is_model(primitive: &Primitive) -> bool {
     )
 }
 
-/// Draw a run of consecutive model primitives as one image.
+/// A visible tile: its key, its device-pixel rectangle (the grid cell cut to
+/// what it shows) and the primitives reaching it, in order. The key covers
+/// only those primitives, so editing one model leaves another's tiles cached.
+struct Tile {
+    key: u64,
+    rect: [i64; 4],
+    parts: Vec<usize>,
+}
+
+fn plan(run: &[Primitive], camera: Camera, bounds: Rectangle) -> Vec<Tile> {
+    let scale = camera.zoom * OVERSAMPLE;
+    let device = |p: World| [p.x * scale, p.y * scale];
+    let parts: Vec<_> = run
+        .iter()
+        .map(|p| {
+            let (lo, hi) = scene::bounds(std::slice::from_ref(p));
+            let ([x0, y0], [x1, y1]) = (
+                device(lo.offset(-MARGIN, -MARGIN)),
+                device(hi.offset(MARGIN, MARGIN)),
+            );
+            let mut hasher = DefaultHasher::new();
+            // Debug output names every coordinate and colour exactly.
+            format!("{p:?}").hash(&mut hasher);
+            (
+                [x0.floor(), y0.floor(), x1.ceil() + 1., y1.ceil() + 1.].map(|v| v as i64),
+                hasher.finish(),
+            )
+        })
+        .collect();
+    let [lo, hi] = [Point::ORIGIN, Point::new(bounds.width, bounds.height)]
+        .map(|p| device(camera.world(p, bounds)).map(|v| (v.floor() as i64).div_euclid(TILE)));
+    let mut tiles = vec![];
+    for ty in lo[1]..=hi[1] {
+        for tx in lo[0]..=hi[0] {
+            let cell = [tx * TILE, ty * TILE, (tx + 1) * TILE, (ty + 1) * TILE];
+            let mut hasher = DefaultHasher::new();
+            scale.to_bits().hash(&mut hasher);
+            let mut rect = [i64::MAX, i64::MAX, i64::MIN, i64::MIN];
+            let mut reaching = vec![];
+            for (i, (b, key)) in parts.iter().enumerate() {
+                if b[0] < cell[2] && b[2] > cell[0] && b[1] < cell[3] && b[3] > cell[1] {
+                    key.hash(&mut hasher);
+                    rect = [
+                        rect[0].min(b[0]),
+                        rect[1].min(b[1]),
+                        rect[2].max(b[2]),
+                        rect[3].max(b[3]),
+                    ];
+                    reaching.push(i);
+                }
+            }
+            if reaching.is_empty() {
+                continue;
+            }
+            let rect = [
+                rect[0].max(cell[0]),
+                rect[1].max(cell[1]),
+                rect[2].min(cell[2]),
+                rect[3].min(cell[3]),
+            ];
+            rect.hash(&mut hasher);
+            tiles.push(Tile {
+                key: hasher.finish(),
+                rect,
+                parts: reaching,
+            });
+        }
+    }
+    tiles
+}
+
+/// Draw a run of consecutive model primitives as the tiles that show.
 pub(super) fn draw(
     frame: &mut layered::Frame<'_>,
     run: &[Primitive],
@@ -45,82 +152,44 @@ pub(super) fn draw(
     bounds: Rectangle,
     opacity: f32,
 ) {
-    let (lo, hi) = scene::bounds(run);
-    let (a, b) = (camera.screen(lo, bounds), camera.screen(hi, bounds));
-    let whole = Rectangle::new(a, Size::new(b.x - a.x, b.y - a.y));
-    let (area, origin, clipped) = if whole.area() * OVERSAMPLE * OVERSAMPLE <= MAX_PIXELS {
-        (whole, lo, false)
-    } else {
-        let Some(visible) = whole.intersection(&Rectangle::with_size(bounds.size())) else {
-            return;
-        };
-        (visible, camera.world(visible.position(), bounds), true)
-    };
     let scale = camera.zoom * OVERSAMPLE;
-    let width = (area.width * OVERSAMPLE).ceil().max(1.);
-    let height = (area.height * OVERSAMPLE).ceil().max(1.);
-    let mut hasher = DefaultHasher::new();
-    // Debug output names every coordinate and colour exactly.
-    format!("{run:?}").hash(&mut hasher);
-    scale.to_bits().hash(&mut hasher);
-    if clipped {
-        [origin.x, origin.y, width, height]
-            .map(f32::to_bits)
-            .hash(&mut hasher);
-    }
-    let key = hasher.finish();
-    let tiles = IMAGES.with_borrow_mut(|images| {
-        let tiles = match images.iter().position(|(k, _)| *k == key) {
-            Some(i) => images.remove(i).1,
-            None => tiles(run, origin, scale, width as u32, height as u32),
-        };
-        images.insert(0, (key, tiles.clone()));
-        images.truncate(CACHED);
-        tiles
-    });
-    // Snapped to whole device pixels, so the tiles are not resampled.
-    let at = Point::new(
-        (area.x * OVERSAMPLE).round() / OVERSAMPLE,
-        (area.y * OVERSAMPLE).round() / OVERSAMPLE,
+    let tiles = plan(run, camera, bounds);
+    let Some([ox, oy, ..]) = tiles.first().map(|tile| tile.rect) else {
+        return;
+    };
+    // Snapped to whole device pixels once, so the tiles are not resampled
+    // and meet exactly.
+    let world = |x: i64, y: i64| World::new(x as f32 / scale, y as f32 / scale);
+    let anchor = camera.screen(world(ox, oy), bounds);
+    let anchor = Point::new(
+        (anchor.x * OVERSAMPLE).round() / OVERSAMPLE,
+        (anchor.y * OVERSAMPLE).round() / OVERSAMPLE,
     );
+    let logical = |v: i64| v as f32 / OVERSAMPLE;
     frame.split();
-    for ([x, y, w, h], handle) in tiles {
-        let device = |v: u32| v as f32 / OVERSAMPLE;
+    for tile in tiles {
+        let [x0, y0, x1, y1] = tile.rect;
+        let size = [(x1 - x0) as u32, (y1 - y0) as u32];
+        let render = || {
+            let part: Vec<_> = tile
+                .parts
+                .iter()
+                .filter_map(|&i| run.get(i).cloned())
+                .collect();
+            pixels(&part, world(x0, y0), scale, size[0], size[1])
+        };
+        let Some(handle) = TILES.with_borrow_mut(|cache| cache.get(tile.key, size, render)) else {
+            continue;
+        };
         frame.draw_image(
             Rectangle::new(
-                at + iced::Vector::new(device(x), device(y)),
-                Size::new(device(w), device(h)),
+                anchor + iced::Vector::new(logical(x0 - ox), logical(y0 - oy)),
+                Size::new(logical(x1 - x0), logical(y1 - y0)),
             ),
             canvas::Image::new(handle).opacity(opacity),
         );
     }
     frame.split();
-}
-
-/// `run` from `origin` at `scale` pixels per drawing unit, as image tiles.
-fn tiles(run: &[Primitive], origin: World, scale: f32, width: u32, height: u32) -> Vec<Tile> {
-    let Some(pixels) = pixels(run, origin, scale, width, height) else {
-        return vec![];
-    };
-    let row = width as usize * 4;
-    let mut tiles = vec![];
-    for y in (0..height).step_by(TILE as usize) {
-        for x in (0..width).step_by(TILE as usize) {
-            let (w, h) = (TILE.min(width - x), TILE.min(height - y));
-            let tile: Vec<u8> = (y..y + h)
-                .flat_map(|line| {
-                    let start = line as usize * row + x as usize * 4;
-                    pixels
-                        .get(start..start + w as usize * 4)
-                        .unwrap_or_default()
-                        .iter()
-                        .copied()
-                })
-                .collect();
-            tiles.push(([x, y, w, h], Handle::from_rgba(w, h, tile)));
-        }
-    }
-    tiles
 }
 
 /// Straight-alpha RGBA pixels of `run`, rendered as figure export does.
