@@ -65,7 +65,8 @@ const ICON: Size = Size::new(16., 14.);
 
 impl Bar {
     /// Centred above the selection's box and its rotation handle, or below it
-    /// when there is no room; never over the selection.
+    /// when there is no room; when neither fits it stays inside the paper,
+    /// over the selection.
     fn new(selection: Rectangle, paper: Size) -> Self {
         let font = |label: &str, size: f32| crate::app::text_width(label, size);
         let label = font("Show as", 11.5) + 14.;
@@ -74,10 +75,12 @@ impl Bar {
         let height = 2. * BAR_PADDING + BUTTON_HEIGHT;
         // The box's grips sit 12 px out and its rotation handle 34 px above them.
         let above = selection.y - 12. - 34. - 10. - height;
+        let below = selection.y + selection.height + 12. + 8.;
+        let lowest = (paper.height - height - 4.).max(4.);
         let y = if above >= 4. {
             above
         } else {
-            selection.y + selection.height + 12. + 8.
+            below.min(lowest)
         };
         let x = (selection.center_x() - width / 2.).clamp(4., (paper.width - width - 4.).max(4.));
         let panel = Rectangle::new(Point::new(x, y), Size::new(width, height));

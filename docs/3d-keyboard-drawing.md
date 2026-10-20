@@ -16,8 +16,9 @@ Select one molecule and choose **2D**, **3D** or **Both** on the small
 (also **Show as** in the right-click menu and **Show as 3D model** in the
 command palette). The bar shows while a whole molecule is selected with Select
 or Lasso and hides during any drag; it sits above the selection box and its
-rotation handle, or below them at the top of the window. **3D** draws the molecule as a ball & stick model in
-place of its drawing, **Both** puts the model one bond length to its right, and
+rotation handle, or below them at the top of the window, and when neither fits
+it stays inside the canvas over the selection. **3D** draws the molecule as a
+ball & stick model in place of its drawing, **Both** puts the model one bond length to its right, and
 **2D** shows the drawing again. The first switch generates the conformer in the
 background with the same worker as 3D optimize (fresh ETKDG conformers, then
 MMFF94s); a result for a drawing that changed meanwhile is discarded. Later
