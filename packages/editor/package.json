@@ -1,0 +1,24 @@
+{
+  "name": "@reshiki/editor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ReShiki in the browser: structure conversion and rendering in WebAssembly",
+  "license": "MIT OR Apache-2.0",
+  "files": [
+    "src",
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./reshiki_web_bg.wasm": "./dist/wasm/reshiki_web_bg.wasm"
+  },
+  "scripts": {
+    "build": "../../scripts/build_wasm.sh",
+    "test": "bun test"
+  }
+}
