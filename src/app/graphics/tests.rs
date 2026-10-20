@@ -340,16 +340,17 @@ fn click_lone_pairs_and_manual_marks_have_separate_exact_history_steps() {
     assert_undo_redo(&mut app, &original);
     let before_drag = app.tab.doc.clone();
     app.tool = Tool::Graphic(pair);
+    // Option/Alt or Shift frees the drag from the orbit.
     app.edit(crate::canvas::Edit::Graphic(
         Point::default(),
         Point::new(8., -15.),
-        false,
+        true,
     ));
     assert_eq!(app.tab.doc.atom(id).unwrap().marks[0], auto);
-    assert_eq!(
-        app.tab.doc.atom(id).unwrap().marks[1].offset,
-        Point::new(8., -15.)
-    );
+    let dragged = &app.tab.doc.atom(id).unwrap().marks[1];
+    assert_eq!(dragged.offset, Point::new(8., -15.));
+    let tangent = (-15_f32).atan2(8.).to_degrees() + 90.;
+    assert!((dragged.angle - tangent).abs() < 1e-3, "{}", dragged.angle);
     assert_eq!(app.tab.doc.atom(id).unwrap().label_h, 1);
     assert_undo_redo(&mut app, &before_drag);
     assert_eq!(
