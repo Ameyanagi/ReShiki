@@ -37,6 +37,10 @@ fn readout_wraps_to_plus_minus_180() {
     ] {
         assert_eq!(wrap(raw), shown, "{raw}");
     }
+    assert!(
+        wrap(-0.).is_sign_positive(),
+        "a horizontal drag reads X +0°"
+    );
 }
 
 #[test]

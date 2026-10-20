@@ -40,9 +40,10 @@ impl TiltDrag {
     }
 }
 
-/// The equivalent angle in −180…+180°, as shown in the live readout.
+/// The equivalent angle in −180…+180°, as shown in the live readout
+/// (never −0, so an untouched axis reads +0°).
 pub(crate) fn wrap(degrees: f32) -> f32 {
-    let degrees = degrees.rem_euclid(360.);
+    let degrees = degrees.rem_euclid(360.) + 0.;
     if degrees > 180. {
         degrees - 360.
     } else {
