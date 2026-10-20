@@ -102,7 +102,7 @@ pub async fn execute(
     // Retain the caller snapshot. Large text/document clones and chemical work
     // belong on the blocking executor; only the bounded InChI exchange is async.
     let prepared =
-        tokio::task::spawn_blocking(move || prepare(Arc::unwrap_or_clone(request))).await??;
+        crate::task::spawn_blocking(move || prepare(Arc::unwrap_or_clone(request))).await??;
     let prepared = match prepared {
         Preparation::Complete(prepared) => prepared,
         Preparation::Drawing(document, warnings) => {
@@ -118,7 +118,7 @@ pub async fn execute(
             let reader = match config.clone() {
                 Some(config) => config,
                 None => native_response::Config::new(
-                    tokio::task::spawn_blocking(helper::discover)
+                    crate::task::spawn_blocking(helper::discover)
                         .await?
                         .map_err(native_response::Error::Discovery)?,
                 ),
@@ -127,7 +127,7 @@ pub async fn execute(
                 .await
                 .map_err(native_response::Error::Helper)?;
             config = Some(reader);
-            Box::new(tokio::task::spawn_blocking(move || prepare_inchi(output)).await??)
+            Box::new(crate::task::spawn_blocking(move || prepare_inchi(output)).await??)
         }
         Preparation::Deferred(reason) => return Ok(Outcome::Deferred(reason)),
     };

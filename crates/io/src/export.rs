@@ -94,7 +94,7 @@ pub async fn publication(
     let attachment_notice = pages
         .then(|| crate::arrow_anchors::export_notice(&doc))
         .flatten();
-    let figure = tokio::task::spawn_blocking(move || {
+    let figure = crate::task::spawn_blocking(move || {
         if pages {
             pages_pdf(&doc).map(|bytes| Figure {
                 bytes,

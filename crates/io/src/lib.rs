@@ -37,6 +37,7 @@ pub mod geometry;
 pub mod native_windows;
 pub mod nmr;
 pub mod recovery;
+mod task;
 pub mod template_library;
 
 /// The repository root, from which the development reference resolves its

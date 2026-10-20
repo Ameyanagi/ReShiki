@@ -35,6 +35,10 @@ pub fn filename() -> &'static str {
 /// Development builds can explicitly select an audited, already built helper.
 /// An invalid override is an error; it never silently falls back to another file.
 pub fn discover() -> Result<PathBuf, Error> {
+    // The browser runs the kernel in-process (generator::exchange).
+    if cfg!(target_arch = "wasm32") {
+        return Ok(PathBuf::new());
+    }
     let application = std::env::current_exe().map_err(Error::Application)?;
     resolve(
         &application,

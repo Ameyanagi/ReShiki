@@ -1,13 +1,17 @@
 //! One immutable native request per disposable process. Drop requests child killing;
 //! Tokio does not await termination when the request future is dropped.
 use super::{Conformer, Error, ForceField, Optimized, Pin, Point3, Prepared, wire};
-use std::{path::PathBuf, process::Stdio, time::Duration};
+#[cfg(not(target_arch = "wasm32"))]
+use std::process::Stdio;
+use std::{path::PathBuf, time::Duration};
+#[cfg(not(target_arch = "wasm32"))]
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
     process::Command,
     time::Instant,
 };
 
+#[cfg(not(target_arch = "wasm32"))]
 const MAX_STDERR_BYTES: usize = 64 * 1024;
 pub(super) const MAX_HEAP_BYTES: usize = 512 * 1024 * 1024;
 pub(super) const MAX_TIMEOUT: Duration = Duration::from_secs(120);
@@ -50,6 +54,8 @@ impl Limits {
 
 #[derive(Clone, Debug, Default)]
 pub struct Client {
+    // The browser solves in-process and never launches it.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     executable: Option<PathBuf>,
     pub limits: Limits,
 }
@@ -179,26 +185,34 @@ impl Client {
             wire::MAX_REQUEST_BYTES,
         )
         .map_err(Error::Protocol)?;
-        let executable = match &self.executable {
-            Some(path) => path.clone(),
-            None => std::env::current_exe()?,
+        #[cfg(not(target_arch = "wasm32"))]
+        let (_reservation, bytes) = {
+            let executable = match &self.executable {
+                Some(path) => path.clone(),
+                None => std::env::current_exe()?,
+            };
+            // Waiting for a shared memory reservation consumes this operation's
+            // deadline and remains cancellable with the async future.
+            let budget = reshiki_process_heap::policy::Capabilities::detect().resolve();
+            let reserved_bytes = self
+                .limits
+                .heap_bytes
+                .checked_add(32 * 1024 * 1024)
+                .ok_or_else(|| Error::Invalid("Geometry reservation size overflow".into()))?;
+            if reserved_bytes > budget.reservation_ceiling() {
+                return Err(Error::Invalid(
+                    "Insufficient available memory for this geometry budget".into(),
+                ));
+            }
+            let deadline = Instant::now() + self.limits.timeout;
+            let reservation =
+                reserve_until(deadline, || budget.try_reserve(reserved_bytes)).await?;
+            (reservation, exchange(executable, &request, deadline).await?)
         };
-        // Waiting for a shared memory reservation consumes this operation's
-        // deadline and remains cancellable with the async future.
-        let budget = reshiki_process_heap::policy::Capabilities::detect().resolve();
-        let reserved_bytes = self
-            .limits
-            .heap_bytes
-            .checked_add(32 * 1024 * 1024)
-            .ok_or_else(|| Error::Invalid("Geometry reservation size overflow".into()))?;
-        if reserved_bytes > budget.reservation_ceiling() {
-            return Err(Error::Invalid(
-                "Insufficient available memory for this geometry budget".into(),
-            ));
-        }
-        let deadline = Instant::now() + self.limits.timeout;
-        let _reservation = reserve_until(deadline, || budget.try_reserve(reserved_bytes)).await?;
-        let bytes = exchange(executable, &request, deadline).await?;
+        // The browser has no worker processes, so the request is solved in-process
+        // through the same framing; the timeout and heap budget do not apply.
+        #[cfg(target_arch = "wasm32")]
+        let bytes = super::worker::respond(&request).map_err(Error::Protocol)?;
         let response: wire::Response =
             wire::decode(&bytes, wire::MAX_RESPONSE_BYTES).map_err(Error::Protocol)?;
         if response.version != reshiki_geometry::RDKIT_VERSION {
@@ -287,6 +301,7 @@ impl Client {
 
 // Return ownership to execute so admission remains charged through response
 // decoding and validation, just as it is while the child is running.
+#[cfg(not(target_arch = "wasm32"))]
 async fn reserve_until<R>(
     deadline: Instant,
     mut try_reserve: impl FnMut() -> Option<R>,
@@ -307,6 +322,7 @@ async fn reserve_until<R>(
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 async fn read_limited(
     mut stream: impl AsyncRead + Unpin,
     limit: usize,
@@ -330,6 +346,7 @@ async fn read_limited(
         );
     }
 }
+#[cfg(not(target_arch = "wasm32"))]
 async fn exchange(
     executable: PathBuf,
     request: &[u8],
@@ -341,6 +358,7 @@ async fn exchange(
     exchange_with_deadline(executable, request, tokio::time::sleep_until(deadline)).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 async fn exchange_with_deadline(
     executable: PathBuf,
     request: &[u8],

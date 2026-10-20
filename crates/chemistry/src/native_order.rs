@@ -1,10 +1,11 @@
 //! Checked copies of the pinned platform's C++ comparison-sort policies.
 //! Used where equal keys affect chemical output, including traversal and rings.
-#[cfg(target_os = "macos")]
+// The browser follows the macOS policy, so its output matches that desktop.
+#[cfg(any(target_os = "macos", target_arch = "wasm32"))]
 mod apple_sort;
 #[cfg(target_os = "linux")]
 mod linux_sort;
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_arch = "wasm32"))]
 mod sort_common;
 #[cfg(all(
     test,
@@ -20,7 +21,12 @@ pub enum Error {
     Invalid,
     #[error("Comparison-sort resource limit exceeded")]
     Limit,
-    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "macos",
+        target_os = "windows",
+        target_arch = "wasm32"
+    )))]
     #[error("No chemistry comparison-sort policy for this platform")]
     UnsupportedPlatform,
 }
@@ -38,11 +44,16 @@ pub fn indices(keys: &[i32]) -> Result<Vec<usize>, Error> {
     let mut entries: Vec<_> = keys.iter().enumerate().map(|(i, &key)| (key, i)).collect();
     #[cfg(target_os = "linux")]
     linux_sort::sort(&mut entries)?;
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_arch = "wasm32"))]
     apple_sort::sort(&mut entries)?;
     #[cfg(target_os = "windows")]
     windows_sort::sort(&mut entries)?;
-    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "macos",
+        target_os = "windows",
+        target_arch = "wasm32"
+    )))]
     return Err(Error::UnsupportedPlatform);
     Ok(entries.into_iter().map(|(_, i)| i).collect())
 }

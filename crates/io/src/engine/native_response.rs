@@ -126,13 +126,13 @@ pub async fn analyze_prepared(
     config: Option<Config>,
 ) -> Result<Analysis, Error> {
     let source = Arc::clone(&molecule);
-    let (smiles, input) = tokio::task::spawn_blocking(move || {
+    let (smiles, input) = crate::task::spawn_blocking(move || {
         molecular::validate_molecule(&source)?;
         prepare_identifiers(&source, false)
     })
     .await??;
     let inchi = generate_inchi(input.as_ref(), config).await?;
-    tokio::task::spawn_blocking(move || complete_analysis(&molecule, smiles, inchi)).await?
+    crate::task::spawn_blocking(move || complete_analysis(&molecule, smiles, inchi)).await?
 }
 
 /// Default-engine route. Preparation matches the retained bridge: only empty
@@ -147,7 +147,7 @@ pub(crate) async fn execute(request: Request) -> Result<Response, Error> {
             .as_ref()
             .is_some_and(crate::attachments::present)
     {
-        return tokio::task::spawn_blocking(move || {
+        return crate::task::spawn_blocking(move || {
             let document = request.document.as_ref().ok_or(Error::MissingDocument)?;
             let (output, stereo_fallback) = if request.format.as_deref() == Some("mol") {
                 molfile::write_document_with_fallback(document)?
@@ -174,7 +174,7 @@ pub(crate) async fn execute(request: Request) -> Result<Response, Error> {
     }
     let request = Arc::new(request);
     let source = Arc::clone(&request);
-    let prepared = tokio::task::spawn_blocking(move || {
+    let prepared = crate::task::spawn_blocking(move || {
         let Some(document) = source.document.as_ref().filter(|document| {
             !document.atoms.is_empty() || source.operation == "finish_abbreviation"
         }) else {
@@ -207,7 +207,7 @@ pub(crate) async fn execute(request: Request) -> Result<Response, Error> {
         && request.operation == "export"
         && matches!(request.format.as_deref(), Some("cdxml" | "cdx"))
     {
-        return tokio::task::spawn_blocking(move || {
+        return crate::task::spawn_blocking(move || {
             let document = request.document.as_ref().ok_or(Error::MissingDocument)?;
             let output = encode_drawing(document, &request, true)?;
             Ok(Response {
@@ -234,9 +234,9 @@ async fn build_with_config(
 ) -> Result<Response, Error> {
     let source = Arc::clone(&request);
     let state = prepared.clone();
-    let draft = tokio::task::spawn_blocking(move || begin(&source, state.as_deref())).await??;
+    let draft = crate::task::spawn_blocking(move || begin(&source, state.as_deref())).await??;
     let inchi = generate_inchi(draft.inchi.as_ref(), config).await?;
-    tokio::task::spawn_blocking(move || finish(&request, prepared.as_deref(), draft, inchi)).await?
+    crate::task::spawn_blocking(move || finish(&request, prepared.as_deref(), draft, inchi)).await?
 }
 
 async fn generate_inchi(
@@ -246,7 +246,7 @@ async fn generate_inchi(
     if let Some(input) = input {
         let config = match config {
             Some(config) => config,
-            None => Config::new(tokio::task::spawn_blocking(helper::discover).await??),
+            None => Config::new(crate::task::spawn_blocking(helper::discover).await??),
         };
         // Native warning/error statuses are not transport failures. Like the
         // original MolToInchi wrapper, retain the returned identifier (possibly
