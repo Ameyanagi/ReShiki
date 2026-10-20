@@ -33,19 +33,63 @@ pub(super) fn tangent(mut mark: AtomMark, degrees: f32) -> AtomMark {
 }
 
 /// The mark centered in each direction (degrees) at the click gap outside
-/// the owner's label ink, so the gap stays even around wide labels.
+/// the owner's label ink, and whether it there clears the atom's bonds.
+///
+/// Each glyph counts as the rounded rectangle `text_ink_shapes` fits to it,
+/// so the gap stays even around round letters like O yet clears the corners
+/// of N or H. Gaps are measured between convex outlines: the label's (so OH
+/// reads as one rounded shape and the orbit never dips between glyphs) and
+/// the mark's (so a lone pair keeps the gap like the box a click measures).
 pub(super) fn orbit(
     doc: &Document,
     atom: &Atom,
     mark: &AtomMark,
     directions: impl IntoIterator<Item = f32>,
-) -> Vec<AtomMark> {
+) -> Vec<(AtomMark, bool)> {
     let (font_pt, gap) = font_gap(doc, atom);
-    let ink = crate::scene::atom_label_ink_boxes(atom, doc);
-    let nearest = nearest_ink(&ink, atom.position);
-    let anchor: Vec<_> = ink
+    let style = &doc.drawing_style;
+    // Separations are found along these normals, 1° apart.
+    let normals: Vec<(f32, f32)> = (0..360)
+        .map(|i| {
+            let (s, c) = (i as f32).to_radians().sin_cos();
+            (c, s)
+        })
+        .collect();
+    let dot = |(c, s): (f32, f32), q: Point| q.x * c + q.y * s;
+    // How far the label's outline reaches along each normal.
+    let shapes = crate::scene::atom_label_ink_shapes(atom, doc);
+    let label: Vec<f32> = normals
         .iter()
-        .filter(|&&bounds| box_distance(bounds, atom.position) <= nearest + 0.001)
+        .map(|&(c, s)| {
+            if shapes.is_empty() {
+                return dot((c, s), atom.position) + style.world(font_pt * 0.35);
+            }
+            shapes
+                .iter()
+                .map(|&((lo, hi), radius)| {
+                    let (lo, hi) = (lo.offset(radius, radius), hi.offset(-radius, -radius));
+                    (lo.x * c).max(hi.x * c) + (lo.y * s).max(hi.y * s) + radius
+                })
+                .fold(f32::NEG_INFINITY, f32::max)
+        })
+        .collect();
+    // Drawn bond spans with their half widths, including parallel lines.
+    let spacing = style.bond_length_world * style.bond_spacing_ratio;
+    let bonds: Vec<_> = doc
+        .bonds
+        .iter()
+        .filter(|bond| bond.a == atom.id || bond.b == atom.id)
+        .filter_map(|bond| {
+            let (a, b) = crate::scene::bond_segment(doc, bond, None)?;
+            let wide = bond.stereo.is_some() || bond.display != "plain";
+            let width = style.world(if wide {
+                style.bold_width_pt.max(style.line_width_pt)
+            } else {
+                style.line_width_pt
+            });
+            let parallel = matches!(bond.order, 2 | 3 | 4 | 6 | 7);
+            Some((a, b, width * 0.5 + if parallel { spacing } else { 0. }))
+        })
         .collect();
     let mut single = atom.clone();
     single.position = Point::new(0., 0.);
@@ -56,71 +100,50 @@ pub(super) fn orbit(
             let mut placed = tangent(mark.clone(), degrees);
             placed.offset = Point::new(0., 0.);
             single.marks = vec![placed.clone()];
-            let clearance = if ink.is_empty() {
-                doc.drawing_style.world(font_pt * 0.35)
-            } else {
-                anchor
-                    .iter()
-                    .filter_map(|&&bounds| ray_exit(bounds, atom.position, c, s))
-                    .fold(0., f32::max)
-            };
-            let parts = styled_mark_parts(&single, &doc.drawing_style);
-            // How far the mark's own ink reaches back toward the atom.
-            let reach = parts
+            let parts = styled_mark_parts(&single, style);
+            let pad = parts
                 .iter()
-                .flat_map(|part| {
-                    let pad = part.style.width() * 0.5;
-                    flattened(&part.commands)
-                        .into_iter()
-                        .flatten()
-                        .map(move |q| pad - q.x * c - q.y * s)
-                })
+                .map(|part| part.style.width() * 0.5)
                 .fold(0., f32::max);
-            let mut radius = clearance + gap + reach;
-            // Each part's box keeps the same gap from every glyph: the anchor's
-            // corners on diagonals, and hydrogens, counts and isotopes beside it.
-            let shapes: Vec<_> = parts
+            let ink: Vec<Point> = parts
                 .iter()
-                .map(|part| bounds(std::slice::from_ref(part)))
+                .flat_map(|part| flattened(&part.commands))
+                .flatten()
                 .collect();
-            let margin = gap * 0.999;
-            let boxes = ink
+            // How far the mark reaches back against each normal.
+            let back: Vec<f32> = normals
                 .iter()
-                .flat_map(|&glyph| shapes.iter().map(move |&shape| (glyph, shape)));
-            while let Some(exit) = boxes.clone().find_map(|((lo, hi), (shape_lo, shape_hi))| {
-                let grown = (
-                    lo.offset(-shape_hi.x - margin, -shape_hi.y - margin),
-                    hi.offset(margin - shape_lo.x, margin - shape_lo.y),
-                );
-                let center = atom.position.offset(radius * c, radius * s);
-                inside(grown, center)
-                    .then(|| ray_exit(grown, atom.position, c, s))
-                    .flatten()
-            }) {
-                // Rounding can leave the center a hair inside; always move out.
-                radius = exit.max(radius) + 1e-3;
-            }
+                .map(|&n| {
+                    ink.iter()
+                        .map(|&q| -dot(n, q))
+                        .fold(f32::NEG_INFINITY, f32::max)
+                })
+                .collect();
+            // Centered at p, the mark clears the label along normal n by
+            // n·p - back - label; along the ray that first reaches the gap at:
+            let need = gap + pad;
+            let radius = normals
+                .iter()
+                .zip(back.iter().zip(&label))
+                .filter(|&(&n, _)| dot(n, Point::new(c, s)) > 1e-3)
+                .map(|(&n, (back, label))| {
+                    (need + back + label - dot(n, atom.position)) / dot(n, Point::new(c, s))
+                })
+                .fold(f32::INFINITY, f32::min)
+                .max(0.);
             placed.offset = Point::new(radius * c, radius * s);
-            placed
+            let center = atom.position.offset(placed.offset.x, placed.offset.y);
+            let clear = bonds.iter().all(|&(a, b, half)| {
+                normals
+                    .iter()
+                    .zip(&back)
+                    .map(|(&n, back)| dot(n, center) - back - dot(n, a).max(dot(n, b)))
+                    .fold(f32::NEG_INFINITY, f32::max)
+                    >= need + half
+            });
+            (placed, clear)
         })
         .collect()
-}
-
-/// Where a ray from `from` along (c, s) leaves the box, if it crosses it.
-fn ray_exit((lo, hi): Box2, from: Point, c: f32, s: f32) -> Option<f32> {
-    let (mut enter, mut exit) = (0_f32, f32::INFINITY);
-    for (p, d, lo, hi) in [(from.x, c, lo.x, hi.x), (from.y, s, lo.y, hi.y)] {
-        if d.abs() < 1e-6 {
-            if p < lo || p > hi {
-                return None;
-            }
-        } else {
-            let (a, b) = ((lo - p) / d, (hi - p) / d);
-            enter = enter.max(a.min(b));
-            exit = exit.min(a.max(b));
-        }
-    }
-    (exit >= enter).then_some(exit)
 }
 
 pub(super) fn lone_pair(doc: &Document, atom: &Atom, kind: MarkKind) -> (Point, f32) {
@@ -274,9 +297,6 @@ fn nearest_ink(ink: &[Box2], point: Point) -> f32 {
     ink.iter()
         .map(|&bounds| box_distance(bounds, point))
         .fold(f32::INFINITY, f32::min)
-}
-fn inside((lo, hi): Box2, point: Point) -> bool {
-    lo.x < point.x && point.x < hi.x && lo.y < point.y && point.y < hi.y
 }
 fn box_distance((lo, hi): Box2, point: Point) -> f32 {
     point.distance(Point::new(

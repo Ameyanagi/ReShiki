@@ -453,7 +453,8 @@ fn attach_inner(atom: &mut Atom, kind: SymbolKind, offset: Point) -> Result<(), 
 pub const MARK_ORBIT_STEP: f32 = 15.;
 
 /// The mark dragged to `to`. A plain drag orbits the atom in 15° steps,
-/// hugging its label at the click gap; `free` keeps the exact offset. Lone
+/// hugging its label at the click gap and skipping steps where the mark
+/// would touch one of the atom's bonds; `free` keeps the exact offset. Lone
 /// pairs turn tangent to the atom either way; other marks stay upright.
 pub fn orbit_mark(
     doc: &crate::document::Document,
@@ -470,26 +471,83 @@ pub fn orbit_mark(
             ..mark_placement::tangent(mark.clone(), degrees)
         };
     }
-    let snapped = (degrees / MARK_ORBIT_STEP).round() * MARK_ORBIT_STEP;
-    mark_placement::orbit(doc, atom, mark, [snapped]).remove(0)
+    let turn = |snap: &(AtomMark, bool)| {
+        let snapped = snap.0.offset.y.atan2(snap.0.offset.x).to_degrees();
+        let turn = (snapped - degrees).rem_euclid(360.);
+        turn.min(360. - turn)
+    };
+    let snaps = mark_placement::orbit(doc, atom, mark, orbit_snaps());
+    // With every step blocked, the nearest one still beats an exact offset.
+    snaps
+        .iter()
+        .filter(|(_, clear)| *clear)
+        .min_by(|a, b| turn(a).total_cmp(&turn(b)))
+        .or_else(|| snaps.iter().min_by(|a, b| turn(a).total_cmp(&turn(b))))
+        .map_or_else(|| mark.clone(), |(mark, _)| mark.clone())
 }
 
-/// The orbit a dragged mark follows and its snap positions, in world space.
+fn orbit_snaps() -> impl Iterator<Item = f32> {
+    (0..24).map(|i| i as f32 * MARK_ORBIT_STEP)
+}
+
+/// The orbit a dragged mark follows, as the runs clear of the atom's bonds,
+/// and its available snap positions, in world space. Both come from the
+/// placement `orbit_mark` commits, and every snap is a vertex of the orbit.
 pub fn mark_orbit_guide(
     doc: &crate::document::Document,
     atom: &Atom,
     mark: &AtomMark,
-) -> (Vec<Point>, Vec<Point>) {
-    let centers = |directions: Vec<f32>| -> Vec<Point> {
-        mark_placement::orbit(doc, atom, mark, directions)
-            .into_iter()
-            .map(|m| atom.position.offset(m.offset.x, m.offset.y))
-            .collect()
-    };
-    (
-        centers((0..=120).map(|i| i as f32 * 3.).collect()),
-        centers((0..24).map(|i| i as f32 * MARK_ORBIT_STEP).collect()),
-    )
+) -> (Vec<Vec<Point>>, Vec<Point>) {
+    let center = |m: &AtomMark| atom.position.offset(m.offset.x, m.offset.y);
+    let directions: Vec<f32> = (0..=120).map(|i| i as f32 * 3.).collect();
+    let snaps = directions
+        .iter()
+        .step_by(5)
+        .take(24)
+        .copied()
+        .collect::<Vec<_>>();
+    let mut orbit: Vec<_> = directions
+        .iter()
+        .copied()
+        .zip(mark_placement::orbit(doc, atom, mark, directions.clone()))
+        .collect();
+    // Where the mark swings fast round a corner, sample more finely.
+    let step = doc
+        .drawing_style
+        .world(doc.drawing_style.font_size_pt * 0.05);
+    for _ in 0..3 {
+        let between: Vec<f32> = orbit
+            .iter()
+            .zip(orbit.iter().skip(1))
+            .filter(|(a, b)| center(&a.1.0).distance(center(&b.1.0)) > step)
+            .map(|(a, b)| 0.5 * (a.0 + b.0))
+            .collect();
+        if between.is_empty() {
+            break;
+        }
+        orbit.extend(between.iter().copied().zip(mark_placement::orbit(
+            doc,
+            atom,
+            mark,
+            between.clone(),
+        )));
+        orbit.sort_by(|a, b| a.0.total_cmp(&b.0));
+    }
+    let mut runs = vec![Vec::new()];
+    for (_, (mark, clear)) in &orbit {
+        match (clear, runs.last_mut()) {
+            (true, Some(run)) => run.push(center(mark)),
+            (false, Some(run)) if !run.is_empty() => runs.push(Vec::new()),
+            _ => {}
+        }
+    }
+    runs.retain(|run| run.len() > 1);
+    let snaps = orbit
+        .iter()
+        .filter(|(degrees, (_, clear))| *clear && snaps.contains(degrees))
+        .map(|(_, (mark, _))| center(mark))
+        .collect();
+    (runs, snaps)
 }
 
 pub fn next_mark_id(atom: &Atom) -> Result<u64, String> {

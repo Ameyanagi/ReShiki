@@ -288,6 +288,85 @@ fn degrees_apart(a: f32, b: f32) -> f32 {
     turn.min(360. - turn)
 }
 
+/// Mark `index`'s ink points with their stroke half widths, and the owner's
+/// label glyphs as (core box, radius): the rounded rectangles
+/// `text_ink_shapes` fits to their outlines.
+#[allow(clippy::type_complexity)]
+fn mark_and_label(
+    doc: &Document,
+    id: u64,
+    index: usize,
+) -> (Vec<(Point, f32)>, Vec<((Point, Point), f32)>) {
+    let mut atom = doc.atom(id).unwrap().clone();
+    let shapes = crate::scene::atom_label_ink_shapes(&atom, doc)
+        .into_iter()
+        .map(|((lo, hi), radius)| {
+            (
+                (lo.offset(radius, radius), hi.offset(-radius, -radius)),
+                radius,
+            )
+        })
+        .collect();
+    atom.marks = vec![atom.marks[index].clone()];
+    let ink = styled_mark_parts(&atom, &doc.drawing_style)
+        .iter()
+        .flat_map(|part| {
+            let pad = part.style.width() * 0.5;
+            crate::graphics::flattened(&part.commands)
+                .into_iter()
+                .flatten()
+                .map(move |q| (q, pad))
+        })
+        .collect();
+    (ink, shapes)
+}
+
+/// Unit directions all the way round, for support-function distances.
+fn normals() -> impl Iterator<Item = (f32, f32)> {
+    (0..1440).map(|i| (i as f32 * 0.25).to_radians().sin_cos())
+}
+
+/// How far the label's outline (the convex hull of its rounded glyphs, so OH
+/// reads as one rounded shape) reaches along (c, s).
+fn label_reach(shapes: &[((Point, Point), f32)], (s, c): (f32, f32)) -> f32 {
+    shapes
+        .iter()
+        .map(|&((lo, hi), radius)| (lo.x * c).max(hi.x * c) + (lo.y * s).max(hi.y * s) + radius)
+        .fold(f32::NEG_INFINITY, f32::max)
+}
+
+/// The gap from mark `index`'s nearest ink to its owner's label outline.
+fn ink_gap(doc: &Document, id: u64, index: usize) -> f32 {
+    let (ink, shapes) = mark_and_label(doc, id, index);
+    let reach: Vec<_> = normals().map(|n| (n, label_reach(&shapes, n))).collect();
+    ink.iter()
+        .map(|&(q, pad)| {
+            reach
+                .iter()
+                .map(|&((s, c), h)| q.x * c + q.y * s - h)
+                .fold(f32::NEG_INFINITY, f32::max)
+                - pad
+        })
+        .fold(f32::INFINITY, f32::min)
+}
+
+/// The gap from the outline of mark `index` (the convex hull of its ink, so a
+/// lone pair counts as one mark) to its owner's label outline.
+fn outline_gap(doc: &Document, id: u64, index: usize) -> f32 {
+    let (ink, shapes) = mark_and_label(doc, id, index);
+    let pad = ink.iter().map(|&(_, pad)| pad).fold(0., f32::max);
+    normals()
+        .map(|(s, c)| {
+            let near = ink
+                .iter()
+                .map(|&(q, _)| q.x * c + q.y * s)
+                .fold(f32::INFINITY, f32::min);
+            near - label_reach(&shapes, (s, c))
+        })
+        .fold(f32::NEG_INFINITY, f32::max)
+        - pad
+}
+
 #[test]
 fn dragged_marks_orbit_every_snap_direction_hugging_the_label() {
     let mut doc = Document::default();
@@ -331,18 +410,10 @@ fn dragged_marks_orbit_every_snap_direction_hugging_the_label() {
             let mut placed = doc.clone();
             placed.atom_mut(id).unwrap().marks[0] = mark.clone();
             // The mark's ink clears the label (O and H) and hugs it.
-            let ink: Vec<_> = styled_mark_parts(placed.atom(id).unwrap(), &placed.drawing_style)
-                .iter()
-                .flat_map(|part| crate::graphics::flattened(&part.commands))
-                .flatten()
-                .collect();
-            let nearest = labels
-                .iter()
-                .flat_map(|&label| ink.iter().map(move |&q| rectangle_gap((q, q), label)))
-                .fold(f32::INFINITY, f32::min);
+            let nearest = ink_gap(&placed, id, 0);
             assert!(
                 nearest > DEFAULT.world(10. * 0.07) * 0.99,
-                "{kind} at {snapped}°"
+                "{kind} at {snapped}°: {nearest}"
             );
             assert!(
                 nearest < DEFAULT.world(10. * 0.3),
@@ -366,23 +437,17 @@ fn orbits_settle_and_keep_the_gap_from_label_corners() {
             }
             click(&mut doc, id, kind);
             let atom = doc.atom(id).unwrap();
-            let labels = crate::scene::atom_label_ink_boxes(atom, &doc);
             // OH with a bar at 324° used to loop forever on a rounding re-entry.
             let directions = (0..120).map(|i| i as f32 * 3.);
-            for (i, mark) in mark_placement::orbit(&doc, atom, &atom.marks[0], directions)
+            for (i, (mark, _)) in mark_placement::orbit(&doc, atom, &atom.marks[0], directions)
                 .into_iter()
                 .enumerate()
             {
                 let mut placed = doc.clone();
                 placed.atom_mut(id).unwrap().marks[0] = mark;
                 // N's stems reach its box corners, so diagonals must clear them.
-                for part in styled_mark_parts(placed.atom(id).unwrap(), &placed.drawing_style) {
-                    let shape = mark_placement::bounds(&[part]);
-                    for &label in &labels {
-                        let clear = rectangle_gap(shape, label);
-                        assert!(clear > gap, "{element} {kind} at {}°: {clear}", i * 3);
-                    }
-                }
+                let clear = ink_gap(&placed, id, 0);
+                assert!(clear > gap, "{element} {kind} at {}°: {clear}", i * 3);
             }
         }
     }
@@ -443,4 +508,145 @@ fn rotating_and_flipping_turn_lone_pairs_while_charges_stay_upright() {
     transform(&mut doc, &[id], Transform::FlipHorizontal);
     assert!(degrees_apart(angles(&doc).0, 135.) < 1e-3);
     assert_eq!(angles(&doc).1, 0.);
+}
+
+#[test]
+fn round_glyphs_round_their_corners_and_stemmed_ones_keep_them() {
+    for (element, round) in [("O", true), ("N", false), ("H", false)] {
+        let mut doc = Document::default();
+        let id = doc.add_atom(element, p(0., 0.));
+        doc.atom_mut(id).unwrap().no_implicit = true;
+        let shapes = crate::scene::atom_label_ink_shapes(doc.atom(id).unwrap(), &doc);
+        let &((lo, hi), radius) = shapes.first().unwrap();
+        let half = 0.5 * (hi.x - lo.x).min(hi.y - lo.y);
+        assert_eq!(radius > half * 0.6, round, "{element}: {radius} of {half}");
+    }
+}
+
+#[test]
+fn the_orbit_gap_to_the_label_ink_stays_even_all_the_way_round() {
+    for (label_h, kind) in [
+        (None, SymbolKind::CircleMinus),
+        (None, SymbolKind::LonePair),
+        (Some(("O", 1)), SymbolKind::LonePair),
+        (Some(("O", 1)), SymbolKind::LonePairBar),
+        (Some(("N", 2)), SymbolKind::LonePair),
+        (Some(("N", 2)), SymbolKind::Radical),
+    ] {
+        let (element, hydrogens) = label_h.unwrap_or(("O", 0));
+        let mut doc = Document::default();
+        let id = doc.add_atom(element, p(0., 0.));
+        let atom = doc.atom_mut(id).unwrap();
+        atom.label_h = hydrogens;
+        atom.no_implicit = hydrogens == 0;
+        attach(atom, kind, p(0., -20.)).unwrap();
+        let atom = doc.atom(id).unwrap();
+        let gaps: Vec<_> = (0..24)
+            .map(|step| {
+                let snapped = (step as f32 * MARK_ORBIT_STEP).to_radians();
+                let to = p(40. * snapped.cos(), 40. * snapped.sin());
+                let mut placed = doc.clone();
+                placed.atom_mut(id).unwrap().marks[0] =
+                    orbit_mark(&doc, atom, &atom.marks[0], to, false);
+                outline_gap(&placed, id, 0)
+            })
+            .collect();
+        let (low, high) = gaps
+            .iter()
+            .fold((f32::INFINITY, 0_f32), |(l, h), &g| (l.min(g), h.max(g)));
+        assert!(high <= low * 1.15, "{element}H{hydrogens} {kind}: {gaps:?}");
+    }
+}
+
+/// Methanol's O (as OH) with one mark of `kind` above it; C sits at 180°.
+fn methanol_o(kind: SymbolKind) -> (Document, u64) {
+    let mut doc = Document::default();
+    let c = doc.add_atom("C", p(-42., 0.));
+    let o = doc.add_atom("O", p(0., 0.));
+    doc.add_bond(c, o, 1, "plain");
+    doc.atom_mut(o).unwrap().label_h = 1;
+    attach(doc.atom_mut(o).unwrap(), kind, p(0., -20.)).unwrap();
+    (doc, o)
+}
+
+#[test]
+fn orbit_guides_are_smooth_and_carry_the_committed_snaps() {
+    for (element, hydrogens) in [("O", 0), ("O", 1), ("N", 2)] {
+        for kind in [SymbolKind::LonePair, SymbolKind::CircleMinus] {
+            let mut doc = Document::default();
+            let id = doc.add_atom(element, p(0., 0.));
+            let atom = doc.atom_mut(id).unwrap();
+            atom.label_h = hydrogens;
+            atom.no_implicit = hydrogens == 0;
+            attach(atom, kind, p(0., -20.)).unwrap();
+            let atom = doc.atom(id).unwrap();
+            let (runs, snaps) = mark_orbit_guide(&doc, atom, &atom.marks[0]);
+            assert_eq!((runs.len(), snaps.len()), (1, 24));
+            let run = &runs[0];
+            // Each dot is the position a drag there commits, on the guide.
+            for (step, snap) in snaps.iter().enumerate() {
+                let direction = (step as f32 * MARK_ORBIT_STEP).to_radians();
+                let to = p(40. * direction.cos(), 40. * direction.sin());
+                let mark = orbit_mark(&doc, atom, &atom.marks[0], to, false);
+                assert!(snap.distance(mark.offset) < 1e-4);
+                assert!(run.iter().any(|q| q.distance(*snap) < 1e-4));
+            }
+            // No zig-zag: no sample strays from the line through its neighbors.
+            let worst = run
+                .windows(3)
+                .map(|w| {
+                    let (dx, dy) = (w[2].x - w[0].x, w[2].y - w[0].y);
+                    ((w[1].x - w[0].x) * dy - (w[1].y - w[0].y) * dx).abs() / dx.hypot(dy)
+                })
+                .fold(0., f32::max);
+            assert!(worst < 0.4, "{element}H{hydrogens} {kind}: strays {worst}");
+        }
+    }
+}
+
+#[test]
+fn orbit_steps_that_would_touch_a_bond_are_skipped() {
+    let style = &DEFAULT;
+    let need = DEFAULT.world(10. * 0.07) * 0.99 + style.world(style.line_width_pt) * 0.5;
+    for kind in [SymbolKind::LonePair, SymbolKind::CircleMinus] {
+        let (doc, o) = methanol_o(kind);
+        let atom = doc.atom(o).unwrap();
+        let bond = crate::scene::bond_segment(&doc, &doc.bonds[0], None).unwrap();
+        let (_, snaps) = mark_orbit_guide(&doc, atom, &atom.marks[0]);
+        assert!(snaps.len() < 24, "{kind}: no step was blocked");
+        let mut directions = Vec::new();
+        for step in 0..24 {
+            let pointer = (step as f32 * MARK_ORBIT_STEP + 4.).to_radians();
+            let to = p(40. * pointer.cos(), 40. * pointer.sin());
+            let mark = orbit_mark(&doc, atom, &atom.marks[0], to, false);
+            let mut placed = doc.clone();
+            placed.atom_mut(o).unwrap().marks[0] = mark.clone();
+            let (ink, _) = mark_and_label(&placed, o, 0);
+            let clear = ink
+                .iter()
+                .map(|&(q, pad)| {
+                    // Sample the bond finely; its ends are trimmed at the label.
+                    (0..=200)
+                        .map(|i| {
+                            let t = i as f32 / 200.;
+                            q.distance(p(
+                                bond.0.x + (bond.1.x - bond.0.x) * t,
+                                bond.0.y + (bond.1.y - bond.0.y) * t,
+                            ))
+                        })
+                        .fold(f32::INFINITY, f32::min)
+                        - pad
+                })
+                .fold(f32::INFINITY, f32::min);
+            let direction = mark.offset.y.atan2(mark.offset.x).to_degrees();
+            assert!(clear >= need, "{kind} at {direction}°: {clear}");
+            assert!(snaps.iter().any(|s| s.distance(mark.offset) < 1e-4));
+            directions.push(direction.rem_euclid(360.).round() as i32);
+        }
+        // Toward C, the drag lands on the nearest clear step instead.
+        assert!(!directions.contains(&180), "{kind}: {directions:?}");
+        // A free drag still goes exactly where it is put.
+        let free = orbit_mark(&doc, atom, &atom.marks[0], p(-30., 0.), true);
+        assert_eq!(free.offset, p(-30., 0.));
+    }
 }
