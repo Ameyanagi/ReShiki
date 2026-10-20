@@ -114,7 +114,7 @@ impl App {
     }
 
     /// The display a still-current generation for these atoms will show.
-    fn pending(&self, atoms: &[u64]) -> Option<Display> {
+    pub(super) fn pending(&self, atoms: &[u64]) -> Option<Display> {
         self.tab
             .model_job
             .as_ref()

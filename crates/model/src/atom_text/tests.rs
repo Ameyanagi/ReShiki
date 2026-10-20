@@ -967,6 +967,249 @@ fn every_bundled_spelling_types_as_its_group() -> Result<(), Box<dyn std::error:
     Ok(())
 }
 
+/// CH3–C with the endpoint carbon's ID; the endpoint is the right-hand end.
+fn ethane() -> (Document, u64) {
+    ethane_with_end_at(42., 0.)
+}
+
+/// CH3–C with the endpoint carbon at `(x, y)` from the methyl.
+fn ethane_with_end_at(x: f32, y: f32) -> (Document, u64) {
+    let mut doc = Document::default();
+    let methyl = doc.add_atom("C", Point::new(0., 0.));
+    let endpoint = doc.add_atom("C", Point::new(x, y));
+    doc.add_bond(methyl, endpoint, 1, "plain");
+    (doc, endpoint)
+}
+
+#[test]
+fn nc_and_ocn_are_reverse_spellings_only_where_they_read_toward_the_bond()
+-> Result<(), Box<dyn std::error::Error>> {
+    for (typed, label) in [("NC", "CN"), ("OCN", "NCO")] {
+        // Left-hand end: the bond meets the last letter, as in NC–R.
+        let (doc, endpoint) = ethane_with_end_at(-42., 0.);
+        let left = apply(&doc, endpoint, typed, Mode::Auto)?;
+        let group = left.abbreviation(endpoint).ok_or(typed)?;
+        assert_eq!(
+            (group.label.as_str(), group.reverse_label.as_str()),
+            (label, typed)
+        );
+        assert!(!wrong_side(&doc, endpoint, typed));
+        // Right-hand end (R–NC is an isocyanide) and a vertical bond stay text.
+        for (x, y) in [(42., 0.), (0., 42.), (0., -42.)] {
+            let (doc, endpoint) = ethane_with_end_at(x, y);
+            assert!(wrong_side(&doc, endpoint, typed), "{typed} at {x},{y}");
+            let text = apply(&doc, endpoint, typed, Mode::Auto)?;
+            assert!(text.abbreviations.is_empty(), "{typed} at {x},{y}");
+            let atom = text.atom(endpoint).ok_or(typed)?;
+            assert_eq!(
+                (atom.element.as_str(), atom.display.variable.as_deref()),
+                ("*", Some(typed))
+            );
+            assert!(apply(&doc, endpoint, typed, Mode::Group).is_err());
+            assert!(
+                apply(&doc, endpoint, typed, Mode::Text)?
+                    .abbreviations
+                    .is_empty()
+            );
+        }
+    }
+    // Other reverse spellings have no second reading, so either end works.
+    for (x, y) in [(-42., 0.), (42., 0.), (0., 42.)] {
+        let (doc, endpoint) = ethane_with_end_at(x, y);
+        assert!(!wrong_side(&doc, endpoint, "MeO"));
+        let typed = apply(&doc, endpoint, "MeO", Mode::Auto)?;
+        assert_eq!(
+            typed.abbreviation(endpoint).map(|g| g.label.as_str()),
+            Some("OMe")
+        );
+    }
+    // The canonical labels are unaffected on any end.
+    let (doc, endpoint) = ethane();
+    assert!(!wrong_side(&doc, endpoint, "CN"));
+    assert!(
+        apply(&doc, endpoint, "CN", Mode::Auto)?
+            .abbreviation(endpoint)
+            .is_some()
+    );
+    Ok(())
+}
+
+#[test]
+fn user_groups_spelled_nc_or_ocn_are_made_on_either_end() -> Result<(), Box<dyn std::error::Error>>
+{
+    let errors = crate::chemistry::abbreviations::set_user_on_thread(
+        r#"{"format": 1, "groups": [
+            {"label": "Isn", "reverse": "NC", "smiles": "*[N+]#[C-]"},
+            {"label": "Cyt", "reverse": "OCN", "smiles": "*OC#N"}
+        ]}"#,
+    );
+    assert!(errors.is_empty(), "{errors:?}");
+    for (typed, label) in [("NC", "Isn"), ("OCN", "Cyt")] {
+        for (x, y) in [(-42., 0.), (42., 0.), (0., 42.)] {
+            let (doc, endpoint) = ethane_with_end_at(x, y);
+            assert!(!wrong_side(&doc, endpoint, typed), "{typed} at {x},{y}");
+            for mode in [Mode::Auto, Mode::Group] {
+                let typed_doc = apply(&doc, endpoint, typed, mode)?;
+                let group = typed_doc.abbreviation(endpoint).ok_or(typed)?;
+                assert_eq!(group.label, label, "{typed} at {x},{y}");
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn typed_reverse_spellings_make_their_group() -> Result<(), Box<dyn std::error::Error>> {
+    for (typed, label) in [
+        ("MeO", "OMe"),
+        ("TBSO", "OTBS"),
+        ("O2N", "NO2"),
+        ("ON", "NO"),
+        ("(HO)2B", "B(OH)2"),
+        ("(EtO)3Si", "Si(OEt)3"),
+    ] {
+        let (doc, endpoint) = ethane();
+        let reversed = apply(&doc, endpoint, typed, Mode::Auto)?;
+        let canonical = apply(&doc, endpoint, label, Mode::Auto)?;
+        let group = reversed.abbreviation(endpoint).ok_or(typed)?;
+        assert_eq!(
+            (group.label.as_str(), group.reverse_label.as_str()),
+            (label, typed)
+        );
+        assert_eq!(formula(&reversed)?, formula(&canonical)?, "{typed}");
+    }
+    // A lowered count keeps a reverse spelling chemical, as it does a label.
+    let (doc, endpoint) = ethane();
+    let lowered = [ScriptRun {
+        start: 3,
+        end: 4,
+        script: Script::Subscript,
+    }];
+    let typed = apply_with_scripts(&doc, endpoint, "MeO2C", &lowered, Mode::Auto)?;
+    let group = typed.abbreviation(endpoint).ok_or("MeO2C")?;
+    assert_eq!(
+        (group.label.as_str(), group.reverse_label.as_str()),
+        ("CO2Me", "MeO2C")
+    );
+    // Retyping the reverse spelling on that group keeps the same group.
+    let retyped = apply(&typed, endpoint, "MeO2C", Mode::Auto)?;
+    assert_eq!(formula(&retyped)?, formula(&typed)?);
+    assert_eq!(
+        retyped.abbreviation(endpoint).map(|g| g.label.as_str()),
+        Some("CO2Me")
+    );
+    Ok(())
+}
+
+/// Every bundled reverse spelling, typed on C–CH3, creates its group under
+/// the group's label, as the loop above does for labels and aliases.
+#[test]
+fn every_bundled_reverse_spelling_types_as_its_group() -> Result<(), Box<dyn std::error::Error>> {
+    let catalog = crate::chemistry::abbreviations::presets()?;
+    let mut checked = 0;
+    for preset in catalog.iter().filter(|p| !p.user) {
+        let reverse = preset.reverse_label.as_str();
+        if reverse.is_empty() {
+            continue;
+        }
+        assert!(!ELEMENTS.contains(&reverse), "{reverse} is an element");
+        assert!(
+            !matches!(hydride::parse(reverse), Ok(Some(_))),
+            "{reverse} is an atom label"
+        );
+        assert!(
+            description(reverse, &[], Mode::Auto).starts_with("A real chemical group"),
+            "{reverse}: {}",
+            description(reverse, &[], Mode::Auto)
+        );
+        // On a left-hand end, where a reverse spelling reads toward the bond.
+        let (doc, endpoint) = ethane_with_end_at(-42., 0.);
+        let labelled =
+            apply(&doc, endpoint, reverse, Mode::Auto).map_err(|e| format!("{reverse}: {e}"))?;
+        let group = labelled.abbreviation(endpoint).ok_or(reverse)?;
+        assert_eq!(
+            (group.label.as_str(), group.reverse_label.as_str()),
+            (preset.label.as_str(), reverse)
+        );
+        assert_eq!(group.members.len(), preset.atom_count(), "{reverse}");
+        assert_eq!(
+            formula(&labelled)?,
+            methyl_formula(&preset.formula),
+            "{reverse}"
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 214);
+    Ok(())
+}
+
+#[test]
+fn names_with_locants_never_reach_the_link_node_parser() -> Result<(), Box<dyn std::error::Error>> {
+    for name in ["2-thienyl", "propan-2-yl", "4-methoxyphenyl"] {
+        let (doc, endpoint) = ethane();
+        let result = apply(&doc, endpoint, name, Mode::Auto)?;
+        assert!(result.generic.links.is_empty(), "{name}");
+        let atom = result.atom(endpoint).ok_or(name)?;
+        assert_eq!(
+            (atom.element.as_str(), atom.display.variable.as_deref()),
+            ("*", Some(name))
+        );
+    }
+    // Every catalog name, typed as written, is suggested and stays text.
+    for name in crate::abbreviations::groups().flat_map(|g| g.names) {
+        let (doc, endpoint) = ethane();
+        let applied = apply(&doc, endpoint, &name, Mode::Auto);
+        if name.chars().count() > 32 {
+            assert_eq!(
+                applied.err().as_deref(),
+                Some("Enter 1–32 characters for the atom label")
+            );
+            continue;
+        }
+        let result = applied.map_err(|e| format!("{name}: {e}"))?;
+        assert!(result.generic.links.is_empty(), "{name}");
+        assert!(result.generic.alternatives.is_empty(), "{name}");
+        assert!(suggestion(&name, Mode::Auto).is_some(), "{name}");
+        assert!(
+            description(&name, &[], Mode::Auto).starts_with("Text on a dummy atom"),
+            "{name}: {}",
+            description(&name, &[], Mode::Auto)
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn catalog_names_suggest_their_labels_without_making_the_group() -> Result<(), String> {
+    assert_eq!(
+        suggestion("morpholino", Mode::Auto).as_deref(),
+        Some("Did you mean Morph?")
+    );
+    assert_eq!(
+        suggestion("Acetyl", Mode::Auto).as_deref(),
+        Some("Did you mean Ac or COMe?")
+    );
+    assert_eq!(suggestion("morpholino", Mode::Text), None);
+    assert_eq!(suggestion("Morph", Mode::Auto), None);
+    assert_eq!(suggestion("MOrph", Mode::Auto), None);
+    let (doc, endpoint) = ethane();
+    let typed = apply(&doc, endpoint, "morpholino", Mode::Auto)?;
+    assert!(typed.abbreviations.is_empty());
+    // Labels stay case-sensitive: MOrph is text, not the Morph group.
+    let typed = apply(&doc, endpoint, "MOrph", Mode::Auto)?;
+    assert!(typed.abbreviations.is_empty());
+    assert_eq!(
+        typed
+            .atom(endpoint)
+            .ok_or("atom")?
+            .display
+            .variable
+            .as_deref(),
+        Some("MOrph")
+    );
+    Ok(())
+}
+
 /// An `outside`-carbon chain on N(charge)–C(=O)–O–C(CH3)3.
 fn carbamate(outside: usize, charge: i32) -> Document {
     let mut doc = Document::default();

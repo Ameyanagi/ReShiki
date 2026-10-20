@@ -59,7 +59,7 @@ impl MoleculeCanvas<'_> {
                 Ok((self.doc.clone(), vec![]))
             } else {
                 let converted = if let Some(text) = source_text {
-                    reshiki::atom_text::text_to_atom(self.doc, *text)
+                    reshiki::atom_text::text_to_atom_toward(self.doc, *text, points.get(1).copied())
                         .map(|(doc, id)| (Cow::Owned(doc), Some(id)))
                 } else {
                     Ok((Cow::Borrowed(self.doc), *source))

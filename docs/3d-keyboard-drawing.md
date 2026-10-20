@@ -119,7 +119,7 @@ tetrahedral or double-bond stereochemistry.
 
 ## Force fields and calculation scope
 
-The backend uses the **Rust COSMolKit 0.3.0** implementations of ETKDGv3,
+The backend uses the **Rust COSMolKit 0.5.0** implementations of ETKDGv3,
 MMFF94, MMFF94s, and UFF, with its exact source revision pinned by Cargo.
 The installed application is one executable and requires no Python or RDKit
 runtime. The independent development comparison uses RDKit **2026.03.6**;

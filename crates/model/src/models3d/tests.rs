@@ -784,3 +784,19 @@ fn the_morph_starts_flat_on_the_drawing_and_ends_on_the_model() {
     let read = Document::from_json(&doc.file_json().unwrap()).unwrap();
     assert_eq!(read.models[0].morph, None);
 }
+
+#[test]
+fn hidden_indicator_owners_and_group_labels_are_out_of_reach() {
+    use crate::abbreviations::label_hit;
+    use crate::atom_labels::Owner;
+    let (mut doc, atoms, methane) = drawing();
+    doc.contract(&[atoms[2]], "OH", "HO").unwrap();
+    let o = doc.atom(atoms[2]).unwrap().position;
+    assert_eq!(label_hit(&doc, o, 1.), Some(atoms[2]));
+    assert!(Owner::BondStereo(atoms[0], atoms[1]).drawn(&doc));
+    assert!(set_display(&mut doc, 0, Display::ThreeD));
+    assert_eq!(label_hit(&doc, o, 1.), None);
+    assert!(!Owner::Number(atoms[0]).drawn(&doc));
+    assert!(!Owner::BondStereo(atoms[0], atoms[1]).drawn(&doc));
+    assert!(Owner::Number(methane).drawn(&doc));
+}

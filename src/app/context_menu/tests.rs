@@ -1120,3 +1120,18 @@ fn show_as_offers_the_views_the_molecule_is_not_in() {
     assert_eq!(enabled(&app, Page::Model, "3D model"), Some(true));
     assert_eq!(enabled(&app, Page::Model, "2D and 3D"), Some(true));
 }
+
+#[test]
+fn show_as_can_cancel_a_generation_in_flight() {
+    use reshiki::models3d::Display;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+    app.tab.selected = app.tab.doc.all_ids();
+    let _ = app.update(Message::Models3d(super::super::models3d::Action::Show(
+        Display::ThreeD,
+    )));
+    assert!(app.tab.model_job.is_some(), "generation started");
+    assert_eq!(enabled(&app, Page::Model, "2D drawing"), Some(true));
+    assert_eq!(enabled(&app, Page::Model, "3D model"), Some(false));
+}

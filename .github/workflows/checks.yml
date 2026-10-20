@@ -306,7 +306,7 @@ jobs:
       - name: Test panic unwinding through the measured application heap
         run: cargo test --release --locked -p reshiki-process-heap --no-default-features --features allocation-metrics --test global_allocator_unwind --target ${{ matrix.target }}
       - name: Test the Rust geometry crate with the locked COSMolKit source
-        run: cargo test --locked -p reshiki-geometry --features cosmolkit-core/op-contracts-strict --target ${{ matrix.target }}
+        run: cargo test --locked -p reshiki-geometry --features cosmolkit/op-contracts-strict --target ${{ matrix.target }}
       - name: Compare abbreviation layouts with the frozen RDKit captures
         # The catalog lays groups out with the native depiction port at run
         # time; this replaces the former per-platform capture workflow.

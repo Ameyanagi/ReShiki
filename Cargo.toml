@@ -68,7 +68,7 @@ reshiki-geometry = { path = "native/geometry" }
 reshiki-process = { path = "native/process" }
 accesskit = "=0.24.1"
 reshiki-process-heap = { path = "crates/process-heap" }
-cosmolkit-inchi = { version = "=0.3.0", git = "https://github.com/Ameyanagi/COSMolKit.git", rev = "252a1f3d6480fc4a0abcd51d76707f51f69b4406" }
+cosmolkit-inchi = { version = "=0.5.0", git = "https://github.com/Ameyanagi/COSMolKit.git", rev = "501f7b234031ba4d87461e14d0947c77a7d1a631" }
 reshiki-depict-math = { path = "crates/depict-math" }
 reshiki-chemistry = { path = "crates/chemistry" }
 reshiki-model = { path = "crates/model" }
@@ -125,8 +125,41 @@ sha2 = { version = "0.10.9", default-features = false, features = ["force-soft"]
 debug = 1
 
 # Keep interactive geometry within its worker deadline in development builds,
-# using the same optimized solver core as numerical tests.
+# using the same optimized solver crates (ETKDG, MMFF/UFF, model) as numerical tests.
+[profile.dev.package.cosmolkit]
+opt-level = 3
+
+[profile.dev.package.cosmolkit-alignment]
+opt-level = 3
+
+[profile.dev.package.cosmolkit-conformer]
+opt-level = 3
+
 [profile.dev.package.cosmolkit-core]
+opt-level = 3
+
+[profile.dev.package.cosmolkit-cx]
+opt-level = 3
+
+[profile.dev.package.cosmolkit-forcefields]
+opt-level = 3
+
+[profile.dev.package.cosmolkit-model]
+opt-level = 3
+
+[profile.dev.package.cosmolkit-ringdecomposer]
+opt-level = 3
+
+[profile.dev.package.cosmolkit-search]
+opt-level = 3
+
+[profile.dev.package.cosmolkit-smiles]
+opt-level = 3
+
+[profile.dev.package.cosmolkit-stereo]
+opt-level = 3
+
+[profile.dev.package.cosmolkit-types]
 opt-level = 3
 
 # RDKit's macOS ABI uses paired sincos. Compile only this non-inlined wrapper
@@ -139,8 +172,41 @@ opt-level = 1
 opt-level = 1
 
 # Numerical geometry tests exercise the application's fixed embedding deadline.
-# Optimize the chemistry dependency while retaining test assertions and checks.
+# Optimize the chemistry dependencies while retaining test assertions and checks.
+[profile.test.package.cosmolkit]
+opt-level = 3
+
+[profile.test.package.cosmolkit-alignment]
+opt-level = 3
+
+[profile.test.package.cosmolkit-conformer]
+opt-level = 3
+
 [profile.test.package.cosmolkit-core]
+opt-level = 3
+
+[profile.test.package.cosmolkit-cx]
+opt-level = 3
+
+[profile.test.package.cosmolkit-forcefields]
+opt-level = 3
+
+[profile.test.package.cosmolkit-model]
+opt-level = 3
+
+[profile.test.package.cosmolkit-ringdecomposer]
+opt-level = 3
+
+[profile.test.package.cosmolkit-search]
+opt-level = 3
+
+[profile.test.package.cosmolkit-smiles]
+opt-level = 3
+
+[profile.test.package.cosmolkit-stereo]
+opt-level = 3
+
+[profile.test.package.cosmolkit-types]
 opt-level = 3
 
 [dev-dependencies]

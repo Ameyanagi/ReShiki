@@ -366,11 +366,16 @@ impl App {
     fn model_entries(&self) -> Vec<Entry> {
         use super::models3d::Action;
         use reshiki::models3d::Display;
-        let model = self
-            .selected_model()
-            .and_then(|(_, index)| index)
+        let selected = self.selected_model();
+        let model = selected
+            .as_ref()
+            .and_then(|(_, index)| *index)
             .and_then(|i| self.tab.doc.models.get(i));
-        let current = model.map_or(Display::TwoD, |m| m.display);
+        let shown = model.map_or(Display::TwoD, |m| m.display);
+        // A generation in flight shows its view, so 2D can cancel it.
+        let current = selected
+            .and_then(|(atoms, _)| self.pending(&atoms))
+            .unwrap_or(shown);
         let enabled = !self.tab.busy && self.tab.optimization.is_none();
         // 2D in 2D still brings back a drawn layout that was flattened.
         let flattened = model.is_some_and(|m| m.drawn.is_some());

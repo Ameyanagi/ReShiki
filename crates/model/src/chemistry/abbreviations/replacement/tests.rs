@@ -114,7 +114,7 @@ fn aromatic_nitrogen_roots_attach_without_an_extra_hydrogen() {
             &input,
             &[anchor],
             "Ring",
-            (preset, false),
+            (preset, Spelling::Label),
             AttachmentPolicy::Terminal,
         )
         .unwrap_or_else(|error| panic!("{smiles}: {error}"));

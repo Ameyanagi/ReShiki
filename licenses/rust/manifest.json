@@ -1212,65 +1212,235 @@
       }
     ]
   },
-  "cosmolkit-inchi@0.3.0": {
+  "cosmolkit@0.5.0": {
     "license": "MIT",
     "repository": "https://github.com/cosmol-studio/COSMolKit",
-    "revision": "d892ec3507c5b568c5ed5d86ae44e466f7d03855",
+    "revision": "3cb27d54e3321287fce731d6f5791c42a06fddf0",
     "authors": ["COSMolKit Contributors"],
     "files": [
       {
         "path": "texts/cosmolkit-MIT-318ada8a479d.txt",
         "sha256": "318ada8a479dc3483285c569ab09a4a7044b7c324dedef241625495ecdb1971e",
-        "source": "https://raw.githubusercontent.com/Ameyanagi/COSMolKit/252a1f3d6480fc4a0abcd51d76707f51f69b4406/LICENSE"
+        "source": "https://raw.githubusercontent.com/Ameyanagi/COSMolKit/501f7b234031ba4d87461e14d0947c77a7d1a631/LICENSE"
       }
     ],
     "fork": "https://github.com/Ameyanagi/COSMolKit",
-    "fork_revision": "252a1f3d6480fc4a0abcd51d76707f51f69b4406"
+    "fork_revision": "501f7b234031ba4d87461e14d0947c77a7d1a631"
   },
-  "cosmolkit-core@0.3.0": {
+  "cosmolkit-alignment@0.5.0": {
     "license": "MIT",
     "repository": "https://github.com/cosmol-studio/COSMolKit",
-    "revision": "d892ec3507c5b568c5ed5d86ae44e466f7d03855",
+    "revision": "3cb27d54e3321287fce731d6f5791c42a06fddf0",
     "authors": ["COSMolKit Contributors"],
     "files": [
       {
         "path": "texts/cosmolkit-MIT-318ada8a479d.txt",
         "sha256": "318ada8a479dc3483285c569ab09a4a7044b7c324dedef241625495ecdb1971e",
-        "source": "https://raw.githubusercontent.com/Ameyanagi/COSMolKit/252a1f3d6480fc4a0abcd51d76707f51f69b4406/LICENSE"
+        "source": "https://raw.githubusercontent.com/Ameyanagi/COSMolKit/501f7b234031ba4d87461e14d0947c77a7d1a631/LICENSE"
       }
     ],
     "fork": "https://github.com/Ameyanagi/COSMolKit",
-    "fork_revision": "252a1f3d6480fc4a0abcd51d76707f51f69b4406"
+    "fork_revision": "501f7b234031ba4d87461e14d0947c77a7d1a631"
   },
-  "cosmolkit-macros@0.3.0": {
+  "cosmolkit-conformer@0.5.0": {
     "license": "MIT",
     "repository": "https://github.com/cosmol-studio/COSMolKit",
-    "revision": "d892ec3507c5b568c5ed5d86ae44e466f7d03855",
+    "revision": "3cb27d54e3321287fce731d6f5791c42a06fddf0",
     "authors": ["COSMolKit Contributors"],
     "files": [
       {
         "path": "texts/cosmolkit-MIT-318ada8a479d.txt",
         "sha256": "318ada8a479dc3483285c569ab09a4a7044b7c324dedef241625495ecdb1971e",
-        "source": "https://raw.githubusercontent.com/Ameyanagi/COSMolKit/252a1f3d6480fc4a0abcd51d76707f51f69b4406/LICENSE"
+        "source": "https://raw.githubusercontent.com/Ameyanagi/COSMolKit/501f7b234031ba4d87461e14d0947c77a7d1a631/LICENSE"
       }
     ],
     "fork": "https://github.com/Ameyanagi/COSMolKit",
-    "fork_revision": "252a1f3d6480fc4a0abcd51d76707f51f69b4406"
+    "fork_revision": "501f7b234031ba4d87461e14d0947c77a7d1a631"
   },
-  "cosmolkit-ringdecomposer@0.3.0": {
+  "cosmolkit-core@0.5.0": {
     "license": "MIT",
     "repository": "https://github.com/cosmol-studio/COSMolKit",
-    "revision": "d892ec3507c5b568c5ed5d86ae44e466f7d03855",
+    "revision": "3cb27d54e3321287fce731d6f5791c42a06fddf0",
     "authors": ["COSMolKit Contributors"],
     "files": [
       {
         "path": "texts/cosmolkit-MIT-318ada8a479d.txt",
         "sha256": "318ada8a479dc3483285c569ab09a4a7044b7c324dedef241625495ecdb1971e",
-        "source": "https://raw.githubusercontent.com/Ameyanagi/COSMolKit/252a1f3d6480fc4a0abcd51d76707f51f69b4406/LICENSE"
+        "source": "https://raw.githubusercontent.com/Ameyanagi/COSMolKit/501f7b234031ba4d87461e14d0947c77a7d1a631/LICENSE"
       }
     ],
     "fork": "https://github.com/Ameyanagi/COSMolKit",
-    "fork_revision": "252a1f3d6480fc4a0abcd51d76707f51f69b4406"
+    "fork_revision": "501f7b234031ba4d87461e14d0947c77a7d1a631"
+  },
+  "cosmolkit-cx@0.5.0": {
+    "license": "MIT",
+    "repository": "https://github.com/cosmol-studio/COSMolKit",
+    "revision": "3cb27d54e3321287fce731d6f5791c42a06fddf0",
+    "authors": ["COSMolKit Contributors"],
+    "files": [
+      {
+        "path": "texts/cosmolkit-MIT-318ada8a479d.txt",
+        "sha256": "318ada8a479dc3483285c569ab09a4a7044b7c324dedef241625495ecdb1971e",
+        "source": "https://raw.githubusercontent.com/Ameyanagi/COSMolKit/501f7b234031ba4d87461e14d0947c77a7d1a631/LICENSE"
+      }
+    ],
+    "fork": "https://github.com/Ameyanagi/COSMolKit",
+    "fork_revision": "501f7b234031ba4d87461e14d0947c77a7d1a631"
+  },
+  "cosmolkit-forcefields@0.5.0": {
+    "license": "MIT",
+    "repository": "https://github.com/cosmol-studio/COSMolKit",
+    "revision": "3cb27d54e3321287fce731d6f5791c42a06fddf0",
+    "authors": ["COSMolKit Contributors"],
+    "files": [
+      {
+        "path": "texts/cosmolkit-MIT-318ada8a479d.txt",
+        "sha256": "318ada8a479dc3483285c569ab09a4a7044b7c324dedef241625495ecdb1971e",
+        "source": "https://raw.githubusercontent.com/Ameyanagi/COSMolKit/501f7b234031ba4d87461e14d0947c77a7d1a631/LICENSE"
+      }
+    ],
+    "fork": "https://github.com/Ameyanagi/COSMolKit",
+    "fork_revision": "501f7b234031ba4d87461e14d0947c77a7d1a631"
+  },
+  "cosmolkit-inchi@0.5.0": {
+    "license": "MIT",
+    "repository": "https://github.com/cosmol-studio/COSMolKit",
+    "revision": "3cb27d54e3321287fce731d6f5791c42a06fddf0",
+    "authors": ["COSMolKit Contributors"],
+    "files": [
+      {
+        "path": "texts/cosmolkit-MIT-318ada8a479d.txt",
+        "sha256": "318ada8a479dc3483285c569ab09a4a7044b7c324dedef241625495ecdb1971e",
+        "source": "https://raw.githubusercontent.com/Ameyanagi/COSMolKit/501f7b234031ba4d87461e14d0947c77a7d1a631/LICENSE"
+      }
+    ],
+    "fork": "https://github.com/Ameyanagi/COSMolKit",
+    "fork_revision": "501f7b234031ba4d87461e14d0947c77a7d1a631"
+  },
+  "cosmolkit-io@0.5.0": {
+    "license": "MIT",
+    "repository": "https://github.com/cosmol-studio/COSMolKit",
+    "revision": "3cb27d54e3321287fce731d6f5791c42a06fddf0",
+    "authors": ["COSMolKit Contributors"],
+    "files": [
+      {
+        "path": "texts/cosmolkit-MIT-318ada8a479d.txt",
+        "sha256": "318ada8a479dc3483285c569ab09a4a7044b7c324dedef241625495ecdb1971e",
+        "source": "https://raw.githubusercontent.com/Ameyanagi/COSMolKit/501f7b234031ba4d87461e14d0947c77a7d1a631/LICENSE"
+      },
+      {
+        "path": "texts/cosmolkit-io-THIRD_PARTY_NOTICES-43623c3f52fd.txt",
+        "sha256": "43623c3f52fda9979a0c00ecb850ddd05c618eaaabbdb05b4849266ac2845e74",
+        "source": "https://raw.githubusercontent.com/Ameyanagi/COSMolKit/501f7b234031ba4d87461e14d0947c77a7d1a631/crates/cosmolkit-io/THIRD_PARTY_NOTICES.md"
+      }
+    ],
+    "fork": "https://github.com/Ameyanagi/COSMolKit",
+    "fork_revision": "501f7b234031ba4d87461e14d0947c77a7d1a631"
+  },
+  "cosmolkit-macros@0.5.0": {
+    "license": "MIT",
+    "repository": "https://github.com/cosmol-studio/COSMolKit",
+    "revision": "3cb27d54e3321287fce731d6f5791c42a06fddf0",
+    "authors": ["COSMolKit Contributors"],
+    "files": [
+      {
+        "path": "texts/cosmolkit-MIT-318ada8a479d.txt",
+        "sha256": "318ada8a479dc3483285c569ab09a4a7044b7c324dedef241625495ecdb1971e",
+        "source": "https://raw.githubusercontent.com/Ameyanagi/COSMolKit/501f7b234031ba4d87461e14d0947c77a7d1a631/LICENSE"
+      }
+    ],
+    "fork": "https://github.com/Ameyanagi/COSMolKit",
+    "fork_revision": "501f7b234031ba4d87461e14d0947c77a7d1a631"
+  },
+  "cosmolkit-model@0.5.0": {
+    "license": "MIT",
+    "repository": "https://github.com/cosmol-studio/COSMolKit",
+    "revision": "3cb27d54e3321287fce731d6f5791c42a06fddf0",
+    "authors": ["COSMolKit Contributors"],
+    "files": [
+      {
+        "path": "texts/cosmolkit-MIT-318ada8a479d.txt",
+        "sha256": "318ada8a479dc3483285c569ab09a4a7044b7c324dedef241625495ecdb1971e",
+        "source": "https://raw.githubusercontent.com/Ameyanagi/COSMolKit/501f7b234031ba4d87461e14d0947c77a7d1a631/LICENSE"
+      }
+    ],
+    "fork": "https://github.com/Ameyanagi/COSMolKit",
+    "fork_revision": "501f7b234031ba4d87461e14d0947c77a7d1a631"
+  },
+  "cosmolkit-ringdecomposer@0.5.0": {
+    "license": "MIT",
+    "repository": "https://github.com/cosmol-studio/COSMolKit",
+    "revision": "3cb27d54e3321287fce731d6f5791c42a06fddf0",
+    "authors": ["COSMolKit Contributors"],
+    "files": [
+      {
+        "path": "texts/cosmolkit-MIT-318ada8a479d.txt",
+        "sha256": "318ada8a479dc3483285c569ab09a4a7044b7c324dedef241625495ecdb1971e",
+        "source": "https://raw.githubusercontent.com/Ameyanagi/COSMolKit/501f7b234031ba4d87461e14d0947c77a7d1a631/LICENSE"
+      }
+    ],
+    "fork": "https://github.com/Ameyanagi/COSMolKit",
+    "fork_revision": "501f7b234031ba4d87461e14d0947c77a7d1a631"
+  },
+  "cosmolkit-search@0.5.0": {
+    "license": "MIT",
+    "repository": "https://github.com/cosmol-studio/COSMolKit",
+    "revision": "3cb27d54e3321287fce731d6f5791c42a06fddf0",
+    "authors": ["COSMolKit Contributors"],
+    "files": [
+      {
+        "path": "texts/cosmolkit-MIT-318ada8a479d.txt",
+        "sha256": "318ada8a479dc3483285c569ab09a4a7044b7c324dedef241625495ecdb1971e",
+        "source": "https://raw.githubusercontent.com/Ameyanagi/COSMolKit/501f7b234031ba4d87461e14d0947c77a7d1a631/LICENSE"
+      }
+    ],
+    "fork": "https://github.com/Ameyanagi/COSMolKit",
+    "fork_revision": "501f7b234031ba4d87461e14d0947c77a7d1a631"
+  },
+  "cosmolkit-smiles@0.5.0": {
+    "license": "MIT",
+    "repository": "https://github.com/cosmol-studio/COSMolKit",
+    "revision": "3cb27d54e3321287fce731d6f5791c42a06fddf0",
+    "authors": ["COSMolKit Contributors"],
+    "files": [
+      {
+        "path": "texts/cosmolkit-MIT-318ada8a479d.txt",
+        "sha256": "318ada8a479dc3483285c569ab09a4a7044b7c324dedef241625495ecdb1971e",
+        "source": "https://raw.githubusercontent.com/Ameyanagi/COSMolKit/501f7b234031ba4d87461e14d0947c77a7d1a631/LICENSE"
+      }
+    ],
+    "fork": "https://github.com/Ameyanagi/COSMolKit",
+    "fork_revision": "501f7b234031ba4d87461e14d0947c77a7d1a631"
+  },
+  "cosmolkit-stereo@0.5.0": {
+    "license": "MIT",
+    "repository": "https://github.com/cosmol-studio/COSMolKit",
+    "revision": "3cb27d54e3321287fce731d6f5791c42a06fddf0",
+    "authors": ["COSMolKit Contributors"],
+    "files": [
+      {
+        "path": "texts/cosmolkit-MIT-318ada8a479d.txt",
+        "sha256": "318ada8a479dc3483285c569ab09a4a7044b7c324dedef241625495ecdb1971e",
+        "source": "https://raw.githubusercontent.com/Ameyanagi/COSMolKit/501f7b234031ba4d87461e14d0947c77a7d1a631/LICENSE"
+      }
+    ],
+    "fork": "https://github.com/Ameyanagi/COSMolKit",
+    "fork_revision": "501f7b234031ba4d87461e14d0947c77a7d1a631"
+  },
+  "cosmolkit-types@0.5.0": {
+    "license": "MIT",
+    "repository": "https://github.com/cosmol-studio/COSMolKit",
+    "revision": "3cb27d54e3321287fce731d6f5791c42a06fddf0",
+    "authors": ["COSMolKit Contributors"],
+    "files": [
+      {
+        "path": "texts/cosmolkit-MIT-318ada8a479d.txt",
+        "sha256": "318ada8a479dc3483285c569ab09a4a7044b7c324dedef241625495ecdb1971e",
+        "source": "https://raw.githubusercontent.com/Ameyanagi/COSMolKit/501f7b234031ba4d87461e14d0947c77a7d1a631/LICENSE"
+      }
+    ],
+    "fork": "https://github.com/Ameyanagi/COSMolKit",
+    "fork_revision": "501f7b234031ba4d87461e14d0947c77a7d1a631"
   },
   "rmcp@3.5.1": {
     "license": "Apache-2.0",

@@ -61,7 +61,7 @@ def build(output, target=None, jobs=2, tests=False, offline=False):
         test_command = command.copy()
         test_command[1] = "test"
         test_command.remove("--message-format=json-render-diagnostics")
-        test_command.extend(["--features", "cosmolkit-core/op-contracts-strict"])
+        test_command.extend(["--features", "cosmolkit/op-contracts-strict"])
         subprocess.run(test_command, cwd=ROOT, check=True)
     if len(candidates) != 1:
         raise ValueError("Rust geometry build did not produce exactly one crate archive")
@@ -82,7 +82,7 @@ def build(output, target=None, jobs=2, tests=False, offline=False):
         "rust_archive_sha256": digest(archive),
         "dependency_fetch": "disabled" if offline else "Cargo locked sources",
         "native_tests": tests,
-        "test_features": ["cosmolkit-core/op-contracts-strict"] if tests else [],
+        "test_features": ["cosmolkit/op-contracts-strict"] if tests else [],
     }
     (output / "build.json").write_text(json.dumps(result, indent=2) + "\n")
     return result
