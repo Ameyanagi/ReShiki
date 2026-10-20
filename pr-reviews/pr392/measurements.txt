@@ -1,0 +1,15 @@
+Circled-charge geometry measured from the exported SVG paths (stored size_pt = 7.5 in the CDXML inputs; app-drawn stores none and uses 0.75 x 10 pt = 7.5)
+drawing              circle diameter pt (before -> after)   sign bar pt (before -> after)
+methoxide            7.8 -> 6.0                      4.5 -> 3.6
+methylpyridinium     7.8 -> 6.0                      4.5 -> 3.6
+ammonium-chemdraw    7.8 -> 6.0                      4.5 -> 3.6
+app-drawn            7.8 -> 6.0                      4.5 -> 3.6
+Expected: before 7.8 (0.52*2*7.5) / 4.5 (0.3*2*7.5); after 6.0 (0.40*2*7.5) / 3.6 (0.24*2*7.5)
+
+app-drawn (built with scientific::Drawing::place, the app's symbol placement; marks store size_pt = None)
+  before CDXML CircleMinus  written size 7.500 pt
+  before CDXML CirclePlus   written size 7.500 pt
+  after  CDXML CircleMinus  written size 7.500 pt
+  after  CDXML CirclePlus   written size 7.500 pt
+  before 1200 dpi ink heights: circle 8.40 pt incl. stroke, O 7.38 pt -> circle/O = 1.14
+  after  1200 dpi ink heights: circle 6.60 pt incl. stroke, O 7.38 pt -> circle/O = 0.89

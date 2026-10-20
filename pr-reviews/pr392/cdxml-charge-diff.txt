@@ -1,0 +1,24 @@
+== methoxide: input graphic
+BoundingBox="51.5 23.5 44.00 23.5" SymbolType="CircleMinus" 
+-- before export:
+<graphic id="6" GraphicType="Symbol" SymbolType="CircleMinus" BoundingBox="51.499998 23.500000 43.999998 23.500000">
+-- after export:
+<graphic id="6" GraphicType="Symbol" SymbolType="CircleMinus" BoundingBox="51.499998 23.500000 43.999998 23.500000">
+-- full-file diff before vs after export:
+(identical)
+== methylpyridinium: input graphic
+BoundingBox="64.5 35 57.00 35" SymbolType="CirclePlus" 
+-- before export:
+<graphic id="17" GraphicType="Symbol" SymbolType="CirclePlus" BoundingBox="64.499997 35.000004 56.999997 35.000004">
+-- after export:
+<graphic id="17" GraphicType="Symbol" SymbolType="CirclePlus" BoundingBox="64.499997 35.000004 56.999997 35.000004">
+-- full-file diff before vs after export:
+(identical)
+== ammonium-chemdraw: input graphic
+BoundingBox="30 20 22.50 20" SymbolType="CirclePlus" 
+-- before export:
+<graphic id="4" GraphicType="Symbol" SymbolType="CirclePlus" BoundingBox="30.000000 20.000000 22.500000 20.000000">
+-- after export:
+<graphic id="4" GraphicType="Symbol" SymbolType="CirclePlus" BoundingBox="30.000000 20.000000 22.500000 20.000000">
+-- full-file diff before vs after export:
+(identical)
