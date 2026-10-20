@@ -3921,6 +3921,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "reshiki-web"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "reshiki-io",
+ "reshiki-model",
+ "resvg",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
 name = "reshiki-windows"
 version = "0.1.0"
 dependencies = [

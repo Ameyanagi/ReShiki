@@ -35,6 +35,7 @@ members = [
   "crates/metafile",
   "crates/opsin",
   "crates/process-heap",
+  "crates/web",
 ]
 default-members = [
   ".",
