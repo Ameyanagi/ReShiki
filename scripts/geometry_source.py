@@ -14,22 +14,42 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 GEOMETRY_MANIFEST = Path("native/geometry/Cargo.toml")
-COSMOLKIT_VERSION = "0.3.0"
+COSMOLKIT_VERSION = "0.5.0"
 COSMOLKIT_REPOSITORY = "https://github.com/Ameyanagi/COSMolKit.git"
 RDKIT_VERSION = "2026.03.6"
 RDKIT_REVISION = "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
+# COSMolKit records this RDKit commit as the source of its embedded tables
+# (crates/cosmolkit-forcefields/src/mmff/parameter-provenance.md).
 PARAMETER_REFERENCE_VERSION = "2026.03.1"
 PARAMETER_REFERENCE_REVISION = "351f8f378f8ad6bbd517980c38896e66bf907af8"
-PARAMETER_ROOT = Path("crates/cosmolkit-core/src/chemistry/forcefield/rdkit")
-# Exact bytes audited in the pinned COSMolKit checkout, not C++ build inputs.
+# The geometry facade and the crates whose embedded data it consumes.
+COSMOLKIT_CRATES = ("cosmolkit", "cosmolkit-core", "cosmolkit-forcefields")
+# Exact bytes audited in the pinned COSMolKit checkout, keyed by crate-relative
+# path: MMFF, UFF and CrystalFF tables and the periodic table rows.
 PARAMETER_SHA256 = {
-    "ForceField/MMFF/Params.cpp": "91af3ffd45515712bb787d2c14c4a1c890367fc15e1a71b1d1782a60a0e34b7f",
-    "ForceField/UFF/Params.cpp": "c2e3fedb28233258a5277dcfddd0e163c55bd4cc9e83b2e242fefb0cb96f787e",
-    "GraphMol/atomic_data.cpp": "7f9cee6e430b60d303a0a7fa9e33c45e5c529ee204f86afeab6a20f68b6b0631",
-    "GraphMol/ForceFieldHelpers/CrystalFF/torsionPreferences_v1.in": "8af25175470dbfc82714dcf54115cccd741ef65463096703a67799c4340d98be",
-    "GraphMol/ForceFieldHelpers/CrystalFF/torsionPreferences_v2.in": "c1c1ff3d93b9629d1e71502daa02257c9968ca4788478d4970f81e457a37d8e5",
-    "GraphMol/ForceFieldHelpers/CrystalFF/torsionPreferences_smallrings.in": "28124c740e9aba1ec835fa9cef8f095258f0b94f5829dda2b995e99bbd1b5efb",
-    "GraphMol/ForceFieldHelpers/CrystalFF/torsionPreferences_macrocycles.in": "0a11044bbcdddf842b505e4baa0b4878e1fcc0725fa7c99dd82ff462938eab6e",
+    "cosmolkit-core/src/periodic_table.rs": "951d98267f4d9974499aec41b9499d8db2eaec12878b274863bf33feb9a02106",
+    "cosmolkit-core/src/periodic_table_isotopes.tsv": "18bb0cfa9c75a7e451f98aa62a6ab584e65dccb004ae167afb8f175bbddfd410",
+    "cosmolkit-forcefields/src/crystalff/params/macrocycles.txt": "2068befd9d50344cfdc4924304ea4eb83ccae00c97915d93c13e0e20fe34b5b5",
+    "cosmolkit-forcefields/src/crystalff/params/smallrings.txt": "73f833deacf5bad450cc2df2e847a8f731462eaeba2f21fd2c45a55e6cd33b61",
+    "cosmolkit-forcefields/src/crystalff/params/v1.txt": "368e03e7702fd51bea155213766292a14d258b4bab058999a5741b79fe176cdc",
+    "cosmolkit-forcefields/src/crystalff/params/v2.txt": "f908fe1ae0d8d228c6729173dfec289dfab68e43e0468968c3f9986f08c5790d",
+    "cosmolkit-forcefields/src/mmff/default_angle.tsv": "53e6e385eba67d020e7fe00f9c9520181f6c964d1f72827a638d66825f483b70",
+    "cosmolkit-forcefields/src/mmff/default_bndk.tsv": "b8767ef084b90c0c99c670ff2b2100765713522951fcd82f61c42b57d7bc5955",
+    "cosmolkit-forcefields/src/mmff/default_bond.tsv": "2d6aaa670c425f98ec9a8b18a3cd6e5aef50f14a312ae8d92e0ad7fa79caa2bb",
+    "cosmolkit-forcefields/src/mmff/default_chg.tsv": "914c03dbbaf053c0adb00340da4812f9212dd79c1c98bfc67bd5f9391be70e6b",
+    "cosmolkit-forcefields/src/mmff/default_cov_rad_pau_ele.tsv": "ad2f757dd038bb1b5161db003deb2edc6fa1a5055991d4d89f35e3fdcea6fd48",
+    "cosmolkit-forcefields/src/mmff/default_def.tsv": "9febef6c21516bc67b6176176eb3131809345baa425b9ca1e25e4398a51be24e",
+    "cosmolkit-forcefields/src/mmff/default_dfsb.tsv": "e4150c4719c15b569e779306c7d4647f9f14f949c4712af39ea67a1e458ddf55",
+    "cosmolkit-forcefields/src/mmff/default_herschbach_laurie.tsv": "41dcb5b0d58e14e9aa1cf8d04340a0a4006273bd273c7fc6ed7d674d07b457d3",
+    "cosmolkit-forcefields/src/mmff/default_oop.tsv": "97501718884333a9fe35460d025376f5ebd7f0644cf29207a7db6a078e372bf9",
+    "cosmolkit-forcefields/src/mmff/default_oop_s.tsv": "848807b023cc31a21ababb779b934abff0af8547e5ce8a6d2f85bc094b843e32",
+    "cosmolkit-forcefields/src/mmff/default_pbci.tsv": "65b1aa8df49edec87ca37f7a1474d61e6933ac7b66e5384e44162377b24859f9",
+    "cosmolkit-forcefields/src/mmff/default_prop.tsv": "7ddda181552effed6fbd78e9ee9a70c4d54fe0e8850b29de5d8ffb8d4cda9b2f",
+    "cosmolkit-forcefields/src/mmff/default_stbn.tsv": "3d54fe7c56108ccbbe7c06dc93adb6b911acb4495416f7ff4faa4bc4a73fc5b4",
+    "cosmolkit-forcefields/src/mmff/default_tor.tsv": "fec53b928fee6cf489ec6dd3e73697f626b944ef4c9d76d8841397ec8c0917a6",
+    "cosmolkit-forcefields/src/mmff/default_tor_s.tsv": "b5f2d7588930ee193712c35012e54cfd83b5d327b3a3f52604cc26556a37576a",
+    "cosmolkit-forcefields/src/mmff/default_vdw.tsv": "c9d60e3dbb91587a02314055f64b03169667d042eabce9d6e033a4f0b87aa7ca",
+    "cosmolkit-forcefields/src/uff/default_params.tsv": "4f2e2d5a29fd53de05e3b13ce84e5d0313037a30d5dba69bff663de450fcbd73",
 }
 
 
@@ -40,28 +60,36 @@ def digest(path):
 def dependency(root=ROOT):
     root = Path(root)
     manifest = tomllib.loads((root / GEOMETRY_MANIFEST).read_text())
-    required = manifest["dependencies"]["cosmolkit-core"]
-    if (
-        not isinstance(required, dict)
-        or required.get("version") != "=" + COSMOLKIT_VERSION
-        or required.get("git") != COSMOLKIT_REPOSITORY
-        or not re.fullmatch(r"[0-9a-f]{40}", required.get("rev", ""))
-    ):
-        raise ValueError(
-            "Geometry Cargo dependency must pin the exact COSMolKit version and Git revision"
-        )
-    lock = tomllib.loads((root / "Cargo.lock").read_text())
-    packages = [p for p in lock["package"] if p["name"] == "cosmolkit-core"]
-    revision = required["rev"]
+    revisions = set()
+    for name in ("cosmolkit", "cosmolkit-core"):
+        required = manifest["dependencies"].get(name)
+        if (
+            not isinstance(required, dict)
+            or required.get("version") != "=" + COSMOLKIT_VERSION
+            or required.get("git") != COSMOLKIT_REPOSITORY
+            or not re.fullmatch(r"[0-9a-f]{40}", required.get("rev", ""))
+        ):
+            raise ValueError(
+                "Geometry Cargo dependency must pin the exact COSMolKit version and Git revision"
+            )
+        revisions.add(required["rev"])
+    if len(revisions) != 1:
+        raise ValueError("Geometry Cargo dependencies must pin one COSMolKit revision")
+    revision = revisions.pop()
     source = f"git+{COSMOLKIT_REPOSITORY}?rev={revision}#{revision}"
-    if (
-        len(packages) != 1
-        or packages[0]["version"] != COSMOLKIT_VERSION
-        or packages[0].get("source") != source
-    ):
-        raise ValueError("Geometry Cargo dependency does not match the locked COSMolKit revision")
+    lock = tomllib.loads((root / "Cargo.lock").read_text())
+    for name in COSMOLKIT_CRATES:
+        packages = [p for p in lock["package"] if p["name"] == name]
+        if (
+            len(packages) != 1
+            or packages[0]["version"] != COSMOLKIT_VERSION
+            or packages[0].get("source") != source
+        ):
+            raise ValueError(
+                "Geometry Cargo dependency does not match the locked COSMolKit revision"
+            )
     return dict(
-        name="cosmolkit-core",
+        name="cosmolkit",
         version=COSMOLKIT_VERSION,
         repository=COSMOLKIT_REPOSITORY,
         revision=revision,
@@ -91,9 +119,9 @@ def metadata(root=ROOT):
             "repository": "https://github.com/rdkit/rdkit",
         },
         "parameter_data": {
-            "repository_path": PARAMETER_ROOT.as_posix(),
+            "repository_path": "crates",
             "files_sha256": PARAMETER_SHA256,
-            "capture": "COSMolKit embedded data; MMFF adds an Id header, legacy torsion-v1 repeats one row",
+            "capture": "COSMolKit embedded tables captured from the RDKit parameter sources",
         },
         "cargo_manifest_sha256": digest(root / GEOMETRY_MANIFEST),
         "cargo_lock_sha256": digest(root / "Cargo.lock"),
@@ -103,9 +131,11 @@ def metadata(root=ROOT):
     }
 
 
-def verify_parameters(core):
+def verify_parameters(crates):
+    """Check audited bytes; crates maps each crate name to its directory."""
     for name, expected in PARAMETER_SHA256.items():
-        if digest(Path(core) / "src/chemistry/forcefield/rdkit" / name) != expected:
+        crate, relative = name.split("/", 1)
+        if digest(Path(crates[crate]) / relative) != expected:
             raise ValueError(f"Geometry parameter data changed: {name}")
 
 
@@ -123,16 +153,19 @@ def verify(root=ROOT, cosmolkit_source=None, cargo_metadata=None):
         ).stdout.strip()
         if revision != result["revision"]:
             raise ValueError("COSMolKit checkout does not match the locked geometry revision")
-        verify_parameters(source / "crates/cosmolkit-core")
+        verify_parameters({name: source / "crates" / name for name in COSMOLKIT_CRATES})
     if cargo_metadata is not None:
-        packages = [p for p in cargo_metadata["packages"] if p["name"] == "cosmolkit-core"]
-        if (
-            len(packages) != 1
-            or packages[0]["version"] != COSMOLKIT_VERSION
-            or packages[0].get("source") != result["backend"]["source"]
-        ):
-            raise ValueError("Resolved COSMolKit source does not match the geometry Cargo pin")
-        verify_parameters(Path(packages[0]["manifest_path"]).parent)
+        crates = {}
+        for name in {name.split("/", 1)[0] for name in PARAMETER_SHA256}:
+            packages = [p for p in cargo_metadata["packages"] if p["name"] == name]
+            if (
+                len(packages) != 1
+                or packages[0]["version"] != COSMOLKIT_VERSION
+                or packages[0].get("source") != result["backend"]["source"]
+            ):
+                raise ValueError("Resolved COSMolKit source does not match the geometry Cargo pin")
+            crates[name] = Path(packages[0]["manifest_path"]).parent
+        verify_parameters(crates)
     return result
 
 

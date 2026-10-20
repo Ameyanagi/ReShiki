@@ -1,8 +1,8 @@
 Rust geometry backend and parameter data
 =======================================
 
-ReShiki's geometry worker uses cosmolkit-core 0.3.0 from the COSMolKit Rust
-implementation, https://github.com/Ameyanagi/COSMolKit.git. The complete Git
+ReShiki's geometry worker uses the cosmolkit 0.5.0 crates from the COSMolKit
+Rust implementation, https://github.com/Ameyanagi/COSMolKit.git. The complete Git
 revision is pinned in native/geometry/Cargo.toml and Cargo.lock and recorded
 in each release's build.json. COSMolKit retains its MIT license and the
 copyright of the COSMolKit Contributors; its complete terms are included
@@ -10,10 +10,10 @@ by the Rust dependency notice supplements and consolidated distribution.
 The geometry adapter and worker integration are original ReShiki code.
 
 COSMolKit implements distance-geometry embedding, MMFF94, MMFF94s, UFF,
-atom typing, energy/gradient evaluation, and optimization in Rust. Its Rust
-build script reads embedded RDKit parameter/torsion/atomic data to generate
-Rust constants. Files named Params.cpp and atomic_data.cpp are data sources
-for that generator; no C++ solver or Boost headers are compiled or linked.
+atom typing, energy/gradient evaluation, and optimization in Rust. Its crates
+embed RDKit parameter, torsion-preference and periodic-table data as tables
+compiled into the executable; no C++ solver or Boost headers are compiled or
+linked.
 Python is used only by separate developer/reference tests. The application
 runs from its own executable without a Python or RDKit runtime or downloads.
 
@@ -25,12 +25,11 @@ This reference version is retained in the worker protocol's version field;
 it does not identify the Rust backend or original parameter-source revision.
 Exact SHA-256 values for
 COSMolKit's embedded data are audited by scripts/geometry_source.py and
-recorded in release build.json. UFF, atomic data, ETKDGv2, small-ring and
-macrocycle torsion files match that RDKit reference. The MMFF source adds
-an Id header, and the legacy torsion-v1 file repeats its first pattern.
+recorded in release build.json. COSMolKit documents the MMFF tables as exact
+captures of RDKit's Params.cpp string literals at that revision.
 
 Original RDKit source/data notices remain applicable under BSD-3-Clause; see
-RDKIT-LICENSE. The embedded source files preserve:
+RDKIT-LICENSE. The embedded sources preserve:
 Copyright (C) 2013 Paolo Tosco
 Copyright (C) 2004-2006 Rational Discovery LLC
 Copyright (C) 2004-2021 Greg Landrum and other RDKit contributors

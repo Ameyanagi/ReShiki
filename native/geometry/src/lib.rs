@@ -8,7 +8,7 @@ use std::{collections::BTreeSet, sync::Mutex};
 
 /// Version of the independent force-field reference, not a runtime dependency.
 pub const RDKIT_VERSION: &str = "2026.03.6";
-pub const COSMOLKIT_VERSION: &str = "0.3.0";
+pub const COSMOLKIT_VERSION: &str = "0.5.0";
 /// Absolute structural safety ceiling, separate from machine-budget admission.
 pub const MAX_ATOMS: usize = 640;
 pub const MAX_COORDINATES: usize = 4096;

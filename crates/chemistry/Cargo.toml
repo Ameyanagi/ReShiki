@@ -13,7 +13,7 @@ rdkit-reference = []
 
 [dependencies]
 # Keep identical to the root declaration; scripts/build_inchi_helper.py validates that one.
-cosmolkit-inchi = { version = "=0.3.0", git = "https://github.com/Ameyanagi/COSMolKit.git", rev = "252a1f3d6480fc4a0abcd51d76707f51f69b4406" }
+cosmolkit-inchi = { version = "=0.5.0", git = "https://github.com/Ameyanagi/COSMolKit.git", rev = "501f7b234031ba4d87461e14d0947c77a7d1a631" }
 reshiki-depict-math = { path = "../depict-math" }
 reshiki-process-heap = { path = "../process-heap" }
 serde = { version = "1", features = ["derive", "rc"] }
