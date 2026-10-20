@@ -641,6 +641,14 @@ impl Drawing {
             {
                 mark.angle = angle;
             }
+            if !matches!(kind, SymbolKind::LonePair | SymbolKind::LonePairBar) {
+                doc.invalidate_chemistry(&[id]);
+                // Orbit the label the refresh will show, hydrogens included.
+                let hydrogens = crate::atom_labels::refresh::label_hydrogens(doc, id);
+                if let Some((atom, h)) = doc.atom_mut(id).zip(hydrogens) {
+                    atom.label_h = h;
+                }
+            }
             // A drag orbits the atom like moving the mark; `constrain` frees it.
             if start.distance(end) >= 3.
                 && let Some(atom) = doc.atom(id)
@@ -650,9 +658,6 @@ impl Drawing {
                 if let Some(mark) = doc.atom_mut(id).and_then(|a| a.marks.last_mut()) {
                     *mark = placed;
                 }
-            }
-            if !matches!(kind, SymbolKind::LonePair | SymbolKind::LonePairBar) {
-                doc.invalidate_chemistry(&[id]);
             }
             return Ok(id);
         }

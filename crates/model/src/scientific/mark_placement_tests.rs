@@ -650,3 +650,30 @@ fn orbit_steps_that_would_touch_a_bond_are_skipped() {
         assert_eq!(free.offset, p(-30., 0.));
     }
 }
+
+#[test]
+fn dragged_charges_and_radicals_orbit_the_label_they_will_have() {
+    // Methylamine's N reads NH2 with the hydrogens to the right, away from C.
+    for (kind, hydrogens) in [(SymbolKind::Radical, 1), (SymbolKind::Plus, 3)] {
+        let mut doc = Document::default();
+        let c = doc.add_atom("C", p(-42., 0.));
+        let n = doc.add_atom("N", p(0., 0.));
+        doc.add_bond(c, n, 1, "plain");
+        crate::atom_labels::refresh::Refresh::calculate(&doc, &Default::default())
+            .unwrap()
+            .apply(&mut doc);
+        assert_eq!(doc.atom(n).unwrap().label_h, 2);
+        // Attaching clears the hydrogens; the drag to the right must still
+        // orbit the label the refresh brings back.
+        tool(kind)
+            .place(&mut doc, p(0., 0.), p(40., 0.), false, 10.)
+            .unwrap();
+        crate::atom_labels::refresh::Refresh::calculate(&doc, &Default::default())
+            .unwrap()
+            .apply(&mut doc);
+        assert_eq!(doc.atom(n).unwrap().label_h, hydrogens);
+        let gap = ink_gap(&doc, n, 0);
+        assert!(gap > DEFAULT.world(10. * 0.07) * 0.99, "{kind}: {gap}");
+        assert!(gap < DEFAULT.world(10. * 0.3), "{kind}: {gap}");
+    }
+}
