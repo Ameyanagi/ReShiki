@@ -38,7 +38,7 @@ pub(super) struct SelectionBox {
     pub pivot: World,
     camera: Camera,
     bounds: Rectangle,
-    /// Scaling would distort the hidden 2D layout of a molecule shown in 3D.
+    /// Models shown in 3D or beside their drawing do not resize yet.
     resizable: bool,
 }
 

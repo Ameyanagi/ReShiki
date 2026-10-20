@@ -398,12 +398,12 @@ pub fn frame_hit(doc: &Document, p: Point) -> Option<Vec<u64>> {
         .map(|m| m.atoms.iter().map(|a| a.id).collect())
 }
 
-/// Whether the selection includes a molecule shown only in 3D, which the
-/// selection box must not scale: its hidden 2D layout would distort.
+/// Whether the selection includes a molecule whose model is shown (3D or
+/// both), which the selection box must not scale: models do not resize yet.
 pub fn shows_3d(doc: &Document, ids: &[u64]) -> bool {
     doc.models
         .iter()
-        .any(|m| m.display == Display::ThreeD && ids.iter().any(|id| m.contains(*id)))
+        .any(|m| m.display != Display::TwoD && ids.iter().any(|id| m.contains(*id)))
 }
 
 pub fn validate(doc: &Document) -> Result<(), String> {

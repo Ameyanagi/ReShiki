@@ -305,3 +305,27 @@ fn a_result_during_a_modal_edit_is_dropped_and_not_left_pending() {
     assert!(app.tab.doc.models.is_empty());
     assert!(app.status.contains("not applied"), "{}", app.status);
 }
+
+#[test]
+fn the_status_names_the_view_undo_restores() {
+    let (mut app, ..) = drawing();
+    show(&mut app, Display::Both);
+    let (key, result) = generated(&app);
+    let _ = app.update(Message::Models3d(Action::Generated(key, Ok(result))));
+    assert_eq!(
+        app.status,
+        "Shown as 2D and 3D · Undo restores the 2D drawing"
+    );
+    show(&mut app, Display::TwoD);
+    assert_eq!(app.status, "Shown as 2D · Undo restores 2D and 3D");
+    show(&mut app, Display::ThreeD);
+    assert_eq!(
+        app.status,
+        "Shown as 3D model · Undo restores the 2D drawing"
+    );
+    show(&mut app, Display::Both);
+    assert_eq!(
+        app.status,
+        "Shown as 2D and 3D · Undo restores the 3D model"
+    );
+}

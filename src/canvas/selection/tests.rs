@@ -280,7 +280,11 @@ fn a_molecule_shown_in_3d_keeps_rotation_but_not_resize_handles() {
     doc.require_version(reshiki::document::MODELS_3D);
     let camera = Camera::default();
     let bounds = Rectangle::new(Point::ORIGIN, Size::new(400., 300.));
-    for (display, resizable) in [(Display::Both, true), (Display::ThreeD, false)] {
+    for (display, resizable) in [
+        (Display::TwoD, true),
+        (Display::Both, false),
+        (Display::ThreeD, false),
+    ] {
         reshiki::models3d::set_display(&mut doc, 0, display);
         let selection = SelectionBox::new(&doc, &[a, b], camera, bounds).unwrap();
         let grip = selection.grips()[0];

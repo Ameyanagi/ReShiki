@@ -115,8 +115,9 @@ impl App {
         if let Some(index) = index {
             let before = self.tab.doc.clone();
             if models3d::set_display(&mut self.tab.doc, index, display) {
+                let previous = before.models.get(index).map(|m| m.display);
                 self.changed(before);
-                self.status = status(display).into();
+                self.status = status(display, previous.unwrap_or(Display::TwoD));
                 // Showing another molecule differently leaves a generation
                 // in flight valid.
                 let key = self.model_key();
@@ -170,6 +171,11 @@ impl App {
     fn add_model(&mut self, model: models3d::Model3d, display: Display) {
         let before = self.tab.doc.clone();
         let atoms: Vec<_> = model.atoms.iter().map(|a| a.id).collect();
+        let previous = before
+            .models
+            .iter()
+            .find(|m| m.atoms.iter().any(|a| atoms.contains(&a.id)))
+            .map_or(Display::TwoD, |m| m.display);
         self.tab
             .doc
             .models
@@ -180,7 +186,7 @@ impl App {
         models3d::set_display(&mut self.tab.doc, index, display);
         self.changed(before);
         if !self.error {
-            self.status = status(display).into();
+            self.status = status(display, previous);
         }
     }
 
@@ -277,12 +283,19 @@ impl App {
     }
 }
 
-fn status(display: Display) -> &'static str {
-    match display {
-        Display::TwoD => "Shown as 2D · Undo restores the 3D model",
-        Display::ThreeD => "Shown as 3D model · Undo restores the 2D drawing",
-        Display::Both => "Shown as 2D and 3D · Undo restores the previous view",
-    }
+/// The new view and the one Undo brings back.
+fn status(display: Display, previous: Display) -> String {
+    let shown = match display {
+        Display::TwoD => "2D",
+        Display::ThreeD => "3D model",
+        Display::Both => "2D and 3D",
+    };
+    let restored = match previous {
+        Display::TwoD => "the 2D drawing",
+        Display::ThreeD => "the 3D model",
+        Display::Both => "2D and 3D",
+    };
+    format!("Shown as {shown} · Undo restores {restored}")
 }
 
 #[cfg(test)]

@@ -348,6 +348,8 @@ fn hidden_atoms_are_not_picked_and_the_frame_selects_the_molecule() {
 
     // Beside the drawing, the frame sits right of the atoms.
     let (both, ..) = shown(Display::Both);
+    assert!(shows_3d(&both, &atoms));
+    assert!(!shows_3d(&drawing().0, &atoms));
     let (lo, _) = frame(&both, &both.models[0]).unwrap();
     let bond = both.drawing_style.bond_length_world;
     assert!((lo.x - (72. + bond)).abs() < 1e-3, "{lo:?}");

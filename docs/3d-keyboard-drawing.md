@@ -22,8 +22,8 @@ switches reuse the stored model, and each switch is one Undo step.
 The model links to the molecule by atom ID. It never changes chemistry, atom IDs
 or the 2D layout, which is kept for switching back. Clicking or lassoing the
 model selects the molecule, so moving, aligning, copying and Duplicate carry it
-along; while the molecule is shown in 3D, its hidden 2D atoms cannot be picked
-and the selection has no resize handles. A chemical edit to the molecule
+along; while the molecule is shown in 3D, its hidden 2D atoms cannot be picked.
+A selection that includes a shown model (3D or Both) has no resize handles. A chemical edit to the molecule
 (element, charge, bonds or stereo) removes the model. Rotating the model, its
 floating bar and flattening the current view are planned (#386).
 
