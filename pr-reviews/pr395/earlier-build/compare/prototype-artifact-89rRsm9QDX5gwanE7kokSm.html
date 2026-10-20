@@ -1,0 +1,658 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>ReShiki 3D Models</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: an app-window mock (paper canvas + inspector) above a four-style comparison strip. */
+:root {
+  --bg: #f3f5f4;
+  --surface: #ffffff;
+  --ink: #1d2422;
+  --muted: #5d6965;
+  --line: #d9dfdc;
+  --accent: #2f7a66;
+  --accent-soft: #e3f0eb;
+  --warn: #9a5b00;
+  --warn-soft: #fbefdc;
+  --paper: #ffffff;
+  --paper-line: #e6e9e8;
+  --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161a19; --surface: #1f2423; --ink: #e5ebe8; --muted: #9aa7a2; --line: #333b39;
+    --accent: #6cc3a8; --accent-soft: #23352f; --warn: #f0b860; --warn-soft: #3a2f1c;
+    --paper: #ffffff; --paper-line: #e6e9e8; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161a19; --surface: #1f2423; --ink: #e5ebe8; --muted: #9aa7a2; --line: #333b39;
+  --accent: #6cc3a8; --accent-soft: #23352f; --warn: #f0b860; --warn-soft: #3a2f1c;
+  --paper: #ffffff; --paper-line: #e6e9e8; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.5;
+  padding-block: 28px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 28px; }
+header { display: grid; gap: 6px; max-width: 72ch; }
+.eyebrow { font: 500 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-size: 26px; line-height: 1.2; margin: 0; font-weight: 600; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); }
+h2 { font-size: 15px; margin: 0; font-weight: 600; }
+
+/* App window mock */
+.app { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) 300px; }
+.titlebar { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+.dots { display: flex; gap: 6px; } .dots i { width: 11px; height: 11px; border-radius: 50%; background: var(--line); display: block; }
+.titlebar b { color: var(--ink); font-weight: 500; }
+.picker { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { font: inherit; font-size: 12px; border: 1px solid var(--line); background: transparent; color: var(--ink); padding: 3px 10px; border-radius: 999px; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.paper { background: var(--paper); position: relative; min-height: 440px; display: flex; align-items: center; justify-content: center; gap: 28px; padding: 32px 24px; flex-wrap: wrap;
+  background-image: radial-gradient(var(--paper-line) 1px, transparent 1px); background-size: 18px 18px; }
+.paper { display: grid; justify-content: center; align-content: center; grid-template-columns: auto; padding-top: 72px; padding-bottom: 52px; }
+.paper[data-rep="both"] { grid-template-columns: auto auto; }
+.paper[data-rep="2d"] > .obj, .paper[data-rep="3d"] > .obj { grid-area: 1 / 1; }
+.obj { transition: opacity .22s ease; justify-self: center; align-self: center; }
+.obj.off { opacity: 0; pointer-events: none; }
+.obj.off .sel, .obj.off .hint { display: none; }
+.objbox { position: relative; }
+.figure2d { width: 300px; max-width: 100%; height: 300px; display: block; }
+.modelbox { position: relative; width: 340px; max-width: 100%; aspect-ratio: 1 / 1; }
+.quick { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); z-index: 2; display: flex; align-items: center; gap: 4px; padding: 4px; background: #ffffff; border: 1px solid #d5dbe0; border-radius: 10px; box-shadow: 0 4px 14px rgba(20, 30, 40, .10); }
+.quick span { font-size: 11.5px; color: #66717a; padding: 0 6px 0 8px; }
+.quick button { font: inherit; font-size: 12.5px; display: flex; align-items: center; gap: 6px; border: 0; background: transparent; color: #26302c; padding: 5px 10px; border-radius: 7px; cursor: pointer; }
+.quick button svg { width: 16px; height: 14px; }
+.quick button[aria-pressed="true"] { background: #e3f0eb; color: #2f7a66; font-weight: 500; }
+.quick button:hover { background: #f1f4f3; }
+.toast { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); font-size: 12px; color: #fff; background: rgba(29, 36, 34, .88); padding: 5px 12px; border-radius: 999px; white-space: nowrap; transition: opacity .3s; }
+.subtle { font-size: 12px; color: var(--muted); margin: 0; }
+.radios { display: grid; gap: 6px; }
+.radio { font: inherit; text-align: left; display: grid; grid-template-columns: 16px 1fr; gap: 8px; align-items: start; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 8px; padding: 7px 9px; cursor: pointer; font-size: 12.5px; }
+.radio i { width: 12px; height: 12px; margin-top: 3px; border-radius: 50%; border: 1.5px solid var(--muted); display: block; }
+.radio[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.radio[aria-pressed="true"] i { border-color: var(--accent); box-shadow: inset 0 0 0 2.5px var(--surface); background: var(--accent); }
+.radio small { display: block; color: var(--muted); font-size: 11.5px; }
+.divider { height: 1px; background: var(--line); }
+.modelbox canvas { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; border-radius: 10px; }
+.modelbox canvas:active { cursor: grabbing; }
+.modelbox.card canvas { background: #f4f6f8; box-shadow: inset 0 0 0 1px #e3e7ea; }
+.sel { position: absolute; inset: -6px; border: 1.5px solid #4c8df6; border-radius: 12px; pointer-events: none; }
+.sel i { position: absolute; width: 9px; height: 9px; background: #fff; border: 1.5px solid #4c8df6; border-radius: 2px; }
+.sel i:nth-child(1) { left: -5px; top: -5px; } .sel i:nth-child(2) { right: -5px; top: -5px; }
+.sel i:nth-child(3) { left: -5px; bottom: -5px; } .sel i:nth-child(4) { right: -5px; bottom: -5px; }
+.hint { position: absolute; left: 50%; bottom: -34px; transform: translateX(-50%); white-space: nowrap; font-size: 11.5px; color: #6b7672; }
+.badge { position: absolute; top: 10px; left: 10px; display: flex; align-items: center; gap: 8px; background: #fff7ea; color: #8a5200; border: 1px solid #f0d3a4; font-size: 12px; padding: 4px 6px 4px 10px; border-radius: 8px; }
+.badge button { font: inherit; font-size: 12px; border: 0; background: #8a5200; color: #fff; padding: 2px 9px; border-radius: 6px; cursor: pointer; }
+.caption2d { position: absolute; left: 18px; bottom: 14px; font: 12px/1.3 Arial, sans-serif; color: #222; }
+
+/* Inspector */
+.inspector { border-left: 1px solid var(--line); padding: 16px; display: grid; gap: 16px; align-content: start; }
+.inspector h3 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.field { display: grid; gap: 6px; }
+.field > label, .field > .lbl { font-size: 12.5px; color: var(--ink); font-weight: 500; }
+.styles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.style { font: inherit; display: grid; grid-template-columns: 30px 1fr; align-items: center; gap: 8px; text-align: left; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 8px; padding: 6px 8px; cursor: pointer; font-size: 12.5px; }
+.style svg { width: 30px; height: 22px; }
+.style[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { flex: 1; font: inherit; font-size: 12px; padding: 5px 4px; border: 0; background: transparent; color: var(--ink); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.row { display: flex; justify-content: space-between; align-items: baseline; }
+.row output { font: 12px var(--mono); color: var(--muted); }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { font: inherit; font-size: 12.5px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 5px 10px; border-radius: 7px; cursor: pointer; }
+.btn:hover, .chip:hover, .style:hover { border-color: var(--accent); }
+.meta { font: 11.5px/1.5 var(--mono); color: var(--muted); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Compare strip */
+.compare { display: grid; gap: 12px; }
+.compare header { max-width: none; }
+.strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tile { font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: grid; gap: 8px; cursor: pointer; text-align: left; }
+.tile[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.tile canvas { width: 100%; aspect-ratio: 1 / 1; display: block; background: #fff; border-radius: 6px; }
+.tile b { font-size: 13px; font-weight: 600; }
+.tile span { font-size: 12px; color: var(--muted); }
+
+.notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.note { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 6px; align-content: start; }
+.note p { margin: 0; color: var(--muted); font-size: 13px; }
+
+@media (max-width: 900px) {
+  .paper[data-rep="both"] { grid-template-columns: auto; }
+  .quick span { display: none; }
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .inspector { border-left: 0; border-top: 1px solid var(--line); }
+  .strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .notes { grid-template-columns: minmax(0, 1fr); }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Design prototype · not in the app yet</span>
+    <h1>Switch a structure between 2D and 3D</h1>
+    <p>Select a molecule and switch it to <b>3D</b>, back to <b>2D</b>, or show <b>both</b>, from the bar above the selection or the <b>Structure</b> panel on the right. It stays one molecule: the switch only changes how it is drawn. Drag the 3D model to rotate it. Every render is drawn the way ReShiki would export it: shaded vector discs and cylinders, back to front.</p>
+  </header>
+
+  <section class="app" aria-label="ReShiki window mock">
+    <div class="titlebar">
+      <span class="dots"><i></i><i></i><i></i></span>
+      <b id="docname">caffeine.rsk</b>
+      <div class="picker" role="group" aria-label="Example molecule">
+        <button class="chip" id="m-caffeine" data-mol="caffeine" aria-pressed="true">Caffeine</button>
+        <button class="chip" id="m-ibuprofen" data-mol="ibuprofen" aria-pressed="false">Ibuprofen</button>
+        <button class="chip" id="m-crown" data-mol="crown" aria-pressed="false">18-Crown-6</button>
+      </div>
+    </div>
+    <div class="paper" id="paper" data-rep="both">
+      <div class="quick" role="group" aria-label="Show the selected molecule as">
+        <span>Show as</span>
+        <button id="q-2d" data-rep="2d" aria-pressed="false"><svg viewBox="0 0 16 14"><polygon points="8,1.5 13.6,4.75 13.6,9.25 8,12.5 2.4,9.25 2.4,4.75" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>2D</button>
+        <button id="q-3d" data-rep="3d" aria-pressed="false"><svg viewBox="0 0 16 14"><line x1="4" y1="10" x2="12" y2="4" stroke="currentColor" stroke-width="1.6"/><circle cx="4" cy="10" r="3" fill="currentColor"/><circle cx="12" cy="4" r="2.6" fill="currentColor"/></svg>3D</button>
+        <button id="q-both" data-rep="both" aria-pressed="true"><svg viewBox="0 0 16 14"><polygon points="5,2 8.5,4 8.5,8 5,10 1.5,8 1.5,4" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="12.5" cy="9.5" r="2.6" fill="currentColor"/></svg>Both</button>
+      </div>
+      <div class="obj objbox" id="box2d">
+        <svg class="figure2d" id="fig2d" viewBox="0 0 300 300" role="img" aria-label="Skeletal structure"></svg>
+      </div>
+      <div class="obj modelbox" id="modelbox">
+        <canvas id="main" aria-label="3D model; drag to rotate"></canvas>
+        <div class="sel" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div class="badge" id="badge" hidden>Structure changed <button id="update">Update model</button></div>
+        <div class="hint">Drag to rotate · Shift-drag to roll · Double-click to reset</div>
+      </div>
+      <div class="toast" id="toast" style="opacity:0" aria-live="polite"></div>
+    </div>
+    <aside class="inspector" aria-label="Properties">
+      <h3>Structure</h3>
+      <div class="field">
+        <span class="lbl">Show as</span>
+        <div class="seg" role="group" aria-label="Show as">
+          <button id="r-2d" data-rep="2d" aria-pressed="false">2D drawing</button>
+          <button id="r-3d" data-rep="3d" aria-pressed="false">3D model</button>
+          <button id="r-both" data-rep="both" aria-pressed="true">Both</button>
+        </div>
+        <p class="subtle" id="rep-note">One molecule, drawn twice. Edits to the 2D drawing mark the model out of date.</p>
+      </div>
+      <div class="field" id="f-layout">
+        <span class="lbl">2D layout</span>
+        <div class="radios" role="group" aria-label="2D layout">
+          <button class="radio" id="y-original" data-layout="original" aria-pressed="true"><i></i><span>Original drawing<small>The layout you drew, unchanged.</small></span></button>
+          <button class="radio" id="y-view" data-layout="view" aria-pressed="false"><i></i><span>From the 3D view<small>Flatten the model as it is turned now, with far bonds lighter.</small></span></button>
+        </div>
+      </div>
+      <div class="field" id="f-conformer">
+        <span class="lbl">Conformer</span>
+        <div class="seg" role="group" aria-label="Force field">
+          <button id="c-mmff94s" data-ff="MMFF94s" aria-pressed="true">MMFF94s</button>
+          <button id="c-mmff94" data-ff="MMFF94" aria-pressed="false">MMFF94</button>
+          <button id="c-uff" data-ff="UFF" aria-pressed="false">UFF</button>
+        </div>
+        <p class="subtle">Same engine as 3D optimize. The prototype always shows the MMFF94s result.</p>
+      </div>
+      <div class="divider"></div>
+      <div id="sec3d" style="display:grid;gap:16px">
+      <h3>3D model</h3>
+      <div class="field">
+        <span class="lbl">Style</span>
+        <div class="styles" role="group" aria-label="Style">
+          <button class="style" id="s-ballstick" data-style="ballstick" aria-pressed="true"><svg viewBox="0 0 30 22"><line x1="7" y1="15" x2="23" y2="7" stroke="currentColor" stroke-width="2.5"/><circle cx="7" cy="15" r="5" fill="currentColor"/><circle cx="23" cy="7" r="4" fill="currentColor"/></svg>Ball &amp; stick</button>
+          <button class="style" id="s-stick" data-style="stick" aria-pressed="false"><svg viewBox="0 0 30 22"><polyline points="4,16 12,8 20,15 27,7" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Stick</button>
+          <button class="style" id="s-wire" data-style="wire" aria-pressed="false"><svg viewBox="0 0 30 22"><polyline points="4,16 12,8 20,15 27,7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>Wireframe</button>
+          <button class="style" id="s-space" data-style="space" aria-pressed="false"><svg viewBox="0 0 30 22"><circle cx="11" cy="12" r="7" fill="currentColor" opacity=".55"/><circle cx="19" cy="10" r="7" fill="currentColor"/></svg>Space-filling</button>
+        </div>
+      </div>
+      <div class="field">
+        <span class="lbl">Look</span>
+        <div class="seg" role="group" aria-label="Look">
+          <button id="l-flat" data-look="flat" aria-pressed="true">Flat · journal</button>
+          <button id="l-glossy" data-look="glossy" aria-pressed="false">Glossy · slides</button>
+        </div>
+      </div>
+      <div class="field">
+        <span class="lbl">Hydrogens</span>
+        <div class="seg" role="group" aria-label="Hydrogens">
+          <button id="h-all" data-h="all" aria-pressed="true">All</button>
+          <button id="h-polar" data-h="polar" aria-pressed="false">Polar</button>
+          <button id="h-none" data-h="none" aria-pressed="false">None</button>
+        </div>
+      </div>
+      <div class="field">
+        <span class="lbl">Atom labels</span>
+        <div class="seg" role="group" aria-label="Atom labels">
+          <button id="a-none" data-labels="none" aria-pressed="true">None</button>
+          <button id="a-hetero" data-labels="hetero" aria-pressed="false">Heteroatoms</button>
+          <button id="a-all" data-labels="all" aria-pressed="false">All</button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="row"><label for="depth">Depth fade</label><output id="depth-out">35%</output></div>
+        <input type="range" id="depth" min="0" max="100" value="35">
+      </div>
+      <div class="field">
+        <div class="row"><label for="persp">Perspective</label><output id="persp-out">20%</output></div>
+        <input type="range" id="persp" min="0" max="100" value="20">
+      </div>
+      <div class="field">
+        <span class="lbl">Background</span>
+        <div class="seg" role="group" aria-label="Background">
+          <button id="b-none" data-bg="none" aria-pressed="true">None</button>
+          <button id="b-card" data-bg="card" aria-pressed="false">Soft card</button>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="reset">Reset view</button>
+        <button class="btn" id="edit">Edit the structure</button>
+      </div>
+      </div>
+      <div class="meta" id="meta"></div>
+    </aside>
+  </section>
+
+  <section class="compare" aria-label="Style comparison">
+    <header>
+      <h2>The four styles, same view</h2>
+      <p>These follow the rotation above. Click one to use it.</p>
+    </header>
+    <div class="strip" id="strip"></div>
+  </section>
+
+  <section class="notes" aria-label="How it would work">
+    <div class="note"><h2>One molecule, two drawings</h2><p>Switching between 2D, 3D and Both never changes the chemistry or atom identities, and each switch is one Undo step. Going back to 2D can restore your drawing or flatten the current 3D view.</p></div>
+    <div class="note"><h2>Linked to its structure</h2><p>In Both, edit the 2D structure and the model is marked out of date, with one click to update. It never re-generates a view you arranged without asking. Try <b>Edit the structure</b>.</p></div>
+    <div class="note"><h2>Exports like the drawing</h2><p>PNG, SVG and PDF keep it as sharp vector shapes. ChemDraw (CDX) and Office have no 3D object, so they receive it as a picture; the .rsk file keeps it live.</p></div>
+  </section>
+</div>
+
+<script>
+const MOLS = {"caffeine":{"name":"Caffeine","smiles":"CN1C=NC2=C1C(=O)N(C(=O)N2C)C","formula":"C8H10N4O2","atoms":[{"el":"C","xyz":[3.324,0.058,-0.234]},{"el":"N","xyz":[2.058,-0.627,-0.194]},{"el":"C","xyz":[1.867,-1.981,-0.279]},{"el":"N","xyz":[0.59,-2.298,-0.21]},{"el":"C","xyz":[-0.049,-1.103,-0.077]},{"el":"C","xyz":[0.824,-0.058,-0.063]},{"el":"C","xyz":[0.415,1.297,0.065]},{"el":"O","xyz":[1.21,2.232,0.076]},{"el":"N","xyz":[-0.972,1.436,0.175]},{"el":"C","xyz":[-1.908,0.38,0.165]},{"el":"O","xyz":[-3.118,0.604,0.268]},{"el":"N","xyz":[-1.406,-0.915,0.034]},{"el":"C","xyz":[-2.301,-2.057,0.015]},{"el":"C","xyz":[-1.516,2.773,0.312]},{"el":"H","xyz":[4.13,-0.671,-0.345]},{"el":"H","xyz":[3.324,0.74,-1.089]},{"el":"H","xyz":[3.452,0.609,0.701]},{"el":"H","xyz":[2.684,-2.685,-0.389]},{"el":"H","xyz":[-3.348,-1.757,0.112]},{"el":"H","xyz":[-2.05,-2.722,0.847]},{"el":"H","xyz":[-2.178,-2.592,-0.932]},{"el":"H","xyz":[-2.207,2.962,-0.517]},{"el":"H","xyz":[-2.08,2.833,1.248]},{"el":"H","xyz":[-0.743,3.545,0.313]}],"bonds":[[0,1,1],[1,2,1.5],[2,3,1.5],[3,4,1.5],[4,5,1.5],[5,6,1],[6,7,2],[6,8,1],[8,9,1],[9,10,2],[9,11,1],[11,12,1],[8,13,1],[5,1,1.5],[11,4,1],[0,14,1],[0,15,1],[0,16,1],[2,17,1],[12,18,1],[12,19,1],[12,20,1],[13,21,1],[13,22,1],[13,23,1]],"two":{"xy":[[-1.617,-1.806],[-1.405,-0.829],[-2.071,-0.083],[-1.568,0.781],[-0.591,0.569],[-0.49,-0.426],[0.422,-0.836],[0.523,-1.831],[1.233,-0.251],[1.133,0.743],[1.944,1.328],[0.221,1.154],[0.12,2.149],[2.145,-0.662]],"el":["C","N","C","N","C","C","C","O","N","C","O","N","C","C"],"h":[3,0,1,0,0,0,0,0,0,0,0,0,3,3],"bonds":[[0,1,1,null],[1,2,1,[1,2,3,4,5]],[2,3,2,[1,2,3,4,5]],[3,4,1,[1,2,3,4,5]],[4,5,2,[1,2,3,4,5]],[5,6,1,[4,5,6,8,9,11]],[6,7,2,null],[6,8,1,[4,5,6,8,9,11]],[8,9,1,[4,5,6,8,9,11]],[9,10,2,null],[9,11,1,[4,5,6,8,9,11]],[11,12,1,null],[8,13,1,null],[5,1,1,[1,2,3,4,5]],[11,4,1,[4,5,6,8,9,11]]]}},"ibuprofen":{"name":"(S)-Ibuprofen","smiles":"CC(C)Cc1ccc(cc1)[C@H](C)C(=O)O","formula":"C13H18O2","atoms":[{"el":"C","xyz":[-4.548,1.115,0.222]},{"el":"C","xyz":[-3.162,0.529,0.504]},{"el":"C","xyz":[-3.302,-0.927,0.958]},{"el":"C","xyz":[-2.274,0.661,-0.749]},{"el":"C","xyz":[-0.826,0.307,-0.51]},{"el":"C","xyz":[-0.289,-0.881,-1.018]},{"el":"C","xyz":[1.051,-1.209,-0.793]},{"el":"C","xyz":[1.882,-0.356,-0.053]},{"el":"C","xyz":[1.342,0.835,0.452]},{"el":"C","xyz":[0.003,1.163,0.226]},{"el":"C","xyz":[3.334,-0.729,0.183]},{"el":"C","xyz":[3.64,-0.924,1.67]},{"el":"C","xyz":[4.283,0.29,-0.421]},{"el":"O","xyz":[4.764,1.267,0.132]},{"el":"O","xyz":[4.571,0.034,-1.715]},{"el":"H","xyz":[-5.185,1.055,1.11]},{"el":"H","xyz":[-4.473,2.171,-0.062]},{"el":"H","xyz":[-5.048,0.58,-0.592]},{"el":"H","xyz":[-2.72,1.101,1.329]},{"el":"H","xyz":[-2.336,-1.344,1.259]},{"el":"H","xyz":[-3.972,-1.001,1.821]},{"el":"H","xyz":[-3.71,-1.555,0.158]},{"el":"H","xyz":[-2.308,1.694,-1.12]},{"el":"H","xyz":[-2.68,0.044,-1.561]},{"el":"H","xyz":[-0.911,-1.563,-1.593]},{"el":"H","xyz":[1.439,-2.139,-1.203]},{"el":"H","xyz":[1.96,1.525,1.024]},{"el":"H","xyz":[-0.39,2.094,0.628]},{"el":"H","xyz":[3.551,-1.69,-0.304]},{"el":"H","xyz":[3.498,-0.001,2.244]},{"el":"H","xyz":[4.68,-1.236,1.811]},{"el":"H","xyz":[2.992,-1.692,2.106]},{"el":"H","xyz":[5.144,0.783,-1.981]}],"bonds":[[0,1,1],[1,2,1],[1,3,1],[3,4,1],[4,5,1.5],[5,6,1.5],[6,7,1.5],[7,8,1.5],[8,9,1.5],[7,10,1],[10,11,1],[10,12,1],[12,13,2],[12,14,1],[9,4,1.5],[0,15,1],[0,16,1],[0,17,1],[1,18,1],[2,19,1],[2,20,1],[2,21,1],[3,22,1],[3,23,1],[5,24,1],[6,25,1],[8,26,1],[9,27,1],[10,28,1],[11,29,1],[11,30,1],[11,31,1],[14,32,1]],"two":{"xy":[[-2.773,-2.531],[-1.907,-2.032],[-1.041,-2.533],[-1.906,-1.032],[-1.04,-0.533],[-0.174,-1.033],[0.692,-0.534],[0.693,0.466],[-0.172,0.967],[-1.039,0.468],[1.56,0.965],[2.425,0.465],[1.56,1.965],[0.695,2.466],[2.427,2.465]],"el":["C","C","C","C","C","C","C","C","C","C","C","C","C","O","O"],"h":[3,1,3,2,0,1,1,0,1,1,1,3,0,0,1],"bonds":[[0,1,1,null],[1,2,1,null],[1,3,1,null],[3,4,1,null],[4,5,1,[4,5,6,7,8,9]],[5,6,2,[4,5,6,7,8,9]],[6,7,1,[4,5,6,7,8,9]],[7,8,2,[4,5,6,7,8,9]],[8,9,1,[4,5,6,7,8,9]],[7,10,1,null],[10,11,1,null],[10,12,1,null],[12,13,2,null],[12,14,1,null],[9,4,2,[4,5,6,7,8,9]]]}},"crown":{"name":"18-Crown-6","smiles":"C1COCCOCCOCCOCCOCCO1","formula":"C12H24O6","atoms":[{"el":"C","xyz":[1.487,2.834,-1.671]},{"el":"C","xyz":[0.371,3.869,-1.501]},{"el":"O","xyz":[-0.834,3.267,-1.014]},{"el":"C","xyz":[-0.831,3.065,0.403]},{"el":"C","xyz":[-2.022,2.194,0.795]},{"el":"O","xyz":[-1.796,0.848,0.354]},{"el":"C","xyz":[-2.841,-0.025,0.789]},{"el":"C","xyz":[-2.668,-1.408,0.163]},{"el":"O","xyz":[-1.54,-2.077,0.741]},{"el":"C","xyz":[-1.499,-3.456,0.352]},{"el":"C","xyz":[-0.173,-4.076,0.792]},{"el":"O","xyz":[0.844,-3.993,-0.211]},{"el":"C","xyz":[1.309,-2.676,-0.512]},{"el":"C","xyz":[2.109,-2.041,0.628]},{"el":"O","xyz":[2.847,-0.896,0.193]},{"el":"C","xyz":[2.04,0.277,0.088]},{"el":"C","xyz":[2.918,1.445,-0.368]},{"el":"O","xyz":[2.18,2.665,-0.429]},{"el":"H","xyz":[1.065,1.885,-2.017]},{"el":"H","xyz":[2.216,3.194,-2.404]},{"el":"H","xyz":[0.123,4.278,-2.486]},{"el":"H","xyz":[0.67,4.698,-0.85]},{"el":"H","xyz":[0.087,2.57,0.724]},{"el":"H","xyz":[-0.908,4.042,0.891]},{"el":"H","xyz":[-2.134,2.199,1.885]},{"el":"H","xyz":[-2.939,2.571,0.328]},{"el":"H","xyz":[-3.808,0.388,0.48]},{"el":"H","xyz":[-2.806,-0.098,1.882]},{"el":"H","xyz":[-2.503,-1.319,-0.916]},{"el":"H","xyz":[-3.572,-1.999,0.349]},{"el":"H","xyz":[-2.325,-3.966,0.86]},{"el":"H","xyz":[-1.625,-3.545,-0.733]},{"el":"H","xyz":[-0.331,-5.148,0.952]},{"el":"H","xyz":[0.189,-3.653,1.734]},{"el":"H","xyz":[0.482,-2.038,-0.836]},{"el":"H","xyz":[1.964,-2.768,-1.387]},{"el":"H","xyz":[1.469,-1.781,1.479]},{"el":"H","xyz":[2.836,-2.77,1.001]},{"el":"H","xyz":[1.224,0.115,-0.623]},{"el":"H","xyz":[1.592,0.511,1.061]},{"el":"H","xyz":[3.725,1.586,0.36]},{"el":"H","xyz":[3.405,1.23,-1.327]}],"bonds":[[0,1,1],[1,2,1],[2,3,1],[3,4,1],[4,5,1],[5,6,1],[6,7,1],[7,8,1],[8,9,1],[9,10,1],[10,11,1],[11,12,1],[12,13,1],[13,14,1],[14,15,1],[15,16,1],[16,17,1],[17,0,1],[0,18,1],[0,19,1],[1,20,1],[1,21,1],[3,22,1],[3,23,1],[4,24,1],[4,25,1],[6,26,1],[6,27,1],[7,28,1],[7,29,1],[9,30,1],[9,31,1],[10,32,1],[10,33,1],[12,34,1],[12,35,1],[13,36,1],[13,37,1],[15,38,1],[15,39,1],[16,40,1],[16,41,1]],"two":{"xy":[[2.599,-0.493],[2.597,0.507],[1.729,1.005],[1.726,2.005],[0.859,2.502],[-0.006,2.0],[-0.873,2.498],[-1.738,1.995],[-1.735,0.995],[-2.599,0.493],[-2.597,-0.507],[-1.729,-1.005],[-1.726,-2.005],[-0.859,-2.502],[0.006,-2.0],[0.873,-2.498],[1.738,-1.995],[1.735,-0.995]],"el":["C","C","O","C","C","O","C","C","O","C","C","O","C","C","O","C","C","O"],"h":[2,2,0,2,2,0,2,2,0,2,2,0,2,2,0,2,2,0],"bonds":[[0,1,1,[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]],[1,2,1,[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]],[2,3,1,[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]],[3,4,1,[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]],[4,5,1,[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]],[5,6,1,[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]],[6,7,1,[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]],[7,8,1,[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]],[8,9,1,[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]],[9,10,1,[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]],[10,11,1,[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]],[11,12,1,[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]],[12,13,1,[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]],[13,14,1,[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]],[14,15,1,[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]],[15,16,1,[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]],[16,17,1,[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]],[17,0,1,[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]]]}}};
+
+/* ---------- chemistry constants ---------- */
+const COLOR = { H: "#eef0f2", C: "#8d949b", N: "#3f6fd6", O: "#e0483d", S: "#e3b52e", F: "#5fbf4f", Cl: "#3fae4a", Br: "#9b4a2c", P: "#ef8a2f" };
+const VDW = { H: 1.10, C: 1.70, N: 1.55, O: 1.52, S: 1.80, F: 1.47, Cl: 1.75, Br: 1.85, P: 1.80 };
+const BALL = { H: 0.23, C: 0.33, N: 0.32, O: 0.31, S: 0.40, F: 0.30, Cl: 0.40, Br: 0.44, P: 0.40 };
+const STYLE_NAMES = { ballstick: ["Ball & stick", "Default. Clear bonds, readable atoms."], stick: ["Stick", "Shape and conformation, little clutter."], wire: ["Wireframe", "Lightest. Good for large molecules."], space: ["Space-filling", "Size and shape, van der Waals radii."] };
+
+const state = { mol: "caffeine", style: "ballstick", look: "flat", h: "all", labels: "none", depth: 0.35, persp: 0.2, bg: "none", R: null, stale: false, rep: "both", layout: "original", ff: "MMFF94s", morph: 1 };
+
+/* ---------- small math ---------- */
+const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const rgb = c => `rgb(${c.map(v => Math.round(Math.max(0, Math.min(255, v)))).join(",")})`;
+const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+const mul = (A, B) => A.map((r, i) => [0, 1, 2].map(j => r[0] * B[0][j] + r[1] * B[1][j] + r[2] * B[2][j]));
+const rotX = a => [[1, 0, 0], [0, Math.cos(a), -Math.sin(a)], [0, Math.sin(a), Math.cos(a)]];
+const rotY = a => [[Math.cos(a), 0, Math.sin(a)], [0, 1, 0], [-Math.sin(a), 0, Math.cos(a)]];
+const rotZ = a => [[Math.cos(a), -Math.sin(a), 0], [Math.sin(a), Math.cos(a), 0], [0, 0, 1]];
+const apply = (R, v) => [0, 1, 2].map(i => R[i][0] * v[0] + R[i][1] * v[1] + R[i][2] * v[2]);
+
+/* Principal axes, so each molecule opens showing its broadest face. */
+function initialView(mol) {
+  const pts = mol.atoms.filter(a => a.el !== "H").map(a => a.xyz);
+  const c = [0, 1, 2].map(i => pts.reduce((s, p) => s + p[i], 0) / pts.length);
+  const C = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  for (const p of pts) for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) C[i][j] += (p[i] - c[i]) * (p[j] - c[j]);
+  const axes = [];
+  let M = C.map(r => r.slice());
+  for (let k = 0; k < 2; k++) {
+    let v = k === 0 ? [1, 0.3, 0.2] : [0.2, 1, 0.3];
+    for (let it = 0; it < 60; it++) {
+      v = apply(M, v);
+      for (const a of axes) { const d = v[0] * a[0] + v[1] * a[1] + v[2] * a[2]; v = v.map((x, i) => x - d * a[i]); }
+      const n = Math.hypot(...v) || 1; v = v.map(x => x / n);
+    }
+    axes.push(v);
+  }
+  const z = [axes[0][1] * axes[1][2] - axes[0][2] * axes[1][1], axes[0][2] * axes[1][0] - axes[0][0] * axes[1][2], axes[0][0] * axes[1][1] - axes[0][1] * axes[1][0]];
+  // Rows are the new x, y, z axes; tilt slightly so it reads as 3D.
+  return mul(mul(rotX(-0.35), rotY(0.3)), [axes[0], axes[1].map(x => -x), z]);
+}
+
+/* ---------- renderer ---------- */
+function visibleAtoms(mol, h) {
+  const nbr = mol.atoms.map(() => []);
+  for (const [a, b] of mol.bonds) { nbr[a].push(b); nbr[b].push(a); }
+  return mol.atoms.map((a, i) => {
+    if (a.el !== "H" || h === "all") return true;
+    if (h === "none") return false;
+    return nbr[i].some(j => ["N", "O", "S"].includes(mol.atoms[j].el));
+  });
+}
+
+/* Heavy-atom 2D positions in Å (z = 0) for the chosen 2D layout; H sits on its atom. */
+function layoutXY(mol, layout, R) {
+  const n = mol.two.xy.length;
+  if (layout === "view") {
+    const heavy = mol.atoms.slice(0, n).map(a => a.xyz);
+    const c = [0, 1, 2].map(i => heavy.reduce((s, p) => s + p[i], 0) / n);
+    return heavy.map(p => apply(R, p.map((v, i) => v - c[i])));
+  }
+  const xy = mol.two.xy;
+  const lens = mol.two.bonds.map(([a, b]) => Math.hypot(xy[a][0] - xy[b][0], xy[a][1] - xy[b][1]));
+  const k = 1.45 / (lens.reduce((s, v) => s + v, 0) / lens.length);
+  const cx = xy.reduce((s, p) => s + p[0], 0) / n, cy = xy.reduce((s, p) => s + p[1], 0) / n;
+  return xy.map(p => [(p[0] - cx) * k, (p[1] - cy) * k, 0]);
+}
+function flatStart(mol, opts) {
+  const n = mol.two.xy.length;
+  const L = layoutXY(mol, opts.layout, opts.R).map(p => [p[0], p[1], 0]);
+  const parent = mol.atoms.map((a, i) => i);
+  for (const [a, b] of mol.bonds) { if (a >= n && b < n) parent[a] = b; if (b >= n && a < n) parent[b] = a; }
+  return mol.atoms.map((a, i) => L[i < n ? i : parent[i]] || [0, 0, 0]);
+}
+
+function render(canvas, opts) {
+  const mol = MOLS[opts.mol];
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (!w || !h) return;
+  if (canvas.width !== Math.round(w * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  const show = visibleAtoms(mol, opts.h);
+  const heavy = mol.atoms.filter(a => a.el !== "H").map(a => a.xyz);
+  const c = [0, 1, 2].map(i => heavy.reduce((s, p) => s + p[i], 0) / heavy.length);
+  let P = mol.atoms.map(a => apply(opts.R, a.xyz.map((v, i) => v - c[i])));
+  const m = opts.morph ?? 1;
+  let alphaH = 1;
+  if (m < 1) {
+    // Start from the flat 2D layout (z = 0); hydrogens grow out of their atoms.
+    const F = flatStart(mol, opts);
+    const e = m < 0.5 ? 4 * m * m * m : 1 - Math.pow(-2 * m + 2, 3) / 2;
+    P = P.map((p, i) => p.map((v, k) => F[i][k] + (v - F[i][k]) * e));
+    alphaH = e;
+  }
+  const radiusOf = el => opts.style === "space" ? VDW[el] : opts.style === "ballstick" ? BALL[el] : opts.style === "stick" ? 0.16 : 0.02;
+  let reach = 0;
+  mol.atoms.forEach((a, i) => { if (show[i]) reach = Math.max(reach, Math.hypot(...a.xyz.map((v, k) => v - c[k])) + radiusOf(a.el)); });
+  const scale = Math.min(w, h) * 0.44 / reach;
+  const cam = reach * (1.2 + 9 * (1 - opts.persp));
+  const proj = p => { const f = opts.persp > 0 ? cam / (cam - p[2]) : 1; return { x: w / 2 + p[0] * scale * f, y: h / 2 - p[1] * scale * f, f, z: p[2] }; };
+  const Q = P.map(proj);
+  const bg = opts.bg === "card" ? hex("#f4f6f8") : hex("#ffffff");
+  const fade = z => opts.depth * Math.max(0, Math.min(1, (reach - z) / (2 * reach)));
+  const glossy = opts.look === "glossy";
+  const outline = glossy ? null : "rgba(30,34,38,0.85)";
+  const line = Math.max(0.6, Math.min(1.1, w / 400));
+
+  const items = [];
+  // Bonds: each half in its atom's colour, drawn as a shaded cylinder.
+  if (opts.style !== "space") {
+    for (const [a, b, order] of mol.bonds) {
+      if (!show[a] || !show[b]) continue;
+      const m = P[a].map((v, i) => (v + P[b][i]) / 2);
+      for (const [s, e] of [[a, m], [b, m]]) {
+        const ps = P[s], pe = Array.isArray(e) ? e : P[e];
+        items.push({ kind: "bond", z: (ps[2] + pe[2]) / 2 - 0.05, s: Q[s], e: proj(pe), el: mol.atoms[s].el, order });
+      }
+    }
+  }
+  if (opts.style !== "wire") {
+    P.forEach((p, i) => { if (show[i]) items.push({ kind: "atom", z: p[2], q: Q[i], el: mol.atoms[i].el, r: radiusOf(mol.atoms[i].el) * scale * Q[i].f }); });
+  }
+  items.sort((x, y) => x.z - y.z);
+
+  const bondR = opts.style === "ballstick" ? 0.085 : opts.style === "stick" ? 0.16 : 0;
+  for (const it of items) {
+    const base = mix(hex(COLOR[it.el] || "#999999"), bg, fade(it.z));
+    ctx.globalAlpha = it.el === "H" ? alphaH : 1;
+    if (it.kind === "atom") {
+      const { x, y } = it.q, r = it.r;
+      const g = ctx.createRadialGradient(x - r * 0.38, y - r * 0.42, r * 0.05, x, y, r);
+      if (glossy) {
+        g.addColorStop(0, rgb(mix(base, [255, 255, 255], 0.85)));
+        g.addColorStop(0.18, rgb(mix(base, [255, 255, 255], 0.35)));
+        g.addColorStop(0.75, rgb(base));
+        g.addColorStop(1, rgb(mix(base, [0, 0, 0], 0.45)));
+      } else {
+        g.addColorStop(0, rgb(mix(base, [255, 255, 255], 0.45)));
+        g.addColorStop(0.6, rgb(base));
+        g.addColorStop(1, rgb(mix(base, [0, 0, 0], 0.18)));
+      }
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
+      if (outline && opts.style !== "stick") { ctx.lineWidth = line; ctx.strokeStyle = outline; ctx.stroke(); }
+    } else if (opts.style === "wire") {
+      ctx.beginPath(); ctx.moveTo(it.s.x, it.s.y); ctx.lineTo(it.e.x, it.e.y);
+      ctx.lineCap = "round"; ctx.lineWidth = Math.max(1.6, w / 190); ctx.strokeStyle = rgb(mix(base, [0, 0, 0], it.el === "C" ? 0.35 : 0.1)); ctx.stroke();
+    } else {
+      const dx = it.e.x - it.s.x, dy = it.e.y - it.s.y, len = Math.hypot(dx, dy);
+      if (len < 0.5) continue;
+      const nx = -dy / len, ny = dx / len, hw = bondR * scale * it.s.f;
+      const g = ctx.createLinearGradient(it.s.x + nx * hw, it.s.y + ny * hw, it.s.x - nx * hw, it.s.y - ny * hw);
+      g.addColorStop(0, rgb(mix(base, [0, 0, 0], glossy ? 0.4 : 0.2)));
+      g.addColorStop(glossy ? 0.3 : 0.4, rgb(mix(base, [255, 255, 255], glossy ? 0.55 : 0.3)));
+      g.addColorStop(1, rgb(mix(base, [0, 0, 0], glossy ? 0.45 : 0.22)));
+      ctx.beginPath();
+      ctx.moveTo(it.s.x + nx * hw, it.s.y + ny * hw); ctx.lineTo(it.e.x + nx * hw, it.e.y + ny * hw);
+      ctx.lineTo(it.e.x - nx * hw, it.e.y - ny * hw); ctx.lineTo(it.s.x - nx * hw, it.s.y - ny * hw); ctx.closePath();
+      ctx.fillStyle = g; ctx.fill();
+      if (outline && opts.style === "ballstick") {
+        ctx.lineWidth = line * 0.8; ctx.strokeStyle = outline;
+        ctx.beginPath(); ctx.moveTo(it.s.x + nx * hw, it.s.y + ny * hw); ctx.lineTo(it.e.x + nx * hw, it.e.y + ny * hw);
+        ctx.moveTo(it.s.x - nx * hw, it.s.y - ny * hw); ctx.lineTo(it.e.x - nx * hw, it.e.y - ny * hw); ctx.stroke();
+      }
+    }
+  }
+
+  ctx.globalAlpha = 1;
+  if (opts.labels !== "none" && m >= 1) {
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    const order = P.map((p, i) => i).filter(i => show[i]).sort((a, b) => P[a][2] - P[b][2]);
+    for (const i of order) {
+      const el = mol.atoms[i].el;
+      if (opts.labels === "hetero" && (el === "C" || el === "H")) continue;
+      const q = Q[i], size = Math.max(9, Math.min(15, w / 26)) * (el === "H" ? 0.8 : 1);
+      ctx.font = `600 ${size}px Arial, sans-serif`;
+      const dark = el === "H" || el === "S";
+      ctx.lineWidth = 3; ctx.strokeStyle = dark ? "rgba(255,255,255,.9)" : "rgba(20,24,28,.55)"; ctx.strokeText(el, q.x, q.y);
+      ctx.fillStyle = dark ? "#1d2422" : "#ffffff"; ctx.fillText(el, q.x, q.y);
+    }
+  }
+}
+
+/* ---------- 2D skeletal structure (ACS-like) ---------- */
+function draw2d() {
+  const mol = MOLS[state.mol], svg = document.getElementById("fig2d");
+  const L = layoutXY(mol, state.layout, state.R);
+  const t = { ...mol.two, xy: L.map(p => [p[0], p[1]]) };
+  const zs = L.map(p => p[2]), zmin = Math.min(...zs), zmax = Math.max(...zs);
+  const far = i => state.layout === "view" && zmax > zmin ? (zmax - zs[i]) / (zmax - zmin) : 0;
+  const lens = t.bonds.map(([a, b]) => Math.hypot(t.xy[a][0] - t.xy[b][0], t.xy[a][1] - t.xy[b][1]));
+  const avg = lens.reduce((s, v) => s + v, 0) / lens.length;
+  const k = 30 / avg;
+  const xs = t.xy.map(p => p[0]), ys = t.xy.map(p => p[1]);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const fit = Math.min(1, 250 / ((Math.max(...xs) - Math.min(...xs)) * k), 250 / ((Math.max(...ys) - Math.min(...ys)) * k));
+  const s = k * fit;
+  const pt = p => [150 + (p[0] - cx) * s, 150 - (p[1] - cy) * s];
+  const X = t.xy.map(pt);
+  const nbr = t.xy.map(() => []);
+  t.bonds.forEach(([a, b]) => { nbr[a].push(b); nbr[b].push(a); });
+  const labelled = t.el.map(e => e !== "C");
+  const fs = 11.5 * Math.max(0.8, fit);
+  let out = "";
+  const seg = (p, q, trimA, trimB) => {
+    const dx = q[0] - p[0], dy = q[1] - p[1], L = Math.hypot(dx, dy);
+    const a = trimA / L, b = trimB / L;
+    return [[p[0] + dx * a, p[1] + dy * a], [q[0] - dx * b, q[1] - dy * b]];
+  };
+  const ln = (p, q) => `<line x1="${p[0].toFixed(1)}" y1="${p[1].toFixed(1)}" x2="${q[0].toFixed(1)}" y2="${q[1].toFixed(1)}"/>`;
+  t.bonds.forEach(([a, b, order, ring]) => {
+    const ta = labelled[a] ? fs * 0.62 : 0, tb = labelled[b] ? fs * 0.62 : 0;
+    const [p, q] = seg(X[a], X[b], ta, tb);
+    // Far bonds fade, as 3D optimize's projection does.
+    const op = (1 - 0.55 * (far(a) + far(b)) / 2).toFixed(2);
+    out += `<g opacity="${op}">`;
+    const done = () => { out += "</g>"; };
+    if (order === 1) { out += ln(p, q); done(); return; }
+    const dx = q[0] - p[0], dy = q[1] - p[1], L = Math.hypot(dx, dy), nx = -dy / L, ny = dx / L;
+    const gap = 4.6 * Math.max(0.8, fit);
+    if (ring) {
+      const rc = [ring.reduce((s, i) => s + X[i][0], 0) / ring.length, ring.reduce((s, i) => s + X[i][1], 0) / ring.length];
+      const mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2;
+      const sgn = ((rc[0] - mx) * nx + (rc[1] - my) * ny) > 0 ? 1 : -1;
+      out += ln(p, q);
+      const [p2, q2] = seg([p[0] + nx * gap * sgn, p[1] + ny * gap * sgn], [q[0] + nx * gap * sgn, q[1] + ny * gap * sgn], ta ? 0 : 4, tb ? 0 : 4);
+      out += ln(p2, q2);
+    } else {
+      out += ln([p[0] + nx * gap / 2, p[1] + ny * gap / 2], [q[0] + nx * gap / 2, q[1] + ny * gap / 2]);
+      out += ln([p[0] - nx * gap / 2, p[1] - ny * gap / 2], [q[0] - nx * gap / 2, q[1] - ny * gap / 2]);
+    }
+    done();
+  });
+  let labels = "";
+  t.el.forEach((e, i) => {
+    if (!labelled[i]) return;
+    const [x, y] = X[i], hcount = t.h[i];
+    const left = nbr[i].length && nbr[i].reduce((s, j) => s + X[j][0], 0) / nbr[i].length > x + 1;
+    let txt = e;
+    if (hcount) { const hs = "H" + (hcount > 1 ? `<tspan font-size="${(fs * 0.72).toFixed(1)}" dy="3">${hcount}</tspan>` : ""); txt = left ? `${hs}<tspan${hcount > 1 ? ' dy="-3"' : ""}>${e}</tspan>` : `${e}${hs}`; }
+    const anchor = hcount ? (left ? "end" : "start") : "middle";
+    const ox = hcount ? (left ? fs * 0.38 : -fs * 0.38) : 0;
+    labels += `<text x="${(x + ox).toFixed(1)}" y="${(y + fs * 0.36).toFixed(1)}" text-anchor="${anchor}">${txt}</text>`;
+  });
+  svg.innerHTML = `<g stroke="#111" stroke-width="${(1.15 * Math.max(0.8, fit)).toFixed(2)}" stroke-linecap="round">${out}</g><g font-family="Arial, Helvetica, sans-serif" font-size="${fs.toFixed(1)}" fill="#111">${labels}</g>`
+    + `<text x="150" y="292" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#444">${mol.name}</text>`;
+}
+
+/* ---------- UI wiring ---------- */
+const main = document.getElementById("main");
+const strip = document.getElementById("strip");
+const tiles = {};
+for (const key of Object.keys(STYLE_NAMES)) {
+  const b = document.createElement("button");
+  b.className = "tile"; b.id = "t-" + key; b.setAttribute("aria-pressed", String(key === state.style));
+  b.innerHTML = `<canvas aria-hidden="true"></canvas><b>${STYLE_NAMES[key][0]}</b><span>${STYLE_NAMES[key][1]}</span>`;
+  b.addEventListener("click", () => set("style", key));
+  strip.appendChild(b); tiles[key] = b;
+}
+
+function drawAll() {
+  const o = { mol: state.mol, style: state.style, look: state.look, h: state.h, labels: state.labels, depth: state.depth, persp: state.persp, bg: state.bg, R: state.R, layout: state.layout };
+  render(main, { ...o, morph: state.morph });
+  for (const key in tiles) render(tiles[key].querySelector("canvas"), { ...o, style: key, bg: "none", labels: "none", morph: 1 });
+  if (state.layout === "view" && state.rep !== "3d") draw2d();
+  const mol = MOLS[state.mol];
+  document.getElementById("meta").textContent = `${mol.formula} · ${mol.atoms.length} atoms · MMFF94s conformer`;
+}
+let raf = 0;
+const redraw = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(drawAll); };
+
+function pressGroup(attr, value) {
+  document.querySelectorAll(`[data-${attr}]`).forEach(b => b.setAttribute("aria-pressed", String(b.dataset[attr] === value)));
+}
+function set(key, value) {
+  state[key] = value;
+  const attr = { style: "style", look: "look", h: "h", labels: "labels", bg: "bg", mol: "mol", layout: "layout", ff: "ff" }[key];
+  if (attr) pressGroup(attr, value);
+  if (key === "style") for (const k in tiles) tiles[k].setAttribute("aria-pressed", String(k === value));
+  if (key === "bg") document.getElementById("modelbox").classList.toggle("card", value === "card");
+  if (key === "mol") {
+    state.R = initialView(MOLS[value]); state.stale = false; document.getElementById("badge").hidden = true;
+    document.getElementById("docname").textContent = { caffeine: "caffeine.rsk", ibuprofen: "ibuprofen.rsk", crown: "18-crown-6.rsk" }[value];
+    draw2d();
+  }
+  if (key === "layout") { draw2d(); toast(value === "view" ? "2D drawing flattened from the 3D view" : "Original 2D drawing restored"); }
+  redraw();
+}
+
+/* ---------- 2D / 3D switching ---------- */
+const paper = document.getElementById("paper"), box2d = document.getElementById("box2d"), box3d = document.getElementById("modelbox");
+let toastTimer = 0;
+function toast(text) {
+  const t = document.getElementById("toast");
+  t.textContent = text; t.style.opacity = "1";
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.style.opacity = "0"; }, 1800);
+}
+function animateMorph(from, to, done) {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { state.morph = to; drawAll(); done && done(); return; }
+  const t0 = performance.now(), dur = 750;
+  const step = now => {
+    const k = Math.min(1, (now - t0) / dur);
+    state.morph = from + (to - from) * k; drawAll();
+    if (k < 1) requestAnimationFrame(step); else done && done();
+  };
+  requestAnimationFrame(step);
+}
+function layoutFields() {
+  document.getElementById("f-layout").style.display = state.rep === "3d" ? "none" : "grid";
+  document.getElementById("f-conformer").style.display = state.rep === "2d" ? "none" : "grid";
+  document.getElementById("sec3d").style.display = state.rep === "2d" ? "none" : "grid";
+  document.getElementById("rep-note").textContent = {
+    "2d": "Shown as a 2D drawing. Its 3D conformer is kept, so switching back restores the same model and view.",
+    "3d": "Shown as a 3D model in place of the drawing. The 2D layout is kept for switching back.",
+    both: "One molecule, drawn twice. Edits to the 2D drawing mark the model out of date.",
+  }[state.rep];
+}
+function setRep(next) {
+  const prev = state.rep;
+  if (next === prev) return;
+  idle = false;
+  state.rep = next; pressGroup("rep", next); layoutFields();
+  paper.dataset.rep = next;
+  if (next === "2d") {
+    // Fold the model back into the flat drawing, then hand over to the 2D drawing.
+    box2d.classList.add("off"); box3d.classList.remove("off");
+    paper.dataset.rep = prev === "both" ? "both" : "3d";
+    animateMorph(1, 0, () => {
+      paper.dataset.rep = "2d"; box3d.classList.add("off"); box2d.classList.remove("off"); state.morph = 1; draw2d();
+    });
+    toast("Shown as 2D · the 3D conformer is kept");
+  } else {
+    box3d.classList.remove("off");
+    if (next === "3d") box2d.classList.add("off"); else box2d.classList.remove("off");
+    if (prev === "2d") { state.morph = 0; drawAll(); animateMorph(0, 1); toast(next === "3d" ? "Converted to 3D · MMFF94s conformer" : "3D model added beside the drawing"); }
+    else { drawAll(); }
+  }
+}
+document.querySelectorAll("[data-rep]").forEach(b => b.addEventListener("click", () => setRep(b.dataset.rep)));
+document.querySelectorAll("[data-layout]").forEach(b => b.addEventListener("click", () => set("layout", b.dataset.layout)));
+document.querySelectorAll("[data-ff]").forEach(b => b.addEventListener("click", () => { set("ff", b.dataset.ff); toast(`Conformer: ${b.dataset.ff} (prototype shows MMFF94s)`); }));
+document.querySelectorAll("[data-mol]").forEach(b => b.addEventListener("click", () => set("mol", b.dataset.mol)));
+document.querySelectorAll(".styles [data-style]").forEach(b => b.addEventListener("click", () => set("style", b.dataset.style)));
+document.querySelectorAll("[data-look]").forEach(b => b.addEventListener("click", () => set("look", b.dataset.look)));
+document.querySelectorAll("[data-h]").forEach(b => b.addEventListener("click", () => set("h", b.dataset.h)));
+document.querySelectorAll("[data-labels]").forEach(b => b.addEventListener("click", () => set("labels", b.dataset.labels)));
+document.querySelectorAll("[data-bg]").forEach(b => b.addEventListener("click", () => set("bg", b.dataset.bg)));
+for (const [id, key] of [["depth", "depth"], ["persp", "persp"]]) {
+  const input = document.getElementById(id), out = document.getElementById(id + "-out");
+  input.addEventListener("input", () => { state[key] = input.value / 100; out.textContent = input.value + "%"; redraw(); });
+}
+document.getElementById("reset").addEventListener("click", () => { state.R = initialView(MOLS[state.mol]); redraw(); });
+document.getElementById("edit").addEventListener("click", () => { state.stale = true; document.getElementById("badge").hidden = false; });
+document.getElementById("update").addEventListener("click", () => { state.stale = false; document.getElementById("badge").hidden = true; });
+
+let drag = null;
+main.addEventListener("pointerdown", e => { drag = { x: e.clientX, y: e.clientY, shift: e.shiftKey }; main.setPointerCapture(e.pointerId); });
+main.addEventListener("pointermove", e => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY;
+  state.R = drag.shift || e.shiftKey ? mul(rotZ(-dx * 0.01), state.R) : mul(mul(rotY(dx * 0.01), rotX(dy * 0.01)), state.R);
+  redraw();
+});
+const end = () => { drag = null; };
+main.addEventListener("pointerup", end); main.addEventListener("pointercancel", end);
+main.addEventListener("dblclick", () => { state.R = initialView(MOLS[state.mol]); redraw(); });
+
+/* Slow idle turn on load so the 3D reads at a glance; stops at the first touch. */
+let idle = !window.matchMedia("(prefers-reduced-motion: reduce)").matches, spun = 0;
+function spin() { if (!idle || spun > 70) return; state.R = mul(rotY(0.012), state.R); spun++; drawAll(); requestAnimationFrame(spin); }
+main.addEventListener("pointerdown", () => { idle = false; });
+
+state.R = initialView(MOLS[state.mol]);
+layoutFields(); draw2d(); drawAll(); requestAnimationFrame(spin);
+new ResizeObserver(redraw).observe(document.body);
+</script>
+
+</body></html>

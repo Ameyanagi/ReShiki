@@ -1,0 +1,7 @@
+frontmost_pid=74366 bundle=dev.reshiki.verification.ev3862p2
+window_id=7185 bounds={
+    Height = 852;
+    Width = 1280;
+    X = 200;
+    Y = 115;
+} owner_pid=74366 layer=0

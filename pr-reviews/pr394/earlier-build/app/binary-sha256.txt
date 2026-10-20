@@ -1,0 +1,2 @@
+fb1b8427dc3628fc4b79e0fbddf1ef1c4aecefd54b62f098ef89ce48cbd1f4be  /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-1/target/debug/reshiki
+1e1d6e157647c5a3e2efdccd800700ac991db7cd

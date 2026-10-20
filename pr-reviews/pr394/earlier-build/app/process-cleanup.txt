@@ -1,0 +1,16 @@
+Cleanup command:
+kill 46018
+Exit code: 0
+
+Verification bundle process check:
+pgrep -f 'apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki'
+Exit code: 1
+Output: (empty)
+Result: verification process 46018 is gone.
+
+Installed app process check:
+pgrep -fl '^/nix/store/[^ ]*/Applications/ReShiki[.]app/Contents/MacOS/reshiki([[:space:]]|$)'
+Exit code: 0
+Output:
+51217 /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki
+Result: original installed app process 51217 is still running.

@@ -1,0 +1,2 @@
+  PID STARTED                      ARGS
+74366 Tue Oct 20 18:39:33 2026     /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/target/debug/reshiki --open /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/input/own/caffeine-ballstick-flat.rsk

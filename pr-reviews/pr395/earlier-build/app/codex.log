@@ -1,0 +1,793 @@
+Reading additional input from stdin...
+OpenAI Codex v0.162.1
+--------
+workdir: /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+model: gpt-6-astra
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: xhigh
+reasoning summaries: none
+session id: 01a158ad-ee8c-7f00-b370-981d139afb61
+--------
+user
+You are running local UI verification for Claude on macOS. Use computer use (screenshots, mouse, keyboard) plus shell.
+
+Artifact directory (save everything here): /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app   (call it $ART)
+
+App under test: a branch build of ReShiki wrapped in its own bundle:
+  /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps386-2/ReShiki386P2Evidence.app
+  bundle id dev.reshiki.verification.ev3862p2, name "ReShiki386P2Evidence". Contents/MacOS/reshiki is a symlink to the branch binary.
+IMPORTANT: the user's installed "ReShiki" app (PID 51217, bundle in /nix/store/...) is running. Never touch, focus, click in, open, or quit it. Never look the app up by the plain name "ReShiki". If you ever find yourself in a window not owned by the PID you launched, stop interacting with it immediately.
+
+Setup:
+a. Launch it yourself, exactly:
+   open -n "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps386-2/ReShiki386P2Evidence.app" --env RESHIKI_DATA_DIR=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2-data --args --open "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/input/own/caffeine-ballstick-flat.rsk"
+b. Its PID: pgrep -f 'wf_228c0944-39d-2/target/debug/reshiki --open'  (exactly one; it is NOT 51217). Save "ps -o pid,lstart,args -p <PID>" to $ART/launched-process.txt. Call it $PID.
+c. Window id: /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-wid $PID  -> $WID (re-run if the window changes).
+d. Attach computer use by bundle id dev.reshiki.verification.ev3862p2 (or by bundle path). The window shows caffeine as a 3D ball & stick model, title "caffeine-ballstick-flat.rsk — ReShiki". The window is about 1000 x 665 points.
+
+Evidence shots: screencapture -x -o -l $WID "$ART/<name>.png" (window-only capture of your PID). Before each, move the pointer off the model and off the controls you are documenting.
+
+Drag helper (use it for the slider drag; it holds the mouse button with real CGEvents):
+  /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag $PID x1 y1 x2 y2
+  Coordinates are POINTS relative to the top-left corner of the app window frame (including title bar). The window must be frontmost and unobstructed. Work out coordinates from a computer-use screenshot, minding Retina scaling.
+
+Feature (ReShiki #386 phase 2): with the 3D model selected, Properties shows a "3D model" section: Style buttons with pictograms (Ball & stick, Stick, Wireframe, Space-filling), Look (Flat · journal / Glossy · slides), Hydrogens All/Polar/None, Depth fade and Perspective sliders, Background None/Soft card, Reset view. Every change is one Undo step; one slider drag is one Undo step. The canvas draws the model as smooth image tiles, so zooming in must show smooth shading, no stepped rings (banding) on balls.
+
+Flow (keep the window size; you may scroll or collapse other Properties sections so the 3D model section is visible - say so):
+1. Choose the Select tool (arrow, top-left of tools), click the model once to select it (or click empty canvas then Cmd+A). Expect the "3D model" section in Properties. Save 01-section-ballstick.png (Ball & stick active, whole section visible as far as possible).
+2. Click Style "Stick". Save 02-style-stick.png.
+3. Click "Wireframe". Save 03-style-wireframe.png.
+4. Click "Space-filling". Save 04-style-spacefilling.png.
+5. Click "Ball & stick". Save 05-style-ballstick-again.png.
+6. Click Look "Glossy · slides". Save 06-look-glossy.png. Then click "Flat · journal" again (no shot needed).
+7. Slider: note the Depth fade value (expect 35%). With the drag helper drag the Depth fade slider knob to roughly 85-90% (one drag). Save 07-depth-fade-dragged.png (value and model visibly lighter at the back). Open the Edit menu of YOUR app window (menu bar while it is frontmost) and capture what the Undo item says, if anything: screencapture -x "$ART/07b-edit-menu-full-screen.png" is allowed for this one (full screen, because menus are separate windows) - then Escape.
+8. Press Cmd+Z once. Save 08-undo-slider.png. Expect Depth fade back to 35%, Look still Flat, Style Ball & stick.
+9. Press Cmd+Z once more. Save 09-undo-again.png. Expect that this undoes the previous change (Look back to... the Flat click from step 6 - so Glossy), proving the slider drag was a single step. Record what changed.
+10. Press Cmd+Shift+Z (or Edit > Redo) until the state is: Ball & stick, Flat, Depth fade 35% (or just click Flat · journal). Click empty canvas to deselect.
+11. Zoom to 300% (use the status bar zoom −/+ or Cmd+scroll or type it if the zoom field is editable; the status bar shows the zoom %, initially about 201%). Pan (two-finger scroll / scroll wheel) so several balls and bonds fill the view. Wait 1 s. Save 10-zoom-300-ballstick.png. Record the exact zoom % shown. Then also zoom to 400% or more and save 11-zoom-400-ballstick.png.
+12. At the end quit ONLY your PID: kill $PID (not the app menu). Confirm with pgrep it is gone and that PID 51217 still runs; save both outputs to $ART/process-cleanup.txt.
+
+Do not save the drawing, do not edit repository files, do not change system settings, do not quit any other app.
+
+Write $ART/report.md: for each step what you did (exact drag-helper coordinates), observed vs expected (status bar text, slider values, which buttons are active), screenshot filename, pass/fail. End with anything you could not verify and why.
+codex
+指定の検証用バンドルだけを起動し、起動 PID とウィンドウの所有者を確認しながら操作します。スクリーンショットと手順ごとの結果を指定ディレクトリに保存し、最後に検証用 PID だけを終了します。
+exec
+/bin/zsh -lc "pwd; rg --files -g AGENTS.md -g '"'!node_modules'"' -g '"'!target'"' . /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2 2>/dev/null" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ exited 1 in 0ms:
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+
+exec
+/bin/zsh -lc 'open -n "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps386-2/ReShiki386P2Evidence.app" --env RESHIKI_DATA_DIR=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2-data --args --open "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/input/own/caffeine-ballstick-flat.rsk"' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 0ms:
+exec
+/bin/zsh -lc "pgrep -f 'wf_228c0944-39d-2/target/debug/reshiki --open'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 0ms:
+74366
+
+exec
+/bin/zsh -lc 'ps -o pid,lstart,args -p 51217' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 0ms:
+  PID STARTED                      ARGS
+51217 Tue Oct 20 14:02:02 2026     /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki
+
+exec
+/bin/zsh -lc 'ps -o pid,lstart,args -p 74366 > launched-process.txt
+cat launched-process.txt
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-wid 74366' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 0ms:
+  PID STARTED                      ARGS
+74366 Tue Oct 20 18:39:33 2026     /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/target/debug/reshiki --open /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/input/own/caffeine-ballstick-flat.rsk
+7185
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+codex
+The verification app is PID **74366**, window **7185**; the installed app remains PID **51217**. Selection exposes the entire 3D model section at the existing window size. The initial state is Ball & stick, Flat, all hydrogens, Depth fade **35%**, Perspective **20%**, and zoom **201%**.
+exec
+/bin/zsh -lc "screencapture -x -o -l 7185 \"01-section-ballstick.png\"
+rg --files /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad | rg 'ev386-1b-(wid|drag)'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 179ms:
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-wid
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (failed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'screencapture -x -o -l 7185 "02-style-stick.png"' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 31ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'screencapture -x -o -l 7185 "03-style-wireframe.png"' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 30ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'screencapture -x -o -l 7185 "04-style-spacefilling.png"' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 49ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'screencapture -x -o -l 7185 "05-style-ballstick-again.png"' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 0ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'screencapture -x -o -l 7185 "06-look-glossy.png"' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 47ms:
+codex
+All four Style buttons switch their active state correctly, and Glossy activates correctly. I’m checking the rendered evidence alongside the controls, then testing whether one Depth fade drag is exactly one Undo step.
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "swift -e 'import Cocoa
+import CoreGraphics
+let target: pid_t = 74366
+let front = NSWorkspace.shared.frontmostApplication
+print(\"frontmost_pid=\\(front?.processIdentifier ?? -1) bundle=\\(front?.bundleIdentifier ?? \"nil\")\")
+let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+for w in windows where (w[kCGWindowOwnerPID as String] as? Int) == Int(target) {
+ print(\"window_id=\\(w[kCGWindowNumber as String] ?? \"nil\") bounds=\\(w[kCGWindowBounds as String] ?? \"nil\") owner_pid=\\(target) layer=\\(w[kCGWindowLayer as String] ?? \"nil\")\")
+}' > window-verification.txt
+cat window-verification.txt" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 454ms:
+frontmost_pid=74366 bundle=dev.reshiki.verification.ev3862p2
+window_id=7185 bounds={
+    Height = 852;
+    Width = 1280;
+    X = 200;
+    Y = 115;
+} owner_pid=74366 layer=0
+
+exec
+/bin/zsh -lc '/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 74366 1095 645 1222 645' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 937ms:
+ok window 7185 origin 200.0,115.0
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'screencapture -x -o -l 7185 "07-depth-fade-dragged.png"
+screencapture -x "07b-edit-menu-full-screen.png"' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 188ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'screencapture -x "07b-edit-menu-full-screen.png"' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 97ms:
+codex
+The single drag changed Depth fade from **35% to 87%**, with visibly lighter rear atoms. This build exposes only its application menu—there is no Edit menu or native Undo label to inspect. The full-screen evidence also contains existing Finder alerts; I have left those untouched and am continuing only in the verified app window.
+mcp: cua_repl/js started
+mcp: cua_repl/js (failed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'screencapture -x -o -l 7185 "08-undo-slider.png"' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 46ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'screencapture -x -o -l 7185 "09-undo-again.png"' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 36ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+codex
+Undo behaved as expected: one **Cmd+Z** restored Depth fade to **35%** while keeping Flat, and the second restored **Glossy** without changing the slider. One Redo returned to **Flat / 35%**. I’m now checking enlarged spheres and bonds at the available zoom levels.
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "rg -n 'zoom_percent|zoom_in|zoom_out|Zoom in|Zoom out|zoom \\*|zoom \\*=|300%' /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src | head -80" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 0ms:
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/models3d.rs:86:    let scale = camera.zoom * OVERSAMPLE;
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/models3d.rs:155:    let scale = camera.zoom * OVERSAMPLE;
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/models3d/tests.rs:173:    let middle = (300. * camera.zoom * OVERSAMPLE) as i64;
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/models3d/tests.rs:220:        let scale = camera.zoom * OVERSAMPLE;
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/canvas_edit.rs:89:                    self.tab.camera.zoom = (self.tab.camera.zoom * factor).clamp(0.005, 5.);
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/command_palette/tests.rs:408:    assert_eq!(ranked[0].name, "Zoom in");
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/command_palette/tests.rs:769:    assert_eq!(top(&app).name, "Zoom in");
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/command_palette/catalog.rs:1150:            "Zoom in",
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/command_palette/catalog.rs:1157:            "Zoom out",
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/tests.rs:839:fn tilt_drag_preserves_partial_selection_and_has_zoom_independent_snapping() -> Result<(), String> {
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/view_settings.rs:68:        self.tab.camera.zoom = (self.tab.camera.zoom * factor).clamp(0.005, 5.0);
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/optimization.rs:172:                Edit::Zoom((zoom * 0.9).exp(), canvas.camera.world(point?, bounds))
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/workspace.rs:2384:                text(format!("{:.0}%", self.tab.camera.zoom * 100.0))
+
+exec
+/bin/zsh -lc "sed -n '2350,2405p' /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/workspace.rs
+sed -n '1,130p' /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/view_settings.rs
+rg -n 'Zoom|zoom' /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas.rs | head -40" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 0ms:
+                        container::Style {
+                            background: Some(
+                                crate::appearance::themed(
+                                    theme,
+                                    if failed {
+                                        Color::from_rgb8(168, 52, 47)
+                                    } else {
+                                        Color::from_rgb8(86, 160, 132)
+                                    },
+                                )
+                                .into(),
+                            ),
+                            border: Border {
+                                radius: 4.0.into(),
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        }
+                    }),
+                )
+                .padding(5),
+                self.tab.autosave_status.as_str(),
+                tooltip::Position::Top,
+            ));
+        }
+        let status = status
+            .extend(self.document_settings())
+            .push(divider())
+            .push(
+                command("View", Message::View(super::view_settings::Action::Toggle))
+                    .style(control(self.view_open)),
+            )
+            .push(command("−", Message::Zoom(0.8)))
+            .push(
+                text(format!("{:.0}%", self.tab.camera.zoom * 100.0))
+                    .size(11)
+                    .width(38)
+                    .center(),
+            )
+            .push(command("+", Message::Zoom(1.25)))
+            .push(command("Fit", Message::Fit));
+        container(status).padding([6, 14]).style(panel).into()
+    }
+
+    /// Journal preset, color theme and canvas light/dark: whole-document
+    /// settings, kept beside View and zoom.
+    fn document_settings(&self) -> [Element<'_, Message>; 3] {
+        use super::document_styles::Choice;
+        use reshiki::document_styles::Preset;
+        let current = Preset::ALL
+            .into_iter()
+            .find(|p| p.style() == self.tab.doc.drawing_style)
+            .map(Choice::Journal)
+            .unwrap_or(Choice::Custom);
+        let (themes, theme) = self.theme_choices();
+        let dark = self.tab.doc.canvas_theme.is_dark();
+//! Window, camera and view-aid preferences.
+use super::App;
+
+/// View-aid commands, nested under `Message::View`.
+/// Every View action passes both previews through `gates::preview_passthrough`, and none commits a draft.
+#[derive(Debug, Clone)]
+pub enum Action {
+    /// Flips the grid regardless of the checkbox value.
+    Grid,
+    SmartGuides(bool),
+    Rulers(bool),
+    Crosshair(bool),
+    RulerUnit(crate::canvas::guides::Unit),
+    /// Shows or hides the View options bar (was `ToggleView`).
+    Toggle,
+}
+
+impl App {
+    pub(super) fn view_action(&mut self, action: Action) {
+        match action {
+            Action::Grid => self.grid = !self.grid,
+            Action::SmartGuides(enabled) => self.set_smart_guides(enabled),
+            Action::Toggle => self.view_open = !self.view_open,
+            Action::Rulers(enabled) => self.set_rulers(enabled),
+            Action::Crosshair(enabled) => self.guides.crosshair = enabled,
+            Action::RulerUnit(unit) => self.guides.unit = unit,
+        }
+    }
+    pub(super) fn set_viewport(&mut self, size: iced::Size) {
+        // Inspector width changes, such as docking NMR, do not request fitting
+        // the drawing. Only suppress the expected layout transition; later
+        // genuine window resizes keep their ordinary fit behavior.
+        let preserve_camera = self.tab.inspector_ui.take_expected_viewport(size);
+        if self.viewport != size {
+            self.viewport = size;
+            if !preserve_camera {
+                if let Some(index) = self.tab.pages.fit {
+                    self.fit_pages(index);
+                } else if self.tab.fit_to_view {
+                    self.fit();
+                }
+            }
+        }
+    }
+    pub(super) fn set_appearance(&mut self, mode: crate::appearance::Mode) {
+        self.appearance.mode = mode;
+        if let Err(error) = self.appearance.save() {
+            self.status = format!("Appearance changed, but could not save preference: {error}");
+            self.error = true;
+        }
+    }
+    pub(super) fn set_smart_guides(&mut self, enabled: bool) {
+        self.appearance.smart_guides = enabled;
+        if let Err(error) = self.appearance.save() {
+            self.status = format!("Could not save smart guides preference: {error}");
+            self.error = true;
+        }
+    }
+    pub(super) fn set_rulers(&mut self, enabled: bool) {
+        self.guides.rulers = enabled;
+        if self.tab.fit_to_view {
+            self.fit();
+        }
+    }
+    pub(super) fn zoom_by(&mut self, factor: f32) {
+        self.tab.pages.fit = None;
+        self.tab.fit_to_view = false;
+        self.tab.camera.zoom = (self.tab.camera.zoom * factor).clamp(0.005, 5.0);
+    }
+}
+223:    Zoom(f32, World),
+228:    pub zoom: f32,
+234:            zoom: 1.0,
+239:    /// Convert a screen-pixel length to world units at this zoom.
+241:        px / self.zoom
+246:            (p.x - self.center.x) * self.zoom + bounds.width / 2.0,
+247:            (p.y - self.center.y) * self.zoom + bounds.height / 2.0,
+252:            (p.x - bounds.width / 2.0) / self.zoom + self.center.x,
+253:            (p.y - bounds.height / 2.0) / self.zoom + self.center.y,
+593:/// smart guides on, at zoom 1.
+
+exec
+/bin/zsh -lc "rg -n 'WheelScrolled|Modifiers|Edit::Zoom|ScrollDelta' /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app | head -80" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 0ms:
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/rotation_gesture_tests.rs:50:        Event::Keyboard(keyboard::Event::ModifiersChanged(
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/rotation_gesture_tests.rs:51:            keyboard::Modifiers::SHIFT,
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/rotation_gesture_tests.rs:92:            modifiers: keyboard::Modifiers::SHIFT,
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/rotation_gesture_tests.rs:136:    use keyboard::Modifiers;
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/rotation_gesture_tests.rs:154:        (Modifiers::default(), 22.),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/rotation_gesture_tests.rs:155:        (Modifiers::ALT, 22.),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/rotation_gesture_tests.rs:156:        (Modifiers::SHIFT, 15.),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/rotation_gesture_tests.rs:165:            Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/clipboard/tests.rs:123:    use iced::keyboard::{Key, Modifiers};
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/clipboard/tests.rs:126:    let message = key_message(&key, &key, Modifiers::COMMAND | Modifiers::ALT).unwrap();
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/atom_text.rs:460:                    iced::keyboard::Modifiers::COMMAND,
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/label_click_tests.rs:172:            modifiers: iced::keyboard::Modifiers::empty(),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/input.rs:30:            iced::keyboard::Event::ModifiersChanged(modifiers)
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/input.rs:56:                            | mouse::Event::WheelScrolled { .. }
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/input.rs:64:            Event::Keyboard(iced::keyboard::Event::ModifiersChanged(_)) => {
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/input.rs:99:            Event::Mouse(mouse::Event::WheelScrolled { delta })
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/input.rs:103:                    mouse::ScrollDelta::Lines { x, y } => (*x * 40., *y * 40., *y * 0.12),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/input.rs:104:                    mouse::ScrollDelta::Pixels { x, y } => (*x, *y, *y * 0.003),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/input.rs:110:                    Edit::Zoom(zoom_amount.exp(), self.camera.world(point?, bounds))
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/selection_edits.rs:56:                    super::shortcuts::keys(iced::keyboard::Modifiers::ALT, ""),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/help/tests.rs:102:    use iced::keyboard::{Key, Modifiers, key::Named};
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/help/tests.rs:103:    assert!(is_shortcut(&Key::Named(Named::F1), Modifiers::empty()));
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/help/tests.rs:104:    let command_shift = Modifiers::COMMAND | Modifiers::SHIFT;
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/help/tests.rs:109:        Modifiers::empty()
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/help/tests.rs:111:    assert!(!is_shortcut(&Key::Character("/".into()), Modifiers::SHIFT));
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/help/tests.rs:112:    assert!(!is_shortcut(&Key::Named(Named::F1), Modifiers::ALT));
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/help/tests.rs:115:    assert!(!is_shortcut(&key, Modifiers::COMMAND));
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/help/tests.rs:117:        crate::app::shortcuts::key_message(&key, &key, Modifiers::COMMAND),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/help/tests.rs:271:    use iced::keyboard::{Key, Modifiers, key::Named};
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/help/tests.rs:279:    let key = |named| modal_key(&Key::Named(named), Modifiers::empty()).unwrap();
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/help/tests.rs:281:    assert!(modal_key(&Key::Character("r".into()), Modifiers::empty()).is_none());
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/help/tests.rs:282:    assert!(modal_key(&Key::Named(Named::ArrowDown), Modifiers::SHIFT).is_none());
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/help/tests.rs:328:    let shifted = crate::app::shortcuts::keys(Modifiers::SHIFT, "E");
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/help/registry.rs:11:use iced::keyboard::Modifiers;
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/help/registry.rs:85:        keys(Modifiers::COMMAND | Modifiers::SHIFT, "/")
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/help/registry.rs:91:    let (command, shift, alt) = (Modifiers::COMMAND, Modifiers::SHIFT, Modifiers::ALT);
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/help/registry.rs:92:    let none = Modifiers::empty();
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/help/registry.rs:499:                keys(Modifiers::CTRL, "Tab"),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/help/registry.rs:500:                keys(Modifiers::CTRL | shift, "Tab")
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/help/registry.rs:561:                    keys(Modifiers::CTRL, "")
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/command_palette/tests.rs:17:        Modifiers::SHIFT,
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/command_palette/tests.rs:462:        modal_key(&Key::Named(Named::Escape), Modifiers::empty()),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/command_palette/tests.rs:545:        Modifiers::SHIFT,
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/command_palette/tests.rs:725:        modal_key(&Key::Named(Named::Tab), Modifiers::empty()),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/command_palette/tests.rs:729:        modal_key(&Key::Named(Named::Tab), Modifiers::SHIFT),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/command_palette/tests.rs:844:            modal_key(&Key::Named(key), Modifiers::empty()),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/typography/caption_controls_tests.rs:184:        self, Key, Modifiers,
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/typography/caption_controls_tests.rs:290:            modifiers: Modifiers::empty(),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/typography/caption_controls_tests.rs:316:                    Event::Keyboard(keyboard::Event::ModifiersChanged(Modifiers::COMMAND)),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/typography/caption_controls_tests.rs:324:                Event::Mouse(mouse::Event::WheelScrolled {
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/typography/caption_controls_tests.rs:325:                    delta: mouse::ScrollDelta::Lines { x: 0., y: -1. },
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/typography/caption_controls_tests.rs:339:                    Event::Keyboard(keyboard::Event::ModifiersChanged(Modifiers::empty())),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/command_palette/catalog.rs:12:use iced::keyboard::Modifiers;
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/command_palette/catalog.rs:572:                    "Enter" => keys(Modifiers::empty(), "Enter"),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/command_palette/catalog.rs:676:        .keys(keys(Modifiers::COMMAND | Modifiers::SHIFT, "K")),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/command_palette/catalog.rs:713:        .keys(keys(Modifiers::COMMAND | Modifiers::SHIFT, "Right")),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/command_palette/catalog.rs:926:    let (command, alt, shift) = (Modifiers::COMMAND, Modifiers::ALT, Modifiers::SHIFT);
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/command_palette/catalog.rs:1000:        .keys(keys(Modifiers::CTRL, "Tab"))
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/command_palette/catalog.rs:1009:        .keys(keys(Modifiers::CTRL | shift, "Tab"))
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/command_palette/catalog.rs:1193:        .keys(keys(Modifiers::COMMAND, ";")),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/command_palette/catalog.rs:1201:        .keys(keys(Modifiers::COMMAND | Modifiers::ALT, "X")),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/command_palette/catalog.rs:1209:        .keys(keys(Modifiers::COMMAND, "L")),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/command_palette/catalog.rs:1217:        .keys(keys(Modifiers::COMMAND, "E")),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/command_palette/catalog.rs:1347:        .keys(keys(Modifiers::SHIFT, "X")),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/palettes.rs:206:    use iced::keyboard::Modifiers;
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/palettes.rs:207:    let shift = |key| super::shortcuts::keys(Modifiers::SHIFT, key);
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/palettes.rs:238:    use iced::keyboard::Modifiers;
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/palettes.rs:249:            super::shortcuts::keys(Modifiers::SHIFT, "J")
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/palettes.rs:257:    use iced::keyboard::Modifiers;
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/palettes.rs:266:        super::shortcuts::keys(Modifiers::SHIFT, key)
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/workspace/view_parity_tests.rs:57:    self, Key, Modifiers,
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/workspace/view_parity_tests.rs:798:    Event::Mouse(mouse::Event::WheelScrolled {
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/workspace/view_parity_tests.rs:799:        delta: mouse::ScrollDelta::Lines { x: 0., y: lines },
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/workspace/view_parity_tests.rs:837:        modifiers: Modifiers::empty(),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/document_styles/tests.rs:850:    use iced::keyboard::{self, Key, Modifiers, key};
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/document_styles/tests.rs:965:            Modifiers::empty(),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/document_styles/tests.rs:983:        Modifiers::LOGO
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/document_styles/tests.rs:985:        Modifiers::CTRL
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/document_styles/tests.rs:1011:            Event::Keyboard(keyboard::Event::ModifiersChanged(command)),
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/app/document_styles/tests.rs:1013:            Event::Keyboard(keyboard::Event::ModifiersChanged(Modifiers::empty())),
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "sed -n '94,116p' /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/src/canvas/input.rs" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 0ms:
+                    state.gesture = None;
+                    return Some(Action::publish(Edit::EraseEnd));
+                }
+                Some(Action::publish(Edit::Hover(None)))
+            }
+            Event::Mouse(mouse::Event::WheelScrolled { delta })
+                if inside && state.gesture.is_none() =>
+            {
+                let (x, y, zoom_amount) = match delta {
+                    mouse::ScrollDelta::Lines { x, y } => (*x * 40., *y * 40., *y * 0.12),
+                    mouse::ScrollDelta::Pixels { x, y } => (*x, *y, *y * 0.003),
+                };
+                if !x.is_finite() || !y.is_finite() {
+                    return None;
+                }
+                let edit = if state.modifiers.command() || state.modifiers.control() {
+                    Edit::Zoom(zoom_amount.exp(), self.camera.world(point?, bounds))
+                } else {
+                    Edit::Pan(x / self.camera.zoom, y / self.camera.zoom)
+                };
+                Some(Action::publish(edit).and_capture())
+            }
+            // macOS can report Control-click as a secondary click.
+
+codex
+The zoom percentage is a read-only label, and the “+” button advances by 25% (201% → 251%). I’m using the requested Cmd+scroll interaction to reach the displayed **300%** more precisely, then checking a second view at **400% or higher**.
+exec
+/bin/zsh -lc "cat > cmd-scroll.swift <<'SWIFT'
+import Cocoa
+import CoreGraphics
+
+let args = CommandLine.arguments
+if args.count "'!= 5 { fputs("usage: cmd-scroll.swift PID windowX windowY pixelDelta'"\\n\", stderr); exit(2) }
+guard let pid = Int32(args[1]), pid == 74366,
+      let x = Double(args[2]), let y = Double(args[3]), let delta = Int32(args[4]),
+      NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
+      NSWorkspace.shared.frontmostApplication?.bundleIdentifier == \"dev.reshiki.verification.ev3862p2\" else {
+    fputs(\"Refusing: expected verification PID is not frontmost\\n\", stderr); exit(3)
+}
+let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String:Any]] ?? []
+guard let window = windows.first(where: { ("'$0[kCGWindowNumber as String] as? Int) == 7185 && ($0[kCGWindowOwnerPID as String] as? Int) == Int(pid) }),
+      let b = window[kCGWindowBounds as String] as? [String:Double],
+      let bx = b["X"], let by = b["Y"], let width = b["Width"], let height = b["Height"],
+      x >= 0, y >= 0, x < width, y < height else { exit(4) }
+let point = CGPoint(x: bx+x, y: by+y)
+if let top = windows.first(where: { w in
+    guard let d = w[kCGWindowBounds as String] as? [String:Double], let wx = d["X"], let wy = d["Y"], let ww = d["Width"], let wh = d["Height"] else { return false }
+    return CGRect(x:wx,y:wy,width:ww,height:wh).contains(point)
+}), (top[kCGWindowOwnerPID as String] as? Int) != Int(pid) {
+    fputs("Refusing: scroll point is obstructed by another PID'"\\n\", stderr); exit(5)
+}
+let source = CGEventSource(stateID: .hidSystemState)
+CGWarpMouseCursorPosition(point)
+let move = CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left)"'!
+move.postToPid(pid)
+let down = CGEvent(keyboardEventSource: source, virtualKey: 55, keyDown: true)!
+down.flags = .maskCommand
+down.postToPid(pid)
+usleep(100000)
+let scroll = CGEvent(scrollWheelEvent2Source: source, units: .pixel, wheelCount: 1, wheel1: delta, wheel2: 0, wheel3: 0)!
+scroll.flags = .maskCommand
+scroll.location = point
+scroll.postToPid(pid)
+usleep(100000)
+let up = CGEvent(keyboardEventSource: source, virtualKey: 55, keyDown: false)!
+up.flags = []
+up.postToPid(pid)
+print("Cmd+scroll PID='"\\(pid) WID=7185 relative=(\\(x),\\(y)) pixelDelta=\\(delta)\")
+SWIFT
+swift cmd-scroll.swift 74366 200 700 30" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 578ms:
+Cmd+scroll PID=74366 WID=7185 relative=(200.0,700.0) pixelDelta=30
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+p=Path('cmd-scroll.swift')
+p.write_text(p.read_text().replace('.postToPid(pid)', '.post(tap: .cghidEventTap)'))
+PY
+swift cmd-scroll.swift 74366 200 700 30" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ exited 5 in 348ms:
+Refusing: scroll point is obstructed by another PID
+
+exec
+/bin/zsh -lc "swift -e 'import Cocoa
+import CoreGraphics
+let ws = CGWindowListCopyWindowInfo([.optionOnScreenOnly,.excludeDesktopElements], kCGNullWindowID) as? [[String:Any]] ?? []
+for w in ws { guard let b = w[kCGWindowBounds as String] as? [String:Double], let x=b[\"X\"],let y=b[\"Y\"],let width=b[\"Width\"],let height=b[\"Height\"] else {continue}; if CGRect(x:x,y:y,width:width,height:height).contains(CGPoint(x:400,y:815)) {print(\"pid=\\(w[kCGWindowOwnerPID as String] ?? \"nil\") id=\\(w[kCGWindowNumber as String] ?? \"nil\") layer=\\(w[kCGWindowLayer as String] ?? \"nil\") name=\\(w[kCGWindowName as String] ?? \"nil\") bounds=\\(b)\")}}'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 204ms:
+pid=612 id=2 layer=2147483630 name=Cursor bounds=["Height": 40.0, "Y": 810.0, "Width": 28.0, "X": 395.0]
+pid=74366 id=7185 layer=0 name=caffeine-ballstick-flat.rsk — ReShiki bounds=["Height": 852.0, "Y": 115.0, "Width": 1280.0, "X": 200.0]
+pid=51217 id=6626 layer=0 name=Untitled • — ReShiki bounds=["Height": 848.0, "Y": 115.0, "Width": 1280.0, "X": 200.0]
+pid=1867 id=1105 layer=0 name=Atom Marks Dragging bounds=["Height": 1020.0, "Y": 30.0, "Width": 1680.0, "X": 0.0]
+
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+p=Path('cmd-scroll.swift')
+s=p.read_text().replace('if let top = windows.first(where: { w in\\n', 'if let top = windows.first(where: { w in\\n    if (w[kCGWindowName as String] as? String) == \"Cursor\" { return false }\\n')
+p.write_text(s)
+PY
+swift cmd-scroll.swift 74366 200 700 30" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 587ms:
+Cmd+scroll PID=74366 WID=7185 relative=(200.0,700.0) pixelDelta=30
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'sleep 1
+screencapture -x -o -l 7185 "10-zoom-300-ballstick.png"
+swift cmd-scroll.swift 74366 200 700 48' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 1760ms:
+Cmd+scroll PID=74366 WID=7185 relative=(200.0,700.0) pixelDelta=48
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'sleep 1
+screencapture -x -o -l 7185 "11-zoom-400-ballstick.png"
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-wid 74366' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 1111ms:
+7185
+
+codex
+The evidence now shows exactly **300%** and **400%**. The enlarged spheres appear smoothly shaded without stepped concentric rings. I’m doing the final screenshot review and writing the report, then confirming that only PID **74366** was terminated and PID **51217** is still running.
+exec
+/bin/zsh -lc "python3 - <<'PY'
+import subprocess
+from pathlib import Path
+pid = 74366
+args = subprocess.check_output(['ps', '-o', 'args=', '-p', str(pid)], text=True).strip()
+expected = '/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/target/debug/reshiki --open '
+if not args.startswith(expected):
+    raise SystemExit('Refusing cleanup: launched PID command changed')
+subprocess.run(['kill', str(pid)], check=True)
+result = subprocess.run(['pgrep', '-f', 'wf_228c0944-39d-2/target/debug/reshiki --open'], capture_output=True, text=True)
+exact = subprocess.run(['ps', '-o', 'pid,lstart,args', '-p', str(pid)], capture_output=True, text=True)
+installed = subprocess.run(['ps', '-o', 'pid,lstart,args', '-p', '51217'], capture_output=True, text=True)
+text = f'''Cleanup command: kill {pid}
+Verified target command before kill:
+{args}
+
+"'$ pgrep -f '"'wf_228c0944-39d-2/target/debug/reshiki --open'
+exit_code={result.returncode}
+stdout={result.stdout or '(empty)'}
+stderr={result.stderr or '(empty)'}
+
+"'$ ps -o pid,lstart,args -p {pid}
+exit_code={exact.returncode}
+{exact.stdout}{exact.stderr}
+
+$ ps -o pid,lstart,args -p 51217
+exit_code={installed.returncode}
+{installed.stdout}{installed.stderr}
+'"'''
+Path('process-cleanup.txt').write_text(text)
+print(text)
+if result.returncode "'!= 1 or exact.returncode != 1 or installed.returncode != 0:
+    raise SystemExit('"'Cleanup verification requires follow-up')
+PY" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 0ms:
+Cleanup command: kill 74366
+Verified target command before kill:
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/target/debug/reshiki --open /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/input/own/caffeine-ballstick-flat.rsk
+
+$ pgrep -f 'wf_228c0944-39d-2/target/debug/reshiki --open'
+exit_code=1
+stdout=(empty)
+stderr=(empty)
+
+$ ps -o pid,lstart,args -p 74366
+exit_code=1
+  PID STARTED                      ARGS
+
+
+$ ps -o pid,lstart,args -p 51217
+exit_code=0
+  PID STARTED                      ARGS
+51217 Tue Oct 20 14:02:02 2026     /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki
+
+
+
+exec
+/bin/zsh -lc 'sips -g pixelWidth -g pixelHeight 01-section-ballstick.png 07b-edit-menu-full-screen.png 08-undo-slider.png 10-zoom-300-ballstick.png 11-zoom-400-ballstick.png
+ls -lh' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 0ms:
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app/01-section-ballstick.png
+  pixelWidth: 2560
+  pixelHeight: 1704
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app/07b-edit-menu-full-screen.png
+  pixelWidth: 3360
+  pixelHeight: 2100
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app/08-undo-slider.png
+  pixelWidth: 2560
+  pixelHeight: 1704
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app/10-zoom-300-ballstick.png
+  pixelWidth: 2560
+  pixelHeight: 1704
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app/11-zoom-400-ballstick.png
+  pixelWidth: 2560
+  pixelHeight: 1704
+total 18256
+-rw-r--r--@ 1 shiranui  wheel   571K Oct 20 18:27 00-preflight-launch.png
+-rw-r--r--@ 1 shiranui  wheel   569K Oct 20 18:40 01-section-ballstick.png
+-rw-r--r--@ 1 shiranui  wheel   506K Oct 20 18:40 02-style-stick.png
+-rw-r--r--@ 1 shiranui  wheel   392K Oct 20 18:41 03-style-wireframe.png
+-rw-r--r--@ 1 shiranui  wheel   780K Oct 20 18:41 04-style-spacefilling.png
+-rw-r--r--@ 1 shiranui  wheel   565K Oct 20 18:41 05-style-ballstick-again.png
+-rw-r--r--@ 1 shiranui  wheel   540K Oct 20 18:41 06-look-glossy.png
+-rw-r--r--@ 1 shiranui  wheel   563K Oct 20 18:42 07-depth-fade-dragged.png
+-rw-r--r--@ 1 shiranui  wheel   1.8M Oct 20 18:42 07b-edit-menu-full-screen.png
+-rw-r--r--@ 1 shiranui  wheel   563K Oct 20 18:43 08-undo-slider.png
+-rw-r--r--@ 1 shiranui  wheel   539K Oct 20 18:43 09-undo-again.png
+-rw-r--r--@ 1 shiranui  wheel   724K Oct 20 18:47 10-zoom-300-ballstick.png
+-rw-r--r--@ 1 shiranui  wheel   865K Oct 20 18:48 11-zoom-400-ballstick.png
+-rw-r--r--@ 1 shiranui  wheel   128B Oct 20 18:26 binary-sha256.txt
+-rw-r--r--@ 1 shiranui  wheel   2.4K Oct 20 18:46 cmd-scroll.swift
+-rw-r--r--@ 1 shiranui  wheel    45K Oct 20 18:48 codex.log
+-rw-r--r--@ 1 shiranui  wheel   185B Oct 20 18:26 installed-process-before.txt
+-rw-r--r--@ 1 shiranui  wheel   313B Oct 20 18:39 launched-process.txt
+-rw-r--r--@ 1 shiranui  wheel   721B Oct 20 18:48 process-cleanup.txt
+-rw-r--r--@ 1 shiranui  wheel   5.6K Oct 20 18:28 prompt.md
+-rw-r--r--@ 1 shiranui  wheel   173B Oct 20 18:41 window-verification.txt
+
+exec
+/bin/zsh -lc "cat > report.md <<'REPORT'
+# ReShiki #386 phase 2 — local UI verification
+
+Verified on macOS on 2026-10-20, approximately 18:39–18:48 JST. The requested style changes, Glossy/Flat change, single-drag Undo grouping, and sphere shading at displayed **300%** and **400%** passed visual verification. The native **Edit menu/Undo label could not be verified because this build has no Edit menu**. Two additional visual inconsistencies were observed: a stale Structure subtitle and fine seams across some carbon–carbon bond cylinders.
+
+## Process isolation and capture setup
+
+- Launched exactly the supplied "'`open -n` command for `ReShiki386P2Evidence.app`, with the supplied `RESHIKI_DATA_DIR` and `--open` drawing path.
+- `pgrep -f '"'wf_228c0944-39d-2/target/debug/reshiki --open'"'` returned exactly **74366**. This differs from the protected installed-app PID **51217**.
+- Saved the launched command and start time in [launched-process.txt](launched-process.txt).
+- The supplied window helper returned **7185**; it still returned 7185 at the end of the UI checks.
+- Computer use attached only by bundle ID **dev.reshiki.verification.ev3862p2**. Target window title: `caffeine-ballstick-flat.rsk — ReShiki`, with a dirty-state dot during changes.
+- Read-only window inspection confirmed frontmost PID **74366**, the expected bundle ID, and window **7185** owned by that PID. See [window-verification.txt](window-verification.txt).
+- Actual window frame was **1280 × 852 points**, origin **(200, 115)**; captures are **2560 × 1704 pixels**, at 2× Retina scale. This was larger than the approximate size in the task. The window was never resized or moved.
+- The entire 3D model section through **Reset view** fitted without scrolling or manually collapsing Properties sections. Selecting the model automatically changed Molecular properties from expanded to collapsed.
+- Window evidence used `screencapture -x -o -l 7185 "$ART/<filename>.png"`. Only `07b-edit-menu-full-screen.png` used the authorized full-screen capture. The pointer was parked on the title bar before window captures, except image 08, where it remained at the app menu, also away from the model and documented controls.
+- No Save command was issued. Repository files and system settings were not modified. The installed app was never attached to, focused, clicked, opened, or quit. Other visible system alerts were not dismissed.
+
+## Step-by-step results
+
+For steps 1–9, unless explicitly changed below: **Hydrogens All**, **Perspective 20%**, **Background None**, and **3D** remained active. The inspector reported **14 atoms · 15 bonds**. Buttons for Polar/None hydrogens, Soft card, and Reset view were visible.
+
+| Step | Action and expected result | Observed result, active controls, and exact status | Evidence | Verdict |
+|---|---|---|---|---|
+| 1 | Clicked Select/move, then Cmd+A to select the model. Expected the 3D model section and initial Ball & stick state. | Whole section visible. **Ball & stick**, **Flat · journal**, Depth fade **35%**; style pictograms present. Separate outlined spheres and shaded cylinders. Status **“Document opened”**; zoom **201%**. | [01-section-ballstick.png](01-section-ballstick.png) | PASS |
+| 2 | Clicked **Stick**. Expected Stick active and corresponding model rendering. | **Stick** active; 3D model summary says “Stick”. Large atom spheres disappear; cylinders meet at small rounded joints. Flat and fade **35%** remain. Status **“Drawing updated”**; **201%**. Structure subtitle inconsistency noted below. | [02-style-stick.png](02-style-stick.png) | PASS for requested switch |
+| 3 | Clicked **Wireframe**. Expected Wireframe active and line rendering. | **Wireframe** active; thin colored lines replace spheres and cylinders. Flat and fade **35%** remain. Status **“Drawing updated”**; **201%**. | [03-style-wireframe.png](03-style-wireframe.png) | PASS for requested switch |
+| 4 | Clicked **Space-filling**. Expected large overlapping spheres. | **Space-filling** active; large overlapping spheres obscure bonds. Flat and fade **35%** remain. Status **“Drawing updated”**; **201%**. | [04-style-spacefilling.png](04-style-spacefilling.png) | PASS for requested switch |
+| 5 | Clicked **Ball & stick** again. Expected original style restored. | **Ball & stick** active; original sphere/cylinder appearance and selection bounds restored. **Flat**, fade **35%**. Status **“Drawing updated”**; **201%**. | [05-style-ballstick-again.png](05-style-ballstick-again.png) | PASS |
+| 6 | Clicked **Glossy · slides**, captured it, then clicked **Flat · journal** again. | In the shot, **Glossy** is active, spheres have stronger highlights and lose their dark outlines; **Ball & stick**, fade **35%** remain. Status **“Drawing updated”**; **201%**. Subsequent Flat click was verified through the active toggle and screenshot observation before the drag. | [06-look-glossy.png](06-look-glossy.png) | PASS |
+| 7 | Starting at **35%**, used the supplied helper for exactly one held-button drag, **(1095, 645) → (1222, 645)** in window-relative points. Expected roughly 85–90% and visible depth fading. | Depth fade became **87%**. **Ball & stick / Flat** remained active. Blue and red atoms became visibly paler than in 05/08. Status **“Drawing updated”**; **201%**. The nearly planar projection limits independent identification of which atoms are farthest back. | [07-depth-fade-dragged.png](07-depth-fade-dragged.png) | PASS for value and visible fading |
+| 7b | Inspected the native menu bar for **Edit > Undo**, then attempted to leave the menu with Escape. | The verified app exposes only its application menu; **no Edit menu exists**, and no native Undo label was available. Accessibility showed About, Services, Hide, Hide Others, Show All, and Quit. The full-screen shot shows the active verification-app menu-bar name and no Edit heading. It also contains Finder alerts; these were untouched. Escape did not clear the menu'"'s accessibility state, so the exposed **Cancel** menu action was used after the first Undo. | [07b-edit-menu-full-screen.png](07b-edit-menu-full-screen.png) | NOT VERIFIED — menu unavailable |
+| 8 | Pressed **Cmd+Z once**. Expected the whole drag to undo to 35%, keeping Flat and Ball & stick. | Depth fade **35%**, **Flat · journal**, **Ball & stick**. Stronger atom colors restored. Status **“History restored”**; **201%**. | [08-undo-slider.png](08-undo-slider.png) | PASS |
+| 9 | Pressed **Cmd+Z once more**. Expected undo of the prior Flat click, rather than another intermediate slider value. | **Glossy · slides** became active; Depth fade stayed **35%**, style stayed **Ball & stick**. Glossy highlights returned. Status **“History restored”**; **201%**. Together with step 8, this verifies that the drag occupied one Undo step. | [09-undo-again.png](09-undo-again.png) | PASS |
+| 10 | Pressed **Cmd+Shift+Z once**, then clicked empty canvas at computer-use screenshot pixel **(350, 450)**. | Redo restored **Ball & stick / Flat / Depth fade 35%**, verified before deselection. Selection rectangle disappeared; Properties said **“Select an object to edit its properties.”** Status **“History restored”**; **201%**. | Live screenshot/AX observation; following images show deselection | PASS |
+| 11a | Zoomed to displayed **300%**, panned with scroll, parked pointer, waited **1 second**, and captured. Details below. | Exact displayed zoom **300%**; status **“History restored”**. Several large spheres and bonds fill the canvas. Spheres show continuous smooth shading with no obvious stepped rings/banding. The bottom hydrogen is partly clipped by the viewport. Fine bond seams are noted separately below. | [10-zoom-300-ballstick.png](10-zoom-300-ballstick.png) | PASS for zoom and sphere shading |
+| 11b | Used another Cmd+scroll gesture to displayed **400%**, parked pointer, waited **1 second**, and captured. | Exact displayed zoom **400%**; status **“History restored”**. Enlarged spheres have smooth gradients and crisp outlines, without obvious stepped rings/banding. The enlarged molecule extends beyond the top/right/bottom viewport edges as expected for this close-up. | [11-zoom-400-ballstick.png](11-zoom-400-ballstick.png) | PASS for zoom and sphere shading |
+| 12 | Verified the launched command still matched the target, then executed **kill 74366**. Checked disappearance and protected PID. | Target "'`pgrep` produced no output, exit **1**. `ps -p 74366` exited **1**. `ps -p 51217` exited **0**, showing the original installed app and its original start time. | [process-cleanup.txt](process-cleanup.txt) | PASS |
+
+## Exact drag and zoom interactions
+
+The single Depth fade drag was:
+
+```sh
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 74366 1095 645 1222 645
+```
+
+The helper returned `ok window 7185 origin 200.0,115.0`. Coordinates were derived from the 2× computer-use screenshot: the 35% knob was approximately pixel **(2189,1290)**, corresponding to point **(1094.5,645)**. Only one slider drag was performed.
+
+For zoom, clicking the displayed percentage did not open an editable field. Clicking status-bar **+** at screenshot pixel **(2423,1662)** changed **201% → 251%**. The View options row was briefly opened at **(2176,1662)** and closed at the same point; no option was changed. A read-only source inspection confirmed that the percentage is a text label and +/- multiply the zoom, rather than offering exact entry.
+
+The artifact [cmd-scroll.swift](cmd-scroll.swift) implements the requested Cmd+scroll interaction using real CGEvents. It guards the exact verification PID/bundle, verifies window ownership, and checks that the pointer destination is not covered by another process'"'s window. Its coordinates are window-relative **points**. The working event sequence was:
+
+"'```sh
+swift cmd-scroll.swift 74366 200 700 30   # displayed 251% → 300%
+swift cmd-scroll.swift 74366 200 700 48   # displayed 300% → 400%
+```
+
+Between these two zoom gestures, computer use panned at screenshot pixel **(400,1400)** with `scroll(up, 0.15)` followed by `scroll(down, 0.1)`. The status remained **300%**. Pointer parking on the title bar and a one-second wait preceded each final zoom capture.
+
+Automation retries: an initial process-directed scroll attempt left zoom at 251%; the working helper uses the real event tap. One guard also rejected the macOS cursor pseudo-window before sending any events; the guard was refined to ignore only that cursor window. These attempts did not change document contents. One early stale accessibility ID was rejected and refreshed before the Stick action succeeded.
+
+## Additional findings
+
+1. **Stale Structure subtitle — visual inconsistency.** Images 02–04 still say **“Ball & stick · Chemistry and atom IDs stay the same”** in the Structure card while the Style toggle, 3D model summary, and canvas correctly show Stick, Wireframe, or Space-filling. The requested switches pass, but the summary text is inconsistent.
+2. **Fine bond-cylinder seams — visual artifact.** At 300% and especially 400%, a thin pale transverse line crosses the central carbon–carbon cylinder; another is visible on the lower diagonal carbon–carbon cylinder. These are isolated bond seams, separate from sphere shading. The spheres themselves did not show obvious stepped concentric rings.
+3. **Full-screen evidence has unrelated alerts.** The allowed full-screen capture includes Finder alerts, including “The application ‘ReShiki’ is not open anymore.” Their origin was not investigated. They were not clicked or dismissed. The target remained running and responsive, with its PID/bundle independently verified. The right-side slider path was clear, and window-only evidence excludes the unrelated alert windows. The entire desktop was therefore not visually unobstructed, although the actual drag path was unobstructed.
+
+## Unverified items and limits
+
+- A native Edit-menu Undo description could not be inspected because the target build has no Edit menu. The in-app toolbar exposes the generic accessibility label **“Undo · ⌘Z”**; history behavior was verified directly with the two Undo steps.
+- Increased fade visibly lightened the model, but the nearly planar pose does not independently establish the exact depth ordering of every atom.
+- Hydrogens Polar/None, Perspective adjustment, Soft card, and Reset view were verified as present only; the requested flow did not exercise them. Individual Undo behavior of each Style/Hydrogen/Background control was not exhaustively tested.
+- The zoom shots deliberately deselect the model, so their inspector does not display the Look or slider state. **Ball & stick / Flat / 35%** was verified immediately before deselection, and only view interactions followed.
+- Smooth shading is a visual result for this caffeine model at the captured zoom levels. Internal image-tile implementation and all possible orientations/models were not separately tested.
+- All required evidence filenames were saved. The pre-existing `00-preflight-launch.png` and other pre-existing artifacts were left in place and were not treated as evidence from this run.
+REPORT
+python3 - <<'"'PY'
+from pathlib import Path
+import re
+p=Path('report.md')
+missing=[x for x in re.findall(r'\\]\\((["'^)]+)'"\\)',p.read_text()) if not Path(x).exists()]
+assert not missing, missing
+required=['01-section-ballstick.png','02-style-stick.png','03-style-wireframe.png','04-style-spacefilling.png','05-style-ballstick-again.png','06-look-glossy.png','07-depth-fade-dragged.png','07b-edit-menu-full-screen.png','08-undo-slider.png','09-undo-again.png','10-zoom-300-ballstick.png','11-zoom-400-ballstick.png','launched-process.txt','process-cleanup.txt','report.md']
+assert all(Path(x).is_file() and Path(x).stat().st_size for x in required)
+print(f'Validated {len(required)} required artifacts and all report links.')
+PY" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app
+ succeeded in 0ms:
+Validated 15 required artifacts and all report links.
+
+codex
+Verification is complete. Saved the [report]( /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app/report.md) and all **12 requested screenshots** in `$ART`.
+
+- Style switching and Glossy/Flat changes passed.
+- One Depth fade drag changed **35% → 87%**. One Undo restored **35% / Flat**; the next restored **Glossy**, confirming one drag was one Undo step.
+- Captured exactly **300%** and **400%**. Spheres showed smooth shading without obvious stepped rings.
+- Found two visual issues: a stale “Ball & stick” Structure subtitle and fine seams across some bond cylinders.
+- Native Edit-menu Undo text could not be verified because this build has **no Edit menu**.
+
+Terminated only **PID 74366** and confirmed **PID 51217 remains running**. No drawing save, repository edit, or system-setting change was performed.
+tokens used
+146,046
+Verification is complete. Saved the [report]( /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/app/report.md) and all **12 requested screenshots** in `$ART`.
+
+- Style switching and Glossy/Flat changes passed.
+- One Depth fade drag changed **35% → 87%**. One Undo restored **35% / Flat**; the next restored **Glossy**, confirming one drag was one Undo step.
+- Captured exactly **300%** and **400%**. Spheres showed smooth shading without obvious stepped rings.
+- Found two visual issues: a stale “Ball & stick” Structure subtitle and fine seams across some bond cylinders.
+- Native Edit-menu Undo text could not be verified because this build has **no Edit menu**.
+
+Terminated only **PID 74366** and confirmed **PID 51217 remains running**. No drawing save, repository edit, or system-setting change was performed.
+EXIT=0

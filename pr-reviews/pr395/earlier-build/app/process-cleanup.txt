@@ -1,0 +1,19 @@
+Cleanup command: kill 74366
+Verified target command before kill:
+/Users/shiranui/dev/ReShiki/.claude/worktrees/wf_228c0944-39d-2/target/debug/reshiki --open /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/input/own/caffeine-ballstick-flat.rsk
+
+$ pgrep -f 'wf_228c0944-39d-2/target/debug/reshiki --open'
+exit_code=1
+stdout=(empty)
+stderr=(empty)
+
+$ ps -o pid,lstart,args -p 74366
+exit_code=1
+  PID STARTED                      ARGS
+
+
+$ ps -o pid,lstart,args -p 51217
+exit_code=0
+  PID STARTED                      ARGS
+51217 Tue Oct 20 14:02:02 2026     /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki
+

@@ -1,0 +1,2 @@
+  PID STARTED                      ARGS
+46018 Tue Oct 20 18:02:39 2026     /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki --open /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/input/caffeine.mol

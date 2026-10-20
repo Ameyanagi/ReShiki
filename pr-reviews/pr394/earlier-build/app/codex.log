@@ -1,0 +1,1597 @@
+Reading additional input from stdin...
+OpenAI Codex v0.162.1
+--------
+workdir: /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+model: gpt-6-astra
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: xhigh
+reasoning summaries: none
+session id: 01a1588c-3886-7560-9e80-d2633c5b5cf2
+--------
+user
+You are running local UI verification for Claude on macOS. Use computer use (screenshots, mouse, keyboard).
+
+Artifact directory (save everything here): /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+Call it $ART below.
+
+App under test: a branch build of ReShiki wrapped in its own bundle:
+  /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app
+  bundle id dev.reshiki.verification.ev3861b2, name "ReShiki1bEvidence".
+IMPORTANT: the user's installed "ReShiki" app (bundle in /nix/store/...) is running. Never touch, focus, click in, open, or quit it. Never look the app up by the plain name "ReShiki". If you ever find yourself in a window not owned by the PID you launched, stop interacting with it immediately.
+
+Setup:
+a. Launch it yourself, exactly:
+   open -n "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app" --env RESHIKI_DATA_DIR=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-data --args --open "$ART/../input/caffeine.mol"
+   (use the absolute path for the .mol: /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/input/caffeine.mol)
+b. Find its PID: pgrep -f 'apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki'  (exactly one). Save `ps -o pid,lstart,args -p <PID>` to $ART/launched-process.txt. Call it $PID.
+c. Its window id: /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-wid $PID   -> $WID (re-run if the window changes).
+d. Attach computer use by bundle id dev.reshiki.verification.ev3861b2 (or by the bundle path). The window should show caffeine (2D) in an "Untitled" tab.
+
+Evidence screenshots: save each with
+  screencapture -x -o -l $WID "$ART/<name>.png"
+(window-only capture of your PID). Use computer-use screenshots for navigating. Move the pointer off the molecule before an evidence shot unless the step says otherwise.
+
+Drag helper (use it for ALL drags in steps 4, 6, 8 and 9, because it can hold the mouse button while capturing):
+  /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag $PID x1 y1 x2 y2 [shift] [capture=/abs/path.png]
+  Coordinates are in POINTS relative to the top-left corner of the app window (window frame, including the title bar). It presses at (x1,y1), moves in 12 steps to (x2,y2), waits 0.3 s, optionally captures the window while still holding, then releases. `shift` holds Shift throughout. The app window MUST be frontmost and unobstructed at those points before you run it (activate it first), because it posts real mouse events at screen positions. Work out the point coordinates from a computer-use screenshot (mind Retina scaling: the window is about 1000 x 665 points). For a double-click use computer use normally.
+
+Feature under test (ReShiki #386 phase 1b, 3D models):
+- With the whole molecule selected (Select tool, Cmd+A), Properties -> Structure has "Show as" 2D / 3D / Both. The first switch to 3D generates a conformer (a few seconds), then atoms morph from the drawing into the 3D ball & stick model over 0.75 s.
+- While the whole molecule shown as 3D is selected, a small floating "Show as" bar (2D / 3D / Both) is drawn on the canvas just above the selection box (or below if no room). It hides during any drag.
+- With the molecule selected, dragging inside the 3D model frame (not within ~8 px of the frame edge) rotates the model like a trackball. Shift+drag rolls it about the view axis. Double-click inside the frame resets to the opening view. Each rotation is one Undo step.
+- The selection box around a 3D model has corner handles; dragging a corner resizes the model frame (edge handles are hidden).
+- Properties -> Structure has "2D layout": "Original drawing" / "From the 3D view" while the model is shown. "From the 3D view" then 2D flattens the current 3D view into the 2D drawing.
+
+Flow (keep the window size as is; you may scroll the Properties panel):
+1. Activate the window. Choose the Select tool (arrow, top-left of tools), click empty canvas, then Cmd+A. Expect caffeine selected and Properties -> Structure showing Show as 2D (active) / 3D / Both (scroll Properties if needed). Save 01-selected-2d.png.
+2. Morph capture: immediately before clicking "3D", run:  echo $PID > "$ART/morph-go"   then click "3D" in the Structure section at once (a background script records ~40 frames of the window when that file appears; do not delete it). Wait until generation finishes and the model is shown. Save 02-3d-shown.png with the molecule still selected (floating bar visible).
+3. Save 03-bar.png (same capture; note bar position above/below the selection and which button looks active).
+4. Rotate, mid-drag: with the molecule selected, use the drag helper from a point well inside the model frame near its centre-left to ~120 pt right / ~40 pt down, with capture=$ART/04-rotate-mid-drag.png. Expect the model turned and the bar hidden in that capture.
+5. After release save 05-rotate-released.png. Expect new orientation kept, bar visible again.
+6. Shift-roll: drag helper with `shift`, from a point right of the model centre to ~100 pt above it (an arc-ish move), inside the frame. Save 06-shift-roll.png after. Expect the model rolled in the screen plane relative to 05.
+7. Double-click inside the frame on the model. Save 07-double-click-reset.png. Expect the opening orientation (compare with 02).
+8. Plain drag helper rotation again (different direction than step 4) so the view differs from the opening one; save 08-rotated-before-resize.png.
+9. Resize: drag helper from the bottom-right corner handle of the selection box ~100 pt right and ~80 pt down (stay inside the canvas). Save 09-resized.png. Expect a larger frame and model; corner handles only.
+10. In Properties -> Structure choose "2D layout" -> "From the 3D view". Save 10-layout-from-3d.png (Structure section visible). Then click "2D" in Show as (Structure section, or the floating bar). Save 11-flattened-2d.png. Expect a 2D drawing matching the turned 3D view (not the original caffeine layout), far bonds lighter. Note status bar text.
+11. Press Cmd+Z once. Save 12-undo.png. Expect the 3D model back as in step 9/10. Note status bar text.
+12. Optional: right-click the molecule, hover "Show as", save 13-context-menu.png, then press Escape.
+
+For every evidence shot record the status bar text (bottom-left), the window title, and anything that looks wrong.
+
+Constraints:
+- Do not close or quit any other app; do not change system settings; do not edit repository files; do not save the drawing.
+- At the very end quit ONLY your PID: `kill $PID` (do not use the app menu, so you cannot hit the other ReShiki). Confirm with pgrep that it is gone and that the other ReShiki is still running; record both in the report.
+
+Write $ART/report.md: for each step, what you did (including the exact drag-helper coordinates), observed vs expected (with status bar text), screenshot filename, and a pass/fail verdict. End with anything you could not verify and why.
+codex
+指定された検証用バンドルだけを起動し、PIDとウィンドウの所有者を確認してから操作します。各ステップの画面、ステータス、ドラッグ座標を保存し、最後に検証用PIDだけを終了してレポートを作成します。
+exec
+/bin/zsh -lc 'open -n "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app" --env RESHIKI_DATA_DIR=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-data --args --open "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/input/caffeine.mol"' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 0ms:
+exec
+/bin/zsh -lc "pgrep -f 'apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 0ms:
+46018
+
+exec
+/bin/zsh -lc 'ps -o pid,lstart,args -p 46018 > /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/launched-process.txt
+cat /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/launched-process.txt' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 0ms:
+  PID STARTED                      ARGS
+46018 Tue Oct 20 18:02:39 2026     /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki --open /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/input/caffeine.mol
+
+exec
+/bin/zsh -lc "ps -axo pid,args | rg '/nix/store/.*/Contents/MacOS/reshiki' > /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/installed-process-before.txt
+cat /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/installed-process-before.txt" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 0ms:
+45390 codex exec -m gpt-6-astra -C /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app --skip-git-repo-check --add-dir /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app -s danger-full-access -o /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/codex-final.md You are running local UI verification for Claude on macOS. Use computer use (screenshots, mouse, keyboard).\012\012Artifact directory (save everything here): /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app\012Call it $ART below.\012\012App under test: a branch build of ReShiki wrapped in its own bundle:\012  /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app\012  bundle id dev.reshiki.verification.ev3861b2, name "ReShiki1bEvidence".\012IMPORTANT: the user's installed "ReShiki" app (bundle in /nix/store/...) is running. Never touch, focus, click in, open, or quit it. Never look the app up by the plain name "ReShiki". If you ever find yourself in a window not owned by the PID you launched, stop interacting with it immediately.\012\012Setup:\012a. Launch it yourself, exactly:\012   open -n "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app" --env RESHIKI_DATA_DIR=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-data --args --open "$ART/../input/caffeine.mol"\012   (use the absolute path for the .mol: /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/input/caffeine.mol)\012b. Find its PID: pgrep -f 'apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki'  (exactly one). Save `ps -o pid,lstart,args -p <PID>` to $ART/launched-process.txt. Call it $PID.\012c. Its window id: /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-wid $PID   -> $WID (re-run if the window changes).\012d. Attach computer use by bundle id dev.reshiki.verification.ev3861b2 (or by the bundle path). The window should show caffeine (2D) in an "Untitled" tab.\012\012Evidence screenshots: save each with\012  screencapture -x -o -l $WID "$ART/<name>.png"\012(window-only capture of your PID). Use computer-use screenshots for navigating. Move the pointer off the molecule before an evidence shot unless the step says otherwise.\012\012Drag helper (use it for ALL drags in steps 4, 6, 8 and 9, because it can hold the mouse button while capturing):\012  /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag $PID x1 y1 x2 y2 [shift] [capture=/abs/path.png]\012  Coordinates are in POINTS relative to the top-left corner of the app window (window frame, including the title bar). It presses at (x1,y1), moves in 12 steps to (x2,y2), waits 0.3 s, optionally captures the window while still holding, then releases. `shift` holds Shift throughout. The app window MUST be frontmost and unobstructed at those points before you run it (activate it first), because it posts real mouse events at screen positions. Work out the point coordinates from a computer-use screenshot (mind Retina scaling: the window is about 1000 x 665 points). For a double-click use computer use normally.\012\012Feature under test (ReShiki #386 phase 1b, 3D models):\012- With the whole molecule selected (Select tool, Cmd+A), Properties -> Structure has "Show as" 2D / 3D / Both. The first switch to 3D generates a conformer (a few seconds), then atoms morph from the drawing into the 3D ball & stick model over 0.75 s.\012- While the whole molecule shown as 3D is selected, a small floating "Show as" bar (2D / 3D / Both) is drawn on the canvas just above the selection box (or below if no room). It hides during any drag.\012- With the molecule selected, dragging inside the 3D model frame (not within ~8 px of the frame edge) rotates the model like a trackball. Shift+drag rolls it about the view axis. Double-click inside the frame resets to the opening view. Each rotation is one Undo step.\012- The selection box around a 3D model has corner handles; dragging a corner resizes the model frame (edge handles are hidden).\012- Properties -> Structure has "2D layout": "Original drawing" / "From the 3D view" while the model is shown. "From the 3D view" then 2D flattens the current 3D view into the 2D drawing.\012\012Flow (keep the window size as is; you may scroll the Properties panel):\0121. Activate the window. Choose the Select tool (arrow, top-left of tools), click empty canvas, then Cmd+A. Expect caffeine selected and Properties -> Structure showing Show as 2D (active) / 3D / Both (scroll Properties if needed). Save 01-selected-2d.png.\0122. Morph capture: immediately before clicking "3D", run:  echo $PID > "$ART/morph-go"   then click "3D" in the Structure section at once (a background script records ~40 frames of the window when that file appears; do not delete it). Wait until generation finishes and the model is shown. Save 02-3d-shown.png with the molecule still selected (floating bar visible).\0123. Save 03-bar.png (same capture; note bar position above/below the selection and which button looks active).\0124. Rotate, mid-drag: with the molecule selected, use the drag helper from a point well inside the model frame near its centre-left to ~120 pt right / ~40 pt down, with capture=$ART/04-rotate-mid-drag.png. Expect the model turned and the bar hidden in that capture.\0125. After release save 05-rotate-released.png. Expect new orientation kept, bar visible again.\0126. Shift-roll: drag helper with `shift`, from a point right of the model centre to ~100 pt above it (an arc-ish move), inside the frame. Save 06-shift-roll.png after. Expect the model rolled in the screen plane relative to 05.\0127. Double-click inside the frame on the model. Save 07-double-click-reset.png. Expect the opening orientation (compare with 02).\0128. Plain drag helper rotation again (different direction than step 4) so the view differs from the opening one; save 08-rotated-before-resize.png.\0129. Resize: drag helper from the bottom-right corner handle of the selection box ~100 pt right and ~80 pt down (stay inside the canvas). Save 09-resized.png. Expect a larger frame and model; corner handles only.\01210. In Properties -> Structure choose "2D layout" -> "From the 3D view". Save 10-layout-from-3d.png (Structure section visible). Then click "2D" in Show as (Structure section, or the floating bar). Save 11-flattened-2d.png. Expect a 2D drawing matching the turned 3D view (not the original caffeine layout), far bonds lighter. Note status bar text.\01211. Press Cmd+Z once. Save 12-undo.png. Expect the 3D model back as in step 9/10. Note status bar text.\01212. Optional: right-click the molecule, hover "Show as", save 13-context-menu.png, then press Escape.\012\012For every evidence shot record the status bar text (bottom-left), the window title, and anything that looks wrong.\012\012Constraints:\012- Do not close or quit any other app; do not change system settings; do not edit repository files; do not save the drawing.\012- At the very end quit ONLY your PID: `kill $PID` (do not use the app menu, so you cannot hit the other ReShiki). Confirm with pgrep that it is gone and that the other ReShiki is still running; record both in the report.\012\012Write $ART/report.md: for each step, what you did (including the exact drag-helper coordinates), observed vs expected (with status bar text), screenshot filename, and a pass/fail verdict. End with anything you could not verify and why.
+46362 /bin/zsh -c ps -axo pid,args | rg '/nix/store/.*/Contents/MacOS/reshiki' > /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/installed-process-before.txt\012cat /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/installed-process-before.txt
+46367 rg /nix/store/.*/Contents/MacOS/reshiki
+51217 /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki
+
+exec
+/bin/zsh -lc '/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-wid 46018' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 109ms:
+7018
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (failed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+codex
+The verification process is PID 46018 and its window is 7018. The installed app is a separate process (PID 51217). I’m keeping all interaction bound to the verification bundle and checking the initial selection controls before starting the morph capture.
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "screencapture -x -o -l 7018 \"/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/01-selected-2d.png\"
+sips -g pixelWidth -g pixelHeight \"/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/01-selected-2d.png\"
+ps -axo pid,args | rg '"'^ *[0-9]+ /nix/store/[''^ ]*/Applications/ReShiki[.]app/Contents/MacOS/reshiki'"' > /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/installed-process-before.txt" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 74ms:
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/01-selected-2d.png
+  pixelWidth: 2560
+  pixelHeight: 1704
+
+exec
+/bin/zsh -lc 'echo 46018 > "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-go"' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 0ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'screencapture -x -o -l 7018 "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/02-3d-shown.png"
+screencapture -x -o -l 7018 "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/03-bar.png"
+rg --files /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 446ms:
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/installed-process-before.txt
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/02-3d-shown.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/01-selected-2d.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/03-bar.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f39.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f11.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f05.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f04.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f10.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f38.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f06.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f12.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f13.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f07.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f03.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f17.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f16.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f02.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/log.txt
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f14.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f28.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f29.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f01.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f15.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f18.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f30.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f24.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f25.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f31.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f19.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f27.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f33.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f32.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f26.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f22.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f36.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f37.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f23.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f35.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f21.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f09.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f08.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f20.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f34.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/f40.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/prompt.md
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-done
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/binary-sha256.txt
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/run1-blocked/00-blocked-initial.png
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/run1-blocked/prompt.md
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/run1-blocked/report.md
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/run1-blocked/codex.log
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/run1-blocked/codex-final.md
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/codex.log
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/launched-process.txt
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-go
+
+codex
+The 3D model is displayed with the floating “Show as” bar below the selection frame, and 3D is active. The capture script produced all 40 morph frames; a read-only review is checking those while I test rotation, roll, reset, and resizing.
+exec
+/bin/zsh -lc '/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 450 440 570 480 capture=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/04-rotate-mid-drag.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 1333ms:
+ok window 7018 origin 200.0,115.0
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'screencapture -x -o -l 7018 "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/05-rotate-released.png"' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 111ms:
+exec
+/bin/zsh -lc '/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 570 480 490 380 shift' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 983ms:
+ok window 7018 origin 200.0,115.0
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'screencapture -x -o -l 7018 "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/06-shift-roll.png"' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 218ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+codex
+Rotation and Shift-roll both changed the view as expected. The floating bar is absent in the held-drag capture and returns after release; double-click restored the opening orientation. The morph frames also contain several intermediate positions, with timing consistent with the expected 0.75-second transition.
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'screencapture -x -o -l 7018 "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/07-double-click-reset.png"
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 550 460 475 400' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 1392ms:
+ok window 7018 origin 200.0,115.0
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'screencapture -x -o -l 7018 "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/08-rotated-before-resize.png"
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 807 680 907 760' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 1714ms:
+ok window 7018 origin 200.0,115.0
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'screencapture -x -o -l 7018 "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/09-resized.png"' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 470ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'screencapture -x -o -l 7018 "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/10-layout-from-3d.png"' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 48ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+codex
+The corner drag enlarged both the frame and model while preserving the turned orientation. “From the 3D view” then 2D produced a different layout from the original drawing, with visibly lighter far bonds. I’m now checking that one Undo restores the resized 3D state.
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'screencapture -x -o -l 7018 "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/11-flattened-2d.png"' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 47ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'screencapture -x -o -l 7018 "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/12-undo.png"' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 149ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'screencapture -x -o -l 7018 "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/13-context-menu.png"' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 0ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'cat /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/morph-raw/log.txt' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 0ms:
+pid 46018 wid 7018
+f01 1792487048574
+f02 1792487048697
+f03 1792487048822
+f04 1792487048952
+f05 1792487049082
+f06 1792487049213
+f07 1792487049344
+f08 1792487049469
+f09 1792487049597
+f10 1792487049716
+f11 1792487049847
+f12 1792487049965
+f13 1792487050096
+f14 1792487050215
+f15 1792487050347
+f16 1792487050466
+f17 1792487050595
+f18 1792487050714
+f19 1792487050832
+f20 1792487050961
+f21 1792487051080
+f22 1792487051199
+f23 1792487051330
+f24 1792487051448
+f25 1792487051569
+f26 1792487051701
+f27 1792487051846
+f28 1792487051978
+f29 1792487052112
+f30 1792487052247
+f31 1792487052379
+f32 1792487052516
+f33 1792487052657
+f34 1792487052783
+f35 1792487052919
+f36 1792487053049
+f37 1792487053185
+f38 1792487053318
+f39 1792487053449
+f40 1792487053583
+
+codex
+One Undo restored the resized 3D view, and the context submenu contains all four expected display choices. I found one visual issue: after the first rotation, the floating bar returns but its lower border is slightly clipped by the canvas/footer boundary. I’m documenting that separately from the successful behavior checks, then I’ll terminate only PID 46018 and verify both process states.
+apply patch
+patch: completed
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/report.md
+diff --git a/report.md b/report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..551a4984a4529315832ead6ef3a5ab49de612234
+--- /dev/null
++++ b/report.md
+@@ -0,0 +1,115 @@
++**ReShiki #386 phase 1b — local UI verification**
++
++The requested core flow passed: first-use 3D generation and intermediate morph states, floating display bar, trackball rotation, Shift-roll, double-click reset, corner resizing, flattening from the turned 3D view, and restoration with one Undo. One visual defect was observed: the floating bar's lower border is clipped at the canvas/footer boundary after the first rotation (`05-rotate-released.png`). Its buttons remain readable.
++
++**Run identity and safeguards**
++
++- Test bundle: `/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app`
++- Bundle identifier: `dev.reshiki.verification.ev3861b2`.
++- Launched PID: **46018**. Window ID: **7018** throughout. Launch details are in [launched-process.txt](launched-process.txt).
++- The existing installed app was PID **51217**, executing `/nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki`. Its process record is in [installed-process-before.txt](installed-process-before.txt). It was never selected, focused, clicked, opened, or quit.
++- Computer use attached by the exact verification bundle identifier. All observed app states belonged to `ReShiki1bEvidence`. Every drag helper invocation reported window `7018`, origin `200.0,115.0`.
++- The window was kept at its initial size. Saved images are **2560 × 1704 pixels**, corresponding to approximately **1280 × 852 points** at Retina 2×. Zoom remained **238%**. No drawing was saved, repository files were not edited, and system settings were not changed.
++- All ordinary evidence images used `screencapture -x -o -l 7018 "$ART/<name>.png"`. The held-drag image used the supplied drag helper's capture option.
++- Before ordinary captures the pointer was moved to the title bar by clicking screenshot coordinate `(1500,30)`, away from the molecule. Exceptions were the requested held-drag capture and the open context submenu.
++- The footer's persistent left-hand recovery UI read **“Recovery draft”**, **“Restore”**, **“Dismiss”** in every evidence image. It was left untouched. The operation status text beside it is recorded below.
++
++Launch command executed:
++
++```sh
++open -n "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app" --env RESHIKI_DATA_DIR=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-data --args --open "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/input/caffeine.mol"
++```
++
++The exact requested `pgrep -f 'apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki'` returned one PID, `46018`. The supplied window helper returned `7018`. An initial stale accessibility-element error was resolved by refreshing the accessibility state; it did not change the document or redirect interaction to another app.
++
++**Step-by-step observations**
++
++1. **Select the whole 2D molecule — PASS.** Raised the verification window, clicked the Select arrow, clicked empty canvas at computer-use screenshot coordinate `(900,500)`, and pressed Cmd+A. Caffeine was selected, with **14 atoms · 15 bonds**. Properties → Structure was already visible and showed **2D active**, with 3D and Both available. No Properties scrolling was needed. The drawing had the expected original caffeine layout. A floating bar was also visible in 2D; this was additional behavior, not a failure of the requested 3D test.
++
++   Evidence: [01-selected-2d.png](01-selected-2d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Structure imported · Undo restores the previous drawing”**. No blocking defect observed.
++
++2. **First 3D switch and morph capture — PASS; exact duration not measured.** Wrote `46018` to `$ART/morph-go`, then immediately issued the computer-use click on **3D in Properties → Structure**. The marker was retained. The background script produced all 40 frames in [morph-raw](morph-raw), and its [log](morph-raw/log.txt) confirms PID `46018`, WID `7018`. Generation completed and the selected ball-and-stick model appeared. The floating bar was visible below the frame with 3D active.
++
++   Evidence: [02-3d-shown.png](02-3d-shown.png), plus `morph-raw/f01.png` through `f40.png`. Window title: **“Untitled • — ReShiki”**. Final status: **“Shown as 3D model · Undo restores the 2D drawing”**. Intermediate motion and timing limits are detailed below.
++
++3. **Floating display bar — PASS.** Captured the same settled selection. The bar sits **below** the selection frame, where there is more space than above it. It contains Show as / 2D / 3D / Both; **3D has the pale-green active background**. The Structure section also has 3D active.
++
++   Evidence: [03-bar.png](03-bar.png). Window title: **“Untitled • — ReShiki”**. Status: **“Shown as 3D model · Undo restores the 2D drawing”**. No clipping of this bar in this initial view.
++
++4. **Trackball rotation while held — PASS.** With the test window frontmost, used the supplied helper from **(450,440) → (570,480) points**, a movement of **+120,+40**, starting well inside the frame. The helper captured before releasing the button. The model turned to a narrow, nearly edge-on view, and the floating bar was **hidden**. A canvas instruction strip read **“Drag to rotate · Shift-drag to roll · Double-click to reset”**.
++
++   Evidence: [04-rotate-mid-drag.png](04-rotate-mid-drag.png). Window title: **“Untitled • — ReShiki”**. Status while held: **“Shown as 3D model · Undo restores the 2D drawing”**. No rotation failure observed.
++
++5. **Rotation after release — PASS for persistence/bar return; FAIL for complete bar visibility.** The rotated orientation remained after release and the floating bar reappeared below the selection, with 3D active. However, the lower rounded border of the bar runs into and is clipped by the canvas/footer boundary. The labels and active button remain readable. This is a visual layout issue; the bar did return as expected.
++
++   Evidence: [05-rotate-released.png](05-rotate-released.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**.
++
++6. **Shift-roll — PASS.** Used the helper with Shift held from **(570,480) → (490,380) points**, movement **−80,−100**, starting right of the model's center and remaining within the frame. The previously almost vertical model rolled to a diagonal from upper-left to lower-right, with the same nearly edge-on appearance. The bar was visible after release.
++
++   Evidence: [06-shift-roll.png](06-shift-roll.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No defect observed for this action.
++
++7. **Double-click reset — PASS.** Double-clicked the model at computer-use screenshot coordinate **(975,1000)**, equivalent to approximately **(487.5,500) points**. The molecule and selection frame returned to the opening orientation and size seen in image 02. The orange active-position indicator and keyboard-context text changed, but the molecular orientation matched.
++
++   Evidence: [07-double-click-reset.png](07-double-click-reset.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No reset failure observed.
++
++8. **Second rotation before resizing — PASS.** Used a different direction with the helper: **(550,460) → (475,400) points**, movement **−75,−60**. The resulting model was visibly tilted from the opening view, with a wider, shallower projection of the rings. The floating bar returned after release.
++
++   Evidence: [08-rotated-before-resize.png](08-rotated-before-resize.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No defect observed for this action.
++
++9. **Bottom-right corner resizing — PASS.** Dragged the bottom-right corner using the helper from **(807,680) → (907,760) points**, movement **+100,+80**. Both endpoints were within the canvas. The frame and molecule grew, retaining the turned orientation. The approximate frame changed from `(190,253)–(807,680)` to `(190,253)–(912,752)` points, with the top-left fixed and proportional scaling. Four corner resize handles were visible; **no edge-midpoint resize handles** were shown. A separate top-center circular rotation handle remained visible.
++
++   Evidence: [09-resized.png](09-resized.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. The model and bar fit within the canvas in this state.
++
++10. **Choose the 3D-derived layout and flatten — PASS.** In Properties → Structure, clicked **From the 3D view** under **2D layout**. It became active and displayed the explanation **“Flatten the model as it is turned now, with far bonds lighter.”** The model stayed in its resized, turned state.
++
++    Evidence before flattening: [10-layout-from-3d.png](10-layout-from-3d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. Structure and both layout choices are visible.
++
++    Then clicked **2D in the Structure section**. The model became a 2D drawing whose ring and substituent arrangement follows the turned 3D projection and differs from the original image 01. Far portions of the drawing, including the upper-left oxygen/bonds, are visibly lighter than the nearer lower-right portions. The selection bounds contracted when returning to the 2D drawing; the 3D frame size was not retained as the drawing bounds. No requirement in the requested flow specified identical 2D/3D screen size.
++
++    Evidence after flattening: [11-flattened-2d.png](11-flattened-2d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Shown as 2D from the 3D view · Undo restores the 3D model”**. No mismatch in the expected projection or depth appearance observed.
++
++11. **One Undo — PASS.** Pressed **Cmd+Z exactly once** after flattening. The resized 3D molecule and frame returned, matching images 09/10 in orientation, size, and placement. **From the 3D view** remained active, 3D was active, and the floating bar was visible.
++
++    Evidence: [12-undo.png](12-undo.png). Window title: **“Untitled • — ReShiki”**. Status: **“History restored”**. No restoration mismatch observed.
++
++12. **Optional context submenu — PASS for menu contents; hover-only behavior not independently tested.** Right-clicked the molecule at computer-use screenshot coordinate **(1215,950)**, then clicked **Show as** to expand its submenu. The available computer-use API did not expose a hover operation, so a submenu-row click was used. The menu showed **2D drawing**, **2D from the 3D view**, **3D model** (disabled/current), and **2D and 3D**. Pressed Escape afterward and confirmed the menu closed without changing the drawing.
++
++    Evidence: [13-context-menu.png](13-context-menu.png). Window title: **“Untitled • — ReShiki”**. Status: **“History restored”**. No unexpected menu entry or missing display choice observed.
++
++**Exact drag-helper commands**
++
++All coordinates below are window-relative **points**, including the title bar. Each helper was run while the verification window was active and unobstructed. These were the only drag operations.
++
++```sh
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 450 440 570 480 capture=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/04-rotate-mid-drag.png
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 570 480 490 380 shift
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 550 460 475 400
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 807 680 907 760
++```
++
++**Morph-frame evidence**
++
++All 40 frames have window title **“Untitled • — ReShiki”** and the persistent recovery UI described above.
++
++| Frames | Observed state | Operation status text |
++|---|---|---|
++| f01–f26 | Selected original 2D drawing, unchanged across these samples | Structure imported · Undo restores the previous drawing |
++| f27 | Still 2D geometry; 3D selected; Properties reports “Generating the conformer · ETKDG, then MMFF94s” | Generating 3D model · MMFF94s |
++| f28 | Spheres/sticks appear around the original drawing positions; final hydrogen geometry not yet present | Shown as 3D model · Undo restores the 2D drawing |
++| f29–f32 | Distinct intermediate atom positions; hydrogens emerge during the transition, visibly translucent in f30 | Shown as 3D model · Undo restores the 2D drawing |
++| f33–f40 | Settled final 3D geometry matching image 02 | Shown as 3D model · Undo restores the 2D drawing |
++
++The logged samples occur about every 120–145 ms. The first change falls between f27 (`1792487051846`) and f28 (`1792487051978`); settling falls between f32 (`1792487052516`) and f33 (`1792487052657`). This is consistent with a transition lasting about **538–811 ms**, which includes the expected **750 ms**. The evidence verifies intermediate geometry rather than a simple before/after replacement, but cannot measure the precise animation duration or frame-rate smoothness.
++
++Additional transient observations: the representation changes from text/lines to spheres/sticks between f27 and f28, then positions interpolate; the selection frame expands and the bar moves from above to below; the Molecular properties formula temporarily disappears during f28–f30 and returns by f31. The final orange active-position marker overlaps the top hydrogen. These did not prevent the tested interactions. No persistent blank model or obviously broken bonds were observed.
++
++**Final process cleanup**
++
++Process cleanup results will be recorded here after the final PID-only termination.
++
++**Unverified items and limits**
++
++- Exact 0.75-second duration and per-frame animation smoothness: the background capture sampled approximately every 120–145 ms.
++- Whether every rotation produces exactly one Undo entry: the specified flow tested one Undo for flattening, not individual rotation-history boundaries.
++- Hover-only opening of the context submenu: the available computer-use API exposed click and keyboard actions but no hover operation; the submenu was expanded by clicking its parent row.
++- Both mode, alternative molecules, repeated conformer generation, saving/reopening, and persistence across launches were outside the requested flow and were not exercised.
+
+diff --git a/report.md b/report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..551a4984a4529315832ead6ef3a5ab49de612234
+--- /dev/null
++++ b/report.md
+@@ -0,0 +1,115 @@
++**ReShiki #386 phase 1b — local UI verification**
++
++The requested core flow passed: first-use 3D generation and intermediate morph states, floating display bar, trackball rotation, Shift-roll, double-click reset, corner resizing, flattening from the turned 3D view, and restoration with one Undo. One visual defect was observed: the floating bar's lower border is clipped at the canvas/footer boundary after the first rotation (`05-rotate-released.png`). Its buttons remain readable.
++
++**Run identity and safeguards**
++
++- Test bundle: `/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app`
++- Bundle identifier: `dev.reshiki.verification.ev3861b2`.
++- Launched PID: **46018**. Window ID: **7018** throughout. Launch details are in [launched-process.txt](launched-process.txt).
++- The existing installed app was PID **51217**, executing `/nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki`. Its process record is in [installed-process-before.txt](installed-process-before.txt). It was never selected, focused, clicked, opened, or quit.
++- Computer use attached by the exact verification bundle identifier. All observed app states belonged to `ReShiki1bEvidence`. Every drag helper invocation reported window `7018`, origin `200.0,115.0`.
++- The window was kept at its initial size. Saved images are **2560 × 1704 pixels**, corresponding to approximately **1280 × 852 points** at Retina 2×. Zoom remained **238%**. No drawing was saved, repository files were not edited, and system settings were not changed.
++- All ordinary evidence images used `screencapture -x -o -l 7018 "$ART/<name>.png"`. The held-drag image used the supplied drag helper's capture option.
++- Before ordinary captures the pointer was moved to the title bar by clicking screenshot coordinate `(1500,30)`, away from the molecule. Exceptions were the requested held-drag capture and the open context submenu.
++- The footer's persistent left-hand recovery UI read **“Recovery draft”**, **“Restore”**, **“Dismiss”** in every evidence image. It was left untouched. The operation status text beside it is recorded below.
++
++Launch command executed:
++
++```sh
++open -n "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app" --env RESHIKI_DATA_DIR=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-data --args --open "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/input/caffeine.mol"
++```
++
++The exact requested `pgrep -f 'apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki'` returned one PID, `46018`. The supplied window helper returned `7018`. An initial stale accessibility-element error was resolved by refreshing the accessibility state; it did not change the document or redirect interaction to another app.
++
++**Step-by-step observations**
++
++1. **Select the whole 2D molecule — PASS.** Raised the verification window, clicked the Select arrow, clicked empty canvas at computer-use screenshot coordinate `(900,500)`, and pressed Cmd+A. Caffeine was selected, with **14 atoms · 15 bonds**. Properties → Structure was already visible and showed **2D active**, with 3D and Both available. No Properties scrolling was needed. The drawing had the expected original caffeine layout. A floating bar was also visible in 2D; this was additional behavior, not a failure of the requested 3D test.
++
++   Evidence: [01-selected-2d.png](01-selected-2d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Structure imported · Undo restores the previous drawing”**. No blocking defect observed.
++
++2. **First 3D switch and morph capture — PASS; exact duration not measured.** Wrote `46018` to `$ART/morph-go`, then immediately issued the computer-use click on **3D in Properties → Structure**. The marker was retained. The background script produced all 40 frames in [morph-raw](morph-raw), and its [log](morph-raw/log.txt) confirms PID `46018`, WID `7018`. Generation completed and the selected ball-and-stick model appeared. The floating bar was visible below the frame with 3D active.
++
++   Evidence: [02-3d-shown.png](02-3d-shown.png), plus `morph-raw/f01.png` through `f40.png`. Window title: **“Untitled • — ReShiki”**. Final status: **“Shown as 3D model · Undo restores the 2D drawing”**. Intermediate motion and timing limits are detailed below.
++
++3. **Floating display bar — PASS.** Captured the same settled selection. The bar sits **below** the selection frame, where there is more space than above it. It contains Show as / 2D / 3D / Both; **3D has the pale-green active background**. The Structure section also has 3D active.
++
++   Evidence: [03-bar.png](03-bar.png). Window title: **“Untitled • — ReShiki”**. Status: **“Shown as 3D model · Undo restores the 2D drawing”**. No clipping of this bar in this initial view.
++
++4. **Trackball rotation while held — PASS.** With the test window frontmost, used the supplied helper from **(450,440) → (570,480) points**, a movement of **+120,+40**, starting well inside the frame. The helper captured before releasing the button. The model turned to a narrow, nearly edge-on view, and the floating bar was **hidden**. A canvas instruction strip read **“Drag to rotate · Shift-drag to roll · Double-click to reset”**.
++
++   Evidence: [04-rotate-mid-drag.png](04-rotate-mid-drag.png). Window title: **“Untitled • — ReShiki”**. Status while held: **“Shown as 3D model · Undo restores the 2D drawing”**. No rotation failure observed.
++
++5. **Rotation after release — PASS for persistence/bar return; FAIL for complete bar visibility.** The rotated orientation remained after release and the floating bar reappeared below the selection, with 3D active. However, the lower rounded border of the bar runs into and is clipped by the canvas/footer boundary. The labels and active button remain readable. This is a visual layout issue; the bar did return as expected.
++
++   Evidence: [05-rotate-released.png](05-rotate-released.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**.
++
++6. **Shift-roll — PASS.** Used the helper with Shift held from **(570,480) → (490,380) points**, movement **−80,−100**, starting right of the model's center and remaining within the frame. The previously almost vertical model rolled to a diagonal from upper-left to lower-right, with the same nearly edge-on appearance. The bar was visible after release.
++
++   Evidence: [06-shift-roll.png](06-shift-roll.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No defect observed for this action.
++
++7. **Double-click reset — PASS.** Double-clicked the model at computer-use screenshot coordinate **(975,1000)**, equivalent to approximately **(487.5,500) points**. The molecule and selection frame returned to the opening orientation and size seen in image 02. The orange active-position indicator and keyboard-context text changed, but the molecular orientation matched.
++
++   Evidence: [07-double-click-reset.png](07-double-click-reset.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No reset failure observed.
++
++8. **Second rotation before resizing — PASS.** Used a different direction with the helper: **(550,460) → (475,400) points**, movement **−75,−60**. The resulting model was visibly tilted from the opening view, with a wider, shallower projection of the rings. The floating bar returned after release.
++
++   Evidence: [08-rotated-before-resize.png](08-rotated-before-resize.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No defect observed for this action.
++
++9. **Bottom-right corner resizing — PASS.** Dragged the bottom-right corner using the helper from **(807,680) → (907,760) points**, movement **+100,+80**. Both endpoints were within the canvas. The frame and molecule grew, retaining the turned orientation. The approximate frame changed from `(190,253)–(807,680)` to `(190,253)–(912,752)` points, with the top-left fixed and proportional scaling. Four corner resize handles were visible; **no edge-midpoint resize handles** were shown. A separate top-center circular rotation handle remained visible.
++
++   Evidence: [09-resized.png](09-resized.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. The model and bar fit within the canvas in this state.
++
++10. **Choose the 3D-derived layout and flatten — PASS.** In Properties → Structure, clicked **From the 3D view** under **2D layout**. It became active and displayed the explanation **“Flatten the model as it is turned now, with far bonds lighter.”** The model stayed in its resized, turned state.
++
++    Evidence before flattening: [10-layout-from-3d.png](10-layout-from-3d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. Structure and both layout choices are visible.
++
++    Then clicked **2D in the Structure section**. The model became a 2D drawing whose ring and substituent arrangement follows the turned 3D projection and differs from the original image 01. Far portions of the drawing, including the upper-left oxygen/bonds, are visibly lighter than the nearer lower-right portions. The selection bounds contracted when returning to the 2D drawing; the 3D frame size was not retained as the drawing bounds. No requirement in the requested flow specified identical 2D/3D screen size.
++
++    Evidence after flattening: [11-flattened-2d.png](11-flattened-2d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Shown as 2D from the 3D view · Undo restores the 3D model”**. No mismatch in the expected projection or depth appearance observed.
++
++11. **One Undo — PASS.** Pressed **Cmd+Z exactly once** after flattening. The resized 3D molecule and frame returned, matching images 09/10 in orientation, size, and placement. **From the 3D view** remained active, 3D was active, and the floating bar was visible.
++
++    Evidence: [12-undo.png](12-undo.png). Window title: **“Untitled • — ReShiki”**. Status: **“History restored”**. No restoration mismatch observed.
++
++12. **Optional context submenu — PASS for menu contents; hover-only behavior not independently tested.** Right-clicked the molecule at computer-use screenshot coordinate **(1215,950)**, then clicked **Show as** to expand its submenu. The available computer-use API did not expose a hover operation, so a submenu-row click was used. The menu showed **2D drawing**, **2D from the 3D view**, **3D model** (disabled/current), and **2D and 3D**. Pressed Escape afterward and confirmed the menu closed without changing the drawing.
++
++    Evidence: [13-context-menu.png](13-context-menu.png). Window title: **“Untitled • — ReShiki”**. Status: **“History restored”**. No unexpected menu entry or missing display choice observed.
++
++**Exact drag-helper commands**
++
++All coordinates below are window-relative **points**, including the title bar. Each helper was run while the verification window was active and unobstructed. These were the only drag operations.
++
++```sh
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 450 440 570 480 capture=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/04-rotate-mid-drag.png
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 570 480 490 380 shift
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 550 460 475 400
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 807 680 907 760
++```
++
++**Morph-frame evidence**
++
++All 40 frames have window title **“Untitled • — ReShiki”** and the persistent recovery UI described above.
++
++| Frames | Observed state | Operation status text |
++|---|---|---|
++| f01–f26 | Selected original 2D drawing, unchanged across these samples | Structure imported · Undo restores the previous drawing |
++| f27 | Still 2D geometry; 3D selected; Properties reports “Generating the conformer · ETKDG, then MMFF94s” | Generating 3D model · MMFF94s |
++| f28 | Spheres/sticks appear around the original drawing positions; final hydrogen geometry not yet present | Shown as 3D model · Undo restores the 2D drawing |
++| f29–f32 | Distinct intermediate atom positions; hydrogens emerge during the transition, visibly translucent in f30 | Shown as 3D model · Undo restores the 2D drawing |
++| f33–f40 | Settled final 3D geometry matching image 02 | Shown as 3D model · Undo restores the 2D drawing |
++
++The logged samples occur about every 120–145 ms. The first change falls between f27 (`1792487051846`) and f28 (`1792487051978`); settling falls between f32 (`1792487052516`) and f33 (`1792487052657`). This is consistent with a transition lasting about **538–811 ms**, which includes the expected **750 ms**. The evidence verifies intermediate geometry rather than a simple before/after replacement, but cannot measure the precise animation duration or frame-rate smoothness.
++
++Additional transient observations: the representation changes from text/lines to spheres/sticks between f27 and f28, then positions interpolate; the selection frame expands and the bar moves from above to below; the Molecular properties formula temporarily disappears during f28–f30 and returns by f31. The final orange active-position marker overlaps the top hydrogen. These did not prevent the tested interactions. No persistent blank model or obviously broken bonds were observed.
++
++**Final process cleanup**
++
++Process cleanup results will be recorded here after the final PID-only termination.
++
++**Unverified items and limits**
++
++- Exact 0.75-second duration and per-frame animation smoothness: the background capture sampled approximately every 120–145 ms.
++- Whether every rotation produces exactly one Undo entry: the specified flow tested one Undo for flattening, not individual rotation-history boundaries.
++- Hover-only opening of the context submenu: the available computer-use API exposed click and keyboard actions but no hover operation; the submenu was expanded by clicking its parent row.
++- Both mode, alternative molecules, repeated conformer generation, saving/reopening, and persistence across launches were outside the requested flow and were not exercised.
+
+exec
+/bin/zsh -lc 'ps -o pid,lstart,args -p 46018
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-wid 46018' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 0ms:
+  PID STARTED                      ARGS
+46018 Tue Oct 20 18:02:39 2026     /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki --open /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/input/caffeine.mol
+7018
+
+diff --git a/report.md b/report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..551a4984a4529315832ead6ef3a5ab49de612234
+--- /dev/null
++++ b/report.md
+@@ -0,0 +1,115 @@
++**ReShiki #386 phase 1b — local UI verification**
++
++The requested core flow passed: first-use 3D generation and intermediate morph states, floating display bar, trackball rotation, Shift-roll, double-click reset, corner resizing, flattening from the turned 3D view, and restoration with one Undo. One visual defect was observed: the floating bar's lower border is clipped at the canvas/footer boundary after the first rotation (`05-rotate-released.png`). Its buttons remain readable.
++
++**Run identity and safeguards**
++
++- Test bundle: `/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app`
++- Bundle identifier: `dev.reshiki.verification.ev3861b2`.
++- Launched PID: **46018**. Window ID: **7018** throughout. Launch details are in [launched-process.txt](launched-process.txt).
++- The existing installed app was PID **51217**, executing `/nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki`. Its process record is in [installed-process-before.txt](installed-process-before.txt). It was never selected, focused, clicked, opened, or quit.
++- Computer use attached by the exact verification bundle identifier. All observed app states belonged to `ReShiki1bEvidence`. Every drag helper invocation reported window `7018`, origin `200.0,115.0`.
++- The window was kept at its initial size. Saved images are **2560 × 1704 pixels**, corresponding to approximately **1280 × 852 points** at Retina 2×. Zoom remained **238%**. No drawing was saved, repository files were not edited, and system settings were not changed.
++- All ordinary evidence images used `screencapture -x -o -l 7018 "$ART/<name>.png"`. The held-drag image used the supplied drag helper's capture option.
++- Before ordinary captures the pointer was moved to the title bar by clicking screenshot coordinate `(1500,30)`, away from the molecule. Exceptions were the requested held-drag capture and the open context submenu.
++- The footer's persistent left-hand recovery UI read **“Recovery draft”**, **“Restore”**, **“Dismiss”** in every evidence image. It was left untouched. The operation status text beside it is recorded below.
++
++Launch command executed:
++
++```sh
++open -n "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app" --env RESHIKI_DATA_DIR=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-data --args --open "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/input/caffeine.mol"
++```
++
++The exact requested `pgrep -f 'apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki'` returned one PID, `46018`. The supplied window helper returned `7018`. An initial stale accessibility-element error was resolved by refreshing the accessibility state; it did not change the document or redirect interaction to another app.
++
++**Step-by-step observations**
++
++1. **Select the whole 2D molecule — PASS.** Raised the verification window, clicked the Select arrow, clicked empty canvas at computer-use screenshot coordinate `(900,500)`, and pressed Cmd+A. Caffeine was selected, with **14 atoms · 15 bonds**. Properties → Structure was already visible and showed **2D active**, with 3D and Both available. No Properties scrolling was needed. The drawing had the expected original caffeine layout. A floating bar was also visible in 2D; this was additional behavior, not a failure of the requested 3D test.
++
++   Evidence: [01-selected-2d.png](01-selected-2d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Structure imported · Undo restores the previous drawing”**. No blocking defect observed.
++
++2. **First 3D switch and morph capture — PASS; exact duration not measured.** Wrote `46018` to `$ART/morph-go`, then immediately issued the computer-use click on **3D in Properties → Structure**. The marker was retained. The background script produced all 40 frames in [morph-raw](morph-raw), and its [log](morph-raw/log.txt) confirms PID `46018`, WID `7018`. Generation completed and the selected ball-and-stick model appeared. The floating bar was visible below the frame with 3D active.
++
++   Evidence: [02-3d-shown.png](02-3d-shown.png), plus `morph-raw/f01.png` through `f40.png`. Window title: **“Untitled • — ReShiki”**. Final status: **“Shown as 3D model · Undo restores the 2D drawing”**. Intermediate motion and timing limits are detailed below.
++
++3. **Floating display bar — PASS.** Captured the same settled selection. The bar sits **below** the selection frame, where there is more space than above it. It contains Show as / 2D / 3D / Both; **3D has the pale-green active background**. The Structure section also has 3D active.
++
++   Evidence: [03-bar.png](03-bar.png). Window title: **“Untitled • — ReShiki”**. Status: **“Shown as 3D model · Undo restores the 2D drawing”**. No clipping of this bar in this initial view.
++
++4. **Trackball rotation while held — PASS.** With the test window frontmost, used the supplied helper from **(450,440) → (570,480) points**, a movement of **+120,+40**, starting well inside the frame. The helper captured before releasing the button. The model turned to a narrow, nearly edge-on view, and the floating bar was **hidden**. A canvas instruction strip read **“Drag to rotate · Shift-drag to roll · Double-click to reset”**.
++
++   Evidence: [04-rotate-mid-drag.png](04-rotate-mid-drag.png). Window title: **“Untitled • — ReShiki”**. Status while held: **“Shown as 3D model · Undo restores the 2D drawing”**. No rotation failure observed.
++
++5. **Rotation after release — PASS for persistence/bar return; FAIL for complete bar visibility.** The rotated orientation remained after release and the floating bar reappeared below the selection, with 3D active. However, the lower rounded border of the bar runs into and is clipped by the canvas/footer boundary. The labels and active button remain readable. This is a visual layout issue; the bar did return as expected.
++
++   Evidence: [05-rotate-released.png](05-rotate-released.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**.
++
++6. **Shift-roll — PASS.** Used the helper with Shift held from **(570,480) → (490,380) points**, movement **−80,−100**, starting right of the model's center and remaining within the frame. The previously almost vertical model rolled to a diagonal from upper-left to lower-right, with the same nearly edge-on appearance. The bar was visible after release.
++
++   Evidence: [06-shift-roll.png](06-shift-roll.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No defect observed for this action.
++
++7. **Double-click reset — PASS.** Double-clicked the model at computer-use screenshot coordinate **(975,1000)**, equivalent to approximately **(487.5,500) points**. The molecule and selection frame returned to the opening orientation and size seen in image 02. The orange active-position indicator and keyboard-context text changed, but the molecular orientation matched.
++
++   Evidence: [07-double-click-reset.png](07-double-click-reset.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No reset failure observed.
++
++8. **Second rotation before resizing — PASS.** Used a different direction with the helper: **(550,460) → (475,400) points**, movement **−75,−60**. The resulting model was visibly tilted from the opening view, with a wider, shallower projection of the rings. The floating bar returned after release.
++
++   Evidence: [08-rotated-before-resize.png](08-rotated-before-resize.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No defect observed for this action.
++
++9. **Bottom-right corner resizing — PASS.** Dragged the bottom-right corner using the helper from **(807,680) → (907,760) points**, movement **+100,+80**. Both endpoints were within the canvas. The frame and molecule grew, retaining the turned orientation. The approximate frame changed from `(190,253)–(807,680)` to `(190,253)–(912,752)` points, with the top-left fixed and proportional scaling. Four corner resize handles were visible; **no edge-midpoint resize handles** were shown. A separate top-center circular rotation handle remained visible.
++
++   Evidence: [09-resized.png](09-resized.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. The model and bar fit within the canvas in this state.
++
++10. **Choose the 3D-derived layout and flatten — PASS.** In Properties → Structure, clicked **From the 3D view** under **2D layout**. It became active and displayed the explanation **“Flatten the model as it is turned now, with far bonds lighter.”** The model stayed in its resized, turned state.
++
++    Evidence before flattening: [10-layout-from-3d.png](10-layout-from-3d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. Structure and both layout choices are visible.
++
++    Then clicked **2D in the Structure section**. The model became a 2D drawing whose ring and substituent arrangement follows the turned 3D projection and differs from the original image 01. Far portions of the drawing, including the upper-left oxygen/bonds, are visibly lighter than the nearer lower-right portions. The selection bounds contracted when returning to the 2D drawing; the 3D frame size was not retained as the drawing bounds. No requirement in the requested flow specified identical 2D/3D screen size.
++
++    Evidence after flattening: [11-flattened-2d.png](11-flattened-2d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Shown as 2D from the 3D view · Undo restores the 3D model”**. No mismatch in the expected projection or depth appearance observed.
++
++11. **One Undo — PASS.** Pressed **Cmd+Z exactly once** after flattening. The resized 3D molecule and frame returned, matching images 09/10 in orientation, size, and placement. **From the 3D view** remained active, 3D was active, and the floating bar was visible.
++
++    Evidence: [12-undo.png](12-undo.png). Window title: **“Untitled • — ReShiki”**. Status: **“History restored”**. No restoration mismatch observed.
++
++12. **Optional context submenu — PASS for menu contents; hover-only behavior not independently tested.** Right-clicked the molecule at computer-use screenshot coordinate **(1215,950)**, then clicked **Show as** to expand its submenu. The available computer-use API did not expose a hover operation, so a submenu-row click was used. The menu showed **2D drawing**, **2D from the 3D view**, **3D model** (disabled/current), and **2D and 3D**. Pressed Escape afterward and confirmed the menu closed without changing the drawing.
++
++    Evidence: [13-context-menu.png](13-context-menu.png). Window title: **“Untitled • — ReShiki”**. Status: **“History restored”**. No unexpected menu entry or missing display choice observed.
++
++**Exact drag-helper commands**
++
++All coordinates below are window-relative **points**, including the title bar. Each helper was run while the verification window was active and unobstructed. These were the only drag operations.
++
++```sh
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 450 440 570 480 capture=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/04-rotate-mid-drag.png
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 570 480 490 380 shift
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 550 460 475 400
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 807 680 907 760
++```
++
++**Morph-frame evidence**
++
++All 40 frames have window title **“Untitled • — ReShiki”** and the persistent recovery UI described above.
++
++| Frames | Observed state | Operation status text |
++|---|---|---|
++| f01–f26 | Selected original 2D drawing, unchanged across these samples | Structure imported · Undo restores the previous drawing |
++| f27 | Still 2D geometry; 3D selected; Properties reports “Generating the conformer · ETKDG, then MMFF94s” | Generating 3D model · MMFF94s |
++| f28 | Spheres/sticks appear around the original drawing positions; final hydrogen geometry not yet present | Shown as 3D model · Undo restores the 2D drawing |
++| f29–f32 | Distinct intermediate atom positions; hydrogens emerge during the transition, visibly translucent in f30 | Shown as 3D model · Undo restores the 2D drawing |
++| f33–f40 | Settled final 3D geometry matching image 02 | Shown as 3D model · Undo restores the 2D drawing |
++
++The logged samples occur about every 120–145 ms. The first change falls between f27 (`1792487051846`) and f28 (`1792487051978`); settling falls between f32 (`1792487052516`) and f33 (`1792487052657`). This is consistent with a transition lasting about **538–811 ms**, which includes the expected **750 ms**. The evidence verifies intermediate geometry rather than a simple before/after replacement, but cannot measure the precise animation duration or frame-rate smoothness.
++
++Additional transient observations: the representation changes from text/lines to spheres/sticks between f27 and f28, then positions interpolate; the selection frame expands and the bar moves from above to below; the Molecular properties formula temporarily disappears during f28–f30 and returns by f31. The final orange active-position marker overlaps the top hydrogen. These did not prevent the tested interactions. No persistent blank model or obviously broken bonds were observed.
++
++**Final process cleanup**
++
++Process cleanup results will be recorded here after the final PID-only termination.
++
++**Unverified items and limits**
++
++- Exact 0.75-second duration and per-frame animation smoothness: the background capture sampled approximately every 120–145 ms.
++- Whether every rotation produces exactly one Undo entry: the specified flow tested one Undo for flattening, not individual rotation-history boundaries.
++- Hover-only opening of the context submenu: the available computer-use API exposed click and keyboard actions but no hover operation; the submenu was expanded by clicking its parent row.
++- Both mode, alternative molecules, repeated conformer generation, saving/reopening, and persistence across launches were outside the requested flow and were not exercised.
+
+exec
+/bin/zsh -lc 'kill 46018' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 0ms:
+diff --git a/report.md b/report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..551a4984a4529315832ead6ef3a5ab49de612234
+--- /dev/null
++++ b/report.md
+@@ -0,0 +1,115 @@
++**ReShiki #386 phase 1b — local UI verification**
++
++The requested core flow passed: first-use 3D generation and intermediate morph states, floating display bar, trackball rotation, Shift-roll, double-click reset, corner resizing, flattening from the turned 3D view, and restoration with one Undo. One visual defect was observed: the floating bar's lower border is clipped at the canvas/footer boundary after the first rotation (`05-rotate-released.png`). Its buttons remain readable.
++
++**Run identity and safeguards**
++
++- Test bundle: `/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app`
++- Bundle identifier: `dev.reshiki.verification.ev3861b2`.
++- Launched PID: **46018**. Window ID: **7018** throughout. Launch details are in [launched-process.txt](launched-process.txt).
++- The existing installed app was PID **51217**, executing `/nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki`. Its process record is in [installed-process-before.txt](installed-process-before.txt). It was never selected, focused, clicked, opened, or quit.
++- Computer use attached by the exact verification bundle identifier. All observed app states belonged to `ReShiki1bEvidence`. Every drag helper invocation reported window `7018`, origin `200.0,115.0`.
++- The window was kept at its initial size. Saved images are **2560 × 1704 pixels**, corresponding to approximately **1280 × 852 points** at Retina 2×. Zoom remained **238%**. No drawing was saved, repository files were not edited, and system settings were not changed.
++- All ordinary evidence images used `screencapture -x -o -l 7018 "$ART/<name>.png"`. The held-drag image used the supplied drag helper's capture option.
++- Before ordinary captures the pointer was moved to the title bar by clicking screenshot coordinate `(1500,30)`, away from the molecule. Exceptions were the requested held-drag capture and the open context submenu.
++- The footer's persistent left-hand recovery UI read **“Recovery draft”**, **“Restore”**, **“Dismiss”** in every evidence image. It was left untouched. The operation status text beside it is recorded below.
++
++Launch command executed:
++
++```sh
++open -n "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app" --env RESHIKI_DATA_DIR=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-data --args --open "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/input/caffeine.mol"
++```
++
++The exact requested `pgrep -f 'apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki'` returned one PID, `46018`. The supplied window helper returned `7018`. An initial stale accessibility-element error was resolved by refreshing the accessibility state; it did not change the document or redirect interaction to another app.
++
++**Step-by-step observations**
++
++1. **Select the whole 2D molecule — PASS.** Raised the verification window, clicked the Select arrow, clicked empty canvas at computer-use screenshot coordinate `(900,500)`, and pressed Cmd+A. Caffeine was selected, with **14 atoms · 15 bonds**. Properties → Structure was already visible and showed **2D active**, with 3D and Both available. No Properties scrolling was needed. The drawing had the expected original caffeine layout. A floating bar was also visible in 2D; this was additional behavior, not a failure of the requested 3D test.
++
++   Evidence: [01-selected-2d.png](01-selected-2d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Structure imported · Undo restores the previous drawing”**. No blocking defect observed.
++
++2. **First 3D switch and morph capture — PASS; exact duration not measured.** Wrote `46018` to `$ART/morph-go`, then immediately issued the computer-use click on **3D in Properties → Structure**. The marker was retained. The background script produced all 40 frames in [morph-raw](morph-raw), and its [log](morph-raw/log.txt) confirms PID `46018`, WID `7018`. Generation completed and the selected ball-and-stick model appeared. The floating bar was visible below the frame with 3D active.
++
++   Evidence: [02-3d-shown.png](02-3d-shown.png), plus `morph-raw/f01.png` through `f40.png`. Window title: **“Untitled • — ReShiki”**. Final status: **“Shown as 3D model · Undo restores the 2D drawing”**. Intermediate motion and timing limits are detailed below.
++
++3. **Floating display bar — PASS.** Captured the same settled selection. The bar sits **below** the selection frame, where there is more space than above it. It contains Show as / 2D / 3D / Both; **3D has the pale-green active background**. The Structure section also has 3D active.
++
++   Evidence: [03-bar.png](03-bar.png). Window title: **“Untitled • — ReShiki”**. Status: **“Shown as 3D model · Undo restores the 2D drawing”**. No clipping of this bar in this initial view.
++
++4. **Trackball rotation while held — PASS.** With the test window frontmost, used the supplied helper from **(450,440) → (570,480) points**, a movement of **+120,+40**, starting well inside the frame. The helper captured before releasing the button. The model turned to a narrow, nearly edge-on view, and the floating bar was **hidden**. A canvas instruction strip read **“Drag to rotate · Shift-drag to roll · Double-click to reset”**.
++
++   Evidence: [04-rotate-mid-drag.png](04-rotate-mid-drag.png). Window title: **“Untitled • — ReShiki”**. Status while held: **“Shown as 3D model · Undo restores the 2D drawing”**. No rotation failure observed.
++
++5. **Rotation after release — PASS for persistence/bar return; FAIL for complete bar visibility.** The rotated orientation remained after release and the floating bar reappeared below the selection, with 3D active. However, the lower rounded border of the bar runs into and is clipped by the canvas/footer boundary. The labels and active button remain readable. This is a visual layout issue; the bar did return as expected.
++
++   Evidence: [05-rotate-released.png](05-rotate-released.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**.
++
++6. **Shift-roll — PASS.** Used the helper with Shift held from **(570,480) → (490,380) points**, movement **−80,−100**, starting right of the model's center and remaining within the frame. The previously almost vertical model rolled to a diagonal from upper-left to lower-right, with the same nearly edge-on appearance. The bar was visible after release.
++
++   Evidence: [06-shift-roll.png](06-shift-roll.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No defect observed for this action.
++
++7. **Double-click reset — PASS.** Double-clicked the model at computer-use screenshot coordinate **(975,1000)**, equivalent to approximately **(487.5,500) points**. The molecule and selection frame returned to the opening orientation and size seen in image 02. The orange active-position indicator and keyboard-context text changed, but the molecular orientation matched.
++
++   Evidence: [07-double-click-reset.png](07-double-click-reset.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No reset failure observed.
++
++8. **Second rotation before resizing — PASS.** Used a different direction with the helper: **(550,460) → (475,400) points**, movement **−75,−60**. The resulting model was visibly tilted from the opening view, with a wider, shallower projection of the rings. The floating bar returned after release.
++
++   Evidence: [08-rotated-before-resize.png](08-rotated-before-resize.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No defect observed for this action.
++
++9. **Bottom-right corner resizing — PASS.** Dragged the bottom-right corner using the helper from **(807,680) → (907,760) points**, movement **+100,+80**. Both endpoints were within the canvas. The frame and molecule grew, retaining the turned orientation. The approximate frame changed from `(190,253)–(807,680)` to `(190,253)–(912,752)` points, with the top-left fixed and proportional scaling. Four corner resize handles were visible; **no edge-midpoint resize handles** were shown. A separate top-center circular rotation handle remained visible.
++
++   Evidence: [09-resized.png](09-resized.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. The model and bar fit within the canvas in this state.
++
++10. **Choose the 3D-derived layout and flatten — PASS.** In Properties → Structure, clicked **From the 3D view** under **2D layout**. It became active and displayed the explanation **“Flatten the model as it is turned now, with far bonds lighter.”** The model stayed in its resized, turned state.
++
++    Evidence before flattening: [10-layout-from-3d.png](10-layout-from-3d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. Structure and both layout choices are visible.
++
++    Then clicked **2D in the Structure section**. The model became a 2D drawing whose ring and substituent arrangement follows the turned 3D projection and differs from the original image 01. Far portions of the drawing, including the upper-left oxygen/bonds, are visibly lighter than the nearer lower-right portions. The selection bounds contracted when returning to the 2D drawing; the 3D frame size was not retained as the drawing bounds. No requirement in the requested flow specified identical 2D/3D screen size.
++
++    Evidence after flattening: [11-flattened-2d.png](11-flattened-2d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Shown as 2D from the 3D view · Undo restores the 3D model”**. No mismatch in the expected projection or depth appearance observed.
++
++11. **One Undo — PASS.** Pressed **Cmd+Z exactly once** after flattening. The resized 3D molecule and frame returned, matching images 09/10 in orientation, size, and placement. **From the 3D view** remained active, 3D was active, and the floating bar was visible.
++
++    Evidence: [12-undo.png](12-undo.png). Window title: **“Untitled • — ReShiki”**. Status: **“History restored”**. No restoration mismatch observed.
++
++12. **Optional context submenu — PASS for menu contents; hover-only behavior not independently tested.** Right-clicked the molecule at computer-use screenshot coordinate **(1215,950)**, then clicked **Show as** to expand its submenu. The available computer-use API did not expose a hover operation, so a submenu-row click was used. The menu showed **2D drawing**, **2D from the 3D view**, **3D model** (disabled/current), and **2D and 3D**. Pressed Escape afterward and confirmed the menu closed without changing the drawing.
++
++    Evidence: [13-context-menu.png](13-context-menu.png). Window title: **“Untitled • — ReShiki”**. Status: **“History restored”**. No unexpected menu entry or missing display choice observed.
++
++**Exact drag-helper commands**
++
++All coordinates below are window-relative **points**, including the title bar. Each helper was run while the verification window was active and unobstructed. These were the only drag operations.
++
++```sh
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 450 440 570 480 capture=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/04-rotate-mid-drag.png
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 570 480 490 380 shift
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 550 460 475 400
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 807 680 907 760
++```
++
++**Morph-frame evidence**
++
++All 40 frames have window title **“Untitled • — ReShiki”** and the persistent recovery UI described above.
++
++| Frames | Observed state | Operation status text |
++|---|---|---|
++| f01–f26 | Selected original 2D drawing, unchanged across these samples | Structure imported · Undo restores the previous drawing |
++| f27 | Still 2D geometry; 3D selected; Properties reports “Generating the conformer · ETKDG, then MMFF94s” | Generating 3D model · MMFF94s |
++| f28 | Spheres/sticks appear around the original drawing positions; final hydrogen geometry not yet present | Shown as 3D model · Undo restores the 2D drawing |
++| f29–f32 | Distinct intermediate atom positions; hydrogens emerge during the transition, visibly translucent in f30 | Shown as 3D model · Undo restores the 2D drawing |
++| f33–f40 | Settled final 3D geometry matching image 02 | Shown as 3D model · Undo restores the 2D drawing |
++
++The logged samples occur about every 120–145 ms. The first change falls between f27 (`1792487051846`) and f28 (`1792487051978`); settling falls between f32 (`1792487052516`) and f33 (`1792487052657`). This is consistent with a transition lasting about **538–811 ms**, which includes the expected **750 ms**. The evidence verifies intermediate geometry rather than a simple before/after replacement, but cannot measure the precise animation duration or frame-rate smoothness.
++
++Additional transient observations: the representation changes from text/lines to spheres/sticks between f27 and f28, then positions interpolate; the selection frame expands and the bar moves from above to below; the Molecular properties formula temporarily disappears during f28–f30 and returns by f31. The final orange active-position marker overlaps the top hydrogen. These did not prevent the tested interactions. No persistent blank model or obviously broken bonds were observed.
++
++**Final process cleanup**
++
++Process cleanup results will be recorded here after the final PID-only termination.
++
++**Unverified items and limits**
++
++- Exact 0.75-second duration and per-frame animation smoothness: the background capture sampled approximately every 120–145 ms.
++- Whether every rotation produces exactly one Undo entry: the specified flow tested one Undo for flattening, not individual rotation-history boundaries.
++- Hover-only opening of the context submenu: the available computer-use API exposed click and keyboard actions but no hover operation; the submenu was expanded by clicking its parent row.
++- Both mode, alternative molecules, repeated conformer generation, saving/reopening, and persistence across launches were outside the requested flow and were not exercised.
+
+exec
+/bin/zsh -lc "pgrep -fl '"'^/nix/store/[''^ ]*/Applications/ReShiki[.]app/Contents/MacOS/reshiki([[:space:]]|$)'"'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+exec
+/bin/zsh -lc "pgrep -f 'apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 0ms:
+51217 /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki
+
+ exited 1 in 0ms:
+diff --git a/report.md b/report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..551a4984a4529315832ead6ef3a5ab49de612234
+--- /dev/null
++++ b/report.md
+@@ -0,0 +1,115 @@
++**ReShiki #386 phase 1b — local UI verification**
++
++The requested core flow passed: first-use 3D generation and intermediate morph states, floating display bar, trackball rotation, Shift-roll, double-click reset, corner resizing, flattening from the turned 3D view, and restoration with one Undo. One visual defect was observed: the floating bar's lower border is clipped at the canvas/footer boundary after the first rotation (`05-rotate-released.png`). Its buttons remain readable.
++
++**Run identity and safeguards**
++
++- Test bundle: `/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app`
++- Bundle identifier: `dev.reshiki.verification.ev3861b2`.
++- Launched PID: **46018**. Window ID: **7018** throughout. Launch details are in [launched-process.txt](launched-process.txt).
++- The existing installed app was PID **51217**, executing `/nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki`. Its process record is in [installed-process-before.txt](installed-process-before.txt). It was never selected, focused, clicked, opened, or quit.
++- Computer use attached by the exact verification bundle identifier. All observed app states belonged to `ReShiki1bEvidence`. Every drag helper invocation reported window `7018`, origin `200.0,115.0`.
++- The window was kept at its initial size. Saved images are **2560 × 1704 pixels**, corresponding to approximately **1280 × 852 points** at Retina 2×. Zoom remained **238%**. No drawing was saved, repository files were not edited, and system settings were not changed.
++- All ordinary evidence images used `screencapture -x -o -l 7018 "$ART/<name>.png"`. The held-drag image used the supplied drag helper's capture option.
++- Before ordinary captures the pointer was moved to the title bar by clicking screenshot coordinate `(1500,30)`, away from the molecule. Exceptions were the requested held-drag capture and the open context submenu.
++- The footer's persistent left-hand recovery UI read **“Recovery draft”**, **“Restore”**, **“Dismiss”** in every evidence image. It was left untouched. The operation status text beside it is recorded below.
++
++Launch command executed:
++
++```sh
++open -n "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app" --env RESHIKI_DATA_DIR=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-data --args --open "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/input/caffeine.mol"
++```
++
++The exact requested `pgrep -f 'apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki'` returned one PID, `46018`. The supplied window helper returned `7018`. An initial stale accessibility-element error was resolved by refreshing the accessibility state; it did not change the document or redirect interaction to another app.
++
++**Step-by-step observations**
++
++1. **Select the whole 2D molecule — PASS.** Raised the verification window, clicked the Select arrow, clicked empty canvas at computer-use screenshot coordinate `(900,500)`, and pressed Cmd+A. Caffeine was selected, with **14 atoms · 15 bonds**. Properties → Structure was already visible and showed **2D active**, with 3D and Both available. No Properties scrolling was needed. The drawing had the expected original caffeine layout. A floating bar was also visible in 2D; this was additional behavior, not a failure of the requested 3D test.
++
++   Evidence: [01-selected-2d.png](01-selected-2d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Structure imported · Undo restores the previous drawing”**. No blocking defect observed.
++
++2. **First 3D switch and morph capture — PASS; exact duration not measured.** Wrote `46018` to `$ART/morph-go`, then immediately issued the computer-use click on **3D in Properties → Structure**. The marker was retained. The background script produced all 40 frames in [morph-raw](morph-raw), and its [log](morph-raw/log.txt) confirms PID `46018`, WID `7018`. Generation completed and the selected ball-and-stick model appeared. The floating bar was visible below the frame with 3D active.
++
++   Evidence: [02-3d-shown.png](02-3d-shown.png), plus `morph-raw/f01.png` through `f40.png`. Window title: **“Untitled • — ReShiki”**. Final status: **“Shown as 3D model · Undo restores the 2D drawing”**. Intermediate motion and timing limits are detailed below.
++
++3. **Floating display bar — PASS.** Captured the same settled selection. The bar sits **below** the selection frame, where there is more space than above it. It contains Show as / 2D / 3D / Both; **3D has the pale-green active background**. The Structure section also has 3D active.
++
++   Evidence: [03-bar.png](03-bar.png). Window title: **“Untitled • — ReShiki”**. Status: **“Shown as 3D model · Undo restores the 2D drawing”**. No clipping of this bar in this initial view.
++
++4. **Trackball rotation while held — PASS.** With the test window frontmost, used the supplied helper from **(450,440) → (570,480) points**, a movement of **+120,+40**, starting well inside the frame. The helper captured before releasing the button. The model turned to a narrow, nearly edge-on view, and the floating bar was **hidden**. A canvas instruction strip read **“Drag to rotate · Shift-drag to roll · Double-click to reset”**.
++
++   Evidence: [04-rotate-mid-drag.png](04-rotate-mid-drag.png). Window title: **“Untitled • — ReShiki”**. Status while held: **“Shown as 3D model · Undo restores the 2D drawing”**. No rotation failure observed.
++
++5. **Rotation after release — PASS for persistence/bar return; FAIL for complete bar visibility.** The rotated orientation remained after release and the floating bar reappeared below the selection, with 3D active. However, the lower rounded border of the bar runs into and is clipped by the canvas/footer boundary. The labels and active button remain readable. This is a visual layout issue; the bar did return as expected.
++
++   Evidence: [05-rotate-released.png](05-rotate-released.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**.
++
++6. **Shift-roll — PASS.** Used the helper with Shift held from **(570,480) → (490,380) points**, movement **−80,−100**, starting right of the model's center and remaining within the frame. The previously almost vertical model rolled to a diagonal from upper-left to lower-right, with the same nearly edge-on appearance. The bar was visible after release.
++
++   Evidence: [06-shift-roll.png](06-shift-roll.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No defect observed for this action.
++
++7. **Double-click reset — PASS.** Double-clicked the model at computer-use screenshot coordinate **(975,1000)**, equivalent to approximately **(487.5,500) points**. The molecule and selection frame returned to the opening orientation and size seen in image 02. The orange active-position indicator and keyboard-context text changed, but the molecular orientation matched.
++
++   Evidence: [07-double-click-reset.png](07-double-click-reset.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No reset failure observed.
++
++8. **Second rotation before resizing — PASS.** Used a different direction with the helper: **(550,460) → (475,400) points**, movement **−75,−60**. The resulting model was visibly tilted from the opening view, with a wider, shallower projection of the rings. The floating bar returned after release.
++
++   Evidence: [08-rotated-before-resize.png](08-rotated-before-resize.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No defect observed for this action.
++
++9. **Bottom-right corner resizing — PASS.** Dragged the bottom-right corner using the helper from **(807,680) → (907,760) points**, movement **+100,+80**. Both endpoints were within the canvas. The frame and molecule grew, retaining the turned orientation. The approximate frame changed from `(190,253)–(807,680)` to `(190,253)–(912,752)` points, with the top-left fixed and proportional scaling. Four corner resize handles were visible; **no edge-midpoint resize handles** were shown. A separate top-center circular rotation handle remained visible.
++
++   Evidence: [09-resized.png](09-resized.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. The model and bar fit within the canvas in this state.
++
++10. **Choose the 3D-derived layout and flatten — PASS.** In Properties → Structure, clicked **From the 3D view** under **2D layout**. It became active and displayed the explanation **“Flatten the model as it is turned now, with far bonds lighter.”** The model stayed in its resized, turned state.
++
++    Evidence before flattening: [10-layout-from-3d.png](10-layout-from-3d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. Structure and both layout choices are visible.
++
++    Then clicked **2D in the Structure section**. The model became a 2D drawing whose ring and substituent arrangement follows the turned 3D projection and differs from the original image 01. Far portions of the drawing, including the upper-left oxygen/bonds, are visibly lighter than the nearer lower-right portions. The selection bounds contracted when returning to the 2D drawing; the 3D frame size was not retained as the drawing bounds. No requirement in the requested flow specified identical 2D/3D screen size.
++
++    Evidence after flattening: [11-flattened-2d.png](11-flattened-2d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Shown as 2D from the 3D view · Undo restores the 3D model”**. No mismatch in the expected projection or depth appearance observed.
++
++11. **One Undo — PASS.** Pressed **Cmd+Z exactly once** after flattening. The resized 3D molecule and frame returned, matching images 09/10 in orientation, size, and placement. **From the 3D view** remained active, 3D was active, and the floating bar was visible.
++
++    Evidence: [12-undo.png](12-undo.png). Window title: **“Untitled • — ReShiki”**. Status: **“History restored”**. No restoration mismatch observed.
++
++12. **Optional context submenu — PASS for menu contents; hover-only behavior not independently tested.** Right-clicked the molecule at computer-use screenshot coordinate **(1215,950)**, then clicked **Show as** to expand its submenu. The available computer-use API did not expose a hover operation, so a submenu-row click was used. The menu showed **2D drawing**, **2D from the 3D view**, **3D model** (disabled/current), and **2D and 3D**. Pressed Escape afterward and confirmed the menu closed without changing the drawing.
++
++    Evidence: [13-context-menu.png](13-context-menu.png). Window title: **“Untitled • — ReShiki”**. Status: **“History restored”**. No unexpected menu entry or missing display choice observed.
++
++**Exact drag-helper commands**
++
++All coordinates below are window-relative **points**, including the title bar. Each helper was run while the verification window was active and unobstructed. These were the only drag operations.
++
++```sh
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 450 440 570 480 capture=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/04-rotate-mid-drag.png
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 570 480 490 380 shift
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 550 460 475 400
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 807 680 907 760
++```
++
++**Morph-frame evidence**
++
++All 40 frames have window title **“Untitled • — ReShiki”** and the persistent recovery UI described above.
++
++| Frames | Observed state | Operation status text |
++|---|---|---|
++| f01–f26 | Selected original 2D drawing, unchanged across these samples | Structure imported · Undo restores the previous drawing |
++| f27 | Still 2D geometry; 3D selected; Properties reports “Generating the conformer · ETKDG, then MMFF94s” | Generating 3D model · MMFF94s |
++| f28 | Spheres/sticks appear around the original drawing positions; final hydrogen geometry not yet present | Shown as 3D model · Undo restores the 2D drawing |
++| f29–f32 | Distinct intermediate atom positions; hydrogens emerge during the transition, visibly translucent in f30 | Shown as 3D model · Undo restores the 2D drawing |
++| f33–f40 | Settled final 3D geometry matching image 02 | Shown as 3D model · Undo restores the 2D drawing |
++
++The logged samples occur about every 120–145 ms. The first change falls between f27 (`1792487051846`) and f28 (`1792487051978`); settling falls between f32 (`1792487052516`) and f33 (`1792487052657`). This is consistent with a transition lasting about **538–811 ms**, which includes the expected **750 ms**. The evidence verifies intermediate geometry rather than a simple before/after replacement, but cannot measure the precise animation duration or frame-rate smoothness.
++
++Additional transient observations: the representation changes from text/lines to spheres/sticks between f27 and f28, then positions interpolate; the selection frame expands and the bar moves from above to below; the Molecular properties formula temporarily disappears during f28–f30 and returns by f31. The final orange active-position marker overlaps the top hydrogen. These did not prevent the tested interactions. No persistent blank model or obviously broken bonds were observed.
++
++**Final process cleanup**
++
++Process cleanup results will be recorded here after the final PID-only termination.
++
++**Unverified items and limits**
++
++- Exact 0.75-second duration and per-frame animation smoothness: the background capture sampled approximately every 120–145 ms.
++- Whether every rotation produces exactly one Undo entry: the specified flow tested one Undo for flattening, not individual rotation-history boundaries.
++- Hover-only opening of the context submenu: the available computer-use API exposed click and keyboard actions but no hover operation; the submenu was expanded by clicking its parent row.
++- Both mode, alternative molecules, repeated conformer generation, saving/reopening, and persistence across launches were outside the requested flow and were not exercised.
+
+apply patch
+patch: completed
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/process-cleanup.txt
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/report.md
+diff --git a/process-cleanup.txt b/process-cleanup.txt
+new file mode 100644
+index 0000000000000000000000000000000000000000..f4f81f924e7738c4bb071aa4600f1ea387f74104
+--- /dev/null
++++ b/process-cleanup.txt
+@@ -0,0 +1,16 @@
++Cleanup command:
++kill 46018
++Exit code: 0
++
++Verification bundle process check:
++pgrep -f 'apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki'
++Exit code: 1
++Output: (empty)
++Result: verification process 46018 is gone.
++
++Installed app process check:
++pgrep -fl '^/nix/store/[^ ]*/Applications/ReShiki[.]app/Contents/MacOS/reshiki([[:space:]]|$)'
++Exit code: 0
++Output:
++51217 /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki
++Result: original installed app process 51217 is still running.
+diff --git a/report.md b/report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..96a604a5e8ec62517f152474bcd14c0c2812cc3b
+--- /dev/null
++++ b/report.md
+@@ -0,0 +1,121 @@
++**ReShiki #386 phase 1b — local UI verification**
++
++The requested core flow passed: first-use 3D generation and intermediate morph states, floating display bar, trackball rotation, Shift-roll, double-click reset, corner resizing, flattening from the turned 3D view, and restoration with one Undo. One visual defect was observed: the floating bar's lower border is clipped at the canvas/footer boundary after the first rotation (`05-rotate-released.png`). Its buttons remain readable.
++
++**Run identity and safeguards**
++
++- Test bundle: `/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app`
++- Bundle identifier: `dev.reshiki.verification.ev3861b2`.
++- Launched PID: **46018**. Window ID: **7018** throughout. Launch details are in [launched-process.txt](launched-process.txt).
++- The existing installed app was PID **51217**, executing `/nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki`. Its process record is in [installed-process-before.txt](installed-process-before.txt). It was never selected, focused, clicked, opened, or quit.
++- Computer use attached by the exact verification bundle identifier. All observed app states belonged to `ReShiki1bEvidence`. Every drag helper invocation reported window `7018`, origin `200.0,115.0`.
++- The window was kept at its initial size. Saved images are **2560 × 1704 pixels**, corresponding to approximately **1280 × 852 points** at Retina 2×. Zoom remained **238%**. No drawing was saved, repository files were not edited, and system settings were not changed.
++- All ordinary evidence images used `screencapture -x -o -l 7018 "$ART/<name>.png"`. The held-drag image used the supplied drag helper's capture option.
++- Before ordinary captures the pointer was moved to the title bar by clicking screenshot coordinate `(1500,30)`, away from the molecule. Exceptions were the requested held-drag capture and the open context submenu.
++- The footer's persistent left-hand recovery UI read **“Recovery draft”**, **“Restore”**, **“Dismiss”** in every evidence image. It was left untouched. The operation status text beside it is recorded below.
++
++Launch command executed:
++
++```sh
++open -n "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app" --env RESHIKI_DATA_DIR=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-data --args --open "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/input/caffeine.mol"
++```
++
++The exact requested `pgrep -f 'apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki'` returned one PID, `46018`. The supplied window helper returned `7018`. An initial stale accessibility-element error was resolved by refreshing the accessibility state; it did not change the document or redirect interaction to another app.
++
++**Step-by-step observations**
++
++1. **Select the whole 2D molecule — PASS.** Raised the verification window, clicked the Select arrow, clicked empty canvas at computer-use screenshot coordinate `(900,500)`, and pressed Cmd+A. Caffeine was selected, with **14 atoms · 15 bonds**. Properties → Structure was already visible and showed **2D active**, with 3D and Both available. No Properties scrolling was needed. The drawing had the expected original caffeine layout. A floating bar was also visible in 2D; this was additional behavior, not a failure of the requested 3D test.
++
++   Evidence: [01-selected-2d.png](01-selected-2d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Structure imported · Undo restores the previous drawing”**. No blocking defect observed.
++
++2. **First 3D switch and morph capture — PASS; exact duration not measured.** Wrote `46018` to `$ART/morph-go`, then immediately issued the computer-use click on **3D in Properties → Structure**. The marker was retained. The background script produced all 40 frames in [morph-raw](morph-raw), and its [log](morph-raw/log.txt) confirms PID `46018`, WID `7018`. Generation completed and the selected ball-and-stick model appeared. The floating bar was visible below the frame with 3D active.
++
++   Evidence: [02-3d-shown.png](02-3d-shown.png), plus `morph-raw/f01.png` through `f40.png`. Window title: **“Untitled • — ReShiki”**. Final status: **“Shown as 3D model · Undo restores the 2D drawing”**. Intermediate motion and timing limits are detailed below.
++
++3. **Floating display bar — PASS.** Captured the same settled selection. The bar sits **below** the selection frame, where there is more space than above it. It contains Show as / 2D / 3D / Both; **3D has the pale-green active background**. The Structure section also has 3D active.
++
++   Evidence: [03-bar.png](03-bar.png). Window title: **“Untitled • — ReShiki”**. Status: **“Shown as 3D model · Undo restores the 2D drawing”**. No clipping of this bar in this initial view.
++
++4. **Trackball rotation while held — PASS.** With the test window frontmost, used the supplied helper from **(450,440) → (570,480) points**, a movement of **+120,+40**, starting well inside the frame. The helper captured before releasing the button. The model turned to a narrow, nearly edge-on view, and the floating bar was **hidden**. A canvas instruction strip read **“Drag to rotate · Shift-drag to roll · Double-click to reset”**.
++
++   Evidence: [04-rotate-mid-drag.png](04-rotate-mid-drag.png). Window title: **“Untitled • — ReShiki”**. Status while held: **“Shown as 3D model · Undo restores the 2D drawing”**. No rotation failure observed.
++
++5. **Rotation after release — PASS for persistence/bar return; FAIL for complete bar visibility.** The rotated orientation remained after release and the floating bar reappeared below the selection, with 3D active. However, the lower rounded border of the bar runs into and is clipped by the canvas/footer boundary. The labels and active button remain readable. This is a visual layout issue; the bar did return as expected.
++
++   Evidence: [05-rotate-released.png](05-rotate-released.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**.
++
++6. **Shift-roll — PASS.** Used the helper with Shift held from **(570,480) → (490,380) points**, movement **−80,−100**, starting right of the model's center and remaining within the frame. The previously almost vertical model rolled to a diagonal from upper-left to lower-right, with the same nearly edge-on appearance. The bar was visible after release.
++
++   Evidence: [06-shift-roll.png](06-shift-roll.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No defect observed for this action.
++
++7. **Double-click reset — PASS.** Double-clicked the model at computer-use screenshot coordinate **(975,1000)**, equivalent to approximately **(487.5,500) points**. The molecule and selection frame returned to the opening orientation and size seen in image 02. The orange active-position indicator and keyboard-context text changed, but the molecular orientation matched.
++
++   Evidence: [07-double-click-reset.png](07-double-click-reset.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No reset failure observed.
++
++8. **Second rotation before resizing — PASS.** Used a different direction with the helper: **(550,460) → (475,400) points**, movement **−75,−60**. The resulting model was visibly tilted from the opening view, with a wider, shallower projection of the rings. The floating bar returned after release.
++
++   Evidence: [08-rotated-before-resize.png](08-rotated-before-resize.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No defect observed for this action.
++
++9. **Bottom-right corner resizing — PASS.** Dragged the bottom-right corner using the helper from **(807,680) → (907,760) points**, movement **+100,+80**. Both endpoints were within the canvas. The frame and molecule grew, retaining the turned orientation. The approximate frame changed from `(190,253)–(807,680)` to `(190,253)–(912,752)` points, with the top-left fixed and proportional scaling. Four corner resize handles were visible; **no edge-midpoint resize handles** were shown. A separate top-center circular rotation handle remained visible.
++
++   Evidence: [09-resized.png](09-resized.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. The model and bar fit within the canvas in this state.
++
++10. **Choose the 3D-derived layout and flatten — PASS.** In Properties → Structure, clicked **From the 3D view** under **2D layout**. It became active and displayed the explanation **“Flatten the model as it is turned now, with far bonds lighter.”** The model stayed in its resized, turned state.
++
++    Evidence before flattening: [10-layout-from-3d.png](10-layout-from-3d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. Structure and both layout choices are visible.
++
++    Then clicked **2D in the Structure section**. The model became a 2D drawing whose ring and substituent arrangement follows the turned 3D projection and differs from the original image 01. Far portions of the drawing, including the upper-left oxygen/bonds, are visibly lighter than the nearer lower-right portions. The selection bounds contracted when returning to the 2D drawing; the 3D frame size was not retained as the drawing bounds. No requirement in the requested flow specified identical 2D/3D screen size.
++
++    Evidence after flattening: [11-flattened-2d.png](11-flattened-2d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Shown as 2D from the 3D view · Undo restores the 3D model”**. No mismatch in the expected projection or depth appearance observed.
++
++11. **One Undo — PASS.** Pressed **Cmd+Z exactly once** after flattening. The resized 3D molecule and frame returned, matching images 09/10 in orientation, size, and placement. **From the 3D view** remained active, 3D was active, and the floating bar was visible.
++
++    Evidence: [12-undo.png](12-undo.png). Window title: **“Untitled • — ReShiki”**. Status: **“History restored”**. No restoration mismatch observed.
++
++12. **Optional context submenu — PASS for menu contents; hover-only behavior not independently tested.** Right-clicked the molecule at computer-use screenshot coordinate **(1215,950)**, then clicked **Show as** to expand its submenu. The available computer-use API did not expose a hover operation, so a submenu-row click was used. The menu showed **2D drawing**, **2D from the 3D view**, **3D model** (disabled/current), and **2D and 3D**. Pressed Escape afterward and confirmed the menu closed without changing the drawing.
++
++    Evidence: [13-context-menu.png](13-context-menu.png). Window title: **“Untitled • — ReShiki”**. Status: **“History restored”**. No unexpected menu entry or missing display choice observed.
++
++**Exact drag-helper commands**
++
++All coordinates below are window-relative **points**, including the title bar. Each helper was run while the verification window was active and unobstructed. These were the only drag operations.
++
++```sh
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 450 440 570 480 capture=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/04-rotate-mid-drag.png
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 570 480 490 380 shift
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 550 460 475 400
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 807 680 907 760
++```
++
++**Morph-frame evidence**
++
++All 40 frames have window title **“Untitled • — ReShiki”** and the persistent recovery UI described above.
++
++| Frames | Observed state | Operation status text |
++|---|---|---|
++| f01–f26 | Selected original 2D drawing, unchanged across these samples | Structure imported · Undo restores the previous drawing |
++| f27 | Still 2D geometry; 3D selected; Properties reports “Generating the conformer · ETKDG, then MMFF94s” | Generating 3D model · MMFF94s |
++| f28 | Spheres/sticks appear around the original drawing positions; final hydrogen geometry not yet present | Shown as 3D model · Undo restores the 2D drawing |
++| f29–f32 | Distinct intermediate atom positions; hydrogens emerge during the transition, visibly translucent in f30 | Shown as 3D model · Undo restores the 2D drawing |
++| f33–f40 | Settled final 3D geometry matching image 02 | Shown as 3D model · Undo restores the 2D drawing |
++
++The logged samples occur about every 120–145 ms. The first change falls between f27 (`1792487051846`) and f28 (`1792487051978`); settling falls between f32 (`1792487052516`) and f33 (`1792487052657`). This is consistent with a transition lasting about **538–811 ms**, which includes the expected **750 ms**. The evidence verifies intermediate geometry rather than a simple before/after replacement, but cannot measure the precise animation duration or frame-rate smoothness.
++
++Additional transient observations: the representation changes from text/lines to spheres/sticks between f27 and f28, then positions interpolate; the selection frame expands and the bar moves from above to below; the Molecular properties formula temporarily disappears during f28–f30 and returns by f31. The final orange active-position marker overlaps the top hydrogen. These did not prevent the tested interactions. No persistent blank model or obviously broken bonds were observed.
++
++**Final process cleanup**
++
++**PASS.** Immediately before cleanup, `ps` still identified PID `46018` as the exact verification-bundle executable, and the window helper still returned `7018`. Executed **`kill 46018` only**, which succeeded with exit code 0. No app menu was used.
++
++- Verification process check: `pgrep -f 'apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki'` returned **no output, exit code 1**. The test process was gone.
++- Installed app check: `pgrep -fl '^/nix/store/[^ ]*/Applications/ReShiki[.]app/Contents/MacOS/reshiki([[:space:]]|$)'` returned **PID 51217**, with the same installed executable path recorded before the run, **exit code 0**. The user's installed app remained running.
++- No further computer-use interaction occurred after terminating the verification process.
++
++The exact cleanup results are also recorded in [process-cleanup.txt](process-cleanup.txt).
++
++**Unverified items and limits**
++
++- Exact 0.75-second duration and per-frame animation smoothness: the background capture sampled approximately every 120–145 ms.
++- Whether every rotation produces exactly one Undo entry: the specified flow tested one Undo for flattening, not individual rotation-history boundaries.
++- Hover-only opening of the context submenu: the available computer-use API exposed click and keyboard actions but no hover operation; the submenu was expanded by clicking its parent row.
++- Both mode, alternative molecules, repeated conformer generation, saving/reopening, and persistence across launches were outside the requested flow and were not exercised.
+
+diff --git a/process-cleanup.txt b/process-cleanup.txt
+new file mode 100644
+index 0000000000000000000000000000000000000000..f4f81f924e7738c4bb071aa4600f1ea387f74104
+--- /dev/null
++++ b/process-cleanup.txt
+@@ -0,0 +1,16 @@
++Cleanup command:
++kill 46018
++Exit code: 0
++
++Verification bundle process check:
++pgrep -f 'apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki'
++Exit code: 1
++Output: (empty)
++Result: verification process 46018 is gone.
++
++Installed app process check:
++pgrep -fl '^/nix/store/[^ ]*/Applications/ReShiki[.]app/Contents/MacOS/reshiki([[:space:]]|$)'
++Exit code: 0
++Output:
++51217 /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki
++Result: original installed app process 51217 is still running.
+diff --git a/report.md b/report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..96a604a5e8ec62517f152474bcd14c0c2812cc3b
+--- /dev/null
++++ b/report.md
+@@ -0,0 +1,121 @@
++**ReShiki #386 phase 1b — local UI verification**
++
++The requested core flow passed: first-use 3D generation and intermediate morph states, floating display bar, trackball rotation, Shift-roll, double-click reset, corner resizing, flattening from the turned 3D view, and restoration with one Undo. One visual defect was observed: the floating bar's lower border is clipped at the canvas/footer boundary after the first rotation (`05-rotate-released.png`). Its buttons remain readable.
++
++**Run identity and safeguards**
++
++- Test bundle: `/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app`
++- Bundle identifier: `dev.reshiki.verification.ev3861b2`.
++- Launched PID: **46018**. Window ID: **7018** throughout. Launch details are in [launched-process.txt](launched-process.txt).
++- The existing installed app was PID **51217**, executing `/nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki`. Its process record is in [installed-process-before.txt](installed-process-before.txt). It was never selected, focused, clicked, opened, or quit.
++- Computer use attached by the exact verification bundle identifier. All observed app states belonged to `ReShiki1bEvidence`. Every drag helper invocation reported window `7018`, origin `200.0,115.0`.
++- The window was kept at its initial size. Saved images are **2560 × 1704 pixels**, corresponding to approximately **1280 × 852 points** at Retina 2×. Zoom remained **238%**. No drawing was saved, repository files were not edited, and system settings were not changed.
++- All ordinary evidence images used `screencapture -x -o -l 7018 "$ART/<name>.png"`. The held-drag image used the supplied drag helper's capture option.
++- Before ordinary captures the pointer was moved to the title bar by clicking screenshot coordinate `(1500,30)`, away from the molecule. Exceptions were the requested held-drag capture and the open context submenu.
++- The footer's persistent left-hand recovery UI read **“Recovery draft”**, **“Restore”**, **“Dismiss”** in every evidence image. It was left untouched. The operation status text beside it is recorded below.
++
++Launch command executed:
++
++```sh
++open -n "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app" --env RESHIKI_DATA_DIR=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-data --args --open "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/input/caffeine.mol"
++```
++
++The exact requested `pgrep -f 'apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki'` returned one PID, `46018`. The supplied window helper returned `7018`. An initial stale accessibility-element error was resolved by refreshing the accessibility state; it did not change the document or redirect interaction to another app.
++
++**Step-by-step observations**
++
++1. **Select the whole 2D molecule — PASS.** Raised the verification window, clicked the Select arrow, clicked empty canvas at computer-use screenshot coordinate `(900,500)`, and pressed Cmd+A. Caffeine was selected, with **14 atoms · 15 bonds**. Properties → Structure was already visible and showed **2D active**, with 3D and Both available. No Properties scrolling was needed. The drawing had the expected original caffeine layout. A floating bar was also visible in 2D; this was additional behavior, not a failure of the requested 3D test.
++
++   Evidence: [01-selected-2d.png](01-selected-2d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Structure imported · Undo restores the previous drawing”**. No blocking defect observed.
++
++2. **First 3D switch and morph capture — PASS; exact duration not measured.** Wrote `46018` to `$ART/morph-go`, then immediately issued the computer-use click on **3D in Properties → Structure**. The marker was retained. The background script produced all 40 frames in [morph-raw](morph-raw), and its [log](morph-raw/log.txt) confirms PID `46018`, WID `7018`. Generation completed and the selected ball-and-stick model appeared. The floating bar was visible below the frame with 3D active.
++
++   Evidence: [02-3d-shown.png](02-3d-shown.png), plus `morph-raw/f01.png` through `f40.png`. Window title: **“Untitled • — ReShiki”**. Final status: **“Shown as 3D model · Undo restores the 2D drawing”**. Intermediate motion and timing limits are detailed below.
++
++3. **Floating display bar — PASS.** Captured the same settled selection. The bar sits **below** the selection frame, where there is more space than above it. It contains Show as / 2D / 3D / Both; **3D has the pale-green active background**. The Structure section also has 3D active.
++
++   Evidence: [03-bar.png](03-bar.png). Window title: **“Untitled • — ReShiki”**. Status: **“Shown as 3D model · Undo restores the 2D drawing”**. No clipping of this bar in this initial view.
++
++4. **Trackball rotation while held — PASS.** With the test window frontmost, used the supplied helper from **(450,440) → (570,480) points**, a movement of **+120,+40**, starting well inside the frame. The helper captured before releasing the button. The model turned to a narrow, nearly edge-on view, and the floating bar was **hidden**. A canvas instruction strip read **“Drag to rotate · Shift-drag to roll · Double-click to reset”**.
++
++   Evidence: [04-rotate-mid-drag.png](04-rotate-mid-drag.png). Window title: **“Untitled • — ReShiki”**. Status while held: **“Shown as 3D model · Undo restores the 2D drawing”**. No rotation failure observed.
++
++5. **Rotation after release — PASS for persistence/bar return; FAIL for complete bar visibility.** The rotated orientation remained after release and the floating bar reappeared below the selection, with 3D active. However, the lower rounded border of the bar runs into and is clipped by the canvas/footer boundary. The labels and active button remain readable. This is a visual layout issue; the bar did return as expected.
++
++   Evidence: [05-rotate-released.png](05-rotate-released.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**.
++
++6. **Shift-roll — PASS.** Used the helper with Shift held from **(570,480) → (490,380) points**, movement **−80,−100**, starting right of the model's center and remaining within the frame. The previously almost vertical model rolled to a diagonal from upper-left to lower-right, with the same nearly edge-on appearance. The bar was visible after release.
++
++   Evidence: [06-shift-roll.png](06-shift-roll.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No defect observed for this action.
++
++7. **Double-click reset — PASS.** Double-clicked the model at computer-use screenshot coordinate **(975,1000)**, equivalent to approximately **(487.5,500) points**. The molecule and selection frame returned to the opening orientation and size seen in image 02. The orange active-position indicator and keyboard-context text changed, but the molecular orientation matched.
++
++   Evidence: [07-double-click-reset.png](07-double-click-reset.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No reset failure observed.
++
++8. **Second rotation before resizing — PASS.** Used a different direction with the helper: **(550,460) → (475,400) points**, movement **−75,−60**. The resulting model was visibly tilted from the opening view, with a wider, shallower projection of the rings. The floating bar returned after release.
++
++   Evidence: [08-rotated-before-resize.png](08-rotated-before-resize.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No defect observed for this action.
++
++9. **Bottom-right corner resizing — PASS.** Dragged the bottom-right corner using the helper from **(807,680) → (907,760) points**, movement **+100,+80**. Both endpoints were within the canvas. The frame and molecule grew, retaining the turned orientation. The approximate frame changed from `(190,253)–(807,680)` to `(190,253)–(912,752)` points, with the top-left fixed and proportional scaling. Four corner resize handles were visible; **no edge-midpoint resize handles** were shown. A separate top-center circular rotation handle remained visible.
++
++   Evidence: [09-resized.png](09-resized.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. The model and bar fit within the canvas in this state.
++
++10. **Choose the 3D-derived layout and flatten — PASS.** In Properties → Structure, clicked **From the 3D view** under **2D layout**. It became active and displayed the explanation **“Flatten the model as it is turned now, with far bonds lighter.”** The model stayed in its resized, turned state.
++
++    Evidence before flattening: [10-layout-from-3d.png](10-layout-from-3d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. Structure and both layout choices are visible.
++
++    Then clicked **2D in the Structure section**. The model became a 2D drawing whose ring and substituent arrangement follows the turned 3D projection and differs from the original image 01. Far portions of the drawing, including the upper-left oxygen/bonds, are visibly lighter than the nearer lower-right portions. The selection bounds contracted when returning to the 2D drawing; the 3D frame size was not retained as the drawing bounds. No requirement in the requested flow specified identical 2D/3D screen size.
++
++    Evidence after flattening: [11-flattened-2d.png](11-flattened-2d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Shown as 2D from the 3D view · Undo restores the 3D model”**. No mismatch in the expected projection or depth appearance observed.
++
++11. **One Undo — PASS.** Pressed **Cmd+Z exactly once** after flattening. The resized 3D molecule and frame returned, matching images 09/10 in orientation, size, and placement. **From the 3D view** remained active, 3D was active, and the floating bar was visible.
++
++    Evidence: [12-undo.png](12-undo.png). Window title: **“Untitled • — ReShiki”**. Status: **“History restored”**. No restoration mismatch observed.
++
++12. **Optional context submenu — PASS for menu contents; hover-only behavior not independently tested.** Right-clicked the molecule at computer-use screenshot coordinate **(1215,950)**, then clicked **Show as** to expand its submenu. The available computer-use API did not expose a hover operation, so a submenu-row click was used. The menu showed **2D drawing**, **2D from the 3D view**, **3D model** (disabled/current), and **2D and 3D**. Pressed Escape afterward and confirmed the menu closed without changing the drawing.
++
++    Evidence: [13-context-menu.png](13-context-menu.png). Window title: **“Untitled • — ReShiki”**. Status: **“History restored”**. No unexpected menu entry or missing display choice observed.
++
++**Exact drag-helper commands**
++
++All coordinates below are window-relative **points**, including the title bar. Each helper was run while the verification window was active and unobstructed. These were the only drag operations.
++
++```sh
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 450 440 570 480 capture=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/04-rotate-mid-drag.png
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 570 480 490 380 shift
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 550 460 475 400
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 807 680 907 760
++```
++
++**Morph-frame evidence**
++
++All 40 frames have window title **“Untitled • — ReShiki”** and the persistent recovery UI described above.
++
++| Frames | Observed state | Operation status text |
++|---|---|---|
++| f01–f26 | Selected original 2D drawing, unchanged across these samples | Structure imported · Undo restores the previous drawing |
++| f27 | Still 2D geometry; 3D selected; Properties reports “Generating the conformer · ETKDG, then MMFF94s” | Generating 3D model · MMFF94s |
++| f28 | Spheres/sticks appear around the original drawing positions; final hydrogen geometry not yet present | Shown as 3D model · Undo restores the 2D drawing |
++| f29–f32 | Distinct intermediate atom positions; hydrogens emerge during the transition, visibly translucent in f30 | Shown as 3D model · Undo restores the 2D drawing |
++| f33–f40 | Settled final 3D geometry matching image 02 | Shown as 3D model · Undo restores the 2D drawing |
++
++The logged samples occur about every 120–145 ms. The first change falls between f27 (`1792487051846`) and f28 (`1792487051978`); settling falls between f32 (`1792487052516`) and f33 (`1792487052657`). This is consistent with a transition lasting about **538–811 ms**, which includes the expected **750 ms**. The evidence verifies intermediate geometry rather than a simple before/after replacement, but cannot measure the precise animation duration or frame-rate smoothness.
++
++Additional transient observations: the representation changes from text/lines to spheres/sticks between f27 and f28, then positions interpolate; the selection frame expands and the bar moves from above to below; the Molecular properties formula temporarily disappears during f28–f30 and returns by f31. The final orange active-position marker overlaps the top hydrogen. These did not prevent the tested interactions. No persistent blank model or obviously broken bonds were observed.
++
++**Final process cleanup**
++
++**PASS.** Immediately before cleanup, `ps` still identified PID `46018` as the exact verification-bundle executable, and the window helper still returned `7018`. Executed **`kill 46018` only**, which succeeded with exit code 0. No app menu was used.
++
++- Verification process check: `pgrep -f 'apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki'` returned **no output, exit code 1**. The test process was gone.
++- Installed app check: `pgrep -fl '^/nix/store/[^ ]*/Applications/ReShiki[.]app/Contents/MacOS/reshiki([[:space:]]|$)'` returned **PID 51217**, with the same installed executable path recorded before the run, **exit code 0**. The user's installed app remained running.
++- No further computer-use interaction occurred after terminating the verification process.
++
++The exact cleanup results are also recorded in [process-cleanup.txt](process-cleanup.txt).
++
++**Unverified items and limits**
++
++- Exact 0.75-second duration and per-frame animation smoothness: the background capture sampled approximately every 120–145 ms.
++- Whether every rotation produces exactly one Undo entry: the specified flow tested one Undo for flattening, not individual rotation-history boundaries.
++- Hover-only opening of the context submenu: the available computer-use API exposed click and keyboard actions but no hover operation; the submenu was expanded by clicking its parent row.
++- Both mode, alternative molecules, repeated conformer generation, saving/reopening, and persistence across launches were outside the requested flow and were not exercised.
+
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+import struct
+art = Path('/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app')
+evidence = sorted(art.glob('[0-9][0-9]-*.png'))
+frames = sorted((art / 'morph-raw').glob('f[0-9][0-9].png'))
+assert len(evidence) == 13, len(evidence)
+assert len(frames) == 40, len(frames)
+for path in evidence + frames:
+    data = path.read_bytes()
+    assert data[:8] == b'\\x89PNG\\r\\n\\x1a\\n', path
+    assert struct.unpack('>II', data[16:24]) == (2560, 1704), path
+assert (art / 'morph-go').read_text().strip() == '46018'
+assert 'will be recorded here' not in (art / 'report.md').read_text()
+print('Verified: report.md, 13 evidence PNGs, 40 morph PNGs, retained morph-go, and process cleanup record.')
+PY" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app
+ succeeded in 0ms:
+Verified: report.md, 13 evidence PNGs, 40 morph PNGs, retained morph-go, and process cleanup record.
+
+diff --git a/process-cleanup.txt b/process-cleanup.txt
+new file mode 100644
+index 0000000000000000000000000000000000000000..f4f81f924e7738c4bb071aa4600f1ea387f74104
+--- /dev/null
++++ b/process-cleanup.txt
+@@ -0,0 +1,16 @@
++Cleanup command:
++kill 46018
++Exit code: 0
++
++Verification bundle process check:
++pgrep -f 'apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki'
++Exit code: 1
++Output: (empty)
++Result: verification process 46018 is gone.
++
++Installed app process check:
++pgrep -fl '^/nix/store/[^ ]*/Applications/ReShiki[.]app/Contents/MacOS/reshiki([[:space:]]|$)'
++Exit code: 0
++Output:
++51217 /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki
++Result: original installed app process 51217 is still running.
+diff --git a/report.md b/report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..96a604a5e8ec62517f152474bcd14c0c2812cc3b
+--- /dev/null
++++ b/report.md
+@@ -0,0 +1,121 @@
++**ReShiki #386 phase 1b — local UI verification**
++
++The requested core flow passed: first-use 3D generation and intermediate morph states, floating display bar, trackball rotation, Shift-roll, double-click reset, corner resizing, flattening from the turned 3D view, and restoration with one Undo. One visual defect was observed: the floating bar's lower border is clipped at the canvas/footer boundary after the first rotation (`05-rotate-released.png`). Its buttons remain readable.
++
++**Run identity and safeguards**
++
++- Test bundle: `/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app`
++- Bundle identifier: `dev.reshiki.verification.ev3861b2`.
++- Launched PID: **46018**. Window ID: **7018** throughout. Launch details are in [launched-process.txt](launched-process.txt).
++- The existing installed app was PID **51217**, executing `/nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki`. Its process record is in [installed-process-before.txt](installed-process-before.txt). It was never selected, focused, clicked, opened, or quit.
++- Computer use attached by the exact verification bundle identifier. All observed app states belonged to `ReShiki1bEvidence`. Every drag helper invocation reported window `7018`, origin `200.0,115.0`.
++- The window was kept at its initial size. Saved images are **2560 × 1704 pixels**, corresponding to approximately **1280 × 852 points** at Retina 2×. Zoom remained **238%**. No drawing was saved, repository files were not edited, and system settings were not changed.
++- All ordinary evidence images used `screencapture -x -o -l 7018 "$ART/<name>.png"`. The held-drag image used the supplied drag helper's capture option.
++- Before ordinary captures the pointer was moved to the title bar by clicking screenshot coordinate `(1500,30)`, away from the molecule. Exceptions were the requested held-drag capture and the open context submenu.
++- The footer's persistent left-hand recovery UI read **“Recovery draft”**, **“Restore”**, **“Dismiss”** in every evidence image. It was left untouched. The operation status text beside it is recorded below.
++
++Launch command executed:
++
++```sh
++open -n "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app" --env RESHIKI_DATA_DIR=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-data --args --open "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/input/caffeine.mol"
++```
++
++The exact requested `pgrep -f 'apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki'` returned one PID, `46018`. The supplied window helper returned `7018`. An initial stale accessibility-element error was resolved by refreshing the accessibility state; it did not change the document or redirect interaction to another app.
++
++**Step-by-step observations**
++
++1. **Select the whole 2D molecule — PASS.** Raised the verification window, clicked the Select arrow, clicked empty canvas at computer-use screenshot coordinate `(900,500)`, and pressed Cmd+A. Caffeine was selected, with **14 atoms · 15 bonds**. Properties → Structure was already visible and showed **2D active**, with 3D and Both available. No Properties scrolling was needed. The drawing had the expected original caffeine layout. A floating bar was also visible in 2D; this was additional behavior, not a failure of the requested 3D test.
++
++   Evidence: [01-selected-2d.png](01-selected-2d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Structure imported · Undo restores the previous drawing”**. No blocking defect observed.
++
++2. **First 3D switch and morph capture — PASS; exact duration not measured.** Wrote `46018` to `$ART/morph-go`, then immediately issued the computer-use click on **3D in Properties → Structure**. The marker was retained. The background script produced all 40 frames in [morph-raw](morph-raw), and its [log](morph-raw/log.txt) confirms PID `46018`, WID `7018`. Generation completed and the selected ball-and-stick model appeared. The floating bar was visible below the frame with 3D active.
++
++   Evidence: [02-3d-shown.png](02-3d-shown.png), plus `morph-raw/f01.png` through `f40.png`. Window title: **“Untitled • — ReShiki”**. Final status: **“Shown as 3D model · Undo restores the 2D drawing”**. Intermediate motion and timing limits are detailed below.
++
++3. **Floating display bar — PASS.** Captured the same settled selection. The bar sits **below** the selection frame, where there is more space than above it. It contains Show as / 2D / 3D / Both; **3D has the pale-green active background**. The Structure section also has 3D active.
++
++   Evidence: [03-bar.png](03-bar.png). Window title: **“Untitled • — ReShiki”**. Status: **“Shown as 3D model · Undo restores the 2D drawing”**. No clipping of this bar in this initial view.
++
++4. **Trackball rotation while held — PASS.** With the test window frontmost, used the supplied helper from **(450,440) → (570,480) points**, a movement of **+120,+40**, starting well inside the frame. The helper captured before releasing the button. The model turned to a narrow, nearly edge-on view, and the floating bar was **hidden**. A canvas instruction strip read **“Drag to rotate · Shift-drag to roll · Double-click to reset”**.
++
++   Evidence: [04-rotate-mid-drag.png](04-rotate-mid-drag.png). Window title: **“Untitled • — ReShiki”**. Status while held: **“Shown as 3D model · Undo restores the 2D drawing”**. No rotation failure observed.
++
++5. **Rotation after release — PASS for persistence/bar return; FAIL for complete bar visibility.** The rotated orientation remained after release and the floating bar reappeared below the selection, with 3D active. However, the lower rounded border of the bar runs into and is clipped by the canvas/footer boundary. The labels and active button remain readable. This is a visual layout issue; the bar did return as expected.
++
++   Evidence: [05-rotate-released.png](05-rotate-released.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**.
++
++6. **Shift-roll — PASS.** Used the helper with Shift held from **(570,480) → (490,380) points**, movement **−80,−100**, starting right of the model's center and remaining within the frame. The previously almost vertical model rolled to a diagonal from upper-left to lower-right, with the same nearly edge-on appearance. The bar was visible after release.
++
++   Evidence: [06-shift-roll.png](06-shift-roll.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No defect observed for this action.
++
++7. **Double-click reset — PASS.** Double-clicked the model at computer-use screenshot coordinate **(975,1000)**, equivalent to approximately **(487.5,500) points**. The molecule and selection frame returned to the opening orientation and size seen in image 02. The orange active-position indicator and keyboard-context text changed, but the molecular orientation matched.
++
++   Evidence: [07-double-click-reset.png](07-double-click-reset.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No reset failure observed.
++
++8. **Second rotation before resizing — PASS.** Used a different direction with the helper: **(550,460) → (475,400) points**, movement **−75,−60**. The resulting model was visibly tilted from the opening view, with a wider, shallower projection of the rings. The floating bar returned after release.
++
++   Evidence: [08-rotated-before-resize.png](08-rotated-before-resize.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No defect observed for this action.
++
++9. **Bottom-right corner resizing — PASS.** Dragged the bottom-right corner using the helper from **(807,680) → (907,760) points**, movement **+100,+80**. Both endpoints were within the canvas. The frame and molecule grew, retaining the turned orientation. The approximate frame changed from `(190,253)–(807,680)` to `(190,253)–(912,752)` points, with the top-left fixed and proportional scaling. Four corner resize handles were visible; **no edge-midpoint resize handles** were shown. A separate top-center circular rotation handle remained visible.
++
++   Evidence: [09-resized.png](09-resized.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. The model and bar fit within the canvas in this state.
++
++10. **Choose the 3D-derived layout and flatten — PASS.** In Properties → Structure, clicked **From the 3D view** under **2D layout**. It became active and displayed the explanation **“Flatten the model as it is turned now, with far bonds lighter.”** The model stayed in its resized, turned state.
++
++    Evidence before flattening: [10-layout-from-3d.png](10-layout-from-3d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. Structure and both layout choices are visible.
++
++    Then clicked **2D in the Structure section**. The model became a 2D drawing whose ring and substituent arrangement follows the turned 3D projection and differs from the original image 01. Far portions of the drawing, including the upper-left oxygen/bonds, are visibly lighter than the nearer lower-right portions. The selection bounds contracted when returning to the 2D drawing; the 3D frame size was not retained as the drawing bounds. No requirement in the requested flow specified identical 2D/3D screen size.
++
++    Evidence after flattening: [11-flattened-2d.png](11-flattened-2d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Shown as 2D from the 3D view · Undo restores the 3D model”**. No mismatch in the expected projection or depth appearance observed.
++
++11. **One Undo — PASS.** Pressed **Cmd+Z exactly once** after flattening. The resized 3D molecule and frame returned, matching images 09/10 in orientation, size, and placement. **From the 3D view** remained active, 3D was active, and the floating bar was visible.
++
++    Evidence: [12-undo.png](12-undo.png). Window title: **“Untitled • — ReShiki”**. Status: **“History restored”**. No restoration mismatch observed.
++
++12. **Optional context submenu — PASS for menu contents; hover-only behavior not independently tested.** Right-clicked the molecule at computer-use screenshot coordinate **(1215,950)**, then clicked **Show as** to expand its submenu. The available computer-use API did not expose a hover operation, so a submenu-row click was used. The menu showed **2D drawing**, **2D from the 3D view**, **3D model** (disabled/current), and **2D and 3D**. Pressed Escape afterward and confirmed the menu closed without changing the drawing.
++
++    Evidence: [13-context-menu.png](13-context-menu.png). Window title: **“Untitled • — ReShiki”**. Status: **“History restored”**. No unexpected menu entry or missing display choice observed.
++
++**Exact drag-helper commands**
++
++All coordinates below are window-relative **points**, including the title bar. Each helper was run while the verification window was active and unobstructed. These were the only drag operations.
++
++```sh
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 450 440 570 480 capture=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/04-rotate-mid-drag.png
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 570 480 490 380 shift
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 550 460 475 400
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 807 680 907 760
++```
++
++**Morph-frame evidence**
++
++All 40 frames have window title **“Untitled • — ReShiki”** and the persistent recovery UI described above.
++
++| Frames | Observed state | Operation status text |
++|---|---|---|
++| f01–f26 | Selected original 2D drawing, unchanged across these samples | Structure imported · Undo restores the previous drawing |
++| f27 | Still 2D geometry; 3D selected; Properties reports “Generating the conformer · ETKDG, then MMFF94s” | Generating 3D model · MMFF94s |
++| f28 | Spheres/sticks appear around the original drawing positions; final hydrogen geometry not yet present | Shown as 3D model · Undo restores the 2D drawing |
++| f29–f32 | Distinct intermediate atom positions; hydrogens emerge during the transition, visibly translucent in f30 | Shown as 3D model · Undo restores the 2D drawing |
++| f33–f40 | Settled final 3D geometry matching image 02 | Shown as 3D model · Undo restores the 2D drawing |
++
++The logged samples occur about every 120–145 ms. The first change falls between f27 (`1792487051846`) and f28 (`1792487051978`); settling falls between f32 (`1792487052516`) and f33 (`1792487052657`). This is consistent with a transition lasting about **538–811 ms**, which includes the expected **750 ms**. The evidence verifies intermediate geometry rather than a simple before/after replacement, but cannot measure the precise animation duration or frame-rate smoothness.
++
++Additional transient observations: the representation changes from text/lines to spheres/sticks between f27 and f28, then positions interpolate; the selection frame expands and the bar moves from above to below; the Molecular properties formula temporarily disappears during f28–f30 and returns by f31. The final orange active-position marker overlaps the top hydrogen. These did not prevent the tested interactions. No persistent blank model or obviously broken bonds were observed.
++
++**Final process cleanup**
++
++**PASS.** Immediately before cleanup, `ps` still identified PID `46018` as the exact verification-bundle executable, and the window helper still returned `7018`. Executed **`kill 46018` only**, which succeeded with exit code 0. No app menu was used.
++
++- Verification process check: `pgrep -f 'apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki'` returned **no output, exit code 1**. The test process was gone.
++- Installed app check: `pgrep -fl '^/nix/store/[^ ]*/Applications/ReShiki[.]app/Contents/MacOS/reshiki([[:space:]]|$)'` returned **PID 51217**, with the same installed executable path recorded before the run, **exit code 0**. The user's installed app remained running.
++- No further computer-use interaction occurred after terminating the verification process.
++
++The exact cleanup results are also recorded in [process-cleanup.txt](process-cleanup.txt).
++
++**Unverified items and limits**
++
++- Exact 0.75-second duration and per-frame animation smoothness: the background capture sampled approximately every 120–145 ms.
++- Whether every rotation produces exactly one Undo entry: the specified flow tested one Undo for flattening, not individual rotation-history boundaries.
++- Hover-only opening of the context submenu: the available computer-use API exposed click and keyboard actions but no hover operation; the submenu was expanded by clicking its parent row.
++- Both mode, alternative molecules, repeated conformer generation, saving/reopening, and persistence across launches were outside the requested flow and were not exercised.
+
+codex
+Verification completed. The [report](</private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/report.md>) records every step, exact drag coordinates, status text, window title, and verdict. All 13 evidence screenshots and 40 morph frames are saved in the artifact directory.
+
+- **Core flow passed:** morph, rotation, Shift-roll, reset, resize, flattening, and single-Undo restoration.
+- **One visual defect:** the floating bar’s lower border is clipped by the footer after the first rotation, visible in [05-rotate-released.png](</private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/05-rotate-released.png>).
+- **Cleanup confirmed:** test PID **46018** was terminated with `kill`; installed-app PID **51217** remains running.
+
+The report notes limits on exact animation timing, individual rotation Undo boundaries, and hover-only submenu behavior.
+diff --git a/process-cleanup.txt b/process-cleanup.txt
+new file mode 100644
+index 0000000000000000000000000000000000000000..f4f81f924e7738c4bb071aa4600f1ea387f74104
+--- /dev/null
++++ b/process-cleanup.txt
+@@ -0,0 +1,16 @@
++Cleanup command:
++kill 46018
++Exit code: 0
++
++Verification bundle process check:
++pgrep -f 'apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki'
++Exit code: 1
++Output: (empty)
++Result: verification process 46018 is gone.
++
++Installed app process check:
++pgrep -fl '^/nix/store/[^ ]*/Applications/ReShiki[.]app/Contents/MacOS/reshiki([[:space:]]|$)'
++Exit code: 0
++Output:
++51217 /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki
++Result: original installed app process 51217 is still running.
+diff --git a/report.md b/report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..96a604a5e8ec62517f152474bcd14c0c2812cc3b
+--- /dev/null
++++ b/report.md
+@@ -0,0 +1,121 @@
++**ReShiki #386 phase 1b — local UI verification**
++
++The requested core flow passed: first-use 3D generation and intermediate morph states, floating display bar, trackball rotation, Shift-roll, double-click reset, corner resizing, flattening from the turned 3D view, and restoration with one Undo. One visual defect was observed: the floating bar's lower border is clipped at the canvas/footer boundary after the first rotation (`05-rotate-released.png`). Its buttons remain readable.
++
++**Run identity and safeguards**
++
++- Test bundle: `/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app`
++- Bundle identifier: `dev.reshiki.verification.ev3861b2`.
++- Launched PID: **46018**. Window ID: **7018** throughout. Launch details are in [launched-process.txt](launched-process.txt).
++- The existing installed app was PID **51217**, executing `/nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki`. Its process record is in [installed-process-before.txt](installed-process-before.txt). It was never selected, focused, clicked, opened, or quit.
++- Computer use attached by the exact verification bundle identifier. All observed app states belonged to `ReShiki1bEvidence`. Every drag helper invocation reported window `7018`, origin `200.0,115.0`.
++- The window was kept at its initial size. Saved images are **2560 × 1704 pixels**, corresponding to approximately **1280 × 852 points** at Retina 2×. Zoom remained **238%**. No drawing was saved, repository files were not edited, and system settings were not changed.
++- All ordinary evidence images used `screencapture -x -o -l 7018 "$ART/<name>.png"`. The held-drag image used the supplied drag helper's capture option.
++- Before ordinary captures the pointer was moved to the title bar by clicking screenshot coordinate `(1500,30)`, away from the molecule. Exceptions were the requested held-drag capture and the open context submenu.
++- The footer's persistent left-hand recovery UI read **“Recovery draft”**, **“Restore”**, **“Dismiss”** in every evidence image. It was left untouched. The operation status text beside it is recorded below.
++
++Launch command executed:
++
++```sh
++open -n "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps1b2/ReShiki1bEvidence.app" --env RESHIKI_DATA_DIR=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-data --args --open "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/input/caffeine.mol"
++```
++
++The exact requested `pgrep -f 'apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki'` returned one PID, `46018`. The supplied window helper returned `7018`. An initial stale accessibility-element error was resolved by refreshing the accessibility state; it did not change the document or redirect interaction to another app.
++
++**Step-by-step observations**
++
++1. **Select the whole 2D molecule — PASS.** Raised the verification window, clicked the Select arrow, clicked empty canvas at computer-use screenshot coordinate `(900,500)`, and pressed Cmd+A. Caffeine was selected, with **14 atoms · 15 bonds**. Properties → Structure was already visible and showed **2D active**, with 3D and Both available. No Properties scrolling was needed. The drawing had the expected original caffeine layout. A floating bar was also visible in 2D; this was additional behavior, not a failure of the requested 3D test.
++
++   Evidence: [01-selected-2d.png](01-selected-2d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Structure imported · Undo restores the previous drawing”**. No blocking defect observed.
++
++2. **First 3D switch and morph capture — PASS; exact duration not measured.** Wrote `46018` to `$ART/morph-go`, then immediately issued the computer-use click on **3D in Properties → Structure**. The marker was retained. The background script produced all 40 frames in [morph-raw](morph-raw), and its [log](morph-raw/log.txt) confirms PID `46018`, WID `7018`. Generation completed and the selected ball-and-stick model appeared. The floating bar was visible below the frame with 3D active.
++
++   Evidence: [02-3d-shown.png](02-3d-shown.png), plus `morph-raw/f01.png` through `f40.png`. Window title: **“Untitled • — ReShiki”**. Final status: **“Shown as 3D model · Undo restores the 2D drawing”**. Intermediate motion and timing limits are detailed below.
++
++3. **Floating display bar — PASS.** Captured the same settled selection. The bar sits **below** the selection frame, where there is more space than above it. It contains Show as / 2D / 3D / Both; **3D has the pale-green active background**. The Structure section also has 3D active.
++
++   Evidence: [03-bar.png](03-bar.png). Window title: **“Untitled • — ReShiki”**. Status: **“Shown as 3D model · Undo restores the 2D drawing”**. No clipping of this bar in this initial view.
++
++4. **Trackball rotation while held — PASS.** With the test window frontmost, used the supplied helper from **(450,440) → (570,480) points**, a movement of **+120,+40**, starting well inside the frame. The helper captured before releasing the button. The model turned to a narrow, nearly edge-on view, and the floating bar was **hidden**. A canvas instruction strip read **“Drag to rotate · Shift-drag to roll · Double-click to reset”**.
++
++   Evidence: [04-rotate-mid-drag.png](04-rotate-mid-drag.png). Window title: **“Untitled • — ReShiki”**. Status while held: **“Shown as 3D model · Undo restores the 2D drawing”**. No rotation failure observed.
++
++5. **Rotation after release — PASS for persistence/bar return; FAIL for complete bar visibility.** The rotated orientation remained after release and the floating bar reappeared below the selection, with 3D active. However, the lower rounded border of the bar runs into and is clipped by the canvas/footer boundary. The labels and active button remain readable. This is a visual layout issue; the bar did return as expected.
++
++   Evidence: [05-rotate-released.png](05-rotate-released.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**.
++
++6. **Shift-roll — PASS.** Used the helper with Shift held from **(570,480) → (490,380) points**, movement **−80,−100**, starting right of the model's center and remaining within the frame. The previously almost vertical model rolled to a diagonal from upper-left to lower-right, with the same nearly edge-on appearance. The bar was visible after release.
++
++   Evidence: [06-shift-roll.png](06-shift-roll.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No defect observed for this action.
++
++7. **Double-click reset — PASS.** Double-clicked the model at computer-use screenshot coordinate **(975,1000)**, equivalent to approximately **(487.5,500) points**. The molecule and selection frame returned to the opening orientation and size seen in image 02. The orange active-position indicator and keyboard-context text changed, but the molecular orientation matched.
++
++   Evidence: [07-double-click-reset.png](07-double-click-reset.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No reset failure observed.
++
++8. **Second rotation before resizing — PASS.** Used a different direction with the helper: **(550,460) → (475,400) points**, movement **−75,−60**. The resulting model was visibly tilted from the opening view, with a wider, shallower projection of the rings. The floating bar returned after release.
++
++   Evidence: [08-rotated-before-resize.png](08-rotated-before-resize.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. No defect observed for this action.
++
++9. **Bottom-right corner resizing — PASS.** Dragged the bottom-right corner using the helper from **(807,680) → (907,760) points**, movement **+100,+80**. Both endpoints were within the canvas. The frame and molecule grew, retaining the turned orientation. The approximate frame changed from `(190,253)–(807,680)` to `(190,253)–(912,752)` points, with the top-left fixed and proportional scaling. Four corner resize handles were visible; **no edge-midpoint resize handles** were shown. A separate top-center circular rotation handle remained visible.
++
++   Evidence: [09-resized.png](09-resized.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. The model and bar fit within the canvas in this state.
++
++10. **Choose the 3D-derived layout and flatten — PASS.** In Properties → Structure, clicked **From the 3D view** under **2D layout**. It became active and displayed the explanation **“Flatten the model as it is turned now, with far bonds lighter.”** The model stayed in its resized, turned state.
++
++    Evidence before flattening: [10-layout-from-3d.png](10-layout-from-3d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Drawing updated”**. Structure and both layout choices are visible.
++
++    Then clicked **2D in the Structure section**. The model became a 2D drawing whose ring and substituent arrangement follows the turned 3D projection and differs from the original image 01. Far portions of the drawing, including the upper-left oxygen/bonds, are visibly lighter than the nearer lower-right portions. The selection bounds contracted when returning to the 2D drawing; the 3D frame size was not retained as the drawing bounds. No requirement in the requested flow specified identical 2D/3D screen size.
++
++    Evidence after flattening: [11-flattened-2d.png](11-flattened-2d.png). Window title: **“Untitled • — ReShiki”**. Status: **“Shown as 2D from the 3D view · Undo restores the 3D model”**. No mismatch in the expected projection or depth appearance observed.
++
++11. **One Undo — PASS.** Pressed **Cmd+Z exactly once** after flattening. The resized 3D molecule and frame returned, matching images 09/10 in orientation, size, and placement. **From the 3D view** remained active, 3D was active, and the floating bar was visible.
++
++    Evidence: [12-undo.png](12-undo.png). Window title: **“Untitled • — ReShiki”**. Status: **“History restored”**. No restoration mismatch observed.
++
++12. **Optional context submenu — PASS for menu contents; hover-only behavior not independently tested.** Right-clicked the molecule at computer-use screenshot coordinate **(1215,950)**, then clicked **Show as** to expand its submenu. The available computer-use API did not expose a hover operation, so a submenu-row click was used. The menu showed **2D drawing**, **2D from the 3D view**, **3D model** (disabled/current), and **2D and 3D**. Pressed Escape afterward and confirmed the menu closed without changing the drawing.
++
++    Evidence: [13-context-menu.png](13-context-menu.png). Window title: **“Untitled • — ReShiki”**. Status: **“History restored”**. No unexpected menu entry or missing display choice observed.
++
++**Exact drag-helper commands**
++
++All coordinates below are window-relative **points**, including the title bar. Each helper was run while the verification window was active and unobstructed. These were the only drag operations.
++
++```sh
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 450 440 570 480 capture=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/04-rotate-mid-drag.png
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 570 480 490 380 shift
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 550 460 475 400
++/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 46018 807 680 907 760
++```
++
++**Morph-frame evidence**
++
++All 40 frames have window title **“Untitled • — ReShiki”** and the persistent recovery UI described above.
++
++| Frames | Observed state | Operation status text |
++|---|---|---|
++| f01–f26 | Selected original 2D drawing, unchanged across these samples | Structure imported · Undo restores the previous drawing |
++| f27 | Still 2D geometry; 3D selected; Properties reports “Generating the conformer · ETKDG, then MMFF94s” | Generating 3D model · MMFF94s |
++| f28 | Spheres/sticks appear around the original drawing positions; final hydrogen geometry not yet present | Shown as 3D model · Undo restores the 2D drawing |
++| f29–f32 | Distinct intermediate atom positions; hydrogens emerge during the transition, visibly translucent in f30 | Shown as 3D model · Undo restores the 2D drawing |
++| f33–f40 | Settled final 3D geometry matching image 02 | Shown as 3D model · Undo restores the 2D drawing |
++
++The logged samples occur about every 120–145 ms. The first change falls between f27 (`1792487051846`) and f28 (`1792487051978`); settling falls between f32 (`1792487052516`) and f33 (`1792487052657`). This is consistent with a transition lasting about **538–811 ms**, which includes the expected **750 ms**. The evidence verifies intermediate geometry rather than a simple before/after replacement, but cannot measure the precise animation duration or frame-rate smoothness.
++
++Additional transient observations: the representation changes from text/lines to spheres/sticks between f27 and f28, then positions interpolate; the selection frame expands and the bar moves from above to below; the Molecular properties formula temporarily disappears during f28–f30 and returns by f31. The final orange active-position marker overlaps the top hydrogen. These did not prevent the tested interactions. No persistent blank model or obviously broken bonds were observed.
++
++**Final process cleanup**
++
++**PASS.** Immediately before cleanup, `ps` still identified PID `46018` as the exact verification-bundle executable, and the window helper still returned `7018`. Executed **`kill 46018` only**, which succeeded with exit code 0. No app menu was used.
++
++- Verification process check: `pgrep -f 'apps1b2/ReShiki1bEvidence.app/Contents/MacOS/reshiki'` returned **no output, exit code 1**. The test process was gone.
++- Installed app check: `pgrep -fl '^/nix/store/[^ ]*/Applications/ReShiki[.]app/Contents/MacOS/reshiki([[:space:]]|$)'` returned **PID 51217**, with the same installed executable path recorded before the run, **exit code 0**. The user's installed app remained running.
++- No further computer-use interaction occurred after terminating the verification process.
++
++The exact cleanup results are also recorded in [process-cleanup.txt](process-cleanup.txt).
++
++**Unverified items and limits**
++
++- Exact 0.75-second duration and per-frame animation smoothness: the background capture sampled approximately every 120–145 ms.
++- Whether every rotation produces exactly one Undo entry: the specified flow tested one Undo for flattening, not individual rotation-history boundaries.
++- Hover-only opening of the context submenu: the available computer-use API exposed click and keyboard actions but no hover operation; the submenu was expanded by clicking its parent row.
++- Both mode, alternative molecules, repeated conformer generation, saving/reopening, and persistence across launches were outside the requested flow and were not exercised.
+
+tokens used
+123,679
+Verification completed. The [report](</private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/report.md>) records every step, exact drag coordinates, status text, window title, and verdict. All 13 evidence screenshots and 40 morph frames are saved in the artifact directory.
+
+- **Core flow passed:** morph, rotation, Shift-roll, reset, resize, flattening, and single-Undo restoration.
+- **One visual defect:** the floating bar’s lower border is clipped by the footer after the first rotation, visible in [05-rotate-released.png](</private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b/app/05-rotate-released.png>).
+- **Cleanup confirmed:** test PID **46018** was terminated with `kill`; installed-app PID **51217** remains running.
+
+The report notes limits on exact animation timing, individual rotation Undo boundaries, and hover-only submenu behavior.
