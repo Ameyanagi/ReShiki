@@ -521,6 +521,44 @@ fn from_the_3d_view_flattens_the_turned_model_in_one_step() {
 }
 
 #[test]
+fn the_frame_keeps_its_place_through_2d_and_back() {
+    let (mut app, atoms) = with_model(Display::ThreeD);
+    let frame = |app: &App| reshiki::models3d::frame(&app.tab.doc, &app.tab.doc.models[0]);
+    let (lo, _) = frame(&app).unwrap();
+    app.edit(Edit::ResizeModels {
+        ids: atoms.clone(),
+        pivot: lo,
+        scale: 1.5,
+    });
+    let quarter = std::f32::consts::FRAC_1_SQRT_2;
+    app.edit(Edit::ModelView {
+        atoms,
+        rotation: [quarter, 0., quarter, 0.],
+    });
+    let placed = frame(&app).unwrap();
+    let near = |app: &App| {
+        let (a, b) = frame(app).unwrap();
+        [
+            a.x - placed.0.x,
+            a.y - placed.0.y,
+            b.x - placed.1.x,
+            b.y - placed.1.y,
+        ]
+        .iter()
+        .all(|d| d.abs() < 1e-3)
+    };
+    let drawn = app.tab.doc.atoms.clone();
+    let _ = app.update(Message::Models3d(Action::Flatten));
+    assert_ne!(app.tab.doc.atoms, drawn, "flattened");
+    show(&mut app, Display::ThreeD);
+    assert!(near(&app), "from the 3D view and back");
+    show(&mut app, Display::TwoD);
+    assert_eq!(app.tab.doc.atoms, drawn, "the drawing restored");
+    show(&mut app, Display::ThreeD);
+    assert!(near(&app), "from the original drawing and back");
+}
+
+#[test]
 fn flattening_keeps_drawn_stereo_and_the_model() {
     let (mut app, _) = App::new();
     app.tab.busy = false;
@@ -580,19 +618,60 @@ fn the_2d_buttons_follow_the_chosen_layout() {
     show(&mut app, Display::ThreeD);
     assert_eq!(app.tab.doc.atoms, flat, "3D keeps the flattened drawing");
     let _ = app.update(Message::Models3d(Action::Layout(Layout::Original)));
-    let _ = app.update(Message::Canvas(Edit::ShowAs(Display::TwoD)));
-    assert_eq!(displays(&app.tab.doc), [Display::TwoD]);
+    assert_eq!(displays(&app.tab.doc), [Display::ThreeD]);
     assert_eq!(app.tab.doc.atoms, original.atoms);
     assert_eq!(app.tab.doc.bonds, original.bonds);
     assert_eq!(app.tab.doc.depth_appearance, original.depth_appearance);
     assert_eq!(app.tab.doc.models[0].drawn, None);
     assert_eq!(app.status, "Original 2D drawing restored");
+    let _ = app.update(Message::Canvas(Edit::ShowAs(Display::TwoD)));
+    assert_eq!(displays(&app.tab.doc), [Display::TwoD]);
+    assert_eq!(app.tab.doc.atoms, original.atoms);
     // So does Show as 2D drawing on a flattened 2D molecule.
     let _ = app.update(Message::Models3d(Action::Flatten));
     assert_ne!(app.tab.doc.atoms, original.atoms);
     show(&mut app, Display::TwoD);
     assert_eq!(app.tab.doc.atoms, original.atoms);
     assert_eq!(app.tab.doc.models[0].layout, Layout::Original);
+}
+
+#[test]
+fn the_original_drawing_choice_and_the_2d_atoms_never_disagree() {
+    let (mut app, atoms) = with_model(Display::ThreeD);
+    let drawn = app.tab.doc.atoms.clone();
+    let _ = app.update(Message::Models3d(Action::Layout(Layout::View)));
+    let _ = app.update(Message::Canvas(Edit::ShowAs(Display::TwoD)));
+    let flat = app.tab.doc.atoms.clone();
+    assert_ne!(flat, drawn);
+    show(&mut app, Display::ThreeD);
+    // Choosing Original drawing brings the drawing back in that one step, so
+    // Undo returns to From the 3D view with the flattened atoms together.
+    let start = frames(&app);
+    let _ = app.update(Message::Models3d(Action::Layout(Layout::Original)));
+    assert_eq!(frames(&app), start + 1);
+    assert_eq!(app.tab.doc.atoms, drawn);
+    show(&mut app, Display::TwoD);
+    let _ = app.update(Message::Undo);
+    let _ = app.update(Message::Undo);
+    let model = &app.tab.doc.models[0];
+    assert_eq!(
+        (model.display, model.layout),
+        (Display::ThreeD, Layout::View)
+    );
+    assert_eq!(app.tab.doc.atoms, flat);
+    let _ = app.update(Message::Redo);
+    let model = &app.tab.doc.models[0];
+    assert_eq!(model.layout, Layout::Original);
+    assert_eq!(model.drawn, None);
+    assert_eq!(app.tab.doc.atoms, drawn, "Both draws the drawn layout");
+    // With nothing flattened, the choice alone is the step.
+    app.tab.selected = atoms;
+    let _ = app.update(Message::Models3d(Action::Layout(Layout::View)));
+    let _ = app.update(Message::Models3d(Action::Layout(Layout::Original)));
+    assert_eq!(app.tab.doc.atoms, drawn);
+    let start = frames(&app);
+    let _ = app.update(Message::Models3d(Action::Layout(Layout::Original)));
+    assert_eq!(frames(&app), start, "choosing it again changes nothing");
 }
 
 #[test]

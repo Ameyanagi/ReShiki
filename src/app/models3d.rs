@@ -79,11 +79,18 @@ impl App {
             Action::Layout(layout) => {
                 if let Some((_, Some(index))) = self.selected_model() {
                     let before = self.tab.doc.clone();
-                    if let Some(model) = self.tab.doc.models.get_mut(index)
-                        && model.layout != layout
-                    {
+                    if let Some(model) = self.tab.doc.models.get_mut(index) {
                         model.layout = layout;
+                    }
+                    // Original drawing always means the drawn layout is in
+                    // place, so a flattened drawing comes back in this step.
+                    let restored = layout == Layout::Original
+                        && models3d::restore_drawing(&mut self.tab.doc, index);
+                    if self.tab.doc != before {
                         self.commit_model(before, false);
+                        if restored && !self.error {
+                            self.status = "Original 2D drawing restored".into();
+                        }
                     }
                 }
                 Task::none()
@@ -332,6 +339,7 @@ impl App {
             return;
         };
         let previous = model.display;
+        let origin = models3d::frame_origin(&self.tab.doc, model);
         // The drawn layout stays on the model, for Original drawing.
         let drawn = model
             .drawn
@@ -341,6 +349,10 @@ impl App {
             .and_then(|prepared| prepared.flattened(model))
             .map_err(|error| error.to_string())
             .and_then(|mut doc| {
+                // The model keeps its place for showing it in 3D again.
+                if let Some(origin) = origin {
+                    models3d::keep_place(&mut doc, index, origin);
+                }
                 models3d::set_display(&mut doc, index, Display::TwoD);
                 if let Some(model) = doc.models.get_mut(index) {
                     model.layout = Layout::View;

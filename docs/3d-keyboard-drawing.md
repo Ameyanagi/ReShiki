@@ -62,12 +62,15 @@ into the 2D drawing, like 3D optimize's projection: atoms keep their IDs and
 drawn stereo, the drawing keeps its bond-length scale and centre, and far bonds
 are lighter through **Automatic depth**. The right-click **Show as** menu and
 the command palette also offer **2D from the 3D view** directly. Each flatten is
-one Undo step that also switches the molecule to 2D; the model is kept.
+one Undo step that also switches the molecule to 2D; the model is kept, and
+shown in 3D again it is back in the same frame, at the same place and size.
 
 The choice belongs to each model and is saved with it. A flattened model also
 keeps the layout you drew (positions, depth, stored stereo and depth
 appearance), so **Original drawing**, or **Show as → 2D drawing**, brings it
-back, also after saving and reopening. Choosing the display that is already
+back, also after saving and reopening. Choosing **Original drawing** brings it
+back at once, in the same Undo step, so while that choice shows, the 2D atoms
+(and the 2D half of **Both**) are always the layout you drew. Choosing the display that is already
 shown changes nothing.
 
 While the model is shown, **Properties → 3D model** sets how it looks:
