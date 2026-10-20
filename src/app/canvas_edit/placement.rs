@@ -23,8 +23,12 @@ impl App {
         if !self.tool.bonds_from_text() {
             return;
         }
-        let conversion =
-            convert_bond_text(&self.tab.doc, (source, source_text), (target, target_text));
+        let conversion = convert_bond_text(
+            &self.tab.doc,
+            (source, source_text),
+            (target, target_text),
+            (start, end),
+        );
         let (doc, source, target) = match conversion {
             Ok(converted) => converted,
             Err(error) => {
@@ -67,15 +71,16 @@ impl App {
             return;
         }
         let result =
-            reshiki::atom_text::text_to_atom(&self.tab.doc, text).and_then(|(doc, source)| {
-                reshiki::chains::place(
-                    &doc,
-                    points,
-                    Some(source),
-                    target,
-                    self.tab.camera.world_len(PICK_RADIUS_PX),
-                )
-            });
+            reshiki::atom_text::text_to_atom_toward(&self.tab.doc, text, points.get(1).copied())
+                .and_then(|(doc, source)| {
+                    reshiki::chains::place(
+                        &doc,
+                        points,
+                        Some(source),
+                        target,
+                        self.tab.camera.world_len(PICK_RADIUS_PX),
+                    )
+                });
         match result {
             Ok((doc, ids)) => {
                 self.tab.doc = doc;
@@ -394,19 +399,22 @@ impl App {
 }
 
 /// Convert both ends on a candidate so a refusal never installs half an edit.
+/// Each end is read toward the other, as the bond will leave it.
 fn convert_bond_text(
     doc: &Document,
     source: (Option<u64>, Option<u64>),
     target: (Option<u64>, Option<u64>),
+    (start, end): (Point, Option<Point>),
 ) -> Result<(Document, Option<u64>, Option<u64>), String> {
+    use reshiki::atom_text::text_to_atom_toward;
     let (doc, source) = if let Some(text) = source.1 {
-        let (doc, id) = reshiki::atom_text::text_to_atom(doc, text)?;
+        let (doc, id) = text_to_atom_toward(doc, text, end)?;
         (doc, Some(id))
     } else {
         (doc.clone(), source.0)
     };
     if let Some(text) = target.1 {
-        let (doc, target) = reshiki::atom_text::text_to_atom(&doc, text)?;
+        let (doc, target) = text_to_atom_toward(&doc, text, Some(start))?;
         Ok((doc, source, Some(target)))
     } else {
         Ok((doc, source, target.0))

@@ -2,7 +2,9 @@
 //! ReShiki's own depiction of the group SMILES. Chemistry preparation and
 //! drawing reconstruction remain Rust calculations; the final whole-document
 //! check and full CIP labels are the caller's responsibility.
-use super::{AttachmentPolicy, Preset, check_size, lookup, lookup_bundled, validate_with_policy};
+use super::{
+    AttachmentPolicy, Preset, Spelling, check_size, lookup, lookup_bundled, validate_with_policy,
+};
 #[cfg(all(target_os = "windows", target_arch = "aarch64"))]
 use crate::chemistry::windows_trigonometry as trigonometry;
 use crate::{
@@ -214,7 +216,7 @@ fn replace_preset(
     document: &Document,
     selection: &[u64],
     label: &str,
-    (preset, alias): (std::sync::Arc<Preset>, bool),
+    (preset, spelling): (std::sync::Arc<Preset>, Spelling),
     policy: AttachmentPolicy,
 ) -> Result<Document> {
     check_size(document)?;
@@ -299,11 +301,14 @@ fn replace_preset(
         highlight,
         alignment: Default::default(),
         // An alias keeps the typed spelling; its reverse is not defined.
-        label: label.into(),
-        reverse_label: if alias {
-            String::new()
-        } else {
-            preset.reverse_label.clone()
+        // A typed reverse spelling (MeO) is the group under its label (OMe).
+        label: match spelling {
+            Spelling::Reverse => preset.label.clone(),
+            Spelling::Label | Spelling::Alias => label.into(),
+        },
+        reverse_label: match spelling {
+            Spelling::Alias => String::new(),
+            Spelling::Label | Spelling::Reverse => preset.reverse_label.clone(),
         },
         anchor: target,
         members,

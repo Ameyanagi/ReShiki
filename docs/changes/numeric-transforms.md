@@ -24,7 +24,8 @@ or discard other draft values.
   rotation handle. Repeating `15` then `−15` restores placement, within
   coordinate roundoff, including after native save/reopen.
 - **Tilt X / Tilt Y** (°, under **More**) use the existing orthographic
-  projection, with an allowed change of −85° through 85°. As with the existing
+  projection and accept any change from −36000° to 36000°, like **Rotate**;
+  full turns are no-ops. As with the existing
   tilt controls, atoms and shapes tilt; arrows and upright captions do not.
 - **W / H** (pt) specify the canvas selection bounds in publication points,
   including labels. The lock beside **H** scales coordinates uniformly; unlock

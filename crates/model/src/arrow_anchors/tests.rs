@@ -1582,3 +1582,188 @@ fn nearby_bonds_rank_by_their_drawn_ink() {
         Some(Pick::Bond { a, b, .. }) if a == c && b == o
     ));
 }
+/// The #312 methoxide -> acetone arrow, C=O up, before any aim.
+fn acetone_arrow() -> (Document, u64, u64) {
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    for (degrees, symbol, order) in [(270f32, "O", 2), (150., "C", 1), (30., "C", 1)] {
+        let angle = degrees.to_radians();
+        let n = d.add_atom(symbol, Point::new(42. * angle.cos(), 42. * angle.sin()));
+        d.add_bond(c, n, order, "plain");
+    }
+    let id = lone_pair_arrow_to(&mut d, c);
+    (d, c, id)
+}
+fn arrow(d: &Document, id: u64) -> &Arrow {
+    d.arrows.iter().find(|a| a.id == id).unwrap()
+}
+fn arrival(arrow: &Arrow) -> Point {
+    unit(delta(arrow.cubic.unwrap()[1], arrow.end))
+}
+/// `d` after only [`Arrow::edit_handle`], as before #379.
+fn bare_edit(d: &Document, id: u64, index: usize, p: Point) -> Document {
+    let mut d = d.clone();
+    d.arrows
+        .iter_mut()
+        .find(|a| a.id == id)
+        .unwrap()
+        .edit_handle(index, p);
+    d
+}
+/// The end tangent square dragged so the arrival points `degrees` from the end.
+fn aim(d: &Document, id: u64, degrees: f32) -> Point {
+    let (s, c) = degrees.to_radians().sin_cos();
+    arrow(d, id).end.offset(20. * c, 20. * s)
+}
+#[test]
+fn mechanism_attachment_379_aimed_end_head_clears_the_carbonyl() {
+    let (d, c, id) = acetone_arrow();
+    // Up-left, toward the C=O axis, as when the user aims at the carbonyl.
+    let p = aim(&d, id, 235.);
+    let plain = bare_edit(&d, id, 4, p);
+    assert!(
+        rendered_head_ink_gap(&plain, arrow(&plain, id)) < 0.,
+        "the bare tangent edit leaves the head on bond ink"
+    );
+    let mut aimed = d.clone();
+    edit_handle(&mut aimed, id, 4, p);
+    let a = arrow(&aimed, id);
+    let gap = rendered_head_ink_gap(&aimed, a);
+    assert!(gap > 0., "aimed arrowhead overlaps bond ink by {}", -gap);
+    assert!(head_ink_gap(&aimed, a) > 0.);
+    // The aim is kept, and the attachment and start are untouched.
+    near(arrival(a), arrival(arrow(&plain, id)));
+    assert_eq!(
+        a.end_anchor.as_ref().unwrap().target,
+        Target::Atom { atom: c }
+    );
+    assert_eq!(a.start_anchor, arrow(&d, id).start_anchor);
+    assert_eq!((a.start, a.cubic.unwrap()[0]), {
+        let b = arrow(&d, id);
+        (b.start, b.cubic.unwrap()[0])
+    });
+    aimed.validate().unwrap();
+    let once = aimed.clone();
+    reconcile(&mut aimed);
+    assert_eq!(aimed, once, "an aimed end is stable under reconciliation");
+}
+#[test]
+fn mechanism_attachment_379_clear_aim_leaves_the_arrow_unchanged() {
+    let (d, _, id) = acetone_arrow();
+    let mut aimed = d.clone();
+    let p = arrow(&d, id).cubic.unwrap()[1];
+    edit_handle(&mut aimed, id, 4, p);
+    let (a, b) = (arrow(&aimed, id), arrow(&d, id));
+    assert_eq!((a.start, a.end, a.cubic), (b.start, b.end, b.cubic));
+}
+#[test]
+fn mechanism_attachment_379_aim_along_a_bond_keeps_the_aim_and_base_gap() {
+    let (d, c, id) = acetone_arrow();
+    // Straight down the C=O bond: no gap clears it, so the end keeps the
+    // base gap, as on arrival, and the aim never turns.
+    let mut aimed = d.clone();
+    edit_handle(&mut aimed, id, 4, aim(&d, id, 270.));
+    let a = arrow(&aimed, id);
+    near(arrival(a), Point::new(0., -1.));
+    let anchor = a.end_anchor.as_ref().unwrap();
+    assert_eq!(anchor.target, Target::Atom { atom: c });
+    assert!((anchor.gap - end_gap()).abs() < 0.0001);
+    let once = aimed.clone();
+    reconcile(&mut aimed);
+    assert_eq!(aimed, once);
+}
+#[test]
+fn mechanism_attachment_379_repeated_aims_do_not_pile_up_gap() {
+    let (mut d, _, id) = acetone_arrow();
+    let center = Point::new(0., 0.);
+    let mut reach = Vec::new();
+    // Re-aim along the same rays, down the C=O bond and toward it, again
+    // and again: the end must settle, not back away a cap per edit.
+    for degrees in [270f32, 270., 235., 235., 270., 270.] {
+        let p = aim(&d, id, degrees);
+        edit_handle(&mut d, id, 4, p);
+        let anchor = arrow(&d, id).end_anchor.as_ref().unwrap();
+        assert!(anchor.gap <= 2. * end_gap() + 0.0001);
+        reach.push(arrow(&d, id).end.distance(center));
+    }
+    assert!((reach[0] - reach[1]).abs() < 0.001, "{reach:?}");
+    assert!((reach[2] - reach[3]).abs() < 0.001, "{reach:?}");
+    assert!((reach[4] - reach[5]).abs() < 0.001, "{reach:?}");
+    assert!((reach[0] - reach[4]).abs() < 0.001, "{reach:?}");
+}
+#[test]
+fn mechanism_attachment_379_aimed_bond_end_keeps_target_aim_and_stability() {
+    let mut d = Document::default();
+    let c = d.add_atom("C", Point::new(0., 0.));
+    let o = d.add_atom("O", Point::new(0., -42.));
+    d.add_bond(c, o, 2, "plain");
+    let source = d.add_atom("O", Point::new(-120., -21.));
+    scientific::attach(
+        d.atom_mut(source).unwrap(),
+        SymbolKind::LonePair,
+        Point::new(25., 0.),
+    )
+    .unwrap();
+    let source = pick(&d, Point::new(-95., -21.), 2.).unwrap();
+    let (a, b) = (c.min(o), c.max(o));
+    let target = Pick::Bond {
+        a,
+        b,
+        fraction: 0.5,
+    };
+    let style = ArrowStyle::preset(Preset::Curved);
+    let id = create(&mut d, &source, &target, Preset::Curved, style).unwrap();
+    let before = arrow(&d, id).end_anchor.clone().unwrap().target;
+    for degrees in [150f32, 200., 260.] {
+        let p = aim(&d, id, degrees);
+        let mut aimed = d.clone();
+        edit_handle(&mut aimed, id, 4, p);
+        let (s, c) = degrees.to_radians().sin_cos();
+        near(arrival(arrow(&aimed, id)), Point::new(c, s));
+        assert_eq!(
+            arrow(&aimed, id).end_anchor.as_ref().unwrap().target,
+            before
+        );
+        let once = aimed.clone();
+        reconcile(&mut aimed);
+        assert_eq!(aimed, once);
+    }
+}
+#[test]
+fn mechanism_attachment_379_other_handles_do_not_reaim() {
+    let (d, _, id) = acetone_arrow();
+    let p = arrow(&d, id).cubic.unwrap()[0].offset(4., -13.);
+    let mut edited = d.clone();
+    edit_handle(&mut edited, id, 3, p);
+    assert_eq!(edited, bare_edit(&d, id, 3, p));
+}
+#[test]
+fn mechanism_attachment_379_an_aimed_end_depends_only_on_its_aim() {
+    let (mut d, _, id) = acetone_arrow();
+    let mut first = None;
+    // Swinging the aim around and back must not walk the end away: the same
+    // aim always lands on the same end.
+    for degrees in [235f32, 300., 180., 235., 330., 150., 200., 260., 235.] {
+        let p = aim(&d, id, degrees);
+        edit_handle(&mut d, id, 4, p);
+        let a = arrow(&d, id);
+        if degrees == 235. {
+            let end = (a.end, a.end_anchor.clone());
+            assert_eq!(*first.get_or_insert(end.clone()), end, "{degrees}");
+        }
+    }
+}
+#[test]
+fn mechanism_attachment_379_aim_after_detaching_the_start_still_clears_bonds() {
+    let (mut d, _, id) = acetone_arrow();
+    // Dragging the Start handle detaches the start but keeps the end.
+    d.arrows
+        .iter_mut()
+        .find(|a| a.id == id)
+        .unwrap()
+        .start_anchor = None;
+    let p = aim(&d, id, 235.);
+    edit_handle(&mut d, id, 4, p);
+    let a = arrow(&d, id);
+    assert!(rendered_head_ink_gap(&d, a) > 0.);
+}

@@ -212,11 +212,15 @@ impl Writer<'_> {
                 };
                 // ChemDraw's flush justification matches the attachment side;
                 // a chosen character has no ChemDraw equivalent and stays native.
-                let justification = a
-                    .display
-                    .label_attachment
-                    .cdxml()
-                    .map(|value| ("LabelJustification", value.to_owned()));
+                // ChemDraw 26 keeps the choice only with the node's
+                // LabelDisplay; without it, paste re-lays the text out as
+                // Automatic. It replaces the hydrogen side, which free text
+                // lacks but a ChemDraw import may have filled from this value.
+                let attachment = a.display.label_attachment.cdxml();
+                self.tree
+                    .set(node, "LabelDisplay", attachment.unwrap_or("Auto"))?;
+                let justification =
+                    attachment.map(|value| ("LabelJustification", value.to_owned()));
                 let text = self.text(
                     node,
                     label,
@@ -573,17 +577,20 @@ impl Writer<'_> {
             if let Some(show) = d.hydrogens {
                 self.tree.set(n, "HideImplicitHydrogens", yes(!show))?;
             }
-            self.tree.set(
-                n,
-                "LabelDisplay",
-                match d.hydrogen_position {
-                    HydrogenPosition::Auto => "Auto",
-                    HydrogenPosition::Left => "Left",
-                    HydrogenPosition::Right => "Right",
-                    HydrogenPosition::Above => "Above",
-                    HydrogenPosition::Below => "Below",
-                },
-            )?;
+            // A free text label's flush choice was already written.
+            if self.tree.get(n, "LabelDisplay")?.is_none() {
+                self.tree.set(
+                    n,
+                    "LabelDisplay",
+                    match d.hydrogen_position {
+                        HydrogenPosition::Auto => "Auto",
+                        HydrogenPosition::Left => "Left",
+                        HydrogenPosition::Right => "Right",
+                        HydrogenPosition::Above => "Above",
+                        HydrogenPosition::Below => "Below",
+                    },
+                )?;
+            }
             if let Some(number) = &d.number {
                 self.tree.set(n, "AtomNumber", &number.text)?;
                 self.tree.set(n, "ShowAtomNumber", "yes")?;

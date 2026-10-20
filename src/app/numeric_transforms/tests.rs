@@ -196,7 +196,7 @@ fn apply_button_rejects_all_edits_when_one_field_is_invalid() {
     let mut app = fixture();
     let original = app.tab.doc.clone();
     let _ = app.update(Message::NumericTransform(Action::More(true)));
-    for (field, input) in [(Field::Rotation, "72"), (Field::TiltX, "90")] {
+    for (field, input) in [(Field::Rotation, "72"), (Field::TiltX, "36001")] {
         let _ = app.update(Message::NumericTransform(Action::Input(
             field,
             input.into(),
@@ -366,8 +366,8 @@ fn invalid_and_noop_values_do_not_mutate_or_consume_history() {
     }
     for (field, input) in [
         (Field::Rotation, "36001"),
-        (Field::TiltX, "86"),
-        (Field::TiltY, "-86"),
+        (Field::TiltX, "36001"),
+        (Field::TiltY, "-36001"),
         (Field::Width, "0"),
         (Field::Height, "-1"),
         (Field::Scale, "0"),
@@ -384,6 +384,8 @@ fn invalid_and_noop_values_do_not_mutate_or_consume_history() {
         (Field::Rotation, "-720"),
         (Field::TiltX, "0"),
         (Field::TiltY, "0"),
+        (Field::TiltX, "360"),
+        (Field::TiltY, "-720"),
         (Field::Scale, "100"),
     ] {
         apply(&mut app, field, input);

@@ -219,7 +219,8 @@ where
             .map(String::as_str)
             .unwrap_or("Auto")
         {
-            "Auto" | "Best" => HydrogenPosition::Auto,
+            // ChemDraw's Centered free-text labels; hydrogens have no center.
+            "Auto" | "Best" | "Center" => HydrogenPosition::Auto,
             "Left" => HydrogenPosition::Left,
             "Right" => HydrogenPosition::Right,
             "Above" => HydrogenPosition::Above,

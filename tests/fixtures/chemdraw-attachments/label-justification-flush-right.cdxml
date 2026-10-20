@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE CDXML SYSTEM "https://static.chemistry.revvitycloud.com/cdxml/CDXML.dtd" >
+<CDXML
+ CreationProgram="ChemDraw 26.1.0.6801"
+ Name="meo-flush-right.cdxml.sb-e2532e7a-1DElJA"
+ BoundingBox="172.96 142.58 216.22 161.76"
+ WindowPosition="0 0"
+ WindowSize="0 0"
+ FractionalWidths="yes"
+ InterpretChemically="yes"
+ ShowAtomQuery="yes"
+ ShowAtomStereo="no"
+ ShowAtomEnhancedStereo="yes"
+ ShowAtomNumber="no"
+ ShowResidueID="no"
+ ShowBondQuery="yes"
+ ShowBondRxn="yes"
+ ShowBondStereo="no"
+ ShowTerminalCarbonLabels="no"
+ ShowNonTerminalCarbonLabels="no"
+ HideImplicitHydrogens="no"
+ LabelFont="60"
+ LabelSize="10"
+ LabelFace="96"
+ CaptionFont="593"
+ CaptionSize="12"
+ HashSpacing="2.69"
+ MarginWidth="2.01"
+ LineWidth="0.99"
+ BoldWidth="4"
+ BondLength="29.99"
+ BondSpacing="12"
+ ChainAngle="120"
+ LabelJustification="Auto"
+ CaptionJustification="Left"
+ AminoAcidTermini="HOH"
+ ShowSequenceTermini="yes"
+ ShowSequenceBonds="yes"
+ ShowSequenceUnlinkedBranches="no"
+ ShowPrimeLabels="no"
+ ResidueWrapCount="40"
+ PrintMargins="36 36 36 36"
+ MacPrintInfo="00030000004800480000000002DE0240FFEEFFEE030602520367052803FC00020000004800480000000002DE0240000100000064000000010001010100000001270F000100010000000000000000000000000002001901900000000000400000000000000000000100000000000000000000000000000000"
+ ChemPropName=""
+ ChemPropFormula="Chemical formula: "
+ ChemPropExactMass="Exact mass: "
+ ChemPropMolWt="Molecular weight: "
+ ChemPropMOverZ="m/z: "
+ ChemPropAnalysis="Elemental analysis: "
+ ChemPropBoilingPt="Boiling point: "
+ ChemPropMeltingPt="Melting point: "
+ ChemPropCritTemp="Critical temp: "
+ ChemPropCritPres="Critical pres: "
+ ChemPropCritVol="Critical vol: "
+ ChemPropGibbs="Gibbs energy: "
+ ChemPropLogP="Log P: "
+ ChemPropMR="MR: "
+ ChemPropHenry="Henry&apos;s law: "
+ ChemPropEForm="Heat of form: "
+ ChemProptPSA="tPSA: "
+ ChemPropID=""
+ ChemPropFragmentLabel=""
+ color="0"
+ bgcolor="1"
+ RxnAutonumberStart="1"
+ RxnAutonumberConditions="no"
+ RxnAutonumberStyle="Roman"
+ RxnAutonumberFormat="(#)"
+><colortable>
+<color r="1" g="1" b="1"/>
+<color r="0" g="0" b="0"/>
+<color r="1" g="0" b="0"/>
+<color r="1" g="1" b="0"/>
+<color r="0" g="1" b="0"/>
+<color r="0" g="1" b="1"/>
+<color r="0" g="0" b="1"/>
+<color r="1" g="0" b="1"/>
+</colortable><fonttable>
+<font id="60" charset="x-mac-roman" name="Arial"/>
+<font id="593" charset="x-mac-roman" name="Times New Roman"/>
+</fonttable><page
+ id="19"
+ BoundingBox="0 0 540 720"
+ HeaderPosition="36"
+ FooterPosition="36"
+ PrintTrimMarks="yes"
+ HeightPages="1"
+ WidthPages="1"
+><fragment
+ id="15"
+ BoundingBox="172.96 142.58 216.22 161.76"
+ Z="10"
+><n
+ id="14"
+ p="190 158"
+ Z="9"
+ NodeType="Fragment"
+ NeedsClean="yes"
+ AS="N"
+ LabelDisplay="Right"
+ AtomID="1"
+><fragment
+ id="20"
+><n
+ id="21"
+ p="190 187.95"
+ NumHydrogens="3"
+/><n
+ id="22"
+ p="190 158"
+ Element="8"
+ NumHydrogens="0"
+/><n
+ id="23"
+ p="215.94 143.02"
+ NodeType="ExternalConnectionPoint"
+/><b
+ id="24"
+ B="21"
+ E="22"
+/><b
+ id="25"
+ B="23"
+ E="22"
+/></fragment><t
+ p="193.89 161.64"
+ BoundingBox="172.96 154.36 193.44 161.76"
+ LabelJustification="Right"
+ Justification="Right"
+ LabelAlignment="Right"
+><s font="60" size="10" color="0" face="96">MeO</s></t></n><n
+ id="16"
+ p="215.97 143"
+ Z="11"
+ AS="N"
+ AtomID="2"
+/><b
+ id="17"
+ Z="12"
+ B="14"
+ E="16"
+ BS="N"
+/></fragment></page></CDXML>

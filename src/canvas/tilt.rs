@@ -20,6 +20,8 @@ pub(super) struct TiltDrag {
 }
 
 impl TiltDrag {
+    /// Total tilt of the drag so far: 0.5° per pixel, unbounded, so a long
+    /// drag keeps turning past 90° and 180°.
     pub fn angles(&self, end: Point, snap: bool) -> (f32, f32) {
         let dx = end.x - self.start.x;
         let dy = end.y - self.start.y;
@@ -28,19 +30,29 @@ impl TiltDrag {
         }
         let angle = |distance: f32| {
             let degrees = distance * 0.5;
-            let degrees = if snap {
+            if snap {
                 (degrees / 15.).round() * 15.
             } else {
                 degrees
-            };
-            degrees.clamp(-75., 75.)
+            }
         };
         (angle(-dy), angle(dx))
     }
 }
 
+/// The equivalent angle in −180…+180°, as shown in the live readout
+/// (never −0, so an untouched axis reads +0°).
+pub(crate) fn wrap(degrees: f32) -> f32 {
+    let degrees = degrees.rem_euclid(360.) + 0.;
+    if degrees > 180. {
+        degrees - 360.
+    } else {
+        degrees
+    }
+}
+
 pub(crate) fn apply(doc: &mut Document, ids: &[u64], x: f32, y: f32) {
-    if !x.is_finite() || !y.is_finite() || x.abs() > 75. || y.abs() > 75. {
+    if !x.is_finite() || !y.is_finite() {
         return;
     }
     reshiki::projection::tilt(doc, ids, x, true);

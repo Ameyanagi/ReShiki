@@ -1,4 +1,32 @@
 use super::*;
+
+#[test]
+fn tilt_accepts_any_finite_angle_and_full_turns_restore_positions() {
+    let mut doc = Document::default();
+    let ids = crate::editing::ring(&mut doc, Point::new(100., 100.), 6, false, 5.);
+    let original = doc.clone();
+    for degrees in [f32::NAN, f32::INFINITY, 0., 360., -720.] {
+        tilt(&mut doc, &ids, degrees, true);
+        assert_eq!(doc, original, "{degrees}");
+    }
+    let mut over = original.clone();
+    tilt(&mut over, &ids, 100., true);
+    assert_ne!(over, original, "angles above the old 85° guard apply");
+    let mut reduced = original.clone();
+    tilt(&mut reduced, &ids, 460., true);
+    assert_eq!(over, reduced, "460° is 100° modulo a full turn");
+    for around_x in [true, false] {
+        let mut turned = original.clone();
+        for _ in 0..4 {
+            tilt(&mut turned, &ids, 90., around_x);
+        }
+        for (a, b) in turned.atoms.iter().zip(&original.atoms) {
+            assert!(a.position.distance(b.position) < 1e-3);
+            assert!((a.depth - b.depth).abs() < 1e-3);
+        }
+    }
+}
+
 #[test]
 fn depth_emphasis_preserves_graph_and_does_not_create_stereo_wedges() {
     let mut doc = Document::default();
