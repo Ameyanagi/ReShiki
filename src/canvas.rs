@@ -145,7 +145,8 @@ pub enum Edit {
     /// as the live preview uses them; a chemical symbol's attachment is separate.
     Orbital(World, World, bool, bool),
     GraphicPoint(u64, usize, World),
-    AtomMark(u64, usize, World),
+    /// The pointer and whether Option/Alt or Shift freed the orbit.
+    AtomMark(u64, usize, World, bool),
     AtomIndicator(reshiki::atom_labels::Owner, World),
     ArrowHandle(u64, usize, World),
     ArrowClick(u64),

@@ -76,6 +76,17 @@ impl MoleculeCanvas<'_> {
         }
     }
 
+    /// Shift constrains a graphic; Option/Alt also frees an attached mark's orbit.
+    pub(in crate::canvas) fn graphic_constrain(
+        &self,
+        kind: GraphicKind,
+        modifiers: keyboard::Modifiers,
+    ) -> bool {
+        modifiers.shift()
+            || self.graphics.constrain
+            || (matches!(kind, GraphicKind::Symbol(_)) && modifiers.alt())
+    }
+
     pub(super) fn draw_arrow_targets(
         &self,
         frame: &mut layered::Frame<'_>,
@@ -174,6 +185,73 @@ impl MoleculeCanvas<'_> {
                 &Path::circle(center, 8.),
                 Stroke::default().with_width(1.5).with_color(ACCENT),
             );
+        }
+    }
+
+    /// The orbit and snap positions of an attached mark being dragged.
+    pub(super) fn draw_mark_orbit(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        state: &State,
+        preview: &Document,
+        bounds: Rectangle,
+    ) {
+        let (id, index) = match (&state.gesture, self.tool) {
+            (Some(Gesture::AtomMark { id, index }), _) => (*id, Some(*index)),
+            // A new mark dragged out with the symbol tool is the one the
+            // committed atom lacks.
+            (Some(Gesture::Graphic { start }), Tool::Graphic(GraphicKind::Symbol(_)))
+                if self.graphics.attach =>
+            {
+                let Some(id) = self
+                    .doc
+                    .nearest(*start, self.camera.world_len(pick::PICK_RADIUS_PX))
+                else {
+                    return;
+                };
+                let old = self.doc.atom(id).map(|a| &a.marks);
+                let index = preview.atom(id).and_then(|a| {
+                    a.marks
+                        .iter()
+                        .position(|m| old.is_none_or(|old| !old.iter().any(|o| o.id == m.id)))
+                });
+                (id, index)
+            }
+            _ => return,
+        };
+        let Some((atom, mark)) = preview
+            .atom(id)
+            .and_then(|a| Some((a, a.marks.get(index?)?)))
+        else {
+            return;
+        };
+        let (orbit, snaps) = reshiki::scientific::mark_orbit_guide(preview, atom, mark);
+        let path = Path::new(|b| {
+            for (i, p) in orbit.iter().enumerate() {
+                let p = self.camera.screen(*p, bounds);
+                if i == 0 { b.move_to(p) } else { b.line_to(p) }
+            }
+        });
+        frame.stroke(
+            &path,
+            Stroke {
+                line_dash: canvas::LineDash {
+                    segments: &[3., 4.],
+                    offset: 0,
+                },
+                ..Stroke::default()
+                    .with_width(1.)
+                    .with_color(Color { a: 0.5, ..ACCENT })
+            },
+        );
+        // Snap ticks sit just outside the orbit, clear of the dragged mark.
+        let center = self.camera.screen(atom.position, bounds);
+        for (i, p) in snaps.into_iter().enumerate() {
+            let p = self.camera.screen(p, bounds);
+            let out = p - center;
+            let out = out * (6. / out.x.hypot(out.y).max(1e-3));
+            let radius = if i % 6 == 0 { 2.2 } else { 1.4 };
+            frame.fill(&Path::circle(p + out, radius), Color { a: 0.7, ..ACCENT });
         }
     }
 

@@ -96,7 +96,12 @@ fn lone_pair_click_and_drag_previews_match_the_exact_committed_marks() {
     doc.atom_mut(id).unwrap().label_h = 1;
     let bounds = Rectangle::with_size(iced::Size::new(600., 400.));
     for zoom in [0.5, 1., 2.] {
-        for end in [World::default(), World::new(8., -15.)] {
+        for (end, modifiers) in [
+            (World::default(), Modifiers::empty()),
+            (World::new(8., -15.), Modifiers::empty()),
+            (World::new(8., -15.), Modifiers::ALT),
+            (World::new(8., -15.), Modifiers::SHIFT),
+        ] {
             let mut canvas =
                 crate::canvas::tests::chain_canvas(&doc, reshiki::chains::ChainMode::Straight);
             let kind = GraphicKind::Symbol(reshiki::scientific::SymbolKind::LonePair);
@@ -107,6 +112,7 @@ fn lone_pair_click_and_drag_previews_match_the_exact_committed_marks() {
                     start: World::default(),
                 }),
                 cursor: Some(canvas.camera.screen(end, bounds)),
+                modifiers,
                 ..Default::default()
             };
             let mut preview = Draft::new(&doc);
@@ -142,6 +148,19 @@ fn lone_pair_click_and_drag_previews_match_the_exact_committed_marks() {
                 .unwrap();
             assert_eq!(committed, edited);
             assert_eq!(committed.atom(id).unwrap().label_h, 1);
+            // A plain drag orbits in 15° steps; Option/Alt or Shift keeps the offset.
+            let mark = &committed.atom(id).unwrap().marks[0];
+            if end != World::default() {
+                assert_eq!(constrain, !modifiers.is_empty());
+                let direction = mark.offset.y.atan2(mark.offset.x).to_degrees();
+                if modifiers.is_empty() {
+                    assert!((direction + 60.).abs() < 1e-3, "{direction}");
+                } else {
+                    assert_eq!(mark.offset, end);
+                }
+                let turn = (mark.angle - direction - 90.).rem_euclid(360.);
+                assert!(turn.min(360. - turn) < 1e-3, "{}", mark.angle);
+            }
         }
     }
 }

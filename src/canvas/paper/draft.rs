@@ -92,7 +92,7 @@ impl MoleculeCanvas<'_> {
                         preview.to_mut(),
                         *start,
                         end,
-                        state.modifiers.shift() || self.graphics.constrain,
+                        self.graphic_constrain(kind, state.modifiers),
                         self.camera.world_len(pick::PICK_RADIUS_PX),
                     ) {
                         *ring_selection = Some(vec![id]);
@@ -115,10 +115,37 @@ impl MoleculeCanvas<'_> {
                 }
             }
             if let Some(Gesture::AtomMark { id, index }) = &state.gesture
-                && let Some(a) = preview.to_mut().atom_mut(*id)
-                && let Some(mark) = a.marks.get_mut(*index)
+                && let Some(a) = preview.atom(*id)
+                && let Some(mark) = a.marks.get(*index)
             {
-                mark.offset = World::new(end.x - a.position.x, end.y - a.position.y);
+                let free = state.modifiers.alt() || state.modifiers.shift();
+                let placed = reshiki::scientific::orbit_mark(preview, a, mark, end, free);
+                let degrees = (placed.offset.y.atan2(placed.offset.x).to_degrees().round() as i32)
+                    .rem_euclid(360);
+                let turn = if matches!(
+                    placed.kind,
+                    reshiki::scientific::MarkKind::LonePair
+                        | reshiki::scientific::MarkKind::LonePairBar
+                ) {
+                    "dots tangent"
+                } else {
+                    "upright"
+                };
+                *template_notice = Some((
+                    if free {
+                        format!("Free · {degrees}° · {turn}")
+                    } else {
+                        format!("Orbit · {degrees}° · {turn} · Option/Alt or Shift frees")
+                    },
+                    true,
+                ));
+                if let Some(mark) = preview
+                    .to_mut()
+                    .atom_mut(*id)
+                    .and_then(|a| a.marks.get_mut(*index))
+                {
+                    *mark = placed;
+                }
             }
             if let Some(Gesture::ArrowHandle { id, index }) = &state.gesture
                 && let Some(arrow) = self.doc.arrows.iter().find(|a| a.id == *id)

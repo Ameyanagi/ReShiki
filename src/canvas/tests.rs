@@ -2646,8 +2646,9 @@ fn mechanism_attachment_92_mark_drag_preview_resolves_same_geometry_as_commit() 
     };
     let preview = canvas.pointer_preview_document(&state, bounds);
     let mut committed = doc.clone();
-    let atom = committed.atom_mut(2).unwrap();
-    atom.marks[0].offset = World::new(target.x - atom.position.x, target.y - atom.position.y);
+    let atom = committed.atom(2).unwrap();
+    let placed = reshiki::scientific::orbit_mark(&committed, atom, &atom.marks[0], target, false);
+    committed.atom_mut(2).unwrap().marks[0] = placed;
     let _ = reshiki::transaction::reconcile(&mut committed, doc).unwrap();
     assert_eq!(preview, committed);
 }

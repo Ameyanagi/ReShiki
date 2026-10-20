@@ -127,6 +127,7 @@ impl MoleculeCanvas<'_> {
         self.draw_nmr_assignments(frame, &preview, selected, bounds, nmr_cache);
         self.draw_editor_markers(frame, &preview, bounds);
         self.draw_orbital_target(frame, state, bounds);
+        self.draw_mark_orbit(frame, state, &preview, bounds);
         self.draw_arrow_handles(frame, &preview, selected, bounds);
         self.draw_arrow_targets(frame, state, bounds, cursor);
         self.draw_notices(

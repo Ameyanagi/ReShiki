@@ -72,7 +72,12 @@ impl MoleculeCanvas<'_> {
                 if !inside {
                     return Some(Action::request_redraw().and_capture());
                 }
-                Edit::AtomMark(id, index, p)
+                Edit::AtomMark(
+                    id,
+                    index,
+                    p,
+                    state.modifiers.alt() || state.modifiers.shift(),
+                )
             }
             Gesture::AtomIndicator { owner } => Edit::AtomIndicator(owner, p),
             Gesture::GraphicPoint { id, index } => Edit::GraphicPoint(id, index, p),
@@ -169,7 +174,10 @@ impl MoleculeCanvas<'_> {
         {
             return ControlFlow::Break(Action::request_redraw().and_capture());
         }
-        let constrain = state.modifiers.shift() || self.graphics.constrain;
+        let constrain = match self.tool {
+            Tool::Graphic(kind) => self.graphic_constrain(kind, state.modifiers),
+            _ => state.modifiers.shift() || self.graphics.constrain,
+        };
         ControlFlow::Continue(
             if matches!(self.tool, Tool::Graphic(GraphicKind::Orbital(_))) {
                 Edit::Orbital(
