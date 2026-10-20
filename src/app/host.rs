@@ -12,7 +12,9 @@ impl App {
                 self.reset_tab();
                 self.show_opened(*doc, None);
             }
-            Request::Snapshot(id) => crate::web::reply(id, self.tab.doc.clone()),
+            // Include a text draft still being typed, as Save and Export do,
+            // without ending the edit.
+            Request::Snapshot(id) => crate::web::reply(id, self.inline_candidate()),
             Request::Close => return iced::exit(),
         }
         Task::none()

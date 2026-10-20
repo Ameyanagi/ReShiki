@@ -33,7 +33,7 @@ struct Host {
     requests: Option<mpsc::UnboundedSender<Request>>,
     /// Until the app's subscription takes it.
     receiver: Option<mpsc::UnboundedReceiver<Request>>,
-    replies: HashMap<u64, oneshot::Sender<Document>>,
+    replies: HashMap<u64, oneshot::Sender<Result<Document, String>>>,
     next_reply: u64,
     on_change: Option<js_sys::Function>,
     revision: Option<(u64, u64)>,
@@ -184,7 +184,10 @@ pub async fn save(format: String) -> Result<Vec<u8>, JsError> {
         host.next_reply
     });
     send(Request::Snapshot(id))?;
-    let doc = receiver.await.map_err(|_| js("The editor stopped"))?;
+    let doc = receiver
+        .await
+        .map_err(|_| js("The editor stopped"))?
+        .map_err(js)?;
     formats::write(doc, &format).await.map_err(js)
 }
 
@@ -236,7 +239,7 @@ pub(crate) fn update(app: &mut App, message: Message) -> Task<Message> {
 }
 
 /// Answer the page's waiting `save` with the drawing in front.
-pub(crate) fn reply(id: u64, doc: Document) {
+pub(crate) fn reply(id: u64, doc: Result<Document, String>) {
     if let Some(reply) = HOST.with_borrow_mut(|host| host.replies.remove(&id)) {
         let _ = reply.send(doc);
     }
@@ -286,14 +289,15 @@ fn clipboard() -> Option<web_sys::Clipboard> {
 }
 
 /// Put `text` on the system clipboard, where the page may write it. A refusal
-/// is logged; the desktop's clipboard writes do not report failures either.
-pub(crate) async fn write_text(text: String) {
-    if let Some(clipboard) = clipboard()
-        && let Err(refused) =
-            wasm_bindgen_futures::JsFuture::from(clipboard.write_text(&text)).await
-    {
+/// is logged and returned, so Cut can keep what was not copied.
+pub(crate) async fn write_text(text: String) -> Result<(), String> {
+    const REFUSED: &str = "The browser did not allow clipboard access";
+    let clipboard = clipboard().ok_or(REFUSED)?;
+    if let Err(refused) = wasm_bindgen_futures::JsFuture::from(clipboard.write_text(&text)).await {
         error(&format!("Could not copy to the clipboard: {refused:?}"));
+        return Err(REFUSED.into());
     }
+    Ok(())
 }
 
 /// The system clipboard's text, when the page may read it.
