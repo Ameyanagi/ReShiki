@@ -134,7 +134,10 @@ pub(crate) fn split_link_label(text: &str) -> Result<Option<(&str, &str)>, Strin
     }
     // A trailing sign is a charge (O2-, SO4 2-), never a range, and so is a
     // charged hydride (NH4-2, CH2-3). A space before the range separates it
-    // from the label's own digits (CH2 1-3).
+    // from the label's own digits (CH2 1-3). Without brackets, only a label
+    // followed by an N-M range is a link node, so names such as 2-thienyl
+    // or propan-2-yl stay ordinary text.
+    let digits = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit());
     if !text.trim_end().ends_with(['+', '-', '−', '⁺', '⁻'])
         && !crate::atom_text::charged_label(text)
         && let Some(start) = text
@@ -142,12 +145,14 @@ pub(crate) fn split_link_label(text: &str) -> Result<Option<(&str, &str)>, Strin
             .filter(|(_, range)| range.trim_start().starts_with(|c: char| c.is_ascii_digit()))
             .map(|(label, _)| label.len())
             .or_else(|| text.find(|c: char| c.is_ascii_digit()))
-        && text.get(start..).is_some_and(|s| s.contains('-'))
+        && let (Some(label), Some(range)) = (text.get(..start), text.get(start..))
+        && !label.trim().is_empty()
+        && range
+            .trim()
+            .split_once('-')
+            .is_some_and(|(min, max)| digits(min.trim()) && digits(max.trim()))
     {
-        return Ok(Some((
-            text.get(..start).ok_or("Invalid link label")?,
-            text.get(start..).ok_or("Invalid link range")?,
-        )));
+        return Ok(Some((label, range)));
     }
     Ok(None)
 }

@@ -7,12 +7,58 @@ use crate::{
 fn known_group(text: &str) -> bool {
     crate::abbreviations::is_group_label(text)
 }
+/// Reverse spellings with another reading. Read from the bond, NC is an
+/// isocyanide and OCN a cyanate; neither is a catalog group.
+const SIDED: [&str; 2] = ["NC", "OCN"];
+/// Explains why [`wrong_side`] text stays a text label.
+pub const WRONG_SIDE: &str = "Text on a dummy atom. Read from this bond, NC is an isocyanide and OCN a cyanate, which have no catalog group. Type CN or NCO for the nitrile or isocyanate.";
+/// Whether `text` is NC or OCN typed where the bond does not meet its last
+/// letter: only on a left-hand end do they read as the reverse of CN and NCO.
+pub fn wrong_side(doc: &Document, id: u64, text: &str) -> bool {
+    sided(text) && !left_hand_end(doc, id)
+}
+/// NC or OCN found as the bundled reverse spelling; a user group with that
+/// spelling has no second reading.
+fn sided(text: &str) -> bool {
+    use crate::chemistry::abbreviations::{Spelling, lookup};
+    let text = text.trim();
+    SIDED.contains(&text)
+        && matches!(lookup(text), Ok(Some((preset, Spelling::Reverse))) if !preset.user)
+}
+/// An atom whose outside bonds all leave to the right, so a label on it
+/// reads toward the bond.
+fn left_hand_end(doc: &Document, id: u64) -> bool {
+    let Some(atom) = doc.atom(id) else {
+        return false;
+    };
+    let members = doc
+        .abbreviation(id)
+        .map(|g| g.members.clone())
+        .unwrap_or_default();
+    let mut others = doc
+        .bonds
+        .iter()
+        .filter_map(|b| match (b.a == id, b.b == id) {
+            (true, _) => Some(b.b),
+            (_, true) => Some(b.a),
+            _ => None,
+        })
+        .filter(|other| !members.contains(other))
+        .filter_map(|other| doc.atom(other))
+        .peekable();
+    others.peek().is_some() && others.all(|o| o.position.x > atom.position.x + 0.1)
+}
+/// A catalog spelling or full name, such as 2-Py, (HO)2B or
+/// (ethoxycarbonyl)methyl, is never read as a link-node range.
+fn catalog_text(text: &str) -> bool {
+    known_group(text) || !crate::abbreviations::named(text).is_empty()
+}
 mod hydride;
 pub use hydride::entry;
 mod from_text;
 pub use from_text::{
     TEXT_TOO_LONG, text_atom_position, text_atom_refusal, text_first_glyph_center, text_ink_bounds,
-    text_to_atom,
+    text_to_atom, text_to_atom_toward,
 };
 
 /// Whether text is one of the fixed condensed spellings below.
@@ -50,7 +96,8 @@ impl std::fmt::Display for Mode {
 /// Describes what Apply creates. Manual script runs in Automatic mode keep the
 /// text out of the generic grammar, as in [`apply_with_scripts`].
 pub fn description(text: &str, runs: &[ScriptRun], mode: Mode) -> &'static str {
-    let generic = mode == Mode::Group || mode == Mode::Auto && runs.is_empty();
+    let generic = (mode == Mode::Group || mode == Mode::Auto && runs.is_empty())
+        && !catalog_text(text.trim());
     if generic && text.contains(',') {
         "A finite list of element or chemical group alternatives. Expand generic structures generates each combination."
     } else if mode == Mode::Text {
@@ -72,6 +119,21 @@ pub fn description(text: &str, runs: &[ScriptRun], mode: Mode) -> &'static str {
     } else {
         "Text on a dummy atom; existing bonds stay connected."
     }
+}
+
+/// Suggests the labels of the catalog groups that the text names, such as
+/// "Did you mean Morph?" for morpholino. Names never type as groups.
+pub fn suggestion(text: &str, mode: Mode) -> Option<String> {
+    if mode == Mode::Text || known_group(text.trim()) {
+        return None;
+    }
+    let labels = crate::abbreviations::named(text);
+    let (last, rest) = labels.split_last()?;
+    Some(if rest.is_empty() {
+        format!("Did you mean {last}?")
+    } else {
+        format!("Did you mean {} or {last}?", rest.join(", "))
+    })
 }
 
 /// Automatic entry turns these labels into a chemical group, not one atom.
@@ -117,10 +179,9 @@ fn apply_entry(
         return Err("Use a single line of printable text".into());
     }
     let text = text.trim();
-    // A catalog label such as 2-Py or Indol-1-yl is never a link-node range.
     if allow_generic
         && mode != Mode::Text
-        && !known_group(text)
+        && !catalog_text(text)
         && let Some(candidate) = crate::generic::apply_label(doc, id, text)?
     {
         return Ok(candidate);
@@ -138,6 +199,10 @@ fn apply_entry(
         );
     }
     let element = ELEMENTS.contains(&text) || text == "*";
+    let sided = mode != Mode::Text && wrong_side(doc, id, text);
+    if sided && mode == Mode::Group {
+        return Err("Read from this bond, NC is an isocyanide and OCN a cyanate, which have no catalog group. Type CN or NCO, or choose Text label.".into());
+    }
     let formula = (mode != Mode::Text).then(|| formula_group(text)).flatten();
     if mode == Mode::Group
         && !known_group(text)
@@ -159,7 +224,7 @@ fn apply_entry(
     }
     if mode == Mode::Group
         || formula.is_some()
-        || mode == Mode::Auto && !element && known_group(text)
+        || mode == Mode::Auto && !element && !sided && known_group(text)
     {
         let selected = doc
             .abbreviation(id)

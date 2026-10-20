@@ -133,7 +133,7 @@ fn preview_entry(doc: &mut Document, atom: u64, text: &str, allow_generic: bool)
     if text.is_empty() {
         return Err(());
     }
-    if allow_generic {
+    if allow_generic && !super::catalog_text(text) {
         if let Some((choices, excluded)) = crate::generic::alternative(text).map_err(|_| ())? {
             if choices.iter().enumerate().any(|(index, choice)| {
                 choices
@@ -168,14 +168,15 @@ fn preview_entry(doc: &mut Document, atom: u64, text: &str, allow_generic: bool)
     let element = crate::editing::ELEMENTS.contains(&text) || text == "*";
     if crate::ligands::LABELS.contains(&text)
         || super::formula_group(text).is_some()
-        || !element && super::known_group(text)
+        || !element && super::known_group(text) && !super::wrong_side(doc, atom, text)
     {
+        let (label, reverse_label) = preview_group_names(text).ok_or(())?;
         doc.abbreviations.push(crate::abbreviations::Abbreviation {
             label_style: None,
             label_color_override: false,
             highlight: None,
-            label: text.to_owned(),
-            reverse_label: preview_group_reverse_label(text).ok_or(())?,
+            label,
+            reverse_label,
             anchor: atom,
             members: vec![atom],
             alignment: Default::default(),
@@ -205,23 +206,24 @@ fn preview_entry(doc: &mut Document, atom: u64, text: &str, allow_generic: bool)
     Ok(())
 }
 
-fn preview_group_reverse_label(text: &str) -> Option<String> {
+/// The stored label and reverse label of a typed group, as Apply makes them.
+fn preview_group_names(text: &str) -> Option<(String, String)> {
+    use crate::chemistry::abbreviations::Spelling;
+    let typed = |reverse: &str| Some((text.to_owned(), reverse.to_owned()));
     if let Some((_, reverse)) = super::formula_group(text) {
-        return Some(reverse.into());
+        return typed(reverse);
     }
     match text {
-        "Cp" | "Cp*" => Some(text.into()),
-        "MgBr" => Some("BrMg".into()),
-        "N3" => Some(String::new()),
+        "Cp" | "Cp*" => typed(text),
+        "MgBr" => typed("BrMg"),
+        "N3" => typed(""),
         _ => crate::chemistry::abbreviations::lookup(text)
             .ok()
             .flatten()
-            .map(|(preset, alias)| {
-                if alias {
-                    String::new()
-                } else {
-                    preset.reverse_label.clone()
-                }
+            .map(|(preset, spelling)| match spelling {
+                Spelling::Label => (text.to_owned(), preset.reverse_label.clone()),
+                Spelling::Alias => (text.to_owned(), String::new()),
+                Spelling::Reverse => (preset.label.clone(), preset.reverse_label.clone()),
             }),
     }
 }
@@ -256,6 +258,16 @@ pub fn text_atom_refusal(doc: &Document, id: u64) -> Option<String> {
 
 /// Return a complete candidate and its new atom ID; errors leave `doc` intact.
 pub fn text_to_atom(doc: &Document, id: u64) -> Result<(Document, u64), String> {
+    text_to_atom_toward(doc, id, None)
+}
+
+/// [`text_to_atom`] for a bond about to be drawn to `toward`, so NC and OCN
+/// are read from that bond as if it already existed.
+pub fn text_to_atom_toward(
+    doc: &Document,
+    id: u64,
+    toward: Option<Point>,
+) -> Result<(Document, u64), String> {
     #[cfg(test)]
     CONVERSION_ENTRIES.with(|entries| entries.set(entries.get() + 1));
     if let Some(reason) = text_atom_refusal(doc, id) {
@@ -272,9 +284,20 @@ pub fn text_to_atom(doc: &Document, id: u64) -> Result<(Document, u64), String> 
     let runs = manual_runs(annotation);
     let mut candidate = doc.clone();
     let atom = candidate.add_atom("*", position);
+    // A stand-in for the bond's far end, removed once the entry is decided.
+    let far = toward
+        .filter(|_| super::sided(&annotation.text))
+        .map(|toward| {
+            let far = candidate.add_atom("C", toward);
+            candidate.add_bond(atom, far, 1, "plain");
+            far
+        });
     let mut candidate = apply_with_scripts(&candidate, atom, &annotation.text, &runs, Mode::Auto)
         .or_else(|_| apply_with_scripts(&candidate, atom, &annotation.text, &runs, Mode::Text))
         .map_err(|_| TEXT_TOO_LONG.to_owned())?;
+    if let Some(far) = far {
+        candidate.delete(&[far]);
+    }
     candidate
         .atom_mut(atom)
         .ok_or("The atom is no longer available")?
