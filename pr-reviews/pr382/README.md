@@ -23,7 +23,16 @@ drawn left to right) in **Automatic** mode, through the same
 | morpholino | text on a dummy atom, CH3\*, `*C`                   | text on a dummy atom, CH3\*, `*C`; editor: "Did you mean Morph?"   |
 | 2-thienyl  | Apply error "A link node requires a finite number range" | text on a dummy atom, CH3\*, `*C`; editor: "Did you mean 2-Thienyl?" |
 | MeO        | text on a dummy atom, CH3\*, `*C`                   | OMe group (label OMe, reverse MeO), C2H6O, `COC`                   |
-| NC         | text on a dummy atom, CH3\*, `*C`                   | CN group (label CN, reverse NC), C2H3N, `CC#N`                     |
+| NC         | text on a dummy atom, CH3\*, `*C`                   | text on this right-hand end (R–NC reads as an isocyanide); CN group on a left-hand end, see `after/sided.txt` |
 
 The bond leaves the group to the left, so the after drawings show OMe and CN.
 On a carbon whose bond leaves to the right, the same groups show MeO and NC.
+
+## Follow-up: NC and OCN are read from the bond (commit 4f678044)
+
+Read from the bond, NC on a right-hand end (R–NC) is an isocyanide and OCN a
+cyanate, and the catalog has neither. So they make CN and NCO only on a
+left-hand end, where they read toward the bond. `harness-sided.rs` types NC,
+OCN and MeO on a left-hand end, a right-hand end and a vertical bond; its
+output is `after/sided.txt`. The first after run's NC renders (a CN group on
+the right-hand end) are kept in `superseded/` for reference.
