@@ -121,6 +121,8 @@ impl Preview {
 enum NoticeKind {
     Retry,
     Unsupported,
+    /// The name parsed to a salt or mixture.
+    Disconnected,
     Failed,
     Info,
 }
@@ -142,6 +144,9 @@ impl Notice {
         match self.kind {
             NoticeKind::Retry | NoticeKind::Info => &self.detail,
             NoticeKind::Unsupported => "Unsupported or ambiguous name. Try a more specific name.",
+            NoticeKind::Disconnected => {
+                "Salts and mixtures aren't supported yet. Draw the ions, or paste SMILES under Import → Structure."
+            }
             NoticeKind::Failed => "Could not import this name. See Details.",
         }
     }
@@ -150,6 +155,7 @@ impl From<naming::Error> for Notice {
     fn from(error: naming::Error) -> Self {
         match error {
             naming::Error::Rejected(detail) => Self::new(NoticeKind::Unsupported, detail),
+            naming::Error::Disconnected(detail) => Self::new(NoticeKind::Disconnected, detail),
             naming::Error::Worker(detail) => Self::new(NoticeKind::Failed, detail),
             naming::Error::Cancelled(detail) => Self::new(NoticeKind::Retry, detail),
         }

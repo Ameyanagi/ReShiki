@@ -36,10 +36,17 @@ a group without a reverse spelling still attaches at its anchor (OAc read
 from the right attaches at O, not at Ac). **Bond attachment (text labels)**
 overrides it per atom: **Centered** centers the label, **Flush left**/**Flush right** attach at the first or
 last atom, and **Character N** at that character. Native files store the
-choice as `label_attachment`; editable CDXML/CDX clipboard data writes and reads
-flush left/center/right as the text's `LabelJustification` (CDXML/CDX file
-export still refuses free text labels). A chosen character has no ChemDraw equivalent and
-is native only; changing the text returns it to Automatic.
+choice as `label_attachment`. Editable CDXML/CDX clipboard data writes flush
+left/center/right as the text's `LabelJustification` and the atom's
+`LabelDisplay`, as ChemDraw saves its **Text → Flush Left / Centered / Flush
+Right**; ChemDraw lays a label without `LabelDisplay` out again as Automatic.
+Import reads `LabelJustification` (CDXML/CDX file export still refuses free
+text labels). Copying to ChemDraw 26.1 and back was checked on macOS: Flush
+left and Centered return unchanged. Flush right MeO returns as a contracted
+methoxy group aligned flush right, because ChemDraw reads a flush-right MeO
+as a methoxy fragment (it does the same for labels drawn in ChemDraw). A
+chosen character has no ChemDraw equivalent and is native only; changing the
+text returns it to Automatic.
 
 Alternative lists such as `[Cl,Br,I]` with a single horizontal bond meet it
 with their near edge, so the text extends away from the molecule and the bond

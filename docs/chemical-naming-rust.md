@@ -76,6 +76,9 @@ Import tab.
 - Ambiguous names, unsupported or ignored stereo, relative or racemic
   qualifiers, radicals, polymers, queries and disconnected salts are rejected
   with a reason. A rejected name leaves the drawing and Undo history unchanged.
+  A salt or mixture name, such as `sodium chloride`, is summarized as
+  "Salts and mixtures aren't supported yet. Draw the ions, or paste SMILES
+  under Import → Structure." rather than as an ambiguous name.
 - Optical rotation signs are not turned into R/S. The one exception is
   `(+)-lactic acid`, which reads as `(2S)-2-hydroxypropanoic acid`.
 - Generated names cover neutral organic molecules with up to 64 heavy atoms.

@@ -130,6 +130,51 @@ fn caption_click_grows_the_default_bond_in_one_undo_step() {
 }
 
 #[test]
+fn nc_caption_is_read_from_the_bond_drawn_from_or_to_it() {
+    // Dragged out to the right, the bond meets the C of NC: a nitrile.
+    let mut app = app();
+    let text = caption(&mut app.tab.doc, "NC", Point::new(15., 20.));
+    let before = app.tab.doc.clone();
+    let start = ink(&before, text);
+    app.edit(source_edit(&before, text, Some(start.offset(42., 0.))));
+    assert!(!app.error, "{}", app.status);
+    let group = &app.tab.doc.abbreviations[0];
+    assert_eq!(
+        (group.label.as_str(), group.reverse_label.as_str()),
+        ("CN", "NC")
+    );
+    assert!(
+        app.tab
+            .doc
+            .bonds
+            .iter()
+            .any(|b| b.a == group.anchor && !group.members.contains(&b.b))
+    );
+    // Drawn into from the left, it meets the N: isocyanide text.
+    let mut app = self::app();
+    let source = app.tab.doc.add_atom("C", Point::new(-60., 0.));
+    let text = caption(&mut app.tab.doc, "NC", Point::new(25., -10.));
+    let before = app.tab.doc.clone();
+    app.edit(Edit::TextBond {
+        source: Some(source),
+        source_text: None,
+        start: before.atom(source).unwrap().position,
+        end: Some(ink(&before, text)),
+        target: None,
+        target_text: Some(text),
+    });
+    assert!(!app.error, "{}", app.status);
+    assert!(app.tab.doc.abbreviations.is_empty());
+    assert!(
+        app.tab
+            .doc
+            .atoms
+            .iter()
+            .any(|a| a.display.variable.as_deref() == Some("NC"))
+    );
+}
+
+#[test]
 fn atom_drag_to_caption_converts_only_the_target_and_undo_restores_it() {
     let mut app = app();
     let source = app.tab.doc.add_atom("O", Point::new(-60., 0.));

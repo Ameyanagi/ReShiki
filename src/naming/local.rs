@@ -167,7 +167,7 @@ fn parse_reply(bytes: &[u8], name: &str) -> Result<Record, Error> {
     }
     if smiles.contains('.') {
         const MESSAGE: &str = "Local naming supports one connected molecule; disconnected salts and mixtures are unsupported";
-        return Err(Error::Rejected(MESSAGE.into()));
+        return Err(Error::Disconnected(MESSAGE.into()));
     }
     let canonical_smiles = canonical_smiles(&smiles).map_err(Error::Rejected)?;
     let synonyms = super::aliases_for_smiles(&canonical_smiles).map_err(Error::Worker)?;
