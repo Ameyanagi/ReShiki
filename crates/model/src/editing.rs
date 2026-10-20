@@ -1795,6 +1795,10 @@ pub fn snap_ring(doc: &mut Document, ids: &[u64], delta: Point, radius: f32) -> 
         points: Vec<Point>,
     }
     let ring = isolated_ring(doc, ids)?;
+    // A ring shown as a 3D model keeps its hidden drawing.
+    if ring.iter().any(|id| crate::models3d::hides(doc, *id)) {
+        return None;
+    }
     let mut targets = None;
     let mut best: Option<Candidate> = None;
     for (a, b) in ring
@@ -1820,6 +1824,9 @@ pub fn snap_ring(doc: &mut Document, ids: &[u64], delta: Point, radius: f32) -> 
                         || ids.contains(&bond.b)
                         || bond.order != 1
                         || bond.display != "plain"
+                        // Nor fuses onto a bond hidden in a 3D model.
+                        || crate::models3d::hides(doc, bond.a)
+                        || crate::models3d::hides(doc, bond.b)
                     {
                         return None;
                     }
@@ -1878,7 +1885,7 @@ pub fn snap_ring(doc: &mut Document, ids: &[u64], delta: Point, radius: f32) -> 
                     score += (p.distance(moved) / length).powi(2) * 0.1;
                     if !source.contains(id) {
                         for other in &doc.atoms {
-                            if !ids.contains(&other.id) {
+                            if !ids.contains(&other.id) && !crate::models3d::hides(doc, other.id) {
                                 score +=
                                     (0.6 - p.distance(other.position) / length).max(0.0).powi(2)
                                         * 1000.0;

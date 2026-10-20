@@ -179,7 +179,9 @@ impl App {
                 scale,
                 rotation,
             } => {
-                editing::transform_about(&mut self.tab.doc, &ids, pivot, scale, rotation);
+                // A molecule shown only in 3D keeps its hidden drawing.
+                let drawn = reshiki::models3d::without_hidden(&self.tab.doc, &ids);
+                editing::transform_about(&mut self.tab.doc, &drawn, pivot, scale, rotation);
                 self.tab.selected = ids;
             }
             Edit::Tilt { ids, x, y } => {
@@ -187,7 +189,8 @@ impl App {
                 self.tab.selected = ids;
             }
             Edit::ScaleAxes { ids, pivot, x, y } => {
-                editing::scale_axes_about(&mut self.tab.doc, &ids, pivot, x, y);
+                let drawn = reshiki::models3d::without_hidden(&self.tab.doc, &ids);
+                editing::scale_axes_about(&mut self.tab.doc, &drawn, pivot, x, y);
                 self.tab.selected = ids;
             }
             Edit::RingPreset(preset, anchor, direction, connect, alternate) => {

@@ -204,6 +204,20 @@ pub fn hides(doc: &Document, id: u64) -> bool {
         .any(|m| m.display == Display::ThreeD && m.contains(id))
 }
 
+/// `ids` without the atoms shown only as 3D models. Edits that reshape the
+/// drawing (rotate, flip, resize, clean up) keep those molecules' hidden 2D
+/// drawing; moving them is fine, since their models move with them.
+pub fn without_hidden(doc: &Document, ids: &[u64]) -> Vec<u64> {
+    ids.iter().copied().filter(|id| !hides(doc, *id)).collect()
+}
+
+/// The status for an edit that would only reach molecules shown as 3D models,
+/// such as "Switch to 2D to rotate the drawing" for `verb` "rotate".
+pub fn refusal(doc: &Document, ids: &[u64], verb: &str) -> Option<String> {
+    (ids.iter().any(|id| hides(doc, *id)) && without_hidden(doc, ids).is_empty())
+        .then(|| format!("Switch to 2D to {verb} the drawing"))
+}
+
 impl Document {
     /// [`Self::atom_visible`] and not shown as a 3D model: the atoms that
     /// picking, selection regions, markers and erasing can reach.

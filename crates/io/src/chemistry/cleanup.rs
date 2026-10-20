@@ -14,6 +14,7 @@ use super::{
 use crate::{
     cleanup::{Options, Scope},
     document::Document,
+    models3d,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -25,6 +26,8 @@ pub enum Error {
     Select,
     #[error("Draw or select a molecule first")]
     Empty,
+    #[error("Switch to 2D to clean up the drawing")]
+    ShownIn3d,
     #[error("Invalid abbreviation in cleanup drawing")]
     Abbreviation,
     #[error("Cleanup could not preserve the fixed atoms; choose Selected molecules")]
@@ -88,6 +91,8 @@ pub struct Prepared {
     deferred_error: Option<Error>,
     bond_length: f64,
     preserved_attachments: usize,
+    /// Molecules shown only as 3D models, whose hidden drawing stays.
+    shown_in_3d: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -228,8 +233,14 @@ pub fn prepare(source: &Document, options: Options, selection: &[u64]) -> Result
     let mut parts = Vec::new();
     let mut deferred_error = None;
     let mut preserved_attachments = 0;
+    let mut shown_in_3d = 0;
     for base in bases {
         if options.scope != Scope::Drawing && !base.atoms.iter().any(|a| selected.contains(&a.id)) {
+            continue;
+        }
+        // A molecule shown only as a 3D model keeps its hidden 2D drawing.
+        if base.atoms.iter().any(|a| models3d::hides(source, a.id)) {
+            shown_in_3d += 1;
             continue;
         }
         // The ordinary solver and its identity check cannot represent ALL/ANY
@@ -277,7 +288,11 @@ pub fn prepare(source: &Document, options: Options, selection: &[u64]) -> Result
         });
     }
     if parts.is_empty() && deferred_error.is_none() && preserved_attachments == 0 {
-        return Err(Error::Empty);
+        return Err(if shown_in_3d == 0 {
+            Error::Empty
+        } else {
+            Error::ShownIn3d
+        });
     }
     Ok(Prepared {
         source: source.clone(),
@@ -286,6 +301,7 @@ pub fn prepare(source: &Document, options: Options, selection: &[u64]) -> Result
         deferred_error,
         bond_length: f64::from(source.drawing_style.bond_length_world) / 28.,
         preserved_attachments,
+        shown_in_3d,
     })
 }
 
@@ -477,6 +493,12 @@ impl Prepared {
             warnings.push(format!(
                 "{} attachment-containing structure(s) kept unchanged. Automatic cleanup of multi-center and variable attachments is not yet supported.",
                 self.preserved_attachments
+            ));
+        }
+        if self.shown_in_3d != 0 {
+            warnings.push(format!(
+                "{} molecule(s) shown in 3D kept unchanged.",
+                self.shown_in_3d
             ));
         }
         if crate::attachments::present(&result) {

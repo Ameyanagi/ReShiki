@@ -38,6 +38,7 @@ fn merge_atoms_with_position(
     if crate::generic::touches(doc, selected) {
         return Err(crate::generic::JOIN_NOTICE.into());
     }
+    super::shown_in_3d(doc, selected)?;
     let first = atoms.first().copied().ok_or("Select atoms to merge.")?;
     for atom in &atoms {
         if doc

@@ -251,8 +251,9 @@ impl Fusion {
             let nearby: Vec<_> = doc
                 .atoms
                 .iter()
+                // Atoms hidden in a 3D model are never shared.
                 .filter(|old| {
-                    doc.atom_visible(old.id) && old.position.distance(atom.position) <= tolerance
+                    doc.atom_drawn(old.id) && old.position.distance(atom.position) <= tolerance
                 })
                 .collect();
             let existing = if let Some(id) = shared.get(&id) {

@@ -24,7 +24,13 @@ The model links to the molecule by atom ID. It never changes chemistry, atom IDs
 or the 2D layout, which is kept for switching back. Clicking or lassoing the
 model selects the molecule, so moving, aligning, copying and Duplicate carry it
 along; while the molecule is shown in 3D, its hidden 2D atoms cannot be picked.
-A selection that includes a shown model (3D or Both) has no resize handles. A chemical edit to the molecule
+A selection that includes a shown model (3D or Both) has no resize handles.
+Editing never changes the hidden 2D drawing of a molecule shown in 3D: a
+selection of only such molecules has no rotation handle, and rotate, flip,
+tilt, resize, Clean up, 3D optimize, reference align/stretch and Join say
+**Switch to 2D** instead. A mixed selection rotates, flips and tilts just its
+other objects, and rings, joins and fused templates never attach to the hidden
+atoms. A chemical edit to the molecule
 (element, charge, bonds or stereo) removes the model. Rotating the model, its
 floating bar and flattening the current view are planned (#386).
 
