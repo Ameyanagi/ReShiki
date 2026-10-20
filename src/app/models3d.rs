@@ -27,7 +27,11 @@ pub(crate) enum Action {
 
 /// The generation in flight; dropping it aborts the worker.
 pub(crate) struct Job {
+    /// The key the worker answers with; it never changes.
     key: Key,
+    /// The drawing state the result still applies to: `key` until switching
+    /// another molecule's display moves it on.
+    current: Key,
     display: Display,
     prepared: Arc<Prepared>,
     _handle: iced::task::Handle,
@@ -41,7 +45,7 @@ impl App {
                 let Some(job) = self.tab.model_job.take_if(|job| job.key == key) else {
                     return Task::none();
                 };
-                if key != self.model_key() {
+                if job.current != self.model_key() {
                     self.status = "Drawing changed · 3D model not applied".into();
                     self.error = false;
                     return Task::none();
@@ -86,7 +90,7 @@ impl App {
             .as_ref()
             .filter(|job| {
                 let ids = job.prepared.ids();
-                job.key == self.model_key()
+                job.current == self.model_key()
                     && ids.len() == atoms.len()
                     && atoms.iter().all(|id| ids.contains(id))
             })
@@ -116,13 +120,16 @@ impl App {
             let before = self.tab.doc.clone();
             if models3d::set_display(&mut self.tab.doc, index, display) {
                 let previous = before.models.get(index).map(|m| m.display);
+                let current = self.model_key();
                 self.changed(before);
                 self.status = status(display, previous.unwrap_or(Display::TwoD));
                 // Showing another molecule differently leaves a generation
-                // in flight valid.
-                let key = self.model_key();
-                if let Some(job) = &mut self.tab.model_job {
-                    job.key = key;
+                // in flight valid (unless it was already stale).
+                let next = self.model_key();
+                if let Some(job) = &mut self.tab.model_job
+                    && job.current == current
+                {
+                    job.current = next;
                 }
             }
             return Task::none();
@@ -159,6 +166,7 @@ impl App {
         .abortable();
         self.tab.model_job = Some(Job {
             key,
+            current: key,
             display,
             prepared,
             _handle: handle.abort_on_drop(),

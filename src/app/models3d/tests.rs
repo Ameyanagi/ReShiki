@@ -281,13 +281,15 @@ fn a_job_belongs_to_its_molecule() {
     show(&mut app, Display::ThreeD);
     assert_eq!(app.pending(&[water]), Some(Display::ThreeD));
     assert_eq!(app.pending(&atoms), None);
+    // The worker answers with the key it was started with.
+    let (key, result) = generated(&app);
 
     // Switching the other molecule keeps the generation in flight.
     app.tab.selected = vec![atoms[0]];
     show(&mut app, Display::TwoD);
     assert_eq!(app.pending(&[water]), Some(Display::ThreeD));
-    let (key, result) = generated(&app);
     let _ = app.update(Message::Models3d(Action::Generated(key, Ok(result))));
+    assert!(app.tab.model_job.is_none());
     assert_eq!(displays(&app.tab.doc), [Display::TwoD, Display::ThreeD]);
 }
 
