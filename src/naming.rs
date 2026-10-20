@@ -24,6 +24,9 @@ pub use reverse::generate_name;
 pub enum Error {
     /// The name or structure is outside what local naming supports.
     Rejected(String),
+    /// The name describes several disconnected pieces, such as a salt or a
+    /// mixture. Local naming accepts one connected molecule.
+    Disconnected(String),
     /// The bounded worker could not be started, supervised or understood.
     Worker(String),
     /// The request was cancelled before it finished.
@@ -32,9 +35,10 @@ pub enum Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Rejected(message) | Self::Worker(message) | Self::Cancelled(message) => {
-                formatter.write_str(message)
-            }
+            Self::Rejected(message)
+            | Self::Disconnected(message)
+            | Self::Worker(message)
+            | Self::Cancelled(message) => formatter.write_str(message),
         }
     }
 }

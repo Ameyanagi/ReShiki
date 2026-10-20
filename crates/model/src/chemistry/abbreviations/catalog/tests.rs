@@ -168,15 +168,48 @@ fn user_groups_win_label_clashes_and_keep_the_bundled_order() {
     assert_eq!(merged.len(), builtin.len() + 1);
     let position = |catalog: &[Arc<Preset>]| catalog.iter().position(|p| p.label == "TBS");
     assert_eq!(position(&merged), position(builtin));
-    let (tbs, alias) = lookup_in(&merged, "TBS").unwrap();
-    assert!(tbs.user && !alias);
+    let (tbs, spelling) = lookup_in(&merged, "TBS").unwrap();
+    assert!(tbs.user && spelling == Spelling::Label);
     assert_eq!(tbs.smiles, "*[Si](CC)(CC)CC");
     // A user alias wins over the bundled alias with the same spelling.
-    let (mine, alias) = lookup_in(&merged, "TBDMS").unwrap();
-    assert!(mine.user && alias);
+    let (mine, spelling) = lookup_in(&merged, "TBDMS").unwrap();
+    assert!(mine.user && spelling == Spelling::Alias);
     assert_eq!(mine.label, "Mine");
     assert_eq!(merged.last().unwrap().label, "Mine");
     assert!(lookup_in(builtin, "Mine").is_none());
+}
+
+/// Reverse spellings come after every label and alias, user groups first.
+#[test]
+fn reverse_spellings_follow_labels_and_aliases() {
+    let builtin = builtin().unwrap();
+    let (preset, spelling) = lookup_in(builtin, "MeO").unwrap();
+    assert_eq!(
+        (preset.label.as_str(), spelling),
+        ("OMe", Spelling::Reverse)
+    );
+    // Reverse spellings, like labels, are case-sensitive.
+    assert!(lookup_in(builtin, "meo").is_none());
+    let text = r#"{"format": 1, "groups": [
+        {"label": "MeO", "smiles": "*CF"},
+        {"label": "Mine", "reverse": "TBS", "smiles": "*CCl"},
+        {"label": "Yours", "reverse": "TBSO", "smiles": "*CBr"}
+    ]}"#;
+    let (user, errors) = parse(text, true);
+    assert!(errors.is_empty(), "{errors:?}");
+    let merged = merge(builtin, user);
+    // A user group labelled like a bundled reverse spelling wins.
+    let (meo, spelling) = lookup_in(&merged, "MeO").unwrap();
+    assert!(meo.user && spelling == Spelling::Label, "{}", meo.label);
+    // A bundled label wins over a user reverse spelling.
+    let (tbs, spelling) = lookup_in(&merged, "TBS").unwrap();
+    assert!(!tbs.user && spelling == Spelling::Label);
+    // A user reverse spelling wins over the bundled one.
+    let (yours, spelling) = lookup_in(&merged, "TBSO").unwrap();
+    assert_eq!(
+        (yours.label.as_str(), spelling),
+        ("Yours", Spelling::Reverse)
+    );
 }
 
 /// Typing resolves these before the catalog, so a user group could be saved

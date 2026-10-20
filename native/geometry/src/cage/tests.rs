@@ -1,5 +1,5 @@
 use super::*;
-use cosmolkit_core::{AtomSpec, BondOrder, BondSpec, Element, MoleculeBuilder};
+use cosmolkit::{AtomSpec, BondOrder, BondSpec, Element, MoleculeBuilder};
 
 // Analytic dodecahedral C20 topology exercises the policy independently of
 // the C60 reference fixture and demonstrates that the gate is not a C60

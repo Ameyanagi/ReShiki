@@ -6,18 +6,17 @@ child process while the editor retains ownership of its graph. Portable archives
 contain one executable and attribution records. No Python interpreter, chemistry
 helper executable, RDKit shared library, or runtime parameter directory is needed.
 
-The backend uses **COSMolKit 0.3.0** for ETKDGv3 conformer generation and
+The backend uses **COSMolKit 0.5.0** for ETKDGv3 conformer generation and
 MMFF94, MMFF94s, and UFF energy, gradient, and minimization calculations. Its
 complete Git revision is pinned in [the geometry manifest](../native/geometry/Cargo.toml)
-and `Cargo.lock`. The opaque force-field adapter keeps calculation contributions
-separate from their coordinate context; ETKDG uses the same ownership boundary
-for its three- and four-dimensional fields.
+and `Cargo.lock`. COSMolKit's persistent force field owns its prepared
+contributions and coordinates; ETKDG and cage admission use the sanitized
+calculation graph, while each MMFF field prepares its own MMFF aromaticity.
 
 COSMolKit's parameter-source reference is RDKit **2026.03.1**, revision
-`351f8f378f8ad6bbd517980c38896e66bf907af8`. Its Rust build script reads embedded
-parameter, atomic, and torsion data and generates Rust constants. Some data files
-retain upstream `.cpp` names; they are not compiled as C++ or installed as runtime
-files. ReShiki's independent development comparison uses RDKit **2026.03.6**,
+`351f8f378f8ad6bbd517980c38896e66bf907af8`. Its crates embed the MMFF, UFF,
+torsion-preference and periodic-table data as tables compiled into the
+executable; they are not installed as runtime files. ReShiki's independent development comparison uses RDKit **2026.03.6**,
 revision `0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985`. A newer comparison reference
 does not change the recorded origin of the parameter sources.
 

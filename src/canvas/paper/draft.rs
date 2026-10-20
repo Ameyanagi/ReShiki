@@ -130,9 +130,7 @@ impl MoleculeCanvas<'_> {
                 } else {
                     end
                 };
-                if let Some(a) = preview.to_mut().arrows.iter_mut().find(|a| a.id == *id) {
-                    a.edit_handle(*index, end);
-                }
+                reshiki::arrow_anchors::edit_handle(preview.to_mut(), *id, *index, end);
             }
             if let Some(Gesture::Draw { start, .. }) = &state.gesture
                 && self.tool == Tool::Arrow
