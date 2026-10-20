@@ -1,0 +1,28 @@
+Report links: all present
+Primary/supplementary evidence PNG dimensions: all 2560 x 1704
+Morph frames: 40
+
+01-selected-2d.png: 2560 x 1704, 434105 bytes
+02-3d-shown.png: 2560 x 1704, 475866 bytes
+02-initial-238-percent.png: 2560 x 1704, 604072 bytes
+03-rotate-mid-drag.png: 2560 x 1704, 449708 bytes
+04-rotate-released.png: 2560 x 1704, 443809 bytes
+05-zoomed-bar-clamped.png: 2560 x 1704, 532739 bytes
+05b-zoom-restored.png: 2560 x 1704, 443817 bytes
+06-shift-roll.png: 2560 x 1704, 444335 bytes
+06a-shift-roll-mid-drag.png: 2560 x 1704, 443817 bytes
+07-double-click-reset.png: 2560 x 1704, 469062 bytes
+08-resized.png: 2560 x 1704, 493887 bytes
+08a-resize-mid-drag.png: 2560 x 1704, 482179 bytes
+09-resized-then-rotated.png: 2560 x 1704, 480605 bytes
+09a-resized-rotate-mid-drag.png: 2560 x 1704, 480023 bytes
+10-layout-from-3d.png: 2560 x 1704, 482342 bytes
+11-flattened-2d.png: 2560 x 1704, 402838 bytes
+12-back-to-3d.png: 2560 x 1704, 483498 bytes
+13-layout-original.png: 2560 x 1704, 475754 bytes
+14-original-restored.png: 2560 x 1704, 407531 bytes
+15-undo.png: 2560 x 1704, 474368 bytes
+16-context-menu.png: 2560 x 1704, 509907 bytes
+17-both.png: 2560 x 1704, 473819 bytes
+17a-both-at-122-percent.png: 2560 x 1704, 495935 bytes
+18-both-deselected.png: 2560 x 1704, 461269 bytes

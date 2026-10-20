@@ -1,0 +1,357 @@
+{
+  "coordinate_convention": "Top-left origin; integer values identify pixel samples; add0.5 for pixel-edge coordinates.",
+  "source_size_px": [
+    2560,
+    1704
+  ],
+  "selection_rgb": [
+    62,
+    133,
+    117
+  ],
+  "frames": [
+    {
+      "screenshots": [
+        "02-3d-shown.png",
+        "03-rotate-mid-drag.png",
+        "04-rotate-released.png",
+        "05b-zoom-restored.png",
+        "06-shift-roll.png",
+        "07-double-click-reset.png"
+      ],
+      "stroke_center_ltrb": [
+        664.5,
+        603.5,
+        1408.5,
+        1347.5
+      ],
+      "size_px": [
+        744,
+        744
+      ],
+      "stroke_columns": [
+        [
+          664,
+          665
+        ],
+        [
+          1408,
+          1409
+        ]
+      ],
+      "stroke_rows": [
+        [
+          603,
+          604
+        ],
+        [
+          1347,
+          1348
+        ]
+      ]
+    },
+    {
+      "screenshots": [
+        "08-resized.png",
+        "09-resized-then-rotated.png"
+      ],
+      "stroke_center_ltrb": [
+        664.5,
+        603.5,
+        1548.5,
+        1487.5
+      ],
+      "size_px": [
+        884,
+        884
+      ],
+      "stroke_columns": [
+        [
+          664,
+          665
+        ],
+        [
+          1548,
+          1549
+        ]
+      ],
+      "stroke_rows": [
+        [
+          603,
+          604
+        ],
+        [
+          1487,
+          1488
+        ]
+      ]
+    },
+    {
+      "screenshots": [
+        "05-zoomed-bar-clamped.png"
+      ],
+      "visible_stroke_x": [
+        287.5,
+        1695.5
+      ],
+      "width_px": 1408,
+      "vertical_edges": "outside visible canvas"
+    }
+  ],
+  "canvas_half_open_ltrb": [
+    208,
+    364,
+    1960,
+    1620
+  ],
+  "bar_body_inclusive_ltrb_approx": {
+    "02-3d-shown.png": [
+      760,
+      446,
+      1313,
+      516
+    ],
+    "04-rotate-released.png": [
+      760,
+      446,
+      1313,
+      516
+    ],
+    "05-zoomed-bar-clamped.png": [
+      715,
+      1543,
+      1268,
+      1612
+    ]
+  },
+  "bar_edge_uncertainty_px": 1,
+  "bar02_04_crop_half_open_ltrb": [
+    750,
+    440,
+    1330,
+    535
+  ],
+  "bar02_04_differing_pixels": 0,
+  "mid_drag": {
+    "bar_rect_half_open_ltrb": [
+      760,
+      446,
+      1314,
+      517
+    ],
+    "bar_rect_pixels": 39334,
+    "bar_rect_white_pixels": 39334,
+    "hint_inclusive_ltrb": [
+      226,
+      1552,
+      1941,
+      1601
+    ],
+    "hint_rgb": [
+      228,
+      242,
+      237
+    ]
+  },
+  "reset_comparison": {
+    "sources": [
+      "02-3d-shown.png",
+      "07-double-click-reset.png"
+    ],
+    "crop_half_open_ltrb": [
+      674,
+      614,
+      1399,
+      1338
+    ],
+    "excluded_crosshair_half_open_ltrb": [
+      [
+        700,
+        676,
+        766,
+        743
+      ],
+      [
+        1240,
+        1035,
+        1303,
+        1098
+      ]
+    ],
+    "compared_pixels": 516509,
+    "differing_pixels": 222,
+    "max_channel_difference": 2,
+    "sum_absolute_rgb_difference": 315,
+    "nonwhite_model_pixels": 41305
+  },
+  "original_layout_restore": {
+    "sources": [
+      "01-selected-2d.png",
+      "14-original-restored.png"
+    ],
+    "fit": "restored_xy = scale * original_xy + translation_xy; no rotation or shear",
+    "scale": 0.5118824532338145,
+    "translation_px": [
+      528.8222674215206,
+      483.93984523705615
+    ],
+    "rms_residual_px": 0.12923423545161464,
+    "max_residual_px": 0.3782925783364329,
+    "marker_centers": [
+      {
+        "atom_location": "top-methyl",
+        "original_xy": [
+          786.535,
+          586.174
+        ],
+        "restored_xy": [
+          931.486,
+          783.925
+        ]
+      },
+      {
+        "atom_location": "upper-N",
+        "original_xy": [
+          1210.33,
+          680.51
+        ],
+        "restored_xy": [
+          1148.451,
+          832.308
+        ]
+      },
+      {
+        "atom_location": "left-N",
+        "original_xy": [
+          857.177,
+          773.204
+        ],
+        "restored_xy": [
+          967.527,
+          879.624
+        ]
+      },
+      {
+        "atom_location": "fusion-top-C",
+        "original_xy": [
+          1054.368,
+          805.507
+        ],
+        "restored_xy": [
+          1068.585,
+          896.246
+        ]
+      },
+      {
+        "atom_location": "right-ring-C",
+        "original_xy": [
+          1377.401,
+          790.113
+        ],
+        "restored_xy": [
+          1233.932,
+          888.405
+        ]
+      },
+      {
+        "atom_location": "left-O",
+        "original_xy": [
+          533.46,
+          895.546
+        ],
+        "restored_xy": [
+          801.847,
+          942.404
+        ]
+      },
+      {
+        "atom_location": "left-carbonyl-C",
+        "original_xy": [
+          730.623,
+          927.865
+        ],
+        "restored_xy": [
+          902.777,
+          958.892
+        ]
+      },
+      {
+        "atom_location": "fusion-bottom-C",
+        "original_xy": [
+          1125.084,
+          992.316
+        ],
+        "restored_xy": [
+          1104.764,
+          991.871
+        ]
+      },
+      {
+        "atom_location": "right-N",
+        "original_xy": [
+          1324.592,
+          982.873
+        ],
+        "restored_xy": [
+          1207.015,
+          987.106
+        ]
+      },
+      {
+        "atom_location": "right-methyl",
+        "original_xy": [
+          1450.719,
+          1138.835
+        ],
+        "restored_xy": [
+          1271.042,
+          1066.87
+        ]
+      },
+      {
+        "atom_location": "bottom-N",
+        "original_xy": [
+          801.374,
+          1114.816
+        ],
+        "restored_xy": [
+          939.017,
+          1054.54
+        ]
+      },
+      {
+        "atom_location": "bottom-carbonyl-C",
+        "original_xy": [
+          998.547,
+          1147.013
+        ],
+        "restored_xy": [
+          1039.961,
+          1071.156
+        ]
+      },
+      {
+        "atom_location": "bottom-methyl",
+        "original_xy": [
+          674.755,
+          1269.428
+        ],
+        "restored_xy": [
+          874.272,
+          1133.758
+        ]
+      },
+      {
+        "atom_location": "bottom-O",
+        "original_xy": [
+          1069.227,
+          1333.853
+        ],
+        "restored_xy": [
+          1076.216,
+          1166.757
+        ]
+      }
+    ]
+  }
+}

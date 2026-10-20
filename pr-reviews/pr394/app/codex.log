@@ -1,0 +1,1311 @@
+Reading additional input from stdin...
+OpenAI Codex v0.162.1
+--------
+workdir: /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+model: gpt-6-astra
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: xhigh
+reasoning summaries: none
+session id: 01a158e7-0517-7821-914c-d0a0994565f4
+--------
+user
+You are running local UI verification for Claude on macOS. Use computer use (screenshots, mouse, keyboard) plus shell.
+
+Artifact directory (save everything here): /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app   (call it $ART)
+
+App under test: a branch build of ReShiki wrapped in its own bundle:
+  /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps386-final-1b/ReShiki386F1bEvidence.app
+  bundle id dev.reshiki.verification.ev386final1b, name "ReShiki386F1bEvidence". Contents/MacOS/reshiki is a hard link to the branch binary.
+IMPORTANT: the user's installed "ReShiki" app (PID 51217, bundle in /nix/store/...) is running, and there may be other ReShiki processes. Never touch, focus, click in, open, screenshot or quit any of them. Never look the app up by the plain name "ReShiki". If you ever find yourself in a window not owned by the PID you launched, stop interacting with it immediately.
+
+Setup:
+a. Save `pgrep -lf reshiki` to $ART/installed-process-before.txt.
+b. Launch it yourself, exactly:
+   open -n "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps386-final-1b/ReShiki386F1bEvidence.app" --env RESHIKI_DATA_DIR=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final-data --args --open "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/input/caffeine.mol"
+c. Its PID: pgrep -f 'apps386-final-1b/ReShiki386F1bEvidence.app/Contents/MacOS/reshiki' (exactly one). Save `ps -o pid,lstart,args -p <PID>` to $ART/launched-process.txt. Call it $PID.
+d. Window id: /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-wid $PID -> $WID (re-run if the window changes). Append it to launched-process.txt.
+e. Attach computer use by bundle id dev.reshiki.verification.ev386final1b (or bundle path). The window shows caffeine (2D). The window is about 1000 x 665 points; keep its size.
+
+Evidence shots: screencapture -x -o -l $WID "$ART/<name>.png" (window-only capture of your PID). Before each, move the pointer off the model and off the controls you document, unless the step says otherwise.
+
+Drag helper (use it for ALL drags; it holds the mouse button with real CGEvents and can capture mid-drag):
+  /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag $PID x1 y1 x2 y2 [shift] [capture=/abs/path.png]
+  POINTS relative to the top-left of the app window frame (including title bar). Presses at (x1,y1), 12 steps to (x2,y2), waits 0.3 s, optional capture while held, releases. The window must be frontmost and unobstructed. Mind Retina scaling (screenshots are 2x).
+
+Feature (ReShiki #386 phase 1b, 3D models):
+- With the whole molecule selected, Properties -> Structure has Show as 2D / 3D / Both, and a floating "Show as" bar (2D / 3D / Both) is drawn on the canvas near the selection. It must always stay fully inside the visible canvas. It hides during any drag.
+- First switch to 3D generates a conformer, then atoms morph into the 3D model over 0.75 s.
+- Dragging inside the selected model's frame rotates it (trackball); a hint strip "Drag to rotate · Shift-drag to roll · Double-click to reset" shows during the drag. Shift-drag rolls. Double-click resets to the opening view. NEW: the model's frame keeps its size and place while the model turns (it must NOT resize to fit the rotated model). A size set by a corner resize is kept through later rotations.
+- Properties -> Structure "2D layout": "Original drawing" / "From the 3D view" (shown while the model is shown). From the 3D view + 2D flattens the current view. Original drawing + 2D restores the drawn 2D layout, with status "Original 2D drawing restored" (or similar).
+- Right-click -> "Show as" submenu.
+
+Flow:
+1. Choose the Select tool (arrow, top-left of tools), click empty canvas, Cmd+A. Expect caffeine selected, Structure Show as 2D active, floating bar visible. Save 01-selected-2d.png.
+2. Morph: create $ART/morph-raw if missing. Immediately before clicking 3D run: echo $PID > "$ART/morph-go" then click "3D" in the Structure section at once (a background script records ~40 frames). Wait until the model is shown. Save 02-3d-shown.png (molecule still selected, bar visible). Measure the selection frame size in screenshot pixels and record it.
+3. Rotate mid-drag: drag helper from a point inside the model frame near its centre-left, ~120 pt right / ~40 pt down, with capture=$ART/03-rotate-mid-drag.png. Expect model turned, bar hidden, hint strip shown.
+4. After release, save 04-rotate-released.png. Expect orientation kept, the frame the SAME size and place as in 02 (measure and compare in pixels), bar fully inside the canvas (not clipped by status bar or panel).
+5. Zoom in (status bar zoom +, or Cmd+= / Cmd+plus; record the method and the zoom %) until the selection fills the full canvas height or more, keeping the molecule selected; pan if needed so the selection is centred. Save 05-zoomed-bar-clamped.png: the bar must still be fully inside the visible canvas (clamped). Then zoom back to the previous zoom % (record it) and confirm the molecule is visible again.
+6. Shift-roll: drag helper with `shift`, from right of the model centre to ~100 pt above it, inside the frame. Save 06-shift-roll.png. Expect a roll in the screen plane, frame size unchanged.
+7. Double-click inside the frame on the model (computer use). Save 07-double-click-reset.png. Expect the opening orientation (compare with 02).
+8. Resize: drag helper from the bottom-right corner handle of the selection box ~80 pt right and ~60 pt down (stay inside the canvas). Save 08-resized.png; record the new frame size in pixels.
+9. Plain rotate with the drag helper (inside the frame, ~100 pt left / 60 pt up). Save 09-resized-then-rotated.png. Expect frame size equal to 08 (record pixels).
+10. Properties -> Structure "2D layout" -> "From the 3D view". Save 10-layout-from-3d.png (Structure section visible). Click "2D" (Structure section or floating bar). Save 11-flattened-2d.png (2D drawing in the turned projection, far bonds lighter). Record status bar text.
+11. Click "3D" again (model back). Save 12-back-to-3d.png. Choose "2D layout" -> "Original drawing". Save 13-layout-original.png. Click "2D". Save 14-original-restored.png: expect the ORIGINAL caffeine drawing (same layout as 01) and status like "Original 2D drawing restored". Record the exact status text.
+12. Press Cmd+Z once. Save 15-undo.png. Record what came back and the status text.
+13. Right-click the molecule, open "Show as" submenu (hover; click if hover does not open it). Save 16-context-menu.png (if the menu is a separate window not captured by -l, also save screencapture -x -R of the app window rect to 16b-context-menu-rect.png, cropped to the app window bounds only). Press Escape.
+14. Choose "Both" (floating bar or Structure section or the context menu). Save 17-both.png: expect 2D drawing and 3D model shown together. Record status text. Click empty canvas to deselect, save 18-both-deselected.png.
+15. At the end quit ONLY your PID: kill $PID. Confirm with pgrep it is gone and that 51217 (and any other pre-existing ReShiki) still runs; save outputs to $ART/process-cleanup.txt.
+
+Do not save the drawing, do not edit repository files, do not change system settings, do not quit any other app.
+
+Write $ART/report.md: for each step what you did (exact drag-helper coordinates), observed vs expected (status bar text, frame pixel sizes, bar position, which buttons are active), screenshot filename, pass/fail. End with anything you could not verify and why.
+codex
+I’ll launch the isolated verification bundle, confirm its PID and window ownership, and run the flow with window-only evidence captures. I’ll record measurements, status text, and any failures in the report, then quit only the process I launched.
+
+exec
+/bin/zsh -lc pwd in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 0ms:
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+
+exec
+/bin/zsh -lc "mkdir -p '/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app/morph-raw'
+pgrep -lf reshiki > '/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app/installed-process-before.txt'
+cat '/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app/installed-process-before.txt'
+rg --files -g '*386*' -g 'AGENTS.md' -g '*morph*' -g '"'!node_modules'"' -g '"'!target'"' ." in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 69ms:
+51217 /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki
+./ev386-1b-wid
+./ev376/after/morpholino.rsk
+./ev376/after/morpholino.png
+./ev376/before/morpholino.rsk
+./ev376/before/morpholino.png
+./ev386-1b-final/tools/morphcap.sh
+./ev386-1b/app/morph/m3-f29-morph.png
+./ev386-1b/app/morph/m4-f30-morph-hydrogens-fading-in.png
+./ev386-1b/app/morph/m5-f31-morph.png
+./ev386-1b/app/morph/m2-f28-morph-start.png
+./ev386-1b/app/morph/m6-f32-morph-near-end.png
+./ev386-1b/app/morph-go
+./ev386-1b/tools/morphcap.sh
+./ev386f-sheets.sh
+./ev386-1b-drag
+./ct-palette-release/release/build/aws-lc-sys-1957bc08ecb73ffc/out/199386740f3660f1-ripemd.o
+./review1b/issue386.txt
+./evidence/pr-reviews/pr390/harness/ev386_harness.rs
+./evidence/pr-reviews/pr382/after/morpholino.rsk
+./evidence/pr-reviews/pr382/after/morpholino.png
+./evidence/pr-reviews/pr382/before/morpholino.rsk
+./evidence/pr-reviews/pr382/before/morpholino.png
+./cosmolkit/AGENTS.md
+./ct-base/debug/deps/reshiki_chemistry-0950daf81ff3cfab.25pmjyr63864b01zabo0oecyq.08y5b5e.rcgu.o
+./ct-base/debug/deps/reshiki_io-e9762438fa5cae4c.c58fbz2po27qqvy2nhq38663e.0xu5a30.rcgu.o
+./ev386-2-chrome/component_crx_cache/abd93867c038d4d17c101ace2226d7e21303d984d7097271392bae6be478495b
+./ev386-2-chrome/component_crx_cache/545666a4efd056351597bb386aea1368105ededc976ed5650d8682daab9f37ff
+./ct-base/debug/incremental/reshiki_io-2prbbn4snjd4p/s-hnd07trefk-1dpl8mj-eiwjd4ztmb5tmx6ff3k8mmcxl/c58fbz2po27qqvy2nhq38663e.o
+./ct-base/debug/incremental/reshiki_chemistry-0nf09rnuwf1l3/s-hnd0h4utsf-0tae25e-b1ktx63xmhwmk5fde5265t5dp/25pmjyr63864b01zabo0oecyq.o
+./ev386-1b-morphcap.sh
+./ev386-main-build.log
+./ev386-1a/harness/ev386_harness.rs
+./ev386f-crop.py
+
+exec
+/bin/zsh -lc 'open -n "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps386-final-1b/ReShiki386F1bEvidence.app" --env RESHIKI_DATA_DIR=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final-data --args --open "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/input/caffeine.mol"' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 0ms:
+exec
+/bin/zsh -lc "pgrep -f 'apps386-final-1b/ReShiki386F1bEvidence.app/Contents/MacOS/reshiki'
+cat ev386-1b-final/tools/morphcap.sh
+ls -l ev386-1b-wid ev386-1b-drag
+ps -axo pid,args | rg 'morphcap|morph-go'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 0ms:
+29655
+#!/bin/bash
+# Usage: morphcap.sh <artifact dir> <wid-helper>
+# Waits for <dir>/morph-go (which holds the app PID), finds that PID's window and
+# captures it 40 times as fast as screencapture allows, logging ms timestamps.
+D=$1; WIDBIN=$2
+while [ ! -s "$D/morph-go" ]; do sleep 0.05; done
+PID=$(cat "$D/morph-go"); WID=$($WIDBIN $PID)
+echo "pid $PID wid $WID" > "$D/morph-raw/log.txt"
+for i in $(seq -w 1 40); do
+  screencapture -x -o -l $WID "$D/morph-raw/f$i.png"
+  perl -MTime::HiRes=time -e 'printf "f'$i' %.0f\n", time*1000' >> "$D/morph-raw/log.txt"
+done
+touch "$D/morph-done"
+-rwxr-xr-x@ 1 shiranui  wheel  60624 Oct 20 17:58 ev386-1b-drag
+-rwxr-xr-x@ 1 shiranui  wheel  56208 Oct 20 17:58 ev386-1b-wid
+28417 bash /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/tools/morphcap.sh /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-wid
+28826 codex exec --skip-git-repo-check -m gpt-6-astra -s danger-full-access -o /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app/codex-final.md You are running local UI verification for Claude on macOS. Use computer use (screenshots, mouse, keyboard) plus shell.\012\012Artifact directory (save everything here): /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app   (call it $ART)\012\012App under test: a branch build of ReShiki wrapped in its own bundle:\012  /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps386-final-1b/ReShiki386F1bEvidence.app\012  bundle id dev.reshiki.verification.ev386final1b, name "ReShiki386F1bEvidence". Contents/MacOS/reshiki is a hard link to the branch binary.\012IMPORTANT: the user's installed "ReShiki" app (PID 51217, bundle in /nix/store/...) is running, and there may be other ReShiki processes. Never touch, focus, click in, open, screenshot or quit any of them. Never look the app up by the plain name "ReShiki". If you ever find yourself in a window not owned by the PID you launched, stop interacting with it immediately.\012\012Setup:\012a. Save `pgrep -lf reshiki` to $ART/installed-process-before.txt.\012b. Launch it yourself, exactly:\012   open -n "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps386-final-1b/ReShiki386F1bEvidence.app" --env RESHIKI_DATA_DIR=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final-data --args --open "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/input/caffeine.mol"\012c. Its PID: pgrep -f 'apps386-final-1b/ReShiki386F1bEvidence.app/Contents/MacOS/reshiki' (exactly one). Save `ps -o pid,lstart,args -p <PID>` to $ART/launched-process.txt. Call it $PID.\012d. Window id: /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-wid $PID -> $WID (re-run if the window changes). Append it to launched-process.txt.\012e. Attach computer use by bundle id dev.reshiki.verification.ev386final1b (or bundle path). The window shows caffeine (2D). The window is about 1000 x 665 points; keep its size.\012\012Evidence shots: screencapture -x -o -l $WID "$ART/<name>.png" (window-only capture of your PID). Before each, move the pointer off the model and off the controls you document, unless the step says otherwise.\012\012Drag helper (use it for ALL drags; it holds the mouse button with real CGEvents and can capture mid-drag):\012  /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag $PID x1 y1 x2 y2 [shift] [capture=/abs/path.png]\012  POINTS relative to the top-left of the app window frame (including title bar). Presses at (x1,y1), 12 steps to (x2,y2), waits 0.3 s, optional capture while held, releases. The window must be frontmost and unobstructed. Mind Retina scaling (screenshots are 2x).\012\012Feature (ReShiki #386 phase 1b, 3D models):\012- With the whole molecule selected, Properties -> Structure has Show as 2D / 3D / Both, and a floating "Show as" bar (2D / 3D / Both) is drawn on the canvas near the selection. It must always stay fully inside the visible canvas. It hides during any drag.\012- First switch to 3D generates a conformer, then atoms morph into the 3D model over 0.75 s.\012- Dragging inside the selected model's frame rotates it (trackball); a hint strip "Drag to rotate · Shift-drag to roll · Double-click to reset" shows during the drag. Shift-drag rolls. Double-click resets to the opening view. NEW: the model's frame keeps its size and place while the model turns (it must NOT resize to fit the rotated model). A size set by a corner resize is kept through later rotations.\012- Properties -> Structure "2D layout": "Original drawing" / "From the 3D view" (shown while the model is shown). From the 3D view + 2D flattens the current view. Original drawing + 2D restores the drawn 2D layout, with status "Original 2D drawing restored" (or similar).\012- Right-click -> "Show as" submenu.\012\012Flow:\0121. Choose the Select tool (arrow, top-left of tools), click empty canvas, Cmd+A. Expect caffeine selected, Structure Show as 2D active, floating bar visible. Save 01-selected-2d.png.\0122. Morph: create $ART/morph-raw if missing. Immediately before clicking 3D run: echo $PID > "$ART/morph-go" then click "3D" in the Structure section at once (a background script records ~40 frames). Wait until the model is shown. Save 02-3d-shown.png (molecule still selected, bar visible). Measure the selection frame size in screenshot pixels and record it.\0123. Rotate mid-drag: drag helper from a point inside the model frame near its centre-left, ~120 pt right / ~40 pt down, with capture=$ART/03-rotate-mid-drag.png. Expect model turned, bar hidden, hint strip shown.\0124. After release, save 04-rotate-released.png. Expect orientation kept, the frame the SAME size and place as in 02 (measure and compare in pixels), bar fully inside the canvas (not clipped by status bar or panel).\0125. Zoom in (status bar zoom +, or Cmd+= / Cmd+plus; record the method and the zoom %) until the selection fills the full canvas height or more, keeping the molecule selected; pan if needed so the selection is centred. Save 05-zoomed-bar-clamped.png: the bar must still be fully inside the visible canvas (clamped). Then zoom back to the previous zoom % (record it) and confirm the molecule is visible again.\0126. Shift-roll: drag helper with `shift`, from right of the model centre to ~100 pt above it, inside the frame. Save 06-shift-roll.png. Expect a roll in the screen plane, frame size unchanged.\0127. Double-click inside the frame on the model (computer use). Save 07-double-click-reset.png. Expect the opening orientation (compare with 02).\0128. Resize: drag helper from the bottom-right corner handle of the selection box ~80 pt right and ~60 pt down (stay inside the canvas). Save 08-resized.png; record the new frame size in pixels.\0129. Plain rotate with the drag helper (inside the frame, ~100 pt left / 60 pt up). Save 09-resized-then-rotated.png. Expect frame size equal to 08 (record pixels).\01210. Properties -> Structure "2D layout" -> "From the 3D view". Save 10-layout-from-3d.png (Structure section visible). Click "2D" (Structure section or floating bar). Save 11-flattened-2d.png (2D drawing in the turned projection, far bonds lighter). Record status bar text.\01211. Click "3D" again (model back). Save 12-back-to-3d.png. Choose "2D layout" -> "Original drawing". Save 13-layout-original.png. Click "2D". Save 14-original-restored.png: expect the ORIGINAL caffeine drawing (same layout as 01) and status like "Original 2D drawing restored". Record the exact status text.\01212. Press Cmd+Z once. Save 15-undo.png. Record what came back and the status text.\01213. Right-click the molecule, open "Show as" submenu (hover; click if hover does not open it). Save 16-context-menu.png (if the menu is a separate window not captured by -l, also save screencapture -x -R of the app window rect to 16b-context-menu-rect.png, cropped to the app window bounds only). Press Escape.\01214. Choose "Both" (floating bar or Structure section or the context menu). Save 17-both.png: expect 2D drawing and 3D model shown together. Record status text. Click empty canvas to deselect, save 18-both-deselected.png.\01215. At the end quit ONLY your PID: kill $PID. Confirm with pgrep it is gone and that 51217 (and any other pre-existing ReShiki) still runs; save outputs to $ART/process-cleanup.txt.\012\012Do not save the drawing, do not edit repository files, do not change system settings, do not quit any other app.\012\012Write $ART/report.md: for each step what you did (exact drag-helper coordinates), observed vs expected (status bar text, frame pixel sizes, bar position, which buttons are active), screenshot filename, pass/fail. End with anything you could not verify and why.
+29774 /bin/zsh -c pgrep -f 'apps386-final-1b/ReShiki386F1bEvidence.app/Contents/MacOS/reshiki'\012cat ev386-1b-final/tools/morphcap.sh\012ls -l ev386-1b-wid ev386-1b-drag\012ps -axo pid,args | rg 'morphcap|morph-go'
+29780 rg morphcap|morph-go
+
+exec
+/bin/zsh -lc 'ps -o pid,lstart,args -p 29655 > ev386-1b-final/app/launched-process.txt
+./ev386-1b-wid 29655 >> ev386-1b-final/app/launched-process.txt
+cat ev386-1b-final/app/launched-process.txt' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 0ms:
+  PID STARTED                      ARGS
+29655 Tue Oct 20 19:42:00 2026     /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps386-final-1b/ReShiki386F1bEvidence.app/Contents/MacOS/reshiki --open /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/input/caffeine.mol
+7293
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "screencapture -x -o -l 7293 'ev386-1b-final/app/setup-window.png'
+sips -g pixelWidth -g pixelHeight 'ev386-1b-final/app/setup-window.png'
+/usr/bin/swift -e 'import AppKit; import CoreGraphics; let pid: pid_t = 29655; let ws = CGWindowListCopyWindowInfo(.optionAll, kCGNullWindowID) as"'! [[String: Any]]; for w in ws where (w[kCGWindowOwnerPID as String] as? Int) == Int(pid) { print(w) }; if let a = NSWorkspace.shared.frontmostApplication { print("frontmostPid", a.processIdentifier, "bundle", a.bundleIdentifier ?? "") }'"'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 1164ms:
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app/setup-window.png
+  pixelWidth: 2560
+  pixelHeight: 1704
+["kCGWindowNumber": 7291, "kCGWindowLayer": 0, "kCGWindowName": , "kCGWindowBounds": {
+    Height = 30;
+    Width = 1680;
+    X = 0;
+    Y = 0;
+}, "kCGWindowAlpha": 1, "kCGWindowStoreType": 1, "kCGWindowSharingState": 1, "kCGWindowOwnerPID": 29655, "kCGWindowMemoryUsage": 2432, "kCGWindowOwnerName": ReShiki386F1bEvidence]
+["kCGWindowOwnerPID": 29655, "kCGWindowOwnerName": ReShiki386F1bEvidence, "kCGWindowBounds": {
+    Height = 30;
+    Width = 1680;
+    X = 0;
+    Y = 0;
+}, "kCGWindowLayer": 0, "kCGWindowNumber": 7290, "kCGWindowName": , "kCGWindowAlpha": 1, "kCGWindowSharingState": 1, "kCGWindowStoreType": 1, "kCGWindowMemoryUsage": 2432]
+["kCGWindowBounds": {
+    Height = 30;
+    Width = 1680;
+    X = 0;
+    Y = 0;
+}, "kCGWindowAlpha": 1, "kCGWindowOwnerPID": 29655, "kCGWindowName": , "kCGWindowOwnerName": ReShiki386F1bEvidence, "kCGWindowNumber": 7289, "kCGWindowStoreType": 1, "kCGWindowMemoryUsage": 2432, "kCGWindowSharingState": 1, "kCGWindowLayer": 0]
+["kCGWindowOwnerName": ReShiki386F1bEvidence, "kCGWindowStoreType": 1, "kCGWindowNumber": 7294, "kCGWindowName": , "kCGWindowOwnerPID": 29655, "kCGWindowSharingState": 1, "kCGWindowBounds": {
+    Height = 500;
+    Width = 500;
+    X = 0;
+    Y = 550;
+}, "kCGWindowMemoryUsage": 2432, "kCGWindowAlpha": 1, "kCGWindowLayer": 0]
+["kCGWindowBounds": {
+    Height = 852;
+    Width = 1280;
+    X = 200;
+    Y = 115;
+}, "kCGWindowStoreType": 1, "kCGWindowOwnerName": ReShiki386F1bEvidence, "kCGWindowMemoryUsage": 2432, "kCGWindowOwnerPID": 29655, "kCGWindowSharingState": 1, "kCGWindowNumber": 7293, "kCGWindowIsOnscreen": 1, "kCGWindowAlpha": 1, "kCGWindowLayer": 0, "kCGWindowName": Untitled • — ReShiki]
+["kCGWindowName": , "kCGWindowOwnerPID": 29655, "kCGWindowAlpha": 1, "kCGWindowMemoryUsage": 2432, "kCGWindowOwnerName": ReShiki386F1bEvidence, "kCGWindowBounds": {
+    Height = 30;
+    Width = 1680;
+    X = 0;
+    Y = 0;
+}, "kCGWindowSharingState": 1, "kCGWindowStoreType": 1, "kCGWindowNumber": 7292, "kCGWindowLayer": 0]
+frontmostPid 29655 bundle dev.reshiki.verification.ev386final1b
+
+codex
+The launched process is PID 29655, and its main window is ID 7293. It opened at 1280 × 852 points; I’ll preserve that actual size throughout. The pre-launch process check found only the installed PID 51217.
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "screencapture -x -o -l 7293 'ev386-1b-final/app/01-selected-2d.png'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 23ms:
+exec
+/bin/zsh -lc "echo 29655 > 'ev386-1b-final/app/morph-go'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 0ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "screencapture -x -o -l 7293 'ev386-1b-final/app/02-3d-shown.png'
+cat ev386-1b-final/app/morph-raw/log.txt" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 51ms:
+pid 29655 wid 7293
+f01 1792492994240
+f02 1792492994356
+f03 1792492994476
+f04 1792492994599
+f05 1792492994723
+f06 1792492994842
+f07 1792492994966
+f08 1792492995092
+f09 1792492995210
+f10 1792492995340
+f11 1792492995458
+f12 1792492995577
+f13 1792492995706
+f14 1792492995827
+f15 1792492995955
+f16 1792492996076
+f17 1792492996195
+f18 1792492996323
+f19 1792492996440
+f20 1792492996558
+f21 1792492996675
+f22 1792492996796
+f23 1792492996922
+f24 1792492997041
+f25 1792492997159
+f26 1792492997279
+f27 1792492997407
+f28 1792492997526
+f29 1792492997645
+f30 1792492997772
+f31 1792492997893
+f32 1792492998023
+f33 1792492998157
+f34 1792492998289
+f35 1792492998423
+f36 1792492998555
+f37 1792492998683
+f38 1792492998814
+f39 1792492998943
+f40 1792492999065
+
+codex
+The 3D model is visible, and its floating bar is clamped above the status bar. At the initial 238% zoom, the frame extends beyond the canvas vertically. I’ll preserve that capture and zoom out to establish a fully visible frame for the rotation and resize measurements. A separate reviewer is checking the recorded morph frames.
+
+exec
+/bin/zsh -lc "cp 'ev386-1b-final/app/02-3d-shown.png' 'ev386-1b-final/app/02-initial-238-percent.png'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 0ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+2026-10-20T10:44:07.726305Z ERROR codex_core::tools::router: error=unable to locate image at `/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app/morph-raw/contact-sheet.png`: No such file or directory (os error 2)
+2026-10-20T10:44:13.732995Z ERROR codex_core::tools::router: error=unable to locate image at `/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app/morph-raw/contact-sheet.png`: No such file or directory (os error 2)
+exec
+/bin/zsh -lc "screencapture -x -o -l 7293 'ev386-1b-final/app/02-3d-shown.png'
+./ev386-1b-drag 29655 450 470 570 510 capture=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app/03-rotate-mid-drag.png" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 1287ms:
+ok window 7293 origin 200.0,115.0
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (failed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "screencapture -x -o -l 7293 'ev386-1b-final/app/04-rotate-released.png'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 41ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "screencapture -x -o -l 7293 'ev386-1b-final/app/05-zoomed-bar-clamped.png'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 38ms:
+codex
+Rotation kept the frame in the same position and size while turning the model to an edge-on view. During the held drag, the floating bar disappeared and the rotation hint appeared; the bar returned after release. At 238% zoom, it remains fully visible above the status bar even though the frame extends beyond the canvas.
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "screencapture -x -o -l 7293 'ev386-1b-final/app/05b-zoom-restored.png'
+./ev386-1b-drag 29655 590 488 518 388 shift capture=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app/06a-shift-roll-mid-drag.png" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 1272ms:
+ok window 7293 origin 200.0,115.0
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "screencapture -x -o -l 7293 'ev386-1b-final/app/06-shift-roll.png'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 52ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "screencapture -x -o -l 7293 'ev386-1b-final/app/07-double-click-reset.png'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 43ms:
+exec
+/bin/zsh -lc './ev386-1b-drag 29655 704 674 784 734 capture=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app/08a-resize-mid-drag.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 1169ms:
+ok window 7293 origin 200.0,115.0
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "screencapture -x -o -l 7293 'ev386-1b-final/app/08-resized.png'
+./ev386-1b-drag 29655 580 530 480 470 capture=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app/09a-resized-rotate-mid-drag.png" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 1286ms:
+ok window 7293 origin 200.0,115.0
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "screencapture -x -o -l 7293 'ev386-1b-final/app/09-resized-then-rotated.png'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 19ms:
+codex
+Shift-drag rolled the model in the screen plane, and double-click returned it to the opening orientation. The corner resize enlarged the frame, and the next rotation preserved that new frame. I’m moving on to flattening, original-layout restoration, Undo, and the context menu.
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "screencapture -x -o -l 7293 'ev386-1b-final/app/10-layout-from-3d.png'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 42ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "screencapture -x -o -l 7293 'ev386-1b-final/app/11-flattened-2d.png'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 37ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "screencapture -x -o -l 7293 'ev386-1b-final/app/12-back-to-3d.png'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 23ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "screencapture -x -o -l 7293 'ev386-1b-final/app/13-layout-original.png'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 51ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "screencapture -x -o -l 7293 'ev386-1b-final/app/14-original-restored.png'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 35ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "screencapture -x -o -l 7293 'ev386-1b-final/app/15-undo.png'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 48ms:
+codex
+“From the 3D view” produced a flattened drawing with lighter distant bonds. “Original drawing” restored the original caffeine layout and displayed “Original 2D drawing restored.” One Undo brought back the turned 3D model and displayed “History restored.”
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "screencapture -x -o -l 7293 'ev386-1b-final/app/16-context-menu.png'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 36ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "screencapture -x -o -l 7293 'ev386-1b-final/app/17-both.png'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 49ms:
+exec
+/bin/zsh -lc "cp 'ev386-1b-final/app/17-both.png' 'ev386-1b-final/app/17a-both-at-122-percent.png'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 0ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "screencapture -x -o -l 7293 'ev386-1b-final/app/17-both.png'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 43ms:
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "screencapture -x -o -l 7293 'ev386-1b-final/app/18-both-deselected.png'
+./ev386-1b-wid 29655" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 62ms:
+7293
+
+codex
+The context submenu contains all four expected choices. Both mode shows the 2D drawing beside the 3D model; one zoom-out step to 97% makes both fully visible. They remain visible after deselection. I’m now quitting PID 29655 and checking that the installed process is still running.
+
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+import subprocess, time
+art = Path('ev386-1b-final/app')
+pid = 29655
+expected = '/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps386-final-1b/ReShiki386F1bEvidence.app/Contents/MacOS/reshiki'
+log = []
+def capture(argv):
+    p = subprocess.run(argv, text=True, capture_output=True)
+    log.extend(['"'$ '"' + ' '.join(argv), p.stdout.rstrip(), p.stderr.rstrip(), 'exit=' + str(p.returncode)])
+    return p
+p = capture(['ps','-o','pid,lstart,args','-p',str(pid)])
+assert expected in p.stdout, 'PID ownership mismatch; refusing kill'
+capture(['/bin/kill',str(pid)])
+for _ in range(20):
+    probe = subprocess.run(['ps','-p',str(pid)],capture_output=True)
+    if probe.returncode "'!= 0: break
+    time.sleep(0.1)
+p = capture(['"'pgrep','-f','apps386-final-1b/ReShiki386F1bEvidence.app/Contents/MacOS/reshiki'])
+assert p.returncode == 1, 'Launched process still matched'
+capture(['ps','-o','pid,lstart,args','-p','51217'])
+p = capture(['pgrep','-lf','reshiki'])
+pre = (art/'installed-process-before.txt').read_text().splitlines()
+for line in pre:
+    old_pid = line.split()[0]
+    check = subprocess.run(['ps','-p',old_pid,'-o','pid='],text=True,capture_output=True)
+    log.append('pre-existing PID '+old_pid+': '+('RUNNING' if check.returncode == 0 else 'MISSING'))
+log.append('Launched PID 29655: gone. No UI actions or screenshots taken after termination.')
+text = '\\n'.join(x for x in log if x)+'\\n'
+(art/'process-cleanup.txt').write_text(text)
+print(text)
+PY" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 46ms:
+$ ps -o pid,lstart,args -p 29655
+  PID STARTED                      ARGS
+29655 Tue Oct 20 19:42:00 2026     /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps386-final-1b/ReShiki386F1bEvidence.app/Contents/MacOS/reshiki --open /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/input/caffeine.mol
+exit=0
+$ /bin/kill 29655
+exit=0
+$ pgrep -f apps386-final-1b/ReShiki386F1bEvidence.app/Contents/MacOS/reshiki
+exit=1
+$ ps -o pid,lstart,args -p 51217
+  PID STARTED                      ARGS
+51217 Tue Oct 20 14:02:02 2026     /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki
+exit=0
+$ pgrep -lf reshiki
+51217 /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki
+exit=0
+pre-existing PID 51217: RUNNING
+Launched PID 29655: gone. No UI actions or screenshots taken after termination.
+
+
+exec
+/bin/zsh -lc 'cat ev386-1b-final/app/morph-analysis.md
+ls -lh ev386-1b-final/app' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 0ms:
+# Morph capture evidence
+
+The 40 captures show several intermediate spatial states during the 2D-to-3D transition. They support an animated geometry morph rather than a single jump directly to the final conformer. The rendering style changes to ball-and-stick before the spatial morph is complete; the captures do not show a gradual fade of the original 2D letters and bond strokes into spheres.
+
+| Frames | Logged epoch ms / local time (JST, 2026-10-20) | Visible evidence |
+| --- | --- | --- |
+| f01–f31 | 1792492994240–1792492997893 / 19:43:14.240–17.893 | Unchanged selected 2D drawing. Every PNG has the same SHA-256 as `01-selected-2d.png`: `7cbde000c1adb13e17112e31f7b7002309edd47ee50952d670fd59388436d489`. |
+| f32 | 1792492998023 / 19:43:18.023 | 3D is selected, but the canvas still contains the 2D drawing. The inspector says “Generating the conformer · ETKDG, then MMFF94s”. |
+| f33 | 1792492998157 / 19:43:18.157 | First ball-and-stick frame. Heavy-atom centers remain at the original drawing positions, and explicit hydrogen spheres are absent. This is an initial spatial state, distinct from the endpoint. |
+| f34 | 1792492998289 / 19:43:18.289 | Heavy-atom positions have begun changing slightly. |
+| f35 | 1792492998423 / 19:43:18.423 | Clear intermediate geometry, with pale, partially transparent hydrogens appearing near the methyl groups and right ring carbon. |
+| f36–f38 | 1792492998555–1792492998814 / 19:43:18.555–18.814 | Hydrogens spread outward to visible bonded positions while the heavy-atom arrangement moves toward the final conformer. f37 and f38 are close to the endpoint but remain distinct PNGs. |
+| f39–f40 | 1792492998943–1792492999065 / 19:43:18.943–19.065 | Stable final 3D state; these two PNGs are byte-identical, SHA-256 `de23c753e600ba675a5b53162bbbaf6a5f9103f0a4dbb1edc84add9239c738d5`. They visually agree with the final molecular arrangement in `02-3d-shown.png`; that separately captured PNG has a different file hash. |
+
+The morph is visible in **f33–f38**, and the first stable endpoint is **f39**. The sampled initial-to-stable span is **786 ms** (f33 to f39), so approximately **0.8 seconds** is a reasonable description. The switch from 2D rendering to the initial ball-and-stick state occurs between f32 and f33, within **19:43:18.023–18.157 JST**. The last observed geometric difference resolves between f38 and f39, within **19:43:18.814–18.943 JST**. If these screenshots bracket the true onset and completion, the duration lies approximately between **657 and 920 ms**; the capture alone cannot establish exact animation start/end times.
+
+Four useful evidence frames are **f32** (3D requested; 2D still visible), **f33** (initial ball-and-stick geometry), **f35** (unambiguous intermediate geometry and translucent hydrogens), and **f39** (stable final 3D). Comparing f33, f35, and f39 makes the progression particularly clear: the upper-right nitrogen moves down and left, the methyl carbons shift, and hydrogen spheres emerge and separate around them. `morph-raw/contact-sheet.png` provides an overview of all 40 captures.
+
+Caveats: the log records screenshot times, not animation clock values or render-frame timestamps. Sampling gaps are 116–134 ms (median 122 ms), about eight captures per second; these images prove sampled intermediate states, not uninterrupted frame-by-frame smoothness. The elapsed capture is 4.825 seconds, most of which precedes the mode switch. Only the forward 2D-to-3D transition is covered. No conclusion about reverse morphing, atom-ID preservation, chemical correctness, or undo behavior follows from this visual sequence alone.
+total 23184
+-rw-r--r--@  1 shiranui  wheel   424K Oct 20 19:42 01-selected-2d.png
+-rw-r--r--@  1 shiranui  wheel   465K Oct 20 19:44 02-3d-shown.png
+-rw-r--r--@  1 shiranui  wheel   590K Oct 20 19:43 02-initial-238-percent.png
+-rw-r--r--@  1 shiranui  wheel   439K Oct 20 19:44 03-rotate-mid-drag.png
+-rw-r--r--@  1 shiranui  wheel   433K Oct 20 19:44 04-rotate-released.png
+-rw-r--r--@  1 shiranui  wheel   520K Oct 20 19:45 05-zoomed-bar-clamped.png
+-rw-r--r--@  1 shiranui  wheel   433K Oct 20 19:45 05b-zoom-restored.png
+-rw-r--r--@  1 shiranui  wheel   434K Oct 20 19:45 06-shift-roll.png
+-rw-r--r--@  1 shiranui  wheel   433K Oct 20 19:45 06a-shift-roll-mid-drag.png
+-rw-r--r--@  1 shiranui  wheel   458K Oct 20 19:45 07-double-click-reset.png
+-rw-r--r--@  1 shiranui  wheel   482K Oct 20 19:46 08-resized.png
+-rw-r--r--@  1 shiranui  wheel   471K Oct 20 19:46 08a-resize-mid-drag.png
+-rw-r--r--@  1 shiranui  wheel   469K Oct 20 19:46 09-resized-then-rotated.png
+-rw-r--r--@  1 shiranui  wheel   469K Oct 20 19:46 09a-resized-rotate-mid-drag.png
+-rw-r--r--@  1 shiranui  wheel   471K Oct 20 19:46 10-layout-from-3d.png
+-rw-r--r--@  1 shiranui  wheel   393K Oct 20 19:47 11-flattened-2d.png
+-rw-r--r--@  1 shiranui  wheel   472K Oct 20 19:47 12-back-to-3d.png
+-rw-r--r--@  1 shiranui  wheel   465K Oct 20 19:47 13-layout-original.png
+-rw-r--r--@  1 shiranui  wheel   398K Oct 20 19:47 14-original-restored.png
+-rw-r--r--@  1 shiranui  wheel   463K Oct 20 19:48 15-undo.png
+-rw-r--r--@  1 shiranui  wheel   498K Oct 20 19:48 16-context-menu.png
+-rw-r--r--@  1 shiranui  wheel   463K Oct 20 19:49 17-both.png
+-rw-r--r--@  1 shiranui  wheel   484K Oct 20 19:49 17a-both-at-122-percent.png
+-rw-r--r--@  1 shiranui  wheel   450K Oct 20 19:49 18-both-deselected.png
+-rw-r--r--@  1 shiranui  wheel   143B Oct 20 19:39 binary-sha256.txt
+-rw-r--r--@  1 shiranui  wheel    38K Oct 20 19:49 codex.log
+-rw-r--r--@  1 shiranui  wheel   113B Oct 20 19:41 installed-process-before.txt
+-rw-r--r--@  1 shiranui  wheel   387B Oct 20 19:42 launched-process.txt
+-rw-r--r--@  1 shiranui  wheel   3.6K Oct 20 19:45 morph-analysis.md
+-rw-r--r--@  1 shiranui  wheel     0B Oct 20 19:43 morph-done
+-rw-r--r--@  1 shiranui  wheel     6B Oct 20 19:43 morph-go
+drwxr-xr-x@ 44 shiranui  wheel   1.4K Oct 20 19:44 morph-raw
+-rw-r--r--@  1 shiranui  wheel   1.0K Oct 20 19:49 process-cleanup.txt
+-rw-r--r--@  1 shiranui  wheel   7.6K Oct 20 19:41 prompt.md
+-rw-r--r--@  1 shiranui  wheel   385K Oct 20 19:42 setup-window.png
+
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from PIL import Image
+from pathlib import Path
+from collections import Counter
+art=Path('ev386-1b-final/app')
+for name in ['02-3d-shown.png','04-rotate-released.png','06-shift-roll.png','07-double-click-reset.png','08-resized.png','09-resized-then-rotated.png']:
+    im=Image.open(art/name).convert('RGB')
+    row=[x for x in range(300,1900) if im.getpixel((x,620))[1]>im.getpixel((x,620))[0]+35 and im.getpixel((x,620))[1]>100 and im.getpixel((x,620))[2]>80]
+    col=[y for y in range(540,1550) if im.getpixel((680,y))[1]>im.getpixel((680,y))[0]+35 and im.getpixel((680,y))[1]>100 and im.getpixel((680,y))[2]>80]
+    print(name, 'vertical strokes in y620:',row,'horizontal strokes in x680:',col)
+print('40 morph frames:',len(list((art/'morph-raw').glob('f[0-9][0-9].png'))))
+PY" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ exited 1 in 0ms:
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+ModuleNotFoundError: No module named 'PIL'
+
+exec
+/bin/zsh -lc 'command -v -a python3
+ls -d /tmp/*venv* /private/tmp/*venv* 2>/dev/null' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ exited 1 in 0ms:
+zsh:1: command not found: -v
+zsh:2: no matches found: /tmp/*venv*
+
+codex
+Cleanup is confirmed: PID 29655 is gone, and PID 51217 is still running. The frame measurements are 744 × 744 pixels before and after rotation and roll, then 884 × 884 pixels before and after the post-resize rotation. The morph captures show intermediate geometry over roughly 0.8 seconds, consistent with the expected 0.75-second transition at this capture rate.
+
+exec
+/bin/zsh -lc "/usr/bin/swift - 'ev386-1b-final/app' <<'SWIFT'
+import AppKit
+let base = CommandLine.arguments[1]
+for name in [\"02-3d-shown.png\", \"04-rotate-released.png\", \"06-shift-roll.png\", \"07-double-click-reset.png\", \"08-resized.png\", \"09-resized-then-rotated.png\"] {
+  let img = NSBitmapImageRep(data: try Data(contentsOf: URL(fileURLWithPath: base + \"/\" + name)))"'!
+  let bytes = img.bitmapData!
+  func teal(_ x:Int, _ y:Int)->Bool { let p = y*img.bytesPerRow + x*img.samplesPerPixel; return bytes[p]==62 && bytes[p+1]==133 && bytes[p+2]==117 }
+  let cols=(300..<1900).filter{teal($0,620)}
+  let rows=(540..<1550).filter{teal(680,$0)}
+  print(name, "vertical edges at y620:",cols,"horizontal edges at x680:",rows)
+}
+SWIFT' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 244ms:
+02-3d-shown.png vertical edges at y620: [664, 665, 1408, 1409] horizontal edges at x680: [603, 604, 1347, 1348]
+04-rotate-released.png vertical edges at y620: [664, 665, 1408, 1409] horizontal edges at x680: [603, 604, 1347, 1348]
+06-shift-roll.png vertical edges at y620: [664, 665, 1408, 1409] horizontal edges at x680: [603, 604, 1347, 1348]
+07-double-click-reset.png vertical edges at y620: [664, 665, 1408, 1409] horizontal edges at x680: [603, 604, 1347, 1348]
+08-resized.png vertical edges at y620: [664, 665, 1548, 1549] horizontal edges at x680: [603, 604, 1487, 1488]
+09-resized-then-rotated.png vertical edges at y620: [664, 665, 1548, 1549] horizontal edges at x680: [603, 604, 1487, 1488]
+
+apply patch
+patch: completed
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app/report.md
+diff --git a/ev386-1b-final/app/report.md b/ev386-1b-final/app/report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..227d75dfccaabb4a663b2dcbd8829aa09cc4d920
+--- /dev/null
++++ b/ev386-1b-final/app/report.md
+@@ -0,0 +1,65 @@
++# ReShiki #386 phase 1b — local UI verification
++
++Run on macOS, 2026-10-20, approximately 19:42–19:50 JST. **The requested feature checks passed in this run**, with the viewport and measurement qualifications below. No drawing was saved and no repository files or system settings were changed.
++
++The verification bundle was launched with the exact supplied `open -n … --env RESHIKI_DATA_DIR=… --args --open …/input/caffeine.mol` command. Computer use attached only through bundle ID `dev.reshiki.verification.ev386final1b`.
++
++| Isolation evidence | Observed |
++| --- | --- |
++| Bundle | `apps386-final-1b/ReShiki386F1bEvidence.app` |
++| Launched PID | **29655**, exact executable-path match |
++| Main window ID | **7293** throughout, including the final check |
++| Window rectangle | Screen origin **(200, 115)** points; **1280 × 852 points** |
++| Screenshot resolution | **2560 × 1704 pixels**, Retina 2× |
++| Pre-existing application | PID **51217**, installed `/nix/store/…/ReShiki.app/Contents/MacOS/reshiki` |
++| Process logs | [installed-process-before.txt](installed-process-before.txt), [launched-process.txt](launched-process.txt), [process-cleanup.txt](process-cleanup.txt) |
++
++The window opened larger than the approximate 1000 × 665 points in the brief. Its actual 1280 × 852-point size was preserved. The initial zoom was **238%**, which made the first 3D selection frame extend above and below the canvas. That initial state is preserved in [02-initial-238-percent.png](02-initial-238-percent.png). Before the measured rotation sequence, three status-bar minus clicks reduced zoom to **122%**, making the entire frame visible; [02-3d-shown.png](02-3d-shown.png) is this opening-orientation baseline. Two attempted `Cmd+-` keystrokes had no visible effect, so all effective zoom changes used the status-bar buttons.
++
++All primary evidence shots used `screencapture -x -o -l 7293 <file>`. Held-drag captures used the supplied helper with the same PID and window. The pointer was parked on an inert title-bar area at screenshot coordinate **(600, 16)** before ordinary evidence captures. During held-drag and context-menu evidence it remained where needed for that interaction. The orange crosshair visible on the canvas is the app's keyboard-drawing marker, not the parked mouse pointer.
++
++**Coordinate and measurement conventions.** Every drag below uses window-frame-relative **points**, including the title bar, exactly as required by the supplied helper. Other mouse coordinates are explicitly described as **screenshot pixels**. Frame measurements use the centerlines of the two-pixel teal strokes, excluding handles, the rotation stem, and the floating bar. The visible canvas is **x = 208…1959, y = 364…1619 pixels**; the inspector begins at x ≈ 1960 and the status-bar boundary is y = 1620.
++
++| Evidence | Frame centerline bounds `(left, top) → (right, bottom)`, pixels | Width × height | Comparison |
++| --- | --- | --- | --- |
++| 02, 03, 04 | `(664.5, 603.5) → (1408.5, 1347.5)` | **744 × 744 px** | Same size and position before, during, and after rotation |
++| 05b, 06, 07 | `(664.5, 603.5) → (1408.5, 1347.5)` | **744 × 744 px** | Same after zoom restoration, roll, and reset |
++| 08, 09 | `(664.5, 603.5) → (1548.5, 1487.5)` | **884 × 884 px** | Resized dimensions and position preserved through subsequent rotation |
++
++The original frame's painted edge pixels are x = 664–665 / 1408–1409 and y = 603–604 / 1347–1348. After resizing, the right/bottom edge pixels become x = 1548–1549 and y = 1487–1488. Independent pixel scans of the saved PNGs confirmed these bounds.
++
++1. **Select the complete 2D molecule — PASS.** Clicked the Select arrow, clicked empty canvas at screenshot pixel **(400, 440)**, then pressed `Cmd+A`. Caffeine was selected with **14 atoms · 15 bonds**. Structure was expanded, **2D active**, 3D/Both inactive. The floating Show as bar was visible above the selection and fully inside the canvas. Status: **“Structure imported · Undo restores the previous drawing”**. Evidence: [01-selected-2d.png](01-selected-2d.png).
++
++2. **Generate and morph to 3D — PASS, sampled timing qualification.** Created `morph-raw`, wrote **29655** to `morph-go`, and immediately made the next UI action a click on Structure's **3D** button. The background recorder captured all **40 frames**. Frame f32 shows **“Generating the conformer · ETKDG, then MMFF94s”** with 3D selected; f33–f38 show intermediate spatial states and emerging hydrogen spheres; f39–f40 show the stable endpoint. The sampled span from f33 to f39 is **786 ms**, consistent with the expected 0.75-second morph within the approximately 0.12–0.13-second capture interval.
++
++   The selected 3D model appeared with **3D active** and **Original drawing active**. Status: **“Shown as 3D model · Undo restores the 2D drawing”**. Preserved the immediate 238% state, then established the fully visible **122%**, **744 × 744 px** measurement baseline without changing orientation. Its floating bar is approximately **x = 760…1313, y = 446…516 px**, fully inside the canvas. Evidence: [02-3d-shown.png](02-3d-shown.png), [02-initial-238-percent.png](02-initial-238-percent.png), [morph-raw/contact-sheet.png](morph-raw/contact-sheet.png), [morph-analysis.md](morph-analysis.md).
++
++3. **Rotate while held — PASS.** Ran the helper with PID **29655**, **(450, 470) → (570, 510)** points, without Shift, and `capture=…/03-rotate-mid-drag.png`. This is **+120 pt right, +40 pt down**, starting inside the frame toward its center-left. The molecule turned to an almost edge-on orientation. The frame remained **744 × 744 px at the same coordinates**. The floating Show as bar was **hidden**, and the hint strip read **“Drag to rotate · Shift-drag to roll · Double-click to reset”**. Structure retained **3D / Original drawing**. The status still read **“Shown as 3D model · Undo restores the 2D drawing”** during the held capture. Evidence: [03-rotate-mid-drag.png](03-rotate-mid-drag.png).
++
++4. **Release rotation — PASS.** Released via the helper, refreshed computer-use state, and parked the pointer. The turned orientation persisted. Frame bounds exactly matched step 2: **744 × 744 px**, with **zero measured displacement or size change**. The hint disappeared and Show as returned at approximately **x = 760…1313, y = 446…516 px**, fully clear of the inspector and status bar. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [04-rotate-released.png](04-rotate-released.png).
++
++5. **Zoom and clamp the floating bar — PASS.** Clicked status-bar **+** at screenshot pixel **(2423, 1664)** three times, changing **122% → 238%**. The selected frame then extended beyond the full canvas height. No pan was needed: the model remained near the canvas center. The entire Show as bar remained visible at approximately **x = 715…1268, y = 1543…1612 px**, including all three buttons. Its lower edge stayed about **7–8 px above the status-bar boundary**. **3D** remained active; status: **“Drawing updated”**. Then clicked status-bar **−** at screenshot pixel **(2264, 1664)** three times to restore **122%**. The full model and the original **744 × 744 px** frame were visible again. Evidence: [05-zoomed-bar-clamped.png](05-zoomed-bar-clamped.png), [05b-zoom-restored.png](05b-zoom-restored.png).
++
++6. **Shift-roll — PASS.** Ran the helper with PID **29655**, **(590, 488) → (518, 388)** points and **`shift`**, starting right of center and ending about 100 pt above center. The previously near-vertical, edge-on molecule rolled to a diagonal in the screen plane. Frame position and **744 × 744 px** dimensions stayed unchanged. The supplementary held capture shows the bar hidden and the rotation hint present; the released capture shows the bar above the frame again. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [06-shift-roll.png](06-shift-roll.png), [06a-shift-roll-mid-drag.png](06a-shift-roll-mid-drag.png).
++
++7. **Double-click reset — PASS.** Used computer use to double-click an atom inside the frame at screenshot pixel **(1025, 992)**, then parked the pointer. The model returned to its opening orientation from step 2. Frame bounds remained **744 × 744 px** and unchanged. A saved-image comparison excluding keyboard-marker regions found only very small rendering differences, consistent with the same geometry. **3D / Original drawing** remained active; the floating bar was visible above the frame. Status: **“Drawing updated”**. Evidence: [07-double-click-reset.png](07-double-click-reset.png); compare [02-3d-shown.png](02-3d-shown.png).
++
++8. **Corner resize — PASS.** Ran the helper from the bottom-right handle at **(704, 674) → (784, 734)** points, a requested movement of **+80 pt right / +60 pt down**, entirely within the canvas. The model and square frame enlarged. The top-left frame centerline stayed at **(664.5, 603.5) px**; the bottom-right became **(1548.5, 1487.5) px**, making the frame **884 × 884 px**. The square grew by 140 px in each dimension. The supplementary held capture confirms Show as was hidden during resizing; it returned above the frame after release. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [08-resized.png](08-resized.png), [08a-resize-mid-drag.png](08a-resize-mid-drag.png).
++
++9. **Rotate after resize — PASS.** Ran the helper without Shift at **(580, 530) → (480, 470)** points, exactly **100 pt left / 60 pt up**, inside the enlarged frame. The model turned to a clearly different oblique view. The frame stayed at the exact step-8 bounds and **884 × 884 px** dimensions. The floating bar hid during the drag and returned after release; the held capture shows the hint strip. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [09-resized-then-rotated.png](09-resized-then-rotated.png), [09a-resized-rotate-mid-drag.png](09a-resized-rotate-mid-drag.png).
++
++10. **Flatten the turned 3D view — PASS.** Clicked Structure → 2D layout → **From the 3D view**. That option became active while **3D** stayed active, and the description read **“Flatten the model as it is turned now, with far bonds lighter.”** Status at that point: **“Drawing updated”**. Saved [10-layout-from-3d.png](10-layout-from-3d.png), then clicked Structure → **2D**. The model became a 2D drawing in the oblique projection, visibly distinct from the original caffeine layout, with distant bonds/labels lighter. **2D** became active in Structure and the floating bar; the 2D-layout choices disappeared while only 2D was shown. Status: **“Shown as 2D from the 3D view · Undo restores the 3D model”**. Evidence: [11-flattened-2d.png](11-flattened-2d.png).
++
++11. **Return to 3D, then restore the original drawing — PASS.** Clicked Structure → **3D**. The turned 3D model returned, **From the 3D view** still active, and status read **“Shown as 3D model · Undo restores the 2D drawing”**. Evidence: [12-back-to-3d.png](12-back-to-3d.png). Clicked **Original drawing**, which became active; its description read **“The layout you drew, unchanged.”** Status became **“Drawing updated”**. Evidence: [13-layout-original.png](13-layout-original.png). Clicked **2D**. The original caffeine arrangement from step 1 returned, including the ring orientation and methyl/carbonyl bond directions. Its screenshot is smaller because zoom is 122% instead of 238%. **2D** was active, the floating bar was visible above the selected drawing, and the exact status was **“Original 2D drawing restored”**. Evidence: [14-original-restored.png](14-original-restored.png).
++
++12. **Undo once — PASS.** Pressed **`Cmd+Z` once**. The previous **turned 3D model** came back, with **3D active** and **Original drawing active** in the 2D-layout controls. The floating bar was visible, and Redo became enabled. Exact status: **“History restored”**. Evidence: [15-undo.png](15-undo.png).
++
++13. **Context-menu Show as submenu — PASS by click.** Right-clicked the molecule at screenshot pixel **(1065, 920)**, then clicked the **Show as** parent row at **(1300, 888)**. The available computer-use API did not expose a hover operation, so the permitted click fallback was used. The submenu contained **2D drawing**, **2D from the 3D view**, **3D model**, and **2D and 3D**. **3D model** was disabled as the current mode. The submenu is present in the window-only screenshot, so no `16b` screen-rectangle capture was necessary. Status remained **“History restored”**. Pressed **Escape** to dismiss it. Evidence: [16-context-menu.png](16-context-menu.png).
++
++14. **Both, then deselect — PASS with a zoom adjustment.** Clicked Structure → **Both**. Both became active in Structure and the floating bar. The 2D drawing and turned 3D model appeared beside each other. At **122%**, the rightmost part of the model extended beyond the canvas under the inspector; this exact initial result is preserved in [17a-both-at-122-percent.png](17a-both-at-122-percent.png). One status-bar minus click reduced zoom to **97%**, bringing both molecular representations fully into view for [17-both.png](17-both.png). The shared selection frame reached the inspector boundary, but the floating Show as bar remained fully inside the canvas.
++
++    Exact status: **“Shown as 2D and 3D · Undo restores the 3D model”**. The 2D member at this point is the flattened projection restored by Undo; no additional original-layout restoration was performed after Undo. Clicked empty canvas at screenshot pixel **(400, 450)**, then parked the pointer. Both representations remained visible, while the selection frame and floating bar disappeared. Properties showed **“Select an object to edit its properties.”** The status text remained unchanged. Evidence: [18-both-deselected.png](18-both-deselected.png).
++
++15. **Quit only the launched process — PASS.** Rechecked that window **7293** still belonged to PID **29655**, and checked the PID's executable path before terminating it with **`kill 29655`**. The exact executable-path `pgrep -f` then returned **exit 1 / no match**. `pgrep -lf reshiki` showed only the pre-existing installed PID **51217**, whose start time remained **2026-10-20 14:02:02**. No other ReShiki process was present in the pre-launch list. No UI interaction or screenshot occurred after termination. Evidence: [process-cleanup.txt](process-cleanup.txt).
++
++**Unverified items and limits.** The screenshots demonstrate sampled intermediate morph states, but their capture cadence cannot establish an exact 0.750-second duration or smoothness of every rendered frame. Hover-only submenu behavior was not tested because the available UI API has no hover method; click expansion passed. The initial offscreen 3D frame height at 238% could not be measured directly from that clipped screenshot, so frame-invariance comparisons use the fully visible 122% baseline. The requested approximate window size was not reproduced because the instruction to preserve the actual window size was followed. Clamping and drag hiding passed for the zoom levels and drag types exercised here; this run does not exhaust every possible zoom, pan, molecule, or viewport. No save/reopen persistence or underlying atom-ID/chemical correctness assertion was made from UI screenshots alone.
+
+diff --git a/ev386-1b-final/app/report.md b/ev386-1b-final/app/report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..227d75dfccaabb4a663b2dcbd8829aa09cc4d920
+--- /dev/null
++++ b/ev386-1b-final/app/report.md
+@@ -0,0 +1,65 @@
++# ReShiki #386 phase 1b — local UI verification
++
++Run on macOS, 2026-10-20, approximately 19:42–19:50 JST. **The requested feature checks passed in this run**, with the viewport and measurement qualifications below. No drawing was saved and no repository files or system settings were changed.
++
++The verification bundle was launched with the exact supplied `open -n … --env RESHIKI_DATA_DIR=… --args --open …/input/caffeine.mol` command. Computer use attached only through bundle ID `dev.reshiki.verification.ev386final1b`.
++
++| Isolation evidence | Observed |
++| --- | --- |
++| Bundle | `apps386-final-1b/ReShiki386F1bEvidence.app` |
++| Launched PID | **29655**, exact executable-path match |
++| Main window ID | **7293** throughout, including the final check |
++| Window rectangle | Screen origin **(200, 115)** points; **1280 × 852 points** |
++| Screenshot resolution | **2560 × 1704 pixels**, Retina 2× |
++| Pre-existing application | PID **51217**, installed `/nix/store/…/ReShiki.app/Contents/MacOS/reshiki` |
++| Process logs | [installed-process-before.txt](installed-process-before.txt), [launched-process.txt](launched-process.txt), [process-cleanup.txt](process-cleanup.txt) |
++
++The window opened larger than the approximate 1000 × 665 points in the brief. Its actual 1280 × 852-point size was preserved. The initial zoom was **238%**, which made the first 3D selection frame extend above and below the canvas. That initial state is preserved in [02-initial-238-percent.png](02-initial-238-percent.png). Before the measured rotation sequence, three status-bar minus clicks reduced zoom to **122%**, making the entire frame visible; [02-3d-shown.png](02-3d-shown.png) is this opening-orientation baseline. Two attempted `Cmd+-` keystrokes had no visible effect, so all effective zoom changes used the status-bar buttons.
++
++All primary evidence shots used `screencapture -x -o -l 7293 <file>`. Held-drag captures used the supplied helper with the same PID and window. The pointer was parked on an inert title-bar area at screenshot coordinate **(600, 16)** before ordinary evidence captures. During held-drag and context-menu evidence it remained where needed for that interaction. The orange crosshair visible on the canvas is the app's keyboard-drawing marker, not the parked mouse pointer.
++
++**Coordinate and measurement conventions.** Every drag below uses window-frame-relative **points**, including the title bar, exactly as required by the supplied helper. Other mouse coordinates are explicitly described as **screenshot pixels**. Frame measurements use the centerlines of the two-pixel teal strokes, excluding handles, the rotation stem, and the floating bar. The visible canvas is **x = 208…1959, y = 364…1619 pixels**; the inspector begins at x ≈ 1960 and the status-bar boundary is y = 1620.
++
++| Evidence | Frame centerline bounds `(left, top) → (right, bottom)`, pixels | Width × height | Comparison |
++| --- | --- | --- | --- |
++| 02, 03, 04 | `(664.5, 603.5) → (1408.5, 1347.5)` | **744 × 744 px** | Same size and position before, during, and after rotation |
++| 05b, 06, 07 | `(664.5, 603.5) → (1408.5, 1347.5)` | **744 × 744 px** | Same after zoom restoration, roll, and reset |
++| 08, 09 | `(664.5, 603.5) → (1548.5, 1487.5)` | **884 × 884 px** | Resized dimensions and position preserved through subsequent rotation |
++
++The original frame's painted edge pixels are x = 664–665 / 1408–1409 and y = 603–604 / 1347–1348. After resizing, the right/bottom edge pixels become x = 1548–1549 and y = 1487–1488. Independent pixel scans of the saved PNGs confirmed these bounds.
++
++1. **Select the complete 2D molecule — PASS.** Clicked the Select arrow, clicked empty canvas at screenshot pixel **(400, 440)**, then pressed `Cmd+A`. Caffeine was selected with **14 atoms · 15 bonds**. Structure was expanded, **2D active**, 3D/Both inactive. The floating Show as bar was visible above the selection and fully inside the canvas. Status: **“Structure imported · Undo restores the previous drawing”**. Evidence: [01-selected-2d.png](01-selected-2d.png).
++
++2. **Generate and morph to 3D — PASS, sampled timing qualification.** Created `morph-raw`, wrote **29655** to `morph-go`, and immediately made the next UI action a click on Structure's **3D** button. The background recorder captured all **40 frames**. Frame f32 shows **“Generating the conformer · ETKDG, then MMFF94s”** with 3D selected; f33–f38 show intermediate spatial states and emerging hydrogen spheres; f39–f40 show the stable endpoint. The sampled span from f33 to f39 is **786 ms**, consistent with the expected 0.75-second morph within the approximately 0.12–0.13-second capture interval.
++
++   The selected 3D model appeared with **3D active** and **Original drawing active**. Status: **“Shown as 3D model · Undo restores the 2D drawing”**. Preserved the immediate 238% state, then established the fully visible **122%**, **744 × 744 px** measurement baseline without changing orientation. Its floating bar is approximately **x = 760…1313, y = 446…516 px**, fully inside the canvas. Evidence: [02-3d-shown.png](02-3d-shown.png), [02-initial-238-percent.png](02-initial-238-percent.png), [morph-raw/contact-sheet.png](morph-raw/contact-sheet.png), [morph-analysis.md](morph-analysis.md).
++
++3. **Rotate while held — PASS.** Ran the helper with PID **29655**, **(450, 470) → (570, 510)** points, without Shift, and `capture=…/03-rotate-mid-drag.png`. This is **+120 pt right, +40 pt down**, starting inside the frame toward its center-left. The molecule turned to an almost edge-on orientation. The frame remained **744 × 744 px at the same coordinates**. The floating Show as bar was **hidden**, and the hint strip read **“Drag to rotate · Shift-drag to roll · Double-click to reset”**. Structure retained **3D / Original drawing**. The status still read **“Shown as 3D model · Undo restores the 2D drawing”** during the held capture. Evidence: [03-rotate-mid-drag.png](03-rotate-mid-drag.png).
++
++4. **Release rotation — PASS.** Released via the helper, refreshed computer-use state, and parked the pointer. The turned orientation persisted. Frame bounds exactly matched step 2: **744 × 744 px**, with **zero measured displacement or size change**. The hint disappeared and Show as returned at approximately **x = 760…1313, y = 446…516 px**, fully clear of the inspector and status bar. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [04-rotate-released.png](04-rotate-released.png).
++
++5. **Zoom and clamp the floating bar — PASS.** Clicked status-bar **+** at screenshot pixel **(2423, 1664)** three times, changing **122% → 238%**. The selected frame then extended beyond the full canvas height. No pan was needed: the model remained near the canvas center. The entire Show as bar remained visible at approximately **x = 715…1268, y = 1543…1612 px**, including all three buttons. Its lower edge stayed about **7–8 px above the status-bar boundary**. **3D** remained active; status: **“Drawing updated”**. Then clicked status-bar **−** at screenshot pixel **(2264, 1664)** three times to restore **122%**. The full model and the original **744 × 744 px** frame were visible again. Evidence: [05-zoomed-bar-clamped.png](05-zoomed-bar-clamped.png), [05b-zoom-restored.png](05b-zoom-restored.png).
++
++6. **Shift-roll — PASS.** Ran the helper with PID **29655**, **(590, 488) → (518, 388)** points and **`shift`**, starting right of center and ending about 100 pt above center. The previously near-vertical, edge-on molecule rolled to a diagonal in the screen plane. Frame position and **744 × 744 px** dimensions stayed unchanged. The supplementary held capture shows the bar hidden and the rotation hint present; the released capture shows the bar above the frame again. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [06-shift-roll.png](06-shift-roll.png), [06a-shift-roll-mid-drag.png](06a-shift-roll-mid-drag.png).
++
++7. **Double-click reset — PASS.** Used computer use to double-click an atom inside the frame at screenshot pixel **(1025, 992)**, then parked the pointer. The model returned to its opening orientation from step 2. Frame bounds remained **744 × 744 px** and unchanged. A saved-image comparison excluding keyboard-marker regions found only very small rendering differences, consistent with the same geometry. **3D / Original drawing** remained active; the floating bar was visible above the frame. Status: **“Drawing updated”**. Evidence: [07-double-click-reset.png](07-double-click-reset.png); compare [02-3d-shown.png](02-3d-shown.png).
++
++8. **Corner resize — PASS.** Ran the helper from the bottom-right handle at **(704, 674) → (784, 734)** points, a requested movement of **+80 pt right / +60 pt down**, entirely within the canvas. The model and square frame enlarged. The top-left frame centerline stayed at **(664.5, 603.5) px**; the bottom-right became **(1548.5, 1487.5) px**, making the frame **884 × 884 px**. The square grew by 140 px in each dimension. The supplementary held capture confirms Show as was hidden during resizing; it returned above the frame after release. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [08-resized.png](08-resized.png), [08a-resize-mid-drag.png](08a-resize-mid-drag.png).
++
++9. **Rotate after resize — PASS.** Ran the helper without Shift at **(580, 530) → (480, 470)** points, exactly **100 pt left / 60 pt up**, inside the enlarged frame. The model turned to a clearly different oblique view. The frame stayed at the exact step-8 bounds and **884 × 884 px** dimensions. The floating bar hid during the drag and returned after release; the held capture shows the hint strip. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [09-resized-then-rotated.png](09-resized-then-rotated.png), [09a-resized-rotate-mid-drag.png](09a-resized-rotate-mid-drag.png).
++
++10. **Flatten the turned 3D view — PASS.** Clicked Structure → 2D layout → **From the 3D view**. That option became active while **3D** stayed active, and the description read **“Flatten the model as it is turned now, with far bonds lighter.”** Status at that point: **“Drawing updated”**. Saved [10-layout-from-3d.png](10-layout-from-3d.png), then clicked Structure → **2D**. The model became a 2D drawing in the oblique projection, visibly distinct from the original caffeine layout, with distant bonds/labels lighter. **2D** became active in Structure and the floating bar; the 2D-layout choices disappeared while only 2D was shown. Status: **“Shown as 2D from the 3D view · Undo restores the 3D model”**. Evidence: [11-flattened-2d.png](11-flattened-2d.png).
++
++11. **Return to 3D, then restore the original drawing — PASS.** Clicked Structure → **3D**. The turned 3D model returned, **From the 3D view** still active, and status read **“Shown as 3D model · Undo restores the 2D drawing”**. Evidence: [12-back-to-3d.png](12-back-to-3d.png). Clicked **Original drawing**, which became active; its description read **“The layout you drew, unchanged.”** Status became **“Drawing updated”**. Evidence: [13-layout-original.png](13-layout-original.png). Clicked **2D**. The original caffeine arrangement from step 1 returned, including the ring orientation and methyl/carbonyl bond directions. Its screenshot is smaller because zoom is 122% instead of 238%. **2D** was active, the floating bar was visible above the selected drawing, and the exact status was **“Original 2D drawing restored”**. Evidence: [14-original-restored.png](14-original-restored.png).
++
++12. **Undo once — PASS.** Pressed **`Cmd+Z` once**. The previous **turned 3D model** came back, with **3D active** and **Original drawing active** in the 2D-layout controls. The floating bar was visible, and Redo became enabled. Exact status: **“History restored”**. Evidence: [15-undo.png](15-undo.png).
++
++13. **Context-menu Show as submenu — PASS by click.** Right-clicked the molecule at screenshot pixel **(1065, 920)**, then clicked the **Show as** parent row at **(1300, 888)**. The available computer-use API did not expose a hover operation, so the permitted click fallback was used. The submenu contained **2D drawing**, **2D from the 3D view**, **3D model**, and **2D and 3D**. **3D model** was disabled as the current mode. The submenu is present in the window-only screenshot, so no `16b` screen-rectangle capture was necessary. Status remained **“History restored”**. Pressed **Escape** to dismiss it. Evidence: [16-context-menu.png](16-context-menu.png).
++
++14. **Both, then deselect — PASS with a zoom adjustment.** Clicked Structure → **Both**. Both became active in Structure and the floating bar. The 2D drawing and turned 3D model appeared beside each other. At **122%**, the rightmost part of the model extended beyond the canvas under the inspector; this exact initial result is preserved in [17a-both-at-122-percent.png](17a-both-at-122-percent.png). One status-bar minus click reduced zoom to **97%**, bringing both molecular representations fully into view for [17-both.png](17-both.png). The shared selection frame reached the inspector boundary, but the floating Show as bar remained fully inside the canvas.
++
++    Exact status: **“Shown as 2D and 3D · Undo restores the 3D model”**. The 2D member at this point is the flattened projection restored by Undo; no additional original-layout restoration was performed after Undo. Clicked empty canvas at screenshot pixel **(400, 450)**, then parked the pointer. Both representations remained visible, while the selection frame and floating bar disappeared. Properties showed **“Select an object to edit its properties.”** The status text remained unchanged. Evidence: [18-both-deselected.png](18-both-deselected.png).
++
++15. **Quit only the launched process — PASS.** Rechecked that window **7293** still belonged to PID **29655**, and checked the PID's executable path before terminating it with **`kill 29655`**. The exact executable-path `pgrep -f` then returned **exit 1 / no match**. `pgrep -lf reshiki` showed only the pre-existing installed PID **51217**, whose start time remained **2026-10-20 14:02:02**. No other ReShiki process was present in the pre-launch list. No UI interaction or screenshot occurred after termination. Evidence: [process-cleanup.txt](process-cleanup.txt).
++
++**Unverified items and limits.** The screenshots demonstrate sampled intermediate morph states, but their capture cadence cannot establish an exact 0.750-second duration or smoothness of every rendered frame. Hover-only submenu behavior was not tested because the available UI API has no hover method; click expansion passed. The initial offscreen 3D frame height at 238% could not be measured directly from that clipped screenshot, so frame-invariance comparisons use the fully visible 122% baseline. The requested approximate window size was not reproduced because the instruction to preserve the actual window size was followed. Clamping and drag hiding passed for the zoom levels and drag types exercised here; this run does not exhaust every possible zoom, pan, molecule, or viewport. No save/reopen persistence or underlying atom-ID/chemical correctness assertion was made from UI screenshots alone.
+
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+import re, struct, hashlib
+art=Path('ev386-1b-final/app')
+report=(art/'report.md').read_text()
+missing=[]
+for target in re.findall(r'\\]\\((["'^)]+)'"\\)',report):
+    if not (art/target).exists(): missing.append(target)
+assert not missing, missing
+images=sorted(p for p in art.glob('*.png') if p.name[:2].isdigit())
+checks=[]
+for p in images:
+    data=p.read_bytes()
+    assert data[:8]==b'\\x89PNG\\r\\n\\x1a\\n'
+    dims=struct.unpack('>II',data[16:24])
+    assert dims==(2560,1704), (p.name,dims)
+    checks.append(f'{p.name}: {dims[0]} x {dims[1]}, {len(data)} bytes')
+assert len(list((art/'morph-raw').glob('f[0-9][0-9].png')))==40
+summary='Report links: all present\\nPrimary/supplementary evidence PNG dimensions: all 2560 x 1704\\nMorph frames: 40\\n\\n'+'\\n'.join(checks)+'\\n'
+(art/'artifact-validation.txt').write_text(summary)
+log=art/'launched-process.txt'
+log.write_text(log.read_text()+'Window ID: 7293\\nVerified owner PID: 29655\\nBundle ID: dev.reshiki.verification.ev386final1b\\nWindow rect (points): x=200, y=115, width=1280, height=852\\nFrontmost PID at setup: 29655\\nFinal window-ID check before cleanup: 7293\\n')
+print(summary)
+PY" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 0ms:
+Report links: all present
+Primary/supplementary evidence PNG dimensions: all 2560 x 1704
+Morph frames: 40
+
+01-selected-2d.png: 2560 x 1704, 434105 bytes
+02-3d-shown.png: 2560 x 1704, 475866 bytes
+02-initial-238-percent.png: 2560 x 1704, 604072 bytes
+03-rotate-mid-drag.png: 2560 x 1704, 449708 bytes
+04-rotate-released.png: 2560 x 1704, 443809 bytes
+05-zoomed-bar-clamped.png: 2560 x 1704, 532739 bytes
+05b-zoom-restored.png: 2560 x 1704, 443817 bytes
+06-shift-roll.png: 2560 x 1704, 444335 bytes
+06a-shift-roll-mid-drag.png: 2560 x 1704, 443817 bytes
+07-double-click-reset.png: 2560 x 1704, 469062 bytes
+08-resized.png: 2560 x 1704, 493887 bytes
+08a-resize-mid-drag.png: 2560 x 1704, 482179 bytes
+09-resized-then-rotated.png: 2560 x 1704, 480605 bytes
+09a-resized-rotate-mid-drag.png: 2560 x 1704, 480023 bytes
+10-layout-from-3d.png: 2560 x 1704, 482342 bytes
+11-flattened-2d.png: 2560 x 1704, 402838 bytes
+12-back-to-3d.png: 2560 x 1704, 483498 bytes
+13-layout-original.png: 2560 x 1704, 475754 bytes
+14-original-restored.png: 2560 x 1704, 407531 bytes
+15-undo.png: 2560 x 1704, 474368 bytes
+16-context-menu.png: 2560 x 1704, 509907 bytes
+17-both.png: 2560 x 1704, 473819 bytes
+17a-both-at-122-percent.png: 2560 x 1704, 495935 bytes
+18-both-deselected.png: 2560 x 1704, 461269 bytes
+
+
+diff --git a/ev386-1b-final/app/report.md b/ev386-1b-final/app/report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..227d75dfccaabb4a663b2dcbd8829aa09cc4d920
+--- /dev/null
++++ b/ev386-1b-final/app/report.md
+@@ -0,0 +1,65 @@
++# ReShiki #386 phase 1b — local UI verification
++
++Run on macOS, 2026-10-20, approximately 19:42–19:50 JST. **The requested feature checks passed in this run**, with the viewport and measurement qualifications below. No drawing was saved and no repository files or system settings were changed.
++
++The verification bundle was launched with the exact supplied `open -n … --env RESHIKI_DATA_DIR=… --args --open …/input/caffeine.mol` command. Computer use attached only through bundle ID `dev.reshiki.verification.ev386final1b`.
++
++| Isolation evidence | Observed |
++| --- | --- |
++| Bundle | `apps386-final-1b/ReShiki386F1bEvidence.app` |
++| Launched PID | **29655**, exact executable-path match |
++| Main window ID | **7293** throughout, including the final check |
++| Window rectangle | Screen origin **(200, 115)** points; **1280 × 852 points** |
++| Screenshot resolution | **2560 × 1704 pixels**, Retina 2× |
++| Pre-existing application | PID **51217**, installed `/nix/store/…/ReShiki.app/Contents/MacOS/reshiki` |
++| Process logs | [installed-process-before.txt](installed-process-before.txt), [launched-process.txt](launched-process.txt), [process-cleanup.txt](process-cleanup.txt) |
++
++The window opened larger than the approximate 1000 × 665 points in the brief. Its actual 1280 × 852-point size was preserved. The initial zoom was **238%**, which made the first 3D selection frame extend above and below the canvas. That initial state is preserved in [02-initial-238-percent.png](02-initial-238-percent.png). Before the measured rotation sequence, three status-bar minus clicks reduced zoom to **122%**, making the entire frame visible; [02-3d-shown.png](02-3d-shown.png) is this opening-orientation baseline. Two attempted `Cmd+-` keystrokes had no visible effect, so all effective zoom changes used the status-bar buttons.
++
++All primary evidence shots used `screencapture -x -o -l 7293 <file>`. Held-drag captures used the supplied helper with the same PID and window. The pointer was parked on an inert title-bar area at screenshot coordinate **(600, 16)** before ordinary evidence captures. During held-drag and context-menu evidence it remained where needed for that interaction. The orange crosshair visible on the canvas is the app's keyboard-drawing marker, not the parked mouse pointer.
++
++**Coordinate and measurement conventions.** Every drag below uses window-frame-relative **points**, including the title bar, exactly as required by the supplied helper. Other mouse coordinates are explicitly described as **screenshot pixels**. Frame measurements use the centerlines of the two-pixel teal strokes, excluding handles, the rotation stem, and the floating bar. The visible canvas is **x = 208…1959, y = 364…1619 pixels**; the inspector begins at x ≈ 1960 and the status-bar boundary is y = 1620.
++
++| Evidence | Frame centerline bounds `(left, top) → (right, bottom)`, pixels | Width × height | Comparison |
++| --- | --- | --- | --- |
++| 02, 03, 04 | `(664.5, 603.5) → (1408.5, 1347.5)` | **744 × 744 px** | Same size and position before, during, and after rotation |
++| 05b, 06, 07 | `(664.5, 603.5) → (1408.5, 1347.5)` | **744 × 744 px** | Same after zoom restoration, roll, and reset |
++| 08, 09 | `(664.5, 603.5) → (1548.5, 1487.5)` | **884 × 884 px** | Resized dimensions and position preserved through subsequent rotation |
++
++The original frame's painted edge pixels are x = 664–665 / 1408–1409 and y = 603–604 / 1347–1348. After resizing, the right/bottom edge pixels become x = 1548–1549 and y = 1487–1488. Independent pixel scans of the saved PNGs confirmed these bounds.
++
++1. **Select the complete 2D molecule — PASS.** Clicked the Select arrow, clicked empty canvas at screenshot pixel **(400, 440)**, then pressed `Cmd+A`. Caffeine was selected with **14 atoms · 15 bonds**. Structure was expanded, **2D active**, 3D/Both inactive. The floating Show as bar was visible above the selection and fully inside the canvas. Status: **“Structure imported · Undo restores the previous drawing”**. Evidence: [01-selected-2d.png](01-selected-2d.png).
++
++2. **Generate and morph to 3D — PASS, sampled timing qualification.** Created `morph-raw`, wrote **29655** to `morph-go`, and immediately made the next UI action a click on Structure's **3D** button. The background recorder captured all **40 frames**. Frame f32 shows **“Generating the conformer · ETKDG, then MMFF94s”** with 3D selected; f33–f38 show intermediate spatial states and emerging hydrogen spheres; f39–f40 show the stable endpoint. The sampled span from f33 to f39 is **786 ms**, consistent with the expected 0.75-second morph within the approximately 0.12–0.13-second capture interval.
++
++   The selected 3D model appeared with **3D active** and **Original drawing active**. Status: **“Shown as 3D model · Undo restores the 2D drawing”**. Preserved the immediate 238% state, then established the fully visible **122%**, **744 × 744 px** measurement baseline without changing orientation. Its floating bar is approximately **x = 760…1313, y = 446…516 px**, fully inside the canvas. Evidence: [02-3d-shown.png](02-3d-shown.png), [02-initial-238-percent.png](02-initial-238-percent.png), [morph-raw/contact-sheet.png](morph-raw/contact-sheet.png), [morph-analysis.md](morph-analysis.md).
++
++3. **Rotate while held — PASS.** Ran the helper with PID **29655**, **(450, 470) → (570, 510)** points, without Shift, and `capture=…/03-rotate-mid-drag.png`. This is **+120 pt right, +40 pt down**, starting inside the frame toward its center-left. The molecule turned to an almost edge-on orientation. The frame remained **744 × 744 px at the same coordinates**. The floating Show as bar was **hidden**, and the hint strip read **“Drag to rotate · Shift-drag to roll · Double-click to reset”**. Structure retained **3D / Original drawing**. The status still read **“Shown as 3D model · Undo restores the 2D drawing”** during the held capture. Evidence: [03-rotate-mid-drag.png](03-rotate-mid-drag.png).
++
++4. **Release rotation — PASS.** Released via the helper, refreshed computer-use state, and parked the pointer. The turned orientation persisted. Frame bounds exactly matched step 2: **744 × 744 px**, with **zero measured displacement or size change**. The hint disappeared and Show as returned at approximately **x = 760…1313, y = 446…516 px**, fully clear of the inspector and status bar. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [04-rotate-released.png](04-rotate-released.png).
++
++5. **Zoom and clamp the floating bar — PASS.** Clicked status-bar **+** at screenshot pixel **(2423, 1664)** three times, changing **122% → 238%**. The selected frame then extended beyond the full canvas height. No pan was needed: the model remained near the canvas center. The entire Show as bar remained visible at approximately **x = 715…1268, y = 1543…1612 px**, including all three buttons. Its lower edge stayed about **7–8 px above the status-bar boundary**. **3D** remained active; status: **“Drawing updated”**. Then clicked status-bar **−** at screenshot pixel **(2264, 1664)** three times to restore **122%**. The full model and the original **744 × 744 px** frame were visible again. Evidence: [05-zoomed-bar-clamped.png](05-zoomed-bar-clamped.png), [05b-zoom-restored.png](05b-zoom-restored.png).
++
++6. **Shift-roll — PASS.** Ran the helper with PID **29655**, **(590, 488) → (518, 388)** points and **`shift`**, starting right of center and ending about 100 pt above center. The previously near-vertical, edge-on molecule rolled to a diagonal in the screen plane. Frame position and **744 × 744 px** dimensions stayed unchanged. The supplementary held capture shows the bar hidden and the rotation hint present; the released capture shows the bar above the frame again. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [06-shift-roll.png](06-shift-roll.png), [06a-shift-roll-mid-drag.png](06a-shift-roll-mid-drag.png).
++
++7. **Double-click reset — PASS.** Used computer use to double-click an atom inside the frame at screenshot pixel **(1025, 992)**, then parked the pointer. The model returned to its opening orientation from step 2. Frame bounds remained **744 × 744 px** and unchanged. A saved-image comparison excluding keyboard-marker regions found only very small rendering differences, consistent with the same geometry. **3D / Original drawing** remained active; the floating bar was visible above the frame. Status: **“Drawing updated”**. Evidence: [07-double-click-reset.png](07-double-click-reset.png); compare [02-3d-shown.png](02-3d-shown.png).
++
++8. **Corner resize — PASS.** Ran the helper from the bottom-right handle at **(704, 674) → (784, 734)** points, a requested movement of **+80 pt right / +60 pt down**, entirely within the canvas. The model and square frame enlarged. The top-left frame centerline stayed at **(664.5, 603.5) px**; the bottom-right became **(1548.5, 1487.5) px**, making the frame **884 × 884 px**. The square grew by 140 px in each dimension. The supplementary held capture confirms Show as was hidden during resizing; it returned above the frame after release. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [08-resized.png](08-resized.png), [08a-resize-mid-drag.png](08a-resize-mid-drag.png).
++
++9. **Rotate after resize — PASS.** Ran the helper without Shift at **(580, 530) → (480, 470)** points, exactly **100 pt left / 60 pt up**, inside the enlarged frame. The model turned to a clearly different oblique view. The frame stayed at the exact step-8 bounds and **884 × 884 px** dimensions. The floating bar hid during the drag and returned after release; the held capture shows the hint strip. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [09-resized-then-rotated.png](09-resized-then-rotated.png), [09a-resized-rotate-mid-drag.png](09a-resized-rotate-mid-drag.png).
++
++10. **Flatten the turned 3D view — PASS.** Clicked Structure → 2D layout → **From the 3D view**. That option became active while **3D** stayed active, and the description read **“Flatten the model as it is turned now, with far bonds lighter.”** Status at that point: **“Drawing updated”**. Saved [10-layout-from-3d.png](10-layout-from-3d.png), then clicked Structure → **2D**. The model became a 2D drawing in the oblique projection, visibly distinct from the original caffeine layout, with distant bonds/labels lighter. **2D** became active in Structure and the floating bar; the 2D-layout choices disappeared while only 2D was shown. Status: **“Shown as 2D from the 3D view · Undo restores the 3D model”**. Evidence: [11-flattened-2d.png](11-flattened-2d.png).
++
++11. **Return to 3D, then restore the original drawing — PASS.** Clicked Structure → **3D**. The turned 3D model returned, **From the 3D view** still active, and status read **“Shown as 3D model · Undo restores the 2D drawing”**. Evidence: [12-back-to-3d.png](12-back-to-3d.png). Clicked **Original drawing**, which became active; its description read **“The layout you drew, unchanged.”** Status became **“Drawing updated”**. Evidence: [13-layout-original.png](13-layout-original.png). Clicked **2D**. The original caffeine arrangement from step 1 returned, including the ring orientation and methyl/carbonyl bond directions. Its screenshot is smaller because zoom is 122% instead of 238%. **2D** was active, the floating bar was visible above the selected drawing, and the exact status was **“Original 2D drawing restored”**. Evidence: [14-original-restored.png](14-original-restored.png).
++
++12. **Undo once — PASS.** Pressed **`Cmd+Z` once**. The previous **turned 3D model** came back, with **3D active** and **Original drawing active** in the 2D-layout controls. The floating bar was visible, and Redo became enabled. Exact status: **“History restored”**. Evidence: [15-undo.png](15-undo.png).
++
++13. **Context-menu Show as submenu — PASS by click.** Right-clicked the molecule at screenshot pixel **(1065, 920)**, then clicked the **Show as** parent row at **(1300, 888)**. The available computer-use API did not expose a hover operation, so the permitted click fallback was used. The submenu contained **2D drawing**, **2D from the 3D view**, **3D model**, and **2D and 3D**. **3D model** was disabled as the current mode. The submenu is present in the window-only screenshot, so no `16b` screen-rectangle capture was necessary. Status remained **“History restored”**. Pressed **Escape** to dismiss it. Evidence: [16-context-menu.png](16-context-menu.png).
++
++14. **Both, then deselect — PASS with a zoom adjustment.** Clicked Structure → **Both**. Both became active in Structure and the floating bar. The 2D drawing and turned 3D model appeared beside each other. At **122%**, the rightmost part of the model extended beyond the canvas under the inspector; this exact initial result is preserved in [17a-both-at-122-percent.png](17a-both-at-122-percent.png). One status-bar minus click reduced zoom to **97%**, bringing both molecular representations fully into view for [17-both.png](17-both.png). The shared selection frame reached the inspector boundary, but the floating Show as bar remained fully inside the canvas.
++
++    Exact status: **“Shown as 2D and 3D · Undo restores the 3D model”**. The 2D member at this point is the flattened projection restored by Undo; no additional original-layout restoration was performed after Undo. Clicked empty canvas at screenshot pixel **(400, 450)**, then parked the pointer. Both representations remained visible, while the selection frame and floating bar disappeared. Properties showed **“Select an object to edit its properties.”** The status text remained unchanged. Evidence: [18-both-deselected.png](18-both-deselected.png).
++
++15. **Quit only the launched process — PASS.** Rechecked that window **7293** still belonged to PID **29655**, and checked the PID's executable path before terminating it with **`kill 29655`**. The exact executable-path `pgrep -f` then returned **exit 1 / no match**. `pgrep -lf reshiki` showed only the pre-existing installed PID **51217**, whose start time remained **2026-10-20 14:02:02**. No other ReShiki process was present in the pre-launch list. No UI interaction or screenshot occurred after termination. Evidence: [process-cleanup.txt](process-cleanup.txt).
++
++**Unverified items and limits.** The screenshots demonstrate sampled intermediate morph states, but their capture cadence cannot establish an exact 0.750-second duration or smoothness of every rendered frame. Hover-only submenu behavior was not tested because the available UI API has no hover method; click expansion passed. The initial offscreen 3D frame height at 238% could not be measured directly from that clipped screenshot, so frame-invariance comparisons use the fully visible 122% baseline. The requested approximate window size was not reproduced because the instruction to preserve the actual window size was followed. Clamping and drag hiding passed for the zoom levels and drag types exercised here; this run does not exhaust every possible zoom, pan, molecule, or viewport. No save/reopen persistence or underlying atom-ID/chemical correctness assertion was made from UI screenshots alone.
+
+exec
+/bin/zsh -lc 'ls -l ev386-1b-final/app/frame-measurements.md' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 0ms:
+-rw-r--r--@ 1 shiranui  wheel  6594 Oct 20 19:53 ev386-1b-final/app/frame-measurements.md
+
+diff --git a/ev386-1b-final/app/report.md b/ev386-1b-final/app/report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..227d75dfccaabb4a663b2dcbd8829aa09cc4d920
+--- /dev/null
++++ b/ev386-1b-final/app/report.md
+@@ -0,0 +1,65 @@
++# ReShiki #386 phase 1b — local UI verification
++
++Run on macOS, 2026-10-20, approximately 19:42–19:50 JST. **The requested feature checks passed in this run**, with the viewport and measurement qualifications below. No drawing was saved and no repository files or system settings were changed.
++
++The verification bundle was launched with the exact supplied `open -n … --env RESHIKI_DATA_DIR=… --args --open …/input/caffeine.mol` command. Computer use attached only through bundle ID `dev.reshiki.verification.ev386final1b`.
++
++| Isolation evidence | Observed |
++| --- | --- |
++| Bundle | `apps386-final-1b/ReShiki386F1bEvidence.app` |
++| Launched PID | **29655**, exact executable-path match |
++| Main window ID | **7293** throughout, including the final check |
++| Window rectangle | Screen origin **(200, 115)** points; **1280 × 852 points** |
++| Screenshot resolution | **2560 × 1704 pixels**, Retina 2× |
++| Pre-existing application | PID **51217**, installed `/nix/store/…/ReShiki.app/Contents/MacOS/reshiki` |
++| Process logs | [installed-process-before.txt](installed-process-before.txt), [launched-process.txt](launched-process.txt), [process-cleanup.txt](process-cleanup.txt) |
++
++The window opened larger than the approximate 1000 × 665 points in the brief. Its actual 1280 × 852-point size was preserved. The initial zoom was **238%**, which made the first 3D selection frame extend above and below the canvas. That initial state is preserved in [02-initial-238-percent.png](02-initial-238-percent.png). Before the measured rotation sequence, three status-bar minus clicks reduced zoom to **122%**, making the entire frame visible; [02-3d-shown.png](02-3d-shown.png) is this opening-orientation baseline. Two attempted `Cmd+-` keystrokes had no visible effect, so all effective zoom changes used the status-bar buttons.
++
++All primary evidence shots used `screencapture -x -o -l 7293 <file>`. Held-drag captures used the supplied helper with the same PID and window. The pointer was parked on an inert title-bar area at screenshot coordinate **(600, 16)** before ordinary evidence captures. During held-drag and context-menu evidence it remained where needed for that interaction. The orange crosshair visible on the canvas is the app's keyboard-drawing marker, not the parked mouse pointer.
++
++**Coordinate and measurement conventions.** Every drag below uses window-frame-relative **points**, including the title bar, exactly as required by the supplied helper. Other mouse coordinates are explicitly described as **screenshot pixels**. Frame measurements use the centerlines of the two-pixel teal strokes, excluding handles, the rotation stem, and the floating bar. The visible canvas is **x = 208…1959, y = 364…1619 pixels**; the inspector begins at x ≈ 1960 and the status-bar boundary is y = 1620.
++
++| Evidence | Frame centerline bounds `(left, top) → (right, bottom)`, pixels | Width × height | Comparison |
++| --- | --- | --- | --- |
++| 02, 03, 04 | `(664.5, 603.5) → (1408.5, 1347.5)` | **744 × 744 px** | Same size and position before, during, and after rotation |
++| 05b, 06, 07 | `(664.5, 603.5) → (1408.5, 1347.5)` | **744 × 744 px** | Same after zoom restoration, roll, and reset |
++| 08, 09 | `(664.5, 603.5) → (1548.5, 1487.5)` | **884 × 884 px** | Resized dimensions and position preserved through subsequent rotation |
++
++The original frame's painted edge pixels are x = 664–665 / 1408–1409 and y = 603–604 / 1347–1348. After resizing, the right/bottom edge pixels become x = 1548–1549 and y = 1487–1488. Independent pixel scans of the saved PNGs confirmed these bounds.
++
++1. **Select the complete 2D molecule — PASS.** Clicked the Select arrow, clicked empty canvas at screenshot pixel **(400, 440)**, then pressed `Cmd+A`. Caffeine was selected with **14 atoms · 15 bonds**. Structure was expanded, **2D active**, 3D/Both inactive. The floating Show as bar was visible above the selection and fully inside the canvas. Status: **“Structure imported · Undo restores the previous drawing”**. Evidence: [01-selected-2d.png](01-selected-2d.png).
++
++2. **Generate and morph to 3D — PASS, sampled timing qualification.** Created `morph-raw`, wrote **29655** to `morph-go`, and immediately made the next UI action a click on Structure's **3D** button. The background recorder captured all **40 frames**. Frame f32 shows **“Generating the conformer · ETKDG, then MMFF94s”** with 3D selected; f33–f38 show intermediate spatial states and emerging hydrogen spheres; f39–f40 show the stable endpoint. The sampled span from f33 to f39 is **786 ms**, consistent with the expected 0.75-second morph within the approximately 0.12–0.13-second capture interval.
++
++   The selected 3D model appeared with **3D active** and **Original drawing active**. Status: **“Shown as 3D model · Undo restores the 2D drawing”**. Preserved the immediate 238% state, then established the fully visible **122%**, **744 × 744 px** measurement baseline without changing orientation. Its floating bar is approximately **x = 760…1313, y = 446…516 px**, fully inside the canvas. Evidence: [02-3d-shown.png](02-3d-shown.png), [02-initial-238-percent.png](02-initial-238-percent.png), [morph-raw/contact-sheet.png](morph-raw/contact-sheet.png), [morph-analysis.md](morph-analysis.md).
++
++3. **Rotate while held — PASS.** Ran the helper with PID **29655**, **(450, 470) → (570, 510)** points, without Shift, and `capture=…/03-rotate-mid-drag.png`. This is **+120 pt right, +40 pt down**, starting inside the frame toward its center-left. The molecule turned to an almost edge-on orientation. The frame remained **744 × 744 px at the same coordinates**. The floating Show as bar was **hidden**, and the hint strip read **“Drag to rotate · Shift-drag to roll · Double-click to reset”**. Structure retained **3D / Original drawing**. The status still read **“Shown as 3D model · Undo restores the 2D drawing”** during the held capture. Evidence: [03-rotate-mid-drag.png](03-rotate-mid-drag.png).
++
++4. **Release rotation — PASS.** Released via the helper, refreshed computer-use state, and parked the pointer. The turned orientation persisted. Frame bounds exactly matched step 2: **744 × 744 px**, with **zero measured displacement or size change**. The hint disappeared and Show as returned at approximately **x = 760…1313, y = 446…516 px**, fully clear of the inspector and status bar. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [04-rotate-released.png](04-rotate-released.png).
++
++5. **Zoom and clamp the floating bar — PASS.** Clicked status-bar **+** at screenshot pixel **(2423, 1664)** three times, changing **122% → 238%**. The selected frame then extended beyond the full canvas height. No pan was needed: the model remained near the canvas center. The entire Show as bar remained visible at approximately **x = 715…1268, y = 1543…1612 px**, including all three buttons. Its lower edge stayed about **7–8 px above the status-bar boundary**. **3D** remained active; status: **“Drawing updated”**. Then clicked status-bar **−** at screenshot pixel **(2264, 1664)** three times to restore **122%**. The full model and the original **744 × 744 px** frame were visible again. Evidence: [05-zoomed-bar-clamped.png](05-zoomed-bar-clamped.png), [05b-zoom-restored.png](05b-zoom-restored.png).
++
++6. **Shift-roll — PASS.** Ran the helper with PID **29655**, **(590, 488) → (518, 388)** points and **`shift`**, starting right of center and ending about 100 pt above center. The previously near-vertical, edge-on molecule rolled to a diagonal in the screen plane. Frame position and **744 × 744 px** dimensions stayed unchanged. The supplementary held capture shows the bar hidden and the rotation hint present; the released capture shows the bar above the frame again. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [06-shift-roll.png](06-shift-roll.png), [06a-shift-roll-mid-drag.png](06a-shift-roll-mid-drag.png).
++
++7. **Double-click reset — PASS.** Used computer use to double-click an atom inside the frame at screenshot pixel **(1025, 992)**, then parked the pointer. The model returned to its opening orientation from step 2. Frame bounds remained **744 × 744 px** and unchanged. A saved-image comparison excluding keyboard-marker regions found only very small rendering differences, consistent with the same geometry. **3D / Original drawing** remained active; the floating bar was visible above the frame. Status: **“Drawing updated”**. Evidence: [07-double-click-reset.png](07-double-click-reset.png); compare [02-3d-shown.png](02-3d-shown.png).
++
++8. **Corner resize — PASS.** Ran the helper from the bottom-right handle at **(704, 674) → (784, 734)** points, a requested movement of **+80 pt right / +60 pt down**, entirely within the canvas. The model and square frame enlarged. The top-left frame centerline stayed at **(664.5, 603.5) px**; the bottom-right became **(1548.5, 1487.5) px**, making the frame **884 × 884 px**. The square grew by 140 px in each dimension. The supplementary held capture confirms Show as was hidden during resizing; it returned above the frame after release. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [08-resized.png](08-resized.png), [08a-resize-mid-drag.png](08a-resize-mid-drag.png).
++
++9. **Rotate after resize — PASS.** Ran the helper without Shift at **(580, 530) → (480, 470)** points, exactly **100 pt left / 60 pt up**, inside the enlarged frame. The model turned to a clearly different oblique view. The frame stayed at the exact step-8 bounds and **884 × 884 px** dimensions. The floating bar hid during the drag and returned after release; the held capture shows the hint strip. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [09-resized-then-rotated.png](09-resized-then-rotated.png), [09a-resized-rotate-mid-drag.png](09a-resized-rotate-mid-drag.png).
++
++10. **Flatten the turned 3D view — PASS.** Clicked Structure → 2D layout → **From the 3D view**. That option became active while **3D** stayed active, and the description read **“Flatten the model as it is turned now, with far bonds lighter.”** Status at that point: **“Drawing updated”**. Saved [10-layout-from-3d.png](10-layout-from-3d.png), then clicked Structure → **2D**. The model became a 2D drawing in the oblique projection, visibly distinct from the original caffeine layout, with distant bonds/labels lighter. **2D** became active in Structure and the floating bar; the 2D-layout choices disappeared while only 2D was shown. Status: **“Shown as 2D from the 3D view · Undo restores the 3D model”**. Evidence: [11-flattened-2d.png](11-flattened-2d.png).
++
++11. **Return to 3D, then restore the original drawing — PASS.** Clicked Structure → **3D**. The turned 3D model returned, **From the 3D view** still active, and status read **“Shown as 3D model · Undo restores the 2D drawing”**. Evidence: [12-back-to-3d.png](12-back-to-3d.png). Clicked **Original drawing**, which became active; its description read **“The layout you drew, unchanged.”** Status became **“Drawing updated”**. Evidence: [13-layout-original.png](13-layout-original.png). Clicked **2D**. The original caffeine arrangement from step 1 returned, including the ring orientation and methyl/carbonyl bond directions. Its screenshot is smaller because zoom is 122% instead of 238%. **2D** was active, the floating bar was visible above the selected drawing, and the exact status was **“Original 2D drawing restored”**. Evidence: [14-original-restored.png](14-original-restored.png).
++
++12. **Undo once — PASS.** Pressed **`Cmd+Z` once**. The previous **turned 3D model** came back, with **3D active** and **Original drawing active** in the 2D-layout controls. The floating bar was visible, and Redo became enabled. Exact status: **“History restored”**. Evidence: [15-undo.png](15-undo.png).
++
++13. **Context-menu Show as submenu — PASS by click.** Right-clicked the molecule at screenshot pixel **(1065, 920)**, then clicked the **Show as** parent row at **(1300, 888)**. The available computer-use API did not expose a hover operation, so the permitted click fallback was used. The submenu contained **2D drawing**, **2D from the 3D view**, **3D model**, and **2D and 3D**. **3D model** was disabled as the current mode. The submenu is present in the window-only screenshot, so no `16b` screen-rectangle capture was necessary. Status remained **“History restored”**. Pressed **Escape** to dismiss it. Evidence: [16-context-menu.png](16-context-menu.png).
++
++14. **Both, then deselect — PASS with a zoom adjustment.** Clicked Structure → **Both**. Both became active in Structure and the floating bar. The 2D drawing and turned 3D model appeared beside each other. At **122%**, the rightmost part of the model extended beyond the canvas under the inspector; this exact initial result is preserved in [17a-both-at-122-percent.png](17a-both-at-122-percent.png). One status-bar minus click reduced zoom to **97%**, bringing both molecular representations fully into view for [17-both.png](17-both.png). The shared selection frame reached the inspector boundary, but the floating Show as bar remained fully inside the canvas.
++
++    Exact status: **“Shown as 2D and 3D · Undo restores the 3D model”**. The 2D member at this point is the flattened projection restored by Undo; no additional original-layout restoration was performed after Undo. Clicked empty canvas at screenshot pixel **(400, 450)**, then parked the pointer. Both representations remained visible, while the selection frame and floating bar disappeared. Properties showed **“Select an object to edit its properties.”** The status text remained unchanged. Evidence: [18-both-deselected.png](18-both-deselected.png).
++
++15. **Quit only the launched process — PASS.** Rechecked that window **7293** still belonged to PID **29655**, and checked the PID's executable path before terminating it with **`kill 29655`**. The exact executable-path `pgrep -f` then returned **exit 1 / no match**. `pgrep -lf reshiki` showed only the pre-existing installed PID **51217**, whose start time remained **2026-10-20 14:02:02**. No other ReShiki process was present in the pre-launch list. No UI interaction or screenshot occurred after termination. Evidence: [process-cleanup.txt](process-cleanup.txt).
++
++**Unverified items and limits.** The screenshots demonstrate sampled intermediate morph states, but their capture cadence cannot establish an exact 0.750-second duration or smoothness of every rendered frame. Hover-only submenu behavior was not tested because the available UI API has no hover method; click expansion passed. The initial offscreen 3D frame height at 238% could not be measured directly from that clipped screenshot, so frame-invariance comparisons use the fully visible 122% baseline. The requested approximate window size was not reproduced because the instruction to preserve the actual window size was followed. Clamping and drag hiding passed for the zoom levels and drag types exercised here; this run does not exhaust every possible zoom, pan, molecule, or viewport. No save/reopen persistence or underlying atom-ID/chemical correctness assertion was made from UI screenshots alone.
+
+exec
+/bin/zsh -lc 'cat ev386-1b-final/app/frame-measurements.md' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad
+ succeeded in 0ms:
+# Screenshot measurements
+
+Measured fresh PNG bytes with macOS `/usr/bin/swift` and AppKit `NSBitmapImageRep`; no live application or UI was accessed. All inputs are 2560 × 1704 pixels. Coordinates below use a top-left origin, with integer coordinates identifying pixel samples. Thus a two-pixel stroke occupying columns 664–665 has sample-center coordinate 664.5. To express the same center relative to the image's outer pixel edge, add 0.5 to each coordinate. Dimensions are unaffected. Logical dimensions at 2× are half the listed pixel dimensions.
+
+The corrected `02-3d-shown.png` was read afresh at 122% zoom (SHA-256 `258174208f4b7d339e90db3b2788f3d89cee24c8e61adf2d4be125edc0746e3c`). The older 238% screenshot cached in an earlier image view was not used for these measurements.
+
+| Screenshot(s) | Left / top stroke center | Right / bottom stroke center | Frame width × height | Frame center |
+| --- | --- | --- | --- | --- |
+| 02, 03, 04, 05b, 06, 07 | (664.5, 603.5) | (1408.5, 1347.5) | **744 × 744 px** / 372 × 372 pt | (1036.5, 975.5) |
+| 08, 09 | (664.5, 603.5) | (1548.5, 1487.5) | **884 × 884 px** / 442 × 442 pt | (1106.5, 1045.5) |
+| 05, zoomed | Visible left x=287.5 | Visible right x=1695.5 | Width **1408 px**; horizontal edges are outside the visible canvas | Horizontal center x=991.5 |
+
+The exact solid selection-stroke RGB in decoded bitmap bytes is **(62, 133, 117)**. For the 744-pixel square, long straight strokes occupy columns **664–665 and 1408–1409**, and rows **603–604 and 1347–1348**. For the resized square, the right stroke occupies columns **1548–1549**, and the bottom occupies rows **1487–1488**. Handles and the rotation stem were excluded by measuring long straight runs. There is **zero measured frame displacement or size change** from 02 through ordinary rotation, released rotation, Shift-roll, and reset (03/04/06/07). Resizing moves the right and bottom edges by **+140 px**, retaining the left/top edges. Rotation after resizing (08→09) again changes neither frame position nor dimensions.
+
+The visible white canvas occupies pixel columns **208–1959** and rows **364–1619**, or the half-open rectangle **[208,1960) × [364,1620)**, measuring **1752 × 1256 px**. Inspector divider pixels begin at x=1960; status-bar divider pixels begin at y=1620.
+
+| Screenshot | Floating bar body raster envelope, inclusive | Size | Canvas margins: left / right / top / bottom |
+| --- | --- | --- | --- |
+| 02 and 04 | x≈760–1313, y≈446–516 | ≈554 × 71 px | ≈552 / 646 / 82 / 1103 px |
+| 05, zoomed and clamped | x≈715–1268, y≈1543–1612 | ≈554 × 70 px | ≈507 / 691 / 1179 / **7 px** |
+
+These envelopes include the hard rounded border and its antialiased edge, excluding the diffuse drop shadow. The border's exact darkest constant color is RGB **(214,219,223)**: its extremal pixels are x=761/1312 and y=447/515 in 02/04, and x=716/1267 and y=1543/1612 in 05. Antialiasing makes the outer body envelope uncertain by approximately one pixel; its nominal height is about 70 px. The zoomed body remains fully above the status bar, and its shadow extends into the seven-pixel gap, still ending before the divider. It also remains well left of the inspector. The 02 and 04 bar crops **[750,1330) × [440,535)** are pixel-identical.
+
+In 03, **all 39,334 pixels** of the former bar body rectangle **[760,1314) × [446,517)** are white: the bar is absent during the drag. A mint hint strip occupies x=226–1941, y=1552–1601 (**1716 × 50 px**), displaying “Drag to rotate · Shift-drag to roll · Double-click to reset”. The bar returns in 04.
+
+Reset restores the opening 3D orientation to raster precision. Comparing 02 and 07 inside **[674,1399) × [614,1338)**, while excluding the two orange keyboard-crosshair rectangles **[700,766) × [676,743)** and **[1240,1303) × [1035,1098)**, leaves 516,509 pixels. Only **222** differ; their maximum RGB-channel difference is **2/255**, with total absolute channel difference 315. The same comparison contains 41,305 nonwhite model pixels. These tiny color-rounding differences show no spatial discrepancy in the molecular geometry. Toolbar/status differences lie outside this comparison.
+
+The additional original-layout check also passes. Fitting the circular selection markers for all **14 heavy-atom centers** in `01-selected-2d.png` and `14-original-restored.png` gives the uniform transform:
+
+```text
+x_restored = 0.5118824532 * x_original + 528.8222674
+y_restored = 0.5118824532 * y_original + 483.9398452
+```
+
+No rotation or shear was needed. The center-fit residual is **0.129 px RMS**, **0.378 px maximum**, despite the zoom/translation change. Representative original→restored centers are top methyl **(786.535,586.174)→(931.486,783.925)**, left O **(533.460,895.546)→(801.847,942.404)**, and bottom O **(1069.227,1333.853)→(1076.216,1166.757)**. Marker centers were estimated by algebraically fitting circles to teal stroke pixels within 24 px of each approximate atom position; black bonds/labels occlude parts of some rings, so subpixel residuals should not be interpreted as exact atom-coordinate telemetry. This strongly supports restoration of the original 2D arrangement.
+
+`frame-measurements.json` stores the measured bounds, comparison statistics, and all 14 center pairs. To reproduce the exact selection-stroke raster scan from the scratchpad directory, run:
+
+```sh
+swift - <<'SWIFT'
+import AppKit
+let names = ["02-3d-shown.png", "03-rotate-mid-drag.png",
+ "04-rotate-released.png", "05-zoomed-bar-clamped.png",
+ "05b-zoom-restored.png", "06-shift-roll.png", "07-double-click-reset.png",
+ "08-resized.png", "09-resized-then-rotated.png"]
+for name in names {
+ let url = URL(fileURLWithPath: "ev386-1b-final/app/" + name)
+ let im = NSBitmapImageRep(data: try! Data(contentsOf: url))!
+ precondition(im.bitsPerSample == 8 && im.samplesPerPixel == 4)
+ let d = im.bitmapData!, stride = im.bytesPerRow
+ var columns = [Int](repeating: 0, count: im.pixelsWide)
+ var rows = [Int](repeating: 0, count: im.pixelsHigh)
+ for y in 364..<1620 { for x in 208..<1960 {
+  let k = y * stride + x * 4
+  if d[k] == 62 && d[k+1] == 133 && d[k+2] == 117 {
+   columns[x] += 1; rows[y] += 1
+  }
+ }}
+ print(name, "long columns:", columns.indices.filter { columns[$0] > 600 },
+       "long rows:", rows.indices.filter { rows[$0] > 600 })
+}
+SWIFT
+```
+
+The evidence establishes the geometry visible in these captures. A screenshot pair cannot establish every intermediate event, native atom identity, or application-state persistence beyond the visible result.
+
+diff --git a/ev386-1b-final/app/report.md b/ev386-1b-final/app/report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..227d75dfccaabb4a663b2dcbd8829aa09cc4d920
+--- /dev/null
++++ b/ev386-1b-final/app/report.md
+@@ -0,0 +1,65 @@
++# ReShiki #386 phase 1b — local UI verification
++
++Run on macOS, 2026-10-20, approximately 19:42–19:50 JST. **The requested feature checks passed in this run**, with the viewport and measurement qualifications below. No drawing was saved and no repository files or system settings were changed.
++
++The verification bundle was launched with the exact supplied `open -n … --env RESHIKI_DATA_DIR=… --args --open …/input/caffeine.mol` command. Computer use attached only through bundle ID `dev.reshiki.verification.ev386final1b`.
++
++| Isolation evidence | Observed |
++| --- | --- |
++| Bundle | `apps386-final-1b/ReShiki386F1bEvidence.app` |
++| Launched PID | **29655**, exact executable-path match |
++| Main window ID | **7293** throughout, including the final check |
++| Window rectangle | Screen origin **(200, 115)** points; **1280 × 852 points** |
++| Screenshot resolution | **2560 × 1704 pixels**, Retina 2× |
++| Pre-existing application | PID **51217**, installed `/nix/store/…/ReShiki.app/Contents/MacOS/reshiki` |
++| Process logs | [installed-process-before.txt](installed-process-before.txt), [launched-process.txt](launched-process.txt), [process-cleanup.txt](process-cleanup.txt) |
++
++The window opened larger than the approximate 1000 × 665 points in the brief. Its actual 1280 × 852-point size was preserved. The initial zoom was **238%**, which made the first 3D selection frame extend above and below the canvas. That initial state is preserved in [02-initial-238-percent.png](02-initial-238-percent.png). Before the measured rotation sequence, three status-bar minus clicks reduced zoom to **122%**, making the entire frame visible; [02-3d-shown.png](02-3d-shown.png) is this opening-orientation baseline. Two attempted `Cmd+-` keystrokes had no visible effect, so all effective zoom changes used the status-bar buttons.
++
++All primary evidence shots used `screencapture -x -o -l 7293 <file>`. Held-drag captures used the supplied helper with the same PID and window. The pointer was parked on an inert title-bar area at screenshot coordinate **(600, 16)** before ordinary evidence captures. During held-drag and context-menu evidence it remained where needed for that interaction. The orange crosshair visible on the canvas is the app's keyboard-drawing marker, not the parked mouse pointer.
++
++**Coordinate and measurement conventions.** Every drag below uses window-frame-relative **points**, including the title bar, exactly as required by the supplied helper. Other mouse coordinates are explicitly described as **screenshot pixels**. Frame measurements use the centerlines of the two-pixel teal strokes, excluding handles, the rotation stem, and the floating bar. The visible canvas is **x = 208…1959, y = 364…1619 pixels**; the inspector begins at x ≈ 1960 and the status-bar boundary is y = 1620.
++
++| Evidence | Frame centerline bounds `(left, top) → (right, bottom)`, pixels | Width × height | Comparison |
++| --- | --- | --- | --- |
++| 02, 03, 04 | `(664.5, 603.5) → (1408.5, 1347.5)` | **744 × 744 px** | Same size and position before, during, and after rotation |
++| 05b, 06, 07 | `(664.5, 603.5) → (1408.5, 1347.5)` | **744 × 744 px** | Same after zoom restoration, roll, and reset |
++| 08, 09 | `(664.5, 603.5) → (1548.5, 1487.5)` | **884 × 884 px** | Resized dimensions and position preserved through subsequent rotation |
++
++The original frame's painted edge pixels are x = 664–665 / 1408–1409 and y = 603–604 / 1347–1348. After resizing, the right/bottom edge pixels become x = 1548–1549 and y = 1487–1488. Independent pixel scans of the saved PNGs confirmed these bounds.
++
++1. **Select the complete 2D molecule — PASS.** Clicked the Select arrow, clicked empty canvas at screenshot pixel **(400, 440)**, then pressed `Cmd+A`. Caffeine was selected with **14 atoms · 15 bonds**. Structure was expanded, **2D active**, 3D/Both inactive. The floating Show as bar was visible above the selection and fully inside the canvas. Status: **“Structure imported · Undo restores the previous drawing”**. Evidence: [01-selected-2d.png](01-selected-2d.png).
++
++2. **Generate and morph to 3D — PASS, sampled timing qualification.** Created `morph-raw`, wrote **29655** to `morph-go`, and immediately made the next UI action a click on Structure's **3D** button. The background recorder captured all **40 frames**. Frame f32 shows **“Generating the conformer · ETKDG, then MMFF94s”** with 3D selected; f33–f38 show intermediate spatial states and emerging hydrogen spheres; f39–f40 show the stable endpoint. The sampled span from f33 to f39 is **786 ms**, consistent with the expected 0.75-second morph within the approximately 0.12–0.13-second capture interval.
++
++   The selected 3D model appeared with **3D active** and **Original drawing active**. Status: **“Shown as 3D model · Undo restores the 2D drawing”**. Preserved the immediate 238% state, then established the fully visible **122%**, **744 × 744 px** measurement baseline without changing orientation. Its floating bar is approximately **x = 760…1313, y = 446…516 px**, fully inside the canvas. Evidence: [02-3d-shown.png](02-3d-shown.png), [02-initial-238-percent.png](02-initial-238-percent.png), [morph-raw/contact-sheet.png](morph-raw/contact-sheet.png), [morph-analysis.md](morph-analysis.md).
++
++3. **Rotate while held — PASS.** Ran the helper with PID **29655**, **(450, 470) → (570, 510)** points, without Shift, and `capture=…/03-rotate-mid-drag.png`. This is **+120 pt right, +40 pt down**, starting inside the frame toward its center-left. The molecule turned to an almost edge-on orientation. The frame remained **744 × 744 px at the same coordinates**. The floating Show as bar was **hidden**, and the hint strip read **“Drag to rotate · Shift-drag to roll · Double-click to reset”**. Structure retained **3D / Original drawing**. The status still read **“Shown as 3D model · Undo restores the 2D drawing”** during the held capture. Evidence: [03-rotate-mid-drag.png](03-rotate-mid-drag.png).
++
++4. **Release rotation — PASS.** Released via the helper, refreshed computer-use state, and parked the pointer. The turned orientation persisted. Frame bounds exactly matched step 2: **744 × 744 px**, with **zero measured displacement or size change**. The hint disappeared and Show as returned at approximately **x = 760…1313, y = 446…516 px**, fully clear of the inspector and status bar. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [04-rotate-released.png](04-rotate-released.png).
++
++5. **Zoom and clamp the floating bar — PASS.** Clicked status-bar **+** at screenshot pixel **(2423, 1664)** three times, changing **122% → 238%**. The selected frame then extended beyond the full canvas height. No pan was needed: the model remained near the canvas center. The entire Show as bar remained visible at approximately **x = 715…1268, y = 1543…1612 px**, including all three buttons. Its lower edge stayed about **7–8 px above the status-bar boundary**. **3D** remained active; status: **“Drawing updated”**. Then clicked status-bar **−** at screenshot pixel **(2264, 1664)** three times to restore **122%**. The full model and the original **744 × 744 px** frame were visible again. Evidence: [05-zoomed-bar-clamped.png](05-zoomed-bar-clamped.png), [05b-zoom-restored.png](05b-zoom-restored.png).
++
++6. **Shift-roll — PASS.** Ran the helper with PID **29655**, **(590, 488) → (518, 388)** points and **`shift`**, starting right of center and ending about 100 pt above center. The previously near-vertical, edge-on molecule rolled to a diagonal in the screen plane. Frame position and **744 × 744 px** dimensions stayed unchanged. The supplementary held capture shows the bar hidden and the rotation hint present; the released capture shows the bar above the frame again. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [06-shift-roll.png](06-shift-roll.png), [06a-shift-roll-mid-drag.png](06a-shift-roll-mid-drag.png).
++
++7. **Double-click reset — PASS.** Used computer use to double-click an atom inside the frame at screenshot pixel **(1025, 992)**, then parked the pointer. The model returned to its opening orientation from step 2. Frame bounds remained **744 × 744 px** and unchanged. A saved-image comparison excluding keyboard-marker regions found only very small rendering differences, consistent with the same geometry. **3D / Original drawing** remained active; the floating bar was visible above the frame. Status: **“Drawing updated”**. Evidence: [07-double-click-reset.png](07-double-click-reset.png); compare [02-3d-shown.png](02-3d-shown.png).
++
++8. **Corner resize — PASS.** Ran the helper from the bottom-right handle at **(704, 674) → (784, 734)** points, a requested movement of **+80 pt right / +60 pt down**, entirely within the canvas. The model and square frame enlarged. The top-left frame centerline stayed at **(664.5, 603.5) px**; the bottom-right became **(1548.5, 1487.5) px**, making the frame **884 × 884 px**. The square grew by 140 px in each dimension. The supplementary held capture confirms Show as was hidden during resizing; it returned above the frame after release. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [08-resized.png](08-resized.png), [08a-resize-mid-drag.png](08a-resize-mid-drag.png).
++
++9. **Rotate after resize — PASS.** Ran the helper without Shift at **(580, 530) → (480, 470)** points, exactly **100 pt left / 60 pt up**, inside the enlarged frame. The model turned to a clearly different oblique view. The frame stayed at the exact step-8 bounds and **884 × 884 px** dimensions. The floating bar hid during the drag and returned after release; the held capture shows the hint strip. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [09-resized-then-rotated.png](09-resized-then-rotated.png), [09a-resized-rotate-mid-drag.png](09a-resized-rotate-mid-drag.png).
++
++10. **Flatten the turned 3D view — PASS.** Clicked Structure → 2D layout → **From the 3D view**. That option became active while **3D** stayed active, and the description read **“Flatten the model as it is turned now, with far bonds lighter.”** Status at that point: **“Drawing updated”**. Saved [10-layout-from-3d.png](10-layout-from-3d.png), then clicked Structure → **2D**. The model became a 2D drawing in the oblique projection, visibly distinct from the original caffeine layout, with distant bonds/labels lighter. **2D** became active in Structure and the floating bar; the 2D-layout choices disappeared while only 2D was shown. Status: **“Shown as 2D from the 3D view · Undo restores the 3D model”**. Evidence: [11-flattened-2d.png](11-flattened-2d.png).
++
++11. **Return to 3D, then restore the original drawing — PASS.** Clicked Structure → **3D**. The turned 3D model returned, **From the 3D view** still active, and status read **“Shown as 3D model · Undo restores the 2D drawing”**. Evidence: [12-back-to-3d.png](12-back-to-3d.png). Clicked **Original drawing**, which became active; its description read **“The layout you drew, unchanged.”** Status became **“Drawing updated”**. Evidence: [13-layout-original.png](13-layout-original.png). Clicked **2D**. The original caffeine arrangement from step 1 returned, including the ring orientation and methyl/carbonyl bond directions. Its screenshot is smaller because zoom is 122% instead of 238%. **2D** was active, the floating bar was visible above the selected drawing, and the exact status was **“Original 2D drawing restored”**. Evidence: [14-original-restored.png](14-original-restored.png).
++
++12. **Undo once — PASS.** Pressed **`Cmd+Z` once**. The previous **turned 3D model** came back, with **3D active** and **Original drawing active** in the 2D-layout controls. The floating bar was visible, and Redo became enabled. Exact status: **“History restored”**. Evidence: [15-undo.png](15-undo.png).
++
++13. **Context-menu Show as submenu — PASS by click.** Right-clicked the molecule at screenshot pixel **(1065, 920)**, then clicked the **Show as** parent row at **(1300, 888)**. The available computer-use API did not expose a hover operation, so the permitted click fallback was used. The submenu contained **2D drawing**, **2D from the 3D view**, **3D model**, and **2D and 3D**. **3D model** was disabled as the current mode. The submenu is present in the window-only screenshot, so no `16b` screen-rectangle capture was necessary. Status remained **“History restored”**. Pressed **Escape** to dismiss it. Evidence: [16-context-menu.png](16-context-menu.png).
++
++14. **Both, then deselect — PASS with a zoom adjustment.** Clicked Structure → **Both**. Both became active in Structure and the floating bar. The 2D drawing and turned 3D model appeared beside each other. At **122%**, the rightmost part of the model extended beyond the canvas under the inspector; this exact initial result is preserved in [17a-both-at-122-percent.png](17a-both-at-122-percent.png). One status-bar minus click reduced zoom to **97%**, bringing both molecular representations fully into view for [17-both.png](17-both.png). The shared selection frame reached the inspector boundary, but the floating Show as bar remained fully inside the canvas.
++
++    Exact status: **“Shown as 2D and 3D · Undo restores the 3D model”**. The 2D member at this point is the flattened projection restored by Undo; no additional original-layout restoration was performed after Undo. Clicked empty canvas at screenshot pixel **(400, 450)**, then parked the pointer. Both representations remained visible, while the selection frame and floating bar disappeared. Properties showed **“Select an object to edit its properties.”** The status text remained unchanged. Evidence: [18-both-deselected.png](18-both-deselected.png).
++
++15. **Quit only the launched process — PASS.** Rechecked that window **7293** still belonged to PID **29655**, and checked the PID's executable path before terminating it with **`kill 29655`**. The exact executable-path `pgrep -f` then returned **exit 1 / no match**. `pgrep -lf reshiki` showed only the pre-existing installed PID **51217**, whose start time remained **2026-10-20 14:02:02**. No other ReShiki process was present in the pre-launch list. No UI interaction or screenshot occurred after termination. Evidence: [process-cleanup.txt](process-cleanup.txt).
++
++**Unverified items and limits.** The screenshots demonstrate sampled intermediate morph states, but their capture cadence cannot establish an exact 0.750-second duration or smoothness of every rendered frame. Hover-only submenu behavior was not tested because the available UI API has no hover method; click expansion passed. The initial offscreen 3D frame height at 238% could not be measured directly from that clipped screenshot, so frame-invariance comparisons use the fully visible 122% baseline. The requested approximate window size was not reproduced because the instruction to preserve the actual window size was followed. Clamping and drag hiding passed for the zoom levels and drag types exercised here; this run does not exhaust every possible zoom, pan, molecule, or viewport. No save/reopen persistence or underlying atom-ID/chemical correctness assertion was made from UI screenshots alone.
+
+apply patch
+patch: completed
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app/report.md
+diff --git a/ev386-1b-final/app/report.md b/ev386-1b-final/app/report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..6beb37e2e4a259174620087476e556708239d56f
+--- /dev/null
++++ b/ev386-1b-final/app/report.md
+@@ -0,0 +1,67 @@
++# ReShiki #386 phase 1b — local UI verification
++
++Run on macOS, 2026-10-20, approximately 19:42–19:50 JST. **The requested feature checks passed in this run**, with the viewport and measurement qualifications below. No drawing was saved and no repository files or system settings were changed.
++
++The verification bundle was launched with the exact supplied `open -n … --env RESHIKI_DATA_DIR=… --args --open …/input/caffeine.mol` command. Computer use attached only through bundle ID `dev.reshiki.verification.ev386final1b`.
++
++| Isolation evidence | Observed |
++| --- | --- |
++| Bundle | `apps386-final-1b/ReShiki386F1bEvidence.app` |
++| Launched PID | **29655**, exact executable-path match |
++| Main window ID | **7293** throughout, including the final check |
++| Window rectangle | Screen origin **(200, 115)** points; **1280 × 852 points** |
++| Screenshot resolution | **2560 × 1704 pixels**, Retina 2× |
++| Pre-existing application | PID **51217**, installed `/nix/store/…/ReShiki.app/Contents/MacOS/reshiki` |
++| Process logs | [installed-process-before.txt](installed-process-before.txt), [launched-process.txt](launched-process.txt), [process-cleanup.txt](process-cleanup.txt) |
++
++The window opened larger than the approximate 1000 × 665 points in the brief. Its actual 1280 × 852-point size was preserved. The initial zoom was **238%**, which made the first 3D selection frame extend above and below the canvas. That initial state is preserved in [02-initial-238-percent.png](02-initial-238-percent.png). Before the measured rotation sequence, three status-bar minus clicks reduced zoom to **122%**, making the entire frame visible; [02-3d-shown.png](02-3d-shown.png) is this opening-orientation baseline. Two attempted `Cmd+-` keystrokes had no visible effect, so all effective zoom changes used the status-bar buttons.
++
++All primary evidence shots used `screencapture -x -o -l 7293 <file>`. Held-drag captures used the supplied helper with the same PID and window. The pointer was parked on an inert title-bar area at screenshot coordinate **(600, 16)** before ordinary evidence captures. During held-drag and context-menu evidence it remained where needed for that interaction. The orange crosshair visible on the canvas is the app's keyboard-drawing marker, not the parked mouse pointer.
++
++**Coordinate and measurement conventions.** Every drag below uses window-frame-relative **points**, including the title bar, exactly as required by the supplied helper. Other mouse coordinates are explicitly described as **screenshot pixels**. Frame measurements use the centerlines of the two-pixel teal strokes, excluding handles, the rotation stem, and the floating bar. The visible canvas is **x = 208…1959, y = 364…1619 pixels**; the inspector begins at x ≈ 1960 and the status-bar boundary is y = 1620.
++
++| Evidence | Frame centerline bounds `(left, top) → (right, bottom)`, pixels | Width × height | Comparison |
++| --- | --- | --- | --- |
++| 02, 03, 04 | `(664.5, 603.5) → (1408.5, 1347.5)` | **744 × 744 px** | Same size and position before, during, and after rotation |
++| 05b, 06, 07 | `(664.5, 603.5) → (1408.5, 1347.5)` | **744 × 744 px** | Same after zoom restoration, roll, and reset |
++| 08, 09 | `(664.5, 603.5) → (1548.5, 1487.5)` | **884 × 884 px** | Resized dimensions and position preserved through subsequent rotation |
++
++The original frame's painted edge pixels are x = 664–665 / 1408–1409 and y = 603–604 / 1347–1348. After resizing, the right/bottom edge pixels become x = 1548–1549 and y = 1487–1488. Independent pixel scans of the saved PNGs confirmed these bounds. Detailed measurements, comparison methods, and a reproducible Swift/AppKit command are in [frame-measurements.md](frame-measurements.md), with numerical data in [frame-measurements.json](frame-measurements.json).
++
++1. **Select the complete 2D molecule — PASS.** Clicked the Select arrow, clicked empty canvas at screenshot pixel **(400, 440)**, then pressed `Cmd+A`. Caffeine was selected with **14 atoms · 15 bonds**. Structure was expanded, **2D active**, 3D/Both inactive. The floating Show as bar was visible above the selection and fully inside the canvas. Status: **“Structure imported · Undo restores the previous drawing”**. Evidence: [01-selected-2d.png](01-selected-2d.png).
++
++2. **Generate and morph to 3D — PASS, sampled timing qualification.** Created `morph-raw`, wrote **29655** to `morph-go`, and immediately made the next UI action a click on Structure's **3D** button. The background recorder captured all **40 frames**. Frame f32 shows **“Generating the conformer · ETKDG, then MMFF94s”** with 3D selected; f33–f38 show intermediate spatial states and emerging hydrogen spheres; f39–f40 show the stable endpoint. The sampled span from f33 to f39 is **786 ms**, consistent with the expected 0.75-second morph within the approximately 0.12–0.13-second capture interval.
++
++   The selected 3D model appeared with **3D active** and **Original drawing active**. Status: **“Shown as 3D model · Undo restores the 2D drawing”**. Preserved the immediate 238% state, then established the fully visible **122%**, **744 × 744 px** measurement baseline without changing orientation. Its floating bar is approximately **x = 760…1313, y = 446…516 px**, fully inside the canvas. Evidence: [02-3d-shown.png](02-3d-shown.png), [02-initial-238-percent.png](02-initial-238-percent.png), [morph-raw/contact-sheet.png](morph-raw/contact-sheet.png), [morph-analysis.md](morph-analysis.md).
++
++3. **Rotate while held — PASS.** Ran the helper with PID **29655**, **(450, 470) → (570, 510)** points, without Shift, and `capture=…/03-rotate-mid-drag.png`. This is **+120 pt right, +40 pt down**, starting inside the frame toward its center-left. The molecule turned to an almost edge-on orientation. The frame remained **744 × 744 px at the same coordinates**. The floating Show as bar was **hidden**, and the hint strip read **“Drag to rotate · Shift-drag to roll · Double-click to reset”**. Structure retained **3D / Original drawing**. The status still read **“Shown as 3D model · Undo restores the 2D drawing”** during the held capture. Evidence: [03-rotate-mid-drag.png](03-rotate-mid-drag.png).
++
++4. **Release rotation — PASS.** Released via the helper, refreshed computer-use state, and parked the pointer. The turned orientation persisted. Frame bounds exactly matched step 2: **744 × 744 px**, with **zero measured displacement or size change**. The hint disappeared and Show as returned at approximately **x = 760…1313, y = 446…516 px**, fully clear of the inspector and status bar. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [04-rotate-released.png](04-rotate-released.png).
++
++5. **Zoom and clamp the floating bar — PASS.** Clicked status-bar **+** at screenshot pixel **(2423, 1664)** three times, changing **122% → 238%**. The selected frame then extended beyond the full canvas height. No pan was needed: the model remained near the canvas center. The entire Show as bar remained visible at approximately **x = 715…1268, y = 1543…1612 px**, including all three buttons. Its lower edge stayed about **7–8 px above the status-bar boundary**. **3D** remained active; status: **“Drawing updated”**. Then clicked status-bar **−** at screenshot pixel **(2264, 1664)** three times to restore **122%**. The full model and the original **744 × 744 px** frame were visible again. Evidence: [05-zoomed-bar-clamped.png](05-zoomed-bar-clamped.png), [05b-zoom-restored.png](05b-zoom-restored.png).
++
++6. **Shift-roll — PASS.** Ran the helper with PID **29655**, **(590, 488) → (518, 388)** points and **`shift`**, starting right of center and ending about 100 pt above center. The previously near-vertical, edge-on molecule rolled to a diagonal in the screen plane. Frame position and **744 × 744 px** dimensions stayed unchanged. The supplementary held capture shows the bar hidden and the rotation hint present; the released capture shows the bar above the frame again. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [06-shift-roll.png](06-shift-roll.png), [06a-shift-roll-mid-drag.png](06a-shift-roll-mid-drag.png).
++
++7. **Double-click reset — PASS.** Used computer use to double-click an atom inside the frame at screenshot pixel **(1025, 992)**, then parked the pointer. The model returned to its opening orientation from step 2. Frame bounds remained **744 × 744 px** and unchanged. A saved-image comparison excluding keyboard-marker regions found only very small rendering differences, consistent with the same geometry. **3D / Original drawing** remained active; the floating bar was visible above the frame. Status: **“Drawing updated”**. Evidence: [07-double-click-reset.png](07-double-click-reset.png); compare [02-3d-shown.png](02-3d-shown.png).
++
++8. **Corner resize — PASS.** Ran the helper from the bottom-right handle at **(704, 674) → (784, 734)** points, a requested movement of **+80 pt right / +60 pt down**, entirely within the canvas. The model and square frame enlarged. The top-left frame centerline stayed at **(664.5, 603.5) px**; the bottom-right became **(1548.5, 1487.5) px**, making the frame **884 × 884 px**. The square grew by 140 px in each dimension. The supplementary held capture confirms Show as was hidden during resizing; it returned above the frame after release. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [08-resized.png](08-resized.png), [08a-resize-mid-drag.png](08a-resize-mid-drag.png).
++
++9. **Rotate after resize — PASS.** Ran the helper without Shift at **(580, 530) → (480, 470)** points, exactly **100 pt left / 60 pt up**, inside the enlarged frame. The model turned to a clearly different oblique view. The frame stayed at the exact step-8 bounds and **884 × 884 px** dimensions. The floating bar hid during the drag and returned after release; the held capture shows the hint strip. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [09-resized-then-rotated.png](09-resized-then-rotated.png), [09a-resized-rotate-mid-drag.png](09a-resized-rotate-mid-drag.png).
++
++10. **Flatten the turned 3D view — PASS.** Clicked Structure → 2D layout → **From the 3D view**. That option became active while **3D** stayed active, and the description read **“Flatten the model as it is turned now, with far bonds lighter.”** Status at that point: **“Drawing updated”**. Saved [10-layout-from-3d.png](10-layout-from-3d.png), then clicked Structure → **2D**. The model became a 2D drawing in the oblique projection, visibly distinct from the original caffeine layout, with distant bonds/labels lighter. **2D** became active in Structure and the floating bar; the 2D-layout choices disappeared while only 2D was shown. Status: **“Shown as 2D from the 3D view · Undo restores the 3D model”**. Evidence: [11-flattened-2d.png](11-flattened-2d.png).
++
++11. **Return to 3D, then restore the original drawing — PASS.** Clicked Structure → **3D**. The turned 3D model returned, **From the 3D view** still active, and status read **“Shown as 3D model · Undo restores the 2D drawing”**. Evidence: [12-back-to-3d.png](12-back-to-3d.png). Clicked **Original drawing**, which became active; its description read **“The layout you drew, unchanged.”** Status became **“Drawing updated”**. Evidence: [13-layout-original.png](13-layout-original.png). Clicked **2D**. The original caffeine arrangement from step 1 returned, including the ring orientation and methyl/carbonyl bond directions. Its screenshot is smaller because zoom is 122% instead of 238%. **2D** was active, the floating bar was visible above the selected drawing, and the exact status was **“Original 2D drawing restored”**. Evidence: [14-original-restored.png](14-original-restored.png).
++
++    A numerical check of all 14 atom-marker centers between screenshots 01 and 14 supports that visual result: uniform scale and translation, with no rotation or shear, maps them with **0.129 px RMS / 0.378 px maximum residual**. This accounts for the changed viewport zoom and position.
++
++12. **Undo once — PASS.** Pressed **`Cmd+Z` once**. The previous **turned 3D model** came back, with **3D active** and **Original drawing active** in the 2D-layout controls. The floating bar was visible, and Redo became enabled. Exact status: **“History restored”**. Evidence: [15-undo.png](15-undo.png).
++
++13. **Context-menu Show as submenu — PASS by click.** Right-clicked the molecule at screenshot pixel **(1065, 920)**, then clicked the **Show as** parent row at **(1300, 888)**. The available computer-use API did not expose a hover operation, so the permitted click fallback was used. The submenu contained **2D drawing**, **2D from the 3D view**, **3D model**, and **2D and 3D**. **3D model** was disabled as the current mode. The submenu is present in the window-only screenshot, so no `16b` screen-rectangle capture was necessary. Status remained **“History restored”**. Pressed **Escape** to dismiss it. Evidence: [16-context-menu.png](16-context-menu.png).
++
++14. **Both, then deselect — PASS with a zoom adjustment.** Clicked Structure → **Both**. Both became active in Structure and the floating bar. The 2D drawing and turned 3D model appeared beside each other. At **122%**, the rightmost part of the model extended beyond the canvas under the inspector; this exact initial result is preserved in [17a-both-at-122-percent.png](17a-both-at-122-percent.png). One status-bar minus click reduced zoom to **97%**, bringing both molecular representations fully into view for [17-both.png](17-both.png). The shared selection frame reached the inspector boundary, but the floating Show as bar remained fully inside the canvas.
++
++    Exact status: **“Shown as 2D and 3D · Undo restores the 3D model”**. The 2D member at this point is the flattened projection restored by Undo; no additional original-layout restoration was performed after Undo. Clicked empty canvas at screenshot pixel **(400, 450)**, then parked the pointer. Both representations remained visible, while the selection frame and floating bar disappeared. Properties showed **“Select an object to edit its properties.”** The status text remained unchanged. Evidence: [18-both-deselected.png](18-both-deselected.png).
++
++15. **Quit only the launched process — PASS.** Rechecked that window **7293** still belonged to PID **29655**, and checked the PID's executable path before terminating it with **`kill 29655`**. The exact executable-path `pgrep -f` then returned **exit 1 / no match**. `pgrep -lf reshiki` showed only the pre-existing installed PID **51217**, whose start time remained **2026-10-20 14:02:02**. No other ReShiki process was present in the pre-launch list. No UI interaction or screenshot occurred after termination. Evidence: [process-cleanup.txt](process-cleanup.txt).
++
++**Unverified items and limits.** The screenshots demonstrate sampled intermediate morph states, but their capture cadence cannot establish an exact 0.750-second duration or smoothness of every rendered frame. Hover-only submenu behavior was not tested because the available UI API has no hover method; click expansion passed. The initial offscreen 3D frame height at 238% could not be measured directly from that clipped screenshot, so frame-invariance comparisons use the fully visible 122% baseline. The requested approximate window size was not reproduced because the instruction to preserve the actual window size was followed. Clamping and drag hiding passed for the zoom levels and drag types exercised here; this run does not exhaust every possible zoom, pan, molecule, or viewport. No save/reopen persistence or underlying atom-ID/chemical correctness assertion was made from UI screenshots alone.
+
+diff --git a/ev386-1b-final/app/report.md b/ev386-1b-final/app/report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..6beb37e2e4a259174620087476e556708239d56f
+--- /dev/null
++++ b/ev386-1b-final/app/report.md
+@@ -0,0 +1,67 @@
++# ReShiki #386 phase 1b — local UI verification
++
++Run on macOS, 2026-10-20, approximately 19:42–19:50 JST. **The requested feature checks passed in this run**, with the viewport and measurement qualifications below. No drawing was saved and no repository files or system settings were changed.
++
++The verification bundle was launched with the exact supplied `open -n … --env RESHIKI_DATA_DIR=… --args --open …/input/caffeine.mol` command. Computer use attached only through bundle ID `dev.reshiki.verification.ev386final1b`.
++
++| Isolation evidence | Observed |
++| --- | --- |
++| Bundle | `apps386-final-1b/ReShiki386F1bEvidence.app` |
++| Launched PID | **29655**, exact executable-path match |
++| Main window ID | **7293** throughout, including the final check |
++| Window rectangle | Screen origin **(200, 115)** points; **1280 × 852 points** |
++| Screenshot resolution | **2560 × 1704 pixels**, Retina 2× |
++| Pre-existing application | PID **51217**, installed `/nix/store/…/ReShiki.app/Contents/MacOS/reshiki` |
++| Process logs | [installed-process-before.txt](installed-process-before.txt), [launched-process.txt](launched-process.txt), [process-cleanup.txt](process-cleanup.txt) |
++
++The window opened larger than the approximate 1000 × 665 points in the brief. Its actual 1280 × 852-point size was preserved. The initial zoom was **238%**, which made the first 3D selection frame extend above and below the canvas. That initial state is preserved in [02-initial-238-percent.png](02-initial-238-percent.png). Before the measured rotation sequence, three status-bar minus clicks reduced zoom to **122%**, making the entire frame visible; [02-3d-shown.png](02-3d-shown.png) is this opening-orientation baseline. Two attempted `Cmd+-` keystrokes had no visible effect, so all effective zoom changes used the status-bar buttons.
++
++All primary evidence shots used `screencapture -x -o -l 7293 <file>`. Held-drag captures used the supplied helper with the same PID and window. The pointer was parked on an inert title-bar area at screenshot coordinate **(600, 16)** before ordinary evidence captures. During held-drag and context-menu evidence it remained where needed for that interaction. The orange crosshair visible on the canvas is the app's keyboard-drawing marker, not the parked mouse pointer.
++
++**Coordinate and measurement conventions.** Every drag below uses window-frame-relative **points**, including the title bar, exactly as required by the supplied helper. Other mouse coordinates are explicitly described as **screenshot pixels**. Frame measurements use the centerlines of the two-pixel teal strokes, excluding handles, the rotation stem, and the floating bar. The visible canvas is **x = 208…1959, y = 364…1619 pixels**; the inspector begins at x ≈ 1960 and the status-bar boundary is y = 1620.
++
++| Evidence | Frame centerline bounds `(left, top) → (right, bottom)`, pixels | Width × height | Comparison |
++| --- | --- | --- | --- |
++| 02, 03, 04 | `(664.5, 603.5) → (1408.5, 1347.5)` | **744 × 744 px** | Same size and position before, during, and after rotation |
++| 05b, 06, 07 | `(664.5, 603.5) → (1408.5, 1347.5)` | **744 × 744 px** | Same after zoom restoration, roll, and reset |
++| 08, 09 | `(664.5, 603.5) → (1548.5, 1487.5)` | **884 × 884 px** | Resized dimensions and position preserved through subsequent rotation |
++
++The original frame's painted edge pixels are x = 664–665 / 1408–1409 and y = 603–604 / 1347–1348. After resizing, the right/bottom edge pixels become x = 1548–1549 and y = 1487–1488. Independent pixel scans of the saved PNGs confirmed these bounds. Detailed measurements, comparison methods, and a reproducible Swift/AppKit command are in [frame-measurements.md](frame-measurements.md), with numerical data in [frame-measurements.json](frame-measurements.json).
++
++1. **Select the complete 2D molecule — PASS.** Clicked the Select arrow, clicked empty canvas at screenshot pixel **(400, 440)**, then pressed `Cmd+A`. Caffeine was selected with **14 atoms · 15 bonds**. Structure was expanded, **2D active**, 3D/Both inactive. The floating Show as bar was visible above the selection and fully inside the canvas. Status: **“Structure imported · Undo restores the previous drawing”**. Evidence: [01-selected-2d.png](01-selected-2d.png).
++
++2. **Generate and morph to 3D — PASS, sampled timing qualification.** Created `morph-raw`, wrote **29655** to `morph-go`, and immediately made the next UI action a click on Structure's **3D** button. The background recorder captured all **40 frames**. Frame f32 shows **“Generating the conformer · ETKDG, then MMFF94s”** with 3D selected; f33–f38 show intermediate spatial states and emerging hydrogen spheres; f39–f40 show the stable endpoint. The sampled span from f33 to f39 is **786 ms**, consistent with the expected 0.75-second morph within the approximately 0.12–0.13-second capture interval.
++
++   The selected 3D model appeared with **3D active** and **Original drawing active**. Status: **“Shown as 3D model · Undo restores the 2D drawing”**. Preserved the immediate 238% state, then established the fully visible **122%**, **744 × 744 px** measurement baseline without changing orientation. Its floating bar is approximately **x = 760…1313, y = 446…516 px**, fully inside the canvas. Evidence: [02-3d-shown.png](02-3d-shown.png), [02-initial-238-percent.png](02-initial-238-percent.png), [morph-raw/contact-sheet.png](morph-raw/contact-sheet.png), [morph-analysis.md](morph-analysis.md).
++
++3. **Rotate while held — PASS.** Ran the helper with PID **29655**, **(450, 470) → (570, 510)** points, without Shift, and `capture=…/03-rotate-mid-drag.png`. This is **+120 pt right, +40 pt down**, starting inside the frame toward its center-left. The molecule turned to an almost edge-on orientation. The frame remained **744 × 744 px at the same coordinates**. The floating Show as bar was **hidden**, and the hint strip read **“Drag to rotate · Shift-drag to roll · Double-click to reset”**. Structure retained **3D / Original drawing**. The status still read **“Shown as 3D model · Undo restores the 2D drawing”** during the held capture. Evidence: [03-rotate-mid-drag.png](03-rotate-mid-drag.png).
++
++4. **Release rotation — PASS.** Released via the helper, refreshed computer-use state, and parked the pointer. The turned orientation persisted. Frame bounds exactly matched step 2: **744 × 744 px**, with **zero measured displacement or size change**. The hint disappeared and Show as returned at approximately **x = 760…1313, y = 446…516 px**, fully clear of the inspector and status bar. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [04-rotate-released.png](04-rotate-released.png).
++
++5. **Zoom and clamp the floating bar — PASS.** Clicked status-bar **+** at screenshot pixel **(2423, 1664)** three times, changing **122% → 238%**. The selected frame then extended beyond the full canvas height. No pan was needed: the model remained near the canvas center. The entire Show as bar remained visible at approximately **x = 715…1268, y = 1543…1612 px**, including all three buttons. Its lower edge stayed about **7–8 px above the status-bar boundary**. **3D** remained active; status: **“Drawing updated”**. Then clicked status-bar **−** at screenshot pixel **(2264, 1664)** three times to restore **122%**. The full model and the original **744 × 744 px** frame were visible again. Evidence: [05-zoomed-bar-clamped.png](05-zoomed-bar-clamped.png), [05b-zoom-restored.png](05b-zoom-restored.png).
++
++6. **Shift-roll — PASS.** Ran the helper with PID **29655**, **(590, 488) → (518, 388)** points and **`shift`**, starting right of center and ending about 100 pt above center. The previously near-vertical, edge-on molecule rolled to a diagonal in the screen plane. Frame position and **744 × 744 px** dimensions stayed unchanged. The supplementary held capture shows the bar hidden and the rotation hint present; the released capture shows the bar above the frame again. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [06-shift-roll.png](06-shift-roll.png), [06a-shift-roll-mid-drag.png](06a-shift-roll-mid-drag.png).
++
++7. **Double-click reset — PASS.** Used computer use to double-click an atom inside the frame at screenshot pixel **(1025, 992)**, then parked the pointer. The model returned to its opening orientation from step 2. Frame bounds remained **744 × 744 px** and unchanged. A saved-image comparison excluding keyboard-marker regions found only very small rendering differences, consistent with the same geometry. **3D / Original drawing** remained active; the floating bar was visible above the frame. Status: **“Drawing updated”**. Evidence: [07-double-click-reset.png](07-double-click-reset.png); compare [02-3d-shown.png](02-3d-shown.png).
++
++8. **Corner resize — PASS.** Ran the helper from the bottom-right handle at **(704, 674) → (784, 734)** points, a requested movement of **+80 pt right / +60 pt down**, entirely within the canvas. The model and square frame enlarged. The top-left frame centerline stayed at **(664.5, 603.5) px**; the bottom-right became **(1548.5, 1487.5) px**, making the frame **884 × 884 px**. The square grew by 140 px in each dimension. The supplementary held capture confirms Show as was hidden during resizing; it returned above the frame after release. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [08-resized.png](08-resized.png), [08a-resize-mid-drag.png](08a-resize-mid-drag.png).
++
++9. **Rotate after resize — PASS.** Ran the helper without Shift at **(580, 530) → (480, 470)** points, exactly **100 pt left / 60 pt up**, inside the enlarged frame. The model turned to a clearly different oblique view. The frame stayed at the exact step-8 bounds and **884 × 884 px** dimensions. The floating bar hid during the drag and returned after release; the held capture shows the hint strip. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [09-resized-then-rotated.png](09-resized-then-rotated.png), [09a-resized-rotate-mid-drag.png](09a-resized-rotate-mid-drag.png).
++
++10. **Flatten the turned 3D view — PASS.** Clicked Structure → 2D layout → **From the 3D view**. That option became active while **3D** stayed active, and the description read **“Flatten the model as it is turned now, with far bonds lighter.”** Status at that point: **“Drawing updated”**. Saved [10-layout-from-3d.png](10-layout-from-3d.png), then clicked Structure → **2D**. The model became a 2D drawing in the oblique projection, visibly distinct from the original caffeine layout, with distant bonds/labels lighter. **2D** became active in Structure and the floating bar; the 2D-layout choices disappeared while only 2D was shown. Status: **“Shown as 2D from the 3D view · Undo restores the 3D model”**. Evidence: [11-flattened-2d.png](11-flattened-2d.png).
++
++11. **Return to 3D, then restore the original drawing — PASS.** Clicked Structure → **3D**. The turned 3D model returned, **From the 3D view** still active, and status read **“Shown as 3D model · Undo restores the 2D drawing”**. Evidence: [12-back-to-3d.png](12-back-to-3d.png). Clicked **Original drawing**, which became active; its description read **“The layout you drew, unchanged.”** Status became **“Drawing updated”**. Evidence: [13-layout-original.png](13-layout-original.png). Clicked **2D**. The original caffeine arrangement from step 1 returned, including the ring orientation and methyl/carbonyl bond directions. Its screenshot is smaller because zoom is 122% instead of 238%. **2D** was active, the floating bar was visible above the selected drawing, and the exact status was **“Original 2D drawing restored”**. Evidence: [14-original-restored.png](14-original-restored.png).
++
++    A numerical check of all 14 atom-marker centers between screenshots 01 and 14 supports that visual result: uniform scale and translation, with no rotation or shear, maps them with **0.129 px RMS / 0.378 px maximum residual**. This accounts for the changed viewport zoom and position.
++
++12. **Undo once — PASS.** Pressed **`Cmd+Z` once**. The previous **turned 3D model** came back, with **3D active** and **Original drawing active** in the 2D-layout controls. The floating bar was visible, and Redo became enabled. Exact status: **“History restored”**. Evidence: [15-undo.png](15-undo.png).
++
++13. **Context-menu Show as submenu — PASS by click.** Right-clicked the molecule at screenshot pixel **(1065, 920)**, then clicked the **Show as** parent row at **(1300, 888)**. The available computer-use API did not expose a hover operation, so the permitted click fallback was used. The submenu contained **2D drawing**, **2D from the 3D view**, **3D model**, and **2D and 3D**. **3D model** was disabled as the current mode. The submenu is present in the window-only screenshot, so no `16b` screen-rectangle capture was necessary. Status remained **“History restored”**. Pressed **Escape** to dismiss it. Evidence: [16-context-menu.png](16-context-menu.png).
++
++14. **Both, then deselect — PASS with a zoom adjustment.** Clicked Structure → **Both**. Both became active in Structure and the floating bar. The 2D drawing and turned 3D model appeared beside each other. At **122%**, the rightmost part of the model extended beyond the canvas under the inspector; this exact initial result is preserved in [17a-both-at-122-percent.png](17a-both-at-122-percent.png). One status-bar minus click reduced zoom to **97%**, bringing both molecular representations fully into view for [17-both.png](17-both.png). The shared selection frame reached the inspector boundary, but the floating Show as bar remained fully inside the canvas.
++
++    Exact status: **“Shown as 2D and 3D · Undo restores the 3D model”**. The 2D member at this point is the flattened projection restored by Undo; no additional original-layout restoration was performed after Undo. Clicked empty canvas at screenshot pixel **(400, 450)**, then parked the pointer. Both representations remained visible, while the selection frame and floating bar disappeared. Properties showed **“Select an object to edit its properties.”** The status text remained unchanged. Evidence: [18-both-deselected.png](18-both-deselected.png).
++
++15. **Quit only the launched process — PASS.** Rechecked that window **7293** still belonged to PID **29655**, and checked the PID's executable path before terminating it with **`kill 29655`**. The exact executable-path `pgrep -f` then returned **exit 1 / no match**. `pgrep -lf reshiki` showed only the pre-existing installed PID **51217**, whose start time remained **2026-10-20 14:02:02**. No other ReShiki process was present in the pre-launch list. No UI interaction or screenshot occurred after termination. Evidence: [process-cleanup.txt](process-cleanup.txt).
++
++**Unverified items and limits.** The screenshots demonstrate sampled intermediate morph states, but their capture cadence cannot establish an exact 0.750-second duration or smoothness of every rendered frame. Hover-only submenu behavior was not tested because the available UI API has no hover method; click expansion passed. The initial offscreen 3D frame height at 238% could not be measured directly from that clipped screenshot, so frame-invariance comparisons use the fully visible 122% baseline. The requested approximate window size was not reproduced because the instruction to preserve the actual window size was followed. Clamping and drag hiding passed for the zoom levels and drag types exercised here; this run does not exhaust every possible zoom, pan, molecule, or viewport. No save/reopen persistence or underlying atom-ID/chemical correctness assertion was made from UI screenshots alone.
+
+codex
+Completed the verification and saved the full [report.md](/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app/report.md), all 18 requested screenshots, supplementary captures, and 40 morph frames.
+
+The tested feature checks passed:
+
+- Rotation and roll preserved the **744 × 744 px** frame.
+- Resizing produced **884 × 884 px**, preserved through subsequent rotation.
+- The floating bar hid during drags and stayed inside the canvas when zoomed.
+- Double-click reset, projection flattening, original-layout restoration, Undo, the context submenu, and Both mode behaved as expected.
+- Morph captures show intermediate geometry over approximately **0.8 seconds**; capture timing cannot establish exactly 0.750 seconds.
+
+The report documents the actual window size, zoom adjustments, exact drag coordinates, status text, and verification limits.
+
+**Cleanup confirmed:** launched PID **29655** was terminated; installed PID **51217** remains running. No drawing was saved, and no repository files or system settings were changed.
+diff --git a/ev386-1b-final/app/report.md b/ev386-1b-final/app/report.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..6beb37e2e4a259174620087476e556708239d56f
+--- /dev/null
++++ b/ev386-1b-final/app/report.md
+@@ -0,0 +1,67 @@
++# ReShiki #386 phase 1b — local UI verification
++
++Run on macOS, 2026-10-20, approximately 19:42–19:50 JST. **The requested feature checks passed in this run**, with the viewport and measurement qualifications below. No drawing was saved and no repository files or system settings were changed.
++
++The verification bundle was launched with the exact supplied `open -n … --env RESHIKI_DATA_DIR=… --args --open …/input/caffeine.mol` command. Computer use attached only through bundle ID `dev.reshiki.verification.ev386final1b`.
++
++| Isolation evidence | Observed |
++| --- | --- |
++| Bundle | `apps386-final-1b/ReShiki386F1bEvidence.app` |
++| Launched PID | **29655**, exact executable-path match |
++| Main window ID | **7293** throughout, including the final check |
++| Window rectangle | Screen origin **(200, 115)** points; **1280 × 852 points** |
++| Screenshot resolution | **2560 × 1704 pixels**, Retina 2× |
++| Pre-existing application | PID **51217**, installed `/nix/store/…/ReShiki.app/Contents/MacOS/reshiki` |
++| Process logs | [installed-process-before.txt](installed-process-before.txt), [launched-process.txt](launched-process.txt), [process-cleanup.txt](process-cleanup.txt) |
++
++The window opened larger than the approximate 1000 × 665 points in the brief. Its actual 1280 × 852-point size was preserved. The initial zoom was **238%**, which made the first 3D selection frame extend above and below the canvas. That initial state is preserved in [02-initial-238-percent.png](02-initial-238-percent.png). Before the measured rotation sequence, three status-bar minus clicks reduced zoom to **122%**, making the entire frame visible; [02-3d-shown.png](02-3d-shown.png) is this opening-orientation baseline. Two attempted `Cmd+-` keystrokes had no visible effect, so all effective zoom changes used the status-bar buttons.
++
++All primary evidence shots used `screencapture -x -o -l 7293 <file>`. Held-drag captures used the supplied helper with the same PID and window. The pointer was parked on an inert title-bar area at screenshot coordinate **(600, 16)** before ordinary evidence captures. During held-drag and context-menu evidence it remained where needed for that interaction. The orange crosshair visible on the canvas is the app's keyboard-drawing marker, not the parked mouse pointer.
++
++**Coordinate and measurement conventions.** Every drag below uses window-frame-relative **points**, including the title bar, exactly as required by the supplied helper. Other mouse coordinates are explicitly described as **screenshot pixels**. Frame measurements use the centerlines of the two-pixel teal strokes, excluding handles, the rotation stem, and the floating bar. The visible canvas is **x = 208…1959, y = 364…1619 pixels**; the inspector begins at x ≈ 1960 and the status-bar boundary is y = 1620.
++
++| Evidence | Frame centerline bounds `(left, top) → (right, bottom)`, pixels | Width × height | Comparison |
++| --- | --- | --- | --- |
++| 02, 03, 04 | `(664.5, 603.5) → (1408.5, 1347.5)` | **744 × 744 px** | Same size and position before, during, and after rotation |
++| 05b, 06, 07 | `(664.5, 603.5) → (1408.5, 1347.5)` | **744 × 744 px** | Same after zoom restoration, roll, and reset |
++| 08, 09 | `(664.5, 603.5) → (1548.5, 1487.5)` | **884 × 884 px** | Resized dimensions and position preserved through subsequent rotation |
++
++The original frame's painted edge pixels are x = 664–665 / 1408–1409 and y = 603–604 / 1347–1348. After resizing, the right/bottom edge pixels become x = 1548–1549 and y = 1487–1488. Independent pixel scans of the saved PNGs confirmed these bounds. Detailed measurements, comparison methods, and a reproducible Swift/AppKit command are in [frame-measurements.md](frame-measurements.md), with numerical data in [frame-measurements.json](frame-measurements.json).
++
++1. **Select the complete 2D molecule — PASS.** Clicked the Select arrow, clicked empty canvas at screenshot pixel **(400, 440)**, then pressed `Cmd+A`. Caffeine was selected with **14 atoms · 15 bonds**. Structure was expanded, **2D active**, 3D/Both inactive. The floating Show as bar was visible above the selection and fully inside the canvas. Status: **“Structure imported · Undo restores the previous drawing”**. Evidence: [01-selected-2d.png](01-selected-2d.png).
++
++2. **Generate and morph to 3D — PASS, sampled timing qualification.** Created `morph-raw`, wrote **29655** to `morph-go`, and immediately made the next UI action a click on Structure's **3D** button. The background recorder captured all **40 frames**. Frame f32 shows **“Generating the conformer · ETKDG, then MMFF94s”** with 3D selected; f33–f38 show intermediate spatial states and emerging hydrogen spheres; f39–f40 show the stable endpoint. The sampled span from f33 to f39 is **786 ms**, consistent with the expected 0.75-second morph within the approximately 0.12–0.13-second capture interval.
++
++   The selected 3D model appeared with **3D active** and **Original drawing active**. Status: **“Shown as 3D model · Undo restores the 2D drawing”**. Preserved the immediate 238% state, then established the fully visible **122%**, **744 × 744 px** measurement baseline without changing orientation. Its floating bar is approximately **x = 760…1313, y = 446…516 px**, fully inside the canvas. Evidence: [02-3d-shown.png](02-3d-shown.png), [02-initial-238-percent.png](02-initial-238-percent.png), [morph-raw/contact-sheet.png](morph-raw/contact-sheet.png), [morph-analysis.md](morph-analysis.md).
++
++3. **Rotate while held — PASS.** Ran the helper with PID **29655**, **(450, 470) → (570, 510)** points, without Shift, and `capture=…/03-rotate-mid-drag.png`. This is **+120 pt right, +40 pt down**, starting inside the frame toward its center-left. The molecule turned to an almost edge-on orientation. The frame remained **744 × 744 px at the same coordinates**. The floating Show as bar was **hidden**, and the hint strip read **“Drag to rotate · Shift-drag to roll · Double-click to reset”**. Structure retained **3D / Original drawing**. The status still read **“Shown as 3D model · Undo restores the 2D drawing”** during the held capture. Evidence: [03-rotate-mid-drag.png](03-rotate-mid-drag.png).
++
++4. **Release rotation — PASS.** Released via the helper, refreshed computer-use state, and parked the pointer. The turned orientation persisted. Frame bounds exactly matched step 2: **744 × 744 px**, with **zero measured displacement or size change**. The hint disappeared and Show as returned at approximately **x = 760…1313, y = 446…516 px**, fully clear of the inspector and status bar. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [04-rotate-released.png](04-rotate-released.png).
++
++5. **Zoom and clamp the floating bar — PASS.** Clicked status-bar **+** at screenshot pixel **(2423, 1664)** three times, changing **122% → 238%**. The selected frame then extended beyond the full canvas height. No pan was needed: the model remained near the canvas center. The entire Show as bar remained visible at approximately **x = 715…1268, y = 1543…1612 px**, including all three buttons. Its lower edge stayed about **7–8 px above the status-bar boundary**. **3D** remained active; status: **“Drawing updated”**. Then clicked status-bar **−** at screenshot pixel **(2264, 1664)** three times to restore **122%**. The full model and the original **744 × 744 px** frame were visible again. Evidence: [05-zoomed-bar-clamped.png](05-zoomed-bar-clamped.png), [05b-zoom-restored.png](05b-zoom-restored.png).
++
++6. **Shift-roll — PASS.** Ran the helper with PID **29655**, **(590, 488) → (518, 388)** points and **`shift`**, starting right of center and ending about 100 pt above center. The previously near-vertical, edge-on molecule rolled to a diagonal in the screen plane. Frame position and **744 × 744 px** dimensions stayed unchanged. The supplementary held capture shows the bar hidden and the rotation hint present; the released capture shows the bar above the frame again. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [06-shift-roll.png](06-shift-roll.png), [06a-shift-roll-mid-drag.png](06a-shift-roll-mid-drag.png).
++
++7. **Double-click reset — PASS.** Used computer use to double-click an atom inside the frame at screenshot pixel **(1025, 992)**, then parked the pointer. The model returned to its opening orientation from step 2. Frame bounds remained **744 × 744 px** and unchanged. A saved-image comparison excluding keyboard-marker regions found only very small rendering differences, consistent with the same geometry. **3D / Original drawing** remained active; the floating bar was visible above the frame. Status: **“Drawing updated”**. Evidence: [07-double-click-reset.png](07-double-click-reset.png); compare [02-3d-shown.png](02-3d-shown.png).
++
++8. **Corner resize — PASS.** Ran the helper from the bottom-right handle at **(704, 674) → (784, 734)** points, a requested movement of **+80 pt right / +60 pt down**, entirely within the canvas. The model and square frame enlarged. The top-left frame centerline stayed at **(664.5, 603.5) px**; the bottom-right became **(1548.5, 1487.5) px**, making the frame **884 × 884 px**. The square grew by 140 px in each dimension. The supplementary held capture confirms Show as was hidden during resizing; it returned above the frame after release. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [08-resized.png](08-resized.png), [08a-resize-mid-drag.png](08a-resize-mid-drag.png).
++
++9. **Rotate after resize — PASS.** Ran the helper without Shift at **(580, 530) → (480, 470)** points, exactly **100 pt left / 60 pt up**, inside the enlarged frame. The model turned to a clearly different oblique view. The frame stayed at the exact step-8 bounds and **884 × 884 px** dimensions. The floating bar hid during the drag and returned after release; the held capture shows the hint strip. **3D / Original drawing** remained active. Status: **“Drawing updated”**. Evidence: [09-resized-then-rotated.png](09-resized-then-rotated.png), [09a-resized-rotate-mid-drag.png](09a-resized-rotate-mid-drag.png).
++
++10. **Flatten the turned 3D view — PASS.** Clicked Structure → 2D layout → **From the 3D view**. That option became active while **3D** stayed active, and the description read **“Flatten the model as it is turned now, with far bonds lighter.”** Status at that point: **“Drawing updated”**. Saved [10-layout-from-3d.png](10-layout-from-3d.png), then clicked Structure → **2D**. The model became a 2D drawing in the oblique projection, visibly distinct from the original caffeine layout, with distant bonds/labels lighter. **2D** became active in Structure and the floating bar; the 2D-layout choices disappeared while only 2D was shown. Status: **“Shown as 2D from the 3D view · Undo restores the 3D model”**. Evidence: [11-flattened-2d.png](11-flattened-2d.png).
++
++11. **Return to 3D, then restore the original drawing — PASS.** Clicked Structure → **3D**. The turned 3D model returned, **From the 3D view** still active, and status read **“Shown as 3D model · Undo restores the 2D drawing”**. Evidence: [12-back-to-3d.png](12-back-to-3d.png). Clicked **Original drawing**, which became active; its description read **“The layout you drew, unchanged.”** Status became **“Drawing updated”**. Evidence: [13-layout-original.png](13-layout-original.png). Clicked **2D**. The original caffeine arrangement from step 1 returned, including the ring orientation and methyl/carbonyl bond directions. Its screenshot is smaller because zoom is 122% instead of 238%. **2D** was active, the floating bar was visible above the selected drawing, and the exact status was **“Original 2D drawing restored”**. Evidence: [14-original-restored.png](14-original-restored.png).
++
++    A numerical check of all 14 atom-marker centers between screenshots 01 and 14 supports that visual result: uniform scale and translation, with no rotation or shear, maps them with **0.129 px RMS / 0.378 px maximum residual**. This accounts for the changed viewport zoom and position.
++
++12. **Undo once — PASS.** Pressed **`Cmd+Z` once**. The previous **turned 3D model** came back, with **3D active** and **Original drawing active** in the 2D-layout controls. The floating bar was visible, and Redo became enabled. Exact status: **“History restored”**. Evidence: [15-undo.png](15-undo.png).
++
++13. **Context-menu Show as submenu — PASS by click.** Right-clicked the molecule at screenshot pixel **(1065, 920)**, then clicked the **Show as** parent row at **(1300, 888)**. The available computer-use API did not expose a hover operation, so the permitted click fallback was used. The submenu contained **2D drawing**, **2D from the 3D view**, **3D model**, and **2D and 3D**. **3D model** was disabled as the current mode. The submenu is present in the window-only screenshot, so no `16b` screen-rectangle capture was necessary. Status remained **“History restored”**. Pressed **Escape** to dismiss it. Evidence: [16-context-menu.png](16-context-menu.png).
++
++14. **Both, then deselect — PASS with a zoom adjustment.** Clicked Structure → **Both**. Both became active in Structure and the floating bar. The 2D drawing and turned 3D model appeared beside each other. At **122%**, the rightmost part of the model extended beyond the canvas under the inspector; this exact initial result is preserved in [17a-both-at-122-percent.png](17a-both-at-122-percent.png). One status-bar minus click reduced zoom to **97%**, bringing both molecular representations fully into view for [17-both.png](17-both.png). The shared selection frame reached the inspector boundary, but the floating Show as bar remained fully inside the canvas.
++
++    Exact status: **“Shown as 2D and 3D · Undo restores the 3D model”**. The 2D member at this point is the flattened projection restored by Undo; no additional original-layout restoration was performed after Undo. Clicked empty canvas at screenshot pixel **(400, 450)**, then parked the pointer. Both representations remained visible, while the selection frame and floating bar disappeared. Properties showed **“Select an object to edit its properties.”** The status text remained unchanged. Evidence: [18-both-deselected.png](18-both-deselected.png).
++
++15. **Quit only the launched process — PASS.** Rechecked that window **7293** still belonged to PID **29655**, and checked the PID's executable path before terminating it with **`kill 29655`**. The exact executable-path `pgrep -f` then returned **exit 1 / no match**. `pgrep -lf reshiki` showed only the pre-existing installed PID **51217**, whose start time remained **2026-10-20 14:02:02**. No other ReShiki process was present in the pre-launch list. No UI interaction or screenshot occurred after termination. Evidence: [process-cleanup.txt](process-cleanup.txt).
++
++**Unverified items and limits.** The screenshots demonstrate sampled intermediate morph states, but their capture cadence cannot establish an exact 0.750-second duration or smoothness of every rendered frame. Hover-only submenu behavior was not tested because the available UI API has no hover method; click expansion passed. The initial offscreen 3D frame height at 238% could not be measured directly from that clipped screenshot, so frame-invariance comparisons use the fully visible 122% baseline. The requested approximate window size was not reproduced because the instruction to preserve the actual window size was followed. Clamping and drag hiding passed for the zoom levels and drag types exercised here; this run does not exhaust every possible zoom, pan, molecule, or viewport. No save/reopen persistence or underlying atom-ID/chemical correctness assertion was made from UI screenshots alone.
+
+tokens used
+153,468
+Completed the verification and saved the full [report.md](/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app/report.md), all 18 requested screenshots, supplementary captures, and 40 morph frames.
+
+The tested feature checks passed:
+
+- Rotation and roll preserved the **744 × 744 px** frame.
+- Resizing produced **884 × 884 px**, preserved through subsequent rotation.
+- The floating bar hid during drags and stayed inside the canvas when zoomed.
+- Double-click reset, projection flattening, original-layout restoration, Undo, the context submenu, and Both mode behaved as expected.
+- Morph captures show intermediate geometry over approximately **0.8 seconds**; capture timing cannot establish exactly 0.750 seconds.
+
+The report documents the actual window size, zoom adjustments, exact drag coordinates, status text, and verification limits.
+
+**Cleanup confirmed:** launched PID **29655** was terminated; installed PID **51217** remains running. No drawing was saved, and no repository files or system settings were changed.

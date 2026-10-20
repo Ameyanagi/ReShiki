@@ -1,0 +1,9 @@
+  PID STARTED                      ARGS
+29655 Tue Oct 20 19:42:00 2026     /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps386-final-1b/ReShiki386F1bEvidence.app/Contents/MacOS/reshiki --open /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/input/caffeine.mol
+7293
+Window ID: 7293
+Verified owner PID: 29655
+Bundle ID: dev.reshiki.verification.ev386final1b
+Window rect (points): x=200, y=115, width=1280, height=852
+Frontmost PID at setup: 29655
+Final window-ID check before cleanup: 7293
