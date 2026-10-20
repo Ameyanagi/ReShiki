@@ -172,12 +172,14 @@ impl SceneCache {
             .markers
             .get_or_insert_with(|| Rc::new(super::markers::Markers::new(doc, ids)))
             .clone();
-        let paint = self
-            .opacity
-            .get_or_insert_with(|| Rc::new(Paint::new(&reshiki::models3d::drawn(doc))));
+        let opacity = &mut self.opacity;
         let scene = self
             .scene
-            .get_or_insert_with(|| scene::primitives_with_opacity(doc, paint).into())
+            .get_or_insert_with(|| {
+                let flat = reshiki::models3d::drawn(doc);
+                let paint = opacity.get_or_insert_with(|| Rc::new(Paint::new(&flat)));
+                scene::primitives_with_opacity(doc, &flat, paint).into()
+            })
             .clone();
         (markers, scene)
     }

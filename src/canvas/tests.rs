@@ -1649,6 +1649,40 @@ fn filled_background_leaves_atoms_and_bonds_selectable() {
 }
 
 #[test]
+fn a_3d_model_takes_clicks_over_what_it_is_painted_above() {
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", World::new(-20., 0.));
+    let b = doc.add_atom("O", World::new(20., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    let atoms = [(a, [-0.7, 0., 0.]), (b, [0.7, 0., 0.])]
+        .map(|(id, xyz)| reshiki::models3d::Placed { id, xyz })
+        .to_vec();
+    let model = reshiki::models3d::Model3d::new(
+        &doc,
+        atoms,
+        vec![],
+        reshiki::models3d::ForceField::Mmff94s,
+    );
+    doc.models.push(model);
+    reshiki::models3d::set_display(&mut doc, 0, reshiki::models3d::Display::ThreeD);
+    let mut g = Graphic::dragged(
+        3,
+        reshiki::graphics::GraphicKind::Rectangle,
+        World::new(-50., -50.),
+        World::new(50., 50.),
+        GraphicStyle::default(),
+        BracketSides::Both,
+        false,
+    );
+    g.layer = -1;
+    g.style.fill = Some(reshiki::palette::Color::Custom([220, 239, 233]));
+    doc.graphics.push(g);
+    assert_eq!(hit_selection(&doc, World::new(0., 8.), 5.), vec![a, b]);
+    doc.graphics[0].layer = 1;
+    assert_eq!(hit_selection(&doc, World::new(0., 8.), 5.), vec![3]);
+}
+
+#[test]
 fn graphic_and_curve_point_drags_publish_one_edit_and_do_not_mutate_preview() {
     let doc = Document::default();
     let style = GraphicStyle::default();

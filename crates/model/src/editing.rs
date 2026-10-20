@@ -1733,6 +1733,8 @@ fn isolated_ring(doc: &Document, ids: &[u64]) -> Option<Vec<u64>> {
 /// The separate fusion operation still requires an isolated saturated ring.
 pub fn ring_at(doc: &Document, p: Point) -> Option<Vec<u64>> {
     let mut rings = crate::aromatic::ring_circles(doc, false);
+    // A ring shown as a 3D model has no 2D interior to hit.
+    rings.retain(|ring| ring.atoms.iter().all(|id| doc.atom_drawn(*id)));
     rings.sort_by(|a, b| a.radius.total_cmp(&b.radius));
     rings.into_iter().find_map(|ring| {
         let ring = ring.atoms;

@@ -180,6 +180,8 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                 stops,
                 outline,
             } => {
+                // `fr` is SVG 2: the vendored usvg 0.45 behind PNG and PDF
+                // export ignores it and starts the gradient at radius 0.
                 let (defs, id) = gradient(
                     frame,
                     "radialGradient",

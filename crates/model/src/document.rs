@@ -340,7 +340,7 @@ impl Document {
         let mut doc: Self = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
         doc.validate()?;
         doc.migrate();
-        crate::models3d::prune(&mut doc);
+        crate::models3d::retain_whole(&mut doc);
         crate::arrow_anchors::reconcile(&mut doc);
         doc.validate()?;
         Ok(doc)

@@ -1020,6 +1020,9 @@ pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<
             Owner::BondStereo(a, b) if owners.get(&a) == owners.get(&b) => a,
             Owner::BondStereo(..) => continue,
         };
+        if crate::models3d::hides(doc, id) {
+            continue;
+        }
         let corner = label.origin.offset(label.width, label.height);
         grow(id, &mut [label.origin, corner].into_iter());
     }
@@ -1068,7 +1071,7 @@ pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<
     let mut highlight_joins = None;
     for bond in &doc.bonds {
         if bond.highlight.is_some()
-            && doc.bond_visible(bond.a, bond.b)
+            && doc.bond_drawn(bond.a, bond.b)
             && owners
                 .get(&bond.a)
                 .is_some_and(|owner| Some(owner) == owners.get(&bond.b))
@@ -1292,18 +1295,20 @@ fn ring_center(doc: &Document, from: u64, to: u64) -> Option<Point> {
 /// Drawing primitives with colors in canonical light-canvas bytes; renderers
 /// apply the canvas conversion once.
 pub fn primitives(doc: &Document) -> Vec<Primitive> {
-    let opacity = crate::rear_opacity::Paint::new(&crate::models3d::drawn(doc));
-    primitives_with_opacity(doc, &opacity)
+    let flat = crate::models3d::drawn(doc);
+    let opacity = crate::rear_opacity::Paint::new(&flat);
+    primitives_with_opacity(doc, &flat, &opacity)
 }
-/// Drawing primitives using shared rear-opacity paint. `opacity` must be
-/// `rear_opacity::Paint::new` of [`crate::models3d::drawn`] of this same raw,
-/// unmaterialized document: atoms shown as 3D models are not painted in 2D.
+/// Drawing primitives using shared rear-opacity paint. `flat` must be
+/// [`crate::models3d::drawn`] of this same raw, unmaterialized document, and
+/// `opacity` its `rear_opacity::Paint::new`: atoms shown as 3D models are not
+/// painted in 2D.
 pub fn primitives_with_opacity(
     raw: &Document,
+    flat: &Document,
     opacity: &crate::rear_opacity::Paint,
 ) -> Vec<Primitive> {
-    let flat = crate::models3d::drawn(raw);
-    let inputs = BondInputs::prepare(&flat, opacity, Resolve::Scene);
+    let inputs = BondInputs::prepare(flat, opacity, Resolve::Scene);
     let doc = inputs.doc();
     let style = &doc.drawing_style;
     let mut out = vec![];

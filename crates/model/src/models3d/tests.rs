@@ -404,3 +404,148 @@ fn stepped_discs_match_a_radial_gradient() {
     assert!(worst <= 6, "worst channel difference {worst}");
     assert!(total as f64 / (count as f64) < 2., "mean difference");
 }
+
+/// Give every atom of `doc`, one molecule, a model shown as `display`.
+fn model_all(doc: &mut Document, display: Display) {
+    let atoms = doc
+        .atoms
+        .iter()
+        .enumerate()
+        .map(|(i, a)| Placed {
+            id: a.id,
+            xyz: [i as f32, (i % 2) as f32, 0.1 * i as f32],
+        })
+        .collect();
+    let model = Model3d::new(doc, atoms, vec![], ForceField::Mmff94s);
+    doc.models.push(model);
+    doc.require_version(MODELS_3D);
+    set_display(doc, 0, display);
+}
+
+fn moved(doc: &Document, moves: &[(u64, Point)]) -> Document {
+    let mut edited = doc.clone();
+    let before = edited.clone();
+    for (id, p) in moves {
+        edited.atom_mut(*id).unwrap().position = *p;
+    }
+    commit(&mut edited, before);
+    edited
+}
+
+#[test]
+fn moving_atoms_that_flip_drawn_stereo_drops_the_model() {
+    // (E)-1,2-difluoroethene.
+    let mut doc = Document::default();
+    let c1 = doc.add_atom("C", Point::new(0., 0.));
+    let c2 = doc.add_atom("C", Point::new(36., 0.));
+    let f1 = doc.add_atom("F", Point::new(-18., -30.));
+    let f2 = doc.add_atom("F", Point::new(54., 30.));
+    doc.add_bond(c1, c2, 2, "plain");
+    doc.add_bond(c1, f1, 1, "plain");
+    doc.add_bond(c2, f2, 1, "plain");
+    model_all(&mut doc, Display::Both);
+    assert_eq!(moved(&doc, &[(f2, Point::new(60., 34.))]).models.len(), 1);
+    assert!(
+        moved(&doc, &[(f2, Point::new(54., -30.))])
+            .models
+            .is_empty()
+    );
+
+    // A wedged centre whose plain neighbours swap places is inverted.
+    let mut doc = Document::default();
+    let c = doc.add_atom("C", Point::default());
+    let f = doc.add_atom("F", Point::new(0., -36.));
+    let cl = doc.add_atom("Cl", Point::new(31., 18.));
+    let br = doc.add_atom("Br", Point::new(-31., 18.));
+    doc.add_bond(c, f, 1, "wedge");
+    doc.add_bond(c, cl, 1, "plain");
+    doc.add_bond(c, br, 1, "plain");
+    model_all(&mut doc, Display::Both);
+    assert_eq!(moved(&doc, &[(cl, Point::new(35., 20.))]).models.len(), 1);
+    let swapped = moved(
+        &doc,
+        &[(cl, Point::new(-31., 18.)), (br, Point::new(31., 18.))],
+    );
+    assert!(swapped.models.is_empty());
+}
+
+#[test]
+fn bond_styles_and_label_display_are_presentation() {
+    let (doc, atoms, _) = shown(Display::ThreeD);
+    let edits: [&dyn Fn(&mut Document); 3] = [
+        &|d| d.bonds[0].display = "bold".into(),
+        &|d| d.bonds[1].display = "hashed".into(),
+        &|d| d.atom_mut(atoms[2]).unwrap().display.hydrogens = Some(false),
+    ];
+    for edit in edits {
+        let mut edited = doc.clone();
+        let before = edited.clone();
+        edit(&mut edited);
+        commit(&mut edited, before);
+        assert_eq!(edited.models, doc.models);
+    }
+}
+
+#[test]
+fn loading_drops_models_that_are_not_one_whole_molecule() {
+    let (doc, atoms, methane) = shown(Display::ThreeD);
+    let mut partial = doc.clone();
+    partial.models[0].atoms.pop();
+    partial.models[0].hydrogens.retain(|h| h.parent != atoms[2]);
+    let mut spanning = doc.clone();
+    spanning.models[0].atoms.push(Placed {
+        id: methane,
+        xyz: [3., 0., 0.],
+    });
+    for file in [partial, spanning] {
+        let read = Document::from_json(&file.file_json().unwrap()).unwrap();
+        assert!(read.models.is_empty());
+    }
+}
+
+#[test]
+fn hidden_ink_is_not_measured_or_targeted() {
+    let (mut doc, atoms, _) = shown(Display::ThreeD);
+    let bounds = scene::selection_bounds(&doc, &atoms);
+    doc.atom_mut(atoms[0]).unwrap().display.number = Some(crate::atom_labels::Number {
+        text: "1".into(),
+        offset: Some(Point::new(0., 500.)),
+        style: crate::atom_labels::number_style(),
+    });
+    doc.bonds[0].highlight = Some(crate::palette::Color::Custom([255, 220, 0]));
+    assert_eq!(scene::selection_bounds(&doc, &atoms), bounds);
+    for id in &atoms {
+        let p = doc.atom(*id).unwrap().position;
+        assert!(crate::arrow_anchors::pick(&doc, p, 5.).is_none());
+    }
+
+    // A ring shown in 3D has no 2D interior.
+    let mut ring = Document::default();
+    let ids = [(0., 0.), (36., 0.), (18., 31.)].map(|(x, y)| ring.add_atom("C", Point::new(x, y)));
+    for (a, b) in [(0, 1), (1, 2), (2, 0)] {
+        ring.add_bond(ids[a], ids[b], 1, "plain");
+    }
+    let inside = Point::new(18., 10.);
+    assert!(editing::ring_at(&ring, inside).is_some());
+    model_all(&mut ring, Display::ThreeD);
+    assert_eq!(editing::ring_at(&ring, inside), None);
+}
+
+#[test]
+fn sphere_svg_writes_the_prototype_gradient() {
+    let (doc, ..) = shown(Display::ThreeD);
+    let svg = scene::svg(&doc);
+    let radial = svg
+        .split("<radialGradient ")
+        .nth(1)
+        .and_then(|s| s.split("</radialGradient>").next())
+        .unwrap();
+    assert!(radial.contains("gradientUnits=\"userSpaceOnUse\""));
+    assert!(radial.contains(" fr=\""));
+    assert_eq!(radial.matches("<stop ").count(), 3);
+    assert!(radial.contains("offset=\"0.6\""));
+    // Each bond half outlines only its two long sides.
+    let quad = svg.split("<linearGradient ").nth(1).unwrap();
+    let outline = quad.split("<path d=\"").nth(1).unwrap();
+    assert_eq!(outline.split('"').next().unwrap().matches('M').count(), 2);
+}

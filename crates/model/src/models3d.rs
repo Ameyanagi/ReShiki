@@ -393,6 +393,24 @@ pub fn prune(doc: &mut Document) {
         .retain(|m| m.atoms.iter().all(|a| present.contains(&a.id)));
 }
 
+/// Whether the model's atoms are exactly one whole connected molecule.
+fn whole(doc: &Document, model: &Model3d) -> bool {
+    let ids = model.ids();
+    let component = model
+        .atoms
+        .first()
+        .map(|a| crate::molecule_names::component(doc, a.id))
+        .unwrap_or_default();
+    component.len() == ids.len() && component.iter().all(|id| ids.contains(id))
+}
+
+/// Drop a loaded file's models that are not one whole molecule. Unlike
+/// [`prune`], nothing is mid-edit here.
+pub fn retain_whole(doc: &mut Document) {
+    let models = std::mem::take(&mut doc.models);
+    doc.models = models.into_iter().filter(|m| whole(doc, m)).collect();
+}
+
 /// Called in the same transaction as the edit. A model whose atoms are no
 /// longer exactly one molecule, or whose molecule changed chemically since
 /// `before` (element, charge, bonds, stereo, …; not its 2D layout), is dropped.
@@ -407,20 +425,44 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
         .into_iter()
         .filter(|m| {
             let ids = m.ids();
-            let component = m
-                .atoms
-                .first()
-                .map(|a| crate::molecule_names::component(doc, a.id))
-                .unwrap_or_default();
             let kept = before.models.iter().any(|old| old.ids() == ids);
-            component.len() == ids.len()
-                && component.iter().all(|id| ids.contains(id))
-                && (!kept || chemistry(before, &ids) == chemistry(doc, &ids))
+            whole(doc, m)
+                && (!kept
+                    || chemistry(before, &ids) == chemistry(doc, &ids)
+                        && stereo(before, &ids) == stereo(doc, &ids))
         })
         .collect();
 }
 
-/// The chemistry of these atoms and their bonds, without presentation.
+/// Atom chiral tags, then each bond's stereo, stereo atoms and unknown flag.
+type Stereo = (Vec<u8>, Vec<(u8, Vec<usize>, bool)>);
+/// Stereo as perceived from the drawing, which reads E/Z and R/S from 2D
+/// positions and wedges as well as stored fields; `None` when the molecule
+/// cannot be perceived.
+fn stereo(doc: &Document, ids: &HashSet<u64>) -> Option<Stereo> {
+    let atoms: Vec<_> = doc
+        .atoms
+        .iter()
+        .map(|a| a.id)
+        .filter(|id| ids.contains(id))
+        .collect();
+    let part = crate::editing::analysis_document(doc, &atoms);
+    let metadata = crate::chemistry::document::prepare(&part)
+        .ok()?
+        .state
+        .metadata;
+    Some((
+        metadata.atoms.iter().map(|a| a.chiral_tag).collect(),
+        metadata
+            .bonds
+            .into_iter()
+            .map(|b| (b.stereo, b.stereo_atoms, b.unknown_stereo))
+            .collect(),
+    ))
+}
+
+/// The chemistry of these atoms and their bonds, without presentation. Bond
+/// appearance counts only through the stereo it marks, see [`stereo`].
 fn chemistry(doc: &Document, ids: &HashSet<u64>) -> (Vec<Atom>, Vec<Bond>) {
     let atoms = doc
         .atoms
@@ -452,6 +494,7 @@ fn chemistry(doc: &Document, ids: &HashSet<u64>) -> (Vec<Atom>, Vec<Bond>) {
             double_position: Default::default(),
             secondary_display: None,
             color: Default::default(),
+            display: String::new(),
             ..b.clone()
         })
         .collect();

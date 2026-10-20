@@ -55,17 +55,26 @@ fn hit_selection_with_object(
             reshiki::atom_labels::Owner::BondStereo(a, b) => vec![a, b],
         };
     }
-    if let Some(id) = object() {
-        return vec![id];
-    }
-    // A 3D model selects its whole molecule.
-    if let Some(atoms) = reshiki::models3d::frame_hit(doc, p) {
+    let object = object();
+    // A 3D model selects its whole molecule. It is painted above molecules and
+    // background graphics, below arrows, text and foreground graphics.
+    if let Some(atoms) = reshiki::models3d::frame_hit(doc, p)
+        && !object.is_some_and(|id| above_models(doc, id))
+    {
         return atoms;
+    }
+    if let Some(id) = object {
+        return vec![id];
     }
     reshiki::editing::nearest_bond(doc, p, r * 0.7)
         .and_then(|i| doc.bonds.get(i))
         .map(|b| vec![b.a, b.b])
         .unwrap_or_default()
+}
+fn above_models(doc: &Document, id: u64) -> bool {
+    doc.arrows.iter().any(|a| a.id == id)
+        || doc.annotations.iter().any(|a| a.id == id)
+        || doc.graphics.iter().any(|g| g.id == id && g.layer >= 0)
 }
 /// Use the same attachment resolution for the drag preview and committed bond.
 /// Excluding the source lets short drags grow a bond rather than snap to themselves.
