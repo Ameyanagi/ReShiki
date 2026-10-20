@@ -941,35 +941,52 @@ fn numeric_size_apply_latency() {
 }
 
 #[test]
-fn tilt_steps_and_fields_leave_a_molecule_shown_only_in_3d_alone() {
-    use crate::canvas::tilt::{SHOWN_IN_3D, shown};
-    let (doc, molecule, drawn) = shown(reshiki::models3d::Display::ThreeD);
+fn tilts_turn_a_model_shown_only_in_3d_as_one_undo_step() {
+    use crate::canvas::{Edit, tilt};
+    let (doc, molecule, drawn) = tilt::shown(reshiki::models3d::Display::ThreeD);
     let positions = |doc: &Document, ids: [u64; 2]| {
         ids.map(|id| {
             let a = doc.atom(id).unwrap();
             (a.position, a.depth)
         })
     };
+    let mixed = [molecule, drawn].concat();
     let (mut app, _) = App::new();
     app.tab.busy = false;
     app.tab.doc = doc.clone();
-    app.tab.selected = molecule.to_vec();
     let frames = app.tab.history.undo_frames().count();
-    let _ = app.update(Message::Transform(Transform::TiltX(15.)));
-    assert_eq!(app.tab.doc, doc);
-    assert_eq!((app.status.as_str(), app.error), (SHOWN_IN_3D, true));
-    assert_eq!(app.tab.history.undo_frames().count(), frames);
-    assert_eq!(
-        transformed(&doc, &molecule, Field::TiltY, "30", false),
-        Err(SHOWN_IN_3D.into())
-    );
-    let mixed = [molecule, drawn].concat();
-    let tilted = transformed(&doc, &mixed, Field::TiltY, "30", false).unwrap();
-    assert_eq!(positions(&tilted, molecule), positions(&doc, molecule));
-    assert_ne!(positions(&tilted, drawn), positions(&doc, drawn));
-    app.tab.selected = mixed;
-    let _ = app.update(Message::Transform(Transform::TiltY(15.)));
-    assert_eq!(positions(&app.tab.doc, molecule), positions(&doc, molecule));
-    assert_ne!(positions(&app.tab.doc, drawn), positions(&doc, drawn));
-    assert_eq!(app.tab.history.undo_frames().count(), frames + 1);
+    let check = |app: &mut App, ids: &[u64], expected: Document| {
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(app.tab.doc, expected);
+        assert_eq!(positions(&app.tab.doc, molecule), positions(&doc, molecule));
+        assert_ne!(app.tab.doc.models[0].rotation, doc.models[0].rotation);
+        assert_eq!(
+            positions(&app.tab.doc, drawn) != positions(&doc, drawn),
+            ids.len() > 2
+        );
+        assert_eq!(app.tab.history.undo_frames().count(), frames + 1);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, doc);
+    };
+    for ids in [&molecule[..], &mixed] {
+        // A drag commits what its preview showed: the same tilt.
+        let mut preview = doc.clone();
+        tilt::apply(&mut preview, ids, -10., 15.);
+        app.edit(Edit::Tilt {
+            ids: ids.to_vec(),
+            x: -10.,
+            y: 15.,
+        });
+        check(&mut app, ids, preview);
+        // Step commands from the menu, keys and palette.
+        app.tab.selected = ids.to_vec();
+        let mut stepped = doc.clone();
+        reshiki::editing::transform(&mut stepped, ids, Transform::TiltX(15.));
+        let _ = app.update(Message::Transform(Transform::TiltX(15.)));
+        check(&mut app, ids, stepped);
+        // The inspector tilt field.
+        let typed = transformed(&doc, ids, Field::TiltY, "30", false).unwrap();
+        assert_eq!(positions(&typed, molecule), positions(&doc, molecule));
+        assert_ne!(typed.models[0].rotation, doc.models[0].rotation);
+    }
 }

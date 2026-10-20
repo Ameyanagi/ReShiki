@@ -343,9 +343,6 @@ fn transform_candidate(
             if value.abs() > 36_000. {
                 return Err("Enter a tilt between −36000° and 36000°".into());
             }
-            if let Some(reason) = crate::canvas::tilt::refusal(document, &ids) {
-                return Err(reason.into());
-            }
             if !crate::canvas::tilt::available(document, &ids) {
                 return Err("Select at least two atoms or a shape to tilt".into());
             }

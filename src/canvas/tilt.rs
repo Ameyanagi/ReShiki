@@ -2,11 +2,8 @@
 use iced::Point;
 use reshiki::document::Document;
 
-/// Status shown when the tilt selection only holds molecules shown as 3D models.
-pub(crate) const SHOWN_IN_3D: &str = "Switch to 2D to tilt the drawing";
-
-/// Whether the selection holds something drawn that tilts: two atoms shown in
-/// 2D, or a shape. Atoms shown only as a 3D model keep their hidden drawing.
+/// Whether the selection holds something that tilts: two atoms shown in 2D,
+/// a shape, or a molecule shown only as a 3D model, which turns its model.
 pub(crate) fn available(doc: &Document, ids: &[u64]) -> bool {
     let ids = doc.expand_abbreviation_selection(ids);
     doc.atoms
@@ -20,12 +17,7 @@ pub(crate) fn available(doc: &Document, ids: &[u64]) -> bool {
         .count()
         >= 2
         || doc.graphics.iter().any(|g| ids.contains(&g.id))
-}
-
-/// The status for a tilt that would only reach molecules shown as 3D models.
-pub(crate) fn refusal(doc: &Document, ids: &[u64]) -> Option<&'static str> {
-    (!available(doc, ids) && ids.iter().any(|id| reshiki::models3d::hides(doc, *id)))
-        .then_some(SHOWN_IN_3D)
+        || ids.iter().any(|id| reshiki::models3d::hides(doc, *id))
 }
 
 #[derive(Debug)]

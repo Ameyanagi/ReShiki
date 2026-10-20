@@ -102,13 +102,6 @@ impl App {
         self.tool = Tool::Select;
     }
     pub(super) fn transform_selection(&mut self, transform: reshiki::editing::Transform) {
-        if let editing::Transform::TiltX(_) | editing::Transform::TiltY(_) = transform
-            && let Some(reason) = crate::canvas::tilt::refusal(&self.tab.doc, &self.tab.selected)
-        {
-            self.status = reason.into();
-            self.error = true;
-            return;
-        }
         let before = self.tab.doc.clone();
         editing::transform(&mut self.tab.doc, &self.tab.selected, transform);
         self.changed(before);

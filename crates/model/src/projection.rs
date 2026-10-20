@@ -98,8 +98,8 @@ pub fn prune_centroids(doc: &mut Document) {
 
 /// Rotate the retained XYZ positions, preserving topology and stereo descriptors.
 /// Labels stay upright. Positive depth faces the viewer. Any finite angle is
-/// accepted; whole turns are no-ops. Atoms shown only as a 3D model are left
-/// unchanged.
+/// accepted; whole turns are no-ops. A molecule shown only as a 3D model
+/// turns its model instead, leaving its hidden 2D drawing unchanged.
 pub fn tilt(doc: &mut Document, ids: &[u64], degrees: f32, around_x: bool) {
     if !degrees.is_finite() {
         return;
@@ -108,8 +108,10 @@ pub fn tilt(doc: &mut Document, ids: &[u64], degrees: f32, around_x: bool) {
     if degrees == 0. {
         return;
     }
-    // A molecule shown only as a 3D model keeps its hidden 2D drawing.
+    // A molecule shown only as a 3D model turns its model and keeps its
+    // hidden 2D drawing.
     let mut ids = doc.expand_abbreviation_selection(ids);
+    crate::models3d::tilt(doc, &ids, degrees, around_x);
     ids.retain(|id| !crate::models3d::hides(doc, *id));
     let selected: Vec<_> = doc
         .atoms

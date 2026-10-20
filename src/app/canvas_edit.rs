@@ -119,7 +119,7 @@ impl App {
                 target,
             } => return self.place_chain_from_text(&points, source, source_text, target, before),
             edit @ Edit::TextBond { .. } => return self.place_text_bond(edit, before),
-            Edit::TextBondRefused(error) | Edit::Refused(error) => {
+            Edit::TextBondRefused(error) => {
                 self.status = error;
                 self.error = true;
                 return;

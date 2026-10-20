@@ -694,6 +694,28 @@ pub fn turn(rotation: [f32; 4], dx: f32, dy: f32, roll: bool) -> [f32; 4] {
     q.map(|v| v / n)
 }
 
+/// Turn each model shown only in 3D that holds one of `ids` by a tilt of
+/// `degrees` about the screen's horizontal (`around_x`) or vertical axis, in
+/// the same sense as [`crate::projection::tilt`] turns a 2D drawing and as a
+/// drag of [`turn`] does: a positive X tilt sends the top away, a positive Y
+/// tilt the right side.
+pub fn tilt(doc: &mut Document, ids: &[u64], degrees: f32, around_x: bool) {
+    // `turn` takes screen pixels of 0.01 radian; screen y points down.
+    let pixels = degrees.to_radians() * 100.;
+    let (dx, dy) = if around_x {
+        (0., -pixels)
+    } else {
+        (pixels, 0.)
+    };
+    for model in doc
+        .models
+        .iter_mut()
+        .filter(|m| m.display == Display::ThreeD && ids.iter().any(|id| m.contains(*id)))
+    {
+        model.rotation = turn(model.rotation, dx, dy, false);
+    }
+}
+
 /// The rotation `b`, then `a`.
 fn compose(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
     let [aw, ax, ay, az] = a;
