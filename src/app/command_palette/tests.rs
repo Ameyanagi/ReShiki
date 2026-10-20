@@ -1,6 +1,7 @@
 use super::*;
 use crate::canvas::Tool;
 use reshiki::bonds::BondPreset;
+use reshiki::document::Document;
 
 fn app() -> App {
     let (mut app, _) = App::new();
@@ -885,4 +886,125 @@ fn matched_letters_are_emphasised() {
     let spans = name_spans("Bring bond forward", "ring");
     let text: Vec<_> = spans.iter().map(|s| s.text.as_ref()).collect();
     assert_eq!(text, ["B\u{2060}", "ring", " bond forward"]);
+}
+
+/// The document after `query` runs on a selected benzene, and after `message`
+/// does the same directly; each palette run is one Undo step.
+fn ran_as(query: &str, message: Message) -> (Document, Document) {
+    let selected = |app: &mut App| {
+        app.tab.doc = reshiki::rings::Preset::Benzene.document(42., false);
+        app.tab.selected = app.tab.doc.all_ids();
+        app.sync_numeric_transforms();
+    };
+    let mut app = app();
+    selected(&mut app);
+    let before = app.tab.doc.clone();
+    run(&mut app, query);
+    assert!(!app.commands.open, "{query} ran");
+    let after = app.tab.doc.clone();
+    assert_ne!(after, before, "{query} changed the drawing");
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before, "{query} is one undo step");
+    let mut direct = self::app();
+    selected(&mut direct);
+    let _ = direct.update(message);
+    (after, direct.tab.doc)
+}
+
+#[test]
+fn command_word_prefixes_take_a_value() {
+    use reshiki::editing::Transform;
+    for (query, message) in [
+        ("rot 30", Message::Transform(Transform::Rotate(30.))),
+        ("rotate ccw 30", Message::Transform(Transform::Rotate(-30.))),
+        ("rotate cw 30", Message::Transform(Transform::Rotate(30.))),
+        ("tilt up 20", Message::Transform(Transform::TiltX(-20.))),
+        ("tilt down 20", Message::Transform(Transform::TiltX(20.))),
+        ("tilt left 20", Message::Transform(Transform::TiltY(20.))),
+        ("ti ri 20", Message::Transform(Transform::TiltY(-20.))),
+        ("tilt x -15", Message::Transform(Transform::TiltX(-15.))),
+        ("tilt y 15", Message::Transform(Transform::TiltY(15.))),
+    ] {
+        let (palette, direct) = ran_as(query, message);
+        assert_eq!(palette, direct, "{query}");
+    }
+    // Scale goes through the Scale field: relative and uniform.
+    use crate::app::numeric_transforms::{Action as Numeric, Field};
+    let (palette, direct) = ran_as(
+        "scale 150",
+        Message::NumericTransform(Numeric::Input(Field::Scale, "150".into())),
+    );
+    let width = |doc: &Document| {
+        let (lo, hi) = reshiki::scene::selection_bounds(doc, &doc.all_ids()).unwrap();
+        hi.x - lo.x
+    };
+    assert!((width(&palette) / width(&direct) - 1.5).abs() < 1e-3);
+
+    let mut app = app();
+    let named = |app: &App, query| catalog::parameterised(app, query).map(|c| c.name);
+    assert_eq!(named(&app, "tilt up 20").unwrap(), "Tilt selection up 20°");
+    assert_eq!(named(&app, "zo 150").unwrap(), "Zoom to 150%");
+    assert_eq!(named(&app, "ri 7").unwrap(), "Insert 7-membered ring");
+    assert_eq!(named(&app, "el pd").unwrap(), "Element Pd");
+    assert_eq!(named(&app, "font 12").unwrap(), "Font size 12 pt");
+    assert_eq!(named(&app, "bond len 14").unwrap(), "Bond length 14 pt");
+    assert_eq!(named(&app, "chain 5").unwrap(), "Chain tool with 5 atoms");
+    // One letter is too short to pick a command word.
+    assert!(named(&app, "r 30").is_none());
+    run(&mut app, "zo 150");
+    assert!((app.tab.camera.zoom - 1.5).abs() < 1e-4);
+    // "ch" is charge, whose value fits, and its row ranks first.
+    let (a, _) = ethane(&mut app);
+    app.tab.selected = vec![a];
+    search(&mut app, "ch -1");
+    assert_eq!(top(&app).name, "Set charge to -1");
+    let _ = app.update(Message::Commands(Action::Submit));
+    assert_eq!(app.tab.doc.atom(a).unwrap().charge, -1);
+}
+
+#[test]
+fn ring_presets_have_tools_and_loose_words_find_them() {
+    let mut app = app();
+    for query in [
+        "ben to",
+        "benzene tool",
+        "bnz tool",
+        "benzne tool",
+        "to ben",
+    ] {
+        search(&mut app, query);
+        assert_eq!(top(&app).name, "Benzene tool", "{query}");
+    }
+    // Letters may span words; the Bt group still ranks first for its name.
+    search(&mut app, "bt");
+    assert_eq!(top(&app).name, "Bt");
+    row(&app, "Benzene tool");
+    run(&mut app, "ben to");
+    assert_eq!(app.tool, Tool::RingPreset(reshiki::rings::Preset::Benzene));
+    for (query, preset) in [
+        (
+            "cyclopentadiene tool",
+            reshiki::rings::Preset::Cyclopentadiene,
+        ),
+        ("chair up tool", reshiki::rings::Preset::ChairUp),
+        ("chair down tool", reshiki::rings::Preset::ChairDown),
+        ("haworth five tool", reshiki::rings::Preset::HaworthFive),
+        ("haworth six tool", reshiki::rings::Preset::HaworthSix),
+    ] {
+        run(&mut app, query);
+        assert_eq!(app.tool, Tool::RingPreset(preset), "{query}");
+    }
+    // Short words and abbreviations find their rows.
+    search(&mut app, "rotate ccw");
+    assert!(top(&app).name.ends_with("counterclockwise"));
+    // Exact queries keep their first result.
+    for (query, name) in [
+        ("ring", "Ring tool"),
+        ("v", "Select tool"),
+        ("benzene", "Benzene"),
+        ("lasso", "Lasso tool"),
+    ] {
+        search(&mut app, query);
+        assert_eq!(top(&app).name, name, "{query}");
+    }
 }
