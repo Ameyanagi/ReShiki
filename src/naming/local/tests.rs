@@ -24,7 +24,6 @@ fn strict_adapter_rejects_semantic_loss_and_inconsistent_provenance() {
         "C[C@H](O)C(=O)O |o1:1|",
         "*CC* |$star_e;;;star_e$,Sg:n:1,2::ht|",
         "CCO |unknown:1|",
-        "[Na+].[Cl-]",
         "[CH3]",
         "*C",
         "C~C",
@@ -35,6 +34,10 @@ fn strict_adapter_rejects_semantic_loss_and_inconsistent_provenance() {
             "Simplified unsupported {smiles}"
         );
     }
+    assert!(matches!(
+        parse(reply("[Na+].[Cl-]")),
+        Err(Error::Disconnected(_))
+    ));
     assert!(matches!(
         parse(reply(&"C".repeat(513))),
         Err(Error::Rejected(_))
@@ -114,7 +117,21 @@ async fn pinned_local_engine_matches_independent_connected_graphs_and_stereo() -
 }
 
 #[tokio::test]
-async fn actual_parser_rejects_ambiguous_stereo_polymers_salts_and_unknown_names() {
+async fn actual_parser_reports_salts_as_disconnected_not_ambiguous() {
+    for name in [
+        "sodium chloride",
+        "potassium bromide",
+        "sodium acetate",
+        "triethylamine hydrochloride",
+    ] {
+        let error = resolve_name(name, Cancel::default()).await.expect_err(name);
+        assert!(matches!(error, Error::Disconnected(_)), "{name}: {error}");
+        assert!(error.to_string().contains("salts and mixtures"), "{name}");
+    }
+}
+
+#[tokio::test]
+async fn actual_parser_rejects_ambiguous_stereo_polymers_and_unknown_names() {
     for name in [
         "bromobutane",
         "(+)-butan-2-ol",
@@ -124,7 +141,6 @@ async fn actual_parser_rejects_ambiguous_stereo_polymers_salts_and_unknown_names
         "(rac)-lactic acid",
         "rel-(1R,2R)-cyclohexane-1,2-diol",
         "poly(ethylene)",
-        "sodium chloride",
         "acetic",
         "phenyl",
         "(R)-ethanol",
