@@ -420,7 +420,12 @@ impl MoleculeCanvas<'_> {
                 .iter()
                 .filter(|a| selected.contains(&a.id) && preview.atom_visible(a.id))
             {
-                for m in &a.marks {
+                // A hidden charge has no handle, so it keeps its place.
+                for m in a
+                    .marks
+                    .iter()
+                    .filter(|m| reshiki::scientific::mark_drawn(a, m))
+                {
                     let center = self
                         .camera
                         .screen(a.position.offset(m.offset.x, m.offset.y), bounds);

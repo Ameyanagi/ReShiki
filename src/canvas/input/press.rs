@@ -178,8 +178,9 @@ impl MoleculeCanvas<'_> {
                 .filter(|a| self.selected.contains(&a.id) && self.doc.atom_visible(a.id))
             {
                 if let Some(index) = a.marks.iter().position(|m| {
-                    a.position.offset(m.offset.x, m.offset.y).distance(p)
-                        < self.camera.world_len(HANDLE_PICK_PX)
+                    reshiki::scientific::mark_drawn(a, m)
+                        && a.position.offset(m.offset.x, m.offset.y).distance(p)
+                            < self.camera.world_len(HANDLE_PICK_PX)
                 }) {
                     state.gesture = Some(Gesture::AtomMark {
                         id: a.id,

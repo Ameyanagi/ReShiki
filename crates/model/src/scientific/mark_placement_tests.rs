@@ -539,6 +539,41 @@ fn rotating_and_flipping_turn_lone_pairs_while_charges_stay_upright() {
 }
 
 #[test]
+fn unequal_stretching_keeps_lone_pairs_across_their_atom_direction() {
+    let mut doc = Document::default();
+    let id = doc.add_atom("O", p(0., 0.));
+    let atom = doc.atom_mut(id).unwrap();
+    attach(atom, SymbolKind::LonePair, p(10., 10.)).unwrap();
+    atom.marks[0].angle = 135.;
+    crate::editing::scale_axes_about(&mut doc, &[id], p(0., 0.), 2., 1.);
+    let mark = &doc.atom(id).unwrap().marks[0];
+    assert_eq!(mark.offset, p(20., 10.));
+    let direction = 10_f32.atan2(20.).to_degrees();
+    assert!(
+        degrees_apart(mark.angle, direction + 90.) < 1e-3,
+        "{}",
+        mark.angle
+    );
+}
+
+#[test]
+fn hidden_charges_keep_their_offset_when_dragged() {
+    let mut doc = Document::default();
+    let id = doc.add_atom("N", p(0., 0.));
+    let atom = doc.atom_mut(id).unwrap();
+    attach(atom, SymbolKind::Plus, p(10., -10.)).unwrap();
+    assert_ne!(atom.charge, 0);
+    atom.display.hide_charge = true;
+    let atom = doc.atom(id).unwrap();
+    let mark = &atom.marks[0];
+    assert!(!mark_drawn(atom, mark));
+    for free in [false, true] {
+        assert_eq!(orbit_mark(&doc, atom, mark, p(-30., 5.), free), *mark);
+    }
+    assert_eq!(mark_orbit_guide(&doc, atom, mark), (vec![], vec![]));
+}
+
+#[test]
 fn round_glyphs_round_their_corners_and_stemmed_ones_keep_them() {
     for (element, round) in [("O", true), ("N", false), ("H", false)] {
         let mut doc = Document::default();

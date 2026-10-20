@@ -335,6 +335,13 @@ impl Graphic {
 pub fn mark_parts(atom: &Atom) -> Vec<Part> {
     styled_mark_parts(atom, &DEFAULT)
 }
+/// Whether `mark` draws anything on `atom`; a charge hidden with the
+/// atom's charge label, for instance, does not.
+pub fn mark_drawn(atom: &Atom, mark: &AtomMark) -> bool {
+    let mut single = atom.clone();
+    single.marks = vec![mark.clone()];
+    !styled_mark_parts(&single, &DEFAULT).is_empty()
+}
 pub fn styled_mark_parts(atom: &Atom, drawing_style: &crate::style::DrawingStyle) -> Vec<Part> {
     let default_size = atom
         .text_style
@@ -475,6 +482,10 @@ pub fn orbit_mark(
     to: Point,
     free: bool,
 ) -> AtomMark {
+    // A mark that draws nothing has no shape to orbit with; keep its offset.
+    if !mark_drawn(atom, mark) {
+        return mark.clone();
+    }
     let offset = Point::new(to.x - atom.position.x, to.y - atom.position.y);
     let degrees = offset.y.atan2(offset.x).to_degrees();
     if free {
@@ -510,6 +521,9 @@ pub fn mark_orbit_guide(
     atom: &Atom,
     mark: &AtomMark,
 ) -> (Vec<Vec<Point>>, Vec<Point>) {
+    if !mark_drawn(atom, mark) {
+        return (vec![], vec![]);
+    }
     let center = |m: &AtomMark| atom.position.offset(m.offset.x, m.offset.y);
     let directions: Vec<f32> = (0..=120).map(|i| i as f32 * 3.).collect();
     let snaps = directions
