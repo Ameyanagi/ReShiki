@@ -114,7 +114,8 @@ impl MoleculeCanvas<'_> {
                     *ring_selection = Some(vec![id]);
                 }
             }
-            if let Some(Gesture::AtomMark { id, index }) = &state.gesture
+            if let Some(Gesture::AtomMark { id, index, start }) = &state.gesture
+                && start.distance(end) >= self.camera.world_len(pick::DRAG_SLOP_PX)
                 && let Some(a) = preview.atom(*id)
                 && let Some(mark) = a.marks.get(*index)
             {

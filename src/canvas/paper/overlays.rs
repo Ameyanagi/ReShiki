@@ -197,7 +197,7 @@ impl MoleculeCanvas<'_> {
         bounds: Rectangle,
     ) {
         let (id, index) = match (&state.gesture, self.tool) {
-            (Some(Gesture::AtomMark { id, index }), _) => (*id, Some(*index)),
+            (Some(Gesture::AtomMark { id, index, .. }), _) => (*id, Some(*index)),
             // A new mark dragged out with the symbol tool is the one the
             // committed atom lacks.
             (Some(Gesture::Graphic { start }), Tool::Graphic(GraphicKind::Symbol(_)))

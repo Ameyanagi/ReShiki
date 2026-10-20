@@ -306,6 +306,7 @@ enum Gesture {
     AtomMark {
         id: u64,
         index: usize,
+        start: World,
     },
     GraphicPoint {
         id: u64,

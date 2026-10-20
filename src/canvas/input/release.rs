@@ -68,8 +68,9 @@ impl MoleculeCanvas<'_> {
                     ControlFlow::Break(action) => return Some(action),
                 }
             }
-            Gesture::AtomMark { id, index } => {
-                if !inside {
+            Gesture::AtomMark { id, index, start } => {
+                // A click on the handle leaves the mark where it was.
+                if !inside || start.distance(p) < self.camera.world_len(DRAG_SLOP_PX) {
                     return Some(Action::request_redraw().and_capture());
                 }
                 Edit::AtomMark(

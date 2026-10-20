@@ -181,7 +181,11 @@ impl MoleculeCanvas<'_> {
                     a.position.offset(m.offset.x, m.offset.y).distance(p)
                         < self.camera.world_len(HANDLE_PICK_PX)
                 }) {
-                    state.gesture = Some(Gesture::AtomMark { id: a.id, index });
+                    state.gesture = Some(Gesture::AtomMark {
+                        id: a.id,
+                        index,
+                        start: p,
+                    });
                     return Some(Action::request_redraw().and_capture());
                 }
             }
