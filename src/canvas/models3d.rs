@@ -1,6 +1,6 @@
 //! 3D models on the canvas (#386). Iced has no radial gradient, so each run of
 //! model primitives is rasterized at device resolution by resvg from the same
-//! SVG that figure export renders, then drawn as one cached image: smooth
+//! SVG that figure export renders, then drawn as cached image tiles: smooth
 //! shading at any zoom and the same pixels as PNG export.
 use super::{Camera, World, layered};
 use iced::advanced::image::Handle;
@@ -16,9 +16,15 @@ const OVERSAMPLE: f32 = 2.;
 const MAX_PIXELS: f32 = 3000. * 3000.;
 /// Images kept for redraws and zoom steps back.
 const CACHED: usize = 4;
+/// Tile side in device pixels. Iced uploads images of 2 MB or more on a
+/// worker and skips them until then, so a new zoom would flash blank.
+const TILE: u32 = 512;
+
+/// A tile's offset and size in device pixels within the model image.
+type Tile = ([u32; 4], Handle);
 
 thread_local! {
-    static IMAGES: RefCell<Vec<(u64, Option<Handle>)>> = const { RefCell::new(Vec::new()) };
+    static IMAGES: RefCell<Vec<(u64, Vec<Tile>)>> = const { RefCell::new(Vec::new()) };
 }
 
 pub(super) fn is_model(primitive: &Primitive) -> bool {
@@ -63,40 +69,58 @@ pub(super) fn draw(
             .hash(&mut hasher);
     }
     let key = hasher.finish();
-    let image = IMAGES.with_borrow_mut(|images| {
-        let image = match images.iter().position(|(k, _)| *k == key) {
+    let tiles = IMAGES.with_borrow_mut(|images| {
+        let tiles = match images.iter().position(|(k, _)| *k == key) {
             Some(i) => images.remove(i).1,
-            None => rasterize(run, origin, scale, width as u32, height as u32),
+            None => tiles(run, origin, scale, width as u32, height as u32),
         };
-        images.insert(0, (key, image.clone()));
+        images.insert(0, (key, tiles.clone()));
         images.truncate(CACHED);
-        image
+        tiles
     });
-    if let Some(handle) = image {
-        frame.split();
-        // Snapped to whole device pixels, so the image is not resampled.
-        let at = Point::new(
-            (area.x * OVERSAMPLE).round() / OVERSAMPLE,
-            (area.y * OVERSAMPLE).round() / OVERSAMPLE,
-        );
+    // Snapped to whole device pixels, so the tiles are not resampled.
+    let at = Point::new(
+        (area.x * OVERSAMPLE).round() / OVERSAMPLE,
+        (area.y * OVERSAMPLE).round() / OVERSAMPLE,
+    );
+    frame.split();
+    for ([x, y, w, h], handle) in tiles {
+        let device = |v: u32| v as f32 / OVERSAMPLE;
         frame.draw_image(
-            Rectangle::new(at, Size::new(width, height) * (1. / OVERSAMPLE)),
+            Rectangle::new(
+                at + iced::Vector::new(device(x), device(y)),
+                Size::new(device(w), device(h)),
+            ),
             canvas::Image::new(handle).opacity(opacity),
         );
-        frame.split();
     }
+    frame.split();
 }
 
-/// `run` from `origin` at `scale` pixels per drawing unit, as an image.
-fn rasterize(
-    run: &[Primitive],
-    origin: World,
-    scale: f32,
-    width: u32,
-    height: u32,
-) -> Option<Handle> {
-    let pixels = pixels(run, origin, scale, width, height)?;
-    Some(Handle::from_rgba(width, height, pixels))
+/// `run` from `origin` at `scale` pixels per drawing unit, as image tiles.
+fn tiles(run: &[Primitive], origin: World, scale: f32, width: u32, height: u32) -> Vec<Tile> {
+    let Some(pixels) = pixels(run, origin, scale, width, height) else {
+        return vec![];
+    };
+    let row = width as usize * 4;
+    let mut tiles = vec![];
+    for y in (0..height).step_by(TILE as usize) {
+        for x in (0..width).step_by(TILE as usize) {
+            let (w, h) = (TILE.min(width - x), TILE.min(height - y));
+            let tile: Vec<u8> = (y..y + h)
+                .flat_map(|line| {
+                    let start = line as usize * row + x as usize * 4;
+                    pixels
+                        .get(start..start + w as usize * 4)
+                        .unwrap_or_default()
+                        .iter()
+                        .copied()
+                })
+                .collect();
+            tiles.push(([x, y, w, h], Handle::from_rgba(w, h, tile)));
+        }
+    }
+    tiles
 }
 
 /// Straight-alpha RGBA pixels of `run`, rendered as figure export does.

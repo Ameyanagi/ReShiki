@@ -92,3 +92,49 @@ fn model_images_match_figure_export_and_are_smooth() {
         }
     }
 }
+
+/// A model zoomed in far enough for a multi-megabyte image appears in the
+/// first frame, not after iced's background upload, and is drawn whole.
+#[tokio::test]
+#[ignore = "Opt-in real renderer 3D model image check"]
+async fn a_zoomed_model_appears_in_its_first_frame() {
+    use iced::advanced::Renderer as _;
+    use iced::advanced::graphics::geometry::Renderer as _;
+    use iced::advanced::renderer::Headless;
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .expect("Headless renderer");
+    let doc = model(Style::SpaceFilling);
+    let (lo, hi) = reshiki::models3d::frame(&doc, &doc.models[0]).unwrap();
+    let bounds = Rectangle::with_size(Size::new(640., 400.));
+    let camera = Camera {
+        center: World::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.),
+        zoom: 6.,
+    };
+    let mut render = || {
+        renderer.reset(bounds);
+        let mut frame = layered::Frame::new(&renderer, bounds.size());
+        frame.fill_rectangle(Point::ORIGIN, bounds.size(), iced::Color::WHITE);
+        super::super::render::draw_primitives(
+            &mut frame,
+            &scene::primitives(&doc),
+            camera,
+            bounds,
+            0.,
+        );
+        for geometry in frame.finish() {
+            renderer.draw_geometry(geometry);
+        }
+        Headless::screenshot(&mut renderer, Size::new(1280, 800), 2., iced::Color::WHITE)
+    };
+    let cold = render();
+    assert!(
+        cold.chunks(4).any(|p| p[0] < 200),
+        "the model is drawn in the first frame"
+    );
+    assert_eq!(cold, render(), "cold and warm frames match");
+}
