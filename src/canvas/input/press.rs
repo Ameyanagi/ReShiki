@@ -116,6 +116,9 @@ impl MoleculeCanvas<'_> {
             ids
         };
         state.last_click = None;
+        if let Some(reason) = tilt::refusal(self.doc, &ids) {
+            return Some(Action::publish(Edit::Refused(reason.into())).and_capture());
+        }
         state.gesture = Some(if tilt::available(self.doc, &ids) {
             Gesture::Tilt(tilt::TiltDrag { ids, start: point })
         } else {

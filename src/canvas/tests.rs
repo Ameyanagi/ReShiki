@@ -931,6 +931,46 @@ fn tilt_click_selects_a_molecule_without_rotating_and_blank_drag_selects() -> Re
 }
 
 #[test]
+fn tilt_on_a_molecule_shown_only_in_3d_says_to_switch_to_2d() {
+    use reshiki::models3d::Display;
+    for display in [Display::Both, Display::ThreeD] {
+        let (doc, molecule, drawn) = tilt::shown(display);
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::Tilt;
+        let mixed = [molecule, drawn].concat();
+        for (selected, at) in [
+            (&[][..], Point::new(200., 180.)),
+            (&molecule[..], Point::new(200., 180.)),
+            (&mixed[..], Point::new(200., 180.)),
+        ] {
+            canvas.selected = selected;
+            let mut state = State::default();
+            tilt_pointer(
+                &canvas,
+                &mut state,
+                mouse::Event::CursorMoved { position: at },
+            );
+            let edit = tilt_pointer(
+                &canvas,
+                &mut state,
+                mouse::Event::ButtonPressed(mouse::Button::Left),
+            );
+            let refused = display == Display::ThreeD && selected != mixed.as_slice();
+            assert_eq!(
+                matches!(&edit, Some(Edit::Refused(reason)) if reason == tilt::SHOWN_IN_3D),
+                refused,
+                "{display:?} {selected:?}"
+            );
+            assert_eq!(
+                matches!(state.gesture, Some(Gesture::Tilt(_))),
+                !refused,
+                "{display:?} {selected:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn aromatic_ring_interior_opens_its_menu_and_starts_tilt_without_prior_selection()
 -> Result<(), String> {
     let mut doc = Document::default();
