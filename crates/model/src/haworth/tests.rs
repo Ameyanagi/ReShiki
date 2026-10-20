@@ -175,6 +175,40 @@ fn retyping_a_turned_c4_group_without_a_reverse_spelling_keeps_its_attachment() 
 }
 
 #[test]
+fn retyping_a_c4_group_without_a_reverse_spelling_keeps_non_turning_placement() -> anyhow::Result<()>
+{
+    use crate::abbreviations::LabelAlignment;
+    let doc = sugar_document(Sugar::Glucose, Anomer::Alpha, 42.).map_err(anyhow::Error::msg)?;
+    let (mut placed, _, _) = typed_group(&doc, C4_OXYGEN, "OBn")?;
+    // Above, Center and Left never force the reversed reading, so ONp keeps
+    // them with O still on the bond.
+    for kept in [
+        LabelAlignment::Above,
+        LabelAlignment::Center,
+        LabelAlignment::Left,
+    ] {
+        if let Some(group) = placed
+            .abbreviations
+            .iter_mut()
+            .find(|g| g.anchor == C4_OXYGEN)
+        {
+            group.alignment = kept;
+        }
+        let (result, text, alignment) = typed_group(&placed, C4_OXYGEN, "ONp")?;
+        assert_eq!((text.as_str(), alignment), ("ONp", kept));
+        let group = result
+            .abbreviation(C4_OXYGEN)
+            .ok_or_else(|| anyhow::anyhow!("no group"))?;
+        assert_eq!(
+            crate::abbreviations::anchor_range(&text, group.faces_left(&result)),
+            0..1,
+            "{kept:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn groups_typed_at_the_anomeric_hydroxyl_turn_to_the_free_side() -> anyhow::Result<()> {
     use crate::abbreviations::LabelAlignment;
     let doc = sugar_document(Sugar::Glucose, Anomer::Alpha, 42.).map_err(anyhow::Error::msg)?;

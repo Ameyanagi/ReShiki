@@ -368,12 +368,14 @@ impl App {
                             {
                                 group.reverse_label = state.reverse.trim().into();
                             }
-                            // A new group keeps the side the model chose from
-                            // the label it replaced; one without a reverse
-                            // spelling (ONp) cannot take a turned group's side.
+                            // A new group keeps the placement of the label it
+                            // replaced, except that one without a reverse
+                            // spelling (ONp) cannot take Right, which turns it.
                             if state.members.is_some()
                                 || old.is_some_and(|g| {
-                                    g.label == group.label || !group.reverse_label.is_empty()
+                                    g.label == group.label
+                                        || !group.reverse_label.is_empty()
+                                        || state.alignment != LabelAlignment::Right
                                 })
                             {
                                 group.alignment = state.alignment;
