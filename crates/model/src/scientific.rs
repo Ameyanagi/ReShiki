@@ -170,7 +170,18 @@ pub fn orbital_parts(
     out
 }
 pub fn symbol_parts(kind: SymbolKind, amount: u8, style: &GraphicStyle) -> Vec<Part> {
+    glyph_parts(kind, amount, style, false)
+}
+/// An atom's circled charge keeps ChemDraw's nominal size but draws smaller: radius 0.40
+/// and sign arms 0.24 of it. Plain signs and free symbols keep 0.52 and 0.3.
+fn glyph_parts(kind: SymbolKind, amount: u8, style: &GraphicStyle, mark: bool) -> Vec<Part> {
     use PathCommand::*;
+    let circled = matches!(kind, SymbolKind::CirclePlus | SymbolKind::CircleMinus);
+    let (radius, arm) = if mark && circled {
+        (0.4, 0.24)
+    } else {
+        (0.52, 0.3)
+    };
     let mut out = vec![];
     let mut add = |commands: Vec<PathCommand>, fill: bool| {
         out.push(Part {
@@ -183,9 +194,9 @@ pub fn symbol_parts(kind: SymbolKind, amount: u8, style: &GraphicStyle) -> Vec<P
         })
     };
     let sign = |positive: bool, x: f32| {
-        let mut v = vec![Move(p(x - 0.3, 0.)), Line(p(x + 0.3, 0.))];
+        let mut v = vec![Move(p(x - arm, 0.)), Line(p(x + arm, 0.))];
         if positive {
-            v.extend([Move(p(x, -0.3)), Line(p(x, 0.3))]);
+            v.extend([Move(p(x, -arm)), Line(p(x, arm))]);
         }
         v
     };
@@ -206,8 +217,8 @@ pub fn symbol_parts(kind: SymbolKind, amount: u8, style: &GraphicStyle) -> Vec<P
         let ion = matches!(kind, SymbolKind::RadicalCation | SymbolKind::RadicalAnion);
         let x = if ion { 0.22 } else { 0. };
         add(sign(positive, x), false);
-        if matches!(kind, SymbolKind::CirclePlus | SymbolKind::CircleMinus) {
-            add(circle(0., 0., 0.52, 0.52), false);
+        if circled {
+            add(circle(0., 0., radius, radius), false);
         }
         if ion {
             add(circle(-0.45, 0., 0.095, 0.095), true);
@@ -383,7 +394,7 @@ pub fn styled_mark_parts(atom: &Atom, drawing_style: &crate::style::DrawingStyle
             MarkKind::LonePairBar => (SymbolKind::LonePairBar, 1),
             _ => continue,
         };
-        let mut parts = symbol_parts(kind, amount, &style);
+        let mut parts = glyph_parts(kind, amount, &style, true);
         if mark.kind == MarkKind::RadicalIon
             && !atom.display.hide_charge
             && atom.radical_electrons == 2

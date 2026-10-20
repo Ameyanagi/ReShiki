@@ -108,6 +108,30 @@ fn chemical_marks_follow_atoms_through_move_copy_rotation_and_validation() {
 }
 
 #[test]
+fn circled_charge_marks_draw_smaller_than_their_stored_size() {
+    let extent = |parts: &[reshiki::scientific::Part], index: usize| {
+        let points = reshiki::graphics::flattened(&parts[index].commands).concat();
+        let x = points.iter().map(|q| q.x);
+        x.clone().fold(f32::MIN, f32::max) - x.fold(f32::MAX, f32::min)
+    };
+    let mut doc = Document::default();
+    let id = doc.add_atom("N", p(0., 0.));
+    let atom = doc.atom_mut(id).unwrap();
+    scientific::attach(atom, SymbolKind::Plus, p(0., 0.)).unwrap();
+    atom.marks[0].size_pt = Some(7.5);
+    let plain = scientific::mark_parts(atom);
+    atom.marks[0].kind = MarkKind::CircledCharge;
+    let circled = scientific::mark_parts(atom);
+    assert_eq!(atom.marks[0].size_pt, Some(7.5));
+    // Plain sign spans 0.6 × size; the circled one 0.48 × size inside a 0.8 × size circle.
+    let size = extent(&plain, 0) / 0.6;
+    assert!((extent(&circled, 0) - 0.48 * size).abs() < 1e-3);
+    assert!((extent(&circled, 1) - 0.8 * size).abs() < 0.02 * size);
+    let free = scientific::symbol_parts(SymbolKind::CirclePlus, 1, &GraphicStyle::default());
+    assert!((extent(&free, 1) - 1.04).abs() < 0.02);
+}
+
+#[test]
 fn failed_attachment_is_atomic_and_combined_marks_track_two_radicals() {
     let mut doc = Document::default();
     let id = doc.add_atom("C", p(0., 0.));
