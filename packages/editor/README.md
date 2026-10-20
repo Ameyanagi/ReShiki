@@ -81,9 +81,10 @@ scripts/build_wasm.sh                    # from the repository root
 cd packages/editor && bun examples/serve.ts
 ```
 
-Then open <http://localhost:8080/examples/> (one editor and the page's
-buttons) or <http://localhost:8080/examples/iframe.html> (two editors in
-iframes). `PORT` picks another port.
+Then open <http://localhost:8080/>, which is the editor alone, filling the
+window. <http://localhost:8080/examples/api.html> calls the JavaScript API from
+the page's own buttons, and <http://localhost:8080/examples/iframe.html> shows
+two editors in iframes. `PORT` picks another port.
 
 ### What the browser editor leaves out
 
