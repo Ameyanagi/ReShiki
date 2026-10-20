@@ -21,6 +21,8 @@ pub enum Page {
     Align,
     Bonds,
     Tilt,
+    /// Show the selected molecule as 2D, 3D or both.
+    Model,
     Attachments,
     CopyAs,
     // Menus anchored under context row buttons.
@@ -189,6 +191,7 @@ impl App {
                 ),
                 Hint("Labels stay upright. Undo restores the previous view."),
             ],
+            Page::Model => self.model_entries(),
             Page::Align => self.align_entries(atoms, multiple),
             Page::Bonds => self.bond_entries(bonds),
             Page::AlignObjects => self.arrange_entries(&[&Command::HORIZONTAL, &Command::VERTICAL]),
@@ -358,6 +361,30 @@ impl App {
         entries
     }
 
+    /// The Structure section's 2D / 3D / Both; the current view is disabled.
+    fn model_entries(&self) -> Vec<Entry> {
+        use reshiki::models3d::Display;
+        let current = self
+            .selected_model()
+            .and_then(|(_, index)| index)
+            .and_then(|i| self.tab.doc.models.get(i))
+            .map_or(Display::TwoD, |m| m.display);
+        let enabled = !self.tab.busy && self.tab.optimization.is_none();
+        [
+            ("2D drawing", Display::TwoD),
+            ("3D model", Display::ThreeD),
+            ("2D and 3D", Display::Both),
+        ]
+        .map(|(label, display)| {
+            Entry::command(
+                label,
+                Message::Models3d(super::models3d::Action::Show(display)),
+                enabled && display != current,
+            )
+        })
+        .into()
+    }
+
     /// Connect and reshape the selection. Move & attach and Coordinate in
     /// place stay in Arrange & transform, so the menu fits a 1280 × 820 window.
     fn structure_entries(&self, atoms: bool, bonds: bool, tilt: bool) -> Vec<Entry> {
@@ -373,6 +400,9 @@ impl App {
         }
         if tilt {
             entries.push(submenu("3D tilt", Page::Tilt));
+        }
+        if self.selected_model().is_some() {
+            entries.push(submenu("Show as", Page::Model));
         }
         if self.tab.doc.atoms.iter().any(|a| {
             self.tab.selected.contains(&a.id)

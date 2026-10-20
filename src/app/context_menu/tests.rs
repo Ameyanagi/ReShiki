@@ -78,6 +78,7 @@ fn atom_menu_groups_editing_naming_connecting_and_clipboard_commands() -> Result
             "—",
             "Join selected atoms or bonds",
             "Merge selected atoms",
+            "Show as",
             "Arrange & transform",
             "—",
             "Cut",
@@ -1107,4 +1108,15 @@ async fn inserted_examples_keep_existing_objects_and_can_be_removed_in_one_undo(
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
     Ok(())
+}
+
+#[test]
+fn show_as_offers_the_views_the_molecule_is_not_in() {
+    let (mut app, _) = App::new();
+    app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+    app.tab.selected = app.tab.doc.all_ids();
+    assert!(outline(&app, Page::Main).contains(&"Show as"));
+    assert_eq!(enabled(&app, Page::Model, "2D drawing"), Some(false));
+    assert_eq!(enabled(&app, Page::Model, "3D model"), Some(true));
+    assert_eq!(enabled(&app, Page::Model, "2D and 3D"), Some(true));
 }

@@ -12,7 +12,8 @@ Commands that do not fit in the context row are in its **⋯** menu.
 ## Show a molecule as a 3D model
 
 Select one molecule and choose **2D**, **3D** or **Both** at the top of
-**Properties → Structure**. **3D** draws the molecule as a ball & stick model in
+**Properties → Structure** (also **Show as** in the right-click menu and
+**Show as 3D model** in the command palette). **3D** draws the molecule as a ball & stick model in
 place of its drawing, **Both** puts the model one bond length to its right, and
 **2D** shows the drawing again. The first switch generates the conformer in the
 background with the same worker as 3D optimize (fresh ETKDG conformers, then
