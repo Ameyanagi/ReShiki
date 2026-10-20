@@ -366,9 +366,13 @@ impl App {
         use reshiki::models3d::Display;
         let current = self
             .selected_model()
-            .and_then(|(_, index)| index)
-            .and_then(|i| self.tab.doc.models.get(i))
-            .map_or(Display::TwoD, |m| m.display);
+            .map_or(Display::TwoD, |(atoms, index)| {
+                let shown = index
+                    .and_then(|i| self.tab.doc.models.get(i))
+                    .map_or(Display::TwoD, |m| m.display);
+                // A generation in flight shows its view, so 2D can cancel it.
+                self.pending(&atoms).unwrap_or(shown)
+            });
         let enabled = !self.tab.busy && self.tab.optimization.is_none();
         [
             ("2D drawing", Display::TwoD),
