@@ -1,0 +1,227 @@
+[
+  {
+    "barBorderCoreBoundsInclusive" : [
+      720,
+      1475,
+      1272,
+      1543
+    ],
+    "exactColorCanvasCount" : 7166,
+    "file" : "P01-perspective-20.png",
+    "frameColorMaskDifferenceVersusP01" : 0,
+    "height" : 1704,
+    "horizontalRuns_y_x0_x1_length" : [
+      [
+        524,
+        537,
+        1456,
+        920
+      ],
+      [
+        525,
+        537,
+        1456,
+        920
+      ],
+      [
+        1458,
+        537,
+        1456,
+        920
+      ],
+      [
+        1459,
+        537,
+        1456,
+        920
+      ]
+    ],
+    "verticalRuns_x_y0_y1_length" : [
+      [
+        529,
+        532,
+        1451,
+        920
+      ],
+      [
+        1463,
+        532,
+        1451,
+        920
+      ],
+      [
+        1464,
+        532,
+        1451,
+        920
+      ]
+    ],
+    "width" : 2560
+  },
+  {
+    "barBorderCoreBoundsInclusive" : [
+      720,
+      1478,
+      1272,
+      1547
+    ],
+    "exactColorCanvasCount" : 7220,
+    "file" : "P02-perspective-50.png",
+    "frameColorMaskDifferenceVersusP01" : 14058,
+    "height" : 1704,
+    "horizontalRuns_y_x0_x1_length" : [
+      [
+        520,
+        533,
+        1459,
+        927
+      ],
+      [
+        521,
+        533,
+        1459,
+        927
+      ],
+      [
+        1462,
+        533,
+        1459,
+        927
+      ],
+      [
+        1463,
+        533,
+        1459,
+        927
+      ]
+    ],
+    "verticalRuns_x_y0_y1_length" : [
+      [
+        525,
+        528,
+        1455,
+        928
+      ],
+      [
+        526,
+        528,
+        1455,
+        928
+      ],
+      [
+        1467,
+        528,
+        1455,
+        928
+      ]
+    ],
+    "width" : 2560
+  },
+  {
+    "barBorderCoreBoundsInclusive" : [
+      720,
+      1543,
+      1272,
+      1612
+    ],
+    "exactColorCanvasCount" : 1256,
+    "file" : "P03-perspective-100.png",
+    "frameColorMaskDifferenceVersusP01" : 8422,
+    "height" : 1704,
+    "horizontalRuns_y_x0_x1_length" : [
+
+    ],
+    "verticalRuns_x_y0_y1_length" : [
+      [
+        1816,
+        364,
+        1619,
+        1256
+      ]
+    ],
+    "width" : 2560
+  },
+  {
+    "barBorderCoreBoundsInclusive" : [
+      720,
+      1475,
+      1272,
+      1543
+    ],
+    "exactColorCanvasCount" : 7166,
+    "file" : "P04-back-to-20.png",
+    "frameColorMaskDifferenceVersusP01" : 0,
+    "height" : 1704,
+    "horizontalRuns_y_x0_x1_length" : [
+      [
+        524,
+        537,
+        1456,
+        920
+      ],
+      [
+        525,
+        537,
+        1456,
+        920
+      ],
+      [
+        1458,
+        537,
+        1456,
+        920
+      ],
+      [
+        1459,
+        537,
+        1456,
+        920
+      ]
+    ],
+    "verticalRuns_x_y0_y1_length" : [
+      [
+        529,
+        532,
+        1451,
+        920
+      ],
+      [
+        1463,
+        532,
+        1451,
+        920
+      ],
+      [
+        1464,
+        532,
+        1451,
+        920
+      ]
+    ],
+    "width" : 2560
+  },
+  {
+    "barBorderCoreBoundsInclusive" : [
+      720,
+      1543,
+      1272,
+      1612
+    ],
+    "exactColorCanvasCount" : 1256,
+    "file" : "P05-perspective-100-rotated.png",
+    "frameColorMaskDifferenceVersusP01" : 8422,
+    "height" : 1704,
+    "horizontalRuns_y_x0_x1_length" : [
+
+    ],
+    "verticalRuns_x_y0_y1_length" : [
+      [
+        1816,
+        364,
+        1619,
+        1256
+      ]
+    ],
+    "width" : 2560
+  }
+]

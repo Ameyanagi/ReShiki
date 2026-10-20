@@ -1,0 +1,4 @@
+  PID STARTED                      ARGS
+76822 Tue Oct 20 21:18:55 2026     /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps-appfix-1b/ReShiki386Fix1bEvidence.app/Contents/MacOS/reshiki --open /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/input/caffeine.mol
+7636
+pid=76822 window=7636 rect=["X": 200.0, "Y": 115.0, "Height": 852.0, "Width": 1280.0] frontmost_pid=76822 frontmost_bundle=dev.reshiki.verification.ev386fix1b

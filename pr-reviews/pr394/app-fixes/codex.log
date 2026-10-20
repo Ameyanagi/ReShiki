@@ -1,0 +1,3018 @@
+Reading additional input from stdin...
+OpenAI Codex v0.162.1
+--------
+workdir: /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+model: gpt-6-astra
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: xhigh
+reasoning summaries: none
+session id: 01a1593f-a9cb-70e3-9454-99e6e26eb621
+--------
+user
+Follow the instructions in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes/prompt.md exactly.
+codex
+I’ll read `prompt.md` and the repository instructions, then carry out the requested changes and checks.
+exec
+/bin/zsh -lc "pwd && rg --files -g 'AGENTS.md' -g 'prompt.md' -g 'package.json' -g 'pnpm-lock.yaml' -g 'README*' -g 'go.mod' -g 'Cargo.toml' -g 'pyproject.toml'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 0ms:
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+prompt.md
+
+exec
+/bin/zsh -lc 'cat prompt.md' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 0ms:
+You are running local UI verification for Claude on macOS. Use computer use (screenshots, mouse, keyboard) plus shell.
+
+Artifact directory (save everything here): /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes   (call it $ART)
+
+App under test: a branch build of ReShiki wrapped in its own bundle:
+  /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps-appfix-1b/ReShiki386Fix1bEvidence.app
+  bundle id dev.reshiki.verification.ev386fix1b, name "ReShiki386Fix1bEvidence". Contents/MacOS/reshiki is a hard link to the branch binary.
+IMPORTANT: the user's installed "ReShiki" app (PID 51217, bundle in /nix/store/...) is running, and there may be other ReShiki processes. Never touch, focus, click in, open, screenshot or quit any of them. Never look the app up by the plain name "ReShiki". If you ever find yourself in a window not owned by the PID you launched, stop interacting with it immediately.
+
+Setup:
+a. Save `pgrep -lf reshiki` to $ART/installed-process-before.txt.
+b. Launch it yourself, exactly:
+   open -n "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps-appfix-1b/ReShiki386Fix1bEvidence.app" --env RESHIKI_DATA_DIR=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-appfix-data --args --open "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/input/caffeine.mol"
+c. PID: pgrep -f 'apps-appfix-1b/ReShiki386Fix1bEvidence.app/Contents/MacOS/reshiki' (exactly one). Save `ps -o pid,lstart,args -p <PID>` to $ART/launched-process.txt. Call it $PID.
+d. Window id: /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-wid $PID -> $WID (re-run if the window changes). Append it and the window rect to launched-process.txt.
+e. Attach computer use by bundle id dev.reshiki.verification.ev386fix1b (or bundle path). Keep the window size as it opens (previous runs: 1280 x 852 pt).
+
+Evidence shots: screencapture -x -o -l $WID "$ART/<name>.png" (window-only capture of your PID). Before each, move the pointer off the model and off the controls you document.
+
+Drag helper (use it for ALL drags; real CGEvents):
+  /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag $PID x1 y1 x2 y2 [shift] [capture=/abs/path.png]
+  POINTS relative to the top-left of the app window frame (including title bar). The window must be frontmost and unobstructed. Screenshots are 2x.
+
+Frame measurement: the selection frame of a 3D model is drawn with solid RGB (62,133,117) 2-px strokes. Measure it by scanning the PNG for long straight runs of that exact colour (columns/rows with > 400 such pixels inside the canvas), excluding handles. Previous run: canvas is pixels x 208..1959, y 364..1619. Report left/top/right/bottom stroke positions, width x height in px, and centre.
+
+Background (fixes under test, ReShiki #386 phase 1b):
+- Fix 1: a 3D model keeps its frame's place (and size) through 2D (flattened "From the 3D view") and back to 3D. Previously the frame moved ~43 pt left / 40 pt up after 2D-from-3D -> 3D.
+- Fix 2: choosing "Original drawing" in Properties -> Structure -> 2D layout now brings the drawn 2D layout back at once (same Undo step). Previously, after 2D restore + Undo, the layout row said "Original drawing" but Both drew the flattened projection as the 2D member.
+
+Flow (zoom must match the old run: 122% for the 3D/2D steps, 97% for Both):
+1. Select tool (arrow, top-left), click empty canvas, Cmd+A. Click "3D" in Properties -> Structure. Wait until the model has settled (~2 s). The file opens at about 238%; click the status-bar zoom minus button three times to reach 122% (record the % shown). Keep the molecule selected. Save A01-3d-122.png and measure the frame (expected 744 x 744 px as before).
+2. Resize: drag helper from the frame's bottom-right corner handle ~80 pt right / ~60 pt down (previous run used 704 674 784 734; verify the handle position from a screenshot first). Save A02-resized.png; measure (expected 884 x 884, top-left fixed).
+3. Rotate: drag helper inside the frame ~100 pt left / 60 pt up (previous: 580 530 480 470). Save A03-resized-rotated.png; measure. This is the BEFORE frame.
+4. Structure -> 2D layout -> "From the 3D view". Save A04-layout-from-3d.png. Click "2D". Save A05-flattened-2d.png (record status text).
+5. Click "3D". Save A06-back-to-3d.png; measure the frame. EXPECTED: identical position and size to A03 (record the difference in px for each edge). Record status text.
+6. Structure -> 2D layout -> "Original drawing". Save A07-layout-original.png. Record what the layout row, the canvas and the status show (the model stays 3D; the 2D atoms are restored underneath). Measure the frame again.
+7. Click "2D". Save A08-original-2d.png: expect the drawn caffeine layout (same as the opening 2D drawing), status text recorded.
+8. Cmd+Z once. Save A09-undo.png: record what came back, which 2D layout option is active, Show as active button, status, and whether Redo is enabled (Edit menu; close it again with Escape before the shot).
+9. Choose "Both" (Structure section). Save A10-both-122.png (record status). Then click status-bar minus once to 97% and save A11-both-97.png. CHECK: the 2D member must be the DRAWN caffeine (same layout as A08 / the opening drawing: fused 6+5 rings upright, not the flattened projection of A05), and the 2D layout row must say "Original drawing". Click empty canvas and save A12-both-deselected.png, then Cmd+A again.
+10. Cmd+Z once (undoes Both). Save A13-undo-both.png. Then Redo (Cmd+Shift+Z, or Edit -> Redo) once. Save A14-redo-both.png: expect Both again, 2D member still the drawn caffeine, layout row "Original drawing". Record status texts.
+11. Also check redo of the 2D restore then Both: Cmd+Z until the state is 3D with Original drawing (as in A09) — record each step's status. Then press Redo once if that redoes the 2D restore (record what Redo does), save A15-redo-2d.png, then choose "Both" and save A16-both-after-redo.png (expect the drawn caffeine as the 2D member). If the history does not allow this, say so and save whatever state you reached.
+12. Quit ONLY your PID: kill $PID. Confirm with pgrep it is gone and that 51217 (and any other pre-existing ReShiki) still runs; save outputs to $ART/process-cleanup.txt.
+
+Do not save the drawing, do not edit repository files, do not change system settings, do not quit any other app.
+
+Write $ART/frame-measurements.md (all frame measurements, with the A03 vs A06 vs A07 comparison) and $ART/report.md: for each step what you did (exact drag-helper coordinates and click points), observed vs expected (status bar text, frame px, active buttons, layout row), screenshot filename, pass/fail. End with anything you could not verify and why.
+
+exec
+/bin/zsh -lc 'ls -la
+for d in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0 /private/tmp/claude-502/-Users-shiranui-dev-ReShiki /private/tmp/claude-502 /private/tmp /private /; do if [ -f "$d/AGENTS.md" ]; then printf '"'\\n%s\\n' \""'$d/AGENTS.md"; cat "$d/AGENTS.md"; fi; done
+pgrep -lf reshiki > installed-process-before.txt
+cat installed-process-before.txt' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 0ms:
+total 48
+drwxr-xr-x@ 6 shiranui  wheel   192 Oct 20 21:18 .
+drwxr-xr-x@ 9 shiranui  wheel   288 Oct 20 21:16 ..
+-rw-r--r--@ 1 shiranui  wheel   232 Oct 20 21:16 binary-sha256.txt
+-rw-r--r--@ 1 shiranui  wheel  8334 Oct 20 21:18 codex.log
+-rw-r--r--@ 1 shiranui  wheel  7022 Oct 20 21:18 prompt.md
+drwxr-xr-x@ 3 shiranui  wheel    96 Oct 20 21:16 tools
+51217 /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki
+
+codex
+The instructions call for UI verification only. I’ll launch the isolated build, verify its PID and window before interacting, and save the screenshots and reports in the specified artifact directory. The installed ReShiki process will remain untouched.
+exec
+/bin/zsh -lc 'open -n "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps-appfix-1b/ReShiki386Fix1bEvidence.app" --env RESHIKI_DATA_DIR=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-appfix-data --args --open "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/input/caffeine.mol"' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 0ms:
+exec
+/bin/zsh -lc "pgrep -f 'apps-appfix-1b/ReShiki386Fix1bEvidence.app/Contents/MacOS/reshiki'
+rg --files tools" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 0ms:
+76822
+tools/bundle-Info.plist
+
+exec
+/bin/zsh -lc 'ps -o pid,lstart,args -p 76822 > launched-process.txt
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-wid 76822 | tee -a launched-process.txt' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 0ms:
+7636
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "python3 - <<'PY'
+try:
+ import Quartz
+ print('Quartz available')
+ for w in Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionAll, Quartz.kCGNullWindowID):
+  if w.get('kCGWindowOwnerPID')==76822:
+   print(dict(w))
+except ImportError as e:
+ print(e)
+PY" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 0ms:
+No module named 'Quartz'
+
+exec
+/bin/zsh -lc "rg --files .. ../.. | rg '(ev386-1b-(wid|drag)|\\.swift"'$|measure)'"'" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 66ms:
+../app/frame-measurements.json
+../app/frame-measurements.md
+../tools/wid.swift
+../tools/drag.swift
+../../ev388/app/measurements.json
+../../ev388/measurements.txt
+../../ev386-1b/tools/wid.swift
+../../ev386-1b/tools/drag.swift
+../../ev386-1b-drag
+../../evidence/pr-reviews/pr385/b/set_clipboard.swift
+../../palette-impl/scripts/chemdraw_capture_clipboard.swift
+../../evidence/pr-reviews/pr395/compare/proto-shots/diagnostics/prototype-input.swift
+../../evidence/pr-reviews/pr395/compare/proto-shots/diagnostics/prototype-ax.swift
+../../evidence/pr-reviews/pr395/earlier-build/compare/proto-shots/diagnostics/prototype-input.swift
+../../evidence/pr-reviews/pr395/earlier-build/compare/proto-shots/diagnostics/prototype-ax.swift
+../../merge/wt/docs/performance/data/measurements.csv
+../../palette-impl/docs/performance/data/measurements.csv
+../../evidence/pr-reviews/pr395/earlier-build/app/cmd-scroll.swift
+../../wins.swift
+../../evidence/pr-reviews/pr395/earlier-build/tools/wid.swift
+../../evidence/pr-reviews/pr395/earlier-build/tools/drag.swift
+../../ev386-1b-wid
+../../evidence/pr-reviews/pr395/tools/wid.swift
+../../evidence/pr-reviews/pr395/tools/cmd-scroll.swift
+../../evidence/pr-reviews/pr395/tools/drag.swift
+../../palette-impl/tests/fixtures/nmr/mixed-measured-calculated.sd
+../../evidence/pr-reviews/pr392/measurements.txt
+../../evidence/pr-reviews/pr394/earlier-build/tools/wid.swift
+../../evidence/pr-reviews/pr394/earlier-build/tools/drag.swift
+../../evidence/pr-reviews/pr394/app/frame-measurements.json
+../../evidence/pr-reviews/pr394/app/frame-measurements.md
+../../evidence/pr-reviews/pr394/tools/wid.swift
+../../evidence/pr-reviews/pr394/tools/drag.swift
+../../merge/wt/scripts/chemdraw_capture_clipboard.swift
+../../merge/wt/tests/fixtures/nmr/mixed-measured-calculated.sd
+../../ev386-1b-final/app/frame-measurements.json
+../../ev386-1b-final/app/frame-measurements.md
+../../ev386-1b-final/tools/wid.swift
+../../ev386-1b-final/tools/drag.swift
+../../shardfix/scripts/chemdraw_capture_clipboard.swift
+../../shardfix/docs/performance/data/measurements.csv
+../../main-src/scripts/chemdraw_capture_clipboard.swift
+../../main-src/docs/performance/data/measurements.csv
+../../shardfix/tests/fixtures/nmr/mixed-measured-calculated.sd
+../../main-src/tests/fixtures/nmr/mixed-measured-calculated.sd
+../../nix366/scripts/chemdraw_capture_clipboard.swift
+../../ck-impl/scripts/chemdraw_capture_clipboard.swift
+../../nix366/docs/performance/data/measurements.csv
+../../ck-impl/docs/performance/data/measurements.csv
+../../ck-impl/tests/fixtures/nmr/mixed-measured-calculated.sd
+../../pf.swift
+../../ev386-2/compare/proto-shots/diagnostics/prototype-input.swift
+../../ev386-2/compare/proto-shots/diagnostics/prototype-ax.swift
+../../ev378/b/set_clipboard.swift
+../../ev386-2/app/cmd-scroll.swift
+../../nix366/tests/fixtures/nmr/mixed-measured-calculated.sd
+../../ev386-2/tools/wid.swift
+../../ev386-2/tools/drag.swift
+../../nixpr/docs/performance/data/measurements.csv
+../../nixpr/scripts/chemdraw_capture_clipboard.swift
+../../ev386-main-src/scripts/chemdraw_capture_clipboard.swift
+../../ev386-main-src/docs/performance/data/measurements.csv
+../../ev379/main-src/docs/performance/data/measurements.csv
+../../nixpr/tests/fixtures/nmr/mixed-measured-calculated.sd
+../../ev386-main-src/tests/fixtures/nmr/mixed-measured-calculated.sd
+../../ev379/main-src/tests/fixtures/nmr/mixed-measured-calculated.sd
+../../ck-base/scripts/chemdraw_capture_clipboard.swift
+../../wid.swift
+../../ck-base/docs/performance/data/measurements.csv
+../../ev379/main-src/scripts/chemdraw_capture_clipboard.swift
+../../ck-base/tests/fixtures/nmr/mixed-measured-calculated.sd
+../../ev386-1a/app2/verify-window.swift
+../../ev386-2-final/compare/proto-shots/diagnostics/prototype-input.swift
+../../ev386-2-final/compare/proto-shots/diagnostics/prototype-ax.swift
+../../ev386-2-final/tools/wid.swift
+../../ev386-2-final/tools/cmd-scroll.swift
+../../ev386-2-final/tools/drag.swift
+
+exec
+/bin/zsh -lc 'cat ../tools/wid.swift ../tools/drag.swift' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 0ms:
+import CoreGraphics
+let pid = Int(CommandLine.arguments[1])!
+let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+for w in list where (w[kCGWindowOwnerPID as String] as? Int) == pid && (w[kCGWindowLayer as String] as? Int) == 0 { print(w[kCGWindowNumber as String]!); break }
+// Usage: swift drag.swift <pid> <x1> <y1> <x2> <y2> [shift] [capture=<png>]
+// Coordinates are in points relative to the top-left of <pid>'s main window.
+// Presses at (x1,y1), moves in 12 steps to (x2,y2), optionally captures the
+// window while the button is still held, then releases.
+import CoreGraphics
+import Foundation
+let a = CommandLine.arguments
+let pid = Int(a[1])!
+let x1 = Double(a[2])!, y1 = Double(a[3])!, x2 = Double(a[4])!, y2 = Double(a[5])!
+let shift = a.contains("shift")
+let capture = a.first { $0.hasPrefix("capture=") }.map { String($0.dropFirst(8)) }
+let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+guard let w = list.first(where: { ($0[kCGWindowOwnerPID as String] as? Int) == pid && ($0[kCGWindowLayer as String] as? Int) == 0 }) else { print("no window"); exit(1) }
+let b = w[kCGWindowBounds as String] as! [String: Double]
+let wid = w[kCGWindowNumber as String] as! Int
+let ox = b["X"]!, oy = b["Y"]!
+let flags: CGEventFlags = shift ? .maskShift : []
+func post(_ t: CGEventType, _ x: Double, _ y: Double) {
+  let e = CGEvent(mouseEventSource: nil, mouseType: t, mouseCursorPosition: CGPoint(x: ox + x, y: oy + y), mouseButton: .left)!
+  e.flags = flags
+  e.post(tap: .cghidEventTap)
+}
+if shift { let k = CGEvent(keyboardEventSource: nil, virtualKey: 56, keyDown: true)!; k.flags = .maskShift; k.post(tap: .cghidEventTap) }
+post(.mouseMoved, x1, y1); usleep(80_000)
+post(.leftMouseDown, x1, y1); usleep(80_000)
+for i in 1...12 { let t = Double(i) / 12; post(.leftMouseDragged, x1 + (x2 - x1) * t, y1 + (y2 - y1) * t); usleep(40_000) }
+usleep(300_000)
+if let c = capture {
+  let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture"); p.arguments = ["-x", "-o", "-l", String(wid), c]
+  try! p.run(); p.waitUntilExit()
+}
+post(.leftMouseUp, x2, y2)
+if shift { let k = CGEvent(keyboardEventSource: nil, virtualKey: 56, keyDown: false)!; k.post(tap: .cghidEventTap) }
+print("ok window \(wid) origin \(ox),\(oy)")
+
+exec
+/bin/zsh -lc "command -v swift
+python3 - <<'PY'
+from PIL import Image
+import numpy
+print('PIL/numpy available')
+PY" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ exited 1 in 0ms:
+/usr/bin/swift
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+ModuleNotFoundError: No module named 'PIL'
+
+exec
+/bin/zsh -lc "cat > tools/verify-window.swift <<'SWIFT'
+import AppKit
+import CoreGraphics
+let pid = Int(CommandLine.arguments[1])"'!
+let expected = Int(CommandLine.arguments[2])!
+let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+let b = w[kCGWindowBounds as String] as! [String: Double]
+let front = NSWorkspace.shared.frontmostApplication!
+print("pid='"\\(pid) window=\\(expected) rect=\\(b) frontmost_pid=\\(front.processIdentifier) frontmost_bundle=\\(front.bundleIdentifier ?? \"unknown\")\")
+if CommandLine.arguments.contains(\"park\") {
+ guard front.processIdentifier == pid else { fatalError(\"Target is not frontmost\") }
+ let p = CGPoint(x: b[\"X\"]"'! + 960, y: b["Y"]! + 60)
+ CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: p, mouseButton: .left)!.post(tap: .cghidEventTap)
+}
+SWIFT
+swiftc tools/verify-window.swift -o tools/verify-window
+tools/verify-window 76822 7636 | tee -a launched-process.txt
+screencapture -x -o -l 7636 A00-opening-2d.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 1108ms:
+pid=76822 window=7636 rect=["X": 200.0, "Y": 115.0, "Height": 852.0, "Width": 1280.0] frontmost_pid=76822 frontmost_bundle=dev.reshiki.verification.ev386fix1b
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (failed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+codex
+The isolated build is running as PID `76822` in a `1280 × 852` point window. Caffeine opened at `238%`, and the selected structure has switched to 3D. I’m setting the required zoom and checking the frame before resizing.
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636 park >> window-checks.txt
+screencapture -x -o -l 7636 A01-3d-122.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 86ms:
+main/verify-window.swift:11: Fatal error: Target is not frontmost
+
+exec
+/bin/zsh -lc 'cat window-checks.txt
+ps -o pid,comm -p 76822
+sips -g pixelWidth -g pixelHeight A01-3d-122.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 0ms:
+  PID COMM
+76822 /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps-appfix-1b/ReShiki386Fix1bEvidence.app/Contents/MacOS/reshiki
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes/A01-3d-122.png
+  pixelWidth: 2560
+  pixelHeight: 1704
+
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 0ms:
+pid=76822 window=7636 rect=["Height": 852.0, "Width": 1280.0, "X": 200.0, "Y": 115.0] frontmost_pid=1867 frontmost_bundle=com.apple.Safari
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 0ms:
+pid=76822 window=7636 rect=["X": 200.0, "Width": 1280.0, "Height": 852.0, "Y": 115.0] frontmost_pid=1867 frontmost_bundle=com.apple.Safari
+
+codex
+The zoom now reads `122%`. The computer-use tool restores focus to Safari between calls, so I’m adding a PID-specific foreground check around the supplied drag helper and evidence captures to ensure those actions stay on the test build.
+apply patch
+patch: completed
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes/tools/verify-window.swift
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'swiftc tools/verify-window.swift -o tools/verify-window
+tools/verify-window 76822 7636 activate park >> window-checks.txt && screencapture -x -o -l 7636 A01-3d-122.png
+python3 tools/measure_png_frames.py A01-3d-122.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 1730ms:
+tools/verify-window.swift:10:29: warning: 'activateIgnoringOtherApps' was deprecated in macOS 14.0: ignoringOtherApps is deprecated in macOS 14 and will have no effect. [#DeprecatedDeclaration]
+ 8 | if CommandLine.arguments.contains("activate") {
+ 9 |  guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
+10 |  target.activate(options: [.activateIgnoringOtherApps])
+   |                             `- warning: 'activateIgnoringOtherApps' was deprecated in macOS 14.0: ignoringOtherApps is deprecated in macOS 14 and will have no effect. [#DeprecatedDeclaration]
+11 |  for _ in 0..<20 {
+12 |   if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
+
+tools/verify-window.swift:12:47: error: value of optional type 'pid_t?' (aka 'Optional<Int32>') must be unwrapped to a value of type 'pid_t' (aka 'Int32')
+10 |  target.activate(options: [.activateIgnoringOtherApps])
+11 |  for _ in 0..<20 {
+12 |   if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
+   |                                               |- error: value of optional type 'pid_t?' (aka 'Optional<Int32>') must be unwrapped to a value of type 'pid_t' (aka 'Int32')
+   |                                               |- note: coalesce using '??' to provide a default when the optional value contains 'nil'
+   |                                               `- note: force-unwrap using '!' to abort execution if the optional value contains 'nil'
+13 |   usleep(50_000)
+14 |  }
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+main/verify-window.swift:11: Fatal error: Target is not frontmost
+{
+  "coordinate_system": "zero-based pixels; spans and scan bounds are inclusive",
+  "measurements": [
+    {
+      "file": "A01-3d-122.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 6660,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [
+        {
+          "first": 664,
+          "last": 665,
+          "pixel_counts": [
+            734,
+            734
+          ],
+          "thickness": 2
+        },
+        {
+          "first": 1408,
+          "last": 1409,
+          "pixel_counts": [
+            734,
+            734
+          ],
+          "thickness": 2
+        }
+      ],
+      "horizontal_strokes": [
+        {
+          "first": 603,
+          "last": 604,
+          "pixel_counts": [
+            734,
+            734
+          ],
+          "thickness": 2
+        },
+        {
+          "first": 1347,
+          "last": 1348,
+          "pixel_counts": [
+            734,
+            734
+          ],
+          "thickness": 2
+        }
+      ],
+      "rectangle": {
+        "outer_bounds_inclusive": [
+          664,
+          603,
+          1409,
+          1348
+        ],
+        "width": 746,
+        "height": 746,
+        "center": [
+          1036.5,
+          975.5
+        ],
+        "all_strokes_2px": true
+      }
+    }
+  ]
+}
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc "python3 - <<'PY'
+p='tools/verify-window.swift'
+s=open(p).read().replace('frontmostApplication?.processIdentifier == pid','frontmostApplication?.processIdentifier == pid_t(pid)')
+open(p,'w').write(s)
+PY
+swiftc tools/verify-window.swift -o tools/verify-window && tools/verify-window 76822 7636 activate park >> window-checks.txt && screencapture -x -o -l 7636 A01-3d-122.png" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ exited 133 in 1857ms:
+tools/verify-window.swift:10:29: warning: 'activateIgnoringOtherApps' was deprecated in macOS 14.0: ignoringOtherApps is deprecated in macOS 14 and will have no effect. [#DeprecatedDeclaration]
+ 8 | if CommandLine.arguments.contains("activate") {
+ 9 |  guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
+10 |  target.activate(options: [.activateIgnoringOtherApps])
+   |                             `- warning: 'activateIgnoringOtherApps' was deprecated in macOS 14.0: ignoringOtherApps is deprecated in macOS 14 and will have no effect. [#DeprecatedDeclaration]
+11 |  for _ in 0..<20 {
+12 |   if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid_t(pid) { break }
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+main/verify-window.swift:19: Fatal error: Target is not frontmost
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 0ms:
+pid=76822 window=7636 rect=["Y": 115.0, "X": 200.0, "Height": 852.0, "Width": 1280.0] frontmost_pid=76822 frontmost_bundle=dev.reshiki.verification.ev386fix1b
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc "python3 - <<'PY'
+p='tools/verify-window.swift';s=open(p).read().replace('usleep(50_000)','RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.05))');open(p,'w').write(s)
+PY
+swiftc tools/verify-window.swift -o tools/verify-window && tools/verify-window 76822 7636 activate park >> window-checks.txt && screencapture -x -o -l 7636 A01-3d-122.png" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 832ms:
+tools/verify-window.swift:10:29: warning: 'activateIgnoringOtherApps' was deprecated in macOS 14.0: ignoringOtherApps is deprecated in macOS 14 and will have no effect. [#DeprecatedDeclaration]
+ 8 | if CommandLine.arguments.contains("activate") {
+ 9 |  guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
+10 |  target.activate(options: [.activateIgnoringOtherApps])
+   |                             `- warning: 'activateIgnoringOtherApps' was deprecated in macOS 14.0: ignoringOtherApps is deprecated in macOS 14 and will have no effect. [#DeprecatedDeclaration]
+11 |  for _ in 0..<20 {
+12 |   if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid_t(pid) { break }
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636 activate park >> window-checks.txt && /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 76822 704 674 784 734 >> drag-actions.txt' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 1024ms:
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636 activate park >> window-checks.txt && screencapture -x -o -l 7636 A02-resized.png
+python3 tools/measure_png_frames.py A02-resized.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 1709ms:
+{
+  "coordinate_system": "zero-based pixels; spans and scan bounds are inclusive",
+  "measurements": [
+    {
+      "file": "A02-resized.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 6612,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [
+        {
+          "first": 664,
+          "last": 665,
+          "pixel_counts": [
+            734,
+            734
+          ],
+          "thickness": 2
+        },
+        {
+          "first": 1408,
+          "last": 1409,
+          "pixel_counts": [
+            722,
+            722
+          ],
+          "thickness": 2
+        }
+      ],
+      "horizontal_strokes": [
+        {
+          "first": 603,
+          "last": 604,
+          "pixel_counts": [
+            734,
+            734
+          ],
+          "thickness": 2
+        },
+        {
+          "first": 1347,
+          "last": 1348,
+          "pixel_counts": [
+            722,
+            722
+          ],
+          "thickness": 2
+        }
+      ],
+      "rectangle": {
+        "outer_bounds_inclusive": [
+          664,
+          603,
+          1409,
+          1348
+        ],
+        "width": 746,
+        "height": 746,
+        "center": [
+          1036.5,
+          975.5
+        ],
+        "all_strokes_2px": true
+      }
+    }
+  ]
+}
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'cat drag-actions.txt
+cat window-checks.txt
+file ../../ev386-1b-drag
+cat ../../ev386-1b/tools/drag.swift' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 0ms:
+ok window 7636 origin 200.0,115.0
+pid=76822 window=7636 rect=["Y": 115.0, "Height": 852.0, "Width": 1280.0, "X": 200.0] frontmost_pid=76822 frontmost_bundle=dev.reshiki.verification.ev386fix1b
+pid=76822 window=7636 rect=["Y": 115.0, "X": 200.0, "Height": 852.0, "Width": 1280.0] frontmost_pid=76822 frontmost_bundle=dev.reshiki.verification.ev386fix1b
+pid=76822 window=7636 rect=["Width": 1280.0, "Height": 852.0, "X": 200.0, "Y": 115.0] frontmost_pid=76822 frontmost_bundle=dev.reshiki.verification.ev386fix1b
+../../ev386-1b-drag: Mach-O 64-bit executable arm64
+// Usage: swift drag.swift <pid> <x1> <y1> <x2> <y2> [shift] [capture=<png>]
+// Coordinates are in points relative to the top-left of <pid>'s main window.
+// Presses at (x1,y1), moves in 12 steps to (x2,y2), optionally captures the
+// window while the button is still held, then releases.
+import CoreGraphics
+import Foundation
+let a = CommandLine.arguments
+let pid = Int(a[1])!
+let x1 = Double(a[2])!, y1 = Double(a[3])!, x2 = Double(a[4])!, y2 = Double(a[5])!
+let shift = a.contains("shift")
+let capture = a.first { $0.hasPrefix("capture=") }.map { String($0.dropFirst(8)) }
+let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+guard let w = list.first(where: { ($0[kCGWindowOwnerPID as String] as? Int) == pid && ($0[kCGWindowLayer as String] as? Int) == 0 }) else { print("no window"); exit(1) }
+let b = w[kCGWindowBounds as String] as! [String: Double]
+let wid = w[kCGWindowNumber as String] as! Int
+let ox = b["X"]!, oy = b["Y"]!
+let flags: CGEventFlags = shift ? .maskShift : []
+func post(_ t: CGEventType, _ x: Double, _ y: Double) {
+  let e = CGEvent(mouseEventSource: nil, mouseType: t, mouseCursorPosition: CGPoint(x: ox + x, y: oy + y), mouseButton: .left)!
+  e.flags = flags
+  e.post(tap: .cghidEventTap)
+}
+if shift { let k = CGEvent(keyboardEventSource: nil, virtualKey: 56, keyDown: true)!; k.flags = .maskShift; k.post(tap: .cghidEventTap) }
+post(.mouseMoved, x1, y1); usleep(80_000)
+post(.leftMouseDown, x1, y1); usleep(80_000)
+for i in 1...12 { let t = Double(i) / 12; post(.leftMouseDragged, x1 + (x2 - x1) * t, y1 + (y2 - y1) * t); usleep(40_000) }
+usleep(300_000)
+if let c = capture {
+  let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture"); p.arguments = ["-x", "-o", "-l", String(wid), c]
+  try! p.run(); p.waitUntilExit()
+}
+post(.leftMouseUp, x2, y2)
+if shift { let k = CGEvent(keyboardEventSource: nil, virtualKey: 56, keyDown: false)!; k.post(tap: .cghidEventTap) }
+print("ok window \(wid) origin \(ox),\(oy)")
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+codex
+The first resize attempt left the frame unchanged. The app opened with keyboard-drawing mode active; I’ve exited that mode with F8 and will repeat the same handle drag. I’ll retain the failed-attempt screenshot and note this setup adjustment in the report.
+exec
+/bin/zsh -lc 'mv A02-resized.png A02-resize-first-attempt.png
+tools/verify-window 76822 7636 activate park >> window-checks.txt && /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 76822 704 674 784 734 >> drag-actions.txt' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 1015ms:
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636 activate park >> window-checks.txt && screencapture -x -o -l 7636 A02-resized.png
+python3 tools/measure_png_frames.py A02-resized.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 1644ms:
+{
+  "coordinate_system": "zero-based pixels; spans and scan bounds are inclusive",
+  "measurements": [
+    {
+      "file": "A02-resized.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 7780,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [
+        {
+          "first": 664,
+          "last": 665,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2
+        },
+        {
+          "first": 1548,
+          "last": 1549,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2
+        }
+      ],
+      "horizontal_strokes": [
+        {
+          "first": 603,
+          "last": 604,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2
+        },
+        {
+          "first": 1487,
+          "last": 1488,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2
+        }
+      ],
+      "rectangle": {
+        "outer_bounds_inclusive": [
+          664,
+          603,
+          1549,
+          1488
+        ],
+        "outer_pixel_width": 886,
+        "outer_pixel_height": 886,
+        "geometric_width": 884,
+        "geometric_height": 884,
+        "stroke_centers": {
+          "left": 664.5,
+          "right": 1548.5,
+          "top": 603.5,
+          "bottom": 1487.5
+        },
+        "stroke_center_center": [
+          1106.5,
+          1045.5
+        ],
+        "all_strokes_2px": true
+      }
+    }
+  ]
+}
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636 activate park >> window-checks.txt && /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 76822 580 530 480 470 >> drag-actions.txt' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 1006ms:
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636 activate park >> window-checks.txt && screencapture -x -o -l 7636 A03-resized-rotated.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 86ms:
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636 activate park >> window-checks.txt && screencapture -x -o -l 7636 A04-layout-from-3d.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 73ms:
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636 activate park >> window-checks.txt && screencapture -x -o -l 7636 A05-flattened-2d.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 82ms:
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636 activate park >> window-checks.txt && screencapture -x -o -l 7636 A06-back-to-3d.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 88ms:
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636 activate park >> window-checks.txt && screencapture -x -o -l 7636 A07-layout-original.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 89ms:
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+codex
+The resize reached the expected `884 × 884` pixels with the top-left corner fixed. The rotated model appears to return to the same frame after the 2D round trip; the pixel comparison is running. Choosing “Original drawing” keeps the model in 3D and shows “Original 2D drawing restored.”
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636 activate park >> window-checks.txt && screencapture -x -o -l 7636 A08-original-2d.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 60ms:
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636 activate park >> window-checks.txt && screencapture -x -o -l 7636 A09-undo.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 80ms:
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc "python3 - <<'PY'
+p='tools/verify-window.swift';s=open(p).read().replace('mouseButton: .left)"'!.post(tap: .cghidEventTap)'"','mouseButton: .left)"'!.post(tap: .cghidEventTap)'"\\n RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.2))');open(p,'w').write(s)
+PY
+swiftc tools/verify-window.swift -o tools/verify-window && tools/verify-window 76822 7636 activate park >> window-checks.txt && screencapture -x -o -l 7636 A09-undo.png" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 996ms:
+tools/verify-window.swift:10:29: warning: 'activateIgnoringOtherApps' was deprecated in macOS 14.0: ignoringOtherApps is deprecated in macOS 14 and will have no effect. [#DeprecatedDeclaration]
+ 8 | if CommandLine.arguments.contains("activate") {
+ 9 |  guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
+10 |  target.activate(options: [.activateIgnoringOtherApps])
+   |                             `- warning: 'activateIgnoringOtherApps' was deprecated in macOS 14.0: ignoringOtherApps is deprecated in macOS 14 and will have no effect. [#DeprecatedDeclaration]
+11 |  for _ in 0..<20 {
+12 |   if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid_t(pid) { break }
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636 activate park >> window-checks.txt && screencapture -x -o -l 7636 A10-both-122.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 296ms:
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636 activate park >> window-checks.txt && screencapture -x -o -l 7636 A11-both-97.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 346ms:
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+codex
+The pixel check confirms zero drift: A03, A06, and A07 have identical frame edges and a size of `884 × 884` pixels. At `97%`, Both shows the upright original caffeine drawing beside the rotated 3D model, with “Original drawing” active. I’m checking the undo/redo paths next.
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636 activate park >> window-checks.txt && screencapture -x -o -l 7636 A12-both-deselected.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 336ms:
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636 activate park >> window-checks.txt && screencapture -x -o -l 7636 A13-undo-both.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 334ms:
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636 activate park >> window-checks.txt && screencapture -x -o -l 7636 A14-redo-both.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 338ms:
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636 activate park >> window-checks.txt && screencapture -x -o -l 7636 A15a-undo-to-3d-original.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 288ms:
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+codex
+Undo and Redo of Both preserve the original caffeine layout. The earlier switch to 2D is no longer on the redo branch after choosing Both. I’ll record that limitation, then check the remaining restore action by undoing “Original drawing,” redoing it, and choosing Both again. This build exposes no native Edit menu; Redo is available in the toolbar and via its shortcut.
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636 activate park >> window-checks.txt && screencapture -x -o -l 7636 A15b-undo-original-restore.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 358ms:
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636 activate park >> window-checks.txt && screencapture -x -o -l 7636 A15-redo-2d.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 354ms:
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'tools/verify-window 76822 7636 activate park >> window-checks.txt && screencapture -x -o -l 7636 A16-both-after-redo.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 372ms:
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc "python3 - <<'PY'
+import pathlib, subprocess, time, os
+pid=76822
+expected='/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps-appfix-1b/ReShiki386Fix1bEvidence.app/Contents/MacOS/reshiki'
+proc=subprocess.run(['ps','-o','comm=','-p',str(pid)],capture_output=True,text=True)
+assert proc.stdout.strip()==expected, repr(proc.stdout)
+lines=['Cleanup target verified: PID 76822, '+expected,'Command: kill 76822 (SIGTERM)']
+subprocess.run(['kill',str(pid)],check=True)
+for _ in range(20):
+ check=subprocess.run(['pgrep','-f','apps-appfix-1b/ReShiki386Fix1bEvidence.app/Contents/MacOS/reshiki'],capture_output=True,text=True)
+ if check.returncode==1: break
+ time.sleep(.1)
+lines += ['Exact target pgrep exit status: '+str(check.returncode),'Exact target pgrep output: '+(check.stdout.strip() or '(none)')]
+after=subprocess.run(['pgrep','-lf','reshiki'],capture_output=True,text=True)
+lines+=['pgrep -lf reshiki after cleanup:',after.stdout.strip()]
+for line in pathlib.Path('installed-process-before.txt').read_text().splitlines():
+ original_pid=int(line.split()[0]); original=subprocess.run(['ps','-o','pid,lstart,args','-p',str(original_pid)],capture_output=True,text=True)
+ lines+=['Pre-existing PID '+str(original_pid)+' still running: '+str(original.returncode==0),original.stdout.strip()]
+pathlib.Path('process-cleanup.txt').write_text('\\n'.join(lines)+'\\n')
+print('\\n'.join(lines))
+PY" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 0ms:
+Cleanup target verified: PID 76822, /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps-appfix-1b/ReShiki386Fix1bEvidence.app/Contents/MacOS/reshiki
+Command: kill 76822 (SIGTERM)
+Exact target pgrep exit status: 1
+Exact target pgrep output: (none)
+pgrep -lf reshiki after cleanup:
+51217 /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki
+Pre-existing PID 51217 still running: True
+PID STARTED                      ARGS
+51217 Tue Oct 20 14:02:02 2026     /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+codex
+The final Both view still shows the original drawn caffeine after redoing the layout restore. I’ve terminated only PID `76822` and confirmed that the pre-existing PID `51217` is still running. I’m finishing the reports, including the setup adjustment and history/menu limitations.
+exec
+/bin/zsh -lc "cat > tools/ocr-evidence.swift <<'SWIFT'
+import Foundation
+import Vision
+import ImageIO
+let files=CommandLine.arguments.dropFirst()
+var results:[[String:Any]]=[]
+for file in files {
+ let url=URL(fileURLWithPath:file)
+ let request=VNRecognizeTextRequest()
+ request.recognitionLevel = .accurate
+ request.usesLanguageCorrection=false
+ request.regionOfInterest=CGRect(x:0,y:0,width:1,height:0.05)
+ let handler=VNImageRequestHandler(url:url,options:[:])
+ try handler.perform([request])
+ let text=(request.results ?? []).compactMap{"'$0.topCandidates(1).first?.string}
+ results.append(["file":url.lastPathComponent,"bottom_text":text])
+}
+let data=try JSONSerialization.data(withJSONObject:results,options:[.prettyPrinted,.sortedKeys])
+print(String(data:data,encoding:.utf8)!)
+SWIFT
+swiftc tools/ocr-evidence.swift -o tools/ocr-evidence && tools/ocr-evidence A*.png > status-ocr.json
+cat status-ocr.json' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc 'cat frame-measurements.md
+cat launched-process.txt
+ls -l A*.png' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 0ms:
+# PNG frame measurements
+
+Measurements use exact PNG RGB bytes `(62, 133, 117)` in the inclusive canvas region `x208..1959, y364..1619`. Coordinates below are zero-based screenshot pixel indices. Consecutive rows or columns containing **more than 400** exact-color pixels form a stroke. The compact handles do not create qualifying long rows or columns and cannot enlarge the measured frame.
+
+**Geometric dimensions** are `right.first − left.first` and `bottom.first − top.first`, the distance between corresponding edges of the opposite strokes. **Outer footprint** includes every pixel of both strokes, so a frame with 2px strokes has a footprint two pixels larger than its geometric dimensions. The center is the mean of opposite stroke midpoints. To convert raster-index centers to physical point coordinates for a 2px/pt screenshot, add 0.5px to each coordinate and divide by 2.
+
+| Screenshot | Vertical stroke columns | Horizontal stroke rows | Geometric size (px) | Outer footprint (px) | Stroke-center center (px) |
+|---|---|---|---:|---:|---:|
+| `A00-opening-2d.png` | No detectable frame | No detectable frame | — | — | — |
+| `A01-3d-122.png` | 664..665; 1408..1409 | 603..604; 1347..1348 | 744 × 744 | 746 × 746 | (1036.5, 975.5) |
+| `A02-resize-first-attempt.png` | 664..665; 1408..1409 | 603..604; 1347..1348 | 744 × 744 | 746 × 746 | (1036.5, 975.5) |
+| `A02-resized.png` | 664..665; 1548..1549 | 603..604; 1487..1488 | 884 × 884 | 886 × 886 | (1106.5, 1045.5) |
+| `A03-resized-rotated.png` | 664..665; 1548..1549 | 603..604; 1487..1488 | 884 × 884 | 886 × 886 | (1106.5, 1045.5) |
+| `A04-layout-from-3d.png` | 664..665; 1548..1549 | 603..604; 1487..1488 | 884 × 884 | 886 × 886 | (1106.5, 1045.5) |
+| `A05-flattened-2d.png` | No detectable frame | No detectable frame | — | — | — |
+| `A06-back-to-3d.png` | 664..665; 1548..1549 | 603..604; 1487..1488 | 884 × 884 | 886 × 886 | (1106.5, 1045.5) |
+| `A07-layout-original.png` | 664..665; 1548..1549 | 603..604; 1487..1488 | 884 × 884 | 886 × 886 | (1106.5, 1045.5) |
+| `A08-original-2d.png` | 750..751; 1295..1295 | 760..760; 1223..1223 | 545 × 463 | 546 × 464 | (1022.75, 991.5) |
+| `A09-undo.png` | 664..665; 1548..1549 | 603..604; 1487..1488 | 884 × 884 | 886 × 886 | (1106.5, 1045.5) |
+| `A10-both-122.png` | No detectable frame | No detectable frame | — | — | — |
+| `A11-both-97.png` | No detectable frame | No detectable frame | — | — | — |
+| `A12-both-deselected.png` | No detectable frame | No detectable frame | — | — | — |
+| `A13-undo-both.png` | 743..744; 1460..1461 | 676..677; 1393..1393 | 717 × 717 | 719 × 718 | (1102.0, 1034.75) |
+| `A14-redo-both.png` | No detectable frame | No detectable frame | — | — | — |
+| `A15-redo-2d.png` | 743..744; 1460..1461 | 676..677; 1393..1393 | 717 × 717 | 719 × 718 | (1102.0, 1034.75) |
+| `A15a-undo-to-3d-original.png` | 743..744; 1460..1461 | 676..677; 1393..1393 | 717 × 717 | 719 × 718 | (1102.0, 1034.75) |
+| `A15b-undo-original-restore.png` | 743..744; 1460..1461 | 676..677; 1393..1393 | 717 × 717 | 719 × 718 | (1102.0, 1034.75) |
+| `A16-both-after-redo.png` | No detectable frame | No detectable frame | — | — | — |
+
+These captures have one or more exact-color strokes whose thickness differs from 2px: `A08-original-2d.png`, `A13-undo-both.png`, `A15-redo-2d.png`, `A15a-undo-to-3d-original.png`, `A15b-undo-original-restore.png`. Their dimensions use the same corresponding-first-edge formula shown above; the JSON preserves every observed stroke thickness. No antialiased pixels or inferred stroke edges are added.
+
+## A03 → A06 → A07 comparison
+
+- `A06-back-to-3d.png` versus `A03-resized-rotated.png`: geometric width Δ0px, height Δ0px, center Δ(0.0, 0.0)px. All recorded frame geometry identical: **True**.
+- `A07-layout-original.png` versus `A03-resized-rotated.png`: geometric width Δ0px, height Δ0px, center Δ(0.0, 0.0)px. All recorded frame geometry identical: **True**.
+
+The first A02 attempt is retained as setup evidence: the capture owner reported that keyboard drawing was initially enabled and that the first drag did not resize the frame. The subsequent `A02-resized.png` is the successful resize capture.
+
+Only frame geometry is compared here. The measurements do not establish whether the molecule orientation or other screenshot content is identical. A screenshot with no detected frame is recorded explicitly and is not assigned inferred dimensions.
+
+## Reproduce
+
+```sh
+python3 tools/measure_png_frames.py 'A*.png' --json frame-measurements.json --markdown frame-measurements.md
+```
+
+The tool uses only the Python standard library and reads stored PNG color bytes without display color conversion. The JSON includes image dimensions, exact match counts, each qualifying stroke's full interval and per-coordinate match counts, inclusive outer bounds, geometric dimensions, outer footprint, and center.
+  PID STARTED                      ARGS
+76822 Tue Oct 20 21:18:55 2026     /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps-appfix-1b/ReShiki386Fix1bEvidence.app/Contents/MacOS/reshiki --open /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/input/caffeine.mol
+7636
+pid=76822 window=7636 rect=["X": 200.0, "Y": 115.0, "Height": 852.0, "Width": 1280.0] frontmost_pid=76822 frontmost_bundle=dev.reshiki.verification.ev386fix1b
+-rw-r--r--@ 1 shiranui  wheel  406758 Oct 20 21:19 A00-opening-2d.png
+-rw-r--r--@ 1 shiranui  wheel  476417 Oct 20 21:22 A01-3d-122.png
+-rw-r--r--@ 1 shiranui  wheel  475890 Oct 20 21:22 A02-resize-first-attempt.png
+-rw-r--r--@ 1 shiranui  wheel  492819 Oct 20 21:23 A02-resized.png
+-rw-r--r--@ 1 shiranui  wheel  480037 Oct 20 21:23 A03-resized-rotated.png
+-rw-r--r--@ 1 shiranui  wheel  481655 Oct 20 21:23 A04-layout-from-3d.png
+-rw-r--r--@ 1 shiranui  wheel  401976 Oct 20 21:24 A05-flattened-2d.png
+-rw-r--r--@ 1 shiranui  wheel  488415 Oct 20 21:24 A06-back-to-3d.png
+-rw-r--r--@ 1 shiranui  wheel  482009 Oct 20 21:24 A07-layout-original.png
+-rw-r--r--@ 1 shiranui  wheel  408768 Oct 20 21:24 A08-original-2d.png
+-rw-r--r--@ 1 shiranui  wheel  478557 Oct 20 21:25 A09-undo.png
+-rw-r--r--@ 1 shiranui  wheel  495230 Oct 20 21:26 A10-both-122.png
+-rw-r--r--@ 1 shiranui  wheel  477632 Oct 20 21:26 A11-both-97.png
+-rw-r--r--@ 1 shiranui  wheel  441047 Oct 20 21:26 A12-both-deselected.png
+-rw-r--r--@ 1 shiranui  wheel  449025 Oct 20 21:26 A13-undo-both.png
+-rw-r--r--@ 1 shiranui  wheel  470693 Oct 20 21:27 A14-redo-both.png
+-rw-r--r--@ 1 shiranui  wheel  449025 Oct 20 21:28 A15-redo-2d.png
+-rw-r--r--@ 1 shiranui  wheel  449025 Oct 20 21:27 A15a-undo-to-3d-original.png
+-rw-r--r--@ 1 shiranui  wheel  450536 Oct 20 21:27 A15b-undo-original-restore.png
+-rw-r--r--@ 1 shiranui  wheel  477632 Oct 20 21:28 A16-both-after-redo.png
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+ succeeded in 69401ms:
+[
+  {
+    "bottom_text" : [
+      "Structure imported • Undo restores the previous drawing",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 238% + Fit"
+    ],
+    "file" : "A00-opening-2d.png"
+  },
+  {
+    "bottom_text" : [
+      "Shown as 3D model • Undo restores the 2D drawing",
+      "JACS \/ ACS",
+      "Publication",
+      "View",
+      "122% + Fit"
+    ],
+    "file" : "A01-3d-122.png"
+  },
+  {
+    "bottom_text" : [
+      "Shown as 3D model • Undo restores the 2D drawing",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 122% + Fit"
+    ],
+    "file" : "A02-resize-first-attempt.png"
+  },
+  {
+    "bottom_text" : [
+      "Drawing updated",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 122% + Fit"
+    ],
+    "file" : "A02-resized.png"
+  },
+  {
+    "bottom_text" : [
+      "Drawing updated",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 122% + Fit"
+    ],
+    "file" : "A03-resized-rotated.png"
+  },
+  {
+    "bottom_text" : [
+      "Drawing updated",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 122% + Fit"
+    ],
+    "file" : "A04-layout-from-3d.png"
+  },
+  {
+    "bottom_text" : [
+      "Shown as 2D from the 3D view • Undo restores the 3D model",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 122% + Fit"
+    ],
+    "file" : "A05-flattened-2d.png"
+  },
+  {
+    "bottom_text" : [
+      "Shown as 3D model • Undo restores the 2D drawing",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 122% + Fit"
+    ],
+    "file" : "A06-back-to-3d.png"
+  },
+  {
+    "bottom_text" : [
+      "Original 2D drawing restored",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 122% + Fit"
+    ],
+    "file" : "A07-layout-original.png"
+  },
+  {
+    "bottom_text" : [
+      "Shown as 2D • Undo restores the 3D model",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 122% + Fit"
+    ],
+    "file" : "A08-original-2d.png"
+  },
+  {
+    "bottom_text" : [
+      "History restored",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 122% + Fit"
+    ],
+    "file" : "A09-undo.png"
+  },
+  {
+    "bottom_text" : [
+      "Shown as 2D and 3D • Undo restores the 3D model",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 122% + Fit"
+    ],
+    "file" : "A10-both-122.png"
+  },
+  {
+    "bottom_text" : [
+      "Shown as 2D and 3D • Undo restores the 3D model",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 97% + Fit"
+    ],
+    "file" : "A11-both-97.png"
+  },
+  {
+    "bottom_text" : [
+      "Shown as 2D and 3D • Undo restores the 3D model",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 97% + Fit"
+    ],
+    "file" : "A12-both-deselected.png"
+  },
+  {
+    "bottom_text" : [
+      "History restored",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 97% + Fit"
+    ],
+    "file" : "A13-undo-both.png"
+  },
+  {
+    "bottom_text" : [
+      "History restored",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 97% + Fit"
+    ],
+    "file" : "A14-redo-both.png"
+  },
+  {
+    "bottom_text" : [
+      "History restored",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 97% + Fit"
+    ],
+    "file" : "A15-redo-2d.png"
+  },
+  {
+    "bottom_text" : [
+      "History restored",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 97% + Fit"
+    ],
+    "file" : "A15a-undo-to-3d-original.png"
+  },
+  {
+    "bottom_text" : [
+      "History restored",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 97% + Fit"
+    ],
+    "file" : "A15b-undo-original-restore.png"
+  },
+  {
+    "bottom_text" : [
+      "Shown as 2D and 3D • Undo restores the 3D model",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 97% + Fit"
+    ],
+    "file" : "A16-both-after-redo.png"
+  }
+]
+
+exec
+/bin/zsh -lc "cat > report.md <<'MD'
+# ReShiki #386 phase 1b — local UI verification
+
+Run on 20 October 2026 (Asia/Tokyo), using the isolated "'`ReShiki386Fix1bEvidence.app` build and the supplied caffeine input. **Both targeted fixes passed the observed UI checks.** The resized/rotated 3D frame returned with **0 px movement on every edge** after the flattened-2D round trip. Restoring **Original drawing** produced the original caffeine drawing in 2D and in Both, including after Undo/Redo and after redoing the layout restoration. Two requested details have limitations: this build exposes no native Edit menu, and choosing Both replaces the earlier redo branch for switching to 2D. Those limitations and the additional restore-redo check are documented below.
+
+**Process isolation and capture conditions**
+
+- Saved the pre-launch `pgrep -lf reshiki` output in [installed-process-before.txt](installed-process-before.txt). Only the pre-existing installed PID `51217` was present.
+- Executed the exact `open -n …ReShiki386Fix1bEvidence.app --env RESHIKI_DATA_DIR=…/ev386-1b-appfix-data --args --open …/input/caffeine.mol` launch command from `prompt.md`.
+- Exact bundle-path `pgrep` returned one PID: **76822**. Saved its start time and arguments in [launched-process.txt](launched-process.txt).
+- The supplied window helper returned **WID 7636**. CoreGraphics confirmed owner PID 76822, origin **(200,115)** screen points, size **1280 × 852** points. The window size was kept unchanged. Every formal screenshot is **2560 × 1704** pixels, captured only with `screencapture -x -o -l 7636 <filename>`.
+- Computer use attached only to bundle ID `dev.reshiki.verification.ev386fix1b`. No installed ReShiki app was looked up by name, focused, clicked, captured, or quit.
+- The computer-use tool sometimes returned foreground focus to Safari. For supplied-helper drags and captures, [tools/verify-window.swift](tools/verify-window.swift) verified the exact PID/window pair, activated only PID 76822 after checking its bundle ID, and verified foreground ownership. Pointer parking was at window-relative **(960,60) pt**, a blank header area away from model and documented controls. Checks are in [window-checks.txt](window-checks.txt). Early foreground guards stopped before pointer movement; A01 was recaptured after the guard succeeded. From A09 onward, parking also allowed 0.2 seconds for hover repaint.
+- [A00-opening-2d.png](A00-opening-2d.png) is an extra initial reference at **238%**, before the formal flow and before pointer parking was established. It shows the imported, upright drawn caffeine layout. Formal evidence is A01–A16.
+- No drawing was saved, no repository files were edited, and no system settings were changed. Generated tools, measurements, and reports are confined to this artifact directory.
+
+**Coordinate convention and exact actions**
+
+Computer-use coordinate clicks below are **2× screenshot pixels relative to the window top-left**; the corresponding point coordinates are also given. The supplied drag helper uses **window-relative points including the title bar**. AX actions are identified by their exact accessibility ID; an AX action does not supply a caller-selected x/y, so no fabricated click coordinate is assigned to those two initial actions.
+
+| Control/action | Exact computer-use input | Window-relative point equivalent |
+|---|---|---|
+| Initial arrow selection | AX `tool-Select`, then-current index 80 | AX action; no caller-specified coordinate |
+| Initial 3D selection | AX `structure-show-3D`, then-current index 122 | AX action; no caller-specified coordinate |
+| Arrow recheck before exiting keyboard mode | `(52,374)` px | `(26,187)` pt |
+| Empty canvas | `(400,400)` px | `(200,200)` pt |
+| Zoom minus, each click | `(2263,1663)` px | `(1131.5,831.5)` pt |
+| From the 3D view | `(2380,746)` px | `(1190,373)` pt |
+| Properties → Structure → 2D | `(2048,548)` px | `(1024,274)` pt |
+| Properties → Structure → 3D, return | `(2260,548)` px | `(1130,274)` pt |
+| Original drawing | `(2130,731)` px | `(1065,365.5)` pt |
+| Properties → Structure → Both | `(2394,548)` px | `(1197,274)` pt |
+| App menu inspection | AX menu-bar item `ReShiki386Fix1bEvidence`, then-current index 69 | AX action; no caller-specified coordinate |
+
+A stale initial AX index 16 was rejected without executing an action. The tree was refreshed before using index 80. Keyboard commands were sent only through the test-app binding: `super+a`, `F8`, `super+z`, `super+shift+z`, and `Escape`.
+
+All three drag attempts used exactly the supplied executable:
+
+```text
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 76822 704 674 784 734
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 76822 704 674 784 734
+/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag 76822 580 530 480 470
+```
+
+No Shift modifier was used. [drag-actions.txt](drag-actions.txt) records each helper completion against WID 7636 and origin (200,115).
+
+**Step-by-step observations**
+
+| Prompt step / evidence | Action and expected result | Observed state, status, and measurement | Result |
+|---|---|---|---|
+| 1 — [A01-3d-122.png](A01-3d-122.png) | Arrow; empty canvas `(400,400)` px; Cmd+A; initial 3D AX action; let the model settle; zoom minus `(2263,1663)` px three times. Expected 122%, selected 3D, 744 × 744 px frame. | Zoom **122%**, 3D active in Properties and floating Show as; Original drawing active. Status **“Shown as 3D model · Undo restores the 2D drawing”**. Frame L664..665 / T603..604 / R1408..1409 / B1347..1348; **744 × 744 px**, center **(1036.5,975.5)**. | **PASS** |
+| 2 — [A02-resize-first-attempt.png](A02-resize-first-attempt.png) | Verified bottom-right handle near `(704.5,674)` pt from A01; attempted supplied-helper `(704,674) → (784,734)` pt. | Frame stayed **744 × 744 px**. Keyboard drawing was still active from opening, and the gesture moved the keyboard drawing cursor instead of resizing. Status remained the initial 3D message. | **SETUP ATTEMPT FAILED**, retained as evidence |
+| 2 — [A02-resized.png](A02-resized.png) | Rechecked arrow at `(52,374)` px, then **F8** to leave keyboard drawing; repeated exactly `(704,674) → (784,734)` pt. Expected 884 × 884 with top-left fixed. | Frame L664..665 / T603..604 / R1548..1549 / B1487..1488; **884 × 884 px**, center **(1106.5,1045.5)**. Top-left unchanged; right and bottom each +140 px. 3D and Original drawing active, 122%. Status **“Drawing updated”**. | **PASS after documented setup adjustment** |
+| 3 — [A03-resized-rotated.png](A03-resized-rotated.png) | Supplied-helper `(580,530) → (480,470)` pt, inside frame. Expected model rotation with frame fixed. | Model visibly tilted/rotated. Frame remains **884 × 884 px**, same four edges and center as A02. 3D / Original drawing / 122%. Status **“Drawing updated”**. This is the BEFORE frame. | **PASS** |
+| 4a — [A04-layout-from-3d.png](A04-layout-from-3d.png) | Click From the 3D view `(2380,746)` px. | From the 3D view active; Original drawing off; 3D stays active. Frame unchanged at **884 × 884 px**. Status remains **“Drawing updated”**. Explanatory text says to flatten the model as currently turned, with far bonds lighter. | **PASS** |
+| 4b — [A05-flattened-2d.png](A05-flattened-2d.png) | Click 2D `(2048,548)` px. Expected projection of the rotated model. | 2D active in Properties and Show as. Canvas shows the slanted, compressed projection, visibly distinct from the original upright drawing. Status **“Shown as 2D from the 3D view · Undo restores the 3D model”**. 122%. The 2D layout row is not displayed in pure 2D mode. Compact selection box is visible, but its exact-color lines do not meet the >400-pixel measurement threshold. | **PASS** |
+| 5 — [A06-back-to-3d.png](A06-back-to-3d.png) | Click 3D `(2260,548)` px. Expected identical frame to A03. | Rotated 3D model returns; 3D active, From the 3D view active, 122%. Status **“Shown as 3D model · Undo restores the 2D drawing”**. L664..665 / T603..604 / R1548..1549 / B1487..1488; **884 × 884 px**, center **(1106.5,1045.5)**. Each edge differs from A03 by **0 px**. | **PASS — fix 1** |
+| 6 — [A07-layout-original.png](A07-layout-original.png) | Click Original drawing `(2130,731)` px. Expected original coordinates restored while model remains 3D. | Original drawing active, From the 3D view off; Properties and Show as remain 3D. Canvas still shows the rotated 3D model. Status **“Original 2D drawing restored”**. Frame exactly matches A03/A06: **884 × 884 px**, zero edge or center movement. Hidden 2D restoration is confirmed by A08 and subsequent Both views. | **PASS** |
+| 7 — [A08-original-2d.png](A08-original-2d.png) | Click 2D `(2048,548)` px. Expected original caffeine layout. | Upright fused 6+5 ring drawing matches A00: left carbonyl points left, lower carbonyl down, five-membered ring on the right. It differs clearly from A05. 2D active; layout row hidden; 122%. Status **“Shown as 2D · Undo restores the 3D model”**. Measured 2D selection: **545 × 463 px** by corresponding-edge formula; see stroke-thickness caveat in measurements. | **PASS** |
+| 8 — [A09-undo.png](A09-undo.png) | Cmd+Z once; inspect native menu / Redo availability; close menu with Escape before screenshot. | Returns to rotated **3D**, with **Original drawing** still active. Floating Show as also 3D. Status **“History restored”**. Frame restored at **884 × 884 px** and original center. Toolbar AX `header-redo` is enabled (not marked disabled); screenshot also shows the enabled arrow. Native app menu inspection exposes About/Services/Hide/Quit only; no Edit menu exists in the exposed menu bar. Escape was sent before A09; stale menu AX state was later dismissed with its Cancel action and another Escape. | **PASS for Undo/layout/Redo availability; Edit-menu-specific check unavailable** |
+| 9a — [A10-both-122.png](A10-both-122.png) | Click Both `(2394,548)` px. | Both active in Properties and Show as; Original drawing active. Original upright 2D member is at left, rotated 3D member at right. Status **“Shown as 2D and 3D · Undo restores the 3D model”**. 122%. Right portion of the 3D member and the selected union frame extend beyond the canvas under the inspector. | **PASS for restored 2D layout** |
+| 9b — [A11-both-97.png](A11-both-97.png) | Zoom minus `(2263,1663)` px once. | Zoom **97%**. Both and Original drawing remain active. Both molecules are visible; 2D is the original drawn caffeine, not A05’s projection. Same “Shown as 2D and 3D…” status. The union frame’s right edge is still clipped; no full frame width is inferred. | **PASS — fix 2** |
+| 9c — [A12-both-deselected.png](A12-both-deselected.png) | Empty canvas `(400,400)` px; capture, then Cmd+A again. | Both molecules remain visible at 97%; clean unselected 2D member clearly has the original layout. Selection frame and Show as disappear; inspector says to select an object, so no active layout row is displayed while deselected. Status stays **“Shown as 2D and 3D · Undo restores the 3D model”**. | **PASS** |
+| 10a — [A13-undo-both.png](A13-undo-both.png) | After Cmd+A, Cmd+Z once. Expected undo Both. | 3D only; 3D active, Original drawing active, 97%; Redo enabled. Status **“History restored”**. Exact-color corresponding-edge frame size **717 × 717 px**, center **(1102,1034.75)**; bottom stroke has only one exact-color row at this zoom, so raw details are retained. | **PASS** |
+| 10b — [A14-redo-both.png](A14-redo-both.png) | Cmd+Shift+Z once. Expected Both with original drawing. | Both returns; Both and Original drawing active; 97%. Left 2D member still matches A08/A12. Status **“History restored”**. Redo now disabled. Selected union frame clipped at right. | **PASS** |
+| 11a — [A15a-undo-to-3d-original.png](A15a-undo-to-3d-original.png) | Cmd+Z once from A14, until 3D + Original drawing as A09. | Reached target after **one Undo**: 3D active, Original drawing active, 97%, Redo enabled, status **“History restored”**. Next Redo is the Both action, as already demonstrated in A13→A14; the older switch-to-2D redo branch was replaced when Both was chosen. | **REQUESTED 2D DISPLAY REDO BRANCH UNAVAILABLE** |
+| 11b — [A15b-undo-original-restore.png](A15b-undo-original-restore.png) | Additional focused check: Cmd+Z once more to undo Original drawing restoration itself. | Model remains 3D; layout changes back to **From the 3D view**. Status **“History restored”**; 97%; frame **717 × 717 px**, unchanged from A15a. This establishes the restoration action that can be redone. | **PASS for reaching restore history entry** |
+| 11c — [A15-redo-2d.png](A15-redo-2d.png) | Cmd+Shift+Z once to redo that restoration. | **Original drawing** becomes active again while **3D stays active**. Status **“History restored”**; 97%; frame unchanged at **717 × 717 px**. The required filename is retained, but this shot documents redo of the original-2D-coordinate restoration, not a switch to 2D display. | **PASS for layout-restoration Redo** |
+| 11d — [A16-both-after-redo.png](A16-both-after-redo.png) | Choose Both `(2394,548)` px after restoration Redo. | Both active; Original drawing active; 97%. Left member remains the original drawn caffeine; right member is the rotated 3D model. Status **“Shown as 2D and 3D · Undo restores the 3D model”**. | **PASS** |
+| 12 — [process-cleanup.txt](process-cleanup.txt) | Verify PID executable, then `kill 76822`; check exact-target pgrep and all pre-existing PIDs. | Exact-target pgrep exits **1**, no remaining target process. Installed PID **51217** remains running with the original `/nix/store/…/ReShiki.app/Contents/MacOS/reshiki` path. No other pre-existing ReShiki processes existed in the baseline. | **PASS** |
+
+**Frame comparison and interpretation**
+
+Measurements scan stored PNG RGB values exactly equal to **(62,133,117)**, using qualifying canvas rows/columns with more than 400 matches. Handles are excluded by the long-run criterion. The full measurement table, including partial clipped frames and later zoom states, is in [frame-measurements.md](frame-measurements.md), with raw values in [frame-measurements.json](frame-measurements.json).
+
+| Screenshot | Left stroke | Top stroke | Right stroke | Bottom stroke | Geometric width × height | Center |
+|---|---|---|---|---|---|---|
+| A03 before | 664..665 | 603..604 | 1548..1549 | 1487..1488 | 884 × 884 px | (1106.5,1045.5) |
+| A06 back to 3D | 664..665 | 603..604 | 1548..1549 | 1487..1488 | 884 × 884 px | (1106.5,1045.5) |
+| A07 Original drawing | 664..665 | 603..604 | 1548..1549 | 1487..1488 | 884 × 884 px | (1106.5,1045.5) |
+| A06 − A03 | 0 px | 0 px | 0 px | 0 px | 0 × 0 px | (0,0) px |
+| A07 − A03 | 0 px | 0 px | 0 px | 0 px | 0 × 0 px | (0,0) px |
+
+Widths/heights are distances between corresponding edges of opposite strokes, consistent with the expected 744/884 px dimensions. Inclusive outer footprints are 746/886 px because they include the full two-pixel strokes. Centers above are zero-based raster-index stroke centers; the measurement report states the physical-pixel-center conversion. The later 97% geometry is reported separately and is not compared as if it were at 122%.
+
+Visual comparison was independently reviewed against A05 and A08: A11, A12, A14, and A16 all retain the upright original ring layout and carbonyl directions. A05 has the diagonally compressed projection. This comparison is based on visible layout, not only the active option label.
+
+**Anything not verified, and why**
+
+- **Native Edit → Redo:** unavailable in this build’s exposed native menu bar. Toolbar Redo enabled state was verified at A09, and actual Cmd+Shift+Z behavior was exercised at A14 and A15.
+- **Redo of the earlier switch-to-2D display after choosing Both:** that redo branch no longer exists. A13→A14 confirms the available Redo at the A09-like state restores Both. The additional A15b→A15→A16 sequence verifies redo of the underlying Original drawing restoration and its resulting Both layout instead.
+- **Hidden 2D coordinates while only 3D is shown:** they cannot be viewed directly in A07. A08 and the subsequent Both views demonstrate the restoration, including through the restoration’s Undo/Redo history entry.
+- **Full selected Both-frame width and center:** the right frame edge is outside the visible canvas at both requested Both zooms. Only visible strokes are measured; missing edges are not inferred. A12 supplies a deselected view of both complete molecules at 97%.
+- **Compact A05 selection geometry under the mandated >400 exact-pixel rule:** the visible compact frame does not qualify. Some later 2D/97% strokes contain only one row/column of the exact target RGB; their measured thicknesses are recorded without inventing antialiased edges.
+- **Initial setup fidelity:** keyboard drawing was initially active, so the first resize did not act on the frame. F8 exited that mode, and the exact prescribed resize drag then succeeded. The failed attempt was retained. The initial arrow and 3D activations were AX actions, so their caller-level x/y coordinates do not exist; all coordinate-driven actions and drags are documented above.
+MD' in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 0ms:
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+exec
+/bin/zsh -lc "sed -n '1,240p' tools/measure_png_frames.py" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 0ms:
+#!/usr/bin/env python3
+"""Measure exact-color frame strokes in PNG screenshots, without third-party libs.
+
+Coordinates are zero-based screenshot pixels. Scan only the configured canvas.
+Rows/columns must contain >400 exact RGB matches, so compact resize handles do
+not extend the measured rectangle. Consecutive qualifying coordinates form one
+    stroke. A rectangle is reported only when two horizontal and two vertical
+    strokes are unambiguous. Geometric dimensions use corresponding stroke-edge
+    distances; the raw outer footprint includes both outermost stroke pixels.
+"""
+
+import argparse
+import glob
+import json
+import struct
+import zlib
+from collections import Counter
+from pathlib import Path
+
+
+def png_rows(path):
+    data = Path(path).read_bytes()
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("Not a PNG")
+    offset, idat, palette = 8, [], None
+    while offset < len(data):
+        length = struct.unpack_from(">I", data, offset)[0]
+        kind = data[offset + 4 : offset + 8]
+        body = data[offset + 8 : offset + 8 + length]
+        if kind == b"IHDR":
+            width, height, depth, color_type, comp, filt, interlace = struct.unpack(
+                ">IIBBBBB", body
+            )
+        elif kind == b"IDAT":
+            idat.append(body)
+        elif kind == b"PLTE":
+            palette = [tuple(body[i : i + 3]) for i in range(0, len(body), 3)]
+        elif kind == b"IEND":
+            break
+        offset += length + 12
+    if depth != 8 or interlace or comp or filt:
+        raise ValueError(f"Unsupported PNG depth/interlace/compression/filter: {depth}/{interlace}/{comp}/{filt}")
+    channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}.get(color_type)
+    if channels is None:
+        raise ValueError(f"Unsupported PNG color type {color_type}")
+    raw = zlib.decompress(b"".join(idat))
+    stride = width * channels
+    if len(raw) != height * (stride + 1):
+        raise ValueError("Unexpected decompressed PNG size")
+    rows, previous = [], bytearray(stride)
+    for y in range(height):
+        pos = y * (stride + 1)
+        method, row = raw[pos], bytearray(raw[pos + 1 : pos + 1 + stride])
+        if method == 1:
+            for i in range(channels, stride):
+                row[i] = (row[i] + row[i - channels]) & 255
+        elif method == 2:
+            for i in range(stride):
+                row[i] = (row[i] + previous[i]) & 255
+        elif method == 3:
+            for i in range(stride):
+                left = row[i - channels] if i >= channels else 0
+                row[i] = (row[i] + ((left + previous[i]) // 2)) & 255
+        elif method == 4:
+            for i in range(stride):
+                left = row[i - channels] if i >= channels else 0
+                above, upper_left = previous[i], previous[i - channels] if i >= channels else 0
+                estimate = left + above - upper_left
+                dl, da, du = abs(estimate - left), abs(estimate - above), abs(estimate - upper_left)
+                predictor = left if dl <= da and dl <= du else above if da <= du else upper_left
+                row[i] = (row[i] + predictor) & 255
+        elif method != 0:
+            raise ValueError(f"Unsupported PNG row filter {method}")
+        rows.append(row)
+        previous = row
+    return width, height, channels, color_type, palette, rows
+
+
+def groups(indices, counts):
+    result = []
+    for coordinate in indices:
+        if result and coordinate == result[-1]["last"] + 1:
+            result[-1]["last"] = coordinate
+            result[-1]["pixel_counts"].append(counts[coordinate])
+        else:
+            result.append({"first": coordinate, "last": coordinate, "pixel_counts": [counts[coordinate]]})
+    for group in result:
+        group["thickness"] = group["last"] - group["first"] + 1
+    return result
+
+
+def measure(path, bounds, color, threshold):
+    width, height, channels, color_type, palette, rows = png_rows(path)
+    x0, y0, x1, y1 = bounds
+    x0, y0, x1, y1 = max(x0, 0), max(y0, 0), min(x1, width - 1), min(y1, height - 1)
+    column_counts, row_counts, exact_pixels = Counter(), Counter(), []
+    target = bytes(color)
+    for y in range(y0, y1 + 1):
+        row = rows[y]
+        if color_type in (2, 6):
+            pos = row.find(target, x0 * channels, (x1 + 1) * channels)
+            while pos >= 0:
+                if pos % channels == 0:
+                    x = pos // channels
+                    row_counts[y] += 1
+                    column_counts[x] += 1
+                    exact_pixels.append((x, y))
+                pos = row.find(target, pos + 1, (x1 + 1) * channels)
+        else:
+            for x in range(x0, x1 + 1):
+                pixel = palette[row[x]] if color_type == 3 else (row[x * channels],) * 3
+                if pixel == tuple(color):
+                    row_counts[y] += 1
+                    column_counts[x] += 1
+                    exact_pixels.append((x, y))
+    vertical = groups(sorted(x for x, count in column_counts.items() if count > threshold), column_counts)
+    horizontal = groups(sorted(y for y, count in row_counts.items() if count > threshold), row_counts)
+    for group in vertical:
+        support = [y for x, y in exact_pixels if group["first"] <= x <= group["last"]]
+        group["matching_support_inclusive"] = [min(support), max(support)]
+    for group in horizontal:
+        support = [x for x, y in exact_pixels if group["first"] <= y <= group["last"]]
+        group["matching_support_inclusive"] = [min(support), max(support)]
+    result = {
+        "file": Path(path).name,
+        "image_size": [width, height],
+        "scan_bounds_inclusive": [x0, y0, x1, y1],
+        "exact_rgb": list(color),
+        "matching_pixels": len(exact_pixels),
+        "minimum_pixel_count_exclusive": threshold,
+        "vertical_strokes": vertical,
+        "horizontal_strokes": horizontal,
+        "rectangle": None,
+        "detection_status": "no_qualifying_long_strokes" if not vertical and not horizontal else "partial_or_ambiguous_strokes",
+        "partial_frame": None,
+    }
+    if len(vertical) == 2 and len(horizontal) == 2:
+        result["detection_status"] = "complete_frame"
+        left, right = vertical[0]["first"], vertical[1]["last"]
+        top, bottom = horizontal[0]["first"], horizontal[1]["last"]
+        result["rectangle"] = {
+            "outer_bounds_inclusive": [left, top, right, bottom],
+            "outer_pixel_width": right - left + 1,
+            "outer_pixel_height": bottom - top + 1,
+            "geometric_width": vertical[1]["first"] - vertical[0]["first"],
+            "geometric_height": horizontal[1]["first"] - horizontal[0]["first"],
+            "stroke_centers": {
+                "left": (vertical[0]["first"] + vertical[0]["last"]) / 2,
+                "right": (vertical[1]["first"] + vertical[1]["last"]) / 2,
+                "top": (horizontal[0]["first"] + horizontal[0]["last"]) / 2,
+                "bottom": (horizontal[1]["first"] + horizontal[1]["last"]) / 2,
+            },
+            "stroke_center_center": [
+                sum(group["first"] + group["last"] for group in vertical) / 4,
+                sum(group["first"] + group["last"] for group in horizontal) / 4,
+            ],
+            "all_strokes_2px": all(group["thickness"] == 2 for group in vertical + horizontal),
+        }
+    elif len(vertical) == 1 and len(horizontal) == 2 and all(group["matching_support_inclusive"][1] == x1 for group in horizontal):
+        result["detection_status"] = "partial_frame_right_clipped"
+        result["partial_frame"] = {
+            "observed_left_stroke": [vertical[0]["first"], vertical[0]["last"]],
+            "observed_top_stroke": [horizontal[0]["first"], horizontal[0]["last"]],
+            "observed_bottom_stroke": [horizontal[1]["first"], horizontal[1]["last"]],
+            "right_stroke": None,
+            "right_stroke_note": "not observed; both horizontal strokes continue to the canvas/scan right boundary",
+            "geometric_width": None,
+            "geometric_height": horizontal[1]["first"] - horizontal[0]["first"],
+            "outer_pixel_width": None,
+            "outer_pixel_height": horizontal[1]["last"] - horizontal[0]["first"] + 1,
+            "stroke_center_center": [None, sum(group["first"] + group["last"] for group in horizontal) / 4],
+            "horizontal_strokes_reach_x": x1,
+        }
+    return result
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("images", nargs="+", help="PNG paths or glob patterns")
+    parser.add_argument("--bounds", type=int, nargs=4, default=[208, 364, 1959, 1619], metavar=("X0", "Y0", "X1", "Y1"))
+    parser.add_argument("--rgb", type=int, nargs=3, default=[62, 133, 117])
+    parser.add_argument("--threshold", type=int, default=400)
+    parser.add_argument("--json", type=Path, help="Optional output path; otherwise JSON goes to stdout")
+    parser.add_argument("--markdown", type=Path, help="Optional human-readable measurement report")
+    parser.add_argument("--notes", type=Path, help="Optional JSON capture-state and visual-review notes to include in reports")
+    args = parser.parse_args()
+    paths = sorted(set(path for pattern in args.images for path in glob.glob(pattern)))
+    results = []
+    for path in paths:
+        try:
+            results.append(measure(path, args.bounds, args.rgb, args.threshold))
+        except Exception as error:
+            results.append({"file": Path(path).name, "error": str(error)})
+    by_file = {result["file"]: result for result in results}
+    comparisons = []
+    baseline = by_file.get("A03-resized-rotated.png", {}).get("rectangle")
+    if baseline:
+        for filename in ("A06-back-to-3d.png", "A07-layout-original.png"):
+            rectangle = by_file.get(filename, {}).get("rectangle")
+            if rectangle:
+                comparisons.append({
+                    "baseline": "A03-resized-rotated.png",
+                    "comparison": filename,
+                    "geometric_width_delta": rectangle["geometric_width"] - baseline["geometric_width"],
+                    "geometric_height_delta": rectangle["geometric_height"] - baseline["geometric_height"],
+                    "stroke_center_delta": [a - b for a, b in zip(rectangle["stroke_center_center"], baseline["stroke_center_center"])],
+                    "all_frame_geometry_identical": rectangle == baseline,
+                })
+    document = {
+        "coordinate_system": "zero-based raster pixel indices; stroke ranges, outer bounds and scan bounds are inclusive",
+        "method": {
+            "exact_rgb": args.rgb,
+            "scan_bounds_inclusive": args.bounds,
+            "line_detection": f"group consecutive rows/columns with strictly more than {args.threshold} exact-color pixels",
+            "geometric_dimensions": "right.first-left.first and bottom.first-top.first; distances between corresponding stroke edges",
+            "outer_pixel_dimensions": "outermost stroke pixel minus innermost opposite outer pixel plus one; includes both stroke thicknesses",
+            "center": "mean of left/right stroke midpoints and mean of top/bottom stroke midpoints",
+            "handles": "compact handles cannot add qualifying long rows/columns and therefore do not enlarge the frame measurement",
+            "limitations": "reports frame geometry only; no inference about molecule orientation, model contents, or other screenshot state",
+        },
+        "measurements": results,
+        "comparisons": comparisons,
+    }
+    notes = json.loads(args.notes.read_text()) if args.notes else {}
+    if notes:
+        document["review_notes"] = notes
+    output = json.dumps(document, indent=2) + "\n"
+    if args.json:
+        args.json.write_text(output)
+    else:
+        print(output, end="")
+    if args.markdown:
+        report = [
+            "# PNG frame measurements",
+            "",
+            "Measurements use exact PNG RGB bytes `(62, 133, 117)` in the inclusive canvas region `x208..1959, y364..1619`. Coordinates below are zero-based screenshot pixel indices. Consecutive rows or columns containing **more than 400** exact-color pixels form a stroke. The compact handles do not create qualifying long rows or columns and cannot enlarge the measured frame.",
+            "",
+            "**Geometric dimensions** are `right.first − left.first` and `bottom.first − top.first`, the distance between corresponding edges of the opposite strokes. **Outer footprint** includes every pixel of both strokes, so a frame with 2px strokes has a footprint two pixels larger than its geometric dimensions. The center is the mean of opposite stroke midpoints. To convert raster-index centers to physical point coordinates for a 2px/pt screenshot, add 0.5px to each coordinate and divide by 2.",
+            "",
+            "| Screenshot | Vertical stroke columns | Horizontal stroke rows | Geometric size (px) | Outer footprint (px) | Stroke-center center (px) |",
+
+exec
+/bin/zsh -lc "python3 - <<'PY'
+import pathlib, re, json, hashlib
+p=pathlib.Path('.')
+text=(p/'report.md').read_text()
+missing=[]
+for label,target in re.findall(r'\\[(["'^'"\\]]+)\\]\\((["'^)]+)'"\\)',text):
+ if not (p/target).exists(): missing.append(target)
+print('Report links missing:',missing)
+expected=['A01-3d-122.png','A02-resized.png','A03-resized-rotated.png','A04-layout-from-3d.png','A05-flattened-2d.png','A06-back-to-3d.png','A07-layout-original.png','A08-original-2d.png','A09-undo.png','A10-both-122.png','A11-both-97.png','A12-both-deselected.png','A13-undo-both.png','A14-redo-both.png','A15-redo-2d.png','A16-both-after-redo.png']
+print('Required screenshots present:',sum((p/f).is_file() for f in expected),'of',len(expected))
+for f in ['report.md','frame-measurements.md','frame-measurements.json','installed-process-before.txt','launched-process.txt','process-cleanup.txt']:
+ print(f,(p/f).stat().st_size,'bytes')
+ocr=json.loads((p/'status-ocr.json').read_text())
+print('Bottom-text OCR records:',len(ocr))
+PY" in /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes
+ succeeded in 0ms:
+Report links missing: []
+Required screenshots present: 16 of 16
+report.md 17420 bytes
+frame-measurements.md 8658 bytes
+frame-measurements.json 40331 bytes
+installed-process-before.txt 113 bytes
+launched-process.txt 546 bytes
+process-cleanup.txt 669 bytes
+Bottom-text OCR records: 20
+
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+codex
+Completed the UI verification and saved all 16 required screenshots, plus supporting evidence.
+
+- **Fix 1 passed:** A03, A06, and A07 have identical **884 × 884 px** frames, with **0 px drift on every edge**.
+- **Fix 2 passed:** Both retains the original drawn caffeine layout through the tested Undo/Redo and layout-restoration paths.
+- Terminated only test PID **76822**; confirmed installed PID **51217** remains running.
+
+The report documents the F8 setup adjustment, unavailable native Edit menu, and replaced 2D-display redo branch.
+
+[Verification report](/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes/report.md) · [Frame measurements](/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes/frame-measurements.md) · [Cleanup evidence](/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes/process-cleanup.txt)
+diff --git a/tools/verify-window.swift b/tools/verify-window.swift
+index 97fe758200145c89d6757a095a8f3b4d66cc0df6..b9a529b9c27dce5e004a5d199acf10f417b40902
+--- a/tools/verify-window.swift
++++ b/tools/verify-window.swift
+@@ -5,6 +5,14 @@
+ let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+ guard let w = list.first(where: { ($0[kCGWindowNumber as String] as? Int) == expected && ($0[kCGWindowOwnerPID as String] as? Int) == pid }) else { fatalError("Expected PID/window missing") }
+ let b = w[kCGWindowBounds as String] as! [String: Double]
++if CommandLine.arguments.contains("activate") {
++ guard let target = NSRunningApplication(processIdentifier: pid_t(pid)), target.bundleIdentifier == "dev.reshiki.verification.ev386fix1b" else { fatalError("Unexpected target bundle") }
++ target.activate(options: [.activateIgnoringOtherApps])
++ for _ in 0..<20 {
++  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
++  usleep(50_000)
++ }
++}
+ let front = NSWorkspace.shared.frontmostApplication!
+ print("pid=\(pid) window=\(expected) rect=\(b) frontmost_pid=\(front.processIdentifier) frontmost_bundle=\(front.bundleIdentifier ?? "unknown")")
+ if CommandLine.arguments.contains("park") {
+
+tokens used
+124,095
+Completed the UI verification and saved all 16 required screenshots, plus supporting evidence.
+
+- **Fix 1 passed:** A03, A06, and A07 have identical **884 × 884 px** frames, with **0 px drift on every edge**.
+- **Fix 2 passed:** Both retains the original drawn caffeine layout through the tested Undo/Redo and layout-restoration paths.
+- Terminated only test PID **76822**; confirmed installed PID **51217** remains running.
+
+The report documents the F8 setup adjustment, unavailable native Edit menu, and replaced 2D-display redo branch.
+
+[Verification report](/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes/report.md) · [Frame measurements](/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes/frame-measurements.md) · [Cleanup evidence](/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-final/app-fixes/process-cleanup.txt)

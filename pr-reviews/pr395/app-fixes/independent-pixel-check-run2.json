@@ -1,0 +1,325 @@
+{
+  "comparisons" : {
+    "Q01_versus_Q05" : {
+      "exactColorCanvasMaskSymmetricDifferencePixels" : 0,
+      "longStraightRunMaskSymmetricDifferencePixels" : 0
+    },
+    "Q03_versus_Q04" : {
+      "exactColorCanvasMaskSymmetricDifferencePixels" : 0,
+      "longStraightRunMaskSymmetricDifferencePixels" : 0
+    }
+  },
+  "conventions" : "0-based original screenshot pixels, inclusive bounds, exact RGB masks, long-run minimum 100 px",
+  "decoder" : "NSBitmapImageRep via AppKit; independent of Python stdlib decoder",
+  "measurements" : [
+    {
+      "barBorderCoreBoundsInclusive" : [
+        752,
+        528,
+        1303,
+        596
+      ],
+      "barBorderExactColorCount" : 1240,
+      "barCanvasBottomClearance" : 1023,
+      "barFrameCorePixelRowSeparation" : 87,
+      "barPlacement" : "above",
+      "exactColorCanvasCount" : 3009,
+      "exactColorLongStraightRunCount" : 2400,
+      "file" : "Q01-perspective-20-zoomed-out.png",
+      "frameCoreEnvelopeInclusive" : [
+        720,
+        684,
+        1335,
+        1299
+      ],
+      "frameCoreEnvelopeSize" : [
+        616,
+        616
+      ],
+      "horizontalRuns_y_x0_x1_length" : [
+        [
+          684,
+          728,
+          1327,
+          600
+        ],
+        [
+          1299,
+          728,
+          1327,
+          600
+        ]
+      ],
+      "size" : [
+        2560,
+        1704
+      ],
+      "verticalRuns_x_y0_y1_length" : [
+        [
+          720,
+          692,
+          1291,
+          600
+        ],
+        [
+          1335,
+          692,
+          1291,
+          600
+        ]
+      ]
+    },
+    {
+      "barBorderCoreBoundsInclusive" : [
+        752,
+        525,
+        1303,
+        594
+      ],
+      "barBorderExactColorCount" : 2263,
+      "barCanvasBottomClearance" : 1025,
+      "barFrameCorePixelRowSeparation" : 86,
+      "barPlacement" : "above",
+      "exactColorCanvasCount" : 5670,
+      "exactColorLongStraightRunCount" : 4848,
+      "file" : "Q02-perspective-50-zoomed-out.png",
+      "frameCoreEnvelopeInclusive" : [
+        717,
+        681,
+        1338,
+        1302
+      ],
+      "frameCoreEnvelopeSize" : [
+        622,
+        622
+      ],
+      "horizontalRuns_y_x0_x1_length" : [
+        [
+          681,
+          725,
+          1330,
+          606
+        ],
+        [
+          682,
+          725,
+          1330,
+          606
+        ],
+        [
+          1301,
+          725,
+          1330,
+          606
+        ],
+        [
+          1302,
+          725,
+          1330,
+          606
+        ]
+      ],
+      "size" : [
+        2560,
+        1704
+      ],
+      "verticalRuns_x_y0_y1_length" : [
+        [
+          717,
+          689,
+          1294,
+          606
+        ],
+        [
+          718,
+          689,
+          1294,
+          606
+        ],
+        [
+          1337,
+          689,
+          1294,
+          606
+        ],
+        [
+          1338,
+          689,
+          1294,
+          606
+        ]
+      ]
+    },
+    {
+      "barBorderCoreBoundsInclusive" : [
+        752,
+        1541,
+        1303,
+        1609
+      ],
+      "barBorderExactColorCount" : 1239,
+      "barCanvasBottomClearance" : 10,
+      "barFrameCorePixelRowSeparation" : 15,
+      "barPlacement" : "below",
+      "exactColorCanvasCount" : 4821,
+      "exactColorLongStraightRunCount" : 4208,
+      "file" : "Q03-perspective-100-zoomed-out.png",
+      "frameCoreEnvelopeInclusive" : [
+        494,
+        458,
+        1561,
+        1525
+      ],
+      "frameCoreEnvelopeSize" : [
+        1068,
+        1068
+      ],
+      "horizontalRuns_y_x0_x1_length" : [
+        [
+          458,
+          502,
+          1553,
+          1052
+        ],
+        [
+          1525,
+          502,
+          1553,
+          1052
+        ]
+      ],
+      "size" : [
+        2560,
+        1704
+      ],
+      "verticalRuns_x_y0_y1_length" : [
+        [
+          494,
+          466,
+          1517,
+          1052
+        ],
+        [
+          1561,
+          466,
+          1517,
+          1052
+        ]
+      ]
+    },
+    {
+      "barBorderCoreBoundsInclusive" : [
+        752,
+        1541,
+        1303,
+        1609
+      ],
+      "barBorderExactColorCount" : 1239,
+      "barCanvasBottomClearance" : 10,
+      "barFrameCorePixelRowSeparation" : 15,
+      "barPlacement" : "below",
+      "exactColorCanvasCount" : 4821,
+      "exactColorLongStraightRunCount" : 4208,
+      "file" : "Q04-perspective-100-rotated-zoomed-out.png",
+      "frameCoreEnvelopeInclusive" : [
+        494,
+        458,
+        1561,
+        1525
+      ],
+      "frameCoreEnvelopeSize" : [
+        1068,
+        1068
+      ],
+      "horizontalRuns_y_x0_x1_length" : [
+        [
+          458,
+          502,
+          1553,
+          1052
+        ],
+        [
+          1525,
+          502,
+          1553,
+          1052
+        ]
+      ],
+      "size" : [
+        2560,
+        1704
+      ],
+      "verticalRuns_x_y0_y1_length" : [
+        [
+          494,
+          466,
+          1517,
+          1052
+        ],
+        [
+          1561,
+          466,
+          1517,
+          1052
+        ]
+      ]
+    },
+    {
+      "barBorderCoreBoundsInclusive" : [
+        752,
+        528,
+        1303,
+        596
+      ],
+      "barBorderExactColorCount" : 1240,
+      "barCanvasBottomClearance" : 1023,
+      "barFrameCorePixelRowSeparation" : 87,
+      "barPlacement" : "above",
+      "exactColorCanvasCount" : 3009,
+      "exactColorLongStraightRunCount" : 2400,
+      "file" : "Q05-back-to-20-zoomed-out.png",
+      "frameCoreEnvelopeInclusive" : [
+        720,
+        684,
+        1335,
+        1299
+      ],
+      "frameCoreEnvelopeSize" : [
+        616,
+        616
+      ],
+      "horizontalRuns_y_x0_x1_length" : [
+        [
+          684,
+          728,
+          1327,
+          600
+        ],
+        [
+          1299,
+          728,
+          1327,
+          600
+        ]
+      ],
+      "size" : [
+        2560,
+        1704
+      ],
+      "verticalRuns_x_y0_y1_length" : [
+        [
+          720,
+          692,
+          1291,
+          600
+        ],
+        [
+          1335,
+          692,
+          1291,
+          600
+        ]
+      ]
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+ok window 7636 origin 200.0,115.0
+ok window 7636 origin 200.0,115.0
+ok window 7636 origin 200.0,115.0

@@ -35,6 +35,8 @@
 | `04-rotate-mid-drag.png`, `05-rotate-released.png` | After a rotation, the frame **refits to the turned model**: tall and narrow, about 440×870 px. In `05`, the bar's lower edge is **clipped under the status bar**. |
 | `08-rotated-before-resize.png`, `09-resized.png` | The frame changes aspect with every rotation. |
 
+These were shot in a 1000×665 pt window at 238%, so their scale differs from the `app/` shots.
+
 ## After (`app/`, `9724c826`)
 
 I looked at every image.
@@ -98,3 +100,44 @@ I looked at every image.
 - Save and reopen.
 - Rotation fallbacks: an unselected model, a drag near the edge, and Alt or Cmd drags.
 - Exact morph timing (about 125 ms sampling).
+
+## Fix check (`app-fixes/`, `a50509bf`)
+
+- **What changed:** two fixes landed after the run above.
+  - `2cd64d2e`: the 3D frame keeps its place through 2D and back (problem 2).
+  - `a50509bf`: choosing Original drawing restores the drawn layout in the same Undo step (problem 1).
+- **Binary:** `feat/3d-models-1b` at `a50509bf`, clean tree, built with `CARGO_INCREMENTAL=0 cargo build --bin reshiki`. The sha256 is in `app-fixes/binary-sha256.txt`.
+- **Bundle:** `scratchpad/apps-appfix-1b/ReShiki386Fix1bEvidence.app`, bundle id `dev.reshiki.verification.ev386fix1b` (`app-fixes/tools/bundle-Info.plist`). `Contents/MacOS/reshiki` is a hard link to the worktree binary.
+- **Launch:** `open -n … --env RESHIKI_DATA_DIR=scratchpad/ev386-1b-appfix-data --args --open input/caffeine.mol`. The data dir was new. PID 76822, window 7636, 1280×852 pt.
+- **Driving:** Codex computer use with `codex exec -m gpt-6-astra -s danger-full-access … < /dev/null`.
+  - Prompt: `app-fixes/prompt.md`. Report: `app-fixes/report.md`. Measurements: `app-fixes/frame-measurements.md`.
+  - All shots are window-only (`screencapture -l 7636`).
+- **Cleanup:** Codex killed only PID 76822. The installed PID 51217 was untouched (`app-fixes/process-cleanup.txt`).
+- **Zoom:** 122% for the 3D and 2D steps (as old `09`–`15`) and 97% for Both (as old `17`).
+- **Setup:** the drawing opened in keyboard drawing mode, so the first resize drag moved the keyboard cursor (`A02-resize-first-attempt.png`). F8 left that mode, and the same drag then resized the frame.
+
+I looked at every image. The frame edges were re-measured independently: long runs of the exact frame colour RGB (62,133,117).
+
+| File | What it shows |
+|---|---|
+| `A01-3d-122.png` | 3D at 122%. The frame is 744×744 px at (664,603)–(1408,1347), the same as old `02`. |
+| `A02-resized.png` | After a corner drag: 884×884 px, with the top-left fixed. |
+| `A03-resized-rotated.png` | Rotated. The frame is still 884×884 px at (664,603)–(1548,1487). **This is the BEFORE frame.** |
+| `A04-layout-from-3d.png` | 2D layout → From the 3D view is active. The frame is unchanged. |
+| `A05-flattened-2d.png` | 2D: the flattened projection. Status: "Shown as 2D from the 3D view · Undo restores the 3D model". |
+| `A06-back-to-3d.png` | **Fix 1.** 3D again. The frame is at (664,603)–(1548,1487) and 884×884 px, so **every edge moved 0 px** from `A03`. Before the fix, old `11`→`12` moved the frame from (664,603) to (585,531): −79/−72 px, about 40/36 pt up and left. |
+| `A07-layout-original.png` | **Fix 2.** Original drawing is chosen and the model stays 3D. Status: **"Original 2D drawing restored"** at once, without needing 2D. The frame is still 0 px off. |
+| `A08-original-2d.png` | 2D: the drawn caffeine, upright fused 6+5 rings, the same as the opening drawing (`A00`). Status: "Shown as 2D · Undo restores the 3D model". |
+| `A09-undo.png` | One Cmd+Z: 3D, with **Original drawing** active and Redo enabled. Status: "History restored". Compare old `15`. |
+| `A10-both-122.png`, `A11-both-97.png` | **Fix 2.** Both: the 2D member is the **drawn caffeine**, not the projection from `A05`. The layout row says **Original drawing**. Status: "Shown as 2D and 3D · Undo restores the 3D model". Compare old `17`, which drew the projection. |
+| `A12-both-deselected.png` | Deselected at 97%: the drawn 2D and the turned 3D sit side by side. |
+| `A13-undo-both.png` → `A14-redo-both.png` | Undo Both (3D, Original drawing), then Redo: Both again, still the drawn caffeine, with Original drawing active. |
+| `A15a-undo-to-3d-original.png` → `A15b-undo-original-restore.png` → `A15-redo-2d.png` → `A16-both-after-redo.png` | Undo the Both, then undo the Original drawing choice: From the 3D view is back. Redo brings back **Original drawing**, with 3D kept. Then Both: the drawn caffeine again. |
+
+The flow was "Undo; Both; Redo; Both again". Choosing Both after the Undo replaces the redo entry for the 2D switch, so Redo after Undo-then-Both can only redo Both (`A13`→`A14`). `A15b`→`A16` covers the redo that matters here: redoing the Original drawing choice, then Both.
+
+**Things worth a look (not regressions from these fixes):**
+
+- At 122% and 97%, the Both frame still runs under the inspector on the right (`A10`, `A11`, `A14`), as in old `17`/`17a` (problem 3 above).
+- This build has no native Edit menu, so Redo was checked with the toolbar button and Cmd+Shift+Z.
+- The keyboard hotspot crosshair shows on the model in `A01` (known).

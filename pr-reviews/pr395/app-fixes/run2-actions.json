@@ -1,0 +1,28 @@
+{
+  "pid": 90582,
+  "window_id": 7824,
+  "window_rect_points": {"x": 200, "y": 115, "width": 1280, "height": 852},
+  "ui_coordinate_units": "CUA coordinates are screenshot pixels at 2x; drag helper coordinates are points relative to window top-left including title bar",
+  "select_tool": "clicked AX tool-Select",
+  "model_selection_click_pixels": [870, 736],
+  "zoom_minus_click_pixels": [2262, 1662],
+  "zoom_minus_click_points": [1131, 831],
+  "zoom_percent_readouts": [175, 140, 112],
+  "zoom_minus_click_count": 2,
+  "selection_retained_without_reclick": true,
+  "pointer_parking_pixels": [1600, 30],
+  "pointer_parking_points": [800, 15],
+  "drag_helper": "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-drag",
+  "sequence": [
+    {"capture": "Q01-perspective-20-zoomed-out.png", "perspective_percent": 20, "zoom_percent": 112, "status": "Document opened"},
+    {"drag_arguments": [90582, 1060, 784, 1130, 784], "capture": "Q02-perspective-50-zoomed-out.png", "perspective_percent": 50, "zoom_percent": 112, "status": "Drawing updated"},
+    {"drag_arguments": [90582, 1130, 784, 1266, 784], "capture": "Q03-perspective-100-zoomed-out.png", "perspective_percent": 100, "zoom_percent": 112, "status": "Drawing updated"},
+    {"drag_arguments": [90582, 525, 467, 645, 517], "capture": "Q04-perspective-100-rotated-zoomed-out.png", "perspective_percent": 100, "zoom_percent": 112, "status": "Drawing updated", "rotation_drag_delta_points": [120, 50]},
+    {"keyboard": "Cmd+Z", "count": 1, "capture": "Q04a-after-one-undo-zoomed-out.png", "perspective_percent": 100, "zoom_percent": 112, "status": "History restored"},
+    {"drag_arguments": [90582, 1248, 784, 1056, 784], "capture": "Q05-back-to-20-zoomed-out.png", "perspective_percent": 20, "zoom_percent": 112, "status": "Drawing updated"}
+  ],
+  "shift_modifier": false,
+  "mid_drag_capture": false,
+  "saved_drawing": false,
+  "cleanup": {"signal": "SIGTERM", "own_pid_gone": true, "installed_pid_51217_running": true}
+}

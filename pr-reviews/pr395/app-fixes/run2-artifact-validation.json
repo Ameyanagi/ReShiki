@@ -1,0 +1,24 @@
+{
+  "run1_prefix_unchanged": true,
+  "run1_prefix_bytes": 11424,
+  "run1_prefix_sha256": "a0d62ce6c7ed38dca95b08b0336a2fbd7e435c6ccc6651ce0d49f8338a91b022",
+  "run2_section_count": 1,
+  "run2_link_count": 16,
+  "missing_links": [],
+  "screenshot_hashes_verified": 5,
+  "independent_measurements_cross_checked": true,
+  "main_frame_comparison_mask_differences": {
+    "Q03_versus_Q04": {
+      "exact_color_canvas_mask_symmetric_difference_pixels": 0,
+      "long_straight_run_mask_symmetric_difference_pixels": 0,
+      "exact_color_canvas_masks_identical": true
+    },
+    "Q01_versus_Q05": {
+      "exact_color_canvas_mask_symmetric_difference_pixels": 0,
+      "long_straight_run_mask_symmetric_difference_pixels": 0,
+      "exact_color_canvas_masks_identical": true
+    }
+  },
+  "own_pid": 90582,
+  "cleanup_evidence": "process-cleanup.txt RUN 2: own PID gone, installed PID51217 still running"
+}

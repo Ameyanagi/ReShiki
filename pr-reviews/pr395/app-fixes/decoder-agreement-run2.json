@@ -1,0 +1,27 @@
+{
+  "status": "pass",
+  "method": "Python stdlib PNG decoder vs independent AppKit NSBitmapImageRep decoder",
+  "per_image_checks": [
+    {
+      "file": "Q01-perspective-20-zoomed-out.png",
+      "matching_measurement_fields": 12
+    },
+    {
+      "file": "Q02-perspective-50-zoomed-out.png",
+      "matching_measurement_fields": 12
+    },
+    {
+      "file": "Q03-perspective-100-zoomed-out.png",
+      "matching_measurement_fields": 12
+    },
+    {
+      "file": "Q04-perspective-100-rotated-zoomed-out.png",
+      "matching_measurement_fields": 12
+    },
+    {
+      "file": "Q05-back-to-20-zoomed-out.png",
+      "matching_measurement_fields": 12
+    }
+  ],
+  "comparison_checks": 4
+}

@@ -1,0 +1,1798 @@
+{
+  "coordinate_system": "zero-based raster pixel indices; stroke ranges, outer bounds and scan bounds are inclusive",
+  "method": {
+    "exact_rgb": [
+      62,
+      133,
+      117
+    ],
+    "scan_bounds_inclusive": [
+      208,
+      364,
+      1959,
+      1619
+    ],
+    "line_detection": "group consecutive rows/columns with strictly more than 400 exact-color pixels",
+    "geometric_dimensions": "right.first-left.first and bottom.first-top.first; distances between corresponding stroke edges",
+    "outer_pixel_dimensions": "outermost stroke pixel minus innermost opposite outer pixel plus one; includes both stroke thicknesses",
+    "center": "mean of left/right stroke midpoints and mean of top/bottom stroke midpoints",
+    "handles": "compact handles cannot add qualifying long rows/columns and therefore do not enlarge the frame measurement",
+    "limitations": "reports frame geometry only; no inference about molecule orientation, model contents, or other screenshot state"
+  },
+  "measurements": [
+    {
+      "file": "A00-opening-2d.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 1257,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [],
+      "horizontal_strokes": [],
+      "rectangle": null,
+      "detection_status": "no_qualifying_long_strokes",
+      "partial_frame": null
+    },
+    {
+      "file": "A01-3d-122.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 6660,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [
+        {
+          "first": 664,
+          "last": 665,
+          "pixel_counts": [
+            734,
+            734
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            595,
+            1356
+          ]
+        },
+        {
+          "first": 1408,
+          "last": 1409,
+          "pixel_counts": [
+            734,
+            734
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            595,
+            1356
+          ]
+        }
+      ],
+      "horizontal_strokes": [
+        {
+          "first": 603,
+          "last": 604,
+          "pixel_counts": [
+            734,
+            734
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            656,
+            1417
+          ]
+        },
+        {
+          "first": 1347,
+          "last": 1348,
+          "pixel_counts": [
+            734,
+            734
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            656,
+            1417
+          ]
+        }
+      ],
+      "rectangle": {
+        "outer_bounds_inclusive": [
+          664,
+          603,
+          1409,
+          1348
+        ],
+        "outer_pixel_width": 746,
+        "outer_pixel_height": 746,
+        "geometric_width": 744,
+        "geometric_height": 744,
+        "stroke_centers": {
+          "left": 664.5,
+          "right": 1408.5,
+          "top": 603.5,
+          "bottom": 1347.5
+        },
+        "stroke_center_center": [
+          1036.5,
+          975.5
+        ],
+        "all_strokes_2px": true
+      },
+      "detection_status": "complete_frame",
+      "partial_frame": null
+    },
+    {
+      "file": "A02-resize-first-attempt.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 6612,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [
+        {
+          "first": 664,
+          "last": 665,
+          "pixel_counts": [
+            734,
+            734
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            595,
+            1356
+          ]
+        },
+        {
+          "first": 1408,
+          "last": 1409,
+          "pixel_counts": [
+            722,
+            722
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            595,
+            1356
+          ]
+        }
+      ],
+      "horizontal_strokes": [
+        {
+          "first": 603,
+          "last": 604,
+          "pixel_counts": [
+            734,
+            734
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            656,
+            1417
+          ]
+        },
+        {
+          "first": 1347,
+          "last": 1348,
+          "pixel_counts": [
+            722,
+            722
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            656,
+            1417
+          ]
+        }
+      ],
+      "rectangle": {
+        "outer_bounds_inclusive": [
+          664,
+          603,
+          1409,
+          1348
+        ],
+        "outer_pixel_width": 746,
+        "outer_pixel_height": 746,
+        "geometric_width": 744,
+        "geometric_height": 744,
+        "stroke_centers": {
+          "left": 664.5,
+          "right": 1408.5,
+          "top": 603.5,
+          "bottom": 1347.5
+        },
+        "stroke_center_center": [
+          1036.5,
+          975.5
+        ],
+        "all_strokes_2px": true
+      },
+      "detection_status": "complete_frame",
+      "partial_frame": null
+    },
+    {
+      "file": "A02-resized.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 7780,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [
+        {
+          "first": 664,
+          "last": 665,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            595,
+            1496
+          ]
+        },
+        {
+          "first": 1548,
+          "last": 1549,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            595,
+            1496
+          ]
+        }
+      ],
+      "horizontal_strokes": [
+        {
+          "first": 603,
+          "last": 604,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            656,
+            1557
+          ]
+        },
+        {
+          "first": 1487,
+          "last": 1488,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            656,
+            1557
+          ]
+        }
+      ],
+      "rectangle": {
+        "outer_bounds_inclusive": [
+          664,
+          603,
+          1549,
+          1488
+        ],
+        "outer_pixel_width": 886,
+        "outer_pixel_height": 886,
+        "geometric_width": 884,
+        "geometric_height": 884,
+        "stroke_centers": {
+          "left": 664.5,
+          "right": 1548.5,
+          "top": 603.5,
+          "bottom": 1487.5
+        },
+        "stroke_center_center": [
+          1106.5,
+          1045.5
+        ],
+        "all_strokes_2px": true
+      },
+      "detection_status": "complete_frame",
+      "partial_frame": null
+    },
+    {
+      "file": "A03-resized-rotated.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 7780,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [
+        {
+          "first": 664,
+          "last": 665,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            595,
+            1496
+          ]
+        },
+        {
+          "first": 1548,
+          "last": 1549,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            595,
+            1496
+          ]
+        }
+      ],
+      "horizontal_strokes": [
+        {
+          "first": 603,
+          "last": 604,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            656,
+            1557
+          ]
+        },
+        {
+          "first": 1487,
+          "last": 1488,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            656,
+            1557
+          ]
+        }
+      ],
+      "rectangle": {
+        "outer_bounds_inclusive": [
+          664,
+          603,
+          1549,
+          1488
+        ],
+        "outer_pixel_width": 886,
+        "outer_pixel_height": 886,
+        "geometric_width": 884,
+        "geometric_height": 884,
+        "stroke_centers": {
+          "left": 664.5,
+          "right": 1548.5,
+          "top": 603.5,
+          "bottom": 1487.5
+        },
+        "stroke_center_center": [
+          1106.5,
+          1045.5
+        ],
+        "all_strokes_2px": true
+      },
+      "detection_status": "complete_frame",
+      "partial_frame": null
+    },
+    {
+      "file": "A04-layout-from-3d.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 7780,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [
+        {
+          "first": 664,
+          "last": 665,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            595,
+            1496
+          ]
+        },
+        {
+          "first": 1548,
+          "last": 1549,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            595,
+            1496
+          ]
+        }
+      ],
+      "horizontal_strokes": [
+        {
+          "first": 603,
+          "last": 604,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            656,
+            1557
+          ]
+        },
+        {
+          "first": 1487,
+          "last": 1488,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            656,
+            1557
+          ]
+        }
+      ],
+      "rectangle": {
+        "outer_bounds_inclusive": [
+          664,
+          603,
+          1549,
+          1488
+        ],
+        "outer_pixel_width": 886,
+        "outer_pixel_height": 886,
+        "geometric_width": 884,
+        "geometric_height": 884,
+        "stroke_centers": {
+          "left": 664.5,
+          "right": 1548.5,
+          "top": 603.5,
+          "bottom": 1487.5
+        },
+        "stroke_center_center": [
+          1106.5,
+          1045.5
+        ],
+        "all_strokes_2px": true
+      },
+      "detection_status": "complete_frame",
+      "partial_frame": null
+    },
+    {
+      "file": "A05-flattened-2d.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 7028,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [],
+      "horizontal_strokes": [],
+      "rectangle": null,
+      "detection_status": "no_qualifying_long_strokes",
+      "partial_frame": null
+    },
+    {
+      "file": "A06-back-to-3d.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 7780,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [
+        {
+          "first": 664,
+          "last": 665,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            595,
+            1496
+          ]
+        },
+        {
+          "first": 1548,
+          "last": 1549,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            595,
+            1496
+          ]
+        }
+      ],
+      "horizontal_strokes": [
+        {
+          "first": 603,
+          "last": 604,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            656,
+            1557
+          ]
+        },
+        {
+          "first": 1487,
+          "last": 1488,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            656,
+            1557
+          ]
+        }
+      ],
+      "rectangle": {
+        "outer_bounds_inclusive": [
+          664,
+          603,
+          1549,
+          1488
+        ],
+        "outer_pixel_width": 886,
+        "outer_pixel_height": 886,
+        "geometric_width": 884,
+        "geometric_height": 884,
+        "stroke_centers": {
+          "left": 664.5,
+          "right": 1548.5,
+          "top": 603.5,
+          "bottom": 1487.5
+        },
+        "stroke_center_center": [
+          1106.5,
+          1045.5
+        ],
+        "all_strokes_2px": true
+      },
+      "detection_status": "complete_frame",
+      "partial_frame": null
+    },
+    {
+      "file": "A07-layout-original.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 7780,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [
+        {
+          "first": 664,
+          "last": 665,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            595,
+            1496
+          ]
+        },
+        {
+          "first": 1548,
+          "last": 1549,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            595,
+            1496
+          ]
+        }
+      ],
+      "horizontal_strokes": [
+        {
+          "first": 603,
+          "last": 604,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            656,
+            1557
+          ]
+        },
+        {
+          "first": 1487,
+          "last": 1488,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            656,
+            1557
+          ]
+        }
+      ],
+      "rectangle": {
+        "outer_bounds_inclusive": [
+          664,
+          603,
+          1549,
+          1488
+        ],
+        "outer_pixel_width": 886,
+        "outer_pixel_height": 886,
+        "geometric_width": 884,
+        "geometric_height": 884,
+        "stroke_centers": {
+          "left": 664.5,
+          "right": 1548.5,
+          "top": 603.5,
+          "bottom": 1487.5
+        },
+        "stroke_center_center": [
+          1106.5,
+          1045.5
+        ],
+        "all_strokes_2px": true
+      },
+      "detection_status": "complete_frame",
+      "partial_frame": null
+    },
+    {
+      "file": "A08-original-2d.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 6505,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [
+        {
+          "first": 750,
+          "last": 751,
+          "pixel_counts": [
+            440,
+            440
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            752,
+            1231
+          ]
+        },
+        {
+          "first": 1295,
+          "last": 1295,
+          "pixel_counts": [
+            440
+          ],
+          "thickness": 1,
+          "matching_support_inclusive": [
+            752,
+            1231
+          ]
+        }
+      ],
+      "horizontal_strokes": [
+        {
+          "first": 760,
+          "last": 760,
+          "pixel_counts": [
+            523
+          ],
+          "thickness": 1,
+          "matching_support_inclusive": [
+            742,
+            1303
+          ]
+        },
+        {
+          "first": 1223,
+          "last": 1223,
+          "pixel_counts": [
+            523
+          ],
+          "thickness": 1,
+          "matching_support_inclusive": [
+            742,
+            1303
+          ]
+        }
+      ],
+      "rectangle": {
+        "outer_bounds_inclusive": [
+          750,
+          760,
+          1295,
+          1223
+        ],
+        "outer_pixel_width": 546,
+        "outer_pixel_height": 464,
+        "geometric_width": 545,
+        "geometric_height": 463,
+        "stroke_centers": {
+          "left": 750.5,
+          "right": 1295.0,
+          "top": 760.0,
+          "bottom": 1223.0
+        },
+        "stroke_center_center": [
+          1022.75,
+          991.5
+        ],
+        "all_strokes_2px": false
+      },
+      "detection_status": "complete_frame",
+      "partial_frame": null
+    },
+    {
+      "file": "A09-undo.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 7780,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [
+        {
+          "first": 664,
+          "last": 665,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            595,
+            1496
+          ]
+        },
+        {
+          "first": 1548,
+          "last": 1549,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            595,
+            1496
+          ]
+        }
+      ],
+      "horizontal_strokes": [
+        {
+          "first": 603,
+          "last": 604,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            656,
+            1557
+          ]
+        },
+        {
+          "first": 1487,
+          "last": 1488,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            656,
+            1557
+          ]
+        }
+      ],
+      "rectangle": {
+        "outer_bounds_inclusive": [
+          664,
+          603,
+          1549,
+          1488
+        ],
+        "outer_pixel_width": 886,
+        "outer_pixel_height": 886,
+        "geometric_width": 884,
+        "geometric_height": 884,
+        "stroke_centers": {
+          "left": 664.5,
+          "right": 1548.5,
+          "top": 603.5,
+          "bottom": 1487.5
+        },
+        "stroke_center_center": [
+          1106.5,
+          1045.5
+        ],
+        "all_strokes_2px": true
+      },
+      "detection_status": "complete_frame",
+      "partial_frame": null
+    },
+    {
+      "file": "A10-both-122.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 10317,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [
+        {
+          "first": 750,
+          "last": 751,
+          "pixel_counts": [
+            874,
+            874
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            525,
+            1426
+          ]
+        }
+      ],
+      "horizontal_strokes": [
+        {
+          "first": 533,
+          "last": 534,
+          "pixel_counts": [
+            1204,
+            1204
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            742,
+            1959
+          ]
+        },
+        {
+          "first": 1417,
+          "last": 1418,
+          "pixel_counts": [
+            1204,
+            1204
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            742,
+            1959
+          ]
+        }
+      ],
+      "rectangle": null,
+      "detection_status": "partial_frame_right_clipped",
+      "partial_frame": {
+        "observed_left_stroke": [
+          750,
+          751
+        ],
+        "observed_top_stroke": [
+          533,
+          534
+        ],
+        "observed_bottom_stroke": [
+          1417,
+          1418
+        ],
+        "right_stroke": null,
+        "right_stroke_note": "not observed; both horizontal strokes continue to the canvas/scan right boundary",
+        "geometric_width": null,
+        "geometric_height": 884,
+        "outer_pixel_width": null,
+        "outer_pixel_height": 886,
+        "stroke_center_center": [
+          null,
+          975.5
+        ],
+        "horizontal_strokes_reach_x": 1959
+      }
+    },
+    {
+      "file": "A11-both-97.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 7169,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [
+        {
+          "first": 812,
+          "last": 812,
+          "pixel_counts": [
+            705
+          ],
+          "thickness": 1,
+          "matching_support_inclusive": [
+            612,
+            1345
+          ]
+        }
+      ],
+      "horizontal_strokes": [
+        {
+          "first": 620,
+          "last": 621,
+          "pixel_counts": [
+            1141,
+            1141
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            804,
+            1959
+          ]
+        },
+        {
+          "first": 1337,
+          "last": 1337,
+          "pixel_counts": [
+            1141
+          ],
+          "thickness": 1,
+          "matching_support_inclusive": [
+            804,
+            1959
+          ]
+        }
+      ],
+      "rectangle": null,
+      "detection_status": "partial_frame_right_clipped",
+      "partial_frame": {
+        "observed_left_stroke": [
+          812,
+          812
+        ],
+        "observed_top_stroke": [
+          620,
+          621
+        ],
+        "observed_bottom_stroke": [
+          1337,
+          1337
+        ],
+        "right_stroke": null,
+        "right_stroke_note": "not observed; both horizontal strokes continue to the canvas/scan right boundary",
+        "geometric_width": null,
+        "geometric_height": 717,
+        "outer_pixel_width": null,
+        "outer_pixel_height": 718,
+        "stroke_center_center": [
+          null,
+          978.75
+        ],
+        "horizontal_strokes_reach_x": 1959
+      }
+    },
+    {
+      "file": "A12-both-deselected.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 0,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [],
+      "horizontal_strokes": [],
+      "rectangle": null,
+      "detection_status": "no_qualifying_long_strokes",
+      "partial_frame": null
+    },
+    {
+      "file": "A13-undo-both.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 5645,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [
+        {
+          "first": 743,
+          "last": 744,
+          "pixel_counts": [
+            705,
+            705
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            668,
+            1401
+          ]
+        },
+        {
+          "first": 1460,
+          "last": 1461,
+          "pixel_counts": [
+            705,
+            705
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            668,
+            1401
+          ]
+        }
+      ],
+      "horizontal_strokes": [
+        {
+          "first": 676,
+          "last": 677,
+          "pixel_counts": [
+            707,
+            707
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            735,
+            1469
+          ]
+        },
+        {
+          "first": 1393,
+          "last": 1393,
+          "pixel_counts": [
+            707
+          ],
+          "thickness": 1,
+          "matching_support_inclusive": [
+            735,
+            1469
+          ]
+        }
+      ],
+      "rectangle": {
+        "outer_bounds_inclusive": [
+          743,
+          676,
+          1461,
+          1393
+        ],
+        "outer_pixel_width": 719,
+        "outer_pixel_height": 718,
+        "geometric_width": 717,
+        "geometric_height": 717,
+        "stroke_centers": {
+          "left": 743.5,
+          "right": 1460.5,
+          "top": 676.5,
+          "bottom": 1393.0
+        },
+        "stroke_center_center": [
+          1102.0,
+          1034.75
+        ],
+        "all_strokes_2px": false
+      },
+      "detection_status": "complete_frame",
+      "partial_frame": null
+    },
+    {
+      "file": "A14-redo-both.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 7169,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [
+        {
+          "first": 812,
+          "last": 812,
+          "pixel_counts": [
+            705
+          ],
+          "thickness": 1,
+          "matching_support_inclusive": [
+            612,
+            1345
+          ]
+        }
+      ],
+      "horizontal_strokes": [
+        {
+          "first": 620,
+          "last": 621,
+          "pixel_counts": [
+            1141,
+            1141
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            804,
+            1959
+          ]
+        },
+        {
+          "first": 1337,
+          "last": 1337,
+          "pixel_counts": [
+            1141
+          ],
+          "thickness": 1,
+          "matching_support_inclusive": [
+            804,
+            1959
+          ]
+        }
+      ],
+      "rectangle": null,
+      "detection_status": "partial_frame_right_clipped",
+      "partial_frame": {
+        "observed_left_stroke": [
+          812,
+          812
+        ],
+        "observed_top_stroke": [
+          620,
+          621
+        ],
+        "observed_bottom_stroke": [
+          1337,
+          1337
+        ],
+        "right_stroke": null,
+        "right_stroke_note": "not observed; both horizontal strokes continue to the canvas/scan right boundary",
+        "geometric_width": null,
+        "geometric_height": 717,
+        "outer_pixel_width": null,
+        "outer_pixel_height": 718,
+        "stroke_center_center": [
+          null,
+          978.75
+        ],
+        "horizontal_strokes_reach_x": 1959
+      }
+    },
+    {
+      "file": "A15-redo-2d.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 5645,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [
+        {
+          "first": 743,
+          "last": 744,
+          "pixel_counts": [
+            705,
+            705
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            668,
+            1401
+          ]
+        },
+        {
+          "first": 1460,
+          "last": 1461,
+          "pixel_counts": [
+            705,
+            705
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            668,
+            1401
+          ]
+        }
+      ],
+      "horizontal_strokes": [
+        {
+          "first": 676,
+          "last": 677,
+          "pixel_counts": [
+            707,
+            707
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            735,
+            1469
+          ]
+        },
+        {
+          "first": 1393,
+          "last": 1393,
+          "pixel_counts": [
+            707
+          ],
+          "thickness": 1,
+          "matching_support_inclusive": [
+            735,
+            1469
+          ]
+        }
+      ],
+      "rectangle": {
+        "outer_bounds_inclusive": [
+          743,
+          676,
+          1461,
+          1393
+        ],
+        "outer_pixel_width": 719,
+        "outer_pixel_height": 718,
+        "geometric_width": 717,
+        "geometric_height": 717,
+        "stroke_centers": {
+          "left": 743.5,
+          "right": 1460.5,
+          "top": 676.5,
+          "bottom": 1393.0
+        },
+        "stroke_center_center": [
+          1102.0,
+          1034.75
+        ],
+        "all_strokes_2px": false
+      },
+      "detection_status": "complete_frame",
+      "partial_frame": null
+    },
+    {
+      "file": "A15a-undo-to-3d-original.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 5645,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [
+        {
+          "first": 743,
+          "last": 744,
+          "pixel_counts": [
+            705,
+            705
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            668,
+            1401
+          ]
+        },
+        {
+          "first": 1460,
+          "last": 1461,
+          "pixel_counts": [
+            705,
+            705
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            668,
+            1401
+          ]
+        }
+      ],
+      "horizontal_strokes": [
+        {
+          "first": 676,
+          "last": 677,
+          "pixel_counts": [
+            707,
+            707
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            735,
+            1469
+          ]
+        },
+        {
+          "first": 1393,
+          "last": 1393,
+          "pixel_counts": [
+            707
+          ],
+          "thickness": 1,
+          "matching_support_inclusive": [
+            735,
+            1469
+          ]
+        }
+      ],
+      "rectangle": {
+        "outer_bounds_inclusive": [
+          743,
+          676,
+          1461,
+          1393
+        ],
+        "outer_pixel_width": 719,
+        "outer_pixel_height": 718,
+        "geometric_width": 717,
+        "geometric_height": 717,
+        "stroke_centers": {
+          "left": 743.5,
+          "right": 1460.5,
+          "top": 676.5,
+          "bottom": 1393.0
+        },
+        "stroke_center_center": [
+          1102.0,
+          1034.75
+        ],
+        "all_strokes_2px": false
+      },
+      "detection_status": "complete_frame",
+      "partial_frame": null
+    },
+    {
+      "file": "A15b-undo-original-restore.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 5645,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [
+        {
+          "first": 743,
+          "last": 744,
+          "pixel_counts": [
+            705,
+            705
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            668,
+            1401
+          ]
+        },
+        {
+          "first": 1460,
+          "last": 1461,
+          "pixel_counts": [
+            705,
+            705
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            668,
+            1401
+          ]
+        }
+      ],
+      "horizontal_strokes": [
+        {
+          "first": 676,
+          "last": 677,
+          "pixel_counts": [
+            707,
+            707
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            735,
+            1469
+          ]
+        },
+        {
+          "first": 1393,
+          "last": 1393,
+          "pixel_counts": [
+            707
+          ],
+          "thickness": 1,
+          "matching_support_inclusive": [
+            735,
+            1469
+          ]
+        }
+      ],
+      "rectangle": {
+        "outer_bounds_inclusive": [
+          743,
+          676,
+          1461,
+          1393
+        ],
+        "outer_pixel_width": 719,
+        "outer_pixel_height": 718,
+        "geometric_width": 717,
+        "geometric_height": 717,
+        "stroke_centers": {
+          "left": 743.5,
+          "right": 1460.5,
+          "top": 676.5,
+          "bottom": 1393.0
+        },
+        "stroke_center_center": [
+          1102.0,
+          1034.75
+        ],
+        "all_strokes_2px": false
+      },
+      "detection_status": "complete_frame",
+      "partial_frame": null
+    },
+    {
+      "file": "A16-both-after-redo.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 7169,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [
+        {
+          "first": 812,
+          "last": 812,
+          "pixel_counts": [
+            705
+          ],
+          "thickness": 1,
+          "matching_support_inclusive": [
+            612,
+            1345
+          ]
+        }
+      ],
+      "horizontal_strokes": [
+        {
+          "first": 620,
+          "last": 621,
+          "pixel_counts": [
+            1141,
+            1141
+          ],
+          "thickness": 2,
+          "matching_support_inclusive": [
+            804,
+            1959
+          ]
+        },
+        {
+          "first": 1337,
+          "last": 1337,
+          "pixel_counts": [
+            1141
+          ],
+          "thickness": 1,
+          "matching_support_inclusive": [
+            804,
+            1959
+          ]
+        }
+      ],
+      "rectangle": null,
+      "detection_status": "partial_frame_right_clipped",
+      "partial_frame": {
+        "observed_left_stroke": [
+          812,
+          812
+        ],
+        "observed_top_stroke": [
+          620,
+          621
+        ],
+        "observed_bottom_stroke": [
+          1337,
+          1337
+        ],
+        "right_stroke": null,
+        "right_stroke_note": "not observed; both horizontal strokes continue to the canvas/scan right boundary",
+        "geometric_width": null,
+        "geometric_height": 717,
+        "outer_pixel_width": null,
+        "outer_pixel_height": 718,
+        "stroke_center_center": [
+          null,
+          978.75
+        ],
+        "horizontal_strokes_reach_x": 1959
+      }
+    }
+  ],
+  "comparisons": [
+    {
+      "baseline": "A03-resized-rotated.png",
+      "comparison": "A06-back-to-3d.png",
+      "geometric_width_delta": 0,
+      "geometric_height_delta": 0,
+      "stroke_center_delta": [
+        0.0,
+        0.0
+      ],
+      "all_frame_geometry_identical": true
+    },
+    {
+      "baseline": "A03-resized-rotated.png",
+      "comparison": "A07-layout-original.png",
+      "geometric_width_delta": 0,
+      "geometric_height_delta": 0,
+      "stroke_center_delta": [
+        0.0,
+        0.0
+      ],
+      "all_frame_geometry_identical": true
+    }
+  ],
+  "review_notes": {
+    "capture_state_notes": [
+      "A15-redo-2d.png actually shows 3D with Original drawing layout; its filename does not describe its final displayed state. This is independently visible in its selected 3D display control and Original drawing layout control.",
+      "The capture owner reports this history path: Undo Both \u2192 A15a-undo-to-3d-original.png (3D, Original drawing); additional Undo Original restore \u2192 A15b-undo-original-restore.png (3D, From the 3D view); Redo Original restore \u2192 A15-redo-2d.png (3D, Original drawing); Both \u2192 A16-both-after-redo.png. The former display-2D redo branch was discarded when Both was selected."
+    ],
+    "visual_review": [
+      "Read-only view_image inspection covered A05-flattened-2d.png, A08-original-2d.png, A10-both-122.png, A11-both-97.png, A12-both-deselected.png, A14-redo-both.png, A15-redo-2d.png, A15a-undo-to-3d-original.png, A15b-undo-original-restore.png, and A16-both-after-redo.png. No UI or application interaction was performed for this review.",
+      "A05 visibly contains a compact selected 2D projection with a diagonally slanted, flattened molecular layout. Its bottom status reads 'Shown as 2D from the 3D view'. Its visible selection frame is too small to produce rows or columns containing more than 400 exact-color pixels, so the numeric method intentionally assigns no frame dimensions.",
+      "A08 shows the original, more upright drawn arrangement: a left-pointing carbonyl on the left side, a downward carbonyl below the six-member ring, a five-member ring on the right, and N-substituent bonds extending upper-left and lower-left. These visible relative directions distinguish it from the flattened diagonal projection in A05.",
+      "The left-hand 2D drawing in A11, A12, A14, and A16 retains the same distinctive original arrangement seen in A08: leftward and downward carbonyl directions, the upright fused ring on the right, and upper-left/lower-left N-substituent bonds. It is visually consistent with the Original drawing layout, rather than the diagonal projection in A05. A11, A14, and A16 also show Original drawing selected in the properties sidebar.",
+      "A12 removes the selection overlay and shows the clean original line drawing alongside the ball-and-stick model, making the original-layout evidence easiest to inspect. A11, A14, and A16 show the same two presentations together with selection overlays. The right 3D presentation is visibly present in all four reviewed Both captures.",
+      "A15 and A15a visibly select 3D plus Original drawing. A15b visibly selects 3D plus From the 3D view. The 3D frame and model remain in the same visible position across these three screenshots. A10 independently confirms that the selected Both frame and part of the 3D model extend past the visible right canvas edge behind the properties sidebar.",
+      "These are visual layout comparisons at different zoom levels and with different selection overlays, not a pixel-identity claim for the molecule or the whole screenshot."
+    ]
+  }
+}

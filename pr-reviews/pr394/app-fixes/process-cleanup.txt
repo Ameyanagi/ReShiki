@@ -1,0 +1,9 @@
+Cleanup target verified: PID 76822, /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps-appfix-1b/ReShiki386Fix1bEvidence.app/Contents/MacOS/reshiki
+Command: kill 76822 (SIGTERM)
+Exact target pgrep exit status: 1
+Exact target pgrep output: (none)
+pgrep -lf reshiki after cleanup:
+51217 /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki
+Pre-existing PID 51217 still running: True
+PID STARTED                      ARGS
+51217 Tue Oct 20 14:02:02 2026     /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki

@@ -1,0 +1,88 @@
+{
+  "coordinate_system": "zero-based pixels; spans and scan bounds are inclusive",
+  "measurements": [
+    {
+      "file": "A01-3d-122.png",
+      "image_size": [
+        2560,
+        1704
+      ],
+      "scan_bounds_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_rgb": [
+        62,
+        133,
+        117
+      ],
+      "matching_pixels": 6660,
+      "minimum_pixel_count_exclusive": 400,
+      "vertical_strokes": [
+        {
+          "first": 664,
+          "last": 665,
+          "pixel_counts": [
+            734,
+            734
+          ],
+          "thickness": 2
+        },
+        {
+          "first": 1408,
+          "last": 1409,
+          "pixel_counts": [
+            734,
+            734
+          ],
+          "thickness": 2
+        }
+      ],
+      "horizontal_strokes": [
+        {
+          "first": 603,
+          "last": 604,
+          "pixel_counts": [
+            734,
+            734
+          ],
+          "thickness": 2
+        },
+        {
+          "first": 1347,
+          "last": 1348,
+          "pixel_counts": [
+            734,
+            734
+          ],
+          "thickness": 2
+        }
+      ],
+      "rectangle": {
+        "outer_bounds_inclusive": [
+          664,
+          603,
+          1409,
+          1348
+        ],
+        "outer_pixel_width": 746,
+        "outer_pixel_height": 746,
+        "geometric_width": 744,
+        "geometric_height": 744,
+        "stroke_centers": {
+          "left": 664.5,
+          "right": 1408.5,
+          "top": 603.5,
+          "bottom": 1347.5
+        },
+        "stroke_center_center": [
+          1036.5,
+          975.5
+        ],
+        "all_strokes_2px": true
+      }
+    }
+  ]
+}

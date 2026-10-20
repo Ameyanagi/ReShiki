@@ -132,3 +132,48 @@ I looked at every image.
 - Reset view after non-default Look, Hydrogens or Background (it was tested only on the rotation).
 - Save and reopen.
 - A 1× (non-Retina) display.
+
+## Fix check: frame at Perspective 100% (`app-fixes/`, `ce7d8b22`)
+
+- **Fix:** `ce7d8b22` sizes the frame from the sphere's true projected spread, so at 100% the frame should stay under 2× the flat frame. Before, it was about 6× and left the view (problem 1, `app/A09`).
+- **Binary:** `feat/3d-models-2` at `ce7d8b22`, clean tree, built with `CARGO_INCREMENTAL=0`. The sha256 is `bec9623e…` (`app-fixes/binary-sha256.txt`), re-checked right before each launch.
+- **Bundle:** `scratchpad/apps-appfix-2/ReShiki386Fix2Evidence.app`, bundle id `dev.reshiki.verification.ev386fix2` (`app-fixes/tools/bundle-Info.plist`). `Contents/MacOS/reshiki` is a hard link to the binary.
+- **Data dir:** `scratchpad/ev386-2-appfix-data`.
+- **Input:** `input/own/caffeine-ballstick-flat.rsk`.
+- **Launches:** two, one after another, with `open -n`:
+  - Run 1: PID 82652, window 7762.
+  - Run 2: PID 90582.
+- **Driving:** Codex computer use with `codex exec -m gpt-6-astra -s danger-full-access … < /dev/null`.
+  - Prompts: `app-fixes/prompt.md` and `prompt-zoomed-out.md`. Both runs are in `app-fixes/report.md`.
+  - All shots are window-only.
+- **Cleanup:** each run killed only its own PID. 51217 was untouched (`app-fixes/process-cleanup.txt`).
+- **Measurements:** I re-measured the frames independently from exact frame-colour runs.
+
+**Opening zoom:** the file now opens at **175%**, not 158%. The fix also tightens the frame at 20%, so the fit zoom is higher.
+
+### Run 1: opening zoom, 175%
+
+| File | What it shows |
+|---|---|
+| `P01-perspective-20.png` | 20%: a full frame of 936×936 px, with the bar just below it. |
+| `P02-perspective-50.png` | 50%: a full frame of 943×944 px (1.01×), with the bar just below it. |
+| `P03-perspective-100.png` | 100%: the model is fine, but **only the frame's right edge is in view** (x=1816 px), and the bar sits at the canvas bottom. From the 50% centre, the half-width is about 820 px, so the frame is about **1.75×** the 20% frame. That is within the fix's under-2× bound, but at 175% a frame about 1640 px tall cannot fit the 1256 px canvas. Old `app/A09` had **no** frame pixels at all at 158%. |
+| `P05a-…`, `P05-perspective-100-rotated.png` | 100%, before and after a rotation: the same clipped frame. |
+| `P04-back-to-20.png`, `P06-after-two-undos.png` | Back at 20%, by drag and by Undo: the frame is pixel-identical to `P01`. `P04a`–`c` are intermediate slider values (22% and 21%). |
+
+### Run 2: zoomed out to 112%, two status-bar minus clicks (`Q00` is the 140% step)
+
+| File | What it shows |
+|---|---|
+| `Q01-perspective-20-zoomed-out.png` | 20%: frame (720,684)–(1335,1299), 615 px. The bar is above the frame. |
+| `Q02-perspective-50-zoomed-out.png` | 50%: 620 px, with the bar above. |
+| `Q03-perspective-100-zoomed-out.png` | **100%: all four frame edges are in the canvas around the whole model**, (494,458)–(1561,1525) and 1067 px, which is **1.73×** the 20% frame. The bar sits just below the frame (15 px gap, 10 px above the canvas bottom), because there is no room above. |
+| `Q04-perspective-100-rotated-zoomed-out.png` | Rotated at 100%: the model is near edge-on, and the frame is unchanged and still around the model. |
+| `Q04a-after-one-undo-zoomed-out.png`, `Q05-back-to-20-zoomed-out.png` | Undo of the rotation, then dragging back to 20%: the frame is identical to `Q01`. |
+
+**Verdict:** the fix works. At 100%, the frame stays around the model at about 1.73× the flat size, instead of about 6×.
+
+**Things worth a look:**
+
+- At the opening zoom of 175%, the 100% frame is still taller than the canvas. The user sees one edge and a bar clamped to the bottom (`P03`), which looks like the old bug until they zoom out.
+- At 100%, the frame is loose: a wide empty margin around the model in `Q03`. That follows from the bound being for any rotation.

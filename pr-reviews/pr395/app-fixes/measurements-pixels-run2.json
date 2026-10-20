@@ -1,0 +1,1019 @@
+{
+  "conventions": {
+    "coordinates": "0-based original image pixels; all rectangle endpoints inclusive",
+    "canvas": [
+      208,
+      364,
+      1959,
+      1619
+    ],
+    "frame_extents": "exact RGB(62,133,117) straight-run core; excludes antialias and short handle/stem runs",
+    "frame_mask": "all exact RGB(62,133,117) pixels inside canvas; includes exact-color handle/stem pixels",
+    "bar_extents": "exact RGB(214,219,223) border core; excludes antialias and shadow",
+    "centerline": "midpoints of exact-color row/column groups, not geometric subpixel line estimates",
+    "long_straight_run_count": "union of all horizontal/vertical exact-color contiguous runs of length at least 100; no double count",
+    "gap": "pixel row separation between inclusive exact-color edges; intervening rotation handle/stem is excluded from the frame-edge definition, so rows are not necessarily all blank",
+    "paint_envelope": "nonwhite pixels in stated local ROI around bar, excluding green-dominant pixels (G>R and G>B) of the adjacent selection rotation handle; ROI contact reported as possible contamination/truncation"
+  },
+  "measurements": [
+    {
+      "file": "Q01-perspective-20-zoomed-out.png",
+      "size": [
+        2560,
+        1704
+      ],
+      "source_sha256": "bc9c08bc46ee7761ce5f2a4cead22fcd71d171e72211ea2f402833f2e1f3efcf",
+      "target": [
+        62,
+        133,
+        117
+      ],
+      "canvas_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_color_canvas_count": 3009,
+      "horizontal_long_runs_y_x0_x1_len": [
+        [
+          684,
+          728,
+          1327,
+          600
+        ],
+        [
+          1299,
+          728,
+          1327,
+          600
+        ]
+      ],
+      "vertical_long_runs_x_y0_y1_len": [
+        [
+          720,
+          692,
+          1291,
+          600
+        ],
+        [
+          1335,
+          692,
+          1291,
+          600
+        ]
+      ],
+      "exact_color_long_straight_run_count": 2400,
+      "exact_color_canvas_mask_sha256": "4563d25d9fd9026fd1c85d7dc77db5a1b58d28b22d34fbc8737623c980625919",
+      "straight_edge_exact_color_envelope_inclusive": [
+        720,
+        684,
+        1335,
+        1299
+      ],
+      "straight_edge_exact_color_envelope_size": [
+        616,
+        616
+      ],
+      "vertical_edge_core_column_groups_inclusive": [
+        [
+          720,
+          720
+        ],
+        [
+          1335,
+          1335
+        ]
+      ],
+      "horizontal_edge_core_row_groups_inclusive": [
+        [
+          684,
+          684
+        ],
+        [
+          1299,
+          1299
+        ]
+      ],
+      "exact_color_core_centerline_distances": [
+        615.0,
+        615.0
+      ],
+      "four_edge_cores": {
+        "top": [
+          [
+            684,
+            728,
+            1327,
+            600
+          ]
+        ],
+        "bottom": [
+          [
+            1299,
+            728,
+            1327,
+            600
+          ]
+        ],
+        "left": [
+          [
+            720,
+            692,
+            1291,
+            600
+          ]
+        ],
+        "right": [
+          [
+            1335,
+            692,
+            1291,
+            600
+          ]
+        ]
+      },
+      "floating_bar_candidate_horizontal_border_runs": [
+        [
+          528,
+          767,
+          1289,
+          523
+        ],
+        [
+          596,
+          768,
+          1287,
+          520
+        ]
+      ],
+      "floating_bar_exact_border_rgb": [
+        214,
+        219,
+        223
+      ],
+      "floating_bar_exact_border_pixel_count": 1240,
+      "floating_bar_exact_border_envelope_inclusive": [
+        752,
+        528,
+        1303,
+        596
+      ],
+      "floating_bar_exact_border_envelope_size": [
+        552,
+        69
+      ],
+      "floating_bar_exact_border_canvas_clearance_left_top_right_bottom": [
+        544,
+        164,
+        656,
+        1023
+      ],
+      "floating_bar_placement_relative_to_frame": "above",
+      "floating_bar_pixel_row_separation_between_border_and_frame_core": 87,
+      "floating_bar_center_x_minus_frame_center_x": 0.0,
+      "floating_bar_horizontal_overlap_with_frame_in_pixels": 552,
+      "floating_bar_shadow_scan_roi_inclusive": [
+        728,
+        524,
+        1327,
+        620
+      ],
+      "floating_bar_paint_and_shadow_envelope_inclusive": [
+        742,
+        526,
+        1313,
+        614
+      ],
+      "floating_bar_paint_touches_shadow_roi_left_top_right_bottom": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "floating_bar_including_shadow_canvas_clearance_left_top_right_bottom": [
+        534,
+        162,
+        646,
+        1005
+      ],
+      "floating_bar_including_shadow_pixel_row_separation_to_frame_core": 69
+    },
+    {
+      "file": "Q02-perspective-50-zoomed-out.png",
+      "size": [
+        2560,
+        1704
+      ],
+      "source_sha256": "331bc28e5e52ab5d84e452b596b07cec52aec4814ccf4500771c0d1aac56aa34",
+      "target": [
+        62,
+        133,
+        117
+      ],
+      "canvas_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_color_canvas_count": 5670,
+      "horizontal_long_runs_y_x0_x1_len": [
+        [
+          681,
+          725,
+          1330,
+          606
+        ],
+        [
+          682,
+          725,
+          1330,
+          606
+        ],
+        [
+          1301,
+          725,
+          1330,
+          606
+        ],
+        [
+          1302,
+          725,
+          1330,
+          606
+        ]
+      ],
+      "vertical_long_runs_x_y0_y1_len": [
+        [
+          717,
+          689,
+          1294,
+          606
+        ],
+        [
+          718,
+          689,
+          1294,
+          606
+        ],
+        [
+          1337,
+          689,
+          1294,
+          606
+        ],
+        [
+          1338,
+          689,
+          1294,
+          606
+        ]
+      ],
+      "exact_color_long_straight_run_count": 4848,
+      "exact_color_canvas_mask_sha256": "99ece741487b2e8553484726fcc296256c1169156b4560e80e266f814f3f9d2c",
+      "straight_edge_exact_color_envelope_inclusive": [
+        717,
+        681,
+        1338,
+        1302
+      ],
+      "straight_edge_exact_color_envelope_size": [
+        622,
+        622
+      ],
+      "vertical_edge_core_column_groups_inclusive": [
+        [
+          717,
+          718
+        ],
+        [
+          1337,
+          1338
+        ]
+      ],
+      "horizontal_edge_core_row_groups_inclusive": [
+        [
+          681,
+          682
+        ],
+        [
+          1301,
+          1302
+        ]
+      ],
+      "exact_color_core_centerline_distances": [
+        620.0,
+        620.0
+      ],
+      "four_edge_cores": {
+        "top": [
+          [
+            681,
+            725,
+            1330,
+            606
+          ],
+          [
+            682,
+            725,
+            1330,
+            606
+          ]
+        ],
+        "bottom": [
+          [
+            1301,
+            725,
+            1330,
+            606
+          ],
+          [
+            1302,
+            725,
+            1330,
+            606
+          ]
+        ],
+        "left": [
+          [
+            717,
+            689,
+            1294,
+            606
+          ],
+          [
+            718,
+            689,
+            1294,
+            606
+          ]
+        ],
+        "right": [
+          [
+            1337,
+            689,
+            1294,
+            606
+          ],
+          [
+            1338,
+            689,
+            1294,
+            606
+          ]
+        ]
+      },
+      "floating_bar_candidate_horizontal_border_runs": [
+        [
+          525,
+          771,
+          1284,
+          514
+        ],
+        [
+          526,
+          766,
+          1290,
+          525
+        ],
+        [
+          593,
+          766,
+          1289,
+          524
+        ],
+        [
+          594,
+          771,
+          1284,
+          514
+        ]
+      ],
+      "floating_bar_exact_border_rgb": [
+        214,
+        219,
+        223
+      ],
+      "floating_bar_exact_border_pixel_count": 2263,
+      "floating_bar_exact_border_envelope_inclusive": [
+        752,
+        525,
+        1303,
+        594
+      ],
+      "floating_bar_exact_border_envelope_size": [
+        552,
+        70
+      ],
+      "floating_bar_exact_border_canvas_clearance_left_top_right_bottom": [
+        544,
+        161,
+        656,
+        1025
+      ],
+      "floating_bar_placement_relative_to_frame": "above",
+      "floating_bar_pixel_row_separation_between_border_and_frame_core": 86,
+      "floating_bar_center_x_minus_frame_center_x": 0.0,
+      "floating_bar_horizontal_overlap_with_frame_in_pixels": 552,
+      "floating_bar_shadow_scan_roi_inclusive": [
+        728,
+        521,
+        1327,
+        618
+      ],
+      "floating_bar_paint_and_shadow_envelope_inclusive": [
+        742,
+        524,
+        1313,
+        611
+      ],
+      "floating_bar_paint_touches_shadow_roi_left_top_right_bottom": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "floating_bar_including_shadow_canvas_clearance_left_top_right_bottom": [
+        534,
+        160,
+        646,
+        1008
+      ],
+      "floating_bar_including_shadow_pixel_row_separation_to_frame_core": 69
+    },
+    {
+      "file": "Q03-perspective-100-zoomed-out.png",
+      "size": [
+        2560,
+        1704
+      ],
+      "source_sha256": "7ab7a5cf835fcfc2d7da2998f9434cc5210ebd110e5df3ea78392acf57ae9243",
+      "target": [
+        62,
+        133,
+        117
+      ],
+      "canvas_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_color_canvas_count": 4821,
+      "horizontal_long_runs_y_x0_x1_len": [
+        [
+          458,
+          502,
+          1553,
+          1052
+        ],
+        [
+          1525,
+          502,
+          1553,
+          1052
+        ]
+      ],
+      "vertical_long_runs_x_y0_y1_len": [
+        [
+          494,
+          466,
+          1517,
+          1052
+        ],
+        [
+          1561,
+          466,
+          1517,
+          1052
+        ]
+      ],
+      "exact_color_long_straight_run_count": 4208,
+      "exact_color_canvas_mask_sha256": "2bd957262ca098a2d8c62ba2302549bc6e86c973875db11a94fd243114aacc16",
+      "straight_edge_exact_color_envelope_inclusive": [
+        494,
+        458,
+        1561,
+        1525
+      ],
+      "straight_edge_exact_color_envelope_size": [
+        1068,
+        1068
+      ],
+      "vertical_edge_core_column_groups_inclusive": [
+        [
+          494,
+          494
+        ],
+        [
+          1561,
+          1561
+        ]
+      ],
+      "horizontal_edge_core_row_groups_inclusive": [
+        [
+          458,
+          458
+        ],
+        [
+          1525,
+          1525
+        ]
+      ],
+      "exact_color_core_centerline_distances": [
+        1067.0,
+        1067.0
+      ],
+      "four_edge_cores": {
+        "top": [
+          [
+            458,
+            502,
+            1553,
+            1052
+          ]
+        ],
+        "bottom": [
+          [
+            1525,
+            502,
+            1553,
+            1052
+          ]
+        ],
+        "left": [
+          [
+            494,
+            466,
+            1517,
+            1052
+          ]
+        ],
+        "right": [
+          [
+            1561,
+            466,
+            1517,
+            1052
+          ]
+        ]
+      },
+      "floating_bar_candidate_horizontal_border_runs": [
+        [
+          1541,
+          767,
+          1289,
+          523
+        ],
+        [
+          1609,
+          768,
+          1287,
+          520
+        ]
+      ],
+      "floating_bar_exact_border_rgb": [
+        214,
+        219,
+        223
+      ],
+      "floating_bar_exact_border_pixel_count": 1239,
+      "floating_bar_exact_border_envelope_inclusive": [
+        752,
+        1541,
+        1303,
+        1609
+      ],
+      "floating_bar_exact_border_envelope_size": [
+        552,
+        69
+      ],
+      "floating_bar_exact_border_canvas_clearance_left_top_right_bottom": [
+        544,
+        1177,
+        656,
+        10
+      ],
+      "floating_bar_placement_relative_to_frame": "below",
+      "floating_bar_pixel_row_separation_between_border_and_frame_core": 15,
+      "floating_bar_center_x_minus_frame_center_x": 0.0,
+      "floating_bar_horizontal_overlap_with_frame_in_pixels": 552,
+      "floating_bar_shadow_scan_roi_inclusive": [
+        728,
+        1537,
+        1327,
+        1619
+      ],
+      "floating_bar_paint_and_shadow_envelope_inclusive": [
+        742,
+        1539,
+        1313,
+        1619
+      ],
+      "floating_bar_paint_touches_shadow_roi_left_top_right_bottom": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "floating_bar_including_shadow_canvas_clearance_left_top_right_bottom": [
+        534,
+        1175,
+        646,
+        0
+      ],
+      "floating_bar_including_shadow_pixel_row_separation_to_frame_core": 13
+    },
+    {
+      "file": "Q04-perspective-100-rotated-zoomed-out.png",
+      "size": [
+        2560,
+        1704
+      ],
+      "source_sha256": "927bd972adba58a09c486479799eeb5761dda6f3de6e891dc93631aa9abeb52e",
+      "target": [
+        62,
+        133,
+        117
+      ],
+      "canvas_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_color_canvas_count": 4821,
+      "horizontal_long_runs_y_x0_x1_len": [
+        [
+          458,
+          502,
+          1553,
+          1052
+        ],
+        [
+          1525,
+          502,
+          1553,
+          1052
+        ]
+      ],
+      "vertical_long_runs_x_y0_y1_len": [
+        [
+          494,
+          466,
+          1517,
+          1052
+        ],
+        [
+          1561,
+          466,
+          1517,
+          1052
+        ]
+      ],
+      "exact_color_long_straight_run_count": 4208,
+      "exact_color_canvas_mask_sha256": "2bd957262ca098a2d8c62ba2302549bc6e86c973875db11a94fd243114aacc16",
+      "straight_edge_exact_color_envelope_inclusive": [
+        494,
+        458,
+        1561,
+        1525
+      ],
+      "straight_edge_exact_color_envelope_size": [
+        1068,
+        1068
+      ],
+      "vertical_edge_core_column_groups_inclusive": [
+        [
+          494,
+          494
+        ],
+        [
+          1561,
+          1561
+        ]
+      ],
+      "horizontal_edge_core_row_groups_inclusive": [
+        [
+          458,
+          458
+        ],
+        [
+          1525,
+          1525
+        ]
+      ],
+      "exact_color_core_centerline_distances": [
+        1067.0,
+        1067.0
+      ],
+      "four_edge_cores": {
+        "top": [
+          [
+            458,
+            502,
+            1553,
+            1052
+          ]
+        ],
+        "bottom": [
+          [
+            1525,
+            502,
+            1553,
+            1052
+          ]
+        ],
+        "left": [
+          [
+            494,
+            466,
+            1517,
+            1052
+          ]
+        ],
+        "right": [
+          [
+            1561,
+            466,
+            1517,
+            1052
+          ]
+        ]
+      },
+      "floating_bar_candidate_horizontal_border_runs": [
+        [
+          1541,
+          767,
+          1289,
+          523
+        ],
+        [
+          1609,
+          768,
+          1287,
+          520
+        ]
+      ],
+      "floating_bar_exact_border_rgb": [
+        214,
+        219,
+        223
+      ],
+      "floating_bar_exact_border_pixel_count": 1239,
+      "floating_bar_exact_border_envelope_inclusive": [
+        752,
+        1541,
+        1303,
+        1609
+      ],
+      "floating_bar_exact_border_envelope_size": [
+        552,
+        69
+      ],
+      "floating_bar_exact_border_canvas_clearance_left_top_right_bottom": [
+        544,
+        1177,
+        656,
+        10
+      ],
+      "floating_bar_placement_relative_to_frame": "below",
+      "floating_bar_pixel_row_separation_between_border_and_frame_core": 15,
+      "floating_bar_center_x_minus_frame_center_x": 0.0,
+      "floating_bar_horizontal_overlap_with_frame_in_pixels": 552,
+      "floating_bar_shadow_scan_roi_inclusive": [
+        728,
+        1537,
+        1327,
+        1619
+      ],
+      "floating_bar_paint_and_shadow_envelope_inclusive": [
+        742,
+        1539,
+        1313,
+        1619
+      ],
+      "floating_bar_paint_touches_shadow_roi_left_top_right_bottom": [
+        false,
+        false,
+        false,
+        true
+      ],
+      "floating_bar_including_shadow_canvas_clearance_left_top_right_bottom": [
+        534,
+        1175,
+        646,
+        0
+      ],
+      "floating_bar_including_shadow_pixel_row_separation_to_frame_core": 13
+    },
+    {
+      "file": "Q05-back-to-20-zoomed-out.png",
+      "size": [
+        2560,
+        1704
+      ],
+      "source_sha256": "acef80a382aa760059b746b997239022145472e77b4643660e8a9b9fc4415f76",
+      "target": [
+        62,
+        133,
+        117
+      ],
+      "canvas_inclusive": [
+        208,
+        364,
+        1959,
+        1619
+      ],
+      "exact_color_canvas_count": 3009,
+      "horizontal_long_runs_y_x0_x1_len": [
+        [
+          684,
+          728,
+          1327,
+          600
+        ],
+        [
+          1299,
+          728,
+          1327,
+          600
+        ]
+      ],
+      "vertical_long_runs_x_y0_y1_len": [
+        [
+          720,
+          692,
+          1291,
+          600
+        ],
+        [
+          1335,
+          692,
+          1291,
+          600
+        ]
+      ],
+      "exact_color_long_straight_run_count": 2400,
+      "exact_color_canvas_mask_sha256": "4563d25d9fd9026fd1c85d7dc77db5a1b58d28b22d34fbc8737623c980625919",
+      "straight_edge_exact_color_envelope_inclusive": [
+        720,
+        684,
+        1335,
+        1299
+      ],
+      "straight_edge_exact_color_envelope_size": [
+        616,
+        616
+      ],
+      "vertical_edge_core_column_groups_inclusive": [
+        [
+          720,
+          720
+        ],
+        [
+          1335,
+          1335
+        ]
+      ],
+      "horizontal_edge_core_row_groups_inclusive": [
+        [
+          684,
+          684
+        ],
+        [
+          1299,
+          1299
+        ]
+      ],
+      "exact_color_core_centerline_distances": [
+        615.0,
+        615.0
+      ],
+      "four_edge_cores": {
+        "top": [
+          [
+            684,
+            728,
+            1327,
+            600
+          ]
+        ],
+        "bottom": [
+          [
+            1299,
+            728,
+            1327,
+            600
+          ]
+        ],
+        "left": [
+          [
+            720,
+            692,
+            1291,
+            600
+          ]
+        ],
+        "right": [
+          [
+            1335,
+            692,
+            1291,
+            600
+          ]
+        ]
+      },
+      "floating_bar_candidate_horizontal_border_runs": [
+        [
+          528,
+          767,
+          1289,
+          523
+        ],
+        [
+          596,
+          768,
+          1287,
+          520
+        ]
+      ],
+      "floating_bar_exact_border_rgb": [
+        214,
+        219,
+        223
+      ],
+      "floating_bar_exact_border_pixel_count": 1240,
+      "floating_bar_exact_border_envelope_inclusive": [
+        752,
+        528,
+        1303,
+        596
+      ],
+      "floating_bar_exact_border_envelope_size": [
+        552,
+        69
+      ],
+      "floating_bar_exact_border_canvas_clearance_left_top_right_bottom": [
+        544,
+        164,
+        656,
+        1023
+      ],
+      "floating_bar_placement_relative_to_frame": "above",
+      "floating_bar_pixel_row_separation_between_border_and_frame_core": 87,
+      "floating_bar_center_x_minus_frame_center_x": 0.0,
+      "floating_bar_horizontal_overlap_with_frame_in_pixels": 552,
+      "floating_bar_shadow_scan_roi_inclusive": [
+        728,
+        524,
+        1327,
+        620
+      ],
+      "floating_bar_paint_and_shadow_envelope_inclusive": [
+        742,
+        526,
+        1313,
+        614
+      ],
+      "floating_bar_paint_touches_shadow_roi_left_top_right_bottom": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "floating_bar_including_shadow_canvas_clearance_left_top_right_bottom": [
+        534,
+        162,
+        646,
+        1005
+      ],
+      "floating_bar_including_shadow_pixel_row_separation_to_frame_core": 69
+    }
+  ],
+  "comparisons": {
+    "Q03_versus_Q04": {
+      "exact_color_canvas_mask_symmetric_difference_pixels": 0,
+      "long_straight_run_mask_symmetric_difference_pixels": 0,
+      "exact_color_canvas_masks_identical": true
+    },
+    "Q01_versus_Q05": {
+      "exact_color_canvas_mask_symmetric_difference_pixels": 0,
+      "long_straight_run_mask_symmetric_difference_pixels": 0,
+      "exact_color_canvas_masks_identical": true
+    },
+    "Q03_divided_by_Q01": {
+      "envelope_width_ratio": 1.7337662337662338,
+      "envelope_height_ratio": 1.7337662337662338,
+      "envelope_area_ratio": 3.0059453533479505,
+      "both_envelope_linear_dimensions_under_2x": true,
+      "exact_color_count_ratio": 1.6021934197407777,
+      "long_straight_run_count_ratio": 1.7533333333333334,
+      "core_centerline_distance_ratios": [
+        1.7349593495934958,
+        1.7349593495934958
+      ]
+    }
+  }
+}

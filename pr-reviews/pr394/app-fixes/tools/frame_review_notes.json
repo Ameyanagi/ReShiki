@@ -1,0 +1,15 @@
+{
+  "capture_state_notes": [
+    "A15-redo-2d.png actually shows 3D with Original drawing layout; its filename does not describe its final displayed state. This is independently visible in its selected 3D display control and Original drawing layout control.",
+    "The capture owner reports this history path: Undo Both \u2192 A15a-undo-to-3d-original.png (3D, Original drawing); additional Undo Original restore \u2192 A15b-undo-original-restore.png (3D, From the 3D view); Redo Original restore \u2192 A15-redo-2d.png (3D, Original drawing); Both \u2192 A16-both-after-redo.png. The former display-2D redo branch was discarded when Both was selected."
+  ],
+  "visual_review": [
+    "Read-only view_image inspection covered A05-flattened-2d.png, A08-original-2d.png, A10-both-122.png, A11-both-97.png, A12-both-deselected.png, A14-redo-both.png, A15-redo-2d.png, A15a-undo-to-3d-original.png, A15b-undo-original-restore.png, and A16-both-after-redo.png. No UI or application interaction was performed for this review.",
+    "A05 visibly contains a compact selected 2D projection with a diagonally slanted, flattened molecular layout. Its bottom status reads 'Shown as 2D from the 3D view'. Its visible selection frame is too small to produce rows or columns containing more than 400 exact-color pixels, so the numeric method intentionally assigns no frame dimensions.",
+    "A08 shows the original, more upright drawn arrangement: a left-pointing carbonyl on the left side, a downward carbonyl below the six-member ring, a five-member ring on the right, and N-substituent bonds extending upper-left and lower-left. These visible relative directions distinguish it from the flattened diagonal projection in A05.",
+    "The left-hand 2D drawing in A11, A12, A14, and A16 retains the same distinctive original arrangement seen in A08: leftward and downward carbonyl directions, the upright fused ring on the right, and upper-left/lower-left N-substituent bonds. It is visually consistent with the Original drawing layout, rather than the diagonal projection in A05. A11, A14, and A16 also show Original drawing selected in the properties sidebar.",
+    "A12 removes the selection overlay and shows the clean original line drawing alongside the ball-and-stick model, making the original-layout evidence easiest to inspect. A11, A14, and A16 show the same two presentations together with selection overlays. The right 3D presentation is visibly present in all four reviewed Both captures.",
+    "A15 and A15a visibly select 3D plus Original drawing. A15b visibly selects 3D plus From the 3D view. The 3D frame and model remain in the same visible position across these three screenshots. A10 independently confirms that the selected Both frame and part of the 3D model extend past the visible right canvas edge behind the properties sidebar.",
+    "These are visual layout comparisons at different zoom levels and with different selection overlays, not a pixel-identity claim for the molecule or the whole screenshot."
+  ]
+}

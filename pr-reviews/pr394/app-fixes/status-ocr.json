@@ -1,0 +1,183 @@
+[
+  {
+    "bottom_text" : [
+      "Structure imported • Undo restores the previous drawing",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 238% + Fit"
+    ],
+    "file" : "A00-opening-2d.png"
+  },
+  {
+    "bottom_text" : [
+      "Shown as 3D model • Undo restores the 2D drawing",
+      "JACS \/ ACS",
+      "Publication",
+      "View",
+      "122% + Fit"
+    ],
+    "file" : "A01-3d-122.png"
+  },
+  {
+    "bottom_text" : [
+      "Shown as 3D model • Undo restores the 2D drawing",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 122% + Fit"
+    ],
+    "file" : "A02-resize-first-attempt.png"
+  },
+  {
+    "bottom_text" : [
+      "Drawing updated",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 122% + Fit"
+    ],
+    "file" : "A02-resized.png"
+  },
+  {
+    "bottom_text" : [
+      "Drawing updated",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 122% + Fit"
+    ],
+    "file" : "A03-resized-rotated.png"
+  },
+  {
+    "bottom_text" : [
+      "Drawing updated",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 122% + Fit"
+    ],
+    "file" : "A04-layout-from-3d.png"
+  },
+  {
+    "bottom_text" : [
+      "Shown as 2D from the 3D view • Undo restores the 3D model",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 122% + Fit"
+    ],
+    "file" : "A05-flattened-2d.png"
+  },
+  {
+    "bottom_text" : [
+      "Shown as 3D model • Undo restores the 2D drawing",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 122% + Fit"
+    ],
+    "file" : "A06-back-to-3d.png"
+  },
+  {
+    "bottom_text" : [
+      "Original 2D drawing restored",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 122% + Fit"
+    ],
+    "file" : "A07-layout-original.png"
+  },
+  {
+    "bottom_text" : [
+      "Shown as 2D • Undo restores the 3D model",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 122% + Fit"
+    ],
+    "file" : "A08-original-2d.png"
+  },
+  {
+    "bottom_text" : [
+      "History restored",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 122% + Fit"
+    ],
+    "file" : "A09-undo.png"
+  },
+  {
+    "bottom_text" : [
+      "Shown as 2D and 3D • Undo restores the 3D model",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 122% + Fit"
+    ],
+    "file" : "A10-both-122.png"
+  },
+  {
+    "bottom_text" : [
+      "Shown as 2D and 3D • Undo restores the 3D model",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 97% + Fit"
+    ],
+    "file" : "A11-both-97.png"
+  },
+  {
+    "bottom_text" : [
+      "Shown as 2D and 3D • Undo restores the 3D model",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 97% + Fit"
+    ],
+    "file" : "A12-both-deselected.png"
+  },
+  {
+    "bottom_text" : [
+      "History restored",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 97% + Fit"
+    ],
+    "file" : "A13-undo-both.png"
+  },
+  {
+    "bottom_text" : [
+      "History restored",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 97% + Fit"
+    ],
+    "file" : "A14-redo-both.png"
+  },
+  {
+    "bottom_text" : [
+      "History restored",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 97% + Fit"
+    ],
+    "file" : "A15-redo-2d.png"
+  },
+  {
+    "bottom_text" : [
+      "History restored",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 97% + Fit"
+    ],
+    "file" : "A15a-undo-to-3d-original.png"
+  },
+  {
+    "bottom_text" : [
+      "History restored",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 97% + Fit"
+    ],
+    "file" : "A15b-undo-original-restore.png"
+  },
+  {
+    "bottom_text" : [
+      "Shown as 2D and 3D • Undo restores the 3D model",
+      "JACS \/ ACS",
+      "Publication",
+      "View - 97% + Fit"
+    ],
+    "file" : "A16-both-after-redo.png"
+  }
+]
