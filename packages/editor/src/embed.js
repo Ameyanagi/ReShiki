@@ -17,6 +17,12 @@ export function embed(element, options = {}) {
   const ready = new Promise((resolve, reject) => (started = { resolve, reject }));
   // Calls see a failed start; it is not unhandled when nothing else waits.
   ready.catch(() => {});
+  // A frame whose page or scripts fail to load never reports, so stop waiting.
+  const timer = setTimeout(
+    () => started.reject(new Error("The editor frame did not start")),
+    options.timeout ?? 60_000,
+  );
+  ready.finally(() => clearTimeout(timer)).catch(() => {});
 
   const receive = ({ source, origin, data }) => {
     if (source !== frame.contentWindow || origin !== frameUrl.origin) return;

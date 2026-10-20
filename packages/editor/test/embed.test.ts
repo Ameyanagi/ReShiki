@@ -21,3 +21,12 @@ test("destroy before the frame starts settles waiting calls", async () => {
   await expect(editor.load("C", "smiles")).rejects.toThrow("The editor was removed");
   expect(listeners.size).toBe(0);
 });
+
+test("a frame that never starts rejects waiting calls", async () => {
+  const editor = embed(host, { timeout: 10 });
+  const saving = editor.save();
+  await expect(saving).rejects.toThrow("The editor frame did not start");
+  await expect(editor.ready).rejects.toThrow("The editor frame did not start");
+  editor.destroy();
+  expect(listeners.size).toBe(0);
+});

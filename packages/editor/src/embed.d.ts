@@ -8,6 +8,9 @@ export interface EmbedOptions {
   title?: string;
   /** Called after each edit. */
   onChange?: () => void;
+  /** Milliseconds to wait for the frame to start before `ready` and waiting
+   * calls reject; 60000 by default. */
+  timeout?: number;
 }
 
 export interface EmbeddedEditor extends Editor {
