@@ -225,11 +225,15 @@ impl MoleculeCanvas<'_> {
         else {
             return;
         };
-        let (orbit, snaps) = reshiki::scientific::mark_orbit_guide(preview, atom, mark);
+        // The guide and its dots are the committed placements, so the dragged
+        // mark always sits on them; steps blocked by a bond are left out.
+        let (runs, snaps) = reshiki::scientific::mark_orbit_guide(preview, atom, mark);
         let path = Path::new(|b| {
-            for (i, p) in orbit.iter().enumerate() {
-                let p = self.camera.screen(*p, bounds);
-                if i == 0 { b.move_to(p) } else { b.line_to(p) }
+            for run in &runs {
+                for (i, p) in run.iter().enumerate() {
+                    let p = self.camera.screen(*p, bounds);
+                    if i == 0 { b.move_to(p) } else { b.line_to(p) }
+                }
             }
         });
         frame.stroke(
@@ -244,14 +248,9 @@ impl MoleculeCanvas<'_> {
                     .with_color(Color { a: 0.5, ..ACCENT })
             },
         );
-        // Snap ticks sit just outside the orbit, clear of the dragged mark.
-        let center = self.camera.screen(atom.position, bounds);
-        for (i, p) in snaps.into_iter().enumerate() {
+        for p in snaps {
             let p = self.camera.screen(p, bounds);
-            let out = p - center;
-            let out = out * (6. / out.x.hypot(out.y).max(1e-3));
-            let radius = if i % 6 == 0 { 2.2 } else { 1.4 };
-            frame.fill(&Path::circle(p + out, radius), Color { a: 0.7, ..ACCENT });
+            frame.fill(&Path::circle(p, 1.6), Color { a: 0.7, ..ACCENT });
         }
     }
 
