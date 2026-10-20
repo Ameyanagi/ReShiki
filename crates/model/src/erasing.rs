@@ -2,6 +2,7 @@
 use crate::{
     document::{Document, Point},
     graphics::{PathCommand, flattened},
+    models3d::Display,
 };
 
 fn distance(p: Point, a: Point, b: Point) -> f32 {
@@ -64,6 +65,21 @@ pub fn stroke(doc: &mut Document, from: Point, to: Point, radius: f32) {
                 .any(|part| path_hit(&part.commands, from, to, radius))
         {
             ids.push(atom.id);
+        }
+    }
+    // A shown model erases its whole molecule; its hidden 2D drawing stays out of reach.
+    for model in doc.models.iter().filter(|m| m.display != Display::TwoD) {
+        let Some((balls, sticks)) = crate::models3d::balls_and_sticks(doc, model) else {
+            continue;
+        };
+        if balls
+            .iter()
+            .any(|(c, r)| distance(*c, from, to) <= r + radius)
+            || sticks
+                .iter()
+                .any(|(a, b, half)| crossed(from, to, *a, *b, radius + half))
+        {
+            ids.extend(model.atoms.iter().map(|a| a.id));
         }
     }
     ids.extend(

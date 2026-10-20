@@ -794,8 +794,8 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
     out
 }
 
-fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Option<()> {
-    let view = View::new(doc, model)?;
+/// Each stick as a pair of indices into the model's points.
+fn sticks(doc: &Document, model: &Model3d) -> Option<Vec<(usize, usize)>> {
     let index: HashMap<_, _> = model
         .atoms
         .iter()
@@ -810,6 +810,40 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     for (i, h) in model.hydrogens.iter().enumerate() {
         bonds.push((*index.get(&h.parent)?, model.atoms.len() + i));
     }
+    Some(bonds)
+}
+
+/// The model as drawn: each ball's centre and radius, and each stick as its
+/// end points and half width, in drawing units. `None` while an atom is missing.
+#[allow(clippy::type_complexity)]
+pub fn balls_and_sticks(
+    doc: &Document,
+    model: &Model3d,
+) -> Option<(Vec<(Point, f32)>, Vec<(Point, Point, f32)>)> {
+    let view = View::new(doc, model)?;
+    let projected: Vec<_> = view
+        .symbols
+        .iter()
+        .zip(&view.rotated)
+        .map(|(s, p)| {
+            let (q, f) = view.project(*p);
+            (q, f, element(s).1 * view.scale * f)
+        })
+        .collect();
+    let sticks = sticks(doc, model)?
+        .into_iter()
+        .map(|(a, b)| {
+            let (&(pa, fa, _), &(pb, fb, _)) = (projected.get(a)?, projected.get(b)?);
+            Some((pa, pb, BOND_RADIUS * view.scale * fa.max(fb)))
+        })
+        .collect::<Option<_>>()?;
+    let balls = projected.into_iter().map(|(q, _, r)| (q, r)).collect();
+    Some((balls, sticks))
+}
+
+fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Option<()> {
+    let view = View::new(doc, model)?;
+    let bonds = sticks(doc, model)?;
     let (rotated, reach, scale) = (&view.rotated, view.reach, view.scale);
     let project = |p| view.project(p);
     let paper = float(doc.canvas_theme.background());
