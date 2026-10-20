@@ -955,7 +955,11 @@ fn default_end(doc: &Document, arrow: &Arrow, pen: f32) -> Option<Point> {
     let center = anchor.target.center(doc)?;
     let (direction, extra) = match anchor.target {
         Target::Atom { atom } => {
-            let source = arrow.start_anchor.as_ref()?.target.center(doc)?;
+            // A detached start keeps its own point as the source.
+            let source = match &arrow.start_anchor {
+                Some(start) => start.target.center(doc)?,
+                None => arrow.start,
+            };
             let (preferred, back) = arrival_hints(unit(delta(center, source)));
             let style = arrow.appearance();
             open_approach(doc, atom, preferred, back, arrow.start, &style, end_gap())

@@ -1753,3 +1753,17 @@ fn mechanism_attachment_379_an_aimed_end_depends_only_on_its_aim() {
         }
     }
 }
+#[test]
+fn mechanism_attachment_379_aim_after_detaching_the_start_still_clears_bonds() {
+    let (mut d, _, id) = acetone_arrow();
+    // Dragging the Start handle detaches the start but keeps the end.
+    d.arrows
+        .iter_mut()
+        .find(|a| a.id == id)
+        .unwrap()
+        .start_anchor = None;
+    let p = aim(&d, id, 235.);
+    edit_handle(&mut d, id, 4, p);
+    let a = arrow(&d, id);
+    assert!(rendered_head_ink_gap(&d, a) > 0.);
+}
