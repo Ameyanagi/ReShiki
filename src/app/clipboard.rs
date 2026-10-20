@@ -163,6 +163,12 @@ impl App {
                 self.error = true;
                 return Task::none();
             };
+            // The browser may refuse the write, so report its result.
+            #[cfg(target_arch = "wasm32")]
+            return Task::perform(crate::web::write_text(text), move |result| {
+                Message::CopyAsWritten(key.clone(), result.map(|()| copy.notices.clone()))
+            });
+            #[cfg(not(target_arch = "wasm32"))]
             return write_text(text)
                 .chain(Task::done(Message::CopyAsWritten(key, Ok(copy.notices))));
         }
@@ -451,6 +457,10 @@ impl App {
         if reshiki::clipboard::available() {
             return self.paste_native(false);
         }
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.tab.paste_from = Some((self.tab.file_epoch, self.tab.revision));
+        }
         read_text().map(Message::Pasted)
     }
 
@@ -466,6 +476,12 @@ impl App {
     }
 
     pub(super) fn pasted(&mut self, contents: Option<String>) -> Task<Message> {
+        #[cfg(target_arch = "wasm32")]
+        if self.tab.paste_from.take() != Some((self.tab.file_epoch, self.tab.revision)) {
+            self.status =
+                "Drawing changed while reading the clipboard · Paste again to insert here".into();
+            return Task::none();
+        }
         if let Some(contents) = contents.filter(|s| !s.trim().is_empty()) {
             if let Some(json) = editing::clipboard_json(&contents) {
                 match Document::from_json(json.as_bytes()) {
