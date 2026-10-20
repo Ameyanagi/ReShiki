@@ -402,8 +402,27 @@ fn builtin() -> Result<&'static Catalog> {
 /// The bundled catalog merged with the user's groups, when there are any.
 static ACTIVE: RwLock<Option<Catalog>> = RwLock::new(None);
 
+#[cfg(test)]
+thread_local! {
+    /// User groups for one test thread, leaving tests on other threads alone.
+    static TEST_USER: std::cell::RefCell<Option<Catalog>> = const { std::cell::RefCell::new(None) };
+}
+
+/// [`set_user`] for the calling test thread only.
+#[cfg(test)]
+pub(crate) fn set_user_on_thread(text: &str) -> Vec<String> {
+    let (user, errors) = parse(text, true);
+    let merged = merge(builtin().expect("bundled catalog"), user);
+    TEST_USER.with_borrow_mut(|catalog| *catalog = Some(merged));
+    errors
+}
+
 /// The active catalog in detection tie-break order.
 pub fn presets() -> Result<Catalog> {
+    #[cfg(test)]
+    if let Some(catalog) = TEST_USER.with_borrow(Clone::clone) {
+        return Ok(catalog);
+    }
     if let Some(catalog) = ACTIVE
         .read()
         .unwrap_or_else(PoisonError::into_inner)
@@ -446,33 +465,53 @@ fn merge(builtin: &[Arc<Preset>], user: Vec<Preset>) -> Catalog {
     merged.into()
 }
 
-/// Find the group created by a typed spelling. The flag is true for an alias.
-pub fn lookup(text: &str) -> Result<Option<(Arc<Preset>, bool)>> {
+/// How a typed spelling named its group.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Spelling {
+    Label,
+    /// An alias keeps the typed spelling, without a reverse.
+    Alias,
+    /// A reverse spelling (`MeO`) makes the group under its own label (`OMe`).
+    Reverse,
+}
+
+/// Find the group created by a typed spelling.
+pub fn lookup(text: &str) -> Result<Option<(Arc<Preset>, Spelling)>> {
     Ok(lookup_in(&presets()?, text))
 }
 
 /// Find a spelling in the bundled catalog only, ignoring user overrides.
-pub fn lookup_bundled(text: &str) -> Result<Option<(Arc<Preset>, bool)>> {
+pub fn lookup_bundled(text: &str) -> Result<Option<(Arc<Preset>, Spelling)>> {
     Ok(lookup_in(builtin()?, text))
 }
 
-/// User groups win over a bundled label or alias with the same spelling.
-fn lookup_in(catalog: &[Arc<Preset>], text: &str) -> Option<(Arc<Preset>, bool)> {
-    let find = |user: bool| {
+/// User groups win over a bundled label or alias with the same spelling, and
+/// any label or alias wins over a reverse spelling, as CDXML import does.
+fn lookup_in(catalog: &[Arc<Preset>], text: &str) -> Option<(Arc<Preset>, Spelling)> {
+    let find = |user: bool, reverse: bool| {
         catalog
             .iter()
             .filter(|preset| preset.user == user)
             .find_map(|preset| {
-                if preset.label == text {
-                    Some((preset.clone(), false))
-                } else if preset.aliases.iter().any(|alias| alias == text) {
-                    Some((preset.clone(), true))
+                let spelling = if reverse {
+                    (!preset.reverse_label.is_empty() && preset.reverse_label == text)
+                        .then_some(Spelling::Reverse)
+                } else if preset.label == text {
+                    Some(Spelling::Label)
                 } else {
-                    None
-                }
+                    preset
+                        .aliases
+                        .iter()
+                        .any(|alias| alias == text)
+                        .then_some(Spelling::Alias)
+                };
+                spelling.map(|spelling| (preset.clone(), spelling))
             })
     };
-    find(true).or_else(|| find(false))
+    find(true, false)
+        .or_else(|| find(false, false))
+        .or_else(|| find(true, true))
+        .or_else(|| find(false, true))
 }
 
 #[cfg(test)]

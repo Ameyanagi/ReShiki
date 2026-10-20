@@ -70,7 +70,10 @@ unchanged, with a concise message and the explanation under Details.
 
 The parser accepts its supported connected graphs up to 512 atoms. Ambiguous
 names, unsupported or relative/racemic stereo, radicals, polymers, queries and
-disconnected salts are rejected. Reverse naming remains the declared neutral
+disconnected salts are rejected. A salt or mixture name such as `sodium
+chloride` gets its own message, "Salts and mixtures aren't supported yet. Draw
+the ions, or paste SMILES under Import → Structure.", instead of the
+unsupported-or-ambiguous one. Reverse naming remains the declared neutral
 organic subset, up to 64 heavy atoms; comprehensive IUPAC coverage and preferred
 IUPAC name selection are not claimed. See [Local chemical naming](../chemical-naming-rust.md)
 for the existing detailed support limits.

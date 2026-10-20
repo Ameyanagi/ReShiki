@@ -474,6 +474,10 @@ impl Writer<'_> {
             ];
             if !group.alignment.is_auto() {
                 attributes.push(("LabelJustification", group.alignment.cdxml().into()));
+                // ChemDraw 26 keeps an explicit choice only with the node's
+                // LabelDisplay; without it, paste lays the label out again.
+                self.tree
+                    .set(outer, "LabelDisplay", group.alignment.cdxml())?;
             }
             self.text(
                 outer,

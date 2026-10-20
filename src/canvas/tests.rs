@@ -2679,6 +2679,53 @@ fn mechanism_attachment_92_mark_drag_preview_resolves_same_geometry_as_commit() 
 }
 
 #[test]
+fn mechanism_attachment_379_aimed_end_preview_matches_the_commit() {
+    let mut doc = Document::default();
+    let c = doc.add_atom("C", World::new(0., 0.));
+    for (degrees, symbol, order) in [(270f32, "O", 2), (150., "C", 1), (30., "C", 1)] {
+        let (s, k) = degrees.to_radians().sin_cos();
+        let n = doc.add_atom(symbol, World::new(42. * k, 42. * s));
+        doc.add_bond(c, n, order, "plain");
+    }
+    let o = doc.add_atom("O", World::new(-120., 0.));
+    reshiki::scientific::attach(
+        doc.atom_mut(o).unwrap(),
+        reshiki::scientific::SymbolKind::LonePair,
+        World::new(25., 0.),
+    )
+    .unwrap();
+    let source = reshiki::arrow_anchors::pick(&doc, World::new(-95., 0.), 2.).unwrap();
+    let id = reshiki::arrow_anchors::create(
+        &mut doc,
+        &source,
+        &reshiki::arrow_anchors::Pick::Atom(c),
+        reshiki::arrows::Preset::Curved,
+        reshiki::arrows::ArrowStyle::preset(reshiki::arrows::Preset::Curved),
+    )
+    .unwrap();
+    let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+    let canvas = chain_canvas(&doc, ChainMode::Straight);
+    // Drag the arrival square up-left, toward the C=O axis.
+    let end = doc.arrows[0].end;
+    let screen = canvas.camera.screen(end.offset(-11.5, -16.4), bounds);
+    let target = canvas.camera.world(screen, bounds);
+    let state = State {
+        gesture: Some(Gesture::ArrowHandle { id, index: 4 }),
+        cursor: Some(screen),
+        ..Default::default()
+    };
+    let preview = canvas.pointer_preview_document(&state, bounds);
+    let mut committed = doc.clone();
+    reshiki::arrow_anchors::edit_handle(&mut committed, id, 4, target);
+    let _ = reshiki::transaction::reconcile(&mut committed, doc.clone()).unwrap();
+    assert_eq!(preview, committed);
+    // The aimed end backed away from the bond ink rather than staying put.
+    let mut bare = doc.clone();
+    bare.arrows[0].edit_handle(4, target);
+    assert_ne!(preview.arrows[0].end, bare.arrows[0].end);
+}
+
+#[test]
 fn arrow_end_drag_preview_keeps_condition_labels_like_the_commit() {
     let mut doc = Document::default();
     doc.arrows.push(reshiki::document::Arrow::new(

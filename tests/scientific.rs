@@ -108,6 +108,79 @@ fn chemical_marks_follow_atoms_through_move_copy_rotation_and_validation() {
 }
 
 #[test]
+fn circled_charge_marks_draw_smaller_than_their_stored_size() {
+    let extent = |parts: &[reshiki::scientific::Part], index: usize| {
+        let points = reshiki::graphics::flattened(&parts[index].commands).concat();
+        let x = points.iter().map(|q| q.x);
+        x.clone().fold(f32::MIN, f32::max) - x.fold(f32::MAX, f32::min)
+    };
+    let mut doc = Document::default();
+    let id = doc.add_atom("N", p(0., 0.));
+    let atom = doc.atom_mut(id).unwrap();
+    scientific::attach(atom, SymbolKind::Plus, p(0., 0.)).unwrap();
+    atom.marks[0].size_pt = Some(7.5);
+    let plain = scientific::mark_parts(atom);
+    atom.marks[0].kind = MarkKind::CircledCharge;
+    let circled = scientific::mark_parts(atom);
+    assert_eq!(atom.marks[0].size_pt, Some(7.5));
+    // Plain sign spans 0.6 × size; the circled one 0.48 × size inside a 0.8 × size circle.
+    let size = extent(&plain, 0) / 0.6;
+    assert!((extent(&circled, 0) - 0.48 * size).abs() < 1e-3);
+    assert!((extent(&circled, 1) - 0.8 * size).abs() < 0.02 * size);
+    let free = scientific::symbol_parts(SymbolKind::CirclePlus, 1, &GraphicStyle::default());
+    assert!((extent(&free, 1) - 1.04).abs() < 0.02);
+}
+
+#[tokio::test]
+async fn app_drawn_circled_charge_matches_chemdraw_nominal_size() {
+    let circle = |doc: &Document| {
+        let atom = doc.atoms.iter().find(|a| !a.marks.is_empty()).unwrap();
+        let parts = scientific::styled_mark_parts(atom, &doc.drawing_style);
+        let points = reshiki::graphics::flattened(&parts[1].commands).concat();
+        let x = points.iter().map(|q| q.x);
+        (x.clone().fold(f32::MIN, f32::max) - x.fold(f32::MAX, f32::min))
+            / doc.drawing_style.world(1.)
+    };
+    let engine = LocalEngine::default();
+    // ChemDraw stores a 7.5 pt mark (0.75 × the 10 pt label font) for this charge.
+    let chemdraw = engine
+        .request(Request::import(
+            "cdxml",
+            include_str!("fixtures/exported-charge-chemdraw.cdxml"),
+        ))
+        .await
+        .unwrap()
+        .document
+        .unwrap();
+    // A charge drawn in ReShiki stores no size and falls back to the same nominal size.
+    let mut doc = Document::default();
+    let c = doc.add_atom("C", p(0., 0.));
+    let o = doc.add_atom("O", p(doc.drawing_style.bond_length_world, 0.));
+    doc.add_bond(c, o, 1, "plain");
+    let at = doc.atom(o).unwrap().position;
+    drawing(GraphicKind::Symbol(SymbolKind::CircleMinus))
+        .place(&mut doc, at, at, false, 5.)
+        .unwrap();
+    assert_eq!(doc.atom(o).unwrap().marks[0].size_pt, None);
+    assert!((circle(&chemdraw) - 6.).abs() < 0.05);
+    assert!((circle(&doc) - circle(&chemdraw)).abs() < 0.01);
+    // CDXML export writes that nominal size, so ChemDraw shows the same charge.
+    let mut request = Request::molecule("export", doc);
+    request.format = Some("cdxml".into());
+    let xml = engine.request(request).await.unwrap().output.unwrap();
+    let graphic = &xml[xml.find("SymbolType=\"CircleMinus\"").unwrap()..];
+    let bounds = &graphic[graphic.find("BoundingBox=\"").unwrap() + 13..];
+    let v: Vec<f64> = bounds[..bounds.find('"').unwrap()]
+        .split(' ')
+        .map(|n| n.parse().unwrap())
+        .collect();
+    assert!(
+        ((v[0] - v[2]).hypot(v[1] - v[3]) - 7.5).abs() < 1e-3,
+        "{v:?}"
+    );
+}
+
+#[test]
 fn failed_attachment_is_atomic_and_combined_marks_track_two_radicals() {
     let mut doc = Document::default();
     let id = doc.add_atom("C", p(0., 0.));
