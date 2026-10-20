@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ReShiki editors in iframes</title>
+    <style>
+      body {
+        margin: 0;
+        font:
+          14px system-ui,
+          sans-serif;
+      }
+      main {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+        gap: 8px;
+        padding: 8px;
+      }
+      section {
+        height: 520px;
+      }
+      p {
+        margin: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <p>
+      Two editors, each in its own iframe. <button id="copy">Copy left to right</button>
+      <span id="status"></span>
+    </p>
+    <main>
+      <section id="left"></section>
+      <section id="right"></section>
+    </main>
+    <script type="module">
+      import { embed } from "../src/embed.js";
+
+      const status = (text) => (document.getElementById("status").textContent = text);
+      const left = embed(document.getElementById("left"), {
+        onChange: () => status("Left drawing changed"),
+      });
+      const right = embed(document.getElementById("right"));
+      await left.ready;
+      await left.load("CC(=O)Oc1ccccc1C(=O)O", "smiles");
+      document.getElementById("copy").onclick = async () => {
+        await right.load(await left.save("rsk"), "rsk");
+        status("Copied");
+      };
+      Object.assign(window, { left, right });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ReShiki editor demo</title>
+    <style>
+      body {
+        margin: 0;
+        font:
+          14px system-ui,
+          sans-serif;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        height: 100vh;
+      }
+      header,
+      footer {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 12px;
+        background: #f4f4f5;
+      }
+      #editor {
+        min-height: 0;
+      }
+      output {
+        font-family: ui-monospace, monospace;
+        white-space: pre-wrap;
+        max-height: 20vh;
+        overflow: auto;
+        flex: 1 1 100%;
+      }
+      #preview img {
+        max-height: 120px;
+        background: white;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <strong>ReShiki editor</strong>
+      <button id="caffeine">Load caffeine</button>
+      <label
+        >Open file <input id="file" type="file" accept=".rsk,.mol,.sdf,.rxn,.cdxml,.cdx,.smi"
+      /></label>
+      <select id="format">
+        <option>smiles</option>
+        <option>mol</option>
+        <option>inchi</option>
+        <option>cdxml</option>
+        <option>rsk</option>
+      </select>
+      <button id="save">Save as text</button>
+      <button id="svg">Export SVG</button>
+      <button id="png">Export PNG</button>
+      <a href="iframe.html">Two editors in iframes</a>
+    </header>
+    <div id="editor"></div>
+    <footer>
+      <span id="changes">0 changes</span>
+      <span id="preview"></span>
+      <output id="output"></output>
+    </footer>
+    <script type="module">
+      import { mount } from "../src/editor.js";
+
+      const $ = (id) => document.getElementById(id);
+      const show = (text) => ($("output").textContent = text);
+      let changes = 0;
+      const editor = await mount($("editor"), {
+        onChange: () => ($("changes").textContent = `${++changes} changes`),
+      });
+      const run = (action) => () => action().catch((error) => show(`Error: ${error.message}`));
+
+      $("caffeine").onclick = run(() => editor.load("CN1C=NC2=C1C(=O)N(C(=O)N2C)C", "smiles"));
+      $("file").onchange = run(async () => {
+        const file = $("file").files[0];
+        const format = file.name
+          .split(".")
+          .pop()
+          .toLowerCase()
+          .replace(/^(sdf|smi)$/, "auto");
+        await editor.load(new Uint8Array(await file.arrayBuffer()), format);
+      });
+      $("save").onclick = run(async () => show(await editor.save($("format").value)));
+      $("svg").onclick = run(async () => {
+        const svg = await editor.exportImage("svg");
+        const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+        $("preview").innerHTML = `<img alt="SVG export" src="${url}">`;
+      });
+      $("png").onclick = run(async () => {
+        const png = await editor.exportImage("png");
+        const url = URL.createObjectURL(new Blob([png], { type: "image/png" }));
+        $("preview").innerHTML = `<img alt="PNG export" src="${url}">`;
+      });
+      window.editor = editor;
+    </script>
+  </body>
+</html>

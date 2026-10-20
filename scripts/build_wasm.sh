@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Build the headless browser library (crates/web) into packages/editor/dist.
+# Build the headless browser library (crates/web) and the browser editor (the
+# app itself, for wasm32) into packages/editor/dist/{wasm,editor}.
 #
 # Installs the wasm-bindgen CLI that matches Cargo.lock and a pinned binaryen
 # release (for wasm-opt) under the target directory, so no global tools are
@@ -9,7 +10,6 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 target=${CARGO_TARGET_DIR:-$root/target}
 package=$root/packages/editor
-out=$package/dist/wasm
 
 version=$(awk '$0 == "name = \"wasm-bindgen\"" { getline; gsub(/"/, "", $3); print $3 }' \
   "$root/Cargo.lock")
@@ -49,19 +49,21 @@ CARGO_PROFILE_RELEASE_OPT_LEVEL=s \
   CARGO_PROFILE_RELEASE_PANIC=abort \
   CARGO_PROFILE_RELEASE_DEBUG=false \
   CARGO_PROFILE_RELEASE_STRIP=true \
-  cargo build --manifest-path "$root/Cargo.toml" -p reshiki-web \
+  cargo build --manifest-path "$root/Cargo.toml" -p reshiki-web -p reshiki --lib --bin reshiki \
   --target wasm32-unknown-unknown --release --locked
 
 rm -rf "$package/dist"
-"$bindgen" --target web --out-dir "$out" \
-  "$target/wasm32-unknown-unknown/release/reshiki_web.wasm"
-
 # The features are those Rust enables by default for wasm32-unknown-unknown.
-wasm=$out/reshiki_web_bg.wasm
-"$wasm_opt" -Os --strip-debug --strip-producers \
-  --enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext \
-  --enable-mutable-globals --enable-reference-types --enable-multivalue \
-  "$wasm" -o "$wasm"
+for module in reshiki_web:wasm reshiki:editor; do
+  name=${module%%:*}
+  out=$package/dist/${module##*:}
+  "$bindgen" --target web --out-dir "$out" "$target/wasm32-unknown-unknown/release/$name.wasm"
+  wasm=$out/${name}_bg.wasm
+  "$wasm_opt" -Os --strip-debug --strip-producers \
+    --enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext \
+    --enable-mutable-globals --enable-reference-types --enable-multivalue \
+    "$wasm" -o "$wasm"
+done
 
 # The package carries the same license texts and notices as the desktop release.
 metadata=$(mktemp)
@@ -75,9 +77,11 @@ from license_notices import write_notices
 write_notices(Path(sys.argv[2]), Path(sys.argv[3]), json.loads(Path(sys.argv[4]).read_text()))
 ' "$root/scripts" "$root" "$package/dist/licenses" "$metadata"
 
-raw=$(wc -c < "$wasm" | tr -d ' ')
-zipped=$(gzip -9c "$wasm" | wc -c | tr -d ' ')
-echo "reshiki_web_bg.wasm: $raw bytes, $zipped gzip -9"
+for wasm in "$package"/dist/*/*_bg.wasm; do
+  raw=$(wc -c < "$wasm" | tr -d ' ')
+  zipped=$(gzip -9c "$wasm" | wc -c | tr -d ' ')
+  echo "$(basename "$wasm"): $raw bytes, $zipped gzip -9"
+done
 
 if [[ ${1:-} == --test ]]; then
   (cd "$package" && bun test)
