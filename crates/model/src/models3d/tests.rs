@@ -174,6 +174,36 @@ fn copy_and_paste_remap_the_model_with_its_molecule() {
 }
 
 #[test]
+fn a_kept_drawn_layout_is_pasted_with_its_model_and_restores() {
+    let (mut doc, atoms, _) = shown(Display::Both);
+    let original = doc.clone();
+    doc.models[0].drawn = Some(Drawn::of(&doc, &doc.models[0]));
+    for atom in &mut doc.atoms {
+        atom.position = atom.position.offset(5., -3.);
+        atom.depth = 2.;
+    }
+    doc.validate().unwrap();
+
+    let part = editing::selection(&doc, &atoms);
+    let mut pasted = doc.clone();
+    let ids = editing::append(&mut pasted, &part, Point::new(0., 120.));
+    let drawn = pasted.models[1].drawn.as_ref().unwrap();
+    assert!(drawn.atoms.iter().all(|a| ids.contains(&a.0)));
+    assert!(
+        drawn
+            .bonds
+            .iter()
+            .all(|b| ids.contains(&b.0) && ids.contains(&b.1))
+    );
+    pasted.validate().unwrap();
+
+    assert!(restore_drawing(&mut doc, 0));
+    assert_eq!(doc.atoms[..3], original.atoms[..3]);
+    assert_eq!(doc.models[0].drawn, None);
+    assert!(!restore_drawing(&mut doc, 0));
+}
+
+#[test]
 fn initial_view_shows_the_prototype_face_as_a_proper_rotation() {
     let points = [
         [1.4, 0.2, -0.3],
@@ -568,38 +598,143 @@ fn each_ball_covers_its_own_half_bonds_but_not_a_farther_atom() {
 }
 
 #[test]
-fn the_frame_fits_the_projected_balls_with_a_modest_margin() {
-    let (doc, ..) = shown(Display::ThreeD);
-    let model = &doc.models[0];
-    let (lo, hi) = frame(&doc, model).unwrap();
-    let mut ink = (
-        Point::new(f32::MAX, f32::MAX),
-        Point::new(f32::MIN, f32::MIN),
-    );
-    for p in primitives(&doc) {
-        if let Primitive::Sphere { center, radius, .. } = p {
-            ink.0 = Point::new(
-                ink.0.x.min(center.x - radius),
-                ink.0.y.min(center.y - radius),
-            );
-            ink.1 = Point::new(
-                ink.1.x.max(center.x + radius),
-                ink.1.y.max(center.y + radius),
-            );
+fn the_frame_is_a_square_that_holds_the_model_in_every_rotation() {
+    for style in Style::ALL {
+        let (mut doc, atoms, _) = shown(Display::ThreeD);
+        doc.models[0].style = style;
+        // A resized frame keeps its size while the model turns.
+        resize(&mut doc, &atoms, Point::default(), 1.3);
+        let (lo, hi) = frame(&doc, &doc.models[0]).unwrap();
+        assert!(
+            ((hi.x - lo.x) - (hi.y - lo.y)).abs() < 1e-3,
+            "{style:?} {lo:?} {hi:?}"
+        );
+        let mut rotation = doc.models[0].rotation;
+        for step in 0..60 {
+            rotation = turn(rotation, 13., -7. + step as f32 * 0.5, step % 5 == 0);
+            doc.models[0].rotation = rotation;
+            assert_eq!(frame(&doc, &doc.models[0]), Some((lo, hi)), "{style:?}");
+            for p in primitives(&doc) {
+                if let Primitive::Sphere { center, radius, .. } = p {
+                    assert!(
+                        center.x - radius >= lo.x
+                            && center.y - radius >= lo.y
+                            && center.x + radius <= hi.x
+                            && center.y + radius <= hi.y,
+                        "{style:?} {step}: {center:?} {radius} outside {lo:?} {hi:?}"
+                    );
+                }
+            }
+        }
+        // Without perspective the square is as tight as the bounding sphere.
+        doc.models[0].perspective = 0.;
+        let (a, b) = frame(&doc, &doc.models[0]).unwrap();
+        assert!(b.x - a.x < hi.x - lo.x);
+        if style != Style::Wireframe {
+            assert!((b.x - a.x - 0.88 * doc.models[0].size).abs() < 1e-2);
         }
     }
-    let (w, h) = (ink.1.x - ink.0.x, ink.1.y - ink.0.y);
-    let pad = 0.06 * w.max(h);
-    for (frame, ink) in [
-        (lo.x, ink.0.x - pad),
-        (lo.y, ink.0.y - pad),
-        (hi.x, ink.1.x + pad),
-        (hi.y, ink.1.y + pad),
-    ] {
-        assert!((frame - ink).abs() < 1e-3, "{lo:?} {hi:?} {ink:?}");
+}
+
+#[test]
+fn a_drag_turns_like_the_prototype_and_shift_rolls() {
+    let id = [1., 0., 0., 0.];
+    let v = [0.3, -0.7, 1.1];
+    // The prototype: R = rotY(dx·0.01) · rotX(dy·0.01) · R; rolls rotZ(−dx·0.01).
+    let (sy, cy) = 0.1f32.sin_cos();
+    let (sx, cx) = 0.2f32.sin_cos();
+    let x = [v[0], cx * v[1] - sx * v[2], sx * v[1] + cx * v[2]];
+    let expected = [cy * x[0] + sy * x[2], x[1], -sy * x[0] + cy * x[2]];
+    let turned = rotate(turn(id, 10., 20., false), v);
+    assert!(
+        (0..3).all(|i| (turned[i] - expected[i]).abs() < 1e-5),
+        "{turned:?}"
+    );
+    let (sz, cz) = (-0.1f32).sin_cos();
+    let rolled = rotate(turn(id, 10., 20., true), v);
+    let expected = [cz * v[0] - sz * v[1], sz * v[0] + cz * v[1], v[2]];
+    assert!((0..3).all(|i| (rolled[i] - expected[i]).abs() < 1e-5));
+    // Turns compose onto the current view and stay unit quaternions.
+    let mut q = id;
+    for _ in 0..500 {
+        q = turn(q, 7., -3., false);
     }
-    // Much tighter than the reference square that sets the scale.
-    assert!(hi.x - lo.x < model.size && hi.y - lo.y < model.size * 0.8);
+    assert!((q.iter().map(|v| v * v).sum::<f32>() - 1.).abs() < 1e-4);
+    // The opening view is what the model was created with.
+    let (doc, ..) = drawing();
+    assert_eq!(doc.models[0].initial_view(&doc), doc.models[0].rotation);
+}
+
+#[test]
+fn a_corner_resize_scales_the_frame_about_the_pivot_and_keeps_the_drawing() {
+    for display in [Display::ThreeD, Display::Both] {
+        let (mut doc, atoms, methane) = shown(display);
+        let before = doc.clone();
+        let (lo, hi) = frame(&doc, &doc.models[0]).unwrap();
+        let pivot = Point::new(lo.x - 10., lo.y - 4.);
+        assert!(only_shown(&doc, &atoms) && !only_shown(&doc, &[atoms[0], methane]));
+        resize(&mut doc, &atoms, pivot, 1.5);
+        let (a, b) = frame(&doc, &doc.models[0]).unwrap();
+        let scaled = |p: f32, q: f32| q + (p - q) * 1.5;
+        for (got, want) in [
+            (a.x, scaled(lo.x, pivot.x)),
+            (a.y, scaled(lo.y, pivot.y)),
+            (b.x, scaled(hi.x, pivot.x)),
+            (b.y, scaled(hi.y, pivot.y)),
+        ] {
+            assert!((got - want).abs() < 1e-2, "{display:?} {got} {want}");
+        }
+        assert_eq!(doc.atoms, before.atoms);
+        assert_eq!(doc.models[0].rotation, before.models[0].rotation);
+        doc.validate().unwrap();
+    }
+    // A model shown as 2D has no frame to resize; sizes stay in range.
+    let (mut doc, atoms, _) = drawing();
+    let before = doc.clone();
+    resize(&mut doc, &atoms, Point::default(), 3.);
+    assert_eq!(doc, before);
+    let (mut doc, atoms, _) = shown(Display::ThreeD);
+    for _ in 0..20 {
+        resize(&mut doc, &atoms, Point::default(), 20.);
+    }
+    assert_eq!(doc.models[0].size, 1e5);
+    doc.validate().unwrap();
+}
+
+#[test]
+fn the_morph_starts_flat_on_the_drawing_and_ends_on_the_model() {
+    let (mut doc, atoms, _) = shown(Display::ThreeD);
+    let settled = format!("{:?}", primitives(&doc));
+    doc.models[0].morph = Some(1.);
+    assert_eq!(format!("{:?}", primitives(&doc)), settled);
+
+    doc.models[0].morph = Some(0.);
+    let spheres: Vec<_> = primitives(&doc)
+        .into_iter()
+        .filter_map(|p| match p {
+            Primitive::Sphere { center, .. } => Some((center, 1.)),
+            Primitive::Opacity { alpha, primitive } => match *primitive {
+                Primitive::Sphere { center, .. } => Some((center, alpha)),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    assert_eq!(spheres.len(), 5);
+    // Every ball starts on a drawn atom; hydrogens start transparent, so
+    // they never cover the atom they grow out of.
+    for (center, _) in &spheres {
+        assert!(
+            atoms
+                .iter()
+                .any(|id| doc.atom(*id).unwrap().position.distance(*center) < 1e-3),
+            "{center:?} is off the drawing"
+        );
+    }
+    assert_eq!(spheres.iter().filter(|(_, alpha)| *alpha == 0.).count(), 2);
+    // Never saved.
+    let read = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(read.models[0].morph, None);
 }
 
 fn styled(edit: impl Fn(&mut Model3d)) -> (Document, Vec<Primitive>) {

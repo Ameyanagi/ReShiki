@@ -139,6 +139,12 @@ impl MoleculeCanvas<'_> {
             Event::Mouse(mouse::Event::ButtonReleased(_)) => {
                 self.button_released(state, point, bounds, inside)
             }
+            // The morph plays frame by frame without rebuilding the app.
+            Event::Window(iced::window::Event::RedrawRequested(now))
+                if self.morph(*now).is_some() =>
+            {
+                Some(Action::request_redraw())
+            }
             _ => None,
         }
     }
@@ -156,7 +162,10 @@ impl MoleculeCanvas<'_> {
                 drag.handle.cursor()
             };
         }
-        if matches!(state.gesture, Some(Gesture::ArrowHandle { .. })) {
+        if matches!(
+            state.gesture,
+            Some(Gesture::ArrowHandle { .. } | Gesture::Turn(_))
+        ) {
             return mouse::Interaction::Grabbing;
         }
         if let Tool::StretchBond { fixed, moving } = self.tool
@@ -222,6 +231,23 @@ impl MoleculeCanvas<'_> {
                     && let Some(handle) = selection.hit(Point::new(p.x - bounds.x, p.y - bounds.y))
                 {
                     return handle.cursor();
+                }
+                if let Some(p) = cursor.position_in(bounds) {
+                    if let Some(bar) = self.model_bar(state, bounds)
+                        && bar.contains(p)
+                    {
+                        return if bar.button(p).is_some() {
+                            mouse::Interaction::Pointer
+                        } else {
+                            mouse::Interaction::default()
+                        };
+                    }
+                    if self
+                        .turn_target(state, self.camera.world(p, bounds))
+                        .is_some()
+                    {
+                        return mouse::Interaction::Grab;
+                    }
                 }
                 mouse::Interaction::default()
             } else {

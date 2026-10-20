@@ -38,8 +38,12 @@ pub(super) struct SelectionBox {
     pub pivot: World,
     camera: Camera,
     bounds: Rectangle,
-    /// Models shown in 3D or beside their drawing do not resize yet.
+    /// Corner handles resize the drawing, or the frames of `models`.
     resizable: bool,
+    /// The selection is only molecules shown as 3D models: corners resize
+    /// their frames and there are no edge handles. A drawing mixed with shown
+    /// models does not resize at all.
+    models: bool,
 }
 
 impl SelectionBox {
@@ -47,7 +51,8 @@ impl SelectionBox {
         if ids.is_empty() {
             return None;
         }
-        if matches!(ids, [id] if doc.atom(*id).is_some()) {
+        let models = reshiki::models3d::only_shown(doc, ids);
+        if !models && matches!(ids, [id] if doc.atom(*id).is_some()) {
             return None;
         }
         let (lo, hi) = scene::selection_bounds(doc, ids)?;
@@ -57,7 +62,8 @@ impl SelectionBox {
             pivot: editing::rotation_center(doc, ids).unwrap_or_else(|| editing::center(doc, ids)),
             camera,
             bounds,
-            resizable: !reshiki::models3d::shows_3d(doc, ids),
+            resizable: models || !reshiki::models3d::shows_3d(doc, ids),
+            models,
         })
     }
 
@@ -111,7 +117,7 @@ impl SelectionBox {
     }
 
     fn edge_enabled(self, edge: usize) -> bool {
-        if !self.resizable {
+        if !self.resizable || self.models {
             return false;
         }
         let [a, _, c, _] = self.corners;
@@ -251,6 +257,10 @@ impl TransformDrag {
         }
     }
 
+    pub fn resizes_models(&self) -> bool {
+        self.selection.models && matches!(self.handle, Handle::Resize(_))
+    }
+
     pub fn track_pointer(&mut self, end: World, zoom: f32) {
         self.moved |= self.start.distance(end) * zoom >= 1.;
     }
@@ -316,6 +326,8 @@ impl TransformDrag {
                 (scale, 1.)
             };
             editing::scale_axes_about(doc, &self.ids, self.pivot, x, y);
+        } else if self.resizes_models() {
+            reshiki::models3d::resize(doc, &self.ids, self.pivot, scale);
         } else {
             editing::transform_about(doc, &self.ids, self.pivot, scale, rotation);
         }
@@ -334,6 +346,12 @@ impl TransformDrag {
                 pivot: self.pivot,
                 x,
                 y,
+            }
+        } else if self.resizes_models() {
+            super::Edit::ResizeModels {
+                ids: self.ids,
+                pivot: self.pivot,
+                scale,
             }
         } else {
             super::Edit::Transform {

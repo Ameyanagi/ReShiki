@@ -1,252 +1,354 @@
 use super::*;
+use crate::canvas::{Camera, Gesture, Handle, SelectionBox, Tool, tests::chain_canvas};
+use iced::{Event, keyboard::Modifiers, mouse, widget::canvas::Program};
+use reshiki::chains::ChainMode;
 use reshiki::document::Document;
-use reshiki::models3d::{Display, ForceField, Model3d, Placed, Style, set_display};
-use std::collections::HashMap;
+use reshiki::models3d::{ForceField, Hydrogen, Model3d, Placed};
 
-/// Ethanol at `x`, shown only as a 3D model.
-fn add_ethanol(doc: &mut Document, x: f32) {
-    let c1 = doc.add_atom("C", World::new(x, 0.));
-    let c2 = doc.add_atom("C", World::new(x + 36., -21.));
-    let o = doc.add_atom("O", World::new(x + 72., 0.));
+/// Ethanol shown as a 3D model in place, and a separate methane.
+fn drawing() -> (Document, Vec<u64>) {
+    let mut doc = Document::default();
+    let c1 = doc.add_atom("C", World::new(300., 300.));
+    let c2 = doc.add_atom("C", World::new(336., 279.));
+    let o = doc.add_atom("O", World::new(372., 300.));
     doc.add_bond(c1, c2, 1, "plain");
     doc.add_bond(c2, o, 1, "plain");
-    let atoms = [
-        (c1, [-1.2, -0.2, 0.1]),
-        (c2, [0.1, 0.5, -0.1]),
-        (o, [1.2, -0.3, 0.2]),
-    ]
-    .map(|(id, xyz)| Placed { id, xyz })
-    .to_vec();
-    doc.models
-        .push(Model3d::new(doc, atoms, vec![], ForceField::Mmff94s));
-    set_display(doc, doc.models.len() - 1, Display::ThreeD);
+    doc.add_atom("C", World::new(600., 300.));
+    let placed = |id, xyz| Placed { id, xyz };
+    let model = Model3d::new(
+        &doc,
+        vec![
+            placed(c1, [-1.2, -0.2, 0.1]),
+            placed(c2, [0.1, 0.5, -0.1]),
+            placed(o, [1.2, -0.3, 0.2]),
+        ],
+        vec![Hydrogen {
+            parent: c1,
+            xyz: [-2.0, 0.4, 0.5],
+        }],
+        ForceField::Mmff94s,
+    );
+    doc.models.push(model);
+    doc.require_version(reshiki::document::MODELS_3D);
+    assert!(models3d::set_display(&mut doc, 0, Display::ThreeD));
+    (doc, vec![c1, c2, o])
 }
 
-/// Ethanol shown only as a 3D model, in `style`.
-fn model(style: Style) -> Document {
-    let mut doc = Document::default();
-    add_ethanol(&mut doc, 0.);
-    doc.models[0].style = style;
-    doc
-}
+const BOUNDS: Rectangle = Rectangle {
+    x: 0.,
+    y: 0.,
+    width: 800.,
+    height: 600.,
+};
 
-/// The canvas image of a model is the figure export's rendering of it, and
-/// smooth at 400%: no banding rings inside the balls.
-#[test]
-fn model_images_match_figure_export_and_are_smooth() {
-    for style in Style::ALL {
-        let doc = model(style);
-        let run = scene::primitives(&doc);
-        assert!(run.iter().all(is_model), "{style:?}");
-        let (lo, hi) = scene::bounds(&run);
-        let scale = 4. * OVERSAMPLE;
-        let (width, height) = (
-            ((hi.x - lo.x) * scale).ceil() as u32,
-            ((hi.y - lo.y) * scale).ceil() as u32,
-        );
-        let canvas = pixels(&run, lo, scale, width, height).unwrap();
-
-        let tree = resvg::usvg::Tree::from_str(&scene::svg(&doc), &Default::default()).unwrap();
-        let mut export = resvg::tiny_skia::Pixmap::new(width, height).unwrap();
-        // The export SVG is sized in points over the same view box.
-        let points = tree.size().width() / (hi.x - lo.x);
-        resvg::render(
-            &tree,
-            resvg::tiny_skia::Transform::from_scale(scale / points, scale / points),
-            &mut export.as_mut(),
-        );
-        let worst = canvas
-            .chunks(4)
-            .zip(export.pixels())
-            .flat_map(|(a, b)| {
-                let b = b.demultiply();
-                a.iter()
-                    .zip([b.red(), b.green(), b.blue(), b.alpha()])
-                    .map(|(a, b)| a.abs_diff(b))
-                    .collect::<Vec<_>>()
-            })
-            .max()
-            .unwrap();
-        // Anti-aliased edges may round differently under the two transforms.
-        assert!(
-            worst <= 6,
-            "{style:?}: canvas differs from export by {worst}"
-        );
-
-        // Across the front ball's middle row, neighbouring pixels differ by
-        // at most a few levels: the gradient is continuous.
-        let front = run.iter().rev().find_map(|p| match p {
-            Primitive::Sphere { center, radius, .. } => Some((center, radius)),
-            _ => None,
-        });
-        if let Some((center, radius)) = front {
-            let y = ((center.y - lo.y) * scale) as u32;
-            let (from, to) = (
-                ((center.x - radius * 0.85 - lo.x) * scale) as u32,
-                ((center.x + radius * 0.85 - lo.x) * scale) as u32,
-            );
-            let row = |x: u32| &canvas[((y * width + x) * 4) as usize..][..3];
-            for x in from..to {
-                let step = row(x)
-                    .iter()
-                    .zip(row(x + 1))
-                    .map(|(a, b)| a.abs_diff(*b))
-                    .max()
-                    .unwrap();
-                assert!(step <= 4, "{style:?}: step {step} at {x}");
-            }
-        }
+fn canvas<'a>(doc: &'a Document, selected: &'a [u64]) -> MoleculeCanvas<'a> {
+    MoleculeCanvas {
+        tool: Tool::Select,
+        selected,
+        camera: Camera {
+            center: World::new(400., 300.),
+            zoom: 1.,
+        },
+        ..chain_canvas(doc, ChainMode::Straight)
     }
 }
 
-/// A model zoomed in far enough for a multi-megabyte image appears in the
-/// first frame, not after iced's background upload, and is drawn whole.
-#[tokio::test]
-#[ignore = "Opt-in real renderer 3D model image check"]
-async fn a_zoomed_model_appears_in_its_first_frame() {
-    use iced::advanced::Renderer as _;
-    use iced::advanced::graphics::geometry::Renderer as _;
-    use iced::advanced::renderer::Headless;
-    let mut renderer = <iced::Renderer as Headless>::new(
-        iced::Font::with_name(reshiki::style::ui_font_family()),
-        iced::Pixels(16.),
-        None,
-    )
-    .await
-    .expect("Headless renderer");
-    let doc = model(Style::SpaceFilling);
-    let (lo, hi) = reshiki::models3d::frame(&doc, &doc.models[0]).unwrap();
-    let bounds = Rectangle::with_size(Size::new(640., 400.));
-    let camera = Camera {
-        center: World::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.),
-        zoom: 6.,
-    };
-    let mut render = || {
-        renderer.reset(bounds);
-        let mut frame = layered::Frame::new(&renderer, bounds.size());
-        frame.fill_rectangle(Point::ORIGIN, bounds.size(), iced::Color::WHITE);
-        super::super::render::draw_primitives(
-            &mut frame,
-            &scene::primitives(&doc),
-            camera,
-            bounds,
-            0.,
-        );
-        for geometry in frame.finish() {
-            renderer.draw_geometry(geometry);
+fn send(canvas: &MoleculeCanvas<'_>, state: &mut State, event: Event) -> Option<Edit> {
+    canvas
+        .update(state, &event, BOUNDS, mouse::Cursor::Unavailable)
+        .and_then(|action| action.into_inner().0)
+}
+
+fn moved(position: Point) -> Event {
+    Event::Mouse(mouse::Event::CursorMoved { position })
+}
+const PRESS: Event = Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
+const RELEASE: Event = Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left));
+
+fn frame_center(canvas: &MoleculeCanvas<'_>) -> Point {
+    let (lo, hi) = models3d::frame(canvas.doc, &canvas.doc.models[0]).unwrap();
+    canvas
+        .camera
+        .screen(World::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.), BOUNDS)
+}
+
+/// Press at `from`, move through `path`, release at the last point.
+fn drag(
+    canvas: &MoleculeCanvas<'_>,
+    state: &mut State,
+    from: Point,
+    path: &[Point],
+) -> (Option<[f32; 4]>, Option<Edit>) {
+    send(canvas, state, moved(from));
+    send(canvas, state, PRESS);
+    let mut preview = None;
+    for p in path {
+        send(canvas, state, moved(*p));
+        if let Some(Gesture::Turn(turn)) = &state.gesture {
+            let mut doc = canvas.doc.clone();
+            preview_turn(&mut doc, turn, *p, state.modifiers.shift());
+            preview = Some(doc.models[0].rotation);
         }
-        Headless::screenshot(&mut renderer, Size::new(1280, 800), 2., iced::Color::WHITE)
-    };
-    let cold = render();
-    assert!(
-        cold.chunks(4).any(|p| p[0] < 200),
-        "the model is drawn in the first frame"
-    );
-    assert_eq!(cold, render(), "cold and warm frames match");
-}
-
-/// Tiles sit on a grid fixed to the drawing: a pan reuses the tiles still in
-/// view, the gap between two models has none, and editing one model leaves
-/// the other's tiles cached.
-#[test]
-fn tiles_survive_a_pan_and_another_models_edit() {
-    let mut doc = Document::default();
-    add_ethanol(&mut doc, 0.);
-    add_ethanol(&mut doc, 600.);
-    let bounds = Rectangle::with_size(Size::new(1600., 900.));
-    let camera = Camera {
-        center: World::new(300., 0.),
-        zoom: 1.5,
-    };
-    let keys = |doc: &Document, camera| -> HashMap<_, _> {
-        plan(&scene::primitives(doc), camera, bounds)
-            .into_iter()
-            .map(|tile| (tile.rect, tile.key))
-            .collect()
-    };
-    let before = keys(&doc, camera);
-    let panned = Camera {
-        center: World::new(313.7, 5.3),
-        ..camera
-    };
-    assert_eq!(keys(&doc, panned), before);
-    let middle = (300. * camera.zoom * OVERSAMPLE) as i64;
-    assert!(
-        before.keys().all(|r| r[2] < middle || r[0] > middle),
-        "no tile spans the gap: {before:?}"
-    );
-
-    doc.models[1].rotation = [0., 0., 1., 0.];
-    let edited = keys(&doc, camera);
-    let left = |keys: &HashMap<[i64; 4], u64>| -> Vec<_> {
-        let mut left: Vec<_> = keys.iter().filter(|(r, _)| r[2] < middle).collect();
-        left.sort();
-        left.into_iter().map(|(r, k)| (*r, *k)).collect()
-    };
-    assert!(!left(&before).is_empty());
-    assert_eq!(left(&edited), left(&before));
-    assert_ne!(edited, before);
-}
-
-#[test]
-fn the_tile_cache_keeps_to_its_budget() {
-    let mut cache = Cache::default();
-    let bytes = (TILE * TILE * 4) as usize;
-    let count = (BUDGET / bytes + 20) as u64;
-    for key in 0..count {
-        let tile = cache.get(key, [TILE as u32; 2], || Some(vec![0; bytes]));
-        assert!(tile.is_some() && cache.bytes <= BUDGET);
-        // The first tile stays in use, so it outlives the ones after it.
-        let _ = cache.get(0, [TILE as u32; 2], || None);
     }
-    assert!(cache.tiles.contains_key(&0) && cache.tiles.contains_key(&(count - 1)));
-    assert!(!cache.tiles.contains_key(&1));
+    (preview, send(canvas, state, RELEASE))
 }
 
-/// Tiles render only the primitives reaching them, yet each matches the
-/// whole model rendered over it, and no ink lies outside them.
 #[test]
-fn tiles_together_match_the_whole_model() {
-    for style in Style::ALL {
-        let doc = model(style);
-        let run = scene::primitives(&doc);
-        let (lo, hi) = scene::bounds(&run);
-        let camera = Camera {
-            center: World::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.),
-            zoom: 6.,
+fn dragging_a_selected_model_turns_it_and_the_preview_is_the_commit() {
+    let (doc, atoms) = drawing();
+    let canvas = canvas(&doc, &atoms);
+    let start = doc.models[0].rotation;
+    let c = frame_center(&canvas);
+    for roll in [false, true] {
+        let mut state = State {
+            modifiers: if roll {
+                Modifiers::SHIFT
+            } else {
+                Modifiers::default()
+            },
+            ..Default::default()
         };
-        let tiles = plan(&run, camera, Rectangle::with_size(Size::new(2000., 2000.)));
-        assert!(tiles.len() > 4, "{style:?}");
-        let scale = camera.zoom * OVERSAMPLE;
-        let world = |x: i64, y: i64| World::new(x as f32 / scale, y as f32 / scale);
-        for tile in &tiles {
-            let [x0, y0, x1, y1] = tile.rect;
-            let part: Vec<_> = tile.parts.iter().map(|&i| run[i].clone()).collect();
-            let size = ((x1 - x0) as u32, (y1 - y0) as u32);
-            let image = pixels(&part, world(x0, y0), scale, size.0, size.1).unwrap();
-            let whole = pixels(&run, world(x0, y0), scale, size.0, size.1).unwrap();
-            assert_eq!(image, whole, "{style:?} {:?}", tile.rect);
-        }
-        // Every inked pixel of the model lies in some tile.
-        let (x, y) = (
-            (lo.x * scale).floor() as i64 - 4,
-            (lo.y * scale).floor() as i64 - 4,
-        );
-        let (w, h) = (
-            ((hi.x - lo.x) * scale) as u32 + 8,
-            ((hi.y - lo.y) * scale) as u32 + 8,
-        );
-        let whole = pixels(&run, world(x, y), scale, w, h).unwrap();
-        for (i, pixel) in whole.chunks(4).enumerate() {
-            let (px, py) = (x + (i as u32 % w) as i64, y + (i as u32 / w) as i64);
-            assert!(
-                pixel[3] == 0
-                    || tiles.iter().any(|t| {
-                        let [x0, y0, x1, y1] = t.rect;
-                        (x0..x1).contains(&px) && (y0..y1).contains(&py)
-                    }),
-                "{style:?}: ink outside the tiles at {px},{py}"
-            );
-        }
+        let path = [
+            c + Vector::new(1., 0.),
+            c + Vector::new(20., 6.),
+            c + Vector::new(31., -4.),
+        ];
+        let (preview, edit) = drag(&canvas, &mut state, c, &path);
+        let Some(Edit::ModelView {
+            atoms: turned,
+            rotation,
+        }) = edit
+        else {
+            panic!("{edit:?}");
+        };
+        assert_eq!(turned, atoms);
+        assert_eq!(preview, Some(rotation), "the preview is the commit");
+        // Within the slop nothing turns; then each step turns from the last.
+        let expected = models3d::turn(models3d::turn(start, 20., 6., roll), 11., -10., roll);
+        assert_eq!(rotation, expected);
     }
+}
+
+#[test]
+fn an_unselected_model_or_its_edge_moves_and_alt_or_copy_drags_move() {
+    let (mut doc, atoms) = drawing();
+    let text = doc.next_id();
+    doc.annotations.push(reshiki::document::Annotation {
+        id: text,
+        position: World::new(100., 100.),
+        text: "Note".into(),
+        format: Default::default(),
+    });
+    let with_text = [atoms.clone(), vec![text]].concat();
+    let (lo, _) = models3d::frame(&doc, &doc.models[0]).unwrap();
+    let edge = canvas(&doc, &atoms)
+        .camera
+        .screen(lo.offset(3., 30.), BOUNDS);
+    for (selected, from, modifiers) in [
+        (&[][..], None, Modifiers::default()),
+        // The model with another object moves the whole selection.
+        (&with_text[..], None, Modifiers::default()),
+        (&atoms[..], Some(edge), Modifiers::default()),
+        (&atoms[..], None, Modifiers::ALT),
+        (&atoms[..], None, Modifiers::COMMAND),
+    ] {
+        let canvas = canvas(&doc, selected);
+        let from = from.unwrap_or_else(|| frame_center(&canvas));
+        let mut state = State {
+            modifiers,
+            ..Default::default()
+        };
+        send(&canvas, &mut state, moved(from));
+        send(&canvas, &mut state, PRESS);
+        assert!(
+            matches!(state.gesture, Some(Gesture::Move { .. })),
+            "{selected:?} {modifiers:?}"
+        );
+    }
+}
+
+#[test]
+fn a_double_click_restores_the_opening_view() {
+    let (mut doc, atoms) = drawing();
+    let opening = doc.models[0].rotation;
+    doc.models[0].rotation = models3d::turn(opening, 50., 20., false);
+    let canvas = canvas(&doc, &atoms);
+    let c = frame_center(&canvas);
+    let mut state = State::default();
+    let (_, first) = drag(&canvas, &mut state, c, &[]);
+    assert!(
+        matches!(first, Some(Edit::Select(_) | Edit::SelectAt(..))),
+        "{first:?}"
+    );
+    let (_, second) = drag(&canvas, &mut state, c, &[]);
+    let Some(Edit::ModelView { rotation, .. }) = second else {
+        panic!("{second:?}");
+    };
+    assert_eq!(rotation, opening);
+}
+
+#[test]
+fn corner_handles_resize_the_frame_and_edges_are_hidden() {
+    let (doc, atoms) = drawing();
+    let canvas = canvas(&doc, &atoms);
+    let selection = SelectionBox::new(&doc, &atoms, canvas.camera, BOUNDS).unwrap();
+    let (lo, hi) = reshiki::scene::selection_bounds(&doc, &atoms).unwrap();
+    let corner = canvas.camera.screen(hi, BOUNDS) + Vector::new(12., 12.);
+    assert_eq!(selection.hit(corner), Some(Handle::Resize(2)));
+    let bottom = canvas
+        .camera
+        .screen(World::new((lo.x + hi.x) / 2., hi.y), BOUNDS)
+        + Vector::new(0., 12.);
+    assert_eq!(selection.hit(bottom), None, "no edge handles");
+
+    let mut state = State::default();
+    send(&canvas, &mut state, moved(corner));
+    send(&canvas, &mut state, PRESS);
+    let end = corner + Vector::new(40., 40.);
+    send(&canvas, &mut state, moved(end));
+    let Some(Gesture::Transform(drag)) = &state.gesture else {
+        panic!("{:?}", state.gesture);
+    };
+    let mut preview = doc.clone();
+    drag.apply(&mut preview, canvas.camera.world(end, BOUNDS), false);
+    let Some(Edit::ResizeModels { ids, pivot, scale }) = send(&canvas, &mut state, RELEASE) else {
+        panic!("a corner drag resizes the model");
+    };
+    let mut committed = doc.clone();
+    models3d::resize(&mut committed, &ids, pivot, scale);
+    assert_eq!(preview, committed);
+    assert!(scale > 1. && committed.models[0].size > doc.models[0].size);
+    assert_eq!(committed.atoms, doc.atoms);
+
+    // A shown model mixed with another object still has no resize handles.
+    let mixed = [atoms.clone(), vec![doc.atoms[3].id]].concat();
+    let selection = SelectionBox::new(&doc, &mixed, canvas.camera, BOUNDS).unwrap();
+    let (_, hi) = reshiki::scene::selection_bounds(&doc, &mixed).unwrap();
+    let corner = canvas.camera.screen(hi, BOUNDS) + Vector::new(12., 12.);
+    assert_eq!(selection.hit(corner), None);
+
+    // A model of one drawn atom (methane) resizes too.
+    let mut doc = Document::default();
+    let c = doc.add_atom("C", World::new(300., 300.));
+    let h = |xyz| Hydrogen { parent: c, xyz };
+    let hydrogens = vec![
+        h([0.6, 0.6, 0.6]),
+        h([-0.6, -0.6, 0.6]),
+        h([-0.6, 0.6, -0.6]),
+        h([0.6, -0.6, -0.6]),
+    ];
+    let placed = vec![Placed {
+        id: c,
+        xyz: [0.; 3],
+    }];
+    doc.models
+        .push(Model3d::new(&doc, placed, hydrogens, ForceField::Mmff94s));
+    doc.require_version(reshiki::document::MODELS_3D);
+    assert!(models3d::set_display(&mut doc, 0, Display::ThreeD));
+    let selection = SelectionBox::new(&doc, &[c], canvas.camera, BOUNDS).unwrap();
+    let (_, hi) = reshiki::scene::selection_bounds(&doc, &[c]).unwrap();
+    let corner = canvas.camera.screen(hi, BOUNDS) + Vector::new(12., 12.);
+    assert_eq!(selection.hit(corner), Some(Handle::Resize(2)));
+}
+
+#[test]
+fn the_bar_sits_clear_of_the_selection_hides_while_dragging_and_picks_a_display() {
+    let (doc, atoms) = drawing();
+    let mut canvas = canvas(&doc, &atoms);
+    let state = State::default();
+    assert!(canvas.model_bar(&state, BOUNDS).is_none());
+    canvas.model_bar = Some(Display::ThreeD);
+    let bar = canvas.model_bar(&state, BOUNDS).unwrap();
+    let (lo, hi) = reshiki::scene::selection_bounds(&doc, &atoms).unwrap();
+    let (lo, hi) = (
+        canvas.camera.screen(lo, BOUNDS),
+        canvas.camera.screen(hi, BOUNDS),
+    );
+    // Clear of the box, its grips and the rotation handle above them.
+    assert!(bar.panel.y + bar.panel.height < lo.y - 12. - 34.);
+    assert!(bar.panel.x >= 0. && bar.panel.x + bar.panel.width <= BOUNDS.width);
+    assert!(lo.x < bar.panel.center_x() && bar.panel.center_x() < hi.x);
+
+    let mut state = State::default();
+    let two_d = bar.buttons[0].2.center();
+    send(&canvas, &mut state, moved(two_d));
+    assert_eq!(
+        canvas.pointer_interaction(&state, BOUNDS, mouse::Cursor::Available(two_d)),
+        mouse::Interaction::Pointer
+    );
+    let edit = send(&canvas, &mut state, PRESS);
+    assert!(
+        matches!(edit, Some(Edit::ShowAs(Display::TwoD))),
+        "{edit:?}"
+    );
+    assert!(state.gesture.is_none());
+    // The active button does nothing.
+    send(&canvas, &mut state, RELEASE);
+    send(&canvas, &mut state, moved(bar.buttons[1].2.center()));
+    assert!(send(&canvas, &mut state, PRESS).is_none());
+    assert!(state.gesture.is_none());
+    send(&canvas, &mut state, RELEASE);
+
+    // While the model turns, the bar is gone.
+    send(&canvas, &mut state, moved(frame_center(&canvas)));
+    send(&canvas, &mut state, PRESS);
+    assert!(matches!(state.gesture, Some(Gesture::Turn(_))));
+    assert!(canvas.model_bar(&state, BOUNDS).is_none());
+
+    // With no room above, it goes below the selection.
+    let mut low = canvas;
+    low.camera.center = World::new(400., 480.);
+    let bar = low.model_bar(&State::default(), BOUNDS).unwrap();
+    let (_, hi) = reshiki::scene::selection_bounds(&doc, &atoms).unwrap();
+    assert!(bar.panel.y > low.camera.screen(hi, BOUNDS).y + 12.);
+}
+
+#[test]
+fn the_bar_stays_on_the_paper_when_the_selection_fills_it() {
+    let (doc, atoms) = drawing();
+    let mut canvas = canvas(&doc, &atoms);
+    canvas.model_bar = Some(Display::ThreeD);
+    let (lo, hi) = reshiki::scene::selection_bounds(&doc, &atoms).unwrap();
+    canvas.camera.center = World::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+    canvas.camera.zoom = 1.2 * BOUNDS.height / (hi.y - lo.y);
+    let (top, bottom) = (
+        canvas.camera.screen(lo, BOUNDS).y,
+        canvas.camera.screen(hi, BOUNDS).y,
+    );
+    assert!(top < 0. && bottom > BOUNDS.height, "{top} {bottom}");
+    let bar = canvas.model_bar(&State::default(), BOUNDS).unwrap();
+    assert!(bar.panel.y >= 0., "{:?}", bar.panel);
+    assert!(
+        bar.panel.y + bar.panel.height <= BOUNDS.height,
+        "{:?}",
+        bar.panel
+    );
+    for (_, _, button) in &bar.buttons {
+        assert!(bar.panel.contains(button.center()));
+    }
+}
+
+#[test]
+fn the_morph_redraws_until_it_ends() {
+    let (doc, atoms) = drawing();
+    let mut canvas = canvas(&doc, &atoms);
+    let now = Instant::now();
+    let redraw = |canvas: &MoleculeCanvas<'_>, at| {
+        canvas
+            .update(
+                &mut State::default(),
+                &Event::Window(iced::window::Event::RedrawRequested(at)),
+                BOUNDS,
+                mouse::Cursor::Unavailable,
+            )
+            .is_some()
+    };
+    assert!(!redraw(&canvas, now));
+    canvas.morph = Some((atoms[0], now));
+    assert!(redraw(&canvas, now + MORPH / 2));
+    assert_eq!(
+        canvas.morph(now + MORPH / 2).map(|(id, _)| id),
+        Some(atoms[0])
+    );
+    assert!(!redraw(&canvas, now + MORPH));
 }

@@ -382,7 +382,9 @@ fn completion(message: &Message) -> Option<Completion> {
             super::models3d::Action::Generated(..) => Some(Completion::Models3d),
             super::models3d::Action::Show(..)
             | super::models3d::Action::Set(..)
-            | super::models3d::Action::SlideEnd => None,
+            | super::models3d::Action::SlideEnd
+            | super::models3d::Action::Flatten
+            | super::models3d::Action::Layout(..) => None,
         },
         Message::Optimization(action) => {
             use super::optimization::Action;

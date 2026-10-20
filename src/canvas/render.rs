@@ -51,6 +51,20 @@ fn draw_primitives_with_opacity(
     };
     for (i, primitive) in primitives.iter().enumerate() {
         match primitive {
+            // Each run of model primitives, a fading one included, is drawn
+            // once, from its first, as image tiles.
+            p if models3d::is_model(p) => {
+                if !i
+                    .checked_sub(1)
+                    .and_then(|j| primitives.get(j))
+                    .is_some_and(models3d::is_model)
+                {
+                    let rest = primitives.get(i..).unwrap_or_default();
+                    let run = rest.iter().take_while(|p| models3d::is_model(p)).count();
+                    let run = rest.get(..run).unwrap_or_default();
+                    models3d::draw(frame, run, camera, bounds, opacity);
+                }
+            }
             Primitive::Opacity { alpha, primitive } => draw_primitives_with_opacity(
                 frame,
                 std::slice::from_ref(primitive.as_ref()),
@@ -117,19 +131,7 @@ fn draw_primitives_with_opacity(
             Primitive::Sphere { .. }
             | Primitive::ShadedQuad { .. }
             | Primitive::Wire { .. }
-            | Primitive::Card { .. } => {
-                // Each run of model primitives is drawn once, from its first.
-                let rest = primitives.get(i..).unwrap_or_default();
-                if !i
-                    .checked_sub(1)
-                    .and_then(|j| primitives.get(j))
-                    .is_some_and(models3d::is_model)
-                {
-                    let run = rest.iter().take_while(|p| models3d::is_model(p)).count();
-                    let run = rest.get(..run).unwrap_or_default();
-                    models3d::draw(frame, run, camera, bounds, opacity);
-                }
-            }
+            | Primitive::Card { .. } => {}
             Primitive::Line(a, b, width) => frame.stroke(
                 &Path::line(camera.screen(*a, bounds), camera.screen(*b, bounds)),
                 Stroke::default()

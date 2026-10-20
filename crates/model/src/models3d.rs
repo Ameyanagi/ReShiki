@@ -9,7 +9,8 @@
 //! instead of repairing it; a molecule shown in 3D then shows its 2D drawing.
 //! Chemical formats (MOL, CDX/CDXML, SMILES) keep the 2D atoms and omit models.
 use crate::{
-    document::{Atom, Bond, Document, Point},
+    depth_appearance::Scope,
+    document::{Atom, AtomStereo, Bond, Document, Point},
     scene::{Outline, Primitive},
 };
 use serde::{Deserialize, Serialize};
@@ -26,6 +27,17 @@ pub enum Display {
     ThreeD,
     /// The 2D drawing with the model beside it.
     Both,
+}
+
+/// The 2D layout a molecule's 2D buttons show.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Layout {
+    /// The layout as drawn.
+    #[default]
+    Original,
+    /// The model flattened as it is turned now, far bonds lighter.
+    View,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -141,9 +153,105 @@ pub struct Model3d {
     #[serde(default)]
     pub background: Background,
     pub force_field: ForceField,
+    #[serde(default, skip_serializing_if = "is_original")]
+    pub layout: Layout,
+    /// The layout as drawn, kept while the drawing is flattened from the model
+    /// so that choosing the original drawing brings it back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drawn: Option<Drawn>,
+    /// Progress of the 2D → 3D morph in 0..1, set only on the canvas's
+    /// drawing copy while it plays; never saved.
+    #[serde(skip)]
+    pub morph: Option<f32>,
+}
+fn is_original(layout: &Layout) -> bool {
+    *layout == Layout::Original
 }
 fn depth_fade() -> f32 {
     0.35
+}
+
+/// A bond's atoms, stereo, stereo atoms and stereo authority.
+pub type DrawnBond = (u64, u64, Option<String>, Vec<u64>, bool);
+
+/// What flattening a molecule changes: each atom's place, depth and stored
+/// stereo, each bond's stored stereo, and the molecule's depth appearance.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Drawn {
+    pub atoms: Vec<(u64, Point, f32, Option<AtomStereo>)>,
+    pub bonds: Vec<DrawnBond>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub depth_appearance: Vec<Scope>,
+}
+
+impl Drawn {
+    /// The layout of `model`'s molecule as it is now.
+    pub fn of(doc: &Document, model: &Model3d) -> Self {
+        let ids = model.ids();
+        let own: HashMap<_, _> = ids.iter().map(|id| (*id, *id)).collect();
+        Self {
+            atoms: doc
+                .atoms
+                .iter()
+                .filter(|a| ids.contains(&a.id))
+                .map(|a| (a.id, a.position, a.depth, a.stereo.clone()))
+                .collect(),
+            bonds: doc
+                .bonds
+                .iter()
+                .filter(|b| ids.contains(&b.a))
+                .map(|b| {
+                    let stereo = b.stereo.clone();
+                    (
+                        b.a,
+                        b.b,
+                        stereo,
+                        b.stereo_atoms.clone(),
+                        b.stereo_authoritative,
+                    )
+                })
+                .collect(),
+            depth_appearance: crate::depth_appearance::remap(&doc.depth_appearance, &own),
+        }
+    }
+
+    /// Put this layout back on the drawing.
+    fn restore(self, doc: &mut Document) {
+        let ids: Vec<_> = self.atoms.iter().map(|a| a.0).collect();
+        for (id, position, depth, stereo) in self.atoms {
+            if let Some(atom) = doc.atom_mut(id) {
+                (atom.position, atom.depth, atom.stereo) = (position, depth, stereo);
+            }
+        }
+        for (a, b, stereo, atoms, authoritative) in self.bonds {
+            if let Some(bond) = doc.bonds.iter_mut().find(|x| x.a == a && x.b == b) {
+                (bond.stereo, bond.stereo_atoms) = (stereo, atoms);
+                bond.stereo_authoritative = authoritative;
+            }
+        }
+        crate::depth_appearance::clear(doc, &ids);
+        doc.depth_appearance.extend(self.depth_appearance);
+    }
+
+    fn remap(&mut self, mapping: &HashMap<u64, u64>) -> Option<()> {
+        let map = |id: &mut u64| {
+            *id = *mapping.get(id)?;
+            Some(())
+        };
+        for (id, _, _, stereo) in &mut self.atoms {
+            map(id)?;
+            for n in stereo.iter_mut().flat_map(|s| &mut s.neighbors) {
+                map(n)?;
+            }
+        }
+        for (a, b, _, atoms, _) in &mut self.bonds {
+            map(a)?;
+            map(b)?;
+            atoms.iter_mut().try_for_each(map)?;
+        }
+        self.depth_appearance = crate::depth_appearance::remap(&self.depth_appearance, mapping);
+        Some(())
+    }
 }
 fn perspective() -> f32 {
     0.2
@@ -223,14 +331,29 @@ impl Model3d {
             show_hydrogens: Hydrogens::default(),
             background: Background::default(),
             force_field,
+            layout: Layout::Original,
+            drawn: None,
+            morph: None,
         };
+        model.rotation = model.initial_view(doc);
         let points = model.points(doc).unwrap_or_default();
-        model.rotation = initial_view(doc, &model).unwrap_or(model.rotation);
         // The model's ångström scale matches the drawing: 1.5 Å per bond length.
         let units = doc.drawing_style.bond_length_world / 1.5;
         model.size =
             (reach(&points, heavy_center(&points), Style::BallStick) * units / 0.44).max(1.);
         model
+    }
+
+    /// The opening view, facing the broadest side; double-click restores it.
+    pub fn initial_view(&self, doc: &Document) -> [f32; 4] {
+        let points = self.points(doc).unwrap_or_default();
+        let center = heavy_center(&points);
+        let heavy: Vec<_> = points
+            .iter()
+            .filter(|(symbol, _)| *symbol != "H")
+            .map(|(_, p)| sub(*p, center))
+            .collect();
+        initial_rotation(&heavy)
     }
 
     pub fn contains(&self, id: u64) -> bool {
@@ -294,6 +417,9 @@ impl Model3d {
         }
         for h in &mut self.hydrogens {
             h.parent = *mapping.get(&h.parent)?;
+        }
+        if let Some(drawn) = &mut self.drawn {
+            drawn.remap(mapping)?;
         }
         Some(())
     }
@@ -369,7 +495,7 @@ struct View<'a> {
 }
 impl View<'_> {
     fn new<'a>(doc: &'a Document, model: &Model3d) -> Option<View<'a>> {
-        let (lo, hi) = layout_bounds(doc, model)?;
+        let center = layout_center(doc, model)?;
         let points = model.points(doc)?;
         let shown = model.shown(doc);
         let c = heavy_center(&points);
@@ -389,8 +515,7 @@ impl View<'_> {
             shown,
             style: model.style,
             reach,
-            origin: Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.)
-                .offset(model.offset.x, model.offset.y),
+            origin: center.offset(model.offset.x, model.offset.y),
             scale: 0.44 * model.size / reach,
             camera: reach * (1.2 + 9. * (1. - model.perspective)),
             perspective: model.perspective,
@@ -424,31 +549,55 @@ impl View<'_> {
                 (i, q, self.style.atom_radius(s) * self.scale * f)
             })
     }
-    /// Bounds of the projected balls, padded by 6% of the longer side.
+    /// Move each point a fraction `e` of the way from its flat start: a drawing
+    /// atom's place in the 2D drawing (centred on the frame), or for a
+    /// force-field hydrogen its parent's.
+    fn morph(&mut self, doc: &Document, model: &Model3d, e: f32) {
+        let center = self.origin.offset(-model.offset.x, -model.offset.y);
+        let flat = |id| {
+            doc.atom(id).map_or([0.; 3], |a| {
+                [
+                    (a.position.x - center.x) / self.scale,
+                    -(a.position.y - center.y) / self.scale,
+                    0.,
+                ]
+            })
+        };
+        let starts = model
+            .atoms
+            .iter()
+            .map(|a| a.id)
+            .chain(model.hydrogens.iter().map(|h| h.parent))
+            .map(flat);
+        for (p, start) in self.rotated.iter_mut().zip(starts) {
+            *p = mix(start, *p, e);
+        }
+    }
+    /// A square about the origin holding the model's bounding sphere (its
+    /// farthest drawn ball edge from the centre) in any rotation, perspective
+    /// included, so the frame keeps its size and place while the model turns.
     fn bounds(&self) -> (Point, Point) {
+        let nearest = if self.perspective > 0. {
+            self.camera / (self.camera - self.reach)
+        } else {
+            1.
+        };
         // A wireframe atom without shown bonds is a dot as wide as two lines.
-        let line = if self.style == Style::Wireframe {
+        let dot = if self.style == Style::Wireframe {
             self.wire
         } else {
             0.
         };
-        let mut lo = Point::new(f32::INFINITY, f32::INFINITY);
-        let mut hi = Point::new(f32::NEG_INFINITY, f32::NEG_INFINITY);
-        for (_, q, r) in self.balls() {
-            let r = r.max(line);
-            lo = Point::new(lo.x.min(q.x - r), lo.y.min(q.y - r));
-            hi = Point::new(hi.x.max(q.x + r), hi.y.max(q.y + r));
-        }
-        if lo.x > hi.x {
-            return (self.origin, self.origin);
-        }
-        let pad = 0.06 * (hi.x - lo.x).max(hi.y - lo.y);
-        (lo.offset(-pad, -pad), hi.offset(pad, pad))
+        let half = self.reach * self.scale * nearest + dot;
+        (
+            self.origin.offset(-half, -half),
+            self.origin.offset(half, half),
+        )
     }
 }
 
-/// The frame's top-left and bottom-right corners in drawing units: the
-/// projected model with a modest margin, or `None` while an atom is missing.
+/// The frame's top-left and bottom-right corners in drawing units: a square
+/// that holds the model in every rotation, or `None` while an atom is missing.
 pub fn frame(doc: &Document, model: &Model3d) -> Option<(Point, Point)> {
     Some(View::new(doc, model)?.bounds())
 }
@@ -457,6 +606,12 @@ pub fn frame(doc: &Document, model: &Model3d) -> Option<(Point, Point)> {
 pub fn frame_corners(doc: &Document, model: &Model3d) -> Option<[Point; 4]> {
     let (lo, hi) = frame(doc, model)?;
     Some([lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y)])
+}
+
+/// The centre of the molecule's 2D atoms, which the frame's offset is from.
+fn layout_center(doc: &Document, model: &Model3d) -> Option<Point> {
+    let (lo, hi) = layout_bounds(doc, model)?;
+    Some(Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.))
 }
 
 fn layout_bounds(doc: &Document, model: &Model3d) -> Option<(Point, Point)> {
@@ -508,6 +663,16 @@ pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
     changed
 }
 
+/// Show model `index`'s molecule in its drawn layout again, if it was
+/// flattened; returns whether the drawing changed.
+pub fn restore_drawing(doc: &mut Document, index: usize) -> bool {
+    let Some(drawn) = doc.models.get_mut(index).and_then(|m| m.drawn.take()) else {
+        return false;
+    };
+    drawn.restore(doc);
+    true
+}
+
 /// The selected molecule: the whole connected component of the selected atoms
 /// when they all belong to one, in document order.
 pub fn selected_molecule(doc: &Document, selected: &[u64]) -> Option<Vec<u64>> {
@@ -523,26 +688,136 @@ pub fn selected_molecule(doc: &Document, selected: &[u64]) -> Option<Vec<u64>> {
         .then_some(component)
 }
 
+/// [`selected_molecule`] when the selection is all of it and nothing else
+/// but its name.
+pub fn whole_molecule(doc: &Document, selected: &[u64]) -> Option<Vec<u64>> {
+    let atoms = selected_molecule(doc, selected)?;
+    let named = crate::molecule_names::include_annotations(doc, &atoms);
+    let expanded = doc.expand_abbreviation_selection(selected);
+    (expanded.iter().all(|id| named.contains(id)) && atoms.iter().all(|id| expanded.contains(id)))
+        .then_some(atoms)
+}
+
 /// The atoms of the models whose frame contains `p`, topmost first.
 pub fn frame_hit(doc: &Document, p: Point) -> Option<Vec<u64>> {
+    model_at(doc, p, 0.).map(|m| m.atoms.iter().map(|a| a.id).collect())
+}
+
+/// The topmost shown model whose frame, shrunk by `inset` on every side,
+/// contains `p`.
+pub fn model_at(doc: &Document, p: Point, inset: f32) -> Option<&Model3d> {
     doc.models
         .iter()
         .rev()
         .filter(|m| m.display != Display::TwoD)
         .find(|m| {
             frame(doc, m).is_some_and(|(lo, hi)| {
-                (lo.x..=hi.x).contains(&p.x) && (lo.y..=hi.y).contains(&p.y)
+                (lo.x + inset..=hi.x - inset).contains(&p.x)
+                    && (lo.y + inset..=hi.y - inset).contains(&p.y)
             })
         })
-        .map(|m| m.atoms.iter().map(|a| a.id).collect())
 }
 
 /// Whether the selection includes a molecule whose model is shown (3D or
-/// both), which the selection box must not scale: models do not resize yet.
+/// both), which the selection box must not scale as a drawing.
 pub fn shows_3d(doc: &Document, ids: &[u64]) -> bool {
     doc.models
         .iter()
         .any(|m| m.display != Display::TwoD && ids.iter().any(|id| m.contains(*id)))
+}
+
+/// Whether every selected object is an atom of a shown model, so that corner
+/// handles resize the models' frames with [`resize`].
+pub fn only_shown(doc: &Document, ids: &[u64]) -> bool {
+    !ids.is_empty()
+        && ids.iter().all(|id| {
+            doc.models
+                .iter()
+                .any(|m| m.display != Display::TwoD && m.contains(*id))
+        })
+}
+
+/// Scale the frames of the shown models among `ids` by `scale` about `pivot`,
+/// as a corner handle does. The 2D drawings and the views stay.
+pub fn resize(doc: &mut Document, ids: &[u64], pivot: Point, scale: f32) {
+    if !scale.is_finite() || scale <= 0. {
+        return;
+    }
+    for index in 0..doc.models.len() {
+        let Some(model) = doc.models.get(index) else {
+            continue;
+        };
+        if model.display == Display::TwoD || !ids.iter().any(|id| model.contains(*id)) {
+            continue;
+        }
+        let Some(center) = layout_center(doc, model) else {
+            continue;
+        };
+        // Every frame point is the origin plus a multiple of the size.
+        let size = (model.size * scale).clamp(1., 1e5);
+        let s = size / model.size;
+        let origin = center.offset(model.offset.x, model.offset.y);
+        let moved = Point::new(
+            pivot.x + (origin.x - pivot.x) * s,
+            pivot.y + (origin.y - pivot.y) * s,
+        );
+        if let Some(model) = doc.models.get_mut(index) {
+            model.size = size;
+            model.offset = Point::new(moved.x - center.x, moved.y - center.y);
+        }
+    }
+}
+
+/// Turn the model of atom `id` to the unit quaternion `rotation`; returns
+/// whether it changed.
+pub fn set_rotation(doc: &mut Document, id: u64, rotation: [f32; 4]) -> bool {
+    let norm = rotation.iter().map(|v| v * v).sum::<f32>();
+    let Some(model) = doc.models.iter_mut().find(|m| m.contains(id)) else {
+        return false;
+    };
+    if !rotation.iter().all(|v| v.is_finite()) || (norm - 1.).abs() > 1e-3 {
+        return false;
+    }
+    let changed = model.rotation != rotation;
+    model.rotation = rotation;
+    changed
+}
+
+/// `rotation` turned by a drag of `dx`, `dy` screen pixels, 0.01 radian per
+/// pixel as in the prototype: about the screen's vertical and horizontal axes,
+/// or with `roll` about the view axis.
+pub fn turn(rotation: [f32; 4], dx: f32, dy: f32, roll: bool) -> [f32; 4] {
+    let axis = |angle: f32, i: usize| {
+        let (s, c) = (angle / 2.).sin_cos();
+        let mut q = [c, 0., 0., 0.];
+        if let Some(v) = q.get_mut(i + 1) {
+            *v = s;
+        }
+        q
+    };
+    let step = if roll {
+        axis(-dx * 0.01, 2)
+    } else {
+        compose(axis(dx * 0.01, 1), axis(dy * 0.01, 0))
+    };
+    let q = compose(step, rotation);
+    let n = q.iter().map(|v| v * v).sum::<f32>().sqrt();
+    if !n.is_finite() || n < 1e-6 {
+        return rotation;
+    }
+    q.map(|v| v / n)
+}
+
+/// The rotation `b`, then `a`.
+fn compose(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
+    let [aw, ax, ay, az] = a;
+    let [bw, bx, by, bz] = b;
+    [
+        aw * bw - ax * bx - ay * by - az * bz,
+        aw * bx + ax * bw + ay * bz - az * by,
+        aw * by - ax * bz + ay * bw + az * bx,
+        aw * bz + ax * by - ay * bx + az * bw,
+    ]
 }
 
 pub fn validate(doc: &Document) -> Result<(), String> {
@@ -579,6 +854,12 @@ pub fn validate(doc: &Document) -> Result<(), String> {
             || !(1. ..=1e5).contains(&m.size)
             || !(0. ..=1.).contains(&m.depth_fade)
             || !(0. ..=1.).contains(&m.perspective)
+            || m.drawn.as_ref().is_some_and(|d| {
+                d.atoms.len() != ids.len()
+                    || d.atoms
+                        .iter()
+                        .any(|(id, p, z, _)| !ids.contains(id) || !p.is_finite() || !z.is_finite())
+            })
         {
             return Err("Invalid 3D model".into());
         }
@@ -663,7 +944,8 @@ fn stereo(doc: &Document, ids: &HashSet<u64>) -> Option<Stereo> {
 }
 
 /// The chemistry of these atoms and their bonds, without presentation. Bond
-/// appearance counts only through the stereo it marks, see [`stereo`].
+/// appearance and stored stereo count only through the stereo they mark, see
+/// [`stereo`]: flattening the view stores the drawn stereo without changing it.
 fn chemistry(doc: &Document, ids: &HashSet<u64>) -> (Vec<Atom>, Vec<Bond>) {
     let atoms = doc
         .atoms
@@ -679,6 +961,7 @@ fn chemistry(doc: &Document, ids: &HashSet<u64>) -> (Vec<Atom>, Vec<Bond>) {
             map_num: 0,
             label_h: 0,
             text_style: None,
+            stereo: None,
             ..a.clone()
         })
         .collect();
@@ -696,6 +979,9 @@ fn chemistry(doc: &Document, ids: &HashSet<u64>) -> (Vec<Atom>, Vec<Bond>) {
             secondary_display: None,
             color: Default::default(),
             display: String::new(),
+            stereo: None,
+            stereo_atoms: vec![],
+            stereo_authoritative: false,
             ..b.clone()
         })
         .collect();
@@ -747,19 +1033,6 @@ fn rotate(q: [f32; 4], v: [f32; 3]) -> [f32; 3] {
     let uu = x * x + y * y + z * z;
     let along = zip3([x, y, z], v, |u, v| 2. * dot * u + (w * w - uu) * v);
     zip3(along, cross, |a, c| a + 2. * w * c)
-}
-
-/// The opening view of a model: the broadest face of its heavy atoms, as
-/// [`initial_rotation`]. `None` while an atom is missing.
-pub fn initial_view(doc: &Document, model: &Model3d) -> Option<[f32; 4]> {
-    let points = model.points(doc)?;
-    let center = heavy_center(&points);
-    let heavy: Vec<_> = points
-        .iter()
-        .filter(|(symbol, _)| *symbol != "H")
-        .map(|(_, p)| sub(*p, center))
-        .collect();
-    Some(initial_rotation(&heavy))
 }
 
 /// The prototype's opening view of `points`, the centred heavy atoms: their two
@@ -964,7 +1237,18 @@ pub fn balls_and_sticks(
 }
 
 fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Option<()> {
-    let view = View::new(doc, model)?;
+    let mut view = View::new(doc, model)?;
+    // The 2D → 3D morph, eased as in the prototype; hydrogens fade in.
+    let grown = model.morph.filter(|m| *m < 1.).map_or(1., |m| {
+        let m = m.max(0.);
+        let e = if m < 0.5 {
+            4. * m * m * m
+        } else {
+            1. - (2. - 2. * m).powi(3) / 2.
+        };
+        view.morph(doc, model, e);
+        e
+    });
     let bonds = sticks(doc, model, &view.shown)?;
     let (rotated, reach, style) = (&view.rotated, view.reach, model.style);
     let backdrop = match model.background {
@@ -1037,21 +1321,21 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         let symbol = *view.symbols.get(i)?;
         let base = mix(float(element(symbol).0), float(backdrop), fade(z));
         let wire = rgb(mix(base, BLACK, if symbol == "C" { 0.35 } else { 0.1 }));
-        match item {
+        let primitive = match item {
             Item::Atom(i) if style == Style::Wireframe => {
                 let center = view.project(*rotated.get(i)?).0;
-                out.push(Primitive::Sphere {
+                Primitive::Sphere {
                     center,
                     radius: view.wire,
                     focal: center,
                     stops: vec![(0., wire), (1., wire)],
                     outline: None,
-                });
+                }
             }
             Item::Atom(i) => {
                 let (q, f) = view.project(*rotated.get(i)?);
                 let r = style.atom_radius(symbol) * view.scale * f;
-                out.push(Primitive::Sphere {
+                Primitive::Sphere {
                     center: q,
                     radius: r,
                     focal: q.offset(-r * 0.38, -r * 0.42),
@@ -1076,57 +1360,66 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                     } else {
                         outline(line)
                     },
-                });
+                }
             }
             Item::Bond(s, o) => {
                 let (a, e, start, half) = view.half_bond(s, o)?;
                 if style == Style::Wireframe {
-                    out.push(Primitive::Wire {
+                    Primitive::Wire {
                         from: a,
                         to: e,
                         width: half * 2.,
                         color: wire,
-                    });
-                    continue;
+                    }
+                } else {
+                    let (dx, dy) = (e.x - a.x, e.y - a.y);
+                    let len = dx.hypot(dy);
+                    if len < line * 0.5 {
+                        continue;
+                    }
+                    // The lit side faces up and left like the balls' highlight,
+                    // the same for both halves, so the shading runs on across
+                    // the colour seam.
+                    let side = if 0.38 * dy - 0.42 * dx < 0. { -1. } else { 1. };
+                    let (nx, ny) = (-dy / len * side, dx / len * side);
+                    Primitive::ShadedQuad {
+                        corners: [
+                            a.offset(nx * start, ny * start),
+                            e.offset(nx * half, ny * half),
+                            e.offset(-nx * half, -ny * half),
+                            a.offset(-nx * start, -ny * start),
+                        ],
+                        from: e.offset(nx * half, ny * half),
+                        to: e.offset(-nx * half, -ny * half),
+                        stops: if glossy {
+                            shade(
+                                base,
+                                &[(0., BLACK, 0.4), (0.3, WHITE, 0.55), (1., BLACK, 0.45)],
+                            )
+                        } else {
+                            shade(
+                                base,
+                                &[(0., BLACK, 0.2), (0.4, WHITE, 0.3), (1., BLACK, 0.22)],
+                            )
+                        },
+                        outline: if style == Style::BallStick {
+                            outline(line * 0.8)
+                        } else {
+                            None
+                        },
+                    }
                 }
-                let (dx, dy) = (e.x - a.x, e.y - a.y);
-                let len = dx.hypot(dy);
-                if len < line * 0.5 {
-                    continue;
-                }
-                // The lit side faces up and left like the balls' highlight,
-                // the same for both halves, so the shading runs on across
-                // the colour seam.
-                let side = if 0.38 * dy - 0.42 * dx < 0. { -1. } else { 1. };
-                let (nx, ny) = (-dy / len * side, dx / len * side);
-                out.push(Primitive::ShadedQuad {
-                    corners: [
-                        a.offset(nx * start, ny * start),
-                        e.offset(nx * half, ny * half),
-                        e.offset(-nx * half, -ny * half),
-                        a.offset(-nx * start, -ny * start),
-                    ],
-                    from: e.offset(nx * half, ny * half),
-                    to: e.offset(-nx * half, -ny * half),
-                    stops: if glossy {
-                        shade(
-                            base,
-                            &[(0., BLACK, 0.4), (0.3, WHITE, 0.55), (1., BLACK, 0.45)],
-                        )
-                    } else {
-                        shade(
-                            base,
-                            &[(0., BLACK, 0.2), (0.4, WHITE, 0.3), (1., BLACK, 0.22)],
-                        )
-                    },
-                    outline: if style == Style::BallStick {
-                        outline(line * 0.8)
-                    } else {
-                        None
-                    },
-                });
             }
-        }
+        };
+        // Hydrogens fade in as a whole, as the prototype's globalAlpha does.
+        out.push(if symbol == "H" && grown < 1. {
+            Primitive::Opacity {
+                alpha: grown,
+                primitive: Box::new(primitive),
+            }
+        } else {
+            primitive
+        });
     }
     Some(())
 }

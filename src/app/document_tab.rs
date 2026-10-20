@@ -59,6 +59,9 @@ pub(super) struct DocumentTab {
     /// The revision and model a 3D-model slider drag has reached; the drag
     /// is one Undo step until release or any other commit.
     pub(super) model_sliding: Option<(u64, usize)>,
+    /// The model (by an atom) whose 2D → 3D morph is playing, and its start,
+    /// for the drawing state it started in.
+    pub(super) model_morph: Option<(super::models3d::Key, u64, std::time::Instant)>,
     // Derived chemistry and in-flight work.
     pub(super) analysis: Option<Analysis>,
     pub(super) busy: bool,
@@ -162,6 +165,7 @@ impl DocumentTab {
             model_job: None,
             model_serial: 0,
             model_sliding: None,
+            model_morph: None,
             analysis: None,
             busy: false,
             clipboard_busy: false,

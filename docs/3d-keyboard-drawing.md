@@ -11,22 +11,64 @@ Commands that do not fit in the context row are in its **⋯** menu.
 
 ## Show a molecule as a 3D model
 
-Select one molecule and choose **2D**, **3D** or **Both** at the top of
-**Properties → Structure** (also **Show as** in the right-click menu and
-**Show as 3D model** in the command palette). **3D** draws the molecule as a ball & stick model in
+Select one molecule and choose **2D**, **3D** or **Both** on the small
+**Show as** bar above the selection, or at the top of **Properties → Structure**
+(also **Show as** in the right-click menu and **Show as 3D model** in the
+command palette). The bar shows while a whole molecule is selected with Select
+or Lasso and hides during any drag; it sits above the selection box and its
+rotation handle, or below them at the top of the window, and when neither fits
+it stays inside the canvas over the selection. **3D** draws the molecule as a
+model (ball & stick unless **Properties → 3D model** picks another style) in
 place of its drawing, **Both** puts the model one bond length to its right, and
 **2D** shows the drawing again. The first switch generates the conformer in the
 background with the same worker as 3D optimize (fresh ETKDG conformers, then
 MMFF94s); a result for a drawing that changed meanwhile is discarded. Later
-switches reuse the stored model, and each switch is one Undo step.
+switches reuse the stored model, and each switch is one Undo step. When a model
+first appears (2D → 3D or 2D → Both), a 0.75 s morph moves the atoms from the
+drawing into 3D while the hydrogens grow out of their atoms. It only redraws
+the canvas and never delays input; ReShiki has no reduced-motion setting yet.
 
 The model links to the molecule by atom ID. It never changes chemistry, atom IDs
 or the 2D layout, which is kept for switching back. Clicking or lassoing the
 model selects the molecule, so moving, aligning, copying and Duplicate carry it
 along; while the molecule is shown in 3D, its hidden 2D atoms cannot be picked.
-A selection that includes a shown model (3D or Both) has no resize handles. A chemical edit to the molecule
-(element, charge, bonds or stereo) removes the model. Rotating the model, its
-floating bar and flattening the current view are planned (#386).
+A chemical edit to the molecule (element, charge, bonds or stereo) removes the
+model.
+
+The model sits in a square frame that holds it in any rotation, so the frame,
+its handles and the bar stay put while the model turns. On the canvas, a model
+that is not selected moves like any object. Once its molecule is selected:
+
+- **drag inside the frame** to rotate it like a trackball (0.01 radian per
+  pixel about the screen axes);
+- **Shift-drag** to roll it about the view axis;
+- **double-click** to reset the view to the opening principal-axes view;
+- drag **within 8 px of the frame edge**, or with Alt or Cmd/Ctrl, to move or
+  copy it as usual;
+- drag a **corner handle** to resize the frame, which scales the model about
+  the opposite corner and leaves the 2D drawing as it is. Edge handles are
+  hidden for a selection of shown models, and a selection mixing a shown model
+  with other objects has no resize handles.
+
+Each rotation, reset and resize is one Undo step, and the canvas preview is the
+committed result.
+
+### 2D layout
+
+While a model is shown, **Properties → Structure → 2D layout** chooses what the
+**2D** buttons return to. **Original drawing** (the default) restores the
+layout you drew. **From the 3D view** flattens the model as it is turned now
+into the 2D drawing, like 3D optimize's projection: atoms keep their IDs and
+drawn stereo, the drawing keeps its bond-length scale and centre, and far bonds
+are lighter through **Automatic depth**. The right-click **Show as** menu and
+the command palette also offer **2D from the 3D view** directly. Each flatten is
+one Undo step that also switches the molecule to 2D; the model is kept.
+
+The choice belongs to each model and is saved with it. A flattened model also
+keeps the layout you drew (positions, depth, stored stereo and depth
+appearance), so **Original drawing**, or **Show as → 2D drawing**, brings it
+back, also after saving and reopening. Choosing the display that is already
+shown changes nothing.
 
 While the model is shown, **Properties → 3D model** sets how it looks:
 

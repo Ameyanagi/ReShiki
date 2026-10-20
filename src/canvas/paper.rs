@@ -63,6 +63,7 @@ impl MoleculeCanvas<'_> {
         let base = self.joining.map(|(j, _)| &j.base).unwrap_or(self.doc);
         let mut draft = Draft::new(base);
         self.preview_tilt(&mut draft, state, bounds);
+        self.preview_model(&mut draft, state, bounds);
         self.preview_chain(&mut draft, frame, state, bounds);
         self.preview_pointer_edits(&mut draft, state, bounds);
         self.preview_transform(&mut draft, state, bounds);
@@ -154,6 +155,7 @@ impl MoleculeCanvas<'_> {
             cached_camera.map(|_| translation.unwrap_or_default()),
         );
         self.draw_tilt_bounds(frame, &preview, selected, bounds);
+        self.draw_model_bar(frame, state, bounds);
         // Above the selection, so that gap labels stay legible.
         smart_guides::draw(
             frame,
