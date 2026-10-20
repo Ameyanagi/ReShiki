@@ -383,6 +383,7 @@ fn completion(message: &Message) -> Option<Completion> {
             super::models3d::Action::Show(..)
             | super::models3d::Action::Set(..)
             | super::models3d::Action::SlideEnd
+            | super::models3d::Action::Unchanged
             | super::models3d::Action::Flatten
             | super::models3d::Action::Layout(..) => None,
         },

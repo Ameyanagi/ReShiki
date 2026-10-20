@@ -35,6 +35,9 @@ pub(crate) enum Action {
     /// drag is one step until [`Action::SlideEnd`].
     Set(Setting),
     SlideEnd,
+    /// The button of what is shown already: it keeps its selected look
+    /// rather than looking disabled, and changes nothing.
+    Unchanged,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -72,6 +75,7 @@ impl App {
                 self.tab.model_sliding = None;
                 Task::none()
             }
+            Action::Unchanged => Task::none(),
             Action::Flatten => {
                 self.flatten_model();
                 Task::none()
@@ -299,6 +303,10 @@ impl App {
             Setting::Perspective(value) => model.perspective = value.clamp(0., 1.),
             Setting::ResetView => model.rotation = reset.unwrap_or(model.rotation),
         }
+        // The active choice again changes nothing and adds no Undo step.
+        if self.tab.doc == before {
+            return;
+        }
         // A drag continues only while nothing else has been committed.
         let sliding = matches!(setting, Setting::DepthFade(_) | Setting::Perspective(_));
         let continuing = sliding && self.tab.model_sliding == Some((self.tab.revision, index));
@@ -462,9 +470,13 @@ impl App {
                     .checked(active)
                     .style(control(active))
                     .width(Length::Fill)
-                    .on_press_maybe(
-                        (enabled && !active).then(|| Message::Models3d(self.show_as(display))),
-                    )
+                    .on_press_maybe(enabled.then(|| {
+                        Message::Models3d(if active {
+                            Action::Unchanged
+                        } else {
+                            self.show_as(display)
+                        })
+                    }))
                     .into()
             }),)
             .spacing(4),

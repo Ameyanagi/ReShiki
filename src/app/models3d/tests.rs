@@ -189,7 +189,11 @@ async fn structure_section_buttons_show_the_molecule() -> Result<(), String> {
         );
         let mut activate = reshiki::accessibility::Activate::<Message>::new(id);
         ui.operate(&renderer, &mut operation::black_box(&mut activate));
+        // The shown display's button stays pressable, with its selected
+        // look, and changes nothing.
         match activate.finish() {
+            operation::Outcome::Some(Message::Models3d(Action::Unchanged))
+                if display == Display::TwoD => {}
             operation::Outcome::Some(Message::Models3d(Action::Show(shown))) => {
                 assert_eq!(shown, display)
             }
@@ -334,6 +338,29 @@ fn the_status_names_the_view_undo_restores() {
 
 fn set(app: &mut App, setting: Setting) {
     let _ = app.update(Message::Models3d(Action::Set(setting)));
+}
+
+/// The active style, look, hydrogens, background or display chosen again
+/// keeps the drawing and adds no Undo step.
+#[test]
+fn choosing_what_is_active_again_changes_nothing() {
+    let (mut app, _) = with_model(Display::ThreeD);
+    let (start, doc, revision) = (frames(&app), app.tab.doc.clone(), app.tab.revision);
+    let depth = doc.models[0].depth_fade;
+    for setting in [
+        Setting::Style(Style::BallStick),
+        Setting::Look(Look::Flat),
+        Setting::Hydrogens(Hydrogens::All),
+        Setting::Background(Background::None),
+        Setting::DepthFade(depth),
+    ] {
+        set(&mut app, setting);
+    }
+    show(&mut app, Display::ThreeD);
+    let _ = app.update(Message::Models3d(Action::Unchanged));
+    assert_eq!(frames(&app), start);
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(app.tab.doc, doc);
 }
 
 #[test]
