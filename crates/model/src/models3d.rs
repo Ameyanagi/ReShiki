@@ -278,7 +278,13 @@ impl Model3d {
             .hydrogens
             .iter()
             .map(|h| keep(true, &|| polar(h.parent)));
-        atoms.chain(hydrogens).collect()
+        let shown: Vec<bool> = atoms.chain(hydrogens).collect();
+        // A molecule of hydrogens alone stays visible and selectable.
+        if shown.contains(&true) {
+            shown
+        } else {
+            vec![true; shown.len()]
+        }
     }
 
     /// Map every ID; `None` when one is missing.
@@ -420,8 +426,9 @@ impl View<'_> {
     }
     /// Bounds of the projected balls, padded by 6% of the longer side.
     fn bounds(&self) -> (Point, Point) {
+        // A wireframe atom without shown bonds is a dot as wide as two lines.
         let line = if self.style == Style::Wireframe {
-            self.wire / 2.
+            self.wire
         } else {
             0.
         };
@@ -1008,12 +1015,16 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             items.push((z.min(ps[2]), 0, z, Item::Bond(s, o)));
         }
     }
-    if style != Style::Wireframe {
-        items.extend(view.balls().filter_map(|(i, ..)| {
-            let z = rotated.get(i)?[2];
-            Some((z, 1, z, Item::Atom(i)))
-        }));
-    }
+    // Wireframe draws only the atoms without shown bonds, as dots.
+    let bonded: HashSet<usize> = bonds.iter().flat_map(|&(a, b)| [a, b]).collect();
+    items.extend(
+        view.balls()
+            .filter(|(i, ..)| style != Style::Wireframe || !bonded.contains(i))
+            .filter_map(|(i, ..)| {
+                let z = rotated.get(i)?[2];
+                Some((z, 1, z, Item::Atom(i)))
+            }),
+    );
     items.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
     let shade = |base: [f32; 3], stops: &[(f32, [f32; 3], f32)]| {
         stops
@@ -1025,7 +1036,18 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         let (Item::Bond(i, _) | Item::Atom(i)) = item;
         let symbol = *view.symbols.get(i)?;
         let base = mix(float(element(symbol).0), float(backdrop), fade(z));
+        let wire = rgb(mix(base, BLACK, if symbol == "C" { 0.35 } else { 0.1 }));
         match item {
+            Item::Atom(i) if style == Style::Wireframe => {
+                let center = view.project(*rotated.get(i)?).0;
+                out.push(Primitive::Sphere {
+                    center,
+                    radius: view.wire,
+                    focal: center,
+                    stops: vec![(0., wire), (1., wire)],
+                    outline: None,
+                });
+            }
             Item::Atom(i) => {
                 let (q, f) = view.project(*rotated.get(i)?);
                 let r = style.atom_radius(symbol) * view.scale * f;
@@ -1059,12 +1081,11 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             Item::Bond(s, o) => {
                 let (a, e, start, half) = view.half_bond(s, o)?;
                 if style == Style::Wireframe {
-                    let dark = if symbol == "C" { 0.35 } else { 0.1 };
                     out.push(Primitive::Wire {
                         from: a,
                         to: e,
                         width: half * 2.,
-                        color: rgb(mix(base, BLACK, dark)),
+                        color: wire,
                     });
                     continue;
                 }

@@ -31,11 +31,12 @@ floating bar and flattening the current view are planned (#386).
 While the model is shown, **Properties → 3D model** sets how it looks:
 
 - **Style:** **Ball & stick** (the default), **Stick** (thick bonds joined at
-  the atoms), **Wireframe** (thin lines in the atom colours) or
-  **Space-filling** (balls at van der Waals radii).
+  the atoms), **Wireframe** (thin lines in the atom colours; an atom with no
+  shown bonds is a dot) or **Space-filling** (balls at van der Waals radii).
 - **Look:** **Flat · journal** (thin dark outlines) or **Glossy · slides**
   (brighter highlights, no outlines).
 - **Hydrogens:** **All**, **Polar** (only those on N, O and S) or **None**.
+  A molecule made only of hydrogens always shows them.
 - **Depth fade** mixes farther atoms toward the background, and
   **Perspective** sets how strongly nearer atoms are enlarged.
 - **Background:** **None** or **Soft card**, a light grey rounded card behind

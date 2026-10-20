@@ -715,6 +715,86 @@ fn hydrogens_can_be_all_polar_or_none() {
     assert_eq!(model.shown(&doc), [true, false]);
 }
 
+/// A one-model drawing of these atoms with their hydrogens, shown as 3D.
+fn lone(
+    atoms: &[(&str, [f32; 3])],
+    hydrogens: &[[f32; 3]],
+    edit: impl Fn(&mut Model3d),
+) -> Document {
+    let mut doc = Document::default();
+    let placed: Vec<_> = atoms
+        .iter()
+        .map(|(symbol, xyz)| Placed {
+            id: doc.add_atom(symbol, Point::new(xyz[0] * 30., 0.)),
+            xyz: *xyz,
+        })
+        .collect();
+    for pair in placed.windows(2) {
+        doc.add_bond(pair[0].id, pair[1].id, 1, "plain");
+    }
+    let hydrogens = hydrogens
+        .iter()
+        .map(|&xyz| Hydrogen {
+            parent: placed[0].id,
+            xyz,
+        })
+        .collect();
+    doc.models
+        .push(Model3d::new(&doc, placed, hydrogens, ForceField::Mmff94s));
+    doc.require_version(MODELS_3D);
+    assert!(set_display(&mut doc, 0, Display::ThreeD));
+    edit(&mut doc.models[0]);
+    doc
+}
+
+#[test]
+fn a_molecule_of_hydrogens_alone_stays_shown_and_selectable() {
+    let doc = lone(&[("H", [-0.37, 0., 0.]), ("H", [0.37, 0., 0.])], &[], |m| {
+        m.show_hydrogens = Hydrogens::None;
+        m.background = Background::Card;
+    });
+    let (lo, hi) = frame(&doc, &doc.models[0]).unwrap();
+    assert!(hi.x - lo.x > 1. && hi.y - lo.y > 1.);
+    assert_eq!(counts(&primitives(&doc)), (2, 2, 0));
+    let middle = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+    assert_eq!(frame_hit(&doc, middle).map(|ids| ids.len()), Some(2));
+}
+
+#[test]
+fn a_wireframe_atom_without_shown_bonds_is_a_dot() {
+    // Water with its hydrogens hidden: only the oxygen is left.
+    let doc = lone(
+        &[("O", [0., 0., 0.])],
+        &[[0.76, 0.59, 0.], [-0.76, 0.59, 0.]],
+        |m| {
+            m.style = Style::Wireframe;
+            m.show_hydrogens = Hydrogens::None;
+        },
+    );
+    let parts = primitives(&doc);
+    assert_eq!(counts(&parts), (1, 0, 0));
+    let Primitive::Sphere {
+        center,
+        radius,
+        stops,
+        outline: None,
+        ..
+    } = &parts[0]
+    else {
+        panic!("a flat dot: {parts:?}");
+    };
+    assert!(stops.iter().all(|(_, c)| *c == stops[0].1));
+    let (lo, hi) = frame(&doc, &doc.models[0]).unwrap();
+    assert!(lo.x < center.x - radius && center.x + radius < hi.x);
+    // With its hydrogens, the oxygen is drawn by its bonds alone.
+    let doc = lone(
+        &[("O", [0., 0., 0.])],
+        &[[0.76, 0.59, 0.], [-0.76, 0.59, 0.]],
+        |m| m.style = Style::Wireframe,
+    );
+    assert_eq!(counts(&primitives(&doc)), (0, 0, 4));
+}
+
 #[test]
 fn glossy_has_brighter_highlights_and_no_outlines() {
     let (_, parts) = styled(|m| m.look = Look::Glossy);
