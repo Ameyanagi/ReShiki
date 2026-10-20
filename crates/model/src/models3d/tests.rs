@@ -549,3 +549,28 @@ fn sphere_svg_writes_the_prototype_gradient() {
     let outline = quad.split("<path d=\"").nth(1).unwrap();
     assert_eq!(outline.split('"').next().unwrap().matches('M').count(), 2);
 }
+
+#[test]
+fn chemistry_and_reaction_roles_keep_a_drawing_with_a_model_valid() {
+    let (mut doc, atoms, methane) = shown(Display::Both);
+    let molecule = crate::chemistry::document::prepare(&doc).unwrap();
+    let drawing = crate::chemistry::document::for_drawing(&molecule, &doc).unwrap();
+    let labels = drawing.labels().unwrap();
+    let output = drawing.finish(labels).unwrap();
+    assert_eq!(output.models, doc.models);
+    assert!(output.version >= MODELS_3D);
+
+    let arrow = doc.next_id();
+    doc.arrows.push(crate::document::Arrow::new(
+        arrow,
+        Point::new(100., 40.),
+        Point::new(180., 40.),
+        Default::default(),
+        Default::default(),
+    ));
+    let role = crate::reactions::Role::Reactant;
+    crate::reactions::assign(&mut doc, arrow, &atoms[..1], role).unwrap();
+    crate::reactions::assign(&mut doc, arrow, &[methane], crate::reactions::Role::Product).unwrap();
+    assert_eq!(doc.version, VERSION);
+    assert_eq!(doc.models.len(), 1);
+}
