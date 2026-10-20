@@ -128,10 +128,9 @@ fn exact_dragged_and_saved_offsets_are_preserved_after_label_and_style_changes()
     let start = p(10., 20.);
     let end = p(18., 5.);
     tool(SymbolKind::LonePair)
-        .place(&mut doc, start, end, false, 10.)
+        .place(&mut doc, start, end, true, 10.)
         .unwrap();
     assert_eq!(doc.atom(id).unwrap().marks[0].offset, p(8., -15.));
-    assert_eq!(doc.atom(id).unwrap().marks[0].angle, 0.);
     let saved_mark = doc.atom(id).unwrap().marks[0].clone();
     doc.atom_mut(id).unwrap().label_h = 2;
     doc.drawing_style.font_size_pt = 18.;
@@ -282,4 +281,127 @@ fn first_click_pairs_avoid_view_occluded_bond_ink_at_positive_rear_opacity() {
             drawing.validate().unwrap();
         }
     }
+}
+
+fn degrees_apart(a: f32, b: f32) -> f32 {
+    let turn = (a - b).rem_euclid(360.);
+    turn.min(360. - turn)
+}
+
+#[test]
+fn dragged_marks_orbit_every_snap_direction_hugging_the_label() {
+    let mut doc = Document::default();
+    let id = doc.add_atom("O", p(0., 0.));
+    doc.atom_mut(id).unwrap().label_h = 1;
+    click(&mut doc, id, SymbolKind::LonePair);
+    let clicked = doc.atom(id).unwrap().marks[0].clone();
+    assert_eq!(clicked.offset.x, 0.);
+    for kind in [SymbolKind::LonePair, SymbolKind::CirclePlus] {
+        let mut doc = doc.clone();
+        if kind == SymbolKind::CirclePlus {
+            let atom = doc.atom_mut(id).unwrap();
+            atom.marks.clear();
+            attach(atom, kind, p(0., -10.)).unwrap();
+        }
+        // A charge clears the label hydrogens, leaving only O to orbit.
+        let labels = crate::scene::atom_label_ink_boxes(doc.atom(id).unwrap(), &doc);
+        assert_eq!(
+            labels.len(),
+            if kind == SymbolKind::LonePair { 2 } else { 1 }
+        );
+        for step in 0..24 {
+            let snapped = step as f32 * MARK_ORBIT_STEP;
+            // The pointer may be off the snap direction and at any distance.
+            let pointer = (snapped + 6.).to_radians();
+            let to = p(40. * pointer.cos(), 40. * pointer.sin());
+            let atom = doc.atom(id).unwrap();
+            let mark = orbit_mark(&doc, atom, &atom.marks[0], to, false);
+            let direction = mark.offset.y.atan2(mark.offset.x).to_degrees();
+            assert!(degrees_apart(direction, snapped) < 1e-3, "{direction}");
+            if kind == SymbolKind::LonePair {
+                assert!(degrees_apart(mark.angle, snapped + 90.) < 1e-3);
+                if step == 18 {
+                    // Straight up is where a click puts the pair.
+                    assert!(mark.offset.distance(clicked.offset) < 1e-3);
+                    assert!(degrees_apart(mark.angle, clicked.angle) < 1e-3);
+                }
+            } else {
+                assert_eq!(mark.angle, 0.);
+            }
+            let mut placed = doc.clone();
+            placed.atom_mut(id).unwrap().marks[0] = mark.clone();
+            // The mark's ink clears the label (O and H) and hugs it.
+            let ink: Vec<_> = styled_mark_parts(placed.atom(id).unwrap(), &placed.drawing_style)
+                .iter()
+                .flat_map(|part| crate::graphics::flattened(&part.commands))
+                .flatten()
+                .collect();
+            let nearest = labels
+                .iter()
+                .flat_map(|&label| ink.iter().map(move |&q| rectangle_gap((q, q), label)))
+                .fold(f32::INFINITY, f32::min);
+            assert!(nearest > 0., "{kind} at {snapped}°");
+            assert!(
+                nearest < DEFAULT.world(10. * 0.3),
+                "{kind} at {snapped}°: {nearest}"
+            );
+        }
+    }
+}
+
+#[test]
+fn free_drags_keep_the_offset_and_turn_only_lone_pairs() {
+    let mut doc = Document::default();
+    let id = doc.add_atom("N", p(0., 0.));
+    let atom = doc.atom_mut(id).unwrap();
+    attach(atom, SymbolKind::LonePair, p(0., -10.)).unwrap();
+    attach(atom, SymbolKind::Plus, p(10., -10.)).unwrap();
+    let atom = doc.atom(id).unwrap();
+    let to = p(-17., 9.);
+    let pair = orbit_mark(&doc, atom, &atom.marks[0], to, true);
+    assert_eq!(pair.offset, to);
+    assert!(degrees_apart(pair.angle, 9_f32.atan2(-17.).to_degrees() + 90.) < 1e-3);
+    let charge = orbit_mark(&doc, atom, &atom.marks[1], to, true);
+    assert_eq!((charge.offset, charge.angle), (to, 0.));
+}
+
+#[test]
+fn symbol_tool_drags_orbit_unless_freed() {
+    let mut doc = Document::default();
+    let id = doc.add_atom("O", p(0., 0.));
+    let to = p(30., -14.);
+    let mut orbited = doc.clone();
+    tool(SymbolKind::LonePair)
+        .place(&mut orbited, p(0., 0.), to, false, 10.)
+        .unwrap();
+    let mark = &orbited.atom(id).unwrap().marks[0];
+    let direction = mark.offset.y.atan2(mark.offset.x).to_degrees();
+    assert!(degrees_apart(direction, -30.) < 1e-3, "{direction}");
+    assert!(degrees_apart(mark.angle, 60.) < 1e-3);
+    tool(SymbolKind::LonePair)
+        .place(&mut doc, p(0., 0.), to, true, 10.)
+        .unwrap();
+    assert_eq!(doc.atom(id).unwrap().marks[0].offset, to);
+}
+
+#[test]
+fn rotating_and_flipping_turn_lone_pairs_while_charges_stay_upright() {
+    use crate::editing::{Transform, transform, transform_about};
+    let mut doc = Document::default();
+    let id = doc.add_atom("O", p(0., 0.));
+    let atom = doc.atom_mut(id).unwrap();
+    attach(atom, SymbolKind::LonePair, p(0., -10.)).unwrap();
+    attach(atom, SymbolKind::CircleMinus, p(10., -10.)).unwrap();
+    let angles = |doc: &Document| {
+        let atom = doc.atom(id).unwrap();
+        (atom.marks[0].angle, atom.marks[1].angle)
+    };
+    transform(&mut doc, &[id], Transform::Rotate(30.));
+    assert!(degrees_apart(angles(&doc).0, 30.) < 1e-3);
+    assert_eq!(angles(&doc).1, 0.);
+    transform_about(&mut doc, &[id], p(5., 5.), 1., 15.);
+    assert!(degrees_apart(angles(&doc).0, 45.) < 1e-3);
+    transform(&mut doc, &[id], Transform::FlipHorizontal);
+    assert!(degrees_apart(angles(&doc).0, 135.) < 1e-3);
+    assert_eq!(angles(&doc).1, 0.);
 }

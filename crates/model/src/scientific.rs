@@ -449,6 +449,49 @@ fn attach_inner(atom: &mut Atom, kind: SymbolKind, offset: Point) -> Result<(), 
     Ok(())
 }
 
+/// Attached marks orbit their atom in these steps (degrees) unless dragged freely.
+pub const MARK_ORBIT_STEP: f32 = 15.;
+
+/// The mark dragged to `to`. A plain drag orbits the atom in 15° steps,
+/// hugging its label at the click gap; `free` keeps the exact offset. Lone
+/// pairs turn tangent to the atom either way; other marks stay upright.
+pub fn orbit_mark(
+    doc: &crate::document::Document,
+    atom: &Atom,
+    mark: &AtomMark,
+    to: Point,
+    free: bool,
+) -> AtomMark {
+    let offset = Point::new(to.x - atom.position.x, to.y - atom.position.y);
+    let degrees = offset.y.atan2(offset.x).to_degrees();
+    if free {
+        return AtomMark {
+            offset,
+            ..mark_placement::tangent(mark.clone(), degrees)
+        };
+    }
+    let snapped = (degrees / MARK_ORBIT_STEP).round() * MARK_ORBIT_STEP;
+    mark_placement::orbit(doc, atom, mark, [snapped]).remove(0)
+}
+
+/// The orbit a dragged mark follows and its snap positions, in world space.
+pub fn mark_orbit_guide(
+    doc: &crate::document::Document,
+    atom: &Atom,
+    mark: &AtomMark,
+) -> (Vec<Point>, Vec<Point>) {
+    let centers = |directions: Vec<f32>| -> Vec<Point> {
+        mark_placement::orbit(doc, atom, mark, directions)
+            .into_iter()
+            .map(|m| atom.position.offset(m.offset.x, m.offset.y))
+            .collect()
+    };
+    (
+        centers((0..=120).map(|i| i as f32 * 3.).collect()),
+        centers((0..24).map(|i| i as f32 * MARK_ORBIT_STEP).collect()),
+    )
+}
+
 pub fn next_mark_id(atom: &Atom) -> Result<u64, String> {
     atom.marks
         .iter()
@@ -482,6 +525,8 @@ impl Drawing {
             .then(|| doc.nearest(start, radius))
             .flatten()
     }
+    /// `constrain` (Shift) snaps a free graphic; an attached mark's drag
+    /// instead orbits its atom unless `constrain` frees it.
     pub fn place(
         &self,
         doc: &mut crate::document::Document,
@@ -537,6 +582,16 @@ impl Drawing {
                 && let Some(mark) = atom.marks.last_mut()
             {
                 mark.angle = angle;
+            }
+            // A drag orbits the atom like moving the mark; `constrain` frees it.
+            if start.distance(end) >= 3.
+                && let Some(atom) = doc.atom(id)
+                && let Some(mark) = atom.marks.last()
+            {
+                let placed = orbit_mark(doc, atom, mark, end, constrain);
+                if let Some(mark) = doc.atom_mut(id).and_then(|a| a.marks.last_mut()) {
+                    *mark = placed;
+                }
             }
             if !matches!(kind, SymbolKind::LonePair | SymbolKind::LonePairBar) {
                 doc.invalidate_chemistry(&[id]);

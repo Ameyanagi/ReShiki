@@ -778,6 +778,16 @@ fn map_positions(
             for mark in &mut a.marks {
                 let moved = convert(a.position.offset(mark.offset.x, mark.offset.y));
                 mark.offset = Point::new(moved.x - position.x, moved.y - position.y);
+                // Lone pairs turn with the molecule; charges stay upright.
+                if matches!(
+                    mark.kind,
+                    crate::scientific::MarkKind::LonePair
+                        | crate::scientific::MarkKind::LonePairBar
+                ) {
+                    let (s, c) = mark.angle.to_radians().sin_cos();
+                    let axis = vector(Point::new(c, s));
+                    mark.angle = axis.y.atan2(axis.x).to_degrees().rem_euclid(360.);
+                }
             }
             a.position = position;
         }
