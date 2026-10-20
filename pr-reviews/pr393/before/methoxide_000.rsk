@@ -1,0 +1,108 @@
+{
+  "atom_labels": {
+    "carbons": "skeletal",
+    "hydrogens": true,
+    "stereo": false
+  },
+  "version": 27,
+  "atoms": [
+    {
+      "id": 1,
+      "element": "C",
+      "position": {
+        "x": -21.0,
+        "y": -1.5543122e-15
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 2,
+      "element": "O",
+      "position": {
+        "x": 21.0,
+        "y": 1.5543122e-15
+      },
+      "charge": -1,
+      "radical_electrons": 0,
+      "marks": [
+        {
+          "id": 1,
+          "kind": "circled_charge",
+          "offset": {
+            "x": -25.2,
+            "y": 0.000002203054
+          },
+          "angle": 0.0,
+          "size_pt": null
+        },
+        {
+          "id": 2,
+          "kind": "lone_pair",
+          "offset": {
+            "x": 25.2,
+            "y": 0.0
+          },
+          "angle": 0.0,
+          "size_pt": null
+        },
+        {
+          "id": 3,
+          "kind": "lone_pair",
+          "offset": {
+            "x": -12.600002,
+            "y": -21.823841
+          },
+          "angle": 0.0,
+          "size_pt": null
+        },
+        {
+          "id": 4,
+          "kind": "lone_pair",
+          "offset": {
+            "x": -12.599998,
+            "y": 21.823841
+          },
+          "angle": 0.0,
+          "size_pt": null
+        }
+      ],
+      "mark_serial": 4,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    }
+  ],
+  "bonds": [
+    {
+      "z_order": 0,
+      "a": 1,
+      "b": 2,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "annotations": [],
+  "arrows": [],
+  "graphics": [],
+  "groups": []
+}

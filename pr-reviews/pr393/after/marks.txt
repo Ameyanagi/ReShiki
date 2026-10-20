@@ -1,0 +1,31 @@
+O at (21.00,0.00); C at (-21.00,-0.00); bond 42.00; release reach 25.20
+theta 0:
+  CircledCharge offset (-17.63,17.63) |r| 24.93 dir 225.0 angle 0.0
+  LonePair offset (15.14,0.00) |r| 15.14 dir -0.0 angle 90.0
+  LonePair offset (-7.94,-13.75) |r| 15.88 dir 120.0 angle 330.0
+  LonePair offset (-7.94,13.75) |r| 15.88 dir 240.0 angle 210.0
+theta 45:
+  CircledCharge offset (-17.63,17.63) |r| 24.93 dir 225.0 angle 0.0
+  LonePair offset (11.19,-11.19) |r| 15.82 dir 45.0 angle 45.0
+  LonePair offset (-11.14,-11.14) |r| 15.75 dir 135.0 angle 315.0
+  LonePair offset (4.13,15.41) |r| 15.96 dir 285.0 angle 165.0
+theta 90:
+  CircledCharge offset (-0.00,25.09) |r| 25.09 dir 270.0 angle 0.0
+  LonePair offset (0.00,-15.91) |r| 15.91 dir 90.0 angle 0.0
+  LonePair offset (-11.14,11.14) |r| 15.75 dir 225.0 angle 225.0
+  LonePair offset (13.55,7.82) |r| 15.65 dir 330.0 angle 120.0
+theta 135:
+  CircledCharge offset (17.68,17.68) |r| 25.00 dir 315.0 angle 0.0
+  LonePair offset (-11.14,-11.14) |r| 15.75 dir 135.0 angle 315.0
+  LonePair offset (-4.12,15.39) |r| 15.93 dir 255.0 angle 195.0
+  LonePair offset (14.89,-3.99) |r| 15.41 dir 15.0 angle 75.0
+theta 200:
+  CircledCharge offset (23.74,-6.36) |r| 24.58 dir 15.0 angle 0.0
+  LonePair offset (-11.14,11.14) |r| 15.75 dir 225.0 angle 225.0
+  LonePair offset (11.19,11.19) |r| 15.82 dir 315.0 angle 135.0
+  LonePair offset (4.13,-15.41) |r| 15.96 dir 75.0 angle 15.0
+theta 45 rotated 30:
+  CircledCharge offset (-24.08,6.45) dir 195.0 angle 0.0
+  LonePair offset (15.28,-4.10) dir 15.0 angle 75.0
+  LonePair offset (-4.08,-15.22) dir 105.0 angle 345.0
+  LonePair offset (-4.13,15.41) dir 255.0 angle 195.0

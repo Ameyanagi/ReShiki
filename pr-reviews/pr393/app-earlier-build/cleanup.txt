@@ -1,0 +1,9 @@
+test branch PID 75972: NOT RUNNING
+empty branch relaunched by post-quit AX read PID 81119: NOT RUNNING
+pre-existing installed ReShiki PID 51217: 51217 /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki
+Frontmost app identity after cleanup (read-only check):
+"ReShiki" ASN:0x0-0x609609: (in front) 
+    bundleID="dev.reshiki.editor"
+    bundle path=[ NULL ] 
+    executable path=[ NULL ] 
+    pid = 51217 !cgsConnection !signalled type=[ NULL ]  flavor=[ NULL ]  Version=[ NULL ]  Arch=!!none

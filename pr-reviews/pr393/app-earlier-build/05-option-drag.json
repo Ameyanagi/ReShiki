@@ -1,0 +1,106 @@
+{
+  "start": [
+    498.0,
+    575.0
+  ],
+  "option": true,
+  "checkpoints": [
+    {
+      "point": [
+        530.0,
+        595.0
+      ],
+      "state": {
+        "bundle_id": "dev.reshiki.ev387branch",
+        "pid": 75972,
+        "window_id": 6759,
+        "bounds": {
+          "X": 6.0,
+          "Height": 852.0,
+          "Y": 115.0,
+          "Width": 1280.0
+        },
+        "title": "Untitled \u2022 \u2014 ReShiki",
+        "checked_points": [
+          [
+            530.0,
+            595.0
+          ]
+        ]
+      },
+      "button_held": true
+    },
+    {
+      "point": [
+        563.0,
+        672.0
+      ],
+      "state": {
+        "bundle_id": "dev.reshiki.ev387branch",
+        "pid": 75972,
+        "window_id": 6759,
+        "bounds": {
+          "X": 6.0,
+          "Height": 852.0,
+          "Y": 115.0,
+          "Width": 1280.0
+        },
+        "title": "Untitled \u2022 \u2014 ReShiki",
+        "checked_points": [],
+        "capture": "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev387/app/05-option-mid-drag.png"
+      },
+      "button_held": true
+    }
+  ],
+  "resumed_held_button": false,
+  "initial": {
+    "bundle_id": "dev.reshiki.ev387branch",
+    "pid": 75972,
+    "window_id": 6759,
+    "bounds": {
+      "X": 6.0,
+      "Height": 852.0,
+      "Y": 115.0,
+      "Width": 1280.0
+    },
+    "title": "Untitled \u2022 \u2014 ReShiki",
+    "checked_points": [
+      [
+        498.0,
+        575.0
+      ]
+    ]
+  },
+  "release_state": {
+    "bundle_id": "dev.reshiki.ev387branch",
+    "pid": 75972,
+    "window_id": 6759,
+    "bounds": {
+      "X": 6.0,
+      "Height": 852.0,
+      "Y": 115.0,
+      "Width": 1280.0
+    },
+    "title": "Untitled \u2022 \u2014 ReShiki",
+    "checked_points": [
+      [
+        563.0,
+        672.0
+      ]
+    ]
+  },
+  "released_capture": {
+    "bundle_id": "dev.reshiki.ev387branch",
+    "pid": 75972,
+    "window_id": 6759,
+    "bounds": {
+      "X": 6.0,
+      "Height": 852.0,
+      "Y": 115.0,
+      "Width": 1280.0
+    },
+    "title": "Untitled \u2022 \u2014 ReShiki",
+    "checked_points": [],
+    "capture": "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev387/app/05b-option-released.png"
+  }
+}
