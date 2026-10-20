@@ -1,0 +1,12 @@
+Launched with open -n ReShiki Verification.app
+Timestamp: 2026-10-20T16:32:57.985270+09:00
+pgrep -f .claude/worktrees/wf_9a402735-96b-2/target/debug/reshiki
+PID: 49245
+Command: /Users/shiranui/dev/ReShiki/.claude/worktrees/wf_9a402735-96b-2/target/debug/reshiki
+
+Protected existing installed ReShiki PID: 51217
+
+Part A cleanup 2026-10-20T16:35:37.606875+09:00
+Initial verification PID 49245 quit. A post-quit CUA observation reopened verification as PID 51237; that instance was also quit. No additional captures taken from the reopened instance.
+  PID  PPID COMMAND
+51217     1 /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki

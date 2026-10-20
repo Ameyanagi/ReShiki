@@ -1,0 +1,29 @@
+[
+  {
+    "file": "A1-3d-fit.png",
+    "width": 2560,
+    "height": 1704,
+    "pid": 49245,
+    "windowID": 6908,
+    "sha256": "99ff34bc313d2be3755e7d1e086c8470e5bf2211d59c7fe1714d12eddb24f0d3",
+    "ownershipEvidence": "A1-3d-fit.pid.json"
+  },
+  {
+    "file": "A2-3d-large.png",
+    "width": 2560,
+    "height": 1704,
+    "pid": 49245,
+    "windowID": 6908,
+    "sha256": "23c6b791c2914ba09ca5251c82660833eb311239052e2147b5d057b7caba4c92",
+    "ownershipEvidence": "A2-3d-large.pid.json"
+  },
+  {
+    "file": "A3-both.png",
+    "width": 2560,
+    "height": 1704,
+    "pid": 49245,
+    "windowID": 6908,
+    "sha256": "a24d1adffd5e0613091e2d7221e869f4aa9954f9577a9742ad9a79ca52999f99",
+    "ownershipEvidence": "A3-both.pid.json"
+  }
+]
