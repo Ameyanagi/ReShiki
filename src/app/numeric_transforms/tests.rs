@@ -939,3 +939,37 @@ fn numeric_size_apply_latency() {
     println!("1002 atoms, inward-label fallback: {:?}", start.elapsed());
     assert!((extent(&changed, &ids, Field::Width).unwrap() - target).abs() < 0.005);
 }
+
+#[test]
+fn tilt_steps_and_fields_leave_a_molecule_shown_only_in_3d_alone() {
+    use crate::canvas::tilt::{SHOWN_IN_3D, shown};
+    let (doc, molecule, drawn) = shown(reshiki::models3d::Display::ThreeD);
+    let positions = |doc: &Document, ids: [u64; 2]| {
+        ids.map(|id| {
+            let a = doc.atom(id).unwrap();
+            (a.position, a.depth)
+        })
+    };
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = doc.clone();
+    app.tab.selected = molecule.to_vec();
+    let frames = app.tab.history.undo_frames().count();
+    let _ = app.update(Message::Transform(Transform::TiltX(15.)));
+    assert_eq!(app.tab.doc, doc);
+    assert_eq!((app.status.as_str(), app.error), (SHOWN_IN_3D, true));
+    assert_eq!(app.tab.history.undo_frames().count(), frames);
+    assert_eq!(
+        transformed(&doc, &molecule, Field::TiltY, "30", false),
+        Err(SHOWN_IN_3D.into())
+    );
+    let mixed = [molecule, drawn].concat();
+    let tilted = transformed(&doc, &mixed, Field::TiltY, "30", false).unwrap();
+    assert_eq!(positions(&tilted, molecule), positions(&doc, molecule));
+    assert_ne!(positions(&tilted, drawn), positions(&doc, drawn));
+    app.tab.selected = mixed;
+    let _ = app.update(Message::Transform(Transform::TiltY(15.)));
+    assert_eq!(positions(&app.tab.doc, molecule), positions(&doc, molecule));
+    assert_ne!(positions(&app.tab.doc, drawn), positions(&doc, drawn));
+    assert_eq!(app.tab.history.undo_frames().count(), frames + 1);
+}

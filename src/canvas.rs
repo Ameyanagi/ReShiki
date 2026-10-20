@@ -212,6 +212,8 @@ pub enum Edit {
         target_text: Option<u64>,
     },
     TextBondRefused(String),
+    /// A refused tool gesture; shows its reason in the status bar.
+    Refused(String),
     PlaneBond(u64, reshiki::projection::growth::Endpoint),
     Ring(World, Option<World>),
     DelocalizedRing(World, Option<World>, u8),
