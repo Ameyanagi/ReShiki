@@ -1,0 +1,895 @@
+    Checking wgpu-types v27.0.1
+    Checking reshiki-chemistry v0.1.0 (/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/wasm-study/repo/crates/chemistry)
+    Checking winit v0.30.13
+    Checking cosmolkit-core v0.3.0 (https://github.com/Ameyanagi/COSMolKit.git?rev=252a1f3d6480fc4a0abcd51d76707f51f69b4406#252a1f3d)
+    Checking regex v1.13.1
+    Checking reqwest v0.13.5
+    Checking rfd v0.15.4
+    Checking reshiki-process v0.1.0 (/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/wasm-study/repo/native/process)
+    Checking opsin v0.1.0 (/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/wasm-study/repo/crates/opsin)
+warning: unused import: `process::Stdio`
+ --> crates/chemistry/src/inchi/generator.rs:9:23
+  |
+9 | use std::{path::Path, process::Stdio, time::Duration};
+  |                       ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `AsyncWriteExt`
+  --> crates/chemistry/src/inchi/generator.rs:11:35
+   |
+11 |     io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
+   |                                   ^^^^^^^^^^^^^
+
+warning: unreachable expression
+  --> crates/chemistry/src/native_order.rs:47:5
+   |
+46 |     return Err(Error::UnsupportedPlatform);
+   |     -------------------------------------- any code following this expression is unreachable
+47 |     Ok(entries.into_iter().map(|(_, i)| i).collect())
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unreachable expression
+   |
+   = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `helper`
+   --> crates/chemistry/src/inchi/generator.rs:232:5
+    |
+232 |     helper: &Path,
+    |     ^^^^^^ help: if this is intentional, prefix it with an underscore: `_helper`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `request`
+   --> crates/chemistry/src/inchi/generator.rs:233:5
+    |
+233 |     request: &[u8],
+    |     ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request`
+
+warning: unused variable: `timeout`
+   --> crates/chemistry/src/inchi/generator.rs:234:5
+    |
+234 |     timeout: Duration,
+    |     ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_timeout`
+
+warning: unused variable: `heap_bytes`
+   --> crates/chemistry/src/inchi/generator.rs:235:5
+    |
+235 |     heap_bytes: usize,
+    |     ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_heap_bytes`
+
+warning: variable does not need to be mutable
+  --> crates/chemistry/src/native_order.rs:38:9
+   |
+38 |     let mut entries: Vec<_> = keys.iter().enumerate().map(|(i, &key)| (key, i)).collect();
+   |         ----^^^^^^^
+   |         |
+   |         help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `entries`
+  --> crates/chemistry/src/native_order.rs:38:9
+   |
+38 |     let mut entries: Vec<_> = keys.iter().enumerate().map(|(i, &key)| (key, i)).collect();
+   |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_entries`
+
+warning: constant `MAX_STDERR_BYTES` is never used
+  --> crates/chemistry/src/inchi/generator.rs:17:7
+   |
+17 | const MAX_STDERR_BYTES: usize = 64 * 1024;
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `read_limited` is never used
+   --> crates/chemistry/src/inchi/generator.rs:125:10
+    |
+125 | async fn read_limited(
+    |          ^^^^^^^^^^^^
+
+warning: variant `Invalid` is never constructed
+  --> crates/chemistry/src/native_order.rs:20:5
+   |
+18 | pub enum Error {
+   |          ----- variant in this enum
+19 |     #[error("Invalid comparison-sort index")]
+20 |     Invalid,
+   |     ^^^^^^^
+   |
+   = note: `Error` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: function `at` is never used
+  --> crates/chemistry/src/native_order.rs:27:4
+   |
+27 | fn at<T>(items: &[T], i: usize) -> Result<&T, Error> {
+   |    ^^
+
+warning: function `at_mut` is never used
+  --> crates/chemistry/src/native_order.rs:30:4
+   |
+30 | fn at_mut<T>(items: &mut [T], i: usize) -> Result<&mut T, Error> {
+   |    ^^^^^^
+
+warning: `reshiki-chemistry` (lib) generated 14 warnings (run `cargo fix --lib -p reshiki-chemistry` to apply 8 suggestions)
+    Checking reshiki-model v0.1.0 (/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/wasm-study/repo/crates/model)
+    Checking wgpu v27.0.1
+    Checking iced_winit v0.14.1
+    Checking cryoglyph v0.1.0
+    Checking iced_wgpu v0.14.0
+    Checking iced_renderer v0.14.0
+    Checking iced_widget v0.14.2
+    Checking iced v0.14.0
+    Checking reshiki-geometry v0.1.0 (/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/wasm-study/repo/native/geometry)
+    Checking reshiki-io v0.1.0 (/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/wasm-study/repo/crates/io)
+warning: unused import: `process::Stdio`
+ --> crates/io/src/geometry/client.rs:4:26
+  |
+4 | use std::{path::PathBuf, process::Stdio, time::Duration};
+  |                          ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `AsyncWriteExt`
+ --> crates/io/src/geometry/client.rs:6:35
+  |
+6 |     io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
+  |                                   ^^^^^^^^^^^^^
+
+warning: unused variable: `executable`
+   --> crates/io/src/geometry/client.rs:344:5
+    |
+344 |     executable: PathBuf,
+    |     ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_executable`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `request`
+   --> crates/io/src/geometry/client.rs:345:5
+    |
+345 |     request: &[u8],
+    |     ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_request`
+
+warning: unused variable: `deadline`
+   --> crates/io/src/geometry/client.rs:346:5
+    |
+346 |     deadline: impl std::future::Future<Output = ()>,
+    |     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_deadline`
+
+warning: constant `MAX_STDERR_BYTES` is never used
+  --> crates/io/src/geometry/client.rs:10:7
+   |
+10 | const MAX_STDERR_BYTES: usize = 64 * 1024;
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `read_limited` is never used
+   --> crates/io/src/geometry/client.rs:309:10
+    |
+309 | async fn read_limited(
+    |          ^^^^^^^^^^^^
+
+warning: `reshiki-io` (lib) generated 7 warnings (run `cargo fix --lib -p reshiki-io` to apply 5 suggestions)
+    Checking reshiki v0.12.0 (/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/wasm-study/repo)
+error[E0432]: unresolved import `reshiki_agent`
+  --> src/lib.rs:31:9
+   |
+31 | pub use reshiki_agent::envelope;
+   |         ^^^^^^^^^^^^^ use of unresolved module or unlinked crate `reshiki_agent`
+   |
+   = help: if you wanted to use a crate named `reshiki_agent`, use `cargo add reshiki_agent` to add it to your `Cargo.toml`
+
+error[E0432]: unresolved import `tokio::process`
+   --> src/assistant/codex.rs:14:5
+    |
+ 14 |     process::{Child, ChildStdin, ChildStdout, Command},
+    |     ^^^^^^^ could not find `process` in `tokio`
+    |
+note: found an item that was configured out
+   --> /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/lib.rs:534:13
+    |
+534 |     pub mod process;
+    |             ^^^^^^^
+    |
+   ::: /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/macros/cfg.rs:397:19
+    |
+397 |             #[cfg(feature = "process")]
+    |                   ------------------- the item is gated behind the `process` feature
+
+error[E0432]: unresolved import `reshiki_agent`
+ --> src/assistant/mod.rs:7:9
+  |
+7 | pub use reshiki_agent::render_progress;
+  |         ^^^^^^^^^^^^^ use of unresolved module or unlinked crate `reshiki_agent`
+  |
+  = help: if you wanted to use a crate named `reshiki_agent`, use `cargo add reshiki_agent` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `reshiki_agent` in this scope
+ --> src/cli/compose.rs:9:5
+  |
+9 | use reshiki_agent::ops::budget::Budgets;
+  |     ^^^^^^^^^^^^^ use of unresolved module or unlinked crate `reshiki_agent`
+  |
+  = help: if you wanted to use a crate named `reshiki_agent`, use `cargo add reshiki_agent` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `reshiki_agent` in this scope
+ --> src/cli/io.rs:7:5
+  |
+7 | use reshiki_agent::ops::budget::Budgets;
+  |     ^^^^^^^^^^^^^ use of unresolved module or unlinked crate `reshiki_agent`
+  |
+  = help: if you wanted to use a crate named `reshiki_agent`, use `cargo add reshiki_agent` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `reshiki_agent` in this scope
+ --> src/cli/mcp_usage.rs:5:5
+  |
+5 | use reshiki_agent::stability::{GUIDE_URL, NOTICE};
+  |     ^^^^^^^^^^^^^ use of unresolved module or unlinked crate `reshiki_agent`
+  |
+  = help: if you wanted to use a crate named `reshiki_agent`, use `cargo add reshiki_agent` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `reshiki_agent` in this scope
+ --> src/cli/reference.rs:3:5
+  |
+3 | use reshiki_agent::{
+  |     ^^^^^^^^^^^^^ use of unresolved module or unlinked crate `reshiki_agent`
+  |
+  = help: if you wanted to use a crate named `reshiki_agent`, use `cargo add reshiki_agent` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `reshiki_agent` in this scope
+  --> src/cli/skill/references.rs:14:5
+   |
+14 | use reshiki_agent::ops::{
+   |     ^^^^^^^^^^^^^ use of unresolved module or unlinked crate `reshiki_agent`
+   |
+   = help: if you wanted to use a crate named `reshiki_agent`, use `cargo add reshiki_agent` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `reshiki_agent` in this scope
+  --> src/cli.rs:43:5
+   |
+43 | use reshiki_agent::{
+   |     ^^^^^^^^^^^^^ use of unresolved module or unlinked crate `reshiki_agent`
+   |
+   = help: if you wanted to use a crate named `reshiki_agent`, use `cargo add reshiki_agent` to add it to your `Cargo.toml`
+
+error[E0432]: unresolved import `reshiki_agent`
+ --> src/assistant/mod.rs:8:9
+  |
+8 | pub use reshiki_agent::{
+  |         ^^^^^^^^^^^^^ use of unresolved module or unlinked crate `reshiki_agent`
+  |
+  = help: if you wanted to use a crate named `reshiki_agent`, use `cargo add reshiki_agent` to add it to your `Cargo.toml`
+
+error[E0432]: unresolved import `tokio::process`
+   --> src/clipboard.rs:15:12
+    |
+ 15 | use tokio::process::Command;
+    |            ^^^^^^^ could not find `process` in `tokio`
+    |
+note: found an item that was configured out
+   --> /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/lib.rs:534:13
+    |
+534 |     pub mod process;
+    |             ^^^^^^^
+    |
+   ::: /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/macros/cfg.rs:397:19
+    |
+397 |             #[cfg(feature = "process")]
+    |                   ------------------- the item is gated behind the `process` feature
+
+error[E0432]: unresolved import `tokio::process`
+   --> src/native_process.rs:2:65
+    |
+  2 | use tokio::{io::AsyncRead, io::AsyncReadExt, io::AsyncWriteExt, process::ChildStdin};
+    |                                                                 ^^^^^^^ could not find `process` in `tokio`
+    |
+note: found an item that was configured out
+   --> /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/lib.rs:534:13
+    |
+534 |     pub mod process;
+    |             ^^^^^^^
+    |
+   ::: /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/macros/cfg.rs:397:19
+    |
+397 |             #[cfg(feature = "process")]
+    |                   ------------------- the item is gated behind the `process` feature
+
+error[E0433]: cannot find module or crate `reshiki_agent` in this scope
+  --> src/assistant/codex.rs:25:5
+   |
+25 | use reshiki_agent::tool_spec::ToolSpec;
+   |     ^^^^^^^^^^^^^ use of unresolved module or unlinked crate `reshiki_agent`
+   |
+   = help: if you wanted to use a crate named `reshiki_agent`, use `cargo add reshiki_agent` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `reshiki_agent` in this scope
+ --> src/cli/commands.rs:9:5
+  |
+9 | use reshiki_agent::{
+  |     ^^^^^^^^^^^^^ use of unresolved module or unlinked crate `reshiki_agent`
+  |
+  = help: if you wanted to use a crate named `reshiki_agent`, use `cargo add reshiki_agent` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `reshiki_agent` in this scope
+ --> src/cli/host.rs:8:5
+  |
+8 | use reshiki_agent::{
+  |     ^^^^^^^^^^^^^ use of unresolved module or unlinked crate `reshiki_agent`
+  |
+  = help: if you wanted to use a crate named `reshiki_agent`, use `cargo add reshiki_agent` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `reshiki_agent` in this scope
+  --> src/cli/skill/template.rs:15:5
+   |
+15 | use reshiki_agent::{
+   |     ^^^^^^^^^^^^^ use of unresolved module or unlinked crate `reshiki_agent`
+   |
+   = help: if you wanted to use a crate named `reshiki_agent`, use `cargo add reshiki_agent` to add it to your `Cargo.toml`
+
+error[E0432]: unresolved import `tokio::process`
+   --> src/printing.rs:15:12
+    |
+ 15 | use tokio::process::Command;
+    |            ^^^^^^^ could not find `process` in `tokio`
+    |
+note: found an item that was configured out
+   --> /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/lib.rs:534:13
+    |
+534 |     pub mod process;
+    |             ^^^^^^^
+    |
+   ::: /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/macros/cfg.rs:397:19
+    |
+397 |             #[cfg(feature = "process")]
+    |                   ------------------- the item is gated behind the `process` feature
+
+error[E0433]: cannot find module or crate `reshiki_agent` in this scope
+   --> src/cli.rs:144:34
+    |
+144 |                 ("tools".into(), reshiki_agent::ops::catalog::catalog_json()),
+    |                                  ^^^^^^^^^^^^^ use of unresolved module or unlinked crate `reshiki_agent`
+    |
+    = help: if you wanted to use a crate named `reshiki_agent`, use `cargo add reshiki_agent` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `reshiki_agent` in this scope
+   --> src/cli.rs:216:5
+    |
+216 |     reshiki_agent::ops::render::FORMATS
+    |     ^^^^^^^^^^^^^ use of unresolved module or unlinked crate `reshiki_agent`
+    |
+    = help: if you wanted to use a crate named `reshiki_agent`, use `cargo add reshiki_agent` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find `redirect` in `reqwest`
+   --> src/updates/install.rs:68:28
+    |
+ 68 |         .redirect(reqwest::redirect::Policy::custom(|attempt| {
+    |                            ^^^^^^^^ could not find `redirect` in `reqwest`
+    |
+note: found an item that was configured out
+   --> /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-0.13.5/src/lib.rs:380:13
+    |
+274 |         #[cfg(not(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none"))))]
+    |                  ----------------------------------------------------------------------------- the item is gated here
+...
+380 |     pub mod redirect;
+    |             ^^^^^^^^
+
+error[E0433]: cannot find `redirect` in `reqwest`
+   --> src/updates.rs:278:28
+    |
+278 |         .redirect(reqwest::redirect::Policy::none())
+    |                            ^^^^^^^^ could not find `redirect` in `reqwest`
+    |
+note: found an item that was configured out
+   --> /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-0.13.5/src/lib.rs:380:13
+    |
+274 |         #[cfg(not(all(target_arch = "wasm32", any(target_os = "unknown", target_os = "none"))))]
+    |                  ----------------------------------------------------------------------------- the item is gated here
+...
+380 |     pub mod redirect;
+    |             ^^^^^^^^
+
+error[E0433]: cannot find `fs` in `tokio`
+   --> src/assistant/codex.rs:607:12
+    |
+607 |     tokio::fs::write(&path, png)
+    |            ^^ could not find `fs` in `tokio`
+    |
+note: found an item that was configured out
+   --> /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/lib.rs:523:13
+    |
+523 |     pub mod fs;
+    |             ^^
+    |
+   ::: /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/macros/cfg.rs:132:19
+    |
+132 |             #[cfg(feature = "fs")]
+    |                   -------------- the item is gated behind the `fs` feature
+help: consider importing this module
+    |
+  2 + use std::fs;
+    |
+help: if you import `fs`, refer to it directly
+    |
+607 -     tokio::fs::write(&path, png)
+607 +     fs::write(&path, png)
+    |
+
+error[E0433]: cannot find `fs` in `tokio`
+   --> src/assistant/codex.rs:811:20
+    |
+811 |             tokio::fs::write(&path, png)
+    |                    ^^ could not find `fs` in `tokio`
+    |
+note: found an item that was configured out
+   --> /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/lib.rs:523:13
+    |
+523 |     pub mod fs;
+    |             ^^
+    |
+   ::: /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/macros/cfg.rs:132:19
+    |
+132 |             #[cfg(feature = "fs")]
+    |                   -------------- the item is gated behind the `fs` feature
+help: consider importing this module
+    |
+  2 + use std::fs;
+    |
+help: if you import `fs`, refer to it directly
+    |
+811 -             tokio::fs::write(&path, png)
+811 +             fs::write(&path, png)
+    |
+
+error[E0433]: cannot find `fs` in `tokio`
+   --> src/updates/install.rs:105:27
+    |
+105 |     let mut file = tokio::fs::File::create(path)
+    |                           ^^ could not find `fs` in `tokio`
+    |
+note: found an item that was configured out
+   --> /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/lib.rs:523:13
+    |
+523 |     pub mod fs;
+    |             ^^
+    |
+   ::: /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/macros/cfg.rs:132:19
+    |
+132 |             #[cfg(feature = "fs")]
+    |                   -------------- the item is gated behind the `fs` feature
+help: consider importing this struct
+    |
+  2 + use std::fs::File;
+    |
+help: if you import `File`, refer to it directly
+    |
+105 -     let mut file = tokio::fs::File::create(path)
+105 +     let mut file = File::create(path)
+    |
+
+error[E0433]: cannot find `fs` in `tokio`
+   --> src/updates/install.rs:195:17
+    |
+195 |         &tokio::fs::read_to_string(manifest)
+    |                 ^^ could not find `fs` in `tokio`
+    |
+note: found an item that was configured out
+   --> /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/lib.rs:523:13
+    |
+523 |     pub mod fs;
+    |             ^^
+    |
+   ::: /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/macros/cfg.rs:132:19
+    |
+132 |             #[cfg(feature = "fs")]
+    |                   -------------- the item is gated behind the `fs` feature
+help: consider importing this module
+    |
+  2 + use std::fs;
+    |
+help: if you import `fs`, refer to it directly
+    |
+195 -         &tokio::fs::read_to_string(manifest)
+195 +         &fs::read_to_string(manifest)
+    |
+
+error[E0433]: cannot find `fs` in `tokio`
+   --> src/updates/install.rs:343:18
+    |
+343 |     match tokio::fs::remove_file(&ready).await {
+    |                  ^^ could not find `fs` in `tokio`
+    |
+note: found an item that was configured out
+   --> /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/lib.rs:523:13
+    |
+523 |     pub mod fs;
+    |             ^^
+    |
+   ::: /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/macros/cfg.rs:132:19
+    |
+132 |             #[cfg(feature = "fs")]
+    |                   -------------- the item is gated behind the `fs` feature
+help: consider importing this module
+    |
+  2 + use std::fs;
+    |
+help: if you import `fs`, refer to it directly
+    |
+343 -     match tokio::fs::remove_file(&ready).await {
+343 +     match fs::remove_file(&ready).await {
+    |
+
+error[E0433]: cannot find `fs` in `tokio`
+   --> src/updates/install.rs:357:12
+    |
+357 |     tokio::fs::write(
+    |            ^^ could not find `fs` in `tokio`
+    |
+note: found an item that was configured out
+   --> /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/lib.rs:523:13
+    |
+523 |     pub mod fs;
+    |             ^^
+    |
+   ::: /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.53.1/src/macros/cfg.rs:132:19
+    |
+132 |             #[cfg(feature = "fs")]
+    |                   -------------- the item is gated behind the `fs` feature
+help: consider importing this module
+    |
+  2 + use std::fs;
+    |
+help: if you import `fs`, refer to it directly
+    |
+357 -     tokio::fs::write(
+357 +     fs::write(
+    |
+
+warning: method call on a diverging inference variable
+   --> src/assistant/codex.rs:703:112
+    |
+703 |                         result = canvas.call_progress(name, arguments, &tool_engine, Some(progress)) => result.map(tool_response),
+    |                                                                                                                ^^^
+    |
+    = help: consider providing a type annotation
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+    = note: for more information, see issue #156047 <https://github.com/rust-lang/rust/issues/156047>
+    = note: `#[warn(method_call_on_diverging_infer_var)]` (part of `#[warn(future_incompatible)]`) on by default
+
+error[E0277]: `!` is not an iterator
+   --> src/assistant/codex.rs:703:112
+    |
+703 |                         result = canvas.call_progress(name, arguments, &tool_engine, Some(progress)) => result.map(tool_response),
+    |                                                                                                                ^^^ `!` is not an iterator
+    |
+    = help: the trait `std::iter::Iterator` is not implemented for `!`
+
+error[E0277]: `!` is not an iterator
+   --> src/assistant/codex.rs:703:105
+    |
+703 |                         result = canvas.call_progress(name, arguments, &tool_engine, Some(progress)) => result.map(tool_response),
+    |                                                                                                         ^^^^^^^^^^^^^^^^^^^^^^^^^ `!` is not an iterator
+    |
+    = help: the trait `std::iter::Iterator` is not implemented for `!`
+
+error[E0308]: `if` and `else` have incompatible types
+   --> src/assistant/codex.rs:708:21
+    |
+693 |                    } else if let Some(canvas) = canvas.filter(|_| allow_planning) {
+    |  _________________________-
+694 | |                      let _ = progress.try_send(Progress::Status(
+695 | |                          if name == "canvas_inspect" {
+696 | |                              "Inspecting the canvas…"
+...   |
+702 | |/                     tokio::select! {
+703 | ||                         result = canvas.call_progress(name, arguments, &tool_engine, Some(progress)) => result.map(tool_response),
+704 | ||                         _ = server.cancel.cancelled() => return Err("Stopped".into()),
+705 | ||                         _ = tokio::time::sleep_until(server.timeout.hard.min(tokio::time::Instant::now() + IDLE_LIMIT)) => retur...
+706 | ||                     }
+    | ||_____________________- expected because of this
+707 | |                  } else {
+708 | |                      Err("Canvas tools are unavailable for this request".into())
+    | |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Map<!, fn(_) -> Value {tool_response}>`, found `Result<_, _>`
+709 | |                  };
+    | |__________________- `if` and `else` have incompatible types
+    |
+    = note: expected struct `std::iter::Map<!, fn({type error}) -> serde_json::Value {tool_response}>`
+                 found enum `Result<_, _>`
+help: use the `?` operator to extract the `Result<_, _>` value, propagating a `Result::Err` value to the caller
+    |
+709 |                 }?;
+    |                  +
+
+warning: method call on a diverging inference variable
+   --> src/assistant/codex.rs:793:26
+    |
+793 |             }) => result.map_err(|e| e.to_string())??,
+    |                          ^^^^^^^
+    |
+    = help: consider providing a type annotation
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+    = note: for more information, see issue #156047 <https://github.com/rust-lang/rust/issues/156047>
+
+error[E0599]: no method named `map_err` found for type `_` in the current scope
+   --> src/assistant/codex.rs:793:26
+    |
+793 |             }) => result.map_err(|e| e.to_string())??,
+    |                          ^^^^^^^
+    |
+    = help: items from traits can only be used if the trait is in scope
+help: the following traits which provide `map_err` are implemented but not in scope; perhaps you want to import one of them
+    |
+  2 + use iced::futures::TryFutureExt;
+    |
+  2 + use iced::futures::TryStreamExt;
+    |
+help: there is a method `sink_map_err` with a similar name
+    |
+793 |             }) => result.sink_map_err(|e| e.to_string())??,
+    |                          +++++
+
+error[E0277]: the size for values of type `[u8]` cannot be known at compilation time
+  --> src/cli/render.rs:45:9
+   |
+45 |     let Some(bytes) = bytes else {
+   |         ^^^^^^^^^^^ doesn't have a size known at compile-time
+   |
+   = help: the trait `Sized` is not implemented for `[u8]`
+note: required by a bound in `std::prelude::v1::Some`
+  --> /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library/core/src/option.rs:606:4
+
+error[E0433]: cannot find module or crate `reshiki_agent` in this scope
+   --> src/cli.rs:149:33
+    |
+149 |             writeln!(out, "{}", reshiki_agent::schema()).map_err(CliError::Stdout)
+    |                                 ^^^^^^^^^^^^^ use of unresolved module or unlinked crate `reshiki_agent`
+    |
+    = help: if you wanted to use a crate named `reshiki_agent`, use `cargo add reshiki_agent` to add it to your `Cargo.toml`
+
+warning: method call on a diverging inference variable
+   --> src/clipboard.rs:290:23
+    |
+290 |             if output.len() > JSON_LIMIT {
+    |                       ^^^
+    |
+    = help: consider providing a type annotation
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+    = note: for more information, see issue #156047 <https://github.com/rust-lang/rust/issues/156047>
+
+error[E0599]: no method named `len` found for type `!` in the current scope
+   --> src/clipboard.rs:290:23
+    |
+290 |             if output.len() > JSON_LIMIT {
+    |                       ^^^
+    |
+help: there is a method `le` with a similar name, but with different arguments
+   --> /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library/core/src/cmp.rs:1440:4
+
+warning: unreachable call
+   --> src/clipboard.rs:293:13
+    |
+293 |             Ok(output)
+    |             ^^ ------ any code following this expression is unreachable
+    |             |
+    |             unreachable call
+    |
+    = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+error[E0277]: the size for values of type `[u8]` cannot be known at compilation time
+   --> src/clipboard.rs:297:25
+    |
+297 |         let (_, output, errors, status) = tokio::try_join!(write, read, errors, wait)?;
+    |                         ^^^^^^ doesn't have a size known at compile-time
+    |
+    = help: the trait `Sized` is not implemented for `[u8]`
+    = note: all local variables must have a statically known size
+
+error[E0277]: the size for values of type `[u8]` cannot be known at compilation time
+   --> src/clipboard.rs:297:43
+    |
+297 |         let (_, output, errors, status) = tokio::try_join!(write, read, errors, wait)?;
+    |                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ doesn't have a size known at compile-time
+    |
+    = help: the trait `Sized` is not implemented for `[u8]`
+    = note: only the last element of a tuple may have a dynamically sized type
+
+error[E0277]: the size for values of type `[u8]` cannot be known at compilation time
+   --> src/clipboard.rs:297:17
+    |
+297 |         let (_, output, errors, status) = tokio::try_join!(write, read, errors, wait)?;
+    |                 ^^^^^^ doesn't have a size known at compile-time
+    |
+    = help: the trait `Sized` is not implemented for `[u8]`
+    = note: all local variables must have a statically known size
+
+warning: method call on a diverging inference variable
+   --> src/printing.rs:182:18
+    |
+182 |         if bytes.len() > 65536 {
+    |                  ^^^
+    |
+    = help: consider providing a type annotation
+    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+    = note: for more information, see issue #156047 <https://github.com/rust-lang/rust/issues/156047>
+
+error[E0599]: no method named `len` found for type `!` in the current scope
+   --> src/printing.rs:182:18
+    |
+182 |         if bytes.len() > 65536 {
+    |                  ^^^
+    |
+help: there is a method `le` with a similar name, but with different arguments
+   --> /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library/core/src/cmp.rs:1440:4
+
+warning: unreachable call
+   --> src/printing.rs:185:9
+    |
+185 |         Ok(bytes)
+    |         ^^ ----- any code following this expression is unreachable
+    |         |
+    |         unreachable call
+
+error[E0277]: the size for values of type `[u8]` cannot be known at compilation time
+   --> src/printing.rs:188:20
+    |
+188 |     let (_, bytes, errors, status) = tokio::try_join!(write, read, drain_errors(errors), wait)?;
+    |                    ^^^^^^ doesn't have a size known at compile-time
+    |
+    = help: the trait `Sized` is not implemented for `[u8]`
+    = note: all local variables must have a statically known size
+
+error[E0277]: the size for values of type `[u8]` cannot be known at compilation time
+   --> src/printing.rs:188:38
+    |
+188 |     let (_, bytes, errors, status) = tokio::try_join!(write, read, drain_errors(errors), wait)?;
+    |                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ doesn't have a size known at compile-time
+    |
+    = help: the trait `Sized` is not implemented for `[u8]`
+    = note: only the last element of a tuple may have a dynamically sized type
+
+error[E0277]: the size for values of type `[u8]` cannot be known at compilation time
+   --> src/printing.rs:188:13
+    |
+188 |     let (_, bytes, errors, status) = tokio::try_join!(write, read, drain_errors(errors), wait)?;
+    |             ^^^^^ doesn't have a size known at compile-time
+    |
+    = help: the trait `Sized` is not implemented for `[u8]`
+    = note: all local variables must have a statically known size
+
+error[E0599]: no method named `chunk` found for struct `reqwest::Response` in the current scope
+   --> src/updates/install.rs:112:10
+    |
+111 |       while let Some(chunk) = response
+    |  _____________________________-
+112 | |         .chunk()
+    | |         -^^^^^ method not found in `reqwest::Response`
+    | |_________|
+    |
+
+error[E0425]: cannot find function `stage` in this scope
+   --> src/updates/install.rs:218:23
+    |
+218 |         let payload = stage(&asset, directory.path(), &release.version)?;
+    |                       ^^^^^ not found in this scope
+
+error[E0599]: no method named `chunk` found for struct `reqwest::Response` in the current scope
+   --> src/updates.rs:363:10
+    |
+362 |       while let Some(chunk) = response
+    |  _____________________________-
+363 | |         .chunk()
+    | |         -^^^^^ method not found in `reqwest::Response`
+    | |_________|
+    |
+
+error[E0433]: cannot find module or crate `open` in this scope
+   --> src/updates.rs:452:9
+    |
+452 |         open::that(url).map_err(|e| format!("Could not open the browser: {e}"))
+    |         ^^^^ use of unresolved module or unlinked crate `open`
+    |
+    = help: if you wanted to use a crate named `open`, use `cargo add open` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `reshiki_agent` in this scope
+  --> src/cli/reference.rs:46:47
+   |
+46 |     fence(&mut text, "json", &format!("{:#}", reshiki_agent::schema()));
+   |                                               ^^^^^^^^^^^^^ use of unresolved module or unlinked crate `reshiki_agent`
+   |
+   = help: if you wanted to use a crate named `reshiki_agent`, use `cargo add reshiki_agent` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `reshiki_agent` in this scope
+  --> src/cli/skill.rs:49:43
+   |
+49 |         (PROPOSAL_SCHEMA, format!("{}\n", reshiki_agent::schema())),
+   |                                           ^^^^^^^^^^^^^ use of unresolved module or unlinked crate `reshiki_agent`
+   |
+   = help: if you wanted to use a crate named `reshiki_agent`, use `cargo add reshiki_agent` to add it to your `Cargo.toml`
+
+error[E0599]: no associated function or constant named `new` found for struct `tokio::runtime::Runtime` in the current scope
+  --> src/libreoffice.rs:65:52
+   |
+65 |             let runtime = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
+   |                                                    ^^^ associated function or constant not found in `tokio::runtime::Runtime`
+
+error[E0599]: no associated function or constant named `new` found for struct `tokio::runtime::Runtime` in the current scope
+  --> src/libreoffice.rs:71:52
+   |
+71 |             let runtime = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
+   |                                                    ^^^ associated function or constant not found in `tokio::runtime::Runtime`
+
+error[E0599]: no method named `write_input` found for struct `reshiki_process::Child` in the current scope
+   --> src/naming/client.rs:102:25
+    |
+102 |             match child.write_input(
+    |                   ------^^^^^^^^^^^ method not found in `reshiki_process::Child`
+
+error[E0599]: no method named `close_input` found for struct `reshiki_process::Child` in the current scope
+   --> src/naming/client.rs:114:19
+    |
+114 |             child.close_input();
+    |                   ^^^^^^^^^^^ method not found in `reshiki_process::Child`
+
+error[E0599]: no method named `read_output` found for struct `reshiki_process::Child` in the current scope
+   --> src/naming/client.rs:117:58
+    |
+117 |             output_closed = read_available(|bytes| child.read_output(bytes), &mut output)
+    |                                                          ^^^^^^^^^^^ method not found in `reshiki_process::Child`
+
+error[E0599]: no method named `read_errors` found for struct `reshiki_process::Child` in the current scope
+   --> src/naming/client.rs:121:58
+    |
+121 |             errors_closed = read_available(|bytes| child.read_errors(bytes), &mut errors)
+    |                                                          ^^^^^^^^^^^ method not found in `reshiki_process::Child`
+
+error[E0599]: no method named `try_wait` found for struct `reshiki_process::Child` in the current scope
+   --> src/naming/client.rs:125:28
+    |
+125 |             status = child.try_wait().map_err(|e| Error::Worker(e.to_string()))?;
+    |                            ^^^^^^^^ method not found in `reshiki_process::Child`
+
+error[E0599]: no method named `terminate` found for struct `reshiki_process::Child` in the current scope
+   --> src/naming/client.rs:129:23
+    |
+129 |                 child.terminate();
+    |                       ^^^^^^^^^ method not found in `reshiki_process::Child`
+
+error[E0599]: no method named `check` found for struct `reshiki_process::Child` in the current scope
+   --> src/naming/client.rs:132:29
+    |
+132 |                 match child.check() {
+    |                             ^^^^^ method not found in `reshiki_process::Child`
+
+error[E0599]: no method named `try_wait` found for struct `reshiki_process::Child` in the current scope
+   --> src/naming/client.rs:146:30
+    |
+145 |                           if child
+    |  ____________________________-
+146 | |                             .try_wait()
+    | |                             -^^^^^^^^ method not found in `reshiki_process::Child`
+    | |_____________________________|
+    |
+
+error[E0599]: no method named `https_only` found for struct `ClientBuilder` in the current scope
+  --> src/updates/install.rs:64:10
+   |
+63 | /     reqwest::Client::builder()
+64 | |         .https_only(true)
+   | |         -^^^^^^^^^^ method not found in `ClientBuilder`
+   | |_________|
+   |
+
+error[E0599]: no method named `https_only` found for struct `ClientBuilder` in the current scope
+   --> src/updates.rs:277:10
+    |
+275 | /     reqwest::Client::builder()
+276 | |         .user_agent(concat!("ReShiki/", env!("CARGO_PKG_VERSION")))
+277 | |         .https_only(true)
+    | |         -^^^^^^^^^^ method not found in `ClientBuilder`
+    | |_________|
+    |
+
+Some errors have detailed explanations: E0277, E0308, E0425, E0432, E0433, E0599.
+For more information about an error, try `rustc --explain E0277`.
+warning: `reshiki` (lib) generated 6 warnings
+error: could not compile `reshiki` (lib) due to 59 previous errors; 10 warnings emitted

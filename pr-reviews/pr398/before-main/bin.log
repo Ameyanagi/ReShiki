@@ -1,0 +1,88 @@
+   Compiling bytemuck_derive v1.12.1
+   Compiling futures-macro v0.3.34
+   Compiling wasm-bindgen-macro-support v0.2.128
+   Compiling thiserror-impl v2.0.20
+   Compiling synstructure v0.14.0
+    Checking zerocopy v0.8.57
+    Checking moxcms v0.8.1
+   Compiling serde_derive v1.0.229
+   Compiling zerofrom-derive v0.1.8
+    Checking futures-util v0.3.34
+    Checking bytemuck v1.25.2
+    Checking thiserror v2.0.20
+   Compiling yoke-derive v0.8.3
+    Checking font-types v0.10.1
+    Checking read-fonts v0.35.0
+    Checking zerofrom v0.1.8
+   Compiling zerovec-derive v0.11.6
+    Checking lyon_geom v1.0.19
+    Checking yoke v0.8.3
+   Compiling displaydoc v0.2.7
+    Checking futures-executor v0.3.34
+    Checking serde v1.0.229
+    Checking futures v0.3.34
+    Checking lyon_path v1.0.19
+    Checking font-types v0.12.5
+    Checking zerovec v0.11.8
+    Checking half v2.7.1
+    Checking rgb v0.8.53
+    Checking read-fonts v0.41.0
+    Checking tiff v0.11.3
+    Checking tiny-skia-path v0.11.4
+    Checking tiny-skia-path v0.12.0
+    Checking font-types v0.11.3
+    Checking tinystr v0.8.4
+   Compiling tokio-macros v2.7.2
+    Checking kamadak-exif v0.6.1
+    Checking read-fonts v0.39.2
+    Checking icu_locale_core v2.3.0
+    Checking image v0.25.10
+    Checking rustybuzz v0.20.1
+    Checking tokio v1.53.1
+    Checking cosmolkit-inchi v0.3.0 (https://github.com/Ameyanagi/COSMolKit.git?rev=252a1f3d6480fc4a0abcd51d76707f51f69b4406#252a1f3d)
+   Compiling wasm-bindgen-macro v0.2.128
+    Checking wasm-bindgen v0.2.128
+    Checking svgtypes v0.15.3
+    Checking skrifa v0.37.0
+    Checking harfrust v0.3.2
+    Checking potential_utf v0.1.6
+    Checking zerotrie v0.2.5
+   Compiling wgpu v27.0.1
+   Compiling icu_normalizer_data v2.3.0
+    Checking js-sys v0.3.105
+    Checking foldhash v0.2.0
+   Compiling icu_properties_data v2.3.0
+    Checking utf8_iter v1.0.4
+    Checking svg_fmt v0.4.5
+   Compiling litrs v1.0.0
+    Checking usvg v0.45.1 (/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/wasm-study/repo/vendor/usvg)
+    Checking swash v0.2.10
+   Compiling document-features v0.2.12
+    Checking icu_collections v2.3.0
+   Compiling rustix v1.1.4
+    Checking skrifa v0.44.0
+    Checking harfrust v0.12.0
+    Checking hashbrown v0.16.1
+   Compiling io-lifetimes v2.0.4
+   Compiling io-lifetimes v3.0.1
+    Checking icu_provider v2.3.1
+    Checking heapless v0.7.17
+    Checking tiny-skia v0.11.4
+    Checking tiny-skia v0.12.0
+    Checking cosmic-text v0.15.0
+    Checking cobs v0.3.0
+   Compiling tracing-attributes v0.1.31
+    Checking num-integer v0.1.47
+    Checking tracing-core v0.1.36
+    Checking float_next_after v1.0.0
+   Compiling io-extras v0.19.0
+    Checking errno v0.3.14
+error: The target OS is "unknown" or "none", so it's unsupported by the errno crate.
+ --> /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/errno-0.3.14/src/sys.rs:8:1
+  |
+8 | compile_error!("The target OS is \"unknown\" or \"none\", so it's unsupported by the errno crate.");
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+    Checking static_assertions v1.1.0
+error: could not compile `errno` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

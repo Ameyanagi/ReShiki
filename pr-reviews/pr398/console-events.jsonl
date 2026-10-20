@@ -1,0 +1,1 @@
+{"capturedAt":"2026-10-20T16:27:27.219Z","method":"Log.entryAdded","params":{"entry":{"source":"network","level":"error","text":"Failed to load resource: the server responded with a status of 404 (Not Found)","timestamp":1792513592809.733,"url":"http://localhost:63925/favicon.ico","networkRequestId":"11627.5"}}}

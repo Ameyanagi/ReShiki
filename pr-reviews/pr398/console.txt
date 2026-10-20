@@ -1,0 +1,18 @@
+ReShiki isolated Chrome console capture
+Page: http://localhost:63925/examples/
+Capture: CDP Runtime.enable + Log.enable, page target only.
+Buffered startup messages were requested on attachment; monitoring continued until isolated Chrome shutdown.
+
+2026-10-20T16:26:32.809733+00:00 [error] [network] Failed to load resource: the server responded with a status of 404 (Not Found) (http://localhost:63925/favicon.ico)
+
+No Runtime.consoleAPICalled warning/error or Runtime.exceptionThrown event and no application panic was captured.
+
+Harness evaluation issue (not an application error):
+One CDP evaluation returned SyntaxError: Unexpected identifier 'window' because top-level await was used before enabling Runtime.evaluate replMode.
+After enabling replMode, the same save("smiles") evaluation succeeded. Full evaluation responses: api-results.jsonl.
+
+Backend: navigator.gpu present; requestAdapter() succeeded (vendor apple, architecture metal-3).
+The already-rendered canvas returned a non-null getContext("webgpu") context, confirming WebGPU for this run.
+WebGL fallback was not tested.
+
+Isolated instance cleanup: {"checkedAt": "2026-10-20T16:31:23.650377+00:00", "isolatedChromeProcesses": [], "port9333Closed": true}

@@ -1,0 +1,3 @@
+.rw-r--r--@ 23M shiranui 21 Oct 01:43 packages/editor/dist/editor/reshiki_bg.wasm
+.rw-r--r--@ 13M shiranui 21 Oct 01:43 packages/editor/dist/wasm/reshiki_web_bg.wasm
+ 4947808

@@ -1,0 +1,4 @@
+    Finished `release` profile [optimized] target(s) in 0.37s
+reshiki_bg.wasm: 22755151 bytes, 8323805 gzip -9
+reshiki_web_bg.wasm: 13081297 bytes, 4947373 gzip -9
+CARGO_INCREMENTAL=0 CARGO_TARGET_DIR=$PWD/target scripts/build_wasm.sh  241.23s user 2.37s system 385% cpu 1:03.12 total

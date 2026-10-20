@@ -1,0 +1,43 @@
+{
+  "backend": {},
+  "start": {
+    "smiles": "EXCEPTION: Error: Draw or import a molecule first\n    at __wbg_Error_67e7344beaa85059 (http://localhost:63925/dist/editor/reshiki.js:78:25)\n    at http://localhost:63925/dist/editor/reshiki_bg.wasm:wasm-function[11492]:0xf17541\n    at http://localhost:63925/dist/editor/reshiki_bg.wasm:wasm-function[1296]:0x6f9cd2\n    at http://localhost:63925/dist/editor/reshiki_bg.wasm:wasm-function[6722]:0xdc50bd\n    at http://localhost:63925/dist/editor/reshiki_bg.wasm:wasm-function[14260]:0xf7aa4b\n    at __wasm_bindgen_func_elem_12758 (http://localhost:63925/dist/editor/reshiki.js:2775:14)\n    at real (http://localhost:63925/dist/editor/reshiki.js:3088:20)",
+    "counter": "0 changes"
+  },
+  "afterBond": {
+    "smiles": "CC",
+    "counter": "1 changes"
+  },
+  "afterRing": {
+    "smiles": "C1CCCCC1.CC",
+    "counter": "2 changes"
+  },
+  "afterCtrlZ": {
+    "smiles": "CC",
+    "counter": "3 changes"
+  },
+  "afterCmdZ": {
+    "smiles": "CC",
+    "counter": "3 changes"
+  },
+  "secondListenerCount": 3,
+  "afterHoverO": {
+    "smiles": "CC",
+    "counter": "3 changes"
+  },
+  "small": [
+    900,
+    563,
+    1800,
+    921
+  ],
+  "large": [
+    1600,
+    933,
+    3200,
+    1710
+  ],
+  "logs": [
+    "[log error] Failed to load resource: the server responded with a status of 404 (Not Found) http://localhost:63925/favicon.ico"
+  ]
+}

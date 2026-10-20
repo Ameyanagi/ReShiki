@@ -1,0 +1,60 @@
+
+DevTools listening on ws://127.0.0.1:9334/devtools/browser/50323aef-2e6f-4ba9-bb7b-0b77890feb48
+Trying to load the allocator multiple times. This is *not* supported.
+[16113:30053713:1021/013425.761181:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+Created TensorFlow Lite XNNPACK delegate for CPU.
+[16309:30055181:1021/013442.268977:VERBOSE1:chrome/updater/updater.cc:375] Version: 157.0.8089.0, opt, ARM_64, command line: /Users/shiranui/Library/Application Support/Google/GoogleUpdater/157.0.8089.0/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --wake-all --enable-logging --vmodule=*/components/update_client/*=2,*/chrome/enterprise_companion/*=2,*/chrome/updater/*=2
+[16309:30055181:1021/013442.269495:VERBOSE1:chrome/updater/updater.cc:378] OS version: 27.0.1, arch: arm64, System uptime (seconds): 1190563, parent pid: 16113
+[16309:30055181:1021/013442.271216:VERBOSE1:chrome/updater/updater.cc:383] Available disk space in install directory (/Users/shiranui/Library/Application Support/Google/GoogleUpdater): 197067202560B (183.533GiB) / 494384795648B (460.432GiB)
+[16309:30055181:1021/013442.271246:VERBOSE1:chrome/updater/updater.cc:387] Available disk space in temporary directory (/var/folders/3w/r26w4yb56mj_9902qyf3q23h0000gp/T/): 197067202560B (183.533GiB) / 494384795648B (460.432GiB)
+[16309:30055181:1021/013442.271308:VERBOSE2:chrome/updater/event_history.cc:266] Emitted a UPDATER_PROCESS START event to the history log
+[16311:30055185:1021/013442.280055:VERBOSE1:chrome/updater/updater.cc:375] Version: 157.0.8089.0, opt, ARM_64, command line: /Users/shiranui/Library/Application Support/Google/GoogleUpdater/157.0.8089.0/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --crash-handler --database=/Users/shiranui/Library/Application Support/Google/GoogleUpdater/157.0.8089.0/Crashpad --url=https://clients2.google.com/cr/report --annotation=prod=Update4 --annotation=ver=157.0.8089.0 --handshake-fd=6 --enable-logging --vmodule=*/components/update_client/*=2,*/chrome/enterprise_companion/*=2,*/chrome/updater/*=2
+[16311:30055185:1021/013442.280556:VERBOSE1:chrome/updater/updater.cc:378] OS version: 27.0.1, arch: arm64, System uptime (seconds): 1190563, parent pid: 1
+[16311:30055185:1021/013442.282209:VERBOSE1:chrome/updater/updater.cc:383] Available disk space in install directory (/Users/shiranui/Library/Application Support/Google/GoogleUpdater): 197067198464B (183.533GiB) / 494384795648B (460.432GiB)
+[16311:30055185:1021/013442.282240:VERBOSE1:chrome/updater/updater.cc:387] Available disk space in temporary directory (/var/folders/3w/r26w4yb56mj_9902qyf3q23h0000gp/T/): 197067198464B (183.533GiB) / 494384795648B (460.432GiB)
+[16311:30055185:1021/013442.282307:VERBOSE2:chrome/updater/event_history.cc:266] Emitted a UPDATER_PROCESS START event to the history log
+[16309:30055181:1021/013442.282761:VERBOSE1:chrome/updater/crash_reporter.cc:123] Crash handler launched and ready.
+[16309:30055181:1021/013442.283399:VERBOSE1:chrome/updater/crash_client.cc:109] Found 0 completed crash reports
+[16309:30055181:1021/013442.283481:VERBOSE1:chrome/updater/crash_client.cc:132] Found 0 pending crash reports
+[16309:30055181:1021/013442.283568:ERROR:third_party/crashpad/crashpad/util/file/file_io_posix.cc:145] open /Users/shiranui/Library/Application Support/Google/Chrome Dev/Crashpad/settings.dat: No such file or directory (2)
+[16309:30055181:1021/013442.283585:ERROR:third_party/crashpad/crashpad/util/file/file_io_posix.cc:145] open /Users/shiranui/Library/Application Support/Google/RLZ/Crashpad/settings.dat: No such file or directory (2)
+[16309:30055181:1021/013442.283597:ERROR:third_party/crashpad/crashpad/util/file/file_io_posix.cc:145] open /Users/shiranui/Library/Application Support/Google/Chrome Beta/Crashpad/settings.dat: No such file or directory (2)
+[16309:30055181:1021/013442.283654:ERROR:third_party/crashpad/crashpad/util/file/file_io_posix.cc:145] open /Users/shiranui/Library/Application Support/Google/ChromeForTesting/Crashpad/settings.dat: No such file or directory (2)
+[16309:30055181:1021/013442.283667:ERROR:third_party/crashpad/crashpad/util/file/file_io_posix.cc:145] open /Users/shiranui/Library/Application Support/Google/Chrome Canary/Crashpad/settings.dat: No such file or directory (2)
+[16309:30055181:1021/013442.283691:ERROR:third_party/crashpad/crashpad/util/file/file_io_posix.cc:145] open /Users/shiranui/Library/Application Support/Google/Chrome-headless/Crashpad/settings.dat: No such file or directory (2)
+[16309:30055181:1021/013442.283704:VERBOSE1:chrome/updater/updater.cc:107] Crash reporting initialized.
+[16309:30055193:1021/013442.283957:VERBOSE1:chrome/updater/app/app_wakeall.cc:58] Launching `/Users/shiranui/Library/Application Support/Google/GoogleUpdater/157.0.8089.0/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --wake`
+[16312:30055199:1021/013442.291724:VERBOSE1:chrome/updater/updater.cc:375] Version: 157.0.8089.0, opt, ARM_64, command line: /Users/shiranui/Library/Application Support/Google/GoogleUpdater/157.0.8089.0/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --wake --enable-logging --vmodule=*/components/update_client/*=2,*/chrome/enterprise_companion/*=2,*/chrome/updater/*=2
+[16312:30055199:1021/013442.292225:VERBOSE1:chrome/updater/updater.cc:378] OS version: 27.0.1, arch: arm64, System uptime (seconds): 1190563, parent pid: 16309
+[16312:30055199:1021/013442.293925:VERBOSE1:chrome/updater/updater.cc:383] Available disk space in install directory (/Users/shiranui/Library/Application Support/Google/GoogleUpdater): 197067194368B (183.533GiB) / 494384795648B (460.432GiB)
+[16312:30055199:1021/013442.293954:VERBOSE1:chrome/updater/updater.cc:387] Available disk space in temporary directory (/var/folders/3w/r26w4yb56mj_9902qyf3q23h0000gp/T/): 197067194368B (183.533GiB) / 494384795648B (460.432GiB)
+[16312:30055199:1021/013442.294013:VERBOSE2:chrome/updater/event_history.cc:266] Emitted a UPDATER_PROCESS START event to the history log
+[16314:30055203:1021/013442.302600:VERBOSE1:chrome/updater/updater.cc:375] Version: 157.0.8089.0, opt, ARM_64, command line: /Users/shiranui/Library/Application Support/Google/GoogleUpdater/157.0.8089.0/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --crash-handler --database=/Users/shiranui/Library/Application Support/Google/GoogleUpdater/157.0.8089.0/Crashpad --url=https://clients2.google.com/cr/report --annotation=prod=Update4 --annotation=ver=157.0.8089.0 --handshake-fd=6 --enable-logging --vmodule=*/components/update_client/*=2,*/chrome/enterprise_companion/*=2,*/chrome/updater/*=2
+[16314:30055203:1021/013442.303102:VERBOSE1:chrome/updater/updater.cc:378] OS version: 27.0.1, arch: arm64, System uptime (seconds): 1190563, parent pid: 1
+[16314:30055203:1021/013442.304811:VERBOSE1:chrome/updater/updater.cc:383] Available disk space in install directory (/Users/shiranui/Library/Application Support/Google/GoogleUpdater): 197067194368B (183.533GiB) / 494384795648B (460.432GiB)
+[16314:30055203:1021/013442.304843:VERBOSE1:chrome/updater/updater.cc:387] Available disk space in temporary directory (/var/folders/3w/r26w4yb56mj_9902qyf3q23h0000gp/T/): 197067194368B (183.533GiB) / 494384795648B (460.432GiB)
+[16314:30055203:1021/013442.304911:VERBOSE2:chrome/updater/event_history.cc:266] Emitted a UPDATER_PROCESS START event to the history log
+[16312:30055199:1021/013442.305291:VERBOSE1:chrome/updater/crash_reporter.cc:123] Crash handler launched and ready.
+[16312:30055199:1021/013442.305869:VERBOSE1:chrome/updater/crash_client.cc:109] Found 0 completed crash reports
+[16312:30055199:1021/013442.305937:VERBOSE1:chrome/updater/crash_client.cc:132] Found 0 pending crash reports
+[16312:30055199:1021/013442.306017:ERROR:third_party/crashpad/crashpad/util/file/file_io_posix.cc:145] open /Users/shiranui/Library/Application Support/Google/Chrome Dev/Crashpad/settings.dat: No such file or directory (2)
+[16312:30055199:1021/013442.306032:ERROR:third_party/crashpad/crashpad/util/file/file_io_posix.cc:145] open /Users/shiranui/Library/Application Support/Google/RLZ/Crashpad/settings.dat: No such file or directory (2)
+[16312:30055199:1021/013442.306043:ERROR:third_party/crashpad/crashpad/util/file/file_io_posix.cc:145] open /Users/shiranui/Library/Application Support/Google/Chrome Beta/Crashpad/settings.dat: No such file or directory (2)
+[16312:30055199:1021/013442.306105:ERROR:third_party/crashpad/crashpad/util/file/file_io_posix.cc:145] open /Users/shiranui/Library/Application Support/Google/ChromeForTesting/Crashpad/settings.dat: No such file or directory (2)
+[16312:30055199:1021/013442.306118:ERROR:third_party/crashpad/crashpad/util/file/file_io_posix.cc:145] open /Users/shiranui/Library/Application Support/Google/Chrome Canary/Crashpad/settings.dat: No such file or directory (2)
+[16312:30055199:1021/013442.306128:ERROR:third_party/crashpad/crashpad/util/file/file_io_posix.cc:145] open /Users/shiranui/Library/Application Support/Google/Chrome-headless/Crashpad/settings.dat: No such file or directory (2)
+[16312:30055199:1021/013442.306142:VERBOSE1:chrome/updater/updater.cc:107] Crash reporting initialized.
+[16312:30055199:1021/013442.306300:VERBOSE1:chrome/updater/ipc/update_service_internal_proxy_mojo.cc:61] Run
+[16113:30053713:1021/013455.021854:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[16312:30055199:1021/013500.090856:VERBOSE1:chrome/updater/app/app.cc:52] Shutdown: 0
+[16312:30055199:1021/013500.091344:VERBOSE2:chrome/updater/event_history.cc:266] Emitted a UPDATER_PROCESS END event to the history log
+[16312:30055199:1021/013500.091379:VERBOSE1:chrome/updater/updater.cc:420] UpdaterMain (--wake) returned 0.
+[16309:30055193:1021/013500.146944:VERBOSE1:chrome/updater/app/app_wakeall.cc:68] `/Users/shiranui/Library/Application Support/Google/GoogleUpdater/157.0.8089.0/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --wake` exited 0
+[16309:30055181:1021/013500.147360:VERBOSE1:chrome/updater/app/app.cc:52] Shutdown: 0
+[16309:30055181:1021/013500.148945:VERBOSE2:chrome/updater/event_history.cc:266] Emitted a UPDATER_PROCESS END event to the history log
+[16309:30055181:1021/013500.149042:VERBOSE1:chrome/updater/updater.cc:420] UpdaterMain (--wake-all) returned 0.
+[16314:30055203:1021/013510.102623:VERBOSE2:chrome/updater/event_history.cc:266] Emitted a UPDATER_PROCESS END event to the history log
+[16314:30055203:1021/013510.102739:VERBOSE1:chrome/updater/updater.cc:420] UpdaterMain (--crash-handler) returned 0.
+[16311:30055185:1021/013510.104085:VERBOSE2:chrome/updater/event_history.cc:266] Emitted a UPDATER_PROCESS END event to the history log
+[16311:30055185:1021/013510.104288:VERBOSE1:chrome/updater/updater.cc:420] UpdaterMain (--crash-handler) returned 0.
+[16113:30053713:1021/013516.654820:ERROR:google_apis/gcm/engine/connection_factory_impl.cc:474] ConnectionHandler failed with net error: -2
