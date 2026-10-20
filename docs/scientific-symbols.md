@@ -18,7 +18,8 @@ to the page. Orbitals are editable drawing shapes that can snap to an atom.
 3. To adjust marks later, select the atom and choose **Position atom marks**.
    Drag a mark's handle to move it around the same orbit; Option/Alt or Shift
    frees it. While dragging, a dashed line shows the orbit and dots show the
-   15° positions. **Rotate** turns a mark by 45°, and **Remove** deletes it.
+   15° positions it can take. **Rotate** turns a mark by 45°, and **Remove**
+   deletes it.
 
 A lone pair or bar always turns across the line from the atom, so its two
 dots sit side by side around the label, also when placed freely. Charges and
@@ -71,11 +72,18 @@ Click-created lone pairs and bars sit just outside the visible label ink, with
 a modest gap scaled to its font size. New placements try the top, left, bottom
 and right sides, avoiding nearby label ink, bonds and existing atom marks.
 Pairs beside the label turn vertically. A dragged mark's orbit follows the
-label: its distance is the label ink's clearance in that direction plus the
-same gap and the mark's own extent, so the gap stays even around wide labels,
-and hydrogens or isotopes beside the element push it out past them. A free
-(Option/Alt or Shift) drag keeps the exact requested offset; existing saved
-marks do not move when labels or styles change.
+label at the same gap a click uses, measured from the label's outline: each
+glyph counts as a rounded rectangle fitted to its outline (O is nearly round,
+while N and H keep the corners their stems reach), and the glyphs together
+form one convex shape, so OH reads as one rounded label with its hydrogen.
+The mark counts as one shape too, so a lone pair keeps the gap like the box a
+click measures. The gap therefore stays even all the way round, and straight
+up is exactly where a click puts a pair. Steps where the mark would touch one
+of the atom's bonds are skipped: the drag lands on the nearest clear step, and
+the guide leaves those steps out. Other marks are not avoided, so dragging one
+mark onto another is allowed. A free (Option/Alt or Shift) drag keeps the
+exact requested offset, bonds included; existing saved marks do not move when
+labels or styles change.
 
 **Snap to atoms** controls orbital node snapping independently of
 chemical-symbol attachment. The choice stays selected when switching tools in
