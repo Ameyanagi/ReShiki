@@ -163,6 +163,7 @@ impl MoleculeCanvas<'_> {
                     .into_iter()
                     .find(|i| {
                         i.owner.selected(self.selected)
+                            && i.owner.drawn(self.doc)
                             && i.center.distance(p) < 9. / self.camera.zoom
                     })
             {
@@ -175,7 +176,7 @@ impl MoleculeCanvas<'_> {
                 .doc
                 .atoms
                 .iter()
-                .filter(|a| self.selected.contains(&a.id) && self.doc.atom_visible(a.id))
+                .filter(|a| self.selected.contains(&a.id) && self.doc.atom_drawn(a.id))
             {
                 if let Some(index) = a.marks.iter().position(|m| {
                     a.position.offset(m.offset.x, m.offset.y).distance(p)

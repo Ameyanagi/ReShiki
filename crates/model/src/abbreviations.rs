@@ -545,6 +545,9 @@ impl Document {
 
 pub fn label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
     doc.abbreviations.iter().rev().find_map(|g| {
+        if crate::models3d::hides(doc, g.anchor) {
+            return None;
+        }
         let atom = doc.atom(g.anchor)?;
         let (lo, hi) = crate::scene::atom_label_bounds(atom, doc)?;
         (point.x >= lo.x - radius

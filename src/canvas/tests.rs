@@ -1683,6 +1683,73 @@ fn a_3d_model_takes_clicks_over_what_it_is_painted_above() {
 }
 
 #[test]
+fn edit_points_skips_marks_and_indicators_of_a_molecule_shown_in_3d() {
+    use reshiki::models3d::{Display, set_display};
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", World::new(-20., 0.));
+    let b = doc.add_atom("O", World::new(20., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    let atom = doc.atom_mut(a).unwrap();
+    atom.display.number = Some(reshiki::atom_labels::Number {
+        text: "1".into(),
+        offset: None,
+        style: reshiki::atom_labels::number_style(),
+    });
+    atom.marks.push(reshiki::scientific::AtomMark {
+        id: Some(1),
+        kind: reshiki::scientific::MarkKind::LonePair,
+        offset: World::new(-15., -15.),
+        angle: 0.,
+        size_pt: None,
+    });
+    let atoms = [(a, [-0.7, 0., 0.]), (b, [0.7, 0., 0.])]
+        .map(|(id, xyz)| reshiki::models3d::Placed { id, xyz })
+        .to_vec();
+    let model = reshiki::models3d::Model3d::new(
+        &doc,
+        atoms,
+        vec![],
+        reshiki::models3d::ForceField::Mmff94s,
+    );
+    doc.models.push(model);
+    let [indicator] = reshiki::atom_labels::indicators(&doc).try_into().unwrap();
+    let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+    let selected = [a, b];
+    let press = |doc: &Document, at: World| {
+        let mut canvas = chain_canvas(doc, ChainMode::Straight);
+        canvas.tool = Tool::EditPoints;
+        canvas.selected = &selected;
+        let mut state = State::default();
+        let cursor = canvas.camera.screen(at, bounds);
+        canvas.update(
+            &mut state,
+            &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            bounds,
+            mouse::Cursor::Available(cursor),
+        );
+        state.gesture
+    };
+    let mark = World::new(-35., -15.);
+    for display in [Display::TwoD, Display::Both, Display::ThreeD] {
+        set_display(&mut doc, 0, display);
+        let hidden = display == Display::ThreeD;
+        assert_eq!(
+            matches!(press(&doc, mark), Some(Gesture::AtomMark { .. })),
+            !hidden,
+            "{display:?}"
+        );
+        assert_eq!(
+            matches!(
+                press(&doc, indicator.center),
+                Some(Gesture::AtomIndicator { .. })
+            ),
+            !hidden,
+            "{display:?}"
+        );
+    }
+}
+
+#[test]
 fn graphic_and_curve_point_drags_publish_one_edit_and_do_not_mutate_preview() {
     let doc = Document::default();
     let style = GraphicStyle::default();

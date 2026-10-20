@@ -590,6 +590,14 @@ impl Owner {
             Self::BondStereo(a, b) => ids.contains(&a) && ids.contains(&b),
         }
     }
+    /// Whether the owner is drawn in 2D: not collapsed into a group and not
+    /// shown as a 3D model.
+    pub fn drawn(self, doc: &Document) -> bool {
+        match self {
+            Self::Number(id) | Self::Mapping(id) | Self::AtomStereo(id) => doc.atom_drawn(id),
+            Self::BondStereo(a, b) => doc.bond_drawn(a, b),
+        }
+    }
     pub fn anchor(self, doc: &Document) -> Option<Point> {
         match self {
             Self::Number(id) | Self::Mapping(id) | Self::AtomStereo(id) => {

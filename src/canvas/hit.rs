@@ -37,12 +37,7 @@ fn hit_selection_with_object(
     object: impl FnOnce() -> Option<u64>,
 ) -> Vec<u64> {
     if let Some(i) = reshiki::atom_labels::indicators(doc).into_iter().find(|i| {
-        use reshiki::atom_labels::Owner;
-        let (Owner::Number(id)
-        | Owner::Mapping(id)
-        | Owner::AtomStereo(id)
-        | Owner::BondStereo(id, _)) = i.owner;
-        !reshiki::models3d::hides(doc, id)
+        i.owner.drawn(doc)
             && (p.x - i.center.x).abs() < i.width / 2. + r
             && (p.y - i.center.y).abs() < i.height / 2. + r
     }) {
