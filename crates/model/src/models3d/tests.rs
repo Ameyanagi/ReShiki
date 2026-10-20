@@ -763,7 +763,7 @@ fn the_soft_card_fills_the_frame_behind_the_model() {
 }
 
 /// Shading runs on across the colour seam: both halves of a bond share their
-/// width, their middle edge and the side their highlight is on.
+/// middle edge and one gradient line, on the side facing the light.
 #[test]
 fn both_halves_of_a_bond_meet_with_continuous_shading() {
     for perspective in [0., 1.] {
@@ -779,24 +779,55 @@ fn both_halves_of_a_bond_meet_with_continuous_shading() {
             .collect();
         let mut matched = 0;
         for (a, from_a, to_a) in &halves {
-            let Some((b, from_b, to_b)) = halves
+            let Some((_, from_b, to_b)) = halves
                 .iter()
                 .find(|(b, ..)| b != a && b[1].distance(a[1]) < 1e-3 && b[2].distance(a[2]) < 1e-3)
             else {
                 continue;
             };
             matched += 1;
-            assert!((a[0].distance(a[3]) - b[0].distance(b[3])).abs() < 1e-3);
-            let (da, db) = (
-                Point::new(to_a.x - from_a.x, to_a.y - from_a.y),
-                Point::new(to_b.x - from_b.x, to_b.y - from_b.y),
-            );
-            assert!(da.distance(db) < 1e-3, "{da:?} {db:?}");
+            assert!(from_a.distance(*from_b) < 1e-3 && to_a.distance(*to_b) < 1e-3);
+            let da = Point::new(to_a.x - from_a.x, to_a.y - from_a.y);
             // The gradient starts on the side facing the up-left light.
             assert!(-0.38 * da.x - 0.42 * da.y <= 1e-6, "{da:?}");
         }
         assert_eq!(matched, halves.len(), "every half meets its partner");
     }
+}
+
+/// Under full perspective each stick tapers to its own joint's width, so
+/// none sticks out past the far joint.
+#[test]
+fn sticks_end_as_wide_as_their_joints_under_perspective() {
+    let (_, parts) = styled(|m| {
+        m.style = Style::Stick;
+        m.perspective = 1.;
+    });
+    let joints: Vec<_> = parts
+        .iter()
+        .filter_map(|p| match p {
+            Primitive::Sphere { center, radius, .. } => Some((*center, *radius)),
+            _ => None,
+        })
+        .collect();
+    let mut widths = HashSet::new();
+    for p in &parts {
+        let Primitive::ShadedQuad { corners, .. } = p else {
+            continue;
+        };
+        let start = Point::new(
+            (corners[0].x + corners[3].x) / 2.,
+            (corners[0].y + corners[3].y) / 2.,
+        );
+        let (_, radius) = joints
+            .iter()
+            .find(|(c, _)| c.distance(start) < 1e-3)
+            .expect("each stick starts at a joint");
+        let half = corners[0].distance(corners[3]) / 2.;
+        assert!((half - radius).abs() < 1e-3, "{half} {radius}");
+        widths.insert(half.to_bits());
+    }
+    assert!(widths.len() > 1, "perspective changes the widths");
 }
 
 #[test]

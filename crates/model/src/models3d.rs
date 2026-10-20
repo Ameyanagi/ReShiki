@@ -918,18 +918,20 @@ fn sticks(doc: &Document, model: &Model3d, shown: &[bool]) -> Option<Vec<(usize,
 
 impl View<'_> {
     /// The half-bond from point `s` toward point `o`: its projected start,
-    /// the projected bond middle and the half width. Both halves share one
-    /// width, so they meet at the colour seam.
-    fn half_bond(&self, s: usize, o: usize) -> Option<(Point, Point, f32)> {
+    /// the projected bond middle and the half width at each. It tapers from
+    /// its start's perspective to one middle width shared by both halves, so
+    /// they meet at the colour seam and a stick never outgrows its joint.
+    fn half_bond(&self, s: usize, o: usize) -> Option<(Point, Point, f32, f32)> {
         let (ps, po) = (*self.rotated.get(s)?, *self.rotated.get(o)?);
-        let (middle, f) = self.project(zip3(ps, po, |a, b| (a + b) / 2.));
-        let half = match self.style {
-            Style::BallStick => BOND_RADIUS * self.scale * f,
-            Style::Stick => STICK_RADIUS * self.scale * f,
-            Style::Wireframe => self.wire / 2.,
+        let (start, fs) = self.project(ps);
+        let (middle, fm) = self.project(zip3(ps, po, |a, b| (a + b) / 2.));
+        let radius = match self.style {
+            Style::BallStick => BOND_RADIUS * self.scale,
+            Style::Stick => STICK_RADIUS * self.scale,
+            Style::Wireframe => return Some((start, middle, self.wire / 2., self.wire / 2.)),
             Style::SpaceFilling => 0.,
         };
-        Some((self.project(ps).0, middle, half))
+        Some((start, middle, radius * fs, radius * fm))
     }
 }
 
@@ -945,7 +947,10 @@ pub fn balls_and_sticks(
     let sticks = sticks(doc, model, &view.shown)?
         .into_iter()
         .flat_map(|(a, b)| [(a, b), (b, a)])
-        .map(|(s, o)| view.half_bond(s, o))
+        .map(|(s, o)| {
+            let (a, e, start, middle) = view.half_bond(s, o)?;
+            Some((a, e, start.max(middle)))
+        })
         .collect::<Option<_>>()?;
     let balls = view.balls().map(|(_, q, r)| (q, r)).collect();
     Some((balls, sticks))
@@ -1052,7 +1057,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                 });
             }
             Item::Bond(s, o) => {
-                let (a, e, half) = view.half_bond(s, o)?;
+                let (a, e, start, half) = view.half_bond(s, o)?;
                 if style == Style::Wireframe {
                     let dark = if symbol == "C" { 0.35 } else { 0.1 };
                     out.push(Primitive::Wire {
@@ -1071,21 +1076,17 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                 // The lit side faces up and left like the balls' highlight,
                 // the same for both halves, so the shading runs on across
                 // the colour seam.
-                let side = if 0.38 * dy - 0.42 * dx < 0. {
-                    -half
-                } else {
-                    half
-                };
+                let side = if 0.38 * dy - 0.42 * dx < 0. { -1. } else { 1. };
                 let (nx, ny) = (-dy / len * side, dx / len * side);
                 out.push(Primitive::ShadedQuad {
                     corners: [
-                        a.offset(nx, ny),
-                        e.offset(nx, ny),
-                        e.offset(-nx, -ny),
-                        a.offset(-nx, -ny),
+                        a.offset(nx * start, ny * start),
+                        e.offset(nx * half, ny * half),
+                        e.offset(-nx * half, -ny * half),
+                        a.offset(-nx * start, -ny * start),
                     ],
-                    from: a.offset(nx, ny),
-                    to: a.offset(-nx, -ny),
+                    from: e.offset(nx * half, ny * half),
+                    to: e.offset(-nx * half, -ny * half),
                     stops: if glossy {
                         shade(
                             base,
