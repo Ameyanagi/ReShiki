@@ -12,15 +12,23 @@ to the page. Orbitals are editable drawing shapes that can snap to an atom.
    and bars, radical ions, H-dot and H-dash, attachment diamond, star, wave and
    bead, and single and double daggers.
 2. With **Attach to atoms** on, click an atom to add the mark. Drag from the
-   atom to place the mark at a chosen offset.
+   atom to choose its side: the mark orbits the atom in 15° steps, just
+   outside the label with the same gap a click uses. Hold Option/Alt or Shift
+   to place it at any offset.
 3. To adjust marks later, select the atom and choose **Position atom marks**.
-   Drag a mark's handle to move it. **Rotate** turns a mark by 45°, and
-   **Remove** deletes it.
+   Drag a mark's handle to move it around the same orbit; Option/Alt or Shift
+   frees it. While dragging, a dashed line shows the orbit and dots show the
+   15° positions. **Rotate** turns a mark by 45°, and **Remove** deletes it.
+
+A lone pair or bar always turns across the line from the atom, so its two
+dots sit side by side around the label, also when placed freely. Charges and
+radicals stay upright.
 
 Charges and radicals change the atom's chemistry, and ReShiki refreshes its
 hydrogen label and unpaired electrons. Lone pairs and bars are annotations
 only. Marks move, copy and transform with their atom, take the atom label's
-color, and each edit is one Undo step.
+color, and each edit is one Undo step. Rotating or flipping a molecule turns
+its lone pairs with it; charges stay upright.
 
 ### Draw an orbital
 
@@ -62,8 +70,12 @@ charge or radical state.
 Click-created lone pairs and bars sit just outside the visible label ink, with
 a modest gap scaled to its font size. New placements try the top, left, bottom
 and right sides, avoiding nearby label ink, bonds and existing atom marks.
-Pairs beside the label turn vertically. Dragging from an atom keeps the exact
-requested offset; existing saved marks do not move when labels or styles change.
+Pairs beside the label turn vertically. A dragged mark's orbit follows the
+label: its distance is the label ink's clearance in that direction plus the
+same gap and the mark's own extent, so the gap stays even around wide labels,
+and hydrogens or isotopes beside the element push it out past them. A free
+(Option/Alt or Shift) drag keeps the exact requested offset; existing saved
+marks do not move when labels or styles change.
 
 **Snap to atoms** controls orbital node snapping independently of
 chemical-symbol attachment. The choice stays selected when switching tools in
