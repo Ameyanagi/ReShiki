@@ -56,6 +56,8 @@ pub(super) struct DocumentTab {
     pub(super) optimization_serial: u64,
     pub(super) model_job: Option<super::models3d::Job>,
     pub(super) model_serial: u64,
+    /// A 3D-model slider drag has recorded its Undo step; it ends on release.
+    pub(super) model_sliding: bool,
     // Derived chemistry and in-flight work.
     pub(super) analysis: Option<Analysis>,
     pub(super) busy: bool,
@@ -158,6 +160,7 @@ impl DocumentTab {
             optimization_serial: 0,
             model_job: None,
             model_serial: 0,
+            model_sliding: false,
             analysis: None,
             busy: false,
             clipboard_busy: false,

@@ -3,12 +3,13 @@
 //! A molecule without a model gets one from the geometry worker: one abortable
 //! job per tab, whose result is dropped when the drawing changed meanwhile.
 //! Each switch, including the one that adds the model, is one Undo step.
+use super::icons::{Glyph, Icon};
 use super::workspace::{accessible_command, control, muted_text};
 use super::{App, Message, document_tab::TabId, inspector::Section};
-use iced::widget::{column, row, text};
-use iced::{Element, Length, Task};
+use iced::widget::{Space, canvas, column, row, slider, text};
+use iced::{Alignment, Element, Length, Task};
 use reshiki::geometry::{Client, ForceField, Optimized, Prepared};
-use reshiki::models3d::{self, Display};
+use reshiki::models3d::{self, Background, Display, Hydrogens, Look, Style};
 use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,6 +24,21 @@ pub(crate) struct Key {
 pub(crate) enum Action {
     Show(Display),
     Generated(Key, Result<Arc<Optimized>, String>),
+    /// Change the selected model; each change is one Undo step, and a slider
+    /// drag is one step until [`Action::SlideEnd`].
+    Set(Setting),
+    SlideEnd,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum Setting {
+    Style(Style),
+    Look(Look),
+    Hydrogens(Hydrogens),
+    Background(Background),
+    DepthFade(f32),
+    Perspective(f32),
+    ResetView,
 }
 
 /// The generation in flight; dropping it aborts the worker.
@@ -41,6 +57,14 @@ impl App {
     pub(super) fn models3d_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Show(display) => self.show_model(display),
+            Action::Set(setting) => {
+                self.set_model(setting);
+                Task::none()
+            }
+            Action::SlideEnd => {
+                self.tab.model_sliding = false;
+                Task::none()
+            }
             Action::Generated(key, result) => {
                 let Some(job) = self.tab.model_job.take_if(|job| job.key == key) else {
                     return Task::none();
@@ -176,6 +200,38 @@ impl App {
         task
     }
 
+    fn set_model(&mut self, setting: Setting) {
+        if self.tab.busy || self.tab.drawing_edit_active() {
+            return;
+        }
+        let Some((_, Some(index))) = self.selected_model() else {
+            return;
+        };
+        let before = self.tab.doc.clone();
+        let reset = before
+            .models
+            .get(index)
+            .and_then(|model| models3d::initial_view(&before, model));
+        let Some(model) = self.tab.doc.models.get_mut(index) else {
+            return;
+        };
+        match setting {
+            Setting::Style(style) => model.style = style,
+            Setting::Look(look) => model.look = look,
+            Setting::Hydrogens(shown) => model.show_hydrogens = shown,
+            Setting::Background(background) => model.background = background,
+            Setting::DepthFade(value) => model.depth_fade = value.clamp(0., 1.),
+            Setting::Perspective(value) => model.perspective = value.clamp(0., 1.),
+            Setting::ResetView => model.rotation = reset.unwrap_or(model.rotation),
+        }
+        if matches!(setting, Setting::DepthFade(_) | Setting::Perspective(_)) {
+            self.changed_continuing(before, self.tab.model_sliding);
+            self.tab.model_sliding = true;
+        } else {
+            self.changed(before);
+        }
+    }
+
     fn add_model(&mut self, model: models3d::Model3d, display: Display) {
         let before = self.tab.doc.clone();
         let atoms: Vec<_> = model.atoms.iter().map(|a| a.id).collect();
@@ -245,6 +301,177 @@ impl App {
                 .spacing(6),
             ),
         )
+    }
+}
+
+impl App {
+    /// Style, look and view of the selected molecule's model while it is shown.
+    pub(super) fn model_section(&self) -> Option<Element<'_, Message>> {
+        let model = self.tab.doc.models.get(self.selected_model()?.1?)?;
+        if model.display == Display::TwoD {
+            return None;
+        }
+        let enabled = !self.tab.busy && self.tab.optimization.is_none();
+        let set = move |setting| enabled.then_some(Message::Models3d(Action::Set(setting)));
+        let choice = |id: String, name: &str, label: &'static str, active: bool, setting| {
+            accessible_command(format!("model-{id}"), name, label)
+                .checked(active)
+                .style(control(active))
+                .width(Length::Fill)
+                .on_press_maybe(set(setting))
+        };
+        let field = |label: &'static str, content: Element<'static, Message>| {
+            column![text(label).size(12), content].spacing(4)
+        };
+        let [ball, stick, wire, space] = Style::ALL.map(|style| {
+            let active = model.style == style;
+            reshiki::accessibility::button(
+                format!("model-style-{}", slug(style)),
+                format!("{} style", name(style)),
+                row![
+                    canvas(Glyph(Icon::ModelStyle(style), true))
+                        .width(24)
+                        .height(24),
+                    text(name(style)).size(12)
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center),
+            )
+            .checked(active)
+            .style(control(active))
+            .padding([3, 6])
+            .width(Length::Fill)
+            .on_press_maybe(set(Setting::Style(style)))
+        });
+        let segments = |options: Vec<(String, &'static str, &'static str, bool, Setting)>| {
+            row(options
+                .into_iter()
+                .map(|(id, name, label, active, setting)| {
+                    choice(id, name, label, active, setting).into()
+                }))
+            .spacing(4)
+            .into()
+        };
+        let slider_field = |label: &'static str, value: f32, setting: fn(f32) -> Setting| {
+            column![
+                row![
+                    text(label).size(12),
+                    Space::new().width(Length::Fill),
+                    text(format!("{:.0}%", value * 100.))
+                        .size(12)
+                        .style(muted_text)
+                ],
+                slider(0_f32..=100., value * 100., move |v| {
+                    Message::Models3d(Action::Set(setting(v / 100.)))
+                })
+                .step(1_f32)
+                .on_release(Message::Models3d(Action::SlideEnd)),
+            ]
+            .spacing(4)
+        };
+        let look = |look: Look, id: &str, name, label| {
+            (
+                format!("look-{id}"),
+                name,
+                label,
+                model.look == look,
+                Setting::Look(look),
+            )
+        };
+        let hydrogens = |shown: Hydrogens, label, name| {
+            (
+                format!("hydrogens-{label}"),
+                name,
+                label,
+                model.show_hydrogens == shown,
+                Setting::Hydrogens(shown),
+            )
+        };
+        let background = |background: Background, id: &str, name, label| {
+            (
+                format!("background-{id}"),
+                name,
+                label,
+                model.background == background,
+                Setting::Background(background),
+            )
+        };
+        Some(
+            self.inspector_section(
+                Section::Model3d,
+                "3D model",
+                name(model.style),
+                true,
+                column![
+                    field(
+                        "Style",
+                        column![row![ball, stick].spacing(4), row![wire, space].spacing(4)]
+                            .spacing(4)
+                            .into()
+                    ),
+                    field(
+                        "Look",
+                        segments(vec![
+                            look(
+                                Look::Flat,
+                                "flat",
+                                "Flat look, for journals",
+                                "Flat · journal"
+                            ),
+                            look(
+                                Look::Glossy,
+                                "glossy",
+                                "Glossy look, for slides",
+                                "Glossy · slides"
+                            ),
+                        ])
+                    ),
+                    field(
+                        "Hydrogens",
+                        segments(vec![
+                            hydrogens(Hydrogens::All, "All", "Show all hydrogens"),
+                            hydrogens(Hydrogens::Polar, "Polar", "Show hydrogens on N, O and S"),
+                            hydrogens(Hydrogens::None, "None", "Hide hydrogens"),
+                        ])
+                    ),
+                    slider_field("Depth fade", model.depth_fade, Setting::DepthFade),
+                    slider_field("Perspective", model.perspective, Setting::Perspective),
+                    field(
+                        "Background",
+                        segments(vec![
+                            background(Background::None, "none", "No background", "None"),
+                            background(
+                                Background::Card,
+                                "card",
+                                "Soft card background",
+                                "Soft card"
+                            ),
+                        ])
+                    ),
+                    accessible_command("model-reset-view", "Reset the 3D view", "Reset view")
+                        .on_press_maybe(set(Setting::ResetView)),
+                ]
+                .spacing(10),
+            ),
+        )
+    }
+}
+
+fn name(style: Style) -> &'static str {
+    match style {
+        Style::BallStick => "Ball & stick",
+        Style::Stick => "Stick",
+        Style::Wireframe => "Wireframe",
+        Style::SpaceFilling => "Space-filling",
+    }
+}
+
+fn slug(style: Style) -> &'static str {
+    match style {
+        Style::BallStick => "ball-stick",
+        Style::Stick => "stick",
+        Style::Wireframe => "wireframe",
+        Style::SpaceFilling => "space-filling",
     }
 }
 

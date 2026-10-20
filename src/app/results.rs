@@ -380,7 +380,9 @@ fn completion(message: &Message) -> Option<Completion> {
         }
         Message::Models3d(action) => match action {
             super::models3d::Action::Generated(..) => Some(Completion::Models3d),
-            super::models3d::Action::Show(..) => None,
+            super::models3d::Action::Show(..)
+            | super::models3d::Action::Set(..)
+            | super::models3d::Action::SlideEnd => None,
         },
         Message::Optimization(action) => {
             use super::optimization::Action;

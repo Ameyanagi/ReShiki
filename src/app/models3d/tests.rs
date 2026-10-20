@@ -331,3 +331,135 @@ fn the_status_names_the_view_undo_restores() {
         "Shown as 2D and 3D · Undo restores the 3D model"
     );
 }
+
+fn set(app: &mut App, setting: Setting) {
+    let _ = app.update(Message::Models3d(Action::Set(setting)));
+}
+
+#[test]
+fn each_model_setting_is_one_undo_step_and_a_slider_drag_is_one() {
+    let (mut app, _) = with_model(Display::ThreeD);
+    let original = app.tab.doc.models[0].clone();
+    let start = frames(&app);
+    set(&mut app, Setting::Style(Style::SpaceFilling));
+    set(&mut app, Setting::Look(Look::Glossy));
+    set(&mut app, Setting::Hydrogens(Hydrogens::Polar));
+    set(&mut app, Setting::Background(Background::Card));
+    set(&mut app, Setting::Background(Background::Card));
+    assert_eq!(
+        frames(&app),
+        start + 4,
+        "repeating a choice records nothing"
+    );
+    // A drag sends many values, then the release.
+    for value in [0.4, 0.5, 0.6] {
+        set(&mut app, Setting::DepthFade(value));
+    }
+    let _ = app.update(Message::Models3d(Action::SlideEnd));
+    for value in [0.1, 0.0] {
+        set(&mut app, Setting::Perspective(value));
+    }
+    let _ = app.update(Message::Models3d(Action::SlideEnd));
+    assert_eq!(frames(&app), start + 6);
+    let model = &app.tab.doc.models[0];
+    assert_eq!(
+        (
+            model.style,
+            model.look,
+            model.show_hydrogens,
+            model.background
+        ),
+        (
+            Style::SpaceFilling,
+            Look::Glossy,
+            Hydrogens::Polar,
+            Background::Card
+        )
+    );
+    assert_eq!((model.depth_fade, model.perspective), (0.6, 0.));
+    assert_eq!(app.tab.doc.version, reshiki::document::MODELS_3D);
+
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.models[0].perspective, original.perspective);
+    assert_eq!(app.tab.doc.models[0].depth_fade, 0.6);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.models[0].depth_fade, original.depth_fade);
+    for _ in 0..4 {
+        let _ = app.update(Message::Undo);
+    }
+    assert_eq!(app.tab.doc.models[0], original);
+}
+
+#[test]
+fn reset_view_restores_the_opening_view() {
+    let (mut app, _) = with_model(Display::Both);
+    let opening = app.tab.doc.models[0].rotation;
+    let before = app.tab.doc.clone();
+    app.tab.doc.models[0].rotation = [0., 1., 0., 0.];
+    app.changed(before);
+    let start = frames(&app);
+    set(&mut app, Setting::ResetView);
+    assert_eq!(app.tab.doc.models[0].rotation, opening);
+    assert_eq!(frames(&app), start + 1);
+}
+
+#[test]
+fn the_model_section_shows_only_while_the_model_does() {
+    let (mut app, _) = with_model(Display::Both);
+    assert!(app.model_section().is_some());
+    show(&mut app, Display::TwoD);
+    assert!(app.model_section().is_none());
+    // Without a selected molecule nothing changes.
+    app.tab.selected.clear();
+    let start = frames(&app);
+    set(&mut app, Setting::Style(Style::Wireframe));
+    assert_eq!(frames(&app), start);
+    assert_eq!(app.tab.doc.models[0].style, Style::BallStick);
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer 3D model section controls"]
+async fn model_section_controls_change_the_model() -> Result<(), String> {
+    use iced::advanced::{renderer::Headless, widget::Operation, widget::operation};
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .ok_or("No renderer")?;
+    let (app, _) = with_model(Display::ThreeD);
+    for (id, setting) in [
+        (
+            "model-style-space-filling",
+            Setting::Style(Style::SpaceFilling),
+        ),
+        ("model-look-glossy", Setting::Look(Look::Glossy)),
+        (
+            "model-hydrogens-Polar",
+            Setting::Hydrogens(Hydrogens::Polar),
+        ),
+        (
+            "model-background-card",
+            Setting::Background(Background::Card),
+        ),
+        ("model-reset-view", Setting::ResetView),
+    ] {
+        let section = app.model_section().ok_or("No 3D model section")?;
+        let mut ui = iced_runtime::UserInterface::build(
+            section,
+            iced::Size::new(288., 600.),
+            iced_runtime::user_interface::Cache::new(),
+            &mut renderer,
+        );
+        let mut activate = reshiki::accessibility::Activate::<Message>::new(id);
+        ui.operate(&renderer, &mut operation::black_box(&mut activate));
+        match activate.finish() {
+            operation::Outcome::Some(Message::Models3d(Action::Set(chosen))) => {
+                assert_eq!(chosen, setting)
+            }
+            _ => return Err(format!("{id} did not change the model")),
+        }
+    }
+    Ok(())
+}
