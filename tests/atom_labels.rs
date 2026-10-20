@@ -254,3 +254,54 @@ async fn automatic_numbers_reserve_later_manual_stereo_labels() {
         );
     }
 }
+
+async fn import_cdxml(xml: &str) -> Document {
+    LocalEngine::default()
+        .request(Request::import("cdxml", xml))
+        .await
+        .unwrap()
+        .document
+        .unwrap()
+}
+
+/// ChemDraw 26.1 saves of MeO on ethane with Text > Flush Left / Centered.
+#[tokio::test]
+async fn chemdraw_label_justification_fixtures_import_as_bond_attachment() {
+    use reshiki::atom_labels::LabelAttachment;
+    for (xml, expected) in [
+        (
+            include_str!("fixtures/chemdraw-attachments/label-justification-flush-left.cdxml"),
+            LabelAttachment::Left,
+        ),
+        (
+            include_str!("fixtures/chemdraw-attachments/label-justification-centered.cdxml"),
+            LabelAttachment::Center,
+        ),
+    ] {
+        let doc = import_cdxml(xml).await;
+        let atom = doc
+            .atoms
+            .iter()
+            .find(|atom| atom.display.variable.as_deref() == Some("MeO"))
+            .unwrap_or_else(|| panic!("{expected}: no MeO text label"));
+        assert_eq!(atom.display.label_attachment, expected);
+        // The node's LabelDisplay is the flush choice, not a hydrogen side.
+        assert_eq!(atom.display.hydrogen_position, HydrogenPosition::Auto);
+    }
+}
+
+/// ChemDraw reads Flush Right MeO as a methoxy fragment (O at the bond), so it
+/// returns as a contracted group that keeps the flush-right alignment.
+#[tokio::test]
+async fn chemdraw_flush_right_label_fixture_imports_as_right_aligned_group() {
+    let doc = import_cdxml(include_str!(
+        "fixtures/chemdraw-attachments/label-justification-flush-right.cdxml"
+    ))
+    .await;
+    let group = doc.abbreviations.first().unwrap();
+    assert_eq!(group.reverse_label, "MeO");
+    assert_eq!(
+        group.alignment,
+        reshiki::abbreviations::LabelAlignment::Right
+    );
+}
