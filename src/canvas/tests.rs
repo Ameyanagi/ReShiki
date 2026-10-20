@@ -932,7 +932,7 @@ fn tilt_click_selects_a_molecule_without_rotating_and_blank_drag_selects() -> Re
 }
 
 #[test]
-fn tilt_drag_on_a_molecule_shown_only_in_3d_tilts_it() {
+fn tilt_drag_on_a_molecule_shown_in_3d_or_both_tilts_it() {
     use reshiki::models3d::Display;
     for display in [Display::Both, Display::ThreeD] {
         let (doc, molecule, drawn) = tilt::shown(display);
