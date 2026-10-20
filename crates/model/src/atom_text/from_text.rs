@@ -168,7 +168,7 @@ fn preview_entry(doc: &mut Document, atom: u64, text: &str, allow_generic: bool)
     let element = crate::editing::ELEMENTS.contains(&text) || text == "*";
     if crate::ligands::LABELS.contains(&text)
         || super::formula_group(text).is_some()
-        || !element && super::known_group(text)
+        || !element && super::known_group(text) && !super::wrong_side(doc, atom, text)
     {
         let (label, reverse_label) = preview_group_names(text).ok_or(())?;
         doc.abbreviations.push(crate::abbreviations::Abbreviation {

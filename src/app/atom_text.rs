@@ -535,6 +535,10 @@ impl App {
         }
         content = content.push(text(if state.members.is_some() {
                 "The selected atoms define this group. Its formula and bonds are retained; expand it to edit the structure."
+            } else if state.mode != Mode::Text
+                && atom_text::wrong_side(&self.tab.doc, state.id, &state.input)
+            {
+                atom_text::WRONG_SIDE
             } else { atom_text::description(&state.input, &state.scripts(), state.mode) })
                 .size(12)
                 .style(muted_text));
