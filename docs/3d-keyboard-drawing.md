@@ -28,6 +28,24 @@ A selection that includes a shown model (3D or Both) has no resize handles. A ch
 (element, charge, bonds or stereo) removes the model. Rotating the model, its
 floating bar and flattening the current view are planned (#386).
 
+While the model is shown, **Properties → 3D model** sets how it looks:
+
+- **Style:** **Ball & stick** (the default), **Stick** (thick bonds joined at
+  the atoms), **Wireframe** (thin lines in the atom colours) or
+  **Space-filling** (balls at van der Waals radii).
+- **Look:** **Flat · journal** (thin dark outlines) or **Glossy · slides**
+  (brighter highlights, no outlines).
+- **Hydrogens:** **All**, **Polar** (only those on N, O and S) or **None**.
+- **Depth fade** mixes farther atoms toward the background, and
+  **Perspective** sets how strongly nearer atoms are enlarged.
+- **Background:** **None** or **Soft card**, a light grey rounded card behind
+  the model.
+- **Reset view** turns the model back to its opening view.
+
+Each change is one Undo step; dragging a slider is one step when you release
+it. The canvas draws the model with the same renderer as PNG export, so the
+shading looks the same at any zoom.
+
 ## Preview an optimized molecule
 
 The preview opens the right **Properties** panel. Force-field, pin, view, and
