@@ -9,6 +9,24 @@ Cl at an atom or empty hotspot. Choose Select/Lasso with the tool buttons;
 the current tab between hotspot drawing and classic contextual controls.
 Commands that do not fit in the context row are in its **⋯** menu.
 
+## Show a molecule as a 3D model
+
+Select one molecule and choose **2D**, **3D** or **Both** at the top of
+**Properties → Structure**. **3D** draws the molecule as a ball & stick model in
+place of its drawing, **Both** puts the model one bond length to its right, and
+**2D** shows the drawing again. The first switch generates the conformer in the
+background with the same worker as 3D optimize (fresh ETKDG conformers, then
+MMFF94s); a result for a drawing that changed meanwhile is discarded. Later
+switches reuse the stored model, and each switch is one Undo step.
+
+The model links to the molecule by atom ID. It never changes chemistry, atom IDs
+or the 2D layout, which is kept for switching back. Clicking or lassoing the
+model selects the molecule, so moving, aligning, copying and Duplicate carry it
+along; while the molecule is shown in 3D, its hidden 2D atoms cannot be picked
+and the selection has no resize handles. A chemical edit to the molecule
+(element, charge, bonds or stereo) removes the model. Rotating the model, its
+floating bar and flattening the current view are planned (#386).
+
 ## Preview an optimized molecule
 
 The preview opens the right **Properties** panel. Force-field, pin, view, and
