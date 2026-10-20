@@ -29,7 +29,10 @@ expanded structure. A reverse spelling, such as MeO, AcO, BnO, TBSO or
 shows whichever spelling suits the side its bond leaves from. NC and OCN are
 read from the bond: on a left-hand end (NC–R) they make CN and NCO, but on a
 right-hand end or a vertical bond they would mean an isocyanide or a cyanate,
-which have no catalog group, so they stay text. A user group
+which have no catalog group, so they stay text. A group typed
+over a label that reads to the left keeps that side, so OBn typed on the HO
+of a sugar template reads BnO, and a group retyped over another group keeps
+its alignment. A user group
 whose label is spelled like a bundled reverse spelling takes precedence.
 Labels are case-sensitive, so MOrph is text and not Morph. Full names, such
 as morpholino, 2-thienyl or acetyl, stay text; the label editor suggests
