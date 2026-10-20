@@ -89,7 +89,7 @@ impl MoleculeCanvas<'_> {
                     ControlFlow::Break(action) => return Some(action),
                 }
             }
-            Gesture::Turn(turn) => match self.release_turn(state, turn, position, p, bounds) {
+            Gesture::Turn(turn) => match self.release_turn(state, turn, position, bounds) {
                 ControlFlow::Continue(edit) => edit,
                 ControlFlow::Break(action) => return Some(action),
             },
