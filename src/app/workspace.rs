@@ -294,6 +294,7 @@ impl App {
                 attach: self.tab.attach_symbols,
                 snap: self.tab.snap_orbitals,
                 bracket_sides: self.tab.bracket_sides,
+                revision: self.tab.revision,
             },
             arrows: ArrowOptions {
                 preset: self.tab.arrow_style,

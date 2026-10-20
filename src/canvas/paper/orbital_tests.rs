@@ -259,19 +259,23 @@ fn a_charge_drag_preview_keeps_its_label_hydrogens_for_the_whole_drag() {
         }),
         ..Default::default()
     };
-    let mut frame = |end: World| {
+    let mut frame = |canvas: &MoleculeCanvas, end: World| {
         state.cursor = Some(canvas.camera.screen(end, bounds));
         let mut preview = Draft::new(&doc);
         canvas.preview_pointer_edits(&mut preview, &state, bounds);
         let Some(Gesture::Graphic { hydrogens, .. }) = &mut state.gesture else {
             unreachable!()
         };
-        let memo = hydrogens.get().copied();
+        let memo = hydrogens.get_mut();
+        let seen = memo.1.get().copied();
         // Swap in a stale memo: a frame that recomputed would not show it.
-        *hydrogens = std::cell::OnceCell::from(Some(7));
-        (preview.preview.atom(n).unwrap().label_h, memo)
+        memo.1 = std::cell::OnceCell::from(Some(7));
+        (preview.preview.atom(n).unwrap().label_h, seen)
     };
     // The first frame works out NH3+ once and keeps it for the drag.
-    assert_eq!(frame(World::new(10., -20.)), (3, Some(Some(3))));
-    assert_eq!(frame(World::new(-5., 20.)), (7, Some(Some(7))));
+    assert_eq!(frame(&canvas, World::new(10., -20.)), (3, Some(Some(3))));
+    assert_eq!(frame(&canvas, World::new(-5., 20.)), (7, Some(Some(7))));
+    // Undo mid-drag bumps the revision, so the next frame recomputes.
+    canvas.graphics.revision += 1;
+    assert_eq!(frame(&canvas, World::new(10., -20.)), (3, Some(Some(3))));
 }

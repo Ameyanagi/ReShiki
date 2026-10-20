@@ -813,6 +813,7 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
             attach: true,
             snap: true,
             bracket_sides: BracketSides::Both,
+            revision: 0,
         },
         bond_drawing: Default::default(),
         chain_drawing: Default::default(),

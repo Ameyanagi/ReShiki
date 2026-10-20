@@ -300,8 +300,9 @@ enum Gesture {
     },
     Graphic {
         start: World,
-        /// A charge or radical's label hydrogens, worked out once per drag.
-        hydrogens: std::cell::OnceCell<Option<u32>>,
+        /// A charge or radical's label hydrogens, worked out once per drag
+        /// and keyed on the document revision so Undo mid-drag recomputes them.
+        hydrogens: std::cell::RefCell<(u64, std::cell::OnceCell<Option<u32>>)>,
     },
     AtomIndicator {
         owner: reshiki::atom_labels::Owner,
@@ -407,6 +408,8 @@ pub struct GraphicOptions<'a> {
     pub attach: bool,
     pub snap: bool,
     pub bracket_sides: BracketSides,
+    /// The document revision, which invalidates per-drag caches.
+    pub revision: u64,
 }
 
 impl Default for GraphicOptions<'_> {
@@ -421,6 +424,7 @@ impl Default for GraphicOptions<'_> {
             attach: false,
             snap: false,
             bracket_sides: Default::default(),
+            revision: 0,
         }
     }
 }

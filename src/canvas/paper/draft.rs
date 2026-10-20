@@ -89,13 +89,17 @@ impl MoleculeCanvas<'_> {
                             true,
                         ));
                     }
+                    let mut hydrogens = hydrogens.borrow_mut();
+                    if hydrogens.0 != self.graphics.revision {
+                        *hydrogens = (self.graphics.revision, Default::default());
+                    }
                     if let Ok(id) = drawing.place_with(
                         preview.to_mut(),
                         *start,
                         end,
                         self.graphic_constrain(kind, state.modifiers),
                         self.camera.world_len(pick::PICK_RADIUS_PX),
-                        hydrogens,
+                        &hydrogens.1,
                     ) {
                         *ring_selection = Some(vec![id]);
                     }
