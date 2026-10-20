@@ -577,8 +577,11 @@ impl View<'_> {
     /// farthest drawn ball edge from the centre) in any rotation, perspective
     /// included, so the frame keeps its size and place while the model turns.
     fn bounds(&self) -> (Point, Point) {
-        let nearest = if self.perspective > 0. {
-            self.camera / (self.camera - self.reach)
+        // Seen from the camera, a sphere of radius r spans r / √(1 − (r/c)²)
+        // on the plane through its centre; the camera is always beyond reach.
+        let spread = if self.perspective > 0. {
+            let k = self.reach / self.camera;
+            1. / (1. - k * k).sqrt()
         } else {
             1.
         };
@@ -588,7 +591,7 @@ impl View<'_> {
         } else {
             0.
         };
-        let half = self.reach * self.scale * nearest + dot;
+        let half = self.reach * self.scale * spread + dot;
         (
             self.origin.offset(-half, -half),
             self.origin.offset(half, half),

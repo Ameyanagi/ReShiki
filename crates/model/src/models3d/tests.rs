@@ -637,6 +637,44 @@ fn the_frame_is_a_square_that_holds_the_model_in_every_rotation() {
 }
 
 #[test]
+fn the_frame_holds_the_model_at_full_perspective() {
+    for style in Style::ALL {
+        let (mut doc, _, _) = shown(Display::ThreeD);
+        doc.models[0].style = style;
+        doc.models[0].perspective = 0.;
+        let (a, b) = frame(&doc, &doc.models[0]).unwrap();
+        doc.models[0].perspective = 1.;
+        let (lo, hi) = frame(&doc, &doc.models[0]).unwrap();
+        // Larger than without perspective, but not so large it leaves the view.
+        let (flat, full) = (b.x - a.x, hi.x - lo.x);
+        assert!(
+            full.is_finite() && full > flat && full < 2. * flat,
+            "{style:?} {flat} {full}"
+        );
+        let mut rotation = doc.models[0].rotation;
+        for step in 0..60 {
+            rotation = turn(rotation, 13., -7. + step as f32 * 0.5, step % 5 == 0);
+            doc.models[0].rotation = rotation;
+            assert_eq!(frame(&doc, &doc.models[0]), Some((lo, hi)), "{style:?}");
+            let inside = |p: Point, r: f32| {
+                p.x - r >= lo.x - 1e-3
+                    && p.y - r >= lo.y - 1e-3
+                    && p.x + r <= hi.x + 1e-3
+                    && p.y + r <= hi.y + 1e-3
+            };
+            for p in primitives(&doc) {
+                let held = match &p {
+                    Primitive::Sphere { center, radius, .. } => inside(*center, *radius),
+                    Primitive::ShadedQuad { corners, .. } => corners.iter().all(|c| inside(*c, 0.)),
+                    _ => true,
+                };
+                assert!(held, "{style:?} {step}: {p:?} outside {lo:?} {hi:?}");
+            }
+        }
+    }
+}
+
+#[test]
 fn a_drag_turns_like_the_prototype_and_shift_rolls() {
     let id = [1., 0., 0., 0.];
     let v = [0.3, -0.7, 1.1];
