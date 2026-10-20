@@ -83,7 +83,7 @@ impl Field {
     fn hint(self) -> &'static str {
         match self {
             Self::Rotation => "Relative · positive is clockwise",
-            Self::TiltX | Self::TiltY => "Relative · tilts atoms and shapes, up to ±85° per change",
+            Self::TiltX | Self::TiltY => "Relative · tilts atoms and shapes in 3D",
             Self::Width | Self::Height => "Includes labels; fonts and line widths stay fixed",
             Self::Scale => "Relative · scales coordinates uniformly",
         }
