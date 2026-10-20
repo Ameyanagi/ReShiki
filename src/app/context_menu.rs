@@ -372,11 +372,13 @@ impl App {
             .and_then(|i| self.tab.doc.models.get(i));
         let current = model.map_or(Display::TwoD, |m| m.display);
         let enabled = !self.tab.busy && self.tab.optimization.is_none();
+        // 2D in 2D still brings back a drawn layout that was flattened.
+        let flattened = model.is_some_and(|m| m.drawn.is_some());
         let show = |label, display| {
             Entry::command(
                 label,
                 Message::Models3d(Action::Show(display)),
-                enabled && display != current,
+                enabled && (display != current || display == Display::TwoD && flattened),
             )
         };
         vec![

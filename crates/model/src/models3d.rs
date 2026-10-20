@@ -8,7 +8,8 @@
 //! instead of repairing it; a molecule shown in 3D then shows its 2D drawing.
 //! Chemical formats (MOL, CDX/CDXML, SMILES) keep the 2D atoms and omit models.
 use crate::{
-    document::{Atom, Bond, Document, Point},
+    depth_appearance::Scope,
+    document::{Atom, AtomStereo, Bond, Document, Point},
     scene::{Outline, Primitive},
 };
 use serde::{Deserialize, Serialize};
@@ -25,6 +26,17 @@ pub enum Display {
     ThreeD,
     /// The 2D drawing with the model beside it.
     Both,
+}
+
+/// The 2D layout a molecule's 2D buttons show.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Layout {
+    /// The layout as drawn.
+    #[default]
+    Original,
+    /// The model flattened as it is turned now, far bonds lighter.
+    View,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -89,13 +101,105 @@ pub struct Model3d {
     #[serde(default = "perspective")]
     pub perspective: f32,
     pub force_field: ForceField,
+    #[serde(default, skip_serializing_if = "is_original")]
+    pub layout: Layout,
+    /// The layout as drawn, kept while the drawing is flattened from the model
+    /// so that choosing the original drawing brings it back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drawn: Option<Drawn>,
     /// Progress of the 2D → 3D morph in 0..1, set only on the canvas's
     /// drawing copy while it plays; never saved.
     #[serde(skip)]
     pub morph: Option<f32>,
 }
+fn is_original(layout: &Layout) -> bool {
+    *layout == Layout::Original
+}
 fn depth_fade() -> f32 {
     0.35
+}
+
+/// A bond's atoms, stereo, stereo atoms and stereo authority.
+pub type DrawnBond = (u64, u64, Option<String>, Vec<u64>, bool);
+
+/// What flattening a molecule changes: each atom's place, depth and stored
+/// stereo, each bond's stored stereo, and the molecule's depth appearance.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Drawn {
+    pub atoms: Vec<(u64, Point, f32, Option<AtomStereo>)>,
+    pub bonds: Vec<DrawnBond>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub depth_appearance: Vec<Scope>,
+}
+
+impl Drawn {
+    /// The layout of `model`'s molecule as it is now.
+    pub fn of(doc: &Document, model: &Model3d) -> Self {
+        let ids = model.ids();
+        let own: HashMap<_, _> = ids.iter().map(|id| (*id, *id)).collect();
+        Self {
+            atoms: doc
+                .atoms
+                .iter()
+                .filter(|a| ids.contains(&a.id))
+                .map(|a| (a.id, a.position, a.depth, a.stereo.clone()))
+                .collect(),
+            bonds: doc
+                .bonds
+                .iter()
+                .filter(|b| ids.contains(&b.a))
+                .map(|b| {
+                    let stereo = b.stereo.clone();
+                    (
+                        b.a,
+                        b.b,
+                        stereo,
+                        b.stereo_atoms.clone(),
+                        b.stereo_authoritative,
+                    )
+                })
+                .collect(),
+            depth_appearance: crate::depth_appearance::remap(&doc.depth_appearance, &own),
+        }
+    }
+
+    /// Put this layout back on the drawing.
+    fn restore(self, doc: &mut Document) {
+        let ids: Vec<_> = self.atoms.iter().map(|a| a.0).collect();
+        for (id, position, depth, stereo) in self.atoms {
+            if let Some(atom) = doc.atom_mut(id) {
+                (atom.position, atom.depth, atom.stereo) = (position, depth, stereo);
+            }
+        }
+        for (a, b, stereo, atoms, authoritative) in self.bonds {
+            if let Some(bond) = doc.bonds.iter_mut().find(|x| x.a == a && x.b == b) {
+                (bond.stereo, bond.stereo_atoms) = (stereo, atoms);
+                bond.stereo_authoritative = authoritative;
+            }
+        }
+        crate::depth_appearance::clear(doc, &ids);
+        doc.depth_appearance.extend(self.depth_appearance);
+    }
+
+    fn remap(&mut self, mapping: &HashMap<u64, u64>) -> Option<()> {
+        let map = |id: &mut u64| {
+            *id = *mapping.get(id)?;
+            Some(())
+        };
+        for (id, _, _, stereo) in &mut self.atoms {
+            map(id)?;
+            for n in stereo.iter_mut().flat_map(|s| &mut s.neighbors) {
+                map(n)?;
+            }
+        }
+        for (a, b, _, atoms, _) in &mut self.bonds {
+            map(a)?;
+            map(b)?;
+            atoms.iter_mut().try_for_each(map)?;
+        }
+        self.depth_appearance = crate::depth_appearance::remap(&self.depth_appearance, mapping);
+        Some(())
+    }
 }
 fn perspective() -> f32 {
     0.2
@@ -150,6 +254,8 @@ impl Model3d {
             depth_fade: depth_fade(),
             perspective: perspective(),
             force_field,
+            layout: Layout::Original,
+            drawn: None,
             morph: None,
         };
         model.rotation = model.initial_view(doc);
@@ -198,6 +304,9 @@ impl Model3d {
         }
         for h in &mut self.hydrogens {
             h.parent = *mapping.get(&h.parent)?;
+        }
+        if let Some(drawn) = &mut self.drawn {
+            drawn.remap(mapping)?;
         }
         Some(())
     }
@@ -409,6 +518,16 @@ pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
     changed
 }
 
+/// Show model `index`'s molecule in its drawn layout again, if it was
+/// flattened; returns whether the drawing changed.
+pub fn restore_drawing(doc: &mut Document, index: usize) -> bool {
+    let Some(drawn) = doc.models.get_mut(index).and_then(|m| m.drawn.take()) else {
+        return false;
+    };
+    drawn.restore(doc);
+    true
+}
+
 /// The selected molecule: the whole connected component of the selected atoms
 /// when they all belong to one, in document order.
 pub fn selected_molecule(doc: &Document, selected: &[u64]) -> Option<Vec<u64>> {
@@ -422,6 +541,16 @@ pub fn selected_molecule(doc: &Document, selected: &[u64]) -> Option<Vec<u64>> {
         .iter()
         .all(|id| component.contains(id))
         .then_some(component)
+}
+
+/// [`selected_molecule`] when the selection is all of it and nothing else
+/// but its name.
+pub fn whole_molecule(doc: &Document, selected: &[u64]) -> Option<Vec<u64>> {
+    let atoms = selected_molecule(doc, selected)?;
+    let named = crate::molecule_names::include_annotations(doc, &atoms);
+    let expanded = doc.expand_abbreviation_selection(selected);
+    (expanded.iter().all(|id| named.contains(id)) && atoms.iter().all(|id| expanded.contains(id)))
+        .then_some(atoms)
 }
 
 /// The atoms of the models whose frame contains `p`, topmost first.
@@ -580,6 +709,12 @@ pub fn validate(doc: &Document) -> Result<(), String> {
             || !(1. ..=1e5).contains(&m.size)
             || !(0. ..=1.).contains(&m.depth_fade)
             || !(0. ..=1.).contains(&m.perspective)
+            || m.drawn.as_ref().is_some_and(|d| {
+                d.atoms.len() != ids.len()
+                    || d.atoms
+                        .iter()
+                        .any(|(id, p, z, _)| !ids.contains(id) || !p.is_finite() || !z.is_finite())
+            })
         {
             return Err("Invalid 3D model".into());
         }
@@ -1005,10 +1140,10 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     let paper = float(doc.canvas_theme.background());
     let fade = |z: f32| model.depth_fade * ((reach - z) / (2. * reach)).clamp(0., 1.);
     let line = (model.size / 400.).clamp(0.6, 1.1);
-    let outline = |width, alpha: f32| {
+    let outline = |width| {
         Some(Outline {
             color: [30, 34, 38],
-            alpha: 0.85 * alpha,
+            alpha: 0.85,
             width,
         })
     };
@@ -1040,13 +1175,14 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         let (Item::Bond(i, _) | Item::Atom(i)) = item;
         let symbol = *view.symbols.get(i)?;
         let (color, radius) = element(symbol);
+        let base = mix(float(color), paper, fade(z));
+        // Hydrogens fade in as a whole, as the prototype's globalAlpha does.
         let shown = if symbol == "H" { grown } else { 1. };
-        let base = mix(mix(float(color), paper, fade(z)), paper, 1. - shown);
-        match item {
+        let primitive = match item {
             Item::Atom(i) => {
                 let (q, f) = project(*rotated.get(i)?);
                 let r = radius * scale * f;
-                out.push(Primitive::Sphere {
+                Primitive::Sphere {
                     center: q,
                     radius: r,
                     focal: q.offset(-r * 0.38, -r * 0.42),
@@ -1055,8 +1191,8 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                         (0.6, rgb(base)),
                         (1., rgb(mix(base, BLACK, 0.18))),
                     ],
-                    outline: outline(line, shown),
-                });
+                    outline: outline(line),
+                }
             }
             Item::Bond(s, end) => {
                 let (a, f) = project(*rotated.get(s)?);
@@ -1068,7 +1204,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                 }
                 let half = BOND_RADIUS * scale * f;
                 let (nx, ny) = (-dy / len * half, dx / len * half);
-                out.push(Primitive::ShadedQuad {
+                Primitive::ShadedQuad {
                     corners: [
                         a.offset(nx, ny),
                         e.offset(nx, ny),
@@ -1082,10 +1218,18 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                         (0.4, rgb(mix(base, WHITE, 0.3))),
                         (1., rgb(mix(base, BLACK, 0.22))),
                     ],
-                    outline: outline(line * 0.8, shown),
-                });
+                    outline: outline(line * 0.8),
+                }
             }
-        }
+        };
+        out.push(if shown < 1. {
+            Primitive::Opacity {
+                alpha: shown,
+                primitive: Box::new(primitive),
+            }
+        } else {
+            primitive
+        });
     }
     Some(())
 }

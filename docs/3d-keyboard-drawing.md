@@ -61,6 +61,12 @@ are lighter through **Automatic depth**. The right-click **Show as** menu and
 the command palette also offer **2D from the 3D view** directly. Each flatten is
 one Undo step that also switches the molecule to 2D; the model is kept.
 
+The choice belongs to each model and is saved with it. A flattened model also
+keeps the layout you drew (positions, depth, stored stereo and depth
+appearance), so **Original drawing**, or **Show as → 2D drawing**, brings it
+back, also after saving and reopening. Choosing the display that is already
+shown changes nothing.
+
 ## Preview an optimized molecule
 
 The preview opens the right **Properties** panel. Force-field, pin, view, and

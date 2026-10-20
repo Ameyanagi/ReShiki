@@ -11,7 +11,7 @@ use iced::widget::{column, row, text};
 use iced::{Element, Length, Task};
 use reshiki::document::Document;
 use reshiki::geometry::{Client, ForceField, Optimized, Prepared};
-use reshiki::models3d::{self, Display};
+use reshiki::models3d::{self, Display, Layout};
 use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,16 +30,6 @@ pub(crate) enum Action {
     /// The 2D layout that the 2D buttons of the bar and the section use.
     Layout(Layout),
     Generated(Key, Result<Arc<Optimized>, String>),
-}
-
-/// The 2D layout a molecule shown in 3D returns to.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) enum Layout {
-    /// The layout as drawn, unchanged.
-    #[default]
-    Original,
-    /// The model flattened as it is turned now, far bonds lighter.
-    View,
 }
 
 /// The generation in flight; dropping it aborts the worker.
@@ -63,7 +53,15 @@ impl App {
                 Task::none()
             }
             Action::Layout(layout) => {
-                self.tab.model_layout = layout;
+                if let Some((_, Some(index))) = self.selected_model() {
+                    let before = self.tab.doc.clone();
+                    if let Some(model) = self.tab.doc.models.get_mut(index)
+                        && model.layout != layout
+                    {
+                        model.layout = layout;
+                        self.commit_view(before);
+                    }
+                }
                 Task::none()
             }
             Action::Generated(key, result) => {
@@ -136,12 +134,12 @@ impl App {
         !self.tab.busy && self.tab.optimization.is_none() && !self.tab.drawing_edit_active()
     }
 
-    /// A button of the bar or the section: 2D follows the chosen 2D layout.
+    /// A button of the bar or the section: 2D follows the model's 2D layout.
     pub(super) fn show_as(&self, display: Display) -> Action {
-        let modelled = self
+        let model = self
             .selected_model()
-            .is_some_and(|(_, index)| index.is_some());
-        if display == Display::TwoD && modelled && self.tab.model_layout == Layout::View {
+            .and_then(|(_, index)| self.tab.doc.models.get(index?));
+        if display == Display::TwoD && model.is_some_and(|m| m.layout == Layout::View) {
             Action::Flatten
         } else {
             Action::Show(display)
@@ -190,14 +188,28 @@ impl App {
         };
         if let Some(index) = index {
             let before = self.tab.doc.clone();
-            if models3d::set_display(&mut self.tab.doc, index, display) {
-                let previous = before
-                    .models
-                    .get(index)
-                    .map_or(Display::TwoD, |m| m.display);
+            let Some(model) = before.models.get(index) else {
+                return Task::none();
+            };
+            let previous = model.display;
+            // 2D is the drawn layout, brought back if it was flattened. The
+            // current display again changes nothing, so a resized frame stays.
+            let restore = display == Display::TwoD && model.drawn.is_some();
+            if previous != display || restore {
+                if display == Display::TwoD {
+                    models3d::restore_drawing(&mut self.tab.doc, index);
+                    if let Some(model) = self.tab.doc.models.get_mut(index) {
+                        model.layout = Layout::Original;
+                    }
+                }
+                models3d::set_display(&mut self.tab.doc, index, display);
                 self.commit_view(before);
                 if !self.error {
-                    self.status = status(display, previous);
+                    self.status = if restore {
+                        "Original 2D drawing restored".into()
+                    } else {
+                        status(display, previous)
+                    };
                     self.start_morph(&atoms, previous, display);
                 }
             }
@@ -260,11 +272,20 @@ impl App {
             return;
         };
         let previous = model.display;
+        // The drawn layout stays on the model, for Original drawing.
+        let drawn = model
+            .drawn
+            .clone()
+            .unwrap_or_else(|| models3d::Drawn::of(&self.tab.doc, model));
         let flat = Prepared::new(&self.tab.doc, &atoms)
             .and_then(|prepared| prepared.flattened(model))
             .map_err(|error| error.to_string())
             .and_then(|mut doc| {
                 models3d::set_display(&mut doc, index, Display::TwoD);
+                if let Some(model) = doc.models.get_mut(index) {
+                    model.layout = Layout::View;
+                    model.drawn = Some(drawn);
+                }
                 reshiki::depth_appearance::enable(
                     &mut doc,
                     &atoms,
@@ -296,8 +317,14 @@ impl App {
             && display != Display::TwoD
             && let Some(id) = atoms.first()
         {
-            self.tab.model_morph = Some((*id, std::time::Instant::now()));
+            self.tab.model_morph = Some((self.model_key(), *id, std::time::Instant::now()));
         }
+    }
+
+    /// The morph playing, until Undo, Redo or any other change to the drawing.
+    pub(super) fn model_morph(&self) -> Option<(u64, std::time::Instant)> {
+        let (key, id, start) = self.tab.model_morph?;
+        (key == self.model_key()).then_some((id, start))
     }
 
     /// The display the floating Show as bar marks above a whole selected
@@ -306,14 +333,8 @@ impl App {
         if !self.tool.selects() || !self.idle() || self.context_menu.is_some() {
             return None;
         }
+        models3d::whole_molecule(&self.tab.doc, &self.tab.selected)?;
         let (atoms, index) = self.selected_model()?;
-        let selected = self
-            .tab
-            .doc
-            .expand_abbreviation_selection(&self.tab.selected);
-        if !atoms.iter().all(|id| selected.contains(id)) {
-            return None;
-        }
         Some(self.pending(&atoms).unwrap_or_else(|| {
             index
                 .and_then(|i| self.tab.doc.models.get(i))
@@ -351,6 +372,7 @@ impl App {
             .and_then(|i| self.tab.doc.models.get(i))
             .map_or(Display::TwoD, |m| m.display);
         let pending = self.pending(&atoms);
+        let model = index.and_then(|i| self.tab.doc.models.get(i));
         let enabled = !self.tab.busy && self.tab.optimization.is_none();
         let mut body = column![
             row([
@@ -368,7 +390,9 @@ impl App {
                     .checked(active)
                     .style(control(active))
                     .width(Length::Fill)
-                    .on_press_maybe(enabled.then(|| Message::Models3d(self.show_as(display))))
+                    .on_press_maybe(
+                        (enabled && !active).then(|| Message::Models3d(self.show_as(display))),
+                    )
                     .into()
             }),)
             .spacing(4),
@@ -382,8 +406,8 @@ impl App {
         ]
         .spacing(6);
         // The 2D layout the drawing returns to, while the model is shown.
-        if current != Display::TwoD && pending.is_none() {
-            let layout = self.tab.model_layout;
+        if let Some(model) = model.filter(|m| m.display != Display::TwoD && pending.is_none()) {
+            let layout = model.layout;
             body = body.push(text("2D layout").size(12)).push(
                 row([
                     (Layout::Original, "Original drawing", "original"),

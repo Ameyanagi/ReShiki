@@ -438,12 +438,15 @@ fn flattening_keeps_drawn_stereo_and_the_model() {
 #[test]
 fn the_2d_buttons_follow_the_chosen_layout() {
     let (mut app, atoms) = with_model(Display::Both);
-    assert_eq!(app.tab.model_layout, Layout::Original);
+    let original = app.tab.doc.clone();
+    assert_eq!(app.tab.doc.models[0].layout, Layout::Original);
     assert!(matches!(
         app.show_as(Display::TwoD),
         Action::Show(Display::TwoD)
     ));
+    let start = frames(&app);
     let _ = app.update(Message::Models3d(Action::Layout(Layout::View)));
+    assert_eq!(frames(&app), start + 1);
     assert!(matches!(app.show_as(Display::TwoD), Action::Flatten));
     assert!(matches!(
         app.show_as(Display::ThreeD),
@@ -453,13 +456,59 @@ fn the_2d_buttons_follow_the_chosen_layout() {
     let _ = app.update(Message::Canvas(Edit::ShowAs(Display::TwoD)));
     assert_eq!(displays(&app.tab.doc), [Display::TwoD]);
     assert_ne!(app.tab.doc.atoms, drawn, "flattened from the view");
+    // The choice and the drawn layout are the model's, and saved with it.
+    let flat = app.tab.doc.atoms.clone();
+    let read = Document::from_json(&app.tab.doc.file_json().unwrap()).unwrap();
+    assert_eq!(read.models, app.tab.doc.models);
+    assert_eq!(read.models[0].layout, Layout::View);
     // Without a model, 2D is the drawing whatever the layout.
     app.tab.selected = vec![app.tab.doc.atoms[3].id];
     assert!(matches!(
         app.show_as(Display::TwoD),
         Action::Show(Display::TwoD)
     ));
+
+    // Original drawing brings back the layout as drawn, with its depth.
     app.tab.selected = atoms;
+    show(&mut app, Display::ThreeD);
+    assert_eq!(app.tab.doc.atoms, flat, "3D keeps the flattened drawing");
+    let _ = app.update(Message::Models3d(Action::Layout(Layout::Original)));
+    let _ = app.update(Message::Canvas(Edit::ShowAs(Display::TwoD)));
+    assert_eq!(displays(&app.tab.doc), [Display::TwoD]);
+    assert_eq!(app.tab.doc.atoms, original.atoms);
+    assert_eq!(app.tab.doc.bonds, original.bonds);
+    assert_eq!(app.tab.doc.depth_appearance, original.depth_appearance);
+    assert_eq!(app.tab.doc.models[0].drawn, None);
+    assert_eq!(app.status, "Original 2D drawing restored");
+    // So does Show as 2D drawing on a flattened 2D molecule.
+    let _ = app.update(Message::Models3d(Action::Flatten));
+    assert_ne!(app.tab.doc.atoms, original.atoms);
+    show(&mut app, Display::TwoD);
+    assert_eq!(app.tab.doc.atoms, original.atoms);
+    assert_eq!(app.tab.doc.models[0].layout, Layout::Original);
+}
+
+#[test]
+fn showing_the_current_display_again_changes_nothing() {
+    let (mut app, atoms) = with_model(Display::ThreeD);
+    let (lo, _) = reshiki::models3d::frame(&app.tab.doc, &app.tab.doc.models[0]).unwrap();
+    app.edit(Edit::ResizeModels {
+        ids: atoms,
+        pivot: lo,
+        scale: 2.,
+    });
+    let resized = app.tab.doc.clone();
+    let start = frames(&app);
+    show(&mut app, Display::ThreeD);
+    let _ = app.update(Message::Canvas(Edit::ShowAs(Display::ThreeD)));
+    assert_eq!(app.tab.doc, resized, "the resized frame stays");
+    assert_eq!(frames(&app), start);
+    // Nor does 2D on a drawing that was never flattened, whatever the layout.
+    show(&mut app, Display::TwoD);
+    let drawn = app.tab.doc.clone();
+    show(&mut app, Display::TwoD);
+    assert_eq!(app.tab.doc, drawn);
+    assert_eq!(frames(&app), start + 1);
 }
 
 #[test]
@@ -473,18 +522,36 @@ fn the_bar_shows_above_a_whole_selected_molecule_and_the_morph_starts_from_2d() 
     app.tool = crate::canvas::Tool::Select;
     app.tab.selected = vec![atoms[0], water];
     assert_eq!(app.model_bar(), None);
+    // Nor with any other object in the selection.
+    let text = app.tab.doc.next_id();
+    app.tab.doc.annotations.push(reshiki::document::Annotation {
+        id: text,
+        position: Point::new(0., 80.),
+        text: "Note".into(),
+        format: Default::default(),
+    });
+    app.tab.selected = [atoms.clone(), vec![text]].concat();
+    assert_eq!(app.model_bar(), None);
 
     app.tab.selected = atoms.clone();
     let _ = app.update(Message::Canvas(Edit::ShowAs(Display::ThreeD)));
     assert_eq!(app.model_bar(), Some(Display::ThreeD), "pending");
     let (key, result) = generated(&app);
     let _ = app.update(Message::Models3d(Action::Generated(key, Ok(result))));
-    let (id, started) = app.tab.model_morph.expect("2D → 3D morphs");
+    let (id, started) = app.model_morph().expect("2D → 3D morphs");
     assert_eq!(id, atoms[0]);
     app.tab.model_morph = None;
     show(&mut app, Display::Both);
-    assert_eq!(app.tab.model_morph, None, "3D → Both does not");
+    assert_eq!(app.model_morph(), None, "3D → Both does not");
     show(&mut app, Display::TwoD);
     show(&mut app, Display::Both);
-    assert!(app.tab.model_morph.is_some_and(|(_, at)| at > started));
+    assert!(app.model_morph().is_some_and(|(_, at)| at > started));
+    // Undo or Redo ends it, so an earlier model never plays it.
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.model_morph(), None);
+    show(&mut app, Display::Both);
+    assert!(app.model_morph().is_some());
+    let _ = app.update(Message::Undo);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.model_morph(), None);
 }

@@ -51,11 +51,11 @@ impl SelectionBox {
         if ids.is_empty() {
             return None;
         }
-        if matches!(ids, [id] if doc.atom(*id).is_some()) {
+        let models = reshiki::models3d::only_shown(doc, ids);
+        if !models && matches!(ids, [id] if doc.atom(*id).is_some()) {
             return None;
         }
         let (lo, hi) = scene::selection_bounds(doc, ids)?;
-        let models = reshiki::models3d::only_shown(doc, ids);
         Some(Self {
             corners: [lo, World::new(hi.x, lo.y), hi, World::new(lo.x, hi.y)],
             // Derived centroid markers still have a box even without a rotation site.

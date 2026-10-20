@@ -131,13 +131,23 @@ fn dragging_a_selected_model_turns_it_and_the_preview_is_the_commit() {
 
 #[test]
 fn an_unselected_model_or_its_edge_moves_and_alt_or_copy_drags_move() {
-    let (doc, atoms) = drawing();
+    let (mut doc, atoms) = drawing();
+    let text = doc.next_id();
+    doc.annotations.push(reshiki::document::Annotation {
+        id: text,
+        position: World::new(100., 100.),
+        text: "Note".into(),
+        format: Default::default(),
+    });
+    let with_text = [atoms.clone(), vec![text]].concat();
     let (lo, _) = models3d::frame(&doc, &doc.models[0]).unwrap();
     let edge = canvas(&doc, &atoms)
         .camera
         .screen(lo.offset(3., 30.), BOUNDS);
     for (selected, from, modifiers) in [
         (&[][..], None, Modifiers::default()),
+        // The model with another object moves the whole selection.
+        (&with_text[..], None, Modifiers::default()),
         (&atoms[..], Some(edge), Modifiers::default()),
         (&atoms[..], None, Modifiers::ALT),
         (&atoms[..], None, Modifiers::COMMAND),
@@ -216,6 +226,29 @@ fn corner_handles_resize_the_frame_and_edges_are_hidden() {
     let (_, hi) = reshiki::scene::selection_bounds(&doc, &mixed).unwrap();
     let corner = canvas.camera.screen(hi, BOUNDS) + Vector::new(12., 12.);
     assert_eq!(selection.hit(corner), None);
+
+    // A model of one drawn atom (methane) resizes too.
+    let mut doc = Document::default();
+    let c = doc.add_atom("C", World::new(300., 300.));
+    let h = |xyz| Hydrogen { parent: c, xyz };
+    let hydrogens = vec![
+        h([0.6, 0.6, 0.6]),
+        h([-0.6, -0.6, 0.6]),
+        h([-0.6, 0.6, -0.6]),
+        h([0.6, -0.6, -0.6]),
+    ];
+    let placed = vec![Placed {
+        id: c,
+        xyz: [0.; 3],
+    }];
+    doc.models
+        .push(Model3d::new(&doc, placed, hydrogens, ForceField::Mmff94s));
+    doc.require_version(reshiki::document::MODELS_3D);
+    assert!(models3d::set_display(&mut doc, 0, Display::ThreeD));
+    let selection = SelectionBox::new(&doc, &[c], canvas.camera, BOUNDS).unwrap();
+    let (_, hi) = reshiki::scene::selection_bounds(&doc, &[c]).unwrap();
+    let corner = canvas.camera.screen(hi, BOUNDS) + Vector::new(12., 12.);
+    assert_eq!(selection.hit(corner), Some(Handle::Resize(2)));
 }
 
 #[test]
@@ -249,6 +282,12 @@ fn the_bar_sits_clear_of_the_selection_hides_while_dragging_and_picks_a_display(
         "{edit:?}"
     );
     assert!(state.gesture.is_none());
+    // The active button does nothing.
+    send(&canvas, &mut state, RELEASE);
+    send(&canvas, &mut state, moved(bar.buttons[1].2.center()));
+    assert!(send(&canvas, &mut state, PRESS).is_none());
+    assert!(state.gesture.is_none());
+    send(&canvas, &mut state, RELEASE);
 
     // While the model turns, the bar is gone.
     send(&canvas, &mut state, moved(frame_center(&canvas)));

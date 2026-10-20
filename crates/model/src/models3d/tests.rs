@@ -174,6 +174,36 @@ fn copy_and_paste_remap_the_model_with_its_molecule() {
 }
 
 #[test]
+fn a_kept_drawn_layout_is_pasted_with_its_model_and_restores() {
+    let (mut doc, atoms, _) = shown(Display::Both);
+    let original = doc.clone();
+    doc.models[0].drawn = Some(Drawn::of(&doc, &doc.models[0]));
+    for atom in &mut doc.atoms {
+        atom.position = atom.position.offset(5., -3.);
+        atom.depth = 2.;
+    }
+    doc.validate().unwrap();
+
+    let part = editing::selection(&doc, &atoms);
+    let mut pasted = doc.clone();
+    let ids = editing::append(&mut pasted, &part, Point::new(0., 120.));
+    let drawn = pasted.models[1].drawn.as_ref().unwrap();
+    assert!(drawn.atoms.iter().all(|a| ids.contains(&a.0)));
+    assert!(
+        drawn
+            .bonds
+            .iter()
+            .all(|b| ids.contains(&b.0) && ids.contains(&b.1))
+    );
+    pasted.validate().unwrap();
+
+    assert!(restore_drawing(&mut doc, 0));
+    assert_eq!(doc.atoms[..3], original.atoms[..3]);
+    assert_eq!(doc.models[0].drawn, None);
+    assert!(!restore_drawing(&mut doc, 0));
+}
+
+#[test]
 fn initial_view_shows_the_prototype_face_as_a_proper_rotation() {
     let points = [
         [1.4, 0.2, -0.3],
@@ -731,13 +761,17 @@ fn the_morph_starts_flat_on_the_drawing_and_ends_on_the_model() {
     let spheres: Vec<_> = primitives(&doc)
         .into_iter()
         .filter_map(|p| match p {
-            Primitive::Sphere { center, stops, .. } => Some((center, stops)),
+            Primitive::Sphere { center, .. } => Some((center, 1.)),
+            Primitive::Opacity { alpha, primitive } => match *primitive {
+                Primitive::Sphere { center, .. } => Some((center, alpha)),
+                _ => None,
+            },
             _ => None,
         })
         .collect();
     assert_eq!(spheres.len(), 5);
-    // Every ball starts on a drawn atom; hydrogens start invisible.
-    let paper = doc.canvas_theme.background();
+    // Every ball starts on a drawn atom; hydrogens start transparent, so
+    // they never cover the atom they grow out of.
     for (center, _) in &spheres {
         assert!(
             atoms
@@ -746,7 +780,7 @@ fn the_morph_starts_flat_on_the_drawing_and_ends_on_the_model() {
             "{center:?} is off the drawing"
         );
     }
-    assert_eq!(spheres.iter().filter(|(_, s)| s[1].1 == paper).count(), 2);
+    assert_eq!(spheres.iter().filter(|(_, alpha)| *alpha == 0.).count(), 2);
     // Never saved.
     let read = Document::from_json(&doc.file_json().unwrap()).unwrap();
     assert_eq!(read.models[0].morph, None);

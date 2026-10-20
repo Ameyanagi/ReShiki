@@ -271,10 +271,13 @@ impl MoleculeCanvas<'_> {
         if !bar.contains(point) {
             return None;
         }
-        Some(match bar.button(point) {
-            Some(display) => Action::publish(Edit::ShowAs(display)).and_capture(),
-            None => Action::capture(),
-        })
+        // The active button does nothing, like the section's.
+        Some(
+            match bar.button(point).filter(|d| Some(*d) != self.model_bar) {
+                Some(display) => Action::publish(Edit::ShowAs(display)).and_capture(),
+                None => Action::capture(),
+            },
+        )
     }
 
     /// The selected model that a drag at `p` turns: inside its frame, not at
@@ -285,11 +288,11 @@ impl MoleculeCanvas<'_> {
             return None;
         }
         let model = models3d::model_at(self.doc, p, self.camera.world_len(EDGE_PX))?;
-        let selected = models3d::selected_molecule(self.doc, self.selected)?;
+        let selected = models3d::whole_molecule(self.doc, self.selected)?;
         let atoms: Vec<_> = model.atoms.iter().map(|a| a.id).collect();
         let hit = hit_selection(self.doc, p, self.camera.world_len(PICK_RADIUS_PX));
         (selected.len() == atoms.len()
-            && atoms.iter().all(|id| self.selected.contains(id))
+            && atoms.iter().all(|id| selected.contains(id))
             && hit.first().is_some_and(|id| model.contains(*id)))
         .then(|| (atoms, self.doc.expand_groups(&hit)))
     }
