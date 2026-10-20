@@ -1,4 +1,4 @@
-# @reshiki/editor
+# @ameyanagi/reshiki
 
 ReShiki in the browser, compiled to WebAssembly: the drawing editor itself,
 and a headless library that converts structures between formats and draws
@@ -106,7 +106,7 @@ iframes). `PORT` picks another port.
 ## Library
 
 ```js
-import { convert, renderPng, renderSvg, smiles, inchi } from "@reshiki/editor";
+import { convert, renderPng, renderSvg, smiles, inchi } from "@ameyanagi/reshiki";
 
 const mol = await convert("CN1C=NC2=C1C(=O)N(C(=O)N2C)C", "smiles", "mol");
 const svg = await renderSvg(mol, "mol");
@@ -121,7 +121,7 @@ call `init` first with a URL, a `Response`, the bytes or a compiled
 `WebAssembly.Module`:
 
 ```js
-import { init } from "@reshiki/editor";
+import { init } from "@ameyanagi/reshiki";
 await init(new URL("/assets/reshiki_web_bg.wasm", location.href));
 ```
 
