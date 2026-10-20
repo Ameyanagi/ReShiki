@@ -1,0 +1,8 @@
+Terminated only the validated prototype main process with: kill 70420
+Time: 2026-10-20 18:37:45 +0900
+
+pgrep -fl ^/Applications/Google\ Chrome\.app/Contents/MacOS/Google\ Chrome .*--user-data-dir=/private/tmp/claude\-502/\-Users\-shiranui\-dev\-ReShiki/dd6a248f\-7145\-4e1e\-bc5b\-a50dfb88eed0/scratchpad/ev386\-2\-chrome( |$)
+Exit code: 1 (no matches)
+Output: (empty)
+
+pgrep -x "Google Chrome" was also checked: PID 70420 was absent.

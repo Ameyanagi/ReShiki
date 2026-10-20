@@ -1,0 +1,24 @@
+RUN A; killed only PID 38356
+Verification pgrep returncode=1, stdout=''
+pgrep -lf reshiki:
+51217 /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki
+
+RUN B; killed only PID 40976
+Verification pgrep returncode=1, stdout=''
+pgrep -lf reshiki:
+51217 /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki
+
+RUN C; killed only PID 41441
+Verification pgrep returncode=1, stdout=''
+pgrep -lf reshiki:
+51217 /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki
+
+Dark-canvas verification cleanup: 2026-10-20 20:29:45 JST
+Sent SIGTERM using kill 46469 only.
+pgrep -f apps386-final-2/ReShiki386F2Evidence.app/Contents/MacOS/reshiki:
+No matches; verification process is gone.
+pgrep -x reshiki, restricted to protected PID 51217:
+51217
+Protected installed process status:
+  PID STARTED                      ARGS
+51217 Tue Oct 20 14:02:02 2026     /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki

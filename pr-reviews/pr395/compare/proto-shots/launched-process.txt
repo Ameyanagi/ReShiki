@@ -1,0 +1,2 @@
+  PID STARTED                      ARGS
+70420 Tue Oct 20 18:28:00 2026     /Applications/Google Chrome.app/Contents/MacOS/Google Chrome --user-data-dir=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2-chrome --no-first-run --no-default-browser-check --new-window --window-size=1500,1400 file:///private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2/compare/prototype-artifact-89rRsm9QDX5gwanE7kokSm.html

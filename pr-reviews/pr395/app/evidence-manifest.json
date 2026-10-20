@@ -1,0 +1,170 @@
+[
+  {
+    "file": "A01-section-ballstick.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 536669,
+    "sha256": "80f5dc95a813e695d29306731f453ad4695fa5d62defe11ea63a5d92139cf1a3"
+  },
+  {
+    "file": "A02-style-stick.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 490484,
+    "sha256": "f51a8ddb5129d9ba2eef450a20b39c2ddd3355e3a8585ea62170f14d6c048ca4"
+  },
+  {
+    "file": "A03-style-wireframe.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 415605,
+    "sha256": "dde65d03464fcd45e7728c70696ae640afb61346699f3fd14eb452ebf22ee69f"
+  },
+  {
+    "file": "A04-style-spacefilling.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 691867,
+    "sha256": "d2abec92c4491ebc28c12f6ce5a23d09db354241db157e57c2580c9b7cdab77f"
+  },
+  {
+    "file": "A05-style-ballstick.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 531714,
+    "sha256": "4706b542a4eb53e68c9906d53eb5cb553e19f439c7c0650b275cb7d9daa2eb59"
+  },
+  {
+    "file": "A06-look-glossy.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 517365,
+    "sha256": "6e16b036e10b7b2615b4de51df363ebb41d7bc0cec9d185e4baddeabd85a3288"
+  },
+  {
+    "file": "A07-hydrogens-polar.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 530877,
+    "sha256": "cb14cf3afd5f258586fc00e34fd17414b4ad814b8e6c1b050caadfa0e3044a9e"
+  },
+  {
+    "file": "A08-hydrogens-none.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 530806,
+    "sha256": "14d4b3d5b9a906e45e3e95e52c1bf4ab569e1488811fd3ee5fde7eb7a3eab958"
+  },
+  {
+    "file": "A09-perspective-100.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 531995,
+    "sha256": "1885180581f54deceea1ec7f49ccd25d07b69b41a2261d4c7185ed892911d45d"
+  },
+  {
+    "file": "A10-soft-card.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 529746,
+    "sha256": "8d90c2f220004f4dc91e71056fde7da9d5c99f909699c7f228a8307e05c12559"
+  },
+  {
+    "file": "A11-rotated.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 475244,
+    "sha256": "75bd6dfd1e0abb6ff45789984c4e03c051b7c42ed2eca28470b0d760fefc4e00"
+  },
+  {
+    "file": "A12-reset-view.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 526821,
+    "sha256": "727c984a0592a30f976b3bad5462673c26dde60d3342bb0051e1294f8b1098b8"
+  },
+  {
+    "file": "A13-stick-rotate-mid-drag.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 483149,
+    "sha256": "9b598b77955964336d5521b2b3663a6a3ac9aa511523125d42fd38f51ba4a760"
+  },
+  {
+    "file": "A14-stick-rotate-released.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 484034,
+    "sha256": "3b2318e83d52240596847b0c69eca233bc9927a8bbf95899459e9b0c157950c8"
+  },
+  {
+    "file": "A15-zoom-400-stick.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 761159,
+    "sha256": "ae17585cb529649ea490dbc28e1a81327aa038e64e9016c942f6ccd68eb04ace"
+  },
+  {
+    "file": "A16-zoom-400-ballstick.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 882421,
+    "sha256": "bd941a627f5be07ae7a19f98f9b535562802030e56123784616b53d12363459e"
+  },
+  {
+    "file": "B01-ballstick.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 504900,
+    "sha256": "2d928294eef3e75b6cfa4de0580005de424970481a9c563ff99b59866943e776"
+  },
+  {
+    "file": "B02-stick.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 459289,
+    "sha256": "256c341b286770129ed1d403e104bdcbf1ef41de09e3504ac28e8181484b4c4b"
+  },
+  {
+    "file": "B03-wireframe.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 407409,
+    "sha256": "5b072cf2097acca31f567f21ce7b010400a39ea982bbb3b05f32fa703ccf81da"
+  },
+  {
+    "file": "B04-spacefilling.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 610690,
+    "sha256": "8da3d4f732af945ccf69657ea8f217b50cb458ebc473ca338f7dc14f1f51950d"
+  },
+  {
+    "file": "B05-glossy.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 483144,
+    "sha256": "9efbf899a79921815d9fd0623a5323ff82850660a60f3e086803160d9c49bb39"
+  },
+  {
+    "file": "B06-hydrogens-polar.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 460263,
+    "sha256": "757064ff99f487009945473f23192af6efb7b783b4ca87141953602b172a3db0"
+  },
+  {
+    "file": "C01-dark-stick-selected.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 489847,
+    "sha256": "90a202c769226393ea7509ef9f74cba7860da5ca1da630e30ebdb115ac60bd24"
+  },
+  {
+    "file": "C02-dark-stick-deselected.png",
+    "width": 2560,
+    "height": 1704,
+    "bytes": 474698,
+    "sha256": "caf522c062277572bd24a639bbdfa761d77d2c331ebd4fd7ef44eae0deb61844"
+  }
+]

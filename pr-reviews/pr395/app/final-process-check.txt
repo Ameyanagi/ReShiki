@@ -1,0 +1,3 @@
+Verification executable pgrep exit=1; no matching PID
+  PID STARTED                      ARGS
+51217 Tue Oct 20 14:02:02 2026     /nix/store/lx488j7ggxfy04cgck5afam7qh13fk3s-reshiki-0.12.0/Applications/ReShiki.app/Contents/MacOS/reshiki

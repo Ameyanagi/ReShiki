@@ -1,0 +1,182 @@
+[
+  {
+    "file": "caffeine-ballstick-flat.png",
+    "dimensions": [
+      3000,
+      2040
+    ],
+    "bytes": 526513,
+    "sha256": "b7a52c031539fe9bc8240bef5571dd3323b050b09bc2e1fd118c4380fb739be8"
+  },
+  {
+    "file": "caffeine-stick-flat.png",
+    "dimensions": [
+      3000,
+      2040
+    ],
+    "bytes": 506529,
+    "sha256": "0681737290141cb0baab126fda8072073add24c85a05dfffe18bf2ecc0b55f73"
+  },
+  {
+    "file": "caffeine-wire-flat.png",
+    "dimensions": [
+      3000,
+      2040
+    ],
+    "bytes": 479938,
+    "sha256": "f16835457a321015fb487463c8e1a79bc25b2c36d0a4a186a8e25c72b26e9db1"
+  },
+  {
+    "file": "caffeine-space-flat.png",
+    "dimensions": [
+      3000,
+      2040
+    ],
+    "bytes": 600715,
+    "sha256": "9533c5bb936208362188a0a7880a642dde8bfc8534c18bfe6be2ddb3fa63d635"
+  },
+  {
+    "file": "caffeine-strip-flat.png",
+    "dimensions": [
+      3000,
+      2040
+    ],
+    "bytes": 784315,
+    "sha256": "e8122bb1a9a23fa18198c1f4b42089557158b2368749e835c05dfefca141643f"
+  },
+  {
+    "file": "caffeine-ballstick-glossy.png",
+    "dimensions": [
+      3000,
+      2040
+    ],
+    "bytes": 518879,
+    "sha256": "c71081761d672aa5a51260e058482eace1cc7e0a7a16cc1ad86609d1b2c48c9c"
+  },
+  {
+    "file": "caffeine-stick-glossy.png",
+    "dimensions": [
+      3000,
+      2040
+    ],
+    "bytes": 507113,
+    "sha256": "8d8077abed0ff266a54d188efdbaeadad95c8e322264cf5405d61f2dccac727c"
+  },
+  {
+    "file": "caffeine-wire-glossy.png",
+    "dimensions": [
+      3000,
+      2040
+    ],
+    "bytes": 479662,
+    "sha256": "73c0894a276823543b19b7c37ed519519976330268f9eab40012bfaad903fd19"
+  },
+  {
+    "file": "caffeine-space-glossy.png",
+    "dimensions": [
+      3000,
+      2040
+    ],
+    "bytes": 602070,
+    "sha256": "7fd1c281bcf528c520ab0dac43123b4a5cab909e0b22df88eced4027e95e47f0"
+  },
+  {
+    "file": "caffeine-strip-glossy.png",
+    "dimensions": [
+      3000,
+      2040
+    ],
+    "bytes": 783722,
+    "sha256": "4883327c83e29219d4ca0e001e0ff3f6b7d77527627e4209e03ef5f252096d0e"
+  },
+  {
+    "file": "ibuprofen-ballstick-flat.png",
+    "dimensions": [
+      3000,
+      2040
+    ],
+    "bytes": 503866,
+    "sha256": "ecbdf01f54d2654476137b333411e1859ffa73fd8e4f32c7a9bd2fa9413f5f70"
+  },
+  {
+    "file": "ibuprofen-stick-flat.png",
+    "dimensions": [
+      3000,
+      2040
+    ],
+    "bytes": 487072,
+    "sha256": "d9d7cddeba2d009a7bf895977689e28ab0b4cfd356b8d506bdadca69299bde4a"
+  },
+  {
+    "file": "ibuprofen-wire-flat.png",
+    "dimensions": [
+      3000,
+      2040
+    ],
+    "bytes": 472719,
+    "sha256": "1de18f8b36c9eff7a520a3eebe1df07aed8cdd6b8956177782f2374f081a3af2"
+  },
+  {
+    "file": "ibuprofen-space-flat.png",
+    "dimensions": [
+      3000,
+      2040
+    ],
+    "bytes": 554696,
+    "sha256": "8190987bc8a05d5c3eaf7e05e6022bba2639057c365c1f73045bf581bd13dd11"
+  },
+  {
+    "file": "ibuprofen-strip-flat.png",
+    "dimensions": [
+      3000,
+      2040
+    ],
+    "bytes": 664957,
+    "sha256": "a7c94db695b4f937ab4f5451a989cd047f26d8b60537dca724f1de0ca4963589"
+  },
+  {
+    "file": "ibuprofen-ballstick-glossy.png",
+    "dimensions": [
+      3000,
+      2040
+    ],
+    "bytes": 497731,
+    "sha256": "142bdba8094d6ac59765e0c265198aaf8e34ad1cf6f44564193de582f0a71038"
+  },
+  {
+    "file": "ibuprofen-stick-glossy.png",
+    "dimensions": [
+      3000,
+      2040
+    ],
+    "bytes": 487984,
+    "sha256": "12de45dd46229443820001386785a9e4dd819b31e2a088d195ad65030a83a41a"
+  },
+  {
+    "file": "ibuprofen-wire-glossy.png",
+    "dimensions": [
+      3000,
+      2040
+    ],
+    "bytes": 472475,
+    "sha256": "78e309018a619458232d3784556e6943f0846efc740f7d3acf36140b71ab4101"
+  },
+  {
+    "file": "ibuprofen-space-glossy.png",
+    "dimensions": [
+      3000,
+      2040
+    ],
+    "bytes": 552232,
+    "sha256": "66ab313f8be83f91d487f4cc3147d9fde4471284af8c97f7f2b27b504ae72b42"
+  },
+  {
+    "file": "ibuprofen-strip-glossy.png",
+    "dimensions": [
+      3000,
+      2040
+    ],
+    "bytes": 657051,
+    "sha256": "fe9d98e31a640a0bc4d6fdf08ebb3862b51d41cf979e21ad84c1c4d0e1abaca9"
+  }
+]

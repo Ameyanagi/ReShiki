@@ -1,0 +1,11 @@
+You are running a short local UI check for Claude on macOS. Use computer use plus shell.
+$ART = /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2-final/app
+App bundle: /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/apps386-final-2/ReShiki386F2Evidence.app (bundle id dev.reshiki.verification.ev386final2).
+IMPORTANT: the user's installed "ReShiki" (PID 51217, /nix/store/...) is running. Never touch, focus, click, screenshot or quit it or any ReShiki process you did not launch. Never look the app up by the plain name "ReShiki".
+
+1. Launch: open -n "<bundle>" --env RESHIKI_DATA_DIR=/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2-final-data-dark --args --open "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-2-final/input/own/caffeine-stick-flat.rsk"
+   PID = pgrep -f 'apps386-final-2/ReShiki386F2Evidence.app/Contents/MacOS/reshiki' (exactly one). Append `ps -o pid,lstart,args -p $PID` to $ART/launched-process.txt. WID = /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev386-1b-wid $PID. Attach computer use by bundle id.
+2. The UI is dark but the drawing canvas is white. Find the control that makes the CANVAS dark (likely the sun icon in the status bar, left of "View"; or a menu/command - the Commands palette opens with ":" and may have a canvas theme command). Do not change system settings. Record what you used.
+3. With the canvas dark: Select tool, click the model to select it; save screencapture -x -o -l $WID "$ART/C03-dark-canvas-stick-selected.png". Click empty canvas, move the pointer to the title bar, save C04-dark-canvas-stick-deselected.png. Then select the model, click Style "Ball & stick" in the 3D model section, deselect, save C05-dark-canvas-ballstick.png.
+4. kill $PID only; confirm gone with pgrep and that 51217 still runs; append to $ART/process-cleanup.txt.
+Do not save the drawing or edit any files except in $ART. Write $ART/report-dark-canvas.md: what you did, the control used, what each shot shows, anything odd (e.g. outlines or hydrogens hard to see on dark).

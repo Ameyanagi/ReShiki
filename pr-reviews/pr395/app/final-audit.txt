@@ -1,0 +1,8 @@
+Final artifact audit: PASS
+24 required screenshots are present; each is 2560 x 1704 pixels.
+All manifest dimensions, byte counts, and SHA-256 hashes independently checked.
+All report links resolve.
+Run A/B/C PID and window information agrees with launch/cleanup logs.
+A15 seam midpoint and no-pale-transverse-line finding independently reviewed.
+Final verification executable pgrep: no matching process.
+Installed PID 51217 remains running with original start time.
