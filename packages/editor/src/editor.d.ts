@@ -38,5 +38,6 @@ export interface Editor {
 export function initEditor(module?: MountOptions["module"]): Promise<void>;
 
 /** Start the editor in `element`, which it fills. A page can mount one
- * editor; a second mount rejects. */
+ * editor; a second mount rejects. Data that cannot be read rejects before the
+ * editor starts, so the page can mount again. */
 export function mount(element: HTMLElement, options?: MountOptions): Promise<Editor>;

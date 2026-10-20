@@ -60,16 +60,31 @@ fn js(message: impl std::fmt::Display) -> JsError {
     JsError::new(&message.to_string())
 }
 
-/// Start the editor in `element`, which it fills. A page can mount one editor;
-/// put further editors in iframes.
+/// Start the editor in `element`, which it fills, showing `data` read as
+/// `format` when given. A page can mount one editor; put further editors in
+/// iframes.
 #[wasm_bindgen]
-pub async fn mount(element: web_sys::Element) -> Result<(), JsError> {
+pub async fn mount(
+    element: web_sys::Element,
+    data: Option<Vec<u8>>,
+    format: Option<String>,
+) -> Result<(), JsError> {
     const TARGET: &str = "reshiki-editor-canvas";
     if HOST.with_borrow(|host| host.mounted) {
         return Err(js(
             "ReShiki is already mounted on this page; use an iframe for another editor",
         ));
     }
+    // Read the drawing first, so data that cannot be read leaves the page free
+    // to mount again.
+    let opened = match data {
+        Some(data) => Some(
+            formats::read(data, format.as_deref().unwrap_or("auto"))
+                .await
+                .map_err(js)?,
+        ),
+        None => None,
+    };
     // iced replaces the element with this id by its canvas.
     let document = element
         .owner_document()
@@ -81,7 +96,21 @@ pub async fn mount(element: web_sys::Element) -> Result<(), JsError> {
     element
         .append_child(&target)
         .map_err(|_| js("Could not add the editor canvas"))?;
+    // iced looks the placeholder up from the page's body, which cannot see
+    // into shadow roots or detached elements.
+    let found = document
+        .body()
+        .and_then(|body| body.query_selector(&format!("#{TARGET}")).ok().flatten());
+    if found.as_ref() != Some(&target) {
+        target.remove();
+        return Err(js(
+            "Mount the editor on an element in the page's body, outside shadow roots",
+        ));
+    }
     let (sender, receiver) = mpsc::unbounded();
+    if let Some(doc) = opened {
+        let _ = sender.unbounded_send(Request::Load(Box::new(doc)));
+    }
     HOST.with_borrow_mut(|host| {
         *host = Host {
             requests: Some(sender),
@@ -256,10 +285,14 @@ fn clipboard() -> Option<web_sys::Clipboard> {
     Some(web_sys::window()?.navigator().clipboard())
 }
 
-/// Put `text` on the system clipboard, where the page may write it.
+/// Put `text` on the system clipboard, where the page may write it. A refusal
+/// is logged; the desktop's clipboard writes do not report failures either.
 pub(crate) async fn write_text(text: String) {
-    if let Some(clipboard) = clipboard() {
-        let _ = wasm_bindgen_futures::JsFuture::from(clipboard.write_text(&text)).await;
+    if let Some(clipboard) = clipboard()
+        && let Err(refused) =
+            wasm_bindgen_futures::JsFuture::from(clipboard.write_text(&text)).await
+    {
+        error(&format!("Could not copy to the clipboard: {refused:?}"));
     }
 }
 

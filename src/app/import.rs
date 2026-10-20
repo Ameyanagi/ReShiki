@@ -335,6 +335,11 @@ impl App {
                 self.imports.examples_menu = open;
                 self.imports.menu = false;
             }
+            // Browser files have no path to insert from yet.
+            Action::Choose if cfg!(target_arch = "wasm32") => {
+                self.error = true;
+                self.status = "Inserting files needs the desktop app for now".into();
+            }
             Action::Choose => {
                 return Task::perform(choose(), |paths| Message::Imports(Action::Files(paths)));
             }

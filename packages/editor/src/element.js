@@ -16,8 +16,14 @@ export class ReshikiEditor extends HTMLElement {
     this.#editor = this.#start();
   }
 
+  // A move disconnects and reconnects the element at once; only stop the
+  // editor if it is still out of the page afterwards.
   disconnectedCallback() {
-    this.#editor?.then((editor) => editor.destroy()).catch(() => {});
+    this.#editor
+      ?.then((editor) => {
+        if (!this.isConnected) editor.destroy();
+      })
+      .catch(() => {});
   }
 
   async #start() {

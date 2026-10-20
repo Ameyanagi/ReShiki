@@ -18,7 +18,10 @@ const bytes = (data) => (typeof data === "string" ? encoder.encode(data) : data)
 
 export async function mount(element, options = {}) {
   await initEditor(options.module);
-  await wasm.mount(element);
+  // The drawing is read before the editor starts, so data that cannot be read
+  // rejects here and the page can mount again.
+  const data = options.data === undefined ? undefined : bytes(options.data);
+  await wasm.mount(element, data, options.format ?? "auto");
   let listeners = [];
   const editor = {
     async load(data, format = "auto") {
@@ -48,6 +51,5 @@ export async function mount(element, options = {}) {
   };
   wasm.onChange(() => listeners.forEach((listener) => listener()));
   if (options.onChange) editor.onChange(options.onChange);
-  if (options.data !== undefined) await editor.load(options.data, options.format);
   return editor;
 }

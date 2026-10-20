@@ -6,7 +6,12 @@ use iced::Task;
 impl App {
     pub(super) fn host_request(&mut self, request: Request) -> Task<Message> {
         match request {
-            Request::Load(doc) => self.show_opened(*doc, None),
+            // Start the front tab over, dropping text drafts and previews
+            // that belong to the drawing it replaces.
+            Request::Load(doc) => {
+                self.reset_tab();
+                self.show_opened(*doc, None);
+            }
             Request::Snapshot(id) => crate::web::reply(id, self.tab.doc.clone()),
             Request::Close => return iced::exit(),
         }

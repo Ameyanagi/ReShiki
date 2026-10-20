@@ -13,7 +13,10 @@ export function embed(element, options = {}) {
   let next = 0;
   let listeners = options.onChange ? [options.onChange] : [];
   let started;
+  let removed = false;
   const ready = new Promise((resolve, reject) => (started = { resolve, reject }));
+  // Calls see a failed start; it is not unhandled when nothing else waits.
+  ready.catch(() => {});
 
   const receive = ({ source, origin, data }) => {
     if (source !== frame.contentWindow || origin !== frameUrl.origin) return;
@@ -32,6 +35,7 @@ export function embed(element, options = {}) {
 
   const call = async (method, ...args) => {
     await ready;
+    if (removed) throw new Error("The editor was removed");
     const id = ++next;
     return new Promise((resolve, reject) => {
       pending.set(id, { resolve, reject });
@@ -51,6 +55,8 @@ export function embed(element, options = {}) {
       };
     },
     destroy() {
+      removed = true;
+      started.reject(new Error("The editor was removed"));
       removeEventListener("message", receive);
       pending.forEach(({ reject }) => reject(new Error("The editor was removed")));
       pending.clear();

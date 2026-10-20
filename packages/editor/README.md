@@ -41,7 +41,9 @@ editor.destroy();
 ```
 
 `load` takes the same formats as `convert` and rejects with the app's message
-when it cannot read the data. `save` and `exportImage` return what the
+when it cannot read the data; so does `mount` for its `data`, before the
+editor starts. Mount on an element in the page's body: the editor cannot
+start inside a shadow root. `save` and `exportImage` return what the
 headless library's `convert` would for the drawing in front.
 
 A page runs one editor: the editor and the page share one thread and one
@@ -89,10 +91,13 @@ iframes). `PORT` picks another port.
   updates, printing, Office and LibreOffice integration are not built.
 - Open and Save use the browser: Open picks a file, Save and Export download
   one under the drawing's name. Drawing styles, themes, templates and pictures
-  cannot be loaded from files yet, and there are no recovery drafts.
+  cannot be loaded from files yet, Insert cannot insert files, and there are
+  no recovery drafts.
 - Copy and paste carry text (SMILES, the drawing as text) through
   `navigator.clipboard`, which asks for permission to read. There are no
   image or ChemDraw clipboard formats.
+- Only Liberation Sans is bundled, so PNG and PDF figures have no glyphs for
+  CJK text or symbols it lacks, such as ℃, ⇌ and superscript ⁺ and ⁻.
 - Shortcuts use Ctrl, also on macOS, where Cmd does not work yet.
 - Work runs on the page's thread, so a long cleanup or import pauses the page.
 - Without WebGPU, lines are drawn without antialiasing: WebGL2 loses most
