@@ -433,26 +433,25 @@ impl View<'_> {
             *p = mix(start, *p, e);
         }
     }
-    /// Bounds of the projected balls, padded by 6% of the longer side.
+    /// A square about the origin holding the model's bounding sphere (its
+    /// farthest ball edge from the centre) in any rotation, perspective
+    /// included, so the frame keeps its size and place while the model turns.
     fn bounds(&self) -> (Point, Point) {
-        let mut lo = Point::new(f32::INFINITY, f32::INFINITY);
-        let mut hi = Point::new(f32::NEG_INFINITY, f32::NEG_INFINITY);
-        for (s, p) in self.symbols.iter().zip(&self.rotated) {
-            let (q, f) = self.project(*p);
-            let r = element(s).1 * self.scale * f;
-            lo = Point::new(lo.x.min(q.x - r), lo.y.min(q.y - r));
-            hi = Point::new(hi.x.max(q.x + r), hi.y.max(q.y + r));
-        }
-        if lo.x > hi.x {
-            return (self.origin, self.origin);
-        }
-        let pad = 0.06 * (hi.x - lo.x).max(hi.y - lo.y);
-        (lo.offset(-pad, -pad), hi.offset(pad, pad))
+        let nearest = if self.perspective > 0. {
+            self.camera / (self.camera - self.reach)
+        } else {
+            1.
+        };
+        let half = self.reach * self.scale * nearest;
+        (
+            self.origin.offset(-half, -half),
+            self.origin.offset(half, half),
+        )
     }
 }
 
-/// The frame's top-left and bottom-right corners in drawing units: the
-/// projected model with a modest margin, or `None` while an atom is missing.
+/// The frame's top-left and bottom-right corners in drawing units: a square
+/// that holds the model in every rotation, or `None` while an atom is missing.
 pub fn frame(doc: &Document, model: &Model3d) -> Option<(Point, Point)> {
     Some(View::new(doc, model)?.bounds())
 }

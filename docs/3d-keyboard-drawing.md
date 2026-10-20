@@ -34,8 +34,9 @@ along; while the molecule is shown in 3D, its hidden 2D atoms cannot be picked.
 A chemical edit to the molecule (element, charge, bonds or stereo) removes the
 model.
 
-On the canvas, a model that is not selected moves like any object. Once its
-molecule is selected:
+The model sits in a square frame that holds it in any rotation, so the frame,
+its handles and the bar stay put while the model turns. On the canvas, a model
+that is not selected moves like any object. Once its molecule is selected:
 
 - **drag inside the frame** to rotate it like a trackball (0.01 radian per
   pixel about the screen axes);

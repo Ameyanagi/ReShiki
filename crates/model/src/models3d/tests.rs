@@ -651,38 +651,37 @@ fn each_ball_covers_its_own_half_bonds_but_not_a_farther_atom() {
 }
 
 #[test]
-fn the_frame_fits_the_projected_balls_with_a_modest_margin() {
-    let (doc, ..) = shown(Display::ThreeD);
-    let model = &doc.models[0];
-    let (lo, hi) = frame(&doc, model).unwrap();
-    let mut ink = (
-        Point::new(f32::MAX, f32::MAX),
-        Point::new(f32::MIN, f32::MIN),
+fn the_frame_is_a_square_that_holds_the_model_in_every_rotation() {
+    let (mut doc, atoms, _) = shown(Display::ThreeD);
+    // A resized frame keeps its size while the model turns.
+    resize(&mut doc, &atoms, Point::default(), 1.3);
+    let (lo, hi) = frame(&doc, &doc.models[0]).unwrap();
+    assert!(
+        ((hi.x - lo.x) - (hi.y - lo.y)).abs() < 1e-3,
+        "{lo:?} {hi:?}"
     );
-    for p in primitives(&doc) {
-        if let Primitive::Sphere { center, radius, .. } = p {
-            ink.0 = Point::new(
-                ink.0.x.min(center.x - radius),
-                ink.0.y.min(center.y - radius),
-            );
-            ink.1 = Point::new(
-                ink.1.x.max(center.x + radius),
-                ink.1.y.max(center.y + radius),
-            );
+    let mut rotation = doc.models[0].rotation;
+    for step in 0..60 {
+        rotation = turn(rotation, 13., -7. + step as f32 * 0.5, step % 5 == 0);
+        doc.models[0].rotation = rotation;
+        assert_eq!(frame(&doc, &doc.models[0]), Some((lo, hi)));
+        for p in primitives(&doc) {
+            if let Primitive::Sphere { center, radius, .. } = p {
+                assert!(
+                    center.x - radius >= lo.x
+                        && center.y - radius >= lo.y
+                        && center.x + radius <= hi.x
+                        && center.y + radius <= hi.y,
+                    "{step}: {center:?} {radius} outside {lo:?} {hi:?}"
+                );
+            }
         }
     }
-    let (w, h) = (ink.1.x - ink.0.x, ink.1.y - ink.0.y);
-    let pad = 0.06 * w.max(h);
-    for (frame, ink) in [
-        (lo.x, ink.0.x - pad),
-        (lo.y, ink.0.y - pad),
-        (hi.x, ink.1.x + pad),
-        (hi.y, ink.1.y + pad),
-    ] {
-        assert!((frame - ink).abs() < 1e-3, "{lo:?} {hi:?} {ink:?}");
-    }
-    // Much tighter than the reference square that sets the scale.
-    assert!(hi.x - lo.x < model.size && hi.y - lo.y < model.size * 0.8);
+    // Without perspective the square is as tight as the bounding sphere.
+    doc.models[0].perspective = 0.;
+    let (a, b) = frame(&doc, &doc.models[0]).unwrap();
+    assert!(b.x - a.x < hi.x - lo.x);
+    assert!((b.x - a.x - 0.88 * doc.models[0].size).abs() < 1e-2);
 }
 
 #[test]
