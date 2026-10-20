@@ -40,6 +40,7 @@ impl App {
             Message::Desktop(_) => {}
             Message::KeyboardDrawing(action) => return Some(self.keyboard_drawing_action(action)),
             Message::Optimization(action) => return Some(self.optimization_action(action)),
+            Message::Models3d(action) => return Some(self.models3d_action(action)),
             Message::DepthAppearance(action) => return Some(self.depth_appearance_action(action)),
             Message::DrawingStyle(action) => return Some(self.drawing_style_action(action)),
             Message::Imports(action) => return Some(self.import_action(action)),
@@ -213,6 +214,7 @@ impl App {
     pub(super) fn update_document_result(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Optimization(action) => return self.optimization_action(action),
+            Message::Models3d(action) => return self.models3d_action(action),
             Message::Nmr(action) => return self.nmr_action(action),
             Message::LabelsReady(key, result) => self.labels_ready(key, result),
             Message::Mapping(action) => return self.mapping_action(action),

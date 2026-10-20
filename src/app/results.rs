@@ -16,6 +16,8 @@ enum Completion {
     Engine,
     /// Optimization(WorkerDone).
     Optimization,
+    /// Models3d(Generated).
+    Models3d,
     /// Nmr(Finished | Exported).
     Nmr,
     /// Exported.
@@ -79,6 +81,7 @@ impl Completion {
         match self {
             Self::Engine
             | Self::Optimization
+            | Self::Models3d
             | Self::Nmr
             | Self::Export
             | Self::FigureExport
@@ -174,6 +177,7 @@ fn admission(completion: Completion) -> Admission {
             updates_dialog: true,
         },
         Completion::Optimization
+        | Completion::Models3d
         | Completion::DrawingStyle
         | Completion::Labels
         | Completion::Mapping
@@ -372,6 +376,10 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::ExportMenu(..) => None,
             }
         }
+        Message::Models3d(action) => match action {
+            super::models3d::Action::Generated(..) => Some(Completion::Models3d),
+            super::models3d::Action::Show(..) => None,
+        },
         Message::Optimization(action) => {
             use super::optimization::Action;
             match action {

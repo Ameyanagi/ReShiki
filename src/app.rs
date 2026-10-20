@@ -62,6 +62,7 @@ mod object_toolbar;
 mod office;
 #[cfg(any(windows, target_os = "linux"))]
 pub(crate) use desktop::install_document_events as install_desktop_events;
+mod models3d;
 #[cfg(test)]
 mod ops_parity_tests;
 mod optimization;
@@ -158,6 +159,7 @@ pub enum Message {
     Join(joining::Action),
     KeyboardDrawing(keyboard_drawing::Action),
     Optimization(optimization::Action),
+    Models3d(models3d::Action),
     Pages(pages::Action),
     Printing(printing::Action),
     Pictures(pictures::Action),
@@ -1045,6 +1047,7 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
         && a.graphics == b.graphics
         && a.groups == b.groups
         && a.reactions == b.reactions
+        && a.models == b.models
         && a.generic == b.generic
         && a.abbreviations == b.abbreviations
         && a.ring_fills == b.ring_fills
