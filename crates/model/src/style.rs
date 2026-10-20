@@ -213,16 +213,32 @@ pub fn glyph_metrics(c: char, style: &crate::typography::TextStyle) -> GlyphMetr
 }
 
 type InkBox = (crate::document::Point, crate::document::Point);
-static GLYPH_INK: LazyLock<Mutex<HashMap<GlyphKey, Option<InkBox>>>> =
+/// A glyph's ink box and the corner radius (em) its outline leaves free.
+type InkShape = (InkBox, f32);
+static GLYPH_INK: LazyLock<Mutex<HashMap<GlyphKey, Option<InkShape>>>> =
     LazyLock::new(Default::default);
 
 /// Ink boxes relative to the text's top-left origin, excluding blank line height.
 /// Keep individual glyphs separate so superscripts do not mask empty corners.
 pub fn text_ink_boxes(text: &str, size: f32, style: &crate::typography::TextStyle) -> Vec<InkBox> {
+    text_ink_shapes(text, size, style)
+        .into_iter()
+        .map(|(bounds, _)| bounds)
+        .collect()
+}
+
+/// `text_ink_boxes` with each glyph's ink as a rounded rectangle: the largest
+/// corner radius (up to half the shorter side) that still holds the outline,
+/// so O is nearly round while N and H keep the corners their stems reach.
+pub fn text_ink_shapes(
+    text: &str,
+    size: f32,
+    style: &crate::typography::TextStyle,
+) -> Vec<InkShape> {
     use crate::document::Point;
     use resvg::usvg::fontdb::{Family, Query};
     let mut x = 0.;
-    let mut boxes = Vec::new();
+    let mut shapes = Vec::new();
     for c in text.chars() {
         let (family, advance) = glyph_metrics(c, style);
         let key = (family.to_owned(), style.bold, style.italic, c);
@@ -251,15 +267,27 @@ pub fn text_ink_boxes(text: &str, size: f32, style: &crate::typography::TextStyl
                         let bbox = face.glyph_bounding_box(glyph)?;
                         let em = face.units_per_em() as f32;
                         let ascent = face.ascender() as f32;
+                        let mut outline = font::Outline::default();
+                        face.outline_glyph(glyph, &mut outline);
                         Some((
-                            Point::new(bbox.x_min as f32 / em, (ascent - bbox.y_max as f32) / em),
-                            Point::new(bbox.x_max as f32 / em, (ascent - bbox.y_min as f32) / em),
+                            (
+                                Point::new(
+                                    bbox.x_min as f32 / em,
+                                    (ascent - bbox.y_max as f32) / em,
+                                ),
+                                Point::new(
+                                    bbox.x_max as f32 / em,
+                                    (ascent - bbox.y_min as f32) / em,
+                                ),
+                            ),
+                            outline.corner_radius(bbox) / em,
                         ))
                     })
                 })
                 .flatten()
                 .or_else(|| {
-                    (!c.is_whitespace()).then_some((Point::default(), Point::new(advance, 1.)))
+                    (!c.is_whitespace())
+                        .then_some(((Point::default(), Point::new(advance, 1.)), 0.))
                 });
             if let Ok(mut cache) = GLYPH_INK.lock() {
                 if cache.len() >= 16384 {
@@ -269,22 +297,28 @@ pub fn text_ink_boxes(text: &str, size: f32, style: &crate::typography::TextStyl
             }
             ink
         };
-        if let Some((lo, hi)) = ink {
-            boxes.push((
-                Point::new(x + lo.x * size, lo.y * size),
-                Point::new(x + hi.x * size, hi.y * size),
+        if let Some(((lo, hi), radius)) = ink {
+            shapes.push((
+                (
+                    Point::new(x + lo.x * size, lo.y * size),
+                    Point::new(x + hi.x * size, hi.y * size),
+                ),
+                radius * size,
             ));
         }
         if style.underline {
             // Underline metrics differ between backends. Reserve its full band.
-            boxes.push((
-                Point::new(x, size * 0.8),
-                Point::new(x + advance * size, size * 1.1),
+            shapes.push((
+                (
+                    Point::new(x, size * 0.8),
+                    Point::new(x + advance * size, size * 1.1),
+                ),
+                0.,
             ));
         }
         x += advance * size;
     }
-    boxes
+    shapes
 }
 
 /// Center the visible chemical symbol, rather than its line-height box.
