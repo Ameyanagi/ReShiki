@@ -46,6 +46,26 @@ pub(super) fn render_svg(doc: &Document, background: bool) -> String {
     s
 }
 
+/// `drawing` alone over `lo..hi`, one SVG unit per drawing unit, in the light
+/// theme and without a background.
+pub(super) fn render_part(drawing: Vec<Primitive>, lo: super::Point, hi: super::Point) -> String {
+    let (width, height) = (hi.x - lo.x, hi.y - lo.y);
+    let frame = Frame {
+        theme: Default::default(),
+        paper: None,
+        lo,
+        hi,
+        gradients: Default::default(),
+    };
+    let mut s = format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"{} {} {width} {height}\" width=\"{width}\" height=\"{height}\">",
+        lo.x, lo.y
+    );
+    push_svg(&mut s, drawing, &frame, &mut 0);
+    s.push_str("</svg>");
+    s
+}
+
 struct Frame {
     theme: crate::canvas_theme::CanvasTheme,
     /// The painted background; `None` leaves the surround transparent.
@@ -238,6 +258,29 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                     ));
                 }
             }
+            Primitive::Wire {
+                from,
+                to,
+                width,
+                color: [r, g, b],
+            } => s.push_str(&format!(
+                "<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"rgb({r},{g},{b})\" stroke-width=\"{width}\" stroke-linecap=\"round\"/>",
+                from.x, from.y, to.x, to.y
+            )),
+            Primitive::Card {
+                lo,
+                hi,
+                radius,
+                fill: [r, g, b],
+                outline,
+            } => s.push_str(&format!(
+                "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{radius}\" fill=\"rgb({r},{g},{b})\"{}/>",
+                lo.x,
+                lo.y,
+                hi.x - lo.x,
+                hi.y - lo.y,
+                outline_paint(Some(outline))
+            )),
             Primitive::Text {
                 position,
                 text,
@@ -355,7 +398,9 @@ fn push_halo(s: &mut String, primitives: &[Primitive], radius: f32, color: &str)
             Primitive::Picture(_)
             | Primitive::Halo { .. }
             | Primitive::Sphere { .. }
-            | Primitive::ShadedQuad { .. } => {}
+            | Primitive::ShadedQuad { .. }
+            | Primitive::Wire { .. }
+            | Primitive::Card { .. } => {}
         }
     }
 }

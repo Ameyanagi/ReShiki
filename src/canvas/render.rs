@@ -1,6 +1,6 @@
 //! Tessellates scene primitives into a layered frame; shared by the paper and every preview program.
 
-use super::{Camera, Document, World, dashes, layered, rgb, text_cache};
+use super::{Camera, Document, World, dashes, layered, models3d, rgb, text_cache};
 use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Rectangle};
 use reshiki::{
@@ -49,7 +49,7 @@ fn draw_primitives_with_opacity(
         color.a *= opacity;
         color
     };
-    for primitive in primitives {
+    for (i, primitive) in primitives.iter().enumerate() {
         match primitive {
             Primitive::Opacity { alpha, primitive } => draw_primitives_with_opacity(
                 frame,
@@ -114,65 +114,20 @@ fn draw_primitives_with_opacity(
             Primitive::Halo { radius, primitives } => {
                 draw_halo(frame, primitives, camera, bounds, *radius)
             }
-            Primitive::Sphere {
-                center,
-                radius,
-                focal,
-                stops,
-                outline,
-            } => {
-                // Iced has no radial gradient; nested discs reproduce it.
-                let steps = (radius * camera.zoom / 1.5).clamp(8., 32.) as usize;
-                for (c, r, color) in
-                    reshiki::models3d::sphere_discs(*center, *radius, *focal, stops, steps)
+            Primitive::Sphere { .. }
+            | Primitive::ShadedQuad { .. }
+            | Primitive::Wire { .. }
+            | Primitive::Card { .. } => {
+                // Each run of model primitives is drawn once, from its first.
+                let rest = primitives.get(i..).unwrap_or_default();
+                if !i
+                    .checked_sub(1)
+                    .and_then(|j| primitives.get(j))
+                    .is_some_and(models3d::is_model)
                 {
-                    frame.fill_exact(
-                        &Path::circle(camera.screen(c, bounds), r * camera.zoom),
-                        alpha(rgb(color)),
-                    );
-                }
-                if let Some(o) = outline {
-                    frame.stroke_exact(
-                        &Path::circle(camera.screen(*center, bounds), radius * camera.zoom),
-                        outline_stroke(o, camera, alpha),
-                    );
-                }
-            }
-            Primitive::ShadedQuad {
-                corners,
-                from,
-                to,
-                stops,
-                outline,
-            } => {
-                let [a, b, c, d] = corners.map(|p| camera.screen(p, bounds));
-                let gradient = stops.iter().fold(
-                    canvas::gradient::Linear::new(
-                        camera.screen(*from, bounds),
-                        camera.screen(*to, bounds),
-                    ),
-                    |gradient, (offset, color)| gradient.add_stop(*offset, alpha(rgb(*color))),
-                );
-                frame.fill_exact(
-                    &Path::new(|p| {
-                        p.move_to(a);
-                        p.line_to(b);
-                        p.line_to(c);
-                        p.line_to(d);
-                        p.close();
-                    }),
-                    canvas::Fill::from(canvas::Gradient::from(gradient)),
-                );
-                if let Some(o) = outline {
-                    frame.stroke_exact(
-                        &Path::new(|p| {
-                            p.move_to(a);
-                            p.line_to(b);
-                            p.move_to(d);
-                            p.line_to(c);
-                        }),
-                        outline_stroke(o, camera, alpha),
-                    );
+                    let run = rest.iter().take_while(|p| models3d::is_model(p)).count();
+                    let run = rest.get(..run).unwrap_or_default();
+                    models3d::draw(frame, run, camera, bounds, opacity);
                 }
             }
             Primitive::Line(a, b, width) => frame.stroke(
@@ -327,22 +282,11 @@ fn draw_halo(
             Primitive::Picture(_)
             | Primitive::Halo { .. }
             | Primitive::Sphere { .. }
-            | Primitive::ShadedQuad { .. } => {}
+            | Primitive::ShadedQuad { .. }
+            | Primitive::Wire { .. }
+            | Primitive::Card { .. } => {}
         }
     }
-}
-
-fn outline_stroke(
-    outline: &reshiki::scene::Outline,
-    camera: Camera,
-    alpha: impl Fn(Color) -> Color,
-) -> Stroke<'static> {
-    Stroke::default()
-        .with_width(outline.width * camera.zoom)
-        .with_color(alpha(Color {
-            a: outline.alpha,
-            ..rgb(outline.color)
-        }))
 }
 
 fn world_path(commands: &[PathCommand], camera: Camera, bounds: Rectangle) -> Path {

@@ -63,6 +63,21 @@ pub enum Primitive {
         stops: Vec<(f32, [u8; 3])>,
         outline: Option<Outline>,
     },
+    /// A 3D-model wireframe half-bond: a round-capped line in an exact color.
+    Wire {
+        from: Point,
+        to: Point,
+        width: f32,
+        color: [u8; 3],
+    },
+    /// A 3D model's soft background card: a rounded rectangle in exact colors.
+    Card {
+        lo: Point,
+        hi: Point,
+        radius: f32,
+        fill: [u8; 3],
+        outline: Outline,
+    },
 }
 /// An exact, translucent stroke around a 3D-model shape.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -2359,6 +2374,15 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
                 points.extend([center.offset(-r, -r), center.offset(r, r)]);
             }
             Primitive::ShadedQuad { corners, .. } => points.extend(corners),
+            Primitive::Wire {
+                from, to, width, ..
+            } => {
+                let r = width / 2.;
+                for p in [from, to] {
+                    points.extend([p.offset(-r, -r), p.offset(r, r)]);
+                }
+            }
+            Primitive::Card { lo, hi, .. } => points.extend([*lo, *hi]),
             Primitive::Text {
                 position,
                 text,
@@ -2391,6 +2415,11 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
 /// The themed drawing with a transparent surround, for compositing and geometry checks.
 pub fn svg(doc: &Document) -> String {
     svg::render_svg(doc, false)
+}
+/// Part of a scene alone over `lo..hi`, for rasterizing it the way figure
+/// export does: the canvas paints 3D models this way.
+pub fn svg_part(drawing: &[Primitive], lo: Point, hi: Point) -> String {
+    svg::render_part(drawing.to_vec(), lo, hi)
 }
 /// A figure carries the canvas background when exported or copied.
 pub fn svg_with_background(doc: &Document) -> String {

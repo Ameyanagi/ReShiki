@@ -215,7 +215,9 @@ fn intersects_fraction(part: &Primitive, origin: Point, axis: Point, at: f32) ->
         | Primitive::Text { .. }
         | Primitive::Halo { .. }
         | Primitive::Sphere { .. }
-        | Primitive::ShadedQuad { .. } => false,
+        | Primitive::ShadedQuad { .. }
+        | Primitive::Wire { .. }
+        | Primitive::Card { .. } => false,
     }
 }
 

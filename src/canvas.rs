@@ -31,6 +31,7 @@ mod hit;
 mod input;
 pub mod layered;
 mod markers;
+mod models3d;
 mod movement;
 pub(crate) mod nmr;
 pub(crate) mod optimization;
