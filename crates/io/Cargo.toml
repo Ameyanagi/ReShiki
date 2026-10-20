@@ -38,9 +38,10 @@ tokio = { version = "1", features = [
   "macros",
 ] }
 
-# The browser has no processes, files or threads; blocking work runs inline.
+# The browser has no processes, files or threads; blocking work runs inline,
+# and only the JoinError type is still needed there.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-tokio = { version = "1", features = ["io-util", "sync", "time", "rt", "macros"] }
+tokio = { version = "1", default-features = false, features = ["rt"] }
 
 [target.'cfg(windows)'.dependencies]
 reshiki-windows = { path = "../../native/windows" }
