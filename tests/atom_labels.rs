@@ -285,6 +285,8 @@ async fn chemdraw_label_justification_fixtures_import_as_bond_attachment() {
             .find(|atom| atom.display.variable.as_deref() == Some("MeO"))
             .unwrap_or_else(|| panic!("{expected}: no MeO text label"));
         assert_eq!(atom.display.label_attachment, expected);
+        // The node's LabelDisplay is the flush choice, not a hydrogen side.
+        assert_eq!(atom.display.hydrogen_position, HydrogenPosition::Auto);
     }
 }
 

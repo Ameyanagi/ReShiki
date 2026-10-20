@@ -200,6 +200,9 @@ impl Variables {
                 atom.display.set_variable(Some(label.text.clone()));
                 atom.display.label_scripts = label.scripts.clone();
                 atom.display.label_attachment = label.attachment;
+                // ChemDraw's LabelDisplay on free text is its flush choice,
+                // not a side for hydrogens this label does not have.
+                atom.display.hydrogen_position = crate::atom_labels::HydrogenPosition::Auto;
                 atom.element = "*".into();
                 atom.no_implicit = true;
                 atom.label_h = 0;
