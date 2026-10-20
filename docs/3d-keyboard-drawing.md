@@ -90,6 +90,14 @@ While the model is shown, **Properties → 3D model** sets how it looks:
   the model.
 - **Reset view** turns the model back to its opening view.
 
+The model's colours follow the drawing's colour theme and canvas: each
+element uses the theme's element swatch (Publication, which has none, uses
+Presentation's), so a dark canvas gets the theme's dark tones, and a user
+theme's swatches apply too. Where the theme greys hydrogen like carbon
+(Presentation, Pastel), hydrogen is a light grey that stays lighter than
+carbon; Jmol keeps its white hydrogen. An element without a swatch keeps the
+prototype's grey.
+
 Each change is one Undo step; dragging a slider is one step when you release
 it. The canvas draws the model with the same renderer as PNG export, so the
 shading looks the same at any zoom.

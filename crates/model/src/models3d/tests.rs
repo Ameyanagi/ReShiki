@@ -1,4 +1,5 @@
 use super::*;
+use crate::canvas_theme::{CanvasTheme, ColorTheme};
 use crate::document::{History, MODELS_3D, VERSION};
 use crate::{editing, scene, transaction};
 
@@ -290,13 +291,15 @@ fn ball_and_stick_primitives_are_back_to_front_in_exact_colors() {
     // Three atoms and two hydrogens; four bonds, each in two halves.
     assert_eq!((spheres, quads), (5, 8));
     assert_eq!(parts.len(), 13);
-    // Oxygen keeps the prototype's flat-look stops, faded toward the paper.
+    // Oxygen keeps the prototype's flat-look stops, in the Presentation
+    // colour the Publication theme shows, faded toward the paper.
     let model = &doc.models[0];
     let c = heavy_center(&model.points(&doc).unwrap());
     let z = rotate(model.rotation, sub(model.atoms[2].xyz, c))[2];
     let reach = reach(&model.points(&doc).unwrap(), c, Style::BallStick);
+    let oxygen = ColorTheme::Presentation.element_swatch("O", CanvasTheme::Light);
     let base = mix(
-        [224., 72., 61.],
+        float(oxygen.unwrap()),
         WHITE,
         0.35 * ((reach - z) / (2. * reach)).clamp(0., 1.),
     );
@@ -305,6 +308,64 @@ fn ball_and_stick_primitives_are_back_to_front_in_exact_colors() {
             if stops[1] == (0.6, rgb(base))
                 && stops[0] == (0., rgb(mix(base, WHITE, 0.45)))
                 && o.color == [30, 34, 38] && o.alpha == 0.85)));
+}
+
+/// The model's colours follow the drawing's colour theme and canvas: the
+/// theme's element swatches, Presentation's for Publication, a user theme's
+/// own, and a light grey hydrogen where the theme greys it like carbon.
+#[test]
+fn model_colours_follow_the_colour_theme_and_canvas() {
+    let (mut doc, ..) = shown(Display::ThreeD);
+    for canvas in CanvasTheme::ALL {
+        doc.canvas_theme = canvas;
+        for theme in ColorTheme::ALL {
+            doc.color_theme = theme;
+            let shown = if theme == ColorTheme::Publication {
+                ColorTheme::Presentation
+            } else {
+                theme
+            };
+            for element in ["C", "N", "O", "S"] {
+                assert_eq!(
+                    Some(element_color(&doc, element)),
+                    shown.element_swatch(element, canvas),
+                    "{canvas:?} {theme:?} {element}"
+                );
+            }
+            let (h, c) = (element_color(&doc, "H"), element_color(&doc, "C"));
+            let light = |rgb: [u8; 3]| rgb.iter().map(|v| u32::from(*v)).sum::<u32>();
+            assert!(light(h) > light(c), "{canvas:?} {theme:?} {h:?} {c:?}");
+            if theme == ColorTheme::Jmol {
+                assert_eq!(h, [255; 3], "Jmol's own white");
+            } else {
+                let grey = if canvas.is_dark() {
+                    HYDROGEN_DARK
+                } else {
+                    HYDROGEN
+                };
+                assert_eq!(h, grey);
+            }
+        }
+    }
+    // The primitives use them, faded toward the dark canvas.
+    doc.color_theme = ColorTheme::Jmol;
+    doc.models[0].depth_fade = 0.;
+    let red = ColorTheme::Jmol
+        .element_swatch("O", CanvasTheme::Dark)
+        .unwrap();
+    assert!(primitives(&doc).iter().any(|p| matches!(p,
+        Primitive::Sphere { stops, .. } if stops[1].1 == red)));
+    doc.models[0].depth_fade = 1.;
+    assert!(!primitives(&doc).iter().any(|p| matches!(p,
+        Primitive::Sphere { stops, .. } if stops[1].1 == red)));
+    // An element without a swatch keeps the prototype's table.
+    assert_eq!(element_color(&doc, "Xx"), element("Xx").0);
+    // A user theme's own swatches count.
+    let mut theme = crate::theme_files::ThemeFile::capture(&doc);
+    let blue = crate::theme_files::ColorValue::Rgb([0x12, 0x34, 0xff]);
+    theme.dark.tile_seeds.insert("O".into(), blue);
+    doc.custom_theme = Some(Box::new(theme));
+    assert_eq!(element_color(&doc, "O"), [0x12, 0x34, 0xff]);
 }
 
 #[test]

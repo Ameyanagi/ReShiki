@@ -268,6 +268,35 @@ const CARD_EDGE: [u8; 3] = [0xe3, 0xe7, 0xea];
 /// The radial gradient's inner circle, as a fraction of the ball radius.
 pub const FOCAL_RADIUS: f32 = 0.05;
 
+/// Hydrogen where the theme greys it like carbon, kept lighter than carbon,
+/// on a light canvas and on a dark one.
+const HYDROGEN: [u8; 3] = [0xee, 0xf0, 0xf2];
+const HYDROGEN_DARK: [u8; 3] = [0xd9, 0xde, 0xe3];
+
+/// An element's model colour: the drawing's element swatch for its theme and
+/// canvas, user themes included, or Presentation's where the theme has none
+/// (Publication), else the prototype's table. Where the theme greys hydrogen
+/// like carbon (Presentation, Pastel), hydrogen is a light grey instead.
+fn element_color(doc: &Document, symbol: &str) -> [u8; 3] {
+    let canvas = doc.canvas_theme;
+    let swatch = |element: &str| {
+        crate::canvas_theme::element_swatch(doc, element, canvas).or_else(|| {
+            crate::canvas_theme::ColorTheme::Presentation.element_swatch(element, canvas)
+        })
+    };
+    match swatch(symbol) {
+        Some(rgb) if symbol == "H" && swatch("C") == Some(rgb) => {
+            if canvas.is_dark() {
+                HYDROGEN_DARK
+            } else {
+                HYDROGEN
+            }
+        }
+        Some(rgb) => rgb,
+        None => element(symbol).0,
+    }
+}
+
 /// Prototype colour and ball & stick radius (Å). Elements it lacks use its
 /// grey with radii in proportion to the others.
 fn element(symbol: &str) -> ([u8; 3], f32) {
@@ -1499,6 +1528,11 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             .map(|&(offset, toward, t)| (offset, rgb(mix(base, toward, t))))
             .collect::<Vec<_>>()
     };
+    let colors: HashMap<&str, [u8; 3]> = view
+        .symbols
+        .iter()
+        .map(|s| (*s, element_color(doc, s)))
+        .collect();
     // Stick style's outline: one stroke of every shape, behind all of them.
     let mut rims: (Vec<Vec<Point>>, Vec<Vec<Point>>) = Default::default();
     let mut drawn = vec![];
@@ -1506,7 +1540,11 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         let (Item::Bond(i, _) | Item::Atom(i)) = item;
         let fading = view.symbols.get(i) == Some(&"H") && grown < 1.;
         let symbol = *view.symbols.get(i)?;
-        let base = mix(float(element(symbol).0), float(backdrop), fade(z));
+        let base = mix(
+            float(*colors.get(symbol).unwrap_or(&GREY)),
+            float(backdrop),
+            fade(z),
+        );
         let wire = rgb(mix(base, BLACK, if symbol == "C" { 0.35 } else { 0.1 }));
         let primitive = match item {
             Item::Atom(i) if style == Style::Wireframe => {
