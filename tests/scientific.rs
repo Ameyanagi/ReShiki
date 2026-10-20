@@ -131,6 +131,55 @@ fn circled_charge_marks_draw_smaller_than_their_stored_size() {
     assert!((extent(&free, 1) - 1.04).abs() < 0.02);
 }
 
+#[tokio::test]
+async fn app_drawn_circled_charge_matches_chemdraw_nominal_size() {
+    let circle = |doc: &Document| {
+        let atom = doc.atoms.iter().find(|a| !a.marks.is_empty()).unwrap();
+        let parts = scientific::styled_mark_parts(atom, &doc.drawing_style);
+        let points = reshiki::graphics::flattened(&parts[1].commands).concat();
+        let x = points.iter().map(|q| q.x);
+        (x.clone().fold(f32::MIN, f32::max) - x.fold(f32::MAX, f32::min))
+            / doc.drawing_style.world(1.)
+    };
+    let engine = LocalEngine::default();
+    // ChemDraw stores a 7.5 pt mark (0.75 × the 10 pt label font) for this charge.
+    let chemdraw = engine
+        .request(Request::import(
+            "cdxml",
+            include_str!("fixtures/exported-charge-chemdraw.cdxml"),
+        ))
+        .await
+        .unwrap()
+        .document
+        .unwrap();
+    // A charge drawn in ReShiki stores no size and falls back to the same nominal size.
+    let mut doc = Document::default();
+    let c = doc.add_atom("C", p(0., 0.));
+    let o = doc.add_atom("O", p(doc.drawing_style.bond_length_world, 0.));
+    doc.add_bond(c, o, 1, "plain");
+    let at = doc.atom(o).unwrap().position;
+    drawing(GraphicKind::Symbol(SymbolKind::CircleMinus))
+        .place(&mut doc, at, at, false, 5.)
+        .unwrap();
+    assert_eq!(doc.atom(o).unwrap().marks[0].size_pt, None);
+    assert!((circle(&chemdraw) - 6.).abs() < 0.05);
+    assert!((circle(&doc) - circle(&chemdraw)).abs() < 0.01);
+    // CDXML export writes that nominal size, so ChemDraw shows the same charge.
+    let mut request = Request::molecule("export", doc);
+    request.format = Some("cdxml".into());
+    let xml = engine.request(request).await.unwrap().output.unwrap();
+    let graphic = &xml[xml.find("SymbolType=\"CircleMinus\"").unwrap()..];
+    let bounds = &graphic[graphic.find("BoundingBox=\"").unwrap() + 13..];
+    let v: Vec<f64> = bounds[..bounds.find('"').unwrap()]
+        .split(' ')
+        .map(|n| n.parse().unwrap())
+        .collect();
+    assert!(
+        ((v[0] - v[2]).hypot(v[1] - v[3]) - 7.5).abs() < 1e-3,
+        "{v:?}"
+    );
+}
+
 #[test]
 fn failed_attachment_is_atomic_and_combined_marks_track_two_radicals() {
     let mut doc = Document::default();
