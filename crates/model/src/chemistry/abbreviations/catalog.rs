@@ -402,8 +402,27 @@ fn builtin() -> Result<&'static Catalog> {
 /// The bundled catalog merged with the user's groups, when there are any.
 static ACTIVE: RwLock<Option<Catalog>> = RwLock::new(None);
 
+#[cfg(test)]
+thread_local! {
+    /// User groups for one test thread, leaving tests on other threads alone.
+    static TEST_USER: std::cell::RefCell<Option<Catalog>> = const { std::cell::RefCell::new(None) };
+}
+
+/// [`set_user`] for the calling test thread only.
+#[cfg(test)]
+pub(crate) fn set_user_on_thread(text: &str) -> Vec<String> {
+    let (user, errors) = parse(text, true);
+    let merged = merge(builtin().expect("bundled catalog"), user);
+    TEST_USER.with_borrow_mut(|catalog| *catalog = Some(merged));
+    errors
+}
+
 /// The active catalog in detection tie-break order.
 pub fn presets() -> Result<Catalog> {
+    #[cfg(test)]
+    if let Some(catalog) = TEST_USER.with_borrow(Clone::clone) {
+        return Ok(catalog);
+    }
     if let Some(catalog) = ACTIVE
         .read()
         .unwrap_or_else(PoisonError::into_inner)
