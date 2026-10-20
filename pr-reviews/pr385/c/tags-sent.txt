@@ -1,0 +1,72 @@
+== G0-above.cdxml
+  n {'id': '4', 'p': '42.340001 51.489998', 'Element': '7', 'NumHydrogens': '1', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Right', 'ShowAtomStereo': 'no'}
+  t {'p': '42.340001 51.489998', 'LabelAlignment': 'Auto'} 'NH'
+  n {'id': '20', 'p': '54.689996 44.289998', 'NodeType': 'Fragment', 'BondOrdering': '13'}
+  t {'p': '54.689996 44.289998', 'LabelAlignment': 'Above', 'LabelJustification': 'Above'} 'Boc'
+  n {'id': '6', 'p': '54.620003 30.000000', 'Element': '8', 'NumHydrogens': '0', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '54.620003 30.000000', 'LabelAlignment': 'Auto'} 'O'
+  n {'id': '7', 'p': '67.090014 51.379999', 'Element': '8', 'NumHydrogens': '0', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '67.090014 51.379999', 'LabelAlignment': 'Auto'} 'O'
+== G0-center.cdxml
+  n {'id': '4', 'p': '42.340001 51.489998', 'Element': '7', 'NumHydrogens': '1', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Right', 'ShowAtomStereo': 'no'}
+  t {'p': '42.340001 51.489998', 'LabelAlignment': 'Auto'} 'NH'
+  n {'id': '20', 'p': '54.689996 44.289998', 'NodeType': 'Fragment', 'BondOrdering': '13'}
+  t {'p': '54.689996 44.289998', 'LabelAlignment': 'Center', 'LabelJustification': 'Center'} 'Boc'
+  n {'id': '6', 'p': '54.620003 30.000000', 'Element': '8', 'NumHydrogens': '0', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '54.620003 30.000000', 'LabelAlignment': 'Auto'} 'O'
+  n {'id': '7', 'p': '67.090014 51.379999', 'Element': '8', 'NumHydrogens': '0', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '67.090014 51.379999', 'LabelAlignment': 'Auto'} 'O'
+== G0-left.cdxml
+  n {'id': '4', 'p': '42.340001 51.489998', 'Element': '7', 'NumHydrogens': '1', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Right', 'ShowAtomStereo': 'no'}
+  t {'p': '42.340001 51.489998', 'LabelAlignment': 'Auto'} 'NH'
+  n {'id': '20', 'p': '54.689996 44.289998', 'NodeType': 'Fragment', 'BondOrdering': '13'}
+  t {'p': '54.689996 44.289998', 'LabelAlignment': 'Left', 'LabelJustification': 'Left'} 'Boc'
+  n {'id': '6', 'p': '54.620003 30.000000', 'Element': '8', 'NumHydrogens': '0', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '54.620003 30.000000', 'LabelAlignment': 'Auto'} 'O'
+  n {'id': '7', 'p': '67.090014 51.379999', 'Element': '8', 'NumHydrogens': '0', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '67.090014 51.379999', 'LabelAlignment': 'Auto'} 'O'
+== G0-right.cdxml
+  n {'id': '4', 'p': '42.340001 51.489998', 'Element': '7', 'NumHydrogens': '1', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Right', 'ShowAtomStereo': 'no'}
+  t {'p': '42.340001 51.489998', 'LabelAlignment': 'Auto'} 'NH'
+  n {'id': '20', 'p': '54.689996 44.289998', 'NodeType': 'Fragment', 'BondOrdering': '13'}
+  t {'p': '54.689996 44.289998', 'LabelAlignment': 'Right', 'LabelJustification': 'Right'} 'Boc'
+  n {'id': '6', 'p': '54.620003 30.000000', 'Element': '8', 'NumHydrogens': '0', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '54.620003 30.000000', 'LabelAlignment': 'Auto'} 'O'
+  n {'id': '7', 'p': '67.090014 51.379999', 'Element': '8', 'NumHydrogens': '0', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '67.090014 51.379999', 'LabelAlignment': 'Auto'} 'O'
+== G1-401-above.cdxml
+  n {'id': '4', 'p': '42.340001 51.489998', 'Element': '7', 'NumHydrogens': '1', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Right', 'ShowAtomStereo': 'no'}
+  t {'p': '42.340001 51.489998', 'LabelAlignment': 'Auto'} 'NH'
+  n {'id': '20', 'p': '54.689996 44.289998', 'NodeType': 'Fragment', 'LabelDisplay': 'Above', 'BondOrdering': '13'}
+  t {'p': '54.689996 44.289998', 'LabelAlignment': 'Above', 'LabelJustification': 'Above'} 'Boc'
+  n {'id': '6', 'p': '54.620003 30.000000', 'Element': '8', 'NumHydrogens': '0', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '54.620003 30.000000', 'LabelAlignment': 'Auto'} 'O'
+  n {'id': '7', 'p': '67.090014 51.379999', 'Element': '8', 'NumHydrogens': '0', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '67.090014 51.379999', 'LabelAlignment': 'Auto'} 'O'
+== G1-401-center.cdxml
+  n {'id': '4', 'p': '42.340001 51.489998', 'Element': '7', 'NumHydrogens': '1', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Right', 'ShowAtomStereo': 'no'}
+  t {'p': '42.340001 51.489998', 'LabelAlignment': 'Auto'} 'NH'
+  n {'id': '20', 'p': '54.689996 44.289998', 'NodeType': 'Fragment', 'LabelDisplay': 'Center', 'BondOrdering': '13'}
+  t {'p': '54.689996 44.289998', 'LabelAlignment': 'Center', 'LabelJustification': 'Center'} 'Boc'
+  n {'id': '6', 'p': '54.620003 30.000000', 'Element': '8', 'NumHydrogens': '0', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '54.620003 30.000000', 'LabelAlignment': 'Auto'} 'O'
+  n {'id': '7', 'p': '67.090014 51.379999', 'Element': '8', 'NumHydrogens': '0', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '67.090014 51.379999', 'LabelAlignment': 'Auto'} 'O'
+== G1-401-left.cdxml
+  n {'id': '4', 'p': '42.340001 51.489998', 'Element': '7', 'NumHydrogens': '1', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Right', 'ShowAtomStereo': 'no'}
+  t {'p': '42.340001 51.489998', 'LabelAlignment': 'Auto'} 'NH'
+  n {'id': '20', 'p': '54.689996 44.289998', 'NodeType': 'Fragment', 'BondOrdering': '13', 'LabelDisplay': 'Left'}
+  t {'p': '54.689996 44.289998', 'LabelAlignment': 'Left', 'LabelJustification': 'Left'} 'Boc'
+  n {'id': '6', 'p': '54.620003 30.000000', 'Element': '8', 'NumHydrogens': '0', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '54.620003 30.000000', 'LabelAlignment': 'Auto'} 'O'
+  n {'id': '7', 'p': '67.090014 51.379999', 'Element': '8', 'NumHydrogens': '0', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '67.090014 51.379999', 'LabelAlignment': 'Auto'} 'O'
+== G1-401-right.cdxml
+  n {'id': '4', 'p': '42.340001 51.489998', 'Element': '7', 'NumHydrogens': '1', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Right', 'ShowAtomStereo': 'no'}
+  t {'p': '42.340001 51.489998', 'LabelAlignment': 'Auto'} 'NH'
+  n {'id': '20', 'p': '54.689996 44.289998', 'NodeType': 'Fragment', 'LabelDisplay': 'Right', 'BondOrdering': '13'}
+  t {'p': '54.689996 44.289998', 'LabelAlignment': 'Right', 'LabelJustification': 'Right'} 'Boc'
+  n {'id': '6', 'p': '54.620003 30.000000', 'Element': '8', 'NumHydrogens': '0', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '54.620003 30.000000', 'LabelAlignment': 'Auto'} 'O'
+  n {'id': '7', 'p': '67.090014 51.379999', 'Element': '8', 'NumHydrogens': '0', 'ShowTerminalCarbonLabels': 'no', 'ShowNonTerminalCarbonLabels': 'no', 'HideImplicitHydrogens': 'no', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '67.090014 51.379999', 'LabelAlignment': 'Auto'} 'O'

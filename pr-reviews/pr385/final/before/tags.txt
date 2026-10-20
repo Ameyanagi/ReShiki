@@ -1,0 +1,6 @@
+== item-0-1.bin.decoded.xml
+  n {'id': '3', 'p': '30 30', 'Element': '0', 'NodeType': 'Unspecified', 'NumHydrogens': '0', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'id': '6', 'p': '30 30', 'LabelJustification': 'Left'} 'MeO'
+== item-0-1.bin.decoded.xml
+  n {'id': '3', 'p': '30 30', 'Element': '0', 'NodeType': 'Unspecified', 'NumHydrogens': '0', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'id': '6', 'p': '30 30', 'LabelJustification': 'Center'} 'MeO'

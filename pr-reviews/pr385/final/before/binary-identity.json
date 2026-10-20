@@ -1,0 +1,26 @@
+{
+  "source": "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/bin-main/reshiki",
+  "wrapper": "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before/ReShiki-EV378-Before.app",
+  "executable": "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before/ReShiki-EV378-Before.app/Contents/MacOS/reshiki-ev378-before",
+  "source_stat": {
+    "device": 16777229,
+    "inode": 13386622,
+    "size": 258574264
+  },
+  "wrapper_stat": {
+    "device": 16777229,
+    "inode": 13386622,
+    "size": 258574264
+  },
+  "sha256": "57e3b15c7d256c59c983c5cfe10b20041b6e5fd2524ecb5d89616882192dca5a",
+  "pid": 47639,
+  "process_ps": "47639     1 /private/tmp/cla /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before/ReShiki-EV378-Before.app/Contents/MacOS/reshiki-ev378-before",
+  "process_text_vnode": "p47639\nftxt\nn/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before/ReShiki-EV378-Before.app/Contents/MacOS/reshiki-ev378-before\nftxt\nn/private/var/db/diagnostics/logd/.plist-cache.QoEdZbPb\nftxt\nn/private/var/db/timezone/tz/2026c.1.0/icutz/icutz44l.dat\nftxt\nn/System/Library/CoreServices/SystemAppearance.bundle/Contents/Resources/SystemAppearance.car\nftxt\nn/private/var/db/analyticsd/events.allowlist\nftxt\nn/usr/lib/libobjc-trampolines.dylib\nftxt\nn/usr/lib/dyld\nftxt\nn/usr/share/icu/icudt78l.dat\nftxt\nn/private/var/folders/3w/r26w4yb56mj_9902qyf3q23h0000gp/0/com.apple.LaunchServices.dv/com.apple.LaunchServices-33554481-v2.csstore\nftxt\nn/System/Library/CoreServices/SystemAppearance.bundle/Contents/Resources/Aqua.car\nftxt\nn/System/Library/CoreServices/SystemAppearance.bundle/Contents/Resources/FauxVibrantLight.car\nftxt\nn/System/Library/CoreServices/SystemAppearance.bundle/Contents/Resources/VibrantLight.car\nftxt\nn/System/Library/Fonts/SFNS.ttf\nftxt\nn/System/Library/Frameworks/AppKit.framework/Versions/C/Resources/InputManager.loctable\nftxt\nn/System/Library/Frameworks/AppKit.framework/Versions/C/Resources/MenuCommands.loctable\nftxt\nn/System/Library/PrivateFrameworks/SFSymbols.framework/Versions/A/Resources/CoreGlyphs.bundle/Contents/Resources/Assets.car\nftxt\nn/System/Library/PrivateFrameworks/SFSymbols.framework/Versions/A/Resources/CoreGlyphsPrivate.bundle/Contents/Resources/Assets.car\nftxt\nn/System/Library/Keyboard Layouts/AppleKeyboardLayouts.bundle/Contents/Resources/AppleKeyboardLayouts-L.dat\nftxt\nn/System/Library/Caches/com.apple.IntlDataCache.le.kbdx\nftxt\nn/System/Library/Input Methods/JapaneseIM-RomajiTyping.app/Contents/PlugIns/JapaneseIM-RomajiTyping.appex/Contents/Resources/InfoPlist.loctable\nftxt\nn/System/Library/Keyboard Layouts/AppleKeyboardLayouts.bundle/Contents/Resources/InfoPlist.loctable\nftxt\nn/System/Library/Frameworks/AppKit.framework/Versions/C/Resources/Common.loctable\nftxt\nn/System/Library/PrivateFrameworks/DesignLibrary.framework/Versions/A/Resources/Assets.car\nftxt\nn/System/Library/CoreServices/SystemVersion.bundle/English.lproj/SystemVersion.strings\nftxt\nn/System/Library/Extensions/AGXMetal13_3.bundle/Contents/Resources/ds.binary.metallib.g13g-b0\nftxt\nn/private/var/folders/3w/r26w4yb56mj_9902qyf3q23h0000gp/C/dev.reshiki.ev378.before/com.apple.metal/16777235_322/functions.data\nftxt\nn/private/var/folders/3w/r26w4yb56mj_9902qyf3q23h0000gp/C/dev.reshiki.ev378.before/com.apple.metal/32024/libraries.data\nftxt\nn/System/Library/Fonts/\u30d2\u30e9\u30ad\u3099\u30ce\u89d2\u30b3\u3099\u30b7\u30c3\u30af W4.ttc\nftxt\nn/System/Library/Fonts/Helvetica.ttc\nftxt\nn/System/Volumes/Preboot/Cryptexes/OS/usr/lib/libMetalMetricsInterpose.dylib\nftxt\nn/System/Library/Frameworks/ApplicationServices.framework/Versions/A/Frameworks/HIServices.framework/Versions/A/Resources/RoleDescriptions.loctable\nftxt\nn/System/Library/Frameworks/ApplicationServices.framework/Versions/A/Frameworks/HIServices.framework/Versions/A/Resources/RoleDescriptions-BBBAA77A32-C4EBFEA440.strings\nftxt\nn/System/Library/Frameworks/AppKit.framework/Versions/C/Resources/Accessibility.loctable\nftxt\nn/System/Library/CoreServices/SystemAppearance.bundle/Contents/Resources/DarkAqua.car\n",
+  "cleanup": {
+    "test_pid_exited": true,
+    "wrapper_removed": true,
+    "verified_at": "2026-10-20T09:43:53.533483+09:00",
+    "chemDraw_preexisting_pid": 67529,
+    "chemDraw_still_running": true
+  }
+}

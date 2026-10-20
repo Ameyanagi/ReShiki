@@ -1,0 +1,45 @@
+== item-0-1.bin.decoded.xml
+  n {'id': '3', 'p': '272.00288 359.93896', 'Warning': 'An atom in this label has an invalid valence.', 'NodeType': 'Unspecified', 'AS': 'N'}
+  t {'p': '274.78365 363.58154', 'LabelJustification': 'Right', 'Justification': 'Right', 'LineHeight': 'variable', 'LabelAlignment': 'Right'} 'MeO'
+== item-0-1.bin.decoded.xml
+  n {'id': '3', 'p': '272.00288 359.93896', 'Warning': 'An atom in this label has an invalid valence.', 'NodeType': 'Unspecified', 'AS': 'N'}
+  t {'p': '274.78365 363.58154', 'LabelJustification': 'Right', 'Justification': 'Right', 'LineHeight': 'variable', 'LabelAlignment': 'Right'} 'MeO'
+== item-0-1.bin.decoded.xml
+  n {'id': '3', 'p': '272.00288 359.93896', 'Warning': 'An atom in this label has an invalid valence.', 'NodeType': 'Unspecified', 'AS': 'N'}
+  t {'p': '274.78365 363.58154', 'LabelJustification': 'Right', 'Justification': 'Right', 'LineHeight': 'variable', 'LabelAlignment': 'Right'} 'MeO'
+== item-0-1.bin.decoded.xml
+  n {'id': '3', 'p': '272.00288 359.93896', 'Warning': 'An atom in this label has an invalid valence.', 'NodeType': 'Unspecified', 'AS': 'N'}
+  t {'p': '274.78365 363.58154', 'LabelJustification': 'Right', 'Justification': 'Right', 'LineHeight': 'variable', 'LabelAlignment': 'Right'} 'MeO'
+== item-0-1.bin.decoded.xml
+  n {'id': '3', 'p': '272.00288 359.93896', 'Warning': 'An atom in this label has an invalid valence.', 'NodeType': 'Unspecified', 'AS': 'N'}
+  t {'p': '274.78365 363.58154', 'LabelJustification': 'Right', 'Justification': 'Right', 'LineHeight': 'variable', 'LabelAlignment': 'Right'} 'MeO'
+== item-0-1.bin.decoded.xml
+  n {'id': '3', 'p': '272.00288 359.93896', 'Warning': 'An atom in this label has an invalid valence.', 'NodeType': 'Unspecified', 'AS': 'N'}
+  t {'p': '274.78365 363.58154', 'LabelJustification': 'Right', 'Justification': 'Right', 'LineHeight': 'variable', 'LabelAlignment': 'Right'} 'MeO'
+== item-0-1.bin.decoded.xml
+  n {'id': '3', 'p': '272.00288 359.93896', 'Warning': 'An atom in this label has an invalid valence.', 'NodeType': 'Unspecified', 'AS': 'N'}
+  t {'p': '274.78365 363.58154', 'LabelJustification': 'Right', 'Justification': 'Right', 'LineHeight': 'variable', 'LabelAlignment': 'Right'} 'MeO'
+== item-0-1.bin.decoded.xml
+  n {'id': '3', 'p': '272.00288 359.93896', 'Warning': 'An atom in this label has an invalid valence.', 'NodeType': 'Unspecified', 'AS': 'N'}
+  t {'p': '274.78365 363.58154', 'LabelJustification': 'Right', 'Justification': 'Right', 'LineHeight': 'variable', 'LabelAlignment': 'Right'} 'MeO'
+== item-0-1.bin.decoded.xml
+  n {'id': '3', 'p': '272.00288 359.93896', 'Warning': 'An atom in this label has an invalid valence.', 'NodeType': 'Unspecified', 'AS': 'N'}
+  t {'p': '274.78365 363.58154', 'LabelJustification': 'Right', 'Justification': 'Right', 'LineHeight': 'variable', 'LabelAlignment': 'Right'} 'MeO'
+== item-0-1.bin.decoded.xml
+  n {'id': '3', 'p': '267.84639 359.93896', 'Warning': 'An atom in this label has an invalid valence.', 'NodeType': 'Unspecified', 'AS': 'N', 'LabelDisplay': 'Center'}
+  t {'p': '267.84639 363.58154', 'LabelJustification': 'Center', 'Justification': 'Center', 'LineHeight': 'variable'} 'MeO'
+== item-0-1.bin.decoded.xml
+  n {'id': '3', 'p': '263.16713 359.93896', 'Warning': 'An atom in this label has an invalid valence.', 'NodeType': 'Unspecified', 'AS': 'N', 'LabelDisplay': 'Left'}
+  t {'p': '259.00209 363.58154', 'LabelJustification': 'Left', 'LineHeight': 'variable'} 'MeO'
+== item-0-1.bin.decoded.xml
+  n {'id': '3', 'p': '271.31929 359.93896', 'NodeType': 'Fragment', 'AS': 'N', 'LabelDisplay': 'Right'}
+  t {'p': '275.20845 363.58154', 'LabelJustification': 'Right', 'Justification': 'Right', 'LineHeight': 'variable'} 'MeO'
+== item-0-1.bin.decoded.xml
+  n {'id': '3', 'p': '267.84639 359.93896', 'Warning': 'An atom in this label has an invalid valence.', 'NodeType': 'Unspecified', 'AS': 'N', 'LabelDisplay': 'Center'}
+  t {'p': '267.84639 363.58154', 'LabelJustification': 'Center', 'Justification': 'Center', 'LineHeight': 'variable'} 'MeO'
+== item-0-1.bin.decoded.xml
+  n {'id': '3', 'p': '263.16713 359.93896', 'Warning': 'An atom in this label has an invalid valence.', 'NodeType': 'Unspecified', 'AS': 'N', 'LabelDisplay': 'Left'}
+  t {'p': '259.00209 363.58154', 'LabelJustification': 'Left', 'LineHeight': 'variable'} 'MeO'
+== item-0-1.bin.decoded.xml
+  n {'id': '3', 'p': '271.31929 359.93896', 'NodeType': 'Fragment', 'AS': 'N', 'LabelDisplay': 'Right'}
+  t {'p': '275.20845 363.58154', 'LabelJustification': 'Right', 'Justification': 'Right', 'LineHeight': 'variable'} 'MeO'

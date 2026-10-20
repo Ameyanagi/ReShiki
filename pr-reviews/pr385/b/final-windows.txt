@@ -1,0 +1,46 @@
+Window: "", App: ChemDraw.
+0 Window, Secondary Actions: Cancel, Pick
+	1 menu Secondary Actions: Cancel
+		2 (disabled) Minimize
+		3 (disabled) Minimize All, ID: miniaturizeAll:
+		4 (disabled) Zoom
+		5 (disabled) Zoom All, ID: zoomAll:
+		6 (disabled) Fill
+		7 (disabled) Center
+		8 (disabled) Enter Full Screen, ID: toggleFullScreen:
+		9 Move & Resize
+			10 menu Secondary Actions: Cancel
+				11 (disabled) Halves
+				12 (disabled) Left
+				13 (disabled) Right
+				14 (disabled) Top
+				15 (disabled) Bottom
+				16 (disabled) Quarters
+				17 (disabled) Top Left
+				18 (disabled) Top Right
+				19 (disabled) Bottom Left
+				20 (disabled) Bottom Right
+				21 (disabled) Arrange
+				22 (disabled) Left & Right
+				23 (disabled) Left & Quarters
+				24 (disabled) Right & Left
+				25 (disabled) Right & Quarters
+				26 (disabled) Top & Bottom
+				27 (disabled) Top & Quarters
+				28 (disabled) Bottom & Top
+				29 (disabled) Bottom & Quarters
+				30 (disabled) Quarters
+				31 (disabled) Return to Previous Size
+		32 (disabled) Full Screen Tile
+		33 Bring All to Front
+		34 Arrange in Front, ID: alternateArrangeInFront:
+		35 (disabled) Remove Window from Set
+		36 (disabled) Show Previous Tab, ID: selectPreviousTab:
+		37 (disabled) Show Next Tab, ID: selectNextTab:
+		38 (disabled) Move Tab to New Window, ID: moveTabToNewWindow:
+		39 (disabled) Merge All Windows, ID: mergeAllWindows:
+		40 (disabled) Show Tab Bar, ID: toggleTabBar:
+		41 (disabled) Show All Tabs, ID: toggleTabOverview:
+		42 Hotkeys Cheat Sheet for macOS.cdxml, ID: makeKeyAndOrderFront:
+		43 Shortcuts Cheat Sheet for macOS.cdxml, ID: makeKeyAndOrderFront:
+		44 Untitled ACS Document 1996-1, ID: makeKeyAndOrderFront:

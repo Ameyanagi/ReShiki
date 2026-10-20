@@ -1,0 +1,38 @@
+Window: "Untitled Document-20", App: ChemDraw.
+0 Text, Secondary Actions: Cancel, Pick
+	1 menu Secondary Actions: Cancel
+		2 Font
+			3 menu Secondary Actions: Cancel
+		4 Style
+			5 menu Secondary Actions: Cancel
+				6 Plain, ID: menuItemAction:
+				7 Bold, ID: menuItemAction:
+				8 Italic, ID: menuItemAction:
+				9 Underline, ID: menuItemAction:
+				10 Outline, ID: menuItemAction:
+				11 Shadow, ID: menuItemAction:
+				12 Subscript, ID: menuItemAction:
+				13 Superscript, ID: menuItemAction:
+				14 Formula, ID: menuItemAction:
+		15 Size
+			16 menu Secondary Actions: Cancel
+				17 5, ID: menuItemAction:
+				18 6, ID: menuItemAction:
+				19 7, ID: menuItemAction:
+				20 8, ID: menuItemAction:
+				21 9, ID: menuItemAction:
+				22 10, ID: menuItemAction:
+				23 12, ID: menuItemAction:
+				24 14, ID: menuItemAction:
+				25 16, ID: menuItemAction:
+				26 18, ID: menuItemAction:
+				27 24, ID: menuItemAction:
+				28 Other…, ID: menuItemAction:
+				29 10, ID: menuItemAction:
+		30 Flush Left, ID: menuItemAction:
+		31 Centered, ID: menuItemAction:
+		32 Flush Right, ID: menuItemAction:
+		33 (disabled) Justified, ID: menuItemAction:
+		34 Stacked Above, ID: menuItemAction:
+		35 Automatic, ID: menuItemAction:
+		36 Line Spacing…, ID: menuItemAction:

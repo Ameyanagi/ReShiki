@@ -1,0 +1,37 @@
+[
+  {
+    "bytes" : 964,
+    "file" : "item-0-0.bin",
+    "type" : "dev.reshiki.drawing"
+  },
+  {
+    "bytes" : 434,
+    "file" : "item-0-1.bin",
+    "type" : "com.revvity.chemdraw.cdx-clipboard"
+  },
+  {
+    "bytes" : 434,
+    "file" : "item-0-2.bin",
+    "type" : "com.perkinelmer.chemdraw.cdx-clipboard"
+  },
+  {
+    "bytes" : 434,
+    "file" : "item-0-3.bin",
+    "type" : "com.cambridgesoft.cdx"
+  },
+  {
+    "bytes" : 9566,
+    "file" : "item-0-4.pdf",
+    "type" : "com.adobe.pdf"
+  },
+  {
+    "bytes" : 13373,
+    "file" : "item-0-5.png",
+    "type" : "public.png"
+  },
+  {
+    "bytes" : 469,
+    "file" : "item-0-6.bin",
+    "type" : "public.svg-image"
+  }
+]

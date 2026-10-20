@@ -1,0 +1,167 @@
+[
+  {
+    "file": "meo-flush-left.cdxml",
+    "program": "ChemDraw 26.1.0.6801",
+    "outer_nodes": [
+      {
+        "id": "14",
+        "p": "190 158",
+        "Z": "9",
+        "Warning": "An atom in this label has an invalid valence.",
+        "NodeType": "Unspecified",
+        "NeedsClean": "yes",
+        "AS": "N",
+        "LabelDisplay": "Left",
+        "AtomID": "1"
+      },
+      {
+        "id": "16",
+        "p": "215.97 143",
+        "Z": "11",
+        "AS": "N",
+        "AtomID": "2"
+      }
+    ],
+    "outer_bonds": [
+      {
+        "id": "17",
+        "Z": "12",
+        "B": "14",
+        "E": "16",
+        "BS": "N"
+      }
+    ],
+    "text": "MeO",
+    "text_attributes": {
+      "p": "185.83 161.64",
+      "BoundingBox": "186.58 154.36 207.06 161.76",
+      "LabelJustification": "Left",
+      "LabelAlignment": "Right"
+    },
+    "nested_fragments": 0
+  },
+  {
+    "file": "meo-centered.cdxml",
+    "program": "ChemDraw 26.1.0.6801",
+    "outer_nodes": [
+      {
+        "id": "14",
+        "p": "190 158",
+        "Z": "9",
+        "Warning": "An atom in this label has an invalid valence.",
+        "NodeType": "Unspecified",
+        "NeedsClean": "yes",
+        "AS": "N",
+        "LabelDisplay": "Center",
+        "AtomID": "1"
+      },
+      {
+        "id": "16",
+        "p": "215.97 143",
+        "Z": "11",
+        "AS": "N",
+        "AtomID": "2"
+      }
+    ],
+    "outer_bonds": [
+      {
+        "id": "17",
+        "Z": "12",
+        "B": "14",
+        "E": "16",
+        "BS": "N"
+      }
+    ],
+    "text": "MeO",
+    "text_attributes": {
+      "p": "190 161.64",
+      "BoundingBox": "179.91 154.36 200.39 161.76",
+      "LabelJustification": "Center",
+      "Justification": "Center",
+      "LabelAlignment": "Right"
+    },
+    "nested_fragments": 0
+  },
+  {
+    "file": "meo-flush-right.cdxml",
+    "program": "ChemDraw 26.1.0.6801",
+    "outer_nodes": [
+      {
+        "id": "14",
+        "p": "190 158",
+        "Z": "9",
+        "NodeType": "Fragment",
+        "NeedsClean": "yes",
+        "AS": "N",
+        "LabelDisplay": "Right",
+        "AtomID": "1"
+      },
+      {
+        "id": "16",
+        "p": "215.97 143",
+        "Z": "11",
+        "AS": "N",
+        "AtomID": "2"
+      }
+    ],
+    "outer_bonds": [
+      {
+        "id": "17",
+        "Z": "12",
+        "B": "14",
+        "E": "16",
+        "BS": "N"
+      }
+    ],
+    "text": "MeO",
+    "text_attributes": {
+      "p": "193.89 161.64",
+      "BoundingBox": "172.96 154.36 193.44 161.76",
+      "LabelJustification": "Right",
+      "Justification": "Right",
+      "LabelAlignment": "Right"
+    },
+    "nested_fragments": 1
+  },
+  {
+    "file": "meo-auto.cdxml",
+    "program": "ChemDraw 26.1.0.6801",
+    "outer_nodes": [
+      {
+        "id": "14",
+        "p": "190 158",
+        "Z": "9",
+        "Warning": "An atom in this label has an invalid valence.",
+        "NodeType": "Unspecified",
+        "NeedsClean": "yes",
+        "AS": "N",
+        "AtomID": "1"
+      },
+      {
+        "id": "16",
+        "p": "215.97 143",
+        "Z": "11",
+        "AS": "N",
+        "AtomID": "2"
+      }
+    ],
+    "outer_bonds": [
+      {
+        "id": "17",
+        "Z": "12",
+        "B": "14",
+        "E": "16",
+        "BS": "N"
+      }
+    ],
+    "text": "MeO",
+    "text_attributes": {
+      "p": "192.78 161.64",
+      "BoundingBox": "171.59 154.36 192.37 161.76",
+      "LabelJustification": "Right",
+      "Justification": "Right",
+      "LabelAlignment": "Right"
+    },
+    "nested_fragments": 0
+  }
+]

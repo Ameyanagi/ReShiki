@@ -1,0 +1,79 @@
+[
+  {
+    "name": "A-823-left",
+    "label": "OMe",
+    "bondLetter": "e",
+    "menu": "Unobservable: accessibility tree omits checkmarks",
+    "problem": "Initial hidden Change Settings dialog resolved via Window menu; As Copied chosen."
+  },
+  {
+    "name": "A-823-center",
+    "label": "OMe",
+    "bondLetter": "e"
+  },
+  {
+    "name": "A-823-right",
+    "label": "OMe",
+    "bondLetter": "e"
+  },
+  {
+    "name": "B-823-701-left",
+    "label": "OMe",
+    "bondLetter": "e"
+  },
+  {
+    "name": "B-823-701-center",
+    "label": "OMe",
+    "bondLetter": "e"
+  },
+  {
+    "name": "B-823-701-right",
+    "label": "OMe",
+    "bondLetter": "e"
+  },
+  {
+    "name": "C-823-701-705-left",
+    "label": "OMe",
+    "bondLetter": "e"
+  },
+  {
+    "name": "C-823-701-705-center",
+    "label": "OMe",
+    "bondLetter": "e"
+  },
+  {
+    "name": "C-823-701-705-right",
+    "label": "OMe",
+    "bondLetter": "e"
+  },
+  {
+    "name": "D-401-823-left",
+    "label": "MeO",
+    "bondLetter": "No bond segment visible; cannot identify visually"
+  },
+  {
+    "name": "D-401-823-center",
+    "label": "MeO",
+    "bondLetter": "No bond segment visible; cannot identify visually"
+  },
+  {
+    "name": "D-401-823-right",
+    "label": "MeO",
+    "bondLetter": "O"
+  },
+  {
+    "name": "E-401-823-701-left",
+    "label": "MeO",
+    "bondLetter": "No bond segment visible; cannot identify visually"
+  },
+  {
+    "name": "E-401-823-701-center",
+    "label": "MeO",
+    "bondLetter": "No bond segment visible; cannot identify visually"
+  },
+  {
+    "name": "E-401-823-701-right",
+    "label": "MeO",
+    "bondLetter": "O"
+  }
+]

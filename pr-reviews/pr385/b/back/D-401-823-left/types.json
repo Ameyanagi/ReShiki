@@ -1,0 +1,27 @@
+[
+  {
+    "bytes" : 10008,
+    "file" : "item-0-0.pdf",
+    "type" : "com.adobe.pdf"
+  },
+  {
+    "bytes" : 1267,
+    "file" : "item-0-1.bin",
+    "type" : "com.revvity.chemdraw.cdx-clipboard"
+  },
+  {
+    "bytes" : 137,
+    "file" : "item-0-2.bin",
+    "type" : "com.mdli.sketchfile"
+  },
+  {
+    "bytes" : 245,
+    "file" : "item-0-3.bin",
+    "type" : "com.mdli.molfile"
+  },
+  {
+    "bytes" : 7,
+    "file" : "item-0-4.bin",
+    "type" : "org.opensmiles.smiles"
+  }
+]

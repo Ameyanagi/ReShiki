@@ -1,0 +1,675 @@
+OpenAI Codex v0.162.1
+--------
+workdir: /Users/shiranui/dev/ReShiki/.claude/worktrees/agent-a826e1a78594af95e
+model: gpt-6-astra
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: xhigh
+reasoning summaries: none
+session id: 01a156be-60ea-7f91-a28e-8439d50c16a7
+--------
+user
+You are running a real-app round-trip check for Claude using computer use, between ReShiki (a chemistry drawing app under test) and ChemDraw 26 (/Applications/ChemDraw.app, already running with pre-existing documents that you must leave untouched).
+
+Evidence directory: /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before  (call it E; create it)
+ReShiki binary to test: /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/bin-main/reshiki (the unfixed origin/main build, so a fail is the expected outcome; record what you read back faithfully either way).
+
+Important: computer use bound by app name may attach to the separately installed ReShiki instead of this binary. Drive only the process launched from the binary above: for example, wrap it in a uniquely named temporary .app inside E whose executable is a hard link or copy of that binary, launch it, and bind to that exact app path. Confirm that the PID you drive belongs to that binary, and record it in the report. Do not close or touch any other ReShiki instance. Remove the temporary wrapper at the end.
+Clipboard capture helper: swift /Users/shiranui/dev/ReShiki/.claude/worktrees/agent-a826e1a78594af95e/scripts/chemdraw_capture_clipboard.swift <dir>
+
+Do this flow twice, with SETTING = "Flush left" (prefix L) and then SETTING = "Centered" (prefix C):
+1. In ReShiki, open a fresh tab. Import the SMILES `CC` through the Import UI, run cleanup, and zoom to about 250%.
+2. Select the left carbon, press Enter, type `MeO`, and press Enter, so that carbon shows the text label MeO.
+3. With MeO selected, open Properties → Labels & chemistry → Atom labels & numbering → "Bond attachment (text labels)" and choose SETTING. Take a screenshot showing the setting: E/<prefix>-1-reshiki-set.png.
+4. Select the whole molecule and press Cmd+C. Then run the capture helper into E/<prefix>-2-reshiki-clipboard.
+5. In ChemDraw, create a new document (Cmd+N) and press Cmd+V (choose "As Copied" if a Change Settings dialog appears; it may be hidden behind other windows, so check the Window menu). Take a screenshot, E/<prefix>-3-chemdraw.png, zooming in if the drawing is tiny. Then press Cmd+A and Cmd+C, and run the capture helper into E/<prefix>-4-chemdraw-clipboard.
+6. Back in ReShiki, open a fresh tab and press Cmd+V. Select the pasted MeO label and open the same Properties setting. Take a screenshot showing what "Bond attachment (text labels)" reads, plus the Hydrogen position just above it: E/<prefix>-5-reshiki-after.png. Record the exact values shown.
+7. Close the ChemDraw document with Cmd+W and discard it (Don't Save / Delete).
+
+Constraints: don't close other apps or ChemDraw's pre-existing documents, don't change system settings, don't save any ChemDraw document, and don't edit repository files. At the end, quit only the ReShiki process you launched (discard unsaved changes).
+
+Write E/report.md: for each SETTING, the values read back in step 6, the screenshot filenames, the PID and binary identity, and anything that did not go as described.
+
+codex
+I’ll launch an isolated wrapper for the specified ReShiki build, verify its process identity, and run both clipboard round trips while preserving ChemDraw’s existing documents. I’ll capture the settings and clipboard evidence, then remove the wrapper and write the report.
+exec
+/bin/zsh -lc "ls -l /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/bin-main/reshiki && sed -n '1,240p' scripts/chemdraw_capture_clipboard.swift" in /Users/shiranui/dev/ReShiki/.claude/worktrees/agent-a826e1a78594af95e
+ succeeded in 0ms:
+-rwxr-xr-x@ 1 shiranui  wheel  258574264 Oct 20 08:35 /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/bin-main/reshiki
+// Save every representation produced by a deliberate ChemDraw Copy As action.
+import AppKit
+import Foundation
+
+guard CommandLine.arguments.count == 2 else {
+    throw NSError(domain: "Capture", code: 1, userInfo: [NSLocalizedDescriptionKey: "Output directory required"])
+}
+if CommandLine.arguments[1] == "--change-count" {
+    print(NSPasteboard.general.changeCount)
+    exit(0)
+}
+let directory = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
+try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+var results: [[String: Any]] = []
+for (index, item) in (NSPasteboard.general.pasteboardItems ?? []).enumerated() {
+    for (slot, type) in item.types.enumerated() {
+        guard let data = item.data(forType: type), data.count <= 16 * 1024 * 1024 else { continue }
+        let suffix: String
+        if type.rawValue.contains("png") { suffix = "png" }
+        else if type.rawValue.contains("3mf") { suffix = "3mf" }
+        else if type.rawValue.contains("pdf") { suffix = "pdf" }
+        else if type.rawValue.contains("tiff") { suffix = "tiff" }
+        else if type.rawValue.contains("text") { suffix = "txt" }
+        else { suffix = "bin" }
+        let name = "item-\(index)-\(slot).\(suffix)"
+        try data.write(to: directory.appendingPathComponent(name))
+        results.append(["type": type.rawValue, "file": name, "bytes": data.count])
+    }
+}
+let json = try JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys])
+try json.write(to: directory.appendingPathComponent("types.json"))
+FileHandle.standardOutput.write(json)
+
+exec
+/bin/zsh -lc "pwd && rg --files -g AGENTS.md -g '*chemdraw*' -g '*clipboard*' -g '*cua*' . scripts 2>/dev/null" in /Users/shiranui/dev/ReShiki/.claude/worktrees/agent-a826e1a78594af95e
+ succeeded in 0ms:
+/Users/shiranui/dev/ReShiki/.claude/worktrees/agent-a826e1a78594af95e
+scripts/chemdraw_haworth_verify.py
+scripts/chemdraw_capture_clipboard.swift
+scripts/chemdraw_haworth_corpus.py
+scripts/chemdraw_haworth_report.py
+scripts/wayland_clipboard_qa.sh
+./docs/clipboard.md
+./docs/chemdraw-attachment-comparison.md
+./src/clipboard.rs
+./docs/changes/chemdraw-arrow-exchange.md
+./website/public/manual/windows/word-clipboard.png
+./docs/changes/windows-chemdraw-paste-2026-10-05.md
+./docs/changes/chemdraw-numbered-paste.md
+./docs/changes/chemdraw-caption-exchange.md
+./docs/changes/windows-ole-clipboard-retry.md
+./docs/changes/native-clipboard-transport-2026-10-04.md
+./licenses/rust/texts/clipboard-win-LICENSE-c9bff7573892.txt
+./native/windows/src/clipboard.rs
+./docs/images/coordination/co-en3-chemdraw-reference.jpg
+./native/linux/examples/clipboard_worker.rs
+./native/macos/src/clipboard.rs
+./tests/chemdraw_captions.rs
+./tests/clipboard_exchange.rs
+./tests/chemdraw_arrows.rs
+./tests/test_native_clipboard.py
+./docs/images/pr17/chemdraw-groups.png
+./docs/images/chemdraw-numbered-paste/windows-chemdraw-before.jpg
+./docs/images/chemdraw-numbered-paste/windows-chemdraw-after.jpg
+./docs/images/haworth/chemdraw-conformers.png
+./docs/images/haworth/chemdraw-all-structures.jpg
+./crates/io/src/exchange/drawing/clipboard.rs
+./src/app/clipboard.rs
+./scripts/chemdraw_haworth_verify.py
+./scripts/chemdraw_capture_clipboard.swift
+./scripts/chemdraw_haworth_corpus.py
+./scripts/chemdraw_haworth_report.py
+./scripts/wayland_clipboard_qa.sh
+./examples/scifinder_clipboard_qa.rs
+./integrations/libreoffice/tests/test_host_clipboard.py
+./vendor/smithay-clipboard/examples/clipboard.rs
+./tests/fixtures/graphics-chemdraw.cdxml
+./tests/fixtures/formatted-label-chemdraw.cdxml
+./tests/fixtures/atom-labels-chemdraw.cdxml
+./tests/fixtures/bold-arene-clipboard.cdx
+./tests/fixtures/arrows-chemdraw.cdxml
+./tests/fixtures/native-ethyl-clipboard.cdx
+./tests/fixtures/attached-symbols-chemdraw.cdxml
+./tests/fixtures/symbols-chemdraw.cdxml
+./tests/fixtures/grouped-aspirin-chemdraw.cdxml
+./tests/fixtures/chemdraw-arrows/reaction-clipboard-return.rsk
+./tests/fixtures/chemdraw-arrows/numeric-clipboard-return.rsk
+./tests/fixtures/chemdraw-arrows/reaction-clipboard-audit.json
+./tests/fixtures/chemdraw-arrows/numeric-clipboard-audit.json
+./tests/fixtures/exported-charge-chemdraw.cdxml
+./tests/fixtures/bond-styles-chemdraw.cdxml
+./tests/fixtures/generic-structures/chemdraw26-anonymous-ome-oph.cdxml
+./tests/fixtures/generic-structures/chemdraw26-anonymous-ome-oph-expanded.cdxml
+./tests/fixtures/generic-structures/chemdraw26-anonymous-producer-receipt.json
+./tests/fixtures/ring-presets-chemdraw.cdxml
+./tests/fixtures/bold-arene-clipboard-return.cdx
+./tests/fixtures/ring-fills/chemdraw-return.cdx
+./tests/fixtures/ring-fills/chemdraw-native.cdx
+./tests/fixtures/ring-fills/chemdraw-native.cdxml
+./tests/fixtures/chemdraw-captions/clipboard-return.rsk
+./tests/fixtures/coordination/co-en3-chemdraw-roundtrip.cdxml
+./tests/fixtures/haworth-chemdraw.json
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+import os, plistlib, hashlib, json, subprocess
+E=Path('/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before')
+src=Path('/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/bin-main/reshiki')
+E.mkdir(parents=True,exist_ok=True)
+app=E/'ReShiki-EV378-Before.app'
+exe=app/'Contents/MacOS/reshiki-ev378-before'
+exe.parent.mkdir(parents=True,exist_ok=True)
+os.link(src,exe)
+plist={'CFBundleExecutable':exe.name,'CFBundleIdentifier':'dev.reshiki.ev378.before','CFBundleName':'ReShiki EV378 Before','CFBundleDisplayName':'ReShiki EV378 Before','CFBundlePackageType':'APPL','CFBundleVersion':'1','NSHighResolutionCapable':True}
+with (app/'Contents/Info.plist').open('wb') as f: plistlib.dump(plist,f)
+info={'source':str(src),'wrapper':str(app),'executable':str(exe),'source_stat':{'device':src.stat().st_dev,'inode':src.stat().st_ino,'size':src.stat().st_size},'wrapper_stat':{'device':exe.stat().st_dev,'inode':exe.stat().st_ino,'size':exe.stat().st_size},'sha256':hashlib.file_digest(src.open('rb'),'sha256').hexdigest()}
+(E/'binary-identity.json').write_text(json.dumps(info,indent=2)+'\\n')
+(E/'processes-before.txt').write_text(subprocess.check_output(['ps','-axo','pid=,comm=,args='],text=True))
+print(json.dumps(info,indent=2))
+PY" in /Users/shiranui/dev/ReShiki/.claude/worktrees/agent-a826e1a78594af95e
+ exited 1 in 0ms:
+Traceback (most recent call last):
+  File "<stdin>", line 12, in <module>
+AttributeError: module 'hashlib' has no attribute 'file_digest'
+
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+import hashlib,json,subprocess
+E=Path('/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before')
+src=E.parents[2]/'bin-main/reshiki'
+app=E/'ReShiki-EV378-Before.app'
+exe=app/'Contents/MacOS/reshiki-ev378-before'
+h=hashlib.sha256()
+with src.open('rb') as f:
+ for chunk in iter(lambda:f.read(1048576),b''): h.update(chunk)
+info={'source':str(src),'wrapper':str(app),'executable':str(exe),'source_stat':{'device':src.stat().st_dev,'inode':src.stat().st_ino,'size':src.stat().st_size},'wrapper_stat':{'device':exe.stat().st_dev,'inode':exe.stat().st_ino,'size':exe.stat().st_size},'sha256':h.hexdigest()}
+(E/'binary-identity.json').write_text(json.dumps(info,indent=2)+'\\n')
+(E/'processes-before.txt').write_text(subprocess.check_output(['ps','-axo','pid=,comm=,args='],text=True))
+print(json.dumps(info,indent=2))
+PY" in /Users/shiranui/dev/ReShiki/.claude/worktrees/agent-a826e1a78594af95e
+ succeeded in 97ms:
+{
+  "source": "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/bin-main/reshiki",
+  "wrapper": "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before/ReShiki-EV378-Before.app",
+  "executable": "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before/ReShiki-EV378-Before.app/Contents/MacOS/reshiki-ev378-before",
+  "source_stat": {
+    "device": 16777229,
+    "inode": 13386622,
+    "size": 258574264
+  },
+  "wrapper_stat": {
+    "device": 16777229,
+    "inode": 13386622,
+    "size": 258574264
+  },
+  "sha256": "57e3b15c7d256c59c983c5cfe10b20041b6e5fd2524ecb5d89616882192dca5a"
+}
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+import subprocess,json
+E=Path('/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before')
+p=E/'binary-identity.json';info=json.loads(p.read_text())
+lines=subprocess.check_output(['ps','-axo','pid=,comm=,args='],text=True).splitlines()
+rows=[x for x in lines if info['executable'] in x and not any(t in x for t in ['python3','/bin/zsh'])]
+print('\\n'.join(rows))
+pids=[int(x.split()[0]) for x in rows]
+assert len(pids)==1,pids
+info['pid']=pids[0]
+info['process_ps']=subprocess.check_output(['ps','-p',str(pids[0]),'-o','pid=,ppid=,comm=,args='],text=True).strip()
+info['process_text_vnode']=subprocess.check_output(['lsof','-a','-p',str(pids[0]),'-d','txt','-Fn'],text=True)
+p.write_text(json.dumps(info,indent=2)+'\\n')
+print(info['process_ps']);print(info['process_text_vnode'])
+PY" in /Users/shiranui/dev/ReShiki/.claude/worktrees/agent-a826e1a78594af95e
+ succeeded in 2ms:
+47639 /private/tmp/cla /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before/ReShiki-EV378-Before.app/Contents/MacOS/reshiki-ev378-before
+47639     1 /private/tmp/cla /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before/ReShiki-EV378-Before.app/Contents/MacOS/reshiki-ev378-before
+p47639
+ftxt
+n/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before/ReShiki-EV378-Before.app/Contents/MacOS/reshiki-ev378-before
+ftxt
+n/private/var/db/diagnostics/logd/.plist-cache.QoEdZbPb
+ftxt
+n/private/var/db/timezone/tz/2026c.1.0/icutz/icutz44l.dat
+ftxt
+n/System/Library/CoreServices/SystemAppearance.bundle/Contents/Resources/SystemAppearance.car
+ftxt
+n/private/var/db/analyticsd/events.allowlist
+ftxt
+n/usr/lib/libobjc-trampolines.dylib
+ftxt
+n/usr/lib/dyld
+ftxt
+n/usr/share/icu/icudt78l.dat
+ftxt
+n/private/var/folders/3w/r26w4yb56mj_9902qyf3q23h0000gp/0/com.apple.LaunchServices.dv/com.apple.LaunchServices-33554481-v2.csstore
+ftxt
+n/System/Library/CoreServices/SystemAppearance.bundle/Contents/Resources/Aqua.car
+ftxt
+n/System/Library/CoreServices/SystemAppearance.bundle/Contents/Resources/FauxVibrantLight.car
+ftxt
+n/System/Library/CoreServices/SystemAppearance.bundle/Contents/Resources/VibrantLight.car
+ftxt
+n/System/Library/Fonts/SFNS.ttf
+ftxt
+n/System/Library/Frameworks/AppKit.framework/Versions/C/Resources/InputManager.loctable
+ftxt
+n/System/Library/Frameworks/AppKit.framework/Versions/C/Resources/MenuCommands.loctable
+ftxt
+n/System/Library/PrivateFrameworks/SFSymbols.framework/Versions/A/Resources/CoreGlyphs.bundle/Contents/Resources/Assets.car
+ftxt
+n/System/Library/PrivateFrameworks/SFSymbols.framework/Versions/A/Resources/CoreGlyphsPrivate.bundle/Contents/Resources/Assets.car
+ftxt
+n/System/Library/Keyboard Layouts/AppleKeyboardLayouts.bundle/Contents/Resources/AppleKeyboardLayouts-L.dat
+ftxt
+n/System/Library/Caches/com.apple.IntlDataCache.le.kbdx
+ftxt
+n/System/Library/Input Methods/JapaneseIM-RomajiTyping.app/Contents/PlugIns/JapaneseIM-RomajiTyping.appex/Contents/Resources/InfoPlist.loctable
+ftxt
+n/System/Library/Keyboard Layouts/AppleKeyboardLayouts.bundle/Contents/Resources/InfoPlist.loctable
+ftxt
+n/System/Library/Frameworks/AppKit.framework/Versions/C/Resources/Common.loctable
+ftxt
+n/System/Library/PrivateFrameworks/DesignLibrary.framework/Versions/A/Resources/Assets.car
+ftxt
+n/System/Library/CoreServices/SystemVersion.bundle/English.lproj/SystemVersion.strings
+ftxt
+n/System/Library/Extensions/AGXMetal13_3.bundle/Contents/Resources/ds.binary.metallib.g13g-b0
+ftxt
+n/private/var/folders/3w/r26w4yb56mj_9902qyf3q23h0000gp/C/dev.reshiki.ev378.before/com.apple.metal/16777235_322/functions.data
+ftxt
+n/private/var/folders/3w/r26w4yb56mj_9902qyf3q23h0000gp/C/dev.reshiki.ev378.before/com.apple.metal/32024/libraries.data
+ftxt
+n/System/Library/Fonts/ヒラギノ角ゴシック W4.ttc
+ftxt
+n/System/Library/Fonts/Helvetica.ttc
+ftxt
+n/System/Volumes/Preboot/Cryptexes/OS/usr/lib/libMetalMetricsInterpose.dylib
+ftxt
+n/System/Library/Frameworks/ApplicationServices.framework/Versions/A/Frameworks/HIServices.framework/Versions/A/Resources/RoleDescriptions.loctable
+ftxt
+n/System/Library/Frameworks/ApplicationServices.framework/Versions/A/Frameworks/HIServices.framework/Versions/A/Resources/RoleDescriptions-BBBAA77A32-C4EBFEA440.strings
+ftxt
+n/System/Library/Frameworks/AppKit.framework/Versions/C/Resources/Accessibility.loctable
+ftxt
+n/System/Library/CoreServices/SystemAppearance.bundle/Contents/Resources/DarkAqua.car
+
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (failed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (failed)
+codex
+The isolated test process is PID **47639**. Its executable is a hard link to the requested binary, with matching inode and SHA-256 recorded in the evidence directory. ChemDraw has duplicate installed/mounted app identifiers, so I’m binding it by the exact `/Applications/ChemDraw.app` path.
+mcp: cua_repl/js started
+mcp: cua_repl/js (failed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (failed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc "ps -axo pid,stat,%cpu,etime,comm | rg 'ChemDraw|reshiki|ReShiki'" in /Users/shiranui/dev/ReShiki/.claude/worktrees/agent-a826e1a78594af95e
+ succeeded in 0ms:
+ 9864 Ss     0.0    01:01:03 /Applications/ChemDraw.app/Contents/PlugIns/QuickLook.appex/Contents/MacOS/QuickLook
+47639 S      0.0       00:56 /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before/ReShiki-EV378-Before.app/Contents/MacOS/reshiki-ev378-before
+67529 R     97.8 02-03:11:29 /Applications/ChemDraw.app/Contents/MacOS/ChemDraw
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (failed)
+codex
+ChemDraw’s existing process (PID 67529) is using about 98% CPU, and computer-use binding repeatedly times out before exposing its windows. Can you make that ChemDraw instance responsive, or authorize an alternative way to drive it (for example AppleScript/System Events)? I’ll keep preparing the ReShiki evidence without touching ChemDraw’s existing documents.
+- I’ll make ChemDraw responsive
+- Use AppleScript/System Events if needed
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (failed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+codex
+ReShiki is at 250% zoom, and ethane has been imported and cleaned up. ChemDraw’s UI remains unresponsive before any document action; I’m continuing with the source-setting evidence while that blocker is pending.
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'swift /Users/shiranui/dev/ReShiki/.claude/worktrees/agent-a826e1a78594af95e/scripts/chemdraw_capture_clipboard.swift /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before/L-2-reshiki-clipboard' in /Users/shiranui/dev/ReShiki/.claude/worktrees/agent-a826e1a78594af95e
+ succeeded in 432ms:
+[
+  {
+    "bytes" : 964,
+    "file" : "item-0-0.bin",
+    "type" : "dev.reshiki.drawing"
+  },
+  {
+    "bytes" : 434,
+    "file" : "item-0-1.bin",
+    "type" : "com.revvity.chemdraw.cdx-clipboard"
+  },
+  {
+    "bytes" : 434,
+    "file" : "item-0-2.bin",
+    "type" : "com.perkinelmer.chemdraw.cdx-clipboard"
+  },
+  {
+    "bytes" : 434,
+    "file" : "item-0-3.bin",
+    "type" : "com.cambridgesoft.cdx"
+  },
+  {
+    "bytes" : 9566,
+    "file" : "item-0-4.pdf",
+    "type" : "com.adobe.pdf"
+  },
+  {
+    "bytes" : 13373,
+    "file" : "item-0-5.png",
+    "type" : "public.png"
+  },
+  {
+    "bytes" : 469,
+    "file" : "item-0-6.bin",
+    "type" : "public.svg-image"
+  }
+]
+mcp: cua_repl/js started
+mcp: cua_repl/js (failed)
+codex
+The Flush left screenshot and clipboard capture are saved. ChemDraw still times out on every binding attempt, so no ChemDraw document has been created or modified. I’m preserving a separate Centered source capture as well; any unavailable round-trip readback will be marked **not obtained**, rather than treated as the expected regression.
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+mcp: cua_repl/js started
+mcp: cua_repl/js (completed)
+exec
+/bin/zsh -lc 'swift /Users/shiranui/dev/ReShiki/.claude/worktrees/agent-a826e1a78594af95e/scripts/chemdraw_capture_clipboard.swift /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before/C-2-reshiki-clipboard' in /Users/shiranui/dev/ReShiki/.claude/worktrees/agent-a826e1a78594af95e
+ succeeded in 220ms:
+[
+  {
+    "bytes" : 966,
+    "file" : "item-0-0.bin",
+    "type" : "dev.reshiki.drawing"
+  },
+  {
+    "bytes" : 434,
+    "file" : "item-0-1.bin",
+    "type" : "com.revvity.chemdraw.cdx-clipboard"
+  },
+  {
+    "bytes" : 434,
+    "file" : "item-0-2.bin",
+    "type" : "com.perkinelmer.chemdraw.cdx-clipboard"
+  },
+  {
+    "bytes" : 434,
+    "file" : "item-0-3.bin",
+    "type" : "com.cambridgesoft.cdx"
+  },
+  {
+    "bytes" : 9563,
+    "file" : "item-0-4.pdf",
+    "type" : "com.adobe.pdf"
+  },
+  {
+    "bytes" : 12667,
+    "file" : "item-0-5.png",
+    "type" : "public.png"
+  },
+  {
+    "bytes" : 466,
+    "file" : "item-0-6.bin",
+    "type" : "public.svg-image"
+  }
+]
+exec
+/bin/zsh -lc 'ps -p 67529,47639 -o pid,stat,%cpu,etime,comm' in /Users/shiranui/dev/ReShiki/.claude/worktrees/agent-a826e1a78594af95e
+ succeeded in 0ms:
+  PID STAT  %CPU     ELAPSED COMM
+47639 S      0.0       04:04 /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before/ReShiki-EV378-Before.app/Contents/MacOS/reshiki-ev378-before
+67529 R     97.2 02-03:14:37 /Applications/ChemDraw.app/Contents/MacOS/ChemDraw
+
+mcp: cua_repl/js started
+mcp: cua_repl/js (failed)
+codex
+Both source captures are complete, including the full two-atom molecule and the requested attachment settings. ChemDraw is still consuming about 97% CPU and cannot be controlled through the available computer-use interface. I’ll record the round trips as blocked, discard only the isolated ReShiki test tabs, and leave ChemDraw running untouched.
+mcp: cua_repl/js started
+mcp: cua_repl/js (failed)
+exec
+/bin/zsh -lc 'ps -p 47639,67529 -o pid,stat,%cpu,etime,comm' in /Users/shiranui/dev/ReShiki/.claude/worktrees/agent-a826e1a78594af95e
+ succeeded in 0ms:
+  PID STAT  %CPU     ELAPSED COMM
+67529 R     81.2 02-03:15:01 /Applications/ChemDraw.app/Contents/MacOS/ChemDraw
+
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+import json
+E=Path('/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before')
+for prefix in ['L','C']:
+ p=E/(prefix+'-2-reshiki-clipboard')/'item-0-0.bin'
+ print(prefix,p.read_text())
+PY" in /Users/shiranui/dev/ReShiki/.claude/worktrees/agent-a826e1a78594af95e
+ succeeded in 0ms:
+L {"atom_labels":{"carbons":"skeletal","hydrogens":true,"stereo":false},"version":27,"atoms":[{"display":{"variable":"MeO","carbons":null,"hydrogens":null,"hydrogen_position":"auto","label_attachment":"left","number":null,"stereo":{"show":null,"offset":null,"style":{"family":"Arial","size_pt":7.5,"bold":false,"italic":true,"underline":false,"color":[0,0,0],"script":"normal","formula":false}}},"id":1,"element":"*","position":{"x":-21.0,"y":-0.0},"charge":0,"radical_electrons":0,"isotope":0,"explicit_h":0,"no_implicit":true,"aromatic":false,"stereo":null,"map_num":0,"label_h":0},{"id":2,"element":"C","position":{"x":21.0,"y":-0.0},"charge":0,"radical_electrons":0,"isotope":0,"explicit_h":0,"no_implicit":false,"aromatic":false,"stereo":null,"map_num":0,"label_h":3}],"bonds":[{"z_order":0,"a":1,"b":2,"order":1,"display":"plain","stereo":null,"stereo_atoms":[],"double_position":"auto","color":[0,0,0]}],"annotations":[],"arrows":[],"graphics":[],"groups":[]}
+C {"atom_labels":{"carbons":"skeletal","hydrogens":true,"stereo":false},"version":27,"atoms":[{"display":{"variable":"MeO","carbons":null,"hydrogens":null,"hydrogen_position":"auto","label_attachment":"center","number":null,"stereo":{"show":null,"offset":null,"style":{"family":"Arial","size_pt":7.5,"bold":false,"italic":true,"underline":false,"color":[0,0,0],"script":"normal","formula":false}}},"id":1,"element":"*","position":{"x":-21.0,"y":-0.0},"charge":0,"radical_electrons":0,"isotope":0,"explicit_h":0,"no_implicit":true,"aromatic":false,"stereo":null,"map_num":0,"label_h":0},{"id":2,"element":"C","position":{"x":21.0,"y":-0.0},"charge":0,"radical_electrons":0,"isotope":0,"explicit_h":0,"no_implicit":false,"aromatic":false,"stereo":null,"map_num":0,"label_h":3}],"bonds":[{"z_order":0,"a":1,"b":2,"order":1,"display":"plain","stereo":null,"stereo_atoms":[],"double_position":"auto","color":[0,0,0]}],"annotations":[],"arrows":[],"graphics":[],"groups":[]}
+
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+from datetime import datetime
+import json, subprocess, shutil, os, hashlib
+E=Path('/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before')
+info=json.loads((E/'binary-identity.json').read_text())
+pid=info['pid']
+assert subprocess.run(['ps','-p',str(pid)],stdout=subprocess.DEVNULL).returncode"'!=0, '"'Test process still running'
+app=Path(info['wrapper'])
+assert app.parent==E and app.name=='ReShiki-EV378-Before.app'
+shutil.rmtree(app)
+assert not app.exists()
+proc=subprocess.check_output(['ps','-axo','pid=,stat=,%cpu=,etime=,comm=,args='],text=True)
+relevant='\\n'.join(x for x in proc.splitlines() if ('ChemDraw.app/Contents/MacOS/ChemDraw' in x or 'reshiki' in x.lower()) and not any(t in x for t in ['/bin/zsh','python3 -']))+'\\n'
+(E/'processes-after.txt').write_text(relevant)
+before=E/'processes-before.txt'
+before.write_text('\\n'.join(x for x in before.read_text().splitlines() if ('ChemDraw.app/Contents/MacOS/ChemDraw' in x or 'reshiki' in x.lower()) and not any(t in x for t in ['/bin/zsh','python3 -']))+'\\n')
+info['cleanup']={'test_pid_exited':True,'wrapper_removed':True,'verified_at':datetime.now().astimezone().isoformat(),'chemDraw_preexisting_pid':67529,'chemDraw_still_running':subprocess.run(['ps','-p','67529'],stdout=subprocess.DEVNULL).returncode==0}
+(E/'binary-identity.json').write_text(json.dumps(info,indent=2)+'\\n')
+for prefix, attachment in [('L','left'),('C','center')]:
+ data=json.loads((E/(prefix+'-2-reshiki-clipboard')/'item-0-0.bin').read_text())
+ assert len(data['atoms'])==2 and len(data['bonds'])==1
+ assert data['atoms'][0]['display']['variable']=='MeO'
+ assert data['atoms'][0]['display']['label_attachment']==attachment
+ assert data['atoms'][0]['display']['hydrogen_position']=='auto'
+ assert (E/(prefix+'-1-reshiki-set.png')).stat().st_size>0
+report=f'''# EV378 origin/main real-app round-trip attempt
+
+Recorded: {datetime.now().astimezone().isoformat()}
+
+**Outcome: BLOCKED at ChemDraw, for both settings. No round-trip result was obtained.** The expected unfixed-build regression was neither confirmed nor disproved. The values below distinguish observed source settings from unavailable step 6 readback.
+
+## Exact build and driven process
+
+- Requested source binary: "'`{info['"'source']}"'`
+- Driven ReShiki PID: **{pid}**.
+- Computer use was bound by the exact temporary app path: `{info['"'wrapper']}"'`.
+- Process executable: `{info['"'executable']}"'`.
+- The executable was a hard link to the requested binary. Both had device **{info['"'source_stat']['device']}**, inode **{info['source_stat']['inode']}**, and size **{info['source_stat']['size']} bytes**.
+- SHA-256: "'`{info['"'sha256']}"'`.
+- `ps` and `lsof -a -p {pid} -d txt -Fn` confirmed that PID {pid} was running the wrapper executable. Full identity evidence is in [binary-identity.json](binary-identity.json).
+- No other ReShiki instance was selected, closed, or driven.
+
+## Observed values and evidence
+
+| Case | Source Bond attachment, observed in step 3 | Source Hydrogen position | Step 6 Bond attachment readback | Step 6 Hydrogen position readback | Outcome |
+| --- | --- | --- | --- | --- | --- |
+| L | Flush left | Automatic | **Not obtained** | **Not obtained** | Blocked before ChemDraw paste |
+| C | Centered | Automatic | **Not obtained** | **Not obtained** | Blocked before ChemDraw paste |
+
+For each source case, a fresh drawing tab was used, `CC` was imported through Import, cleanup was previewed and applied, and the view showed **250%**. The left carbon was selected, Enter opened its label editor, `MeO` was typed, and Enter applied it. With that atom selected, Properties → Labels & chemistry → Atom labels & numbering was opened, and the requested Bond attachment option was chosen. The whole two-atom molecule was then selected using Cmd+A and copied using Cmd+C.
+
+### Flush left (L)
+
+- Step 3 screenshot: [L-1-reshiki-set.png](L-1-reshiki-set.png). It visibly shows **Bond attachment (text labels): Flush left** and **Hydrogen position: Automatic**.
+- Step 4 capture: [L-2-reshiki-clipboard/types.json](L-2-reshiki-clipboard/types.json), created using the specified Swift helper immediately after Cmd+C.
+- Required step 5 screenshot `L-3-chemdraw.png`: **not created**, because ChemDraw could not be bound.
+- Required ChemDraw copy capture directory `L-4-chemdraw-clipboard`: **not created**; no ChemDraw copy occurred.
+- Required step 6 screenshot `L-5-reshiki-after.png`: **not created**; no ChemDraw-return paste or readback occurred.
+
+### Centered (C)
+
+- Step 3 screenshot: [C-1-reshiki-set.png](C-1-reshiki-set.png). It visibly shows **Bond attachment (text labels): Centered** and **Hydrogen position: Automatic**.
+- Step 4 capture: [C-2-reshiki-clipboard/types.json](C-2-reshiki-clipboard/types.json), created using the specified Swift helper immediately after Cmd+C.
+- Required step 5 screenshot `C-3-chemdraw.png`: **not created**, because ChemDraw could not be bound.
+- Required ChemDraw copy capture directory `C-4-chemdraw-clipboard`: **not created**; no ChemDraw copy occurred.
+- Required step 6 screenshot `C-5-reshiki-after.png`: **not created**; no ChemDraw-return paste or readback occurred.
+
+## Clipboard validation
+
+Both source captures advertise `dev.reshiki.drawing`, three ChemDraw CDX flavors, PDF, PNG, and SVG. In each capture, the native drawing payload contains exactly two atoms and one plain single bond: the left atom (x = −21) has the text label `MeO`, and the right atom (x = 21) is carbon. The left atom has `hydrogen_position: "auto"` in both captures and `label_attachment: "left"` for L / `"center"` for C. The three CDX flavor files are 434 bytes each. These are source clipboard observations; they do not show ChemDraw acceptance or a successful round trip.
+
+## Blocker and deviations
+
+1. The pre-existing ChemDraw process was PID **67529**, executable `/Applications/ChemDraw.app/Contents/MacOS/ChemDraw`. Repeated computer-use calls to bind `/Applications/ChemDraw.app` failed with **`Computer Use server error -10005: timeoutReached`** before returning any accessible windows or a usable app binding. This happened before any Cmd+N or Cmd+V was sent to ChemDraw, including retries after source preparation.
+2. Process observations showed ChemDraw using approximately **97–98% CPU** during the attempts (later approximately 81%). This supports a responsiveness concern but does not establish the cause of the binding timeouts.
+3. A bundle-ID binding attempt also reported ambiguity between `/Applications/ChemDraw.app` and `/Volumes/ChemDraw 26.1.0/ChemDraw.app`. The mounted copy was not driven. Exact-path retries still timed out. A documented optional `cua.computer.launch_app` entry point was unavailable (`is not a function`); it performed no launch or document operation.
+4. Because no usable ChemDraw binding was obtained, its Window menu could not be inspected for hidden dialogs. No Change Settings dialog was observed or answered. No test ChemDraw document was created, pasted into, saved, or closed. Its pre-existing documents were left untouched, and its existing process remained running.
+5. The sequence stopped after L step 4. While the blocker persisted, C steps 1–4 were completed separately to preserve source evidence; neither requested full 1–7 flow completed. No direct ReShiki-to-ReShiki paste was substituted for the missing ChemDraw round trip.
+6. ReShiki exposed several inspector controls only visually rather than in the accessibility tree, so their values were read from the captured screenshots. One initial cleanup toolbar action returned `elementHasNoFrame`; cleanup was subsequently opened and applied through the visible controls. The existing 250% zoom was retained. A pre-existing “Recovery draft” banner was visible and was neither restored nor dismissed.
+7. The user was notified of the ChemDraw blocker and asked asynchronously about restoring responsiveness or authorizing an alternate UI mechanism. No response was available before this report; no alternate UI automation mechanism was used.
+
+## Cleanup
+
+Cmd+Q was sent only to the exact-path ReShiki binding for PID {pid}. The process exited immediately; no save/discard prompt was presented. No document Save action was performed. A subsequent `ps` check confirmed PID {pid} no longer existed. The post-quit UI observation reported `procNotFound`, consistent with the exit.
+
+The temporary wrapper `{app.name}` was removed after confirming process exit. The original source binary remains in place. No repository files or system settings were edited. ChemDraw PID 67529 remained running. See [processes-before.txt](processes-before.txt), [processes-after.txt](processes-after.txt), and the cleanup fields in [binary-identity.json](binary-identity.json).
+'"'''
+(E/'report.md').write_text(report)
+print('Report written:',E/'report.md')
+print('Wrapper removed:',not app.exists())
+print('Source still exists:',Path(info['source']).exists())
+print(relevant)
+print('Artifacts:',*[str(x.relative_to(E)) for x in E.rglob('*') if x.is_file()],sep='\\n')
+PY" in /Users/shiranui/dev/ReShiki/.claude/worktrees/agent-a826e1a78594af95e
+ succeeded in 0ms:
+Report written: /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before/report.md
+Wrapper removed: True
+Source still exists: True
+46981 S      8.6       05:54 codex            codex exec -m gpt-6-astra -C /Users/shiranui/dev/ReShiki/.claude/worktrees/agent-a826e1a78594af95e --add-dir /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad -s danger-full-access -o /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before/report-final.md -
+47514 S      0.0       05:41 /Applications/Ch /Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node --experimental-vm-modules /var/folders/3w/r26w4yb56mj_9902qyf3q23h0000gp/T/.tmpCge2hi/kernel.js --session-id a8935cd796bb4cc3b924af623cc46f2c --working-dir /Users/shiranui/dev/ReShiki/.claude/worktrees/agent-a826e1a78594af95e
+47515 S      0.0       05:41 /Applications/Ch /Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node /var/folders/3w/r26w4yb56mj_9902qyf3q23h0000gp/T/.tmpCge2hi/trusted-worker.js /Users/shiranui/dev/ReShiki/.claude/worktrees/agent-a826e1a78594af95e
+67529 R     75.1 02-03:15:50 /Applications/Ch /Applications/ChemDraw.app/Contents/MacOS/ChemDraw
+
+Artifacts:
+report.md
+C-1-reshiki-set.png
+binary-identity.json
+processes-before.txt
+processes-after.txt
+L-1-reshiki-set.png
+L-2-reshiki-clipboard/types.json
+L-2-reshiki-clipboard/item-0-6.bin
+L-2-reshiki-clipboard/item-0-2.bin
+L-2-reshiki-clipboard/item-0-3.bin
+L-2-reshiki-clipboard/item-0-1.bin
+L-2-reshiki-clipboard/item-0-0.bin
+L-2-reshiki-clipboard/item-0-5.png
+L-2-reshiki-clipboard/item-0-4.pdf
+C-2-reshiki-clipboard/types.json
+C-2-reshiki-clipboard/item-0-6.bin
+C-2-reshiki-clipboard/item-0-2.bin
+C-2-reshiki-clipboard/item-0-3.bin
+C-2-reshiki-clipboard/item-0-1.bin
+C-2-reshiki-clipboard/item-0-0.bin
+C-2-reshiki-clipboard/item-0-5.png
+C-2-reshiki-clipboard/item-0-4.pdf
+
+exec
+/bin/zsh -lc "python3 - <<'PY'
+from pathlib import Path
+import hashlib,json
+E=Path('/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before')
+for name in ['processes-before.txt','processes-after.txt']:
+ p=E/name
+ rows=[x for x in p.read_text().splitlines() if ('/Applications/ChemDraw.app/Contents/MacOS/ChemDraw' in x or '/Contents/MacOS/reshiki' in x)]
+ p.write_text('\\n'.join(rows)+'\\n')
+for prefix in ['L','C']:
+ d=E/(prefix+'-2-reshiki-clipboard')
+ assert len({hashlib.sha256((d/f'item-0-{i}.bin').read_bytes()).hexdigest() for i in (1,2,3)})==1
+print('Verified report and both source evidence sets; process records narrowed to the tested applications.')
+print((E/'processes-after.txt').read_text())
+PY" in /Users/shiranui/dev/ReShiki/.claude/worktrees/agent-a826e1a78594af95e
+ succeeded in 0ms:
+Verified report and both source evidence sets; process records narrowed to the tested applications.
+67529 R     75.1 02-03:15:50 /Applications/Ch /Applications/ChemDraw.app/Contents/MacOS/ChemDraw
+
+
+codex
+Wrote [E/report.md](/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before/report.md).
+
+**Both round trips were blocked before ChemDraw paste.** Repeated computer-use bindings to `/Applications/ChemDraw.app` timed out while its existing process consumed about 97–98% CPU. No step 6 values were obtained, so the expected regression was neither confirmed nor disproved.
+
+Saved both source screenshots and clipboard captures:
+
+| Case | Source bond attachment | Source hydrogen position | Round-trip readback |
+|---|---|---|---|
+| L | Flush left | Automatic | Not obtained |
+| C | Centered | Automatic | Not obtained |
+
+The driven ReShiki PID was **47639**, verified against the requested binary using its executable path, shared hard-link inode, and SHA-256. That process exited, and the temporary wrapper was removed.
+
+ChemDraw’s existing process and documents were left untouched. No repository files or system settings were changed.
+tokens used
+95,369
+Wrote [E/report.md](/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/final/before/report.md).
+
+**Both round trips were blocked before ChemDraw paste.** Repeated computer-use bindings to `/Applications/ChemDraw.app` timed out while its existing process consumed about 97–98% CPU. No step 6 values were obtained, so the expected regression was neither confirmed nor disproved.
+
+Saved both source screenshots and clipboard captures:
+
+| Case | Source bond attachment | Source hydrogen position | Round-trip readback |
+|---|---|---|---|
+| L | Flush left | Automatic | Not obtained |
+| C | Centered | Automatic | Not obtained |
+
+The driven ReShiki PID was **47639**, verified against the requested binary using its executable path, shared hard-link inode, and SHA-256. That process exited, and the temporary wrapper was removed.
+
+ChemDraw’s existing process and documents were left untouched. No repository files or system settings were changed.

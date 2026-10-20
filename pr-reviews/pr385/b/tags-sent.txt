@@ -1,0 +1,45 @@
+== A-823-center.cdxml
+  n {'id': '3', 'p': '30.000000 30.000000', 'Element': '0', 'NodeType': 'Unspecified', 'NumHydrogens': '0', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '30.000000 30.000000', 'LabelJustification': 'Center'} 'MeO'
+== A-823-left.cdxml
+  n {'id': '3', 'p': '30.000000 30.000000', 'Element': '0', 'NodeType': 'Unspecified', 'NumHydrogens': '0', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '30.000000 30.000000', 'LabelJustification': 'Left'} 'MeO'
+== A-823-right.cdxml
+  n {'id': '3', 'p': '30.000000 30.000000', 'Element': '0', 'NodeType': 'Unspecified', 'NumHydrogens': '0', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '30.000000 30.000000', 'LabelJustification': 'Right'} 'MeO'
+== B-823-701-center.cdxml
+  n {'id': '3', 'p': '30.000000 30.000000', 'Element': '0', 'NodeType': 'Unspecified', 'NumHydrogens': '0', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '30.000000 30.000000', 'LabelJustification': 'Center', 'Justification': 'Center'} 'MeO'
+== B-823-701-left.cdxml
+  n {'id': '3', 'p': '30.000000 30.000000', 'Element': '0', 'NodeType': 'Unspecified', 'NumHydrogens': '0', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '30.000000 30.000000', 'LabelJustification': 'Left', 'Justification': 'Left'} 'MeO'
+== B-823-701-right.cdxml
+  n {'id': '3', 'p': '30.000000 30.000000', 'Element': '0', 'NodeType': 'Unspecified', 'NumHydrogens': '0', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '30.000000 30.000000', 'LabelJustification': 'Right', 'Justification': 'Right'} 'MeO'
+== C-823-701-705-center.cdxml
+  n {'id': '3', 'p': '30.000000 30.000000', 'Element': '0', 'NodeType': 'Unspecified', 'NumHydrogens': '0', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '30.000000 30.000000', 'LabelJustification': 'Center', 'Justification': 'Center', 'LabelAlignment': 'Right'} 'MeO'
+== C-823-701-705-left.cdxml
+  n {'id': '3', 'p': '30.000000 30.000000', 'Element': '0', 'NodeType': 'Unspecified', 'NumHydrogens': '0', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '30.000000 30.000000', 'LabelJustification': 'Left', 'Justification': 'Left', 'LabelAlignment': 'Right'} 'MeO'
+== C-823-701-705-right.cdxml
+  n {'id': '3', 'p': '30.000000 30.000000', 'Element': '0', 'NodeType': 'Unspecified', 'NumHydrogens': '0', 'LabelDisplay': 'Auto', 'ShowAtomStereo': 'no'}
+  t {'p': '30.000000 30.000000', 'LabelJustification': 'Right', 'Justification': 'Right', 'LabelAlignment': 'Right'} 'MeO'
+== D-401-823-center.cdxml
+  n {'id': '3', 'p': '30.000000 30.000000', 'Element': '0', 'NodeType': 'Unspecified', 'NumHydrogens': '0', 'LabelDisplay': 'Center', 'ShowAtomStereo': 'no'}
+  t {'p': '30.000000 30.000000', 'LabelJustification': 'Center'} 'MeO'
+== D-401-823-left.cdxml
+  n {'id': '3', 'p': '30.000000 30.000000', 'Element': '0', 'NodeType': 'Unspecified', 'NumHydrogens': '0', 'LabelDisplay': 'Left', 'ShowAtomStereo': 'no'}
+  t {'p': '30.000000 30.000000', 'LabelJustification': 'Left'} 'MeO'
+== D-401-823-right.cdxml
+  n {'id': '3', 'p': '30.000000 30.000000', 'Element': '0', 'NodeType': 'Unspecified', 'NumHydrogens': '0', 'LabelDisplay': 'Right', 'ShowAtomStereo': 'no'}
+  t {'p': '30.000000 30.000000', 'LabelJustification': 'Right'} 'MeO'
+== E-401-823-701-center.cdxml
+  n {'id': '3', 'p': '30.000000 30.000000', 'Element': '0', 'NodeType': 'Unspecified', 'NumHydrogens': '0', 'LabelDisplay': 'Center', 'ShowAtomStereo': 'no'}
+  t {'p': '30.000000 30.000000', 'LabelJustification': 'Center', 'Justification': 'Center'} 'MeO'
+== E-401-823-701-left.cdxml
+  n {'id': '3', 'p': '30.000000 30.000000', 'Element': '0', 'NodeType': 'Unspecified', 'NumHydrogens': '0', 'LabelDisplay': 'Left', 'ShowAtomStereo': 'no'}
+  t {'p': '30.000000 30.000000', 'LabelJustification': 'Left', 'Justification': 'Left'} 'MeO'
+== E-401-823-701-right.cdxml
+  n {'id': '3', 'p': '30.000000 30.000000', 'Element': '0', 'NodeType': 'Unspecified', 'NumHydrogens': '0', 'LabelDisplay': 'Right', 'ShowAtomStereo': 'no'}
+  t {'p': '30.000000 30.000000', 'LabelJustification': 'Right', 'Justification': 'Right'} 'MeO'

@@ -1,0 +1,122 @@
+#[test]
+#[ignore]
+fn tmp_issue_378_groups() {
+    let mut doc = crate::chemistry::cdxml::import_cdxml(include_str!(
+        "../../../../../../tests/fixtures/chemdraw-attachments/group-alignment-right.cdxml"
+    ))
+    .unwrap()
+    .document;
+    let out = std::path::Path::new(
+        "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/c/candidates",
+    );
+    std::fs::create_dir_all(out).unwrap();
+    for alignment in crate::abbreviations::LabelAlignment::ALL {
+        doc.abbreviations[0].alignment = alignment;
+        let (xml, _) = super::super::write_clipboard(&doc).unwrap();
+        if let Some(value) = Some(alignment.cdxml()).filter(|_| !alignment.is_auto()) {
+            let name = value.to_lowercase();
+            let display = xml.replace(
+                "NodeType=\"Fragment\"",
+                &format!("NodeType=\"Fragment\" LabelDisplay=\"{value}\""),
+            );
+            for (combo, xml) in [("G0", &xml), ("G1-401", &display)] {
+                std::fs::write(out.join(format!("{combo}-{name}.cdxml")), xml).unwrap();
+                std::fs::write(
+                    out.join(format!("{combo}-{name}.cdx")),
+                    crate::exchange::to_cdx(xml).unwrap(),
+                )
+                .unwrap();
+            }
+        }
+        let tree = roxmltree::Document::parse(&xml).unwrap();
+        for t in tree.descendants().filter(|n| n.has_tag_name("t")) {
+            let n = t.parent().unwrap();
+            if n.attribute("NodeType") == Some("Fragment") {
+                eprintln!(
+                    "{alignment}: n LabelDisplay={:?} t {:?}",
+                    n.attribute("LabelDisplay"),
+                    t.attributes()
+                        .map(|a| (a.name(), a.value()))
+                        .collect::<Vec<_>>()
+                );
+            }
+        }
+    }
+}
+
+#[test]
+#[ignore]
+fn tmp_issue_378_decode() {
+    let mut stack = vec![std::path::PathBuf::from(std::env::var("DECODE").unwrap())];
+    while let Some(path) = stack.pop() {
+        if path.is_dir() {
+            stack.extend(std::fs::read_dir(&path).unwrap().map(|e| e.unwrap().path()));
+            continue;
+        }
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if ext == "cdx" || ext == "bin" {
+            let bytes = std::fs::read(&path).unwrap();
+            match crate::exchange::from_cdx(&bytes) {
+                Ok(xml) => std::fs::write(path.with_extension(format!("{ext}.decoded.xml")), xml)
+                    .unwrap(),
+                Err(error) => eprintln!("{}: {error}", path.display()),
+            }
+        }
+    }
+}
+
+#[test]
+#[ignore]
+fn tmp_issue_378_candidates() {
+    use crate::atom_labels::LabelAttachment;
+    let out = std::path::Path::new(
+        "/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev378/b/candidates",
+    );
+    std::fs::create_dir_all(out).unwrap();
+    let alignment = std::env::var("ALIGN").unwrap_or_default();
+    for (name, attachment) in [
+        ("left", LabelAttachment::Left),
+        ("center", LabelAttachment::Center),
+        ("right", LabelAttachment::Right),
+    ] {
+        let mut document = Document::default();
+        let id = document.add_atom("*", Point::new(0., 0.));
+        let c = document.add_atom("C", Point::new(42., 0.));
+        document.add_bond(id, c, 1, "plain");
+        let atom = document.atom_mut(id).unwrap();
+        atom.display.set_variable(Some("MeO".into()));
+        atom.display.label_attachment = attachment;
+        let (xml, _) = super::super::write_clipboard(&document).unwrap();
+        let value = attachment.cdxml().unwrap();
+        let lj = format!("LabelJustification=\"{value}\"");
+        assert!(xml.contains(&lj), "{xml}");
+        let combos = [
+            ("A-823", lj.clone()),
+            ("B-823-701", format!("{lj} Justification=\"{value}\"")),
+            (
+                "C-823-701-705",
+                format!("{lj} Justification=\"{value}\" LabelAlignment=\"{alignment}\""),
+            ),
+        ];
+        let display = format!("LabelDisplay=\"{value}\"");
+        let combos = combos.into_iter().chain([
+            ("D-401-823", lj.clone()),
+            ("E-401-823-701", format!("{lj} Justification=\"{value}\"")),
+        ]);
+        for (combo, replacement) in combos {
+            if combo.starts_with('C') && alignment.is_empty() {
+                continue;
+            }
+            let mut xml = xml.replace(&lj, &replacement);
+            if combo.starts_with('D') || combo.starts_with('E') {
+                xml = xml.replacen("LabelDisplay=\"Auto\"", &display, 1);
+            }
+            std::fs::write(out.join(format!("{combo}-{name}.cdxml")), &xml).unwrap();
+            std::fs::write(
+                out.join(format!("{combo}-{name}.cdx")),
+                crate::exchange::to_cdx(&xml).unwrap(),
+            )
+            .unwrap();
+        }
+    }
+}

@@ -1,0 +1,72 @@
+== item-0-1.bin.decoded.xml
+  n {'id': '4', 'p': '263.16873 363.60001', 'Element': '7', 'NumHydrogens': '1', 'AS': 'N', 'LabelDisplay': 'Right'}
+  t {'p': '266.77957 367.17911', 'LabelJustification': 'Right', 'Justification': 'Right', 'LineHeight': 'variable'} 'NH'
+  n {'id': '20', 'p': '275.51874 356.39999', 'NodeType': 'Fragment', 'AS': 'N'}
+  t {'p': '272.18378 359.9791', 'LabelJustification': 'Left', 'LineHeight': 'variable', 'LabelAlignment': 'Left'} 'Boc'
+  n {'id': '6', 'p': '275.44875 342.11', 'Element': '8', 'NumHydrogens': '0'}
+  t {'p': '271.55959 345.75258', 'LabelJustification': 'Left', 'LineHeight': 'variable'} 'O'
+  n {'id': '7', 'p': '287.91875 363.49001', 'Element': '8', 'NumHydrogens': '0'}
+  t {'p': '284.02959 367.13258', 'LabelJustification': 'Left', 'LineHeight': 'variable'} 'O'
+== item-0-1.bin.decoded.xml
+  n {'id': '4', 'p': '263.16873 363.60001', 'Element': '7', 'NumHydrogens': '1', 'AS': 'N', 'LabelDisplay': 'Right'}
+  t {'p': '266.77957 367.17911', 'LabelJustification': 'Right', 'Justification': 'Right', 'LineHeight': 'variable'} 'NH'
+  n {'id': '20', 'p': '275.51874 356.39999', 'NodeType': 'Fragment', 'AS': 'N'}
+  t {'p': '272.18378 359.9791', 'LabelJustification': 'Left', 'LineHeight': 'variable', 'LabelAlignment': 'Left'} 'Boc'
+  n {'id': '6', 'p': '275.44875 342.11', 'Element': '8', 'NumHydrogens': '0'}
+  t {'p': '271.55959 345.75258', 'LabelJustification': 'Left', 'LineHeight': 'variable'} 'O'
+  n {'id': '7', 'p': '287.91875 363.49001', 'Element': '8', 'NumHydrogens': '0'}
+  t {'p': '284.02959 367.13258', 'LabelJustification': 'Left', 'LineHeight': 'variable'} 'O'
+== item-0-1.bin.decoded.xml
+  n {'id': '4', 'p': '263.16873 363.60001', 'Element': '7', 'NumHydrogens': '1', 'AS': 'N', 'LabelDisplay': 'Right'}
+  t {'p': '266.77957 367.17911', 'LabelJustification': 'Right', 'Justification': 'Right', 'LineHeight': 'variable'} 'NH'
+  n {'id': '20', 'p': '275.51874 356.39999', 'NodeType': 'Fragment', 'AS': 'N'}
+  t {'p': '272.18378 359.9791', 'LabelJustification': 'Left', 'LineHeight': 'variable', 'LabelAlignment': 'Left'} 'Boc'
+  n {'id': '6', 'p': '275.44875 342.11', 'Element': '8', 'NumHydrogens': '0'}
+  t {'p': '271.55959 345.75258', 'LabelJustification': 'Left', 'LineHeight': 'variable'} 'O'
+  n {'id': '7', 'p': '287.91875 363.49001', 'Element': '8', 'NumHydrogens': '0'}
+  t {'p': '284.02959 367.13258', 'LabelJustification': 'Left', 'LineHeight': 'variable'} 'O'
+== item-0-1.bin.decoded.xml
+  n {'id': '4', 'p': '263.16873 363.60001', 'Element': '7', 'NumHydrogens': '1', 'AS': 'N', 'LabelDisplay': 'Right'}
+  t {'p': '266.77957 367.17911', 'LabelJustification': 'Right', 'Justification': 'Right', 'LineHeight': 'variable'} 'NH'
+  n {'id': '20', 'p': '275.51874 356.39999', 'NodeType': 'Fragment', 'AS': 'N'}
+  t {'p': '272.18378 359.9791', 'LabelJustification': 'Left', 'LineHeight': 'variable', 'LabelAlignment': 'Left'} 'Boc'
+  n {'id': '6', 'p': '275.44875 342.11', 'Element': '8', 'NumHydrogens': '0'}
+  t {'p': '271.55959 345.75258', 'LabelJustification': 'Left', 'LineHeight': 'variable'} 'O'
+  n {'id': '7', 'p': '287.91875 363.49001', 'Element': '8', 'NumHydrogens': '0'}
+  t {'p': '284.02959 367.13258', 'LabelJustification': 'Left', 'LineHeight': 'variable'} 'O'
+== item-0-1.bin.decoded.xml
+  n {'id': '4', 'p': '263.16873 363.60001', 'Element': '7', 'NumHydrogens': '1', 'AS': 'N', 'LabelDisplay': 'Right'}
+  t {'p': '266.77957 367.17911', 'LabelJustification': 'Right', 'Justification': 'Right', 'LineHeight': 'variable'} 'NH'
+  n {'id': '20', 'p': '275.51874 356.39999', 'NodeType': 'Fragment', 'AS': 'N', 'LabelDisplay': 'Above'}
+  t {'p': '272.18378 359.9791', 'LabelJustification': 'Above', 'Justification': 'Above', 'LineHeight': 'variable', 'LabelAlignment': 'Above'} 'Boc'
+  n {'id': '6', 'p': '275.44875 342.11', 'Element': '8', 'NumHydrogens': '0'}
+  t {'p': '271.55959 345.75258', 'LabelJustification': 'Left', 'LineHeight': 'variable'} 'O'
+  n {'id': '7', 'p': '287.91875 363.49001', 'Element': '8', 'NumHydrogens': '0'}
+  t {'p': '284.02959 367.13258', 'LabelJustification': 'Left', 'LineHeight': 'variable'} 'O'
+== item-0-1.bin.decoded.xml
+  n {'id': '4', 'p': '265.80911 363.60001', 'Element': '7', 'NumHydrogens': '1', 'AS': 'N', 'LabelDisplay': 'Right'}
+  t {'p': '269.41995 367.17911', 'LabelJustification': 'Right', 'Justification': 'Right', 'LineHeight': 'variable'} 'NH'
+  n {'id': '20', 'p': '278.15912 356.39999', 'NodeType': 'Fragment', 'AS': 'N', 'LabelDisplay': 'Center'}
+  t {'p': '278.15912 359.9791', 'LabelJustification': 'Center', 'Justification': 'Center', 'LineHeight': 'variable', 'LabelAlignment': 'Center'} 'Boc'
+  n {'id': '6', 'p': '278.08913 342.11', 'Element': '8', 'NumHydrogens': '0'}
+  t {'p': '274.19997 345.75258', 'LabelJustification': 'Left', 'LineHeight': 'variable'} 'O'
+  n {'id': '7', 'p': '290.55913 363.49001', 'Element': '8', 'NumHydrogens': '0'}
+  t {'p': '286.66997 367.13258', 'LabelJustification': 'Left', 'LineHeight': 'variable'} 'O'
+== item-0-1.bin.decoded.xml
+  n {'id': '4', 'p': '263.16873 363.60001', 'Element': '7', 'NumHydrogens': '1', 'AS': 'N', 'LabelDisplay': 'Right'}
+  t {'p': '266.77957 367.17911', 'LabelJustification': 'Right', 'Justification': 'Right', 'LineHeight': 'variable'} 'NH'
+  n {'id': '20', 'p': '275.51874 356.39999', 'NodeType': 'Fragment', 'AS': 'N', 'LabelDisplay': 'Left'}
+  t {'p': '272.18378 359.9791', 'LabelJustification': 'Left', 'LineHeight': 'variable', 'LabelAlignment': 'Left'} 'Boc'
+  n {'id': '6', 'p': '275.44875 342.11', 'Element': '8', 'NumHydrogens': '0'}
+  t {'p': '271.55959 345.75258', 'LabelJustification': 'Left', 'LineHeight': 'variable'} 'O'
+  n {'id': '7', 'p': '287.91875 363.49001', 'Element': '8', 'NumHydrogens': '0'}
+  t {'p': '284.02959 367.13258', 'LabelJustification': 'Left', 'LineHeight': 'variable'} 'O'
+== item-0-1.bin.decoded.xml
+  n {'id': '4', 'p': '268.86697 363.60001', 'Element': '7', 'NumHydrogens': '1', 'AS': 'N', 'LabelDisplay': 'Right'}
+  t {'p': '272.47781 367.17911', 'LabelJustification': 'Right', 'Justification': 'Right', 'LineHeight': 'variable'} 'NH'
+  n {'id': '20', 'p': '281.21698 356.39999', 'NodeType': 'Fragment', 'AS': 'N', 'LabelDisplay': 'Right'}
+  t {'p': '283.71698 359.9791', 'LabelJustification': 'Right', 'Justification': 'Right', 'LineHeight': 'variable', 'LabelAlignment': 'Right'} 'Boc'
+  n {'id': '6', 'p': '281.14699 342.11', 'Element': '8', 'NumHydrogens': '0'}
+  t {'p': '277.25783 345.75258', 'LabelJustification': 'Left', 'LineHeight': 'variable'} 'O'
+  n {'id': '7', 'p': '293.61699 363.49001', 'Element': '8', 'NumHydrogens': '0'}
+  t {'p': '289.72783 367.13258', 'LabelJustification': 'Left', 'LineHeight': 'variable'} 'O'
