@@ -26,7 +26,7 @@ Hold **⌘/Ctrl** while dragging a selection to drop a copy and leave the origin
 
 Select the atoms, choose the **3D tilt** tool on the left, and drag. Vertical movement rotates around X; horizontal movement rotates around Y. Hold **Shift** for 15° increments. Release to commit one Undo step; **Escape** cancels the preview. Labels remain upright, and aromatic circles follow the ring.
 
-Right-click a selection → **3D tilt** also offers X/Y step commands. The top controls offer **Front bonds** for depth emphasis and **Done** to return to selection. Tilt changes drawing perspective, not chemical stereochemistry.
+Right-click a selection → **3D tilt** also offers X/Y step commands. A molecule shown only as a 3D model turns its model instead, and its hidden 2D drawing stays as it is (see [Show a molecule as a 3D model](#show-a-molecule-as-a-3d-model)). The top controls offer **Front bonds** for depth emphasis and **Done** to return to selection. Tilt changes drawing perspective, not chemical stereochemistry.
 
 <Screenshot
   src="/doc-images/pr17/tilt-tool.png"
@@ -45,13 +45,24 @@ To fade the bonds behind the front face of a 3D molecule such as C60, open **Pro
 
 ### Show a molecule as a 3D model
 
-Select a molecule and open **Properties → Structure**, or right-click it and choose **Show as**:
+Select a whole molecule and use the small **Show as** bar above it, or open **Properties → Structure**, or right-click it and choose **Show as**:
 
 - **3D** replaces the drawing with a ball & stick model.
 - **Both** puts the model beside the drawing.
 - **2D** shows the drawing again.
 
-The first switch generates the model with the same method as **3D optimize…** (ETKDG, then MMFF94s); later switches reuse it. Each switch is one Undo step. The chemistry, atom IDs and your 2D layout never change. Click the model to select its molecule; it then moves, aligns and copies with it. Rotating, flipping, tilting, resizing, cleaning up or joining a molecule shown as **3D** would change its hidden drawing, so ReShiki asks you to switch to 2D first; in a mixed selection only the other objects turn. Editing the molecule's chemistry removes the model and shows the drawing again.
+The first switch generates the model with the same method as **3D optimize…** (ETKDG, then MMFF94s); later switches reuse it. When the model appears, the atoms move from the drawing into 3D and the hydrogens grow out of their atoms. Each switch is one Undo step. The chemistry, atom IDs and your 2D layout never change. Click the model to select its molecule; it then moves, aligns and copies with it. Editing the molecule's chemistry removes the model and shows the drawing again.
+
+Once the model is selected:
+
+- drag inside its frame to rotate it;
+- **Shift**-drag to roll it;
+- double-click it to reset the view;
+- drag a corner handle to resize it.
+
+Drag the frame's edge, or a model that is not selected, to move it. The **3D tilt** tool and its X/Y step commands also turn a model shown as **3D**, the same way as dragging inside its frame, and leave its 2D drawing as it is; anything else selected tilts with it. With **Both**, tilt turns the 2D drawing. The rotation handle, **Rotate 180°** and the **Rotate** field roll a model shown as **3D** in place. Flipping, resizing it with **Scale**, cleaning it up or joining it would change its hidden drawing, so ReShiki asks you to switch to 2D first; in a mixed selection only the other objects flip. Each rotation, tilt and resize is one Undo step.
+
+To go back to 2D, **Properties → Structure → 2D layout** offers **Original drawing**, the layout you drew, or **From the 3D view**, which flattens the model as it is turned now, with far bonds lighter, like **3D optimize…**. **Show as → 2D from the 3D view** in the right-click menu does the same. Each molecule keeps its own choice, and a flattened molecule keeps the layout you drew, so **Original drawing** brings it back, even after saving and reopening.
 
 A `.rsk` file keeps the model. PNG, SVG and PDF show it as vector shapes. MOL, CDX/CDXML and SMILES contain the 2D structure only. Files saved by this version need this version or later to open.
 

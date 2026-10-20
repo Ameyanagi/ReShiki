@@ -699,6 +699,12 @@ fn edits() -> Vec<Command> {
             Message::Models3d(models3d::Action::Show(Display::TwoD)),
         ),
         selection(
+            "Show as 2D from the 3D view",
+            "Flatten the 3D model as it is turned now into the 2D drawing",
+            "flatten projection layout structure view",
+            Message::Models3d(models3d::Action::Flatten),
+        ),
+        selection(
             "Join fragments",
             super::super::joining::JOIN_COMMAND_HINT,
             "merge fuse connect",

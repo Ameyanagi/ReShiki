@@ -554,3 +554,37 @@ fn optimized(prepared: &Prepared, parents: Vec<usize>) -> Optimized {
         diagnostics: vec![],
     }
 }
+
+#[test]
+fn flattening_a_model_projects_its_view_at_the_drawing_centre_and_scale() {
+    let doc = ethanol();
+    let prepared = Prepared::new(&doc, &[3]).unwrap();
+    let mut model = prepared.model(&optimized(&prepared, vec![])).unwrap();
+    let units = doc.drawing_style.bond_length_world / 1.5;
+    let center = |doc: &Document| {
+        let n = doc.atoms.len() as f32;
+        doc.atoms.iter().fold(Point::default(), |c, a| {
+            c.offset(a.position.x / n, a.position.y / n)
+        })
+    };
+    let quarter = std::f32::consts::FRAC_1_SQRT_2;
+    // A quarter turn about the view axis stands the chain upright…
+    model.rotation = [quarter, 0., 0., quarter];
+    let flat = prepared.flattened(&model).unwrap();
+    let c = center(&doc);
+    for (i, id) in prepared.ids().iter().enumerate() {
+        let atom = flat.atom(*id).unwrap();
+        let along = (i as f32 - 1.) * 1.5 * units;
+        assert!((atom.position.x - c.x).abs() < 1e-3);
+        assert!((atom.position.y - (c.y - along)).abs() < 1e-3);
+        assert!(atom.depth.abs() < 1e-3);
+    }
+    assert_eq!(flat.bonds, doc.bonds);
+    // …and one about the vertical axis turns it into depth.
+    model.rotation = [quarter, 0., quarter, 0.];
+    let flat = prepared.flattened(&model).unwrap();
+    for (i, id) in prepared.ids().iter().enumerate() {
+        let depth = flat.atom(*id).unwrap().depth;
+        assert!((depth + (i as f32 - 1.) * 1.5 * units).abs() < 1e-3);
+    }
+}

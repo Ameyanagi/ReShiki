@@ -60,6 +60,9 @@ impl MoleculeCanvas<'_> {
                 );
             }
         }
+        if let Some(Gesture::Turn(turn)) = &mut state.gesture {
+            turn.track(point?, state.modifiers.shift());
+        }
         if let Some(Gesture::Transform(drag)) = &mut state.gesture {
             drag.track_pointer(self.camera.world(point?, bounds), self.camera.zoom);
         }

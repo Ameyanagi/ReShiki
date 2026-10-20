@@ -102,38 +102,28 @@ impl App {
         self.tool = Tool::Select;
     }
     pub(super) fn transform_selection(&mut self, transform: reshiki::editing::Transform) {
-        if let editing::Transform::TiltX(_) | editing::Transform::TiltY(_) = transform
-            && let Some(reason) = crate::canvas::tilt::refusal(&self.tab.doc, &self.tab.selected)
-        {
-            self.status = reason.into();
-            self.error = true;
-            return;
-        }
-        // Mixed selections rotate and flip what is drawn; molecules shown only
-        // in 3D keep their hidden drawing. Tilt sorts its atoms itself.
+        // A molecule shown only in 3D keeps its hidden drawing: Rotate rolls
+        // its model and tilt turns it, while a flip has no 3D equivalent (a
+        // mirrored model would be the other enantiomer), so it skips them.
+        let selected = &self.tab.selected;
         let ids = match transform {
-            editing::Transform::TiltX(_) | editing::Transform::TiltY(_) => {
-                self.tab.selected.clone()
+            editing::Transform::TiltX(_) | editing::Transform::TiltY(_) => selected.clone(),
+            editing::Transform::Rotate(_) => {
+                reshiki::models3d::without_hidden(&self.tab.doc, selected)
             }
-            editing::Transform::Rotate(_)
-            | editing::Transform::FlipHorizontal
-            | editing::Transform::FlipVertical => {
-                let verb = if let editing::Transform::Rotate(_) = transform {
-                    "rotate"
-                } else {
-                    "flip"
-                };
-                if let Some(reason) =
-                    reshiki::models3d::refusal(&self.tab.doc, &self.tab.selected, verb)
-                {
+            editing::Transform::FlipHorizontal | editing::Transform::FlipVertical => {
+                if let Some(reason) = reshiki::models3d::refusal(&self.tab.doc, selected, "flip") {
                     self.status = reason;
                     self.error = true;
                     return;
                 }
-                reshiki::models3d::without_hidden(&self.tab.doc, &self.tab.selected)
+                reshiki::models3d::without_hidden(&self.tab.doc, selected)
             }
         };
         let before = self.tab.doc.clone();
+        if let editing::Transform::Rotate(degrees) = transform {
+            reshiki::models3d::roll(&mut self.tab.doc, &self.tab.selected, degrees);
+        }
         editing::transform(&mut self.tab.doc, &ids, transform);
         self.changed(before);
     }

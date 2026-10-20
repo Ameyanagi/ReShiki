@@ -119,7 +119,7 @@ impl App {
                 target,
             } => return self.place_chain_from_text(&points, source, source_text, target, before),
             edit @ Edit::TextBond { .. } => return self.place_text_bond(edit, before),
-            Edit::TextBondRefused(error) | Edit::Refused(error) => {
+            Edit::TextBondRefused(error) => {
                 self.status = error;
                 self.error = true;
                 return;
@@ -179,9 +179,8 @@ impl App {
                 scale,
                 rotation,
             } => {
-                // A molecule shown only in 3D keeps its hidden drawing.
-                let drawn = reshiki::models3d::without_hidden(&self.tab.doc, &ids);
-                editing::transform_about(&mut self.tab.doc, &drawn, pivot, scale, rotation);
+                // A molecule shown only in 3D rolls its model instead.
+                crate::canvas::rotate(&mut self.tab.doc, &ids, pivot, scale, rotation);
                 self.tab.selected = ids;
             }
             Edit::Tilt { ids, x, y } => {
@@ -193,6 +192,11 @@ impl App {
                 editing::scale_axes_about(&mut self.tab.doc, &drawn, pivot, x, y);
                 self.tab.selected = ids;
             }
+            edit @ (Edit::ModelView { .. } | Edit::ResizeModels { .. }) => {
+                return self.model_edit(edit);
+            }
+            // Dispatched as a Models3d action.
+            Edit::ShowAs(_) => return,
             Edit::RingPreset(preset, anchor, direction, connect, alternate) => {
                 return self
                     .place_ring_preset(preset, anchor, direction, connect, alternate, before);

@@ -337,22 +337,18 @@ fn transform_candidate(
             if value.abs() > 36_000. {
                 return Err("Enter a rotation between −36000° and 36000°".into());
             }
-            if let Some(reason) = reshiki::models3d::refusal(document, &ids, "rotate") {
-                return Err(reason);
-            }
-            // A molecule shown only in 3D keeps its hidden drawing.
-            let ids = reshiki::models3d::without_hidden(document, &ids);
             let degrees = value % 360.;
             if degrees != 0. {
+                // A molecule shown only in 3D rolls its model, keeping its
+                // hidden drawing.
+                reshiki::models3d::roll(document, &ids, degrees);
+                let ids = reshiki::models3d::without_hidden(document, &ids);
                 editing::transform(document, &ids, Transform::Rotate(degrees));
             }
         }
         Field::TiltX | Field::TiltY => {
             if value.abs() > 36_000. {
                 return Err("Enter a tilt between −36000° and 36000°".into());
-            }
-            if let Some(reason) = crate::canvas::tilt::refusal(document, &ids) {
-                return Err(reason.into());
             }
             if !crate::canvas::tilt::available(document, &ids) {
                 return Err("Select at least two atoms or a shape to tilt".into());

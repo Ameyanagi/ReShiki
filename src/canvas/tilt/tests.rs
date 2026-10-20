@@ -81,7 +81,7 @@ fn tilts_past_75_degrees_turn_and_a_full_turn_restores_positions() {
 }
 
 #[test]
-fn a_molecule_shown_only_in_3d_keeps_its_hidden_drawing() {
+fn a_molecule_shown_only_in_3d_turns_its_model_and_keeps_its_drawing() {
     use reshiki::editing::{Transform, transform};
     use reshiki::models3d::Display;
     let atoms = |doc: &Document, ids: [u64; 2]| {
@@ -93,34 +93,35 @@ fn a_molecule_shown_only_in_3d_keeps_its_hidden_drawing() {
     for display in [Display::TwoD, Display::Both, Display::ThreeD] {
         let (doc, molecule, drawn) = shown(display);
         let hidden = display == Display::ThreeD;
-        assert_eq!(available(&doc, &molecule), !hidden, "{display:?}");
-        assert_eq!(
-            refusal(&doc, &molecule),
-            hidden.then_some(SHOWN_IN_3D),
-            "{display:?}"
-        );
         let mixed = [molecule, drawn].concat();
-        assert!(available(&doc, &mixed) && refusal(&doc, &mixed).is_none());
+        assert!(available(&doc, &molecule) && available(&doc, &mixed));
         let tilts: [fn(&mut Document, &[u64]); 3] = [
             |doc, ids| apply(doc, ids, 30., 20.),
             |doc, ids| transform(doc, ids, Transform::TiltX(15.)),
             |doc, ids| transform(doc, ids, Transform::TiltY(-15.)),
         ];
         for tilt in tilts {
-            let mut only = doc.clone();
-            tilt(&mut only, &molecule);
-            assert_eq!(only == doc, hidden, "{display:?}");
+            for ids in [&molecule[..], &mixed] {
+                let mut tilted = doc.clone();
+                tilt(&mut tilted, ids);
+                assert_ne!(tilted, doc, "{display:?}");
+                assert_eq!(
+                    atoms(&tilted, molecule) == atoms(&doc, molecule),
+                    hidden,
+                    "{display:?}"
+                );
+                assert_eq!(
+                    tilted.models[0].rotation != doc.models[0].rotation,
+                    hidden,
+                    "{display:?}"
+                );
+            }
+            // The drawn pair turns about its own centre, as if tilted alone.
             let mut both = doc.clone();
             tilt(&mut both, &mixed);
-            assert_ne!(atoms(&both, drawn), atoms(&doc, drawn), "{display:?}");
-            assert_eq!(
-                atoms(&both, molecule) == atoms(&doc, molecule),
-                hidden,
-                "{display:?}"
-            );
-            // The drawn pair turns about its own centre, as if tilted alone.
             let mut alone = doc.clone();
             tilt(&mut alone, &drawn);
+            assert_ne!(atoms(&both, drawn), atoms(&doc, drawn));
             if hidden {
                 assert_eq!(atoms(&both, drawn), atoms(&alone, drawn));
             }

@@ -334,6 +334,42 @@ impl Prepared {
             optimized.force_field.into(),
         ))
     }
+    /// The drawing flattened from `model` as it is turned now, like 3D
+    /// optimize's projection: each atom at its projected place, keeping the
+    /// drawing's scale and centre, with its depth retained.
+    pub fn flattened(&self, model: &crate::models3d::Model3d) -> Result<Document, Error> {
+        let positions = self
+            .ids
+            .iter()
+            .map(|id| {
+                let [x, y, z] = model
+                    .atoms
+                    .iter()
+                    .find(|a| a.id == *id)
+                    .ok_or(Error::Coordinates("Missing model atom"))?
+                    .xyz
+                    .map(f64::from);
+                Ok(Point3 { x, y, z })
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+        let drawing = view::center(&self.drawing_positions)?;
+        let frame = ViewFrame {
+            rotation: Rotation::from_quaternion(model.rotation.map(f64::from)),
+            model_center: view::center(&positions)?,
+            drawing_center: crate::document::Point::new(
+                (drawing.x * self.units) as f32,
+                (-drawing.y * self.units) as f32,
+            ),
+            depth_center: 0.,
+            units_per_angstrom: self.units,
+        };
+        let conformer = Conformer {
+            original_atom_count: positions.len(),
+            positions,
+            hydrogen_parents: vec![],
+        };
+        self.document(&conformer, &frame)
+    }
     pub fn index(&self, id: u64) -> Option<usize> {
         self.ids.iter().position(|a| *a == id)
     }

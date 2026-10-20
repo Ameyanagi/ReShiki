@@ -941,41 +941,58 @@ fn numeric_size_apply_latency() {
 }
 
 #[test]
-fn tilt_steps_and_fields_leave_a_molecule_shown_only_in_3d_alone() {
-    use crate::canvas::tilt::{SHOWN_IN_3D, shown};
-    let (doc, molecule, drawn) = shown(reshiki::models3d::Display::ThreeD);
+fn tilts_turn_a_model_shown_only_in_3d_as_one_undo_step() {
+    use crate::canvas::{Edit, tilt};
+    let (doc, molecule, drawn) = tilt::shown(reshiki::models3d::Display::ThreeD);
     let positions = |doc: &Document, ids: [u64; 2]| {
         ids.map(|id| {
             let a = doc.atom(id).unwrap();
             (a.position, a.depth)
         })
     };
+    let mixed = [molecule, drawn].concat();
     let (mut app, _) = App::new();
     app.tab.busy = false;
     app.tab.doc = doc.clone();
-    app.tab.selected = molecule.to_vec();
     let frames = app.tab.history.undo_frames().count();
-    let _ = app.update(Message::Transform(Transform::TiltX(15.)));
-    assert_eq!(app.tab.doc, doc);
-    assert_eq!((app.status.as_str(), app.error), (SHOWN_IN_3D, true));
-    assert_eq!(app.tab.history.undo_frames().count(), frames);
-    assert_eq!(
-        transformed(&doc, &molecule, Field::TiltY, "30", false),
-        Err(SHOWN_IN_3D.into())
-    );
-    let mixed = [molecule, drawn].concat();
-    let tilted = transformed(&doc, &mixed, Field::TiltY, "30", false).unwrap();
-    assert_eq!(positions(&tilted, molecule), positions(&doc, molecule));
-    assert_ne!(positions(&tilted, drawn), positions(&doc, drawn));
-    app.tab.selected = mixed;
-    let _ = app.update(Message::Transform(Transform::TiltY(15.)));
-    assert_eq!(positions(&app.tab.doc, molecule), positions(&doc, molecule));
-    assert_ne!(positions(&app.tab.doc, drawn), positions(&doc, drawn));
-    assert_eq!(app.tab.history.undo_frames().count(), frames + 1);
+    let check = |app: &mut App, ids: &[u64], expected: Document| {
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(app.tab.doc, expected);
+        assert_eq!(positions(&app.tab.doc, molecule), positions(&doc, molecule));
+        assert_ne!(app.tab.doc.models[0].rotation, doc.models[0].rotation);
+        assert_eq!(
+            positions(&app.tab.doc, drawn) != positions(&doc, drawn),
+            ids.len() > 2
+        );
+        assert_eq!(app.tab.history.undo_frames().count(), frames + 1);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, doc);
+    };
+    for ids in [&molecule[..], &mixed] {
+        // A drag commits what its preview showed: the same tilt.
+        let mut preview = doc.clone();
+        tilt::apply(&mut preview, ids, -10., 15.);
+        app.edit(Edit::Tilt {
+            ids: ids.to_vec(),
+            x: -10.,
+            y: 15.,
+        });
+        check(&mut app, ids, preview);
+        // Step commands from the menu, keys and palette.
+        app.tab.selected = ids.to_vec();
+        let mut stepped = doc.clone();
+        reshiki::editing::transform(&mut stepped, ids, Transform::TiltX(15.));
+        let _ = app.update(Message::Transform(Transform::TiltX(15.)));
+        check(&mut app, ids, stepped);
+        // The inspector tilt field.
+        let typed = transformed(&doc, ids, Field::TiltY, "30", false).unwrap();
+        assert_eq!(positions(&typed, molecule), positions(&doc, molecule));
+        assert_ne!(typed.models[0].rotation, doc.models[0].rotation);
+    }
 }
 
 #[test]
-fn rotate_flip_resize_and_optimize_leave_a_molecule_shown_only_in_3d_alone() {
+fn rotation_rolls_a_model_shown_only_in_3d_and_other_edits_leave_its_drawing() {
     use crate::canvas::tilt::shown;
     use reshiki::models3d::Display;
     let (doc, molecule, drawn) = shown(Display::ThreeD);
@@ -985,33 +1002,36 @@ fn rotate_flip_resize_and_optimize_leave_a_molecule_shown_only_in_3d_alone() {
     app.tab.doc = doc.clone();
     app.tab.selected = molecule.to_vec();
     let frames = app.tab.history.undo_frames().count();
-    for (message, status) in [
-        (
-            Transform::Rotate(180.),
-            "Switch to 2D to rotate the drawing",
-        ),
-        (Transform::Rotate(15.), "Switch to 2D to rotate the drawing"),
-        (
-            Transform::FlipHorizontal,
-            "Switch to 2D to flip the drawing",
-        ),
-        (Transform::FlipVertical, "Switch to 2D to flip the drawing"),
-    ] {
-        app.status.clear();
+    // Rotate 180° and the step keys roll the model, one Undo step each.
+    for (step, degrees) in [180., 15.].into_iter().enumerate() {
+        let before = app.tab.doc.clone();
+        let _ = app.update(Message::Transform(Transform::Rotate(degrees)));
+        assert_eq!(app.tab.doc.atoms, doc.atoms);
+        assert_ne!(app.tab.doc.models[0].rotation, before.models[0].rotation);
+        let mut expected = before.clone();
+        reshiki::models3d::roll(&mut expected, &molecule, degrees);
+        assert_eq!(app.tab.doc.models, expected.models);
+        assert_eq!(app.tab.history.undo_frames().count(), frames + step + 1);
+    }
+    app.tab.doc = doc.clone();
+    for message in [Transform::FlipHorizontal, Transform::FlipVertical] {
         let _ = app.update(Message::Transform(message));
         assert_eq!(app.tab.doc, doc);
-        assert_eq!((app.status.as_str(), app.error), (status, true));
+        assert_eq!(
+            (app.status.as_str(), app.error),
+            ("Switch to 2D to flip the drawing", true)
+        );
     }
     let _ = app.update(Message::Optimization(
         crate::app::optimization::Action::Begin,
     ));
     assert!(app.tab.optimization.is_none());
     assert_eq!(app.status, "Switch to 2D to optimize the drawing");
-    assert_eq!(app.tab.history.undo_frames().count(), frames);
-    assert_eq!(
-        transformed(&doc, &molecule, Field::Rotation, "30", false),
-        Err("Switch to 2D to rotate the drawing".into())
-    );
+    // The Rotate field rolls the model the same way.
+    let rolled = transformed(&doc, &molecule, Field::Rotation, "30", false).unwrap();
+    let mut expected = doc.clone();
+    reshiki::models3d::roll(&mut expected, &molecule, 30.);
+    assert_eq!(rolled, expected);
     let mixed = [molecule, drawn].concat();
     for field in [Field::Scale, Field::Width, Field::Height] {
         for ids in [&molecule[..], &mixed] {
@@ -1024,11 +1044,13 @@ fn rotate_flip_resize_and_optimize_leave_a_molecule_shown_only_in_3d_alone() {
     let rotated = transformed(&doc, &mixed, Field::Rotation, "30", false).unwrap();
     assert_eq!(atoms(&rotated, molecule), atoms(&doc, molecule));
     assert_ne!(atoms(&rotated, drawn), atoms(&doc, drawn));
-    // Mixed selections flip and rotate just the drawing, by keys or a handle.
+    assert_eq!(rotated.models, expected.models);
+    // Mixed selections flip just the drawing and leave the model as it is.
     app.tab.selected = mixed.clone();
     let _ = app.update(Message::Transform(Transform::FlipHorizontal));
     assert_eq!(atoms(&app.tab.doc, molecule), atoms(&doc, molecule));
     assert_ne!(atoms(&app.tab.doc, drawn), atoms(&doc, drawn));
+    assert_eq!(app.tab.doc.models, doc.models);
     app.tab.doc = doc.clone();
     let _ = app.update(Message::Canvas(crate::canvas::Edit::Transform {
         ids: mixed.clone(),
@@ -1038,5 +1060,6 @@ fn rotate_flip_resize_and_optimize_leave_a_molecule_shown_only_in_3d_alone() {
     }));
     assert_eq!(atoms(&app.tab.doc, molecule), atoms(&doc, molecule));
     assert_ne!(atoms(&app.tab.doc, drawn), atoms(&doc, drawn));
+    assert_ne!(app.tab.doc.models[0].rotation, doc.models[0].rotation);
     assert_eq!(app.tab.selected, mixed);
 }
