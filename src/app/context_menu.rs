@@ -361,28 +361,34 @@ impl App {
         entries
     }
 
-    /// The Structure section's 2D / 3D / Both; the current view is disabled.
+    /// The Structure section's 2D / 3D / Both, with 2D in either layout; the
+    /// current view is disabled.
     fn model_entries(&self) -> Vec<Entry> {
+        use super::models3d::Action;
         use reshiki::models3d::Display;
-        let current = self
+        let model = self
             .selected_model()
             .and_then(|(_, index)| index)
-            .and_then(|i| self.tab.doc.models.get(i))
-            .map_or(Display::TwoD, |m| m.display);
+            .and_then(|i| self.tab.doc.models.get(i));
+        let current = model.map_or(Display::TwoD, |m| m.display);
         let enabled = !self.tab.busy && self.tab.optimization.is_none();
-        [
-            ("2D drawing", Display::TwoD),
-            ("3D model", Display::ThreeD),
-            ("2D and 3D", Display::Both),
-        ]
-        .map(|(label, display)| {
+        let show = |label, display| {
             Entry::command(
                 label,
-                Message::Models3d(super::models3d::Action::Show(display)),
+                Message::Models3d(Action::Show(display)),
                 enabled && display != current,
             )
-        })
-        .into()
+        };
+        vec![
+            show("2D drawing", Display::TwoD),
+            Entry::command(
+                "2D from the 3D view",
+                Message::Models3d(Action::Flatten),
+                enabled && model.is_some(),
+            ),
+            show("3D model", Display::ThreeD),
+            show("2D and 3D", Display::Both),
+        ]
     }
 
     /// Connect and reshape the selection. Move & attach and Coordinate in

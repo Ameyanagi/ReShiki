@@ -331,3 +331,160 @@ fn the_status_names_the_view_undo_restores() {
         "Shown as 2D and 3D · Undo restores the 3D model"
     );
 }
+
+#[test]
+fn turning_and_resizing_a_model_are_one_undo_step_each() {
+    let (mut app, atoms) = with_model(Display::ThreeD);
+    let water = app.tab.doc.atoms[3].id;
+    let model = app.tab.doc.models[0].clone();
+    // A generation for another molecule survives both.
+    app.tab.selected = vec![water];
+    show(&mut app, Display::Both);
+    let (key, result) = generated(&app);
+    let start = frames(&app);
+    let drawn = app.tab.doc.atoms.clone();
+
+    let rotation = reshiki::models3d::turn(model.rotation, 40., -12., false);
+    app.edit(Edit::ModelView {
+        atoms: atoms.clone(),
+        rotation,
+    });
+    assert_eq!(app.tab.doc.models[0].rotation, rotation);
+    let (lo, _) = reshiki::models3d::frame(&app.tab.doc, &app.tab.doc.models[0]).unwrap();
+    app.edit(Edit::ResizeModels {
+        ids: atoms.clone(),
+        pivot: lo,
+        scale: 2.,
+    });
+    assert_eq!(app.tab.doc.models[0].size, model.size * 2.);
+    assert_eq!(app.tab.selected, atoms);
+    assert_eq!(frames(&app), start + 2);
+    assert_eq!(app.tab.doc.atoms, drawn, "the drawing stays");
+
+    let _ = app.update(Message::Models3d(Action::Generated(key, Ok(result))));
+    assert_eq!(displays(&app.tab.doc), [Display::ThreeD, Display::Both]);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.models[0].size, model.size * 2.);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.models[0].size, model.size);
+    assert_eq!(app.tab.doc.models[0].rotation, rotation);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.models[0], model);
+}
+
+#[test]
+fn from_the_3d_view_flattens_the_turned_model_in_one_step() {
+    let (mut app, atoms) = with_model(Display::ThreeD);
+    let original = app.tab.doc.clone();
+    let quarter = std::f32::consts::FRAC_1_SQRT_2;
+    app.edit(Edit::ModelView {
+        atoms: atoms.clone(),
+        rotation: [quarter, 0., quarter, 0.],
+    });
+    let start = frames(&app);
+    let _ = app.update(Message::Models3d(Action::Flatten));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(frames(&app), start + 1);
+    let doc = &app.tab.doc;
+    assert_eq!(displays(doc), [Display::TwoD], "the model is kept");
+    assert_eq!(doc.bonds, original.bonds);
+    // The conformer runs along x; turned a quarter about y, x becomes depth.
+    let model = &doc.models[0];
+    let depths: Vec<_> = atoms
+        .iter()
+        .map(|id| doc.atom(*id).unwrap().depth)
+        .collect();
+    assert!(depths.windows(2).all(|d| d[1] < d[0]), "{depths:?}");
+    assert_ne!(doc.atoms, original.atoms);
+    // Far bonds are lighter, as after 3D optimize.
+    assert!(
+        doc.depth_appearance
+            .iter()
+            .any(|s| atoms.iter().all(|id| s.atoms.contains(id)))
+    );
+    assert_eq!(model.rotation, [quarter, 0., quarter, 0.]);
+    assert!(
+        app.status.starts_with("Shown as 2D from the 3D view"),
+        "{}",
+        app.status
+    );
+    let _ = app.update(Message::Undo);
+    assert_eq!(displays(&app.tab.doc), [Display::ThreeD]);
+    assert_eq!(app.tab.doc.atoms, original.atoms);
+}
+
+#[test]
+fn flattening_keeps_drawn_stereo_and_the_model() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let doc = &mut app.tab.doc;
+    let c = doc.add_atom("C", Point::default());
+    let f = doc.add_atom("F", Point::new(0., -36.));
+    let cl = doc.add_atom("Cl", Point::new(31., 18.));
+    let br = doc.add_atom("Br", Point::new(-31., 18.));
+    doc.add_bond(c, f, 1, "wedge");
+    doc.add_bond(c, cl, 1, "plain");
+    doc.add_bond(c, br, 1, "plain");
+    app.tab.selected = vec![c];
+    show(&mut app, Display::ThreeD);
+    let (key, result) = generated(&app);
+    let _ = app.update(Message::Models3d(Action::Generated(key, Ok(result))));
+    let _ = app.update(Message::Models3d(Action::Flatten));
+    assert!(!app.error, "{}", app.status);
+    // A model is dropped when its molecule's perceived stereo changes.
+    assert_eq!(displays(&app.tab.doc), [Display::TwoD]);
+}
+
+#[test]
+fn the_2d_buttons_follow_the_chosen_layout() {
+    let (mut app, atoms) = with_model(Display::Both);
+    assert_eq!(app.tab.model_layout, Layout::Original);
+    assert!(matches!(
+        app.show_as(Display::TwoD),
+        Action::Show(Display::TwoD)
+    ));
+    let _ = app.update(Message::Models3d(Action::Layout(Layout::View)));
+    assert!(matches!(app.show_as(Display::TwoD), Action::Flatten));
+    assert!(matches!(
+        app.show_as(Display::ThreeD),
+        Action::Show(Display::ThreeD)
+    ));
+    let drawn = app.tab.doc.atoms.clone();
+    let _ = app.update(Message::Canvas(Edit::ShowAs(Display::TwoD)));
+    assert_eq!(displays(&app.tab.doc), [Display::TwoD]);
+    assert_ne!(app.tab.doc.atoms, drawn, "flattened from the view");
+    // Without a model, 2D is the drawing whatever the layout.
+    app.tab.selected = vec![app.tab.doc.atoms[3].id];
+    assert!(matches!(
+        app.show_as(Display::TwoD),
+        Action::Show(Display::TwoD)
+    ));
+    app.tab.selected = atoms;
+}
+
+#[test]
+fn the_bar_shows_above_a_whole_selected_molecule_and_the_morph_starts_from_2d() {
+    let (mut app, atoms, water) = drawing();
+    assert_eq!(app.model_bar(), None, "one atom is not the molecule");
+    app.tab.selected = atoms.clone();
+    assert_eq!(app.model_bar(), Some(Display::TwoD));
+    app.tool = crate::canvas::Tool::Bond(1);
+    assert_eq!(app.model_bar(), None);
+    app.tool = crate::canvas::Tool::Select;
+    app.tab.selected = vec![atoms[0], water];
+    assert_eq!(app.model_bar(), None);
+
+    app.tab.selected = atoms.clone();
+    let _ = app.update(Message::Canvas(Edit::ShowAs(Display::ThreeD)));
+    assert_eq!(app.model_bar(), Some(Display::ThreeD), "pending");
+    let (key, result) = generated(&app);
+    let _ = app.update(Message::Models3d(Action::Generated(key, Ok(result))));
+    let (id, started) = app.tab.model_morph.expect("2D → 3D morphs");
+    assert_eq!(id, atoms[0]);
+    app.tab.model_morph = None;
+    show(&mut app, Display::Both);
+    assert_eq!(app.tab.model_morph, None, "3D → Both does not");
+    show(&mut app, Display::TwoD);
+    show(&mut app, Display::Both);
+    assert!(app.tab.model_morph.is_some_and(|(_, at)| at > started));
+}

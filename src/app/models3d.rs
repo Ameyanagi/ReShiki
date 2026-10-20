@@ -2,11 +2,14 @@
 //!
 //! A molecule without a model gets one from the geometry worker: one abortable
 //! job per tab, whose result is dropped when the drawing changed meanwhile.
-//! Each switch, including the one that adds the model, is one Undo step.
+//! Each switch, including the one that adds the model, is one Undo step, and
+//! so is each turn or resize of a model on the canvas.
 use super::workspace::{accessible_command, control, muted_text};
 use super::{App, Message, document_tab::TabId, inspector::Section};
+use crate::canvas::Edit;
 use iced::widget::{column, row, text};
 use iced::{Element, Length, Task};
+use reshiki::document::Document;
 use reshiki::geometry::{Client, ForceField, Optimized, Prepared};
 use reshiki::models3d::{self, Display};
 use std::sync::Arc;
@@ -22,7 +25,21 @@ pub(crate) struct Key {
 #[derive(Clone, Debug)]
 pub(crate) enum Action {
     Show(Display),
+    /// Show as 2D, the drawing flattened from the model as it is turned now.
+    Flatten,
+    /// The 2D layout that the 2D buttons of the bar and the section use.
+    Layout(Layout),
     Generated(Key, Result<Arc<Optimized>, String>),
+}
+
+/// The 2D layout a molecule shown in 3D returns to.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum Layout {
+    /// The layout as drawn, unchanged.
+    #[default]
+    Original,
+    /// The model flattened as it is turned now, far bonds lighter.
+    View,
 }
 
 /// The generation in flight; dropping it aborts the worker.
@@ -41,6 +58,14 @@ impl App {
     pub(super) fn models3d_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Show(display) => self.show_model(display),
+            Action::Flatten => {
+                self.flatten_model();
+                Task::none()
+            }
+            Action::Layout(layout) => {
+                self.tab.model_layout = layout;
+                Task::none()
+            }
             Action::Generated(key, result) => {
                 let Some(job) = self.tab.model_job.take_if(|job| job.key == key) else {
                     return Task::none();
@@ -107,8 +132,55 @@ impl App {
         Some((atoms, index))
     }
 
+    fn idle(&self) -> bool {
+        !self.tab.busy && self.tab.optimization.is_none() && !self.tab.drawing_edit_active()
+    }
+
+    /// A button of the bar or the section: 2D follows the chosen 2D layout.
+    pub(super) fn show_as(&self, display: Display) -> Action {
+        let modelled = self
+            .selected_model()
+            .is_some_and(|(_, index)| index.is_some());
+        if display == Display::TwoD && modelled && self.tab.model_layout == Layout::View {
+            Action::Flatten
+        } else {
+            Action::Show(display)
+        }
+    }
+
+    /// Commit a change to the models' displays, views or frames. A generation
+    /// in flight for another molecule stays valid (unless already stale).
+    fn commit_view(&mut self, before: Document) {
+        let current = self.model_key();
+        self.changed(before);
+        let next = self.model_key();
+        if let Some(job) = &mut self.tab.model_job
+            && job.current == current
+        {
+            job.current = next;
+        }
+    }
+
+    /// A turn or a frame resize from the canvas.
+    pub(super) fn model_edit(&mut self, edit: Edit) {
+        let before = self.tab.doc.clone();
+        match edit {
+            Edit::ModelView { atoms, rotation } => {
+                if let Some(id) = atoms.first() {
+                    models3d::set_rotation(&mut self.tab.doc, *id, rotation);
+                }
+            }
+            Edit::ResizeModels { ids, pivot, scale } => {
+                models3d::resize(&mut self.tab.doc, &ids, pivot, scale);
+                self.tab.selected = ids;
+            }
+            _ => return,
+        }
+        self.commit_view(before);
+    }
+
     fn show_model(&mut self, display: Display) -> Task<Message> {
-        if self.tab.busy || self.tab.optimization.is_some() || self.tab.drawing_edit_active() {
+        if !self.idle() {
             return Task::none();
         }
         let Some((atoms, index)) = self.selected_model() else {
@@ -119,17 +191,14 @@ impl App {
         if let Some(index) = index {
             let before = self.tab.doc.clone();
             if models3d::set_display(&mut self.tab.doc, index, display) {
-                let previous = before.models.get(index).map(|m| m.display);
-                let current = self.model_key();
-                self.changed(before);
-                self.status = status(display, previous.unwrap_or(Display::TwoD));
-                // Showing another molecule differently leaves a generation
-                // in flight valid (unless it was already stale).
-                let next = self.model_key();
-                if let Some(job) = &mut self.tab.model_job
-                    && job.current == current
-                {
-                    job.current = next;
+                let previous = before
+                    .models
+                    .get(index)
+                    .map_or(Display::TwoD, |m| m.display);
+                self.commit_view(before);
+                if !self.error {
+                    self.status = status(display, previous);
+                    self.start_morph(&atoms, previous, display);
                 }
             }
             return Task::none();
@@ -176,6 +245,82 @@ impl App {
         task
     }
 
+    /// Show the selected molecule as 2D, flattened from its model as turned
+    /// now with far bonds lighter, as 3D optimize's projection does.
+    fn flatten_model(&mut self) {
+        if !self.idle() {
+            return;
+        }
+        let Some((atoms, Some(index))) = self.selected_model() else {
+            self.status = "Select a molecule with a 3D model to flatten it".into();
+            self.error = true;
+            return;
+        };
+        let Some(model) = self.tab.doc.models.get(index) else {
+            return;
+        };
+        let previous = model.display;
+        let flat = Prepared::new(&self.tab.doc, &atoms)
+            .and_then(|prepared| prepared.flattened(model))
+            .map_err(|error| error.to_string())
+            .and_then(|mut doc| {
+                models3d::set_display(&mut doc, index, Display::TwoD);
+                reshiki::depth_appearance::enable(
+                    &mut doc,
+                    &atoms,
+                    reshiki::depth_appearance::DEFAULT_STRENGTH,
+                )?;
+                Ok(doc)
+            });
+        match flat {
+            Ok(doc) => {
+                let before = std::mem::replace(&mut self.tab.doc, doc);
+                self.commit_view(before);
+                if !self.error {
+                    self.status = format!(
+                        "Shown as 2D from the 3D view · Undo restores {}",
+                        restored(previous)
+                    );
+                }
+            }
+            Err(error) => {
+                self.status = format!("2D layout not flattened: {error}");
+                self.error = true;
+            }
+        }
+    }
+
+    /// Start the 2D → 3D morph when a molecule's model first appears.
+    fn start_morph(&mut self, atoms: &[u64], previous: Display, display: Display) {
+        if previous == Display::TwoD
+            && display != Display::TwoD
+            && let Some(id) = atoms.first()
+        {
+            self.tab.model_morph = Some((*id, std::time::Instant::now()));
+        }
+    }
+
+    /// The display the floating Show as bar marks above a whole selected
+    /// molecule, when the bar shows.
+    pub(super) fn model_bar(&self) -> Option<Display> {
+        if !self.tool.selects() || !self.idle() || self.context_menu.is_some() {
+            return None;
+        }
+        let (atoms, index) = self.selected_model()?;
+        let selected = self
+            .tab
+            .doc
+            .expand_abbreviation_selection(&self.tab.selected);
+        if !atoms.iter().all(|id| selected.contains(id)) {
+            return None;
+        }
+        Some(self.pending(&atoms).unwrap_or_else(|| {
+            index
+                .and_then(|i| self.tab.doc.models.get(i))
+                .map_or(Display::TwoD, |m| m.display)
+        }))
+    }
+
     fn add_model(&mut self, model: models3d::Model3d, display: Display) {
         let before = self.tab.doc.clone();
         let atoms: Vec<_> = model.atoms.iter().map(|a| a.id).collect();
@@ -195,6 +340,7 @@ impl App {
         self.changed(before);
         if !self.error {
             self.status = status(display, previous);
+            self.start_morph(&atoms, previous, display);
         }
     }
 
@@ -206,45 +352,66 @@ impl App {
             .map_or(Display::TwoD, |m| m.display);
         let pending = self.pending(&atoms);
         let enabled = !self.tab.busy && self.tab.optimization.is_none();
-        Some(
-            self.inspector_section(
-                Section::Structure,
-                "Structure",
-                "",
-                true,
-                column![
-                    row([
-                        (Display::TwoD, "2D", "Show the 2D drawing"),
-                        (Display::ThreeD, "3D", "Show the 3D model in place"),
-                        (
-                            Display::Both,
-                            "Both",
-                            "Show the 2D drawing and the 3D model"
-                        ),
-                    ]
-                    .map(|(display, label, name)| {
-                        let active = pending.unwrap_or(current) == display;
-                        accessible_command(format!("structure-show-{label}"), name, label)
-                            .checked(active)
-                            .style(control(active))
-                            .width(Length::Fill)
-                            .on_press_maybe(
-                                enabled.then_some(Message::Models3d(Action::Show(display))),
-                            )
-                            .into()
-                    }),)
-                    .spacing(4),
-                    text(if pending.is_some() {
-                        "Generating the conformer · ETKDG, then MMFF94s"
-                    } else {
-                        "Ball & stick · Chemistry and atom IDs stay the same"
-                    })
-                    .size(11)
-                    .style(muted_text),
+        let mut body = column![
+            row([
+                (Display::TwoD, "2D", "Show the 2D drawing"),
+                (Display::ThreeD, "3D", "Show the 3D model in place"),
+                (
+                    Display::Both,
+                    "Both",
+                    "Show the 2D drawing and the 3D model"
+                ),
+            ]
+            .map(|(display, label, name)| {
+                let active = pending.unwrap_or(current) == display;
+                accessible_command(format!("structure-show-{label}"), name, label)
+                    .checked(active)
+                    .style(control(active))
+                    .width(Length::Fill)
+                    .on_press_maybe(enabled.then(|| Message::Models3d(self.show_as(display))))
+                    .into()
+            }),)
+            .spacing(4),
+            text(if pending.is_some() {
+                "Generating the conformer · ETKDG, then MMFF94s"
+            } else {
+                "Ball & stick · Chemistry and atom IDs stay the same"
+            })
+            .size(11)
+            .style(muted_text),
+        ]
+        .spacing(6);
+        // The 2D layout the drawing returns to, while the model is shown.
+        if current != Display::TwoD && pending.is_none() {
+            let layout = self.tab.model_layout;
+            body = body.push(text("2D layout").size(12)).push(
+                row([
+                    (Layout::Original, "Original drawing", "original"),
+                    (Layout::View, "From the 3D view", "view"),
                 ]
-                .spacing(6),
-            ),
-        )
+                .map(|(choice, label, id)| {
+                    let active = layout == choice;
+                    accessible_command(format!("structure-layout-{id}"), label, label)
+                        .checked(active)
+                        .style(control(active))
+                        .width(Length::Fill)
+                        .on_press(Message::Models3d(Action::Layout(choice)))
+                        .into()
+                }))
+                .spacing(4),
+            );
+            body = body.push(
+                text(match layout {
+                    Layout::Original => "The layout you drew, unchanged.",
+                    Layout::View => {
+                        "Flatten the model as it is turned now, with far bonds lighter."
+                    }
+                })
+                .size(11)
+                .style(muted_text),
+            );
+        }
+        Some(self.inspector_section(Section::Structure, "Structure", "", true, body))
     }
 }
 
@@ -298,12 +465,15 @@ fn status(display: Display, previous: Display) -> String {
         Display::ThreeD => "3D model",
         Display::Both => "2D and 3D",
     };
-    let restored = match previous {
+    format!("Shown as {shown} · Undo restores {}", restored(previous))
+}
+
+fn restored(previous: Display) -> &'static str {
+    match previous {
         Display::TwoD => "the 2D drawing",
         Display::ThreeD => "the 3D model",
         Display::Both => "2D and 3D",
-    };
-    format!("Shown as {shown} · Undo restores {restored}")
+    }
 }
 
 #[cfg(test)]

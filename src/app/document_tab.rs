@@ -56,6 +56,9 @@ pub(super) struct DocumentTab {
     pub(super) optimization_serial: u64,
     pub(super) model_job: Option<super::models3d::Job>,
     pub(super) model_serial: u64,
+    pub(super) model_layout: super::models3d::Layout,
+    /// The model (by an atom) whose 2D → 3D morph is playing, and its start.
+    pub(super) model_morph: Option<(u64, std::time::Instant)>,
     // Derived chemistry and in-flight work.
     pub(super) analysis: Option<Analysis>,
     pub(super) busy: bool,
@@ -158,6 +161,8 @@ impl DocumentTab {
             optimization_serial: 0,
             model_job: None,
             model_serial: 0,
+            model_layout: Default::default(),
+            model_morph: None,
             analysis: None,
             busy: false,
             clipboard_busy: false,

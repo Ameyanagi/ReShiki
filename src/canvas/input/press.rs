@@ -65,6 +65,10 @@ impl MoleculeCanvas<'_> {
         if self.tool == Tool::Tilt {
             return self.press_tilt(state, p, point);
         }
+        if let Some(action) = self.press_model_bar(state, point, bounds) {
+            state.last_click = None;
+            return Some(action);
+        }
         if let Tool::StretchBond { fixed, moving } = self.tool {
             return self.press_stretch(state, p, fixed, moving);
         }
@@ -77,6 +81,9 @@ impl MoleculeCanvas<'_> {
         if let Some(action) =
             self.press_transform_handle(state, p, point, bounds, last_transform_click)
         {
+            return Some(action);
+        }
+        if let Some(action) = self.press_turn(state, p, point) {
             return Some(action);
         }
         self.start_gesture(state, p)

@@ -3,7 +3,7 @@
 use super::Draft;
 use crate::canvas::hit::region_selection;
 use crate::canvas::snapping::arrow_endpoint;
-use crate::canvas::{Gesture, MoleculeCanvas, State, Tool, World, pick, tilt};
+use crate::canvas::{Gesture, MoleculeCanvas, State, Tool, World, models3d, pick, tilt};
 use iced::{Point, Rectangle};
 use reshiki::arrows::ArrowHandle;
 use reshiki::graphics::{Graphic, GraphicKind};
@@ -30,6 +30,28 @@ impl MoleculeCanvas<'_> {
                 format!("3D tilt · X {x:+.0}° · Y {y:+.0}° · Shift snaps · Escape cancels"),
                 true,
             ));
+        }
+    }
+
+    /// A 3D model turned by the drag, or morphing in from its drawing.
+    pub(super) fn preview_model(&self, draft: &mut Draft<'_>, state: &State, bounds: Rectangle) {
+        let Draft {
+            preview,
+            template_notice,
+            ..
+        } = draft;
+        if let (Some(Gesture::Turn(turn)), Some(p)) = (&state.gesture, state.cursor) {
+            let point = Point::new(p.x - bounds.x, p.y - bounds.y);
+            models3d::preview_turn(preview.to_mut(), turn, point, state.modifiers.shift());
+            *template_notice = Some((
+                "Drag to rotate · Shift-drag to roll · Double-click to reset".into(),
+                true,
+            ));
+        }
+        if let Some((id, t)) = self.morph(std::time::Instant::now())
+            && let Some(model) = preview.to_mut().models.iter_mut().find(|m| m.contains(id))
+        {
+            model.morph = Some(t);
         }
     }
 
