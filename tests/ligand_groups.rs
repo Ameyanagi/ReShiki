@@ -55,6 +55,17 @@ fn group_label_alignment_survives_native_cdxml_and_cdx_without_changing_atoms() 
             exchange::from_cdx(&exchange::to_cdx(&xml).map_err(anyhow::Error::msg)?)
                 .map_err(anyhow::Error::msg)?,
         ] {
+            // ChemDraw 26 keeps an explicit choice on paste only with the
+            // group node's LabelDisplay (issue #378).
+            let tree = roxmltree::Document::parse(&encoded)?;
+            let group = tree
+                .descendants()
+                .find(|n| n.attribute("NodeType") == Some("Fragment"))
+                .ok_or_else(|| anyhow::anyhow!("group node"))?;
+            assert_eq!(
+                group.attribute("LabelDisplay"),
+                (!alignment.is_auto()).then(|| alignment.cdxml())
+            );
             let restored = reshiki::chemistry::cdxml::import_cdxml(&encoded)?.document;
             assert_eq!(
                 restored.abbreviations.first().map(|g| g.alignment),

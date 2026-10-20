@@ -384,7 +384,11 @@ fn flush_label_attachment_round_trips_as_chemdraw_justification() {
         (LabelAttachment::Character(1), None, LabelAttachment::Auto),
     ] {
         let mut document = dummy("MeO");
-        document.atoms.first_mut().unwrap().display.label_attachment = attachment;
+        let display = &mut document.atoms.first_mut().unwrap().display;
+        display.label_attachment = attachment;
+        // A ChemDraw import stores its LabelDisplay as the hydrogen side; a
+        // later Automatic choice must not export that stale flush side.
+        display.hydrogen_position = crate::atom_labels::HydrogenPosition::Left;
         let (xml, _) = super::super::write_clipboard(&document).unwrap();
         let decoded = crate::exchange::from_cdx(&crate::exchange::to_cdx(&xml).unwrap()).unwrap();
         for xml in [&xml, &decoded] {
@@ -394,10 +398,35 @@ fn flush_label_attachment_round_trips_as_chemdraw_justification() {
                 .find(|node| node.has_tag_name("t"))
                 .unwrap();
             assert_eq!(text.attribute("LabelJustification"), justification);
+            // ChemDraw 26 keeps the flush choice only with the node's
+            // LabelDisplay; otherwise paste lays the label out automatically.
+            assert_eq!(
+                text.parent().unwrap().attribute("LabelDisplay"),
+                Some(justification.unwrap_or("Auto"))
+            );
+            assert_eq!(text.attribute("Justification"), None);
+            assert_eq!(text.attribute("LabelAlignment"), None);
             let restored_doc = import_variable(xml);
             let atom = restored_doc.atoms.first().unwrap();
             assert_eq!(atom.display.variable.as_deref(), Some("MeO"));
             assert_eq!(atom.display.label_attachment, restored, "{attachment}");
         }
     }
+}
+
+#[test]
+fn label_justification_outranks_other_chemdraw_alignment_tags() {
+    use crate::atom_labels::LabelAttachment;
+    let mut document = dummy("MeO");
+    document.atoms.first_mut().unwrap().display.label_attachment = LabelAttachment::Left;
+    let (xml, _) = super::super::write_clipboard(&document).unwrap();
+    let xml = xml
+        .replace(
+            "LabelJustification=\"Left\"",
+            "LabelJustification=\"Left\" LabelAlignment=\"Right\"",
+        )
+        .replace("LabelDisplay=\"Left\"", "LabelDisplay=\"Right\"");
+    assert!(xml.contains("LabelAlignment=\"Right\"") && xml.contains("LabelDisplay=\"Right\""));
+    let atom = import_variable(&xml).atoms.first().unwrap().clone();
+    assert_eq!(atom.display.label_attachment, LabelAttachment::Left);
 }
