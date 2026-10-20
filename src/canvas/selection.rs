@@ -38,6 +38,11 @@ pub(super) struct SelectionBox {
     pub pivot: World,
     camera: Camera,
     bounds: Rectangle,
+    /// Models shown in 3D or beside their drawing do not resize yet.
+    resizable: bool,
+    /// A selection of only molecules shown as 3D models has no rotation
+    /// handle: rotating would turn just their hidden 2D drawing.
+    rotatable: bool,
 }
 
 impl SelectionBox {
@@ -49,12 +54,18 @@ impl SelectionBox {
             return None;
         }
         let (lo, hi) = scene::selection_bounds(doc, ids)?;
+        // Rotation turns only what is drawn, about its own centre.
+        let drawn = reshiki::models3d::without_hidden(doc, ids);
+        let turning = if drawn.is_empty() { ids } else { &drawn };
         Some(Self {
             corners: [lo, World::new(hi.x, lo.y), hi, World::new(lo.x, hi.y)],
             // Derived centroid markers still have a box even without a rotation site.
-            pivot: editing::rotation_center(doc, ids).unwrap_or_else(|| editing::center(doc, ids)),
+            pivot: editing::rotation_center(doc, turning)
+                .unwrap_or_else(|| editing::center(doc, turning)),
             camera,
             bounds,
+            resizable: !reshiki::models3d::shows_3d(doc, ids),
+            rotatable: !drawn.is_empty(),
         })
     }
 
@@ -108,6 +119,9 @@ impl SelectionBox {
     }
 
     fn edge_enabled(self, edge: usize) -> bool {
+        if !self.resizable {
+            return false;
+        }
         let [a, _, c, _] = self.corners;
         let width = (c.x - a.x).abs();
         let height = (c.y - a.y).abs();
@@ -119,12 +133,12 @@ impl SelectionBox {
     }
 
     pub fn hit(self, p: Point) -> Option<Handle> {
-        if p.distance(self.rotation_grip()) < 10.0 {
+        if self.rotatable && p.distance(self.rotation_grip()) < 10.0 {
             return Some(Handle::Rotate);
         }
         self.grips()
             .iter()
-            .position(|q| (p.x - q.x).abs() < 8.0 && (p.y - q.y).abs() < 8.0)
+            .position(|q| self.resizable && (p.x - q.x).abs() < 8.0 && (p.y - q.y).abs() < 8.0)
             .map(Handle::Resize)
             .or_else(|| {
                 self.edge_grips()
@@ -157,7 +171,7 @@ impl SelectionBox {
         });
         let stroke = Stroke::default().with_width(1.2).with_color(ACCENT);
         frame.stroke(&outline, stroke);
-        for p in corners {
+        for p in corners.into_iter().filter(|_| self.resizable) {
             let handle = Path::rectangle(Point::new(p.x - 4.0, p.y - 4.0), Size::new(8.0, 8.0));
             frame.fill(&handle, Color::WHITE);
             frame.stroke(&handle, stroke);
@@ -169,6 +183,9 @@ impl SelectionBox {
                 frame.fill(&handle, Color::WHITE);
                 frame.stroke(&handle, stroke);
             }
+        }
+        if !self.rotatable {
+            return;
         }
         let top = Point::new(
             (corners[0].x + corners[1].x) / 2.0,
@@ -311,7 +328,9 @@ impl TransformDrag {
             };
             editing::scale_axes_about(doc, &self.ids, self.pivot, x, y);
         } else {
-            editing::transform_about(doc, &self.ids, self.pivot, scale, rotation);
+            // A molecule shown only in 3D keeps its hidden drawing, as on commit.
+            let ids = reshiki::models3d::without_hidden(doc, &self.ids);
+            editing::transform_about(doc, &ids, self.pivot, scale, rotation);
         }
     }
 

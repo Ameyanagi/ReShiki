@@ -123,3 +123,30 @@ fn pointer_handoff_requires_motion_or_click_and_opt_out_survives_tool_suspension
         "File epoch changes must not undo the explicit preference"
     );
 }
+
+#[test]
+fn atoms_shown_as_a_3d_model_are_not_keyboard_targets() {
+    use crate::models3d::{Display, ForceField, Model3d, Placed, set_display};
+    let (mut doc, a, b, c) = chain();
+    let methane = doc.add_atom("C", Point::new(200., 0.));
+    let atoms = [(a, [-1., 0., 0.]), (b, [0., 0.5, 0.]), (c, [1., 0., 0.])]
+        .map(|(id, xyz)| Placed { id, xyz })
+        .to_vec();
+    let model = Model3d::new(&doc, atoms, vec![], ForceField::Mmff94s);
+    doc.models.push(model);
+    let blank = Target::Blank(Point::new(-50., 0.));
+    assert!(set_display(&mut doc, 0, Display::ThreeD));
+    assert_eq!(
+        navigate(&doc, blank, Direction::Right, false),
+        Some(Target::Atom(methane))
+    );
+    let mut drawing = State::default();
+    drawing.enter(&doc, &[a], Point::new(0., 0.), 0);
+    assert_eq!(drawing.target(), Target::Atom(methane));
+
+    assert!(set_display(&mut doc, 0, Display::Both));
+    assert_eq!(
+        navigate(&doc, blank, Direction::Right, false),
+        Some(Target::Atom(a))
+    );
+}

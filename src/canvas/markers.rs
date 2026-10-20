@@ -68,7 +68,7 @@ impl Markers {
                 .bonds
                 .iter()
                 .filter(|bond| selected.contains(&bond.a) && selected.contains(&bond.b))
-                .filter(|bond| doc.bond_visible(bond.a, bond.b))
+                .filter(|bond| doc.bond_drawn(bond.a, bond.b))
                 .filter_map(|bond| {
                     Some((atoms.get(&bond.a)?.position, atoms.get(&bond.b)?.position))
                 })
@@ -76,7 +76,7 @@ impl Markers {
             // Preserve selection order, including its behavior for repeated IDs.
             atoms: ids
                 .iter()
-                .filter(|id| !hidden.contains(id))
+                .filter(|id| !hidden.contains(id) && !reshiki::models3d::hides(doc, **id))
                 .filter_map(|id| atoms.get(id).map(|atom| (*id, atom.position)))
                 .collect(),
             captions: doc

@@ -114,6 +114,67 @@ fn draw_primitives_with_opacity(
             Primitive::Halo { radius, primitives } => {
                 draw_halo(frame, primitives, camera, bounds, *radius)
             }
+            Primitive::Sphere {
+                center,
+                radius,
+                focal,
+                stops,
+                outline,
+            } => {
+                // Iced has no radial gradient; nested discs reproduce it.
+                let steps = (radius * camera.zoom / 1.5).clamp(8., 32.) as usize;
+                for (c, r, color) in
+                    reshiki::models3d::sphere_discs(*center, *radius, *focal, stops, steps)
+                {
+                    frame.fill_exact(
+                        &Path::circle(camera.screen(c, bounds), r * camera.zoom),
+                        alpha(rgb(color)),
+                    );
+                }
+                if let Some(o) = outline {
+                    frame.stroke_exact(
+                        &Path::circle(camera.screen(*center, bounds), radius * camera.zoom),
+                        outline_stroke(o, camera, alpha),
+                    );
+                }
+            }
+            Primitive::ShadedQuad {
+                corners,
+                from,
+                to,
+                stops,
+                outline,
+            } => {
+                let [a, b, c, d] = corners.map(|p| camera.screen(p, bounds));
+                let gradient = stops.iter().fold(
+                    canvas::gradient::Linear::new(
+                        camera.screen(*from, bounds),
+                        camera.screen(*to, bounds),
+                    ),
+                    |gradient, (offset, color)| gradient.add_stop(*offset, alpha(rgb(*color))),
+                );
+                frame.fill_exact(
+                    &Path::new(|p| {
+                        p.move_to(a);
+                        p.line_to(b);
+                        p.line_to(c);
+                        p.line_to(d);
+                        p.close();
+                    }),
+                    canvas::Fill::from(canvas::Gradient::from(gradient)),
+                );
+                if let Some(o) = outline {
+                    frame.stroke_exact(
+                        &Path::new(|p| {
+                            p.move_to(a);
+                            p.line_to(b);
+                            p.move_to(d);
+                            p.line_to(c);
+                        }),
+                        outline_stroke(o, camera, alpha),
+                    );
+                }
+            }
             Primitive::Line(a, b, width) => frame.stroke(
                 &Path::line(camera.screen(*a, bounds), camera.screen(*b, bounds)),
                 Stroke::default()
@@ -263,9 +324,25 @@ fn draw_halo(
                     frame.stroke(&path, spread(0.));
                 }
             }
-            Primitive::Picture(_) | Primitive::Halo { .. } => {}
+            Primitive::Picture(_)
+            | Primitive::Halo { .. }
+            | Primitive::Sphere { .. }
+            | Primitive::ShadedQuad { .. } => {}
         }
     }
+}
+
+fn outline_stroke(
+    outline: &reshiki::scene::Outline,
+    camera: Camera,
+    alpha: impl Fn(Color) -> Color,
+) -> Stroke<'static> {
+    Stroke::default()
+        .with_width(outline.width * camera.zoom)
+        .with_color(alpha(Color {
+            a: outline.alpha,
+            ..rgb(outline.color)
+        }))
 }
 
 fn world_path(commands: &[PathCommand], camera: Camera, bounds: Rectangle) -> Path {

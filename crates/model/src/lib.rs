@@ -44,6 +44,7 @@ pub mod haworth;
 pub mod highlights;
 pub mod joining;
 pub mod ligands;
+pub mod models3d;
 pub mod molecule_names;
 pub mod pages;
 pub mod palette;

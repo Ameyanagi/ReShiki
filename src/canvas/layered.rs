@@ -197,6 +197,13 @@ impl<'a> Frame<'a> {
         fill.style = self.display_style(fill.style);
         self.current.fill(path, fill);
     }
+    /// Exact colors that no canvas theme changes, such as 3D-model shading.
+    pub fn fill_exact(&mut self, path: &canvas::Path, fill: impl Into<canvas::Fill>) {
+        self.current.fill(path, fill);
+    }
+    pub fn stroke_exact<'s>(&mut self, path: &canvas::Path, stroke: impl Into<canvas::Stroke<'s>>) {
+        self.current.stroke(path, stroke);
+    }
     pub fn fill_rectangle(&mut self, at: iced::Point, size: Size, fill: impl Into<canvas::Fill>) {
         let mut fill = fill.into();
         fill.style = self.display_style(fill.style);

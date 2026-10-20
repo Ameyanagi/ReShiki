@@ -102,8 +102,39 @@ impl App {
         self.tool = Tool::Select;
     }
     pub(super) fn transform_selection(&mut self, transform: reshiki::editing::Transform) {
+        if let editing::Transform::TiltX(_) | editing::Transform::TiltY(_) = transform
+            && let Some(reason) = crate::canvas::tilt::refusal(&self.tab.doc, &self.tab.selected)
+        {
+            self.status = reason.into();
+            self.error = true;
+            return;
+        }
+        // Mixed selections rotate and flip what is drawn; molecules shown only
+        // in 3D keep their hidden drawing. Tilt sorts its atoms itself.
+        let ids = match transform {
+            editing::Transform::TiltX(_) | editing::Transform::TiltY(_) => {
+                self.tab.selected.clone()
+            }
+            editing::Transform::Rotate(_)
+            | editing::Transform::FlipHorizontal
+            | editing::Transform::FlipVertical => {
+                let verb = if let editing::Transform::Rotate(_) = transform {
+                    "rotate"
+                } else {
+                    "flip"
+                };
+                if let Some(reason) =
+                    reshiki::models3d::refusal(&self.tab.doc, &self.tab.selected, verb)
+                {
+                    self.status = reason;
+                    self.error = true;
+                    return;
+                }
+                reshiki::models3d::without_hidden(&self.tab.doc, &self.tab.selected)
+            }
+        };
         let before = self.tab.doc.clone();
-        editing::transform(&mut self.tab.doc, &self.tab.selected, transform);
+        editing::transform(&mut self.tab.doc, &ids, transform);
         self.changed(before);
     }
     pub(super) fn arrange_selection(&mut self, arrange: reshiki::editing::Arrange) {

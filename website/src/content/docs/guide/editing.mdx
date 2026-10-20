@@ -43,6 +43,18 @@ To fade the bonds behind the front face of a 3D molecule such as C60, open **Pro
 
 **3D optimize…** (**⌘/Ctrl+Shift+D**) builds a 3D shape for one molecule and shows a preview before you apply it. The largest molecule it accepts depends on free memory, from about 128 to 640 atoms.
 
+### Show a molecule as a 3D model
+
+Select a molecule and open **Properties → Structure**, or right-click it and choose **Show as**:
+
+- **3D** replaces the drawing with a ball & stick model.
+- **Both** puts the model beside the drawing.
+- **2D** shows the drawing again.
+
+The first switch generates the model with the same method as **3D optimize…** (ETKDG, then MMFF94s); later switches reuse it. Each switch is one Undo step. The chemistry, atom IDs and your 2D layout never change. Click the model to select its molecule; it then moves, aligns and copies with it. Rotating, flipping, tilting, resizing, cleaning up or joining a molecule shown as **3D** would change its hidden drawing, so ReShiki asks you to switch to 2D first; in a mixed selection only the other objects turn. Editing the molecule's chemistry removes the model and shows the drawing again.
+
+A `.rsk` file keeps the model. PNG, SVG and PDF show it as vector shapes. MOL, CDX/CDXML and SMILES contain the 2D structure only. Files saved by this version need this version or later to open.
+
 ## Keep related objects together
 
 Select a molecule and its caption, then **Group** (**⌘/Ctrl+G**). Use **Shift+⌘/Ctrl+G** to ungroup.

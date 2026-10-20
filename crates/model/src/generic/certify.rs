@@ -151,6 +151,7 @@ pub(super) fn certify_translation(
         graphics,
         groups,
         reactions,
+        models,
         recent_colors: _,
     } = &mut restored;
     for (actual, old) in atoms.iter_mut().zip(&source.atoms) {
@@ -272,6 +273,9 @@ pub(super) fn certify_translation(
         for id in &mut n.atoms {
             undo(id)?;
         }
+    }
+    for m in models {
+        m.remap(&inverse).ok_or("Missing 3D model remap")?;
     }
     *depth_appearance = crate::depth_appearance::remap(depth_appearance, &inverse);
     generic.remap(&inverse).ok_or("Missing generic remap")?;

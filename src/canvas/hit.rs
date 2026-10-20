@@ -37,7 +37,9 @@ fn hit_selection_with_object(
     object: impl FnOnce() -> Option<u64>,
 ) -> Vec<u64> {
     if let Some(i) = reshiki::atom_labels::indicators(doc).into_iter().find(|i| {
-        (p.x - i.center.x).abs() < i.width / 2. + r && (p.y - i.center.y).abs() < i.height / 2. + r
+        i.owner.drawn(doc)
+            && (p.x - i.center.x).abs() < i.width / 2. + r
+            && (p.y - i.center.y).abs() < i.height / 2. + r
     }) {
         return match i.owner {
             reshiki::atom_labels::Owner::Number(id)
@@ -48,13 +50,26 @@ fn hit_selection_with_object(
             reshiki::atom_labels::Owner::BondStereo(a, b) => vec![a, b],
         };
     }
-    if let Some(id) = object() {
+    let object = object();
+    // A 3D model selects its whole molecule. It is painted above molecules and
+    // background graphics, below arrows, text and foreground graphics.
+    if let Some(atoms) = reshiki::models3d::frame_hit(doc, p)
+        && !object.is_some_and(|id| above_models(doc, id))
+    {
+        return atoms;
+    }
+    if let Some(id) = object {
         return vec![id];
     }
     reshiki::editing::nearest_bond(doc, p, r * 0.7)
         .and_then(|i| doc.bonds.get(i))
         .map(|b| vec![b.a, b.b])
         .unwrap_or_default()
+}
+fn above_models(doc: &Document, id: u64) -> bool {
+    doc.arrows.iter().any(|a| a.id == id)
+        || doc.annotations.iter().any(|a| a.id == id)
+        || doc.graphics.iter().any(|g| g.id == id && g.layer >= 0)
 }
 /// Use the same attachment resolution for the drag preview and committed bond.
 /// Excluding the source lets short drags grow a bond rather than snap to themselves.
@@ -103,7 +118,7 @@ fn bond_targets(
         doc.atoms
             .iter()
             .filter(|a| {
-                doc.atom_visible(a.id)
+                doc.atom_drawn(a.id)
                     && Some(a.id) != source
                     && a.position.distance(p) < radius
                     && !origin.is_some_and(|o| {
@@ -189,7 +204,7 @@ fn hit_object_with_orbital(
             .iter()
             .rev()
             .find(|a| {
-                doc.atom_visible(a.id)
+                doc.atom_drawn(a.id)
                     && reshiki::scientific::styled_mark_parts(a, &doc.drawing_style)
                         .iter()
                         .any(|part| {

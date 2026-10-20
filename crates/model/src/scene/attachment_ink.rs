@@ -38,7 +38,7 @@ impl<'a> AttachmentInk<'a> {
         self.doc.atom(id).is_some_and(|atom| self.vertex(atom))
     }
     fn vertex(&self, atom: &Atom) -> bool {
-        if !self.doc.atom_visible(atom.id) {
+        if !self.doc.atom_drawn(atom.id) {
             return false;
         }
         if self.opacity().is_none_or(|paint| paint.atom(atom.id) > 0.) {
@@ -68,7 +68,7 @@ impl<'a> AttachmentInk<'a> {
         bonds.iter().any(|&(index, t)| self.bond(index, t))
     }
     pub(crate) fn mark(&self, id: u64) -> bool {
-        self.doc.atom_visible(id) && self.opacity().is_none_or(|paint| paint.atom(id) > 0.)
+        self.doc.atom_drawn(id) && self.opacity().is_none_or(|paint| paint.atom(id) > 0.)
     }
     pub(crate) fn segment(&self, bond: &Bond) -> Option<(Point, Point)> {
         bond_segment(self.doc, bond, self.opacity())
@@ -78,7 +78,7 @@ impl<'a> AttachmentInk<'a> {
             .atoms
             .iter()
             .rev()
-            .filter(|a| self.doc.atom_visible(a.id))
+            .filter(|a| self.doc.atom_drawn(a.id))
             .find_map(|a| {
                 (atom_label_ink_boxes(a, self.doc)
                     .into_iter()
@@ -107,7 +107,7 @@ impl<'a> AttachmentInk<'a> {
         let Some(bond) = self.doc.bonds.get(index) else {
             return false;
         };
-        if !self.doc.bond_visible(bond.a, bond.b)
+        if !self.doc.bond_drawn(bond.a, bond.b)
             || !fraction.is_finite()
             || !(0.0..=1.).contains(&fraction)
         {
@@ -164,7 +164,7 @@ fn rendered_bond_parts(
         .map(|(index, bond)| {
             let mut parts = Vec::new();
             let mut joined = Default::default();
-            if doc.bond_visible(bond.a, bond.b) {
+            if doc.bond_drawn(bond.a, bond.b) {
                 push_bond(scene, &mut parts, &mut joined, index, bond, None);
                 push_joined_outlines(&mut parts, joined);
             }
@@ -211,7 +211,11 @@ fn intersects_fraction(part: &Primitive, origin: Point, axis: Point, at: f32) ->
                         && path.windows(2).any(|line| range(line, style.width() * 0.5)))
             })
         }
-        Primitive::Picture(_) | Primitive::Text { .. } | Primitive::Halo { .. } => false,
+        Primitive::Picture(_)
+        | Primitive::Text { .. }
+        | Primitive::Halo { .. }
+        | Primitive::Sphere { .. }
+        | Primitive::ShadedQuad { .. } => false,
     }
 }
 

@@ -488,3 +488,69 @@ fn authoritative_unspecified_bond_rejects_neighbor_direction_leak() {
     assert!(prepared.state.metadata.bonds[3].stereo > 1);
     assert!(prepared.state.metadata.bonds[1].stereo_atoms.is_empty());
 }
+
+#[test]
+fn a_model_keeps_drawing_ids_and_parents_its_force_field_hydrogens() {
+    let mut doc = ethanol();
+    let methane = doc.add_atom("C", Point::new(400., 100.));
+    // Another molecule's model must not stop this one being prepared.
+    let other = Prepared::new(&doc, &[methane]).unwrap();
+    let mut placed = other.model(&optimized(&other, vec![0])).unwrap();
+    placed.display = crate::models3d::Display::ThreeD;
+    doc.models.push(placed);
+    doc.require_version(crate::document::MODELS_3D);
+    doc.atom_mut(41).unwrap().depth = 30.;
+
+    let prepared = Prepared::new(&doc, &[3]).unwrap();
+    let model = prepared.model(&optimized(&prepared, vec![0, 2])).unwrap();
+    let ids = prepared.ids();
+    assert_eq!(model.atoms.iter().map(|a| a.id).collect::<Vec<_>>(), ids);
+    assert_eq!(
+        model.hydrogens.iter().map(|h| h.parent).collect::<Vec<_>>(),
+        [ids[0], ids[2]]
+    );
+    assert_eq!(model.atoms[1].xyz, [1.5, 0., 0.]);
+    assert_eq!(model.force_field, crate::models3d::ForceField::Mmff94s);
+    // The drawing keeps its 2D atoms; only the model holds the conformer.
+    assert_eq!(prepared.source().atoms, doc.atoms);
+    // Generation for a model embeds afresh instead of reusing drawn depth.
+    let request = |prepared: &Prepared| {
+        prepared
+            .native_request(
+                ForceField::default(),
+                reshiki_geometry::Operation::Generate,
+                None,
+                &[],
+                1,
+            )
+            .unwrap()
+            .coordinates
+    };
+    assert!(!request(&prepared).is_empty());
+    assert!(request(&prepared.clone().without_retained_depth()).is_empty());
+}
+
+/// Original atoms along x, then one hydrogen per entry of `parents`.
+fn optimized(prepared: &Prepared, parents: Vec<usize>) -> Optimized {
+    let n = prepared.ids().len();
+    Optimized {
+        conformer: Conformer {
+            positions: (0..n + parents.len())
+                .map(|i| Point3 {
+                    x: i as f64 * 1.5,
+                    y: 0.,
+                    z: 0.,
+                })
+                .collect(),
+            original_atom_count: n,
+            hydrogen_parents: parents,
+        },
+        initial_energy: 1.,
+        energy: 1.,
+        gradient: None,
+        converged: true,
+        iterations: 1,
+        force_field: ForceField::Mmff94s,
+        diagnostics: vec![],
+    }
+}

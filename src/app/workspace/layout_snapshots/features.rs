@@ -1,7 +1,7 @@
 //! Snapshot scenes for the UI surfaces added after the maintainability
 //! refactor (40c8d82a): NMR, names, atom maps, generic structures, Join and
 //! coordination, pen paths, mechanism arrows, reference geometry, rear
-//! opacity, porphine and the Assistant setup guide.
+//! opacity, 3D models, porphine and the Assistant setup guide.
 //!
 //! Unlike [`super::STATES`], a scene may finish background work (NMR
 //! prediction, local naming, auto-mapping, expansion) the way the event loop
@@ -11,8 +11,8 @@
 //! an empty directory so saved templates and drafts do not appear.
 use super::*;
 use crate::app::{
-    assistant, depth_appearance, generic, graphics, import, inspector, joining, naming, nmr,
-    reaction_mapping, shortcuts, template_library,
+    assistant, depth_appearance, generic, graphics, import, inspector, joining, models3d, naming,
+    nmr, reaction_mapping, shortcuts, template_library,
 };
 use reshiki::nmr::Nucleus;
 use std::cell::Cell;
@@ -645,6 +645,35 @@ fn rear_opacity(app: &mut App, _: &Driver<'_>) {
     ));
 }
 
+/// Adamantane shown as its drawing and a ball & stick model, with the
+/// Structure section. The conformer is the fixture's projected 3D geometry.
+fn structure_both(app: &mut App, _: &Driver<'_>) {
+    show(
+        app,
+        fixture(include_bytes!(
+            "../../../../tests/fixtures/geometry/adamantane-projection.rsk"
+        )),
+        1.4,
+        -120.,
+    );
+    select_all(app);
+    let _ = app.update(Message::Models3d(models3d::Action::Show(
+        reshiki::models3d::Display::Both,
+    )));
+    let units = f64::from(app.tab.doc.drawing_style.bond_length_world) / 1.5;
+    let positions = app
+        .model_atoms()
+        .iter()
+        .filter_map(|id| app.tab.doc.atom(*id))
+        .map(|a| reshiki::geometry::Point3 {
+            x: f64::from(a.position.x) / units,
+            y: -f64::from(a.position.y) / units,
+            z: f64::from(a.depth) / units,
+        })
+        .collect();
+    let _ = app.finish_model(positions, vec![]);
+}
+
 /// Free-base porphine placed, and found by searching the template library.
 fn porphine(app: &mut App, _: &Driver<'_>) {
     let template = reshiki::templates::LIBRARY
@@ -831,7 +860,7 @@ fn bond_from_text(app: &mut App, _: &Driver<'_>) {
     }));
 }
 
-pub(in crate::app::workspace) const STATES: [(&str, Scene); 40] = [
+pub(in crate::app::workspace) const STATES: [(&str, Scene); 41] = [
     ("nmr-proton", nmr_proton),
     ("nmr-carbon-labels", nmr_carbon_labels),
     ("nmr-label-menu", nmr_label_menu),
@@ -863,6 +892,7 @@ pub(in crate::app::workspace) const STATES: [(&str, Scene); 40] = [
     ("stretch-tool", stretch_tool),
     ("orbital-snap", orbital_snap),
     ("rear-opacity", rear_opacity),
+    ("structure-both", structure_both),
     ("porphine", porphine),
     ("export-office-svg", export_office_svg),
     ("assistant-install", assistant_install),

@@ -264,3 +264,66 @@ fn rotation_readout_shows_the_applied_angle_and_the_step_keys() {
     };
     assert!(hint.ends_with(keys), "{hint}");
 }
+
+#[test]
+fn a_shown_model_has_no_resize_handles_and_one_shown_only_in_3d_no_rotation_handle() {
+    use reshiki::models3d::{Display, ForceField, Model3d, Placed};
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", World::new(-20., -10.));
+    let b = doc.add_atom("C", World::new(20., 10.));
+    doc.add_bond(a, b, 1, "plain");
+    let placed = [(a, [-0.75, 0., 0.]), (b, [0.75, 0., 0.])]
+        .map(|(id, xyz)| Placed { id, xyz })
+        .to_vec();
+    doc.models
+        .push(Model3d::new(&doc, placed, vec![], ForceField::Mmff94s));
+    doc.require_version(reshiki::document::MODELS_3D);
+    let camera = Camera::default();
+    let bounds = Rectangle::new(Point::ORIGIN, Size::new(400., 300.));
+    for (display, resizable, rotatable) in [
+        (Display::TwoD, true, true),
+        (Display::Both, false, true),
+        (Display::ThreeD, false, false),
+    ] {
+        reshiki::models3d::set_display(&mut doc, 0, display);
+        let selection = SelectionBox::new(&doc, &[a, b], camera, bounds).unwrap();
+        let grip = selection.grips()[0];
+        assert_eq!(selection.hit(grip) == Some(Handle::Resize(0)), resizable);
+        assert!((0..4).all(|i| selection.edge_enabled(i) == resizable));
+        assert_eq!(
+            selection.hit(selection.rotation_grip()) == Some(Handle::Rotate),
+            rotatable
+        );
+    }
+}
+
+#[test]
+fn rotating_a_mixed_selection_previews_only_the_drawing_turning() {
+    let (doc, molecule, drawn) = crate::canvas::tilt::shown(reshiki::models3d::Display::ThreeD);
+    let ids = [molecule, drawn].concat();
+    let camera = Camera::default();
+    let bounds = Rectangle::new(Point::ORIGIN, Size::new(400., 300.));
+    let selection = SelectionBox::new(&doc, &ids, camera, bounds).unwrap();
+    // The pivot is the drawn pair's centre, not the hidden drawing's.
+    assert_eq!(selection.pivot, World::new(220., 7.5));
+    let start = camera.world(selection.rotation_grip(), bounds);
+    assert_eq!(
+        selection.hit(selection.rotation_grip()),
+        Some(Handle::Rotate)
+    );
+    let drag = TransformDrag::new(selection, Handle::Rotate, start, &ids);
+    let end = start.offset(60., 40.);
+    let mut preview = doc.clone();
+    drag.apply(&mut preview, end, false);
+    for id in molecule {
+        assert_eq!(preview.atom(id), doc.atom(id));
+    }
+    for id in drawn {
+        assert_ne!(preview.atom(id), doc.atom(id));
+    }
+    // The commit keeps the whole selection; the app turns only the drawing.
+    let super::super::Edit::Transform { ids: committed, .. } = drag.into_edit(end, false) else {
+        panic!("a rotation commits a transform");
+    };
+    assert_eq!(committed, ids);
+}

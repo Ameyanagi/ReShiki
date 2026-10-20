@@ -1,0 +1,799 @@
+use super::*;
+use crate::document::{History, MODELS_3D, VERSION};
+use crate::{editing, scene, transaction};
+
+/// Ethanol (C–C–O) and a separate methane, with a fixed conformer for ethanol.
+fn drawing() -> (Document, Vec<u64>, u64) {
+    let mut doc = Document::default();
+    let c1 = doc.add_atom("C", Point::new(0., 0.));
+    let c2 = doc.add_atom("C", Point::new(36., -21.));
+    let o = doc.add_atom("O", Point::new(72., 0.));
+    doc.add_bond(c1, c2, 1, "plain");
+    doc.add_bond(c2, o, 1, "plain");
+    let methane = doc.add_atom("C", Point::new(200., 0.));
+    let atoms = vec![
+        Placed {
+            id: c1,
+            xyz: [-1.2, -0.2, 0.1],
+        },
+        Placed {
+            id: c2,
+            xyz: [0.1, 0.5, -0.1],
+        },
+        Placed {
+            id: o,
+            xyz: [1.2, -0.3, 0.2],
+        },
+    ];
+    let hydrogens = vec![
+        Hydrogen {
+            parent: c1,
+            xyz: [-2.0, 0.4, 0.5],
+        },
+        Hydrogen {
+            parent: o,
+            xyz: [1.9, 0.3, 0.1],
+        },
+    ];
+    let model = Model3d::new(&doc, atoms, hydrogens, ForceField::Mmff94s);
+    doc.models.push(model);
+    doc.require_version(MODELS_3D);
+    (doc, vec![c1, c2, o], methane)
+}
+
+fn shown(display: Display) -> (Document, Vec<u64>, u64) {
+    let (mut doc, atoms, methane) = drawing();
+    assert!(set_display(&mut doc, 0, display));
+    (doc, atoms, methane)
+}
+
+fn commit(doc: &mut Document, before: Document) {
+    transaction::apply(doc, &mut History::default(), before, false).unwrap();
+}
+
+#[test]
+fn native_files_round_trip_models_and_omit_the_key_without_one() {
+    let (doc, ..) = shown(Display::Both);
+    let bytes = doc.file_json().unwrap();
+    let read = Document::from_json(&bytes).unwrap();
+    assert_eq!(read.version, VERSION);
+    assert_eq!(read.models, doc.models);
+    assert_eq!(read.file_json().unwrap(), bytes);
+
+    let mut plain = doc.clone();
+    plain.models.clear();
+    let json: serde_json::Value = serde_json::from_slice(&plain.file_json().unwrap()).unwrap();
+    assert!(json.get("models").is_none());
+    assert_eq!(json["version"], VERSION);
+}
+
+#[test]
+fn validation_rejects_malformed_models_and_older_versions() {
+    let (doc, atoms, methane) = drawing();
+    doc.validate().unwrap();
+    let broken: [&dyn Fn(&mut Document); 7] = [
+        &|d| d.version = MODELS_3D - 1,
+        &|d| d.models[0].rotation = [0.5, 0., 0., 0.],
+        &|d| d.models[0].atoms[0].xyz[1] = f32::NAN,
+        &|d| d.models[0].hydrogens[0].parent = methane,
+        &|d| {
+            let first = d.models[0].atoms[0];
+            d.models[0].atoms.push(first);
+        },
+        &|d| d.models[0].size = 0.,
+        &|d| d.models[0].depth_fade = 2.,
+    ];
+    for (i, edit) in broken.iter().enumerate() {
+        let mut bad = doc.clone();
+        edit(&mut bad);
+        assert!(bad.validate().is_err(), "case {i}");
+    }
+    let mut twice = doc.clone();
+    twice.models.push(twice.models[0].clone());
+    assert!(twice.validate().is_err(), "an atom in two models");
+    // Raw serde paths keep the version check.
+    let mut old = serde_json::to_value(&doc).unwrap();
+    old["version"] = (MODELS_3D - 1).into();
+    assert!(Document::from_json(&serde_json::to_vec(&old).unwrap()).is_err());
+    assert_eq!(atoms.len(), doc.models[0].atoms.len());
+}
+
+#[test]
+fn deleting_an_atom_drops_the_model_but_other_edits_keep_it() {
+    let (doc, atoms, methane) = shown(Display::ThreeD);
+    let mut other = doc.clone();
+    other.delete(&[methane]);
+    assert_eq!(other.models, doc.models);
+    let mut cut = doc.clone();
+    cut.delete(&[atoms[2]]);
+    assert!(cut.models.is_empty());
+    cut.validate().unwrap();
+
+    // Moving the molecule carries the frame with it.
+    let mut moved = doc.clone();
+    let before = moved.clone();
+    let (lo, _) = frame(&moved, &moved.models[0]).unwrap();
+    moved.translate(&atoms, 10., 5.);
+    commit(&mut moved, before);
+    assert_eq!(moved.models, doc.models);
+    let (after, _) = frame(&moved, &moved.models[0]).unwrap();
+    assert!((after.x - lo.x - 10.).abs() < 1e-3 && (after.y - lo.y - 5.).abs() < 1e-3);
+}
+
+#[test]
+fn chemical_edits_and_joined_components_drop_the_model() {
+    let (doc, atoms, methane) = shown(Display::Both);
+    let mut element = doc.clone();
+    let before = element.clone();
+    element.atom_mut(atoms[2]).unwrap().element = "N".into();
+    commit(&mut element, before);
+    assert!(element.models.is_empty());
+
+    let mut joined = doc.clone();
+    let before = joined.clone();
+    joined.add_bond(atoms[2], methane, 1, "plain");
+    commit(&mut joined, before);
+    assert!(joined.models.is_empty());
+
+    let mut order = doc.clone();
+    let before = order.clone();
+    order.bonds[0].order = 2;
+    commit(&mut order, before);
+    assert!(order.models.is_empty());
+
+    // Presentation is not chemistry.
+    let mut color = doc.clone();
+    let before = color.clone();
+    color.bonds[0].color = crate::palette::Color::Custom([200, 0, 0]);
+    commit(&mut color, before);
+    assert_eq!(color.models, doc.models);
+}
+
+#[test]
+fn copy_and_paste_remap_the_model_with_its_molecule() {
+    let (doc, atoms, methane) = shown(Display::ThreeD);
+    let part = editing::selection(&doc, &atoms);
+    assert_eq!(part.models, doc.models);
+    assert!(editing::selection(&doc, &atoms[..2]).models.is_empty());
+    assert!(editing::selection(&doc, &[methane]).models.is_empty());
+
+    let mut pasted = doc.clone();
+    let ids = editing::append(&mut pasted, &part, Point::new(0., 120.));
+    assert_eq!(pasted.models.len(), 2);
+    let copy = &pasted.models[1];
+    assert!(copy.atoms.iter().all(|a| ids.contains(&a.id)));
+    assert!(copy.hydrogens.iter().all(|h| copy.contains(h.parent)));
+    assert_eq!(copy.rotation, doc.models[0].rotation);
+    pasted.validate().unwrap();
+
+    // A drawing that never had a model gains one at the model version.
+    let mut fresh = Document::default();
+    editing::append(&mut fresh, &part, Point::default());
+    assert_eq!(fresh.version, MODELS_3D);
+    fresh.validate().unwrap();
+}
+
+#[test]
+fn initial_view_shows_the_prototype_face_as_a_proper_rotation() {
+    let points = [
+        [1.4, 0.2, -0.3],
+        [-0.9, 1.1, 0.4],
+        [0.3, -1.6, 0.2],
+        [-0.8, 0.3, -0.3],
+    ];
+    let q = initial_rotation(&points);
+    let norm: f32 = q.iter().map(|v| v * v).sum();
+    assert!((norm - 1.).abs() < 1e-5);
+    // The prototype's rows were [a0, −a1, a0×a1], a reflection; the third
+    // row is now a0×(−a1), so the face shown before the tilt is the same.
+    let axes = principal_axes(&points);
+    let y = axes[1].map(|v| -v);
+    for p in points {
+        let r = rotate(q, p);
+        let expected = prototype_tilt([dot3(axes[0], p), dot3(y, p), dot3(cross3(axes[0], y), p)]);
+        assert!(r.iter().zip(expected).all(|(a, b)| (a - b).abs() < 1e-4));
+    }
+    // Linear and one-atom molecules use fixed axes, deterministically.
+    for degenerate in [&[[0., 0., 0.]][..], &[[-1., 0., 0.], [1., 0., 0.]], &[]] {
+        let q = initial_rotation(degenerate);
+        assert!(q.iter().all(|v| v.is_finite()));
+        assert_eq!(q, initial_rotation(degenerate));
+        assert!((q.iter().map(|v| v * v).sum::<f32>() - 1.).abs() < 1e-5);
+    }
+}
+
+fn dot3(a: [f32; 3], b: [f32; 3]) -> f32 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+fn cross3(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+}
+/// The prototype's power iteration (template.html `initialView`).
+fn principal_axes(points: &[[f32; 3]]) -> [[f32; 3]; 2] {
+    let mut c = [[0f32; 3]; 3];
+    for p in points {
+        for i in 0..3 {
+            for j in 0..3 {
+                c[i][j] += p[i] * p[j];
+            }
+        }
+    }
+    let mut axes: Vec<[f32; 3]> = vec![];
+    for start in [[1., 0.3, 0.2], [0.2, 1., 0.3]] {
+        let mut v: [f32; 3] = start;
+        for _ in 0..60 {
+            v = c.map(|row| dot3(row, v));
+            for a in &axes {
+                let d = dot3(v, *a);
+                v = [v[0] - d * a[0], v[1] - d * a[1], v[2] - d * a[2]];
+            }
+            let n = length(v);
+            v = v.map(|x| x / n);
+        }
+        axes.push(v);
+    }
+    [axes[0], axes[1]]
+}
+fn prototype_tilt(p: [f32; 3]) -> [f32; 3] {
+    let (sy, cy) = 0.3f32.sin_cos();
+    let p = [cy * p[0] + sy * p[2], p[1], -sy * p[0] + cy * p[2]];
+    let (sx, cx) = (-0.35f32).sin_cos();
+    [p[0], cx * p[1] - sx * p[2], sx * p[1] + cx * p[2]]
+}
+
+#[test]
+fn ball_and_stick_primitives_are_back_to_front_in_exact_colors() {
+    let (doc, ..) = shown(Display::ThreeD);
+    let parts = primitives(&doc);
+    let spheres = parts
+        .iter()
+        .filter(|p| matches!(p, Primitive::Sphere { .. }))
+        .count();
+    let quads = parts
+        .iter()
+        .filter(|p| matches!(p, Primitive::ShadedQuad { .. }))
+        .count();
+    // Three atoms and two hydrogens; four bonds, each in two halves.
+    assert_eq!((spheres, quads), (5, 8));
+    assert_eq!(parts.len(), 13);
+    // Oxygen keeps the prototype's flat-look stops, faded toward the paper.
+    let model = &doc.models[0];
+    let c = heavy_center(&model.points(&doc).unwrap());
+    let z = rotate(model.rotation, sub(model.atoms[2].xyz, c))[2];
+    let reach = reach(&model.points(&doc).unwrap(), c);
+    let base = mix(
+        [224., 72., 61.],
+        WHITE,
+        0.35 * ((reach - z) / (2. * reach)).clamp(0., 1.),
+    );
+    assert!(parts.iter().any(|p| matches!(p,
+        Primitive::Sphere { stops, outline: Some(o), .. }
+            if stops[1] == (0.6, rgb(base))
+                && stops[0] == (0., rgb(mix(base, WHITE, 0.45)))
+                && o.color == [30, 34, 38] && o.alpha == 0.85)));
+}
+
+#[test]
+fn spheres_are_sorted_by_depth() {
+    let (mut doc, atoms, _) = shown(Display::ThreeD);
+    doc.models[0].rotation = [1., 0., 0., 0.];
+    doc.models[0].hydrogens.clear();
+    doc.models[0].atoms[0].xyz = [0., 0., 1.];
+    doc.models[0].atoms[1].xyz = [1., 0., -1.];
+    doc.models[0].atoms[2].xyz = [2., 0., 0.];
+    let order: Vec<_> = primitives(&doc)
+        .into_iter()
+        .filter_map(|p| match p {
+            Primitive::Sphere { center, .. } => Some(center.x),
+            _ => None,
+        })
+        .collect();
+    // Back (z = −1) to front (z = 1): x of atoms 1, 2, 0.
+    assert!(
+        order[0] > order[2] && order[1] > order[0],
+        "{order:?} {atoms:?}"
+    );
+}
+
+#[test]
+fn a_3d_molecule_leaves_the_2d_pass_and_a_2d_model_changes_nothing() {
+    let (doc, atoms, _) = shown(Display::ThreeD);
+    let mut without = doc.clone();
+    without.models.clear();
+    let flat = |doc: &Document| -> Vec<String> {
+        scene::primitives(doc)
+            .iter()
+            .filter(|p| !matches!(p, Primitive::Sphere { .. } | Primitive::ShadedQuad { .. }))
+            .map(|p| format!("{p:?}"))
+            .collect()
+    };
+    let mut removed = without.clone();
+    removed.delete(&atoms);
+    assert_eq!(flat(&doc), flat(&removed));
+    assert!(scene::svg(&doc).contains("<radialGradient"));
+
+    let (two_d, ..) = drawing();
+    assert_eq!(scene::svg(&two_d), scene::svg(&without));
+    assert_eq!(
+        format!("{:?}", scene::primitives(&two_d)),
+        format!("{:?}", scene::primitives(&without))
+    );
+}
+
+#[test]
+fn hidden_atoms_are_not_picked_and_the_frame_selects_the_molecule() {
+    let (doc, atoms, methane) = shown(Display::ThreeD);
+    assert!(!doc.atom_drawn(atoms[0]) && doc.atom_drawn(methane));
+    let (flo, fhi) = frame(&doc, &doc.models[0]).unwrap();
+    let center = Point::new((flo.x + fhi.x) / 2., (flo.y + fhi.y) / 2.);
+    assert_eq!(doc.nearest(doc.atom(atoms[0]).unwrap().position, 5.), None);
+    assert_eq!(editing::nearest_bond(&doc, Point::new(18., -10.), 5.), None);
+    assert_eq!(frame_hit(&doc, center), Some(atoms.clone()));
+    assert_eq!(frame_hit(&doc, fhi.offset(1., 0.)), None);
+    let (lo, hi) = scene::selection_bounds(&doc, &atoms).unwrap();
+    assert!(lo.x <= flo.x && hi.x >= fhi.x);
+    let lasso = [
+        lo.offset(-1., -1.),
+        Point::new(hi.x + 1., lo.y - 1.),
+        hi.offset(1., 1.),
+        Point::new(lo.x - 1., hi.y + 1.),
+    ];
+    let region = crate::selection_region::objects(&doc, &lasso);
+    assert!(atoms.iter().all(|id| region.contains(id)));
+    assert!(shows_3d(&doc, &atoms) && !shows_3d(&doc, &[methane]));
+
+    // Beside the drawing, the frame sits right of the atoms.
+    let (both, ..) = shown(Display::Both);
+    assert!(shows_3d(&both, &atoms));
+    assert!(!shows_3d(&drawing().0, &atoms));
+    let (lo, _) = frame(&both, &both.models[0]).unwrap();
+    let bond = both.drawing_style.bond_length_world;
+    assert!((lo.x - (72. + bond)).abs() < 1e-3, "{lo:?}");
+    assert!(both.atom_drawn(atoms[0]));
+}
+
+/// Paint the stepped discs and a reference two-point radial gradient over a
+/// pixel grid; they agree within a few levels.
+#[test]
+fn stepped_discs_match_a_radial_gradient() {
+    let center = Point::new(50., 50.);
+    let radius = 40.;
+    let focal = center.offset(-radius * 0.38, -radius * 0.42);
+    let stops = [
+        (0., [240, 200, 190]),
+        (0.6, [224, 72, 61]),
+        (1., [184, 59, 50]),
+    ];
+    let discs = sphere_discs(center, radius, focal, &stops, 32);
+    let mut worst = 0;
+    let mut total = 0u64;
+    let mut count = 0u64;
+    for y in 0..100 {
+        for x in 0..100 {
+            let p = Point::new(x as f32 + 0.5, y as f32 + 0.5);
+            if p.distance(center) > radius - 1. {
+                continue;
+            }
+            // The last disc painted over p, the smallest one containing it.
+            let painted = discs
+                .iter()
+                .rev()
+                .find(|(c, r, _)| p.distance(*c) <= *r)
+                .map(|d| d.2)
+                .unwrap();
+            // The gradient's t: the largest circle of the family through p.
+            let (mut lo, mut hi) = (0f32, 1f32);
+            for _ in 0..40 {
+                let t = (lo + hi) / 2.;
+                let r = radius * FOCAL_RADIUS + (radius - radius * FOCAL_RADIUS) * t;
+                if p.distance(focal.lerp(center, t)) <= r {
+                    hi = t;
+                } else {
+                    lo = t;
+                }
+            }
+            let expected = gradient_color(&stops, hi);
+            for (a, b) in painted.iter().zip(expected) {
+                let d = a.abs_diff(b);
+                worst = worst.max(d);
+                total += u64::from(d);
+                count += 1;
+            }
+        }
+    }
+    assert!(worst <= 6, "worst channel difference {worst}");
+    assert!(total as f64 / (count as f64) < 2., "mean difference");
+}
+
+/// Give every atom of `doc`, one molecule, a model shown as `display`.
+fn model_all(doc: &mut Document, display: Display) {
+    let atoms = doc
+        .atoms
+        .iter()
+        .enumerate()
+        .map(|(i, a)| Placed {
+            id: a.id,
+            xyz: [i as f32, (i % 2) as f32, 0.1 * i as f32],
+        })
+        .collect();
+    let model = Model3d::new(doc, atoms, vec![], ForceField::Mmff94s);
+    doc.models.push(model);
+    doc.require_version(MODELS_3D);
+    set_display(doc, 0, display);
+}
+
+fn moved(doc: &Document, moves: &[(u64, Point)]) -> Document {
+    let mut edited = doc.clone();
+    let before = edited.clone();
+    for (id, p) in moves {
+        edited.atom_mut(*id).unwrap().position = *p;
+    }
+    commit(&mut edited, before);
+    edited
+}
+
+#[test]
+fn moving_atoms_that_flip_drawn_stereo_drops_the_model() {
+    // (E)-1,2-difluoroethene.
+    let mut doc = Document::default();
+    let c1 = doc.add_atom("C", Point::new(0., 0.));
+    let c2 = doc.add_atom("C", Point::new(36., 0.));
+    let f1 = doc.add_atom("F", Point::new(-18., -30.));
+    let f2 = doc.add_atom("F", Point::new(54., 30.));
+    doc.add_bond(c1, c2, 2, "plain");
+    doc.add_bond(c1, f1, 1, "plain");
+    doc.add_bond(c2, f2, 1, "plain");
+    model_all(&mut doc, Display::Both);
+    assert_eq!(moved(&doc, &[(f2, Point::new(60., 34.))]).models.len(), 1);
+    assert!(
+        moved(&doc, &[(f2, Point::new(54., -30.))])
+            .models
+            .is_empty()
+    );
+
+    // A wedged centre whose plain neighbours swap places is inverted.
+    let mut doc = Document::default();
+    let c = doc.add_atom("C", Point::default());
+    let f = doc.add_atom("F", Point::new(0., -36.));
+    let cl = doc.add_atom("Cl", Point::new(31., 18.));
+    let br = doc.add_atom("Br", Point::new(-31., 18.));
+    doc.add_bond(c, f, 1, "wedge");
+    doc.add_bond(c, cl, 1, "plain");
+    doc.add_bond(c, br, 1, "plain");
+    model_all(&mut doc, Display::Both);
+    assert_eq!(moved(&doc, &[(cl, Point::new(35., 20.))]).models.len(), 1);
+    let swapped = moved(
+        &doc,
+        &[(cl, Point::new(-31., 18.)), (br, Point::new(31., 18.))],
+    );
+    assert!(swapped.models.is_empty());
+}
+
+#[test]
+fn bond_styles_and_label_display_are_presentation() {
+    let (doc, atoms, _) = shown(Display::ThreeD);
+    let edits: [&dyn Fn(&mut Document); 3] = [
+        &|d| d.bonds[0].display = "bold".into(),
+        &|d| d.bonds[1].display = "hashed".into(),
+        &|d| d.atom_mut(atoms[2]).unwrap().display.hydrogens = Some(false),
+    ];
+    for edit in edits {
+        let mut edited = doc.clone();
+        let before = edited.clone();
+        edit(&mut edited);
+        commit(&mut edited, before);
+        assert_eq!(edited.models, doc.models);
+    }
+}
+
+#[test]
+fn loading_drops_models_that_are_not_one_whole_molecule() {
+    let (doc, atoms, methane) = shown(Display::ThreeD);
+    let mut partial = doc.clone();
+    partial.models[0].atoms.pop();
+    partial.models[0].hydrogens.retain(|h| h.parent != atoms[2]);
+    let mut spanning = doc.clone();
+    spanning.models[0].atoms.push(Placed {
+        id: methane,
+        xyz: [3., 0., 0.],
+    });
+    for file in [partial, spanning] {
+        let read = Document::from_json(&file.file_json().unwrap()).unwrap();
+        assert!(read.models.is_empty());
+    }
+}
+
+#[test]
+fn hidden_ink_is_not_measured_or_targeted() {
+    let (mut doc, atoms, _) = shown(Display::ThreeD);
+    let bounds = scene::selection_bounds(&doc, &atoms);
+    doc.atom_mut(atoms[0]).unwrap().display.number = Some(crate::atom_labels::Number {
+        text: "1".into(),
+        offset: Some(Point::new(0., 500.)),
+        style: crate::atom_labels::number_style(),
+    });
+    doc.bonds[0].highlight = Some(crate::palette::Color::Custom([255, 220, 0]));
+    assert_eq!(scene::selection_bounds(&doc, &atoms), bounds);
+    for id in &atoms {
+        let p = doc.atom(*id).unwrap().position;
+        assert!(crate::arrow_anchors::pick(&doc, p, 5.).is_none());
+    }
+
+    // A ring shown in 3D has no 2D interior.
+    let mut ring = Document::default();
+    let ids = [(0., 0.), (36., 0.), (18., 31.)].map(|(x, y)| ring.add_atom("C", Point::new(x, y)));
+    for (a, b) in [(0, 1), (1, 2), (2, 0)] {
+        ring.add_bond(ids[a], ids[b], 1, "plain");
+    }
+    let inside = Point::new(18., 10.);
+    assert!(editing::ring_at(&ring, inside).is_some());
+    model_all(&mut ring, Display::ThreeD);
+    assert_eq!(editing::ring_at(&ring, inside), None);
+}
+
+#[test]
+fn sphere_svg_writes_the_prototype_gradient() {
+    let (doc, ..) = shown(Display::ThreeD);
+    let svg = scene::svg(&doc);
+    let radial = svg
+        .split("<radialGradient ")
+        .nth(1)
+        .and_then(|s| s.split("</radialGradient>").next())
+        .unwrap();
+    assert!(radial.contains("gradientUnits=\"userSpaceOnUse\""));
+    assert!(radial.contains(" fr=\""));
+    assert_eq!(radial.matches("<stop ").count(), 3);
+    assert!(radial.contains("offset=\"0.6\""));
+    // Each bond half outlines only its two long sides.
+    let quad = svg.split("<linearGradient ").nth(1).unwrap();
+    let outline = quad.split("<path d=\"").nth(1).unwrap();
+    assert_eq!(outline.split('"').next().unwrap().matches('M').count(), 2);
+}
+
+#[test]
+fn chemistry_and_reaction_roles_keep_a_drawing_with_a_model_valid() {
+    let (mut doc, atoms, methane) = shown(Display::Both);
+    let molecule = crate::chemistry::document::prepare(&doc).unwrap();
+    let drawing = crate::chemistry::document::for_drawing(&molecule, &doc).unwrap();
+    let labels = drawing.labels().unwrap();
+    let output = drawing.finish(labels).unwrap();
+    assert_eq!(output.models, doc.models);
+    assert!(output.version >= MODELS_3D);
+
+    let arrow = doc.next_id();
+    doc.arrows.push(crate::document::Arrow::new(
+        arrow,
+        Point::new(100., 40.),
+        Point::new(180., 40.),
+        Default::default(),
+        Default::default(),
+    ));
+    let role = crate::reactions::Role::Reactant;
+    crate::reactions::assign(&mut doc, arrow, &atoms[..1], role).unwrap();
+    crate::reactions::assign(&mut doc, arrow, &[methane], crate::reactions::Role::Product).unwrap();
+    assert_eq!(doc.version, VERSION);
+    assert_eq!(doc.models.len(), 1);
+}
+
+#[test]
+fn each_ball_covers_its_own_half_bonds_but_not_a_farther_atom() {
+    let (mut doc, ..) = shown(Display::ThreeD);
+    doc.models[0].rotation = [1., 0., 0., 0.];
+    doc.models[0].hydrogens.clear();
+    // C1 sits behind C2, whose half-bond to O points toward the viewer; O is
+    // in front of both. C1 and its half are drawn first, behind everything.
+    doc.models[0].atoms[0].xyz = [-1.2, 0., -1.5];
+    doc.models[0].atoms[1].xyz = [0., 0., 0.];
+    doc.models[0].atoms[2].xyz = [1.2, 0., 1.];
+    let order: Vec<_> = primitives(&doc)
+        .into_iter()
+        .map(|p| match p {
+            Primitive::Sphere { center, .. } => (true, center.x),
+            Primitive::ShadedQuad { corners, .. } => (false, (corners[0].x + corners[3].x) / 2.),
+            _ => unreachable!(),
+        })
+        .collect();
+    let model = &doc.models[0];
+    let points = model.points(&doc).unwrap();
+    let view = View::new(&doc, model).unwrap();
+    let x = |i: usize| view.project(view.rotated[i]).0.x;
+    let sphere = |i| order.iter().position(|&(s, px)| s && px == x(i)).unwrap();
+    let halves = |i| -> Vec<usize> {
+        order
+            .iter()
+            .enumerate()
+            .filter(|(_, (s, px))| !s && (*px - x(i)).abs() < 1e-3)
+            .map(|(n, _)| n)
+            .collect()
+    };
+    assert_eq!(points.len(), 3);
+    // Every half-bond, including C2's half toward the nearer O, comes before
+    // its own ball.
+    for i in 0..3 {
+        assert!(halves(i).iter().all(|&h| h < sphere(i)), "{i}: {order:?}");
+    }
+    // The halves of the front oxygen still pass in front of the far C1.
+    assert!(halves(2).iter().all(|&h| h > sphere(0)), "{order:?}");
+}
+
+#[test]
+fn the_frame_fits_the_projected_balls_with_a_modest_margin() {
+    let (doc, ..) = shown(Display::ThreeD);
+    let model = &doc.models[0];
+    let (lo, hi) = frame(&doc, model).unwrap();
+    let mut ink = (
+        Point::new(f32::MAX, f32::MAX),
+        Point::new(f32::MIN, f32::MIN),
+    );
+    for p in primitives(&doc) {
+        if let Primitive::Sphere { center, radius, .. } = p {
+            ink.0 = Point::new(
+                ink.0.x.min(center.x - radius),
+                ink.0.y.min(center.y - radius),
+            );
+            ink.1 = Point::new(
+                ink.1.x.max(center.x + radius),
+                ink.1.y.max(center.y + radius),
+            );
+        }
+    }
+    let (w, h) = (ink.1.x - ink.0.x, ink.1.y - ink.0.y);
+    let pad = 0.06 * w.max(h);
+    for (frame, ink) in [
+        (lo.x, ink.0.x - pad),
+        (lo.y, ink.0.y - pad),
+        (hi.x, ink.1.x + pad),
+        (hi.y, ink.1.y + pad),
+    ] {
+        assert!((frame - ink).abs() < 1e-3, "{lo:?} {hi:?} {ink:?}");
+    }
+    // Much tighter than the reference square that sets the scale.
+    assert!(hi.x - lo.x < model.size && hi.y - lo.y < model.size * 0.8);
+}
+
+#[test]
+fn hidden_indicator_owners_and_group_labels_are_out_of_reach() {
+    use crate::abbreviations::label_hit;
+    use crate::atom_labels::Owner;
+    let (mut doc, atoms, methane) = drawing();
+    doc.contract(&[atoms[2]], "OH", "HO").unwrap();
+    let o = doc.atom(atoms[2]).unwrap().position;
+    assert_eq!(label_hit(&doc, o, 1.), Some(atoms[2]));
+    assert!(Owner::BondStereo(atoms[0], atoms[1]).drawn(&doc));
+    assert!(set_display(&mut doc, 0, Display::ThreeD));
+    assert_eq!(label_hit(&doc, o, 1.), None);
+    assert!(!Owner::Number(atoms[0]).drawn(&doc));
+    assert!(!Owner::BondStereo(atoms[0], atoms[1]).drawn(&doc));
+    assert!(Owner::Number(methane).drawn(&doc));
+}
+
+#[test]
+fn rings_do_not_snap_onto_or_from_a_molecule_shown_in_3d() {
+    // Drag a free ring's first edge onto the ethanol C–C bond, or a ring shown
+    // only in 3D onto a drawn C–C bond.
+    let snap = |display: Display, hidden_ring: bool| {
+        let (mut doc, atoms, _) = drawing();
+        assert!(display == Display::TwoD || set_display(&mut doc, 0, display));
+        let ring = editing::ring(&mut doc, Point::new(300., 300.), 5, false, 21.);
+        let target = if hidden_ring {
+            doc.models.clear();
+            model_ring(&mut doc, &ring);
+            let a = doc.add_atom("C", Point::new(500., 0.));
+            let b = doc.add_atom("C", Point::new(536., -21.));
+            doc.add_bond(a, b, 1, "plain");
+            [a, b]
+        } else {
+            [atoms[0], atoms[1]]
+        };
+        let p = |id| doc.atom(id).unwrap().position;
+        let (a, b, t, u) = (p(ring[0]), p(ring[1]), p(target[0]), p(target[1]));
+        let delta = Point::new((t.x + u.x - a.x - b.x) / 2., (t.y + u.y - a.y - b.y) / 2.);
+        let before = doc.clone();
+        let snapped = editing::snap_ring(&mut doc, &ring, delta, 14.).is_some();
+        (snapped, doc == before)
+    };
+    assert_eq!(snap(Display::TwoD, false), (true, false));
+    assert_eq!(snap(Display::Both, false), (true, false));
+    assert_eq!(snap(Display::ThreeD, false), (false, true));
+    assert_eq!(snap(Display::TwoD, true), (false, true));
+}
+
+/// A model of the molecule `ids`, shown only in 3D.
+fn model_ring(doc: &mut Document, ids: &[u64]) {
+    let atoms = ids
+        .iter()
+        .enumerate()
+        .map(|(i, id)| {
+            let angle = i as f32 * std::f32::consts::TAU / ids.len() as f32;
+            Placed {
+                id: *id,
+                xyz: [1.3 * angle.cos(), 1.3 * angle.sin(), 0.],
+            }
+        })
+        .collect();
+    let model = Model3d::new(doc, atoms, vec![], ForceField::Mmff94s);
+    doc.models.push(model);
+    doc.require_version(MODELS_3D);
+    let last = doc.models.len() - 1;
+    assert!(set_display(doc, last, Display::ThreeD));
+}
+
+#[test]
+fn reference_align_and_stretch_leave_a_molecule_shown_in_3d_alone() {
+    use crate::editing::reference::{self, Edge, Stretch};
+    let (doc, atoms, methane) = shown(Display::ThreeD);
+    assert!(reference::edges(&doc, &atoms).is_empty());
+    let (drawn, ..) = shown(Display::Both);
+    assert_eq!(
+        reference::edges(&drawn, &atoms),
+        vec![
+            Edge::Bond(atoms[0], atoms[1]),
+            Edge::Bond(atoms[1], atoms[2])
+        ]
+    );
+    let pivot = Point::new(100., 100.);
+    assert_eq!(
+        reference::rotate(&doc, &atoms, pivot, 30., false).map(|_| ()),
+        Err("Switch to 2D to rotate the drawing".into())
+    );
+    let mixed = [atoms.clone(), vec![methane]].concat();
+    let (rotated, _) = reference::rotate(&doc, &mixed, pivot, 30., false).unwrap();
+    for id in &atoms {
+        assert_eq!(rotated.atom(*id), doc.atom(*id));
+    }
+    assert_ne!(
+        rotated.atom(methane).unwrap().position,
+        doc.atom(methane).unwrap().position
+    );
+    assert_eq!(
+        Stretch::new(&doc, atoms[0], atoms[1]).map(|_| ()),
+        Err("Switch to 2D to stretch the drawing".into())
+    );
+    assert!(Stretch::new(&drawn, atoms[1], atoms[2]).is_ok());
+}
+
+#[test]
+fn joins_refuse_a_molecule_shown_in_3d() {
+    use crate::joining::{self, Prepared, SHOWN_IN_3D};
+    let (mut doc, atoms, methane) = shown(Display::ThreeD);
+    let iron = doc.add_atom("Fe", Point::new(0., 200.));
+    let refused = Err(SHOWN_IN_3D.to_string());
+    assert_eq!(Prepared::new(&doc, &[atoms[0]]).map(|_| ()), refused);
+    assert_eq!(
+        joining::merge_atoms(&doc, &[atoms[0], atoms[1], methane]).map(|_| ()),
+        refused
+    );
+    assert_eq!(
+        joining::coordinate_atoms(&doc, atoms[2], iron).map(|_| ()),
+        refused
+    );
+    assert_eq!(joining::shown_in_3d(&doc, &[methane, iron]), Ok(()));
+    assert!(Prepared::new(&doc, &[methane]).is_ok());
+}
+
+#[test]
+fn aligning_moves_a_hidden_molecule_with_its_frame() {
+    let (mut doc, atoms, methane) = shown(Display::ThreeD);
+    // Methane on top: aligning tops moves ethanol up.
+    doc.atom_mut(methane).unwrap().position.y = -500.;
+    let before = doc.clone();
+    let (lo, _) = frame(&doc, &doc.models[0]).unwrap();
+    let ids = [atoms.clone(), vec![methane]].concat();
+    editing::arrange(&mut doc, &ids, editing::Arrange::AlignTop);
+    let (moved_lo, _) = frame(&doc, &doc.models[0]).unwrap();
+    let shift = |id: u64| {
+        let (a, b) = (before.atom(id).unwrap(), doc.atom(id).unwrap());
+        Point::new(b.position.x - a.position.x, b.position.y - a.position.y)
+    };
+    let delta = shift(atoms[0]);
+    assert!(delta.y.abs() > 1.);
+    for id in &atoms {
+        assert_eq!(shift(*id), delta);
+    }
+    assert!((moved_lo.x - lo.x - delta.x).abs() < 1e-3);
+    assert!((moved_lo.y - lo.y - delta.y).abs() < 1e-3);
+}

@@ -389,6 +389,7 @@ impl App {
         if reshiki::generic::touches(&self.tab.doc, &self.tab.selected) {
             return Err(reshiki::generic::JOIN_NOTICE.into());
         }
+        joining::shown_in_3d(&self.tab.doc, &self.tab.selected)?;
         match joining::join_plan(&self.tab.doc, &self.tab.selected) {
             Some(JoinPlan::Coordinate { donor, metal }) => {
                 // A donor and metal remain distinct, even inside one molecule.

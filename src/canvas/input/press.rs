@@ -109,6 +109,9 @@ impl MoleculeCanvas<'_> {
             ids
         };
         state.last_click = None;
+        if let Some(reason) = tilt::refusal(self.doc, &ids) {
+            return Some(Action::publish(Edit::Refused(reason.into())).and_capture());
+        }
         state.gesture = Some(if tilt::available(self.doc, &ids) {
             Gesture::Tilt(tilt::TiltDrag { ids, start: point })
         } else {
@@ -163,6 +166,7 @@ impl MoleculeCanvas<'_> {
                     .into_iter()
                     .find(|i| {
                         i.owner.selected(self.selected)
+                            && i.owner.drawn(self.doc)
                             && i.center.distance(p) < 9. / self.camera.zoom
                     })
             {
@@ -175,7 +179,7 @@ impl MoleculeCanvas<'_> {
                 .doc
                 .atoms
                 .iter()
-                .filter(|a| self.selected.contains(&a.id) && self.doc.atom_visible(a.id))
+                .filter(|a| self.selected.contains(&a.id) && self.doc.atom_drawn(a.id))
             {
                 if let Some(index) = a.marks.iter().position(|m| {
                     reshiki::scientific::mark_drawn(a, m)
