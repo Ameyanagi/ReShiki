@@ -471,7 +471,7 @@ pub struct MoleculeCanvas<'a> {
     /// The display the floating Show as bar marks, when it shows.
     pub(crate) model_bar: Option<reshiki::models3d::Display>,
     /// The model (by an atom) that started its 2D → 3D morph, and when.
-    pub(crate) morph: Option<(u64, std::time::Instant)>,
+    pub(crate) morph: Option<(u64, iced::time::Instant)>,
     pub joining: Option<(&'a reshiki::joining::Prepared, reshiki::templates::Anchor)>,
     pub hidden_annotation: Option<u64>,
     pub bond_drawing: BondDrawing,

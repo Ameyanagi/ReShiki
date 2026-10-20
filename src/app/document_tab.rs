@@ -63,7 +63,7 @@ pub(super) struct DocumentTab {
         Option<(u64, usize, std::mem::Discriminant<super::models3d::Setting>)>,
     /// The model (by an atom) whose 2D → 3D morph is playing, and its start,
     /// for the drawing state it started in.
-    pub(super) model_morph: Option<(super::models3d::Key, u64, std::time::Instant)>,
+    pub(super) model_morph: Option<(super::models3d::Key, u64, iced::time::Instant)>,
     // Derived chemistry and in-flight work.
     pub(super) analysis: Option<Analysis>,
     pub(super) busy: bool,

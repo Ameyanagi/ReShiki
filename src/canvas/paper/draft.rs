@@ -49,7 +49,7 @@ impl MoleculeCanvas<'_> {
                 true,
             ));
         }
-        if let Some((id, t)) = self.morph(std::time::Instant::now())
+        if let Some((id, t)) = self.morph(iced::time::Instant::now())
             && let Some(model) = preview.to_mut().models.iter_mut().find(|m| m.contains(id))
         {
             model.morph = Some(t);

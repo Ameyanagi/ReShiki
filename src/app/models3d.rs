@@ -403,12 +403,12 @@ impl App {
             && display != Display::TwoD
             && let Some(id) = atoms.first()
         {
-            self.tab.model_morph = Some((self.model_key(), *id, std::time::Instant::now()));
+            self.tab.model_morph = Some((self.model_key(), *id, iced::time::Instant::now()));
         }
     }
 
     /// The morph playing, until Undo, Redo or any other change to the drawing.
-    pub(super) fn model_morph(&self) -> Option<(u64, std::time::Instant)> {
+    pub(super) fn model_morph(&self) -> Option<(u64, iced::time::Instant)> {
         let (key, id, start) = self.tab.model_morph?;
         (key == self.model_key()).then_some((id, start))
     }
