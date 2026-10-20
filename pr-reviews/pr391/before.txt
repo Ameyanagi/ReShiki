@@ -1,0 +1,5 @@
+before: drag (+400, +0) px -> angles() X -0.0° Y +75.0°; changed=true; measured Y rotation of Cl +75.0°; /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev389/before/before-400px.rsk
+before: drag (+120, +0) px -> angles() X -0.0° Y +60.0°; changed=true; measured Y rotation of Cl +60.0°; /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev389/before/before-120px.rsk
+before: drag (+240, +0) px -> angles() X -0.0° Y +75.0°; changed=true; measured Y rotation of Cl +75.0°; /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev389/before/before-240px.rsk
+before: drag (+360, +0) px -> angles() X -0.0° Y +75.0°; changed=true; measured Y rotation of Cl +75.0°; /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev389/before/before-360px.rsk
+before: drag (+480, +0) px -> angles() X -0.0° Y +75.0°; changed=true; measured Y rotation of Cl +75.0°; /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev389/before/before-480px.rsk
