@@ -439,6 +439,27 @@ fn a_slider_change_without_release_does_not_join_later_steps() {
 }
 
 #[test]
+fn different_sliders_without_release_are_separate_steps() {
+    let (mut app, _) = with_model(Display::ThreeD);
+    let start = frames(&app);
+    let (fade, perspective) = (
+        app.tab.doc.models[0].depth_fade,
+        app.tab.doc.models[0].perspective,
+    );
+    // Arrow keys on Depth fade, then on Perspective, with no release between.
+    set(&mut app, Setting::DepthFade(0.4));
+    set(&mut app, Setting::DepthFade(0.5));
+    set(&mut app, Setting::Perspective(0.6));
+    set(&mut app, Setting::Perspective(0.7));
+    assert_eq!(frames(&app), start + 2);
+    let _ = app.update(Message::Undo);
+    let model = &app.tab.doc.models[0];
+    assert_eq!((model.depth_fade, model.perspective), (0.5, perspective));
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc.models[0].depth_fade, fade);
+}
+
+#[test]
 fn changing_a_model_keeps_another_generation_in_flight() {
     let (mut app, atoms) = with_model(Display::Both);
     let water = app.tab.doc.atoms[3].id;

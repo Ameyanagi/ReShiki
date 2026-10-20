@@ -1137,6 +1137,10 @@ fn a_wireframe_atom_without_shown_bonds_is_a_dot() {
     assert!(stops.iter().all(|(_, c)| *c == stops[0].1));
     let (lo, hi) = frame(&doc, &doc.models[0]).unwrap();
     assert!(lo.x < center.x - radius && center.x + radius < hi.x);
+    // Erasing and hit testing see the dot as drawn, not a larger ball.
+    let (balls, sticks) = balls_and_sticks(&doc, &doc.models[0]).unwrap();
+    assert_eq!(balls, [(*center, *radius)]);
+    assert!(sticks.is_empty());
     // With its hydrogens, the oxygen is drawn by its bonds alone.
     let doc = lone(
         &[("O", [0., 0., 0.])],
@@ -1144,6 +1148,9 @@ fn a_wireframe_atom_without_shown_bonds_is_a_dot() {
         |m| m.style = Style::Wireframe,
     );
     assert_eq!(counts(&primitives(&doc)), (0, 0, 4));
+    let (balls, sticks) = balls_and_sticks(&doc, &doc.models[0]).unwrap();
+    assert!(balls.is_empty());
+    assert_eq!(sticks.len(), 4);
 }
 
 #[test]
@@ -1183,6 +1190,19 @@ fn the_soft_card_fills_the_frame_behind_the_model() {
     assert_eq!(outline.color, CARD_EDGE);
     let (flo, fhi) = frame(&doc, &doc.models[0]).unwrap();
     assert!(lo.distance(flo) < 1. && hi.distance(fhi) < 1.);
+    // However large the card, its border's outer edge is inside its bounds,
+    // which reach the frame.
+    let (doc, parts) = styled(|m| {
+        m.background = Background::Card;
+        m.size = 1e4;
+    });
+    let (blo, bhi) = scene::bounds(&parts[..1]);
+    let (flo, fhi) = frame(&doc, &doc.models[0]).unwrap();
+    let (flo, fhi) = scene::bounds(&[Primitive::Line(flo, fhi, 0.)]);
+    assert!(
+        blo.distance(flo) < 0.01 && bhi.distance(fhi) < 0.01,
+        "{blo:?} {flo:?}"
+    );
     // Depth fade mixes toward the card, not the paper.
     let (_, plain) = styled(|m| m.depth_fade = 1.);
     let (_, card) = styled(|m| {

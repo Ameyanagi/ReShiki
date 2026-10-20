@@ -307,11 +307,14 @@ impl App {
         if self.tab.doc == before {
             return;
         }
-        // A drag continues only while nothing else has been committed.
-        let sliding = matches!(setting, Setting::DepthFade(_) | Setting::Perspective(_));
-        let continuing = sliding && self.tab.model_sliding == Some((self.tab.revision, index));
+        // A drag continues only on the same slider while nothing else has
+        // been committed.
+        let sliding = matches!(setting, Setting::DepthFade(_) | Setting::Perspective(_))
+            .then(|| (self.tab.revision, index, std::mem::discriminant(&setting)));
+        let continuing = sliding.is_some() && self.tab.model_sliding == sliding;
         self.commit_model(before, continuing);
-        self.tab.model_sliding = sliding.then_some((self.tab.revision, index));
+        self.tab.model_sliding =
+            sliding.map(|(_, index, slider)| (self.tab.revision, index, slider));
     }
 
     /// Commit a change to the models' displays, views, frames or styles. A

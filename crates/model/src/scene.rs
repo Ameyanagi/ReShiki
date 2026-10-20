@@ -2404,7 +2404,12 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
                     points.extend([p.offset(-r, -r), p.offset(r, r)]);
                 }
             }
-            Primitive::Card { lo, hi, .. } => points.extend([*lo, *hi]),
+            Primitive::Card {
+                lo, hi, outline, ..
+            } => {
+                let r = outline.width / 2.;
+                points.extend([lo.offset(-r, -r), hi.offset(r, r)]);
+            }
             Primitive::Text {
                 position,
                 text,

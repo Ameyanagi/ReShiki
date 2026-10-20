@@ -1455,7 +1455,17 @@ pub fn balls_and_sticks(
     model: &Model3d,
 ) -> Option<(Vec<(Point, f32)>, Vec<(Point, Point, f32)>)> {
     let view = View::new(doc, model)?;
-    let sticks = sticks(doc, model, &view.shown)?
+    let bonds = sticks(doc, model, &view.shown)?;
+    // Wireframe draws only the atoms without shown bonds, as dots.
+    let bonded: HashSet<usize> = bonds.iter().flat_map(|&(a, b)| [a, b]).collect();
+    let balls = view
+        .balls()
+        .filter_map(|(i, q, r)| match view.style {
+            Style::Wireframe => (!bonded.contains(&i)).then_some((q, view.wire)),
+            _ => Some((q, r)),
+        })
+        .collect();
+    let sticks = bonds
         .into_iter()
         .flat_map(|(a, b)| [(a, b), (b, a)])
         .map(|(s, o)| {
@@ -1463,7 +1473,6 @@ pub fn balls_and_sticks(
             Some((a, e, start.max(middle)))
         })
         .collect::<Option<_>>()?;
-    let balls = view.balls().map(|(_, q, r)| (q, r)).collect();
     Some((balls, sticks))
 }
 
