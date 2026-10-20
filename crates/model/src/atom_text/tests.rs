@@ -967,13 +967,71 @@ fn every_bundled_spelling_types_as_its_group() -> Result<(), Box<dyn std::error:
     Ok(())
 }
 
-/// CH3–C with the endpoint carbon's ID.
+/// CH3–C with the endpoint carbon's ID; the endpoint is the right-hand end.
 fn ethane() -> (Document, u64) {
+    ethane_with_end_at(42., 0.)
+}
+
+/// CH3–C with the endpoint carbon at `(x, y)` from the methyl.
+fn ethane_with_end_at(x: f32, y: f32) -> (Document, u64) {
     let mut doc = Document::default();
     let methyl = doc.add_atom("C", Point::new(0., 0.));
-    let endpoint = doc.add_atom("C", Point::new(42., 0.));
+    let endpoint = doc.add_atom("C", Point::new(x, y));
     doc.add_bond(methyl, endpoint, 1, "plain");
     (doc, endpoint)
+}
+
+#[test]
+fn nc_and_ocn_are_reverse_spellings_only_where_they_read_toward_the_bond()
+-> Result<(), Box<dyn std::error::Error>> {
+    for (typed, label) in [("NC", "CN"), ("OCN", "NCO")] {
+        // Left-hand end: the bond meets the last letter, as in NC–R.
+        let (doc, endpoint) = ethane_with_end_at(-42., 0.);
+        let left = apply(&doc, endpoint, typed, Mode::Auto)?;
+        let group = left.abbreviation(endpoint).ok_or(typed)?;
+        assert_eq!(
+            (group.label.as_str(), group.reverse_label.as_str()),
+            (label, typed)
+        );
+        assert!(!wrong_side(&doc, endpoint, typed));
+        // Right-hand end (R–NC is an isocyanide) and a vertical bond stay text.
+        for (x, y) in [(42., 0.), (0., 42.), (0., -42.)] {
+            let (doc, endpoint) = ethane_with_end_at(x, y);
+            assert!(wrong_side(&doc, endpoint, typed), "{typed} at {x},{y}");
+            let text = apply(&doc, endpoint, typed, Mode::Auto)?;
+            assert!(text.abbreviations.is_empty(), "{typed} at {x},{y}");
+            let atom = text.atom(endpoint).ok_or(typed)?;
+            assert_eq!(
+                (atom.element.as_str(), atom.display.variable.as_deref()),
+                ("*", Some(typed))
+            );
+            assert!(apply(&doc, endpoint, typed, Mode::Group).is_err());
+            assert!(
+                apply(&doc, endpoint, typed, Mode::Text)?
+                    .abbreviations
+                    .is_empty()
+            );
+        }
+    }
+    // Other reverse spellings have no second reading, so either end works.
+    for (x, y) in [(-42., 0.), (42., 0.), (0., 42.)] {
+        let (doc, endpoint) = ethane_with_end_at(x, y);
+        assert!(!wrong_side(&doc, endpoint, "MeO"));
+        let typed = apply(&doc, endpoint, "MeO", Mode::Auto)?;
+        assert_eq!(
+            typed.abbreviation(endpoint).map(|g| g.label.as_str()),
+            Some("OMe")
+        );
+    }
+    // The canonical labels are unaffected on any end.
+    let (doc, endpoint) = ethane();
+    assert!(!wrong_side(&doc, endpoint, "CN"));
+    assert!(
+        apply(&doc, endpoint, "CN", Mode::Auto)?
+            .abbreviation(endpoint)
+            .is_some()
+    );
+    Ok(())
 }
 
 #[test]
@@ -981,7 +1039,6 @@ fn typed_reverse_spellings_make_their_group() -> Result<(), Box<dyn std::error::
     for (typed, label) in [
         ("MeO", "OMe"),
         ("TBSO", "OTBS"),
-        ("NC", "CN"),
         ("O2N", "NO2"),
         ("ON", "NO"),
         ("(HO)2B", "B(OH)2"),
@@ -1020,7 +1077,7 @@ fn typed_reverse_spellings_make_their_group() -> Result<(), Box<dyn std::error::
     Ok(())
 }
 
-/// Every bundled reverse spelling, typed on CH3–C, creates its group under
+/// Every bundled reverse spelling, typed on C–CH3, creates its group under
 /// the group's label, as the loop above does for labels and aliases.
 #[test]
 fn every_bundled_reverse_spelling_types_as_its_group() -> Result<(), Box<dyn std::error::Error>> {
@@ -1041,7 +1098,8 @@ fn every_bundled_reverse_spelling_types_as_its_group() -> Result<(), Box<dyn std
             "{reverse}: {}",
             description(reverse, &[], Mode::Auto)
         );
-        let (doc, endpoint) = ethane();
+        // On a left-hand end, where a reverse spelling reads toward the bond.
+        let (doc, endpoint) = ethane_with_end_at(-42., 0.);
         let labelled =
             apply(&doc, endpoint, reverse, Mode::Auto).map_err(|e| format!("{reverse}: {e}"))?;
         let group = labelled.abbreviation(endpoint).ok_or(reverse)?;

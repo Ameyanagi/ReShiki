@@ -24,9 +24,12 @@ Each action is one Undo step. Native version-10 documents preserve custom names 
 
 The catalog holds 359 groups with 52 alternative spellings. Typing one of these
 labels on an endpoint creates the real group, so formula and mass match the
-expanded structure. A reverse spelling, such as MeO, AcO, BnO, TBSO, NC or
-(HO)2B, also makes its group (OMe, OAc, OBn, OTBS, CN, B(OH)2), which then
-shows whichever spelling suits the side its bond leaves from. A group typed
+expanded structure. A reverse spelling, such as MeO, AcO, BnO, TBSO or
+(HO)2B, also makes its group (OMe, OAc, OBn, OTBS, B(OH)2), which then
+shows whichever spelling suits the side its bond leaves from. NC and OCN are
+read from the bond: on a left-hand end (NC–R) they make CN and NCO, but on a
+right-hand end or a vertical bond they would mean an isocyanide or a cyanate,
+which have no catalog group, so they stay text. A group typed
 over a label that reads to the left keeps that side, so OBn typed on the HO
 of a sugar template reads BnO, and a group retyped over another group keeps
 its alignment. A user group
