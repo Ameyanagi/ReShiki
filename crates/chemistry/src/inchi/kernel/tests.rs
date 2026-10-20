@@ -82,9 +82,22 @@ fn cleanup_graph_edits_with_unchanged_counts_invalidate_computed_caches() {
 
         // A later callback must perceive the replacement graph's rings. This
         // checks the adapter contract, not the current kernel's callback order.
-        toolkit.kekulize(&mut molecule, false).unwrap();
+        toolkit.kekulize(&mut molecule, false, false).unwrap();
         let updated = toolkit.state.as_ref().unwrap();
         assert_eq!(updated.rings.kind, RingKind::Basis);
         assert!(updated.rings.atoms.is_empty());
     }
+}
+
+#[test]
+fn canonical_kekulization_is_rejected_rather_than_ignored() {
+    let state = smiles::prepare("c1ccccc1").unwrap().state;
+    let mut molecule = to_adapter(&state, vec![], &[]).unwrap();
+    let mut toolkit = Toolkit {
+        state: Some(state),
+        unspecified: vec![],
+    };
+    let error = toolkit.kekulize(&mut molecule, false, true).unwrap_err();
+    assert!(error.message.contains("Canonical"), "{}", error.message);
+    toolkit.kekulize(&mut molecule, false, false).unwrap();
 }

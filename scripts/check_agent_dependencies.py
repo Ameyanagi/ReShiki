@@ -31,7 +31,9 @@ BASELINE_COMMIT = "40c8d82a5ed213685a7eedd150a0b7adf6899846"
 SERDE_JSON_FORBIDDEN = frozenset({"preserve_order", "arbitrary_precision"})
 # Reviewed P1 addition: schemars 1.x, which rmcp's `server` requires, enables
 # alloc. serde_json gates that code on any(std, alloc), so with std on it is a no-op.
-SERDE_JSON_REVIEWED = frozenset({"alloc"})
+# cosmolkit-conformer 0.5.0 enables raw_value, which only adds the opt-in
+# RawValue type; Value, json! and number output are unchanged.
+SERDE_JSON_REVIEWED = frozenset({"alloc", "raw_value"})
 RMCP_FORBIDDEN = ("*client*", "transport-*", "auth*", "*reqwest*", "*http*", "macros")
 # rmcp's `server` always enables this one: tokio io-util and the tokio-util codec
 # over caller-supplied streams, with no network or process transport.
