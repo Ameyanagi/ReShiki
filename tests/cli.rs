@@ -376,3 +376,51 @@ fn compose_rejects_an_invalid_proposal_as_the_assistant_does() {
     );
     assert_eq!(files(&dir), ["p.json"]);
 }
+
+/// A 3D model is presentation only: molecular exports, analysis and figures of
+/// a drawing that carries one work as they do without it.
+#[test]
+fn a_drawing_with_a_3d_model_still_converts_and_analyzes() {
+    use reshiki::document::{Document, MODELS_3D, Point};
+    use reshiki::models3d::{Display, ForceField, Model3d, Placed};
+    let dir = tempfile::tempdir().expect("working folder");
+    let mut doc = Document::default();
+    let c1 = doc.add_atom("C", Point::new(0., 0.));
+    let c2 = doc.add_atom("C", Point::new(36., -21.));
+    let o = doc.add_atom("O", Point::new(72., 0.));
+    doc.add_bond(c1, c2, 1, "plain");
+    doc.add_bond(c2, o, 1, "plain");
+    let placed = [
+        (c1, [-1.2, -0.2, 0.1]),
+        (c2, [0.1, 0.5, -0.1]),
+        (o, [1.2, -0.3, 0.2]),
+    ]
+    .map(|(id, xyz)| Placed { id, xyz })
+    .to_vec();
+    doc.models
+        .push(Model3d::new(&doc, placed, vec![], ForceField::Mmff94s));
+    doc.require_version(MODELS_3D);
+    assert!(reshiki::models3d::set_display(&mut doc, 0, Display::Both));
+    let bytes = doc.file_json().expect("native JSON");
+    fs::write(dir.path().join("eth.rsk"), bytes).expect("write eth.rsk");
+
+    let output = cli(dir.path(), &["convert", "eth.rsk", "--to", "smiles"]);
+    let stderr = text(&output.stderr);
+    assert_eq!(output.status.code(), Some(0), "{stderr}");
+    assert_eq!(text(&output.stdout).trim(), "CCO");
+    for to in ["mol", "cdxml"] {
+        let output = cli(dir.path(), &["convert", "eth.rsk", "--to", to]);
+        let stderr = text(&output.stderr);
+        assert_eq!(output.status.code(), Some(0), "{to}: {stderr}");
+    }
+    let output = cli(dir.path(), &["analyze", "eth.rsk"]);
+    let stderr = text(&output.stderr);
+    assert_eq!(output.status.code(), Some(0), "{stderr}");
+    let result: serde_json::Value =
+        serde_json::from_str(text(&output.stdout).trim()).expect("analyze JSON");
+    assert_eq!(result["value"]["analysis"]["formula"], "C2H6O");
+    let output = cli(dir.path(), &["convert", "eth.rsk", "-o", "eth.svg"]);
+    let stderr = text(&output.stderr);
+    assert_eq!(output.status.code(), Some(0), "{stderr}");
+    assert!(!stderr.contains("needs review"), "{stderr}");
+}

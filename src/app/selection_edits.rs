@@ -102,8 +102,29 @@ impl App {
         self.tool = Tool::Select;
     }
     pub(super) fn transform_selection(&mut self, transform: reshiki::editing::Transform) {
+        // A molecule shown only in 3D keeps its hidden drawing: Rotate rolls
+        // its model and tilt turns it, while a flip has no 3D equivalent (a
+        // mirrored model would be the other enantiomer), so it skips them.
+        let selected = &self.tab.selected;
+        let ids = match transform {
+            editing::Transform::TiltX(_) | editing::Transform::TiltY(_) => selected.clone(),
+            editing::Transform::Rotate(_) => {
+                reshiki::models3d::without_hidden(&self.tab.doc, selected)
+            }
+            editing::Transform::FlipHorizontal | editing::Transform::FlipVertical => {
+                if let Some(reason) = reshiki::models3d::refusal(&self.tab.doc, selected, "flip") {
+                    self.status = reason;
+                    self.error = true;
+                    return;
+                }
+                reshiki::models3d::without_hidden(&self.tab.doc, selected)
+            }
+        };
         let before = self.tab.doc.clone();
-        editing::transform(&mut self.tab.doc, &self.tab.selected, transform);
+        if let editing::Transform::Rotate(degrees) = transform {
+            reshiki::models3d::roll(&mut self.tab.doc, &self.tab.selected, degrees);
+        }
+        editing::transform(&mut self.tab.doc, &ids, transform);
         self.changed(before);
     }
     pub(super) fn arrange_selection(&mut self, arrange: reshiki::editing::Arrange) {

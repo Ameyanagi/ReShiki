@@ -38,6 +38,12 @@ pub(super) struct SelectionBox {
     pub pivot: World,
     camera: Camera,
     bounds: Rectangle,
+    /// Corner handles resize the drawing, or the frames of `models`.
+    resizable: bool,
+    /// The selection is only molecules shown as 3D models: corners resize
+    /// their frames and there are no edge handles. A drawing mixed with shown
+    /// models does not resize at all.
+    models: bool,
 }
 
 impl SelectionBox {
@@ -45,16 +51,24 @@ impl SelectionBox {
         if ids.is_empty() {
             return None;
         }
-        if matches!(ids, [id] if doc.atom(*id).is_some()) {
+        let models = reshiki::models3d::only_shown(doc, ids);
+        if !models && matches!(ids, [id] if doc.atom(*id).is_some()) {
             return None;
         }
         let (lo, hi) = scene::selection_bounds(doc, ids)?;
+        // Rotation turns what is drawn about its own centre, and rolls the
+        // models of molecules shown only in 3D in place.
+        let drawn = reshiki::models3d::without_hidden(doc, ids);
+        let turning = if drawn.is_empty() { ids } else { &drawn };
         Some(Self {
             corners: [lo, World::new(hi.x, lo.y), hi, World::new(lo.x, hi.y)],
             // Derived centroid markers still have a box even without a rotation site.
-            pivot: editing::rotation_center(doc, ids).unwrap_or_else(|| editing::center(doc, ids)),
+            pivot: editing::rotation_center(doc, turning)
+                .unwrap_or_else(|| editing::center(doc, turning)),
             camera,
             bounds,
+            resizable: models || !reshiki::models3d::shows_3d(doc, ids),
+            models,
         })
     }
 
@@ -108,6 +122,9 @@ impl SelectionBox {
     }
 
     fn edge_enabled(self, edge: usize) -> bool {
+        if !self.resizable || self.models {
+            return false;
+        }
         let [a, _, c, _] = self.corners;
         let width = (c.x - a.x).abs();
         let height = (c.y - a.y).abs();
@@ -124,7 +141,7 @@ impl SelectionBox {
         }
         self.grips()
             .iter()
-            .position(|q| (p.x - q.x).abs() < 8.0 && (p.y - q.y).abs() < 8.0)
+            .position(|q| self.resizable && (p.x - q.x).abs() < 8.0 && (p.y - q.y).abs() < 8.0)
             .map(Handle::Resize)
             .or_else(|| {
                 self.edge_grips()
@@ -157,7 +174,7 @@ impl SelectionBox {
         });
         let stroke = Stroke::default().with_width(1.2).with_color(ACCENT);
         frame.stroke(&outline, stroke);
-        for p in corners {
+        for p in corners.into_iter().filter(|_| self.resizable) {
             let handle = Path::rectangle(Point::new(p.x - 4.0, p.y - 4.0), Size::new(8.0, 8.0));
             frame.fill(&handle, Color::WHITE);
             frame.stroke(&handle, stroke);
@@ -198,6 +215,15 @@ pub fn rotation_readout(angle: f32) -> [String; 2] {
         format!("Rotate {}°", angle.round() + 0.),
         format!("Shift: 15° steps · {keys}"),
     ]
+}
+
+/// The rotation handle's transform, in its preview and commit alike: what is
+/// drawn turns about `pivot`, and a molecule shown only in 3D rolls its model
+/// instead of turning its hidden drawing.
+pub(crate) fn rotate(doc: &mut Document, ids: &[u64], pivot: World, scale: f32, degrees: f32) {
+    reshiki::models3d::roll(doc, ids, degrees);
+    let drawn = reshiki::models3d::without_hidden(doc, ids);
+    editing::transform_about(doc, &drawn, pivot, scale, degrees);
 }
 
 #[derive(Debug)]
@@ -243,6 +269,10 @@ impl TransformDrag {
             offset: World::new(start.x - corner.x, start.y - corner.y),
             moved: false,
         }
+    }
+
+    pub fn resizes_models(&self) -> bool {
+        self.selection.models && matches!(self.handle, Handle::Resize(_))
     }
 
     pub fn track_pointer(&mut self, end: World, zoom: f32) {
@@ -310,8 +340,10 @@ impl TransformDrag {
                 (scale, 1.)
             };
             editing::scale_axes_about(doc, &self.ids, self.pivot, x, y);
+        } else if self.resizes_models() {
+            reshiki::models3d::resize(doc, &self.ids, self.pivot, scale);
         } else {
-            editing::transform_about(doc, &self.ids, self.pivot, scale, rotation);
+            rotate(doc, &self.ids, self.pivot, scale, rotation);
         }
     }
 
@@ -328,6 +360,12 @@ impl TransformDrag {
                 pivot: self.pivot,
                 x,
                 y,
+            }
+        } else if self.resizes_models() {
+            super::Edit::ResizeModels {
+                ids: self.ids,
+                pivot: self.pivot,
+                scale,
             }
         } else {
             super::Edit::Transform {

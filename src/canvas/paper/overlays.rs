@@ -404,7 +404,7 @@ impl MoleculeCanvas<'_> {
         if edit_points {
             for indicator in reshiki::atom_labels::indicators(preview)
                 .into_iter()
-                .filter(|i| i.owner.selected(selected))
+                .filter(|i| i.owner.selected(selected) && i.owner.drawn(preview))
             {
                 if let Some(anchor) = indicator.owner.anchor(preview) {
                     let center = self.camera.screen(indicator.center, bounds);
@@ -418,7 +418,7 @@ impl MoleculeCanvas<'_> {
             for a in preview
                 .atoms
                 .iter()
-                .filter(|a| selected.contains(&a.id) && preview.atom_visible(a.id))
+                .filter(|a| selected.contains(&a.id) && preview.atom_drawn(a.id))
             {
                 // A hidden charge has no handle, so it keeps its place.
                 for m in a

@@ -207,6 +207,8 @@ pub(crate) fn preserved_expansion_selection(
         .retain(|n| ids.contains(&n.annotation) && n.atoms.iter().all(|id| ids.contains(id)));
     part.arrow_labels
         .retain(|l| ids.contains(&l.arrow) && ids.contains(&l.annotation));
+    part.models
+        .retain(|m| m.atoms.iter().all(|a| ids.contains(&a.id)));
     part.generic.alternatives.retain(|a| ids.contains(&a.atom));
     part.generic.links.retain(|a| ids.contains(&a.atom));
     part.generic.repeats.retain(|r| {
@@ -420,6 +422,9 @@ fn mapped_append_part(
         label.arrow = mapping.get(&label.arrow).copied()?;
         label.annotation = mapping.get(&label.annotation).copied()?;
     }
+    for model in &mut part.models {
+        model.remap(&mapping)?;
+    }
     part.depth_appearance = crate::depth_appearance::remap(&source.depth_appearance, &mapping);
     for a in &mut part.atoms {
         // A pasted fragment keeps its source appearance when document defaults differ.
@@ -533,6 +538,10 @@ pub(crate) fn extend_append_part(doc: &mut Document, part: Document) {
     doc.ring_fills.extend(part.ring_fills);
     doc.depth_appearance.extend(part.depth_appearance);
     doc.generic.extend(part.generic);
+    if !part.models.is_empty() {
+        doc.models.extend(part.models);
+        doc.require_version(crate::document::MODELS_3D);
+    }
     if crate::rear_opacity::present(doc) {
         doc.require_version(crate::document::REAR_OPACITY);
     }
@@ -978,7 +987,7 @@ pub fn nearest_bond(doc: &Document, p: Point, r: f32) -> Option<usize> {
     doc.bonds
         .iter()
         .enumerate()
-        .filter(|(_, b)| doc.bond_visible(b.a, b.b))
+        .filter(|(_, b)| doc.bond_drawn(b.a, b.b))
         .filter_map(|(i, b)| {
             let a = doc.atom(b.a)?.position;
             let z = doc.atom(b.b)?.position;
@@ -1747,6 +1756,8 @@ fn isolated_ring(doc: &Document, ids: &[u64]) -> Option<Vec<u64>> {
 /// The separate fusion operation still requires an isolated saturated ring.
 pub fn ring_at(doc: &Document, p: Point) -> Option<Vec<u64>> {
     let mut rings = crate::aromatic::ring_circles(doc, false);
+    // A ring shown as a 3D model has no 2D interior to hit.
+    rings.retain(|ring| ring.atoms.iter().all(|id| doc.atom_drawn(*id)));
     rings.sort_by(|a, b| a.radius.total_cmp(&b.radius));
     rings.into_iter().find_map(|ring| {
         let ring = ring.atoms;
@@ -1784,6 +1795,10 @@ pub fn snap_ring(doc: &mut Document, ids: &[u64], delta: Point, radius: f32) -> 
         points: Vec<Point>,
     }
     let ring = isolated_ring(doc, ids)?;
+    // A ring shown as a 3D model keeps its hidden drawing.
+    if ring.iter().any(|id| crate::models3d::hides(doc, *id)) {
+        return None;
+    }
     let mut targets = None;
     let mut best: Option<Candidate> = None;
     for (a, b) in ring
@@ -1809,6 +1824,9 @@ pub fn snap_ring(doc: &mut Document, ids: &[u64], delta: Point, radius: f32) -> 
                         || ids.contains(&bond.b)
                         || bond.order != 1
                         || bond.display != "plain"
+                        // Nor fuses onto a bond hidden in a 3D model.
+                        || crate::models3d::hides(doc, bond.a)
+                        || crate::models3d::hides(doc, bond.b)
                     {
                         return None;
                     }
@@ -1867,7 +1885,7 @@ pub fn snap_ring(doc: &mut Document, ids: &[u64], delta: Point, radius: f32) -> 
                     score += (p.distance(moved) / length).powi(2) * 0.1;
                     if !source.contains(id) {
                         for other in &doc.atoms {
-                            if !ids.contains(&other.id) {
+                            if !ids.contains(&other.id) && !crate::models3d::hides(doc, other.id) {
                                 score +=
                                     (0.6 - p.distance(other.position) / length).max(0.0).powi(2)
                                         * 1000.0;

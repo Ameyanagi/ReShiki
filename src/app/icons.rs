@@ -33,6 +33,7 @@ pub(super) enum Icon {
     Keyboard,
     More,
     Lock(bool),
+    ModelStyle(reshiki::models3d::Style),
 }
 pub(super) struct Glyph(pub Icon, pub bool);
 impl<Message> canvas::Program<Message> for Glyph {
@@ -101,6 +102,7 @@ impl Glyph {
             Icon::Inspector => commands::inspector(f, ink),
             Icon::More => chrome::more(f, ink),
             Icon::Lock(locked) => chrome::lock(f, ink, locked),
+            Icon::ModelStyle(style) => chrome::model_style(f, ink, style),
         }
     }
 }

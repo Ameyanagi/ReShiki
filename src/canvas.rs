@@ -31,6 +31,7 @@ mod hit;
 mod input;
 pub mod layered;
 mod markers;
+mod models3d;
 mod movement;
 pub(crate) mod nmr;
 pub(crate) mod optimization;
@@ -85,6 +86,7 @@ use reshiki::{
     graphics::{ArcGeometry, BracketSides, GraphicStyle},
     scientific::Phase,
 };
+pub(crate) use selection::rotate;
 use selection::{Handle, SelectionBox, TransformDrag};
 use std::sync::LazyLock;
 pub(crate) use text_cache::prepare_fonts;
@@ -203,6 +205,19 @@ pub enum Edit {
         x: f32,
         y: f32,
     },
+    /// Turn the 3D model of these atoms to the unit quaternion `rotation`.
+    ModelView {
+        atoms: Vec<u64>,
+        rotation: [f32; 4],
+    },
+    /// Scale the frames of the shown 3D models among `ids` about `pivot`.
+    ResizeModels {
+        ids: Vec<u64>,
+        pivot: World,
+        scale: f32,
+    },
+    /// The floating bar's Show as 2D / 3D / Both.
+    ShowAs(reshiki::models3d::Display),
     Bond(World, World, Option<u64>, Option<u64>),
     TextBond {
         source: Option<u64>,
@@ -323,6 +338,7 @@ enum Gesture {
     },
     Transform(Box<TransformDrag>),
     Tilt(tilt::TiltDrag),
+    Turn(models3d::Turn),
     Draw {
         start: World,
         pressed: World,
@@ -445,6 +461,10 @@ pub struct MoleculeCanvas<'a> {
     pub(crate) nmr: Option<nmr::Context<'a>>,
     pub(crate) optimizer: Option<optimization::Context<'a>>,
     pub(crate) keyboard_target: Option<World>,
+    /// The display the floating Show as bar marks, when it shows.
+    pub(crate) model_bar: Option<reshiki::models3d::Display>,
+    /// The model (by an atom) that started its 2D → 3D morph, and when.
+    pub(crate) morph: Option<(u64, std::time::Instant)>,
     pub joining: Option<(&'a reshiki::joining::Prepared, reshiki::templates::Anchor)>,
     pub hidden_annotation: Option<u64>,
     pub bond_drawing: BondDrawing,
@@ -488,6 +508,8 @@ impl<'a> MoleculeCanvas<'a> {
             nmr: None,
             optimizer: None,
             keyboard_target: None,
+            model_bar: None,
+            morph: None,
             joining: None,
             hidden_annotation: None,
             bond_drawing: styles.bond_drawing,

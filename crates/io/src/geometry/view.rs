@@ -96,6 +96,10 @@ impl Rotation {
             scale(cross, 2. * self.w),
         )
     }
+    /// A stored `[w, x, y, z]` quaternion, normalized.
+    pub fn from_quaternion([w, x, y, z]: [f64; 4]) -> Self {
+        Self { w, x, y, z }.normalized()
+    }
     pub fn inverse(self) -> Self {
         Self {
             w: self.w,

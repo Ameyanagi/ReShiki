@@ -37,11 +37,32 @@ pub(super) fn render_svg(doc: &Document, background: bool) -> String {
         paper: background.then(|| theme.background()),
         lo,
         hi,
+        gradients: Default::default(),
     };
     let mut content = String::new();
     push_svg(&mut content, drawing, &frame, &mut 0);
     s.push_str(&content);
     s.push_str("</svg>\n");
+    s
+}
+
+/// `drawing` alone over `lo..hi`, one SVG unit per drawing unit, in the light
+/// theme and without a background.
+pub(super) fn render_part(drawing: Vec<Primitive>, lo: super::Point, hi: super::Point) -> String {
+    let (width, height) = (hi.x - lo.x, hi.y - lo.y);
+    let frame = Frame {
+        theme: Default::default(),
+        paper: None,
+        lo,
+        hi,
+        gradients: Default::default(),
+    };
+    let mut s = format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"{} {} {width} {height}\" width=\"{width}\" height=\"{height}\">",
+        lo.x, lo.y
+    );
+    push_svg(&mut s, drawing, &frame, &mut 0);
+    s.push_str("</svg>");
     s
 }
 
@@ -51,6 +72,41 @@ struct Frame {
     paper: Option<[u8; 3]>,
     lo: super::Point,
     hi: super::Point,
+    /// Serial for 3D-model gradient IDs.
+    gradients: std::cell::Cell<usize>,
+}
+
+/// A gradient definition in drawing units with exact stop colors, and its ID.
+fn gradient(
+    frame: &Frame,
+    kind: &str,
+    geometry: &str,
+    stops: &[(f32, [u8; 3])],
+) -> (String, String) {
+    frame.gradients.set(frame.gradients.get() + 1);
+    let id = format!("reshiki-3d-{}", frame.gradients.get());
+    let stops: String = stops
+        .iter()
+        .map(|(offset, [r, g, b])| {
+            format!("<stop offset=\"{offset}\" stop-color=\"rgb({r},{g},{b})\"/>")
+        })
+        .collect();
+    (
+        format!(
+            "<defs><{kind} id=\"{id}\" gradientUnits=\"userSpaceOnUse\" {geometry}>{stops}</{kind}></defs>"
+        ),
+        id,
+    )
+}
+
+fn outline_paint(outline: Option<super::Outline>) -> String {
+    outline.map_or_else(String::new, |o| {
+        let [r, g, b] = o.color;
+        format!(
+            " stroke=\"rgb({r},{g},{b})\" stroke-opacity=\"{}\" stroke-width=\"{}\"",
+            o.alpha, o.width
+        )
+    })
 }
 
 fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut usize) {
@@ -137,6 +193,137 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                         .join(" ")
                 ));
             }
+            Primitive::Sphere {
+                center,
+                radius,
+                focal,
+                stops,
+                outline,
+            } => {
+                // `fr` is SVG 2: the vendored usvg 0.45 behind PNG and PDF
+                // export ignores it and starts the gradient at radius 0.
+                let (defs, id) = gradient(
+                    frame,
+                    "radialGradient",
+                    &format!(
+                        "cx=\"{}\" cy=\"{}\" r=\"{radius}\" fx=\"{}\" fy=\"{}\" fr=\"{}\"",
+                        center.x,
+                        center.y,
+                        focal.x,
+                        focal.y,
+                        radius * crate::models3d::FOCAL_RADIUS
+                    ),
+                    &stops,
+                );
+                s.push_str(&format!(
+                    "{defs}<circle cx=\"{}\" cy=\"{}\" r=\"{radius}\" fill=\"url(#{id})\"{}/>",
+                    center.x,
+                    center.y,
+                    outline_paint(outline)
+                ));
+            }
+            Primitive::ShadedQuad {
+                corners,
+                from,
+                to,
+                stops,
+                outline,
+            } => {
+                let (defs, id) = gradient(
+                    frame,
+                    "linearGradient",
+                    &format!(
+                        "x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\"",
+                        from.x, from.y, to.x, to.y
+                    ),
+                    &stops,
+                );
+                let [a, b, c, d] = corners;
+                s.push_str(&format!(
+                    "{defs}<polygon points=\"{},{} {},{} {},{} {},{}\" fill=\"url(#{id})\"/>",
+                    a.x, a.y, b.x, b.y, c.x, c.y, d.x, d.y
+                ));
+                if outline.is_some() {
+                    s.push_str(&format!(
+                        "<path d=\"M{} {} L{} {} M{} {} L{} {}\" fill=\"none\"{}/>",
+                        a.x,
+                        a.y,
+                        b.x,
+                        b.y,
+                        d.x,
+                        d.y,
+                        c.x,
+                        c.y,
+                        outline_paint(outline)
+                    ));
+                }
+            }
+            Primitive::ShadedPolygon {
+                points,
+                from,
+                to,
+                stops,
+            } => {
+                let (defs, id) = gradient(
+                    frame,
+                    "linearGradient",
+                    &format!(
+                        "x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\"",
+                        from.x, from.y, to.x, to.y
+                    ),
+                    &stops,
+                );
+                s.push_str(&format!(
+                    "{defs}<polygon points=\"{}\" fill=\"url(#{id})\"/>",
+                    points
+                        .iter()
+                        .map(|p| format!("{},{}", p.x, p.y))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                ));
+            }
+            Primitive::Contour { polygons, outline } => {
+                let path: String = polygons
+                    .iter()
+                    .filter_map(|polygon| {
+                        let (first, rest) = polygon.split_first()?;
+                        let mut d = format!("M{} {}", first.x, first.y);
+                        for p in rest {
+                            d.push_str(&format!(" L{} {}", p.x, p.y));
+                        }
+                        d.push_str(" Z ");
+                        Some(d)
+                    })
+                    .collect();
+                s.push_str(&format!(
+                    "<path d=\"{}\" fill=\"none\" stroke-linejoin=\"round\"{}/>",
+                    path.trim_end(),
+                    outline_paint(Some(outline))
+                ));
+            }
+            Primitive::Wire {
+                from,
+                to,
+                width,
+                color: [r, g, b],
+            } => s.push_str(&format!(
+                "<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"rgb({r},{g},{b})\" stroke-width=\"{width}\" stroke-linecap=\"round\"/>",
+                from.x, from.y, to.x, to.y
+            )),
+            Primitive::Card {
+                lo,
+                hi,
+                radius,
+                fill: [r, g, b],
+                outline,
+            } => s.push_str(&format!(
+                "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{radius}\" fill=\"rgb({r},{g},{b})\"{}/>",
+                lo.x,
+                lo.y,
+                hi.x - lo.x,
+                hi.y - lo.y,
+                outline_paint(Some(outline))
+            )),
             Primitive::Text {
                 position,
                 text,
@@ -251,7 +438,14 @@ fn push_halo(s: &mut String, primitives: &[Primitive], radius: f32, color: &str)
                 style,
                 &format!("fill=\"{color}\" {}", spread(0.)),
             ),
-            Primitive::Picture(_) | Primitive::Halo { .. } => {}
+            Primitive::Picture(_)
+            | Primitive::Halo { .. }
+            | Primitive::Sphere { .. }
+            | Primitive::ShadedQuad { .. }
+            | Primitive::ShadedPolygon { .. }
+            | Primitive::Contour { .. }
+            | Primitive::Wire { .. }
+            | Primitive::Card { .. } => {}
         }
     }
 }

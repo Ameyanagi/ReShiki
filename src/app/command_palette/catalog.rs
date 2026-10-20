@@ -3,8 +3,8 @@
 //! from the same tables that menus, tooltips and Help read.
 use super::super::{
     App, InspectorTab, Message, abbreviations, assistant, cleanup, generic, import, inspector,
-    keyboard_drawing, naming, nmr, optimization, pages, palettes, printing, reaction_mapping,
-    reactions,
+    keyboard_drawing, models3d, naming, nmr, optimization, pages, palettes, printing,
+    reaction_mapping, reactions,
     shortcuts::{self, keys},
     tabs, view_settings,
 };
@@ -16,6 +16,7 @@ use reshiki::{
     chains::ChainMode,
     editing::{Arrange, Transform},
     graphics::GraphicKind,
+    models3d::Display,
     rings::Preset as RingPreset,
     typography::{Script, StyleChange, TextAlign},
 };
@@ -678,6 +679,30 @@ fn edits() -> Vec<Command> {
             "Generate an optimized 3D conformer",
             "conformer mmff uff geometry optimize",
             Message::Optimization(optimization::Action::Begin),
+        ),
+        selection(
+            "Show as 3D model",
+            "Show the selected molecule as a ball & stick model",
+            "ball stick conformer structure view",
+            Message::Models3d(models3d::Action::Show(Display::ThreeD)),
+        ),
+        selection(
+            "Show as 2D and 3D",
+            "Show the 3D model beside the 2D drawing",
+            "both ball stick conformer structure view",
+            Message::Models3d(models3d::Action::Show(Display::Both)),
+        ),
+        selection(
+            "Show as 2D drawing",
+            "Show the selected molecule as its 2D drawing",
+            "structure view flat",
+            Message::Models3d(models3d::Action::Show(Display::TwoD)),
+        ),
+        selection(
+            "Show as 2D from the 3D view",
+            "Flatten the 3D model as it is turned now into the 2D drawing",
+            "flatten projection layout structure view",
+            Message::Models3d(models3d::Action::Flatten),
         ),
         selection(
             "Join fragments",

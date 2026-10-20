@@ -38,6 +38,7 @@ fn merge_atoms_with_position(
     if crate::generic::touches(doc, selected) {
         return Err(crate::generic::JOIN_NOTICE.into());
     }
+    super::shown_in_3d(doc, selected)?;
     let first = atoms.first().copied().ok_or("Select atoms to merge.")?;
     for atom in &atoms {
         if doc
@@ -214,6 +215,7 @@ fn merge_atoms_with_position(
     crate::arrow_anchors::remap_for_join(&mut result, &doc.atoms, &endpoint_mapping);
     crate::atom_labels::clear_computed(&mut result);
     crate::molecule_names::reconcile(&mut result, doc);
+    crate::models3d::reconcile(&mut result, doc);
     result.validate()?;
     Ok((result, vec![survivor]))
 }

@@ -14,6 +14,18 @@ pub use coordination::{Coordination, coordinate_atoms, coordination_donor, coord
 mod plan;
 pub use plan::{JoinPlan, join_plan};
 
+/// Why joins refuse a molecule shown only as a 3D model: joining would move
+/// or bond its hidden 2D drawing.
+pub const SHOWN_IN_3D: &str = "Switch to 2D to join a molecule shown in 3D";
+
+/// Refuse a join that reaches an atom shown only as a 3D model.
+pub fn shown_in_3d(doc: &Document, ids: &[u64]) -> Result<(), String> {
+    if ids.iter().any(|id| crate::models3d::hides(doc, *id)) {
+        return Err(SHOWN_IN_3D.into());
+    }
+    Ok(())
+}
+
 /// The result of placing a prepared fragment or adding an in-place contact.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Placed {
@@ -103,6 +115,7 @@ impl Prepared {
         if crate::generic::touches(doc, &moving) {
             return Err(crate::generic::JOIN_NOTICE.into());
         }
+        shown_in_3d(doc, &moving)?;
         let fragment = editing::selection(doc, &moving);
         if fragment.atoms.is_empty() {
             return Err("Select a molecule or atom to move and attach.".into());
