@@ -157,7 +157,8 @@ fn a_generated_model_frame_selects_its_molecule() {
     let _ = app.update(Message::Models3d(Action::Generated(key, Ok(result))));
     let doc = &app.tab.doc;
     assert!(reshiki::models3d::shows_3d(doc, &atoms));
-    let (center, _) = reshiki::models3d::frame(doc, &doc.models[0]).unwrap();
+    let (lo, hi) = reshiki::models3d::frame(doc, &doc.models[0]).unwrap();
+    let center = reshiki::document::Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
     assert_eq!(reshiki::models3d::frame_hit(doc, center), Some(atoms));
 }
 

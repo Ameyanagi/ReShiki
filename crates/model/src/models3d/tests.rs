@@ -112,12 +112,12 @@ fn deleting_an_atom_drops_the_model_but_other_edits_keep_it() {
     // Moving the molecule carries the frame with it.
     let mut moved = doc.clone();
     let before = moved.clone();
-    let (center, _) = frame(&moved, &moved.models[0]).unwrap();
+    let (lo, _) = frame(&moved, &moved.models[0]).unwrap();
     moved.translate(&atoms, 10., 5.);
     commit(&mut moved, before);
     assert_eq!(moved.models, doc.models);
     let (after, _) = frame(&moved, &moved.models[0]).unwrap();
-    assert_eq!(after, center.offset(10., 5.));
+    assert!((after.x - lo.x - 10.).abs() < 1e-3 && (after.y - lo.y - 5.).abs() < 1e-3);
 }
 
 #[test]
@@ -328,13 +328,14 @@ fn a_3d_molecule_leaves_the_2d_pass_and_a_2d_model_changes_nothing() {
 fn hidden_atoms_are_not_picked_and_the_frame_selects_the_molecule() {
     let (doc, atoms, methane) = shown(Display::ThreeD);
     assert!(!doc.atom_drawn(atoms[0]) && doc.atom_drawn(methane));
-    let (center, size) = frame(&doc, &doc.models[0]).unwrap();
+    let (flo, fhi) = frame(&doc, &doc.models[0]).unwrap();
+    let center = Point::new((flo.x + fhi.x) / 2., (flo.y + fhi.y) / 2.);
     assert_eq!(doc.nearest(doc.atom(atoms[0]).unwrap().position, 5.), None);
     assert_eq!(editing::nearest_bond(&doc, Point::new(18., -10.), 5.), None);
     assert_eq!(frame_hit(&doc, center), Some(atoms.clone()));
-    assert_eq!(frame_hit(&doc, center.offset(size, 0.)), None);
+    assert_eq!(frame_hit(&doc, fhi.offset(1., 0.)), None);
     let (lo, hi) = scene::selection_bounds(&doc, &atoms).unwrap();
-    assert!(lo.x <= center.x - size / 2. && hi.x >= center.x + size / 2.);
+    assert!(lo.x <= flo.x && hi.x >= fhi.x);
     let lasso = [
         lo.offset(-1., -1.),
         Point::new(hi.x + 1., lo.y - 1.),
@@ -347,8 +348,9 @@ fn hidden_atoms_are_not_picked_and_the_frame_selects_the_molecule() {
 
     // Beside the drawing, the frame sits right of the atoms.
     let (both, ..) = shown(Display::Both);
-    let (center, size) = frame(&both, &both.models[0]).unwrap();
-    assert!(center.x - size / 2. > 72.);
+    let (lo, _) = frame(&both, &both.models[0]).unwrap();
+    let bond = both.drawing_style.bond_length_world;
+    assert!((lo.x - (72. + bond)).abs() < 1e-3, "{lo:?}");
     assert!(both.atom_drawn(atoms[0]));
 }
 
@@ -573,4 +575,80 @@ fn chemistry_and_reaction_roles_keep_a_drawing_with_a_model_valid() {
     crate::reactions::assign(&mut doc, arrow, &[methane], crate::reactions::Role::Product).unwrap();
     assert_eq!(doc.version, VERSION);
     assert_eq!(doc.models.len(), 1);
+}
+
+#[test]
+fn each_ball_covers_its_own_half_bonds_but_not_a_farther_atom() {
+    let (mut doc, ..) = shown(Display::ThreeD);
+    doc.models[0].rotation = [1., 0., 0., 0.];
+    doc.models[0].hydrogens.clear();
+    // C1 sits behind C2, whose half-bond to O points toward the viewer; O is
+    // in front of both. C1 and its half are drawn first, behind everything.
+    doc.models[0].atoms[0].xyz = [-1.2, 0., -1.5];
+    doc.models[0].atoms[1].xyz = [0., 0., 0.];
+    doc.models[0].atoms[2].xyz = [1.2, 0., 1.];
+    let order: Vec<_> = primitives(&doc)
+        .into_iter()
+        .map(|p| match p {
+            Primitive::Sphere { center, .. } => (true, center.x),
+            Primitive::ShadedQuad { corners, .. } => (false, (corners[0].x + corners[3].x) / 2.),
+            _ => unreachable!(),
+        })
+        .collect();
+    let model = &doc.models[0];
+    let points = model.points(&doc).unwrap();
+    let view = View::new(&doc, model).unwrap();
+    let x = |i: usize| view.project(view.rotated[i]).0.x;
+    let sphere = |i| order.iter().position(|&(s, px)| s && px == x(i)).unwrap();
+    let halves = |i| -> Vec<usize> {
+        order
+            .iter()
+            .enumerate()
+            .filter(|(_, (s, px))| !s && (*px - x(i)).abs() < 1e-3)
+            .map(|(n, _)| n)
+            .collect()
+    };
+    assert_eq!(points.len(), 3);
+    // Every half-bond, including C2's half toward the nearer O, comes before
+    // its own ball.
+    for i in 0..3 {
+        assert!(halves(i).iter().all(|&h| h < sphere(i)), "{i}: {order:?}");
+    }
+    // The halves of the front oxygen still pass in front of the far C1.
+    assert!(halves(2).iter().all(|&h| h > sphere(0)), "{order:?}");
+}
+
+#[test]
+fn the_frame_fits_the_projected_balls_with_a_modest_margin() {
+    let (doc, ..) = shown(Display::ThreeD);
+    let model = &doc.models[0];
+    let (lo, hi) = frame(&doc, model).unwrap();
+    let mut ink = (
+        Point::new(f32::MAX, f32::MAX),
+        Point::new(f32::MIN, f32::MIN),
+    );
+    for p in primitives(&doc) {
+        if let Primitive::Sphere { center, radius, .. } = p {
+            ink.0 = Point::new(
+                ink.0.x.min(center.x - radius),
+                ink.0.y.min(center.y - radius),
+            );
+            ink.1 = Point::new(
+                ink.1.x.max(center.x + radius),
+                ink.1.y.max(center.y + radius),
+            );
+        }
+    }
+    let (w, h) = (ink.1.x - ink.0.x, ink.1.y - ink.0.y);
+    let pad = 0.06 * w.max(h);
+    for (frame, ink) in [
+        (lo.x, ink.0.x - pad),
+        (lo.y, ink.0.y - pad),
+        (hi.x, ink.1.x + pad),
+        (hi.y, ink.1.y + pad),
+    ] {
+        assert!((frame - ink).abs() < 1e-3, "{lo:?} {hi:?} {ink:?}");
+    }
+    // Much tighter than the reference square that sets the scale.
+    assert!(hi.x - lo.x < model.size && hi.y - lo.y < model.size * 0.8);
 }

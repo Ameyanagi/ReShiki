@@ -77,7 +77,8 @@ pub struct Model3d {
     pub rotation: [f32; 4],
     /// Frame centre minus the molecule's 2D centre, in drawing units.
     pub offset: Point,
-    /// Frame side in drawing units.
+    /// Reference side in drawing units: the model's farthest ball edge from
+    /// its centre reaches 44% of it, which sets the drawing scale.
     pub size: f32,
     #[serde(default)]
     pub style: Style,
@@ -243,25 +244,80 @@ pub fn drawn(doc: &Document) -> std::borrow::Cow<'_, Document> {
     std::borrow::Cow::Owned(flat)
 }
 
-/// Frame centre and side in drawing units, or `None` while an atom is missing.
-pub fn frame(doc: &Document, model: &Model3d) -> Option<(Point, f32)> {
-    let (lo, hi) = layout_bounds(doc, model)?;
-    Some((
-        Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.).offset(model.offset.x, model.offset.y),
-        model.size,
-    ))
+/// The model's projection: rotated ångström points about the heavy-atom
+/// centre, drawn around `origin` at `scale` drawing units per ångström.
+struct View<'a> {
+    symbols: Vec<&'a str>,
+    rotated: Vec<[f32; 3]>,
+    reach: f32,
+    origin: Point,
+    scale: f32,
+    camera: f32,
+    perspective: f32,
+}
+impl View<'_> {
+    fn new<'a>(doc: &'a Document, model: &Model3d) -> Option<View<'a>> {
+        let (lo, hi) = layout_bounds(doc, model)?;
+        let points = model.points(doc)?;
+        let c = heavy_center(&points);
+        let reach = reach(&points, c);
+        Some(View {
+            rotated: points
+                .iter()
+                .map(|(_, p)| rotate(model.rotation, sub(*p, c)))
+                .collect(),
+            symbols: points.into_iter().map(|(s, _)| s).collect(),
+            reach,
+            origin: Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.)
+                .offset(model.offset.x, model.offset.y),
+            scale: 0.44 * model.size / reach,
+            camera: reach * (1.2 + 9. * (1. - model.perspective)),
+            perspective: model.perspective,
+        })
+    }
+    /// Drawing point and perspective factor of a rotated point.
+    fn project(&self, p: [f32; 3]) -> (Point, f32) {
+        let f = if self.perspective > 0. {
+            self.camera / (self.camera - p[2])
+        } else {
+            1.
+        };
+        (
+            Point::new(
+                self.origin.x + p[0] * self.scale * f,
+                self.origin.y - p[1] * self.scale * f,
+            ),
+            f,
+        )
+    }
+    /// Bounds of the projected balls, padded by 6% of the longer side.
+    fn bounds(&self) -> (Point, Point) {
+        let mut lo = Point::new(f32::INFINITY, f32::INFINITY);
+        let mut hi = Point::new(f32::NEG_INFINITY, f32::NEG_INFINITY);
+        for (s, p) in self.symbols.iter().zip(&self.rotated) {
+            let (q, f) = self.project(*p);
+            let r = element(s).1 * self.scale * f;
+            lo = Point::new(lo.x.min(q.x - r), lo.y.min(q.y - r));
+            hi = Point::new(hi.x.max(q.x + r), hi.y.max(q.y + r));
+        }
+        if lo.x > hi.x {
+            return (self.origin, self.origin);
+        }
+        let pad = 0.06 * (hi.x - lo.x).max(hi.y - lo.y);
+        (lo.offset(-pad, -pad), hi.offset(pad, pad))
+    }
+}
+
+/// The frame's top-left and bottom-right corners in drawing units: the
+/// projected model with a modest margin, or `None` while an atom is missing.
+pub fn frame(doc: &Document, model: &Model3d) -> Option<(Point, Point)> {
+    Some(View::new(doc, model)?.bounds())
 }
 
 /// The frame's corners, clockwise from the top left.
 pub fn frame_corners(doc: &Document, model: &Model3d) -> Option<[Point; 4]> {
-    let (c, size) = frame(doc, model)?;
-    let h = size / 2.;
-    Some([
-        c.offset(-h, -h),
-        c.offset(h, -h),
-        c.offset(h, h),
-        c.offset(-h, h),
-    ])
+    let (lo, hi) = frame(doc, model)?;
+    Some([lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y)])
 }
 
 fn layout_bounds(doc: &Document, model: &Model3d) -> Option<(Point, Point)> {
@@ -285,14 +341,20 @@ pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
     let Some(model) = doc.models.get(index) else {
         return false;
     };
-    let Some((lo, hi)) = layout_bounds(doc, model) else {
+    let Some((_, hi)) = layout_bounds(doc, model) else {
         return false;
     };
     let offset = match display {
-        Display::Both => Point::new(
-            (hi.x - lo.x) / 2. + doc.drawing_style.bond_length_world + model.size / 2.,
-            0.,
-        ),
+        Display::Both => {
+            let centered = Model3d {
+                offset: Point::default(),
+                ..model.clone()
+            };
+            let Some((left, _)) = frame(doc, &centered) else {
+                return false;
+            };
+            Point::new(hi.x + doc.drawing_style.bond_length_world - left.x, 0.)
+        }
         Display::TwoD | Display::ThreeD => Point::default(),
     };
     let Some(model) = doc.models.get_mut(index) else {
@@ -329,8 +391,8 @@ pub fn frame_hit(doc: &Document, p: Point) -> Option<Vec<u64>> {
         .rev()
         .filter(|m| m.display != Display::TwoD)
         .find(|m| {
-            frame(doc, m).is_some_and(|(c, size)| {
-                (p.x - c.x).abs() <= size / 2. && (p.y - c.y).abs() <= size / 2.
+            frame(doc, m).is_some_and(|(lo, hi)| {
+                (lo.x..=hi.x).contains(&p.x) && (lo.y..=hi.y).contains(&p.y)
             })
         })
         .map(|m| m.atoms.iter().map(|a| a.id).collect())
@@ -733,8 +795,7 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
 }
 
 fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Option<()> {
-    let (center, size) = frame(doc, model)?;
-    let points = model.points(doc)?;
+    let view = View::new(doc, model)?;
     let index: HashMap<_, _> = model
         .atoms
         .iter()
@@ -749,29 +810,11 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     for (i, h) in model.hydrogens.iter().enumerate() {
         bonds.push((*index.get(&h.parent)?, model.atoms.len() + i));
     }
-    let c = heavy_center(&points);
-    let rotated: Vec<_> = points
-        .iter()
-        .map(|(_, p)| rotate(model.rotation, sub(*p, c)))
-        .collect();
-    let reach = reach(&points, c);
-    let scale = 0.44 * size / reach;
-    let perspective = model.perspective;
-    let camera = reach * (1.2 + 9. * (1. - perspective));
-    let project = |p: [f32; 3]| {
-        let f = if perspective > 0. {
-            camera / (camera - p[2])
-        } else {
-            1.
-        };
-        (
-            Point::new(center.x + p[0] * scale * f, center.y - p[1] * scale * f),
-            f,
-        )
-    };
+    let (rotated, reach, scale) = (&view.rotated, view.reach, view.scale);
+    let project = |p| view.project(p);
     let paper = float(doc.canvas_theme.background());
     let fade = |z: f32| model.depth_fade * ((reach - z) / (2. * reach)).clamp(0., 1.);
-    let line = (size / 400.).clamp(0.6, 1.1);
+    let line = (model.size / 400.).clamp(0.6, 1.1);
     let outline = |width| {
         Some(Outline {
             color: [30, 34, 38],
@@ -783,25 +826,29 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         Bond(usize, [f32; 3]),
         Atom(usize),
     }
+    // Each half-bond sorts at its own depth but never after its atom, so the
+    // ball covers the half that points toward the viewer yet a half-bond
+    // still passes in front of a farther atom. Ties draw the half first.
     let mut items = vec![];
     for &(a, b) in &bonds {
         let (pa, pb) = (*rotated.get(a)?, *rotated.get(b)?);
         let middle = zip3(pa, pb, |a, b| (a + b) / 2.);
         for s in [a, b] {
             let ps = *rotated.get(s)?;
-            items.push(((ps[2] + middle[2]) / 2. - 0.05, Item::Bond(s, middle)));
+            let z = (ps[2] + middle[2]) / 2. - 0.05;
+            items.push((z.min(ps[2]), 0, z, Item::Bond(s, middle)));
         }
     }
     items.extend(
         rotated
             .iter()
             .enumerate()
-            .map(|(i, p)| (p[2], Item::Atom(i))),
+            .map(|(i, p)| (p[2], 1, p[2], Item::Atom(i))),
     );
-    items.sort_by(|a, b| a.0.total_cmp(&b.0));
-    for (z, item) in items {
+    items.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+    for (_, _, z, item) in items {
         let (Item::Bond(i, _) | Item::Atom(i)) = item;
-        let (color, radius) = element(points.get(i)?.0);
+        let (color, radius) = element(view.symbols.get(i)?);
         let base = mix(float(color), paper, fade(z));
         match item {
             Item::Atom(i) => {
