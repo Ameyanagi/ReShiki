@@ -1,7 +1,7 @@
 import type { Editor } from "./editor.js";
 
 /** `<reshiki-editor src="…" format="…">`, defined by importing
- * `@reshiki/editor/element`. Fires `ready` and `change`. */
+ * `@ameyanagi/reshiki/element`. Fires `ready` and `change`. */
 export class ReshikiEditor extends HTMLElement {
   /** Resolves once the editor runs. */
   readonly ready: Promise<Editor>;

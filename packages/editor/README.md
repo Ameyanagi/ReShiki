@@ -26,7 +26,7 @@ WebGPU, or WebGL2 where the browser has no WebGPU. It fills the element, so
 give the element a size.
 
 ```js
-import { mount } from "@reshiki/editor/editor";
+import { mount } from "@ameyanagi/reshiki/editor";
 
 const editor = await mount(document.getElementById("editor"), {
   data: "CN1C=NC2=C1C(=O)N(C(=O)N2C)C",
@@ -52,7 +52,7 @@ For several editors, or to keep the page's styles away from the editor, put
 each in an iframe:
 
 ```js
-import { embed } from "@reshiki/editor/embed";
+import { embed } from "@ameyanagi/reshiki/embed";
 
 const editor = embed(document.getElementById("left"));
 await editor.ready;
@@ -67,7 +67,7 @@ The custom element wraps `mount`:
 
 ```html
 <script type="module">
-  import "@reshiki/editor/element";
+  import "@ameyanagi/reshiki/element";
 </script>
 <reshiki-editor src="caffeine.mol" format="mol" style="height: 600px"></reshiki-editor>
 ```
