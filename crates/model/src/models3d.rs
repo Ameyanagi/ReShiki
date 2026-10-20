@@ -492,6 +492,8 @@ pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
     let Some((_, hi)) = layout_bounds(doc, model) else {
         return false;
     };
+    // Leaving the place beside the drawing centres the frame on it again;
+    // otherwise the frame stays where it is.
     let offset = match display {
         Display::Both => {
             let centered = Model3d {
@@ -503,7 +505,8 @@ pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
             };
             Point::new(hi.x + doc.drawing_style.bond_length_world - left.x, 0.)
         }
-        Display::TwoD | Display::ThreeD => Point::default(),
+        _ if model.display == Display::Both => Point::default(),
+        Display::TwoD | Display::ThreeD => model.offset,
     };
     let Some(model) = doc.models.get_mut(index) else {
         return false;
@@ -518,13 +521,42 @@ pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
 }
 
 /// Show model `index`'s molecule in its drawn layout again, if it was
-/// flattened; returns whether the drawing changed.
+/// flattened; returns whether the drawing changed. The frame stays put.
 pub fn restore_drawing(doc: &mut Document, index: usize) -> bool {
+    let origin = doc.models.get(index).and_then(|m| frame_origin(doc, m));
     let Some(drawn) = doc.models.get_mut(index).and_then(|m| m.drawn.take()) else {
         return false;
     };
     drawn.restore(doc);
+    if let Some(origin) = origin {
+        keep_place(doc, index, origin);
+    }
     true
+}
+
+/// The centre of the model's frame, in drawing units.
+pub fn frame_origin(doc: &Document, model: &Model3d) -> Option<Point> {
+    let center = layout_center(doc, model)?;
+    Some(center.offset(model.offset.x, model.offset.y))
+}
+
+/// Keep model `index`'s frame centred on `origin` after its 2D atoms moved,
+/// as when flattening or restoring the drawing; beside the drawing it is
+/// placed beside the moved drawing instead.
+pub fn keep_place(doc: &mut Document, index: usize, origin: Point) {
+    let Some(model) = doc.models.get(index) else {
+        return;
+    };
+    if model.display == Display::Both {
+        set_display(doc, index, Display::Both);
+        return;
+    }
+    let Some(center) = layout_center(doc, model) else {
+        return;
+    };
+    if let Some(model) = doc.models.get_mut(index) {
+        model.offset = Point::new(origin.x - center.x, origin.y - center.y);
+    }
 }
 
 /// The selected molecule: the whole connected component of the selected atoms

@@ -414,6 +414,44 @@ fn from_the_3d_view_flattens_the_turned_model_in_one_step() {
 }
 
 #[test]
+fn the_frame_keeps_its_place_through_2d_and_back() {
+    let (mut app, atoms) = with_model(Display::ThreeD);
+    let frame = |app: &App| reshiki::models3d::frame(&app.tab.doc, &app.tab.doc.models[0]);
+    let (lo, _) = frame(&app).unwrap();
+    app.edit(Edit::ResizeModels {
+        ids: atoms.clone(),
+        pivot: lo,
+        scale: 1.5,
+    });
+    let quarter = std::f32::consts::FRAC_1_SQRT_2;
+    app.edit(Edit::ModelView {
+        atoms,
+        rotation: [quarter, 0., quarter, 0.],
+    });
+    let placed = frame(&app).unwrap();
+    let near = |app: &App| {
+        let (a, b) = frame(app).unwrap();
+        [
+            a.x - placed.0.x,
+            a.y - placed.0.y,
+            b.x - placed.1.x,
+            b.y - placed.1.y,
+        ]
+        .iter()
+        .all(|d| d.abs() < 1e-3)
+    };
+    let drawn = app.tab.doc.atoms.clone();
+    let _ = app.update(Message::Models3d(Action::Flatten));
+    assert_ne!(app.tab.doc.atoms, drawn, "flattened");
+    show(&mut app, Display::ThreeD);
+    assert!(near(&app), "from the 3D view and back");
+    show(&mut app, Display::TwoD);
+    assert_eq!(app.tab.doc.atoms, drawn, "the drawing restored");
+    show(&mut app, Display::ThreeD);
+    assert!(near(&app), "from the original drawing and back");
+}
+
+#[test]
 fn flattening_keeps_drawn_stereo_and_the_model() {
     let (mut app, _) = App::new();
     app.tab.busy = false;

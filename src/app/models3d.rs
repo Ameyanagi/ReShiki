@@ -272,6 +272,7 @@ impl App {
             return;
         };
         let previous = model.display;
+        let origin = models3d::frame_origin(&self.tab.doc, model);
         // The drawn layout stays on the model, for Original drawing.
         let drawn = model
             .drawn
@@ -281,6 +282,10 @@ impl App {
             .and_then(|prepared| prepared.flattened(model))
             .map_err(|error| error.to_string())
             .and_then(|mut doc| {
+                // The model keeps its place for showing it in 3D again.
+                if let Some(origin) = origin {
+                    models3d::keep_place(&mut doc, index, origin);
+                }
                 models3d::set_display(&mut doc, index, Display::TwoD);
                 if let Some(model) = doc.models.get_mut(index) {
                     model.layout = Layout::View;
