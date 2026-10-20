@@ -1,0 +1,31 @@
+- **Merged — 3D models: styles and the 3D model panel:** a molecule shown in 3D or Both ge
+- **Merged — 3D models: rotate, resize and the Show-as bar:** once a shown model is select
+- **Merged — 3D models of structures:** select a molecule and choose **2D**, **3D** or **B
+- **Merged — Attached marks orbit their atom:** dragging an attached lone pair, charge or 
+- **Merged — Groups keep the replaced label's side:** a group typed over a label that read
+- **Merged — Smaller circled charges:** a circled charge (⊕/⊖) on an atom now draws with a
+- **Merged — 3D tilt keeps turning:** a 3D tilt drag no longer stops at 75°; the selection
+- **Merged — Label alignment survives ChemDraw:** **Flush left** and **Centered** text lab
+- **Merged — Clear message for salt names:** **Import → Name** with a salt or mixture such
+- **Merged — Typed reverse spellings and group names:** a group's reverse spelling typed o
+- **Merged — Aimed curved arrows keep their head off bonds:** after you drag the end tange
+- **Merged — COSMolKit 0.5.0:** InChI generation and import, and 3D generation, relaxation
+- **Merged — Compact command palette:** results are one line each (name with the matched l
+- **Merged — Nix flake:** build and install ReShiki with `nix run github:Ameyanagi/ReShiki
+- **Merged — 297 more abbreviations:** the catalog now holds 359 groups, including protect
+- **Merged — Your own abbreviations:** select a group with one bond to the rest of the dra
+- **Merged — One editable abbreviation catalog:** every chemical abbreviation now comes fr
+- **Merged — Protecting-group abbreviations:** typing common carbohydrate and protecting-g
+- **Merged — Command palette:** press **:** to search every command (insertions such as be
+- **Merged — Generic labels sit beside their bond:** an alternative list such as `[Cl,Br,I
+- **Merged — Bonds meet the attachment atom in text labels:** in multi-atom labels such as
+- **Merged — Shortcut finder:** Help (?, F1 or Cmd/Ctrl+Shift+/) is now a searchable list 
+- **Merged — Cleaner crossings on 3D cages:** on projected drawings such as C60, bonds beh
+- **Merged — Arrow length follows its condition text:** text typed or dropped above or bel
+- **Merged — Discoverable fine rotation:** dragging the rotation handle now shows the appl
+- **Merged — Ring drag rotation:** drag with a ring tool to place its first atom at the pr
+- **Merged — Atom text grows away from the drawing:** a longer custom atom number now star
+- **Merged — Word-aware caption wrapping and `reshiki --version`:** wrapped text breaks on
+- **Merged — Intel Mac panic recovery:** preserve the allocation alignment required by the
+- **Merged — Nightly Windows startup:** use Direct3D 12 consistently during automatic adap
+- **Merged — 0.12.0 release validation:** record the tagged source, the tag runs that did 
