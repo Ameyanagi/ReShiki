@@ -56,9 +56,11 @@ pub(super) fn ask_to_save(name: String) -> Task<Message> {
                 "Cancel".into(),
             ));
         match window {
+            // Browser dialogs have no parent window to attach to.
+            #[cfg(not(target_arch = "wasm32"))]
             Some(id) => iced::window::run(id, move |window| dialog.set_parent(&window).show())
                 .then(|answer| Task::perform(answer, save_answer)),
-            None => Task::perform(dialog.show(), save_answer),
+            _ => Task::perform(dialog.show(), save_answer),
         }
     })
 }
@@ -71,11 +73,15 @@ fn save_answer(result: rfd::MessageDialogResult) -> Message {
         Answer::No => Message::Discard,
         Answer::Custom(label) if label == SAVE => Message::Save,
         Answer::Custom(label) if label == DONT_SAVE => Message::Discard,
+        // The browser asks with confirm(): OK saves, Cancel keeps editing.
+        #[cfg(target_arch = "wasm32")]
+        Answer::Ok => Message::Save,
         _ => Message::Cancel,
     }
 }
 
 /// Keep native file types and filename completion consistent across save dialogs.
+#[cfg(not(target_arch = "wasm32"))]
 pub(super) async fn save_path(title: &str, name: &str, extension: &str) -> Option<PathBuf> {
     let dialog = rfd::AsyncFileDialog::new()
         .set_title(title)
@@ -103,6 +109,42 @@ pub(super) async fn save_path(title: &str, name: &str, extension: &str) -> Optio
     Some(path)
 }
 
+/// The browser downloads saved files under the suggested name; see [`write`].
+#[cfg(target_arch = "wasm32")]
+pub(super) async fn save_path(_title: &str, name: &str, extension: &str) -> Option<PathBuf> {
+    Some(reshiki::storage::with_default_extension(
+        std::path::Path::new(name),
+        extension,
+    ))
+}
+
+/// Write a saved file atomically in place.
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn write(path: &std::path::Path, bytes: &[u8]) -> Result<(), String> {
+    reshiki::storage::write_atomic(path, bytes)
+}
+
+/// The browser has no files to write; a save downloads under the file's name.
+#[cfg(target_arch = "wasm32")]
+pub(super) fn write(path: &std::path::Path, bytes: &[u8]) -> Result<(), String> {
+    crate::web::download(path, bytes)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn picked_path(file: &rfd::FileHandle) -> Result<PathBuf, String> {
+    Ok(file.path().to_path_buf())
+}
+
+/// Browser files have no path. Only the drawing and structure openers, which
+/// read the contents instead, support them.
+#[cfg(target_arch = "wasm32")]
+pub(super) fn picked_path(file: &rfd::FileHandle) -> Result<PathBuf, String> {
+    Err(format!(
+        "{} can be opened in the desktop app",
+        file.file_name()
+    ))
+}
+
 /// Save bytes through the native dialog, preserving cancellation and write errors.
 pub(super) async fn save_bytes(
     title: &str,
@@ -113,7 +155,7 @@ pub(super) async fn save_bytes(
     let Some(path) = save_path(title, suggested_name, extension).await else {
         return Ok(None);
     };
-    reshiki::storage::write_atomic(&path, bytes)?;
+    write(&path, bytes)?;
     Ok(Some(path))
 }
 
@@ -158,7 +200,7 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
 /// on the event loop or an async executor's cooperative thread.
 pub(super) async fn read(path: PathBuf) -> Opened {
     let source = path.clone();
-    let result = tokio::task::spawn_blocking(move || {
+    let result = reshiki::task::spawn_blocking(move || {
         let contents = std::fs::read(&source).map_err(|e| e.to_string())?;
         prepare(&source, contents)
     })
@@ -166,6 +208,17 @@ pub(super) async fn read(path: PathBuf) -> Opened {
     .map_err(|e| e.to_string())
     .and_then(|r| r);
     Some((path, result))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) async fn read_picked(file: rfd::FileHandle) -> Opened {
+    read(file.path().to_path_buf()).await
+}
+
+/// The browser hands over the picked file's name and contents.
+#[cfg(target_arch = "wasm32")]
+pub(super) async fn read_picked(file: rfd::FileHandle) -> Opened {
+    prepare_contents(PathBuf::from(file.file_name()), Ok(file.read().await)).await
 }
 
 /// Reads files one after another, so they open as tabs in this order.
@@ -177,7 +230,7 @@ pub(super) fn open_paths(paths: Vec<PathBuf>) -> Task<Message> {
 
 pub(super) async fn prepare_contents(path: PathBuf, contents: Result<Vec<u8>, String>) -> Opened {
     let source = path.clone();
-    let result = tokio::task::spawn_blocking(move || prepare(&source, contents?))
+    let result = reshiki::task::spawn_blocking(move || prepare(&source, contents?))
         .await
         .map_err(|e| e.to_string())
         .and_then(|r| r);
@@ -302,34 +355,38 @@ impl super::App {
                 return task;
             }
             Ok(Prepared::Native(doc)) => {
-                if !self.open_target(Some(&path)) {
-                    return iced::Task::none();
+                if self.open_target(Some(&path)) {
+                    self.show_opened(*doc, Some(path));
                 }
-                self.clear_recovery();
-                self.begin_file_epoch();
-                self.tab.doc = *doc;
-                self.sync_drawing_defaults();
-                self.tab.styles.editor = None;
-                self.theme_library.editor = None;
-                self.tab.saved = self.tab.doc.clone();
-                self.tab.path = Some(path);
-                self.tab.untitled_name = None;
-                self.tab.history = super::History::default();
-                self.tab.revision = self.tab.revision.wrapping_add(1);
-                self.tab.analysis = None;
-                self.tab.labels_dirty = true;
-                self.tab.selected.clear();
-                self.tab.pages = super::pages::State::default();
-                if self.tab.doc.page_layout.is_some() {
-                    self.fit_pages(Some(0));
-                } else {
-                    self.fit();
-                }
-                self.status = "Document opened".into();
-                self.error = false;
             }
         }
         iced::Task::none()
+    }
+
+    /// Show `doc`, read from `path`, in the target tab with a fresh history.
+    pub(super) fn show_opened(&mut self, doc: reshiki::document::Document, path: Option<PathBuf>) {
+        self.clear_recovery();
+        self.begin_file_epoch();
+        self.tab.doc = doc;
+        self.sync_drawing_defaults();
+        self.tab.styles.editor = None;
+        self.theme_library.editor = None;
+        self.tab.saved = self.tab.doc.clone();
+        self.tab.path = path;
+        self.tab.untitled_name = None;
+        self.tab.history = super::History::default();
+        self.tab.revision = self.tab.revision.wrapping_add(1);
+        self.tab.analysis = None;
+        self.tab.labels_dirty = true;
+        self.tab.selected.clear();
+        self.tab.pages = super::pages::State::default();
+        if self.tab.doc.page_layout.is_some() {
+            self.fit_pages(Some(0));
+        } else {
+            self.fit();
+        }
+        self.status = "Document opened".into();
+        self.error = false;
     }
 
     pub(super) fn save_drawing(&mut self, save_as: bool) -> Task<Message> {
@@ -378,7 +435,7 @@ impl super::App {
                     .filter(|binding| binding.same_path(&path))
                     .map_or(path.clone(), |binding| binding.path.clone());
                 let save_path = path.clone();
-                tokio::task::spawn_blocking(move || {
+                reshiki::task::spawn_blocking(move || {
                     let bytes = save_snapshot.file_json()?;
                     #[cfg(any(windows, target_os = "linux"))]
                     let _target_owner = if office.as_ref().is_some_and(|binding| {
@@ -405,7 +462,7 @@ impl super::App {
                         #[cfg(windows)]
                         super::windows_libreoffice_save::save(&save_path, &bytes, office_host)?;
                         #[cfg(not(windows))]
-                        reshiki::storage::write_atomic(&save_path, &bytes)?;
+                        write(&save_path, &bytes)?;
                     }
                     Ok::<_, String>(())
                 })

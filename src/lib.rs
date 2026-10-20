@@ -28,27 +28,32 @@ pub use reshiki_model::{
     storage, style, templates, theme_files, theme_generator, transaction, typography,
 };
 
+#[cfg(not(target_arch = "wasm32"))]
 pub use reshiki_agent::envelope;
 #[cfg(windows)]
 use reshiki_io::native_windows;
 pub use reshiki_io::{
-    chemistry, cleanup, compatibility, document_styles, engine, exchange, export, geometry, nmr,
-    recovery, template_library,
+    chemistry, cleanup, compatibility, document_styles, engine, exchange, export, formats,
+    geometry, nmr, recovery, task, template_library,
 };
 
 pub mod accessibility;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod assistant;
+#[cfg(not(target_arch = "wasm32"))]
 #[doc(hidden)]
 pub mod cli;
 pub mod clipboard;
 pub mod hotkeys;
 pub mod keyboard_drawing;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod libreoffice;
 pub mod metafile;
 pub mod naming;
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_arch = "wasm32")))]
 pub(crate) mod native_process;
 pub mod office_addin;
 pub mod printing;
 pub mod updates;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod workers;

@@ -20,7 +20,7 @@ pub async fn open(path: &Path) -> Result<Picture, String> {
         return open_emf(path).await;
     }
     let path = path.to_owned();
-    tokio::task::spawn_blocking(move || Picture::open(&path))
+    crate::task::spawn_blocking(move || Picture::open(&path))
         .await
         .map_err(|error| error.to_string())?
 }
@@ -35,7 +35,7 @@ async fn open_emf(path: &Path) -> Result<Picture, String> {
         process::Command,
     };
     let path = path.to_owned();
-    let bytes = tokio::task::spawn_blocking(move || {
+    let bytes = crate::task::spawn_blocking(move || {
         let bytes =
             crate::pictures::read_bounded(&path, "Choose an EMF file no larger than 16 MB")?;
         // from_emf validates again when accepting the completed preview.
@@ -82,7 +82,7 @@ async fn open_emf(path: &Path) -> Result<Picture, String> {
     let preview = tokio::time::timeout(PLAYBACK_LIMIT, work)
         .await
         .map_err(|_| "EMF playback exceeded its 30-second limit".to_owned())??;
-    tokio::task::spawn_blocking(move || Picture::from_emf(&bytes, &preview))
+    crate::task::spawn_blocking(move || Picture::from_emf(&bytes, &preview))
         .await
         .map_err(|error| error.to_string())?
 }

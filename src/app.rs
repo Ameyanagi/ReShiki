@@ -14,6 +14,7 @@ mod abbreviations;
 mod accessibility;
 mod arcs;
 mod arrows;
+#[cfg_attr(target_arch = "wasm32", path = "app/assistant_browser.rs")]
 mod assistant;
 mod atom_edits;
 mod atom_labels;
@@ -773,7 +774,7 @@ impl App {
                     .set_title("Open a ReShiki, MOL, RXN, CDXML, CDX or SMILES document")
                     .pick_file()
                     .await?;
-                files::read(file.path().to_path_buf()).await
+                files::read_picked(file).await
             },
             Message::FilePrepared,
         )

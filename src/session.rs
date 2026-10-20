@@ -1,7 +1,8 @@
 //! GUI-free startup arguments and host edit-session ownership.
 use serde::{Deserialize, Serialize};
+#[cfg(not(target_arch = "wasm32"))]
+use std::ffi::OsString;
 use std::{
-    ffi::OsString,
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -151,6 +152,7 @@ pub(crate) struct Arguments {
     pub(crate) office_host: Option<Host>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn parse(args: impl IntoIterator<Item = OsString>) -> Arguments {
     let mut args = args.into_iter();
     let mut parsed = Arguments::default();

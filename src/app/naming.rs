@@ -273,7 +273,7 @@ async fn generate_for_atoms(
     cancel: naming::Cancel,
 ) -> Result<Outcome, naming::Error> {
     let identity =
-        tokio::task::spawn_blocking(move || naming::selected_identity(&document, &atoms))
+        reshiki::task::spawn_blocking(move || naming::selected_identity(&document, &atoms))
             .await
             .map_err(|error| naming::Error::Worker(error.to_string()))?
             .map_err(naming::Error::Rejected)?;

@@ -7,6 +7,7 @@ use iced::{
 use std::sync::OnceLock;
 
 const MARK: &[u8] = include_bytes!("../assets/branding/runtime/mark.png");
+#[cfg(not(target_arch = "wasm32"))]
 const ICON: &[u8] = include_bytes!("../assets/branding/runtime/icon.png");
 
 pub fn wordmark<'a, Message: 'a>(size: f32) -> Element<'a, Message> {
@@ -30,6 +31,7 @@ pub fn wordmark<'a, Message: 'a>(size: f32) -> Element<'a, Message> {
         .into()
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn window_icon() -> Option<iced::window::Icon> {
     let pixels = ::image::load_from_memory(ICON).ok()?.into_rgba8();
     let (width, height) = pixels.dimensions();

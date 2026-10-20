@@ -7,16 +7,30 @@ use crate::{
 };
 use std::collections::HashSet;
 
-mod client;
-mod local;
-pub use local::{Cancel, resolve_name};
 mod catalog;
-mod reverse;
-mod rules;
 pub use catalog::VERSION as ALIAS_CATALOG_VERSION;
 pub use catalog::{Alias, AliasSource, aliases_for_smiles};
+
+// The parsers run in bounded worker processes, which the browser does not have.
+#[cfg(not(target_arch = "wasm32"))]
+mod client;
+#[cfg(not(target_arch = "wasm32"))]
+mod local;
+#[cfg(not(target_arch = "wasm32"))]
+mod reverse;
+#[cfg(not(target_arch = "wasm32"))]
+mod rules;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod worker;
-pub use reverse::generate_name;
+#[cfg(not(target_arch = "wasm32"))]
+pub use {
+    local::{Cancel, resolve_name},
+    reverse::generate_name,
+};
+#[cfg(target_arch = "wasm32")]
+mod browser;
+#[cfg(target_arch = "wasm32")]
+pub use browser::{Cancel, generate_name, resolve_name};
 
 /// Why a local name request produced no result. Display prints the message
 /// unchanged; the variant tells callers how to summarize it.

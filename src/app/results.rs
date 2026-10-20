@@ -45,6 +45,10 @@ enum Completion {
     /// Pictures(Loaded).
     Pictures,
     /// Assistant(Connected | PreferencesSaved | ImageRead | TextPasted | SetupHelpOpened).
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(dead_code, reason = "The browser has no assistant connection")
+    )]
     AssistantApp,
     /// Templates(Finished | Imported | WarningAcknowledged).
     Templates,
@@ -411,6 +415,10 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::RestoreAspect => None,
             }
         }
+        #[cfg(target_arch = "wasm32")]
+        Message::Assistant(action) => matches!(action, super::assistant::Action::Poll)
+            .then_some(Completion::AssistantDocument),
+        #[cfg(not(target_arch = "wasm32"))]
         Message::Assistant(action) => {
             use super::assistant::Action;
             match action {

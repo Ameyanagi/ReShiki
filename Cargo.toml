@@ -60,13 +60,12 @@ iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-s
 # The partial-redraw regression tests exercise the software fallback directly.
 iced_tiny_skia = { version = "0.14", default-features = false }
 
-[target.'cfg(not(windows))'.dependencies]
+[target.'cfg(all(not(windows), not(target_arch = "wasm32")))'.dependencies]
 iced = { version = "0.14", default-features = false, features = ["wgpu"] }
 
 [dependencies]
 opsin = { path = "crates/opsin" }
 reshiki-geometry = { path = "native/geometry" }
-reshiki-process = { path = "native/process" }
 accesskit = "=0.24.1"
 reshiki-process-heap = { path = "crates/process-heap" }
 cosmolkit-inchi = { version = "=0.5.0", git = "https://github.com/Ameyanagi/COSMolKit.git", rev = "501f7b234031ba4d87461e14d0947c77a7d1a631" }
@@ -74,8 +73,6 @@ reshiki-depict-math = { path = "crates/depict-math" }
 reshiki-chemistry = { path = "crates/chemistry" }
 reshiki-model = { path = "crates/model" }
 reshiki-io = { path = "crates/io" }
-reshiki-agent = { path = "crates/agent" }
-reshiki-mcp = { path = "crates/mcp" }
 iced = { version = "0.14", default-features = false, features = [
   "canvas",
   "tokio",
@@ -88,15 +85,6 @@ iced = { version = "0.14", default-features = false, features = [
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 base64 = "0.22"
-tokio = { version = "1", features = [
-  "process",
-  "fs",
-  "io-util",
-  "sync",
-  "time",
-  "rt-multi-thread",
-  "macros",
-] }
 rfd = "0.15"
 tempfile = "3"
 directories-next = "2"
@@ -114,13 +102,39 @@ pdf-writer = "0.12.1"
 ttf-parser = "0.25"
 swash = "0.2.10"
 svg2pdf = { version = "0.13", default-features = false, features = ["text", "image"] }
-reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 semver = "1"
-open = "5"
 roxmltree = "0.20"
 tiff = "0.11.3"
 thiserror = "2"
 sha2 = { version = "0.10.9", default-features = false, features = ["force-soft"] }
+
+# The CLI, MCP server, assistant, updater and helper processes are desktop-only.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+reshiki-process = { path = "native/process" }
+reshiki-agent = { path = "crates/agent" }
+reshiki-mcp = { path = "crates/mcp" }
+tokio = { version = "1", features = [
+  "process",
+  "fs",
+  "io-util",
+  "sync",
+  "time",
+  "rt-multi-thread",
+  "macros",
+] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+open = "5"
+
+# The browser editor: one thread, no processes, and the page's own APIs.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+iced = { version = "0.14", default-features = false, features = ["wgpu", "webgl"] }
+tokio = { version = "1", default-features = false, features = ["sync"] }
+# scripts/build_wasm.sh installs the wasm-bindgen CLI of exactly this version.
+wasm-bindgen = "=0.2.128"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = ["Clipboard", "Navigator", "Window"] }
+web-time = "1"
 
 [profile.dev]
 debug = 1

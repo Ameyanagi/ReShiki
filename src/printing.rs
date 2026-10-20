@@ -6,12 +6,12 @@ use crate::{
     style::DEFAULT as STYLE,
 };
 use serde::Deserialize;
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_arch = "wasm32")))]
 use serde::Serialize;
 use std::{collections::HashSet, sync::Arc};
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_arch = "wasm32")))]
 use std::{io::Write, path::PathBuf, process::Stdio};
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_arch = "wasm32")))]
 use tokio::process::Command;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,7 +30,7 @@ pub struct Prepared {
 pub struct Outcome {
     pub completed: bool,
 }
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_arch = "wasm32")))]
 #[derive(Serialize)]
 struct Request<'a> {
     path: &'a std::path::Path,
@@ -121,12 +121,12 @@ pub fn prepare(doc: Document, title: String) -> Result<Prepared, String> {
             .collect(),
     })
 }
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_arch = "wasm32")))]
 fn helper() -> Result<PathBuf, String> {
     std::env::current_exe().map_err(|e| format!("Could not locate the application: {e}"))
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_arch = "wasm32")))]
 async fn drain_errors(mut input: impl tokio::io::AsyncRead + Unpin) -> Result<Vec<u8>, String> {
     let result = crate::native_process::capture(&mut input, 8192).await?;
     tokio::io::copy(&mut input, &mut tokio::io::sink())
@@ -134,6 +134,11 @@ async fn drain_errors(mut input: impl tokio::io::AsyncRead + Unpin) -> Result<Ve
         .map_err(|e| e.to_string())?;
     Ok(result)
 }
+#[cfg(target_arch = "wasm32")]
+pub async fn show_dialog(_job: Prepared) -> Result<Outcome, String> {
+    Err("Printing is not available in the browser".into())
+}
+
 #[cfg(windows)]
 pub async fn show_dialog(job: Prepared) -> Result<Outcome, String> {
     let completed =
@@ -143,7 +148,7 @@ pub async fn show_dialog(job: Prepared) -> Result<Outcome, String> {
     Ok(Outcome { completed })
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_arch = "wasm32")))]
 pub async fn show_dialog(job: Prepared) -> Result<Outcome, String> {
     if !available() {
         return Err("Native printing is available on Windows and macOS. Export a page PDF to print on this system.".into());

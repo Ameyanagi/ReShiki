@@ -109,8 +109,8 @@ impl State {
         if paths.is_empty() {
             return Ok(());
         }
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
+        let stamp = iced::time::SystemTime::now()
+            .duration_since(iced::time::SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos();
         let archive = dir.join(".deleted").join(stamp.to_string());
@@ -197,8 +197,8 @@ impl App {
                         else {
                             return Ok(None);
                         };
-                        let path = file.path().to_path_buf();
-                        tokio::task::spawn_blocking(move || theme_files::load(&path))
+                        let path = super::files::picked_path(&file)?;
+                        reshiki::task::spawn_blocking(move || theme_files::load(&path))
                             .await
                             .map_err(|e| e.to_string())?
                             .map(|theme| Some(Box::new(theme)))

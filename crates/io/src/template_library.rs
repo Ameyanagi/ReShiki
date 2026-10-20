@@ -6,10 +6,14 @@ use crate::{
     templates::{Anchor, LIBRARY, Template},
 };
 use serde::{Deserialize, Serialize};
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
 };
+#[cfg(target_arch = "wasm32")]
+use web_time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Library {
@@ -265,8 +269,8 @@ fn lock_error(error: std::fs::TryLockError) -> String {
 }
 fn new_id() -> String {
     static SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let time = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
+    let time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
     format!(

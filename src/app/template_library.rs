@@ -717,7 +717,7 @@ impl App {
                     self.templates.pending_context = Some(operation.context);
                     return Some(Task::perform(
                         async move {
-                            tokio::task::spawn_blocking(move || operation.execute().map(Box::new))
+                            reshiki::task::spawn_blocking(move || operation.execute().map(Box::new))
                                 .await
                                 .map_err(|e| e.to_string())
                                 .and_then(|r| r)
@@ -746,8 +746,8 @@ impl App {
                         else {
                             return Ok(None);
                         };
-                        let path = file.path().to_path_buf();
-                        tokio::task::spawn_blocking(move || {
+                        let path = super::files::picked_path(&file)?;
+                        reshiki::task::spawn_blocking(move || {
                             let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
                             Library::from_bytes(&bytes).map(Some)
                         })
@@ -771,7 +771,7 @@ impl App {
                             return Ok(None);
                         };
                         let target = path.clone();
-                        tokio::task::spawn_blocking(move || library.save(&target))
+                        reshiki::task::spawn_blocking(move || library.save(&target))
                             .await
                             .map_err(|e| e.to_string())??;
                         Ok(Some(super::figure_export::Saved {
@@ -978,9 +978,11 @@ fn acknowledge_close_warning(serial: u64, warning: String) -> Task<Message> {
             .set_buttons(rfd::MessageButtons::Ok);
         let acknowledged = move |_| Message::Templates(Action::WarningAcknowledged(serial));
         match window {
+            // Browser dialogs have no parent window to attach to.
+            #[cfg(not(target_arch = "wasm32"))]
             Some(id) => iced::window::run(id, move |window| dialog.set_parent(&window).show())
                 .then(move |answer| Task::perform(answer, acknowledged)),
-            None => Task::perform(dialog.show(), acknowledged),
+            _ => Task::perform(dialog.show(), acknowledged),
         }
     })
 }

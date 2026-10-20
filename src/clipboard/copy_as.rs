@@ -250,7 +250,7 @@ pub async fn prepare_as(
 
     let mut notices = Vec::new();
     let (bytes, text) = if format == CopyFormat::ChemDoodleReaction {
-        let output = tokio::task::spawn_blocking(move || chemdoodle::write(&original))
+        let output = crate::task::spawn_blocking(move || chemdoodle::write(&original))
             .await
             .map_err(|error| format!("Could not prepare ChemDoodle JSON: {error}"))??;
         notices.push("Reaction structure and roles copied as ChemDoodle JSON. Captions, drawing styles and other artwork are not included; keep the native drawing.".into());
@@ -258,7 +258,7 @@ pub async fn prepare_as(
     } else if matches!(format, CopyFormat::Png | CopyFormat::Svg | CopyFormat::Pdf) {
         let (doc, notice) = export::figure_document(&engine, original).await?;
         notices.extend(notice);
-        let figure = tokio::task::spawn_blocking(move || {
+        let figure = crate::task::spawn_blocking(move || {
             #[cfg(windows)]
             if format == CopyFormat::Svg {
                 return export::clipboard_svg(&doc).map(|bytes| export::Figure {

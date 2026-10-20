@@ -153,7 +153,7 @@ impl App {
                 self.error = false;
                 return Task::perform(
                     async move {
-                        tokio::task::spawn_blocking(move || {
+                        reshiki::task::spawn_blocking(move || {
                             reshiki::generic::expand_prepared(input)
                         })
                         .await
