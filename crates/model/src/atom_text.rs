@@ -277,14 +277,18 @@ fn apply_entry(
         // The new group reads from the side the replaced label did: a group
         // keeps its alignment, and a left-facing HO makes OBn read BnO. A
         // group without a reverse spelling (ONp) cannot turn, so it stays Auto
-        // with its attachment glyph on the bond.
+        // with its attachment glyph on the bond, even replacing a turned group.
+        let reversible = result
+            .abbreviation(id)
+            .is_some_and(|g| !g.reverse_label.is_empty());
         let alignment = match doc.abbreviation(id) {
+            _ if !reversible => None,
             Some(old) => Some(old.alignment),
             None => (crate::atom_labels::appendage_position(atom, doc)
                 == crate::atom_labels::HydrogenPosition::Left
                 && result
                     .abbreviation(id)
-                    .is_some_and(|g| !g.reverse_label.is_empty() && !g.faces_left(&result)))
+                    .is_some_and(|g| !g.faces_left(&result)))
             .then_some(crate::abbreviations::LabelAlignment::Right),
         };
         if let Some(alignment) = alignment

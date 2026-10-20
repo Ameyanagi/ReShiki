@@ -361,22 +361,22 @@ impl App {
                         if let Some(group) =
                             doc.abbreviations.iter_mut().find(|g| g.anchor == state.id)
                         {
-                            // A new group keeps the side the model chose
-                            // from the label it replaced.
-                            if state.members.is_some()
-                                || self.tab.doc.abbreviation(state.id).is_some()
-                            {
-                                group.alignment = state.alignment;
-                            }
+                            let old = self.tab.doc.abbreviation(state.id);
                             if state.members.is_some()
                                 || state.reverse_edited
-                                || self
-                                    .tab
-                                    .doc
-                                    .abbreviation(state.id)
-                                    .is_some_and(|g| g.label == group.label)
+                                || old.is_some_and(|g| g.label == group.label)
                             {
                                 group.reverse_label = state.reverse.trim().into();
+                            }
+                            // A new group keeps the side the model chose from
+                            // the label it replaced; one without a reverse
+                            // spelling (ONp) cannot take a turned group's side.
+                            if state.members.is_some()
+                                || old.is_some_and(|g| {
+                                    g.label == group.label || !group.reverse_label.is_empty()
+                                })
+                            {
+                                group.alignment = state.alignment;
                             }
                         }
                         if let Err(error) = doc.validate() {
