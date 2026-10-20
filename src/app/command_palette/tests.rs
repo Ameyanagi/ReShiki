@@ -940,7 +940,20 @@ fn command_word_prefixes_take_a_value() {
     };
     assert!((width(&palette) / width(&direct) - 1.5).abs() < 1e-3);
 
+    // With nothing selected, the row still ranks first, greyed, instead of a
+    // chemical name.
     let mut app = app();
+    for query in ["rot 30", "tilt up 20", "scale 150"] {
+        search(&mut app, query);
+        assert!(app.command_unavailable(top(&app)).is_some(), "{query}");
+        assert!(
+            !app.commands
+                .ranked()
+                .iter()
+                .any(|c| matches!(c.run, Run::Name(_))),
+            "{query}"
+        );
+    }
     let named = |app: &App, query| catalog::parameterised(app, query).map(|c| c.name);
     assert_eq!(named(&app, "tilt up 20").unwrap(), "Tilt selection up 20°");
     assert_eq!(named(&app, "zo 150").unwrap(), "Zoom to 150%");
