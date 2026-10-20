@@ -1035,6 +1035,30 @@ fn nc_and_ocn_are_reverse_spellings_only_where_they_read_toward_the_bond()
 }
 
 #[test]
+fn user_groups_spelled_nc_or_ocn_are_made_on_either_end() -> Result<(), Box<dyn std::error::Error>>
+{
+    let errors = crate::chemistry::abbreviations::set_user_on_thread(
+        r#"{"format": 1, "groups": [
+            {"label": "Isn", "reverse": "NC", "smiles": "*[N+]#[C-]"},
+            {"label": "Cyt", "reverse": "OCN", "smiles": "*OC#N"}
+        ]}"#,
+    );
+    assert!(errors.is_empty(), "{errors:?}");
+    for (typed, label) in [("NC", "Isn"), ("OCN", "Cyt")] {
+        for (x, y) in [(-42., 0.), (42., 0.), (0., 42.)] {
+            let (doc, endpoint) = ethane_with_end_at(x, y);
+            assert!(!wrong_side(&doc, endpoint, typed), "{typed} at {x},{y}");
+            for mode in [Mode::Auto, Mode::Group] {
+                let typed_doc = apply(&doc, endpoint, typed, mode)?;
+                let group = typed_doc.abbreviation(endpoint).ok_or(typed)?;
+                assert_eq!(group.label, label, "{typed} at {x},{y}");
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn typed_reverse_spellings_make_their_group() -> Result<(), Box<dyn std::error::Error>> {
     for (typed, label) in [
         ("MeO", "OMe"),

@@ -15,11 +15,15 @@ pub const WRONG_SIDE: &str = "Text on a dummy atom. Read from this bond, NC is a
 /// Whether `text` is NC or OCN typed where the bond does not meet its last
 /// letter: only on a left-hand end do they read as the reverse of CN and NCO.
 pub fn wrong_side(doc: &Document, id: u64, text: &str) -> bool {
+    sided(text) && !left_hand_end(doc, id)
+}
+/// NC or OCN found as the bundled reverse spelling; a user group with that
+/// spelling has no second reading.
+fn sided(text: &str) -> bool {
     use crate::chemistry::abbreviations::{Spelling, lookup};
     let text = text.trim();
     SIDED.contains(&text)
-        && matches!(lookup(text), Ok(Some((_, Spelling::Reverse))))
-        && !left_hand_end(doc, id)
+        && matches!(lookup(text), Ok(Some((preset, Spelling::Reverse))) if !preset.user)
 }
 /// An atom whose outside bonds all leave to the right, so a label on it
 /// reads toward the bond.
