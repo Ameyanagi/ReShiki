@@ -42,11 +42,11 @@ pub(super) fn orbit(
 ) -> Vec<AtomMark> {
     let (font_pt, gap) = font_gap(doc, atom);
     let ink = crate::scene::atom_label_ink_boxes(atom, doc);
-    let (anchor, others): (Vec<_>, Vec<_>) = {
-        let nearest = nearest_ink(&ink, atom.position);
-        ink.iter()
-            .partition(|&&bounds| box_distance(bounds, atom.position) <= nearest + 0.001)
-    };
+    let nearest = nearest_ink(&ink, atom.position);
+    let anchor: Vec<_> = ink
+        .iter()
+        .filter(|&&bounds| box_distance(bounds, atom.position) <= nearest + 0.001)
+        .collect();
     let mut single = atom.clone();
     single.position = Point::new(0., 0.);
     directions
@@ -77,20 +77,28 @@ pub(super) fn orbit(
                 })
                 .fold(0., f32::max);
             let mut radius = clearance + gap + reach;
-            // Hydrogens, counts and isotopes beside the anchor glyph push the
-            // mark's box out past them by the same gap.
-            let (shape_lo, shape_hi) = bounds(&parts);
-            while let Some(exit) = others.iter().find_map(|&&(lo, hi)| {
+            // Each part's box keeps the same gap from every glyph: the anchor's
+            // corners on diagonals, and hydrogens, counts and isotopes beside it.
+            let shapes: Vec<_> = parts
+                .iter()
+                .map(|part| bounds(std::slice::from_ref(part)))
+                .collect();
+            let margin = gap * 0.999;
+            let boxes = ink
+                .iter()
+                .flat_map(|&glyph| shapes.iter().map(move |&shape| (glyph, shape)));
+            while let Some(exit) = boxes.clone().find_map(|((lo, hi), (shape_lo, shape_hi))| {
                 let grown = (
-                    lo.offset(-shape_hi.x - gap, -shape_hi.y - gap),
-                    hi.offset(gap - shape_lo.x, gap - shape_lo.y),
+                    lo.offset(-shape_hi.x - margin, -shape_hi.y - margin),
+                    hi.offset(margin - shape_lo.x, margin - shape_lo.y),
                 );
                 let center = atom.position.offset(radius * c, radius * s);
                 inside(grown, center)
                     .then(|| ray_exit(grown, atom.position, c, s))
                     .flatten()
             }) {
-                radius = exit;
+                // Rounding can leave the center a hair inside; always move out.
+                radius = exit.max(radius) + 1e-3;
             }
             placed.offset = Point::new(radius * c, radius * s);
             placed

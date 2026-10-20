@@ -340,11 +340,50 @@ fn dragged_marks_orbit_every_snap_direction_hugging_the_label() {
                 .iter()
                 .flat_map(|&label| ink.iter().map(move |&q| rectangle_gap((q, q), label)))
                 .fold(f32::INFINITY, f32::min);
-            assert!(nearest > 0., "{kind} at {snapped}°");
+            assert!(
+                nearest > DEFAULT.world(10. * 0.07) * 0.99,
+                "{kind} at {snapped}°"
+            );
             assert!(
                 nearest < DEFAULT.world(10. * 0.3),
                 "{kind} at {snapped}°: {nearest}"
             );
+        }
+    }
+}
+
+#[test]
+fn orbits_settle_and_keep_the_gap_from_label_corners() {
+    let gap = DEFAULT.world(10. * 0.07) * 0.99;
+    for (element, label_h) in [("O", Some(1)), ("N", None)] {
+        for kind in [SymbolKind::LonePairBar, SymbolKind::LonePair] {
+            let mut doc = Document::default();
+            let id = doc.add_atom(element, p(0., 0.));
+            let atom = doc.atom_mut(id).unwrap();
+            match label_h {
+                Some(h) => atom.label_h = h,
+                None => atom.no_implicit = true,
+            }
+            click(&mut doc, id, kind);
+            let atom = doc.atom(id).unwrap();
+            let labels = crate::scene::atom_label_ink_boxes(atom, &doc);
+            // OH with a bar at 324° used to loop forever on a rounding re-entry.
+            let directions = (0..120).map(|i| i as f32 * 3.);
+            for (i, mark) in mark_placement::orbit(&doc, atom, &atom.marks[0], directions)
+                .into_iter()
+                .enumerate()
+            {
+                let mut placed = doc.clone();
+                placed.atom_mut(id).unwrap().marks[0] = mark;
+                // N's stems reach its box corners, so diagonals must clear them.
+                for part in styled_mark_parts(placed.atom(id).unwrap(), &placed.drawing_style) {
+                    let shape = mark_placement::bounds(&[part]);
+                    for &label in &labels {
+                        let clear = rectangle_gap(shape, label);
+                        assert!(clear > gap, "{element} {kind} at {}°: {clear}", i * 3);
+                    }
+                }
+            }
         }
     }
 }
