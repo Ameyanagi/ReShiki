@@ -281,3 +281,49 @@ fn a_morphing_model_draws_as_tiles_in_every_style() {
         assert!(image.chunks(4).any(|p| p[3] > 0), "{style:?}");
     }
 }
+
+/// The two halves of a bond meet without a pale anti-aliasing seam: at
+/// 1200 dpi every pixel along the C–C stick across its middle is opaque, in
+/// each style with sticks, whatever the view.
+#[test]
+fn a_stick_has_no_seam_where_its_halves_meet() {
+    for style in [Style::BallStick, Style::Stick] {
+        let mut doc = model(style);
+        for rotation in [
+            doc.models[0].rotation,
+            reshiki::models3d::turn(doc.models[0].rotation, 37., 11., false),
+            reshiki::models3d::turn(doc.models[0].rotation, -23., 52., true),
+        ] {
+            doc.models[0].rotation = rotation;
+            let (balls, sticks) =
+                reshiki::models3d::balls_and_sticks(&doc, &doc.models[0]).unwrap();
+            // The half from C1 ends at the C1–C2 middle.
+            let c1 = balls[0].0;
+            let &(_, middle, width) = sticks
+                .iter()
+                .find(|(a, e, _)| {
+                    a.distance(c1) < 1e-3 && e.distance(balls[1].0) < c1.distance(balls[1].0)
+                })
+                .unwrap();
+            let d = c1.distance(middle);
+            let along = ((middle.x - c1.x) / d, (middle.y - c1.y) / d);
+            let across = (-along.1, along.0);
+            let run = scene::primitives(&doc);
+            let scale = 1200. / 72.;
+            let lo = middle.offset(-4. * width, -4. * width);
+            let side = (8. * width * scale).ceil() as u32;
+            let image = pixels(&run, lo, scale, side, side).unwrap();
+            let alpha = |p: World| {
+                let (x, y) = (((p.x - lo.x) * scale) as u32, ((p.y - lo.y) * scale) as u32);
+                image[((y * side + x) * 4 + 3) as usize]
+            };
+            for i in -20..=20 {
+                for j in -5..=5 {
+                    let (u, v) = (i as f32 * 0.02 * width, j as f32 * 0.1 * width);
+                    let p = middle.offset(along.0 * u + across.0 * v, along.1 * u + across.1 * v);
+                    assert_eq!(alpha(p), 255, "{style:?} {rotation:?} at {i}, {j}");
+                }
+            }
+        }
+    }
+}

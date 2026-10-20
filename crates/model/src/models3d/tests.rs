@@ -993,15 +993,23 @@ fn both_halves_of_a_bond_meet_with_continuous_shading() {
             })
             .collect();
         let mut matched = 0;
+        // Each half's gradient runs across the bond's middle.
+        let at_middle = |c: &[Point; 4], from: &Point, to: &Point| {
+            c[1].distance(*from) < 1e-3 && c[2].distance(*to) < 1e-3
+        };
         for (a, from_a, to_a) in &halves {
-            let Some((_, from_b, to_b)) = halves
-                .iter()
-                .find(|(b, ..)| b != a && b[1].distance(a[1]) < 1e-3 && b[2].distance(a[2]) < 1e-3)
-            else {
+            let Some((b, ..)) = halves.iter().find(|(b, from_b, to_b)| {
+                b != a && from_a.distance(*from_b) < 1e-3 && to_a.distance(*to_b) < 1e-3
+            }) else {
                 continue;
             };
             matched += 1;
-            assert!(from_a.distance(*from_b) < 1e-3 && to_a.distance(*to_b) < 1e-3);
+            // One half ends at the middle; the other, drawn first, runs on
+            // under it so no seam shows between them.
+            assert!(
+                at_middle(a, from_a, to_a) != at_middle(b, from_a, to_a),
+                "{a:?} {b:?}"
+            );
             let da = Point::new(to_a.x - from_a.x, to_a.y - from_a.y);
             // The gradient starts on the side facing the up-left light.
             assert!(-0.38 * da.x - 0.42 * da.y <= 1e-6, "{da:?}");

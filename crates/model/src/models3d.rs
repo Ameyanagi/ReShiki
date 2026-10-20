@@ -1310,13 +1310,23 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             }),
     );
     items.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+    // Where each half-bond is drawn, so the first of a pair can reach under
+    // the second.
+    let order: HashMap<(usize, usize), usize> = items
+        .iter()
+        .enumerate()
+        .filter_map(|(n, (.., item))| match item {
+            Item::Bond(s, o) => Some(((*s, *o), n)),
+            Item::Atom(_) => None,
+        })
+        .collect();
     let shade = |base: [f32; 3], stops: &[(f32, [f32; 3], f32)]| {
         stops
             .iter()
             .map(|&(offset, toward, t)| (offset, rgb(mix(base, toward, t))))
             .collect::<Vec<_>>()
     };
-    for (_, _, z, item) in items {
+    for (n, (_, _, z, item)) in items.into_iter().enumerate() {
         let (Item::Bond(i, _) | Item::Atom(i)) = item;
         let symbol = *view.symbols.get(i)?;
         let base = mix(float(element(symbol).0), float(backdrop), fade(z));
@@ -1382,11 +1392,28 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                     // the colour seam.
                     let side = if 0.38 * dy - 0.42 * dx < 0. { -1. } else { 1. };
                     let (nx, ny) = (-dy / len * side, dx / len * side);
+                    // The half drawn first runs on under the other, so their
+                    // anti-aliased edges never meet in a pale seam; the
+                    // colour change stays at the middle.
+                    let (end, width) = view
+                        .half_bond(o, s)
+                        .filter(|_| order.get(&(o, s)).is_some_and(|&m| m > n))
+                        .filter(|_| *view.symbols.get(o).unwrap_or(&"") != "H" || grown >= 1.)
+                        .map(|(b, _, far, _)| (b.distance(e), far))
+                        .filter(|(other, _)| *other >= line * 0.5)
+                        .map_or((e, half), |(other, far)| {
+                            let reach = half.min(other / 2.);
+                            let t = reach / other;
+                            (
+                                e.offset(dx / len * reach, dy / len * reach),
+                                half + (far - half) * t,
+                            )
+                        });
                     Primitive::ShadedQuad {
                         corners: [
                             a.offset(nx * start, ny * start),
-                            e.offset(nx * half, ny * half),
-                            e.offset(-nx * half, -ny * half),
+                            end.offset(nx * width, ny * width),
+                            end.offset(-nx * width, -ny * width),
                             a.offset(-nx * start, -ny * start),
                         ],
                         from: e.offset(nx * half, ny * half),
