@@ -1,0 +1,10 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 35.92s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (target/debug/deps/reshiki-c7bd250cf37056b8)
+
+running 1 test
+test app::atom_text::tests::apply_keeps_placement_a_group_without_a_reverse_spelling_can_take ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1104 filtered out; finished in 0.46s
+

@@ -1,0 +1,25 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 55s
+warning: the following packages contain code that will be rejected by a future version of Rust: block v0.1.6
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (target/debug/deps/reshiki-c7bd250cf37056b8)
+
+running 1 test
+test app::atom_text::tests::apply_keeps_placement_a_group_without_a_reverse_spelling_can_take ... FAILED
+
+failures:
+
+---- app::atom_text::tests::apply_keeps_placement_a_group_without_a_reverse_spelling_can_take stdout ----
+
+thread 'app::atom_text::tests::apply_keeps_placement_a_group_without_a_reverse_spelling_can_take' (29255443) panicked at src/app/atom_text/tests.rs:820:9:
+assertion `left == right` failed: Above
+  left: ("ONp", Auto)
+ right: ("ONp", Above)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    app::atom_text::tests::apply_keeps_placement_a_group_without_a_reverse_spelling_can_take
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1104 filtered out; finished in 0.73s
+
+error: test failed, to rerun pass `-p reshiki --bin reshiki`
