@@ -1,5 +1,5 @@
 {
-  "name": "@reshiki/editor",
+  "name": "@ameyanagi/reshiki",
   "version": "0.1.0",
   "private": true,
   "description": "ReShiki in the browser: structure conversion and rendering in WebAssembly",

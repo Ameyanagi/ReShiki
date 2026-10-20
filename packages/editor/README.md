@@ -1,4 +1,4 @@
-# @reshiki/editor
+# @ameyanagi/reshiki
 
 ReShiki's chemistry in the browser, compiled to WebAssembly. It converts
 structures between formats and draws them with the same Rust code as the
@@ -22,7 +22,7 @@ to `dist/licenses`.
 ## Use
 
 ```js
-import { convert, renderPng, renderSvg, smiles, inchi } from "@reshiki/editor";
+import { convert, renderPng, renderSvg, smiles, inchi } from "@ameyanagi/reshiki";
 
 const mol = await convert("CN1C=NC2=C1C(=O)N(C(=O)N2C)C", "smiles", "mol");
 const svg = await renderSvg(mol, "mol");
@@ -37,7 +37,7 @@ call `init` first with a URL, a `Response`, the bytes or a compiled
 `WebAssembly.Module`:
 
 ```js
-import { init } from "@reshiki/editor";
+import { init } from "@ameyanagi/reshiki";
 await init(new URL("/assets/reshiki_web_bg.wasm", location.href));
 ```
 
