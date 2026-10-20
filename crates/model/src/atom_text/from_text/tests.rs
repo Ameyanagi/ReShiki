@@ -540,3 +540,37 @@ fn preview_work_is_independent_of_unrelated_document_content() {
     assert!(preview.groups.is_empty());
     assert_eq!(CONVERSION_ENTRIES.with(std::cell::Cell::get), entries);
 }
+
+#[test]
+fn nc_and_ocn_captions_are_read_toward_the_bond_being_drawn() -> Result<(), String> {
+    for (text, label) in [("NC", "CN"), ("OCN", "NCO")] {
+        let mut source = Document::default();
+        let id = caption(&mut source, text);
+        let start = text_first_glyph_center(&source.annotations[0]).ok_or(text)?;
+        // A bond leaving to the right meets the last letter: the reverse spelling.
+        let right = Some(start.offset(42., 0.));
+        let (converted, atom) = text_to_atom_toward(&source, id, right)?;
+        let group = converted.abbreviation(atom).ok_or(text)?;
+        assert_eq!(
+            (group.label.as_str(), group.reverse_label.as_str()),
+            (label, text)
+        );
+        assert!(
+            converted
+                .bonds
+                .iter()
+                .all(|b| group.members.contains(&b.a) && group.members.contains(&b.b))
+        );
+        assert_eq!(converted.atoms.len(), group.members.len(), "{text}");
+        converted.validate()?;
+        // Toward the left, or with no bond yet, the text stays a dummy label.
+        for toward in [Some(start.offset(-42., 0.)), None] {
+            let (converted, atom) = text_to_atom_toward(&source, id, toward)?;
+            assert!(converted.abbreviations.is_empty(), "{text}");
+            assert_eq!((converted.atoms.len(), converted.bonds.len()), (1, 0));
+            let atom = converted.atom(atom).ok_or(text)?;
+            assert_eq!(atom.display.variable.as_deref(), Some(text));
+        }
+    }
+    Ok(())
+}

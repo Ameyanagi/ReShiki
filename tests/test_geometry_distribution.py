@@ -23,8 +23,8 @@ class GeometrySourceTests(unittest.TestCase):
     def test_rust_dependency_pin_and_parameter_reference_provenance(self):
         provenance = geometry_source.verify()
         self.assertEqual(provenance["version"], "2026.03.6")
-        self.assertEqual(provenance["backend"]["name"], "cosmolkit-core")
-        self.assertEqual(provenance["backend"]["version"], "0.3.0")
+        self.assertEqual(provenance["backend"]["name"], "cosmolkit")
+        self.assertEqual(provenance["backend"]["version"], "0.5.0")
         self.assertRegex(provenance["revision"], "^[0-9a-f]{40}$")
         self.assertEqual(provenance["revision"], provenance["backend"]["revision"])
         self.assertEqual(provenance["implementation"], "Rust")
@@ -41,7 +41,7 @@ class GeometrySourceTests(unittest.TestCase):
             provenance["comparison_reference"]["revision"],
             "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
         )
-        self.assertEqual(len(provenance["parameter_data"]["files_sha256"]), 7)
+        self.assertEqual(len(provenance["parameter_data"]["files_sha256"]), 23)
         self.assertNotIn("archives", provenance)
         self.assertNotIn("boost_version", provenance)
         for key, name in (
@@ -76,21 +76,23 @@ class GeometrySourceTests(unittest.TestCase):
 
     def test_resolved_parameter_bytes_and_source_revision_are_checked(self):
         with tempfile.TemporaryDirectory() as temporary:
-            core = Path(temporary)
-            source = core / "src/chemistry/forcefield/rdkit/ForceField/UFF/Params.cpp"
+            crate = Path(temporary)
+            source = crate / "src/uff/default_params.tsv"
             source.parent.mkdir(parents=True)
             original = b"embedded parameter fixture"
             source.write_bytes(original)
             package = dict(
-                name="cosmolkit-core",
-                version="0.3.0",
+                name="cosmolkit-forcefields",
+                version="0.5.0",
                 source=geometry_source.dependency()["source"],
-                manifest_path=str(core / "Cargo.toml"),
+                manifest_path=str(crate / "Cargo.toml"),
             )
             with patch(
                 "geometry_source.PARAMETER_SHA256",
                 {
-                    "ForceField/UFF/Params.cpp": hashlib.sha256(original).hexdigest(),
+                    "cosmolkit-forcefields/src/uff/default_params.tsv": hashlib.sha256(
+                        original
+                    ).hexdigest(),
                 },
             ):
                 geometry_source.verify(cargo_metadata={"packages": [package]})
@@ -106,14 +108,14 @@ class GeometrySourceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "output"
             packages = []
-            for name in ("cosmolkit-core", "cosmolkit-macros", "cosmolkit-ringdecomposer"):
+            for name in ("cosmolkit", "cosmolkit-core", "cosmolkit-forcefields"):
                 source = Path(temporary) / name
                 source.mkdir()
                 (source / "Cargo.toml").write_text(f'name = "{name}"\nlicense = "MIT"\n')
                 packages.append(
                     dict(
                         name=name,
-                        version="0.3.0",
+                        version="0.5.0",
                         license="MIT",
                         manifest_path=str(source / "Cargo.toml"),
                     )
@@ -125,7 +127,7 @@ class GeometrySourceTests(unittest.TestCase):
                     (geometry_source.ROOT / "licenses/geometry" / name).read_bytes(), content
                 )
             for package in packages:
-                self.assertIn(f"DEPENDENCY: {package['name']}@0.3.0".encode(), content)
+                self.assertIn(f"DEPENDENCY: {package['name']}@0.5.0".encode(), content)
             self.assertIn(b"Copyright (c) 2026 COSMolKit Contributors", content)
             self.assertFalse((geometry_source.ROOT / "licenses/geometry/BOOST-LICENSE").exists())
 
