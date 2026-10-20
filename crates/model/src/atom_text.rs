@@ -274,6 +274,31 @@ fn apply_entry(
             group.label = text.into();
             group.reverse_label = reverse.into();
         }
+        // The new group reads from the side the replaced label did: a group
+        // keeps its alignment, and a left-facing HO makes OBn read BnO. A
+        // group without a reverse spelling (ONp) cannot turn, so it never
+        // takes Right, which forces the reversed reading; Above, Center and
+        // Left still carry over.
+        let reversible = result
+            .abbreviation(id)
+            .is_some_and(|g| !g.reverse_label.is_empty());
+        let alignment = match doc.abbreviation(id) {
+            Some(old) => (reversible
+                || old.alignment != crate::abbreviations::LabelAlignment::Right)
+                .then_some(old.alignment),
+            None if !reversible => None,
+            None => (crate::atom_labels::appendage_position(atom, doc)
+                == crate::atom_labels::HydrogenPosition::Left
+                && result
+                    .abbreviation(id)
+                    .is_some_and(|g| !g.faces_left(&result)))
+            .then_some(crate::abbreviations::LabelAlignment::Right),
+        };
+        if let Some(alignment) = alignment
+            && let Some(group) = result.abbreviations.iter_mut().find(|g| g.anchor == id)
+        {
+            group.alignment = alignment;
+        }
         result.invalidate_chemistry(&selected);
         result.validate()?;
         return Ok(result);

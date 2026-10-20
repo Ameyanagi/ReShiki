@@ -517,7 +517,7 @@ impl App {
                 pivot,
                 scale,
                 rotation,
-            } => editing::transform_about(&mut preview.document, &ids, pivot, scale, rotation),
+            } => crate::canvas::rotate(&mut preview.document, &ids, pivot, scale, rotation),
             Edit::ScaleAxes { ids, pivot, x, y } => {
                 editing::scale_axes_about(&mut preview.document, &ids, pivot, x, y)
             }

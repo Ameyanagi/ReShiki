@@ -6,6 +6,7 @@ use crate::{
     style::DEFAULT,
 };
 use serde::{Deserialize, Serialize};
+use std::cell::OnceCell;
 
 mod label_halo;
 mod mark_placement;
@@ -334,6 +335,13 @@ impl Graphic {
 pub fn mark_parts(atom: &Atom) -> Vec<Part> {
     styled_mark_parts(atom, &DEFAULT)
 }
+/// Whether `mark` draws anything on `atom`; a charge hidden with the
+/// atom's charge label, for instance, does not.
+pub fn mark_drawn(atom: &Atom, mark: &AtomMark) -> bool {
+    let mut single = atom.clone();
+    single.marks = vec![mark.clone()];
+    !styled_mark_parts(&single, &DEFAULT).is_empty()
+}
 pub fn styled_mark_parts(atom: &Atom, drawing_style: &crate::style::DrawingStyle) -> Vec<Part> {
     let default_size = atom
         .text_style
@@ -460,6 +468,114 @@ fn attach_inner(atom: &mut Atom, kind: SymbolKind, offset: Point) -> Result<(), 
     Ok(())
 }
 
+/// Attached marks orbit their atom in these steps (degrees) unless dragged freely.
+pub const MARK_ORBIT_STEP: f32 = 15.;
+
+/// The mark dragged to `to`. A plain drag orbits the atom in 15° steps,
+/// hugging its label at the click gap and skipping steps where the mark
+/// would touch one of the atom's bonds; `free` keeps the exact offset. Lone
+/// pairs turn tangent to the atom either way; other marks stay upright.
+pub fn orbit_mark(
+    doc: &crate::document::Document,
+    atom: &Atom,
+    mark: &AtomMark,
+    to: Point,
+    free: bool,
+) -> AtomMark {
+    // A mark that draws nothing has no shape to orbit with; keep its offset.
+    if !mark_drawn(atom, mark) {
+        return mark.clone();
+    }
+    let offset = Point::new(to.x - atom.position.x, to.y - atom.position.y);
+    let degrees = offset.y.atan2(offset.x).to_degrees();
+    if free {
+        return AtomMark {
+            offset,
+            ..mark_placement::tangent(mark.clone(), degrees)
+        };
+    }
+    let turn = |snap: &(AtomMark, bool)| {
+        let snapped = snap.0.offset.y.atan2(snap.0.offset.x).to_degrees();
+        let turn = (snapped - degrees).rem_euclid(360.);
+        turn.min(360. - turn)
+    };
+    let snaps = mark_placement::orbit(doc, atom, mark, orbit_snaps());
+    // With every step blocked, the nearest one still beats an exact offset.
+    snaps
+        .iter()
+        .filter(|(_, clear)| *clear)
+        .min_by(|a, b| turn(a).total_cmp(&turn(b)))
+        .or_else(|| snaps.iter().min_by(|a, b| turn(a).total_cmp(&turn(b))))
+        .map_or_else(|| mark.clone(), |(mark, _)| mark.clone())
+}
+
+fn orbit_snaps() -> impl Iterator<Item = f32> {
+    (0..24).map(|i| i as f32 * MARK_ORBIT_STEP)
+}
+
+/// The orbit a dragged mark follows, as the runs clear of the atom's bonds,
+/// and its available snap positions, in world space. Both come from the
+/// placement `orbit_mark` commits, and every snap is a vertex of the orbit.
+pub fn mark_orbit_guide(
+    doc: &crate::document::Document,
+    atom: &Atom,
+    mark: &AtomMark,
+) -> (Vec<Vec<Point>>, Vec<Point>) {
+    if !mark_drawn(atom, mark) {
+        return (vec![], vec![]);
+    }
+    let center = |m: &AtomMark| atom.position.offset(m.offset.x, m.offset.y);
+    let directions: Vec<f32> = (0..=120).map(|i| i as f32 * 3.).collect();
+    let snaps = directions
+        .iter()
+        .step_by(5)
+        .take(24)
+        .copied()
+        .collect::<Vec<_>>();
+    let mut orbit: Vec<_> = directions
+        .iter()
+        .copied()
+        .zip(mark_placement::orbit(doc, atom, mark, directions.clone()))
+        .collect();
+    // Where the mark swings fast round a corner, sample more finely.
+    let step = doc
+        .drawing_style
+        .world(doc.drawing_style.font_size_pt * 0.05);
+    for _ in 0..3 {
+        let between: Vec<f32> = orbit
+            .iter()
+            .zip(orbit.iter().skip(1))
+            .filter(|(a, b)| center(&a.1.0).distance(center(&b.1.0)) > step)
+            .map(|(a, b)| 0.5 * (a.0 + b.0))
+            .collect();
+        if between.is_empty() {
+            break;
+        }
+        orbit.extend(between.iter().copied().zip(mark_placement::orbit(
+            doc,
+            atom,
+            mark,
+            between.clone(),
+        )));
+        orbit.sort_by(|a, b| a.0.total_cmp(&b.0));
+    }
+    let mut runs = vec![Vec::new()];
+    for (_, (mark, clear)) in &orbit {
+        match (clear, runs.last_mut()) {
+            (true, Some(run)) => run.push(center(mark)),
+            (false, Some(run)) if !run.is_empty() => runs.push(Vec::new()),
+            _ => {}
+        }
+    }
+    runs.retain(|run| run.len() > 1);
+    let snaps = orbit
+        .iter()
+        .filter(|(degrees, (_, clear))| *clear && snaps.contains(degrees))
+        .map(|(_, (mark, _))| center(mark))
+        .collect();
+    (runs, snaps)
+}
+
 pub fn next_mark_id(atom: &Atom) -> Result<u64, String> {
     atom.marks
         .iter()
@@ -493,6 +609,8 @@ impl Drawing {
             .then(|| doc.nearest(start, radius))
             .flatten()
     }
+    /// `constrain` (Shift) snaps a free graphic; an attached mark's drag
+    /// instead orbits its atom unless `constrain` frees it.
     pub fn place(
         &self,
         doc: &mut crate::document::Document,
@@ -500,6 +618,19 @@ impl Drawing {
         end: Point,
         constrain: bool,
         radius: f32,
+    ) -> Result<u64, String> {
+        self.place_with(doc, start, end, constrain, radius, &OnceCell::new())
+    }
+    /// [`Self::place`], reusing `hydrogens` for a charge or radical's label
+    /// so a drag's previews work out the molecule's chemistry only once.
+    pub fn place_with(
+        &self,
+        doc: &mut crate::document::Document,
+        start: Point,
+        end: Point,
+        constrain: bool,
+        radius: f32,
+        hydrogens: &OnceCell<Option<u32>>,
     ) -> Result<u64, String> {
         if let GraphicKind::Symbol(kind) = self.kind
             && self.attach
@@ -551,6 +682,22 @@ impl Drawing {
             }
             if !matches!(kind, SymbolKind::LonePair | SymbolKind::LonePairBar) {
                 doc.invalidate_chemistry(&[id]);
+                // Orbit the label the refresh will show, hydrogens included.
+                let hydrogens = *hydrogens
+                    .get_or_init(|| crate::atom_labels::refresh::label_hydrogens(doc, id));
+                if let Some((atom, h)) = doc.atom_mut(id).zip(hydrogens) {
+                    atom.label_h = h;
+                }
+            }
+            // A drag orbits the atom like moving the mark; `constrain` frees it.
+            if start.distance(end) >= 3.
+                && let Some(atom) = doc.atom(id)
+                && let Some(mark) = atom.marks.last()
+            {
+                let placed = orbit_mark(doc, atom, mark, end, constrain);
+                if let Some(mark) = doc.atom_mut(id).and_then(|a| a.marks.last_mut()) {
+                    *mark = placed;
+                }
             }
             return Ok(id);
         }

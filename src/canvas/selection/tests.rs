@@ -293,9 +293,59 @@ fn a_molecule_shown_in_3d_keeps_rotation_and_corners_but_not_edges() {
         let grip = selection.grips()[0];
         assert_eq!(selection.hit(grip) == Some(Handle::Resize(0)), corners);
         assert!((0..4).all(|i| selection.edge_enabled(i) == edges));
+        // Rotation rolls a model shown only in 3D.
         assert_eq!(
             selection.hit(selection.rotation_grip()),
             Some(Handle::Rotate)
         );
     }
+}
+
+#[test]
+fn rotating_rolls_a_model_shown_only_in_3d_and_turns_the_drawing() {
+    let (doc, molecule, drawn) = crate::canvas::tilt::shown(reshiki::models3d::Display::ThreeD);
+    let ids = [molecule, drawn].concat();
+    let camera = Camera::default();
+    let bounds = Rectangle::new(Point::ORIGIN, Size::new(400., 300.));
+    let selection = SelectionBox::new(&doc, &ids, camera, bounds).unwrap();
+    // The pivot is the drawn pair's centre, not the hidden drawing's.
+    assert_eq!(selection.pivot, World::new(220., 7.5));
+    let start = camera.world(selection.rotation_grip(), bounds);
+    assert_eq!(
+        selection.hit(selection.rotation_grip()),
+        Some(Handle::Rotate)
+    );
+    let drag = TransformDrag::new(selection, Handle::Rotate, start, &ids);
+    let end = start.offset(60., 40.);
+    let mut preview = doc.clone();
+    drag.apply(&mut preview, end, false);
+    for id in molecule {
+        assert_eq!(preview.atom(id), doc.atom(id));
+    }
+    for id in drawn {
+        assert_ne!(preview.atom(id), doc.atom(id));
+    }
+    assert_ne!(preview.models[0].rotation, doc.models[0].rotation);
+    // The commit applies the same rotation to the whole selection.
+    let super::super::Edit::Transform {
+        ids: committed,
+        pivot,
+        scale,
+        rotation,
+    } = drag.into_edit(end, false)
+    else {
+        panic!("a rotation commits a transform");
+    };
+    assert_eq!(committed, ids);
+    let mut commit = doc.clone();
+    rotate(&mut commit, &committed, pivot, scale, rotation);
+    assert_eq!(commit, preview);
+    // Alone, the model rolls about its own place: the frame stays put.
+    let selection = SelectionBox::new(&doc, &molecule, camera, bounds).unwrap();
+    let start = camera.world(selection.rotation_grip(), bounds);
+    let drag = TransformDrag::new(selection, Handle::Rotate, start, &molecule);
+    let mut alone = doc.clone();
+    drag.apply(&mut alone, start.offset(60., 40.), false);
+    assert_ne!(alone.models[0].rotation, doc.models[0].rotation);
+    assert_eq!(alone.atoms, doc.atoms);
 }

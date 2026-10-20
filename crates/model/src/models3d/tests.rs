@@ -927,3 +927,164 @@ fn tilt_turns_a_model_shown_only_in_3d_in_the_drawing_s_sense() {
     let [c1, c2, _] = [0, 1, 2].map(|i| flat.atom(atoms[i]).unwrap().depth);
     assert!(c2 < c1, "the top carbon goes away");
 }
+
+#[test]
+fn rings_do_not_snap_onto_or_from_a_molecule_shown_in_3d() {
+    // Drag a free ring's first edge onto the ethanol C–C bond, or a ring shown
+    // only in 3D onto a drawn C–C bond.
+    let snap = |display: Display, hidden_ring: bool| {
+        let (mut doc, atoms, _) = drawing();
+        assert!(display == Display::TwoD || set_display(&mut doc, 0, display));
+        let ring = editing::ring(&mut doc, Point::new(300., 300.), 5, false, 21.);
+        let target = if hidden_ring {
+            doc.models.clear();
+            model_ring(&mut doc, &ring);
+            let a = doc.add_atom("C", Point::new(500., 0.));
+            let b = doc.add_atom("C", Point::new(536., -21.));
+            doc.add_bond(a, b, 1, "plain");
+            [a, b]
+        } else {
+            [atoms[0], atoms[1]]
+        };
+        let p = |id| doc.atom(id).unwrap().position;
+        let (a, b, t, u) = (p(ring[0]), p(ring[1]), p(target[0]), p(target[1]));
+        let delta = Point::new((t.x + u.x - a.x - b.x) / 2., (t.y + u.y - a.y - b.y) / 2.);
+        let before = doc.clone();
+        let snapped = editing::snap_ring(&mut doc, &ring, delta, 14.).is_some();
+        (snapped, doc == before)
+    };
+    assert_eq!(snap(Display::TwoD, false), (true, false));
+    assert_eq!(snap(Display::Both, false), (true, false));
+    assert_eq!(snap(Display::ThreeD, false), (false, true));
+    assert_eq!(snap(Display::TwoD, true), (false, true));
+}
+
+/// A model of the molecule `ids`, shown only in 3D.
+fn model_ring(doc: &mut Document, ids: &[u64]) {
+    let atoms = ids
+        .iter()
+        .enumerate()
+        .map(|(i, id)| {
+            let angle = i as f32 * std::f32::consts::TAU / ids.len() as f32;
+            Placed {
+                id: *id,
+                xyz: [1.3 * angle.cos(), 1.3 * angle.sin(), 0.],
+            }
+        })
+        .collect();
+    let model = Model3d::new(doc, atoms, vec![], ForceField::Mmff94s);
+    doc.models.push(model);
+    doc.require_version(MODELS_3D);
+    let last = doc.models.len() - 1;
+    assert!(set_display(doc, last, Display::ThreeD));
+}
+
+#[test]
+fn reference_align_and_stretch_leave_a_molecule_shown_in_3d_alone() {
+    use crate::editing::reference::{self, Edge, Stretch};
+    let (doc, atoms, methane) = shown(Display::ThreeD);
+    assert!(reference::edges(&doc, &atoms).is_empty());
+    let (drawn, ..) = shown(Display::Both);
+    assert_eq!(
+        reference::edges(&drawn, &atoms),
+        vec![
+            Edge::Bond(atoms[0], atoms[1]),
+            Edge::Bond(atoms[1], atoms[2])
+        ]
+    );
+    let pivot = Point::new(100., 100.);
+    assert_eq!(
+        reference::rotate(&doc, &atoms, pivot, 30., false).map(|_| ()),
+        Err("Switch to 2D to rotate the drawing".into())
+    );
+    let mixed = [atoms.clone(), vec![methane]].concat();
+    let (rotated, _) = reference::rotate(&doc, &mixed, pivot, 30., false).unwrap();
+    for id in &atoms {
+        assert_eq!(rotated.atom(*id), doc.atom(*id));
+    }
+    assert_ne!(
+        rotated.atom(methane).unwrap().position,
+        doc.atom(methane).unwrap().position
+    );
+    assert_eq!(
+        Stretch::new(&doc, atoms[0], atoms[1]).map(|_| ()),
+        Err("Switch to 2D to stretch the drawing".into())
+    );
+    assert!(Stretch::new(&drawn, atoms[1], atoms[2]).is_ok());
+}
+
+#[test]
+fn joins_refuse_a_molecule_shown_in_3d() {
+    use crate::joining::{self, Prepared, SHOWN_IN_3D};
+    let (mut doc, atoms, methane) = shown(Display::ThreeD);
+    let iron = doc.add_atom("Fe", Point::new(0., 200.));
+    let refused = Err(SHOWN_IN_3D.to_string());
+    assert_eq!(Prepared::new(&doc, &[atoms[0]]).map(|_| ()), refused);
+    assert_eq!(
+        joining::merge_atoms(&doc, &[atoms[0], atoms[1], methane]).map(|_| ()),
+        refused
+    );
+    assert_eq!(
+        joining::coordinate_atoms(&doc, atoms[2], iron).map(|_| ()),
+        refused
+    );
+    assert_eq!(joining::shown_in_3d(&doc, &[methane, iron]), Ok(()));
+    assert!(Prepared::new(&doc, &[methane]).is_ok());
+}
+
+#[test]
+fn aligning_moves_a_hidden_molecule_with_its_frame() {
+    let (mut doc, atoms, methane) = shown(Display::ThreeD);
+    // Methane on top: aligning tops moves ethanol up.
+    doc.atom_mut(methane).unwrap().position.y = -500.;
+    let before = doc.clone();
+    let (lo, _) = frame(&doc, &doc.models[0]).unwrap();
+    let ids = [atoms.clone(), vec![methane]].concat();
+    editing::arrange(&mut doc, &ids, editing::Arrange::AlignTop);
+    let (moved_lo, _) = frame(&doc, &doc.models[0]).unwrap();
+    let shift = |id: u64| {
+        let (a, b) = (before.atom(id).unwrap(), doc.atom(id).unwrap());
+        Point::new(b.position.x - a.position.x, b.position.y - a.position.y)
+    };
+    let delta = shift(atoms[0]);
+    assert!(delta.y.abs() > 1.);
+    for id in &atoms {
+        assert_eq!(shift(*id), delta);
+    }
+    assert!((moved_lo.x - lo.x - delta.x).abs() < 1e-3);
+    assert!((moved_lo.y - lo.y - delta.y).abs() < 1e-3);
+}
+
+#[test]
+fn roll_turns_a_model_clockwise_like_a_2d_rotation() {
+    let (mut doc, atoms, methane) = shown(Display::ThreeD);
+    doc.models[0].perspective = 0.;
+    let screen = |doc: &Document| {
+        let view = View::new(doc, &doc.models[0]).unwrap();
+        let points: Vec<_> = view.rotated.iter().map(|p| view.project(*p).0).collect();
+        (view.origin, points)
+    };
+    let (origin, before) = screen(&doc);
+    roll(&mut doc, &[methane], 90.);
+    assert_eq!(
+        screen(&doc).1,
+        before,
+        "only models of the given atoms roll"
+    );
+    roll(&mut doc, &atoms, 90.);
+    let (moved, after) = screen(&doc);
+    assert_eq!(moved, origin);
+    // A quarter turn as editing::transform makes it: (x, y) → (−y, x), y down.
+    for (a, b) in before.iter().zip(&after) {
+        let (x, y) = (a.x - origin.x, a.y - origin.y);
+        assert!((b.x - origin.x + y).abs() < 1e-2, "{a:?} → {b:?}");
+        assert!((b.y - origin.y - x).abs() < 1e-2, "{a:?} → {b:?}");
+    }
+    let (mut both, atoms, _) = shown(Display::Both);
+    let rotation = both.models[0].rotation;
+    roll(&mut both, &atoms, 90.);
+    assert_eq!(
+        both.models[0].rotation, rotation,
+        "a model beside its drawing does not roll"
+    );
+}

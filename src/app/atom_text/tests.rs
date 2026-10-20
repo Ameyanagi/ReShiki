@@ -764,3 +764,64 @@ fn label_errors_and_stale_documents_retain_the_draft() -> Result<(), String> {
     assert_eq!(app.tab.doc, before);
     Ok(())
 }
+
+#[test]
+fn apply_keeps_the_side_the_model_chose_for_a_new_group() -> Result<(), String> {
+    use reshiki::{
+        abbreviations::LabelAlignment,
+        haworth::{Anomer, Sugar, sugar_document},
+    };
+    // The glucose template's C4 hydroxyl, drawn HO on its vertical bond.
+    const C4_OXYGEN: u64 = 10;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = sugar_document(Sugar::Glucose, Anomer::Alpha, 42.)?;
+    let mut retype = |text: &str| {
+        let _ = app.update(Message::AtomText(Action::Begin(Some(C4_OXYGEN))));
+        let _ = app.update(Message::AtomText(Action::Input(text.into())));
+        let _ = app.update(Message::AtomText(Action::Apply));
+        assert!(app.tab.atom_text.is_none(), "{text}");
+        let group = app.tab.doc.abbreviation(C4_OXYGEN).ok_or("Group")?;
+        Ok::<_, String>((group.text(&app.tab.doc).to_owned(), group.alignment))
+    };
+    assert_eq!(retype("OBn")?, ("BnO".into(), LabelAlignment::Right));
+    // Retyping on the group keeps its alignment.
+    assert_eq!(retype("OMe")?, ("MeO".into(), LabelAlignment::Right));
+    Ok(())
+}
+
+#[test]
+fn apply_keeps_placement_a_group_without_a_reverse_spelling_can_take() -> Result<(), String> {
+    use reshiki::{
+        abbreviations::LabelAlignment,
+        haworth::{Anomer, Sugar, sugar_document},
+    };
+    const C4_OXYGEN: u64 = 10;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    for (placed, kept) in [
+        (LabelAlignment::Above, LabelAlignment::Above),
+        (LabelAlignment::Center, LabelAlignment::Center),
+        (LabelAlignment::Left, LabelAlignment::Left),
+        // Right would turn ONp, which has no reverse spelling.
+        (LabelAlignment::Right, LabelAlignment::Auto),
+    ] {
+        let mut doc = sugar_document(Sugar::Glucose, Anomer::Alpha, 42.)?;
+        doc = reshiki::atom_text::apply(&doc, C4_OXYGEN, "OBn", Mode::Auto)?;
+        if let Some(group) = doc.abbreviations.iter_mut().find(|g| g.anchor == C4_OXYGEN) {
+            group.alignment = placed;
+        }
+        app.tab.doc = doc;
+        let _ = app.update(Message::AtomText(Action::Begin(Some(C4_OXYGEN))));
+        let _ = app.update(Message::AtomText(Action::Input("ONp".into())));
+        let _ = app.update(Message::AtomText(Action::Apply));
+        assert!(app.tab.atom_text.is_none(), "{placed:?}");
+        let group = app.tab.doc.abbreviation(C4_OXYGEN).ok_or("Group")?;
+        assert_eq!(
+            (group.text(&app.tab.doc), group.alignment),
+            ("ONp", kept),
+            "{placed:?}"
+        );
+    }
+    Ok(())
+}

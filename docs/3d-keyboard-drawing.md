@@ -63,6 +63,16 @@ together as one Undo step, and the preview is the committed result. A
 molecule shown as **Both** tilts its visible 2D drawing and leaves the model
 alone.
 
+The selection box's rotation handle, **Rotate 180°**, the Alt/Option+arrow
+rotate steps and the **Rotate** transform field roll a model shown only in 3D
+about the view axis, clockwise as they turn a drawing, and its frame stays in
+place; the other selected objects turn as before, in the same Undo step, and
+the preview is the committed result. Editing never changes the hidden 2D
+drawing of such a molecule: Flip, which would make the model the other
+enantiomer, Scale/W/H, Clean up, 3D optimize, reference align/stretch and Join
+say **Switch to 2D** instead, a mixed selection flips just its other objects,
+and rings, joins and fused templates never attach to the hidden atoms.
+
 ### 2D layout
 
 While a model is shown, **Properties → Structure → 2D layout** chooses what the

@@ -949,6 +949,7 @@ async fn paper_layers_match_captured_baseline() {
                 canvas.tool = Tool::Graphic(GraphicKind::Ellipse);
                 state.gesture = Some(Gesture::Graphic {
                     start: World::new(80., 320.),
+                    hydrogens: Default::default(),
                 });
                 Some(at(150., 380.))
             }

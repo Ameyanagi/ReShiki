@@ -106,7 +106,7 @@ impl Tool {
                 "Drag to erase atoms, bonds and objects along the stroke · Undo restores the whole stroke"
             }
             Self::Graphic(GraphicKind::Symbol(_)) => {
-                "Click an atom to attach · Click empty space for a free symbol · Drag to position"
+                "Click an atom to attach · Drag from it to orbit in 15° steps · Option/Alt or Shift places freely · Click empty space for a free symbol"
             }
             Self::Graphic(GraphicKind::Orbital(_)) => {
                 "Click to place · Drag from the node for size and direction · Shift snaps to 15° · Option/Alt bypasses atom snapping"
@@ -120,7 +120,9 @@ impl Tool {
             Self::Graphic(_) => {
                 "Drag to draw · Shift constrains proportions or angle · Escape cancels"
             }
-            Self::EditPoints => "Drag anchors or control points · Escape returns to Select",
+            Self::EditPoints => {
+                "Drag anchors or control points · Atom marks orbit in 15° steps; Option/Alt or Shift frees · Escape returns to Select"
+            }
         }
     }
 }
