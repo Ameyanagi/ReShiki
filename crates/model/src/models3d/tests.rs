@@ -173,17 +173,76 @@ fn copy_and_paste_remap_the_model_with_its_molecule() {
     fresh.validate().unwrap();
 }
 
-#[test]
-fn a_kept_drawn_layout_is_pasted_with_its_model_and_restores() {
+/// `doc` with model 0's molecule "flattened": its atoms moved and squashed
+/// off the drawn layout, which the model keeps.
+fn flattened() -> (Document, Vec<u64>, Document) {
     let (mut doc, atoms, _) = shown(Display::Both);
     let original = doc.clone();
-    doc.models[0].drawn = Some(Drawn::of(&doc, &doc.models[0]));
-    for atom in &mut doc.atoms {
-        atom.position = atom.position.offset(5., -3.);
+    let drawn = Drawn::of(&doc, &doc.models[0]);
+    for atom in &mut doc.atoms[..3] {
+        atom.position = Point::new(atom.position.x * 0.8 + 5., atom.position.y * 0.5 - 3.);
         atom.depth = 2.;
     }
+    doc.models[0].drawn = Some(drawn.kept(&doc, &doc.models[0]));
     doc.validate().unwrap();
+    (doc, atoms, original)
+}
 
+/// The drawn atoms' places, which `restored` must show moved by `by`.
+fn assert_restored(restored: &Document, ids: &[u64], original: &Document, by: Point) {
+    for (id, source) in ids.iter().zip(&original.atoms[..3]) {
+        let atom = restored.atom(*id).unwrap();
+        let want = source.position.offset(by.x, by.y);
+        assert!(
+            atom.position.distance(want) < 1e-3,
+            "{atom:?} not at {want:?}"
+        );
+        assert_eq!((atom.depth, &atom.stereo), (source.depth, &source.stereo));
+    }
+}
+
+fn molecule_center(doc: &Document, index: usize) -> Point {
+    layout_center(doc, &doc.models[index]).unwrap()
+}
+
+#[test]
+fn a_kept_drawn_layout_comes_back_where_the_molecule_is() {
+    // Unmoved, the drawing comes back exactly.
+    let (mut doc, atoms, original) = flattened();
+    assert!(restore_drawing(&mut doc, 0));
+    assert_restored(&doc, &atoms, &original, Point::default());
+    assert_eq!(doc.models[0].drawn, None);
+    assert!(!restore_drawing(&mut doc, 0));
+
+    // Moved, it comes back where the molecule went.
+    let (mut doc, atoms, original) = flattened();
+    doc.translate(&atoms, 40., 25.);
+    assert!(restore_drawing(&mut doc, 0));
+    assert_restored(&doc, &atoms, &original, Point::new(40., 25.));
+
+    // Turned, flipped or scaled, it comes back centred where the molecule is
+    // now, as drawn.
+    let changes: [fn(&mut Document, &[u64]); 3] = [
+        |doc, atoms| editing::transform(doc, atoms, editing::Transform::Rotate(90.)),
+        |doc, atoms| editing::transform(doc, atoms, editing::Transform::FlipHorizontal),
+        |doc, atoms| editing::transform_about(doc, atoms, Point::new(300., 200.), 2., 30.),
+    ];
+    for change in changes {
+        let (mut doc, atoms, original) = flattened();
+        let flat = molecule_center(&doc, 0);
+        change(&mut doc, &atoms);
+        let now = molecule_center(&doc, 0);
+        assert!(restore_drawing(&mut doc, 0));
+        let moved = Point::new(now.x - flat.x, now.y - flat.y);
+        assert_restored(&doc, &atoms, &original, moved);
+        let drawn = molecule_center(&original, 0);
+        assert!(molecule_center(&doc, 0).distance(drawn.offset(moved.x, moved.y)) < 1e-3);
+    }
+}
+
+#[test]
+fn a_kept_drawn_layout_is_pasted_with_its_model_and_restores_on_the_copy() {
+    let (doc, atoms, original) = flattened();
     let part = editing::selection(&doc, &atoms);
     let mut pasted = doc.clone();
     let ids = editing::append(&mut pasted, &part, Point::new(0., 120.));
@@ -197,10 +256,16 @@ fn a_kept_drawn_layout_is_pasted_with_its_model_and_restores() {
     );
     pasted.validate().unwrap();
 
-    assert!(restore_drawing(&mut doc, 0));
-    assert_eq!(doc.atoms[..3], original.atoms[..3]);
-    assert_eq!(doc.models[0].drawn, None);
-    assert!(!restore_drawing(&mut doc, 0));
+    // The copy comes back where it was pasted, clear of its source.
+    let copy: Vec<_> = pasted.models[1].atoms.iter().map(|a| a.id).collect();
+    let (to, from) = (molecule_center(&pasted, 1), molecule_center(&doc, 0));
+    let by = Point::new(to.x - from.x, to.y - from.y);
+    assert!(by.distance(Point::default()) > 1.);
+    assert!(restore_drawing(&mut pasted, 1));
+    assert_restored(&pasted, &copy, &original, by);
+    assert!(pasted.models[0].drawn.is_some());
+    assert!(restore_drawing(&mut pasted, 0));
+    assert_restored(&pasted, &atoms, &original, Point::default());
 }
 
 #[test]
@@ -752,12 +817,25 @@ fn a_corner_resize_scales_the_frame_about_the_pivot_and_keeps_the_drawing() {
 #[test]
 fn the_morph_starts_flat_on_the_drawing_and_ends_on_the_model() {
     let (mut doc, atoms, _) = shown(Display::ThreeD);
-    let settled = format!("{:?}", primitives(&doc));
+    morphs_out_of_the_drawing(&mut doc, &atoms);
+    // Beside the drawing, and in a resized frame off the drawing's centre,
+    // the atoms still start on the drawing rather than beside it.
+    let (mut doc, atoms, _) = shown(Display::Both);
+    assert!(doc.models[0].offset.x > 0.);
+    morphs_out_of_the_drawing(&mut doc, &atoms);
+    let (mut doc, atoms, _) = shown(Display::ThreeD);
+    resize(&mut doc, &atoms, Point::new(-50., -40.), 1.5);
+    assert!(doc.models[0].offset != Point::default());
+    morphs_out_of_the_drawing(&mut doc, &atoms);
+}
+
+fn morphs_out_of_the_drawing(doc: &mut Document, atoms: &[u64]) {
+    let settled = format!("{:?}", primitives(doc));
     doc.models[0].morph = Some(1.);
-    assert_eq!(format!("{:?}", primitives(&doc)), settled);
+    assert_eq!(format!("{:?}", primitives(doc)), settled);
 
     doc.models[0].morph = Some(0.);
-    let spheres: Vec<_> = primitives(&doc)
+    let spheres: Vec<_> = primitives(doc)
         .into_iter()
         .filter_map(|p| match p {
             Primitive::Sphere { center, .. } => Some((center, 1.)),

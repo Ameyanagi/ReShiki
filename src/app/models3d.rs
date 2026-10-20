@@ -294,9 +294,12 @@ impl App {
                     models3d::keep_place(&mut doc, index, origin);
                 }
                 models3d::set_display(&mut doc, index, Display::TwoD);
+                // Kept where the flattened drawing is, to come back wherever
+                // the molecule goes.
+                let drawn = doc.models.get(index).map(|m| drawn.kept(&doc, m));
                 if let Some(model) = doc.models.get_mut(index) {
                     model.layout = Layout::View;
-                    model.drawn = Some(drawn);
+                    model.drawn = drawn;
                 }
                 reshiki::depth_appearance::enable(
                     &mut doc,

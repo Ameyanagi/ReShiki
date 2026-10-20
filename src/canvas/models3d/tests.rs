@@ -329,6 +329,31 @@ fn the_bar_stays_on_the_paper_when_the_selection_fills_it() {
 }
 
 #[test]
+fn the_bar_stays_on_the_paper_when_the_selection_is_panned_off_it() {
+    let (doc, atoms) = drawing();
+    let mut canvas = canvas(&doc, &atoms);
+    canvas.model_bar = Some(Display::ThreeD);
+    let (lo, hi) = reshiki::scene::selection_bounds(&doc, &atoms).unwrap();
+    for dy in [-2000., 2000.] {
+        // dy < 0 puts the selection below the canvas, dy > 0 above it.
+        canvas.camera.center = World::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2. + dy);
+        let top = canvas.camera.screen(lo, BOUNDS).y;
+        let bottom = canvas.camera.screen(hi, BOUNDS).y;
+        assert!(top > BOUNDS.height || bottom < 0., "{top} {bottom}");
+        let bar = canvas.model_bar(&State::default(), BOUNDS).unwrap();
+        assert!(bar.panel.y >= 0., "{dy}: {:?}", bar.panel);
+        assert!(
+            bar.panel.y + bar.panel.height <= BOUNDS.height,
+            "{dy}: {:?}",
+            bar.panel
+        );
+        for (_, _, button) in &bar.buttons {
+            assert!(bar.panel.contains(button.center()));
+        }
+    }
+}
+
+#[test]
 fn the_morph_redraws_until_it_ends() {
     let (doc, atoms) = drawing();
     let mut canvas = canvas(&doc, &atoms);
