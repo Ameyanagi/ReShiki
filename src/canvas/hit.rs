@@ -37,7 +37,14 @@ fn hit_selection_with_object(
     object: impl FnOnce() -> Option<u64>,
 ) -> Vec<u64> {
     if let Some(i) = reshiki::atom_labels::indicators(doc).into_iter().find(|i| {
-        (p.x - i.center.x).abs() < i.width / 2. + r && (p.y - i.center.y).abs() < i.height / 2. + r
+        use reshiki::atom_labels::Owner;
+        let (Owner::Number(id)
+        | Owner::Mapping(id)
+        | Owner::AtomStereo(id)
+        | Owner::BondStereo(id, _)) = i.owner;
+        !reshiki::models3d::hides(doc, id)
+            && (p.x - i.center.x).abs() < i.width / 2. + r
+            && (p.y - i.center.y).abs() < i.height / 2. + r
     }) {
         return match i.owner {
             reshiki::atom_labels::Owner::Number(id)
@@ -50,6 +57,10 @@ fn hit_selection_with_object(
     }
     if let Some(id) = object() {
         return vec![id];
+    }
+    // A 3D model selects its whole molecule.
+    if let Some(atoms) = reshiki::models3d::frame_hit(doc, p) {
+        return atoms;
     }
     reshiki::editing::nearest_bond(doc, p, r * 0.7)
         .and_then(|i| doc.bonds.get(i))
@@ -103,7 +114,7 @@ fn bond_targets(
         doc.atoms
             .iter()
             .filter(|a| {
-                doc.atom_visible(a.id)
+                doc.atom_drawn(a.id)
                     && Some(a.id) != source
                     && a.position.distance(p) < radius
                     && !origin.is_some_and(|o| {
@@ -189,7 +200,7 @@ fn hit_object_with_orbital(
             .iter()
             .rev()
             .find(|a| {
-                doc.atom_visible(a.id)
+                doc.atom_drawn(a.id)
                     && reshiki::scientific::styled_mark_parts(a, &doc.drawing_style)
                         .iter()
                         .any(|part| {

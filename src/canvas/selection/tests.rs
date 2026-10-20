@@ -264,3 +264,31 @@ fn rotation_readout_shows_the_applied_angle_and_the_step_keys() {
     };
     assert!(hint.ends_with(keys), "{hint}");
 }
+
+#[test]
+fn a_molecule_shown_in_3d_keeps_rotation_but_not_resize_handles() {
+    use reshiki::models3d::{Display, ForceField, Model3d, Placed};
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", World::new(-20., -10.));
+    let b = doc.add_atom("C", World::new(20., 10.));
+    doc.add_bond(a, b, 1, "plain");
+    let placed = [(a, [-0.75, 0., 0.]), (b, [0.75, 0., 0.])]
+        .map(|(id, xyz)| Placed { id, xyz })
+        .to_vec();
+    doc.models
+        .push(Model3d::new(&doc, placed, vec![], ForceField::Mmff94s));
+    doc.require_version(reshiki::document::MODELS_3D);
+    let camera = Camera::default();
+    let bounds = Rectangle::new(Point::ORIGIN, Size::new(400., 300.));
+    for (display, resizable) in [(Display::Both, true), (Display::ThreeD, false)] {
+        reshiki::models3d::set_display(&mut doc, 0, display);
+        let selection = SelectionBox::new(&doc, &[a, b], camera, bounds).unwrap();
+        let grip = selection.grips()[0];
+        assert_eq!(selection.hit(grip) == Some(Handle::Resize(0)), resizable);
+        assert!((0..4).all(|i| selection.edge_enabled(i) == resizable));
+        assert_eq!(
+            selection.hit(selection.rotation_grip()),
+            Some(Handle::Rotate)
+        );
+    }
+}

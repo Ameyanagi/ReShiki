@@ -153,11 +153,12 @@ impl SceneCache {
         self.copy = None;
     }
 
-    /// Rear-opacity paint shared by rendering and picking for the same document.
+    /// Rear-opacity paint shared by rendering and picking for the same document,
+    /// without the atoms shown as 3D models.
     pub fn opacity(&mut self, doc: &Document) -> Rc<Paint> {
         self.document(doc);
         self.opacity
-            .get_or_insert_with(|| Rc::new(Paint::new(doc)))
+            .get_or_insert_with(|| Rc::new(Paint::new(&reshiki::models3d::drawn(doc))))
             .clone()
     }
 
@@ -171,7 +172,9 @@ impl SceneCache {
             .markers
             .get_or_insert_with(|| Rc::new(super::markers::Markers::new(doc, ids)))
             .clone();
-        let paint = self.opacity.get_or_insert_with(|| Rc::new(Paint::new(doc)));
+        let paint = self
+            .opacity
+            .get_or_insert_with(|| Rc::new(Paint::new(&reshiki::models3d::drawn(doc))));
         let scene = self
             .scene
             .get_or_insert_with(|| scene::primitives_with_opacity(doc, paint).into())

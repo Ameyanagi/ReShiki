@@ -60,9 +60,22 @@ pub fn objects(doc: &Document, polygon: &[Point]) -> Vec<u64> {
     let mut result: Vec<_> = doc
         .atoms
         .iter()
-        .filter(|a| doc.atom_visible(a.id) && contains(polygon, a.position))
+        .filter(|a| doc.atom_drawn(a.id) && contains(polygon, a.position))
         .map(|a| a.id)
         .collect();
+    // A 3D model inside the region selects its molecule.
+    for model in &doc.models {
+        if model.display != crate::models3d::Display::TwoD
+            && crate::models3d::frame_corners(doc, model)
+                .is_some_and(|corners| encloses(polygon, &corners, true))
+        {
+            for atom in &model.atoms {
+                if !result.contains(&atom.id) {
+                    result.push(atom.id);
+                }
+            }
+        }
+    }
     for a in &doc.annotations {
         let (w, h) = a.size();
         let p = a.position;

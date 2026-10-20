@@ -73,3 +73,33 @@ fn draft_is_durable_and_corrupt_files_are_ignored() {
     store.clear().unwrap();
     assert!(!store.session.exists());
 }
+
+#[test]
+fn drafts_keep_3d_models() {
+    use crate::models3d::{Display, ForceField, Model3d, Placed};
+    let dir = tempfile::tempdir().unwrap();
+    let store = Recovery::in_directory(dir.path()).unwrap();
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Default::default());
+    let b = doc.add_atom("O", crate::document::Point::new(42., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    let placed = vec![
+        Placed {
+            id: a,
+            xyz: [-0.7, 0., 0.],
+        },
+        Placed {
+            id: b,
+            xyz: [0.7, 0.1, 0.],
+        },
+    ];
+    doc.models
+        .push(Model3d::new(&doc, placed, vec![], ForceField::Uff));
+    doc.require_version(crate::document::MODELS_3D);
+    crate::models3d::set_display(&mut doc, 0, Display::ThreeD);
+    store.save(&doc, None).unwrap();
+    std::fs::rename(&store.session, dir.path().join("4294967294-test.json")).unwrap();
+    let candidates = store.candidates();
+    assert_eq!(candidates[0].snapshot.document, doc.current());
+    assert_eq!(candidates[0].snapshot.document.models, doc.models);
+}

@@ -195,3 +195,33 @@ fn lock_errors_distinguish_contention_from_io_failures() {
         "Could not lock the template library (Unsupported): File locking is unavailable"
     );
 }
+
+#[test]
+fn templates_keep_3d_models() {
+    use crate::models3d::{ForceField, Model3d, Placed};
+    use crate::{document::Document, templates::Anchor};
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Default::default());
+    let b = doc.add_atom("N", crate::document::Point::new(42., 0.));
+    doc.add_bond(a, b, 3, "plain");
+    let placed = vec![
+        Placed {
+            id: a,
+            xyz: [-0.6, 0., 0.],
+        },
+        Placed {
+            id: b,
+            xyz: [0.6, 0., 0.],
+        },
+    ];
+    doc.models
+        .push(Model3d::new(&doc, placed, vec![], ForceField::Mmff94s));
+    doc.require_version(crate::document::MODELS_3D);
+    let mut library = super::Library::default();
+    library
+        .add("Nitrile", "Mine", doc.clone(), Anchor::Atom(a))
+        .unwrap();
+    let bytes = serde_json::to_vec(&library).unwrap();
+    let read = super::Library::from_bytes(&bytes).unwrap();
+    assert_eq!(read.templates[0].document.models, doc.models);
+}

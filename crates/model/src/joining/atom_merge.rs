@@ -214,6 +214,7 @@ fn merge_atoms_with_position(
     crate::arrow_anchors::remap_for_join(&mut result, &doc.atoms, &endpoint_mapping);
     crate::atom_labels::clear_computed(&mut result);
     crate::molecule_names::reconcile(&mut result, doc);
+    crate::models3d::reconcile(&mut result, doc);
     result.validate()?;
     Ok((result, vec![survivor]))
 }

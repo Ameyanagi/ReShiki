@@ -154,6 +154,7 @@ pub fn reconcile(doc: &mut Document, before: Document) -> Result<Reconciled, Rej
     }
     crate::molecule_names::reconcile(doc, &before);
     crate::arrow_labels::reconcile(doc, &before);
+    crate::models3d::reconcile(doc, &before);
     if *doc != before {
         if let Err(error) = doc.validate() {
             *doc = before;

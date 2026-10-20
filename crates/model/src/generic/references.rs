@@ -112,6 +112,13 @@ pub(super) fn reject_changed_references(
     {
         return Err(reference_error("depth appearance scopes"));
     }
+    if doc
+        .models
+        .iter()
+        .any(|m| m.atoms.iter().any(|a| changed_ids.contains(&a.id)))
+    {
+        return Err(reference_error("3D models"));
+    }
     Ok(())
 }
 

@@ -194,6 +194,8 @@ pub const CUSTOM_THEMES: u32 = 16;
 pub const EXACT_COLORS: u32 = 17;
 /// Persisted rear-side opacity for editable 3D molecules.
 pub const REAR_OPACITY: u32 = 22;
+/// 3D models of structures; their validation requires this version.
+pub const MODELS_3D: u32 = 28;
 
 /// The newest document format this build reads. Saved files are marked with it.
 ///
@@ -219,7 +221,8 @@ pub const REAR_OPACITY: u32 = 22;
 /// | 25 | Linked molecule-name captions and reaction atom-map labels (#298). |
 /// | 26 | Generic structures and coordination joining (#300; 0.12.0). |
 /// | 27 | Condition text attached to reaction arrows. |
-pub const VERSION: u32 = 27;
+/// | 28 | 3D models of structures (#386). |
+pub const VERSION: u32 = 28;
 
 fn newer_version(version: u64) -> String {
     format!(
@@ -280,6 +283,9 @@ pub struct Document {
     pub groups: Vec<crate::grouping::Group>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub reactions: Vec<crate::reactions::Reaction>,
+    /// 3D models linked to whole molecules by atom ID.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub models: Vec<crate::models3d::Model3d>,
     /// Recent custom colors for the color picker, newest first.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub recent_colors: Vec<crate::color_contrast::Rgb>,
@@ -307,6 +313,7 @@ impl Default for Document {
             graphics: vec![],
             groups: vec![],
             reactions: vec![],
+            models: vec![],
             recent_colors: vec![],
         }
     }
@@ -333,6 +340,7 @@ impl Document {
         let mut doc: Self = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
         doc.validate()?;
         doc.migrate();
+        crate::models3d::prune(&mut doc);
         crate::arrow_anchors::reconcile(&mut doc);
         doc.validate()?;
         Ok(doc)
@@ -429,7 +437,7 @@ impl Document {
     pub fn nearest(&self, point: Point, radius: f32) -> Option<u64> {
         self.atoms
             .iter()
-            .filter(|a| self.atom_visible(a.id) && a.position.distance(point) < radius)
+            .filter(|a| self.atom_drawn(a.id) && a.position.distance(point) < radius)
             .min_by(|a, b| {
                 a.position
                     .distance(point)
@@ -516,6 +524,7 @@ impl Document {
             .retain(|b| !ids.contains(&b.a) && !ids.contains(&b.b));
         self.annotations.retain(|a| !ids.contains(&a.id));
         crate::molecule_names::prune(self);
+        crate::models3d::prune(self);
         self.arrows.retain(|a| !ids.contains(&a.id));
         self.graphics.retain(|a| !ids.contains(&a.id));
         crate::arrow_labels::prune(self);
@@ -591,9 +600,11 @@ impl Document {
             graphics,
             groups,
             reactions,
+            models,
             recent_colors: _,
         } = self;
         atoms.clear();
+        models.clear();
         arrow_labels.clear();
         bonds.clear();
         annotations.clear();
@@ -630,9 +641,11 @@ impl Document {
             graphics,
             groups,
             reactions,
+            models,
             recent_colors: _,
         } = self;
         !atoms.is_empty()
+            || !models.is_empty()
             || !arrow_labels.is_empty()
             || !bonds.is_empty()
             || !annotations.is_empty()
@@ -652,6 +665,7 @@ impl Document {
         crate::ring_fills::validate(self)?;
         crate::attachments::validate(self)?;
         crate::generic::validate(self)?;
+        crate::models3d::validate(self)?;
         self.drawing_style.validate()?;
         if let Some(theme) = &self.custom_theme {
             theme.validate()?;

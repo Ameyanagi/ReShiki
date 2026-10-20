@@ -38,6 +38,8 @@ pub(super) struct SelectionBox {
     pub pivot: World,
     camera: Camera,
     bounds: Rectangle,
+    /// Scaling would distort the hidden 2D layout of a molecule shown in 3D.
+    resizable: bool,
 }
 
 impl SelectionBox {
@@ -55,6 +57,7 @@ impl SelectionBox {
             pivot: editing::rotation_center(doc, ids).unwrap_or_else(|| editing::center(doc, ids)),
             camera,
             bounds,
+            resizable: !reshiki::models3d::shows_3d(doc, ids),
         })
     }
 
@@ -108,6 +111,9 @@ impl SelectionBox {
     }
 
     fn edge_enabled(self, edge: usize) -> bool {
+        if !self.resizable {
+            return false;
+        }
         let [a, _, c, _] = self.corners;
         let width = (c.x - a.x).abs();
         let height = (c.y - a.y).abs();
@@ -124,7 +130,7 @@ impl SelectionBox {
         }
         self.grips()
             .iter()
-            .position(|q| (p.x - q.x).abs() < 8.0 && (p.y - q.y).abs() < 8.0)
+            .position(|q| self.resizable && (p.x - q.x).abs() < 8.0 && (p.y - q.y).abs() < 8.0)
             .map(Handle::Resize)
             .or_else(|| {
                 self.edge_grips()
@@ -157,7 +163,7 @@ impl SelectionBox {
         });
         let stroke = Stroke::default().with_width(1.2).with_color(ACCENT);
         frame.stroke(&outline, stroke);
-        for p in corners {
+        for p in corners.into_iter().filter(|_| self.resizable) {
             let handle = Path::rectangle(Point::new(p.x - 4.0, p.y - 4.0), Size::new(8.0, 8.0));
             frame.fill(&handle, Color::WHITE);
             frame.stroke(&handle, stroke);

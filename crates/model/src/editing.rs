@@ -207,6 +207,8 @@ pub(crate) fn preserved_expansion_selection(
         .retain(|n| ids.contains(&n.annotation) && n.atoms.iter().all(|id| ids.contains(id)));
     part.arrow_labels
         .retain(|l| ids.contains(&l.arrow) && ids.contains(&l.annotation));
+    part.models
+        .retain(|m| m.atoms.iter().all(|a| ids.contains(&a.id)));
     part.generic.alternatives.retain(|a| ids.contains(&a.atom));
     part.generic.links.retain(|a| ids.contains(&a.atom));
     part.generic.repeats.retain(|r| {
@@ -420,6 +422,9 @@ fn mapped_append_part(
         label.arrow = mapping.get(&label.arrow).copied()?;
         label.annotation = mapping.get(&label.annotation).copied()?;
     }
+    for model in &mut part.models {
+        model.remap(&mapping)?;
+    }
     part.depth_appearance = crate::depth_appearance::remap(&source.depth_appearance, &mapping);
     for a in &mut part.atoms {
         // A pasted fragment keeps its source appearance when document defaults differ.
@@ -533,6 +538,10 @@ pub(crate) fn extend_append_part(doc: &mut Document, part: Document) {
     doc.ring_fills.extend(part.ring_fills);
     doc.depth_appearance.extend(part.depth_appearance);
     doc.generic.extend(part.generic);
+    if !part.models.is_empty() {
+        doc.models.extend(part.models);
+        doc.require_version(crate::document::MODELS_3D);
+    }
     if crate::rear_opacity::present(doc) {
         doc.require_version(crate::document::REAR_OPACITY);
     }
@@ -955,7 +964,7 @@ pub fn nearest_bond(doc: &Document, p: Point, r: f32) -> Option<usize> {
     doc.bonds
         .iter()
         .enumerate()
-        .filter(|(_, b)| doc.bond_visible(b.a, b.b))
+        .filter(|(_, b)| doc.bond_drawn(b.a, b.b))
         .filter_map(|(i, b)| {
             let a = doc.atom(b.a)?.position;
             let z = doc.atom(b.b)?.position;
