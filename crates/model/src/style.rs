@@ -208,6 +208,10 @@ pub fn has_glyph(c: char) -> bool {
 
 mod font;
 
+#[cfg(test)]
+#[path = "style/added_font_tests.rs"]
+mod added_font_tests;
+
 /// Measure advances in the same font used by the drawing renderers.
 pub fn text_width(text: &str, size: f32) -> f32 {
     styled_text_width(text, size, &crate::typography::TextStyle::default())
