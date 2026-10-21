@@ -932,7 +932,7 @@ fn tilt_click_selects_a_molecule_without_rotating_and_blank_drag_selects() -> Re
 }
 
 #[test]
-fn tilt_drag_on_a_molecule_shown_only_in_3d_tilts_it() {
+fn tilt_drag_on_a_molecule_shown_in_3d_or_both_tilts_it() {
     use reshiki::models3d::Display;
     for display in [Display::Both, Display::ThreeD] {
         let (doc, molecule, drawn) = tilt::shown(display);
@@ -966,7 +966,13 @@ fn tilt_drag_on_a_molecule_shown_only_in_3d_tilts_it() {
                 panic!("{display:?} {selected:?}: expected a tilt, got {edit:?}");
             };
             ids.sort_unstable();
-            assert_eq!(ids, expected, "{display:?}");
+            // Pressing a drawn atom of a molecule shown as Both tilts that atom,
+            // which turns its whole model.
+            if display == Display::Both && selected.is_empty() {
+                assert!(!ids.is_empty() && ids.iter().all(|id| molecule.contains(id)));
+            } else {
+                assert_eq!(ids, expected, "{display:?}");
+            }
             assert_eq!((x, y), (-10., 15.));
         }
     }
