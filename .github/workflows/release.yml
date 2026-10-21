@@ -572,8 +572,9 @@ jobs:
   # is done this job only leaves a notice.
   npm:
     needs: [publish, web_demo]
-    # It needs the demo job's build, not its demo upload.
-    if: ${{ always() && github.event_name == 'push' && needs.publish.result == 'success' }}
+    # It needs the demo job's build, not its demo upload. !cancelled() and not
+    # always(), so cancelling the run stops the job before it publishes.
+    if: ${{ !cancelled() && github.event_name == 'push' && needs.publish.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: npm
@@ -641,7 +642,15 @@ jobs:
             printf '//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n' > "$RUNNER_TEMP/.npmrc"
             export NPM_CONFIG_USERCONFIG=$RUNNER_TEMP/.npmrc
           fi
-          # Prereleases go under next, so latest stays on the newest stable release.
+          # latest stays on the newest stable release: prereleases go under next,
+          # and an older stable release under release-<major.minor>.
           tag=latest
-          if [[ $version == *-* ]]; then tag=next; fi
+          if [[ $version == *-* ]]; then
+            tag=next
+          else
+            latest=$(npm view "$name" dist-tags.latest 2> /dev/null || true)
+            if [[ -n $latest && $(printf '%s\n' "$latest" "$version" | sort -V | tail -n 1) != "$version" ]]; then
+              tag=release-${version%.*}
+            fi
+          fi
           npm publish --provenance --access public --tag "$tag" --ignore-scripts
