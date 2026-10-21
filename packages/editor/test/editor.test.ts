@@ -65,9 +65,9 @@ describe("headless library", () => {
 
   test("PNG previews and figures have the PNG signature", async () => {
     const preview = await renderPng(CAFFEINE, "smiles", { maxWidth: 400, maxHeight: 300 });
-    expect([...preview.slice(0, 8)]).toEqual(PNG);
+    expect(Array.from(preview.subarray(0, 8))).toEqual(PNG);
     const figure = await convert(CAFFEINE, "smiles", "png");
-    expect([...figure.slice(0, 8)]).toEqual(PNG);
+    expect(Array.from(figure.subarray(0, 8))).toEqual(PNG);
     const pdf = await convert(CAFFEINE, "smiles", "pdf");
     expect(new TextDecoder().decode(pdf.slice(0, 4))).toBe("%PDF");
   });
