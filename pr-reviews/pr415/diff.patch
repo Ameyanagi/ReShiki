@@ -1,0 +1,25 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 6e95444b..fbd54c16 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -3712,7 +3712,7 @@ dependencies = [
+ 
+ [[package]]
+ name = "reshiki"
+-version = "0.12.0"
++version = "0.12.1"
+ dependencies = [
+  "accesskit",
+  "accesskit_consumer",
+diff --git a/Cargo.toml b/Cargo.toml
+index ee5497e5..d4130c28 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -1,6 +1,6 @@
+ [package]
+ name = "reshiki"
+-version = "0.12.0"
++version = "0.12.1"
+ edition = "2024"
+ default-run = "reshiki"
+ description = "A molecular drawing workspace"
