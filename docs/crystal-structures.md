@@ -85,6 +85,11 @@ Saving a crystal needs document version 29. Every file is now saved as version
 - **POSCAR:** VASP 4 files without an element line are refused. A single
   negative scale factor is the cell volume, and three factors scale x, y and
   z.
+- **Extended XYZ:** `pbc="F F F"` makes a molecule without a cell; a partly
+  periodic structure, such as a slab, is refused.
+- A cell thinner than 0.5 Å across a face, a CIF with more than 192 distinct
+  symmetry operators, or one whose sites times operators exceed 40,000, is
+  refused.
 - A cell so thin or skewed that a bond reaches a copy more than three cells
   away is refused with a request for a reduced (Niggli) cell.
 - A structure may have at most 2,000 atoms in its cell. Whole proteins, CIF
