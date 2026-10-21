@@ -499,6 +499,10 @@ jobs:
     if: ${{ always() && github.event_name == 'push' && needs.publish.result == 'success' }}
     runs-on: ubuntu-22.04
     timeout-minutes: 60
+    # One release at a time writes the web-demo asset.
+    concurrency:
+      group: web-demo
+      cancel-in-progress: false
     permissions:
       contents: write
       actions: write
@@ -524,8 +528,31 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          notes="The browser editor at https://reshiki.com/demo/, built from $RELEASE_TAG."
-          if gh release view web-demo > /dev/null 2>&1; then
+          version=$(tar -xzOf dist/reshiki-web-demo.tar.gz demo/VERSION)
+          notes="The browser editor at https://reshiki.com/demo/, built from v$version."
+          if gh release view web-demo --json assets -q '.assets[].name' > "$RUNNER_TEMP/assets"; then
+            # Leave a demo from a newer release in place (semver order).
+            if grep -qx reshiki-web-demo.tar.gz "$RUNNER_TEMP/assets"; then
+              gh release download web-demo -p reshiki-web-demo.tar.gz -D "$RUNNER_TEMP/published"
+              published=$(tar -xzOf "$RUNNER_TEMP/published/reshiki-web-demo.tar.gz" demo/VERSION 2> /dev/null || true)
+              if [[ -n $published ]]; then
+                newest=$(uv run --no-project --python 3.12 python - "$published" "$version" << 'PY'
+          import sys
+
+          def key(version):
+              core, _, pre = version.split("+")[0].partition("-")
+              ids = [(0, int(i), "") if i.isdigit() else (1, 0, i) for i in pre.split(".")] if pre else []
+              return [int(n) for n in core.split(".")], not pre, ids
+
+          print(max(sys.argv[1:], key=key))
+          PY
+                )
+                if [[ $newest != "$version" ]]; then
+                  echo "::notice::The web-demo release has $published, newer than $version; leaving it."
+                  exit 0
+                fi
+              fi
+            fi
             gh release edit web-demo --notes "$notes"
           else
             gh release create web-demo --target "$GITHUB_SHA" --prerelease --latest=false \

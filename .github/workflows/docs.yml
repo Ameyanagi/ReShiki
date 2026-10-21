@@ -31,13 +31,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          if gh release view web-demo --json assets -q '.assets[].name' | grep -qx reshiki-web-demo.tar.gz; then
-            gh release download web-demo -p reshiki-web-demo.tar.gz -D "$RUNNER_TEMP"
-            tar -xzf "$RUNNER_TEMP/reshiki-web-demo.tar.gz" -C website/dist
-            test -f website/dist/demo/index.html
-          else
-            echo "::notice::No reshiki-web-demo.tar.gz in a web-demo release; the site has no /demo/."
+          set -euo pipefail
+          # Only a missing release or asset skips the demo; any other error
+          # fails, so a lookup error cannot deploy the site without it.
+          if ! assets=$(gh release view web-demo --json assets -q '.assets[].name' 2> "$RUNNER_TEMP/error"); then
+            cat "$RUNNER_TEMP/error" >&2
+            grep -qx 'release not found' "$RUNNER_TEMP/error" || exit 1
+            assets=""
           fi
+          if ! grep -qx reshiki-web-demo.tar.gz <<< "$assets"; then
+            echo "::notice::No reshiki-web-demo.tar.gz in a web-demo release; the site has no /demo/."
+            exit 0
+          fi
+          gh release download web-demo -p reshiki-web-demo.tar.gz -D "$RUNNER_TEMP"
+          tar -xzf "$RUNNER_TEMP/reshiki-web-demo.tar.gz" -C website/dist
+          test -f website/dist/demo/index.html
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
         with:
           path: website/dist

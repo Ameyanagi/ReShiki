@@ -86,6 +86,12 @@ window. <http://localhost:8080/examples/api.html> calls the JavaScript API from
 the page's own buttons, and <http://localhost:8080/examples/iframe.html> shows
 two editors in iframes. `PORT` picks another port.
 
+The same editor-only page runs at <https://reshiki.com/demo/>, packaged by
+`scripts/package_web_demo.sh` with a dismissible note that it is a browser
+preview, not the full app. The list below is what it leaves out; point people
+to the [desktop app](https://reshiki.com/guide/install/) whenever they can use
+it.
+
 ### What the browser editor leaves out
 
 - Naming, NMR prediction and 3D say they need the desktop app. The assistant,

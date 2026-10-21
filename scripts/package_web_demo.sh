@@ -30,12 +30,18 @@ trap 'rm -rf "$stage"' EXIT
 demo=$stage/demo
 mkdir -p "$demo/src" "$demo/dist/editor"
 
-# The example page sits one folder below src/; the demo page sits beside it.
-sed 's|"\.\./src/editor\.js"|"./src/editor.js"|' "$package/examples/index.html" > "$demo/index.html"
-if ! grep -q '"./src/editor.js"' "$demo/index.html"; then
-  echo "packages/editor/examples/index.html no longer imports ../src/editor.js" >&2
+# The example page sits one folder below src/; the demo page sits beside it
+# and adds a note that it is a preview of the desktop app.
+awk -v notice="$package/examples/demo-notice.html" '
+  /<\/body>/ { while ((getline line < notice) > 0) print line }
+  { sub(/"\.\.\/src\/editor\.js"/, "\"./src/editor.js\""); print }
+' "$package/examples/index.html" > "$demo/index.html"
+if ! grep -q '"./src/editor.js"' "$demo/index.html" || ! grep -q 'id="demo-notice"' "$demo/index.html"; then
+  echo "packages/editor/examples/index.html no longer imports ../src/editor.js before </body>" >&2
   exit 1
 fi
+# release.yml compares this with the published demo's.
+awk -F '"' '/^version = / { print $2; exit }' "$root/Cargo.toml" > "$demo/VERSION"
 cp "$package/src/editor.js" "$demo/src/"
 cp "$package/dist/editor/reshiki.js" "$package/dist/editor/reshiki_bg.wasm" "$demo/dist/editor/"
 cp -R "$package/dist/licenses" "$demo/licenses"
