@@ -1,9 +1,10 @@
 //! Direct selection with a delayed flyout and an explicit corner target.
 use super::{Message, icons::Glyph, icons::Icon, palettes};
 use crate::canvas::Tool;
+use iced::time::Instant;
 use iced::widget::canvas::{self, Action, Geometry, Path, Stroke};
 use iced::{Color, Event, Point, Rectangle, Renderer, Theme, Vector, mouse};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 const HOLD: Duration = Duration::from_millis(450);
 

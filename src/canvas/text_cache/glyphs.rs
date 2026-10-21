@@ -15,6 +15,9 @@ pub(super) fn prepare_fonts() {
         let mut fonts = text::font_system()
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // The browser has no system fonts; use the faces the drawing renders with.
+        #[cfg(target_arch = "wasm32")]
+        reshiki::style::load_fonts(fonts.raw().db_mut());
         variable::prepare_system_weights(fonts.raw());
     });
 }

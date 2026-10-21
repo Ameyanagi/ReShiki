@@ -20,6 +20,7 @@ pub(super) async fn calculate(
     .await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 async fn run<T: Send + 'static>(
     work: &'static Semaphore,
     timeout: Duration,
@@ -28,7 +29,7 @@ async fn run<T: Send + 'static>(
     let permit = work
         .try_acquire()
         .map_err(|_| "An NMR calculation is already running; try again shortly")?;
-    let job = tokio::task::spawn_blocking(move || {
+    let job = reshiki::task::spawn_blocking(move || {
         let _permit = permit;
         calculate()
     });
@@ -36,6 +37,17 @@ async fn run<T: Send + 'static>(
         .await
         .map_err(|_| "NMR prediction exceeded its time limit")?
         .map_err(|e| format!("NMR calculation failed: {e}"))?
+}
+
+/// Prediction runs on a worker thread under a deadline, which the browser
+/// build does not have yet.
+#[cfg(target_arch = "wasm32")]
+async fn run<T>(
+    _work: &'static Semaphore,
+    _timeout: Duration,
+    _calculate: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    Err("NMR prediction needs the desktop app for now".into())
 }
 
 #[cfg(test)]

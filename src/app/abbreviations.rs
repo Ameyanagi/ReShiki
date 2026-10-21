@@ -223,6 +223,10 @@ impl App {
         let mut doc = self.tab.doc.clone();
         doc.contract(&defined.members, &label, &reverse)?;
         reshiki::storage::write_atomic(&path, text.as_bytes())?;
+        #[cfg_attr(
+            target_arch = "wasm32",
+            expect(clippy::drop_non_drop, reason = "Browser files hold no lock")
+        )]
         drop(lock);
         let skipped = catalog::set_user(Some(&text));
         self.abbreviations.catalog_warning = catalog_warning(&skipped, &path);

@@ -101,3 +101,14 @@ fn importing_previews_until_saved_and_stale_dialogs_do_not_change_drawings() {
     let _ = app.update(Message::ColorTheme(ColorTheme::Jmol));
     assert!(app.tab.doc.custom_theme.is_none());
 }
+#[test]
+fn exported_theme_bytes_are_the_saved_file() {
+    // The browser downloads these bytes instead of calling `save`.
+    let theme = theme_files::bundled().unwrap().remove(0);
+    let bytes = theme_files::to_bytes(&theme).unwrap();
+    assert_eq!(serde_json::from_slice::<ThemeFile>(&bytes).unwrap(), theme);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("exported.reshiki-theme");
+    theme_files::save(&path, &theme).unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), bytes);
+}

@@ -89,7 +89,7 @@ pub enum Action {
     Align,
 }
 async fn calculate(source: Document, arrow: u64) -> Result<Arc<Proposal>, String> {
-    tokio::task::spawn_blocking(move || mapping::propose(&source, arrow, Budget::default()))
+    reshiki::task::spawn_blocking(move || mapping::propose(&source, arrow, Budget::default()))
         .await
         .map_err(|e| format!("Atom mapping failed: {e}"))?
         .map(Arc::new)

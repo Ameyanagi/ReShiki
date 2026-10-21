@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ReShiki editor</title>
+    <style>
+      html,
+      body,
+      #editor {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="editor"></div>
+    <script type="module">
+      // The page embed.js loads into an iframe. It answers its parent's
+      // { id, method, args } messages with { id, result } or { id, error },
+      // and posts { event: "ready" | "change" }.
+      import { mount } from "./editor.js";
+
+      const METHODS = new Set(["load", "save", "exportImage"]);
+      const post = (message, origin = "*") => parent.postMessage(message, origin);
+      const ready = mount(document.getElementById("editor"), {
+        onChange: () => post({ event: "change" }),
+      });
+      ready.then(
+        () => post({ event: "ready" }),
+        (error) => post({ event: "error", error: String(error) }),
+      );
+
+      addEventListener("message", async ({ source, origin, data }) => {
+        if (source !== parent || !METHODS.has(data?.method)) return;
+        try {
+          const editor = await ready;
+          const result = await editor[data.method](...(data.args ?? []));
+          post({ id: data.id, result }, origin);
+        } catch (error) {
+          post({ id: data.id, error: String(error?.message ?? error) }, origin);
+        }
+      });
+    </script>
+  </body>
+</html>

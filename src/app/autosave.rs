@@ -87,7 +87,7 @@ pub(super) enum Work {
 }
 
 pub(super) async fn execute(path: PathBuf, work: Work) -> Result<Option<PathBuf>, String> {
-    tokio::task::spawn_blocking(move || {
+    reshiki::task::spawn_blocking(move || {
         let recovery = Recovery { session: path };
         match work {
             Work::Save {

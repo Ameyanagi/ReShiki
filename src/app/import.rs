@@ -218,7 +218,11 @@ async fn read(engine: &LocalEngine, path: &Path) -> Result<(Document, Vec<String
             Ok((picture_drawing(&picture), warnings))
         }
         Kind::Structure(format) => {
-            let bytes = tokio::fs::read(path).await.map_err(|e| e.to_string())?;
+            let path = path.to_path_buf();
+            let bytes = reshiki::task::spawn_blocking(move || std::fs::read(path))
+                .await
+                .map_err(|e| e.to_string())?
+                .map_err(|e| e.to_string())?;
             let response = engine
                 .execute(Request::import(format, &contents(format, bytes)?))
                 .await?;
@@ -260,7 +264,12 @@ async fn choose() -> Vec<PathBuf> {
         .add_filter("Structures and pictures", &extensions)
         .pick_files()
         .await
-        .map(|files| files.iter().map(|f| f.path().to_path_buf()).collect())
+        .map(|files| {
+            files
+                .iter()
+                .filter_map(|f| super::files::picked_path(f).ok())
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -325,6 +334,11 @@ impl App {
             Action::ExamplesMenu(open) => {
                 self.imports.examples_menu = open;
                 self.imports.menu = false;
+            }
+            // Browser files have no path to insert from yet.
+            Action::Choose if cfg!(target_arch = "wasm32") => {
+                self.error = true;
+                self.status = "Inserting files needs the desktop app for now".into();
             }
             Action::Choose => {
                 return Task::perform(choose(), |paths| Message::Imports(Action::Files(paths)));

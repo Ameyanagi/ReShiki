@@ -3,11 +3,14 @@ use crate::{
     storage::write_atomic,
 };
 use serde::{Deserialize, Serialize};
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{
     borrow::Cow,
     path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
 };
+#[cfg(target_arch = "wasm32")]
+use web_time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snapshot {

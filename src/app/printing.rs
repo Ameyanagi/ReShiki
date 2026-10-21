@@ -105,7 +105,7 @@ impl App {
                 }
                 return Task::perform(
                     async move {
-                        tokio::task::spawn_blocking(move || {
+                        reshiki::task::spawn_blocking(move || {
                             reshiki::printing::prepare(snapshot, title)
                         })
                         .await

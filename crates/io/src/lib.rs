@@ -31,13 +31,14 @@ pub mod document_styles;
 pub mod engine;
 pub mod exchange;
 pub mod export;
+pub mod formats;
 pub mod geometry;
 #[cfg(windows)]
 #[doc(hidden)]
 pub mod native_windows;
 pub mod nmr;
 pub mod recovery;
-mod task;
+pub mod task;
 pub mod template_library;
 
 /// The repository root, from which the development reference resolves its

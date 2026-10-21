@@ -330,6 +330,16 @@ impl Editor {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn open_link(url: &str) -> Result<(), String> {
+    open::that(url).map_err(|e| e.to_string())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn open_link(url: &str) -> Result<(), String> {
+    crate::web::open_url(url)
+}
+
 impl App {
     /// Hidden invalid drafts retain their original unit context. Retry only at
     /// a deliberate boundary, never halfway through typing a number.
@@ -409,7 +419,7 @@ impl App {
         match action {
             Action::Source(preset) => {
                 if let Some(url) = preset.source_url()
-                    && let Err(error) = open::that(url)
+                    && let Err(error) = open_link(url)
                 {
                     self.status = format!("Could not open publisher instructions: {error}");
                     self.error = true;
@@ -527,8 +537,8 @@ impl App {
                         else {
                             return Ok(None);
                         };
-                        let path = file.path().to_path_buf();
-                        tokio::task::spawn_blocking(move || reshiki::document_styles::load(&path))
+                        let path = super::files::picked_path(&file)?;
+                        reshiki::task::spawn_blocking(move || reshiki::document_styles::load(&path))
                             .await
                             .map_err(|e| e.to_string())?
                             .map(Some)
@@ -576,8 +586,9 @@ impl App {
                                 else {
                                     return Ok(false);
                                 };
-                                tokio::task::spawn_blocking(move || {
-                                    reshiki::document_styles::save(&path, &style)
+                                reshiki::task::spawn_blocking(move || {
+                                    let bytes = reshiki::document_styles::to_bytes(&path, &style)?;
+                                    super::files::write(&path, &bytes)
                                 })
                                 .await
                                 .map_err(|e| e.to_string())??;

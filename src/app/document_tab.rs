@@ -63,11 +63,15 @@ pub(super) struct DocumentTab {
         Option<(u64, usize, std::mem::Discriminant<super::models3d::Setting>)>,
     /// The model (by an atom) whose 2D → 3D morph is playing, and its start,
     /// for the drawing state it started in.
-    pub(super) model_morph: Option<(super::models3d::Key, u64, std::time::Instant)>,
+    pub(super) model_morph: Option<(super::models3d::Key, u64, iced::time::Instant)>,
     // Derived chemistry and in-flight work.
     pub(super) analysis: Option<Analysis>,
     pub(super) busy: bool,
     pub(super) clipboard_busy: bool,
+    /// The drawing's epoch and revision when a browser Paste started; the
+    /// browser may wait for permission, and a late reply must not land elsewhere.
+    #[cfg(target_arch = "wasm32")]
+    pub(super) paste_from: Option<(u64, u64)>,
     pub(super) labels_dirty: bool,
     pub(super) label_refresh: label_refresh::State,
     /// Counts computed-label writes that need not bump revision; keys the mapping thumbnail.
@@ -171,6 +175,8 @@ impl DocumentTab {
             analysis: None,
             busy: false,
             clipboard_busy: false,
+            #[cfg(target_arch = "wasm32")]
+            paste_from: None,
             labels_dirty: false,
             label_refresh: Default::default(),
             label_generation: 0,

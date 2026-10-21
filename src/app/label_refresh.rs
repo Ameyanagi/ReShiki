@@ -27,7 +27,7 @@ pub(super) async fn calculate(
     source: reshiki::document::Document,
     previous: Arc<Refresh>,
 ) -> Result<Arc<Refresh>, String> {
-    tokio::task::spawn_blocking(move || Refresh::calculate(&source, &previous))
+    reshiki::task::spawn_blocking(move || Refresh::calculate(&source, &previous))
         .await
         .map_err(|e| format!("Label calculation failed: {e}"))?
         .map(Arc::new)

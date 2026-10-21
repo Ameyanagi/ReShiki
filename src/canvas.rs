@@ -74,6 +74,13 @@ use grid::GridCache;
 pub use hit::{bond_text_at, distance_to_segment, hit_object};
 use iced::widget::canvas::{self, Action, Geometry, Path, Stroke};
 use iced::{Color, Event, Point, Rectangle, Renderer, Theme, Vector, mouse};
+#[cfg_attr(
+    target_arch = "wasm32",
+    expect(
+        unused_imports,
+        reason = "Only the desktop assistant previews whole drawings"
+    )
+)]
 pub use previews::{
     ArrowPreview, DrawingPreview, DrawingThumbnail, OwnedDrawingPreview, PalettePreview,
     ScientificPreview, TemplateAnchorPreview, TemplateThumbnail,
@@ -280,13 +287,13 @@ pub struct State {
     cursor: Option<Point>,
     /// Only caption transitions during a bond drag need an application hint.
     bond_text_hover: Option<u64>,
-    last_click: Option<(std::time::Instant, u64)>,
+    last_click: Option<(iced::time::Instant, u64)>,
     last_transform_click: Option<HandleClick>,
     modifiers: iced::keyboard::Modifiers,
 }
 
 struct HandleClick {
-    at: std::time::Instant,
+    at: iced::time::Instant,
     handle: Handle,
     ids: Vec<u64>,
     position: Point,
@@ -464,7 +471,7 @@ pub struct MoleculeCanvas<'a> {
     /// The display the floating Show as bar marks, when it shows.
     pub(crate) model_bar: Option<reshiki::models3d::Display>,
     /// The model (by an atom) that started its 2D → 3D morph, and when.
-    pub(crate) morph: Option<(u64, std::time::Instant)>,
+    pub(crate) morph: Option<(u64, iced::time::Instant)>,
     pub joining: Option<(&'a reshiki::joining::Prepared, reshiki::templates::Anchor)>,
     pub hidden_annotation: Option<u64>,
     pub bond_drawing: BondDrawing,

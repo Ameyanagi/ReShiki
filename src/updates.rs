@@ -1,5 +1,13 @@
 //! Channel-aware release checks and verified, staged stable updates.
+// The browser twins in browser.rs leave the GitHub client unused there.
+#![cfg_attr(target_arch = "wasm32", allow(dead_code, unused_imports))]
+#[cfg_attr(target_arch = "wasm32", path = "updates/install_browser.rs")]
 pub mod install;
+// The browser build updates with its page and opens links in a new tab.
+#[cfg(target_arch = "wasm32")]
+mod browser;
+#[cfg(target_arch = "wasm32")]
+pub use browser::{check, open_nightly_download, open_url};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -104,7 +112,7 @@ pub fn preferences() -> Preferences {
         .unwrap_or_default()
 }
 pub async fn save_preferences(preferences: Preferences) -> Result<(), String> {
-    tokio::task::spawn_blocking(move || preferences.save(&crate::compatibility::data_directory()?))
+    crate::task::spawn_blocking(move || preferences.save(&crate::compatibility::data_directory()?))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -236,12 +244,13 @@ impl Cache {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn check(channel: Channel, manual: bool) -> Result<Release, String> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
-    let cached = tokio::task::spawn_blocking(move || {
+    let cached = crate::task::spawn_blocking(move || {
         let path = crate::compatibility::data_directory()
             .ok()?
             .join(channel.cache_name());
@@ -261,7 +270,7 @@ pub async fn check(channel: Channel, manual: bool) -> Result<Release, String> {
         result: result.clone(),
     };
     // A read-only profile must not prevent checking or downloading releases.
-    let _ = tokio::task::spawn_blocking(move || -> Result<(), String> {
+    let _ = crate::task::spawn_blocking(move || -> Result<(), String> {
         let dir = crate::compatibility::data_directory()?;
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         let bytes = serde_json::to_vec(&cache).map_err(|e| e.to_string())?;
@@ -271,6 +280,7 @@ pub async fn check(channel: Channel, manual: bool) -> Result<Release, String> {
     result
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn release_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .user_agent(concat!("ReShiki/", env!("CARGO_PKG_VERSION")))
@@ -282,6 +292,7 @@ fn release_client() -> Result<reqwest::Client, String> {
         .map_err(|e| format!("Could not start the update check: {e}"))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 async fn fetch(channel: Channel) -> Result<Release, String> {
     let client = release_client()?;
     if channel == Channel::Stable {
@@ -327,6 +338,7 @@ impl FetchError {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 async fn fetch_bytes(client: &reqwest::Client, url: &str) -> Result<Vec<u8>, FetchError> {
     let mut response = client
         .get(url)
@@ -415,6 +427,7 @@ fn nightly_download_url(
         .ok_or_else(|| "No matching download is available for this nightly release.".into())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn open_nightly_download(release: Release) -> Result<(), String> {
     open_nightly_download_with(
         release,
@@ -446,9 +459,10 @@ async fn open_nightly_download_with(
     };
     open(url).await
 }
+#[cfg(not(target_arch = "wasm32"))]
 /// Opens `url` in the default browser off the UI thread.
 pub async fn open_url(url: String) -> Result<(), String> {
-    tokio::task::spawn_blocking(move || {
+    crate::task::spawn_blocking(move || {
         open::that(url).map_err(|e| format!("Could not open the browser: {e}"))
     })
     .await

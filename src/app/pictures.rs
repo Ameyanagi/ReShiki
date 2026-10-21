@@ -2,7 +2,6 @@
 use super::{App, InspectorTab, Message, Point, Tool};
 use iced::{Element, Task};
 use reshiki::{graphics::Graphic, pictures::Picture};
-use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Ticket {
@@ -49,7 +48,7 @@ async fn choose_picture() -> Result<Option<Picture>, String> {
     else {
         return Ok(None);
     };
-    let path: PathBuf = file.path().to_path_buf();
+    let path = super::files::picked_path(&file)?;
     reshiki::metafile::open(&path).await.map(Some)
 }
 fn millimetres(world: f32) -> f32 {

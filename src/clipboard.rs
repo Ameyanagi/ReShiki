@@ -9,9 +9,9 @@ use crate::{
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-#[cfg(not(any(windows, target_os = "linux")))]
+#[cfg(not(any(windows, target_os = "linux", target_arch = "wasm32")))]
 use std::{path::PathBuf, process::Stdio, time::Duration};
-#[cfg(not(any(windows, target_os = "linux")))]
+#[cfg(not(any(windows, target_os = "linux", target_arch = "wasm32")))]
 use tokio::process::Command;
 
 #[cfg(target_os = "linux")]
@@ -242,7 +242,7 @@ pub fn available() -> bool {
     }
 }
 
-#[cfg(not(any(windows, target_os = "linux")))]
+#[cfg(not(any(windows, target_os = "linux", target_arch = "wasm32")))]
 fn helper() -> Result<PathBuf, String> {
     if !cfg!(target_os = "macos") {
         return Err("Native clipboard is unavailable on this platform".into());
@@ -263,7 +263,13 @@ async fn invoke_encoded(_operation: &str, input: Vec<u8>) -> Result<Packet, Stri
     serde_json::from_slice(&output).map_err(|e| e.to_string())
 }
 
-#[cfg(not(any(windows, target_os = "linux")))]
+/// The browser's clipboard holds text only; the editor copies through it directly.
+#[cfg(target_arch = "wasm32")]
+async fn invoke_encoded(_operation: &str, _input: Vec<u8>) -> Result<Packet, String> {
+    Err("Native clipboard is unavailable in the browser".into())
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_arch = "wasm32")))]
 async fn invoke_encoded(_operation: &str, input: Vec<u8>) -> Result<Packet, String> {
     let mut command = Command::new(helper()?);
     command.arg(crate::workers::CLIPBOARD_WORKER);
@@ -378,7 +384,7 @@ async fn prepare_copy(
             Ok(data) => Ok(data),
             Err(original_error) => {
                 let snapshot = exchange_doc;
-                let compatible = tokio::task::spawn_blocking(move || {
+                let compatible = crate::task::spawn_blocking(move || {
                     let (xml, notices) = crate::exchange::drawing::write_clipboard(&snapshot)
                         .map_err(|e| e.to_string())?;
                     Ok::<_, String>((STANDARD.encode(crate::exchange::to_cdx(&xml)?), notices))
@@ -407,7 +413,7 @@ async fn prepare_copy(
                 .push(format!("Editable exchange unavailable: {error}")),
         }
     }
-    let images = tokio::task::spawn_blocking(move || copy_images(&doc, image_only))
+    let images = crate::task::spawn_blocking(move || copy_images(&doc, image_only))
         .await
         .map_err(|e| format!("Could not render clipboard images: {e}"))?;
     let mut image_count = 0;
@@ -702,7 +708,7 @@ fn remember_failure(failure: &mut Option<(usize, String)>, kind: &str, error: St
 pub async fn picture() -> Result<Option<crate::pictures::Picture>, String> {
     read_candidates(true, read_packet, |item| async move {
         let data = item.bytes()?;
-        tokio::task::spawn_blocking(move || crate::pictures::Picture::import(&data))
+        crate::task::spawn_blocking(move || crate::pictures::Picture::import(&data))
             .await
             .map_err(|e| e.to_string())?
     })
@@ -757,7 +763,7 @@ async fn import_representation(
 ) -> Result<PasteOutcome, String> {
     let data = item.bytes()?;
     if item.kind == NATIVE || item.kind == "dev.moruno.drawing" {
-        return tokio::task::spawn_blocking(move || Document::from_json(&data))
+        return crate::task::spawn_blocking(move || Document::from_json(&data))
             .await
             .map_err(|e| e.to_string())?
             .map(PasteOutcome::native);
@@ -766,7 +772,7 @@ async fn import_representation(
         item.kind.as_str(),
         "public.png" | "public.tiff" | "public.jpeg" | "org.webmproject.webp" | "public.webp"
     ) {
-        return tokio::task::spawn_blocking(move || crate::pictures::clipboard_document(&data))
+        return crate::task::spawn_blocking(move || crate::pictures::clipboard_document(&data))
             .await
             .map_err(|e| e.to_string())?
             .map(PasteOutcome::from);

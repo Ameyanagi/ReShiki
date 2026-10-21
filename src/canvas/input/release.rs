@@ -244,7 +244,7 @@ impl MoleculeCanvas<'_> {
         inside: bool,
     ) -> ControlFlow<Action<Edit>, Edit> {
         if inside && drag.is_click(p, self.camera.zoom) {
-            let now = std::time::Instant::now();
+            let now = iced::time::Instant::now();
             let repeated = state.last_transform_click.take().is_some_and(|last| {
                 last.handle == drag.handle
                     && last.ids == drag.ids
@@ -438,7 +438,7 @@ impl MoleculeCanvas<'_> {
                 && let Some(label) = hit_object(self.doc, p, self.camera.world_len(HANDLE_PICK_PX))
                     .filter(|id| self.doc.annotations.iter().any(|a| a.id == *id))
             {
-                let now = std::time::Instant::now();
+                let now = iced::time::Instant::now();
                 if state.last_click.is_some_and(|(time, id)| {
                     id == label && now.duration_since(time).as_millis() < 450
                 }) {
@@ -453,7 +453,7 @@ impl MoleculeCanvas<'_> {
                 .copied()
                 .filter(|id| self.doc.atom(*id).is_some())
             {
-                let now = std::time::Instant::now();
+                let now = iced::time::Instant::now();
                 if state.last_click.is_some_and(|(time, id)| {
                     id == atom && now.duration_since(time).as_millis() < 450
                 }) {

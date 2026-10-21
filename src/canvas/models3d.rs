@@ -4,11 +4,12 @@
 use super::hit::hit_selection;
 use super::pick::{DRAG_SLOP_PX, PICK_RADIUS_PX};
 use super::{Edit, MoleculeCanvas, State, World, command_held, layered, rgb};
+use iced::time::Instant;
 use iced::widget::canvas::{self, Action, Path, Stroke};
 use iced::{Color, Point, Rectangle, Size, Vector};
 use reshiki::models3d::{self, Display};
 use std::ops::ControlFlow;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 mod tiles;
 pub(super) use tiles::{draw, is_model};

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ReShiki editor</title>
+    <style>
+      html,
+      body,
+      #editor {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Only the editor. api.html calls its JavaScript API from page buttons. -->
+    <div id="editor"></div>
+    <script type="module">
+      import { mount } from "../src/editor.js";
+
+      window.editor = await mount(document.getElementById("editor"));
+    </script>
+  </body>
+</html>

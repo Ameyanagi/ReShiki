@@ -84,8 +84,8 @@ impl std::fmt::Display for Selection {
 fn fresh_id() -> String {
     format!(
         "generated-{:x}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
+        iced::time::SystemTime::now()
+            .duration_since(iced::time::SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos()
     )
@@ -499,9 +499,11 @@ impl App {
                             else {
                                 return Ok(false);
                             };
-                            tokio::task::spawn_blocking(move || theme_files::save(&path, &theme))
-                                .await
-                                .map_err(|e| e.to_string())??;
+                            reshiki::task::spawn_blocking(move || {
+                                super::files::write(&path, &theme_files::to_bytes(&theme)?)
+                            })
+                            .await
+                            .map_err(|e| e.to_string())??;
                             Ok(true)
                         },
                         |r| Message::ThemeFile(super::theme_files::Action::Saved(r)),

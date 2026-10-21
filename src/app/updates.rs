@@ -179,6 +179,7 @@ impl App {
                 return Task::perform(
                     async move {
                         // Let the first canvas appear before checking a release.
+                        #[cfg(not(target_arch = "wasm32"))]
                         if !manual {
                             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
                         }
