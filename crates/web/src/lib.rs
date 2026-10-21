@@ -5,7 +5,7 @@
 //! wraps and tests these exports.
 use reshiki_io::{
     export,
-    formats::{read, write},
+    formats::{EXPORT_PNG_PIXELS, read, write},
 };
 use reshiki_model::{document::Document, scene};
 use wasm_bindgen::prelude::*;

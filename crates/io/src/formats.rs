@@ -15,7 +15,7 @@ use reshiki_model::{
 
 /// The most PNG pixels a figure export may have, as the MCP `export` tool's
 /// default budget allows.
-const EXPORT_PNG_PIXELS: u64 = 16_000_000;
+pub const EXPORT_PNG_PIXELS: u64 = 16_000_000;
 
 /// Read `data` as `format`: `rsk` (a native drawing), `mol`, `smiles`, `inchi`,
 /// `cdxml`, `cdx` (the binary file), `rxn`, `rsmi` or `auto`, which tells the
