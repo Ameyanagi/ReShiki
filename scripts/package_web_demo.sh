@@ -40,5 +40,6 @@ cp "$package/src/editor.js" "$demo/src/"
 cp "$package/dist/editor/reshiki.js" "$package/dist/editor/reshiki_bg.wasm" "$demo/dist/editor/"
 cp -R "$package/dist/licenses" "$demo/licenses"
 
-COPYFILE_DISABLE=1 tar -czf "$output" -C "$stage" demo
+# No macOS metadata, which GNU tar warns about when docs.yml extracts it.
+COPYFILE_DISABLE=1 tar --no-xattrs -czf "$output" -C "$stage" demo
 echo "$output: $(wc -c < "$output" | tr -d ' ') bytes"
