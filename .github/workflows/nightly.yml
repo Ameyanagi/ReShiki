@@ -16,11 +16,14 @@ concurrency:
 jobs:
   packages:
     if: github.ref == 'refs/heads/main'
-    # The reused stable workflow declares a publication job, skipped for nightlies.
-    # Its build jobs explicitly reduce this permission to contents: read.
+    # The reused stable workflow declares publication jobs, skipped for nightlies,
+    # and GitHub refuses to start it unless the caller grants what they declare:
+    # actions: write for web_demo and id-token: write for npm. Its build jobs
+    # explicitly reduce this to contents: read.
     permissions:
       contents: write
-      actions: read
+      actions: write
+      id-token: write
     uses: ./.github/workflows/release.yml
     # Required for the reusable signing jobs to resolve their environment secrets.
     secrets: inherit
