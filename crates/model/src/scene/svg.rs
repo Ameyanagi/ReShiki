@@ -306,9 +306,18 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                 to,
                 width,
                 color: [r, g, b],
+                dash,
             } => s.push_str(&format!(
-                "<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"rgb({r},{g},{b})\" stroke-width=\"{width}\" stroke-linecap=\"round\"/>",
-                from.x, from.y, to.x, to.y
+                "<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"rgb({r},{g},{b})\" stroke-width=\"{width}\" {}/>",
+                from.x,
+                from.y,
+                to.x,
+                to.y,
+                if dash > 0. {
+                    format!("stroke-dasharray=\"{dash} {dash}\"")
+                } else {
+                    "stroke-linecap=\"round\"".into()
+                }
             )),
             Primitive::Card {
                 lo,

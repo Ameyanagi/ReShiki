@@ -659,7 +659,11 @@ fn loading_drops_models_that_are_not_one_whole_molecule() {
     let mut partial = doc.clone();
     partial.models[0].atoms.pop();
     partial.models[0].hydrogens.retain(|h| h.parent != atoms[2]);
+    // Whole molecules may share a model, as a crystal's do, but not a
+    // molecule bonded to atoms outside it.
     let mut spanning = doc.clone();
+    let chloro = spanning.add_atom("Cl", Point::new(240., 0.));
+    spanning.add_bond(methane, chloro, 1, "plain");
     spanning.models[0].atoms.push(Placed {
         id: methane,
         xyz: [3., 0., 0.],
@@ -738,7 +742,7 @@ fn chemistry_and_reaction_roles_keep_a_drawing_with_a_model_valid() {
     let role = crate::reactions::Role::Reactant;
     crate::reactions::assign(&mut doc, arrow, &atoms[..1], role).unwrap();
     crate::reactions::assign(&mut doc, arrow, &[methane], crate::reactions::Role::Product).unwrap();
-    assert_eq!(doc.version, VERSION);
+    assert_eq!(doc.version, MODELS_3D);
     assert_eq!(doc.models.len(), 1);
 }
 
@@ -1538,7 +1542,7 @@ fn stick_hydrogens_fade_in_with_their_outline() {
 }
 
 #[test]
-fn styles_and_settings_round_trip_in_version_28() {
+fn styles_and_settings_round_trip() {
     let (mut doc, ..) = shown(Display::Both);
     let model = &mut doc.models[0];
     model.style = Style::SpaceFilling;
@@ -1552,7 +1556,7 @@ fn styles_and_settings_round_trip_in_version_28() {
     assert_eq!(saved["look"], "glossy");
     assert_eq!(saved["show_hydrogens"], "polar");
     assert_eq!(saved["background"], "card");
-    assert_eq!(json["version"], MODELS_3D);
+    assert_eq!(json["version"], VERSION);
     assert_eq!(Document::from_json(&bytes).unwrap().models, doc.models);
 
     // Earlier version 28 files without the settings read the defaults.
@@ -1789,4 +1793,235 @@ fn roll_turns_a_model_clockwise_like_a_2d_rotation() {
         both.models[0].rotation, rotation,
         "a model beside its drawing does not roll"
     );
+}
+
+/// Two unbonded ions in a 4 Å cube with bonds leaving the cell, shown in 3D.
+fn crystal() -> (Document, [u64; 2]) {
+    let mut doc = Document::default();
+    let na = doc.add_atom("Na", Point::new(0., 0.));
+    let cl = doc.add_atom("Cl", Point::new(30., 20.));
+    let atoms = vec![
+        Placed {
+            id: na,
+            xyz: [0., 0., 0.],
+        },
+        Placed {
+            id: cl,
+            xyz: [2., 2., 2.],
+        },
+    ];
+    let cell = Cell {
+        vectors: [[4., 0., 0.], [0., 4., 0.], [0., 0., 4.]],
+        crossing: vec![Crossing {
+            a: na,
+            b: cl,
+            image: [-1, -1, -1],
+        }],
+    };
+    let sites = vec![Site {
+        id: na,
+        label: "Na1".into(),
+        adp: Some(Adp::Aniso([0.01, 0.02, 0.03, 0., 0.001, -0.002])),
+    }];
+    let model =
+        Model3d::new(&doc, atoms, vec![], ForceField::Mmff94s).with_cell(&doc, Some(cell), sites);
+    doc.models.push(model);
+    doc.require_version(crate::document::CRYSTALS);
+    assert!(set_display(&mut doc, 0, Display::ThreeD));
+    (doc, [na, cl])
+}
+
+fn dashed(p: &Primitive) -> Option<f32> {
+    match p {
+        Primitive::Wire { dash, .. } if *dash > 0. => Some(*dash),
+        _ => None,
+    }
+}
+
+#[test]
+fn the_cell_draws_hidden_edges_behind_and_front_edges_and_labels_in_front() {
+    let (mut doc, _) = crystal();
+    for style in Style::ALL {
+        doc.models[0].style = style;
+        let parts = primitives(&doc);
+        // A box seen obliquely hides the three edges at its far corner.
+        let edge = |p: &Primitive| match p {
+            Primitive::Wire { color, .. } => Some(*color),
+            _ => None,
+        };
+        let hidden = edge(&parts[0]);
+        let behind = parts
+            .iter()
+            .take_while(|p| dashed(p).is_some())
+            .filter(|p| edge(p) == hidden)
+            .count();
+        assert_eq!(behind, 3, "{style:?}");
+        let labels: Vec<_> = parts
+            .iter()
+            .filter_map(|p| match p {
+                Primitive::Text { text, style, .. } => Some((text.as_str(), style.italic)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(labels, [("a", true), ("b", true), ("c", true)], "{style:?}");
+        let solid = parts
+            .iter()
+            .filter(|p| matches!(p, Primitive::Wire { dash, .. } if *dash == 0.))
+            .count();
+        assert!(solid >= 9, "{style:?}");
+        // Bonds leaving the cell: one dashed half from each ion.
+        let leaving = parts.iter().filter_map(dashed).count() - behind;
+        let expected = if style == Style::SpaceFilling { 0 } else { 2 };
+        assert_eq!(leaving, expected, "{style:?}");
+    }
+    assert!(scene::svg(&doc).contains("stroke-dasharray"));
+}
+
+#[test]
+fn the_cell_follows_the_model_and_the_canvas() {
+    let (mut doc, [na, _]) = crystal();
+    let edges = |doc: &Document| -> Vec<(Point, Point)> {
+        primitives(doc)
+            .into_iter()
+            .filter_map(|p| match p {
+                Primitive::Wire { from, to, .. } => Some((from, to)),
+                _ => None,
+            })
+            .collect()
+    };
+    let before = edges(&doc);
+    let rotation = turn(doc.models[0].rotation, 40., 25., false);
+    assert!(set_rotation(&mut doc, na, rotation));
+    assert_ne!(edges(&doc), before);
+    // The edges and the origin are exact; the labels are ink, which the
+    // canvas and exports turn light on a dark canvas.
+    let origin = |doc: &Document| {
+        primitives(doc)
+            .into_iter()
+            .rev()
+            .find_map(|p| match p {
+                Primitive::Sphere { stops, .. } => Some(stops[0].1),
+                _ => None,
+            })
+            .unwrap()
+    };
+    assert!(origin(&doc).iter().all(|v| *v < 80));
+    doc.canvas_theme = CanvasTheme::Dark;
+    assert!(origin(&doc).iter().all(|v| *v > 175));
+    let svg = scene::svg(&doc);
+    let label = svg.split(">a</text>").next().unwrap();
+    let fill = label.rsplit("fill=\"").next().unwrap();
+    assert!(!fill.starts_with("rgb(38,38,38)"), "{fill}");
+}
+
+#[test]
+fn the_frame_holds_the_cell_corners() {
+    let (doc, _) = crystal();
+    let model = &doc.models[0];
+    let (lo, hi) = frame(&doc, model).unwrap();
+    let points: Vec<_> = primitives(&doc)
+        .into_iter()
+        .filter_map(|p| match p {
+            Primitive::Wire { from, to, .. } => Some([from, to]),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    for p in points {
+        assert!(
+            (lo.x..=hi.x).contains(&p.x) && (lo.y..=hi.y).contains(&p.y),
+            "{p:?}"
+        );
+    }
+}
+
+#[test]
+fn crystals_round_trip_and_need_their_version() {
+    let (doc, [na, cl]) = crystal();
+    let bytes = doc.file_json().unwrap();
+    let read = Document::from_json(&bytes).unwrap();
+    assert_eq!(read.models, doc.models);
+    assert_eq!(read.models[0].sites[0].adp, doc.models[0].sites[0].adp);
+
+    let mut old = doc.clone();
+    old.version = MODELS_3D;
+    assert!(validate(&old).unwrap_err().contains("Crystal"));
+    let mut stray = doc.clone();
+    stray.models[0].cell.as_mut().unwrap().crossing[0].b = 999;
+    assert!(validate(&stray).is_err());
+    let mut flat = doc.clone();
+    flat.models[0].cell.as_mut().unwrap().vectors[2] = [0., 0., 0.];
+    assert!(validate(&flat).is_err());
+
+    let mut moved = doc.models[0].clone();
+    moved.remap(&HashMap::from([(na, 10), (cl, 11)])).unwrap();
+    let cell = moved.cell.unwrap();
+    assert_eq!((cell.crossing[0].a, cell.crossing[0].b), (10, 11));
+    assert_eq!(moved.sites[0].id, 10);
+}
+
+#[test]
+fn a_model_of_several_molecules_is_selected_and_kept_whole() {
+    let (mut doc, [na, cl]) = crystal();
+    assert_eq!(selected_molecule(&doc, &[na]), Some(vec![na, cl]));
+    let before = doc.clone();
+    doc.atom_mut(na).unwrap().position = Point::new(5., 5.);
+    reconcile(&mut doc, &before);
+    assert_eq!(doc.models.len(), 1);
+    retain_whole(&mut doc);
+    assert_eq!(doc.models.len(), 1);
+}
+
+#[test]
+fn inserting_or_rebuilding_a_crystal_keeps_its_version() {
+    let (crystal, _) = crystal();
+    let mut doc = Document {
+        version: MODELS_3D,
+        ..Default::default()
+    };
+    let ids = editing::append(&mut doc, &crystal, Point::new(100., 0.));
+    assert_eq!(ids.len(), 2);
+    assert_eq!(doc.version, crate::document::CRYSTALS);
+    assert!(validate(&doc).is_ok());
+
+    let molecule = crate::chemistry::document::prepare(&crystal).unwrap();
+    let drawing = crate::chemistry::document::for_drawing(&molecule, &crystal).unwrap();
+    let labels = drawing.labels().unwrap();
+    let rebuilt = drawing.finish(labels).unwrap();
+    assert_eq!(rebuilt.version, crate::document::CRYSTALS);
+    assert_eq!(rebuilt.models, crystal.models);
+}
+
+#[test]
+fn polar_hydrogens_count_bonds_that_leave_the_cell() {
+    let (mut doc, [na, cl]) = crystal();
+    doc.atom_mut(na).unwrap().element = "H".into();
+    doc.atom_mut(cl).unwrap().element = "N".into();
+    doc.models[0].show_hydrogens = Hydrogens::Polar;
+    assert_eq!(doc.models[0].shown(&doc), [true, true]);
+    doc.models[0].cell.as_mut().unwrap().crossing.clear();
+    assert_eq!(doc.models[0].shown(&doc), [false, true]);
+}
+
+#[test]
+fn the_frame_holds_half_bonds_leaving_the_cell() {
+    let (mut doc, _) = crystal();
+    // A long bond to the copy three cells away ends far outside the box.
+    doc.models[0].cell.as_mut().unwrap().crossing[0].image = [-3, -3, -3];
+    doc.models[0].perspective = 1.;
+    let (lo, hi) = frame(&doc, &doc.models[0]).unwrap();
+    for p in primitives(&doc).into_iter().filter_map(|p| match p {
+        Primitive::Wire { from, to, .. } => Some([from, to]),
+        _ => None,
+    }) {
+        for p in p {
+            assert!(
+                (lo.x..=hi.x).contains(&p.x) && (lo.y..=hi.y).contains(&p.y),
+                "{p:?}"
+            );
+        }
+    }
+    let mut odd = doc.clone();
+    odd.models[0].cell.as_mut().unwrap().crossing[0].image = [-128, 0, 0];
+    assert!(validate(&odd).is_err());
 }

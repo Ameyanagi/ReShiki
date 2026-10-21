@@ -1,0 +1,566 @@
+use super::*;
+use crate::document::{CRYSTALS, MODELS_3D, VERSION};
+use crate::models3d::{Display, Model3d};
+
+const NACL: &str = include_str!("../../../../tests/fixtures/crystal/nacl.cif");
+const CO2: &str = include_str!("../../../../tests/fixtures/crystal/co2.cif");
+const UREA: &str = include_str!("../../../../tests/fixtures/crystal/urea.pdb");
+const RUTILE: &str = include_str!("../../../../tests/fixtures/crystal/rutile.vasp");
+const WATER: &str = include_str!("../../../../tests/fixtures/crystal/water.xyz");
+const SILICON: &str = include_str!("../../../../tests/fixtures/crystal/silicon.extxyz");
+
+fn open(format: &str, text: &str) -> (Document, Vec<String>) {
+    read(format, text).unwrap()
+}
+
+fn model(doc: &Document) -> &Model3d {
+    assert_eq!(doc.models.len(), 1);
+    &doc.models[0]
+}
+
+fn count(doc: &Document, element: &str) -> usize {
+    doc.atoms.iter().filter(|a| a.element == element).count()
+}
+
+fn xyz(model: &Model3d, id: u64) -> [f32; 3] {
+    model.atoms.iter().find(|a| a.id == id).unwrap().xyz
+}
+
+fn distance(a: [f32; 3], b: [f32; 3]) -> f32 {
+    (0..3).map(|k| (a[k] - b[k]).powi(2)).sum::<f32>().sqrt()
+}
+
+/// Fractional coordinates of a model atom in its cell.
+fn fractional(model: &Model3d, id: u64) -> [f64; 3] {
+    let cell = model.cell.as_ref().unwrap();
+    let lattice = build::Lattice::new(cell.vectors.map(|v| v.map(f64::from))).unwrap();
+    lattice.fractional(xyz(model, id).map(f64::from))
+}
+
+/// Bonds of an atom: inside the drawing and leaving the cell.
+fn bonds_of(doc: &Document, id: u64) -> usize {
+    let inside = doc.bonds.iter().filter(|b| b.a == id || b.b == id).count();
+    let leaving = model(doc).cell.as_ref().map_or(0, |c| {
+        c.crossing.iter().filter(|x| x.a == id).count()
+            + c.crossing.iter().filter(|x| x.b == id).count()
+    });
+    inside + leaving
+}
+
+#[test]
+fn nacl_keeps_each_atom_once_with_bonds_leaving_the_cell() {
+    let (doc, warnings) = open("cif", NACL);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    let m = model(&doc);
+    assert_eq!((count(&doc, "Na"), count(&doc, "Cl")), (4, 4));
+    assert_eq!(m.display, Display::ThreeD);
+    assert_eq!(doc.version, CRYSTALS);
+    for atom in &doc.atoms {
+        assert!(
+            fractional(m, atom.id)
+                .iter()
+                .all(|f| (-1e-3..1.).contains(f))
+        );
+        // Rock salt: every ion has six neighbours, inside the cell or not.
+        assert_eq!(bonds_of(&doc, atom.id), 6, "{}", atom.element);
+        assert_eq!(atom.charge, if atom.element == "Na" { 1 } else { -1 });
+    }
+    let cell = m.cell.as_ref().unwrap();
+    assert_eq!(doc.bonds.len() + cell.crossing.len(), 24);
+    assert!(!cell.crossing.is_empty());
+    assert!((cell.vectors[0][0] - 5.6402).abs() < 1e-4);
+    let labels: Vec<_> = m.sites.iter().map(|s| s.label.as_str()).collect();
+    assert_eq!(labels.iter().filter(|l| **l == "Na1").count(), 4);
+    assert!(
+        m.sites
+            .iter()
+            .all(|s| matches!(s.adp, Some(Adp::Iso(u)) if u > 0.01))
+    );
+}
+
+#[test]
+fn co2_keeps_whole_molecules_with_centres_in_the_cell() {
+    let (doc, _) = open("cif", CO2);
+    let m = model(&doc);
+    assert_eq!((count(&doc, "C"), count(&doc, "O")), (4, 8));
+    assert_eq!(doc.bonds.len(), 8);
+    assert!(m.cell.as_ref().unwrap().crossing.is_empty());
+    for carbon in doc.atoms.iter().filter(|a| a.element == "C") {
+        let oxygens: Vec<_> = doc
+            .bonds
+            .iter()
+            .filter_map(|b| match (b.a == carbon.id, b.b == carbon.id) {
+                (true, _) => Some(b.b),
+                (_, true) => Some(b.a),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(oxygens.len(), 2);
+        for o in oxygens {
+            // Unwrapped: the bond is 1.15 Å, not across the cell.
+            let d = distance(xyz(m, carbon.id), xyz(m, o));
+            assert!((d - 1.154).abs() < 0.01, "{d}");
+        }
+        assert!(
+            fractional(m, carbon.id)
+                .iter()
+                .all(|f| (-1e-3..1.).contains(f))
+        );
+    }
+    // Oxygen sticks out of the cell where its molecule sits on a corner.
+    assert!(
+        doc.atoms
+            .iter()
+            .any(|a| fractional(m, a.id).iter().any(|f| *f < -0.05))
+    );
+    let oxygen_adps: Vec<_> = m
+        .sites
+        .iter()
+        .filter(|s| s.label == "O1")
+        .map(|s| s.adp.unwrap())
+        .collect();
+    assert_eq!(oxygen_adps.len(), 8);
+    for adp in oxygen_adps {
+        let Adp::Aniso(u) = adp else {
+            panic!("{adp:?}")
+        };
+        assert_eq!(&u[..3], &[0.045; 3]);
+        // A mirror or inversion through an axis flips off-diagonal signs.
+        assert!(u[3..].iter().all(|v| (v.abs() - 0.010).abs() < 1e-6));
+    }
+    assert!(m.sites.iter().any(|s| s.adp == Some(Adp::Iso(0.030))));
+}
+
+#[test]
+fn pdb_reads_cryst1_and_a_whole_molecule() {
+    let (doc, _) = open("pdb", UREA);
+    let m = model(&doc);
+    assert_eq!(doc.atoms.len(), 8);
+    assert_eq!(doc.bonds.len(), 7);
+    let cell = m.cell.as_ref().unwrap();
+    assert!((cell.vectors[2][2] - 4.684).abs() < 1e-4);
+    assert!(cell.crossing.is_empty());
+    assert_eq!(m.sites.first().unwrap().label, "C1");
+    let n = m.atoms.len() as f64;
+    let centre = (0..3)
+        .map(|k| {
+            doc.atoms
+                .iter()
+                .map(|a| fractional(m, a.id)[k])
+                .sum::<f64>()
+                / n
+        })
+        .collect::<Vec<_>>();
+    assert!(centre.iter().all(|f| (-1e-3..1.).contains(f)), "{centre:?}");
+}
+
+#[test]
+fn poscar_reads_direct_positions_and_keeps_metals_apart_in_oxides() {
+    let (doc, _) = open("poscar", RUTILE);
+    let m = model(&doc);
+    assert_eq!((count(&doc, "Ti"), count(&doc, "O")), (2, 4));
+    for atom in &doc.atoms {
+        assert_eq!(
+            bonds_of(&doc, atom.id),
+            if atom.element == "Ti" { 6 } else { 3 }
+        );
+    }
+    let titanium: Vec<_> = doc
+        .atoms
+        .iter()
+        .filter(|a| a.element == "Ti")
+        .map(|a| a.id)
+        .collect();
+    assert!(
+        doc.bonds
+            .iter()
+            .all(|b| !(titanium.contains(&b.a) && titanium.contains(&b.b)))
+    );
+    assert!(m.sites.is_empty());
+}
+
+#[test]
+fn poscar_reads_cartesian_scaled_positions_and_selective_dynamics() {
+    let text = "scaled\n2.0\n1 0 0\n0 1 0\n0 0 1\nNa_pv Cl\n1 1\nSelective dynamics\nCartesian\n0 0 0 T T T\n0.5 0.5 0.5 T T T\n";
+    let (doc, _) = open("poscar", text);
+    let m = model(&doc);
+    assert!((m.cell.as_ref().unwrap().vectors[0][0] - 2.).abs() < 1e-6);
+    assert!((distance(m.atoms[0].xyz, m.atoms[1].xyz) - 3f32.sqrt()).abs() < 1e-4);
+    assert_eq!(doc.atoms[0].element, "Na");
+}
+
+#[test]
+fn plain_xyz_is_a_molecule_without_a_cell() {
+    let (doc, _) = open("xyz", WATER);
+    let m = model(&doc);
+    assert_eq!(doc.bonds.len(), 2);
+    assert!(m.cell.is_none());
+    assert_eq!(doc.version, MODELS_3D);
+    assert_eq!(m.display, Display::ThreeD);
+    // The 2D layout comes from the 3D view, with depth kept.
+    assert!(doc.atoms.iter().all(|a| a.position.is_finite()));
+    assert!(doc.atoms.iter().any(|a| a.depth != 0.));
+}
+
+#[test]
+fn extended_xyz_reads_the_lattice_and_properties() {
+    let (doc, _) = open("xyz", SILICON);
+    let m = model(&doc);
+    let cell = m.cell.as_ref().unwrap();
+    assert_eq!(doc.atoms.len(), 2);
+    // Diamond: four neighbours each, three of them in other cells.
+    assert_eq!(doc.bonds.len() + cell.crossing.len(), 4);
+    for atom in &doc.atoms {
+        assert_eq!(bonds_of(&doc, atom.id), 4);
+    }
+}
+
+#[test]
+fn saved_drawings_keep_the_structure_and_drop_the_rest_of_the_file() {
+    for (format, text) in [("cif", NACL), ("cif", CO2), ("xyz", SILICON), ("pdb", UREA)] {
+        let (doc, _) = open(format, text);
+        let bytes = doc.file_json().unwrap();
+        let saved = String::from_utf8(bytes.clone()).unwrap();
+        for dropped in [
+            "DROPPED", "journal", "refln", "energy", "forces", "REMARK", "symop",
+        ] {
+            assert!(!saved.contains(dropped), "{format}: {dropped}");
+        }
+        let read = Document::from_json(&bytes).unwrap();
+        assert_eq!(read.version, VERSION);
+        assert_eq!(read.models, doc.models);
+        assert_eq!(read.atoms, doc.atoms);
+    }
+}
+
+#[test]
+fn symmetry_operators_parse_in_their_usual_spellings() {
+    let (r, t) = cif::parse_operator("-x+1/2, y, -z").unwrap();
+    assert_eq!(r, [[-1., 0., 0.], [0., 1., 0.], [0., 0., -1.]]);
+    assert_eq!(t, [0.5, 0., 0.]);
+    let (r, t) = cif::parse_operator("1/2+X,Y-X,0.25+z").unwrap();
+    assert_eq!(r, [[1., 0., 0.], [-1., 1., 0.], [0., 0., 1.]]);
+    assert_eq!(t, [0.5, 0., 0.25]);
+    for bad in ["x,y", "x,y,z,x", "x,y,a", "2x,y,z", "x,x,z"] {
+        assert!(cif::parse_operator(bad).is_none(), "{bad}");
+    }
+}
+
+const CELL: &str = "data_t\n_cell_length_a 4\n_cell_length_b 4\n_cell_length_c 4\n_cell_angle_alpha 90\n_cell_angle_beta 90\n_cell_angle_gamma 90\n";
+
+#[test]
+fn disorder_keeps_the_first_alternative() {
+    let text = format!(
+        "{CELL}_space_group_name_H-M_alt 'P 1'\nloop_\n_atom_site_label\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n_atom_site_disorder_group\nC1 0.1 0.1 0.1 .\nO1A 0.4 0.1 0.1 1\nO1B 0.1 0.4 0.1 2\nN1 0.6 0.6 0.6 2\n"
+    );
+    let (doc, warnings) = open("cif", &text);
+    let labels: Vec<_> = model(&doc).sites.iter().map(|s| s.label.clone()).collect();
+    assert_eq!(labels, ["C1", "O1A"]);
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+}
+
+#[test]
+fn atoms_on_the_cell_boundary_are_kept_once() {
+    let text = format!(
+        "{CELL}loop_\n_atom_site_label\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\nAr1 0 0 0\nAr2 1.0 0 0\nAr3 0.99999 1 1\n"
+    );
+    let (doc, warnings) = open("cif", &text);
+    assert_eq!(doc.atoms.len(), 1);
+    assert!(
+        warnings.iter().any(|w| w.contains("no symmetry operators")),
+        "{warnings:?}"
+    );
+}
+
+#[test]
+fn b_values_are_converted_to_u() {
+    let text = format!(
+        "{CELL}loop_\n_atom_site_label\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n_atom_site_B_iso_or_equiv\nFe1 0 0 0 7.8957\nFe2 0.5 0.5 0.5 ?\nloop_\n_atom_site_aniso_label\n_atom_site_aniso_B_11\n_atom_site_aniso_B_22\n_atom_site_aniso_B_33\n_atom_site_aniso_B_12\n_atom_site_aniso_B_13\n_atom_site_aniso_B_23\nFe2 7.8957 7.8957 7.8957 0 0 0\n"
+    );
+    let (doc, _) = open("cif", &text);
+    let sites = &model(&doc).sites;
+    let Some(Adp::Iso(u)) = sites[0].adp else {
+        panic!()
+    };
+    assert!((u - 0.1).abs() < 1e-4);
+    let Some(Adp::Aniso(u)) = sites[1].adp else {
+        panic!()
+    };
+    assert!((u[0] - 0.1).abs() < 1e-4);
+}
+
+#[test]
+fn invalid_files_are_refused_with_a_reason() {
+    let atoms =
+        "loop_\n_atom_site_label\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n";
+    for (format, text, message) in [
+        (
+            "cif",
+            "data_x\n_cell_length_b 3\n".to_owned(),
+            "no unit cell",
+        ),
+        (
+            "cif",
+            format!("{CELL}{atoms}C1 0 0\n"),
+            "not a whole number of rows",
+        ),
+        ("cif", format!("{CELL};\nopen text\n"), "not closed"),
+        (
+            "cif",
+            format!("{CELL}{atoms}Q1 0 0 0\n"),
+            "element of atom 'Q1'",
+        ),
+        (
+            "cif",
+            format!("{CELL}{atoms}C1 0 ? 0\n"),
+            "no fractional coordinates",
+        ),
+        (
+            "cif",
+            CELL.replace("_cell_angle_gamma 90", "_cell_angle_gamma 190") + atoms,
+            "between 0° and 180°",
+        ),
+        (
+            "cif",
+            format!("{CELL}loop_\n_symmetry_equiv_pos_as_xyz\n'x,y,q'\n{atoms}C1 0 0 0\n"),
+            "symmetry operator",
+        ),
+        ("cif", CELL.to_owned(), "no atom sites"),
+        (
+            "pdb",
+            "CRYST1    5.000    5.000    5.000  90.00  90.00  90.00 P 1\n".to_owned(),
+            "no ATOM",
+        ),
+        (
+            "poscar",
+            "x\n1\n1 0 0\n0 1 0\n0 0 1\n1 1\nDirect\n0 0 0\n".to_owned(),
+            "VASP 4",
+        ),
+        (
+            "poscar",
+            "x\n1\n1 0 0\n0 1 0\n0 0 1\nNa\n2\nDirect\n0 0 0\n".to_owned(),
+            "ends before",
+        ),
+        (
+            "poscar",
+            "x\n1\n1 0 0\n0 1 0\n0 0 0\nNa\n1\nDirect\n0 0 0\n".to_owned(),
+            "no volume",
+        ),
+        ("xyz", "two\n\nC 0 0 0\n".to_owned(), "number of atoms"),
+        ("xyz", "1\n\nXx 0 0 0\n".to_owned(), "not an element"),
+        (
+            "xyz",
+            "1\nLattice=\"1 0 0 0 1 0\"\nC 0 0 0\n".to_owned(),
+            "nine numbers",
+        ),
+        ("xyz", "2\n\nC 0 0 0\n".to_owned(), "ends before"),
+    ] {
+        let error = read(format, &text).unwrap_err().to_string();
+        assert!(error.contains(message), "{format} {text:?}: {error}");
+    }
+}
+
+#[test]
+fn file_names_pick_the_format() {
+    for (name, format) in [
+        ("NaCl.CIF", Some("cif")),
+        ("1abc.pdb", Some("pdb")),
+        ("POSCAR", Some("poscar")),
+        ("CONTCAR_relaxed", Some("poscar")),
+        ("rutile.vasp", Some("poscar")),
+        ("water.xyz", Some("xyz")),
+        ("si.extxyz", Some("xyz")),
+        ("drawing.mol", None),
+    ] {
+        assert_eq!(format_of(name), format, "{name}");
+    }
+}
+
+#[test]
+fn the_model_frame_holds_the_cell() {
+    let (doc, _) = open("cif", NACL);
+    let m = model(&doc);
+    let (lo, hi) = crate::models3d::frame(&doc, m).unwrap();
+    // The cell's diagonal is 9.77 Å at 28 drawing units per ångström.
+    assert!(hi.x - lo.x > 9.77 * 28. * 0.99, "{lo:?} {hi:?}");
+}
+
+#[test]
+fn the_import_engine_reads_crystal_files_and_keeps_the_model() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    for (format, text) in [
+        ("cif", NACL),
+        ("pdb", UREA),
+        ("poscar", RUTILE),
+        ("xyz", SILICON),
+    ] {
+        let doc = runtime
+            .block_on(crate::formats::read(text.as_bytes().to_vec(), format))
+            .unwrap();
+        assert_eq!(doc.models.len(), 1, "{format}");
+        assert_eq!(doc.models[0].display, Display::ThreeD);
+        assert!(doc.models[0].cell.is_some());
+    }
+    let error = runtime
+        .block_on(crate::formats::read(b"data_x\n".to_vec(), "cif"))
+        .unwrap_err();
+    assert!(error.contains("no unit cell"), "{error}");
+}
+
+#[test]
+fn cif_reads_occupancy_assemblies_and_text_fields_by_the_syntax() {
+    let atoms = "loop_\n_atom_site_label\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n_atom_site_occupancy\n_atom_site_disorder_assembly\n_atom_site_disorder_group\n";
+    let text = format!(
+        "{CELL}_audit_creation_method loop_based\n_publ_section_comment\n;\nnote\n; _space_group_name_H-M_alt 'P 1'\n{atoms}C0 .2 .2 .2 0 . .\nO1 .2 .2 .2 1 . .\nN1A .5 .1 .1 .5 A 1\nN1B .1 .5 .1 .5 A 2\nS1C .1 .1 .5 .5 B 3\nS1D .7 .7 .5 .5 B 4\n"
+    );
+    let (doc, warnings) = open("cif", &text);
+    let labels: Vec<_> = model(&doc).sites.iter().map(|s| s.label.as_str()).collect();
+    // The unoccupied carbon is left out, and each assembly keeps its first group.
+    assert_eq!(labels, ["O1", "N1A", "S1C"]);
+    // The space group after the closing semicolon was read: no P1 warning.
+    assert!(
+        !warnings.iter().any(|w| w.contains("symmetry")),
+        "{warnings:?}"
+    );
+    let huge = format!(
+        "{CELL}_space_group_name_H-M_alt 'P 1'\nloop_\n_atom_site_label\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n_atom_site_disorder_group\nC1 0 0 0 -9223372036854775808\n"
+    );
+    assert_eq!(open("cif", &huge).0.atoms.len(), 1);
+}
+
+#[test]
+fn pdb_keeps_the_first_alternate_location_of_each_residue() {
+    let atom = |serial: u32, name: &str, alt: char, residue: u32, x: f64| {
+        format!(
+            "HETATM{serial:5} {name:<4}{alt}LIG A{residue:4}    {x:8.3}{:8.3}{:8.3}  0.50 10.00           C\n",
+            0., 0.
+        )
+    };
+    let text = [
+        atom(1, "C1", 'A', 1, 0.),
+        atom(2, "C1", 'B', 1, 0.5),
+        atom(3, "C2", 'C', 2, 5.),
+        atom(4, "C2", 'D', 2, 5.5),
+    ]
+    .concat();
+    let (doc, warnings) = open("pdb", &text);
+    assert_eq!(doc.atoms.len(), 2);
+    assert!(warnings[0].contains("left out 2 atoms"), "{warnings:?}");
+}
+
+#[test]
+fn poscar_takes_three_scale_factors() {
+    let text = "xyz\n1 2 3\n1 0 0\n0 1 0\n0 0 1\nAr\n1\nCartesian\n0.5 0.5 0.5\n";
+    let (doc, _) = open("poscar", text);
+    let m = model(&doc);
+    let cell = m.cell.as_ref().unwrap();
+    assert_eq!(cell.vectors, [[1., 0., 0.], [0., 2., 0.], [0., 0., 3.]]);
+    assert_eq!(m.atoms[0].xyz, [0.5, 1., 1.5]);
+    let error = read(
+        "poscar",
+        "x\n1 2\n1 0 0\n0 1 0\n0 0 1\nAr\n1\nDirect\n0 0 0\n",
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("three positive"), "{error}");
+}
+
+#[test]
+fn skewed_cells_find_every_copy_or_say_why() {
+    // A cubic 10 Å lattice written with a long, skewed b = 3a + 10 ŷ: the
+    // point 0.07 Å from b − 3a is the same site as the origin.
+    let lattice = build::Lattice::new([[10., 0., 0.], [30., 10., 0.], [0., 0., 10.]]).unwrap();
+    assert!(build::same_site(&lattice, [0.; 3], [0.05, 9.95, 0.]));
+    assert!(!build::same_site(&lattice, [0.; 3], [0.5, 9.5, 0.]));
+    // Bonds to copies more than three cells away are refused, not dropped.
+    let text = "Fe\n1\n2.8 0 0\n14 2.8 0\n0 0 2.8\nFe\n1\nDirect\n0 0 0\n";
+    let error = read("poscar", text).unwrap_err().to_string();
+    assert!(error.contains("reduced"), "{error}");
+    let huge = "1\nProperties=x:R:18446744073709551615:species:S:1:pos:R:3\nC 0 0 0\n";
+    assert!(
+        read("xyz", huge)
+            .unwrap_err()
+            .to_string()
+            .contains("Properties")
+    );
+}
+
+#[test]
+fn a_crystal_formula_counts_its_atoms_without_chemistry() {
+    let (doc, _) = open("cif", NACL);
+    assert!(crate::models3d::crystal::present(&doc));
+    let all = crate::models3d::crystal::composition(&doc, &[]).unwrap();
+    assert_eq!(all.formula, "Cl4Na4");
+    assert!((all.mass - 4. * 58.443).abs() < 0.05, "{}", all.mass);
+    let (silicon, _) = open("xyz", SILICON);
+    let one = crate::models3d::crystal::composition(&silicon, &[silicon.atoms[0].id]).unwrap();
+    assert_eq!(one.formula, "Si");
+}
+
+#[test]
+fn files_cannot_ask_for_endless_work() {
+    // A cell almost flat across one face is refused before any search.
+    let flat = "2\nLattice=\"999 0 0 999 0.000001 0 0 0 999\"\nC 0 0 0\nC 0 0 1\n";
+    assert!(
+        read("xyz", flat)
+            .unwrap_err()
+            .to_string()
+            .contains("thinner")
+    );
+    // Repeated operators count once; too many distinct ones, or too many
+    // entries at all, are refused.
+    let atoms = "loop_\n_atom_site_label\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\nC1 0.1 0.2 0.3\n";
+    let repeated = format!(
+        "{CELL}loop_\n_symmetry_equiv_pos_as_xyz\n{}{atoms}",
+        "'x,y,z'\n'x+1,y,z'\n".repeat(700)
+    );
+    let (doc, _) = open("cif", &repeated);
+    assert_eq!(doc.atoms.len(), 1);
+    let many: String = (0..200).map(|i| format!("'x+{}/400,y,z'\n", i)).collect();
+    let error = read(
+        "cif",
+        &format!("{CELL}loop_\n_symmetry_equiv_pos_as_xyz\n{many}{atoms}"),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("at most 192"), "{error}");
+    let flood: String = (0..100_000)
+        .map(|i| format!("'x+{i}/200000,y,z'\n"))
+        .collect();
+    let error = read(
+        "cif",
+        &format!("{CELL}loop_\n_symmetry_equiv_pos_as_xyz\n{flood}{atoms}"),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("100000 symmetry operators"), "{error}");
+}
+
+#[test]
+fn extended_xyz_follows_its_periodic_flags() {
+    let text = |pbc: &str| {
+        format!("2\nLattice=\"10 0 0 0 10 0 0 0 10\" pbc=\"{pbc}\"\nC 0.1 5 5\nC 9.9 5 5\n")
+    };
+    // Not periodic: a molecule of two far-apart atoms, no cell.
+    let (doc, _) = open("xyz", &text("F F F"));
+    assert_eq!(doc.atoms.len(), 2);
+    assert!(model(&doc).cell.is_none());
+    // Periodic: the two atoms are 0.2 Å apart across the boundary, one site.
+    let (doc, _) = open("xyz", &text("T T T"));
+    assert_eq!(doc.atoms.len(), 1);
+    let error = read("xyz", &text("T T F")).unwrap_err().to_string();
+    assert!(error.contains("pbc"), "{error}");
+}
+
+#[test]
+fn only_crystal_atoms_skip_chemistry_analysis() {
+    let (mut doc, _) = open("cif", NACL);
+    let ethane = [
+        doc.add_atom("C", crate::document::Point::new(500., 0.)),
+        doc.add_atom("C", crate::document::Point::new(540., 0.)),
+    ];
+    doc.add_bond(ethane[0], ethane[1], 1, "plain");
+    use crate::models3d::crystal::touches;
+    assert!(touches(&doc, &[]));
+    assert!(touches(&doc, &[doc.atoms[0].id]));
+    assert!(!touches(&doc, &ethane));
+}

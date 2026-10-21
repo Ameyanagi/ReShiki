@@ -505,9 +505,7 @@ fn reconstruct(
         ..base.cloned().unwrap_or_default()
     };
     // Kept 3D models still need the version that validates them.
-    if !document.models.is_empty() {
-        document.require_version(crate::document::MODELS_3D);
-    }
+    crate::models3d::require_version(&mut document);
     Ok(Drawing {
         molecule: work,
         document,

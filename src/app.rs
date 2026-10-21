@@ -778,7 +778,9 @@ impl App {
                 // Accept supported extensions without relying on macOS
                 // type registration; the worker validates the content.
                 let file = rfd::AsyncFileDialog::new()
-                    .set_title("Open a ReShiki, MOL, RXN, CDXML, CDX or SMILES document")
+                    .set_title(
+                        "Open a ReShiki, MOL, RXN, CDXML, CDX, SMILES, CIF, PDB, POSCAR or XYZ file",
+                    )
                     .pick_file()
                     .await?;
                 files::read_picked(file).await
