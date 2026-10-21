@@ -166,11 +166,12 @@ impl Library {
         }
     }
     pub fn save(&self, path: &Path) -> Result<(), String> {
+        write_atomic(path, &self.to_bytes()?)
+    }
+    /// The file [`Self::save`] writes.
+    pub fn to_bytes(&self) -> Result<Vec<u8>, String> {
         self.validate()?;
-        write_atomic(
-            path,
-            &serde_json::to_vec_pretty(self).map_err(|e| e.to_string())?,
-        )
+        serde_json::to_vec_pretty(self).map_err(|e| e.to_string())
     }
     /// Serialize concurrent local editors and reject stale state without losing
     /// another window's templates. The OS releases the lock if an app exits.

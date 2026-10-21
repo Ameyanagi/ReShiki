@@ -587,7 +587,8 @@ impl App {
                                     return Ok(false);
                                 };
                                 reshiki::task::spawn_blocking(move || {
-                                    reshiki::document_styles::save(&path, &style)
+                                    let bytes = reshiki::document_styles::to_bytes(&path, &style)?;
+                                    super::files::write(&path, &bytes)
                                 })
                                 .await
                                 .map_err(|e| e.to_string())??;

@@ -499,9 +499,11 @@ impl App {
                             else {
                                 return Ok(false);
                             };
-                            reshiki::task::spawn_blocking(move || theme_files::save(&path, &theme))
-                                .await
-                                .map_err(|e| e.to_string())??;
+                            reshiki::task::spawn_blocking(move || {
+                                super::files::write(&path, &theme_files::to_bytes(&theme)?)
+                            })
+                            .await
+                            .map_err(|e| e.to_string())??;
                             Ok(true)
                         },
                         |r| Message::ThemeFile(super::theme_files::Action::Saved(r)),

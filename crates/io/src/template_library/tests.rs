@@ -225,3 +225,18 @@ fn templates_keep_3d_models() {
     let read = super::Library::from_bytes(&bytes).unwrap();
     assert_eq!(read.templates[0].document.models, doc.models);
 }
+
+#[test]
+fn exported_library_bytes_are_the_saved_file() {
+    use crate::{document::Document, templates::Anchor};
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Default::default());
+    let mut library = super::Library::default();
+    library.add("Methyl", "Mine", doc, Anchor::Atom(a)).unwrap();
+    let bytes = library.to_bytes().unwrap();
+    assert_eq!(super::Library::from_bytes(&bytes).unwrap(), library);
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("My templates.reshiki-templates");
+    library.save(&path).unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), bytes);
+}

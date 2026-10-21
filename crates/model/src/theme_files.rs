@@ -264,12 +264,16 @@ pub fn load(path: &Path) -> Result<ThemeFile, String> {
     Ok(theme)
 }
 pub fn save(path: &Path, theme: &ThemeFile) -> Result<(), String> {
+    crate::storage::write_atomic(path, &to_bytes(theme)?)
+}
+/// The file [`save`] writes.
+pub fn to_bytes(theme: &ThemeFile) -> Result<Vec<u8>, String> {
     theme.validate()?;
     let bytes = serde_json::to_vec_pretty(theme).map_err(|e| e.to_string())?;
     if bytes.len() > LIMIT {
         return Err("Theme file exceeds 256 KB".into());
     }
-    crate::storage::write_atomic(path, &bytes)
+    Ok(bytes)
 }
 
 /// Curated additions are code-reviewed with their source and contrast checks.
