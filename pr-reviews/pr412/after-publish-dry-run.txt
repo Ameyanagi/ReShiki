@@ -1,13 +1,30 @@
-The npm job's two shell steps, extracted from release.yml and run locally (npm 11.19.0); the tarball file list is in after-pack.txt.
+The npm job's shell steps, extracted from release.yml with PyYAML and run locally (npm 11.19.0). 'publish.sh' is the publish step with 'npm publish' replaced by 'npm publish --dry-run'. Nothing was published.
 
-=== credential step: NPM_TRUSTED_PUBLISHING=false HAS_TOKEN=false
+--- 1. no credential
+=== credential step: event=push ref=refs/tags/v0.12.0 NPM_TRUSTED_PUBLISHING=false HAS_TOKEN=false
 ::notice::No npm credential is configured (see docs/releasing.md), so @ameyanagi/reshiki was not published.
+exit=0
 mode=none
-(later steps skipped: if: steps.auth.outputs.mode != 'none')
 
-=== credential step: NPM_TRUSTED_PUBLISHING=false HAS_TOKEN=true
+--- 2. npm_only dispatched from a branch other than main
+=== credential step: event=workflow_dispatch ref=refs/heads/feat/x NPM_TRUSTED_PUBLISHING=false HAS_TOKEN=true
+npm_only publishes main's version; run it on main
+exit=1
+
+--- 3. an expired or invalid NPM_TOKEN
+=== credential step: event=workflow_dispatch ref=refs/heads/main NPM_TRUSTED_PUBLISHING=false HAS_TOKEN=true
+exit=0
 mode=token
-=== publish step, with 'npm publish' replaced by 'npm publish --dry-run', RELEASE_TAG=v0.12.0
+=== token check step
+npm error code E401
+npm error 401 Unauthorized - GET https://registry.npmjs.org/-/whoami
+npm error A complete log of this run can be found in: /Users/shiranui/.npm/_logs/2026-10-21T06_58_33_997Z-debug-0.log
+::notice::npm rejected NPM_TOKEN (expired or invalid; see docs/releasing.md), so @ameyanagi/reshiki was not published.
+exit=0
+valid=false
+
+--- 4. token, stable release (npm_only on main, or tag v0.12.0)
+=== publish step (publish.sh), MODE=token, Cargo.toml version 0.12.0
 npm 11.19.0, publishing @ameyanagi/reshiki@0.12.0 with token
 npm notice
 npm notice 📦  @ameyanagi/reshiki@0.12.0
@@ -26,9 +43,11 @@ npm notice Publishing to https://registry.npmjs.org/ with tag latest and public 
 + @ameyanagi/reshiki@0.12.0
 exit=0
 
-=== credential step: NPM_TRUSTED_PUBLISHING=true HAS_TOKEN=true
+--- 5. trusted publishing, prerelease tag v0.13.0-rc.1
+=== credential step: event=push ref=refs/tags/v0.13.0-rc.1 NPM_TRUSTED_PUBLISHING=true HAS_TOKEN=true
+exit=0
 mode=oidc
-=== publish step, with 'npm publish' replaced by 'npm publish --dry-run', RELEASE_TAG=v0.13.0-rc.1
+=== publish step (publish.sh), MODE=oidc, Cargo.toml version 0.13.0-rc.1
 npm 11.19.0, publishing @ameyanagi/reshiki@0.13.0-rc.1 with oidc
 npm notice
 npm notice 📦  @ameyanagi/reshiki@0.13.0-rc.1
@@ -43,23 +62,18 @@ npm notice shasum: e286762d1814afdf25e0e05b2d18cdf976ab9093
 npm notice integrity: sha512-tgkq95ZJ75b1Z[...]wBnKobb030EhA==
 npm notice total files: 26
 npm notice
-npm warn publish This command requires you to be logged in to https://registry.npmjs.org/ (dry-run)
 npm notice Publishing to https://registry.npmjs.org/ with tag next and public access (dry-run)
 + @ameyanagi/reshiki@0.13.0-rc.1
 exit=0
 
---- idempotency: a name and version already on npm (react 18.3.1 stands in)
-=== credential step: NPM_TRUSTED_PUBLISHING=false HAS_TOKEN=true
-mode=token
-=== publish step, with 'npm publish' replaced by 'npm publish --dry-run', RELEASE_TAG=v18.3.1
+--- 6. a version already on npm (react 18.3.1 stands in)
+=== publish step (publish.sh), MODE=token, Cargo.toml version 18.3.1
 npm 11.19.0, publishing react@18.3.1 with token
 ::notice::react@18.3.1 is already on npm.
 exit=0
 
---- an older stable release than latest (react 17.0.99 against react latest) keeps latest
-=== credential step: NPM_TRUSTED_PUBLISHING=false HAS_TOKEN=true
-mode=token
-=== publish step, with 'npm publish' replaced by 'npm publish --dry-run', RELEASE_TAG=v17.0.99
+--- 7. a stable version older than latest (react 17.0.99) keeps latest
+=== publish step (publish.sh), MODE=token, Cargo.toml version 17.0.99
 npm 11.19.0, publishing react@17.0.99 with token
 npm notice
 npm notice 📦  react@17.0.99
@@ -76,4 +90,12 @@ npm notice total files: 26
 npm notice
 npm notice Publishing to https://registry.npmjs.org/ with tag release-17.0 and public access (dry-run)
 + react@17.0.99
+exit=0
+
+--- 8. npm refuses the credential at publish time (the unmodified step, with a stand-in npm that answers publish with E401)
+=== publish step (publish-real.sh), MODE=oidc, Cargo.toml version 0.12.0
+npm 11.19.0, publishing @ameyanagi/reshiki@0.12.0 with oidc
+npm error code E401
+npm error 401 Unauthorized - PUT https://registry.npmjs.org/@ameyanagi%2freshiki
+::notice::npm refused the oidc credential (see docs/releasing.md), so @ameyanagi/reshiki@0.12.0 was not published.
 exit=0

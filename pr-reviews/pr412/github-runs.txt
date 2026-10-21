@@ -1,0 +1,18 @@
+GitHub runs on this branch (nothing published):
+
+1. Release builds, workflow_dispatch npm_only=true on feat/npm-release: https://github.com/Ameyanagi/ReShiki/actions/runs/39558923043
+   validate: skipped
+   build: skipped
+   publish: skipped
+   sign: skipped
+   npm: failure
+   web_demo: skipped
+   reference: skipped
+   sign_windows: skipped
+   npm log: npm_only publishes main's version; run it on main (exit 1, before any credential use)
+
+2. Nightly builds, workflow_dispatch on feat/web-demo (main's workflows since #407): https://github.com/Ameyanagi/ReShiki/actions/runs/39558593340
+   conclusion: startup_failure (web_demo declares actions: write, nightly grants actions: read)
+
+3. Nightly builds, workflow_dispatch on feat/npm-release (nightly grants actions: write, id-token: write): https://github.com/Ameyanagi/ReShiki/actions/runs/39558854374
+   conclusion: skipped (starts; packages is skipped off main as designed)
