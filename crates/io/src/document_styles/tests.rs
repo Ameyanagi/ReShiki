@@ -253,3 +253,26 @@ fn formatting_roundtrips_presets_boundaries_and_small_margins() {
     }
     assert_eq!(units::format(14.4, Unit::Millimetres), "5.08");
 }
+
+#[test]
+fn exported_style_bytes_are_the_saved_file() {
+    // The browser downloads these bytes instead of calling `save`.
+    let directory = tempfile::tempdir().unwrap();
+    let style = Preset::Presentation.style();
+    for name in ["Drawing.reshiki-style", "Drawing.cds"] {
+        let path = directory.path().join(name);
+        let bytes = to_bytes(&path, &style).unwrap();
+        save(&path, &style).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        let read = load(&path).unwrap();
+        assert_eq!(read.font_family, style.font_family);
+        assert_eq!(read.font_size_pt, style.font_size_pt);
+    }
+    assert_eq!(
+        load(&directory.path().join("Drawing.reshiki-style")).unwrap(),
+        style
+    );
+    let mut invalid = style;
+    invalid.bond_length_world = 42.;
+    assert!(to_bytes(std::path::Path::new("Drawing.cds"), &invalid).is_err());
+}

@@ -1580,7 +1580,7 @@ fn hidden_indicator_owners_and_group_labels_are_out_of_reach() {
 }
 
 #[test]
-fn tilt_turns_a_model_shown_only_in_3d_in_the_drawing_s_sense() {
+fn tilt_turns_a_shown_model_in_the_drawing_s_sense() {
     use crate::projection;
     let close = |a: [f32; 4], b: [f32; 4]| a.iter().zip(b).all(|(a, b)| (a - b).abs() < 1e-5);
     for display in [Display::TwoD, Display::Both, Display::ThreeD] {
@@ -1593,16 +1593,16 @@ fn tilt_turns_a_model_shown_only_in_3d_in_the_drawing_s_sense() {
         let ids = [atoms.clone(), vec![methane]].concat();
         projection::tilt(&mut tilted, &ids, 30., true);
         projection::tilt(&mut tilted, &ids, -20., false);
-        let hidden = display == Display::ThreeD;
+        let modelled = display != Display::TwoD;
         let drawing = |d: &Document| {
             atoms
                 .iter()
                 .map(|id| d.atom(*id).map(|a| (a.position, a.depth)))
                 .collect::<Vec<_>>()
         };
-        assert_eq!(drawing(&tilted) == drawing(&doc), hidden, "{display:?}");
+        assert_eq!(drawing(&tilted) == drawing(&doc), modelled, "{display:?}");
         // X then Y, as one drag of `turn` (0.01 radian per pixel) would.
-        let expected = if hidden {
+        let expected = if modelled {
             turn(
                 doc.models[0].rotation,
                 -20f32.to_radians() * 100.,

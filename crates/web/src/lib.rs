@@ -5,7 +5,7 @@
 //! wraps and tests these exports.
 use reshiki_io::{
     export,
-    formats::{read, write},
+    formats::{EXPORT_PNG_PIXELS, read, write},
 };
 use reshiki_model::{document::Document, scene};
 use wasm_bindgen::prelude::*;
@@ -21,15 +21,20 @@ fn preview_svg(doc: &Document) -> String {
 }
 
 /// The editor's PNG preview on white, scaled up to three times and down to fit
-/// within `max_width` × `max_height` pixels, as the `render` tool draws it.
+/// within `max_width` × `max_height` pixels and the export pixel budget, as the
+/// `render` tool draws it.
 fn preview_png(doc: &Document, max_width: u32, max_height: u32) -> Result<Vec<u8>, String> {
     if !(1..=MAX_SIDE).contains(&max_width) || !(1..=MAX_SIDE).contains(&max_height) {
         return Err(format!("Preview sides must be 1 to {MAX_SIDE} pixels"));
     }
     let tree = export::parse_svg(scene::svg(doc))?;
-    let scale = (max_width as f32 / tree.size().width())
-        .min(max_height as f32 / tree.size().height())
-        .min(MAX_UPSCALE);
+    let size = tree.size();
+    // Within the export pixel budget too, as the desktop render path is.
+    let budget = (EXPORT_PNG_PIXELS as f32 / (size.width() * size.height())).sqrt();
+    let scale = (max_width as f32 / size.width())
+        .min(max_height as f32 / size.height())
+        .min(MAX_UPSCALE)
+        .min(budget);
     let width = (tree.size().width() * scale)
         .ceil()
         .clamp(1., max_width as f32) as u32;

@@ -48,8 +48,13 @@ pub fn load(path: &std::path::Path) -> Result<DrawingStyle, String> {
 /// CDS uses ChemDraw's binary document framing; native JSON retains ReShiki's
 /// world-coordinate scale and PNG preference as well as physical dimensions.
 pub fn save(path: &std::path::Path, style: &DrawingStyle) -> Result<(), String> {
+    crate::storage::write_atomic(path, &to_bytes(path, style)?)
+}
+
+/// The file [`save`] writes, in the format the path's extension names.
+pub fn to_bytes(path: &std::path::Path, style: &DrawingStyle) -> Result<Vec<u8>, String> {
     style.validate()?;
-    let bytes = if path
+    if path
         .extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("cds"))
     {
@@ -59,11 +64,10 @@ pub fn save(path: &std::path::Path, style: &DrawingStyle) -> Result<(), String> 
         };
         let xml =
             crate::exchange::drawing::write(&doc, Default::default()).map_err(|e| e.to_string())?;
-        crate::exchange::to_cds(&xml)?
+        crate::exchange::to_cds(&xml)
     } else {
-        serde_json::to_vec_pretty(style).map_err(|e| e.to_string())?
-    };
-    crate::storage::write_atomic(path, &bytes)
+        serde_json::to_vec_pretty(style).map_err(|e| e.to_string())
+    }
 }
 
 /// Stationery supplies label typography and bond dimensions. Page layout,

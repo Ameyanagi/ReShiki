@@ -3,8 +3,9 @@
 //! from the same tables that menus, tooltips and Help read.
 use super::super::{
     App, InspectorTab, Message, abbreviations, assistant, cleanup, generic, import, inspector,
-    keyboard_drawing, models3d, naming, nmr, optimization, pages, palettes, printing,
-    reaction_mapping, reactions,
+    keyboard_drawing, models3d, naming, nmr, numeric_transforms,
+    numeric_transforms::Field,
+    optimization, pages, palettes, printing, reaction_mapping, reactions,
     shortcuts::{self, keys},
     tabs, view_settings,
 };
@@ -63,6 +64,8 @@ impl Category {
 pub(crate) enum Need {
     Nothing,
     Selection,
+    /// A selection the Scale field can resize: none of it shown only in 3D.
+    Resizable,
     Molecule,
     Bond,
     Atom,
@@ -777,7 +780,11 @@ fn edits() -> Vec<Command> {
         list.push(selection(
             name,
             "Rotate the selection",
-            "turn spin",
+            if degrees < 0. {
+                "turn spin ccw anticlockwise"
+            } else {
+                "turn spin cw"
+            },
             Message::Transform(Transform::Rotate(degrees)),
         ));
     }
@@ -1358,10 +1365,46 @@ fn tools() -> Vec<Command> {
         ),
         tool("Atom tool", "element", Tool::Atom),
         tool("Ring tool", "cycle polygon", Tool::Ring).keys("r"),
+        tool(
+            "Benzene tool",
+            "ring preset phenyl aromatic arene",
+            Tool::RingPreset(RingPreset::Benzene),
+        )
+        .keys("j"),
+        tool(
+            "Cyclopentadiene tool",
+            "ring preset cp diene cyclopentadienyl",
+            Tool::RingPreset(RingPreset::Cyclopentadiene),
+        )
+        .keys(keys(Modifiers::SHIFT, "J")),
         tool("Text tool", "caption annotation label write", Tool::Text).keys("t"),
         tool("Eraser", "erase delete rubber", Tool::Erase),
         tool("Edit points", "path nodes bezier", Tool::EditPoints),
     ];
+    for (preset, synonyms) in [
+        (
+            RingPreset::ChairUp,
+            "ring preset cyclohexane chair up conformation",
+        ),
+        (
+            RingPreset::ChairDown,
+            "ring preset cyclohexane chair down conformation",
+        ),
+        (
+            RingPreset::HaworthFive,
+            "ring preset furanose sugar haworth five",
+        ),
+        (
+            RingPreset::HaworthSix,
+            "ring preset pyranose sugar haworth six glucose",
+        ),
+    ] {
+        list.push(tool(
+            &format!("{preset} tool"),
+            synonyms,
+            Tool::RingPreset(preset),
+        ));
+    }
     for preset in ArrowPreset::ALL {
         list.push(send(
             format!("{preset} arrow"),
@@ -1403,31 +1446,129 @@ fn tools() -> Vec<Command> {
     list
 }
 
-/// Commands that take a value typed after their word: "rotate 37",
-/// "zoom 150", "charge -1", "element Pd", "font size 12", "bond length 14",
-/// "ring 7", "chain 5".
+/// What a command word with a value does.
+#[derive(Clone, Copy)]
+enum Word {
+    Rotate(f32),
+    Tilt(Field, f32),
+    Scale,
+    Zoom,
+    Charge,
+    FontSize,
+    BondLength,
+    Ring,
+    Chain,
+    Element,
+}
+
+/// Command words, in the order that settles a shared prefix ("ch" is charge
+/// when its value fits). Tilt signs follow the fixed Tilt up/down/left/right
+/// rows.
+const WORDS: &[(&[&str], Word)] = &[
+    (&["rotate"], Word::Rotate(1.)),
+    (&["rotate", "cw"], Word::Rotate(1.)),
+    (&["rotate", "ccw"], Word::Rotate(-1.)),
+    (&["rotate", "clockwise"], Word::Rotate(1.)),
+    (&["rotate", "counterclockwise"], Word::Rotate(-1.)),
+    (&["tilt", "up"], Word::Tilt(Field::TiltX, -1.)),
+    (&["tilt", "down"], Word::Tilt(Field::TiltX, 1.)),
+    (&["tilt", "left"], Word::Tilt(Field::TiltY, 1.)),
+    (&["tilt", "right"], Word::Tilt(Field::TiltY, -1.)),
+    (&["tilt", "x"], Word::Tilt(Field::TiltX, 1.)),
+    (&["tilt", "y"], Word::Tilt(Field::TiltY, 1.)),
+    (&["scale"], Word::Scale),
+    (&["zoom"], Word::Zoom),
+    (&["charge"], Word::Charge),
+    (&["chain"], Word::Chain),
+    (&["font", "size"], Word::FontSize),
+    (&["font"], Word::FontSize),
+    (&["bond", "length"], Word::BondLength),
+    (&["ring"], Word::Ring),
+    (&["element"], Word::Element),
+];
+
+/// Whether the typed words start the command's words, the first with at
+/// least two letters: "rot", "bond len", "tilt x".
+fn starts(typed: &[&str], words: &[&str]) -> bool {
+    typed.len() == words.len()
+        && typed.first().is_some_and(|w| w.len() >= 2)
+        && typed.iter().zip(words).all(|(t, w)| w.starts_with(t))
+}
+
+/// Commands that take a value typed after their word or its prefix:
+/// "rot 37", "rotate ccw 30", "tilt up 20", "scale 150", "zo 150",
+/// "ch -1", "el Pd", "font 12", "bond len 14", "ri 7", "chain 5".
 pub(crate) fn parameterised(app: &App, query: &str) -> Option<Command> {
     let query = query.trim().to_lowercase();
-    let (word, value) = query.rsplit_once(char::is_whitespace)?;
-    let word = word.trim();
+    let (typed, value) = query.rsplit_once(char::is_whitespace)?;
+    let typed: Vec<&str> = typed.split_whitespace().collect();
     let number = value.parse::<f32>().ok().filter(|n| n.is_finite());
+    WORDS
+        .iter()
+        .filter(|(words, _)| starts(&typed, words))
+        .find_map(|(_, word)| command_with(app, *word, number, value))
+}
+
+fn command_with(app: &App, word: Word, number: Option<f32>, value: &str) -> Option<Command> {
     let command = match (word, number) {
-        ("rotate", Some(n)) => send(
-            format!("Rotate selection by {n}°"),
+        (Word::Rotate(sign), Some(n)) => {
+            let degrees = sign * n;
+            let way = if degrees < 0. {
+                "counterclockwise"
+            } else {
+                "clockwise"
+            };
+            send(
+                format!("Rotate selection {}° {way}", degrees.abs()),
+                Category::Edit,
+                "Rotate the selection clockwise; negative turns counterclockwise",
+                "",
+                Message::Transform(Transform::Rotate(degrees)),
+            )
+            .need(Need::Selection)
+        }
+        // As the Tilt X and Y fields and the fixed tilt rows: molecules shown
+        // as 3D models turn their model.
+        (Word::Tilt(field, sign), Some(n)) => {
+            let degrees = sign * n;
+            let (way, transform) = match field {
+                Field::TiltX if degrees < 0. => ("up", Transform::TiltX(degrees)),
+                Field::TiltX => ("down", Transform::TiltX(degrees)),
+                _ if degrees < 0. => ("right", Transform::TiltY(degrees)),
+                _ => ("left", Transform::TiltY(degrees)),
+            };
+            send(
+                format!("Tilt selection {way} {}°", degrees.abs()),
+                Category::Edit,
+                "Tilt the selection in 3D",
+                "",
+                Message::Transform(transform),
+            )
+            .need(Need::Selection)
+        }
+        // Through the Scale field, so its limits and 3D-model rule apply.
+        (Word::Scale, Some(n)) if n > 0. => Command::new(
+            format!("Scale selection to {n}%"),
             Category::Edit,
-            "Rotate the selection clockwise; negative turns counterclockwise",
+            "Scale the selection uniformly, relative to its size",
             "",
-            Message::Transform(Transform::Rotate(n)),
+            Run::Send(vec![
+                Message::NumericTransform(numeric_transforms::Action::Input(
+                    Field::Scale,
+                    n.to_string(),
+                )),
+                Message::NumericTransform(numeric_transforms::Action::Apply(Field::Scale)),
+            ]),
         )
-        .need(Need::Selection),
-        ("zoom", Some(n)) if n > 0. => send(
+        .need(Need::Resizable),
+        (Word::Zoom, Some(n)) if n > 0. => send(
             format!("Zoom to {n}%"),
             Category::View,
             "Set the zoom",
             "",
             Message::Zoom(n / 100. / app.tab.camera.zoom),
         ),
-        ("charge", Some(n)) if n.fract() == 0. && n.abs() <= 8. => Command::new(
+        (Word::Charge, Some(n)) if n.fract() == 0. && n.abs() <= 8. => Command::new(
             format!("Set charge to {n:+}"),
             Category::Atom,
             "Set the atom's formal charge",
@@ -1435,7 +1576,7 @@ pub(crate) fn parameterised(app: &App, query: &str) -> Option<Command> {
             Run::SetCharge(n as i32),
         )
         .need(Need::OneAtom),
-        ("font size", Some(n)) if n > 0. => Command::new(
+        (Word::FontSize, Some(n)) if n > 0. => Command::new(
             format!("Font size {n} pt"),
             Category::Edit,
             "Set the selected text's size",
@@ -1445,21 +1586,21 @@ pub(crate) fn parameterised(app: &App, query: &str) -> Option<Command> {
                 Message::ApplyFontSize,
             ]),
         ),
-        ("bond length", Some(n)) if n > 0. => send(
+        (Word::BondLength, Some(n)) if n > 0. => send(
             format!("Bond length {n} pt"),
             Category::View,
             "Set the drawing bond length",
             "",
             Message::DrawingLength(value.into()),
         ),
-        ("ring", Some(n)) if (3. ..=8.).contains(&n) && n.fract() == 0. => Command::new(
+        (Word::Ring, Some(n)) if (3. ..=8.).contains(&n) && n.fract() == 0. => Command::new(
             format!("Insert {n}-membered ring"),
             Category::Insert,
             "Attach to the selected or pointed atom or bond, or add at the center",
             "",
             Run::Ring(Ring::Size(n as u8, false)),
         ),
-        ("chain", Some(n))
+        (Word::Chain, Some(n))
             if n >= 1. && n.fract() == 0. && n <= reshiki::chains::MAX_ATOMS as f32 =>
         {
             Command::new(
@@ -1473,7 +1614,7 @@ pub(crate) fn parameterised(app: &App, query: &str) -> Option<Command> {
                 ]),
             )
         }
-        ("element", None) => {
+        (Word::Element, None) => {
             let symbol = reshiki::editing::ELEMENTS
                 .iter()
                 .find(|s| s.eq_ignore_ascii_case(value))?;

@@ -771,9 +771,11 @@ impl App {
                             return Ok(None);
                         };
                         let target = path.clone();
-                        reshiki::task::spawn_blocking(move || library.save(&target))
-                            .await
-                            .map_err(|e| e.to_string())??;
+                        reshiki::task::spawn_blocking(move || {
+                            super::files::write(&target, &library.to_bytes()?)
+                        })
+                        .await
+                        .map_err(|e| e.to_string())??;
                         Ok(Some(super::figure_export::Saved {
                             path,
                             details: vec![],
