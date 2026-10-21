@@ -135,12 +135,36 @@ gh workflow run docs.yml --ref main
 
 Skip `gh release create` when the `web-demo` release exists.
 
+The **npm** job then publishes the browser package `@ameyanagi/reshiki` (`packages/editor`) from the build the **web_demo** job tested, so the WebAssembly is built only once. It runs the package tests and sets the package version from the tag (`v0.13.0` publishes `0.13.0`); the `version` in `packages/editor/package.json` is only a placeholder. It publishes with `npm publish --provenance`. Stable versions get the `latest` dist-tag. Prerelease tags such as `v0.13.0-rc.1` get `next`, so `bun add @ameyanagi/reshiki` keeps installing the newest stable release, the same way the GitHub release is marked as a prerelease. Nightly builds never publish to npm. A version already on npm is skipped, so rerunning a release is safe. Until [npm publishing is configured](#configure-npm-publishing), the job leaves a notice and succeeds.
+
 Package staging uses `build/release-bundles`, outside Cargo’s `target` directory, so cache pruning cannot traverse bundled dependency license sources.
 
 Packaging and macOS signing use Python's standard library. Windows signing uses
 the SignPath GitHub action and a PowerShell verification helper. Intel macOS runs the native Rust chemistry tests, packaging/clipboard/print checks and extracted-application tests without installing RDKit: the pinned reference release has no Intel macOS wheel. Full live RDKit comparisons remain required on macOS ARM64, Windows x64 and Linux x64 before any package is published.
 
 Both Mac builds use the fixed abbreviation drawing coordinates recorded on Apple Silicon. Intel's native tests exercise every predefined group as an isolated and attached fragment; these are application checks, not an independent Intel RDKit geometry capture. The updater selects a separate DMG for each Mac architecture.
+
+## Configure npm publishing
+
+Do this once, before the first release that should reach npm. The **npm** job runs in the `npm` GitHub environment, which GitHub creates on its first run. To keep the token below inside that environment, create the environment under **Settings → Environments** first.
+
+1. **Own the scope.** Sign in to [npmjs.com](https://www.npmjs.com/) as the user `ameyanagi`, or create an organization named `ameyanagi`. Either one owns the `@ameyanagi` scope. Turn on two-factor authentication for the account.
+2. **Add a token for the first publish.** npm configures trusted publishing in the settings of a package that already exists, so the first version has to be published with a token. Create a [granular access token](https://docs.npmjs.com/creating-and-viewing-access-tokens) with **Read and write** permission for all packages, or for the `@ameyanagi` organization if the scope is one. Select **Bypass two-factor authentication** and the shortest expiry that covers the next release. Add it as the secret `NPM_TOKEN` in the `npm` environment (or as a repository secret). Do not publish the first version by hand: the next `v*` tag publishes it, with provenance.
+3. **Switch to trusted publishing** after that release. Open **npmjs.com → Packages → @ameyanagi/reshiki → Settings → Trusted publishing**, choose **GitHub Actions** and enter:
+
+   | Field                   | Value         |
+   | ----------------------- | ------------- |
+   | Organization or user    | `Ameyanagi`   |
+   | Repository              | `ReShiki`     |
+   | Workflow filename       | `release.yml` |
+   | Environment name        | `npm`         |
+   | Allow direct publishing | on            |
+
+   Then set the repository variable `NPM_TRUSTED_PUBLISHING` to `true` (**Settings → Secrets and variables → Actions → Variables**). npm expires a new trusted publisher that has not published within 2 days. If yours expired, delete it and add it again shortly before a release.
+
+4. **Remove the token** once a release has published through trusted publishing. Delete the `NPM_TOKEN` secret and revoke the token on npmjs.com. Under the package's **Settings → Publishing access**, choose to require two-factor authentication and disallow tokens. Trusted publishing keeps working.
+
+With `NPM_TRUSTED_PUBLISHING=true`, the job always uses OIDC (`id-token: write`, npm 11.5.1 or later from Node 24) and ignores `NPM_TOKEN`. With neither the variable nor the secret, it publishes nothing.
 
 ## Configure macOS signing
 

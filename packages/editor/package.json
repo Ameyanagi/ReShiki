@@ -1,9 +1,15 @@
 {
   "name": "@ameyanagi/reshiki",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.0.0-development",
   "description": "ReShiki in the browser: the drawing editor and structure conversion in WebAssembly",
+  "homepage": "https://github.com/Ameyanagi/ReShiki/tree/main/packages/editor#readme",
+  "bugs": "https://github.com/Ameyanagi/ReShiki/issues",
   "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ameyanagi/ReShiki.git",
+    "directory": "packages/editor"
+  },
   "files": [
     "src",
     "dist"
@@ -12,6 +18,7 @@
   "sideEffects": [
     "./src/element.js"
   ],
+  "types": "./src/index.d.ts",
   "exports": {
     ".": {
       "types": "./src/index.d.ts",
@@ -32,6 +39,9 @@
     "./frame.html": "./src/frame.html",
     "./reshiki_web_bg.wasm": "./dist/wasm/reshiki_web_bg.wasm",
     "./reshiki_bg.wasm": "./dist/editor/reshiki_bg.wasm"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "../../scripts/build_wasm.sh",
