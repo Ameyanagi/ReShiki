@@ -234,7 +234,7 @@ impl ThemeFile {
             name: base.to_string(),
             author: String::new(),
             source: base.source().into(),
-            license: String::new(),
+            license: base.license().into(),
             base,
             light: palette(CanvasTheme::Light),
             dark: palette(CanvasTheme::Dark),

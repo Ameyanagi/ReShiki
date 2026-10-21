@@ -4,6 +4,8 @@
 //! The table covers H–Mt in `crate::editing::ELEMENTS` order; later elements retain neutral colors.
 
 pub(crate) const SOURCE: &str = "VESTA element colours (K. Momma and F. Izumi, https://jp-minerals.org/vesta/), via pymatgen ElementColorSchemes.yaml";
+/// See licenses/vesta-colors/NOTICE and LICENSE.
+pub(crate) const LICENSE: &str = "MIT (pymatgen ElementColorSchemes.yaml, Copyright (c) 2011-2012 MIT & The Regents of the University of California, through Lawrence Berkeley National Laboratory)";
 
 const VESTA: [u32; 109] = [
     0xFFCCCC, // H

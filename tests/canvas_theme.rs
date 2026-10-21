@@ -864,4 +864,5 @@ fn vesta_uses_its_reference_colors_with_readable_labels() {
         "{}",
         file.source
     );
+    assert!(file.license.starts_with("MIT"), "{}", file.license);
 }

@@ -16,6 +16,7 @@ of adaptations, copyright notices, and license texts are recorded in:
   licenses/amd-win-libm/   Windows numerical algorithm adaptations
   licenses/oklab/          Public-domain perceptual color conversion matrices
   licenses/iced/           Canvas glyph rendering adaptation (MIT)
+  licenses/vesta-colors/   VESTA element colours via pymatgen (MIT)
   licenses/liberation-fonts/ Liberation Sans fonts in the browser build (OFL-1.1)
   licenses/nmrshiftdb2/    Observed-shift derivative database (separate data license)
   data/nmr/               Offline index, provenance and held-out validation

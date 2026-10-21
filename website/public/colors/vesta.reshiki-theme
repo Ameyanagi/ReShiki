@@ -3,6 +3,7 @@
   "id": "vesta",
   "name": "VESTA",
   "source": "VESTA element colours (K. Momma and F. Izumi, https://jp-minerals.org/vesta/), via pymatgen ElementColorSchemes.yaml",
+  "license": "MIT (pymatgen ElementColorSchemes.yaml, Copyright (c) 2011-2012 MIT & The Regents of the University of California, through Lawrence Berkeley National Laboratory)",
   "base": "vesta",
   "light": {
     "elements": {

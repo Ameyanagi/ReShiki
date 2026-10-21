@@ -116,6 +116,13 @@ impl ColorTheme {
             Self::Vesta => vesta::SOURCE,
         }
     }
+    /// Terms of copied reference data; Jmol's colors are cited, not copied text.
+    pub fn license(self) -> &'static str {
+        match self {
+            Self::Vesta => vesta::LICENSE,
+            _ => "",
+        }
+    }
     pub fn is_publication(&self) -> bool {
         *self == Self::Publication
     }

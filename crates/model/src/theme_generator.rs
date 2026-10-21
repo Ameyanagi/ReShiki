@@ -98,7 +98,7 @@ impl Reference {
             name: ColorTheme::Vesta.to_string(),
             author: String::new(),
             source: vesta::SOURCE.into(),
-            license: String::new(),
+            license: vesta::LICENSE.into(),
             light: seeds(CanvasTheme::Light),
             dark: seeds(CanvasTheme::Dark),
             light_tile_seeds: tiles.clone(),
