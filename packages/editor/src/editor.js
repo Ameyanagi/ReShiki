@@ -22,8 +22,8 @@ export async function mount(element, options = {}) {
   // The drawing is read before the editor starts, so data that cannot be read
   // rejects here and the page can mount again.
   const data = options.data === undefined ? undefined : bytes(options.data);
-  await loadFonts(wasm, options);
-  await wasm.mount(element, data, options.format ?? "auto");
+  const onMissingFont = await loadFonts(wasm, options);
+  await wasm.mount(element, data, options.format ?? "auto", onMissingFont);
   let listeners = [];
   const editor = {
     async load(data, format = "auto") {
@@ -47,7 +47,6 @@ export async function mount(element, options = {}) {
     },
     destroy() {
       wasm.destroy();
-      wasm.onMissingFont(undefined);
       listeners = [];
       element.replaceChildren();
     },

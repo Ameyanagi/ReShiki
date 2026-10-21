@@ -86,20 +86,15 @@ describe("Japanese fallback", () => {
   });
 });
 
-/** A stand-in editor that records added fonts and its missing-font callback. */
+/** A stand-in editor that records added fonts. */
 function editor() {
   const added: Uint8Array[] = [];
-  const state: { missing?: () => void } = {};
   return {
     added,
-    state,
     addFont(font: Uint8Array) {
       if (font[0] === 0) throw new Error("Not a TrueType or OpenType font");
       added.push(font);
       return 1;
-    },
-    onMissingFont(callback?: () => void) {
-      state.missing = callback;
     },
   };
 }
@@ -129,9 +124,9 @@ describe("loadFonts", () => {
   test("loads the Japanese fallback when the editor first needs it", async () => {
     const wasm = editor();
     const host = page("denied");
-    await loadFonts(wasm, {}, host);
+    const missing = await loadFonts(wasm, {}, host);
     expect(host.fetched).toEqual([]);
-    await wasm.state.missing?.();
+    await missing?.();
     expect(host.fetched).toEqual([NOTO_SANS_JP]);
     expect(wasm.added).toEqual([bytes(9)]);
   });
@@ -139,18 +134,17 @@ describe("loadFonts", () => {
   test("reports a fallback that cannot be downloaded", async () => {
     const wasm = editor();
     const errors: string[] = [];
-    await loadFonts(
+    const missing = await loadFonts(
       wasm,
       { cjkFont: "https://fonts.test/missing.otf", onError: (error) => errors.push(error.message) },
       page("denied"),
     );
-    await wasm.state.missing?.();
+    await missing?.();
     expect(errors).toEqual(["Could not load the font https://fonts.test/missing.otf: HTTP 404"]);
   });
 
   test("cjkFont: false never asks", async () => {
     const wasm = editor();
-    await loadFonts(wasm, { cjkFont: false }, page("granted"));
-    expect(wasm.state.missing).toBeUndefined();
+    expect(await loadFonts(wasm, { cjkFont: false }, page("granted"))).toBeUndefined();
   });
 });

@@ -66,9 +66,9 @@ export async function cjkFonts(cjkFont, page = globalThis) {
   return [await fontBytes(cjkFont ?? NOTO_SANS_JP, page.fetch?.bind(page) ?? fetch)];
 }
 
-/** Add the page's `fonts` now, and ask for the Japanese fallback when the
- * editor first needs it. `wasm` has the editor's addFont and onMissingFont;
- * failures go to `onError`. */
+/** Add the page's `fonts` to the editor (`wasm.addFont`) now, and return the
+ * callback the editor calls when it first needs the Japanese fallback, or
+ * undefined for none. Failures go to `onError`. */
 export async function loadFonts(wasm, options = {}, page = globalThis) {
   const onError = options.onError ?? ((error) => console.error(error));
   const add = (bytes) => {
@@ -86,13 +86,10 @@ export async function loadFonts(wasm, options = {}, page = globalThis) {
     if (result.status === "fulfilled") add(result.value);
     else onError(result.reason);
   }
-  wasm.onMissingFont(
-    options.cjkFont === false
-      ? undefined
-      : () =>
-          cjkFonts(options.cjkFont, page).then(
-            (fonts) => fonts.forEach(add),
-            (error) => onError(error),
-          ),
-  );
+  if (options.cjkFont === false) return undefined;
+  return () =>
+    cjkFonts(options.cjkFont, page).then(
+      (fonts) => fonts.forEach(add),
+      (error) => onError(error),
+    );
 }

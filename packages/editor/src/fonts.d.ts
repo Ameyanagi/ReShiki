@@ -21,13 +21,10 @@ export function systemCjkFonts(page?: FontPage): Promise<Uint8Array[]>;
  * JP by default) downloaded; nothing when it is false. */
 export function cjkFonts(cjkFont?: MountOptions["cjkFont"], page?: FontPage): Promise<Uint8Array[]>;
 
-/** Add `options.fonts` to the editor and ask for the Japanese fallback when it
- * first needs one. */
+/** Add `options.fonts` to the editor, and return the callback that loads the
+ * Japanese fallback when the editor first needs one (undefined for none). */
 export function loadFonts(
-  wasm: {
-    addFont(bytes: Uint8Array): number;
-    onMissingFont(callback?: () => void): void;
-  },
+  wasm: { addFont(bytes: Uint8Array): number },
   options?: Pick<MountOptions, "fonts" | "cjkFont" | "onError">,
   page?: FontPage,
-): Promise<void>;
+): Promise<(() => Promise<void>) | undefined>;

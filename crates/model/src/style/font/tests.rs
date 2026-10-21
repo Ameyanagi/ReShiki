@@ -53,6 +53,13 @@ fn added_fonts_join_measurement_and_export() {
     assert_eq!(added_fonts(before).len(), 1);
     let family = "ReShiki Font Export Fixture";
     assert!(font_families().contains(&family));
+    // Labels whose font lacks a glyph look it up there last.
+    let fonts = crate::style::fonts();
+    let order: Vec<_> = crate::style::fallback_families("Arial", &fonts).collect();
+    assert_eq!(order.first(), Some(&"Arial"));
+    assert!(order.contains(&family));
+    assert!(order.ends_with(&fonts.added));
+    drop(fonts);
     // Export loads its own database; it gets the added font too.
     let mut db = resvg::usvg::fontdb::Database::new();
     load_fonts(&mut db);

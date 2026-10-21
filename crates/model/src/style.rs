@@ -104,13 +104,20 @@ impl DrawingStyle {
 struct Fonts {
     db: resvg::usvg::fontdb::Database,
     names: &'static [&'static str],
+    /// Families of the fonts added at runtime, searched after the usual
+    /// fallbacks for glyphs a label's own font lacks.
+    added: Vec<&'static str>,
 }
 
 static FONTS: LazyLock<RwLock<Fonts>> = LazyLock::new(|| {
     let mut db = resvg::usvg::fontdb::Database::new();
     load_fonts(&mut db);
     let names = family_names(&db);
-    RwLock::new(Fonts { db, names })
+    RwLock::new(Fonts {
+        db,
+        names,
+        added: Vec::new(),
+    })
 });
 
 fn fonts() -> RwLockReadGuard<'static, Fonts> {
@@ -138,15 +145,27 @@ pub fn load_fonts(db: &mut resvg::usvg::fontdb::Database) {
 pub fn add_font(bytes: Vec<u8>) -> Result<usize, String> {
     let source = resvg::usvg::fontdb::Source::Binary(std::sync::Arc::new(bytes));
     let mut fonts = FONTS.write().unwrap_or_else(PoisonError::into_inner);
-    let faces = fonts.db.load_font_source(source.clone()).len();
-    if faces == 0 {
+    let ids = fonts.db.load_font_source(source.clone());
+    if ids.is_empty() {
         return Err("Not a TrueType or OpenType font".into());
     }
     fonts.names = family_names(&fonts.db);
+    for id in &ids {
+        let families = fonts.db.face(*id).map(|face| face.families.clone());
+        for (family, _) in families.unwrap_or_default() {
+            let name = fonts.names.iter().find(|name| **name == family).copied();
+            if let Some(name) = name
+                && !fonts.added.contains(&name)
+            {
+                fonts.added.push(name);
+            }
+        }
+    }
     ADDED
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .push(source);
+    let faces = ids.len();
     drop(fonts);
     GLYPHS
         .lock()
@@ -249,6 +268,14 @@ pub fn ui_font_family() -> &'static str {
         .unwrap_or("Arial")
 }
 
+/// The families a label's glyph is looked up in, in order: its own, the
+/// sans-serif fallbacks, then the fonts added at runtime.
+fn fallback_families<'a>(family: &'a str, fonts: &'a Fonts) -> impl Iterator<Item = &'a str> {
+    std::iter::once(family)
+        .chain(SANS_FALLBACKS.iter().copied())
+        .chain(fonts.added.iter().copied())
+}
+
 type GlyphKey = (String, bool, bool, char);
 type GlyphMetrics = (&'static str, f32);
 static GLYPHS: LazyLock<Mutex<HashMap<GlyphKey, GlyphMetrics>>> = LazyLock::new(Default::default);
@@ -264,8 +291,7 @@ pub fn glyph_metrics(c: char, style: &crate::typography::TextStyle) -> GlyphMetr
         return *result;
     }
     let fonts = fonts();
-    let result = std::iter::once(style.family.as_str())
-        .chain(SANS_FALLBACKS.iter().copied())
+    let result = fallback_families(&style.family, &fonts)
         .find_map(|name| {
             let family = fonts.names.iter().find(|n| **n == name).copied()?;
             let id = fonts.db.query(&Query {

@@ -66,13 +66,15 @@ fn js(message: impl std::fmt::Display) -> JsError {
 }
 
 /// Start the editor in `element`, which it fills, showing `data` read as
-/// `format` when given. A page can mount one editor; put further editors in
+/// `format` when given. `on_missing_font` is called once, the first time a
+/// caption has Japanese (CJK) text that no loaded font draws. A page can mount one editor; put further editors in
 /// iframes.
 #[wasm_bindgen]
 pub async fn mount(
     element: web_sys::Element,
     data: Option<Vec<u8>>,
     format: Option<String>,
+    on_missing_font: Option<js_sys::Function>,
 ) -> Result<(), JsError> {
     const TARGET: &str = "reshiki-editor-canvas";
     if HOST.with_borrow(|host| host.mounted) {
@@ -121,7 +123,7 @@ pub async fn mount(
             requests: Some(sender),
             receiver: Some(receiver),
             mounted: true,
-            on_missing_font: host.on_missing_font.take(),
+            on_missing_font,
             ..Host::default()
         }
     });
@@ -214,13 +216,6 @@ pub fn add_font(bytes: Vec<u8>) -> Result<usize, JsError> {
     Ok(faces)
 }
 
-/// Call `callback` once, the first time a caption has Japanese (CJK) text
-/// that no loaded font draws, or stop with none.
-#[wasm_bindgen(js_name = onMissingFont)]
-pub fn on_missing_font(callback: Option<js_sys::Function>) {
-    HOST.with_borrow_mut(|host| host.on_missing_font = callback);
-}
-
 /// Tell the page when `text`, about to be drawn, needs a Japanese font.
 pub(crate) fn text_drawn(text: &str) {
     let cjk = |c: char| {
@@ -253,6 +248,7 @@ pub fn destroy() -> Result<(), JsError> {
     HOST.with_borrow_mut(|host| {
         host.requests = None;
         host.on_change = None;
+        host.on_missing_font = None;
     });
     Ok(())
 }
