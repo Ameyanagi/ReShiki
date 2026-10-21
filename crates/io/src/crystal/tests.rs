@@ -483,3 +483,15 @@ fn skewed_cells_find_every_copy_or_say_why() {
             .contains("Properties")
     );
 }
+
+#[test]
+fn a_crystal_formula_counts_its_atoms_without_chemistry() {
+    let (doc, _) = open("cif", NACL);
+    assert!(crate::models3d::crystal::present(&doc));
+    let all = crate::models3d::crystal::composition(&doc, &[]).unwrap();
+    assert_eq!(all.formula, "Cl4Na4");
+    assert!((all.mass - 4. * 58.443).abs() < 0.05, "{}", all.mass);
+    let (silicon, _) = open("xyz", SILICON);
+    let one = crate::models3d::crystal::composition(&silicon, &[silicon.atoms[0].id]).unwrap();
+    assert_eq!(one.formula, "Si");
+}

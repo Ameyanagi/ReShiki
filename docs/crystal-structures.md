@@ -19,7 +19,9 @@ file…** to insert it into the drawing. These files are read:
 | `.xyz`, `.extxyz` (extended) | `Lattice="…"` and the `species` and `pos` columns of `Properties`                                    |
 
 The structure opens in 3D, facing the cell as crystallographers draw it: _b_
-to the right, _c_ up and _a_ toward you, seen a little from above. Drag inside
+to the right, _c_ up and _a_ toward you, seen a little from above. A skewed
+cell, such as a rhombohedral primitive cell, is tilted further so no axis is
+seen end-on. Drag inside
 the frame to turn it, double-click to come back to that view, and use
 **Properties → 3D model** for **Ball & stick**, **Stick**, **Wireframe** or
 **Space-filling**. **Show as 2D** shows the 2D drawing, laid out as the opening
@@ -46,6 +48,9 @@ view shows the atoms; **Both** puts the model beside it.
   are.
 - **Atoms** are explicit: no hydrogens are added, and a charge in a CIF type
   symbol (`Na1+`, `O2-`) or a PDB charge column stays on the atom.
+- **Properties → Molecular properties** gives the formula and mass of the
+  atoms shown (of the selected atoms, if any) and says that chemical analysis
+  is unavailable, since the bonds come from distances, not chemistry.
 
 ## What is kept
 

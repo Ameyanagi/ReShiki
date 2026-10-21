@@ -293,7 +293,7 @@ const MAX_ATOMS: usize = 100_000;
 /// How far past a lattice vector's end its label sits, as a fraction of it.
 const LABEL_AHEAD: f32 = 0.1;
 /// Room for the labels' text around the cell's bounding sphere.
-const LABEL_ROOM: f32 = 0.08;
+const LABEL_ROOM: f32 = 0.2;
 const MAX_COORDINATE: f32 = 10_000.;
 const GREY: [u8; 3] = [0x99; 3];
 const BOND_RADIUS: f32 = 0.085;
@@ -1406,7 +1406,36 @@ fn crystal_rotation(vectors: [[f32; 3]; 3]) -> [f32; 4] {
         x[2] * y[0] - x[0] * y[2],
         x[0] * y[1] - x[1] * y[0],
     ];
-    tilted([x, y, z], 0.3, -0.45)
+    let basis = [x, y, z];
+    // Each lattice vector's on-screen length as a fraction of its length;
+    // the cell reads as a box only if none is seen end-on.
+    let shown = |q: [f32; 4]| {
+        vectors
+            .iter()
+            .map(|v| {
+                let p = rotate(q, *v);
+                p[0].hypot(p[1]) / length(*v).max(1e-6)
+            })
+            .fold(f32::INFINITY, f32::min)
+    };
+    let standard = tilted(basis, 0.3, -0.45);
+    if shown(standard) >= 0.3 {
+        return standard;
+    }
+    // A skewed cell, such as a rhombohedral primitive cell, can show an
+    // axis end-on from there: take the tilt that shows all three best,
+    // still from above, with c pointing up.
+    let mut best = (shown(standard), standard);
+    for i in 0..=12 {
+        for j in -12..=12 {
+            let q = tilted(basis, 0.05 * f64::from(i), 0.1 * f64::from(j));
+            let score = shown(q);
+            if score > best.0 && rotate(q, c.map(|v| v as f32))[1] > 0. {
+                best = (score, q);
+            }
+        }
+    }
+    best.1
 }
 
 /// The rotation taking the orthonormal rows of `basis` to screen x, y and z,
@@ -2171,9 +2200,24 @@ fn cell_ink(
         italic: true,
         ..Default::default()
     };
+    // Each label sits just past its axis's end on screen, along the axis, or
+    // away from the cell's centre where the axis is seen end-on.
+    let origin = corner([0; 3]).map(|o| view.project(o).0);
+    let middle = view.project(place(cell.center())).0;
+    let unit = |from: Point, to: Point| {
+        let (dx, dy) = (to.x - from.x, to.y - from.y);
+        let n = dx.hypot(dy);
+        (n > size).then(|| (dx / n, dy / n))
+    };
     for (name, v) in ["a", "b", "c"].into_iter().zip(cell.vectors) {
-        let at = view.project(place(v.map(|x| x * (1. + LABEL_AHEAD)))).0;
+        let end = view.project(place(v)).0;
         let w = crate::style::styled_text_width(name, size, &style);
+        let (dx, dy) = origin
+            .and_then(|o| unit(o, end))
+            .or_else(|| unit(middle, end))
+            .unwrap_or((0., -1.));
+        let reach = 0.5 * size + 0.5 * w.max(size * 0.6);
+        let at = end.offset(dx * reach, dy * reach);
         ahead.push(Primitive::Text {
             position: at.offset(-w / 2., -size * 0.6),
             text: name.into(),

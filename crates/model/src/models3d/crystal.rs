@@ -138,3 +138,40 @@ pub(super) fn valid(cell: Option<&Cell>, sites: &[Site], ids: &HashSet<u64>) -> 
                 && s.adp.is_none_or(|a| a.valid())
         })
 }
+
+/// Whether `doc` holds a crystal: a model with a unit cell.
+pub fn present(doc: &crate::document::Document) -> bool {
+    doc.models.iter().any(|m| m.cell.is_some())
+}
+
+/// What the Properties panel says of a crystal, whose bonds come from
+/// distances, not chemistry.
+pub const ANALYSIS_NOTICE: &str = "Crystal structure: bonds come from atom distances, so chemical analysis is unavailable. The formula counts the atoms shown, with charges as read.";
+
+/// The formula and mass of the atoms `ids` of `doc` (all of them when
+/// empty), counted as drawn, without perceiving bonds or hydrogens.
+pub fn composition(
+    doc: &crate::document::Document,
+    ids: &[u64],
+) -> Result<crate::chemistry::Properties, String> {
+    let facts = doc
+        .atoms
+        .iter()
+        .filter(|a| ids.is_empty() || ids.contains(&a.id))
+        .map(|a| {
+            let number = crate::editing::ELEMENTS
+                .iter()
+                .position(|e| *e == a.element)
+                .and_then(|i| u8::try_from(i + 1).ok())
+                .ok_or_else(|| format!("No formula for element {}", a.element))?;
+            Ok(crate::chemistry::AtomFacts {
+                atomic_number: number,
+                isotope: u16::try_from(a.isotope).unwrap_or(0),
+                charge: i8::try_from(a.charge).unwrap_or(0),
+                hydrogens: 0,
+                radical_electrons: 0,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    crate::chemistry::properties(&facts)
+}
