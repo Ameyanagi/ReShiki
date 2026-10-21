@@ -106,6 +106,10 @@ fn format_name(format: &str) -> &'static str {
         "rxn" => "RXN",
         "mol" => "MOL",
         "cdxml" => "CDXML",
+        "cif" => "CIF",
+        "pdb" => "PDB",
+        "poscar" => "POSCAR",
+        "xyz" => "XYZ",
         "rsmi" => "Reaction SMILES",
         _ => "SMILES",
     }
@@ -138,6 +142,10 @@ fn extension(path: &Path) -> String {
 fn kind(path: &Path) -> Kind {
     let extension = extension(path);
     if let Some((_, format)) = STRUCTURES.iter().find(|(e, _)| *e == extension) {
+        Kind::Structure(format)
+    } else if let Some(format) =
+        reshiki::compatibility::file_format(path).filter(|f| reshiki::crystal::is_crystal_format(f))
+    {
         Kind::Structure(format)
     } else if PICTURES.contains(&extension.as_str()) {
         Kind::Picture
@@ -257,6 +265,7 @@ async fn choose() -> Vec<PathBuf> {
     let extensions: Vec<_> = STRUCTURES
         .iter()
         .map(|(e, _)| *e)
+        .chain(reshiki::crystal::EXTENSIONS.iter().copied())
         .chain(PICTURES.iter().copied())
         .collect();
     rfd::AsyncFileDialog::new()
@@ -650,7 +659,7 @@ impl App {
             hover_hint(
                 field("import-choose-file", "Choose file…")
                     .on_press(Message::Imports(Action::Choose)),
-                "MOL, RXN, CDXML, CDX, SMILES or pictures · Several files go side by side",
+                "MOL, RXN, CDXML, CDX, SMILES, CIF, PDB, POSCAR, XYZ or pictures · Several files go side by side",
                 tooltip::Position::Top,
             ),
             field("import-paste-picture", "Paste picture").on_press_maybe(
