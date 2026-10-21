@@ -8,11 +8,16 @@
 //! the atoms carries it along. A chemical edit to the molecule drops the model
 //! instead of repairing it; a molecule shown in 3D then shows its 2D drawing.
 //! Chemical formats (MOL, CDX/CDXML, SMILES) keep the 2D atoms and omit models.
+//!
+//! A model read from a crystal file (#417) may hold several molecules, or an
+//! extended network, with its unit cell: see [`crystal`].
+pub mod crystal;
 use crate::{
     depth_appearance::Scope,
     document::{Atom, AtomStereo, Bond, Document, Point},
     scene::{Outline, Primitive},
 };
+pub use crystal::{Adp, Cell, Crossing, Site};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -129,10 +134,17 @@ pub struct Hydrogen {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Model3d {
     pub display: Display,
-    /// Every atom of one connected molecule.
+    /// Every atom of one connected molecule, or of several whole molecules
+    /// in a model read from a crystal or XYZ file.
     pub atoms: Vec<Placed>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hydrogens: Vec<Hydrogen>,
+    /// The unit cell of a crystal or periodic structure.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cell: Option<Cell>,
+    /// Labels and displacement parameters of atoms read from a file.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sites: Vec<Site>,
     /// View rotation as a unit quaternion `[w, x, y, z]`.
     pub rotation: [f32; 4],
     /// Frame centre minus the molecule's 2D centre, in drawing units.
@@ -278,6 +290,10 @@ fn perspective() -> f32 {
 }
 
 const MAX_ATOMS: usize = 100_000;
+/// How far past a lattice vector's end its label sits, as a fraction of it.
+const LABEL_AHEAD: f32 = 0.1;
+/// Room for the labels' text around the cell's bounding sphere.
+const LABEL_ROOM: f32 = 0.08;
 const MAX_COORDINATE: f32 = 10_000.;
 const GREY: [u8; 3] = [0x99; 3];
 const BOND_RADIUS: f32 = 0.085;
@@ -374,6 +390,8 @@ impl Model3d {
             display: Display::TwoD,
             atoms,
             hydrogens,
+            cell: None,
+            sites: vec![],
             rotation: [1., 0., 0., 0.],
             offset: Point::default(),
             size: 1.,
@@ -388,17 +406,74 @@ impl Model3d {
             drawn: None,
             morph: None,
         };
-        model.rotation = model.initial_view(doc);
-        let points = model.points(doc).unwrap_or_default();
-        // The model's ångström scale matches the drawing: 1.5 Å per bond length.
-        let units = doc.drawing_style.bond_length_world / 1.5;
-        model.size =
-            (reach(&points, heavy_center(&points), Style::BallStick) * units / 0.44).max(1.);
+        model.fit(doc);
         model
     }
 
-    /// The opening view, facing the broadest side; double-click restores it.
+    /// This model of the atoms read from a crystal or XYZ file, in `cell`
+    /// when it is periodic, with what the file gave for each atom's site.
+    pub fn with_cell(mut self, doc: &Document, cell: Option<Cell>, sites: Vec<Site>) -> Self {
+        self.cell = cell;
+        self.sites = sites;
+        self.fit(doc);
+        self
+    }
+
+    /// Face the opening view and size the frame at the drawing's scale.
+    fn fit(&mut self, doc: &Document) {
+        self.rotation = self.initial_view(doc);
+        let points = self.points(doc).unwrap_or_default();
+        // The model's ångström scale matches the drawing: 1.5 Å per bond length.
+        let units = doc.drawing_style.bond_length_world / 1.5;
+        let center = self.center(&points);
+        let reach = reach(&points, center, Style::BallStick).max(self.cell_reach(center));
+        self.size = (reach * units / 0.44).max(1.);
+    }
+
+    /// The centre the model turns about: its cell's, or its heavy atoms'.
+    fn center(&self, points: &[(&str, [f32; 3])]) -> [f32; 3] {
+        self.cell
+            .as_ref()
+            .map_or_else(|| heavy_center(points), Cell::center)
+    }
+
+    /// The farthest the cell box and its axis labels reach from `center`,
+    /// in ångström; 0 without a cell.
+    fn cell_reach(&self, center: [f32; 3]) -> f32 {
+        self.cell.as_ref().map_or(0., |cell| {
+            let labels = cell.vectors.map(|v| v.map(|x| x * (1. + LABEL_AHEAD)));
+            let box_reach = cell
+                .corners()
+                .iter()
+                .chain(&labels)
+                .map(|p| length(sub(*p, center)))
+                .fold(0., f32::max)
+                * (1. + LABEL_ROOM);
+            // The half-bonds leaving the cell end halfway to the next cell.
+            let at = |id: u64| self.atoms.iter().find(|a| a.id == id).map(|a| a.xyz);
+            let halves = cell
+                .crossing
+                .iter()
+                .filter_map(|c| {
+                    let (a, b) = (at(c.a)?, at(c.b)?);
+                    let far = zip3(b, cell.translation(c.image), |p, t| p + t);
+                    let middle = zip3(a, far, |p, q| (p + q) / 2.);
+                    // b's half runs from b by the same vector the other way.
+                    let other = zip3(b, sub(middle, a), |p, h| p - h);
+                    Some(length(sub(middle, center)).max(length(sub(other, center))))
+                })
+                .fold(0., f32::max);
+            box_reach.max(halves)
+        })
+    }
+
+    /// The opening view, facing the broadest side, or for a crystal the
+    /// cell with b to the right, c up and a toward the viewer; double-click
+    /// restores it.
     pub fn initial_view(&self, doc: &Document) -> [f32; 4] {
+        if let Some(cell) = &self.cell {
+            return crystal_rotation(cell.vectors);
+        }
         let points = self.points(doc).unwrap_or_default();
         let center = heavy_center(&points);
         let heavy: Vec<_> = points
@@ -442,12 +517,13 @@ impl Model3d {
                     Hydrogens::None => false,
                 }
         };
+        let crossing = self.cell.iter().flat_map(|c| &c.crossing);
         let atoms = self.atoms.iter().map(|p| {
             let hydrogen = doc.atom(p.id).is_some_and(|a| a.element == "H");
             keep(hydrogen, &|| {
-                doc.bonds
-                    .iter()
-                    .any(|b| (b.a == p.id && polar(b.b)) || (b.b == p.id && polar(b.a)))
+                let bonded = |a: u64, b: u64| (a == p.id && polar(b)) || (b == p.id && polar(a));
+                doc.bonds.iter().any(|b| bonded(b.a, b.b))
+                    || crossing.clone().any(|c| bonded(c.a, c.b))
             })
         });
         let hydrogens = self
@@ -470,6 +546,13 @@ impl Model3d {
         }
         for h in &mut self.hydrogens {
             h.parent = *mapping.get(&h.parent)?;
+        }
+        for c in self.cell.iter_mut().flat_map(|c| &mut c.crossing) {
+            c.a = *mapping.get(&c.a)?;
+            c.b = *mapping.get(&c.b)?;
+        }
+        for site in &mut self.sites {
+            site.id = *mapping.get(&site.id)?;
         }
         if let Some(drawn) = &mut self.drawn {
             drawn.remap(mapping)?;
@@ -547,6 +630,8 @@ pub fn drawn(doc: &Document) -> std::borrow::Cow<'_, Document> {
 /// The model's projection: rotated ångström points about the heavy-atom
 /// centre, drawn around `origin` at `scale` drawing units per ångström.
 struct View<'a> {
+    /// The model point the view turns about.
+    center: [f32; 3],
     symbols: Vec<&'a str>,
     rotated: Vec<[f32; 3]>,
     /// Whether each point is drawn, see [`Model3d::shown`].
@@ -565,15 +650,17 @@ impl View<'_> {
         let center = layout_center(doc, model)?;
         let points = model.points(doc)?;
         let shown = model.shown(doc);
-        let c = heavy_center(&points);
+        let c = model.center(&points);
         let drawn: Vec<_> = points
             .iter()
             .zip(&shown)
             .filter(|(_, shown)| **shown)
             .map(|(p, _)| *p)
             .collect();
-        let reach = reach(&drawn, c, model.style);
+        // The bounding sphere holds the cell and its labels too.
+        let reach = reach(&drawn, c, model.style).max(model.cell_reach(c));
         Some(View {
+            center: c,
             rotated: points
                 .iter()
                 .map(|(_, p)| rotate(model.rotation, sub(*p, c)))
@@ -666,6 +753,18 @@ impl View<'_> {
     }
 }
 
+/// Each atom's place in the model's view as it is turned now, in ångström
+/// about the model's centre: x to the right, y up and z toward the viewer.
+pub fn viewed(doc: &Document, model: &Model3d) -> Vec<(u64, [f32; 3])> {
+    let points = model.points(doc).unwrap_or_default();
+    let center = model.center(&points);
+    model
+        .atoms
+        .iter()
+        .map(|a| (a.id, rotate(model.rotation, sub(a.xyz, center))))
+        .collect()
+}
+
 /// The frame's top-left and bottom-right corners in drawing units: a square
 /// that holds the model in every rotation, or `None` while an atom is missing.
 pub fn frame(doc: &Document, model: &Model3d) -> Option<(Point, Point)> {
@@ -731,9 +830,30 @@ pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
     model.display = display;
     model.offset = offset;
     if changed {
-        doc.require_version(crate::document::MODELS_3D);
+        require_version(doc);
     }
     changed
+}
+
+/// The document version a drawing's models need: none without models,
+/// [`crate::document::CRYSTALS`] for a crystal's cell or atom sites, else
+/// [`crate::document::MODELS_3D`].
+pub fn required_version(models: &[Model3d]) -> Option<u32> {
+    let crystal = models
+        .iter()
+        .any(|m| m.cell.is_some() || !m.sites.is_empty());
+    match (models.is_empty(), crystal) {
+        (true, _) => None,
+        (false, true) => Some(crate::document::CRYSTALS),
+        (false, false) => Some(crate::document::MODELS_3D),
+    }
+}
+
+/// Raise `doc` to the version its models need.
+pub fn require_version(doc: &mut Document) {
+    if let Some(version) = required_version(&doc.models) {
+        doc.require_version(version);
+    }
 }
 
 /// Show model `index`'s molecule in its drawn layout again, if it was
@@ -787,7 +907,17 @@ pub fn selected_molecule(doc: &Document, selected: &[u64]) -> Option<Vec<u64>> {
         .into_iter()
         .filter(|id| doc.atom(*id).is_some())
         .collect();
-    let component = crate::molecule_names::component(doc, *atoms.first()?);
+    let first = *atoms.first()?;
+    // A model of several molecules, read from a crystal file, is one.
+    let component = match model_of(doc, first) {
+        Some(model) if model.atoms.len() > 1 => doc
+            .atoms
+            .iter()
+            .map(|a| a.id)
+            .filter(|id| model.contains(*id))
+            .collect(),
+        _ => crate::molecule_names::component(doc, first),
+    };
     atoms
         .iter()
         .all(|id| component.contains(id))
@@ -977,6 +1107,17 @@ pub fn validate(doc: &Document) -> Result<(), String> {
             crate::document::MODELS_3D
         ));
     }
+    if doc.version < crate::document::CRYSTALS
+        && doc
+            .models
+            .iter()
+            .any(|m| m.cell.is_some() || !m.sites.is_empty())
+    {
+        return Err(format!(
+            "Crystal structures need document version {} or later",
+            crate::document::CRYSTALS
+        ));
+    }
     let finite = |p: &[f32; 3]| p.iter().all(|v| v.is_finite() && v.abs() <= MAX_COORDINATE);
     let mut owned = HashSet::new();
     for m in &doc.models {
@@ -1000,6 +1141,7 @@ pub fn validate(doc: &Document) -> Result<(), String> {
             || !(1. ..=1e5).contains(&m.size)
             || !(0. ..=1.).contains(&m.depth_fade)
             || !(0. ..=1.).contains(&m.perspective)
+            || !crystal::valid(m.cell.as_ref(), &m.sites, &ids)
             || m.drawn.as_ref().is_some_and(|d| {
                 d.atoms.len() != ids.len()
                     || d.at.is_some_and(|p| !p.is_finite())
@@ -1022,15 +1164,16 @@ pub fn prune(doc: &mut Document) {
         .retain(|m| m.atoms.iter().all(|a| present.contains(&a.id)));
 }
 
-/// Whether the model's atoms are exactly one whole connected molecule.
+/// Whether the model's atoms are whole molecules: one connected molecule, or
+/// several read from a crystal or XYZ file, with no bond leaving them.
 fn whole(doc: &Document, model: &Model3d) -> bool {
     let ids = model.ids();
-    let component = model
-        .atoms
-        .first()
-        .map(|a| crate::molecule_names::component(doc, a.id))
-        .unwrap_or_default();
-    component.len() == ids.len() && component.iter().all(|id| ids.contains(id))
+    if ids.is_empty() || ids.iter().any(|id| doc.atom(*id).is_none()) {
+        return false;
+    }
+    doc.bonds
+        .iter()
+        .all(|b| ids.contains(&b.a) == ids.contains(&b.b))
 }
 
 /// Drop a loaded file's models that are not one whole molecule. Unlike
@@ -1241,9 +1384,38 @@ pub fn initial_rotation(points: &[[f32; 3]]) -> [f32; 4] {
     };
     let x = principal([1., 0.3, 0.2], None);
     let y = principal([0.2, 1., 0.3], Some(x)).map(|v| -v);
-    let basis = [x, y, cross(x, y)];
-    let (sx, cx) = (-0.35_f64).sin_cos();
-    let (sy, cy) = 0.3_f64.sin_cos();
+    tilted([x, y, cross(x, y)], -0.35, 0.3)
+}
+
+/// A crystal's opening view, as crystallographers draw a cell: b to the
+/// right, c up and a toward the viewer, seen a little from above and from the
+/// right, so the origin is at the back.
+fn crystal_rotation(vectors: [[f32; 3]; 3]) -> [f32; 4] {
+    type V = [f64; 3];
+    let dot = |a: V, b: V| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    let unit = |v: V| {
+        let n = dot(v, v).sqrt().max(1e-300);
+        v.map(|x| x / n)
+    };
+    let [_, b, c] = vectors.map(|v| v.map(f64::from));
+    let x = unit(b);
+    let d = dot(c, x);
+    let y = unit(zip3(c, x, |c, x| c - d * x));
+    let z = [
+        x[1] * y[2] - x[2] * y[1],
+        x[2] * y[0] - x[0] * y[2],
+        x[0] * y[1] - x[1] * y[0],
+    ];
+    tilted([x, y, z], 0.3, -0.45)
+}
+
+/// The rotation taking the orthonormal rows of `basis` to screen x, y and z,
+/// then tilted by `about_x` and `about_y` radians so the view reads as 3D.
+fn tilted(basis: [[f64; 3]; 3], about_x: f64, about_y: f64) -> [f32; 4] {
+    type V = [f64; 3];
+    let dot = |a: V, b: V| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    let (sx, cx) = about_x.sin_cos();
+    let (sy, cy) = about_y.sin_cos();
     let rx = [[1., 0., 0.], [0., cx, -sx], [0., sx, cx]];
     let ry = [[cy, 0., sy], [0., 1., 0.], [-sy, 0., cy]];
     let mul = |a: [V; 3], b: [V; 3]| {
@@ -1568,6 +1740,8 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         /// The half-bond from a point toward another.
         Bond(usize, usize),
         Atom(usize),
+        /// A dashed half-bond leaving the cell from a point, with its end.
+        Crossing(usize, [f32; 3]),
     }
     // Each half-bond sorts at its own depth but never after its atom, so the
     // ball covers the half that points toward the viewer yet a half-bond
@@ -1604,6 +1778,12 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     } else {
         bonds.iter().flat_map(|&(a, b)| [a, b]).collect()
     };
+    let crossing = crossing_halves(&view, model);
+    for &(i, end) in &crossing {
+        let ps = *rotated.get(i)?;
+        let z = (ps[2] + end[2]) / 2. - 0.05;
+        items.push((z.min(ps[2]), 0, z, Item::Crossing(i, end)));
+    }
     items.extend(
         view.balls()
             .filter(|(i, ..)| {
@@ -1622,7 +1802,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         .enumerate()
         .filter_map(|(n, (.., item))| match item {
             Item::Bond(s, o) => Some(((*s, *o), n)),
-            Item::Atom(_) => None,
+            Item::Atom(_) | Item::Crossing(..) => None,
         })
         .collect();
     let shade = |base: [f32; 3], stops: &[(f32, [f32; 3], f32)]| {
@@ -1640,7 +1820,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     let mut rims: (Vec<Vec<Point>>, Vec<Vec<Point>>) = Default::default();
     let mut drawn = vec![];
     for (n, (_, _, z, item)) in items.into_iter().enumerate() {
-        let (Item::Bond(i, _) | Item::Atom(i)) = item;
+        let (Item::Bond(i, _) | Item::Atom(i) | Item::Crossing(i, _)) = item;
         let fading = view.symbols.get(i) == Some(&"H") && grown < 1.;
         let symbol = *view.symbols.get(i)?;
         let base = mix(
@@ -1650,6 +1830,25 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         );
         let wire = rgb(mix(base, BLACK, if symbol == "C" { 0.35 } else { 0.1 }));
         let primitive = match item {
+            Item::Crossing(i, end) => {
+                let (start, f) = view.project(*rotated.get(i)?);
+                let (end, _) = view.project(end);
+                let width = match style {
+                    Style::Wireframe => view.wire,
+                    _ => 1.2 * BOND_RADIUS * view.scale * f,
+                };
+                Primitive::Wire {
+                    from: start,
+                    to: end,
+                    width,
+                    color: if style == Style::Wireframe {
+                        wire
+                    } else {
+                        rgb(base)
+                    },
+                    dash: width.max(line * 2.) * 1.5,
+                }
+            }
             Item::Atom(i) if style == Style::Wireframe => {
                 let center = view.project(*rotated.get(i)?).0;
                 Primitive::Sphere {
@@ -1709,6 +1908,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                         to: e,
                         width: half * 2.,
                         color: wire,
+                        dash: 0.,
                     }
                 } else {
                     let (dx, dy) = (e.x - a.x, e.y - a.y);
@@ -1801,6 +2001,16 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             primitive
         }
     };
+    // The cell's hidden edges lie behind the model and its front edges,
+    // origin and labels in front; they fade in with the hydrogens.
+    let ink = float(doc.canvas_theme.color([0; 3]));
+    let (behind, front) = model
+        .cell
+        .as_ref()
+        .map(|cell| cell_ink(&view, model, cell, ink, float(backdrop)))
+        .unwrap_or_default();
+    let cell_fading = grown < 1.;
+    out.extend(behind.into_iter().map(|p| fade_in(cell_fading, p)));
     if let Some(outline) = outline(line * 2.) {
         for (polygons, fading) in [(rims.0, false), (rims.1, true)] {
             if !polygons.is_empty() {
@@ -1809,7 +2019,170 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         }
     }
     out.extend(drawn.into_iter().map(|(fading, p)| fade_in(fading, p)));
+    out.extend(front.into_iter().map(|p| fade_in(cell_fading, p)));
     Some(())
+}
+
+/// Each bond leaving the cell as the point it starts from and the rotated
+/// middle of the bond to the partner's copy in the next cell, both ends shown;
+/// none in space-filling.
+fn crossing_halves(view: &View, model: &Model3d) -> Vec<(usize, [f32; 3])> {
+    let Some(cell) = model
+        .cell
+        .as_ref()
+        .filter(|_| model.style != Style::SpaceFilling)
+    else {
+        return vec![];
+    };
+    let index: HashMap<_, _> = model
+        .atoms
+        .iter()
+        .enumerate()
+        .map(|(i, a)| (a.id, i))
+        .collect();
+    let shown = |i: usize| view.shown.get(i) == Some(&true);
+    let mut halves = vec![];
+    for c in &cell.crossing {
+        let (Some(&ia), Some(&ib)) = (index.get(&c.a), index.get(&c.b)) else {
+            continue;
+        };
+        let (Some(pa), Some(pb), Some(&ra), Some(&rb)) = (
+            model.atoms.get(ia),
+            model.atoms.get(ib),
+            view.rotated.get(ia),
+            view.rotated.get(ib),
+        ) else {
+            continue;
+        };
+        if !shown(ia) || !shown(ib) {
+            continue;
+        }
+        let shift = cell.translation(c.image);
+        // From a toward b's copy, and from b toward a's copy the other way.
+        let ab = sub(zip3(pb.xyz, shift, |p, t| p + t), pa.xyz);
+        let half = rotate(model.rotation, ab.map(|v| v / 2.));
+        halves.push((ia, zip3(ra, half, |p, h| p + h)));
+        halves.push((ib, zip3(rb, half, |p, h| p - h)));
+    }
+    halves
+}
+
+/// The cell box: its hidden edges dashed, to draw behind the model, and its
+/// front edges, the origin marker and the a, b and c labels, to draw in front,
+/// in the theme's ink softened toward the backdrop.
+fn cell_ink(
+    view: &View,
+    model: &Model3d,
+    cell: &Cell,
+    ink: [f32; 3],
+    backdrop: [f32; 3],
+) -> (Vec<Primitive>, Vec<Primitive>) {
+    let turn = |v: [f32; 3]| rotate(model.rotation, v);
+    let place = |p: [f32; 3]| turn(sub(p, view.center));
+    let corners = cell.corners().map(place);
+    let corner = |bits: [usize; 3]| corners.get(bits[0] | bits[1] << 1 | bits[2] << 2).copied();
+    let vectors = cell.vectors.map(turn);
+    let cross = |a: [f32; 3], b: [f32; 3]| {
+        [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ]
+    };
+    let dot = |a: [f32; 3], b: [f32; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    // Whether the face at side `s` of axis `k` faces the viewer.
+    let front = |k: usize, s: usize| -> bool {
+        let (k1, k2) = ((k + 1) % 3, (k + 2) % 3);
+        let (Some(&v), Some(&v1), Some(&v2)) = (vectors.get(k), vectors.get(k1), vectors.get(k2))
+        else {
+            return true;
+        };
+        let mut normal = cross(v1, v2);
+        // Outward: along +v on the far side, against it at the origin's.
+        if (dot(normal, v) < 0.) == (s == 1) {
+            normal = normal.map(|x| -x);
+        }
+        let mut bits = [0; 3];
+        if let Some(b) = bits.get_mut(k) {
+            *b = s;
+        }
+        let on = corner(bits).unwrap_or_default();
+        let toward = if view.perspective > 0. {
+            sub([0., 0., view.camera], on)
+        } else {
+            [0., 0., 1.]
+        };
+        dot(normal, toward) > 0.
+    };
+    let width = (model.size / 220.).clamp(1., 3.);
+    let edge = rgb(mix(ink, backdrop, 0.45));
+    let hidden = rgb(mix(ink, backdrop, 0.6));
+    let (mut behind, mut ahead) = (vec![], vec![]);
+    for k in 0..3 {
+        let (k1, k2) = ((k + 1) % 3, (k + 2) % 3);
+        for (i, j) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+            let mut bits = [0; 3];
+            for (axis, value) in [(k1, i), (k2, j)] {
+                if let Some(b) = bits.get_mut(axis) {
+                    *b = value;
+                }
+            }
+            let Some(from) = corner(bits) else { continue };
+            if let Some(b) = bits.get_mut(k) {
+                *b = 1;
+            }
+            let Some(to) = corner(bits) else { continue };
+            let (from, to) = (view.project(from).0, view.project(to).0);
+            if front(k1, i) || front(k2, j) {
+                ahead.push(Primitive::Wire {
+                    from,
+                    to,
+                    width,
+                    color: edge,
+                    dash: 0.,
+                });
+            } else {
+                behind.push(Primitive::Wire {
+                    from,
+                    to,
+                    width,
+                    color: hidden,
+                    dash: width * 3.,
+                });
+            }
+        }
+    }
+    let label = rgb(mix(ink, backdrop, 0.15));
+    // Text colours are given for a light canvas; the canvas and exports
+    // turn them for a dark one, as they do atom labels.
+    let text = rgb(mix(BLACK, WHITE, 0.15));
+    if let Some(origin) = corner([0; 3]) {
+        let center = view.project(origin).0;
+        ahead.push(Primitive::Sphere {
+            center,
+            radius: width * 1.8,
+            focal: center,
+            stops: vec![(0., label), (1., label)],
+            outline: None,
+        });
+    }
+    let size = (model.size * 0.06).clamp(8., 60.);
+    let style = crate::typography::TextStyle {
+        italic: true,
+        ..Default::default()
+    };
+    for (name, v) in ["a", "b", "c"].into_iter().zip(cell.vectors) {
+        let at = view.project(place(v.map(|x| x * (1. + LABEL_AHEAD)))).0;
+        let w = crate::style::styled_text_width(name, size, &style);
+        ahead.push(Primitive::Text {
+            position: at.offset(-w / 2., -size * 0.6),
+            text: name.into(),
+            size,
+            color: text,
+            style: style.clone(),
+        });
+    }
+    (behind, ahead)
 }
 
 #[cfg(test)]

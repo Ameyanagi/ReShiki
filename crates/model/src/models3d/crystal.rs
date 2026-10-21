@@ -1,0 +1,140 @@
+//! Crystal and periodic structures (#417): the unit cell a 3D model is drawn
+//! in, the bonds that leave it and what each atom's site keeps from the file.
+//!
+//! The model's atom positions are Cartesian ångström in the lattice's frame,
+//! with the cell's origin at (0, 0, 0), so fractional coordinates are the
+//! positions in the basis of [`Cell::vectors`]. A neighbouring cell's copy of
+//! an atom is its position plus whole lattice vectors, which is all later
+//! repeats and ghost copies need.
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+
+/// The unit cell of a model.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Cell {
+    /// The lattice vectors a, b and c in ångström.
+    pub vectors: [[f32; 3]; 3],
+    /// Bonds that leave the cell in an extended network, each drawn from its
+    /// atom as a dashed half-bond toward the partner's copy in the next cell.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub crossing: Vec<Crossing>,
+}
+
+/// A bond from atom `a` in the cell to the copy of atom `b` in the cell
+/// `image` lattice vectors away. Stored once, with `a < b`, or for an atom
+/// bonded to its own copy, with the first nonzero `image` component positive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Crossing {
+    pub a: u64,
+    pub b: u64,
+    pub image: [i8; 3],
+}
+
+/// What an atom's site keeps from a crystal file besides its element and
+/// place: its label and its displacement parameters, for ORTEP ellipsoids.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Site {
+    pub id: u64,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adp: Option<Adp>,
+}
+
+/// Atomic displacement parameters in Å², as U (B values are converted).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Adp {
+    /// U_iso or U_equiv.
+    Iso(f32),
+    /// U11, U22, U33, U12, U13, U23 as CIF gives them, in the basis of the
+    /// reciprocal-length-scaled lattice vectors.
+    Aniso([f32; 6]),
+}
+
+/// Most lattice vectors' length and the farthest an ADP may reach.
+const MAX_LENGTH: f32 = 1_000.;
+const MAX_U: f32 = 10.;
+const MAX_LABEL: usize = 64;
+
+impl Cell {
+    /// The cell's eight corners, corner `i` at `(i & 1) a + (i >> 1 & 1) b +
+    /// (i >> 2 & 1) c`.
+    pub fn corners(&self) -> [[f32; 3]; 8] {
+        std::array::from_fn(|i| self.at([i & 1, (i >> 1) & 1, (i >> 2) & 1].map(|v| v as f32)))
+    }
+
+    /// The point at fractional coordinates `f`.
+    pub fn at(&self, f: [f32; 3]) -> [f32; 3] {
+        let [a, b, c] = self.vectors;
+        let [x, y, z] = f;
+        super::zip3(
+            super::zip3(a.map(|v| v * x), b.map(|v| v * y), |p, q| p + q),
+            c,
+            |p, v| p + v * z,
+        )
+    }
+
+    /// The centre of the cell.
+    pub fn center(&self) -> [f32; 3] {
+        self.at([0.5; 3])
+    }
+
+    /// The vector of `image` lattice translations.
+    pub fn translation(&self, image: [i8; 3]) -> [f32; 3] {
+        self.at(image.map(f32::from))
+    }
+
+    /// Signed volume in Å³; positive for a right-handed cell.
+    pub fn volume(&self) -> f32 {
+        let [a, b, c] = self.vectors;
+        let cross = [
+            b[1] * c[2] - b[2] * c[1],
+            b[2] * c[0] - b[0] * c[2],
+            b[0] * c[1] - b[1] * c[0],
+        ];
+        a[0] * cross[0] + a[1] * cross[1] + a[2] * cross[2]
+    }
+
+    fn valid(&self, ids: &HashSet<u64>) -> bool {
+        let lengths = self
+            .vectors
+            .iter()
+            .all(|v| v.iter().all(|x| x.is_finite()) && super::length(*v) <= MAX_LENGTH);
+        let volume = self.volume();
+        let mut seen = HashSet::new();
+        lengths
+            && volume.is_finite()
+            && volume > 1e-3
+            && self.crossing.len() <= ids.len().saturating_mul(16)
+            && self.crossing.iter().all(|c| {
+                ids.contains(&c.a)
+                    && ids.contains(&c.b)
+                    && c.image != [0; 3]
+                    && c.image.iter().all(|v| (-3..=3).contains(v))
+                    && seen.insert(*c)
+            })
+    }
+}
+
+impl Adp {
+    fn valid(&self) -> bool {
+        match self {
+            Self::Iso(u) => u.is_finite() && (0. ..=MAX_U).contains(u),
+            Self::Aniso(u) => u.iter().all(|v| v.is_finite() && v.abs() <= MAX_U),
+        }
+    }
+}
+
+/// Whether a model's cell and sites are valid for its atoms `ids`.
+pub(super) fn valid(cell: Option<&Cell>, sites: &[Site], ids: &HashSet<u64>) -> bool {
+    let mut seen = HashSet::new();
+    cell.is_none_or(|c| c.valid(ids))
+        && sites.len() <= ids.len()
+        && sites.iter().all(|s| {
+            ids.contains(&s.id)
+                && seen.insert(s.id)
+                && s.label.len() <= MAX_LABEL
+                && s.adp.is_none_or(|a| a.valid())
+        })
+}

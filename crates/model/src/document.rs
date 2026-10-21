@@ -196,6 +196,8 @@ pub const EXACT_COLORS: u32 = 17;
 pub const REAR_OPACITY: u32 = 22;
 /// 3D models of structures; their validation requires this version.
 pub const MODELS_3D: u32 = 28;
+/// Crystal unit cells, bonds leaving the cell and atom sites on 3D models.
+pub const CRYSTALS: u32 = 29;
 
 /// The newest document format this build reads. Saved files are marked with it.
 ///
@@ -222,7 +224,8 @@ pub const MODELS_3D: u32 = 28;
 /// | 26 | Generic structures and coordination joining (#300; 0.12.0). |
 /// | 27 | Condition text attached to reaction arrows. |
 /// | 28 | 3D models of structures (#386). |
-pub const VERSION: u32 = 28;
+/// | 29 | Crystal unit cells and atom sites on 3D models (#417). |
+pub const VERSION: u32 = 29;
 
 fn newer_version(version: u64) -> String {
     format!(
