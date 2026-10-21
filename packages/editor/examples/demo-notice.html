@@ -1,0 +1,65 @@
+<!-- Not a page: scripts/package_web_demo.sh adds this before </body> of the
+     reshiki.com/demo/ page. A dismissible note that the browser editor is a
+     preview of the desktop app. -->
+<style>
+  #demo-notice {
+    position: fixed;
+    bottom: 34px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: calc(100vw - 32px);
+    padding: 6px 6px 6px 12px;
+    border-radius: 6px;
+    background: rgb(32 33 36 / 0.92);
+    color: #fff;
+    font:
+      13px/1.4 system-ui,
+      sans-serif;
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
+  }
+  #demo-notice[hidden] {
+    display: none;
+  }
+  #demo-notice a {
+    color: #ffb59a;
+  }
+  #demo-notice button {
+    border: 0;
+    background: none;
+    color: inherit;
+    font-size: 16px;
+    line-height: 1;
+    padding: 2px 6px;
+    cursor: pointer;
+  }
+</style>
+<div id="demo-notice" role="note" hidden>
+  <span>
+    Browser preview, not the full app. For the complete ReShiki,
+    <a href="https://reshiki.com/guide/install/" target="_blank" rel="noopener"
+      >download the desktop app</a
+    >.
+  </span>
+  <button type="button" aria-label="Close">×</button>
+</div>
+<script>
+  {
+    const key = "reshiki-demo-notice-closed";
+    const notice = document.getElementById("demo-notice");
+    let closed = false;
+    try {
+      closed = localStorage.getItem(key) === "1";
+    } catch {}
+    notice.hidden = closed;
+    notice.querySelector("button").addEventListener("click", () => {
+      notice.remove();
+      try {
+        localStorage.setItem(key, "1");
+      } catch {}
+    });
+  }
+</script>

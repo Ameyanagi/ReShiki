@@ -491,3 +491,72 @@ jobs:
           args=(--latest)
           if [[ "$RELEASE_TAG" == *-* ]]; then args=(--prerelease --latest=false); fi
           gh release create "$RELEASE_TAG" --verify-tag --generate-notes --notes-file notes.md "${args[@]}" *.zip *.tar.gz *.dmg *-setup.exe SHA256SUMS
+  # The browser editor demo on reshiki.com/demo/ follows the latest release.
+  # docs.yml copies the web-demo asset into the site on every deploy.
+  web_demo:
+    needs: publish
+    # always(): publish itself runs after skipped jobs, which would skip this one.
+    if: ${{ always() && github.event_name == 'push' && needs.publish.result == 'success' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    # One release at a time writes the web-demo asset.
+    concurrency:
+      group: web-demo
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.3"
+          python-version: "3.12"
+          enable-cache: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - run: rustup toolchain install 1.99.0 --profile minimal --target wasm32-unknown-unknown
+      - run: rustup default 1.99.0
+      # build_wasm.sh pins wasm-bindgen to Cargo.lock and binaryen to a checked release.
+      - run: scripts/build_wasm.sh --test
+      - run: scripts/package_web_demo.sh
+      - name: Replace the web-demo asset and redeploy the site
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version=$(tar -xzOf dist/reshiki-web-demo.tar.gz demo/VERSION)
+          notes="The browser editor at https://reshiki.com/demo/, built from v$version."
+          if gh release view web-demo --json assets -q '.assets[].name' > "$RUNNER_TEMP/assets"; then
+            # Leave a demo from a newer release in place (semver order).
+            if grep -qx reshiki-web-demo.tar.gz "$RUNNER_TEMP/assets"; then
+              gh release download web-demo -p reshiki-web-demo.tar.gz -D "$RUNNER_TEMP/published"
+              published=$(tar -xzOf "$RUNNER_TEMP/published/reshiki-web-demo.tar.gz" demo/VERSION 2> /dev/null || true)
+              if [[ -n $published ]]; then
+                newest=$(uv run --no-project --python 3.12 python - "$published" "$version" << 'PY'
+          import sys
+
+          def key(version):
+              core, _, pre = version.split("+")[0].partition("-")
+              ids = [(0, int(i), "") if i.isdigit() else (1, 0, i) for i in pre.split(".")] if pre else []
+              return [int(n) for n in core.split(".")], not pre, ids
+
+          print(max(sys.argv[1:], key=key))
+          PY
+                )
+                if [[ $newest != "$version" ]]; then
+                  echo "::notice::The web-demo release has $published, newer than $version; leaving it."
+                  exit 0
+                fi
+              fi
+            fi
+            gh release edit web-demo --notes "$notes"
+          else
+            gh release create web-demo --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "Browser editor demo" --notes "$notes"
+          fi
+          gh release upload web-demo dist/reshiki-web-demo.tar.gz --clobber
+          gh workflow run docs.yml --ref main

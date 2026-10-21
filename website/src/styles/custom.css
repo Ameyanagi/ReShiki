@@ -207,6 +207,19 @@
   text-underline-offset: 0.2em;
 }
 
+.home-preview {
+  max-width: 44rem;
+  margin: 0 0 1.35rem;
+  color: var(--sl-color-gray-2);
+  font-size: 0.8rem;
+}
+
+.home-preview a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
 .home-workspace {
   margin: 0;
   scroll-margin-top: 6rem;
