@@ -11,13 +11,11 @@ Commands that do not fit in the context row are in its **⋯** menu.
 
 ## Show a molecule as a 3D model
 
-Select one molecule and choose **2D**, **3D** or **Both** on the small
-**Show as** bar above the selection, or at the top of **Properties → Structure**
-(also **Show as** in the right-click menu and **Show as 3D model** in the
-command palette). The bar shows while a whole molecule is selected with Select
-or Lasso and hides during any drag; it sits above the selection box and its
-rotation handle, or below them at the top of the window, and when neither fits
-it stays inside the canvas over the selection. **3D** draws the molecule as a
+Select one molecule, right-click it and choose **Show as → 2D drawing**,
+**3D model** or **2D and 3D**, or choose **2D**, **3D** or **Both** in
+**Properties → Structure**, below **Molecular properties** and **Labels &
+chemistry** (also **Show as 3D model** in the command palette). No bar appears
+over the selection. **3D** draws the molecule as a
 model (ball & stick unless **Properties → 3D model** picks another style) in
 place of its drawing, **Both** puts the model one bond length to its right, and
 **2D** shows the drawing again. The first switch generates the conformer in the
@@ -35,8 +33,8 @@ along; while the molecule is shown in 3D, its hidden 2D atoms cannot be picked.
 A chemical edit to the molecule (element, charge, bonds or stereo) removes the
 model.
 
-The model sits in a square frame that holds it in any rotation, so the frame,
-its handles and the bar stay put while the model turns. On the canvas, a model
+The model sits in a square frame that holds it in any rotation, so the frame and
+its handles stay put while the model turns. On the canvas, a model
 that is not selected moves like any object. Once its molecule is selected:
 
 - **drag inside the frame** to rotate it like a trackball (0.01 radian per
