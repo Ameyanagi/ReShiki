@@ -141,7 +141,7 @@ body:has(.color-reference) .sl-markdown-content > .starlight-aside:has(+ .color-
 }
 .color-reference .cr-themes {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 1rem;
   margin-bottom: 1.6rem;
 }

@@ -16,13 +16,27 @@ use std::{collections::BTreeMap, path::Path};
 /// release; set this to false when regenerating for that release.
 const NIGHTLY: bool = false;
 
+/// OKLCH is rounded to six decimals, or more where six would no longer convert
+/// back to the same RGB (sRGB gamut corners such as VESTA's pure blues).
 fn color(rgb: Rgb) -> Value {
     let lch = Oklch::from_rgb(rgb);
-    let rounded = |n: f64| (n * 1_000_000.).round() / 1_000_000.;
-    json!({
-        "rgb": rgb,
-        "oklch": [rounded(lch.l), rounded(lch.c), rounded(lch.h.to_degrees().rem_euclid(360.))]
-    })
+    let degrees = lch.h.to_degrees().rem_euclid(360.);
+    let oklch = (6..=9)
+        .map(|digits| {
+            let scale = 10_f64.powi(digits);
+            [lch.l, lch.c, degrees].map(|n| (n * scale).round() / scale)
+        })
+        .find(|&[l, c, h]| {
+            Oklch {
+                l,
+                c,
+                h: h.to_radians(),
+            }
+            .to_rgb()
+                == rgb
+        })
+        .unwrap_or([lch.l, lch.c, degrees]);
+    json!({ "rgb": rgb, "oklch": oklch })
 }
 
 /// One palette row: its shared OKLCH tone and the eight hues in slot order.
@@ -91,6 +105,8 @@ fn main() -> anyhow::Result<()> {
         "palette_context": "Strong colors bonds, text and strokes; Tint colors fills, ring interiors and highlight boxes. Each row shares one OKLCH lightness and target chroma per theme and canvas. Default hue angles.",
         "sources": [
             "https://jmol.sourceforge.net/jscolors/",
+            "https://jp-minerals.org/vesta/",
+            "https://github.com/materialsproject/pymatgen/blob/master/src/pymatgen/vis/ElementColorSchemes.yaml",
             "https://bottosson.github.io/posts/oklab/",
             "https://github.com/Ameyanagi/ReShiki/blob/main/crates/model/src/canvas_theme.rs",
             "https://github.com/Ameyanagi/ReShiki/blob/main/crates/model/src/palette.rs",

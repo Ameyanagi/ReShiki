@@ -327,3 +327,47 @@ fn references_use_each_modes_own_colors_and_survive_portable_roundtrip() {
     .unwrap();
     assert_eq!(old, Recipe::PRESENTATION);
 }
+
+#[test]
+fn vesta_reference_generates_from_raw_vesta_seeds_in_both_modes() {
+    let reference = Reference::vesta();
+    let recipe = Recipe {
+        reference: Some(reference.clone()),
+        ..Recipe::PRESENTATION
+    };
+    let generated = recipe
+        .generate(&ThemeFile::capture(&Document::default()))
+        .unwrap();
+    assert!(generated.source.contains("K. Momma and F. Izumi"));
+    for mode in CanvasTheme::ALL {
+        assert_eq!(generated.palette(mode).elements.len(), 118);
+        // Like any captured reference, elements beyond Mt take their neutral
+        // label seed for tiles too, so they stay grey.
+        assert_eq!(generated.palette(mode).tile_seeds.len(), 118);
+        let ds = Oklch::from_rgb(generated.element_swatch("Ds", mode).unwrap());
+        assert!(ds.c < 0.001, "Ds/{mode}: {ds:?}");
+        for element in ["O", "Ti", "Na", "Cu"] {
+            // Seeds are VESTA's own colors, before label contrast adjustment.
+            let seed = ColorTheme::Vesta.element_swatch(element, mode).unwrap();
+            let original = Oklch::from_rgb(seed);
+            let actual = Oklch::from_rgb(generated.element_swatch(element, mode).unwrap());
+            assert!((original.h - actual.h).abs() < 0.03, "{element}/{mode}");
+            assert!((recipe.tone(mode).lightness - actual.l).abs() < 0.003);
+        }
+        assert_ne!(
+            generated.element_swatch("Ti", mode),
+            Recipe::PRESENTATION
+                .generate(&ThemeFile::capture(&Document::default()))
+                .unwrap()
+                .element_swatch("Ti", mode),
+            "VESTA titanium is blue, Jmol's is grey"
+        );
+        for &element in reshiki::editing::ELEMENTS {
+            let ratio = contrast(generated.element_color(element, mode), mode.background());
+            assert!(ratio >= TEXT_MIN, "{element}/{mode}: {ratio}");
+        }
+    }
+    let json = serde_json::to_string(&recipe).unwrap();
+    assert_eq!(serde_json::from_str::<Recipe>(&json).unwrap(), recipe);
+    assert_eq!(recipe.generate(&generated).unwrap(), generated);
+}

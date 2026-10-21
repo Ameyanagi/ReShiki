@@ -2,6 +2,7 @@
 use crate::palette::{Color, Palette};
 use serde::{Deserialize, Serialize};
 pub(crate) mod jmol;
+pub(crate) mod vesta;
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CanvasTheme {
@@ -97,14 +98,31 @@ pub enum ColorTheme {
     Presentation,
     Pastel,
     Jmol,
+    Vesta,
 }
 impl ColorTheme {
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::Publication,
         Self::Presentation,
         Self::Pastel,
         Self::Jmol,
+        Self::Vesta,
     ];
+    /// Credit for the element reference colors; empty for Publication.
+    pub fn source(self) -> &'static str {
+        match self {
+            Self::Publication => "",
+            Self::Presentation | Self::Pastel | Self::Jmol => jmol::SOURCE,
+            Self::Vesta => vesta::SOURCE,
+        }
+    }
+    /// Terms of copied reference data; Jmol's colors are cited, not copied text.
+    pub fn license(self) -> &'static str {
+        match self {
+            Self::Vesta => vesta::LICENSE,
+            _ => "",
+        }
+    }
     pub fn is_publication(&self) -> bool {
         *self == Self::Publication
     }
@@ -118,14 +136,15 @@ impl ColorTheme {
             .unwrap_or_else(|| canvas.color([0; 3]))
     }
     /// Tiles show the palette's hues separately from canvas-label contrast.
-    /// Presentation and Pastel share Jmol's element mapping with different tones.
+    /// Presentation and Pastel share Jmol's element mapping with different tones;
+    /// Jmol and VESTA show their reference colors unchanged.
     pub fn element_swatch(self, element: &str, canvas: CanvasTheme) -> Option<[u8; 3]> {
-        let rgb = jmol::swatch(element)?;
         match self {
             Self::Publication => None,
-            Self::Jmol => Some(rgb),
+            Self::Jmol => jmol::swatch(element),
+            Self::Vesta => vesta::swatch(element),
             Self::Presentation | Self::Pastel => {
-                Some(jmol::soften(rgb, canvas, self == Self::Pastel))
+                jmol::swatch(element).map(|rgb| jmol::soften(rgb, canvas, self == Self::Pastel))
             }
         }
     }
@@ -160,6 +179,7 @@ impl std::fmt::Display for ColorTheme {
             Self::Presentation => "Presentation",
             Self::Pastel => "Pastel",
             Self::Jmol => "Jmol",
+            Self::Vesta => "VESTA",
         })
     }
 }

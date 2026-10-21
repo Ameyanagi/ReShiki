@@ -115,11 +115,18 @@ const JMOL: [u32; 109] = [
     0xEB0026, // Mt
 ];
 
+pub(crate) const SOURCE: &str = "https://jmol.sourceforge.net/jscolors/";
+
 pub(crate) fn swatch(element: &str) -> Option<[u8; 3]> {
+    lookup(&JMOL, element)
+}
+
+/// A reference table in `crate::editing::ELEMENTS` order; entries past its end stay neutral.
+pub(super) fn lookup(table: &[u32], element: &str) -> Option<[u8; 3]> {
     let index = crate::editing::ELEMENTS
         .iter()
         .position(|&name| name == element)?;
-    let color = *JMOL.get(index)?;
+    let color = *table.get(index)?;
     Some([(color >> 16) as u8, (color >> 8) as u8, color as u8])
 }
 

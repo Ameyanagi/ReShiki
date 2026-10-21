@@ -1,0 +1,19 @@
+VESTA element colour table
+=========================
+
+crates/model/src/canvas_theme/vesta.rs, the VESTA theme and the VESTA generator
+reference use VESTA's element colours (K. Momma and F. Izumi,
+https://jp-minerals.org/vesta/), as tabulated under the `VESTA` key of
+pymatgen's ElementColorSchemes.yaml:
+https://github.com/materialsproject/pymatgen/blob/master/src/pymatgen/vis/ElementColorSchemes.yaml
+
+The 109 RGB values (H through Mt) were converted to a Rust table in ReShiki's
+element order. The file is part of pymatgen:
+
+Copyright (c) 2011-2012 MIT & The Regents of the University of California,
+through Lawrence Berkeley National Laboratory
+Licensed under MIT; see LICENSE in this directory.
+
+ReShiki's label contrast adjustment, palette tones and theme generation are
+ReShiki code. The colour table retains its MIT terms and is not represented as
+original dual-licensed ReShiki material.
