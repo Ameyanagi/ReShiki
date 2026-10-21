@@ -21,6 +21,10 @@ on:
         type: choice
         options: [test-signing, release-signing]
         default: test-signing
+      npm_only:
+        description: Only publish @ameyanagi/reshiki at main's version to npm (no builds, release or demo)
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       nightly:
@@ -55,6 +59,8 @@ jobs:
     with:
       live_reference: true
   validate:
+    # Every build, signing and release job needs validate, so npm_only skips them all.
+    if: ${{ !inputs.npm_only }}
     runs-on: ubuntu-22.04
     outputs:
       nightly_version: ${{ steps.nightly.outputs.version }}
@@ -520,6 +526,13 @@ jobs:
       - run: rustup default 1.99.0
       # build_wasm.sh pins wasm-bindgen to Cargo.lock and binaryen to a checked release.
       - run: scripts/build_wasm.sh --test
+      # The npm job publishes this same tested build.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-package-dist
+          path: packages/editor/dist
+          if-no-files-found: error
+          retention-days: 7
       - run: scripts/package_web_demo.sh
       - name: Replace the web-demo asset and redeploy the site
         env:
@@ -560,3 +573,134 @@ jobs:
           fi
           gh release upload web-demo dist/reshiki-web-demo.tar.gz --clobber
           gh workflow run docs.yml --ref main
+  # @ameyanagi/reshiki (packages/editor) follows each release on npm with the
+  # app's version. A manual run with npm_only publishes main's version, for a
+  # first publish without a new tag. docs/releasing.md describes the npm setup;
+  # without a working credential this job leaves a notice and succeeds.
+  npm:
+    needs: [publish, web_demo]
+    # A tag needs the demo job's build, not its demo upload. !cancelled() and
+    # not always(), so cancelling the run stops the job before it publishes.
+    if: >-
+      ${{ !cancelled()
+          && ((github.event_name == 'push' && needs.publish.result == 'success')
+              || (github.event_name == 'workflow_dispatch' && inputs.npm_only)) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: npm
+    concurrency:
+      group: npm
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Choose the npm credential
+        id: auth
+        env:
+          TRUSTED_PUBLISHING: ${{ vars.NPM_TRUSTED_PUBLISHING == 'true' }}
+          HAS_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
+        run: |
+          if [[ $GITHUB_EVENT_NAME == workflow_dispatch && $GITHUB_REF != refs/heads/main ]]; then
+            echo "npm_only publishes main's version; run it on main" >&2
+            exit 1
+          fi
+          if [[ $TRUSTED_PUBLISHING == true ]]; then
+            mode=oidc
+          elif [[ $HAS_TOKEN == true ]]; then
+            mode=token
+          else
+            mode=none
+            echo "::notice::No npm credential is configured (see docs/releasing.md), so @ameyanagi/reshiki was not published."
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.auth.outputs.mode != 'none'
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        if: steps.auth.outputs.mode != 'none'
+        with:
+          bun-version-file: package.json
+      # Trusted publishing needs npm 11.5.1 or later, which Node 24 ships.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: steps.auth.outputs.mode != 'none'
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: Check the npm token
+        if: steps.auth.outputs.mode == 'token'
+        id: token
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          printf '//registry.npmjs.org/:_authToken=${NPM_TOKEN}\n' > "$RUNNER_TEMP/.npmrc"
+          if user=$(NPM_CONFIG_USERCONFIG=$RUNNER_TEMP/.npmrc npm whoami 2> "$RUNNER_TEMP/whoami.log"); then
+            echo "NPM_TOKEN belongs to $user"
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+          else
+            cat "$RUNNER_TEMP/whoami.log"
+            echo "::notice::npm rejected NPM_TOKEN (expired or invalid; see docs/releasing.md), so @ameyanagi/reshiki was not published."
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+          fi
+      # A tag publishes the build web_demo tested; npm_only builds it here.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: steps.auth.outputs.mode != 'none' && steps.token.outputs.valid != 'false' && github.event_name == 'push'
+        with:
+          name: npm-package-dist
+          path: packages/editor/dist
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        if: steps.auth.outputs.mode != 'none' && steps.token.outputs.valid != 'false' && github.event_name != 'push'
+        with:
+          version: "0.12.3"
+          python-version: "3.12"
+          enable-cache: false
+      - name: Build the package
+        if: steps.auth.outputs.mode != 'none' && steps.token.outputs.valid != 'false' && github.event_name != 'push'
+        run: |
+          rustup toolchain install 1.99.0 --profile minimal --target wasm32-unknown-unknown
+          rustup default 1.99.0
+          scripts/build_wasm.sh
+      - name: Test the package
+        if: steps.auth.outputs.mode != 'none' && steps.token.outputs.valid != 'false'
+        working-directory: packages/editor
+        run: bun test
+      - name: Publish the app's version unless npm has it
+        if: steps.auth.outputs.mode != 'none' && steps.token.outputs.valid != 'false'
+        working-directory: packages/editor
+        env:
+          MODE: ${{ steps.auth.outputs.mode }}
+          NPM_TOKEN: ${{ steps.auth.outputs.mode == 'token' && secrets.NPM_TOKEN || '' }}
+        run: |
+          set -euo pipefail
+          # validate has checked that a tag matches this version.
+          version=$(awk -F '"' '/^version = / { print $2; exit }' ../../Cargo.toml)
+          bun pm pkg set version="$version"
+          name=$(bun pm pkg get name | tr -d '"')
+          echo "npm $(npm --version), publishing $name@$version with $MODE"
+          if [[ $(npm view "$name@$version" version 2> /dev/null || true) == "$version" ]]; then
+            echo "::notice::$name@$version is already on npm."
+            exit 0
+          fi
+          if [[ $MODE == token ]]; then
+            export NPM_CONFIG_USERCONFIG=$RUNNER_TEMP/.npmrc
+          fi
+          # latest stays on the newest stable release: prereleases go under next,
+          # and an older stable release under release-<major.minor>.
+          tag=latest
+          if [[ $version == *-* ]]; then
+            tag=next
+          else
+            latest=$(npm view "$name" dist-tags.latest 2> /dev/null || true)
+            if [[ -n $latest && $(printf '%s\n' "$latest" "$version" | sort -V | tail -n 1) != "$version" ]]; then
+              tag=release-${version%.*}
+            fi
+          fi
+          status=0
+          npm publish --provenance --access public --tag "$tag" --ignore-scripts 2>&1 | tee "$RUNNER_TEMP/publish.log" || status=$?
+          if (( status != 0 )); then
+            # Refused credentials skip npm; any other failure fails the job.
+            if grep -qE 'E401|E403|E404|ENEEDAUTH|EOTP' "$RUNNER_TEMP/publish.log"; then
+              echo "::notice::npm refused the $MODE credential (see docs/releasing.md), so $name@$version was not published."
+              exit 0
+            fi
+            exit "$status"
+          fi

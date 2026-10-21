@@ -4,7 +4,18 @@ ReShiki in the browser, compiled to WebAssembly: the drawing editor itself,
 and a headless library that converts structures between formats and draws
 them. Both run the same Rust code as the desktop app, without a server.
 
-The package is private and has not been published. Its name may change.
+## Install
+
+```sh
+bun add @ameyanagi/reshiki
+npm install @ameyanagi/reshiki
+pnpm add @ameyanagi/reshiki
+```
+
+Each ReShiki release publishes the package with the app's version, so
+`@ameyanagi/reshiki@0.13.0` is the editor of ReShiki 0.13.0. Prereleases are
+under the `next` tag (`bun add @ameyanagi/reshiki@next`). The package carries
+the license texts and third-party notices in `dist/licenses`.
 
 ## Build
 

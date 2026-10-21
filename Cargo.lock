@@ -3712,7 +3712,7 @@ dependencies = [
 
 [[package]]
 name = "reshiki"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "accesskit",
  "accesskit_consumer",
