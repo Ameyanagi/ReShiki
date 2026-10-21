@@ -55,3 +55,25 @@ mode=token
 npm 11.19.0, publishing react@18.3.1 with token
 ::notice::react@18.3.1 is already on npm.
 exit=0
+
+--- an older stable release than latest (react 17.0.99 against react latest) keeps latest
+=== credential step: NPM_TRUSTED_PUBLISHING=false HAS_TOKEN=true
+mode=token
+=== publish step, with 'npm publish' replaced by 'npm publish --dry-run', RELEASE_TAG=v17.0.99
+npm 11.19.0, publishing react@17.0.99 with token
+npm notice
+npm notice 📦  react@17.0.99
+npm notice Tarball Contents
+npm notice Tarball Details
+npm notice name: react
+npm notice version: 17.0.99
+npm notice filename: react-17.0.99.tgz
+npm notice package size: 14.4 MB
+npm notice unpacked size: 40.3 MB
+npm notice shasum: 5456fa464b0bff9714087c7766ca005e3a1f60fd
+npm notice integrity: sha512-8tExRQ7Cf2nXN[...]gyJwOnif+Y6Aw==
+npm notice total files: 26
+npm notice
+npm notice Publishing to https://registry.npmjs.org/ with tag release-17.0 and public access (dry-run)
++ react@17.0.99
+exit=0
