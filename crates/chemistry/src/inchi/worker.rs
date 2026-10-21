@@ -15,6 +15,9 @@ fn operation() -> Result<wire::Reply, String> {
     // Initialize standard I/O before any allocator failure may report to it.
     io::stderr().flush().map_err(|e| e.to_string())?;
     reshiki_process_heap::begin(request.heap_bytes);
+    perform(request)
+}
+fn perform(request: wire::Request) -> Result<wire::Reply, String> {
     request.validate()?;
     match request.operation {
         wire::Operation::Generate(molecule) => {
@@ -25,6 +28,16 @@ fn operation() -> Result<wire::Reply, String> {
             .map(wire::Reply::Imported),
     }
 }
+/// Answer one framed request in-process, where no helper can run (the browser).
+#[cfg(target_arch = "wasm32")]
+pub(super) fn respond(bytes: &[u8]) -> Result<Vec<u8>, String> {
+    let response = wire::Response {
+        version: kernel::VERSION.into(),
+        result: wire::decode(bytes, generator::MAX_REQUEST_BYTES).and_then(perform),
+    };
+    wire::encode(&response, generator::MAX_RESPONSE_BYTES)
+}
+
 /// Handle one framed request, then terminate the worker process.
 /// The caller must install `reshiki_process_heap::BoundedHeap` as its allocator.
 pub fn run() {

@@ -42,7 +42,7 @@ pub async fn execute(
     config: Option<native_response::Config>,
 ) -> Result<Response, Error> {
     let request = request.into();
-    let cleaned = tokio::task::spawn_blocking(move || prepare(&request)).await??;
+    let cleaned = crate::task::spawn_blocking(move || prepare(&request)).await??;
     let analysis = match cleaned.molecule {
         Some(molecule) => {
             Some(native_response::analyze_prepared(Arc::new(molecule), config).await?)
@@ -59,7 +59,7 @@ pub async fn execute(
         }
         None => return Err(Error::AnalysisPolicy),
     };
-    tokio::task::spawn_blocking(move || {
+    crate::task::spawn_blocking(move || {
         let response = Response {
             document: Some(cleaned.document),
             analysis,

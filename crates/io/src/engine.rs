@@ -259,7 +259,7 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
             let label = request.text.clone();
             let replace = request.format.as_deref() == Some("replace");
             request.document = Some(
-                tokio::task::spawn_blocking(move || {
+                crate::task::spawn_blocking(move || {
                     use crate::chemistry::{abbreviations, document as chemistry};
                     document.validate()?;
                     let policy = abbreviations::AttachmentPolicy::SharedAnchor;
@@ -315,7 +315,7 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
             let mut warnings =
                 export_notices::notices(&document, format, export_notices::Route::Reaction);
             let selected = request.selected_ids.take();
-            let output = tokio::task::spawn_blocking(move || {
+            let output = crate::task::spawn_blocking(move || {
                 if reaction_smiles {
                     reaction::write_smiles(&document, selected.as_deref())
                         .map(|output| (output, false))
@@ -357,7 +357,7 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
         if binary && request.operation == "import" {
             let text = request.text.take().unwrap_or_default();
             request.text = Some(
-                tokio::task::spawn_blocking(move || {
+                crate::task::spawn_blocking(move || {
                     if text.trim().is_empty() {
                         return Err("Enter a structure first".into());
                     }
@@ -380,7 +380,7 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
         if export_binary {
             let xml = response.output.take().ok_or("Missing exported drawing")?;
             response.output = Some(
-                tokio::task::spawn_blocking(move || {
+                crate::task::spawn_blocking(move || {
                     crate::exchange::to_cdx(&xml).map(|bytes| STANDARD.encode(bytes))
                 })
                 .await

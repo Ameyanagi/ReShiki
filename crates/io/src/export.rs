@@ -2,7 +2,7 @@ use crate::{document::Document, scene};
 
 pub fn parse_svg(svg: String) -> Result<resvg::usvg::Tree, String> {
     let mut options = resvg::usvg::Options::default();
-    options.fontdb_mut().load_system_fonts();
+    crate::style::load_fonts(options.fontdb_mut());
     resvg::usvg::Tree::from_str(&svg, &options).map_err(|error| error.to_string())
 }
 
@@ -94,7 +94,7 @@ pub async fn publication(
     let attachment_notice = pages
         .then(|| crate::arrow_anchors::export_notice(&doc))
         .flatten();
-    let figure = tokio::task::spawn_blocking(move || {
+    let figure = crate::task::spawn_blocking(move || {
         if pages {
             pages_pdf(&doc).map(|bytes| Figure {
                 bytes,

@@ -8,10 +8,11 @@ use super::{
     graph::{Graph, Valence, pi_electron_count},
 };
 use reshiki_process_heap::policy::{Budget, Cancellation, Capabilities, MIB};
-use std::{
-    collections::{BTreeMap, HashMap, HashSet, VecDeque},
-    time::Instant,
-};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 
 #[cfg(test)]
 mod tests;

@@ -6,7 +6,10 @@ use super::{
     kernel::{Imported, Molecule as Input},
     output,
 };
-use std::{path::Path, process::Stdio, time::Duration};
+#[cfg(not(target_arch = "wasm32"))]
+use std::process::Stdio;
+use std::{path::Path, time::Duration};
+#[cfg(not(target_arch = "wasm32"))]
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
     process::Command,
@@ -15,6 +18,7 @@ use tokio::{
 pub const MAX_INCHI_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_REQUEST_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
+#[cfg(not(target_arch = "wasm32"))]
 const MAX_STDERR_BYTES: usize = 64 * 1024;
 pub const MAX_TIMEOUT: Duration = Duration::from_secs(120);
 pub const DEFAULT_HEAP_BYTES: usize = 64 * 1024 * 1024;
@@ -123,6 +127,7 @@ pub enum Error {
     Timeout,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 async fn read_limited(
     mut stream: impl AsyncRead + Unpin,
     limit: usize,
@@ -229,6 +234,7 @@ fn validate_limits(limits: Limits) -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn helper_command(helper: &Path) -> Command {
     let mut command = Command::new(helper);
     command
@@ -242,6 +248,19 @@ fn helper_command(helper: &Path) -> Command {
     command
 }
 
+/// The browser has no helper processes, so the request runs in-process
+/// through the same framing. The timeout and heap budget do not apply there.
+#[cfg(target_arch = "wasm32")]
+async fn exchange(
+    _helper: &Path,
+    request: &[u8],
+    _timeout: Duration,
+    _heap_bytes: usize,
+) -> Result<Vec<u8>, Error> {
+    super::worker::respond(request).map_err(Error::Rejected)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 async fn exchange(
     helper: &Path,
     request: &[u8],

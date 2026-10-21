@@ -13,6 +13,9 @@ fn operation() -> Result<reshiki_geometry::Response, String> {
     }
     io::stderr().flush().map_err(|e| e.to_string())?;
     reshiki_process_heap::begin(request.heap_bytes);
+    solve(request)
+}
+fn solve(request: wire::Request) -> Result<reshiki_geometry::Response, String> {
     let capacity = resolved_capacity(request.heap_bytes, request.capacity)?;
     request.operation.validate_capacity(capacity)?;
     let response = reshiki_geometry::solve(&request.operation)?;
@@ -42,6 +45,16 @@ fn resolved_capacity(
         return Err("Geometry capacity exceeds its heap-budget envelope".into());
     }
     Ok(capacity)
+}
+
+/// Answer one framed request in-process, where no worker can run (the browser).
+#[cfg(target_arch = "wasm32")]
+pub(super) fn respond(bytes: &[u8]) -> Result<Vec<u8>, String> {
+    let response = wire::Response {
+        version: reshiki_geometry::RDKIT_VERSION.into(),
+        result: wire::decode(bytes, wire::MAX_REQUEST_BYTES).and_then(solve),
+    };
+    wire::encode(&response, wire::MAX_RESPONSE_BYTES)
 }
 
 /// Enter before initializing the GUI or async runtime. The executable must

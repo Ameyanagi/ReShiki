@@ -1,0 +1,19 @@
+[package]
+name = "reshiki-web"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "MIT OR Apache-2.0"
+description = "Headless ReShiki import, export and rendering for the browser"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+reshiki-io = { path = "../io" }
+reshiki-model = { path = "../model" }
+base64 = "0.22"
+resvg = "0.45"
+# scripts/build_wasm.sh installs the wasm-bindgen CLI of exactly this version.
+wasm-bindgen = "=0.2.128"
+wasm-bindgen-futures = "0.4"

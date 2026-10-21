@@ -103,9 +103,18 @@ impl DrawingStyle {
 
 static FONTS: LazyLock<resvg::usvg::fontdb::Database> = LazyLock::new(|| {
     let mut db = resvg::usvg::fontdb::Database::new();
-    db.load_system_fonts();
+    load_fonts(&mut db);
     db
 });
+
+/// Load the fonts that text is measured and drawn with: the system's on the
+/// desktop and the bundled ones in the browser.
+pub fn load_fonts(db: &mut resvg::usvg::fontdb::Database) {
+    #[cfg(not(target_arch = "wasm32"))]
+    db.load_system_fonts();
+    #[cfg(target_arch = "wasm32")]
+    font::load_bundled(db);
+}
 
 mod font;
 

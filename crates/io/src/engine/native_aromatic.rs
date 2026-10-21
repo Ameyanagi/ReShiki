@@ -38,7 +38,7 @@ pub async fn execute(
     config: Option<native_response::Config>,
 ) -> Result<Response, Error> {
     let request = request.into();
-    let edit = tokio::task::spawn_blocking(move || {
+    let edit = crate::task::spawn_blocking(move || {
         if request.protocol != crate::engine::PROTOCOL {
             return Err(Error::Protocol);
         }

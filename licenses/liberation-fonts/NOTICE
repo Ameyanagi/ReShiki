@@ -1,0 +1,19 @@
+Liberation Sans fonts for the browser build
+===========================================
+
+crates/model/fonts/LiberationSans-{Regular,Bold,Italic,BoldItalic}.ttf are the
+unmodified files from Liberation Fonts 2.1.5:
+https://github.com/liberationfonts/liberation-fonts/releases/tag/2.1.5
+(liberation-fonts-ttf-2.1.5.tar.gz, SHA-256
+7191c669bf38899f73a2094ed00f7b800553364f90e2637010a69c0e268f25d0)
+
+Digitized data copyright (c) 2010 Google Corporation
+	with Reserved Font Arimo, Tinos and Cousine.
+Copyright (c) 2012 Red Hat, Inc.
+	with Reserved Font Name Liberation.
+Licensed under the SIL Open Font License, Version 1.1; see LICENSE in this
+directory.
+
+Only the wasm32 build embeds them, because a browser has no system fonts.
+Liberation Sans has Arial's metrics, so the font database also lists its faces
+under the family name Arial; the font files themselves are not changed.
