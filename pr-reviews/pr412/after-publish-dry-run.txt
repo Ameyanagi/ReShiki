@@ -1,0 +1,57 @@
+The npm job's two shell steps, extracted from release.yml and run locally (npm 11.19.0); the tarball file list is in after-pack.txt.
+
+=== credential step: NPM_TRUSTED_PUBLISHING=false HAS_TOKEN=false
+::notice::No npm credential is configured (see docs/releasing.md), so @ameyanagi/reshiki was not published.
+mode=none
+(later steps skipped: if: steps.auth.outputs.mode != 'none')
+
+=== credential step: NPM_TRUSTED_PUBLISHING=false HAS_TOKEN=true
+mode=token
+=== publish step, with 'npm publish' replaced by 'npm publish --dry-run', RELEASE_TAG=v0.12.0
+npm 11.19.0, publishing @ameyanagi/reshiki@0.12.0 with token
+npm notice
+npm notice 📦  @ameyanagi/reshiki@0.12.0
+npm notice Tarball Contents
+npm notice Tarball Details
+npm notice name: @ameyanagi/reshiki
+npm notice version: 0.12.0
+npm notice filename: ameyanagi-reshiki-0.12.0.tgz
+npm notice package size: 14.4 MB
+npm notice unpacked size: 40.3 MB
+npm notice shasum: 2fd1c805c93b7ca32414b2b611093d33126e3be9
+npm notice integrity: sha512-GE2kEnt2fYgux[...]e15V8DQPB7GFA==
+npm notice total files: 26
+npm notice
+npm notice Publishing to https://registry.npmjs.org/ with tag latest and public access (dry-run)
++ @ameyanagi/reshiki@0.12.0
+exit=0
+
+=== credential step: NPM_TRUSTED_PUBLISHING=true HAS_TOKEN=true
+mode=oidc
+=== publish step, with 'npm publish' replaced by 'npm publish --dry-run', RELEASE_TAG=v0.13.0-rc.1
+npm 11.19.0, publishing @ameyanagi/reshiki@0.13.0-rc.1 with oidc
+npm notice
+npm notice 📦  @ameyanagi/reshiki@0.13.0-rc.1
+npm notice Tarball Contents
+npm notice Tarball Details
+npm notice name: @ameyanagi/reshiki
+npm notice version: 0.13.0-rc.1
+npm notice filename: ameyanagi-reshiki-0.13.0-rc.1.tgz
+npm notice package size: 14.4 MB
+npm notice unpacked size: 40.3 MB
+npm notice shasum: e286762d1814afdf25e0e05b2d18cdf976ab9093
+npm notice integrity: sha512-tgkq95ZJ75b1Z[...]wBnKobb030EhA==
+npm notice total files: 26
+npm notice
+npm warn publish This command requires you to be logged in to https://registry.npmjs.org/ (dry-run)
+npm notice Publishing to https://registry.npmjs.org/ with tag next and public access (dry-run)
++ @ameyanagi/reshiki@0.13.0-rc.1
+exit=0
+
+--- idempotency: a name and version already on npm (react 18.3.1 stands in)
+=== credential step: NPM_TRUSTED_PUBLISHING=false HAS_TOKEN=true
+mode=token
+=== publish step, with 'npm publish' replaced by 'npm publish --dry-run', RELEASE_TAG=v18.3.1
+npm 11.19.0, publishing react@18.3.1 with token
+::notice::react@18.3.1 is already on npm.
+exit=0

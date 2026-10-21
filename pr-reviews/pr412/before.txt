@@ -1,0 +1,58 @@
+$ grep -n private package.json
+4:  "private": true,
+
+$ bun pm pack --dry-run
+bun pack v1.4.1 (4661e494f)
+
+packed 1.0KB package.json
+packed 9.49KB README.md
+packed 4.45KB dist/editor/reshiki.d.ts
+packed 161.22KB dist/editor/reshiki.js
+packed 23.0MB dist/editor/reshiki_bg.wasm
+packed 2.1KB dist/editor/reshiki_bg.wasm.d.ts
+packed 0.96KB dist/licenses/LICENSE
+packed 11.36KB dist/licenses/LICENSE-APACHE
+packed 1.1KB dist/licenses/LICENSE-MIT
+packed 2.28KB dist/licenses/NOTICE
+packed 3.79MB dist/licenses/THIRD-PARTY-NOTICES.txt
+packed 3.61KB dist/wasm/reshiki_web.d.ts
+packed 18.41KB dist/wasm/reshiki_web.js
+packed 13.21MB dist/wasm/reshiki_web_bg.wasm
+packed 1.32KB dist/wasm/reshiki_web_bg.wasm.d.ts
+packed 2.83KB src/editor.d.ts
+packed 2.1KB src/editor.js
+packed 0.67KB src/element.d.ts
+packed 2.28KB src/element.js
+packed 1.19KB src/embed.d.ts
+packed 3.47KB src/embed.js
+packed 1.45KB src/fonts.d.ts
+packed 3.81KB src/fonts.js
+packed 1.90KB src/frame.html
+packed 2.53KB src/index.d.ts
+packed 1.60KB src/index.js
+
+ameyanagi-reshiki-0.1.0.tgz
+
+Total files: 26
+Unpacked size: 40.28MB
+
+$ bun publish --dry-run
+bun publish v1.4.1 (4661e494f)
+error: attempted to publish a private package
+exit=1
+
+$ jobs in .github/workflows/release.yml (origin/main): no npm job
+3:  push:
+5:  workflow_dispatch:
+24:  workflow_call:
+51:  reference:
+57:  validate:
+105:  build:
+257:  sign:
+300:  sign_windows:
+427:  publish:
+496:  web_demo:
+
+$ npm view @ameyanagi/reshiki version
+npm error code E404
+npm error 404 Not Found - GET https://registry.npmjs.org/@ameyanagi%2freshiki - Not found

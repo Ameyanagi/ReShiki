@@ -1,0 +1,78 @@
+$ grep -n private package.json  (no match)
+
+$ bun pm pack --dry-run
+bun pack v1.4.1 (4661e494f)
+
+packed 1.35KB package.json
+packed 9.82KB README.md
+packed 4.45KB dist/editor/reshiki.d.ts
+packed 161.22KB dist/editor/reshiki.js
+packed 23.0MB dist/editor/reshiki_bg.wasm
+packed 2.1KB dist/editor/reshiki_bg.wasm.d.ts
+packed 0.96KB dist/licenses/LICENSE
+packed 11.36KB dist/licenses/LICENSE-APACHE
+packed 1.1KB dist/licenses/LICENSE-MIT
+packed 2.28KB dist/licenses/NOTICE
+packed 3.79MB dist/licenses/THIRD-PARTY-NOTICES.txt
+packed 3.61KB dist/wasm/reshiki_web.d.ts
+packed 18.41KB dist/wasm/reshiki_web.js
+packed 13.21MB dist/wasm/reshiki_web_bg.wasm
+packed 1.32KB dist/wasm/reshiki_web_bg.wasm.d.ts
+packed 2.83KB src/editor.d.ts
+packed 2.1KB src/editor.js
+packed 0.67KB src/element.d.ts
+packed 2.28KB src/element.js
+packed 1.19KB src/embed.d.ts
+packed 3.47KB src/embed.js
+packed 1.45KB src/fonts.d.ts
+packed 3.81KB src/fonts.js
+packed 1.90KB src/frame.html
+packed 2.53KB src/index.d.ts
+packed 1.60KB src/index.js
+
+ameyanagi-reshiki-0.0.0-development.tgz
+
+Total files: 26
+Unpacked size: 40.28MB
+
+$ npm pack --dry-run
+npm notice
+npm notice 📦  @ameyanagi/reshiki@0.0.0-development
+npm notice Tarball Contents
+npm notice 9.8kB README.md
+npm notice 23.0MB dist/editor/reshiki_bg.wasm
+npm notice 2.1kB dist/editor/reshiki_bg.wasm.d.ts
+npm notice 4.5kB dist/editor/reshiki.d.ts
+npm notice 161.2kB dist/editor/reshiki.js
+npm notice 963B dist/licenses/LICENSE
+npm notice 11.4kB dist/licenses/LICENSE-APACHE
+npm notice 1.1kB dist/licenses/LICENSE-MIT
+npm notice 2.3kB dist/licenses/NOTICE
+npm notice 3.8MB dist/licenses/THIRD-PARTY-NOTICES.txt
+npm notice 13.2MB dist/wasm/reshiki_web_bg.wasm
+npm notice 1.3kB dist/wasm/reshiki_web_bg.wasm.d.ts
+npm notice 3.6kB dist/wasm/reshiki_web.d.ts
+npm notice 18.4kB dist/wasm/reshiki_web.js
+npm notice 1.4kB package.json
+npm notice 2.8kB src/editor.d.ts
+npm notice 2.1kB src/editor.js
+npm notice 668B src/element.d.ts
+npm notice 2.3kB src/element.js
+npm notice 1.2kB src/embed.d.ts
+npm notice 3.5kB src/embed.js
+npm notice 1.4kB src/fonts.d.ts
+npm notice 3.8kB src/fonts.js
+npm notice 1.9kB src/frame.html
+npm notice 2.5kB src/index.d.ts
+npm notice 1.6kB src/index.js
+npm notice Tarball Details
+npm notice name: @ameyanagi/reshiki
+npm notice version: 0.0.0-development
+npm notice filename: ameyanagi-reshiki-0.0.0-development.tgz
+npm notice package size: 14.4 MB
+npm notice unpacked size: 40.3 MB
+npm notice shasum: 594715c113caac942a14ddffa66bf0cd12e71f8a
+npm notice integrity: sha512-H/DiNXiumYZWk[...]RMmRz8I8aUzmQ==
+npm notice total files: 26
+npm notice
+ameyanagi-reshiki-0.0.0-development.tgz
