@@ -317,6 +317,12 @@ fn rotate_adp(u: [f32; 6], r: &[V3; 3], reciprocal: V3) -> [f32; 6] {
     .map(|v| v as f32)
 }
 
+/// The most symmetry operators of a space group (Fm-3m and the like).
+const MAX_OPERATORS: usize = 192;
+/// The most sites times operators expanded, so a file cannot ask for
+/// endless work below the atom limit.
+const MAX_EXPANSION: usize = 40_000;
+
 const EIGHT_PI_SQUARED: f64 = 8. * std::f64::consts::PI * std::f64::consts::PI;
 
 /// Anisotropic U by atom label, from U or B values.
@@ -514,11 +520,36 @@ pub(super) fn read(text: &str) -> Result<Structure, Error> {
             .push("The CIF lists no symmetry operators; only its listed atoms are shown".into());
     }
     let identity = ([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]], [0.; 3]);
-    let operators = if operators.is_empty() {
+    let mut operators = if operators.is_empty() {
         vec![identity]
     } else {
         operators
     };
+    // Each operator once, translations taken modulo whole cells.
+    let mut seen: Vec<([V3; 3], V3)> = vec![];
+    operators.retain(|(r, t)| {
+        let t = t.map(wrap);
+        let same =
+            |(s, u): &([V3; 3], V3)| s == r && u.iter().zip(&t).all(|(a, b)| (a - b).abs() < 1e-6);
+        let new = !seen.iter().any(same);
+        if new {
+            seen.push((*r, t));
+        }
+        new
+    });
+    if operators.len() > MAX_OPERATORS {
+        return Err(Error(format!(
+            "The CIF lists {} symmetry operators; a space group has at most {MAX_OPERATORS}",
+            operators.len()
+        )));
+    }
+    if asymmetric.len().saturating_mul(operators.len()) > MAX_EXPANSION {
+        return Err(Error(format!(
+            "{} sites under {} symmetry operators are too many to expand; at most {MAX_ATOMS} atoms can be shown",
+            asymmetric.len(),
+            operators.len()
+        )));
+    }
     let reciprocal = lattice.reciprocal_lengths();
     let mut atoms: Vec<Atom> = vec![];
     for (f, element, charge, name, adp) in asymmetric {

@@ -96,9 +96,6 @@ pub fn extension_format(extension: &str) -> Option<&'static str> {
     }
 }
 
-/// File extensions of crystal files, for file dialogs.
-pub const EXTENSIONS: &[&str] = &["cif", "pdb", "vasp", "xyz", "extxyz"];
-
 /// Whether `format` is read by [`read`].
 pub fn is_crystal_format(format: &str) -> bool {
     matches!(format, "cif" | "pdb" | "poscar" | "xyz")

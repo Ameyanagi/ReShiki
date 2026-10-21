@@ -16,6 +16,8 @@ const SAME_SITE: f64 = 0.25;
 const WRAP: f64 = 1e-4;
 /// Drawing units per ångström, as MOL import scales 3D coordinates.
 const UNITS: f32 = 28.;
+/// The closest two lattice planes of a cell may be, in ångström.
+const MIN_SPACING: f64 = 0.5;
 /// The farthest cell a bond may reach, as a model stores bonds that leave it.
 const MAX_REACH: i32 = 3;
 
@@ -48,6 +50,13 @@ impl Lattice {
             scale(super::cross(c, a), 1. / volume),
             scale(super::cross(a, b), 1. / volume),
         ];
+        // Lattice planes closer than this make every search for copies of an
+        // atom endless; no real cell is that thin.
+        if reciprocal.iter().any(|r| length(*r) * MIN_SPACING > 1.) {
+            return Err(Error::new(
+                "The unit cell is thinner than 0.5 Å across one of its faces",
+            ));
+        }
         Ok(Self {
             vectors,
             reciprocal,

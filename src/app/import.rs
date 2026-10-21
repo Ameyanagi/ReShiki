@@ -262,15 +262,10 @@ async fn load(engine: LocalEngine, paths: Vec<PathBuf>) -> Result<Batch, String>
     Ok(batch)
 }
 async fn choose() -> Vec<PathBuf> {
-    let extensions: Vec<_> = STRUCTURES
-        .iter()
-        .map(|(e, _)| *e)
-        .chain(reshiki::crystal::EXTENSIONS.iter().copied())
-        .chain(PICTURES.iter().copied())
-        .collect();
+    // No extension filter: VASP files are often named POSCAR or CONTCAR
+    // without one. Files of other kinds are refused with their extension.
     rfd::AsyncFileDialog::new()
         .set_title("Insert structures or pictures")
-        .add_filter("Structures and pictures", &extensions)
         .pick_files()
         .await
         .map(|files| {

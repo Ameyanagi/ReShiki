@@ -69,7 +69,25 @@ pub(super) fn read(text: &str) -> Result<Structure, Error> {
             .find(|(k, _)| k == key)
             .map(|(_, v)| v.as_str())
     };
+    // Partly periodic structures, such as slabs, are not supported; a
+    // structure periodic along no axis is a molecule.
+    let periodic = match value("pbc").map(|p| {
+        p.split_whitespace()
+            .map(|f| matches!(f, "T" | "t" | "True" | "true" | "1"))
+            .collect::<Vec<_>>()
+    }) {
+        None => true,
+        Some(flags) if flags.len() == 3 && flags.iter().all(|f| *f) => true,
+        Some(flags) if flags.len() == 3 && flags.iter().all(|f| !*f) => false,
+        Some(_) => {
+            return Err(Error::at(
+                line + 1,
+                "Only pbc=\"T T T\" or \"F F F\" is supported",
+            ));
+        }
+    };
     let lattice = value("lattice")
+        .filter(|_| periodic)
         .map(|text| {
             let numbers: Option<Vec<f64>> = text.split_whitespace().map(number).collect();
             match numbers.as_deref() {

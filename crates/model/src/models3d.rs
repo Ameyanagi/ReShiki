@@ -2209,6 +2209,7 @@ fn cell_ink(
         let n = dx.hypot(dy);
         (n > size).then(|| (dx / n, dy / n))
     };
+    let mut labels = vec![];
     for (name, v) in ["a", "b", "c"].into_iter().zip(cell.vectors) {
         let end = view.project(place(v)).0;
         let w = crate::style::styled_text_width(name, size, &style);
@@ -2218,7 +2219,7 @@ fn cell_ink(
             .unwrap_or((0., -1.));
         let reach = 0.5 * size + 0.5 * w.max(size * 0.6);
         let at = end.offset(dx * reach, dy * reach);
-        ahead.push(Primitive::Text {
+        labels.push(Primitive::Text {
             position: at.offset(-w / 2., -size * 0.6),
             text: name.into(),
             size,
@@ -2226,6 +2227,13 @@ fn cell_ink(
             style: style.clone(),
         });
     }
+    // A label over the model stays legible on a halo of paper, as atom
+    // labels over bonds do.
+    ahead.push(Primitive::Halo {
+        radius: size * 0.15,
+        primitives: labels.clone(),
+    });
+    ahead.extend(labels);
     (behind, ahead)
 }
 

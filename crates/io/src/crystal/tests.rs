@@ -466,11 +466,11 @@ fn poscar_takes_three_scale_factors() {
 
 #[test]
 fn skewed_cells_find_every_copy_or_say_why() {
-    // A cubic 10 Å lattice written with a long, skewed b: the copy of the
-    // second atom two cells along a is 0.02 Å away, the same site.
-    let lattice = build::Lattice::new([[10., 0., 0.], [99.99, 0.1, 0.], [0., 0., 10.]]).unwrap();
-    let q = lattice.cartesian([0., 0.2, 0.]);
-    assert!(build::same_site(&lattice, [0.; 3], q));
+    // A cubic 10 Å lattice written with a long, skewed b = 3a + 10 ŷ: the
+    // point 0.07 Å from b − 3a is the same site as the origin.
+    let lattice = build::Lattice::new([[10., 0., 0.], [30., 10., 0.], [0., 0., 10.]]).unwrap();
+    assert!(build::same_site(&lattice, [0.; 3], [0.05, 9.95, 0.]));
+    assert!(!build::same_site(&lattice, [0.; 3], [0.5, 9.5, 0.]));
     // Bonds to copies more than three cells away are refused, not dropped.
     let text = "Fe\n1\n2.8 0 0\n14 2.8 0\n0 0 2.8\nFe\n1\nDirect\n0 0 0\n";
     let error = read("poscar", text).unwrap_err().to_string();
@@ -494,4 +494,62 @@ fn a_crystal_formula_counts_its_atoms_without_chemistry() {
     let (silicon, _) = open("xyz", SILICON);
     let one = crate::models3d::crystal::composition(&silicon, &[silicon.atoms[0].id]).unwrap();
     assert_eq!(one.formula, "Si");
+}
+
+#[test]
+fn files_cannot_ask_for_endless_work() {
+    // A cell almost flat across one face is refused before any search.
+    let flat = "2\nLattice=\"999 0 0 999 0.000001 0 0 0 999\"\nC 0 0 0\nC 0 0 1\n";
+    assert!(
+        read("xyz", flat)
+            .unwrap_err()
+            .to_string()
+            .contains("thinner")
+    );
+    // Repeated operators count once; too many distinct ones are refused.
+    let atoms = "loop_\n_atom_site_label\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\nC1 0.1 0.2 0.3\n";
+    let repeated = format!(
+        "{CELL}loop_\n_symmetry_equiv_pos_as_xyz\n{}{atoms}",
+        "'x,y,z'\n'x+1,y,z'\n".repeat(5_000)
+    );
+    let (doc, _) = open("cif", &repeated);
+    assert_eq!(doc.atoms.len(), 1);
+    let many: String = (0..200).map(|i| format!("'x+{}/400,y,z'\n", i)).collect();
+    let error = read(
+        "cif",
+        &format!("{CELL}loop_\n_symmetry_equiv_pos_as_xyz\n{many}{atoms}"),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("at most 192"), "{error}");
+}
+
+#[test]
+fn extended_xyz_follows_its_periodic_flags() {
+    let text = |pbc: &str| {
+        format!("2\nLattice=\"10 0 0 0 10 0 0 0 10\" pbc=\"{pbc}\"\nC 0.1 5 5\nC 9.9 5 5\n")
+    };
+    // Not periodic: a molecule of two far-apart atoms, no cell.
+    let (doc, _) = open("xyz", &text("F F F"));
+    assert_eq!(doc.atoms.len(), 2);
+    assert!(model(&doc).cell.is_none());
+    // Periodic: the two atoms are 0.2 Å apart across the boundary, one site.
+    let (doc, _) = open("xyz", &text("T T T"));
+    assert_eq!(doc.atoms.len(), 1);
+    let error = read("xyz", &text("T T F")).unwrap_err().to_string();
+    assert!(error.contains("pbc"), "{error}");
+}
+
+#[test]
+fn only_crystal_atoms_skip_chemistry_analysis() {
+    let (mut doc, _) = open("cif", NACL);
+    let ethane = [
+        doc.add_atom("C", crate::document::Point::new(500., 0.)),
+        doc.add_atom("C", crate::document::Point::new(540., 0.)),
+    ];
+    doc.add_bond(ethane[0], ethane[1], 1, "plain");
+    use crate::models3d::crystal::touches;
+    assert!(touches(&doc, &[]));
+    assert!(touches(&doc, &[doc.atoms[0].id]));
+    assert!(!touches(&doc, &ethane));
 }

@@ -276,7 +276,6 @@ impl App {
 
     pub(super) fn properties_subscription(&self) -> Subscription<Message> {
         if reshiki::attachments::present(&self.tab.doc)
-            || reshiki::models3d::crystal::present(&self.tab.doc)
             || !self.inspector_open
             || self.inspector_tab != InspectorTab::Properties
             || self.tab.busy
@@ -290,6 +289,7 @@ impl App {
         }
         let key = self.property_request_key();
         if key.atoms.is_empty()
+            || reshiki::models3d::crystal::touches(&self.tab.doc, &key.atoms)
             || self
                 .tab
                 .inspector_ui
@@ -704,14 +704,15 @@ impl App {
     }
 
     fn molecular_properties(&self) -> Element<'_, Message> {
-        if reshiki::models3d::crystal::present(&self.tab.doc) {
-            let ids: Vec<u64> = self
-                .tab
-                .selected
-                .iter()
-                .copied()
-                .filter(|id| self.tab.doc.atom(*id).is_some())
-                .collect();
+        let ids: Vec<u64> = self
+            .tab
+            .selected
+            .iter()
+            .copied()
+            .filter(|id| self.tab.doc.atom(*id).is_some())
+            .collect();
+        // Ordinary molecules beside a crystal keep their chemistry analysis.
+        if reshiki::models3d::crystal::touches(&self.tab.doc, &ids) {
             let mut body = column![
                 text(reshiki::models3d::crystal::ANALYSIS_NOTICE)
                     .size(11)

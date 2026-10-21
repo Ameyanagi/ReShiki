@@ -144,6 +144,18 @@ pub fn present(doc: &crate::document::Document) -> bool {
     doc.models.iter().any(|m| m.cell.is_some())
 }
 
+/// Whether any of the atoms `ids` (all of `doc`'s when empty) belongs to a
+/// crystal, whose bonds come from distances and cannot be analysed.
+pub fn touches(doc: &crate::document::Document, ids: &[u64]) -> bool {
+    doc.models.iter().filter(|m| m.cell.is_some()).any(|m| {
+        if ids.is_empty() {
+            !m.atoms.is_empty()
+        } else {
+            ids.iter().any(|id| m.contains(*id))
+        }
+    })
+}
+
 /// What the Properties panel says of a crystal, whose bonds come from
 /// distances, not chemistry.
 pub const ANALYSIS_NOTICE: &str = "Crystal structure: bonds come from atom distances, so chemical analysis is unavailable. The formula counts the atoms shown, with charges as read.";
