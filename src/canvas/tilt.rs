@@ -3,7 +3,7 @@ use iced::Point;
 use reshiki::document::Document;
 
 /// Whether the selection holds something that tilts: two atoms shown in 2D,
-/// a shape, or a molecule shown only as a 3D model, which turns its model.
+/// a shape, or a molecule shown as a 3D model, which turns its model.
 pub(crate) fn available(doc: &Document, ids: &[u64]) -> bool {
     let ids = doc.expand_abbreviation_selection(ids);
     doc.atoms
@@ -17,7 +17,7 @@ pub(crate) fn available(doc: &Document, ids: &[u64]) -> bool {
         .count()
         >= 2
         || doc.graphics.iter().any(|g| ids.contains(&g.id))
-        || ids.iter().any(|id| reshiki::models3d::hides(doc, *id))
+        || reshiki::models3d::shows_3d(doc, &ids)
 }
 
 #[derive(Debug)]

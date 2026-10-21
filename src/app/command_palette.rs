@@ -224,6 +224,15 @@ impl App {
                 .selected
                 .is_empty()
                 .then_some("Select something first"),
+            Need::Resizable => self.need_unavailable(Need::Selection, target).or_else(|| {
+                let ids = self
+                    .tab
+                    .doc
+                    .expand_abbreviation_selection(&self.tab.selected);
+                (ids.iter()
+                    .any(|id| reshiki::models3d::hides(&self.tab.doc, *id)))
+                .then_some(super::numeric_transforms::RESIZE_SHOWN_IN_3D)
+            }),
             Need::Molecule => self
                 .tab
                 .doc
@@ -402,11 +411,13 @@ impl App {
             .filter(|(_, i, tier)| !late(*i, *tier))
             .count();
         state.hits = scored.into_iter().map(|(_, i, _)| i).collect();
+        // A command word with a value is what was meant, not a name.
+        let named = extra.is_none();
         let mut rows = vec![];
         if let Some(command) = extra {
             rows.push((true, command));
         }
-        if !query.is_empty() && best < STRONG {
+        if !query.is_empty() && best < STRONG && named {
             if reshiki::chemistry::smiles::parse(query).is_ok() {
                 rows.push((
                     false,

@@ -55,14 +55,13 @@ committed result.
 
 The **3D tilt** tool, its X/Y step commands (right-click → **3D tilt**, the
 Alt+Shift+arrow keys and the command palette) and the **Tilt X / Tilt Y**
-transform fields turn a molecule shown only in 3D by turning its model, with
+transform fields turn a molecule shown in 3D or **Both** by turning its model, with
 the same rotation as dragging inside the frame: vertical movement turns it
 about X and horizontal movement about Y, at the tilt's 0.5° per pixel, and
-Shift snaps to 15°. Its hidden 2D drawing stays as it is. In a selection
-that also holds drawn atoms or shapes, the model turns and the rest tilts,
-together as one Undo step, and the preview is the committed result. A
-molecule shown as **Both** tilts its visible 2D drawing and leaves the model
-alone.
+Shift snaps to 15°. Its 2D drawing, hidden or shown beside the model, stays
+as it is. In a selection that also holds drawn atoms or shapes, the model turns
+and the rest tilts, together as one Undo step, and the preview is the committed
+result.
 
 The selection box's rotation handle, **Rotate 180°**, the Alt/Option+arrow
 rotate steps and the **Rotate** transform field roll a model shown only in 3D

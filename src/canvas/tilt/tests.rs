@@ -81,7 +81,7 @@ fn tilts_past_75_degrees_turn_and_a_full_turn_restores_positions() {
 }
 
 #[test]
-fn a_molecule_shown_only_in_3d_turns_its_model_and_keeps_its_drawing() {
+fn a_molecule_shown_in_3d_or_both_turns_its_model_and_keeps_its_drawing() {
     use reshiki::editing::{Transform, transform};
     use reshiki::models3d::Display;
     let atoms = |doc: &Document, ids: [u64; 2]| {
@@ -92,9 +92,11 @@ fn a_molecule_shown_only_in_3d_turns_its_model_and_keeps_its_drawing() {
     };
     for display in [Display::TwoD, Display::Both, Display::ThreeD] {
         let (doc, molecule, drawn) = shown(display);
-        let hidden = display == Display::ThreeD;
+        let modelled = display != Display::TwoD;
         let mixed = [molecule, drawn].concat();
         assert!(available(&doc, &molecule) && available(&doc, &mixed));
+        // One atom turns a shown model; a lone drawn atom has nothing to tilt.
+        assert_eq!(available(&doc, &molecule[..1]), modelled, "{display:?}");
         let tilts: [fn(&mut Document, &[u64]); 3] = [
             |doc, ids| apply(doc, ids, 30., 20.),
             |doc, ids| transform(doc, ids, Transform::TiltX(15.)),
@@ -107,12 +109,12 @@ fn a_molecule_shown_only_in_3d_turns_its_model_and_keeps_its_drawing() {
                 assert_ne!(tilted, doc, "{display:?}");
                 assert_eq!(
                     atoms(&tilted, molecule) == atoms(&doc, molecule),
-                    hidden,
+                    modelled,
                     "{display:?}"
                 );
                 assert_eq!(
                     tilted.models[0].rotation != doc.models[0].rotation,
-                    hidden,
+                    modelled,
                     "{display:?}"
                 );
             }
@@ -122,7 +124,7 @@ fn a_molecule_shown_only_in_3d_turns_its_model_and_keeps_its_drawing() {
             let mut alone = doc.clone();
             tilt(&mut alone, &drawn);
             assert_ne!(atoms(&both, drawn), atoms(&doc, drawn));
-            if hidden {
+            if modelled {
                 assert_eq!(atoms(&both, drawn), atoms(&alone, drawn));
             }
         }

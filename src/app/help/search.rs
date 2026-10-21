@@ -1,8 +1,10 @@
 //! Fuzzy ranking over the shortcut registry and the command palette.
 //!
-//! Every query word must match the entry somewhere. A key typed exactly as
-//! the chord shows it ranks first, then whole words in the name, synonyms and
-//! description, then prefixes, substrings and finally letters in order.
+//! Every query word must match the entry somewhere, in any order. A key typed
+//! exactly as the chord shows it ranks first, then whole words in the name,
+//! synonyms and description, then prefixes and substrings. A word that matches
+//! none of those may still be the initials of name words ("bt"), letters in
+//! order ("wdg"), or carry one typo in five or more letters ("benzne").
 use super::registry::Entry;
 
 /// What the matcher reads from a row: Help's shortcuts and the palette's
@@ -179,19 +181,79 @@ fn token_score(entry: &impl Searchable, chord: &[String], token: &str) -> u32 {
             best = best.max(5 * weight);
         }
     }
+    if best == 0 && lower.chars().count() > 1 {
+        best = loose_score(&lower, &name, &synonyms, &description);
+    }
+    best
+}
+
+/// Looser matches for a word that matched nothing more directly.
+fn loose_score(lower: &str, name: &str, synonyms: &str, description: &str) -> u32 {
+    let name_words: Vec<String> = words(name).collect();
+    // Initials of consecutive words, as "bt" in "Benzene tool".
+    let initials: String = name_words.iter().filter_map(|w| w.chars().next()).collect();
+    if initials.contains(lower) {
+        return 25;
+    }
+    let mut best = 0;
     // Letters in order within one word, as "wdg" in "wedge". A name with
     // fewer words is a closer match.
-    if best == 0 && lower.chars().count() > 2 {
-        let in_word = |text: &str| words(text).any(|word| subsequence(&lower, &word));
-        if in_word(&name) {
-            best = 4 + 4 / words(&name).count().max(1) as u32;
-        } else if in_word(&synonyms) {
+    if lower.chars().count() > 2 {
+        let in_word = |text: &str| words(text).any(|word| subsequence(lower, &word));
+        if in_word(name) {
+            best = 4 + 4 / name_words.len().max(1) as u32;
+        } else if in_word(synonyms) {
             best = 3;
-        } else if in_word(&description) {
+        } else if in_word(description) {
             best = 2;
         }
     }
+    // One wrong, missing, extra or swapped letter in five or more, as
+    // "benzne" for "benzene".
+    if lower.chars().count() >= 5 {
+        let typo = |text: &str| words(text).any(|word| one_typo(lower, &word));
+        if typo(name) {
+            best = best.max(8);
+        } else if typo(synonyms) {
+            best = best.max(6);
+        }
+    }
+    // Letters in order across the name from a word's start, as "bentl".
+    let first = lower.chars().next().unwrap_or_default();
+    let across = (0..name_words.len())
+        .filter_map(|i| name_words.get(i..))
+        .any(|rest| {
+            rest.first().is_some_and(|w| w.starts_with(first)) && subsequence(lower, &rest.concat())
+        });
+    if best == 0 && across {
+        best = 1;
+    }
     best
+}
+
+/// Whether `typed` is `word`, or its start, but for one typo.
+fn one_typo(typed: &str, word: &str) -> bool {
+    let typed: Vec<char> = typed.chars().collect();
+    let word: Vec<char> = word.chars().collect();
+    let n = typed.len();
+    // The start may be a letter shorter or longer than what was typed.
+    [word.len(), n.saturating_sub(1), n, n + 1]
+        .into_iter()
+        .filter_map(|len| word.get(..len))
+        .any(|start| one_edit(&typed, start))
+}
+
+/// One letter changed, missing, extra or swapped with the next.
+fn one_edit(a: &[char], b: &[char]) -> bool {
+    let same = a.iter().zip(b).take_while(|(x, y)| x == y).count();
+    let (a, b) = (
+        a.get(same..).unwrap_or_default(),
+        b.get(same..).unwrap_or_default(),
+    );
+    a.get(1..) == b.get(1..)
+        || a.get(1..) == Some(b)
+        || b.get(1..) == Some(a)
+        || matches!((a, b), ([x, y, r @ ..], [p, q, s @ ..]) if x == q && y == p && r == s)
 }
 
 /// Query words: whitespace-separated, with modifier symbols split off ("⇧r").
