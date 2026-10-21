@@ -26,6 +26,8 @@ pub(crate) enum Request {
     Snapshot(u64),
     /// Stop the editor.
     Close,
+    /// Draw again, as after a font arrives.
+    Redraw,
 }
 
 #[derive(Default)]
@@ -36,6 +38,9 @@ struct Host {
     replies: HashMap<u64, oneshot::Sender<Result<Document, String>>>,
     next_reply: u64,
     on_change: Option<js_sys::Function>,
+    /// Called once, the first time a caption has Japanese (CJK) text that no
+    /// loaded font draws.
+    on_missing_font: Option<js_sys::Function>,
     revision: Option<(u64, u64)>,
     /// winit runs one event loop per page, even after it exits.
     mounted: bool,
@@ -61,13 +66,15 @@ fn js(message: impl std::fmt::Display) -> JsError {
 }
 
 /// Start the editor in `element`, which it fills, showing `data` read as
-/// `format` when given. A page can mount one editor; put further editors in
+/// `format` when given. `on_missing_font` is called once, the first time a
+/// caption has Japanese (CJK) text that no loaded font draws. A page can mount one editor; put further editors in
 /// iframes.
 #[wasm_bindgen]
 pub async fn mount(
     element: web_sys::Element,
     data: Option<Vec<u8>>,
     format: Option<String>,
+    on_missing_font: Option<js_sys::Function>,
 ) -> Result<(), JsError> {
     const TARGET: &str = "reshiki-editor-canvas";
     if HOST.with_borrow(|host| host.mounted) {
@@ -116,6 +123,7 @@ pub async fn mount(
             requests: Some(sender),
             receiver: Some(receiver),
             mounted: true,
+            on_missing_font,
             ..Host::default()
         }
     });
@@ -197,6 +205,42 @@ pub fn on_change(callback: Option<js_sys::Function>) {
     HOST.with_borrow_mut(|host| host.on_change = callback);
 }
 
+/// Add a TrueType or OpenType font (or collection) for drawing, measuring and
+/// export, before or after `mount`. Text whose own font lacks a glyph falls
+/// back to it. Returns how many faces it holds.
+#[wasm_bindgen(js_name = addFont)]
+pub fn add_font(bytes: Vec<u8>) -> Result<usize, JsError> {
+    let faces = reshiki::style::add_font(bytes).map_err(js)?;
+    // Before mount the first frame has it anyway.
+    let _ = send(Request::Redraw);
+    Ok(faces)
+}
+
+/// Tell the page when `text`, about to be drawn, needs a Japanese font.
+pub(crate) fn text_drawn(text: &str) {
+    let cjk = |c: char| {
+        matches!(c,
+            '\u{3000}'..='\u{30FF}' // CJK punctuation, hiragana, katakana
+            | '\u{3400}'..='\u{4DBF}' // CJK extension A
+            | '\u{4E00}'..='\u{9FFF}' // CJK unified ideographs
+            | '\u{F900}'..='\u{FAFF}' // CJK compatibility ideographs
+            | '\u{FF00}'..='\u{FFEF}') // full- and half-width forms
+    };
+    if HOST.with_borrow(|host| host.on_missing_font.is_none())
+        || !text
+            .chars()
+            .any(|c| cjk(c) && !reshiki::style::has_glyph(c))
+    {
+        return;
+    }
+    let callback = HOST.with_borrow_mut(|host| host.on_missing_font.take());
+    if let Some(callback) = callback
+        && let Err(thrown) = callback.call0(&JsValue::NULL)
+    {
+        error(&format!("The missing font callback failed: {thrown:?}"));
+    }
+}
+
 /// Stop the editor. Its canvas stays until the page removes it.
 #[wasm_bindgen]
 pub fn destroy() -> Result<(), JsError> {
@@ -204,6 +248,7 @@ pub fn destroy() -> Result<(), JsError> {
     HOST.with_borrow_mut(|host| {
         host.requests = None;
         host.on_change = None;
+        host.on_missing_font = None;
     });
     Ok(())
 }

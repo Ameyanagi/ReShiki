@@ -74,6 +74,39 @@ The custom element wraps `mount`:
 
 It fires `ready` and `change`, and has `load`, `save` and `exportImage`.
 
+### Fonts
+
+The editor can only draw with fonts loaded into it as bytes: it bundles
+Liberation Sans, which has Arial's letter widths and answers to Arial, so
+drawings lay out as on the desktop. Text that font lacks falls back to the
+fonts below.
+
+- **Japanese (CJK) text.** The first time a caption has Japanese characters
+  that no loaded font draws, the editor loads a fallback once. If the page
+  already has Local Font Access permission (Chrome and Edge), it uses the
+  computer's own Japanese font, such as Hiragino Sans, Yu Gothic or Meiryo,
+  without a prompt. Otherwise it downloads
+  [Noto Sans JP](https://github.com/notofonts/noto-cjk) Regular (4.5 MB, SIL
+  Open Font License 1.1) from jsDelivr. Pages without Japanese text download
+  nothing. The font is not bundled in this package.
+- **The page's own fonts.** `fonts` takes TrueType or OpenType files (or
+  collections) as URLs or bytes. They load before the editor starts, and
+  text whose font lacks a glyph falls back to them. URLs on another origin
+  need CORS.
+
+```js
+await mount(element, {
+  fonts: ["/fonts/MyLabels.ttf"],
+  cjkFont: "/fonts/NotoSansJP-Regular.otf", // self-host the fallback, or false for none
+  onError: (error) => console.warn(error.message), // a font that could not load
+});
+```
+
+`embed()` takes the same options, with fonts as URLs. The custom element
+takes `fonts` (URLs separated by spaces) and `cjk-font` (a URL, or `false`)
+attributes and fires `error` for a font that could not load. Fonts added this
+way also reach `save` and `exportImage` figures.
+
 ### Demo
 
 ```sh
@@ -103,8 +136,9 @@ it.
 - Copy and paste carry text (SMILES, the drawing as text) through
   `navigator.clipboard`, which asks for permission to read. There are no
   image or ChemDraw clipboard formats.
-- Only Liberation Sans is bundled, so PNG and PDF figures have no glyphs for
-  CJK text or symbols it lacks, such as ℃, ⇌ and superscript ⁺ and ⁻.
+- Only Liberation Sans is bundled, so symbols it lacks, such as ℃, ⇌ and
+  superscript ⁺ and ⁻, need a font from `fonts`. Japanese text loads a
+  fallback (see [Fonts](#fonts)).
 - Shortcuts use Ctrl, also on macOS, where Cmd does not work yet.
 - Work runs on the page's thread, so a long cleanup or import pauses the page.
 - Without WebGPU, lines are drawn without antialiasing: WebGL2 loses most
@@ -132,14 +166,15 @@ import { init } from "@ameyanagi/reshiki";
 await init(new URL("/assets/reshiki_web_bg.wasm", location.href));
 ```
 
-| Function                                           | Result                                                                     |
-| -------------------------------------------------- | -------------------------------------------------------------------------- |
-| `convert(data, from, to)`                          | The structure or drawing in another format.                                |
-| `renderSvg(data, format)`                          | The editor's SVG preview, with a transparent surround.                     |
-| `renderPng(data, format, { maxWidth, maxHeight })` | The editor's PNG preview on white, scaled to fit (1600 × 1000 by default). |
-| `smiles(data, format)`                             | The canonical SMILES.                                                      |
-| `inchi(data, format)`                              | The standard InChI.                                                        |
-| `version()`                                        | The library version.                                                       |
+| Function                                           | Result                                                                        |
+| -------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `convert(data, from, to)`                          | The structure or drawing in another format.                                   |
+| `renderSvg(data, format)`                          | The editor's SVG preview, with a transparent surround.                        |
+| `renderPng(data, format, { maxWidth, maxHeight })` | The editor's PNG preview on white, scaled to fit (1600 × 1000 by default).    |
+| `smiles(data, format)`                             | The canonical SMILES.                                                         |
+| `inchi(data, format)`                              | The standard InChI.                                                           |
+| `addFont(font)`                                    | Adds a font (a URL or bytes) that figures fall back to, such as for Japanese. |
+| `version()`                                        | The library version.                                                          |
 
 `data` is a string or a `Uint8Array`; `cdx` input must be bytes.
 

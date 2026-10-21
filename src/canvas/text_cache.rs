@@ -143,6 +143,8 @@ fn outline_with_glyphs(
     style: &TextStyle,
     glyphs: Option<&mut glyphs::Glyphs>,
 ) -> OutlinedText {
+    #[cfg(target_arch = "wasm32")]
+    crate::web::text_drawn(text);
     let t = canvas::Text {
         content: text.to_owned(),
         position: Point::ORIGIN,

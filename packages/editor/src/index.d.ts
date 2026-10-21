@@ -61,5 +61,10 @@ export function smiles(data: Input, format: InputFormat): Promise<string>;
 /** The standard InChI. */
 export function inchi(data: Input, format: InputFormat): Promise<string>;
 
+/** Add a TrueType or OpenType font (or collection), from a URL or bytes, for
+ * figures and previews; text whose font lacks a glyph, such as Japanese,
+ * falls back to it. Resolves to the number of faces added. */
+export function addFont(font: string | URL | Uint8Array | ArrayBuffer): Promise<number>;
+
 /** The library version. */
 export function version(): Promise<string>;

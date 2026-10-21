@@ -42,7 +42,7 @@ if ! grep -q '"./src/editor.js"' "$demo/index.html" || ! grep -q 'id="demo-notic
 fi
 # release.yml compares this with the published demo's.
 awk -F '"' '/^version = / { print $2; exit }' "$root/Cargo.toml" > "$demo/VERSION"
-cp "$package/src/editor.js" "$demo/src/"
+cp "$package/src/editor.js" "$package/src/fonts.js" "$demo/src/"
 cp "$package/dist/editor/reshiki.js" "$package/dist/editor/reshiki_bg.wasm" "$demo/dist/editor/"
 cp -R "$package/dist/licenses" "$demo/licenses"
 

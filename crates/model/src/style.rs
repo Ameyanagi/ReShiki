@@ -3,7 +3,7 @@ pub mod units;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    sync::{LazyLock, Mutex},
+    sync::{LazyLock, Mutex, PoisonError, RwLock, RwLockReadGuard},
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -101,22 +101,116 @@ impl DrawingStyle {
     }
 }
 
-static FONTS: LazyLock<resvg::usvg::fontdb::Database> = LazyLock::new(|| {
+struct Fonts {
+    db: resvg::usvg::fontdb::Database,
+    names: &'static [&'static str],
+    /// Families of the fonts added at runtime, searched after the usual
+    /// fallbacks for glyphs a label's own font lacks.
+    added: Vec<&'static str>,
+}
+
+static FONTS: LazyLock<RwLock<Fonts>> = LazyLock::new(|| {
     let mut db = resvg::usvg::fontdb::Database::new();
     load_fonts(&mut db);
-    db
+    let names = family_names(&db);
+    RwLock::new(Fonts {
+        db,
+        names,
+        added: Vec::new(),
+    })
 });
 
+fn fonts() -> RwLockReadGuard<'static, Fonts> {
+    FONTS.read().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Fonts a page added at runtime, after the system's or the bundled ones.
+static ADDED: Mutex<Vec<resvg::usvg::fontdb::Source>> = Mutex::new(Vec::new());
+
 /// Load the fonts that text is measured and drawn with: the system's on the
-/// desktop and the bundled ones in the browser.
+/// desktop and the bundled ones in the browser, then any added at runtime.
 pub fn load_fonts(db: &mut resvg::usvg::fontdb::Database) {
     #[cfg(not(target_arch = "wasm32"))]
     db.load_system_fonts();
     #[cfg(target_arch = "wasm32")]
     font::load_bundled(db);
+    for source in added_fonts(0) {
+        db.load_font_source(source);
+    }
+}
+
+/// Add a TrueType or OpenType font (or collection) for measuring, drawing and
+/// export, as the browser does with a page's fonts. Labels whose own family
+/// lacks a glyph fall back to it. Returns how many faces it holds.
+pub fn add_font(bytes: Vec<u8>) -> Result<usize, String> {
+    let source = resvg::usvg::fontdb::Source::Binary(std::sync::Arc::new(bytes));
+    let mut fonts = FONTS.write().unwrap_or_else(PoisonError::into_inner);
+    let ids = fonts.db.load_font_source(source.clone());
+    if ids.is_empty() {
+        return Err("Not a TrueType or OpenType font".into());
+    }
+    fonts.names = family_names(&fonts.db);
+    for id in &ids {
+        let families = fonts.db.face(*id).map(|face| face.families.clone());
+        for (family, _) in families.unwrap_or_default() {
+            let name = fonts.names.iter().find(|name| **name == family).copied();
+            if let Some(name) = name
+                && !fonts.added.contains(&name)
+            {
+                fonts.added.push(name);
+            }
+        }
+    }
+    ADDED
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .push(source);
+    let faces = ids.len();
+    drop(fonts);
+    GLYPHS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clear();
+    GLYPH_INK
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clear();
+    Ok(faces)
+}
+
+/// The fonts added since the first `from`; their count changes with each
+/// [`add_font`], so a renderer with its own font database can catch up.
+pub fn added_fonts(from: usize) -> Vec<resvg::usvg::fontdb::Source> {
+    let added = ADDED.lock().unwrap_or_else(PoisonError::into_inner);
+    added.get(from..).unwrap_or_default().to_vec()
+}
+
+/// How many fonts were added at runtime; caches of laid-out text compare it.
+pub fn font_generation() -> usize {
+    ADDED.lock().unwrap_or_else(PoisonError::into_inner).len()
+}
+
+/// Whether any loaded face draws `c`.
+pub fn has_glyph(c: char) -> bool {
+    let fonts = fonts();
+    fonts.db.faces().any(|face| {
+        fonts
+            .db
+            .with_face_data(face.id, |bytes, index| {
+                ttf_parser::Face::parse(bytes, index)
+                    .ok()
+                    .and_then(|face| face.glyph_index(c))
+            })
+            .flatten()
+            .is_some()
+    })
 }
 
 mod font;
+
+#[cfg(test)]
+#[path = "style/added_font_tests.rs"]
+mod added_font_tests;
 
 /// Measure advances in the same font used by the drawing renderers.
 pub fn text_width(text: &str, size: f32) -> f32 {
@@ -125,7 +219,9 @@ pub fn text_width(text: &str, size: f32) -> f32 {
 
 pub fn text_ascent(style: &crate::typography::TextStyle) -> f32 {
     use resvg::usvg::fontdb::{Family, Query};
-    FONTS
+    let fonts = fonts();
+    fonts
+        .db
         .query(&Query {
             families: &[Family::Name(&style.family), Family::SansSerif],
             weight: resvg::usvg::fontdb::Weight(if style.bold { 700 } else { 400 }),
@@ -137,7 +233,7 @@ pub fn text_ascent(style: &crate::typography::TextStyle) -> f32 {
             ..Query::default()
         })
         .and_then(|id| {
-            FONTS.with_face_data(id, |bytes, index| {
+            fonts.db.with_face_data(id, |bytes, index| {
                 let face = font::face(bytes, index, if style.bold { 700 } else { 400 })?;
                 Some(face.ascender() as f32 / face.units_per_em() as f32 * style.size())
             })
@@ -167,12 +263,21 @@ pub fn ui_font_family() -> &'static str {
     SANS_FALLBACKS
         .iter()
         .find_map(|name| {
-            FONT_NAMES
+            fonts()
+                .names
                 .iter()
                 .find(|available| *available == name)
                 .copied()
         })
         .unwrap_or("Arial")
+}
+
+/// The families a label's glyph is looked up in, in order: its own, the
+/// sans-serif fallbacks, then the fonts added at runtime.
+fn fallback_families<'a>(family: &'a str, fonts: &'a Fonts) -> impl Iterator<Item = &'a str> {
+    std::iter::once(family)
+        .chain(SANS_FALLBACKS.iter().copied())
+        .chain(fonts.added.iter().copied())
 }
 
 type GlyphKey = (String, bool, bool, char);
@@ -189,11 +294,11 @@ pub fn glyph_metrics(c: char, style: &crate::typography::TextStyle) -> GlyphMetr
     {
         return *result;
     }
-    let result = std::iter::once(style.family.as_str())
-        .chain(SANS_FALLBACKS.iter().copied())
+    let fonts = fonts();
+    let result = fallback_families(&style.family, &fonts)
         .find_map(|name| {
-            let family = FONT_NAMES.iter().find(|n| **n == name).copied()?;
-            let id = FONTS.query(&Query {
+            let family = fonts.names.iter().find(|n| **n == name).copied()?;
+            let id = fonts.db.query(&Query {
                 families: &[Family::Name(family)],
                 weight: resvg::usvg::fontdb::Weight(if style.bold { 700 } else { 400 }),
                 style: if style.italic {
@@ -203,7 +308,8 @@ pub fn glyph_metrics(c: char, style: &crate::typography::TextStyle) -> GlyphMetr
                 },
                 ..Default::default()
             })?;
-            FONTS
+            fonts
+                .db
                 .with_face_data(id, |bytes, index| {
                     let face = font::face(bytes, index, if style.bold { 700 } else { 400 })?;
                     let advance = face.glyph_hor_advance(face.glyph_index(c)?)?;
@@ -211,7 +317,11 @@ pub fn glyph_metrics(c: char, style: &crate::typography::TextStyle) -> GlyphMetr
                 })
                 .flatten()
         })
-        .unwrap_or((font_name(&style.family), 0.6));
+        .unwrap_or_else(|| {
+            let family = fonts.names.iter().find(|n| **n == style.family);
+            (family.copied().unwrap_or("Arial"), 0.6)
+        });
+    drop(fonts);
     if let Ok(mut cache) = GLYPHS.lock() {
         if cache.len() >= 16384 {
             cache.clear();
@@ -258,7 +368,9 @@ pub fn text_ink_shapes(
         let ink = if let Some(ink) = cached {
             ink
         } else {
-            let ink = FONTS
+            let fonts = fonts();
+            let ink = fonts
+                .db
                 .query(&Query {
                     families: &[Family::Name(family)],
                     weight: resvg::usvg::fontdb::Weight(if style.bold { 700 } else { 400 }),
@@ -270,7 +382,7 @@ pub fn text_ink_shapes(
                     ..Default::default()
                 })
                 .and_then(|id| {
-                    FONTS.with_face_data(id, |bytes, index| {
+                    fonts.db.with_face_data(id, |bytes, index| {
                         let face = font::face(bytes, index, if style.bold { 700 } else { 400 })?;
                         let glyph = face.glyph_index(c)?;
                         let bbox = face.glyph_bounding_box(glyph)?;
@@ -343,22 +455,25 @@ pub fn label_vertical_center(text: &str, size: f32, style: &crate::typography::T
     }
 }
 
-static FONT_NAMES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
-    let names: std::collections::BTreeSet<_> = FONTS
+fn family_names(db: &resvg::usvg::fontdb::Database) -> &'static [&'static str] {
+    let names: std::collections::BTreeSet<_> = db
         .faces()
         .flat_map(|f| f.families.iter().map(|(n, _)| n.clone()))
         .filter(|n| !n.starts_with('.') && !n.trim().is_empty())
         .collect();
+    // Leaked once at start and once per added font.
     names
         .into_iter()
         .map(|s| &*Box::leak(s.into_boxed_str()))
-        .collect()
-});
+        .collect::<Vec<_>>()
+        .leak()
+}
 pub fn font_families() -> &'static [&'static str] {
-    &FONT_NAMES
+    fonts().names
 }
 pub fn font_name(name: &str) -> &'static str {
-    FONT_NAMES
+    fonts()
+        .names
         .iter()
         .find(|n| **n == name)
         .copied()
@@ -417,13 +532,15 @@ pub fn outline_text(
             self.commands.push(PathCommand::Close);
         }
     }
-    FONTS
+    let fonts = fonts();
+    fonts
+        .db
         .query(&Query {
             families: &[Family::Name(&DEFAULT.font_family), Family::SansSerif],
             ..Query::default()
         })
         .and_then(|id| {
-            FONTS.with_face_data(id, |bytes, index| {
+            fonts.db.with_face_data(id, |bytes, index| {
                 let face = font::face(bytes, index, 400)?;
                 let mut b = Outline {
                     commands: vec![],

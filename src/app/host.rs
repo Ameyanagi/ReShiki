@@ -16,6 +16,8 @@ impl App {
             // without ending the edit.
             Request::Snapshot(id) => crate::web::reply(id, self.inline_candidate()),
             Request::Close => return iced::exit(),
+            // The canvas sees the new font when it draws after this update.
+            Request::Redraw => {}
         }
         Task::none()
     }

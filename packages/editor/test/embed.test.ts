@@ -3,9 +3,13 @@
 import { expect, test } from "bun:test";
 
 const listeners = new Set<unknown>();
+let frame: { src?: string } = {};
 Object.assign(globalThis, {
-  location: { href: "https://example.test/" },
-  document: { createElement: () => ({ style: {}, remove() {}, contentWindow: {} }) },
+  location: { href: "https://example.test/app/" },
+  document: {
+    createElement: () =>
+      (frame = { style: {}, remove() {}, contentWindow: {} } as { src?: string }),
+  },
   addEventListener: (_: string, listener: unknown) => listeners.add(listener),
   removeEventListener: (_: string, listener: unknown) => listeners.delete(listener),
 });
@@ -29,4 +33,17 @@ test("a frame that never starts rejects waiting calls", async () => {
   await expect(editor.ready).rejects.toThrow("The editor frame did not start");
   editor.destroy();
   expect(listeners.size).toBe(0);
+});
+
+test("the frame gets the page's fonts as full URLs", () => {
+  const fontsOf = () => JSON.parse(new URL(frame.src ?? "").searchParams.get("fonts") ?? "null");
+  embed(host, { fonts: ["fonts/a.ttf"], cjkFont: "/jp.otf" }).destroy();
+  expect(fontsOf()).toEqual({
+    fonts: ["https://example.test/app/fonts/a.ttf"],
+    cjkFont: "https://example.test/jp.otf",
+  });
+  embed(host, { cjkFont: false }).destroy();
+  expect(fontsOf()).toEqual({ fonts: [], cjkFont: false });
+  embed(host).destroy();
+  expect(fontsOf()).toBeNull();
 });
