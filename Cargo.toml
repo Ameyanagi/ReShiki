@@ -127,7 +127,8 @@ open = "5"
 
 # The browser editor: one thread, no processes, and the page's own APIs.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-iced = { version = "0.14", default-features = false, features = ["wgpu", "webgl"] }
+# Browser canvases have no sRGB surface format, so pack sRGB colours as-is.
+iced = { version = "0.14", default-features = false, features = ["wgpu", "webgl", "web-colors"] }
 tokio = { version = "1", default-features = false, features = ["sync"] }
 # scripts/build_wasm.sh installs the wasm-bindgen CLI of exactly this version.
 wasm-bindgen = "=0.2.128"
