@@ -1,0 +1,61 @@
+#\#CIF_1.1
+# Solid carbon dioxide (dry ice), Pa-3. Hand-written test fixture from the
+# published cell parameter (a = 5.624 Å) and oxygen parameter x = 0.1185,
+# with the Pa-3 general positions of the International Tables. The
+# displacement parameters are illustrative values for testing, not measured.
+data_co2
+_cell_length_a 5.624
+_cell_length_b 5.624
+_cell_length_c 5.624
+_cell_angle_alpha 90.0
+_cell_angle_beta 90.0
+_cell_angle_gamma 90.0
+_symmetry_space_group_name_H-M 'P a -3'
+
+loop_
+_symmetry_equiv_pos_as_xyz
+'x,y,z'
+'-x+1/2,-y,z+1/2'
+'-x,y+1/2,-z+1/2'
+'x+1/2,-y+1/2,-z'
+'z,x,y'
+'z+1/2,-x+1/2,-y'
+'-z+1/2,-x,y+1/2'
+'-z,x+1/2,-y+1/2'
+'y,z,x'
+'-y,z+1/2,-x+1/2'
+'y+1/2,-z+1/2,-x'
+'-y+1/2,-z,x+1/2'
+'-x,-y,-z'
+'x+1/2,y,-z+1/2'
+'x,-y+1/2,z+1/2'
+'-x+1/2,y+1/2,z'
+'-z,-x,-y'
+'-z+1/2,x+1/2,y'
+'z+1/2,x,-y+1/2'
+'z,-x+1/2,y+1/2'
+'-y,-z,-x'
+'y,-z+1/2,x+1/2'
+'-y+1/2,z+1/2,x'
+'y+1/2,z,-x+1/2'
+
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_U_iso_or_equiv
+_atom_site_adp_type
+C1 C 0.0 0.0 0.0 0.030 Uiso
+O1 O 0.1185(2) 0.1185(2) 0.1185(2) 0.045 Uani
+
+loop_
+_atom_site_aniso_label
+_atom_site_aniso_U_11
+_atom_site_aniso_U_22
+_atom_site_aniso_U_33
+_atom_site_aniso_U_12
+_atom_site_aniso_U_13
+_atom_site_aniso_U_23
+O1 0.045 0.045 0.045 -0.010 -0.010 -0.010
