@@ -109,6 +109,14 @@ pub async fn inchi(data: Vec<u8>, format: String) -> Result<String, JsError> {
     text(write(doc, "inchi").await.map_err(js)?).map_err(js)
 }
 
+/// Add a TrueType or OpenType font (or collection) for figures and previews.
+/// Text whose own font lacks a glyph, such as Japanese, falls back to it.
+/// Returns how many faces it holds.
+#[wasm_bindgen(js_name = addFont)]
+pub fn add_font(bytes: Vec<u8>) -> Result<usize, JsError> {
+    reshiki_model::style::add_font(bytes).map_err(js)
+}
+
 /// This library's version.
 #[wasm_bindgen]
 pub fn version() -> String {

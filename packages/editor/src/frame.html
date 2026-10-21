@@ -20,13 +20,18 @@
     <script type="module">
       // The page embed.js loads into an iframe. It answers its parent's
       // { id, method, args } messages with { id, result } or { id, error },
-      // and posts { event: "ready" | "change" }.
+      // and posts { event: "ready" | "change" } and { event: "fonterror", error }.
+      // embed() passes its fonts as JSON in the `fonts` query parameter.
       import { mount } from "./editor.js";
 
       const METHODS = new Set(["load", "save", "exportImage"]);
       const post = (message, origin = "*") => parent.postMessage(message, origin);
+      const fonts = JSON.parse(new URLSearchParams(location.search).get("fonts") ?? "{}");
       const ready = mount(document.getElementById("editor"), {
+        fonts: fonts.fonts,
+        cjkFont: fonts.cjkFont,
         onChange: () => post({ event: "change" }),
+        onError: (error) => post({ event: "fonterror", error: String(error?.message ?? error) }),
       });
       ready.then(
         () => post({ event: "ready" }),

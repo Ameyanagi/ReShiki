@@ -3,7 +3,9 @@
 //
 //   <reshiki-editor src="caffeine.mol" format="mol" style="height: 600px">
 //
-// It fires `ready` once the editor runs and `change` after each edit, and has
+// `fonts` lists font URLs separated by spaces, and `cjk-font` is the Japanese
+// fallback's URL, or "false" for none. It fires `ready` once the editor runs,
+// `change` after each edit and `error` for a font that could not load, and has
 // the editor's load, save and exportImage methods.
 import { mount } from "./editor.js";
 
@@ -28,11 +30,16 @@ export class ReshikiEditor extends HTMLElement {
 
   async #start() {
     const src = this.getAttribute("src");
+    const cjkFont = this.getAttribute("cjk-font");
     const data = src ? new Uint8Array(await (await fetch(src)).arrayBuffer()) : undefined;
     const editor = await mount(this, {
       data,
       format: this.getAttribute("format") ?? "auto",
+      fonts: this.getAttribute("fonts")?.split(/\s+/).filter(Boolean),
+      cjkFont: cjkFont === "false" ? false : (cjkFont ?? undefined),
       onChange: () => this.dispatchEvent(new Event("change")),
+      onError: (error) =>
+        this.dispatchEvent(new ErrorEvent("error", { error, message: error.message })),
     });
     this.dispatchEvent(new Event("ready"));
     return editor;

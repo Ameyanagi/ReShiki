@@ -8,6 +8,12 @@ export interface EmbedOptions {
   title?: string;
   /** Called after each edit. */
   onChange?: () => void;
+  /** Font URLs, as for mount(); relative URLs resolve against this page. */
+  fonts?: (string | URL)[];
+  /** The Japanese fallback's URL, or `false` for none, as for mount(). */
+  cjkFont?: string | URL | false;
+  /** Called with fonts that could not be loaded; they are logged by default. */
+  onError?: (error: Error) => void;
   /** Milliseconds to wait for the frame to start before `ready` and waiting
    * calls reject; 60000 by default. */
   timeout?: number;

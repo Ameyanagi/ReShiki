@@ -10,16 +10,33 @@ use text::cosmic_text::{Command, SwashCache};
 mod variable;
 
 pub(super) fn prepare_fonts() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
     static PREPARED: std::sync::Once = std::sync::Once::new();
+    /// How many of the fonts added at runtime Iced has.
+    static ADDED: AtomicUsize = AtomicUsize::new(0);
     PREPARED.call_once(|| {
         let mut fonts = text::font_system()
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         // The browser has no system fonts; use the faces the drawing renders with.
         #[cfg(target_arch = "wasm32")]
-        reshiki::style::load_fonts(fonts.raw().db_mut());
+        {
+            reshiki::style::load_fonts(fonts.raw().db_mut());
+            ADDED.store(reshiki::style::font_generation(), Ordering::Relaxed);
+        }
         variable::prepare_system_weights(fonts.raw());
     });
+    let added = reshiki::style::added_fonts(ADDED.load(Ordering::Relaxed));
+    if !added.is_empty() {
+        let mut fonts = text::font_system()
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        ADDED.fetch_add(added.len(), Ordering::Relaxed);
+        for source in added {
+            fonts.raw().db_mut().load_font_source(source);
+        }
+        variable::prepare_system_weights(fonts.raw());
+    }
 }
 
 const BUDGET: usize = 2 * 1024 * 1024;

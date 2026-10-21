@@ -13,7 +13,22 @@ export interface MountOptions {
   format?: InputFormat;
   /** Called after each edit to the drawing in front. */
   onChange?: () => void;
+  /** TrueType or OpenType fonts (or collections) to draw with, as URLs or
+   * bytes. They load before the editor starts; text whose font lacks a glyph
+   * falls back to them. URLs on another origin need CORS. */
+  fonts?: FontSource[];
+  /** The Japanese (CJK) fallback, loaded the first time a caption needs it
+   * when no other font has its glyphs. The computer's own Japanese font is
+   * used when the page already has Local Font Access permission; otherwise
+   * this URL is downloaded: Noto Sans JP from jsDelivr by default. `false`
+   * loads nothing. */
+  cjkFont?: string | URL | false;
+  /** Called with fonts that could not be loaded; they are logged by default. */
+  onError?: (error: Error) => void;
 }
+
+/** A font's URL, or its bytes. */
+export type FontSource = string | URL | Uint8Array | ArrayBuffer;
 
 export interface Editor {
   /** Replace the drawing in front. Rejects with the app's message when the
