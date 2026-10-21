@@ -491,3 +491,45 @@ jobs:
           args=(--latest)
           if [[ "$RELEASE_TAG" == *-* ]]; then args=(--prerelease --latest=false); fi
           gh release create "$RELEASE_TAG" --verify-tag --generate-notes --notes-file notes.md "${args[@]}" *.zip *.tar.gz *.dmg *-setup.exe SHA256SUMS
+  # The browser editor demo on reshiki.com/demo/ follows the latest release.
+  # docs.yml copies the web-demo asset into the site on every deploy.
+  web_demo:
+    needs: publish
+    # always(): publish itself runs after skipped jobs, which would skip this one.
+    if: ${{ always() && github.event_name == 'push' && needs.publish.result == 'success' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.3"
+          python-version: "3.12"
+          enable-cache: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - run: rustup toolchain install 1.99.0 --profile minimal --target wasm32-unknown-unknown
+      - run: rustup default 1.99.0
+      # build_wasm.sh pins wasm-bindgen to Cargo.lock and binaryen to a checked release.
+      - run: scripts/build_wasm.sh --test
+      - run: scripts/package_web_demo.sh
+      - name: Replace the web-demo asset and redeploy the site
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          notes="The browser editor at https://reshiki.com/demo/, built from $RELEASE_TAG."
+          if gh release view web-demo > /dev/null 2>&1; then
+            gh release edit web-demo --notes "$notes"
+          else
+            gh release create web-demo --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "Browser editor demo" --notes "$notes"
+          fi
+          gh release upload web-demo dist/reshiki-web-demo.tar.gz --clobber
+          gh workflow run docs.yml --ref main

@@ -2,6 +2,8 @@ import { access, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 const output = fileURLToPath(new URL("../dist/", import.meta.url));
+// docs.yml adds the browser editor demo to dist/ after this check.
+const addedAfterBuild = new Set(["/demo/"]);
 let checked = 0;
 async function visit(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -10,6 +12,7 @@ async function visit(directory) {
     else if (entry.name.endsWith(".html")) {
       const html = await readFile(file, "utf8");
       for (const match of html.matchAll(/(?:href|src)="(\/(?!\/)[^"?#]*)(?:[?#][^"]*)?"/g)) {
+        if (addedAfterBuild.has(match[1])) continue;
         let target = path.join(output, decodeURIComponent(match[1].slice("/".length)));
         if (target.endsWith(path.sep)) target += "index.html";
         await access(target).catch(() => {
