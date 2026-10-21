@@ -192,7 +192,8 @@ fn vesta_is_a_reference_choice_and_the_default_for_the_vesta_theme() {
     let mut doc = Document::default();
     ColorTheme::Vesta.apply(&mut doc);
     let editor = Editor::new(&doc, 0, &[]);
-    assert_eq!(editor.recipe.reference, Some(vesta));
+    assert_eq!(editor.recipe.reference, Some(vesta.clone()));
+    assert_eq!(editor.references[0], vesta, "VESTA stays listed after Jmol");
     assert_eq!(editor.palette.base, ColorTheme::Vesta);
 }
 #[test]

@@ -93,6 +93,14 @@ fn default_recipe(base: ColorTheme) -> Recipe {
         _ => Recipe::PRESENTATION,
     }
 }
+/// Use a recipe's snapshot in place of a listed reference with its ID, keeping
+/// the list order (VESTA stays next to Jmol); otherwise add it at the end.
+fn keep_reference(references: &mut Vec<Reference>, reference: &Reference) {
+    match references.iter_mut().find(|r| r.id == reference.id) {
+        Some(listed) => *listed = reference.clone(),
+        None => references.push(reference.clone()),
+    }
+}
 fn fresh_id() -> String {
     format!(
         "generated-{:x}",
@@ -187,8 +195,7 @@ impl Editor {
         }
         if let Some(reference) = &recipe.reference {
             // Reopening uses the saved snapshot, even if the library later changed.
-            references.retain(|r| r.id != reference.id);
-            references.push(reference.clone());
+            keep_reference(&mut references, reference);
         }
         // Preview the authored palette exactly. A recipe is applied only after
         // a generation control changes, never merely by opening/importing it.
@@ -214,8 +221,7 @@ impl Editor {
             .clone()
             .unwrap_or_else(|| default_recipe(theme.base));
         if let Some(reference) = &self.recipe.reference {
-            self.references.retain(|r| r.id != reference.id);
-            self.references.push(reference.clone());
+            keep_reference(&mut self.references, reference);
         }
         self.name = theme.name.clone();
         self.template = theme.clone();
