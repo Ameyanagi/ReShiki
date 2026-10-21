@@ -319,6 +319,8 @@ fn rotate_adp(u: [f32; 6], r: &[V3; 3], reciprocal: V3) -> [f32; 6] {
 
 /// The most symmetry operators of a space group (Fm-3m and the like).
 const MAX_OPERATORS: usize = 192;
+/// The most symmetry operator entries read, repeats included.
+const MAX_LISTED_OPERATORS: usize = 8 * MAX_OPERATORS;
 /// The most sites times operators expanded, so a file cannot ask for
 /// endless work below the atom limit.
 const MAX_EXPANSION: usize = 40_000;
@@ -624,6 +626,14 @@ fn symmetry(block: &Block) -> Result<Vec<([V3; 3], V3)>, Error> {
             listed = vec![(*line, value.as_str())];
             break;
         }
+    }
+    // Even repeated, no space group needs more entries than this; checked
+    // before any operator is parsed or compared.
+    if listed.len() > MAX_LISTED_OPERATORS {
+        return Err(Error(format!(
+            "The CIF lists {} symmetry operators; a space group has at most {MAX_OPERATORS}",
+            listed.len()
+        )));
     }
     listed
         .into_iter()

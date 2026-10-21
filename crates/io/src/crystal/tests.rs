@@ -506,11 +506,12 @@ fn files_cannot_ask_for_endless_work() {
             .to_string()
             .contains("thinner")
     );
-    // Repeated operators count once; too many distinct ones are refused.
+    // Repeated operators count once; too many distinct ones, or too many
+    // entries at all, are refused.
     let atoms = "loop_\n_atom_site_label\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\nC1 0.1 0.2 0.3\n";
     let repeated = format!(
         "{CELL}loop_\n_symmetry_equiv_pos_as_xyz\n{}{atoms}",
-        "'x,y,z'\n'x+1,y,z'\n".repeat(5_000)
+        "'x,y,z'\n'x+1,y,z'\n".repeat(700)
     );
     let (doc, _) = open("cif", &repeated);
     assert_eq!(doc.atoms.len(), 1);
@@ -522,6 +523,16 @@ fn files_cannot_ask_for_endless_work() {
     .unwrap_err()
     .to_string();
     assert!(error.contains("at most 192"), "{error}");
+    let flood: String = (0..100_000)
+        .map(|i| format!("'x+{i}/200000,y,z'\n"))
+        .collect();
+    let error = read(
+        "cif",
+        &format!("{CELL}loop_\n_symmetry_equiv_pos_as_xyz\n{flood}{atoms}"),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(error.contains("100000 symmetry operators"), "{error}");
 }
 
 #[test]
