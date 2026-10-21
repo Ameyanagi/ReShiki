@@ -5,6 +5,12 @@ const FRAME = new URL("./frame.html", import.meta.url);
 
 export function embed(element, options = {}) {
   const frameUrl = new URL(options.frameUrl ?? FRAME, location.href);
+  // The frame fetches fonts itself, so it gets their full URLs.
+  const fonts = (options.fonts ?? []).map((font) => new URL(font, location.href).href);
+  const cjkFont = options.cjkFont ? new URL(options.cjkFont, location.href).href : options.cjkFont;
+  if (fonts.length || cjkFont !== undefined) {
+    frameUrl.searchParams.set("fonts", JSON.stringify({ fonts, cjkFont }));
+  }
   const frame = document.createElement("iframe");
   // A frame on another origin needs these to copy and paste.
   frame.allow = "clipboard-read; clipboard-write";
@@ -31,7 +37,9 @@ export function embed(element, options = {}) {
     if (data?.event === "ready") started.resolve();
     else if (data?.event === "error") started.reject(new Error(data.error));
     else if (data?.event === "change") listeners.forEach((listener) => listener());
-    else if (pending.has(data?.id)) {
+    else if (data?.event === "fonterror") {
+      (options.onError ?? console.error)(new Error(data.error));
+    } else if (pending.has(data?.id)) {
       const { resolve, reject } = pending.get(data.id);
       pending.delete(data.id);
       if ("error" in data) reject(new Error(data.error));

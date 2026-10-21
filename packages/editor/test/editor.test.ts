@@ -3,7 +3,16 @@
 // with `reshiki --cli`; without it those tests are skipped.
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { convert, init, inchi, renderPng, renderSvg, smiles, version } from "../src/index.js";
+import {
+  addFont,
+  convert,
+  init,
+  inchi,
+  renderPng,
+  renderSvg,
+  smiles,
+  version,
+} from "../src/index.js";
 
 const CAFFEINE = "CN1C=NC2=C1C(=O)N(C(=O)N2C)C";
 // Rings, stereo centres, a double-bond geometry, charges and a salt.
@@ -69,6 +78,16 @@ describe("headless library", () => {
       "Unknown output format xyz",
     );
     await expect(renderPng(CAFFEINE, "smiles", { maxWidth: 0 })).rejects.toThrow();
+  });
+
+  test("addFont takes TrueType and OpenType fonts only", async () => {
+    await expect(addFont(new Uint8Array([1, 2, 3]))).rejects.toThrow(
+      "Not a TrueType or OpenType font",
+    );
+    const font = readFileSync(
+      new URL("../../../tests/fixtures/font-export-103/static-400.subset.ttf", import.meta.url),
+    );
+    expect(await addFont(font)).toBe(1);
   });
 
   test("version", async () => {

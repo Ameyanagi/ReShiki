@@ -281,6 +281,8 @@ pub struct State {
     scene: std::cell::RefCell<cache::SceneCache>,
     grid: std::cell::RefCell<GridCache>,
     text: std::cell::RefCell<text_cache::TextCache>,
+    /// The runtime font count the caches were laid out with.
+    fonts: std::cell::Cell<usize>,
     orbit_guide: std::cell::RefCell<paper::OrbitGuideCache>,
     gesture: Option<Gesture>,
     relaxation: Option<optimization::Drag>,
@@ -570,6 +572,12 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
+        // A font the page added may draw glyphs that were missing before.
+        let fonts = reshiki::style::font_generation();
+        if state.fonts.replace(fonts) != fonts {
+            state.scene.take();
+            state.text.take();
+        }
         let paper = self.guides.paper(bounds);
         let offset = Vector::new(paper.x - bounds.x, paper.y - bounds.y);
         let mut frame = layered::Frame::clipped(

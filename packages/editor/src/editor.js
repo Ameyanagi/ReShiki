@@ -2,6 +2,7 @@
 // a page element. The page and the editor share one thread and one WebAssembly
 // instance, so a page holds one editor; embed.js puts more in iframes.
 import load, * as wasm from "../dist/editor/reshiki.js";
+import { loadFonts } from "./fonts.js";
 
 const BINARY = new Set(["png", "pdf", "cdx"]);
 const FIGURES = new Set(["svg", "png", "pdf"]);
@@ -21,7 +22,8 @@ export async function mount(element, options = {}) {
   // The drawing is read before the editor starts, so data that cannot be read
   // rejects here and the page can mount again.
   const data = options.data === undefined ? undefined : bytes(options.data);
-  await wasm.mount(element, data, options.format ?? "auto");
+  const onMissingFont = await loadFonts(wasm, options);
+  await wasm.mount(element, data, options.format ?? "auto", onMissingFont);
   let listeners = [];
   const editor = {
     async load(data, format = "auto") {

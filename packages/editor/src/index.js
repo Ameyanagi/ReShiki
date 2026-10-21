@@ -1,6 +1,7 @@
 // The public API: a thin layer over the wasm-bindgen exports that loads the
 // module once, takes text or bytes, and returns text for text formats.
 import load, * as wasm from "../dist/wasm/reshiki_web.js";
+import { fontBytes } from "./fonts.js";
 
 const BINARY = new Set(["png", "pdf", "cdx"]);
 const encoder = new TextEncoder();
@@ -42,6 +43,11 @@ export async function smiles(data, format) {
 export async function inchi(data, format) {
   await init();
   return wasm.inchi(bytes(data), format);
+}
+
+export async function addFont(font) {
+  await init();
+  return wasm.addFont(await fontBytes(font));
 }
 
 export async function version() {
