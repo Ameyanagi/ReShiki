@@ -31,6 +31,23 @@ pub fn structure_format(extension: &str) -> Option<&'static str> {
     }
 }
 
+/// The format the app opens or imports a file as: [`structure_format`], a
+/// crystal file by its extension, or a VASP file named POSCAR or CONTCAR
+/// without one by its name.
+pub fn file_format(path: &Path) -> Option<&'static str> {
+    let extension = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or_default();
+    structure_format(extension)
+        .or_else(|| crate::crystal::extension_format(extension))
+        .or_else(|| {
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .and_then(crate::crystal::format_of)
+        })
+}
+
 /// Structure file contents as import text: binary CDX as standard base64.
 /// Only the exact format name `cdx` is binary; every other name uses UTF-8.
 pub fn import_text(format: &str, bytes: Vec<u8>) -> Result<String, String> {

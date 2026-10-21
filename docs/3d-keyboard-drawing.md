@@ -124,6 +124,10 @@ Each change is one Undo step; dragging a slider is one step when you release
 it. The canvas draws the model with the same renderer as PNG export, so the
 shading looks the same at any zoom.
 
+Crystal and periodic structures (CIF, PDB, POSCAR/CONTCAR and plain or
+extended XYZ) open as a model in their unit cell; see
+[Crystal structures](crystal-structures.md).
+
 ## Preview an optimized molecule
 
 The preview opens the right **Properties** panel. Force-field, pin, view, and

@@ -27,6 +27,7 @@ use reshiki_model::*;
 pub mod chemistry;
 pub mod cleanup;
 pub mod compatibility;
+pub mod crystal;
 pub mod document_styles;
 pub mod engine;
 pub mod exchange;

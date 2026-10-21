@@ -34,7 +34,7 @@ pub use reshiki_agent::envelope;
 #[cfg(windows)]
 use reshiki_io::native_windows;
 pub use reshiki_io::{
-    chemistry, cleanup, compatibility, document_styles, engine, exchange, export, formats,
+    chemistry, cleanup, compatibility, crystal, document_styles, engine, exchange, export, formats,
     geometry, nmr, recovery, task, template_library,
 };
 

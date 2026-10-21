@@ -213,6 +213,7 @@ export default defineConfig({
                 "chemistry-resource-policy",
                 "clipboard",
                 "contextual-shortcuts",
+                "crystal-structures",
                 "drawing-styles",
                 "figure-export",
                 "fragment-joining",

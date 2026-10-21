@@ -73,6 +73,8 @@ pub enum Error {
     ReactionSmiles(#[from] reaction::SmilesError),
     #[error(transparent)]
     Analysis(#[from] native_response::Error),
+    #[error(transparent)]
+    Crystal(#[from] crate::crystal::Error),
     #[error("Invalid imported drawing: {0}")]
     Document(String),
     #[error("Native import task failed: {0}")]
@@ -175,6 +177,10 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
     }
     let prepared = match format {
         "inchi" => return Ok(Preparation::Inchi(text)),
+        format if crate::crystal::is_crystal_format(format) => {
+            let (document, warnings) = crate::crystal::read(format, &text)?;
+            return Ok(Preparation::Drawing(Box::new(document), warnings));
+        }
         "smiles" => {
             let imported = smiles::read(&text)?;
             let mut molecule = molecule(imported.prepared.state)?;

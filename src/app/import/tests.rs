@@ -73,6 +73,15 @@ fn files_route_by_extension_and_label_the_drop() {
     assert_eq!(plan(&insert).label(), "Drop to insert · 6 files");
     let one = paths(&["caffeine.mol"]);
     assert_eq!(plan(&one).label(), "Drop to insert · caffeine.mol");
+    let crystals = paths(&[
+        "nacl.cif", "1abc.PDB", "POSCAR", "CONTCAR", "si.vasp", "w.xyz", "s.extxyz",
+    ]);
+    assert_eq!(plan(&crystals), Plan::Insert(crystals.clone()));
+    let formats: Vec<_> = crystals.iter().map(|p| kind(p)).collect();
+    assert_eq!(
+        formats,
+        ["cif", "pdb", "poscar", "poscar", "poscar", "xyz", "xyz"].map(Kind::Structure)
+    );
     let pictures = paths(&["a.png", "b.JPG", "c.jpeg", "d.tif", "e.tiff", "f.webp"]);
     assert_eq!(plan(&pictures), Plan::Insert(pictures.clone()));
     let metafile = paths(&["spectrum.EMF"]);

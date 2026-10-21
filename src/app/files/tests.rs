@@ -92,6 +92,23 @@ fn native_worker_rejects_invalid_drawing_and_preserves_import_format() {
     assert!(
         matches!(imported.unwrap(), Prepared::Import { format: "cdxml", contents } if contents == "<CDXML/>")
     );
+    for (name, expected) in [
+        ("nacl.cif", "cif"),
+        ("ligand.pdb", "pdb"),
+        ("POSCAR", "poscar"),
+        ("CONTCAR", "poscar"),
+        ("rutile.vasp", "poscar"),
+        ("water.xyz", "xyz"),
+        ("si.extxyz", "xyz"),
+    ] {
+        let (_, crystal) = runtime
+            .block_on(prepare_contents(name.into(), Ok(b"text".to_vec())))
+            .unwrap();
+        assert!(
+            matches!(crystal.unwrap(), Prepared::Import { format, .. } if format == expected),
+            "{name}"
+        );
+    }
 }
 
 #[test]

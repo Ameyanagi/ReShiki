@@ -78,12 +78,15 @@ pub enum Primitive {
         polygons: Vec<Vec<Point>>,
         outline: Outline,
     },
-    /// A 3D-model wireframe half-bond: a round-capped line in an exact color.
+    /// A 3D-model wireframe half-bond: a round-capped line in an exact color,
+    /// or with `dash` above 0 a dashed one with dashes and gaps that long,
+    /// as a crystal's hidden cell edges and bonds leaving the cell are.
     Wire {
         from: Point,
         to: Point,
         width: f32,
         color: [u8; 3],
+        dash: f32,
     },
     /// A 3D model's soft background card: a rounded rectangle in exact colors.
     Card {

@@ -1,0 +1,12 @@
+REMARK   1 UREA, ONE MOLECULE IN ITS P -4 21 M CELL. HAND-WRITTEN TEST FIXTURE
+REMARK   1 FROM PUBLISHED CELL AND ATOM PARAMETERS (A = 5.565, C = 4.684 A).
+CRYST1    5.565    5.565    4.684  90.00  90.00  90.00 P -4 21 m     2
+HETATM    1  C1  URE A   1       0.000   2.783   1.527  1.00  2.50           C
+HETATM    2  O1  URE A   1       0.000   2.783   2.788  1.00  2.50           O
+HETATM    3  N1  URE A   1       0.812   3.594   0.827  1.00  2.50           N
+HETATM    4  N2  URE A   1      -0.812   1.971   0.827  1.00  2.50           N
+HETATM    5  H11 URE A   1       1.433   4.215   1.324  1.00  2.50           H
+HETATM    6  H12 URE A   1       0.802   3.584  -0.178  1.00  2.50           H
+HETATM    7  H21 URE A   1      -1.433   1.350   1.324  1.00  2.50           H
+HETATM    8  H22 URE A   1      -0.802   1.981  -0.178  1.00  2.50           H
+END
