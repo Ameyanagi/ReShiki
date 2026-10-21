@@ -24,7 +24,7 @@ Start with JACS / ACS styling. Attach templates, refine selected structures, or 
 
 Version 0.12 adds chemical names, NMR prediction, generic structures, atom maps, rear opacity, pen paths, attached mechanism arrows, ChemDraw-like atom labels and an experimental agent API. Older drawings open normally; drawings saved in 0.12 use document version 26 and cannot be opened in 0.11.0 or earlier. Keep a separate copy before saving if you need an earlier release. [Release notes](docs/changes-0.12.md) · [Styles and themes](docs/drawing-styles.md) · [Shortcut gallery and reference](docs/contextual-shortcuts.md).
 
-[Explore the color palettes](https://reshiki.com/guide/color-palettes/): each theme's Strong and Tint rows and every Presentation, Pastel and Jmol element color in light and dark mode, with RGB, OKLCH, CSS variables and reusable theme downloads.
+[Explore the color palettes](https://reshiki.com/guide/color-palettes/): each theme's Strong and Tint rows and every Presentation, Pastel, Jmol and VESTA element color in light and dark mode, with RGB, OKLCH, CSS variables and reusable theme downloads.
 
 New drawings use `.rsk`; existing `.reshiki` and `.moruno` drawings remain supported. Groups and templates are available now and may be extended or revised in future releases.
 

@@ -1,7 +1,7 @@
 //! Reference-based theme recipes. Final palettes are portable snapshots, while the
 //! optional recipe lets the editor reopen the four controls without guessing.
 use crate::{
-    canvas_theme::{CanvasTheme, ColorTheme, jmol},
+    canvas_theme::{CanvasTheme, ColorTheme, jmol, vesta},
     color_contrast::{Oklch, Rgb},
     theme_files::{ColorValue, ThemeFile},
 };
@@ -75,6 +75,34 @@ impl Reference {
             dark: colors(CanvasTheme::Dark),
             light_tile_seeds: tiles(CanvasTheme::Light),
             dark_tile_seeds: tiles(CanvasTheme::Dark),
+        }
+    }
+    /// VESTA's published colors before any label contrast adjustment, like the
+    /// Jmol table. Elements beyond Mt keep neutral ink and no tile seed.
+    pub fn vesta() -> Self {
+        let seeds = |mode: CanvasTheme| {
+            crate::editing::ELEMENTS
+                .iter()
+                .map(|&e| {
+                    let rgb = vesta::swatch(e).unwrap_or_else(|| mode.color([0; 3]));
+                    (e.into(), ColorValue::Rgb(rgb))
+                })
+                .collect()
+        };
+        let tiles: BTreeMap<_, _> = crate::editing::ELEMENTS
+            .iter()
+            .filter_map(|&e| vesta::swatch(e).map(|rgb| (e.into(), ColorValue::Rgb(rgb))))
+            .collect();
+        Self {
+            id: "vesta".into(),
+            name: ColorTheme::Vesta.to_string(),
+            author: String::new(),
+            source: vesta::SOURCE.into(),
+            license: String::new(),
+            light: seeds(CanvasTheme::Light),
+            dark: seeds(CanvasTheme::Dark),
+            light_tile_seeds: tiles.clone(),
+            dark_tile_seeds: tiles,
         }
     }
     fn validate(&self) -> Result<(), String> {
@@ -207,10 +235,10 @@ impl Recipe {
         let mut theme = template.clone();
         theme.base = ColorTheme::Presentation;
         theme.generator = Some(self.clone());
-        theme.source = self.reference.as_ref().map_or_else(
-            || "https://jmol.sourceforge.net/jscolors/".into(),
-            |reference| reference.source.clone(),
-        );
+        theme.source = self
+            .reference
+            .as_ref()
+            .map_or_else(|| jmol::SOURCE.into(), |reference| reference.source.clone());
         for mode in CanvasTheme::ALL {
             let palette = if mode.is_dark() {
                 &mut theme.dark

@@ -233,11 +233,7 @@ impl ThemeFile {
             id: base.to_string().to_lowercase(),
             name: base.to_string(),
             author: String::new(),
-            source: if base.is_publication() {
-                String::new()
-            } else {
-                "https://jmol.sourceforge.net/jscolors/".into()
-            },
+            source: base.source().into(),
             license: String::new(),
             base,
             light: palette(CanvasTheme::Light),

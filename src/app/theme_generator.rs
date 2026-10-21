@@ -81,6 +81,18 @@ impl std::fmt::Display for Selection {
         }
     }
 }
+/// Recipe for a theme without one: Pastel keeps its settings, VESTA its own
+/// reference; everything else starts from Presentation over Jmol.
+fn default_recipe(base: ColorTheme) -> Recipe {
+    match base {
+        ColorTheme::Pastel => Recipe::PASTEL,
+        ColorTheme::Vesta => Recipe {
+            reference: Some(Reference::vesta()),
+            ..Recipe::PRESENTATION
+        },
+        _ => Recipe::PRESENTATION,
+    }
+}
 fn fresh_id() -> String {
     format!(
         "generated-{:x}",
@@ -135,15 +147,10 @@ pub(super) struct Editor {
 impl Editor {
     fn new(doc: &Document, epoch: u64, library: &[ThemeFile]) -> Self {
         let original = ThemeFile::capture(doc);
-        let recipe =
-            original
-                .generator
-                .clone()
-                .unwrap_or(if doc.color_theme == ColorTheme::Pastel {
-                    Recipe::PASTEL
-                } else {
-                    Recipe::PRESENTATION
-                });
+        let recipe = original
+            .generator
+            .clone()
+            .unwrap_or_else(|| default_recipe(doc.color_theme));
         let mut template = original.clone();
         let selection = if doc.custom_theme.is_none() {
             template.id = fresh_id();
@@ -157,19 +164,23 @@ impl Editor {
         } else {
             Selection::Draft
         };
-        let mut references: Vec<_> = [
-            ColorTheme::Publication,
-            ColorTheme::Presentation,
-            ColorTheme::Pastel,
-        ]
-        .into_iter()
-        .map(|color_theme| {
-            Reference::capture(&ThemeFile::capture(&Document {
-                color_theme,
-                ..Default::default()
-            }))
-        })
-        .collect();
+        // VESTA, like Jmol, offers its raw published colors as seeds.
+        let mut references: Vec<_> = std::iter::once(Reference::vesta())
+            .chain(
+                [
+                    ColorTheme::Publication,
+                    ColorTheme::Presentation,
+                    ColorTheme::Pastel,
+                ]
+                .into_iter()
+                .map(|color_theme| {
+                    Reference::capture(&ThemeFile::capture(&Document {
+                        color_theme,
+                        ..Default::default()
+                    }))
+                }),
+            )
+            .collect();
         for theme in library.iter().chain(doc.custom_theme.as_deref()) {
             references.retain(|r| r.id != theme.id);
             references.push(Reference::capture(theme));
@@ -201,11 +212,7 @@ impl Editor {
         self.recipe = theme
             .generator
             .clone()
-            .unwrap_or(if theme.base == ColorTheme::Pastel {
-                Recipe::PASTEL
-            } else {
-                Recipe::PRESENTATION
-            });
+            .unwrap_or_else(|| default_recipe(theme.base));
         if let Some(reference) = &self.recipe.reference {
             self.references.retain(|r| r.id != reference.id);
             self.references.push(reference.clone());

@@ -288,8 +288,8 @@ impl ColorTheme {
             (Self::Pastel, false) => ([0.55, 0.07], [0.95, 0.030]),
             // Tint L 0.53, not 0.55, keeps white ink and bonds at 5:1 on every hue.
             (Self::Pastel, true) => ([0.83, 0.06], [0.53, 0.040]),
-            (Self::Jmol, false) => ([0.50, 0.14], [0.92, 0.045]),
-            (Self::Jmol, true) => ([0.70, 0.13], [0.49, 0.065]),
+            (Self::Jmol | Self::Vesta, false) => ([0.50, 0.14], [0.92, 0.045]),
+            (Self::Jmol | Self::Vesta, true) => ([0.70, 0.13], [0.49, 0.065]),
         };
         Tones { strong, tint }
     }

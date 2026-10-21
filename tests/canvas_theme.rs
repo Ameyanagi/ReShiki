@@ -27,6 +27,7 @@ fn attached_hydrogens_follow_h_palette_in_figures_clipboard_and_chemdraw() {
         ColorTheme::Presentation,
         ColorTheme::Pastel,
         ColorTheme::Jmol,
+        ColorTheme::Vesta,
     ] {
         theme.apply(&mut doc);
         for mode in CanvasTheme::ALL {
@@ -813,4 +814,54 @@ fn legacy_swatches_become_palette_colors_and_follow_the_theme() {
     // Custom colors stay exact on the dark canvas.
     doc.bonds[0].color = Color::Custom([32, 80, 145]);
     assert_eq!(blue(&doc), [32, 80, 145]);
+}
+
+#[test]
+fn vesta_uses_its_reference_colors_with_readable_labels() {
+    use reshiki::{
+        canvas_theme::ColorTheme,
+        color_contrast::{TEXT_TARGET, contrast},
+    };
+    let vesta = ColorTheme::Vesta;
+    for mode in CanvasTheme::ALL {
+        for (element, rgb) in [
+            ("O", [254, 3, 0]),
+            ("Ti", [120, 202, 255]),
+            ("Na", [249, 220, 60]),
+            ("H", [255, 204, 204]),
+            ("Mt", [235, 0, 38]),
+        ] {
+            assert_eq!(vesta.element_swatch(element, mode), Some(rgb), "{element}");
+        }
+        // Like Jmol, elements beyond Mt stay neutral.
+        assert_eq!(vesta.element_swatch("Ds", mode), None);
+        assert_eq!(vesta.element_color("Og", mode), mode.color([0; 3]));
+        for &element in reshiki::editing::ELEMENTS {
+            let ratio = contrast(vesta.element_color(element, mode), mode.background());
+            assert!(ratio >= TEXT_TARGET, "{element}/{mode}: {ratio}");
+        }
+    }
+    // Pale VESTA hues darken for light paper; dark paper keeps them.
+    assert_ne!(
+        vesta.element_color("Na", CanvasTheme::Light),
+        [249, 220, 60]
+    );
+    assert_eq!(vesta.element_color("Na", CanvasTheme::Dark), [249, 220, 60]);
+    assert_eq!(vesta.to_string(), "VESTA");
+    assert_eq!(serde_json::to_string(&vesta).unwrap(), r#""vesta""#);
+    for theme in ColorTheme::ALL {
+        let json = serde_json::to_string(&theme).unwrap();
+        assert_eq!(serde_json::from_str::<ColorTheme>(&json).unwrap(), theme);
+    }
+    let mut doc = sample();
+    vesta.apply(&mut doc);
+    let restored: Document = serde_json::from_slice(&serde_json::to_vec(&doc).unwrap()).unwrap();
+    assert_eq!(restored.color_theme, ColorTheme::Vesta);
+    let file = reshiki::theme_files::ThemeFile::capture(&doc);
+    assert_eq!((file.id.as_str(), file.base), ("vesta", ColorTheme::Vesta));
+    assert!(
+        file.source.contains("K. Momma and F. Izumi"),
+        "{}",
+        file.source
+    );
 }

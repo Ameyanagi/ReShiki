@@ -402,6 +402,8 @@ fn model_colours_follow_the_colour_theme_and_canvas() {
             assert!(light(h) > light(c), "{canvas:?} {theme:?} {h:?} {c:?}");
             if theme == ColorTheme::Jmol {
                 assert_eq!(h, [255; 3], "Jmol's own white");
+            } else if theme == ColorTheme::Vesta {
+                assert_eq!(h, [255, 204, 204], "VESTA's own pale pink");
             } else {
                 let grey = if canvas.is_dark() {
                     HYDROGEN_DARK

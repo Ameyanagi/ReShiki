@@ -4,7 +4,7 @@ template: splash
 tableOfContents: false
 prev: false
 next: false
-description: Reuse ReShiki’s theme palettes and element colors. Compare the Strong and Tint rows of Publication, Presentation, Pastel and Jmol on light and dark paper, and download RGB, OKLCH, CSS and theme files.
+description: Reuse ReShiki’s theme palettes and element colors. Compare the Strong and Tint rows of Publication, Presentation, Pastel, Jmol and VESTA on light and dark paper, and download RGB, OKLCH, CSS and theme files.
 ---
 
 import ColorReference from "../../../components/ColorReference.astro";
@@ -67,6 +67,7 @@ Presentation and Pastel preserve the [Jmol reference hues](https://jmol.sourcefo
 | Presentation | 0.50 / 2.00×                 | 0.70 / 1.00×                |
 | Pastel       | 0.55 / 0.35×                 | 0.83 / 0.40×                |
 | Jmol         | Jmol reference colors        | Jmol reference colors       |
+| VESTA        | VESTA reference colors       | VESTA reference colors      |
 
 The generated color is converted to sRGB, reducing chroma when needed to fit the display gamut. Carbon and hydrogen stay neutral in Presentation and Pastel, and Publication keeps every label in Ink. For **canvas labels**, ReShiki then adjusts lightness as needed to target a **5:1 contrast ratio** against the paper. The values on this page include that contrast adjustment.
 
@@ -74,8 +75,8 @@ These values describe automatic labels on plain paper. Tint ring fills can trigg
 
 ## Sources and reuse
 
-Element reference colors come from [Jmol’s published color table](https://jmol.sourceforge.net/jscolors/). The perceptual conversion follows [Björn Ottosson’s Oklab color space](https://bottosson.github.io/posts/oklab/). ReShiki’s [theme implementation](https://github.com/Ameyanagi/ReShiki/blob/main/crates/model/src/canvas_theme.rs), [palette code](https://github.com/Ameyanagi/ReShiki/blob/main/crates/model/src/palette.rs), [contrast code](https://github.com/Ameyanagi/ReShiki/blob/main/crates/model/src/color_contrast.rs), and [theme format guide](https://github.com/Ameyanagi/ReShiki/tree/main/presets/themes) document the transformations and file format.
+Element reference colors come from [Jmol’s published color table](https://jmol.sourceforge.net/jscolors/). VESTA uses VESTA element colours (K. Momma and F. Izumi, [jp-minerals.org/vesta](https://jp-minerals.org/vesta/)), via pymatgen [ElementColorSchemes.yaml](https://github.com/materialsproject/pymatgen/blob/master/src/pymatgen/vis/ElementColorSchemes.yaml) (MIT), for H through Mt; later elements keep neutral colors. The perceptual conversion follows [Björn Ottosson’s Oklab color space](https://bottosson.github.io/posts/oklab/). ReShiki’s [theme implementation](https://github.com/Ameyanagi/ReShiki/blob/main/crates/model/src/canvas_theme.rs), [palette code](https://github.com/Ameyanagi/ReShiki/blob/main/crates/model/src/palette.rs), [contrast code](https://github.com/Ameyanagi/ReShiki/blob/main/crates/model/src/color_contrast.rs), and [theme format guide](https://github.com/Ameyanagi/ReShiki/tree/main/presets/themes) document the transformations and file format.
 
-ReShiki’s original code and contributions are available under [MIT or Apache-2.0](https://github.com/Ameyanagi/ReShiki/blob/main/CONTRIBUTING.md); the Jmol reference palette is credited separately above. Please retain source attribution when redistributing the collection.
+ReShiki’s original code and contributions are available under [MIT or Apache-2.0](https://github.com/Ameyanagi/ReShiki/blob/main/CONTRIBUTING.md); the Jmol and VESTA reference palettes are credited separately above. Please retain source attribution when redistributing the collection.
 
 Contributors can regenerate this reference with `cargo run --locked --example theme_colors`. The `theme_reference` regression test checks every exported RGB and OKLCH value, the shared lightness of each palette row, and the portable theme files against the application.
