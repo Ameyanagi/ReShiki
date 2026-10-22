@@ -513,29 +513,18 @@ fn orders(atoms: &[Atom], bonds: &[(usize, usize)], network: &[bool]) -> Vec<u8>
 }
 
 /// Place each 2D atom where the opening view shows it, keeping its depth, as
-/// MOL import keeps 3D coordinates: at [`UNITS`] per ångström, or for a
-/// crystal at its 2D scale ([`models3d::flat_scale`]). A linear carbon, as
-/// CO₂'s, shows its C.
+/// MOL import keeps 3D coordinates: for a crystal at its 2D scale (see
+/// [`models3d::lay_out_flat`]), else at [`UNITS`] per ångström.
 fn lay_out(doc: &mut Document, model: &Model3d) {
-    let units = if model.cell.is_some() {
-        models3d::flat_scale(doc, model)
-    } else {
-        UNITS
-    };
+    if model.cell.is_some() {
+        models3d::lay_out_flat(doc, model);
+        return;
+    }
     let positions: HashMap<u64, [f32; 3]> = models3d::viewed(doc, model).into_iter().collect();
-    let linear: HashSet<u64> = model
-        .atoms
-        .iter()
-        .map(|a| a.id)
-        .filter(|id| models3d::linear_carbon(doc, model, *id))
-        .collect();
     for atom in &mut doc.atoms {
         if let Some([x, y, z]) = positions.get(&atom.id) {
-            atom.position = Point::new(x * units, -y * units);
-            atom.depth = z * units;
-        }
-        if linear.contains(&atom.id) {
-            atom.display.carbons = Some(crate::atom_labels::Carbons::All);
+            atom.position = Point::new(x * UNITS, -y * UNITS);
+            atom.depth = z * UNITS;
         }
     }
 }

@@ -58,6 +58,19 @@ drawing.
 - **Ion charges** are hidden in 2D, since the formula carries them; choose
   **Properties → Structure → Ion charges → Show** to label each ion, as Na⁺
   and Cl⁻. The choice is kept in the file.
+- **Repeat** in **Properties → Structure** shows 1 to 4 cells along each of
+  _a_, _b_ and _c_ in the 2D drawing, one Undo step each. The model's own cell
+  stays the editable drawing; the other cells are lighter copies (55%) that
+  follow it, not separate atoms. Bonds between cells are drawn in full and the
+  dashed stubs only leave the outside of the whole repeat. The box holds every
+  cell, thin light lines mark where cells meet on its outside, _a_, _b_ and _c_
+  label the ends of the whole repeat, and Fit takes in all of it. The choice is
+  kept in the file.
+- **Look along** _a_, _b_, _c_ or [111] turns the 2D drawing to look down that
+  direction, tilted a little (at most about 15°) where atoms stacked one
+  behind another would hide each other, as rock salt's along _c_. An axis seen
+  end-on has no label. Turning on a repeat looks along whichever of the four
+  keeps the labels of all the cells farthest apart.
 - **Molecular crystals** keep whole molecules. Each molecule is made whole
   across the cell boundary and kept once, where its centre lies in the cell, so
   atoms of a molecule on a corner or face stick out of the box.
@@ -126,8 +139,9 @@ Saving a crystal needs document version 29. Every file is now saved as version
 - If anything in the file fails validation, nothing is opened, and the message
   names the line where it can.
 
-Repeating the cell with ghost copies and looking along _a_, _b_, _c_ or [111]
-are planned ([issue #417](https://github.com/Ameyanagi/ReShiki/issues/417)).
+Coordination polyhedra and the crystallographer's cell (atoms repeated on the
+far faces, edges and corners) are planned
+([issue #417](https://github.com/Ameyanagi/ReShiki/issues/417)).
 
 ## Implementation notes
 

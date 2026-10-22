@@ -681,6 +681,11 @@ const FIXTURES: [(&str, &str); 5] = [
 /// from the drawing. The opening view keeps the origin at the back, so those
 /// edges are the dashed hidden ones.
 fn drawn_cell(drawing: &[crate::scene::Primitive]) -> (Point, [Point; 3]) {
+    cell_in(drawing, true)
+}
+
+/// [`drawn_cell`], with the origin's edges `hidden` or as they come.
+fn cell_in(drawing: &[crate::scene::Primitive], hidden: bool) -> (Point, [Point; 3]) {
     use crate::scene::Primitive;
     let origin = drawing
         .iter()
@@ -693,11 +698,11 @@ fn drawn_cell(drawing: &[crate::scene::Primitive]) -> (Point, [Point; 3]) {
         .iter()
         .filter_map(|p| match p {
             Primitive::Wire { from, to, dash, .. } if from.distance(origin) < 1e-3 => {
-                assert!(*dash > 0., "a front edge at the origin");
+                assert!(!hidden || *dash > 0., "a front edge at the origin");
                 Some(*to)
             }
             Primitive::Wire { from, to, dash, .. } if to.distance(origin) < 1e-3 => {
-                assert!(*dash > 0., "a front edge at the origin");
+                assert!(!hidden || *dash > 0., "a front edge at the origin");
                 Some(*from)
             }
             _ => None,
@@ -867,4 +872,96 @@ fn fitting_and_selecting_a_crystal_hold_its_whole_cell() {
             }
         }
     }
+}
+
+/// Dashed stubs, lighter copies and thin seam lines in a drawing.
+fn supercell_ink(doc: &Document) -> (usize, usize, usize) {
+    use crate::scene::Primitive;
+    let drawing = crate::scene::primitives(doc);
+    let line = doc.drawing_style.world(doc.drawing_style.line_width_pt);
+    let stub = |p: &Primitive| matches!(p, Primitive::Wire { dash, .. } if *dash > 0. && *dash < line * 3.);
+    let stubs = drawing
+        .iter()
+        .filter(|p| match p {
+            Primitive::Opacity { primitive, .. } => stub(primitive),
+            other => stub(other),
+        })
+        .count();
+    let copies = drawing
+        .iter()
+        .filter(|p| matches!(p, Primitive::Opacity { alpha, primitive } if (*alpha - 0.55).abs() < 1e-3 && matches!(**primitive, Primitive::Text { .. })))
+        .count();
+    let seams = drawing
+        .iter()
+        .filter(|p| matches!(p, Primitive::Wire { width, dash, .. } if *dash == 0. && *width < line * 0.9))
+        .count();
+    (stubs, copies, seams)
+}
+
+#[test]
+fn a_supercell_draws_lighter_copies_seams_and_bonds_between_cells() {
+    let (mut doc, _) = open("cif", NACL);
+    let (stubs, copies, seams) = supercell_ink(&doc);
+    assert_eq!((copies, seams), (0, 0));
+    doc.models[0].repeat = [2, 1, 1];
+    let (wide_stubs, copies, seams) = supercell_ink(&doc);
+    // Every atom of both cells has a lighter copy (the model's own cell's
+    // copies lie under its atoms); one plane between the cells, four lines.
+    assert_eq!(copies, 2 * doc.atoms.len());
+    assert_eq!(seams, 4);
+    // Bonds between the two cells replace the stubs that met there; the
+    // second cell's outward stubs are added.
+    assert!(
+        wide_stubs > stubs && wide_stubs < 2 * stubs,
+        "{stubs} {wide_stubs}"
+    );
+    // The box and its a label reach the far end of both cells.
+    let (origin, ends) = drawn_cell(&crate::scene::primitives(&doc));
+    let (_, single) = drawn_cell(&crate::scene::primitives(&open("cif", NACL).0));
+    let (single_origin, _) = drawn_cell(&crate::scene::primitives(&open("cif", NACL).0));
+    let size = |o: Point, e: &[Point; 3]| e.iter().map(|p| p.distance(o)).product::<f32>();
+    assert!((size(origin, &ends) / size(single_origin, &single) - 2.).abs() < 0.05);
+    // Saved and read back; at most four cells along each axis.
+    let read = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(read.models[0].repeat, [2, 1, 1]);
+    doc.models[0].repeat = [5, 1, 1];
+    assert!(doc.validate().is_err());
+}
+
+#[test]
+fn looking_along_an_axis_keeps_the_drawing_on_its_box() {
+    use crate::models3d::{Along, look_along};
+    let (mut doc, _) = open("cif", CO2);
+    doc.models[0].repeat = [2, 2, 1];
+    let before = doc.atoms.clone();
+    assert!(look_along(&mut doc, 0, Along::C));
+    assert_ne!(doc.atoms, before);
+    let m = model(&doc);
+    // c points nearly at the viewer: its edge is short beside a's and b's.
+    let (origin, ends) = cell_in(&crate::scene::primitives(&doc), false);
+    let mut lengths: Vec<_> = ends.iter().map(|e| e.distance(origin)).collect();
+    lengths.sort_by(f32::total_cmp);
+    assert!(lengths[0] < 0.3 * lengths[1], "{lengths:?}");
+    // The atoms still sit where their fractions put them on the box.
+    let at_origin = doc
+        .atoms
+        .iter()
+        .find(|a| fractional(m, a.id).iter().all(|f| f.abs() < 1e-3));
+    if let Some(atom) = at_origin {
+        assert!(atom.position.distance(origin) < 0.1);
+    }
+    // An axis seen end-on has no label.
+    let mut doc = open("cif", NACL).0;
+    let cell = doc.models[0].cell.clone().unwrap();
+    doc.models[0].rotation = Along::C.rotation(&cell);
+    let turned = doc.models[0].clone();
+    crate::models3d::lay_out_flat(&mut doc, &turned);
+    let labels: Vec<_> = crate::scene::primitives(&doc)
+        .into_iter()
+        .filter_map(|p| match p {
+            crate::scene::Primitive::Text { text, style, .. } if style.italic => Some(text),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(labels, ["a", "b"]);
 }
