@@ -965,3 +965,15 @@ fn looking_along_an_axis_keeps_the_drawing_on_its_box() {
         .collect();
     assert_eq!(labels, ["a", "b"]);
 }
+
+#[test]
+fn moving_a_crystal_needs_no_chemistry_for_its_labels() {
+    // Rock salt's Cl has six bonds, which valence rules would refuse.
+    let (mut doc, _) = open("cif", NACL);
+    for atom in &mut doc.atoms {
+        atom.position = atom.position.offset(10., 0.);
+    }
+    let refresh =
+        crate::atom_labels::refresh::Refresh::calculate(&doc, &Default::default()).unwrap();
+    assert_eq!(refresh.notice, None);
+}
