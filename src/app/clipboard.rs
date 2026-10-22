@@ -2,36 +2,15 @@ use super::{App, Document, Job, Message, Point, Tool, editing, input_request};
 use iced::Task;
 use reshiki::clipboard::{CopyFormat, CopyOutcome, PasteOutcome, PreparedCopy};
 
-// Plain text goes through iced's clipboard, or the page's in the browser.
+// Plain text goes through iced's clipboard, or the page's in the browser,
+// where reshiki::clipboard otherwise copies and pastes every format.
+use iced::clipboard::read as read_text;
 #[cfg(not(target_arch = "wasm32"))]
-use iced::clipboard::{read as read_text, write as write_text};
+use iced::clipboard::write as write_text;
 
 #[cfg(target_arch = "wasm32")]
 fn write_text<T: 'static>(text: String) -> Task<T> {
     Task::future(crate::web::write_text(text)).discard()
-}
-
-/// The browser may refuse the write, so a copied selection is reported like a
-/// native copy and Cut deletes only after the write lands.
-#[cfg(target_arch = "wasm32")]
-fn write_selection(text: String, epoch: u64, revision: u64, cut_ids: Vec<u64>) -> Task<Message> {
-    Task::perform(crate::web::write_text(text), move |result| {
-        Message::ClipboardWritten {
-            epoch,
-            revision,
-            cut_ids: cut_ids.clone(),
-            result: result.map(|()| CopyOutcome {
-                external_editable: false,
-                image_only: false,
-                notices: vec![],
-            }),
-        }
-    })
-}
-
-#[cfg(target_arch = "wasm32")]
-fn read_text() -> Task<Option<String>> {
-    Task::future(crate::web::read_text())
 }
 
 #[derive(Debug, Clone)]
@@ -163,12 +142,6 @@ impl App {
                 self.error = true;
                 return Task::none();
             };
-            // The browser may refuse the write, so report its result.
-            #[cfg(target_arch = "wasm32")]
-            return Task::perform(crate::web::write_text(text), move |result| {
-                Message::CopyAsWritten(key.clone(), result.map(|()| copy.notices.clone()))
-            });
-            #[cfg(not(target_arch = "wasm32"))]
             return write_text(text)
                 .chain(Task::done(Message::CopyAsWritten(key, Ok(copy.notices))));
         }
@@ -294,14 +267,7 @@ impl App {
             self.sync_arrows();
             self.sync_bonds();
         }
-        let action = if cfg!(target_arch = "wasm32") && !stale_cut {
-            // The browser holds the selection as text for ReShiki only.
-            if cut {
-                "Selection cut"
-            } else {
-                "Selection copied"
-            }
-        } else if stale_cut {
+        let action = if stale_cut {
             "Copied previous selection; Cut cancelled because the drawing changed"
         } else if cut {
             if cfg!(windows) {
@@ -421,45 +387,25 @@ impl App {
             return Task::none();
         };
         let text = format!("{}{json}", editing::CLIPBOARD_PREFIX);
-        #[cfg(target_arch = "wasm32")]
-        {
-            let cut_ids = if cut {
-                reshiki::arrow_labels::with_labels(&self.tab.doc, &self.tab.selected)
-            } else {
-                vec![]
-            };
-            self.native_copy_busy = true;
-            self.tab.clipboard_busy = true;
-            self.error = false;
-            self.status = "Copying…".into();
-            write_selection(text, self.tab.file_epoch, self.tab.revision, cut_ids)
+        if cut {
+            let before = self.tab.doc.clone();
+            let ids = reshiki::arrow_labels::with_labels(&self.tab.doc, &self.tab.selected);
+            self.tab.doc.delete(&ids);
+            self.tab.selected.clear();
+            self.changed(before);
         }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            if cut {
-                let before = self.tab.doc.clone();
-                let ids = reshiki::arrow_labels::with_labels(&self.tab.doc, &self.tab.selected);
-                self.tab.doc.delete(&ids);
-                self.tab.selected.clear();
-                self.changed(before);
-            }
-            self.status = if cut {
-                "Selection cut"
-            } else {
-                "Selection copied"
-            }
-            .into();
-            write_text(text)
+        self.status = if cut {
+            "Selection cut"
+        } else {
+            "Selection copied"
         }
+        .into();
+        write_text(text)
     }
 
     pub(super) fn paste_clipboard(&mut self) -> Task<Message> {
         if reshiki::clipboard::available() {
             return self.paste_native(false);
-        }
-        #[cfg(target_arch = "wasm32")]
-        {
-            self.tab.paste_from = Some((self.tab.file_epoch, self.tab.revision));
         }
         read_text().map(Message::Pasted)
     }
@@ -476,12 +422,6 @@ impl App {
     }
 
     pub(super) fn pasted(&mut self, contents: Option<String>) -> Task<Message> {
-        #[cfg(target_arch = "wasm32")]
-        if self.tab.paste_from.take() != Some((self.tab.file_epoch, self.tab.revision)) {
-            self.status =
-                "Drawing changed while reading the clipboard · Paste again to insert here".into();
-            return Task::none();
-        }
         if let Some(contents) = contents.filter(|s| !s.trim().is_empty()) {
             if let Some(json) = editing::clipboard_json(&contents) {
                 match Document::from_json(json.as_bytes()) {

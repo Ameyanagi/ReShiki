@@ -135,3 +135,42 @@ async fn image_only_copy_has_no_chemical_text_and_retains_picture_formats() {
     assert!(picture.atoms.is_empty());
     assert_eq!(picture.graphics.len(), 1);
 }
+
+#[tokio::test]
+async fn a_browser_copy_has_the_drawing_pictures_and_smiles_but_no_pdf_or_cdx() {
+    let kinds = |representations: &[Representation]| {
+        representations
+            .iter()
+            .map(|r| r.kind.clone())
+            .collect::<Vec<_>>()
+    };
+    let (outcome, representations) =
+        prepare_copy_for(Default::default(), rings(false), false, true)
+            .await
+            .unwrap();
+    assert!(!outcome.external_editable);
+    assert_eq!(
+        kinds(&representations),
+        [
+            NATIVE,
+            "public.utf8-plain-text",
+            "public.png",
+            "public.svg-image"
+        ]
+    );
+    let smiles = String::from_utf8(representations[1].bytes().unwrap()).unwrap();
+    assert_eq!(smiles.matches(['c', 'C']).count(), 12, "{smiles}");
+    let items = browser::web_items(&representations).unwrap();
+    assert_eq!(
+        items.iter().map(|(mime, _)| *mime).collect::<Vec<_>>(),
+        ["text/html", "image/png", "image/svg+xml", "text/plain"]
+    );
+    // Copy image: the picture alone, which pastes back as a picture.
+    let (_, representations) = prepare_copy_for(Default::default(), rings(false), true, true)
+        .await
+        .unwrap();
+    assert_eq!(
+        kinds(&representations),
+        ["public.png", "public.svg-image", NATIVE]
+    );
+}
