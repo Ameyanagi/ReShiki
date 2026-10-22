@@ -844,3 +844,27 @@ fn linear_carbons_show_their_label() {
     let carbon = doc.atoms.iter().find(|a| a.element == "C").unwrap();
     assert!(!crate::atom_labels::visible(carbon, &doc));
 }
+
+#[test]
+fn fitting_and_selecting_a_crystal_hold_its_whole_cell() {
+    use crate::scene::Primitive;
+    for (format, text) in FIXTURES {
+        let (doc, _) = open(format, text);
+        let ids: Vec<_> = doc.atoms.iter().map(|a| a.id).collect();
+        let (lo, hi) = crate::scene::selection_bounds(&doc, &ids).unwrap();
+        for p in crate::scene::primitives(&doc) {
+            let ends = match p {
+                Primitive::Wire { from, to, .. } => [from, to],
+                Primitive::Text { position, .. } => [position, position],
+                _ => continue,
+            };
+            for e in ends {
+                assert!(
+                    (lo.x - 1e-3..=hi.x + 1e-3).contains(&e.x)
+                        && (lo.y - 1e-3..=hi.y + 1e-3).contains(&e.y),
+                    "{format}: {e:?} outside {lo:?} {hi:?}"
+                );
+            }
+        }
+    }
+}

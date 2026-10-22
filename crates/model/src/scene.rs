@@ -1104,6 +1104,23 @@ pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<
             grow(id, &mut corners.into_iter());
         }
     }
+    // A whole crystal drawn in 2D holds its cell box and axis labels too.
+    for model in doc
+        .models
+        .iter()
+        .filter(|m| m.display == crate::models3d::Display::TwoD && m.cell.is_some())
+    {
+        if let Some(id) = model.atoms.first().map(|a| a.id)
+            && model.atoms.iter().all(|a| owners.contains_key(&a.id))
+        {
+            let cells = crate::models3d::flat_cells(std::slice::from_ref(model), doc);
+            let ink: Vec<_> = [cells.behind, cells.front, cells.above].concat();
+            if !ink.is_empty() {
+                let (lo, hi) = self::bounds(&ink);
+                grow(id, &mut [lo, hi].into_iter());
+            }
+        }
+    }
     for atom in doc
         .atoms
         .iter()
