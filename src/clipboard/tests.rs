@@ -296,7 +296,7 @@ async fn both_canvas_modes_copy_visible_ink_without_background_objects() {
             back.bonds[0].color,
             crate::palette::Color::imported(theme.color([0; 3]))
         );
-        for (_, image) in copy_images(&doc, true) {
+        for (_, image) in copy_images(&doc, true, false) {
             let image = image.unwrap();
             if image.kind == "public.png" {
                 let raster = image::load_from_memory(&image.bytes().unwrap())
@@ -885,7 +885,7 @@ async fn raster_paste_and_copy_image_preserve_pixels_and_physical_size_without_a
         "../../tests/fixtures/ui-drawn-ethanol.reshiki"
     ))
     .unwrap();
-    let images = copy_images(&doc, true);
+    let images = copy_images(&doc, true, false);
     #[cfg(windows)]
     {
         let svg = images
