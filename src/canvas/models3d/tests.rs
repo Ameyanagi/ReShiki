@@ -1,9 +1,9 @@
 use super::*;
 use crate::canvas::{Camera, Gesture, Handle, SelectionBox, Tool, tests::chain_canvas};
-use iced::{Event, keyboard::Modifiers, mouse, widget::canvas::Program};
+use iced::{Event, Vector, keyboard::Modifiers, mouse, widget::canvas::Program};
 use reshiki::chains::ChainMode;
 use reshiki::document::Document;
-use reshiki::models3d::{ForceField, Hydrogen, Model3d, Placed};
+use reshiki::models3d::{Display, ForceField, Hydrogen, Model3d, Placed};
 
 /// Ethanol shown as a 3D model in place, and a separate methane.
 fn drawing() -> (Document, Vec<u64>) {
@@ -267,105 +267,24 @@ fn corner_handles_resize_the_frame_and_edges_are_hidden() {
 }
 
 #[test]
-fn the_bar_sits_clear_of_the_selection_hides_while_dragging_and_picks_a_display() {
+fn a_press_above_a_selected_molecule_selects_on_the_paper() {
+    // No Show as bar floats there (#422): the press starts a marquee.
     let (doc, atoms) = drawing();
-    let mut canvas = canvas(&doc, &atoms);
-    let state = State::default();
-    assert!(canvas.model_bar(&state, BOUNDS).is_none());
-    canvas.model_bar = Some(Display::ThreeD);
-    let bar = canvas.model_bar(&state, BOUNDS).unwrap();
+    let canvas = canvas(&doc, &atoms);
     let (lo, hi) = reshiki::scene::selection_bounds(&doc, &atoms).unwrap();
-    let (lo, hi) = (
-        canvas.camera.screen(lo, BOUNDS),
-        canvas.camera.screen(hi, BOUNDS),
-    );
-    // Clear of the box, its grips and the rotation handle above them.
-    assert!(bar.panel.y + bar.panel.height < lo.y - 12. - 34.);
-    assert!(bar.panel.x >= 0. && bar.panel.x + bar.panel.width <= BOUNDS.width);
-    assert!(lo.x < bar.panel.center_x() && bar.panel.center_x() < hi.x);
-
+    let above = World::new((lo.x + hi.x) / 2., lo.y - 70. / canvas.camera.zoom);
     let mut state = State::default();
-    let two_d = bar.buttons[0].2.center();
-    send(&canvas, &mut state, moved(two_d));
-    assert_eq!(
-        canvas.pointer_interaction(&state, BOUNDS, mouse::Cursor::Available(two_d)),
-        mouse::Interaction::Pointer
+    send(
+        &canvas,
+        &mut state,
+        moved(canvas.camera.screen(above, BOUNDS)),
     );
-    let edit = send(&canvas, &mut state, PRESS);
-    assert!(
-        matches!(edit, Some(Edit::ShowAs(Display::TwoD))),
-        "{edit:?}"
-    );
-    assert!(state.gesture.is_none());
-    // The active button does nothing.
-    send(&canvas, &mut state, RELEASE);
-    send(&canvas, &mut state, moved(bar.buttons[1].2.center()));
-    assert!(send(&canvas, &mut state, PRESS).is_none());
-    assert!(state.gesture.is_none());
-    send(&canvas, &mut state, RELEASE);
-
-    // While the model turns, the bar is gone.
-    send(&canvas, &mut state, moved(frame_center(&canvas)));
     send(&canvas, &mut state, PRESS);
-    assert!(matches!(state.gesture, Some(Gesture::Turn(_))));
-    assert!(canvas.model_bar(&state, BOUNDS).is_none());
-
-    // With no room above, it goes below the selection.
-    let mut low = canvas;
-    low.camera.center = World::new(400., 480.);
-    let bar = low.model_bar(&State::default(), BOUNDS).unwrap();
-    let (_, hi) = reshiki::scene::selection_bounds(&doc, &atoms).unwrap();
-    assert!(bar.panel.y > low.camera.screen(hi, BOUNDS).y + 12.);
-}
-
-#[test]
-fn the_bar_stays_on_the_paper_when_the_selection_fills_it() {
-    let (doc, atoms) = drawing();
-    let mut canvas = canvas(&doc, &atoms);
-    canvas.model_bar = Some(Display::ThreeD);
-    let (lo, hi) = reshiki::scene::selection_bounds(&doc, &atoms).unwrap();
-    canvas.camera.center = World::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
-    canvas.camera.zoom = 1.2 * BOUNDS.height / (hi.y - lo.y);
-    let (top, bottom) = (
-        canvas.camera.screen(lo, BOUNDS).y,
-        canvas.camera.screen(hi, BOUNDS).y,
-    );
-    assert!(top < 0. && bottom > BOUNDS.height, "{top} {bottom}");
-    let bar = canvas.model_bar(&State::default(), BOUNDS).unwrap();
-    assert!(bar.panel.y >= 0., "{:?}", bar.panel);
     assert!(
-        bar.panel.y + bar.panel.height <= BOUNDS.height,
+        matches!(state.gesture, Some(Gesture::Select { .. })),
         "{:?}",
-        bar.panel
+        state.gesture
     );
-    for (_, _, button) in &bar.buttons {
-        assert!(bar.panel.contains(button.center()));
-    }
-}
-
-#[test]
-fn the_bar_stays_on_the_paper_when_the_selection_is_panned_off_it() {
-    let (doc, atoms) = drawing();
-    let mut canvas = canvas(&doc, &atoms);
-    canvas.model_bar = Some(Display::ThreeD);
-    let (lo, hi) = reshiki::scene::selection_bounds(&doc, &atoms).unwrap();
-    for dy in [-2000., 2000.] {
-        // dy < 0 puts the selection below the canvas, dy > 0 above it.
-        canvas.camera.center = World::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2. + dy);
-        let top = canvas.camera.screen(lo, BOUNDS).y;
-        let bottom = canvas.camera.screen(hi, BOUNDS).y;
-        assert!(top > BOUNDS.height || bottom < 0., "{top} {bottom}");
-        let bar = canvas.model_bar(&State::default(), BOUNDS).unwrap();
-        assert!(bar.panel.y >= 0., "{dy}: {:?}", bar.panel);
-        assert!(
-            bar.panel.y + bar.panel.height <= BOUNDS.height,
-            "{dy}: {:?}",
-            bar.panel
-        );
-        for (_, _, button) in &bar.buttons {
-            assert!(bar.panel.contains(button.center()));
-        }
-    }
 }
 
 #[test]

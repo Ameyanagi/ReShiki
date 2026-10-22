@@ -145,9 +145,6 @@ impl App {
             Message::Canvas(Edit::BeginTransform(field)) => {
                 return Some(self.begin_numeric_transform(field));
             }
-            Message::Canvas(Edit::ShowAs(display)) => {
-                return Some(self.models3d_action(self.show_as(display)));
-            }
             Message::Canvas(edit) => {
                 if let Some(task) = self.optimization_edit(edit.clone()) {
                     return Some(task);

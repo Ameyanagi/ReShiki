@@ -28,7 +28,7 @@ pub(crate) enum Action {
     Show(Display),
     /// Show as 2D, the drawing flattened from the model as it is turned now.
     Flatten,
-    /// The 2D layout that the 2D buttons of the bar and the section use.
+    /// The 2D layout that the Structure section's 2D button uses.
     Layout(Layout),
     Generated(Key, Result<Arc<Optimized>, String>),
     /// Change the selected model; each change is one Undo step, and a slider
@@ -169,7 +169,7 @@ impl App {
         !self.tab.busy && self.tab.optimization.is_none() && !self.tab.drawing_edit_active()
     }
 
-    /// A button of the bar or the section: 2D follows the model's 2D layout.
+    /// A button of the Structure section: 2D follows the model's 2D layout.
     pub(super) fn show_as(&self, display: Display) -> Action {
         let model = self
             .selected_model()
@@ -411,21 +411,6 @@ impl App {
     pub(super) fn model_morph(&self) -> Option<(u64, iced::time::Instant)> {
         let (key, id, start) = self.tab.model_morph?;
         (key == self.model_key()).then_some((id, start))
-    }
-
-    /// The display the floating Show as bar marks above a whole selected
-    /// molecule, when the bar shows.
-    pub(super) fn model_bar(&self) -> Option<Display> {
-        if !self.tool.selects() || !self.idle() || self.context_menu.is_some() {
-            return None;
-        }
-        models3d::whole_molecule(&self.tab.doc, &self.tab.selected)?;
-        let (atoms, index) = self.selected_model()?;
-        Some(self.pending(&atoms).unwrap_or_else(|| {
-            index
-                .and_then(|i| self.tab.doc.models.get(i))
-                .map_or(Display::TwoD, |m| m.display)
-        }))
     }
 
     fn add_model(&mut self, model: models3d::Model3d, display: Display) {

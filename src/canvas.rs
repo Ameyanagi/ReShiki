@@ -223,8 +223,6 @@ pub enum Edit {
         pivot: World,
         scale: f32,
     },
-    /// The floating bar's Show as 2D / 3D / Both.
-    ShowAs(reshiki::models3d::Display),
     Bond(World, World, Option<u64>, Option<u64>),
     TextBond {
         source: Option<u64>,
@@ -470,8 +468,6 @@ pub struct MoleculeCanvas<'a> {
     pub(crate) nmr: Option<nmr::Context<'a>>,
     pub(crate) optimizer: Option<optimization::Context<'a>>,
     pub(crate) keyboard_target: Option<World>,
-    /// The display the floating Show as bar marks, when it shows.
-    pub(crate) model_bar: Option<reshiki::models3d::Display>,
     /// The model (by an atom) that started its 2D → 3D morph, and when.
     pub(crate) morph: Option<(u64, iced::time::Instant)>,
     pub joining: Option<(&'a reshiki::joining::Prepared, reshiki::templates::Anchor)>,
@@ -517,7 +513,6 @@ impl<'a> MoleculeCanvas<'a> {
             nmr: None,
             optimizer: None,
             keyboard_target: None,
-            model_bar: None,
             morph: None,
             joining: None,
             hidden_annotation: None,
