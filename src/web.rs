@@ -703,11 +703,3 @@ pub(crate) async fn write_text(text: String) -> Result<(), String> {
     }
     Ok(())
 }
-
-/// The system clipboard's text, when the page may read it.
-pub(crate) async fn read_text() -> Option<String> {
-    wasm_bindgen_futures::JsFuture::from(clipboard()?.read_text())
-        .await
-        .ok()?
-        .as_string()
-}
