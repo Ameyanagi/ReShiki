@@ -41,7 +41,8 @@ impl Default for State {
 }
 async fn choose_picture() -> Result<Option<Picture>, String> {
     let filter = ("Pictures", reshiki::metafile::PICTURE_EXTENSIONS);
-    let Some(file) = super::files::pick("Replace the picture", Some(filter), false)
+    let limit = |_: &std::path::Path| reshiki::pictures::MAX_BYTES as u64;
+    let Some(file) = super::files::pick("Replace the picture", Some(filter), false, limit)
         .await?
         .pop()
     else {

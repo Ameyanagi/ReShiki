@@ -267,10 +267,18 @@ async fn load(engine: LocalEngine, files: Vec<Picked>) -> Result<Batch, String> 
     }
     Ok(batch)
 }
+/// Pictures are read to one byte past their size limit; structure files whole.
+fn limit(path: &Path) -> u64 {
+    if kind(path) == Kind::Picture {
+        reshiki::pictures::MAX_BYTES as u64
+    } else {
+        u64::MAX
+    }
+}
 /// No extension filter: VASP files are often named POSCAR or CONTCAR without
 /// one. Files of other kinds are refused with their extension.
 fn choose() -> Task<Message> {
-    let files = super::files::pick("Insert structures or pictures", None, true);
+    let files = super::files::pick("Insert structures or pictures", None, true, limit);
     Task::perform(files, |files| Message::Imports(Action::Read(files)))
 }
 
@@ -297,6 +305,22 @@ impl App {
             _ => {}
         }
         Task::none()
+    }
+
+    /// Marks the drawing in front busy for a file import, unless it already is.
+    fn begin_import(&mut self) -> Option<Ticket> {
+        if self.tab.busy {
+            self.error = true;
+            self.status = "Wait for the current operation, then import again".into();
+            return None;
+        }
+        self.tab.busy = true;
+        self.error = false;
+        self.status = "Importing…".into();
+        Some(Ticket {
+            epoch: self.tab.file_epoch,
+            revision: self.tab.revision,
+        })
     }
 
     /// Outline the canvas while the browser drags this many files over it,
@@ -353,8 +377,15 @@ impl App {
                 }
                 Plan::Open(paths) => return super::files::open_paths(paths),
                 Plan::Insert(paths) => {
-                    return Task::perform(super::files::read_paths(paths), |files| {
-                        Message::Imports(Action::Read(files))
+                    let Some(ticket) = self.begin_import() else {
+                        return Task::none();
+                    };
+                    let engine = self.engine.clone();
+                    let load = async move {
+                        load(engine, super::files::read_paths(paths, limit).await?).await
+                    };
+                    return Task::perform(load, move |result| {
+                        Message::Imports(Action::Loaded(ticket, Box::new(result)))
                     });
                 }
             },
@@ -372,18 +403,8 @@ impl App {
                     }
                     Plan::Open(_) => return super::files::open_picked(Ok(files)),
                     Plan::Insert(_) => {
-                        if self.tab.busy {
-                            self.error = true;
-                            self.status =
-                                "Wait for the current operation, then import again".into();
+                        let Some(ticket) = self.begin_import() else {
                             return Task::none();
-                        }
-                        self.tab.busy = true;
-                        self.error = false;
-                        self.status = "Importing…".into();
-                        let ticket = Ticket {
-                            epoch: self.tab.file_epoch,
-                            revision: self.tab.revision,
                         };
                         return Task::perform(load(self.engine.clone(), files), move |result| {
                             Message::Imports(Action::Loaded(ticket, Box::new(result)))

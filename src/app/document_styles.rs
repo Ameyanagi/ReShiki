@@ -531,9 +531,11 @@ impl App {
                             ][..],
                         );
                         let Some(file) =
-                            super::files::pick("Load drawing style", Some(filter), false)
-                                .await?
-                                .pop()
+                            super::files::pick("Load drawing style", Some(filter), false, |_| {
+                                reshiki::exchange::LIMIT as u64
+                            })
+                            .await?
+                            .pop()
                         else {
                             return Ok(None);
                         };

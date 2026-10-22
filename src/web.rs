@@ -31,8 +31,9 @@ pub(crate) enum Request {
     /// This many files are dragged over the editor, or none once they leave.
     /// Browsers name dragged files only when they are dropped.
     Drag(usize),
-    /// Files dropped on the editor, by name with their contents.
-    Drop(Vec<(String, Vec<u8>)>),
+    /// Files dropped on the editor, by name with their contents, or why
+    /// one could not be read.
+    Drop(Result<Vec<(String, Vec<u8>)>, String>),
 }
 
 type DragListener = Closure<dyn FnMut(web_sys::DragEvent)>;
@@ -327,28 +328,31 @@ fn files(list: &web_sys::FileList) -> Vec<web_sys::File> {
     (0..list.length()).filter_map(|i| list.get(i)).collect()
 }
 
-/// The files' names and contents, skipping any the browser cannot read.
-async fn read_files(files: Vec<web_sys::File>) -> Vec<(String, Vec<u8>)> {
+/// The files' names and contents, or which one the browser could not read.
+async fn read_files(files: Vec<web_sys::File>) -> Result<Vec<(String, Vec<u8>)>, String> {
     let mut read = Vec::with_capacity(files.len());
     for file in files {
-        match wasm_bindgen_futures::JsFuture::from(file.array_buffer()).await {
-            Ok(buffer) => read.push((file.name(), js_sys::Uint8Array::new(&buffer).to_vec())),
-            Err(thrown) => error(&format!("Could not read {}: {thrown:?}", file.name())),
-        }
+        let buffer = wasm_bindgen_futures::JsFuture::from(file.array_buffer())
+            .await
+            .map_err(|_| format!("Could not read {}", file.name()))?;
+        read.push((file.name(), js_sys::Uint8Array::new(&buffer).to_vec()));
     }
-    read
+    Ok(read)
 }
 
 /// Files the user chooses with the browser's file chooser, by name with their
-/// contents; none when they cancel. `extensions`, without dots, limit the
+/// contents; none when they cancel, and an error when one cannot be read. `extensions`, without dots, limit the
 /// choice when given. The File System Access picker is used where the browser
 /// has it, and otherwise a hidden file input.
-pub(crate) async fn pick(extensions: &[&str], multiple: bool) -> Vec<(String, Vec<u8>)> {
+pub(crate) async fn pick(
+    extensions: &[&str],
+    multiple: bool,
+) -> Result<Vec<(String, Vec<u8>)>, String> {
     let Some(window) = web_sys::window() else {
-        return vec![];
+        return Ok(vec![]);
     };
     let files = match open_file_picker(&window, extensions, multiple).await {
-        Some(files) => files,
+        Some(files) => files?,
         None => file_input(&window, extensions, multiple).await,
     };
     read_files(files).await
@@ -360,7 +364,7 @@ async fn open_file_picker(
     window: &web_sys::Window,
     extensions: &[&str],
     multiple: bool,
-) -> Option<Vec<web_sys::File>> {
+) -> Option<Result<Vec<web_sys::File>, String>> {
     use js_sys::{Array, Function, Object, Promise, Reflect};
     use wasm_bindgen_futures::JsFuture;
     let picker = Reflect::get(window, &"showOpenFilePicker".into())
@@ -399,24 +403,33 @@ async fn open_file_picker(
         // leave the choice to the file input.
         Err(thrown) => {
             let name = Reflect::get(&thrown, &"name".into()).ok()?.as_string();
-            return (name.as_deref() == Some("AbortError")).then(Vec::new);
+            return (name.as_deref() == Some("AbortError")).then(|| Ok(Vec::new()));
         }
     };
     let mut files = vec![];
     for handle in handles.iter() {
+        let name = Reflect::get(&handle, &"name".into())
+            .ok()
+            .and_then(|name| name.as_string())
+            .unwrap_or_default();
         let file = Reflect::get(&handle, &"getFile".into())
             .ok()
             .and_then(|get| get.dyn_into::<Function>().ok())
             .and_then(|get| get.call0(&handle).ok())
             .and_then(|file| file.dyn_into::<Promise>().ok());
-        if let Some(file) = file
-            && let Ok(file) = JsFuture::from(file).await
-            && let Ok(file) = file.dyn_into::<web_sys::File>()
-        {
-            files.push(file);
+        let file = match file {
+            Some(file) => JsFuture::from(file)
+                .await
+                .ok()
+                .and_then(|file| file.dyn_into::<web_sys::File>().ok()),
+            None => None,
+        };
+        match file {
+            Some(file) => files.push(file),
+            None => return Some(Err(format!("Could not read {name}"))),
         }
     }
-    Some(files)
+    Some(Ok(files))
 }
 
 /// A hidden `<input type=file>`, answered by its change or cancel event.

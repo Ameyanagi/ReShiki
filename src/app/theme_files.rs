@@ -191,9 +191,11 @@ impl App {
                     async {
                         let filter = ("ReShiki theme", &["reshiki-theme", "json"][..]);
                         let Some(file) =
-                            super::files::pick("Import color theme", Some(filter), false)
-                                .await?
-                                .pop()
+                            super::files::pick("Import color theme", Some(filter), false, |_| {
+                                theme_files::LIMIT as u64
+                            })
+                            .await?
+                            .pop()
                         else {
                             return Ok(None);
                         };

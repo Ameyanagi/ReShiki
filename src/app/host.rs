@@ -21,14 +21,8 @@ impl App {
             Request::Drag(files) => self.browser_drag(files),
             // Open or insert them as chosen files, through the same checks.
             Request::Drop(files) => {
-                let files = files
-                    .into_iter()
-                    .map(|(name, contents)| super::files::Picked {
-                        path: name.into(),
-                        contents,
-                    })
-                    .collect();
-                return self.update(Message::Imports(super::import::Action::Read(Ok(files))));
+                let files = files.map(super::files::browser_files);
+                return self.update(Message::Imports(super::import::Action::Read(files)));
             }
         }
         Task::none()

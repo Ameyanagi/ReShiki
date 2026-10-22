@@ -740,7 +740,11 @@ impl App {
                 Some(Task::perform(
                     async {
                         let title = "Import a ReShiki template collection";
-                        let Some(file) = super::files::pick(title, None, false).await?.pop() else {
+                        let Some(file) =
+                            super::files::pick(title, None, false, super::files::unlimited)
+                                .await?
+                                .pop()
+                        else {
                             return Ok(None);
                         };
                         reshiki::task::spawn_blocking(move || {

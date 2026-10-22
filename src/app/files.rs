@@ -152,13 +152,24 @@ impl std::fmt::Debug for Picked {
     }
 }
 
-/// Files the user chooses, read. An empty list when they cancel. `filter`
-/// names a kind of file and its extensions; the dialog then offers just those.
+/// How many bytes of a file to read. A loader with a size limit refuses a file
+/// read to one byte past it, so a huge file is never read whole.
+pub(super) type Limit = fn(&std::path::Path) -> u64;
+
+/// No limit, for loaders that take a file of any size.
+pub(super) fn unlimited(_: &std::path::Path) -> u64 {
+    u64::MAX
+}
+
+/// Files the user chooses, read up to `limit`. An empty list when they
+/// cancel. `filter` names a kind of file and its extensions; the dialog then
+/// offers just those.
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) async fn pick(
     title: &str,
     filter: Option<(&str, &[&str])>,
     multiple: bool,
+    limit: Limit,
 ) -> Result<Vec<Picked>, String> {
     let mut dialog = rfd::AsyncFileDialog::new().set_title(title);
     if let Some((name, extensions)) = filter {
@@ -174,38 +185,51 @@ pub(super) async fn pick(
         .iter()
         .map(|file| file.path().to_path_buf())
         .collect();
-    read_paths(paths).await
+    read_paths(paths, limit).await
 }
 
 /// The browser's own file chooser, with no dialog of its own; see
-/// [`crate::web::pick`].
+/// [`crate::web::pick`]. Its files are already in memory.
 #[cfg(target_arch = "wasm32")]
 pub(super) async fn pick(
     _title: &str,
     filter: Option<(&str, &[&str])>,
     multiple: bool,
+    _limit: Limit,
 ) -> Result<Vec<Picked>, String> {
     let extensions = filter.map_or(&[][..], |(_, extensions)| extensions);
-    Ok(crate::web::pick(extensions, multiple)
-        .await
+    Ok(browser_files(crate::web::pick(extensions, multiple).await?))
+}
+
+/// Browser files, by name with their contents.
+#[cfg(target_arch = "wasm32")]
+pub(super) fn browser_files(files: Vec<(String, Vec<u8>)>) -> Vec<Picked> {
+    files
         .into_iter()
         .map(|(name, contents)| Picked {
             path: name.into(),
             contents,
         })
-        .collect())
+        .collect()
 }
 
-/// Read files on a blocking worker.
-pub(super) async fn read_paths(paths: Vec<PathBuf>) -> Result<Vec<Picked>, String> {
+/// Read files up to `limit` on a blocking worker.
+pub(super) async fn read_paths(paths: Vec<PathBuf>, limit: Limit) -> Result<Vec<Picked>, String> {
+    use std::io::Read;
     reshiki::task::spawn_blocking(move || {
         paths
             .into_iter()
             .map(|path| {
-                let contents = std::fs::read(&path).map_err(|e| {
-                    let name = path.file_name().unwrap_or(path.as_os_str());
-                    format!("Could not read {}: {e}", name.to_string_lossy())
-                })?;
+                let mut contents = Vec::new();
+                std::fs::File::open(&path)
+                    .and_then(|file| {
+                        file.take(limit(&path).saturating_add(1))
+                            .read_to_end(&mut contents)
+                    })
+                    .map_err(|e| {
+                        let name = path.file_name().unwrap_or(path.as_os_str());
+                        format!("Could not read {}: {e}", name.to_string_lossy())
+                    })?;
                 Ok(Picked { path, contents })
             })
             .collect()
@@ -287,6 +311,7 @@ pub(super) fn open_dialog() -> Task<Message> {
         "Open a ReShiki, MOL, RXN, CDXML, CDX, SMILES, CIF, PDB, POSCAR or XYZ file",
         None,
         false,
+        unlimited,
     ))
     .then(open_picked)
 }

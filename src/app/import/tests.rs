@@ -296,7 +296,7 @@ async fn files_insert_side_by_side_at_the_pointer_as_one_undo_step() -> Result<(
         fixtures.join("native-ethyl-clipboard.cdx"),
         png,
     ];
-    let files = super::super::files::read_paths(files).await?;
+    let files = super::super::files::read_paths(files, limit).await?;
     let batch = load(LocalEngine::default(), files).await?;
     assert_eq!(batch.label, "3 files");
     assert_eq!(batch.drawings.len(), 3);
@@ -452,4 +452,23 @@ fn browser_drags_outline_the_canvas_until_the_files_leave() {
     let _ = app.with_drop_overlay(iced::widget::text("").into());
     app.browser_drag(0);
     assert!(app.imports.hovered.is_empty());
+}
+
+#[tokio::test]
+async fn oversized_pictures_are_read_only_past_their_limit() -> Result<(), String> {
+    let folder = tempfile::tempdir().map_err(|e| e.to_string())?;
+    let huge = folder.path().join("huge.png");
+    let max = reshiki::pictures::MAX_BYTES;
+    std::fs::write(&huge, vec![0; max + 4096]).map_err(|e| e.to_string())?;
+    let files = super::super::files::read_paths(vec![huge], limit).await?;
+    assert_eq!(files[0].contents.len(), max + 1);
+    let error = load(LocalEngine::default(), files).await.unwrap_err();
+    assert!(error.contains("exceeds 16 MB"), "{error}");
+    Ok(())
+}
+
+#[test]
+fn chosen_files_belong_to_the_drawing_they_were_chosen_for() {
+    let read = Message::Imports(Action::Read(Ok(vec![])));
+    assert!(super::super::tabs::document_result(&read));
 }
