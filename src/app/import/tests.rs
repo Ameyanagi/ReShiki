@@ -296,6 +296,7 @@ async fn files_insert_side_by_side_at_the_pointer_as_one_undo_step() -> Result<(
         fixtures.join("native-ethyl-clipboard.cdx"),
         png,
     ];
+    let files = super::super::files::read_paths(files, limit).await?;
     let batch = load(LocalEngine::default(), files).await?;
     assert_eq!(batch.label, "3 files");
     assert_eq!(batch.drawings.len(), 3);
@@ -383,4 +384,144 @@ async fn open_reads_binary_cdx() -> Result<(), String> {
     assert!(app.tab.busy, "{}", app.status);
     assert!(!response.document.ok_or("drawing")?.atoms.is_empty());
     Ok(())
+}
+
+/// Browser files are a bare name and their contents, with no file to read.
+fn browser_file(name: &str, fixture: &str) -> Picked {
+    let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    Picked {
+        path: name.into(),
+        contents: std::fs::read(fixtures.join(fixture)).unwrap(),
+    }
+}
+
+#[tokio::test]
+async fn browser_files_insert_and_open_from_their_contents() -> Result<(), String> {
+    let mol = browser_file("ethanol.mol", "ethanol.mol");
+    assert!(!mol.path.exists());
+    let batch = load(LocalEngine::default(), vec![mol.clone()]).await?;
+    assert_eq!(
+        (batch.label.as_str(), batch.drawings.len()),
+        ("ethanol.mol", 1)
+    );
+    assert_eq!(batch.drawings[0].atoms.len(), 3);
+
+    let mut app = ready();
+    let task = app.update(Message::Imports(Action::Read(
+        app.import_ticket(),
+        Ok(vec![mol]),
+    )));
+    assert!(
+        task.units() > 0 && app.tab.busy && !app.error,
+        "{}",
+        app.status
+    );
+
+    let mut app = ready();
+    let mut doc = Document::default();
+    doc.add_atom("S", Point::default());
+    let drawing = Picked {
+        path: "drawing.rsk".into(),
+        contents: serde_json::to_vec(&doc).unwrap(),
+    };
+    let task = app.update(Message::Imports(Action::Read(
+        app.import_ticket(),
+        Ok(vec![drawing.clone()]),
+    )));
+    assert!(task.units() > 0 && !app.tab.busy && !app.error);
+    let opened = super::super::files::prepare_contents(drawing.path, Ok(drawing.contents)).await;
+    let _ = app.update(Message::FilePrepared(opened));
+    assert_eq!(app.tab.doc.atoms[0].element, "S");
+    assert_eq!(app.tab.path, Some(PathBuf::from("drawing.rsk")));
+
+    let mut app = ready();
+    let notes = Picked {
+        path: "notes.docx".into(),
+        contents: vec![],
+    };
+    let _ = app.update(Message::Imports(Action::Read(
+        app.import_ticket(),
+        Ok(vec![notes]),
+    )));
+    assert!(app.error && app.status == "Can't import .docx");
+    let _ = app.update(Message::Imports(Action::Read(
+        app.import_ticket(),
+        Err("Could not read x".into()),
+    )));
+    assert_eq!(app.status, "Could not read x");
+    Ok(())
+}
+
+#[test]
+fn browser_drags_outline_the_canvas_until_the_files_leave() {
+    let mut app = ready();
+    app.browser_drag(2);
+    assert_eq!(app.imports.hovered.len(), 2);
+    assert_eq!(unnamed_label(2), "Drop to open or insert · 2 files");
+    assert_eq!(unnamed_label(1), "Drop to open or insert");
+    let _ = app.with_drop_overlay(iced::widget::text("").into());
+    app.browser_drag(0);
+    assert!(app.imports.hovered.is_empty());
+}
+
+#[tokio::test]
+async fn oversized_pictures_are_read_only_past_their_limit() -> Result<(), String> {
+    let folder = tempfile::tempdir().map_err(|e| e.to_string())?;
+    let huge = folder.path().join("huge.png");
+    let max = reshiki::pictures::MAX_BYTES;
+    std::fs::write(&huge, vec![0; max + 4096]).map_err(|e| e.to_string())?;
+    let files = super::super::files::read_paths(vec![huge], limit).await?;
+    assert_eq!(files[0].contents.len(), max + 1);
+    let error = load(LocalEngine::default(), files).await.unwrap_err();
+    assert!(error.contains("exceeds 16 MB"), "{error}");
+    Ok(())
+}
+
+#[test]
+fn chosen_files_belong_to_the_drawing_they_were_chosen_for() {
+    let read = Message::Imports(Action::Read(
+        Ticket {
+            epoch: 0,
+            revision: 0,
+        },
+        Ok(vec![]),
+    ));
+    assert!(super::super::tabs::document_result(&read));
+}
+
+#[test]
+fn edits_made_while_files_are_read_do_not_cancel_their_import() {
+    let mut app = ready();
+    let ticket = app.import_ticket();
+    // As when a caption draft is finished before the read files arrive.
+    app.tab.doc.add_atom("N", Point::new(-80., 0.));
+    app.tab.revision += 1;
+    let mol = browser_file("ethanol.mol", "ethanol.mol");
+    let task = app.update(Message::Imports(Action::Read(ticket, Ok(vec![mol]))));
+    assert!(
+        task.units() > 0 && app.tab.busy && !app.error,
+        "{}",
+        app.status
+    );
+    assert_eq!(app.import_ticket().revision, app.tab.revision);
+}
+
+#[test]
+fn files_read_for_a_drawing_that_was_replaced_are_not_inserted() {
+    let mut app = ready();
+    let ticket = app.import_ticket();
+    app.reset_tab();
+    let mol = browser_file("ethanol.mol", "ethanol.mol");
+    let task = app.update(Message::Imports(Action::Read(ticket, Ok(vec![mol]))));
+    assert_eq!(task.units(), 0);
+    assert!(!app.tab.busy && app.tab.doc.all_ids().is_empty());
+}
+
+#[test]
+fn browser_files_are_read_one_byte_past_their_limit() {
+    use super::super::files::read_length;
+    assert_eq!(read_length(10, 20), 10);
+    assert_eq!(read_length(21, 20), 21);
+    assert_eq!(read_length(5_000_000_000, 20), 21);
+    assert_eq!(read_length(5_000_000_000, u64::MAX), 5_000_000_000);
 }
