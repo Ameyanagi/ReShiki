@@ -490,6 +490,23 @@ fn chosen_files_belong_to_the_drawing_they_were_chosen_for() {
 }
 
 #[test]
+fn edits_made_while_files_are_read_do_not_cancel_their_import() {
+    let mut app = ready();
+    let ticket = app.import_ticket();
+    // As when a caption draft is finished before the read files arrive.
+    app.tab.doc.add_atom("N", Point::new(-80., 0.));
+    app.tab.revision += 1;
+    let mol = browser_file("ethanol.mol", "ethanol.mol");
+    let task = app.update(Message::Imports(Action::Read(ticket, Ok(vec![mol]))));
+    assert!(
+        task.units() > 0 && app.tab.busy && !app.error,
+        "{}",
+        app.status
+    );
+    assert_eq!(app.import_ticket().revision, app.tab.revision);
+}
+
+#[test]
 fn files_read_for_a_drawing_that_was_replaced_are_not_inserted() {
     let mut app = ready();
     let ticket = app.import_ticket();

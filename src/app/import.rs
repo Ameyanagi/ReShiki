@@ -311,6 +311,7 @@ impl App {
     }
 
     /// The drawing in front as it is now, for an import that finishes later.
+    /// Files still being read keep only its file epoch.
     pub(super) fn import_ticket(&self) -> Ticket {
         Ticket {
             epoch: self.tab.file_epoch,
@@ -413,10 +414,13 @@ impl App {
                     Plan::Open(_) => return super::files::open_picked(Ok(files)),
                     Plan::Insert(_) => {
                         // A drawing opened in this tab meanwhile is not the
-                        // one the files were meant for.
+                        // one the files were meant for. Edits made while they
+                        // were read, such as the caption draft finished just
+                        // before this, are kept: the import starts from now.
                         if ticket.epoch != self.tab.file_epoch || !self.begin_import() {
                             return Task::none();
                         }
+                        let ticket = self.import_ticket();
                         return Task::perform(load(self.engine.clone(), files), move |result| {
                             Message::Imports(Action::Loaded(ticket, Box::new(result)))
                         });
