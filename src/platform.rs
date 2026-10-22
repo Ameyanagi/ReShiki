@@ -84,9 +84,10 @@ pub(crate) fn control(modifiers: Modifiers) -> bool {
 /// The desktop app gets this from the system, but in a browser iced reports
 /// the typed character: Shift+6 arrives as "^" and Option+C as "ç" on a Mac.
 /// Digits and letters that are not already a Latin letter come from the
-/// physical key; punctuation does too while Shift is held or the character is
-/// not ASCII. Other layouts keep their own letters and punctuation.
-pub(crate) fn shortcut_key(key: &Key, physical: Physical, modifiers: Modifiers) -> Key {
+/// physical key; punctuation does too when it typed a US keyboard's shifted
+/// character (? for /) or a non-ASCII one. Other layouts keep their own
+/// letters and punctuation, such as a German ? on the minus key.
+pub(crate) fn shortcut_key(key: &Key, physical: Physical) -> Key {
     let Key::Character(typed) = key else {
         return key.clone();
     };
@@ -111,10 +112,10 @@ pub(crate) fn shortcut_key(key: &Key, physical: Physical, modifiers: Modifiers) 
                     return Key::Character(typed.to_ascii_lowercase().into());
                 }
                 letter
-            } else if let Some(punctuation) = punctuation(code)
-                && (!ascii || modifiers.shift())
+            } else if let Some((unshifted, shifted)) = punctuation(code)
+                && (!ascii || typed.starts_with(shifted))
             {
-                punctuation
+                unshifted
             } else {
                 return key.clone();
             }
@@ -155,20 +156,20 @@ fn letter(code: Code) -> Option<char> {
     })
 }
 
-/// The unshifted character of a punctuation key on a US keyboard.
-fn punctuation(code: Code) -> Option<char> {
+/// The unshifted and shifted characters of a punctuation key on a US keyboard.
+fn punctuation(code: Code) -> Option<(char, char)> {
     Some(match code {
-        Code::Minus => '-',
-        Code::Equal => '=',
-        Code::BracketLeft => '[',
-        Code::BracketRight => ']',
-        Code::Backslash => '\\',
-        Code::Semicolon => ';',
-        Code::Quote => '\'',
-        Code::Comma => ',',
-        Code::Period => '.',
-        Code::Slash => '/',
-        Code::Backquote => '`',
+        Code::Minus => ('-', '_'),
+        Code::Equal => ('=', '+'),
+        Code::BracketLeft => ('[', '{'),
+        Code::BracketRight => (']', '}'),
+        Code::Backslash => ('\\', '|'),
+        Code::Semicolon => (';', ':'),
+        Code::Quote => ('\'', '"'),
+        Code::Comma => (',', '<'),
+        Code::Period => ('.', '>'),
+        Code::Slash => ('/', '?'),
+        Code::Backquote => ('`', '~'),
         _ => return None,
     })
 }
@@ -186,21 +187,15 @@ pub(crate) fn shortcut_event(event: &iced::Event) -> Option<iced::Event> {
     };
     let mut keyboard = keyboard.clone();
     let (KeyPressed {
-        key,
-        physical_key,
-        modifiers,
-        ..
+        key, physical_key, ..
     }
     | KeyReleased {
-        key,
-        physical_key,
-        modifiers,
-        ..
+        key, physical_key, ..
     }) = &mut keyboard
     else {
         return None;
     };
-    let base = shortcut_key(key, *physical_key, *modifiers);
+    let base = shortcut_key(key, *physical_key);
     if base == *key {
         return None;
     }
@@ -242,7 +237,7 @@ mod tests {
             ("6", Code::Digit6, "6"),
         ] {
             assert_eq!(
-                shortcut_key(&char(typed), Physical::Code(code), Modifiers::SHIFT),
+                shortcut_key(&char(typed), Physical::Code(code)),
                 char(digit)
             );
         }
@@ -250,7 +245,6 @@ mod tests {
 
     #[test]
     fn option_letters_read_as_the_letter() {
-        let option = Modifiers::CTRL | Modifiers::ALT;
         for (typed, code, letter) in [
             ("ç", Code::KeyC, "c"),
             ("ø", Code::KeyO, "o"),
@@ -259,7 +253,7 @@ mod tests {
             ("Ç", Code::KeyC, "c"),
         ] {
             assert_eq!(
-                shortcut_key(&char(typed), Physical::Code(code), option),
+                shortcut_key(&char(typed), Physical::Code(code)),
                 char(letter)
             );
         }
@@ -269,33 +263,37 @@ mod tests {
     fn layouts_keep_their_own_letters() {
         // AZERTY: the key in QWERTY's Q position types a.
         assert_eq!(
-            shortcut_key(&char("a"), Physical::Code(Code::KeyQ), Modifiers::CTRL),
+            shortcut_key(&char("a"), Physical::Code(Code::KeyQ)),
             char("a")
         );
         assert_eq!(
-            shortcut_key(&char("Z"), Physical::Code(Code::KeyZ), Modifiers::SHIFT),
+            shortcut_key(&char("Z"), Physical::Code(Code::KeyZ)),
             char("z")
         );
     }
 
     #[test]
     fn punctuation_reads_unshifted() {
-        let shift = Modifiers::CTRL | Modifiers::SHIFT;
         assert_eq!(
-            shortcut_key(&char("?"), Physical::Code(Code::Slash), shift),
+            shortcut_key(&char("?"), Physical::Code(Code::Slash)),
             char("/")
         );
         assert_eq!(
-            shortcut_key(
-                &char("“"),
-                Physical::Code(Code::BracketLeft),
-                Modifiers::ALT
-            ),
+            shortcut_key(&char("“"), Physical::Code(Code::BracketLeft)),
             char("[")
+        );
+        // German and French type ? on other keys; it stays ?.
+        assert_eq!(
+            shortcut_key(&char("?"), Physical::Code(Code::Minus)),
+            char("?")
+        );
+        assert_eq!(
+            shortcut_key(&char("?"), Physical::Code(Code::Comma)),
+            char("?")
         );
         // Unshifted ASCII stays as the layout types it.
         assert_eq!(
-            shortcut_key(&char("-"), Physical::Code(Code::Slash), Modifiers::CTRL),
+            shortcut_key(&char("-"), Physical::Code(Code::Slash)),
             char("-")
         );
     }
@@ -304,9 +302,6 @@ mod tests {
     fn named_keys_are_unchanged() {
         use iced::keyboard::key::Named;
         let enter = Key::Named(Named::Enter);
-        assert_eq!(
-            shortcut_key(&enter, Physical::Code(Code::Enter), Modifiers::CTRL),
-            enter
-        );
+        assert_eq!(shortcut_key(&enter, Physical::Code(Code::Enter)), enter);
     }
 }

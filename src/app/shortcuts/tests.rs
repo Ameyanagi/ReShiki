@@ -291,7 +291,7 @@ fn shifted_and_option_characters_reach_their_shortcuts() {
     };
     let read = |typed: &str, code: Code, mods: Modifiers| {
         let typed = Key::Character(typed.into());
-        let key = crate::platform::shortcut_key(&typed, Physical::Code(code), mods);
+        let key = crate::platform::shortcut_key(&typed, Physical::Code(code));
         key_message(&key, &typed, mods)
     };
     for (typed, code, size) in [
@@ -324,7 +324,11 @@ fn shifted_and_option_characters_reach_their_shortcuts() {
         read("¬", Code::KeyL, option | Modifiers::SHIFT),
         Some(Message::Arrange(reshiki::editing::Arrange::AlignLeft))
     ));
-    // Help: Command+? arrives as "?" with Shift.
+    // Help: Command+? arrives as "?" with Shift, also on a German keyboard.
+    assert!(matches!(
+        read("?", Code::Minus, Modifiers::COMMAND | Modifiers::SHIFT),
+        Some(Message::ToggleHelp)
+    ));
     assert!(matches!(
         read("?", Code::Slash, Modifiers::COMMAND | Modifiers::SHIFT),
         Some(Message::ToggleHelp)
