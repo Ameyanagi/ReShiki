@@ -107,7 +107,7 @@ pub struct State {
     /// Unique cleanup notices need acknowledgment if this window later exits.
     close_warnings: Vec<String>,
     /// A committed save's warning must be dismissed before close can continue.
-    pending_warning: Option<u64>,
+    pub(super) pending_warning: Option<u64>,
     importing: bool,
     serial: u64,
     pending_context: Option<Context>,
@@ -683,6 +683,14 @@ impl App {
         // Recovery completion and update_front can both try to finish exit.
         // Keep their gate held until this one native warning is dismissed.
         self.templates.pending_warning = Some(serial);
+        if super::prompt::IN_APP {
+            self.prompt = Some(super::prompt::Prompt::Notice {
+                title: WARNING_TITLE.into(),
+                text: warning,
+                then: Box::new(Message::Templates(Action::WarningAcknowledged(serial))),
+            });
+            return Some(Task::none());
+        }
         Some(acknowledge_close_warning(serial, warning))
     }
     pub(super) fn template_warning_acknowledged(&mut self, serial: u64) -> Task<Message> {
@@ -969,13 +977,15 @@ impl App {
     }
 }
 
+const WARNING_TITLE: &str = "Templates saved with a warning";
+
 /// The inspector notice would disappear on close; retain the successful save
 /// and let its existing close/restart intent continue after a native warning.
 fn acknowledge_close_warning(serial: u64, warning: String) -> Task<Message> {
     iced::window::latest().then(move |window| {
         let dialog = rfd::AsyncMessageDialog::new()
             .set_level(rfd::MessageLevel::Warning)
-            .set_title("Templates saved with a warning")
+            .set_title(WARNING_TITLE)
             .set_description(warning.clone())
             .set_buttons(rfd::MessageButtons::Ok);
         let acknowledged = move |_| Message::Templates(Action::WarningAcknowledged(serial));

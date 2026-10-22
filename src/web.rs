@@ -42,6 +42,14 @@ struct Host {
     /// loaded font draws.
     on_missing_font: Option<js_sys::Function>,
     revision: Option<(u64, u64)>,
+    /// Whether any tab has unsaved changes, as of the last update.
+    dirty: bool,
+    on_dirty_change: Option<js_sys::Function>,
+    /// The window title, `Name • — ReShiki`, as of the last update.
+    title: Option<String>,
+    on_title_change: Option<js_sys::Function>,
+    /// Whether the title becomes the page's `document.title`.
+    sync_title: bool,
     /// winit runs one event loop per page, even after it exits.
     mounted: bool,
 }
@@ -67,14 +75,16 @@ fn js(message: impl std::fmt::Display) -> JsError {
 
 /// Start the editor in `element`, which it fills, showing `data` read as
 /// `format` when given. `on_missing_font` is called once, the first time a
-/// caption has Japanese (CJK) text that no loaded font draws. A page can mount one editor; put further editors in
-/// iframes.
+/// caption has Japanese (CJK) text that no loaded font draws. With
+/// `sync_title`, the page's title follows the document's, as the desktop
+/// window's does. A page can mount one editor; put further editors in iframes.
 #[wasm_bindgen]
 pub async fn mount(
     element: web_sys::Element,
     data: Option<Vec<u8>>,
     format: Option<String>,
     on_missing_font: Option<js_sys::Function>,
+    sync_title: bool,
 ) -> Result<(), JsError> {
     const TARGET: &str = "reshiki-editor-canvas";
     if HOST.with_borrow(|host| host.mounted) {
@@ -124,9 +134,11 @@ pub async fn mount(
             receiver: Some(receiver),
             mounted: true,
             on_missing_font,
+            sync_title,
             ..Host::default()
         }
     });
+    listen_to_page();
     // iced's multisampling leaves most canvases blank on WebGL2, the fallback
     // when the browser offers no WebGPU adapter.
     let antialiasing = webgpu().await;
@@ -142,6 +154,48 @@ pub async fn mount(
     )
     .map_err(js)
 }
+
+/// Ask before the page unloads with unsaved changes. The browser never sends
+/// the window a close request, so the desktop's save dialog cannot run.
+fn listen_to_page() {
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    listen(&window, "beforeunload", |event| {
+        if HOST.with_borrow(|host| host.dirty) {
+            // Browsers show their own "Leave site?" text.
+            event.prevent_default();
+            if let Some(event) = event.dyn_ref::<web_sys::BeforeUnloadEvent>() {
+                event.set_return_value("");
+            }
+        }
+    });
+    listen(&window, "pagehide", |_| page_hidden());
+    if let Some(document) = window.document() {
+        listen(&document.clone(), "visibilitychange", move |_| {
+            if document.visibility_state() == web_sys::VisibilityState::Hidden {
+                page_hidden();
+            }
+        });
+    }
+}
+
+/// Call `handler` for each `event` on `target` for as long as the page lives,
+/// as the editor does.
+fn listen(
+    target: &web_sys::EventTarget,
+    event: &str,
+    handler: impl FnMut(web_sys::Event) + 'static,
+) {
+    let handler = Closure::<dyn FnMut(web_sys::Event)>::new(handler);
+    let _ = target.add_event_listener_with_callback(event, handler.as_ref().unchecked_ref());
+    handler.forget();
+}
+
+/// The page was hidden or is being unloaded: the last moment to keep work the
+/// user may not come back for. This is where recovery drafts are to be written
+/// (#427); nothing is kept in the browser yet.
+fn page_hidden() {}
 
 /// Whether the browser offers a WebGPU adapter, which wgpu prefers to WebGL2.
 async fn webgpu() -> bool {
@@ -205,6 +259,32 @@ pub fn on_change(callback: Option<js_sys::Function>) {
     HOST.with_borrow_mut(|host| host.on_change = callback);
 }
 
+/// Whether any tab has unsaved changes.
+#[wasm_bindgen(js_name = isDirty)]
+pub fn is_dirty() -> bool {
+    HOST.with_borrow(|host| host.dirty)
+}
+
+/// Call `callback` with `true` when a tab gains unsaved changes and `false`
+/// when none has any left, or stop with none.
+#[wasm_bindgen(js_name = onDirtyChange)]
+pub fn on_dirty_change(callback: Option<js_sys::Function>) {
+    HOST.with_borrow_mut(|host| host.on_dirty_change = callback);
+}
+
+/// Call `callback` with the title, `Name • — ReShiki` while it has unsaved
+/// changes, whenever it changes, or stop with none.
+#[wasm_bindgen(js_name = onTitleChange)]
+pub fn on_title_change(callback: Option<js_sys::Function>) {
+    HOST.with_borrow_mut(|host| host.on_title_change = callback);
+}
+
+fn call(callback: &js_sys::Function, argument: &JsValue, name: &str) {
+    if let Err(thrown) = callback.call1(&JsValue::NULL, argument) {
+        error(&format!("The {name} callback failed: {thrown:?}"));
+    }
+}
+
 /// Add a TrueType or OpenType font (or collection) for drawing, measuring and
 /// export, before or after `mount`. Text whose own font lacks a glyph falls
 /// back to it. Returns how many faces it holds.
@@ -249,6 +329,10 @@ pub fn destroy() -> Result<(), JsError> {
         host.requests = None;
         host.on_change = None;
         host.on_missing_font = None;
+        host.on_dirty_change = None;
+        host.on_title_change = None;
+        // The drawings are gone, so leaving the page loses nothing more.
+        host.dirty = false;
     });
     Ok(())
 }
@@ -263,22 +347,47 @@ fn requests() -> impl iced::futures::Stream<Item = Message> {
     stream::iter(receiver).flatten().map(Message::Host)
 }
 
-/// The app's update, then the page's change callback when the drawing in
-/// front changed.
+/// The app's update, then the page's callbacks for what changed: the drawing
+/// in front, whether any tab has unsaved changes, and the title.
 pub(crate) fn update(app: &mut App, message: Message) -> Task<Message> {
     let task = app.update(message);
     let revision = app.revision();
-    let callback = HOST.with_borrow_mut(|host| {
+    let (dirty, title) = (app.unsaved(), app.title());
+    let (changed, dirty_changed, title_changed, sync_title) = HOST.with_borrow_mut(|host| {
         let previous = host.revision.replace(revision);
-        previous
+        let changed = previous
             .is_some_and(|previous| previous != revision)
             .then(|| host.on_change.clone())
-            .flatten()
+            .flatten();
+        let dirty_changed = (host.dirty != dirty)
+            .then(|| host.on_dirty_change.clone())
+            .flatten();
+        host.dirty = dirty;
+        let title_changed = host.title.as_ref() != Some(&title);
+        if title_changed {
+            host.title = Some(title.clone());
+        }
+        (
+            changed,
+            dirty_changed,
+            title_changed.then(|| host.on_title_change.clone()),
+            title_changed && host.sync_title,
+        )
     });
-    if let Some(callback) = callback
+    if let Some(callback) = changed
         && let Err(thrown) = callback.call0(&JsValue::NULL)
     {
         error(&format!("The change callback failed: {thrown:?}"));
+    }
+    if let Some(callback) = dirty_changed {
+        call(&callback, &dirty.into(), "dirty change");
+    }
+    // winit's set_title only labels the canvas, so the page's title is set here.
+    if sync_title && let Some(document) = web_sys::window().and_then(|window| window.document()) {
+        document.set_title(&title);
+    }
+    if let Some(Some(callback)) = title_changed {
+        call(&callback, &title.into(), "title change");
     }
     task
 }
@@ -327,11 +436,6 @@ pub(crate) fn open_url(url: &str) -> Result<(), String> {
         .open_with_url_and_target(url, "_blank")
         .map(|_| ())
         .map_err(|_| "Could not open the link".into())
-}
-
-/// Ask with the browser's OK/Cancel prompt; true for OK.
-pub(crate) fn confirm(message: &str) -> bool {
-    web_sys::window().is_some_and(|window| window.confirm_with_message(message).unwrap_or(false))
 }
 
 fn clipboard() -> Option<web_sys::Clipboard> {

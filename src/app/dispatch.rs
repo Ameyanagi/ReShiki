@@ -196,6 +196,8 @@ impl App {
             }
             Message::Cancel => self.pending = None,
             Message::Discard => return Some(self.discard_pending()),
+            // Answered before routing; see App::update_untagged.
+            Message::Prompt(_) => {}
             #[cfg(target_os = "macos")]
             Message::MacFiles(_) => {}
             Message::Opened(file) => return Some(files::open_contents(file)),

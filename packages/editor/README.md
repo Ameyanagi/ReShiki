@@ -51,6 +51,26 @@ const stop = editor.onChange(() => {}); // returns a function that stops it
 editor.destroy();
 ```
 
+Leaving the page while any tab has unsaved changes (reload, closing the
+browser tab, following a link) asks first with the browser's "Leave site?"
+prompt. Closing an unsaved tab inside the editor asks Save, Don't Save or
+Cancel. The page can follow the same state:
+
+```js
+const editor = await mount(element, {
+  title: true, // document.title follows the drawing: "Untitled • — ReShiki"
+  onDirtyChange: (dirty) => console.log(dirty ? "unsaved" : "saved"),
+  onTitleChange: (title) => console.log(title),
+});
+editor.isDirty(); // whether any tab has unsaved changes
+const stopDirty = editor.onDirtyChange((dirty) => {}); // returns a function that stops it
+const stopTitle = editor.onTitleChange((title) => {});
+```
+
+The title is `Name — ReShiki`, with a `•` after the name while the tab in
+front has unsaved changes, as on the desktop. Without `title: true` the page
+keeps its own title, and `onTitleChange` hands it the editor's.
+
 `load` takes the same formats as `convert` and rejects with the app's message
 when it cannot read the data; so does `mount` for its `data`, before the
 editor starts. Mount on an element in the page's body: the editor cannot
