@@ -86,8 +86,13 @@ impl CopyFormat {
     }
 
     /// Availability of a clipboard transport, separate from conversion support.
+    /// A browser can put no PDF or CDX on its clipboard.
     pub fn available(self) -> bool {
-        super::available() || !matches!(self, Self::Png | Self::Pdf | Self::Cdx)
+        if cfg!(target_arch = "wasm32") {
+            !matches!(self, Self::Pdf | Self::Cdx)
+        } else {
+            super::available() || !matches!(self, Self::Png | Self::Pdf | Self::Cdx)
+        }
     }
 
     /// Cheap menu checks only. The existing exporters still validate chemistry
@@ -97,7 +102,11 @@ impl CopyFormat {
             return Some("There is nothing to copy.");
         }
         if !self.available() {
-            return Some("PNG, PDF and CDX need native clipboard support; use Export.");
+            return Some(if cfg!(target_arch = "wasm32") {
+                "Browsers cannot put PDF or CDX on the clipboard; use Export, or copy CDXML for ChemDraw."
+            } else {
+                "PNG, PDF and CDX need native clipboard support; use Export."
+            });
         }
         if self.is_molecular() {
             if doc.atoms.is_empty() {

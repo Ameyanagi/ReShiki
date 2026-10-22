@@ -19,6 +19,8 @@ mod linux;
 #[cfg(target_os = "linux")]
 use linux::invoke_encoded;
 
+#[cfg(any(target_arch = "wasm32", test))]
+mod browser;
 mod priority;
 
 const NATIVE: &str = "dev.reshiki.drawing";
@@ -238,7 +240,7 @@ pub fn available() -> bool {
     }
     #[cfg(not(target_os = "linux"))]
     {
-        cfg!(any(target_os = "macos", windows))
+        cfg!(any(target_os = "macos", windows, target_arch = "wasm32"))
     }
 }
 
@@ -251,6 +253,10 @@ fn helper() -> Result<PathBuf, String> {
 }
 
 async fn invoke(operation: &str, representations: &[Representation]) -> Result<Packet, String> {
+    #[cfg(target_arch = "wasm32")]
+    if operation.starts_with("write") {
+        return browser::write(representations).await;
+    }
     let input = encode_request(operation, representations)?;
     invoke_encoded(operation, input).await
 }
@@ -263,10 +269,10 @@ async fn invoke_encoded(_operation: &str, input: Vec<u8>) -> Result<Packet, Stri
     serde_json::from_slice(&output).map_err(|e| e.to_string())
 }
 
-/// The browser's clipboard holds text only; the editor copies through it directly.
+/// The browser writes and reads through `browser`; nothing else reaches here.
 #[cfg(target_arch = "wasm32")]
 async fn invoke_encoded(_operation: &str, _input: Vec<u8>) -> Result<Packet, String> {
-    Err("Native clipboard is unavailable in the browser".into())
+    Err("The browser cannot do this clipboard operation".into())
 }
 
 #[cfg(not(any(windows, target_os = "linux", target_arch = "wasm32")))]
@@ -336,6 +342,17 @@ async fn prepare_copy(
     original: Document,
     image_only: bool,
 ) -> Result<(CopyOutcome, Vec<Representation>), String> {
+    prepare_copy_for(engine, original, image_only, cfg!(target_arch = "wasm32")).await
+}
+
+/// A browser can hold neither CDX nor PDF, so its copy has SMILES text for
+/// other apps instead, when the drawing has one.
+async fn prepare_copy_for(
+    engine: LocalEngine,
+    original: Document,
+    image_only: bool,
+    browser: bool,
+) -> Result<(CopyOutcome, Vec<Representation>), String> {
     original.validate()?;
     if original.all_ids().is_empty() {
         return Err("There is nothing to copy".into());
@@ -365,6 +382,20 @@ async fn prepare_copy(
             NATIVE,
             &serde_json::to_vec(&doc).map_err(|e| e.to_string())?,
         ));
+    }
+    if !image_only && browser {
+        let mut request = Request::molecule("export", doc.clone());
+        request.format = Some("smiles".into());
+        if !doc.atoms.is_empty()
+            && let Ok(smiles) = engine.request(request).await
+            && let Some(smiles) = smiles.output.filter(|smiles| !smiles.trim().is_empty())
+        {
+            representations.push(Representation::new(
+                "public.utf8-plain-text",
+                smiles.as_bytes(),
+            ));
+        }
+    } else if !image_only {
         // External editors receive explicit visible ink colors, without the
         // source page background. Native data above retains the original theme.
         // Resolve depth paint against the source paper before changing the
@@ -413,7 +444,7 @@ async fn prepare_copy(
                 .push(format!("Editable exchange unavailable: {error}")),
         }
     }
-    let images = crate::task::spawn_blocking(move || copy_images(&doc, image_only))
+    let images = crate::task::spawn_blocking(move || copy_images(&doc, image_only, browser))
         .await
         .map_err(|e| format!("Could not render clipboard images: {e}"))?;
     let mut image_count = 0;
@@ -444,7 +475,7 @@ async fn prepare_copy(
                 // Editors that prefer CDX may reject the generic PDF/image
                 // flavors. Supply a sized picture when editable exchange is
                 // unavailable, without claiming it contains editable atoms.
-                if (image_only || !outcome.external_editable) && format == "png" {
+                if (image_only || !outcome.external_editable) && format == "png" && !browser {
                     match image.bytes().and_then(|bytes| embedded_png(&bytes)) {
                         Ok(bytes) => {
                             representations.extend(Representation::aliases(
@@ -479,6 +510,7 @@ async fn prepare_copy(
 fn copy_images(
     doc: &Document,
     image_only: bool,
+    browser: bool,
 ) -> Vec<(&'static str, Result<Representation, String>)> {
     let mut images: Vec<_> = [
         ("com.adobe.pdf", "pdf"),
@@ -486,6 +518,7 @@ fn copy_images(
         ("public.svg-image", "svg"),
     ]
     .into_iter()
+    .filter(|(_, format)| !browser || *format != "pdf")
     .map(|(kind, format)| {
         #[cfg(windows)]
         let image = match format {
@@ -503,7 +536,7 @@ fn copy_images(
     })
     .collect();
     #[cfg(windows)]
-    if !image_only {
+    if !image_only && !browser {
         images.push((
             "Office preview",
             crate::native_windows::office_metafile(doc)
@@ -576,6 +609,11 @@ async fn read_packet(
     skip_embedded: bool,
     generation: Option<String>,
 ) -> Result<Packet, String> {
+    // The browser reads its few web types again for each request.
+    #[cfg(target_arch = "wasm32")]
+    if !formats.is_empty() {
+        return browser::read(&formats).await;
+    }
     // Explicit picture requests contain only picture formats, including retries.
     let picture_only = formats
         .iter()
