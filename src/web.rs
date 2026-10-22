@@ -31,9 +31,9 @@ pub(crate) enum Request {
     /// This many files are dragged over the editor, or none once they leave.
     /// Browsers name dragged files only when they are dropped.
     Drag(usize),
-    /// Files dropped on the editor, by name with their contents, or why
-    /// one could not be read.
-    Drop(Result<Vec<(String, Vec<u8>)>, String>),
+    /// Files dropped on the editor, before they are read, so the import
+    /// belongs to the drawing they were dropped on.
+    Drop(Vec<web_sys::File>),
 }
 
 type DragListener = Closure<dyn FnMut(web_sys::DragEvent)>;
@@ -311,9 +311,7 @@ fn file_drops(element: &web_sys::Element) -> DragListener {
                     .files()
                     .map(|list| files(&list))
                     .unwrap_or_default();
-                wasm_bindgen_futures::spawn_local(async move {
-                    let _ = send(Request::Drop(read_files(files).await));
-                });
+                let _ = send(Request::Drop(files));
             }
             _ => {}
         }
@@ -329,12 +327,26 @@ fn files(list: &web_sys::FileList) -> Vec<web_sys::File> {
 }
 
 /// The files' names and contents, or which one the browser could not read.
-async fn read_files(files: Vec<web_sys::File>) -> Result<Vec<(String, Vec<u8>)>, String> {
+/// Each is read up to `limit`, as on the desktop: a larger file is cut one
+/// byte past it, so its loader refuses it with the usual size message.
+pub(crate) async fn read_files(
+    files: Vec<web_sys::File>,
+    limit: fn(&Path) -> u64,
+) -> Result<Vec<(String, Vec<u8>)>, String> {
     let mut read = Vec::with_capacity(files.len());
     for file in files {
-        let buffer = wasm_bindgen_futures::JsFuture::from(file.array_buffer())
+        let failed = || format!("Could not read {}", file.name());
+        let size = file.size() as u64;
+        let length = crate::app::read_length(size, limit(Path::new(&file.name())));
+        let blob: web_sys::Blob = if length < size {
+            file.slice_with_f64_and_f64(0., length as f64)
+                .map_err(|_| failed())?
+        } else {
+            file.clone().into()
+        };
+        let buffer = wasm_bindgen_futures::JsFuture::from(blob.array_buffer())
             .await
-            .map_err(|_| format!("Could not read {}", file.name()))?;
+            .map_err(|_| failed())?;
         read.push((file.name(), js_sys::Uint8Array::new(&buffer).to_vec()));
     }
     Ok(read)
@@ -347,6 +359,7 @@ async fn read_files(files: Vec<web_sys::File>) -> Result<Vec<(String, Vec<u8>)>,
 pub(crate) async fn pick(
     extensions: &[&str],
     multiple: bool,
+    limit: fn(&Path) -> u64,
 ) -> Result<Vec<(String, Vec<u8>)>, String> {
     let Some(window) = web_sys::window() else {
         return Ok(vec![]);
@@ -355,7 +368,7 @@ pub(crate) async fn pick(
         Some(files) => files?,
         None => file_input(&window, extensions, multiple).await,
     };
-    read_files(files).await
+    read_files(files, limit).await
 }
 
 /// `showOpenFilePicker`, or None when the page cannot use it, as in Firefox,

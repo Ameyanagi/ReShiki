@@ -105,6 +105,8 @@ mod wayland_qa;
 #[cfg(windows)]
 mod windows_libreoffice_save;
 mod workspace;
+#[cfg(target_arch = "wasm32")]
+pub(crate) use files::read_length;
 pub(crate) use workspace::text_width;
 
 /// The status bar's idle message.

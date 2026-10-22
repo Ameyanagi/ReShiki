@@ -156,6 +156,13 @@ impl std::fmt::Debug for Picked {
 /// read to one byte past it, so a huge file is never read whole.
 pub(super) type Limit = fn(&std::path::Path) -> u64;
 
+/// How much of a `size`-byte file to read under `limit`: all of it, or one
+/// byte past the limit, which is enough for the loader to refuse it.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) fn read_length(size: u64, limit: u64) -> u64 {
+    size.min(limit.saturating_add(1))
+}
+
 /// No limit, for loaders that take a file of any size.
 pub(super) fn unlimited(_: &std::path::Path) -> u64 {
     u64::MAX
@@ -195,10 +202,12 @@ pub(super) async fn pick(
     _title: &str,
     filter: Option<(&str, &[&str])>,
     multiple: bool,
-    _limit: Limit,
+    limit: Limit,
 ) -> Result<Vec<Picked>, String> {
     let extensions = filter.map_or(&[][..], |(_, extensions)| extensions);
-    Ok(browser_files(crate::web::pick(extensions, multiple).await?))
+    Ok(browser_files(
+        crate::web::pick(extensions, multiple, limit).await?,
+    ))
 }
 
 /// Browser files, by name with their contents.

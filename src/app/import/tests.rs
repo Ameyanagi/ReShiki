@@ -407,7 +407,10 @@ async fn browser_files_insert_and_open_from_their_contents() -> Result<(), Strin
     assert_eq!(batch.drawings[0].atoms.len(), 3);
 
     let mut app = ready();
-    let task = app.update(Message::Imports(Action::Read(Ok(vec![mol]))));
+    let task = app.update(Message::Imports(Action::Read(
+        app.import_ticket(),
+        Ok(vec![mol]),
+    )));
     assert!(
         task.units() > 0 && app.tab.busy && !app.error,
         "{}",
@@ -421,7 +424,10 @@ async fn browser_files_insert_and_open_from_their_contents() -> Result<(), Strin
         path: "drawing.rsk".into(),
         contents: serde_json::to_vec(&doc).unwrap(),
     };
-    let task = app.update(Message::Imports(Action::Read(Ok(vec![drawing.clone()]))));
+    let task = app.update(Message::Imports(Action::Read(
+        app.import_ticket(),
+        Ok(vec![drawing.clone()]),
+    )));
     assert!(task.units() > 0 && !app.tab.busy && !app.error);
     let opened = super::super::files::prepare_contents(drawing.path, Ok(drawing.contents)).await;
     let _ = app.update(Message::FilePrepared(opened));
@@ -433,11 +439,15 @@ async fn browser_files_insert_and_open_from_their_contents() -> Result<(), Strin
         path: "notes.docx".into(),
         contents: vec![],
     };
-    let _ = app.update(Message::Imports(Action::Read(Ok(vec![notes]))));
+    let _ = app.update(Message::Imports(Action::Read(
+        app.import_ticket(),
+        Ok(vec![notes]),
+    )));
     assert!(app.error && app.status == "Can't import .docx");
-    let _ = app.update(Message::Imports(Action::Read(Err(
-        "Could not read x".into()
-    ))));
+    let _ = app.update(Message::Imports(Action::Read(
+        app.import_ticket(),
+        Err("Could not read x".into()),
+    )));
     assert_eq!(app.status, "Could not read x");
     Ok(())
 }
@@ -469,6 +479,32 @@ async fn oversized_pictures_are_read_only_past_their_limit() -> Result<(), Strin
 
 #[test]
 fn chosen_files_belong_to_the_drawing_they_were_chosen_for() {
-    let read = Message::Imports(Action::Read(Ok(vec![])));
+    let read = Message::Imports(Action::Read(
+        Ticket {
+            epoch: 0,
+            revision: 0,
+        },
+        Ok(vec![]),
+    ));
     assert!(super::super::tabs::document_result(&read));
+}
+
+#[test]
+fn files_read_for_a_drawing_that_was_replaced_are_not_inserted() {
+    let mut app = ready();
+    let ticket = app.import_ticket();
+    app.reset_tab();
+    let mol = browser_file("ethanol.mol", "ethanol.mol");
+    let task = app.update(Message::Imports(Action::Read(ticket, Ok(vec![mol]))));
+    assert_eq!(task.units(), 0);
+    assert!(!app.tab.busy && app.tab.doc.all_ids().is_empty());
+}
+
+#[test]
+fn browser_files_are_read_one_byte_past_their_limit() {
+    use super::super::files::read_length;
+    assert_eq!(read_length(10, 20), 10);
+    assert_eq!(read_length(21, 20), 21);
+    assert_eq!(read_length(5_000_000_000, 20), 21);
+    assert_eq!(read_length(5_000_000_000, u64::MAX), 5_000_000_000);
 }

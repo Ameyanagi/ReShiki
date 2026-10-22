@@ -56,8 +56,9 @@ pub enum Action {
     Choose,
     /// Files dropped on the desktop window, imported together.
     Files(Vec<PathBuf>),
-    /// Chosen files, or files dropped on the browser page, already read.
-    Read(Result<Vec<Picked>, String>),
+    /// Chosen files, or files dropped on the browser page, already read, for
+    /// the drawing they were chosen for or dropped on.
+    Read(Ticket, Result<Vec<Picked>, String>),
     Hovered(PathBuf),
     Dropped(PathBuf),
     Left,
@@ -268,7 +269,7 @@ async fn load(engine: LocalEngine, files: Vec<Picked>) -> Result<Batch, String> 
     Ok(batch)
 }
 /// Pictures are read to one byte past their size limit; structure files whole.
-fn limit(path: &Path) -> u64 {
+pub(super) fn limit(path: &Path) -> u64 {
     if kind(path) == Kind::Picture {
         reshiki::pictures::MAX_BYTES as u64
     } else {
@@ -277,9 +278,11 @@ fn limit(path: &Path) -> u64 {
 }
 /// No extension filter: VASP files are often named POSCAR or CONTCAR without
 /// one. Files of other kinds are refused with their extension.
-fn choose() -> Task<Message> {
+fn choose(ticket: Ticket) -> Task<Message> {
     let files = super::files::pick("Insert structures or pictures", None, true, limit);
-    Task::perform(files, |files| Message::Imports(Action::Read(files)))
+    Task::perform(files, move |files| {
+        Message::Imports(Action::Read(ticket, files))
+    })
 }
 
 impl App {
@@ -307,20 +310,25 @@ impl App {
         Task::none()
     }
 
+    /// The drawing in front as it is now, for an import that finishes later.
+    pub(super) fn import_ticket(&self) -> Ticket {
+        Ticket {
+            epoch: self.tab.file_epoch,
+            revision: self.tab.revision,
+        }
+    }
+
     /// Marks the drawing in front busy for a file import, unless it already is.
-    fn begin_import(&mut self) -> Option<Ticket> {
+    fn begin_import(&mut self) -> bool {
         if self.tab.busy {
             self.error = true;
             self.status = "Wait for the current operation, then import again".into();
-            return None;
+            return false;
         }
         self.tab.busy = true;
         self.error = false;
         self.status = "Importing…".into();
-        Some(Ticket {
-            epoch: self.tab.file_epoch,
-            revision: self.tab.revision,
-        })
+        true
     }
 
     /// Outline the canvas while the browser drags this many files over it,
@@ -368,7 +376,7 @@ impl App {
                 self.imports.examples_menu = open;
                 self.imports.menu = false;
             }
-            Action::Choose => return choose(),
+            Action::Choose => return choose(self.import_ticket()),
             Action::Files(paths) if paths.is_empty() => {}
             Action::Files(paths) => match plan(&paths) {
                 Plan::Reject(reason) => {
@@ -377,9 +385,10 @@ impl App {
                 }
                 Plan::Open(paths) => return super::files::open_paths(paths),
                 Plan::Insert(paths) => {
-                    let Some(ticket) = self.begin_import() else {
+                    let ticket = self.import_ticket();
+                    if !self.begin_import() {
                         return Task::none();
-                    };
+                    }
                     let engine = self.engine.clone();
                     let load = async move {
                         load(engine, super::files::read_paths(paths, limit).await?).await
@@ -389,12 +398,12 @@ impl App {
                     });
                 }
             },
-            Action::Read(Err(error)) => {
+            Action::Read(_, Err(error)) => {
                 self.error = true;
                 self.status = error;
             }
-            Action::Read(Ok(files)) if files.is_empty() => {}
-            Action::Read(Ok(files)) => {
+            Action::Read(_, Ok(files)) if files.is_empty() => {}
+            Action::Read(ticket, Ok(files)) => {
                 let paths: Vec<_> = files.iter().map(|file| file.path.clone()).collect();
                 match plan(&paths) {
                     Plan::Reject(reason) => {
@@ -403,9 +412,11 @@ impl App {
                     }
                     Plan::Open(_) => return super::files::open_picked(Ok(files)),
                     Plan::Insert(_) => {
-                        let Some(ticket) = self.begin_import() else {
+                        // A drawing opened in this tab meanwhile is not the
+                        // one the files were meant for.
+                        if ticket.epoch != self.tab.file_epoch || !self.begin_import() {
                             return Task::none();
-                        };
+                        }
                         return Task::perform(load(self.engine.clone(), files), move |result| {
                             Message::Imports(Action::Loaded(ticket, Box::new(result)))
                         });
