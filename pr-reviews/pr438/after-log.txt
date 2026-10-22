@@ -1,0 +1,9 @@
+console error: Failed to load resource: the server responded with a status of 404 (File not found)
+url http://127.0.0.1:8424/demo/ navigator.platform MacIntel
+Cmd+A, Backspace -> "ERR:Draw or import a molecule first"
+Cmd+Z -> "OCCc1ccccc1"
+Cmd+Shift+Z -> "ERR:Draw or import a molecule first"
+Cmd+C clipboard -> "RESHIKI_DRAWING_V1\n{\"atom_labels\":{\"carb"
+Cmd+V -> "CCO.CCO"
+Cmd+O -> file chooser opened
+Cmd+S -> download Untitled.rsk

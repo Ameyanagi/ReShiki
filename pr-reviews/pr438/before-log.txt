@@ -1,0 +1,8 @@
+url https://reshiki.com/demo/ navigator.platform MacIntel
+Cmd+A, Backspace -> "OCCc1ccccc1"
+Cmd+Z -> "OCCc1ccccc1"
+Cmd+Shift+Z -> "OCCc1ccccc1"
+Cmd+C clipboard -> "SENTINEL"
+Cmd+V -> "CCO"
+Cmd+O -> no file chooser
+Cmd+S -> no download
