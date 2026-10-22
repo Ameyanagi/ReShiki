@@ -477,21 +477,53 @@ impl Model3d {
     /// restores it.
     pub fn initial_view(&self, doc: &Document) -> [f32; 4] {
         if let Some(cell) = &self.cell {
-            // Bonded carbons are bare vertices in 2D; every other atom has a
-            // label to keep clear.
-            let bonded = |id: u64| {
-                doc.bonds.iter().any(|b| b.a == id || b.b == id)
-                    || cell.crossing.iter().any(|c| c.a == id || c.b == id)
-            };
-            let labelled: Vec<_> = self
-                .atoms
+            // Measured in label heights, as the 2D drawing will show it.
+            let k = flat_scale(doc, self) / doc.drawing_style.font_size().max(1e-3);
+            let scaled = |p: [f32; 3]| p.map(|v| v * k);
+            let labelled = self.labelled(doc);
+            let index: HashMap<u64, usize> =
+                labelled.iter().enumerate().map(|(i, l)| (l.0, i)).collect();
+            // Bonds to hydrogens are short; their labels need only not
+            // overlap.
+            let bonds = doc
+                .bonds
                 .iter()
-                .filter_map(|a| {
-                    let element = &doc.atom(a.id)?.element;
-                    (element != "C" || !bonded(a.id)).then(|| (a.xyz, element.chars().count()))
+                .filter(|b| !hydrogen(doc, b.a) && !hydrogen(doc, b.b))
+                .filter_map(|b| {
+                    let (i, j) = (*index.get(&b.a)?, *index.get(&b.b)?);
+                    Some((i.min(j), i.max(j)))
                 })
                 .collect();
-            return crystal_rotation(cell.vectors, &labelled);
+            let atoms: Vec<_> = labelled.iter().map(|(_, p, n)| (scaled(*p), *n)).collect();
+            // The 2D stubs of the bonds that leave the cell.
+            let at = |id: u64| self.atoms.iter().find(|a| a.id == id).map(|a| a.xyz);
+            let stubs: Vec<_> = cell
+                .crossing
+                .iter()
+                .filter_map(|c| {
+                    let (pa, pb) = (at(c.a)?, at(c.b)?);
+                    let far = zip3(pb, cell.translation(c.image), |p, t| p + t);
+                    let stub = sub(far, pa).map(|v| v * STUB);
+                    Some([
+                        (scaled(pa), scaled(zip3(pa, stub, |p, s| p + s))),
+                        (scaled(pb), scaled(zip3(pb, stub, |p, s| p - s))),
+                    ])
+                })
+                .flatten()
+                .collect();
+            // Every bond drawn inside the cell, bare carbons' included.
+            let lines: Vec<_> = doc
+                .bonds
+                .iter()
+                .filter_map(|b| Some((scaled(at(b.a)?), scaled(at(b.b)?))))
+                .collect();
+            let labels = Labels {
+                atoms: &atoms,
+                bonds,
+                stubs: &stubs,
+                lines: &lines,
+            };
+            return crystal_rotation(cell.vectors.map(scaled), &labels);
         }
         let points = self.points(doc).unwrap_or_default();
         let center = heavy_center(&points);
@@ -501,6 +533,25 @@ impl Model3d {
             .map(|(_, p)| sub(*p, center))
             .collect();
         initial_rotation(&heavy)
+    }
+
+    /// The atoms a crystal's 2D drawing labels, with their positions and
+    /// letter counts: all but bonded carbons, which are bare vertices unless
+    /// linear.
+    fn labelled(&self, doc: &Document) -> Vec<(u64, [f32; 3], usize)> {
+        let crossing = self.cell.iter().flat_map(|c| &c.crossing);
+        let bonded = |id: u64| {
+            doc.bonds.iter().any(|b| b.a == id || b.b == id)
+                || crossing.clone().any(|c| c.a == id || c.b == id)
+        };
+        self.atoms
+            .iter()
+            .filter_map(|a| {
+                let element = &doc.atom(a.id)?.element;
+                let shown = element != "C" || !bonded(a.id) || linear_carbon(doc, self, a.id);
+                shown.then(|| (a.id, a.xyz, element.chars().count()))
+            })
+            .collect()
     }
 
     pub fn contains(&self, id: u64) -> bool {
@@ -1420,29 +1471,120 @@ pub fn initial_rotation(points: &[[f32; 3]]) -> [f32; 4] {
     tilted([x, y, cross(x, y)], -0.35, 0.3)
 }
 
-/// A crystal's opening view, as crystallographers draw a cell: b to the
-/// right, c up and a toward the viewer, seen a little from above and from the
-/// right, so the origin is at the back. Where the labelled `atoms` would then
-/// hide behind each other or the axis labels, as rutile's Ti behind O, the
-/// nearest tilt that keeps them apart, so its 2D drawing has no overlapping
-/// labels.
-fn crystal_rotation(vectors: [[f32; 3]; 3], atoms: &[([f32; 3], usize)]) -> [f32; 4] {
+/// Drawing units per ångström of a crystal's 2D drawing: the drawing's own
+/// scale (1.5 Å per bond length), or larger for a small cell or close
+/// labelled atoms, so the shortest cell edge is [`CELL_EDGE`] label heights
+/// and a bond between two labels other than H, as CO₂'s C=O,
+/// [`LABELLED_BOND`].
+pub fn flat_scale(doc: &Document, model: &Model3d) -> f32 {
+    let style = &doc.drawing_style;
+    let font = style.font_size();
+    let edge = model.cell.as_ref().map_or(f32::INFINITY, |cell| {
+        cell.vectors
+            .iter()
+            .map(|v| length(*v))
+            .fold(f32::INFINITY, f32::min)
+    });
+    let labelled: HashMap<u64, [f32; 3]> = model
+        .labelled(doc)
+        .into_iter()
+        .map(|(id, p, _)| (id, p))
+        .collect();
+    let bond = doc
+        .bonds
+        .iter()
+        .filter(|b| !hydrogen(doc, b.a) && !hydrogen(doc, b.b))
+        .filter_map(|b| Some(length(sub(*labelled.get(&b.a)?, *labelled.get(&b.b)?))))
+        .fold(f32::INFINITY, f32::min);
+    (style.bond_length_world / 1.5)
+        .max(CELL_EDGE * font / edge.max(1e-3))
+        .max(LABELLED_BOND * font / bond.max(1e-3))
+}
+
+/// The shortest cell edge, and the shortest bond between two labels, in a
+/// crystal's 2D drawing, in label heights.
+const CELL_EDGE: f32 = 8.;
+const LABELLED_BOND: f32 = 2.4;
+
+fn hydrogen(doc: &Document, id: u64) -> bool {
+    doc.atom(id).is_some_and(|a| a.element == "H")
+}
+
+/// Whether atom `id` of `model` is a carbon between exactly two bonded
+/// neighbours in a straight line (165° or more), as CO₂'s, which a 2D
+/// drawing labels so that O=C=O does not read as O=O.
+pub fn linear_carbon(doc: &Document, model: &Model3d, id: u64) -> bool {
+    if doc.atom(id).is_none_or(|a| a.element != "C") {
+        return false;
+    }
+    let at = |id: u64| model.atoms.iter().find(|a| a.id == id).map(|a| a.xyz);
+    let neighbours: Vec<_> = doc
+        .bonds
+        .iter()
+        .filter_map(|b| match (b.a == id, b.b == id) {
+            (true, _) => at(b.b),
+            (_, true) => at(b.a),
+            _ => None,
+        })
+        .collect();
+    let (Some(centre), [p, q]) = (at(id), neighbours.as_slice()) else {
+        return false;
+    };
+    let (u, v) = (sub(*p, centre), sub(*q, centre));
+    let cos = (u[0] * v[0] + u[1] * v[1] + u[2] * v[2]) / (length(u) * length(v)).max(1e-6);
+    cos <= 165_f32.to_radians().cos()
+}
+
+/// A crystal's opening view. Every tilt of three families is tried: the
+/// cell as crystallographers draw it (b to the right, c up, a toward the
+/// viewer), looking down c (a to the right, b up) and down the body
+/// diagonal. Each must show every axis and point c (or b) up, and where any
+/// view allows it, hide the origin behind the box, so that a, b and c end on
+/// its outline. Of the views that keep the `labels` nearly as far apart as
+/// the best one does (see [`separation`]), the one nearest a family's
+/// standard slight tilt wins, so the usual view is kept wherever it reads
+/// well.
+fn crystal_rotation(vectors: [[f32; 3]; 3], labels: &Labels) -> [f32; 4] {
     type V = [f64; 3];
     let dot = |a: V, b: V| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     let unit = |v: V| {
         let n = dot(v, v).sqrt().max(1e-300);
         v.map(|x| x / n)
     };
-    let [_, b, c] = vectors.map(|v| v.map(f64::from));
-    let x = unit(b);
-    let d = dot(c, x);
-    let y = unit(zip3(c, x, |c, x| c - d * x));
-    let z = [
-        x[1] * y[2] - x[2] * y[1],
-        x[2] * y[0] - x[0] * y[2],
-        x[0] * y[1] - x[1] * y[0],
+    let [a, b, c] = vectors.map(|v| v.map(f64::from));
+    let basis = |x: V, toward: V| {
+        let x = unit(x);
+        let d = dot(toward, x);
+        let y = unit(zip3(toward, x, |t, x| t - d * x));
+        let z = [
+            x[1] * y[2] - x[2] * y[1],
+            x[2] * y[0] - x[0] * y[2],
+            x[0] * y[1] - x[1] * y[0],
+        ];
+        [x, y, z]
+    };
+    // Down the body diagonal a + b + c, with c up: every axis comes toward
+    // the viewer, even in a skewed cell.
+    let diagonal = {
+        let z = unit(zip3(zip3(a, b, |a, b| a + b), c, |s, c| s + c));
+        let d = dot(c, z);
+        let y = unit(zip3(c, z, |c, z| c - d * z));
+        let x = [
+            y[1] * z[2] - y[2] * z[1],
+            y[2] * z[0] - y[0] * z[2],
+            y[0] * z[1] - y[1] * z[0],
+        ];
+        [x, y, z]
+    };
+    // b right and c up, a toward the viewer, turned up to 70° either way;
+    // a right and b up, c toward the viewer, turned a little; and down the
+    // diagonal, turned a little. Each with the lattice vector that must
+    // point up and a small preference for the first.
+    let families = [
+        (basis(b, c), 2, 0., 12),
+        (basis(a, b), 1, 0.05, 6),
+        (diagonal, 2, 0.1, 6),
     ];
-    let basis = [x, y, z];
     // Each lattice vector's on-screen length as a fraction of its length;
     // the cell reads as a box only if none is seen end-on.
     let shown = |q: [f32; 4]| {
@@ -1454,96 +1596,253 @@ fn crystal_rotation(vectors: [[f32; 3]; 3], atoms: &[([f32; 3], usize)]) -> [f32
             })
             .fold(f32::INFINITY, f32::min)
     };
-    let up = |q: [f32; 4]| rotate(q, c.map(|v| v as f32))[1] > 0.;
-    let mut tilts = vec![(0.3, -0.45)];
-    for i in 0..=12 {
-        for j in -12..=12 {
-            tilts.push((0.05 * f64::from(i), 0.1 * f64::from(j)));
-        }
-    }
-    let near = |(x, y): (f64, f64)| (x - 0.3).hypot(y + 0.45);
-    tilts.sort_by(|a, b| near(*a).total_cmp(&near(*b)));
-    let mut most: Option<(f32, [f32; 4])> = None;
-    for (x, y) in tilts {
-        let q = tilted(basis, x, y);
-        if shown(q) < 0.3 || !up(q) {
-            continue;
-        }
-        let apart = separation(q, atoms, vectors);
-        if apart >= 1. {
-            return q;
-        }
-        if most.is_none_or(|(m, _)| apart > m) {
-            most = Some((apart, q));
-        }
-    }
-    if let Some((_, q)) = most {
-        return q;
-    }
-    let standard = tilted(basis, 0.3, -0.45);
-    // A skewed cell, such as a rhombohedral primitive cell, can show an
-    // axis end-on from there: take the tilt that shows all three best,
-    // still from above, with c pointing up.
-    let mut best = (shown(standard), standard);
-    for i in 0..=12 {
-        for j in -12..=12 {
-            let q = tilted(basis, 0.05 * f64::from(i), 0.1 * f64::from(j));
-            let score = shown(q);
-            if score > best.0 && up(q) {
-                best = (score, q);
+    let mut views = vec![];
+    for (basis, up, bias, turns) in families {
+        for i in 0..=12 {
+            for j in -turns..=turns {
+                let (x, y) = (0.05 * f64::from(i), 0.1 * f64::from(j));
+                let q = tilted(basis, x, y);
+                let turned = vectors.map(|v| rotate(q, v));
+                if shown(q) >= 0.3 && turned.get(up).is_some_and(|v| v[1] > 0.) {
+                    let near = (x - 0.3).hypot(y + 0.45) + bias;
+                    // The three faces at the origin face away, so it is the
+                    // hidden corner: each face's normal v₁ × v₂ (outward at
+                    // the far side for a right-handed cell) points at us.
+                    let back = (0..3).all(|k| {
+                        let at = |i: usize| turned.get((k + i) % 3).copied().unwrap_or_default();
+                        let ([x1, y1, _], [x2, y2, _]) = (at(1), at(2));
+                        x1 * y2 - y1 * x2 > 0.
+                    });
+                    views.push((separation(q, labels, vectors), near, q, back));
+                }
             }
         }
     }
-    best.1
+    // The origin at the back where any view allows it.
+    if views.iter().any(|v| v.3) {
+        views.retain(|v| v.3);
+    }
+    let best = views.iter().map(|v| v.0).fold(f32::NEG_INFINITY, f32::max);
+    let good = 0.9 * best.min(GOOD_SEPARATION);
+    if let Some((_, _, q, _)) = views
+        .iter()
+        .filter(|v| v.0 >= good)
+        .min_by(|u, v| u.1.total_cmp(&v.1))
+    {
+        return *q;
+    }
+    // A skewed cell, such as a rhombohedral primitive cell, may allow no
+    // such view: take the tilt that shows all three axes best, c up.
+    let standard = basis(b, c);
+    let mut most = (f32::NEG_INFINITY, tilted(standard, 0.3, -0.45));
+    for i in 0..=12 {
+        for j in -12..=12 {
+            let q = tilted(standard, 0.05 * f64::from(i), 0.1 * f64::from(j));
+            let score = shown(q);
+            if score > most.0 && rotate(q, c.map(|v| v as f32))[1] > 0. {
+                most = (score, q);
+            }
+        }
+    }
+    most.1
 }
 
-/// The height and the width per letter, in ångström on screen, that an atom
-/// label in 2D needs (a 10 pt label at 28 drawing units per ångström). Close
-/// neighbours need only [`APART_NEAR`] of their distance in ångström.
-const LABEL_HEIGHT: f32 = 1.;
-const LETTER_WIDTH: f32 = 1.;
-const APART_NEAR: f32 = 0.8;
-/// Above this many labelled atoms the opening view does not look for
-/// overlaps.
+/// The height and the width per letter of an atom label's ink in 2D, with a
+/// little room, in label heights (the font size), the unit the opening view
+/// measures in.
+const LABEL_HEIGHT: f32 = 0.95;
+const LETTER_WIDTH: f32 = 0.8;
+/// How far past its axis's end, away from the cell's centre, an axis label
+/// sits, and how far from every cell edge it should stay, in label heights.
+const AXIS_AHEAD: f32 = 0.8;
+const AXIS_CLEAR: f32 = 0.7;
+/// The room a bond between two labels needs to show, in label heights.
+const BOND_ROOM: f32 = 0.3;
+/// How far an atom label should stay from a box edge it is not on, in label
+/// heights: clear of its ink.
+const EDGE_CLEAR: f32 = 0.45;
+/// A separation this good is as good as any: views that come near it are
+/// told apart by how close they are to the standard view.
+const GOOD_SEPARATION: f32 = 1.6;
+/// Above this many labelled atoms the opening view compares only the axis
+/// labels.
 const APART_ATOMS: usize = 300;
 
-/// How well `atoms`, each a position and its label's letter count, and the
-/// labels past the ends of the lattice `vectors` keep apart seen through `q`:
-/// the least, over each pair, of how far apart their labels' boxes are
-/// across or along as a fraction of what keeps them apart; 1 or more when no
-/// labels overlap, infinite without two to compare or with too many.
-fn separation(q: [f32; 4], atoms: &[([f32; 3], usize)], vectors: [[f32; 3]; 3]) -> f32 {
-    if atoms.len() > APART_ATOMS {
-        return f32::INFINITY;
-    }
+/// How well the labels keep apart seen through `q`: each of `atoms` (a
+/// position and its label's letter count) and each axis label past the end
+/// of one of the lattice `vectors`, from each other, and the axis labels from
+/// the cell's edges and the `stubs` of bonds leaving it. The least, over each
+/// pair, of how far apart they are, across or along, as a fraction of what
+/// keeps them apart: 1 or more when nothing overlaps.
+fn separation(q: [f32; 4], labels: &Labels, vectors: [[f32; 3]; 3]) -> f32 {
     let width = |letters: usize| LETTER_WIDTH * letters.max(1) as f32;
-    let apart = |s: [f32; 3], t: [f32; 3], wide: f32, near: f32| {
-        let near = near.clamp(1e-3, 1.);
-        ((s[0] - t[0]).abs() / (wide * near)).max((s[1] - t[1]).abs() / (LABEL_HEIGHT * near))
+    let apart = |s: [f32; 3], t: [f32; 3], wide: f32, room: f32| {
+        ((s[0] - t[0]).abs() / (wide + room)).max((s[1] - t[1]).abs() / (LABEL_HEIGHT + room))
+    };
+    let atoms = if labels.atoms.len() > APART_ATOMS {
+        &[][..]
+    } else {
+        labels.atoms
     };
     let seen: Vec<_> = atoms
         .iter()
         .map(|(p, n)| (rotate(q, *p), width(*n)))
         .collect();
     let mut least = f32::INFINITY;
-    for (i, ((p, _), (s, ws))) in atoms.iter().zip(&seen).enumerate() {
-        for ((r, _), (t, wt)) in atoms.iter().zip(&seen).skip(i + 1) {
-            let near = APART_NEAR * length(sub(*p, *r));
-            least = least.min(apart(*s, *t, (ws + wt) / 2., near));
+    for (i, (s, ws)) in seen.iter().enumerate() {
+        for (j, (t, wt)) in seen.iter().enumerate().skip(i + 1) {
+            // A bond between two labels needs room to show.
+            let room = if labels.bonds.contains(&(i, j)) {
+                BOND_ROOM
+            } else {
+                0.
+            };
+            least = least.min(apart(*s, *t, (ws + wt) / 2., room));
         }
     }
-    // Each axis label, one letter, sits about a label's height past its
-    // vector's end.
-    for v in vectors {
-        let end = rotate(q, v);
-        let n = end[0].hypot(end[1]).max(1e-6);
-        let ahead = 1. + LABEL_HEIGHT / n;
-        let label = [end[0] * ahead, end[1] * ahead, 0.];
+    let cell = Cell {
+        vectors,
+        crossing: vec![],
+    };
+    let corners = cell.corners();
+    // The twelve edges join corners that differ in one bit.
+    let edges: Vec<_> = (0..8_usize)
+        .flat_map(|j| ((j + 1)..8).map(move |k| (j, k)))
+        .filter(|(j, k)| (j ^ k).count_ones() == 1)
+        .filter_map(|(j, k)| Some(((j, k), *corners.get(j)?, *corners.get(k)?)))
+        .collect();
+    let turned: Vec<_> = edges
+        .iter()
+        .map(|(_, a, b)| (rotate(q, *a), rotate(q, *b)))
+        .collect();
+    // An atom's label keeps clear of the box's edges but those it lies on,
+    // and of the bonds and stubs of other atoms, which would seem to end at
+    // it.
+    let lines: Vec<_> = labels
+        .lines
+        .iter()
+        .chain(labels.stubs)
+        .map(|(a, b)| (*a, *b, rotate(q, *a), rotate(q, *b)))
+        .collect();
+    for ((p, _), (s, _)) in atoms.iter().zip(&seen) {
+        for ((_, a, b), (ta, tb)) in edges.iter().zip(&turned) {
+            if to_segment3(*p, *a, *b) > 1e-2 {
+                least = least.min(to_segment(*s, *ta, *tb) / EDGE_CLEAR);
+            }
+        }
+        for (a, b, ta, tb) in &lines {
+            if length(sub(*p, *a)) > 1e-2 && length(sub(*p, *b)) > 1e-2 {
+                least = least.min(to_segment(*s, *ta, *tb) / EDGE_CLEAR);
+            }
+        }
+    }
+    let flat = corners.map(|c| {
+        let p = rotate(q, c);
+        [p[0], p[1]]
+    });
+    let axes = [0, 1, 2].map(|k| {
+        let [x, y] = axis_spot(&flat, k, 1.);
+        [x, y, 0.]
+    });
+    for (i, label) in axes.iter().enumerate() {
         for (s, ws) in &seen {
-            least = least.min(apart(*s, label, (ws + width(1)) / 2., 1.));
+            least = least.min(apart(*s, *label, (ws + width(1)) / 2., 0.));
+        }
+        for other in axes.iter().skip(i + 1) {
+            least = least.min(apart(*label, *other, width(1), 0.));
+        }
+        let stubs = labels
+            .stubs
+            .iter()
+            .map(|(a, b)| (rotate(q, *a), rotate(q, *b)));
+        // The edges at its own corner are kept clear by `axis_spot`.
+        let corner = 1 << i;
+        let others = edges
+            .iter()
+            .zip(&turned)
+            .filter(|(((j, k), ..), _)| *j != corner && *k != corner)
+            .map(|(_, t)| *t);
+        for (from, to) in others.chain(stubs) {
+            least = least.min(to_segment(*label, from, to) / AXIS_CLEAR);
         }
     }
     least
+}
+
+/// What a crystal's opening view keeps apart, in label heights: each
+/// labelled atom's position and letter count, the bonds between them (as
+/// index pairs, the lower first) and the 2D stubs of the bonds that leave
+/// the cell.
+struct Labels<'a> {
+    atoms: &'a [([f32; 3], usize)],
+    bonds: HashSet<(usize, usize)>,
+    stubs: &'a [([f32; 3], [f32; 3])],
+    /// The bonds inside the cell, as the segments between their atoms.
+    lines: &'a [([f32; 3], [f32; 3])],
+}
+
+/// The distance from `p` to the segment from `a` to `b`.
+fn to_segment3(p: [f32; 3], a: [f32; 3], b: [f32; 3]) -> f32 {
+    let (d, w) = (sub(b, a), sub(p, a));
+    let n = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+    let t = if n > 1e-12 {
+        ((w[0] * d[0] + w[1] * d[1] + w[2] * d[2]) / n).clamp(0., 1.)
+    } else {
+        0.
+    };
+    length(sub(w, d.map(|v| v * t)))
+}
+
+/// Where the label of lattice vector `k` goes, its height `size`, given the
+/// cell's eight `corners` on screen (corner `i` at bits `i` of a, b, c): past
+/// the vector's end, in the widest gap between the three box edges that meet
+/// there, [`AXIS_CLEAR`] label heights from them and at least
+/// [`AXIS_AHEAD`] from the corner.
+fn axis_spot(corners: &[[f32; 2]; 8], k: usize, size: f32) -> [f32; 2] {
+    use std::f32::consts::{FRAC_PI_2, PI, TAU};
+    let bit = 1 << k;
+    let at = |i: usize| corners.get(i).copied().unwrap_or_default();
+    let end = at(bit);
+    let edges = [0, bit | ((bit << 1) % 7), bit | ((bit << 2) % 7)].map(|i| {
+        let n = at(i);
+        (n[1] - end[1]).atan2(n[0] - end[0])
+    });
+    let gap = |t: f32| {
+        edges
+            .iter()
+            .map(|e| {
+                let d = (t - e).rem_euclid(TAU);
+                d.min(TAU - d)
+            })
+            .fold(PI, f32::min)
+    };
+    let (best, wide) = (0..72)
+        .map(|i| {
+            let t = i as f32 * TAU / 72.;
+            (t, gap(t))
+        })
+        .fold(
+            (0., f32::NEG_INFINITY),
+            |b, c| if c.1 > b.1 { c } else { b },
+        );
+    let reach = if wide >= FRAC_PI_2 {
+        AXIS_AHEAD
+    } else {
+        (1.1 * AXIS_CLEAR / wide.sin().max(0.2)).clamp(AXIS_AHEAD, 2.)
+    } * size;
+    [end[0] + best.cos() * reach, end[1] + best.sin() * reach]
+}
+
+/// The on-screen distance from `p` to the segment from `a` to `b`.
+fn to_segment(p: [f32; 3], a: [f32; 3], b: [f32; 3]) -> f32 {
+    let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+    let n = dx * dx + dy * dy;
+    let t = if n > 1e-12 {
+        (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / n).clamp(0., 1.)
+    } else {
+        0.
+    };
+    (p[0] - a[0] - t * dx).hypot(p[1] - a[1] - t * dy)
 }
 
 /// The rotation taking the orthonormal rows of `basis` to screen x, y and z,
@@ -2327,25 +2626,17 @@ fn cell_ink(
         italic: true,
         ..Default::default()
     };
-    // Each label sits just past its axis's end on screen, along the axis, or
-    // away from the cell's centre where the axis is seen end-on.
-    let origin = corner([0; 3]).map(view.project);
-    let middle = (view.project)(place(cell.center()));
-    let unit = |from: Point, to: Point| {
-        let (dx, dy) = (to.x - from.x, to.y - from.y);
-        let n = dx.hypot(dy);
-        (n > size).then(|| (dx / n, dy / n))
-    };
+    // Each label sits just past its axis's end, in the widest gap between
+    // the box edges that meet there.
+    let flat = corners.map(|c| {
+        let p = (view.project)(c);
+        [p.x, p.y]
+    });
     let mut labels = vec![];
-    for (name, v) in ["a", "b", "c"].into_iter().zip(cell.vectors) {
-        let end = (view.project)(place(v));
+    for (k, name) in ["a", "b", "c"].into_iter().enumerate() {
         let w = crate::style::styled_text_width(name, size, &style);
-        let (dx, dy) = origin
-            .and_then(|o| unit(o, end))
-            .or_else(|| unit(middle, end))
-            .unwrap_or((0., -1.));
-        let reach = 0.5 * size + 0.5 * w.max(size * 0.6);
-        let at = end.offset(dx * reach, dy * reach);
+        let [x, y] = axis_spot(&flat, k, size);
+        let at = Point::new(x, y);
         labels.push(Primitive::Text {
             position: at.offset(-w / 2., -size * 0.6),
             text: name.into(),
@@ -2404,8 +2695,10 @@ pub(crate) fn flat_cells(models: &[Model3d], doc: &Document) -> FlatCells {
         out.behind.extend(hidden);
         out.front.extend(edges);
         out.above.extend(marks);
-        // Each bond leaving the cell runs from its atom's label halfway to
-        // the partner's copy, as the 3D model draws it.
+        // Each bond leaving the cell is a short, light dashed stub from its
+        // atom's label, a little over a third of the way to the partner's
+        // copy, so it hints at the next cell without reaching far past the
+        // box.
         let at = |id: u64| model.atoms.iter().find(|a| a.id == id).map(|a| a.xyz);
         let origin = fit.place([0.; 3]);
         for c in &cell.crossing {
@@ -2413,12 +2706,12 @@ pub(crate) fn flat_cells(models: &[Model3d], doc: &Document) -> FlatCells {
                 continue;
             };
             let far = zip3(pb, cell.translation(c.image), |p, t| p + t);
-            let half = sub(fit.place(sub(far, pa).map(|v| v / 2.)), origin);
+            let stub = sub(fit.place(sub(far, pa).map(|v| v * STUB)), origin);
             for (id, sign) in [(c.a, 1.), (c.b, -1.)] {
                 let Some(atom) = doc.atom(id).filter(|a| doc.atom_visible(a.id)) else {
                     continue;
                 };
-                let (dx, dy) = (sign * half[0], -sign * half[1]);
+                let (dx, dy) = (sign * stub[0], -sign * stub[1]);
                 let length = dx.hypot(dy);
                 if length < 0.1 {
                     continue;
@@ -2428,14 +2721,14 @@ pub(crate) fn flat_cells(models: &[Model3d], doc: &Document) -> FlatCells {
                 let from = crate::scene::label_end(atom.position, ux, uy, &boxes, length, margin);
                 let to = atom.position.offset(dx, dy);
                 // One seen nearly end-on would be a speck beside its label.
-                if from.distance(to) < style.font_size() / 2. {
+                if from.distance(to) < style.font_size() / 4. {
                     continue;
                 }
                 out.behind.push(Primitive::Wire {
                     from,
                     to,
                     width: line,
-                    color: rgb(ink),
+                    color: rgb(mix(ink, backdrop, 0.45)),
                     dash: line * 2.5,
                 });
             }
@@ -2445,10 +2738,16 @@ pub(crate) fn flat_cells(models: &[Model3d], doc: &Document) -> FlatCells {
     out
 }
 
+/// How much of a bond leaving the cell its 2D stub draws.
+const STUB: f32 = 0.4;
+
 /// A parallel projection of a model onto its 2D drawing: each point in
-/// ångström to drawing x, y up and depth, the least-squares fit to the 2D
-/// atoms, held toward the model's view at the drawing's scale where the atoms
-/// leave it open (all in one plane or line).
+/// ångström to drawing x, y up and depth. Where the atoms span space it is
+/// the least-squares fit to the 2D atoms, exact for any linear layout, so the
+/// box follows the drawing however it was laid out, moved or transformed.
+/// Where they lie in one plane or line (as silicon's two atoms), it is the
+/// model's view at the drawing's scale, as the drawing was laid out, placed
+/// on the atoms.
 struct Flat {
     rows: [[f64; 3]; 3],
     offset: [f64; 3],
@@ -2484,29 +2783,41 @@ impl Flat {
                 let (x, y) = (zip3(*x, mx, |a, b| a - b), zip3(*y, my, |a, b| a - b));
                 (zip3(xx, outer(x, x), add), zip3(yx, outer(y, x), add))
             });
-        // A small ridge toward the model's view at the drawing's scale fills in
-        // the directions the atoms do not span; elsewhere it changes nothing.
-        let lambda = 1e-3 * n;
-        let scale = f64::from(doc.drawing_style.bond_length_world / 1.5);
-        let [e0, e1, e2] = [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]]
-            .map(|e| rotate(model.rotation, e).map(|v| f64::from(v) * scale));
-        let prior = [
-            [e0[0], e1[0], e2[0]],
-            [e0[1], e1[1], e2[1]],
-            [e0[2], e1[2], e2[2]],
-        ];
         let [[a00, a01, a02], [a10, a11, a12], [a20, a21, a22]] = xx;
-        let ridge = [
-            [a00 + lambda, a01, a02],
-            [a10, a11 + lambda, a12],
-            [a20, a21, a22 + lambda],
-        ];
-        let rows: Vec<V> = yx
-            .iter()
-            .zip(&prior)
-            .map(|(b, p)| solve3(ridge, zip3(*b, *p, |b, p| b + lambda * p)))
-            .collect::<Option<_>>()?;
-        let rows: [V; 3] = rows.try_into().ok()?;
+        let det = a00 * (a11 * a22 - a12 * a21) - a01 * (a10 * a22 - a12 * a20)
+            + a02 * (a10 * a21 - a11 * a20);
+        let spread = (a00 + a11 + a22) / 3.;
+        let solved = (spread > 1e-9 && det > 1e-6 * spread.powi(3))
+            .then(|| {
+                let rows: Option<Vec<V>> = yx.iter().map(|b| solve3(xx, *b)).collect();
+                <[V; 3]>::try_from(rows?).ok()
+            })
+            .flatten();
+        let rows = match solved {
+            Some(rows) => rows,
+            None => {
+                // The scale the atoms show, else the crystal's 2D scale.
+                let moved: f64 = pairs
+                    .iter()
+                    .map(|(_, y)| {
+                        let d = zip3(*y, my, |a, b| a - b);
+                        dot(d, d)
+                    })
+                    .sum();
+                let scale = if spread > 1e-9 {
+                    (moved / (3. * spread)).sqrt()
+                } else {
+                    f64::from(flat_scale(doc, model))
+                };
+                let [e0, e1, e2] = [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]]
+                    .map(|e| rotate(model.rotation, e).map(|v| f64::from(v) * scale));
+                [
+                    [e0[0], e1[0], e2[0]],
+                    [e0[1], e1[1], e2[1]],
+                    [e0[2], e1[2], e2[2]],
+                ]
+            }
+        };
         let offset = zip3(my, rows.map(|r| dot(r, mx)), |y, v| y - v);
         Some(Self { rows, offset })
     }

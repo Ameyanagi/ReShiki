@@ -694,11 +694,15 @@ impl App {
     }
 }
 
-/// The Structure section's note: the generation in flight, or the model's
-/// style (ball & stick before there is a model).
+/// The Structure section's note: the generation in flight, the 2D drawing
+/// while a model is kept but not shown, or the model's style (ball & stick
+/// before there is a model).
 fn subtitle(pending: Option<Display>, model: Option<&models3d::Model3d>) -> String {
     if pending.is_some() {
         return "Generating the conformer · ETKDG, then MMFF94s".into();
+    }
+    if model.is_some_and(|m| m.display == Display::TwoD) {
+        return "2D drawing · Chemistry and atom IDs stay the same".into();
     }
     let style = model.map_or(Style::BallStick, |m| m.style);
     format!("{} · Chemistry and atom IDs stay the same", name(style))

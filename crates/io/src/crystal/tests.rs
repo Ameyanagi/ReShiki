@@ -1,5 +1,5 @@
 use super::*;
-use crate::document::{CRYSTALS, MODELS_3D, VERSION};
+use crate::document::{CRYSTALS, MODELS_3D, Point, VERSION};
 use crate::models3d::{Display, Model3d};
 
 const NACL: &str = include_str!("../../../../tests/fixtures/crystal/nacl.cif");
@@ -562,8 +562,8 @@ fn extended_xyz_follows_its_periodic_flags() {
 fn only_crystal_atoms_skip_chemistry_analysis() {
     let (mut doc, _) = open("cif", NACL);
     let ethane = [
-        doc.add_atom("C", crate::document::Point::new(500., 0.)),
-        doc.add_atom("C", crate::document::Point::new(540., 0.)),
+        doc.add_atom("C", Point::new(500., 0.)),
+        doc.add_atom("C", Point::new(540., 0.)),
     ];
     doc.add_bond(ethane[0], ethane[1], 1, "plain");
     use crate::models3d::crystal::touches;
@@ -667,4 +667,180 @@ fn ion_charges_are_hidden_in_2d_until_shown() {
     );
     let read = Document::from_json(&doc.file_json().unwrap()).unwrap();
     assert!(read.models[0].charges);
+}
+
+const FIXTURES: [(&str, &str); 5] = [
+    ("cif", NACL),
+    ("cif", CO2),
+    ("poscar", RUTILE),
+    ("xyz", SILICON),
+    ("pdb", UREA),
+];
+
+/// The 2D cell's origin and the ends of the three box edges that leave it,
+/// from the drawing. The opening view keeps the origin at the back, so those
+/// edges are the dashed hidden ones.
+fn drawn_cell(drawing: &[crate::scene::Primitive]) -> (Point, [Point; 3]) {
+    use crate::scene::Primitive;
+    let origin = drawing
+        .iter()
+        .find_map(|p| match p {
+            Primitive::Sphere { center, .. } => Some(*center),
+            _ => None,
+        })
+        .unwrap();
+    let ends: Vec<_> = drawing
+        .iter()
+        .filter_map(|p| match p {
+            Primitive::Wire { from, to, dash, .. } if from.distance(origin) < 1e-3 => {
+                assert!(*dash > 0., "a front edge at the origin");
+                Some(*to)
+            }
+            Primitive::Wire { from, to, dash, .. } if to.distance(origin) < 1e-3 => {
+                assert!(*dash > 0., "a front edge at the origin");
+                Some(*from)
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(ends.len(), 3);
+    (origin, [ends[0], ends[1], ends[2]])
+}
+
+#[test]
+fn atoms_sit_on_the_2d_cell_box_where_their_fractions_put_them() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    for (format, text) in FIXTURES {
+        // As opened, and as the import engine hands it to the app.
+        let imported = runtime
+            .block_on(crate::formats::read(text.as_bytes().to_vec(), format))
+            .unwrap();
+        for doc in [open(format, text).0, imported] {
+            let m = model(&doc);
+            let (origin, ends) = drawn_cell(&crate::scene::primitives(&doc));
+            // Origin + Σ fₖ (endₖ − origin), with the drawn edges taken in
+            // whichever order is a, b, c.
+            let at = |f: [f64; 3], order: [usize; 3]| {
+                order.iter().zip(f).fold(origin, |p, (&e, t)| {
+                    let (end, t) = (ends[e], t as f32);
+                    p.offset((end.x - origin.x) * t, (end.y - origin.y) * t)
+                })
+            };
+            let orders = [
+                [0, 1, 2],
+                [0, 2, 1],
+                [1, 0, 2],
+                [1, 2, 0],
+                [2, 0, 1],
+                [2, 1, 0],
+            ];
+            let worst = orders
+                .iter()
+                .map(|order| {
+                    doc.atoms
+                        .iter()
+                        .map(|a| at(fractional(m, a.id), *order).distance(a.position))
+                        .fold(0., f32::max)
+                })
+                .fold(f32::INFINITY, f32::min);
+            assert!(worst < 0.1, "{format}: atoms are {worst} units off the box");
+        }
+    }
+    // Rock salt's origin Na is on the box's origin corner.
+    let (doc, _) = open("cif", NACL);
+    let (origin, _) = drawn_cell(&crate::scene::primitives(&doc));
+    let m = model(&doc);
+    assert!(doc.atoms.iter().any(|a| {
+        fractional(m, a.id).iter().all(|f| f.abs() < 1e-3) && a.position.distance(origin) < 0.1
+    }));
+}
+
+#[test]
+fn axis_labels_sit_outside_the_box_clear_of_edges_and_atoms() {
+    use crate::scene::Primitive;
+    for (format, text) in FIXTURES {
+        let (doc, _) = open(format, text);
+        let drawing = crate::scene::primitives(&doc);
+        let (origin, ends) = drawn_cell(&drawing);
+        let drawn = crate::models3d::drawn(&doc);
+        let atoms: Vec<_> = drawn
+            .atoms
+            .iter()
+            .filter_map(|a| crate::scene::atom_label_ink_bounds(a, &drawn))
+            .collect();
+        let edges: Vec<_> = drawing
+            .iter()
+            .filter_map(|p| match p {
+                Primitive::Wire { from, to, .. } => Some((*from, *to)),
+                _ => None,
+            })
+            .collect();
+        // The box's centre: half of each edge from the origin.
+        let centre = ends.iter().fold(origin, |c, e| {
+            c.offset((e.x - origin.x) / 2., (e.y - origin.y) / 2.)
+        });
+        let mut labels = 0;
+        for p in &drawing {
+            let Primitive::Text {
+                position,
+                text,
+                size,
+                style,
+                ..
+            } = p
+            else {
+                continue;
+            };
+            if !style.italic {
+                continue;
+            }
+            labels += 1;
+            let w = crate::style::styled_text_width(text, *size, style);
+            let at = position.offset(w / 2., size * 0.6);
+            let (lo, hi) = (at.offset(-w / 2., -size / 2.), at.offset(w / 2., size / 2.));
+            for (a_lo, a_hi) in &atoms {
+                let apart = hi.x < a_lo.x || a_hi.x < lo.x || hi.y < a_lo.y || a_hi.y < lo.y;
+                assert!(apart, "{format}: {text} on an atom");
+            }
+            for (from, to) in &edges {
+                let d = segment_distance(at, *from, *to);
+                assert!(d > size * 0.5, "{format}: {text} {d} from an edge");
+            }
+            // Past its axis's end, away from the box.
+            let end = ends
+                .iter()
+                .min_by(|a, b| a.distance(at).total_cmp(&b.distance(at)))
+                .unwrap();
+            assert!(
+                at.distance(centre) > end.distance(centre),
+                "{format}: {text} inside the box"
+            );
+        }
+        assert_eq!(labels, 3, "{format}");
+    }
+}
+
+fn segment_distance(p: Point, a: Point, b: Point) -> f32 {
+    let (dx, dy) = (b.x - a.x, b.y - a.y);
+    let n = dx * dx + dy * dy;
+    let t = if n > 0. {
+        (((p.x - a.x) * dx + (p.y - a.y) * dy) / n).clamp(0., 1.)
+    } else {
+        0.
+    };
+    p.distance(a.offset(t * dx, t * dy))
+}
+
+#[test]
+fn linear_carbons_show_their_label() {
+    let (doc, _) = open("cif", CO2);
+    let drawn = crate::models3d::drawn(&doc);
+    for carbon in drawn.atoms.iter().filter(|a| a.element == "C") {
+        assert!(crate::atom_labels::visible(carbon, &drawn));
+        assert!(crate::scene::atom_label_ink_bounds(carbon, &drawn).is_some());
+    }
+    // Urea's carbon is trigonal and stays a bare vertex.
+    let (doc, _) = open("pdb", UREA);
+    let carbon = doc.atoms.iter().find(|a| a.element == "C").unwrap();
+    assert!(!crate::atom_labels::visible(carbon, &doc));
 }

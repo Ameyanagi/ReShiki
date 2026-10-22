@@ -18,13 +18,18 @@ file…** to insert it into the drawing. These files are read:
 | `.xyz`                       | A molecule without a cell                                                                            |
 | `.xyz`, `.extxyz` (extended) | `Lattice="…"` and the `species` and `pos` columns of `Properties`                                    |
 
-A structure with a cell opens as a 2D drawing with depth, facing the cell as
-crystallographers draw it: _b_ to the right, _c_ up and _a_ toward you, seen a
-little from above, in a parallel projection so the cell's edges stay parallel.
-A skewed cell, such as a rhombohedral primitive cell, is tilted further so no
-axis is seen end-on, and where atoms would hide behind each other or an axis
-label, as rutile's Ti behind O, the nearest tilt that keeps every label apart
-is taken. A plain XYZ file without a cell opens as a 3D model.
+A structure with a cell opens as a 2D drawing with depth, in a parallel
+projection so the cell's edges stay parallel. The opening view is chosen so
+the labels read well: of the views that show every axis, keep the origin
+behind the box and keep atom labels, axis labels, bonds and box edges apart
+nearly as well as the best one, the one closest to the cell as
+crystallographers draw it wins (_b_ to the right, _c_ up and _a_ toward you,
+seen a little from above); otherwise a slight tilt off looking down _c_ or
+down the body diagonal, as for a rhombohedral primitive cell. Rutile's Ti no
+longer sits behind O. The drawing is at the usual scale (1.5 Å per bond
+length) or larger, so the shortest cell edge is at least 8 label heights and
+a bond between two labels, as CO₂'s C=O, at least 2.4. A plain XYZ file
+without a cell opens as a 3D model.
 
 **Show as 3D** shows the model in that same view: drag inside the frame to turn
 it, double-click to come back to the opening view, and use **Properties → 3D
@@ -37,13 +42,19 @@ drawing.
 
 - **The unit cell** is a box in the canvas's ink: the three edges hidden behind
   the cell are dashed, a dot marks the origin, and _a_, _b_ and _c_ label the
-  lattice vectors. In 3D the box turns with the model, appears in every style
+  lattice vectors, each just past its axis's end in the widest gap between the
+  box edges there. In 3D the box turns with the model, appears in every style
   and the model's frame always holds it. In 2D it follows the drawing's atoms
   wherever they are moved, and atom labels sit on a halo of paper so no edge
   runs through them. Both appear in PNG, SVG and PDF export.
 - **The 2D drawing** shows atom labels and bond lines. Carbons with bonds are
-  plain vertices, as in any skeletal drawing, and a bond behind another shows a
-  gap where they cross.
+  plain vertices, as in any skeletal drawing, except a linear carbon (its two
+  bonds 165° or more apart, as in CO₂), which shows its C so O=C=O does not
+  read as O=O. A bond behind another shows a gap where they cross, and a bond
+  that leaves the cell is a short, light dashed stub, 40% of the bond.
+- **Atoms sit on the box** where their fractional coordinates put them: each
+  atom is kept once, inside the cell, so NaCl's ions at 0 and ½ fill the half
+  of the cell at the origin, with Na on the origin corner.
 - **Ion charges** are hidden in 2D, since the formula carries them; choose
   **Properties → Structure → Ion charges → Show** to label each ion, as Na⁺
   and Cl⁻. The choice is kept in the file.
@@ -143,14 +154,17 @@ are ordinary text primitives, so the canvas and exports turn them light on a
 dark canvas as they do atom labels.
 
 In 2D, `models3d::flat_cells` fits a parallel projection from the model's
-positions to the 2D atoms (least squares, held toward the model's view where
-the atoms span no volume) and draws the same box through it: hidden edges and
-half-bonds before the bonds, front edges after them, and the axis labels after
-the atom labels, which get a paper halo. `models3d::drawn` drops the charges
-of a crystal whose `Model3d::charges` is off, only for painting. The opening
-view (`crystal_rotation`) tries tilts nearest the standard one until labelled
-atoms (all but bonded carbons) and the axis labels are about a label's height
-apart, for up to 300 such atoms. Bond orders come from `crystal/build.rs`.
+positions to the 2D atoms (least squares where the atoms span space, else the
+model's view at the scale the atoms show) and draws the same box through it:
+hidden edges and stubs before the bonds, front edges and the origin after
+them, and the axis labels after the atom labels, which get a paper halo.
+`models3d::drawn` drops the charges of a crystal whose `Model3d::charges` is
+off, only for painting. `models3d::flat_scale` sets the 2D scale. The opening
+view (`crystal_rotation`) scores every tilt of three view families by
+`separation`, measured in label heights: label boxes against each other (with
+room for a bond between two), and labels against box edges, other atoms'
+bonds and stubs; atoms beyond 300 labels are not compared. Bond orders come
+from `crystal/build.rs`.
 
 Test fixtures in `tests/fixtures/crystal/` are hand-written from published cell
 parameters: NaCl (Fm-3m), dry ice CO₂ (Pa-3), urea (PDB), rutile TiO₂

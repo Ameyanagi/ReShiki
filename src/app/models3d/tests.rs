@@ -877,6 +877,10 @@ fn a_crystal_opens_in_2d_and_shows_its_ion_charges_in_one_undo_step() {
     app.tab.selected = app.tab.doc.atoms.iter().map(|a| a.id).collect();
     assert_eq!(displays(&app.tab.doc), [Display::TwoD]);
     assert!(app.structure_section().is_some());
+    assert_eq!(
+        subtitle(None, app.tab.doc.models.first()),
+        "2D drawing · Chemistry and atom IDs stay the same"
+    );
     let start = frames(&app);
     set(&mut app, Setting::Charges(true));
     assert!(app.tab.doc.models[0].charges);
