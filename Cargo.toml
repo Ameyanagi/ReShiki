@@ -136,8 +136,14 @@ wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 web-sys = { version = "0.3", features = [
   "Clipboard",
+  "DataTransfer",
+  "DataTransferItemList",
+  "DragEvent",
   "Event",
   "EventTarget",
+  "File",
+  "FileList",
+  "HtmlInputElement",
   "Navigator",
   "Node",
   "Window",

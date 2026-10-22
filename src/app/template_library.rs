@@ -739,17 +739,12 @@ impl App {
                 self.templates.importing = true;
                 Some(Task::perform(
                     async {
-                        let Some(file) = rfd::AsyncFileDialog::new()
-                            .set_title("Import a ReShiki template collection")
-                            .pick_file()
-                            .await
-                        else {
+                        let title = "Import a ReShiki template collection";
+                        let Some(file) = super::files::pick(title, None, false).await?.pop() else {
                             return Ok(None);
                         };
-                        let path = super::files::picked_path(&file)?;
                         reshiki::task::spawn_blocking(move || {
-                            let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-                            Library::from_bytes(&bytes).map(Some)
+                            Library::from_bytes(&file.contents).map(Some)
                         })
                         .await
                         .map_err(|e| e.to_string())?

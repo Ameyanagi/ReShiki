@@ -189,19 +189,20 @@ impl App {
                 let (epoch, serial) = (self.tab.file_epoch, self.theme_library.serial);
                 return Task::perform(
                     async {
-                        let Some(file) = rfd::AsyncFileDialog::new()
-                            .set_title("Import color theme")
-                            .add_filter("ReShiki theme", &["reshiki-theme", "json"])
-                            .pick_file()
-                            .await
+                        let filter = ("ReShiki theme", &["reshiki-theme", "json"][..]);
+                        let Some(file) =
+                            super::files::pick("Import color theme", Some(filter), false)
+                                .await?
+                                .pop()
                         else {
                             return Ok(None);
                         };
-                        let path = super::files::picked_path(&file)?;
-                        reshiki::task::spawn_blocking(move || theme_files::load(&path))
-                            .await
-                            .map_err(|e| e.to_string())?
-                            .map(|theme| Some(Box::new(theme)))
+                        reshiki::task::spawn_blocking(move || {
+                            theme_files::from_bytes(&file.contents)
+                        })
+                        .await
+                        .map_err(|e| e.to_string())?
+                        .map(|theme| Some(Box::new(theme)))
                     },
                     move |result| Message::ThemeFile(Action::Loaded(epoch, serial, result)),
                 );

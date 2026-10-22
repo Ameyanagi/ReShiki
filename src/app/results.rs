@@ -514,6 +514,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::ExamplesMenu(..)
                 | Action::Choose
                 | Action::Files(..)
+                | Action::Read(..)
                 | Action::Hovered(..)
                 | Action::Dropped(..)
                 | Action::Left => None,

@@ -1,4 +1,5 @@
 //! The Import tab, and structure or picture files chosen or dropped on the window.
+use super::files::Picked;
 use super::workspace::{caret, hover_hint, muted_text};
 use super::{App, Message};
 use crate::canvas::Tool;
@@ -53,8 +54,10 @@ pub enum Action {
     Menu(bool),
     ExamplesMenu(bool),
     Choose,
-    /// Chosen or dropped files, imported together.
+    /// Files dropped on the desktop window, imported together.
     Files(Vec<PathBuf>),
+    /// Chosen files, or files dropped on the browser page, already read.
+    Read(Result<Vec<Picked>, String>),
     Hovered(PathBuf),
     Dropped(PathBuf),
     Left,
@@ -201,6 +204,13 @@ impl Plan {
     }
 }
 
+fn unnamed_label(files: usize) -> String {
+    match files {
+        1 => "Drop to open or insert".into(),
+        n => format!("Drop to open or insert · {n} files"),
+    }
+}
+
 /// Structure file contents as the engine reads them: binary CDX as base64.
 pub(super) fn contents(format: &str, bytes: Vec<u8>) -> Result<String, String> {
     reshiki::compatibility::import_text(format, bytes)
@@ -214,10 +224,10 @@ fn picture_drawing(picture: &Picture) -> Document {
     drawing
 }
 
-async fn read(engine: &LocalEngine, path: &Path) -> Result<(Document, Vec<String>), String> {
-    match kind(path) {
+async fn read(engine: &LocalEngine, file: Picked) -> Result<(Document, Vec<String>), String> {
+    match kind(&file.path) {
         Kind::Picture => {
-            let picture = reshiki::metafile::open(path).await?;
+            let picture = reshiki::metafile::open_bytes(&file.path, file.contents).await?;
             let warnings = if picture.emf().is_some() {
                 vec![reshiki::metafile::EMF_IMPORT_NOTICE.into()]
             } else {
@@ -226,13 +236,8 @@ async fn read(engine: &LocalEngine, path: &Path) -> Result<(Document, Vec<String
             Ok((picture_drawing(&picture), warnings))
         }
         Kind::Structure(format) => {
-            let path = path.to_path_buf();
-            let bytes = reshiki::task::spawn_blocking(move || std::fs::read(path))
-                .await
-                .map_err(|e| e.to_string())?
-                .map_err(|e| e.to_string())?;
             let response = engine
-                .execute(Request::import(format, &contents(format, bytes)?))
+                .execute(Request::import(format, &contents(format, file.contents)?))
                 .await?;
             let drawing = response.document.ok_or("The file contains no drawing")?;
             if reshiki::scene::selection_bounds(&drawing, &drawing.all_ids()).is_none() {
@@ -243,13 +248,14 @@ async fn read(engine: &LocalEngine, path: &Path) -> Result<(Document, Vec<String
         Kind::Document | Kind::Unsupported => Err("Unsupported file type".into()),
     }
 }
-async fn load(engine: LocalEngine, paths: Vec<PathBuf>) -> Result<Batch, String> {
+async fn load(engine: LocalEngine, files: Vec<Picked>) -> Result<Batch, String> {
+    let paths: Vec<_> = files.iter().map(|file| file.path.clone()).collect();
     let mut batch = Batch {
         label: describe(&paths),
         ..Default::default()
     };
-    for path in &paths {
-        let (drawing, warnings) = read(&engine, path)
+    for (file, path) in files.into_iter().zip(&paths) {
+        let (drawing, warnings) = read(&engine, file)
             .await
             .map_err(|e| format!("Could not import {}: {e}", name(path)))?;
         batch.drawings.push(drawing);
@@ -261,20 +267,11 @@ async fn load(engine: LocalEngine, paths: Vec<PathBuf>) -> Result<Batch, String>
     }
     Ok(batch)
 }
-async fn choose() -> Vec<PathBuf> {
-    // No extension filter: VASP files are often named POSCAR or CONTCAR
-    // without one. Files of other kinds are refused with their extension.
-    rfd::AsyncFileDialog::new()
-        .set_title("Insert structures or pictures")
-        .pick_files()
-        .await
-        .map(|files| {
-            files
-                .iter()
-                .filter_map(|f| super::files::picked_path(f).ok())
-                .collect()
-        })
-        .unwrap_or_default()
+/// No extension filter: VASP files are often named POSCAR or CONTCAR without
+/// one. Files of other kinds are refused with their extension.
+fn choose() -> Task<Message> {
+    let files = super::files::pick("Insert structures or pictures", None, true);
+    Task::perform(files, |files| Message::Imports(Action::Read(files)))
 }
 
 impl App {
@@ -300,6 +297,14 @@ impl App {
             _ => {}
         }
         Task::none()
+    }
+
+    /// Outline the canvas while the browser drags this many files over it,
+    /// or stop at zero. Their names, and so the plan, come with the drop.
+    #[cfg(any(target_arch = "wasm32", test))]
+    pub(super) fn browser_drag(&mut self, files: usize) {
+        self.imports.hovered = vec![PathBuf::new(); files];
+        self.imports.dropped.clear();
     }
 
     pub(super) fn import_action(&mut self, action: Action) -> Task<Message> {
@@ -339,14 +344,7 @@ impl App {
                 self.imports.examples_menu = open;
                 self.imports.menu = false;
             }
-            // Browser files have no path to insert from yet.
-            Action::Choose if cfg!(target_arch = "wasm32") => {
-                self.error = true;
-                self.status = "Inserting files needs the desktop app for now".into();
-            }
-            Action::Choose => {
-                return Task::perform(choose(), |paths| Message::Imports(Action::Files(paths)));
-            }
+            Action::Choose => return choose(),
             Action::Files(paths) if paths.is_empty() => {}
             Action::Files(paths) => match plan(&paths) {
                 Plan::Reject(reason) => {
@@ -355,23 +353,44 @@ impl App {
                 }
                 Plan::Open(paths) => return super::files::open_paths(paths),
                 Plan::Insert(paths) => {
-                    if self.tab.busy {
-                        self.error = true;
-                        self.status = "Wait for the current operation, then import again".into();
-                        return Task::none();
-                    }
-                    self.tab.busy = true;
-                    self.error = false;
-                    self.status = "Importing…".into();
-                    let ticket = Ticket {
-                        epoch: self.tab.file_epoch,
-                        revision: self.tab.revision,
-                    };
-                    return Task::perform(load(self.engine.clone(), paths), move |result| {
-                        Message::Imports(Action::Loaded(ticket, Box::new(result)))
+                    return Task::perform(super::files::read_paths(paths), |files| {
+                        Message::Imports(Action::Read(files))
                     });
                 }
             },
+            Action::Read(Err(error)) => {
+                self.error = true;
+                self.status = error;
+            }
+            Action::Read(Ok(files)) if files.is_empty() => {}
+            Action::Read(Ok(files)) => {
+                let paths: Vec<_> = files.iter().map(|file| file.path.clone()).collect();
+                match plan(&paths) {
+                    Plan::Reject(reason) => {
+                        self.error = true;
+                        self.status = reason;
+                    }
+                    Plan::Open(_) => return super::files::open_picked(Ok(files)),
+                    Plan::Insert(_) => {
+                        if self.tab.busy {
+                            self.error = true;
+                            self.status =
+                                "Wait for the current operation, then import again".into();
+                            return Task::none();
+                        }
+                        self.tab.busy = true;
+                        self.error = false;
+                        self.status = "Importing…".into();
+                        let ticket = Ticket {
+                            epoch: self.tab.file_epoch,
+                            revision: self.tab.revision,
+                        };
+                        return Task::perform(load(self.engine.clone(), files), move |result| {
+                            Message::Imports(Action::Loaded(ticket, Box::new(result)))
+                        });
+                    }
+                }
+            }
             Action::Loaded(ticket, result) => {
                 if ticket.epoch != self.tab.file_epoch {
                     return Task::none();
@@ -716,13 +735,21 @@ impl App {
         if self.imports.hovered.is_empty() {
             return layers.into();
         }
-        let plan = plan(&self.imports.hovered);
+        let hovered = &self.imports.hovered;
+        // Browser drags have no names until the drop.
+        let (error, label) = match hovered.as_slice() {
+            [path, ..] if path.as_os_str().is_empty() => (false, unnamed_label(hovered.len())),
+            _ => {
+                let plan = plan(hovered);
+                (matches!(plan, Plan::Reject(_)), plan.label())
+            }
+        };
         let zone = Zone {
-            error: matches!(plan, Plan::Reject(_)),
+            error,
             dark: self.tab.doc.canvas_theme.is_dark(),
         };
         let accent = zone.colors(false).0;
-        let tag = container(text(plan.label()).size(12))
+        let tag = container(text(label).size(12))
             .padding([6, 9])
             .style(move |theme| {
                 crate::appearance::container(

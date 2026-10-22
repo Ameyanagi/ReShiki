@@ -296,6 +296,7 @@ async fn files_insert_side_by_side_at_the_pointer_as_one_undo_step() -> Result<(
         fixtures.join("native-ethyl-clipboard.cdx"),
         png,
     ];
+    let files = super::super::files::read_paths(files).await?;
     let batch = load(LocalEngine::default(), files).await?;
     assert_eq!(batch.label, "3 files");
     assert_eq!(batch.drawings.len(), 3);
@@ -383,4 +384,72 @@ async fn open_reads_binary_cdx() -> Result<(), String> {
     assert!(app.tab.busy, "{}", app.status);
     assert!(!response.document.ok_or("drawing")?.atoms.is_empty());
     Ok(())
+}
+
+/// Browser files are a bare name and their contents, with no file to read.
+fn browser_file(name: &str, fixture: &str) -> Picked {
+    let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    Picked {
+        path: name.into(),
+        contents: std::fs::read(fixtures.join(fixture)).unwrap(),
+    }
+}
+
+#[tokio::test]
+async fn browser_files_insert_and_open_from_their_contents() -> Result<(), String> {
+    let mol = browser_file("ethanol.mol", "ethanol.mol");
+    assert!(!mol.path.exists());
+    let batch = load(LocalEngine::default(), vec![mol.clone()]).await?;
+    assert_eq!(
+        (batch.label.as_str(), batch.drawings.len()),
+        ("ethanol.mol", 1)
+    );
+    assert_eq!(batch.drawings[0].atoms.len(), 3);
+
+    let mut app = ready();
+    let task = app.update(Message::Imports(Action::Read(Ok(vec![mol]))));
+    assert!(
+        task.units() > 0 && app.tab.busy && !app.error,
+        "{}",
+        app.status
+    );
+
+    let mut app = ready();
+    let mut doc = Document::default();
+    doc.add_atom("S", Point::default());
+    let drawing = Picked {
+        path: "drawing.rsk".into(),
+        contents: serde_json::to_vec(&doc).unwrap(),
+    };
+    let task = app.update(Message::Imports(Action::Read(Ok(vec![drawing.clone()]))));
+    assert!(task.units() > 0 && !app.tab.busy && !app.error);
+    let opened = super::super::files::prepare_contents(drawing.path, Ok(drawing.contents)).await;
+    let _ = app.update(Message::FilePrepared(opened));
+    assert_eq!(app.tab.doc.atoms[0].element, "S");
+    assert_eq!(app.tab.path, Some(PathBuf::from("drawing.rsk")));
+
+    let mut app = ready();
+    let notes = Picked {
+        path: "notes.docx".into(),
+        contents: vec![],
+    };
+    let _ = app.update(Message::Imports(Action::Read(Ok(vec![notes]))));
+    assert!(app.error && app.status == "Can't import .docx");
+    let _ = app.update(Message::Imports(Action::Read(Err(
+        "Could not read x".into()
+    ))));
+    assert_eq!(app.status, "Could not read x");
+    Ok(())
+}
+
+#[test]
+fn browser_drags_outline_the_canvas_until_the_files_leave() {
+    let mut app = ready();
+    app.browser_drag(2);
+    assert_eq!(app.imports.hovered.len(), 2);
+    assert_eq!(unnamed_label(2), "Drop to open or insert · 2 files");
+    assert_eq!(unnamed_label(1), "Drop to open or insert");
+    let _ = app.with_drop_overlay(iced::widget::text("").into());
+    app.browser_drag(0);
+    assert!(app.imports.hovered.is_empty());
 }

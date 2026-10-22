@@ -28,7 +28,14 @@ pub(crate) enum Request {
     Close,
     /// Draw again, as after a font arrives.
     Redraw,
+    /// This many files are dragged over the editor, or none once they leave.
+    /// Browsers name dragged files only when they are dropped.
+    Drag(usize),
+    /// Files dropped on the editor, by name with their contents.
+    Drop(Vec<(String, Vec<u8>)>),
 }
+
+type DragListener = Closure<dyn FnMut(web_sys::DragEvent)>;
 
 #[derive(Default)]
 struct Host {
@@ -46,6 +53,8 @@ struct Host {
     mounted: bool,
     /// The listener that trades ⌘ and Control on a Mac, until `destroy`.
     command_key: Option<Closure<dyn FnMut(web_sys::Event)>>,
+    /// The element's file drop listener, until `destroy`.
+    drops: Option<(web_sys::Element, DragListener)>,
 }
 
 thread_local! {
@@ -133,6 +142,8 @@ pub async fn mount(
         let swap = command_key(&element);
         HOST.with_borrow_mut(|host| host.command_key = swap);
     }
+    let drops = file_drops(&element);
+    HOST.with_borrow_mut(|host| host.drops = Some((element, drops)));
     // iced's multisampling leaves most canvases blank on WebGL2, the fallback
     // when the browser offers no WebGPU adapter.
     let antialiasing = webgpu().await;
@@ -258,6 +269,203 @@ fn command_key(element: &web_sys::Element) -> Option<Closure<dyn FnMut(web_sys::
     Some(swap)
 }
 
+/// The drag events `file_drops` handles.
+const DRAG_EVENTS: [&str; 4] = ["dragenter", "dragover", "dragleave", "drop"];
+
+/// Take files dropped on `element` into the editor, which opens or inserts
+/// them as the desktop app does. The browser would otherwise show or
+/// download the file in place of the page.
+fn file_drops(element: &web_sys::Element) -> DragListener {
+    use std::cell::Cell;
+    // dragenter and dragleave also fire on moving between the element's
+    // children; the files leave when the count is back at zero.
+    let inside = Cell::new(0u32);
+    let drops = DragListener::new(move |event: web_sys::DragEvent| {
+        let Some(transfer) = event.data_transfer() else {
+            return;
+        };
+        if !transfer.types().includes(&"Files".into(), 0) {
+            return;
+        }
+        event.prevent_default();
+        match event.type_().as_str() {
+            "dragenter" => {
+                if inside.get() == 0 {
+                    let files = transfer.items().length() as usize;
+                    let _ = send(Request::Drag(files.max(1)));
+                }
+                inside.set(inside.get() + 1);
+            }
+            "dragover" => transfer.set_drop_effect("copy"),
+            "dragleave" => {
+                inside.set(inside.get().saturating_sub(1));
+                if inside.get() == 0 {
+                    let _ = send(Request::Drag(0));
+                }
+            }
+            "drop" => {
+                inside.set(0);
+                let _ = send(Request::Drag(0));
+                let files = transfer
+                    .files()
+                    .map(|list| files(&list))
+                    .unwrap_or_default();
+                wasm_bindgen_futures::spawn_local(async move {
+                    let _ = send(Request::Drop(read_files(files).await));
+                });
+            }
+            _ => {}
+        }
+    });
+    for name in DRAG_EVENTS {
+        let _ = element.add_event_listener_with_callback(name, drops.as_ref().unchecked_ref());
+    }
+    drops
+}
+
+fn files(list: &web_sys::FileList) -> Vec<web_sys::File> {
+    (0..list.length()).filter_map(|i| list.get(i)).collect()
+}
+
+/// The files' names and contents, skipping any the browser cannot read.
+async fn read_files(files: Vec<web_sys::File>) -> Vec<(String, Vec<u8>)> {
+    let mut read = Vec::with_capacity(files.len());
+    for file in files {
+        match wasm_bindgen_futures::JsFuture::from(file.array_buffer()).await {
+            Ok(buffer) => read.push((file.name(), js_sys::Uint8Array::new(&buffer).to_vec())),
+            Err(thrown) => error(&format!("Could not read {}: {thrown:?}", file.name())),
+        }
+    }
+    read
+}
+
+/// Files the user chooses with the browser's file chooser, by name with their
+/// contents; none when they cancel. `extensions`, without dots, limit the
+/// choice when given. The File System Access picker is used where the browser
+/// has it, and otherwise a hidden file input.
+pub(crate) async fn pick(extensions: &[&str], multiple: bool) -> Vec<(String, Vec<u8>)> {
+    let Some(window) = web_sys::window() else {
+        return vec![];
+    };
+    let files = match open_file_picker(&window, extensions, multiple).await {
+        Some(files) => files,
+        None => file_input(&window, extensions, multiple).await,
+    };
+    read_files(files).await
+}
+
+/// `showOpenFilePicker`, or None when the page cannot use it, as in Firefox,
+/// Safari and cross-origin frames.
+async fn open_file_picker(
+    window: &web_sys::Window,
+    extensions: &[&str],
+    multiple: bool,
+) -> Option<Vec<web_sys::File>> {
+    use js_sys::{Array, Function, Object, Promise, Reflect};
+    use wasm_bindgen_futures::JsFuture;
+    let picker = Reflect::get(window, &"showOpenFilePicker".into())
+        .ok()?
+        .dyn_into::<Function>()
+        .ok()?;
+    let options = Object::new();
+    let _ = Reflect::set(&options, &"multiple".into(), &multiple.into());
+    // The picker refuses extensions longer than 16 characters or with other
+    // characters than letters, digits, + and .; the choice is then unfiltered.
+    let valid = |extension: &&str| {
+        extension.len() < 16
+            && extension
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '.'))
+    };
+    if !extensions.is_empty() && extensions.iter().all(valid) {
+        let accept = Object::new();
+        let suffixes: Array = extensions
+            .iter()
+            .map(|extension| JsValue::from(format!(".{extension}")))
+            .collect();
+        let _ = Reflect::set(&accept, &"application/octet-stream".into(), &suffixes);
+        let kind = Object::new();
+        let _ = Reflect::set(&kind, &"accept".into(), &accept);
+        let _ = Reflect::set(&options, &"types".into(), &Array::of1(&kind));
+    }
+    let picked = picker
+        .call1(window, &options)
+        .ok()?
+        .dyn_into::<Promise>()
+        .ok()?;
+    let handles = match JsFuture::from(picked).await {
+        Ok(handles) => Array::from(&handles),
+        // Dismissing the picker rejects with an AbortError; other errors
+        // leave the choice to the file input.
+        Err(thrown) => {
+            let name = Reflect::get(&thrown, &"name".into()).ok()?.as_string();
+            return (name.as_deref() == Some("AbortError")).then(Vec::new);
+        }
+    };
+    let mut files = vec![];
+    for handle in handles.iter() {
+        let file = Reflect::get(&handle, &"getFile".into())
+            .ok()
+            .and_then(|get| get.dyn_into::<Function>().ok())
+            .and_then(|get| get.call0(&handle).ok())
+            .and_then(|file| file.dyn_into::<Promise>().ok());
+        if let Some(file) = file
+            && let Ok(file) = JsFuture::from(file).await
+            && let Ok(file) = file.dyn_into::<web_sys::File>()
+        {
+            files.push(file);
+        }
+    }
+    Some(files)
+}
+
+/// A hidden `<input type=file>`, answered by its change or cancel event.
+async fn file_input(
+    window: &web_sys::Window,
+    extensions: &[&str],
+    multiple: bool,
+) -> Vec<web_sys::File> {
+    let Some((document, body)) = window
+        .document()
+        .and_then(|document| Some((document.clone(), document.body()?)))
+    else {
+        return vec![];
+    };
+    let Some(input) = document
+        .create_element("input")
+        .ok()
+        .and_then(|input| input.dyn_into::<web_sys::HtmlInputElement>().ok())
+    else {
+        return vec![];
+    };
+    input.set_type("file");
+    input.set_multiple(multiple);
+    input.set_hidden(true);
+    if !extensions.is_empty() {
+        let accept: Vec<_> = extensions.iter().map(|e| format!(".{e}")).collect();
+        input.set_accept(&accept.join(","));
+    }
+    if body.append_child(&input).is_err() {
+        return vec![];
+    }
+    let (sender, receiver) = oneshot::channel::<()>();
+    let sender = std::rc::Rc::new(RefCell::new(Some(sender)));
+    let answered = Closure::<dyn FnMut()>::new(move || {
+        if let Some(sender) = sender.borrow_mut().take() {
+            let _ = sender.send(());
+        }
+    });
+    for name in ["change", "cancel"] {
+        let _ = input.add_event_listener_with_callback(name, answered.as_ref().unchecked_ref());
+    }
+    input.click();
+    let _ = receiver.await;
+    let chosen = input.files().map(|list| files(&list)).unwrap_or_default();
+    input.remove();
+    drop(answered);
+    chosen
+}
+
 /// Whether the browser offers a WebGPU adapter, which wgpu prefers to WebGL2.
 async fn webgpu() -> bool {
     let Some(gpu) = web_sys::window()
@@ -369,6 +577,13 @@ pub fn destroy() -> Result<(), JsError> {
                 swap.as_ref().unchecked_ref(),
                 true,
             );
+        }
+    }
+    let drops = HOST.with_borrow_mut(|host| host.drops.take());
+    if let Some((element, drops)) = drops {
+        for name in DRAG_EVENTS {
+            let _ =
+                element.remove_event_listener_with_callback(name, drops.as_ref().unchecked_ref());
         }
     }
     HOST.with_borrow_mut(|host| {
