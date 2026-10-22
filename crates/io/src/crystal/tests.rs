@@ -1007,3 +1007,133 @@ fn rock_salt_fills_its_cell_as_crystallographers_draw_it() {
     assert_eq!(sites.len() % 3, 0, "{}", sites.len());
     assert!(sites.len() > doc.atoms.len());
 }
+
+#[test]
+fn beside_its_3d_model_the_2d_drawing_keeps_its_cell() {
+    use crate::models3d::{Display, set_display};
+    let (mut doc, _) = open("cif", NACL);
+    let axes = |doc: &Document| {
+        crate::scene::primitives(doc)
+            .into_iter()
+            .filter(|p| matches!(p, crate::scene::Primitive::Text { text, style, .. } if style.italic && text == "a"))
+            .count()
+    };
+    assert_eq!(axes(&doc), 1);
+    set_display(&mut doc, 0, Display::Both);
+    // One a for the 2D drawing's cell, one for the 3D model's.
+    assert_eq!(axes(&doc), 2);
+}
+
+/// The drawn cell's three edges from the origin, as vectors on screen.
+fn edge_vectors(doc: &Document) -> Vec<Point> {
+    let (origin, ends) = cell_in(&crate::scene::primitives(doc), false);
+    let mut v: Vec<_> = ends
+        .iter()
+        .map(|e| Point::new(e.x - origin.x, e.y - origin.y))
+        .collect();
+    v.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+    v
+}
+
+#[test]
+fn the_cell_turns_and_mirrors_with_a_flat_or_straight_drawing() {
+    let close = |a: &[Point], b: &[Point]| {
+        a.len() == b.len() && a.iter().zip(b).all(|(p, q)| p.distance(*q) < 0.5)
+    };
+    // Silicon's two atoms lie on a line: turning the drawing turns the box.
+    let (mut doc, _) = open("xyz", SILICON);
+    let before = edge_vectors(&doc);
+    for atom in &mut doc.atoms {
+        atom.position = Point::new(-atom.position.y, atom.position.x);
+    }
+    let mut turned: Vec<_> = before.iter().map(|v| Point::new(-v.y, v.x)).collect();
+    turned.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+    assert!(
+        close(&edge_vectors(&doc), &turned),
+        "{:?} {turned:?}",
+        edge_vectors(&doc)
+    );
+    // Urea's atoms lie in a plane: mirroring the drawing mirrors the box.
+    let (mut doc, _) = open("pdb", UREA);
+    let before = edge_vectors(&doc);
+    for atom in &mut doc.atoms {
+        atom.position.x = -atom.position.x;
+    }
+    let mut mirrored: Vec<_> = before.iter().map(|v| Point::new(-v.x, v.y)).collect();
+    mirrored.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+    assert!(
+        close(&edge_vectors(&doc), &mirrored),
+        "{:?} {mirrored:?}",
+        edge_vectors(&doc)
+    );
+}
+
+#[test]
+fn a_crystal_split_across_selections_is_measured_in_parts() {
+    let (doc, _) = open("cif", CO2);
+    let all: Vec<_> = doc.atoms.iter().map(|a| a.id).collect();
+    // One molecule against the rest, as aligning molecules splits it.
+    let first = doc.bonds[0].a;
+    let molecule: Vec<_> = doc
+        .bonds
+        .iter()
+        .filter(|b| b.a == first || b.b == first)
+        .flat_map(|b| [b.a, b.b])
+        .collect();
+    let rest: Vec<_> = all
+        .iter()
+        .copied()
+        .filter(|id| !molecule.contains(id))
+        .collect();
+    let whole = crate::scene::selections_bounds(&doc, std::slice::from_ref(&all));
+    let split = crate::scene::selections_bounds(&doc, &[molecule, rest]);
+    let width = |b: &Option<(Point, Point)>| b.map_or(0., |(lo, hi)| hi.x - lo.x);
+    assert!(
+        width(&split[0]) < 0.6 * width(&whole[0]),
+        "{split:?} {whole:?}"
+    );
+}
+
+#[test]
+fn bond_orders_do_not_depend_on_atom_order() {
+    // Azulene with every hydrogen, its two shared ring carbons first: the
+    // outer ten-carbon ring alternates, the shared bond stays single.
+    let atom = |element: &str| Atom {
+        element: element.into(),
+        charge: 0,
+        label: String::new(),
+        xyz: [0.; 3],
+        adp: None,
+    };
+    let mut atoms: Vec<_> = (0..10).map(|_| atom("C")).collect();
+    let mut bonds = vec![(0, 1)];
+    // Seven-ring 0-2-3-4-5-6-1, five-ring 0-7-8-9-1.
+    for pair in [
+        (0, 2),
+        (2, 3),
+        (3, 4),
+        (4, 5),
+        (5, 6),
+        (6, 1),
+        (0, 7),
+        (7, 8),
+        (8, 9),
+        (9, 1),
+    ] {
+        bonds.push(pair);
+    }
+    for c in 2..10 {
+        atoms.push(atom("H"));
+        bonds.push((c, atoms.len() - 1));
+    }
+    let orders = build::orders(&atoms, &bonds, &vec![false; atoms.len()]);
+    assert_eq!(orders[0], 1, "the shared bond");
+    for c in 0..10 {
+        let doubles = bonds
+            .iter()
+            .zip(&orders)
+            .filter(|((a, b), o)| (*a == c || *b == c) && **o == 2)
+            .count();
+        assert_eq!(doubles, 1, "carbon {c}: {orders:?}");
+    }
+}

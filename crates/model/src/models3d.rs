@@ -2703,7 +2703,8 @@ pub(crate) struct FlatCells {
     pub haloed: Vec<u64>,
 }
 
-/// [`FlatCells`] for each model of `models` with a cell shown in 2D, drawn
+/// [`FlatCells`] for each model of `models` with a cell drawn in 2D (alone or
+/// beside its 3D model), drawn
 /// where `doc`'s 2D atoms are: a parallel projection of the model fitted to
 /// them, so the box follows the drawing however it was laid out or moved.
 pub(crate) fn flat_cells(models: &[Model3d], doc: &Document) -> FlatCells {
@@ -2712,7 +2713,8 @@ pub(crate) fn flat_cells(models: &[Model3d], doc: &Document) -> FlatCells {
     let line = style.world(style.line_width_pt);
     let ink = float(doc.canvas_theme.color([0; 3]));
     let backdrop = float(doc.canvas_theme.background());
-    for model in models.iter().filter(|m| m.display == Display::TwoD) {
+    // Beside a 3D model (Both) the 2D drawing keeps its own cell too.
+    for model in models.iter().filter(|m| m.display != Display::ThreeD) {
         let (Some(cell), Some(fit)) = (&model.cell, Flat::fit(doc, model)) else {
             continue;
         };
@@ -3224,8 +3226,8 @@ const STUB: f32 = 0.4;
 /// the least-squares fit to the 2D atoms, exact for any linear layout, so the
 /// box follows the drawing however it was laid out, moved or transformed.
 /// Where they lie in one plane or line (as silicon's two atoms), it is the
-/// model's view at the drawing's scale, as the drawing was laid out, placed
-/// on the atoms.
+/// model's view at the scale the atoms show, turned or mirrored in the
+/// drawing's plane as far as the atoms were since, placed on the atoms.
 struct Flat {
     rows: [[f64; 3]; 3],
     offset: [f64; 3],
@@ -3289,10 +3291,45 @@ impl Flat {
                 };
                 let [e0, e1, e2] = [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]]
                     .map(|e| rotate(model.rotation, e).map(|v| f64::from(v) * scale));
-                [
+                let [r0, r1, r2] = [
                     [e0[0], e1[0], e2[0]],
                     [e0[1], e1[1], e2[1]],
                     [e0[2], e1[2], e2[2]],
+                ];
+                // The drawing may have been turned or flipped since: the
+                // turn (or mirror and turn) in its plane that best takes the
+                // view's places of the atoms to where they are drawn.
+                let turn = |mirror: f64| {
+                    let (mut along, mut across) = (0., 0.);
+                    for (x, y) in &pairs {
+                        let d = zip3(*x, mx, |a, b| a - b);
+                        let (ux, uy) = (mirror * dot(r0, d), dot(r1, d));
+                        let (vx, vy) = (y[0] - my[0], y[1] - my[1]);
+                        along += ux * vx + uy * vy;
+                        across += ux * vy - uy * vx;
+                    }
+                    (along.hypot(across), across.atan2(along))
+                };
+                let ((fit, angle), mirror) = [1., -1.].map(|m| (turn(m), m)).into_iter().fold(
+                    ((f64::NEG_INFINITY, 0.), 1.),
+                    |best, next| {
+                        if next.0.0 > best.0.0 + 1e-9 {
+                            next
+                        } else {
+                            best
+                        }
+                    },
+                );
+                let (sin, cos) = if fit > 1e-9 {
+                    angle.sin_cos()
+                } else {
+                    (0., 1.)
+                };
+                let mirrored = r0.map(|v| v * mirror);
+                [
+                    zip3(mirrored, r1, |a, b| cos * a - sin * b),
+                    zip3(mirrored, r1, |a, b| sin * a + cos * b),
+                    r2,
                 ]
             }
         };
