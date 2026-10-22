@@ -584,6 +584,10 @@ fn molecules_missing_hydrogens_keep_single_bonds() {
     let (doc, _) = open("pdb", &text);
     assert_eq!(doc.atoms.len(), 4);
     assert!(doc.bonds.iter().all(|b| b.order == 1));
+    // Ethane without hydrogens: no bond beyond triple, so it stays single.
+    let (doc, _) = open("xyz", "2\nethane carbons\nC 0 0 0\nC 1.54 0 0\n");
+    assert_eq!(doc.bonds.len(), 1);
+    assert_eq!(doc.bonds[0].order, 1);
     // Networks never take multiple bonds.
     let (doc, _) = open("xyz", SILICON);
     assert!(doc.bonds.iter().all(|b| b.order == 1));

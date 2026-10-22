@@ -444,11 +444,13 @@ fn orders(atoms: &[Atom], bonds: &[(usize, usize)], network: &[bool]) -> Vec<u8>
     };
     let mut orders = vec![1_u8; bonds.len()];
     loop {
+        // At most triple bonds; order 4 would mean aromatic.
         let candidates: Vec<usize> = (0..bonds.len())
             .filter(|k| {
-                bonds
-                    .get(*k)
-                    .is_some_and(|&(a, b)| a != b && open(&free, a) && open(&free, b))
+                orders.get(*k).is_some_and(|o| *o < 3)
+                    && bonds
+                        .get(*k)
+                        .is_some_and(|&(a, b)| a != b && open(&free, a) && open(&free, b))
             })
             .collect();
         let mut partners = vec![0; atoms.len()];
