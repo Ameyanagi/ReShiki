@@ -327,8 +327,8 @@ impl overlay::Overlay<Message, Theme, Renderer> for FieldKeys<'_> {
 /// A Command key press without the character that macOS reports for it, which
 /// a focused field would otherwise insert (⌘Z typing "z"). Elsewhere Ctrl
 /// reports control characters, and Ctrl+Alt may be AltGr typing a character.
-/// Browsers report the character for Ctrl too, and on a Mac for ⌃ (the logo
-/// key there, see platform.rs).
+/// A browser on a Mac also reports it for ⌃, the logo key there (see
+/// platform.rs).
 fn without_command_text(event: &Event) -> Option<Event> {
     let Event::Keyboard(keyboard::Event::KeyPressed {
         key,
@@ -346,7 +346,7 @@ fn without_command_text(event: &Event) -> Option<Event> {
         modifiers.logo()
     } else {
         modifiers.control() && !modifiers.alt()
-            || cfg!(target_arch = "wasm32") && crate::platform::control(*modifiers)
+            || cfg!(target_arch = "wasm32") && crate::platform::mac() && modifiers.logo()
     };
     command.then(|| {
         Event::Keyboard(keyboard::Event::KeyPressed {

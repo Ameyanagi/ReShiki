@@ -44,6 +44,8 @@ struct Host {
     revision: Option<(u64, u64)>,
     /// winit runs one event loop per page, even after it exits.
     mounted: bool,
+    /// The listener that trades ⌘ and Control on a Mac, until `destroy`.
+    command_key: Option<Closure<dyn FnMut(web_sys::Event)>>,
 }
 
 thread_local! {
@@ -128,7 +130,8 @@ pub async fn mount(
         }
     });
     if crate::platform::mac() {
-        command_key(&element);
+        let swap = command_key(&element);
+        HOST.with_borrow_mut(|host| host.command_key = swap);
     }
     // iced's multisampling leaves most canvases blank on WebGL2, the fallback
     // when the browser offers no WebGPU adapter.
@@ -163,37 +166,33 @@ pub(crate) fn platform_name() -> String {
         .unwrap_or_default()
 }
 
+/// The events whose ⌘ and Control `command_key` trades.
+const SWAPPED_EVENTS: [&str; 15] = [
+    "keydown",
+    "keyup",
+    "pointerdown",
+    "pointermove",
+    "pointerup",
+    "pointercancel",
+    "pointerover",
+    "pointerout",
+    "wheel",
+    "mousedown",
+    "mousemove",
+    "mouseup",
+    "click",
+    "dblclick",
+    "contextmenu",
+];
+
 /// Make ⌘ the Command key on a Mac, as in the desktop app. iced decides at
 /// build time that Command is Control everywhere but macOS, and a browser
 /// build is never macOS, so the editor's key and pointer events trade ⌘ and
 /// Control before winit reads them (see platform.rs). Control-click is the
 /// Mac's secondary click, so it reaches the editor as a right-click.
-fn command_key(element: &web_sys::Element) {
+fn command_key(element: &web_sys::Element) -> Option<Closure<dyn FnMut(web_sys::Event)>> {
     use std::cell::Cell;
-    const EVENTS: [&str; 15] = [
-        "keydown",
-        "keyup",
-        "pointerdown",
-        "pointermove",
-        "pointerup",
-        "pointercancel",
-        "pointerover",
-        "pointerout",
-        "wheel",
-        "mousedown",
-        "mousemove",
-        "mouseup",
-        "click",
-        "dblclick",
-        "contextmenu",
-    ];
-    thread_local! {
-        static SWAPPING: Cell<bool> = const { Cell::new(false) };
-    }
-    // A second swap would undo the first.
-    let Some(window) = web_sys::window().filter(|_| !SWAPPING.replace(true)) else {
-        return;
-    };
+    let window = web_sys::window()?;
     let element = element.clone();
     // The pointer whose Control-click became a right-click, until it lifts.
     let secondary: Cell<Option<JsValue>> = Cell::new(None);
@@ -248,7 +247,7 @@ fn command_key(element: &web_sys::Element) {
         set("ctrlKey", command.into());
         set("metaKey", control.into());
     });
-    for name in EVENTS {
+    for name in SWAPPED_EVENTS {
         // Capture runs before winit's listeners on the canvas.
         let _ = window.add_event_listener_with_callback_and_bool(
             name,
@@ -256,8 +255,7 @@ fn command_key(element: &web_sys::Element) {
             true,
         );
     }
-    // The editor lives as long as the page.
-    swap.forget();
+    Some(swap)
 }
 
 /// Whether the browser offers a WebGPU adapter, which wgpu prefers to WebGL2.
@@ -362,6 +360,17 @@ pub(crate) fn text_drawn(text: &str) {
 #[wasm_bindgen]
 pub fn destroy() -> Result<(), JsError> {
     send(Request::Close)?;
+    // The page may reuse the element; its events keep their own keys.
+    let swap = HOST.with_borrow_mut(|host| host.command_key.take());
+    if let (Some(swap), Some(window)) = (swap, web_sys::window()) {
+        for name in SWAPPED_EVENTS {
+            let _ = window.remove_event_listener_with_callback_and_bool(
+                name,
+                swap.as_ref().unchecked_ref(),
+                true,
+            );
+        }
+    }
     HOST.with_borrow_mut(|host| {
         host.requests = None;
         host.on_change = None;
