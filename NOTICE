@@ -18,6 +18,7 @@ of adaptations, copyright notices, and license texts are recorded in:
   licenses/iced/           Canvas glyph rendering adaptation (MIT)
   licenses/vesta-colors/   VESTA element colours via pymatgen (MIT)
   licenses/liberation-fonts/ Liberation Sans fonts in the browser build (OFL-1.1)
+  licenses/dejavu-fonts/   Key symbols from DejaVu Sans in the browser build (Bitstream Vera)
   licenses/nmrshiftdb2/    Observed-shift derivative database (separate data license)
   data/nmr/               Offline index, provenance and held-out validation
   licenses/name-aliases/   Offline retained-name catalog (OPSIN MIT; ChEBI CC BY 4.0)

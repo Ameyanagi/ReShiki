@@ -22,6 +22,12 @@ pub(super) fn prepare_fonts() {
         #[cfg(target_arch = "wasm32")]
         {
             reshiki::style::load_fonts(fonts.raw().db_mut());
+            // Liberation Sans lacks the Mac key symbols that shortcut labels
+            // use; see licenses/dejavu-fonts.
+            fonts
+                .raw()
+                .db_mut()
+                .load_font_data(include_bytes!("../../../assets/fonts/ReShikiKeys.ttf").to_vec());
             ADDED.store(reshiki::style::font_generation(), Ordering::Relaxed);
         }
         variable::prepare_system_weights(fonts.raw());

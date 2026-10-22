@@ -275,6 +275,13 @@ bond and tool actions. Ring palette hover hints show one tool-selection key.
 | Cmd/Ctrl+Z / Shift+Z      | Undo / redo; Windows also supports Ctrl+Y                                   |
 | Cmd/Ctrl+Enter            | Finish editing a label or caption                                           |
 
+In the browser editor, **Cmd** is Command on a Mac as in the desktop app, and
+the other keys are the same, except three that browsers keep for their own
+windows and tabs: **New** is **Alt+N**, **Close tab** is **Alt+W** and
+**Next / previous tab** are **Alt+]** / **Alt+[**; on a Mac they use Control:
+**⌃N**, **⌃W** and **⌃]** / **⌃[**. Menus, tooltips and Help show these keys.
+Control-click on a Mac opens the context menu, as a right-click does.
+
 **Cmd/Ctrl+C** copies the drawing for ReShiki, ChemDraw, Office and image apps.
 To paste a structure into a text field such as SciFinder's, select it and use
 **Cmd/Ctrl+Alt+C**. With one clear reaction arrow, that shortcut copies bounded

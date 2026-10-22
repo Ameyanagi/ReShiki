@@ -106,7 +106,9 @@ impl MoleculeCanvas<'_> {
                 if !x.is_finite() || !y.is_finite() {
                     return None;
                 }
-                let edit = if state.modifiers.command() || state.modifiers.control() {
+                // A trackpad pinch arrives as Control-scroll.
+                let edit = if state.modifiers.command() || crate::platform::control(state.modifiers)
+                {
                     Edit::Zoom(zoom_amount.exp(), self.camera.world(point?, bounds))
                 } else {
                     Edit::Pan(x / self.camera.zoom, y / self.camera.zoom)
@@ -115,7 +117,9 @@ impl MoleculeCanvas<'_> {
             }
             // macOS can report Control-click as a secondary click.
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right))
-                if inside && self.tool == Tool::Template && state.modifiers.control() =>
+                if inside
+                    && self.tool == Tool::Template
+                    && crate::platform::control(state.modifiers) =>
             {
                 state.gesture = Some(Gesture::Ring {
                     start: self.camera.world(point?, bounds),
