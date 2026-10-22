@@ -279,7 +279,6 @@ impl App {
             } else {
                 None
             },
-            model_bar: self.model_bar(),
             morph: self.model_morph(),
             element: &self.element,
             joining: self.tab.joining.as_ref().map(|s| (&s.prepared, s.anchor)),

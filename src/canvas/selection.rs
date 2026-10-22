@@ -205,7 +205,7 @@ impl SelectionBox {
 /// its step. Shift snaps to 15°; the Alt/Option arrow keys turn the selection
 /// by 1° or 15° without the mouse.
 pub fn rotation_readout(angle: f32) -> [String; 2] {
-    let keys = if cfg!(target_os = "macos") {
+    let keys = if crate::platform::mac() {
         "⌥←/→ 1° · ⌥↑/↓ 15°"
     } else {
         "Alt+←/→ 1° · Alt+↑/↓ 15°"

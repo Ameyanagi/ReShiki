@@ -167,7 +167,7 @@ impl MoleculeCanvas<'_> {
     ) -> (World, Option<World>) {
         let doc = self.joining.map(|(j, _)| &j.base).unwrap_or(self.doc);
         let (anchor, direction) = ring_gesture(start, end, true, 10. / self.camera.zoom);
-        if !(modifiers.shift() || modifiers.control()) || modifiers.alt() {
+        if !(modifiers.shift() || crate::platform::control(modifiers)) || modifiers.alt() {
             return (anchor, direction);
         }
         let origin = doc

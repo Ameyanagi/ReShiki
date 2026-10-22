@@ -1135,3 +1135,32 @@ fn show_as_can_cancel_a_generation_in_flight() {
     assert_eq!(enabled(&app, Page::Model, "2D drawing"), Some(true));
     assert_eq!(enabled(&app, Page::Model, "3D model"), Some(false));
 }
+
+#[test]
+fn show_as_is_offered_for_a_molecule_shown_in_3d() {
+    use reshiki::models3d::{self, Display, ForceField, Model3d, Placed};
+    let (mut app, _) = App::new();
+    let doc = &mut app.tab.doc;
+    let c = doc.add_atom("C", World::new(0., 0.));
+    let o = doc.add_atom("O", World::new(36., 0.));
+    doc.add_bond(c, o, 1, "plain");
+    let placed = |id, xyz| Placed { id, xyz };
+    let model = Model3d::new(
+        doc,
+        vec![placed(c, [-0.7, 0., 0.]), placed(o, [0.7, 0., 0.])],
+        vec![],
+        ForceField::Mmff94s,
+    );
+    doc.models.push(model);
+    doc.require_version(reshiki::document::MODELS_3D);
+    assert!(models3d::set_display(doc, 0, Display::ThreeD));
+    app.tab.selected = vec![c, o];
+    assert!(outline(&app, Page::Main).contains(&"Show as"));
+    assert_eq!(enabled(&app, Page::Model, "3D model"), Some(false));
+    assert_eq!(enabled(&app, Page::Model, "2D drawing"), Some(true));
+    assert_eq!(
+        enabled(&app, Page::Model, "2D from the 3D view"),
+        Some(true)
+    );
+    assert_eq!(enabled(&app, Page::Model, "2D and 3D"), Some(true));
+}

@@ -106,7 +106,9 @@ impl MoleculeCanvas<'_> {
                 if !x.is_finite() || !y.is_finite() {
                     return None;
                 }
-                let edit = if state.modifiers.command() || state.modifiers.control() {
+                // A trackpad pinch arrives as Control-scroll.
+                let edit = if state.modifiers.command() || crate::platform::control(state.modifiers)
+                {
                     Edit::Zoom(zoom_amount.exp(), self.camera.world(point?, bounds))
                 } else {
                     Edit::Pan(x / self.camera.zoom, y / self.camera.zoom)
@@ -115,7 +117,9 @@ impl MoleculeCanvas<'_> {
             }
             // macOS can report Control-click as a secondary click.
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right))
-                if inside && self.tool == Tool::Template && state.modifiers.control() =>
+                if inside
+                    && self.tool == Tool::Template
+                    && crate::platform::control(state.modifiers) =>
             {
                 state.gesture = Some(Gesture::Ring {
                     start: self.camera.world(point?, bounds),
@@ -232,22 +236,12 @@ impl MoleculeCanvas<'_> {
                 {
                     return handle.cursor();
                 }
-                if let Some(p) = cursor.position_in(bounds) {
-                    if let Some(bar) = self.model_bar(state, bounds)
-                        && bar.contains(p)
-                    {
-                        return if bar.button(p).is_some() {
-                            mouse::Interaction::Pointer
-                        } else {
-                            mouse::Interaction::default()
-                        };
-                    }
-                    if self
+                if let Some(p) = cursor.position_in(bounds)
+                    && self
                         .turn_target(state, self.camera.world(p, bounds))
                         .is_some()
-                    {
-                        return mouse::Interaction::Grab;
-                    }
+                {
+                    return mouse::Interaction::Grab;
                 }
                 mouse::Interaction::default()
             } else {

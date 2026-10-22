@@ -21,6 +21,7 @@ mod canvas;
 mod desktop;
 #[cfg(not(target_arch = "wasm32"))]
 mod launch;
+mod platform;
 #[cfg(windows)]
 mod rendering;
 mod session;

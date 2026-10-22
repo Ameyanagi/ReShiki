@@ -2,7 +2,7 @@
 
 ReShiki opens crystal and periodic structures and shows them as a
 [3D model](3d-keyboard-drawing.md#show-a-molecule-as-a-3d-model) in their unit
-cell, with the same styles, panel and **Show as** bar as any molecule shown in
+cell, with the same styles, panel and **Show as** menu as any molecule shown in
 3D.
 
 ## Open a structure
