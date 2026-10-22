@@ -150,7 +150,9 @@ it.
 - Only Liberation Sans is bundled, so symbols it lacks, such as ℃, ⇌ and
   superscript ⁺ and ⁻, need a font from `fonts`. Japanese text loads a
   fallback (see [Fonts](#fonts)).
-- Shortcuts use Ctrl, also on macOS, where Cmd does not work yet.
+- Shortcuts follow the desktop app, with ⌘ as Command on a Mac, except
+  three that browsers keep for their own tabs: New is Alt+N, Close tab Alt+W
+  and next/previous tab Alt+] / Alt+[ (⌃N, ⌃W, ⌃] / ⌃[ on a Mac).
 - Work runs on the page's thread, so a long cleanup or import pauses the page.
 - Without WebGPU, lines are drawn without antialiasing: WebGL2 loses most
   canvases with it.

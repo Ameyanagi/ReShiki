@@ -580,6 +580,7 @@ impl App {
                 {
                     return Some(Message::TemplateNavigate(forward));
                 }
+                let event = crate::platform::shortcut_event(&event).unwrap_or(event);
                 let iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
                     key,
                     modified_key,

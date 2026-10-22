@@ -36,6 +36,14 @@ pub(super) fn label(message: &Message) -> Option<String> {
     binding(message).map(|(mods, key)| keys(mods, key))
 }
 
+pub(super) use super::file_shortcuts::TabKey;
+
+/// The keys of a document tab command, as `keys` shows them.
+pub(super) fn tab_keys(tab: TabKey) -> String {
+    let (mods, key) = super::file_shortcuts::tab_binding(tab);
+    keys(mods, key)
+}
+
 /// The step-rotation keys for hints, as `keys` shows them: ⌥←/⌥→ 1° and
 /// ⌥↑/⌥↓ 15° on macOS.
 pub(super) fn rotation_keys() -> String {
@@ -52,9 +60,10 @@ pub(super) fn rotation_keys() -> String {
 /// A shortcut as menus, tooltips and Help show it: key symbols on macOS
 /// (⇧R, ⌘G, ⌥⌘←, ↩, ⌫) and words elsewhere (Shift+R, Ctrl+G, Ctrl+Alt+Left,
 /// Enter, Delete). An empty key gives the modifiers alone, as in "⌥ drag".
-/// `Modifiers::COMMAND` is ⌘ on macOS and Ctrl elsewhere.
+/// `Modifiers::COMMAND` is ⌘ on a Mac, also in a browser, and Ctrl elsewhere;
+/// `platform::control_modifier` is ⌃.
 pub(super) fn keys(mods: Modifiers, key: &str) -> String {
-    let mac = cfg!(target_os = "macos");
+    let mac = crate::platform::mac();
     let key = match key {
         "Enter" if mac => "↩",
         "Delete" if mac => "⌫",
@@ -66,10 +75,10 @@ pub(super) fn keys(mods: Modifiers, key: &str) -> String {
     };
     if mac {
         [
-            (mods.control(), "⌃"),
+            (mods.contains(crate::platform::control_modifier()), "⌃"),
             (mods.alt(), "⌥"),
             (mods.shift(), "⇧"),
-            (mods.logo(), "⌘"),
+            (mods.contains(Modifiers::COMMAND), "⌘"),
         ]
         .into_iter()
         .filter_map(|(held, symbol)| held.then_some(symbol))
@@ -90,7 +99,8 @@ pub(super) fn keys(mods: Modifiers, key: &str) -> String {
 }
 
 /// `keys` as rich text spans, with the macOS key symbols in Lucida Grande:
-/// the interface font lacks ⌥, ⌫ and ↩ and draws ⇧ as a hairline.
+/// the interface font lacks ⌥, ⌫ and ↩ and draws ⇧ as a hairline. A browser
+/// has no Lucida Grande, so there they come from the bundled ReShiki Keys.
 pub(super) fn spans(keys: &str) -> Vec<iced::widget::text::Span<'static>> {
     let mut spans = vec![];
     let mut rest = keys;
@@ -99,7 +109,11 @@ pub(super) fn spans(keys: &str) -> Vec<iced::widget::text::Span<'static>> {
         let end = rest.find(|c| symbol(c) != symbols).unwrap_or(rest.len());
         let run = iced::widget::span(rest[..end].to_owned());
         spans.push(if symbols {
-            run.font(iced::Font::with_name("Lucida Grande"))
+            run.font(iced::Font::with_name(if cfg!(target_arch = "wasm32") {
+                "ReShiki Keys"
+            } else {
+                "Lucida Grande"
+            }))
         } else {
             run
         });
@@ -119,7 +133,7 @@ fn binding(message: &Message) -> Option<(Modifiers, &'static str)> {
     let command = Modifiers::COMMAND;
     let shift = command | Modifiers::SHIFT;
     Some(match message {
-        Message::New => (command, "N"),
+        Message::New => super::file_shortcuts::tab_binding(TabKey::New),
         Message::Open => (command, "O"),
         Message::Save => (command, "S"),
         Message::SaveAs => (shift, "S"),
@@ -238,7 +252,7 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
         }
         return Some(match c.as_str() {
             "z" => Message::Undo,
-            "y" if cfg!(windows) => Message::Redo,
+            "y" if crate::platform::windows() => Message::Redo,
             "a" => Message::SelectAll,
             "g" => Message::Group,
             "c" => Message::Copy(false),
@@ -269,7 +283,9 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
             (Key::Named(Named::ArrowDown), false) => Message::Transform(Transform::Rotate(15.)),
             (Key::Named(Named::ArrowLeft), false) => Message::Transform(Transform::Rotate(-1.)),
             (Key::Named(Named::ArrowRight), false) => Message::Transform(Transform::Rotate(1.)),
-            (Key::Character(c), false) if cfg!(windows) && c.eq_ignore_ascii_case("k") => {
+            (Key::Character(c), false)
+                if crate::platform::windows() && c.eq_ignore_ascii_case("k") =>
+            {
                 Message::AromaticDisplay
             }
             _ => return None,
