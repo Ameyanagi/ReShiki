@@ -236,22 +236,12 @@ impl MoleculeCanvas<'_> {
                 {
                     return handle.cursor();
                 }
-                if let Some(p) = cursor.position_in(bounds) {
-                    if let Some(bar) = self.model_bar(state, bounds)
-                        && bar.contains(p)
-                    {
-                        return if bar.button(p).is_some() {
-                            mouse::Interaction::Pointer
-                        } else {
-                            mouse::Interaction::default()
-                        };
-                    }
-                    if self
+                if let Some(p) = cursor.position_in(bounds)
+                    && self
                         .turn_target(state, self.camera.world(p, bounds))
                         .is_some()
-                    {
-                        return mouse::Interaction::Grab;
-                    }
+                {
+                    return mouse::Interaction::Grab;
                 }
                 mouse::Interaction::default()
             } else {

@@ -195,8 +195,6 @@ impl App {
             edit @ (Edit::ModelView { .. } | Edit::ResizeModels { .. }) => {
                 return self.model_edit(edit);
             }
-            // Dispatched as a Models3d action.
-            Edit::ShowAs(_) => return,
             Edit::RingPreset(preset, anchor, direction, connect, alternate) => {
                 return self
                     .place_ring_preset(preset, anchor, direction, connect, alternate, before);

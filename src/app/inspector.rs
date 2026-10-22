@@ -527,12 +527,6 @@ impl App {
                 "{} atom label(s) have low contrast against the canvas or a ring fill. Adjust the label or fill color.", color_issues.len()
             )).size(11).style(muted_text));
         }
-        if let Some(section) = self.structure_section() {
-            body = body.push(section);
-        }
-        if let Some(section) = self.model_section() {
-            body = body.push(section);
-        }
         let molecular_first = self.tab.selected.is_empty()
             || self.property_key().is_some_and(|key| !key.atoms.is_empty());
         if molecular_first {
@@ -663,6 +657,13 @@ impl App {
                 }
             },
         ));
+        // Show as and the 3D model are secondary, so they follow the chemistry.
+        if let Some(section) = self.structure_section() {
+            body = body.push(section);
+        }
+        if let Some(section) = self.model_section() {
+            body = body.push(section);
+        }
         if let Some(section) = self.rear_opacity_section(self.depth_ids()) {
             body = body.push(section);
         }
