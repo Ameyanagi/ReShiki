@@ -918,7 +918,20 @@ pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
             let Some((left, _)) = frame(doc, &centered) else {
                 return false;
             };
-            Point::new(hi.x + doc.drawing_style.bond_length_world - left.x, 0.)
+            // A crystal's 2D drawing reaches as far as its cell box and the
+            // copies of a repeat.
+            let flat = Model3d {
+                display: Display::TwoD,
+                ..model.clone()
+            };
+            let cells = flat_cells(std::slice::from_ref(&flat), doc);
+            let ink = [cells.behind, cells.front, cells.above].concat();
+            let right = if ink.is_empty() {
+                hi.x
+            } else {
+                hi.x.max(crate::scene::bounds(&ink).1.x)
+            };
+            Point::new(right + doc.drawing_style.bond_length_world - left.x, 0.)
         }
         _ if model.display == Display::Both => Point::default(),
         Display::TwoD | Display::ThreeD => model.offset,

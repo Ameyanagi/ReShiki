@@ -1166,3 +1166,14 @@ fn far_face_copies_draw_their_stubs_too() {
         .count();
     assert!(ghost_stubs > 0);
 }
+
+#[test]
+fn both_places_the_3d_frame_past_a_whole_repeat() {
+    use crate::models3d::{Display, frame, set_display};
+    let (mut doc, _) = open("cif", NACL);
+    doc.models[0].repeat = [3, 1, 1];
+    let drawing = crate::scene::bounds(&crate::scene::primitives(&doc));
+    set_display(&mut doc, 0, Display::Both);
+    let (lo, _) = frame(&doc, &doc.models[0]).unwrap();
+    assert!(lo.x > drawing.1.x, "{lo:?} {drawing:?}");
+}
