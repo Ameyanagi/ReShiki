@@ -1137,3 +1137,32 @@ fn bond_orders_do_not_depend_on_atom_order() {
         assert_eq!(doubles, 1, "carbon {c}: {orders:?}");
     }
 }
+
+#[test]
+fn a_plain_xyz_molecule_keeps_its_linear_carbon_label() {
+    let (doc, _) = open("xyz", "3\nCO2\nC 0 0 0\nO 1.16 0 0\nO -1.16 0 0\n");
+    let carbon = doc.atoms.iter().find(|a| a.element == "C").unwrap();
+    assert_eq!(
+        carbon.display.carbons,
+        Some(crate::atom_labels::Carbons::All)
+    );
+    assert!(crate::atom_labels::visible(carbon, &doc));
+}
+
+#[test]
+fn far_face_copies_draw_their_stubs_too() {
+    use crate::scene::Primitive;
+    let (doc, _) = open("cif", NACL);
+    let line = doc.drawing_style.world(doc.drawing_style.line_width_pt);
+    // Stubs drawn from the lighter copies on the far faces.
+    let ghost_stubs = crate::scene::primitives(&doc)
+        .into_iter()
+        .filter(|p| match p {
+            Primitive::Opacity { primitive, .. } => {
+                matches!(**primitive, Primitive::Wire { dash, .. } if dash > 0. && dash < line * 3.)
+            }
+            _ => false,
+        })
+        .count();
+    assert!(ghost_stubs > 0);
+}

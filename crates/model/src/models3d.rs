@@ -2764,6 +2764,9 @@ pub(crate) fn flat_cells(models: &[Model3d], doc: &Document) -> FlatCells {
         out.above.extend(marks);
         let cells = grid(repeat);
         let inside = |c: [i32; 3]| cells.contains(&c);
+        let mut shown_cells: Vec<[i32; 3]> = sites.iter().map(|(_, c)| *c).collect();
+        shown_cells.sort_unstable();
+        shown_cells.dedup();
         // The copies of the cell and of the atoms on its far faces, lighter,
         // with the bonds between them.
         let mut copies = None;
@@ -2795,7 +2798,8 @@ pub(crate) fn flat_cells(models: &[Model3d], doc: &Document) -> FlatCells {
             let stub = sub(fit.place(sub(far, pa).map(|v| v * STUB)), origin);
             let image = c.image.map(i32::from);
             for (id, partner, sign) in [(c.a, c.b, 1), (c.b, c.a, -1)] {
-                for &from in &cells {
+                // From every shown copy, the far-face ones included.
+                for &from in &shown_cells {
                     let to = zip3(from, image, |f, i| f + sign * i);
                     let drawn = copies
                         .as_ref()

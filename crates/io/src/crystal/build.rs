@@ -557,10 +557,20 @@ fn lay_out(doc: &mut Document, model: &Model3d) {
         return;
     }
     let positions: HashMap<u64, [f32; 3]> = models3d::viewed(doc, model).into_iter().collect();
+    let linear: HashSet<u64> = model
+        .atoms
+        .iter()
+        .map(|a| a.id)
+        .filter(|id| models3d::linear_carbon(doc, model, *id))
+        .collect();
     for atom in &mut doc.atoms {
         if let Some([x, y, z]) = positions.get(&atom.id) {
             atom.position = Point::new(x * UNITS, -y * UNITS);
             atom.depth = z * UNITS;
+        }
+        // A linear carbon, as CO₂'s, shows its C in 2D too.
+        if linear.contains(&atom.id) {
+            atom.display.carbons = Some(crate::atom_labels::Carbons::All);
         }
     }
 }
