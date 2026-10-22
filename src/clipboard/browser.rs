@@ -93,6 +93,15 @@ pub(super) fn pick(formats: &[String], items: &[(String, Vec<u8>)]) -> Option<Re
     })
 }
 
+/// The browser reads the clipboard again for each fallback, so a token of its
+/// contents lets read_candidates notice when it changed in between.
+pub(super) fn generation(items: &[(String, Vec<u8>)]) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    items.hash(&mut hasher);
+    format!("browser-{:016x}", hasher.finish())
+}
+
 /// What to tell the user when the browser refuses with this DOMException name.
 pub(super) fn refusal(name: &str, reading: bool) -> String {
     match name {
@@ -225,8 +234,7 @@ mod transport {
         }
         Ok(Packet {
             representations: super::pick(formats, &items).into_iter().collect(),
-            // One token, so read_candidates accepts each read as the same clipboard.
-            generation: Some("browser".into()),
+            generation: Some(super::generation(&items)),
         })
     }
 }
@@ -302,6 +310,16 @@ mod tests {
         );
         let other = vec![("text/html".to_owned(), b"<b>CCO</b>".to_vec())];
         assert!(pick(&[NATIVE.to_owned()], &other).is_none());
+    }
+
+    #[test]
+    fn the_generation_follows_the_clipboard_contents() {
+        let text = |t: &str| vec![("text/plain".to_owned(), t.as_bytes().to_vec())];
+        assert_eq!(generation(&text("CCO")), generation(&text("CCO")));
+        assert_ne!(generation(&text("CCO")), generation(&text("CCN")));
+        assert!(
+            super::super::priority::validate_generation(Some(&generation(&text("CCO")))).is_ok()
+        );
     }
 
     #[test]
