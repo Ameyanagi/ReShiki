@@ -52,9 +52,14 @@ drawing.
   bonds 165° or more apart, as in CO₂), which shows its C so O=C=O does not
   read as O=O. A bond behind another shows a gap where they cross, and a bond
   that leaves the cell is a short, light dashed stub, 40% of the bond.
-- **Atoms sit on the box** where their fractional coordinates put them: each
-  atom is kept once, inside the cell, so NaCl's ions at 0 and ½ fill the half
-  of the cell at the origin, with Na on the origin corner.
+- **Atoms sit on the box** where their fractional coordinates put them. The
+  drawing keeps each atom once, inside the cell; as crystallographers draw a
+  cell, an atom on a face, edge or corner at the origin's side is shown again,
+  as a lighter copy, on the far face, edge or corner, so rock salt shows all 27
+  ions and every corner of the box has its atom. A molecule goes by its centre
+  and is copied whole. The copies follow the drawing and are not atoms of
+  their own, so chemistry, IDs, the formula and saving are unchanged; bonds
+  between the cell's atoms and the copies are drawn in full.
 - **Ion charges** are hidden in 2D, since the formula carries them; choose
   **Properties → Structure → Ion charges → Show** to label each ion, as Na⁺
   and Cl⁻. The choice is kept in the file.
@@ -62,7 +67,8 @@ drawing.
   _a_, _b_ and _c_ in the 2D drawing, one Undo step each. The model's own cell
   stays the editable drawing; the other cells are lighter copies (55%) that
   follow it, not separate atoms. Bonds between cells are drawn in full and the
-  dashed stubs only leave the outside of the whole repeat. The box holds every
+  dashed stubs only leave the outside of the whole repeat; atoms on the near
+  faces are copied onto the far faces of the whole repeat. The box holds every
   cell, thin light lines mark where cells meet on its outside, _a_, _b_ and _c_
   label the ends of the whole repeat, and Fit takes in all of it. The choice is
   kept in the file.
@@ -139,8 +145,7 @@ Saving a crystal needs document version 29. Every file is now saved as version
 - If anything in the file fails validation, nothing is opened, and the message
   names the line where it can.
 
-Coordination polyhedra and the crystallographer's cell (atoms repeated on the
-far faces, edges and corners) are planned
+Coordination polyhedra are planned
 ([issue #417](https://github.com/Ameyanagi/ReShiki/issues/417)).
 
 ## Implementation notes

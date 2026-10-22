@@ -901,20 +901,18 @@ fn supercell_ink(doc: &Document) -> (usize, usize, usize) {
 #[test]
 fn a_supercell_draws_lighter_copies_seams_and_bonds_between_cells() {
     let (mut doc, _) = open("cif", NACL);
+    // One cell: its 27 ions as crystallographers draw it, as lighter copies
+    // (the model's own atoms' copies lie under them), no seams.
     let (stubs, copies, seams) = supercell_ink(&doc);
-    assert_eq!((copies, seams), (0, 0));
+    assert_eq!((copies, seams), (27, 0));
     doc.models[0].repeat = [2, 1, 1];
     let (wide_stubs, copies, seams) = supercell_ink(&doc);
-    // Every atom of both cells has a lighter copy (the model's own cell's
-    // copies lie under its atoms); one plane between the cells, four lines.
-    assert_eq!(copies, 2 * doc.atoms.len());
+    // Two cells: ions at every half step, 5 × 3 × 3; one plane between the
+    // cells, four lines.
+    assert_eq!(copies, 45);
     assert_eq!(seams, 4);
-    // Bonds between the two cells replace the stubs that met there; the
-    // second cell's outward stubs are added.
-    assert!(
-        wide_stubs > stubs && wide_stubs < 2 * stubs,
-        "{stubs} {wide_stubs}"
-    );
+    // Bonds that leave the whole block are still stubs.
+    assert!(stubs > 0 && wide_stubs > 0, "{stubs} {wide_stubs}");
     // The box and its a label reach the far end of both cells.
     let (origin, ends) = drawn_cell(&crate::scene::primitives(&doc));
     let (_, single) = drawn_cell(&crate::scene::primitives(&open("cif", NACL).0));
@@ -976,4 +974,36 @@ fn moving_a_crystal_needs_no_chemistry_for_its_labels() {
     let refresh =
         crate::atom_labels::refresh::Refresh::calculate(&doc, &Default::default()).unwrap();
     assert_eq!(refresh.notice, None);
+}
+
+#[test]
+fn rock_salt_fills_its_cell_as_crystallographers_draw_it() {
+    let (mut doc, _) = open("cif", NACL);
+    let m = model(&doc).clone();
+    let sites = crate::models3d::shown_sites(&doc, &m);
+    // 27 ions: 8 in the cell and 19 more on its far faces, edges and corners.
+    assert_eq!(sites.len(), 27);
+    let at = |(id, c): &(u64, [i32; 3])| {
+        let f = fractional(&m, *id);
+        [0, 1, 2].map(|k| f[k] + f64::from(c[k]))
+    };
+    for corner in 0..8_usize {
+        let want = [corner & 1, (corner >> 1) & 1, (corner >> 2) & 1].map(|v| v as f64);
+        assert!(
+            sites
+                .iter()
+                .any(|s| (0..3).all(|k| (at(s)[k] - want[k]).abs() < 1e-3)),
+            "no atom on corner {want:?}"
+        );
+    }
+    // The drawing still holds each atom once.
+    assert_eq!(doc.atoms.len(), 8);
+    // Two cells along each axis: ions at every half step, 5 × 5 × 5.
+    doc.models[0].repeat = [2, 2, 2];
+    assert_eq!(crate::models3d::shown_sites(&doc, model(&doc)).len(), 125);
+    // A molecular crystal copies whole molecules: CO₂ on the corners.
+    let (doc, _) = open("cif", CO2);
+    let sites = crate::models3d::shown_sites(&doc, model(&doc));
+    assert_eq!(sites.len() % 3, 0, "{}", sites.len());
+    assert!(sites.len() > doc.atoms.len());
 }

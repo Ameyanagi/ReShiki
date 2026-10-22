@@ -2469,6 +2469,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         camera: (view.perspective > 0.).then_some(view.camera),
         width: (model.size / 220.).clamp(1., 3.),
         size: (model.size * 0.06).clamp(8., 60.),
+        crowded: [false; 3],
     };
     let (behind, front) = model
         .cell
@@ -2545,6 +2546,9 @@ struct CellView<'a> {
     camera: Option<f32>,
     width: f32,
     size: f32,
+    /// Whether an atom sits on the end of each lattice vector, so its label
+    /// keeps further off.
+    crowded: [bool; 3],
 }
 
 /// The cell box: its hidden edges dashed, its front edges with the origin
@@ -2656,9 +2660,17 @@ fn cell_ink(
     let mut labels = vec![];
     for (k, name) in ["a", "b", "c"].into_iter().enumerate() {
         let w = crate::style::styled_text_width(name, size, &style);
-        let Some([x, y]) = axis_spot(&flat, k, size) else {
+        let Some([mut x, mut y]) = axis_spot(&flat, k, size) else {
             continue;
         };
+        // Past an atom on the corner, one and a half label heights further out.
+        if view.crowded.get(k) == Some(&true)
+            && let Some(end) = flat.get(1 << k)
+        {
+            let (dx, dy) = (x - end[0], y - end[1]);
+            let n = dx.hypot(dy).max(1e-6);
+            (x, y) = (x + dx / n * 1.5 * size, y + dy / n * 1.5 * size);
+        }
         let at = Point::new(x, y);
         labels.push(Primitive::Text {
             position: at.offset(-w / 2., -size * 0.6),
@@ -2706,15 +2718,32 @@ pub(crate) fn flat_cells(models: &[Model3d], doc: &Document) -> FlatCells {
         };
         let place = |p| fit.place(p);
         let project = |q: [f32; 3]| Point::new(q[0], -q[1]);
+        // The box and its labels hold every cell shown.
+        let repeat = model.repeat.map(|n| i32::from(n.clamp(1, MAX_REPEAT)));
+        let sites = shown_sites(doc, model);
+        let at_origin: HashSet<u64> = model
+            .atoms
+            .iter()
+            .filter(|a| cell.fractional(a.xyz).iter().all(|f| f.abs() < ON_FACE))
+            .map(|a| a.id)
+            .collect();
+        let crowded = [0, 1, 2].map(|k| {
+            let mut end = [0; 3];
+            if let (Some(slot), Some(n)) = (end.get_mut(k), repeat.get(k)) {
+                *slot = *n;
+            }
+            sites
+                .iter()
+                .any(|(id, c)| *c == end && at_origin.contains(id))
+        });
         let view = CellView {
             place: &place,
             project: &project,
             camera: None,
             width: line,
             size: style.font_size(),
+            crowded,
         };
-        // The box and its labels hold every cell shown.
-        let repeat = model.repeat.map(|n| i32::from(n.clamp(1, MAX_REPEAT)));
         let whole = Cell {
             vectors: [0, 1, 2].map(|k| {
                 let n = repeat.get(k).copied().unwrap_or(1) as f32;
@@ -2733,10 +2762,11 @@ pub(crate) fn flat_cells(models: &[Model3d], doc: &Document) -> FlatCells {
         out.above.extend(marks);
         let cells = grid(repeat);
         let inside = |c: [i32; 3]| cells.contains(&c);
-        // The copies of the cell, lighter, with the bonds between cells.
+        // The copies of the cell and of the atoms on its far faces, lighter,
+        // with the bonds between them.
         let mut copies = None;
-        if cells.len() > 1
-            && let Some((ghost, index)) = ghosts(doc, model, cell, &fit, &cells)
+        if sites.len() > model.atoms.len()
+            && let Some((ghost, index)) = ghosts(doc, model, cell, &fit, &sites)
         {
             out.behind.extend(
                 crate::scene::primitives(&ghost)
@@ -2762,10 +2792,13 @@ pub(crate) fn flat_cells(models: &[Model3d], doc: &Document) -> FlatCells {
             let far = zip3(pb, cell.translation(c.image), |p, t| p + t);
             let stub = sub(fit.place(sub(far, pa).map(|v| v * STUB)), origin);
             let image = c.image.map(i32::from);
-            for (id, sign) in [(c.a, 1), (c.b, -1)] {
+            for (id, partner, sign) in [(c.a, c.b, 1), (c.b, c.a, -1)] {
                 for &from in &cells {
                     let to = zip3(from, image, |f, i| f + sign * i);
-                    if inside(to) {
+                    let drawn = copies
+                        .as_ref()
+                        .is_some_and(|(_, index)| index.contains_key(&(partner, to)));
+                    if inside(to) || drawn {
                         continue;
                     }
                     let (label_doc, atom, alpha) = if from == [0; 3] {
@@ -2881,16 +2914,91 @@ fn seams(
 /// Where each atom's copy in each cell of a repeat went, by atom and cell.
 type Copies = HashMap<(u64, [i32; 3]), u64>;
 
-/// The copies of `model`'s atoms in every one of `cells`, the model's own
-/// included, at their places in the drawing, with each cell's bonds and the
-/// bonds between cells shown, as a drawing of their own, and where each
-/// atom's copy in each cell went.
+/// Every copy of `model`'s atoms its 2D drawing shows, by atom and cell:
+/// each atom in every cell of the repeat, and again, as crystallographers
+/// draw a cell, one cell on along each axis where it lies on the near face of
+/// that axis, so the far faces, edges and corners of the whole repeat are
+/// filled too. A molecule goes by its centre, so it is copied whole.
+pub fn shown_sites(doc: &Document, model: &Model3d) -> Vec<(u64, [i32; 3])> {
+    let Some(cell) = &model.cell else {
+        return model.atoms.iter().map(|a| (a.id, [0; 3])).collect();
+    };
+    let repeat = model.repeat.map(|n| i32::from(n.clamp(1, MAX_REPEAT)));
+    // Molecules: groups joined by bonds inside the cell and none leaving it.
+    let index: HashMap<u64, usize> = model
+        .atoms
+        .iter()
+        .enumerate()
+        .map(|(i, a)| (a.id, i))
+        .collect();
+    let mut group: Vec<usize> = (0..model.atoms.len()).collect();
+    fn root(group: &[usize], mut i: usize) -> usize {
+        while let Some(&up) = group.get(i).filter(|up| **up != i) {
+            i = up;
+        }
+        i
+    }
+    for bond in &doc.bonds {
+        if let (Some(&a), Some(&b)) = (index.get(&bond.a), index.get(&bond.b)) {
+            let (ra, rb) = (root(&group, a), root(&group, b));
+            if let Some(slot) = group.get_mut(ra) {
+                *slot = rb;
+            }
+        }
+    }
+    let network: HashSet<usize> = cell
+        .crossing
+        .iter()
+        .flat_map(|c| [c.a, c.b])
+        .filter_map(|id| index.get(&id).map(|i| root(&group, *i)))
+        .collect();
+    let mut centres: HashMap<usize, ([f32; 3], f32)> = HashMap::new();
+    for (i, atom) in model.atoms.iter().enumerate() {
+        let entry = centres.entry(root(&group, i)).or_insert(([0.; 3], 0.));
+        entry.0 = zip3(entry.0, atom.xyz, |s, p| s + p);
+        entry.1 += 1.;
+    }
+    let mut sites = vec![];
+    let [na, nb, nc] = repeat;
+    for i in 0..=na {
+        for j in 0..=nb {
+            for k in 0..=nc {
+                let c = [i, j, k];
+                for (n, atom) in model.atoms.iter().enumerate() {
+                    let r = root(&group, n);
+                    let point = match centres.get(&r) {
+                        Some((sum, count)) if !network.contains(&r) => sum.map(|v| v / count),
+                        _ => atom.xyz,
+                    };
+                    let f = cell.fractional(point);
+                    let shown = (0..3).all(|axis| {
+                        let (at, n) = (c.get(axis), repeat.get(axis));
+                        at < n || f.get(axis).is_some_and(|v| v.abs() < ON_FACE)
+                    });
+                    if shown {
+                        sites.push((atom.id, c));
+                    }
+                }
+            }
+        }
+    }
+    sites
+}
+
+/// How near a fractional coordinate must be to 0 for an atom to lie on a
+/// face of its cell.
+const ON_FACE: f32 = 1e-3;
+
+/// The copies of `model`'s atoms at `sites` (by atom and cell, the model's
+/// own included) at their places in the drawing, with each cell's bonds and
+/// the bonds between cells where both ends are shown, as a drawing of their
+/// own, and where each atom's copy in each cell went.
 fn ghosts(
     doc: &Document,
     model: &Model3d,
     cell: &Cell,
     fit: &Flat,
-    cells: &[[i32; 3]],
+    sites: &[(u64, [i32; 3])],
 ) -> Option<(Document, Copies)> {
     let mut ghost = Document {
         canvas_theme: doc.canvas_theme,
@@ -2904,19 +3012,21 @@ fn ghosts(
     let origin = fit.place([0.; 3]);
     let mut index = HashMap::new();
     let mut next = 1;
-    for &c in cells {
+    for &(id, c) in sites {
+        let Some(atom) = doc.atom(id) else { continue };
         let shift = sub(fit.place(cell.at(c.map(|v| v as f32))), origin);
-        for atom in doc.atoms.iter().filter(|a| ids.contains(&a.id)) {
-            let mut copy = atom.clone();
-            copy.id = next;
-            copy.position = atom.position.offset(shift[0], -shift[1]);
-            copy.depth = atom.depth + shift[2];
-            index.insert((atom.id, c), next);
-            ghost.atoms.push(copy);
-            next += 1;
-        }
+        let mut copy = atom.clone();
+        copy.id = next;
+        copy.position = atom.position.offset(shift[0], -shift[1]);
+        copy.depth = atom.depth + shift[2];
+        index.insert((id, c), next);
+        ghost.atoms.push(copy);
+        next += 1;
     }
-    for &c in cells {
+    let mut cells: Vec<[i32; 3]> = sites.iter().map(|(_, c)| *c).collect();
+    cells.sort_unstable();
+    cells.dedup();
+    for &c in &cells {
         for bond in doc.bonds.iter().filter(|b| ids.contains(&b.a)) {
             let (Some(&a), Some(&b)) = (index.get(&(bond.a, c)), index.get(&(bond.b, c))) else {
                 continue;
