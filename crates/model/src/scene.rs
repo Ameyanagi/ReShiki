@@ -1221,7 +1221,7 @@ fn trimmed_span(
     })
 }
 
-fn label_end(
+pub(crate) fn label_end(
     origin: Point,
     ux: f32,
     uy: f32,
@@ -1372,8 +1372,15 @@ pub fn primitives_with_opacity(
     let mut out = vec![];
     let mut graphics: Vec<_> = doc.graphics.iter().collect();
     graphics.sort_by_key(|g| g.layer);
-    let halos = orbital_halos(doc, &graphics, &inputs.labels().runs, opacity);
+    let mut halos = orbital_halos(doc, &graphics, &inputs.labels().runs, opacity);
+    let cells = crate::models3d::flat_cells(&raw.models, doc);
+    for id in cells.haloed {
+        if !halos.contains(id) {
+            halos.atoms.push((id, None));
+        }
+    }
     push_underlays(&mut out, doc, &graphics, opacity);
+    out.extend(cells.behind);
     let rings = push_ring_strokes(&mut out, doc, opacity);
     let pass = BondPass::new(&inputs);
     let doc = pass.doc;
@@ -1405,9 +1412,11 @@ pub fn primitives_with_opacity(
     if opacity.has_visibility() {
         paint_rear_before_front(&mut out, bond_paint_start);
     }
+    out.extend(cells.front);
     let runs = &pass.labels.runs;
     push_atom_labels(&mut out, doc, runs, opacity, &halos);
     push_label_halo(&mut out, doc, runs, opacity, &halos.above(None));
+    out.extend(cells.above);
     out.extend(crate::models3d::primitives(raw));
     push_arrows_and_annotations(&mut out, doc);
     for graphic in graphics.iter().filter(|g| g.layer >= 0) {

@@ -49,6 +49,8 @@ pub(crate) enum Setting {
     DepthFade(f32),
     Perspective(f32),
     ResetView,
+    /// Show a crystal's ion charges in its 2D drawing.
+    Charges(bool),
 }
 
 /// The generation in flight; dropping it aborts the worker.
@@ -302,6 +304,7 @@ impl App {
             Setting::DepthFade(value) => model.depth_fade = value.clamp(0., 1.),
             Setting::Perspective(value) => model.perspective = value.clamp(0., 1.),
             Setting::ResetView => model.rotation = reset.unwrap_or(model.rotation),
+            Setting::Charges(shown) => model.charges = shown,
         }
         // The active choice again changes nothing and adds no Undo step.
         if self.tab.doc == before {
@@ -502,6 +505,36 @@ impl App {
                 })
                 .size(11)
                 .style(muted_text),
+            );
+        }
+        // A crystal's ion charges, hidden in 2D unless asked for.
+        let charged = |m: &&models3d::Model3d| {
+            m.cell.is_some()
+                && m.atoms
+                    .iter()
+                    .any(|a| self.tab.doc.atom(a.id).is_some_and(|a| a.charge != 0))
+        };
+        if let Some(model) = model.filter(charged) {
+            body = body.push(text("Ion charges").size(12)).push(
+                row(
+                    [(false, "Hide", "hide"), (true, "Show", "show")].map(|(shown, label, id)| {
+                        let active = model.charges == shown;
+                        accessible_command(
+                            format!("structure-charges-{id}"),
+                            format!("{label} ion charges"),
+                            label,
+                        )
+                        .checked(active)
+                        .style(control(active))
+                        .width(Length::Fill)
+                        .on_press_maybe(
+                            enabled
+                                .then_some(Message::Models3d(Action::Set(Setting::Charges(shown)))),
+                        )
+                        .into()
+                    }),
+                )
+                .spacing(4),
             );
         }
         Some(self.inspector_section(Section::Structure, "Structure", "", true, body))

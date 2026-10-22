@@ -866,3 +866,21 @@ fn the_structure_note_names_the_current_style() {
     }
     assert!(app.structure_section().is_some());
 }
+
+#[test]
+fn a_crystal_opens_in_2d_and_shows_its_ion_charges_in_one_undo_step() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let text = include_str!("../../../tests/fixtures/crystal/nacl.cif");
+    let (doc, _) = reshiki::crystal::read("cif", text).unwrap();
+    app.tab.doc = doc;
+    app.tab.selected = app.tab.doc.atoms.iter().map(|a| a.id).collect();
+    assert_eq!(displays(&app.tab.doc), [Display::TwoD]);
+    assert!(app.structure_section().is_some());
+    let start = frames(&app);
+    set(&mut app, Setting::Charges(true));
+    assert!(app.tab.doc.models[0].charges);
+    assert_eq!(frames(&app), start + 1);
+    let _ = app.update(Message::Undo);
+    assert!(!app.tab.doc.models[0].charges);
+}

@@ -232,6 +232,8 @@ struct Arranged {
     xyz: Vec<V3>,
     bonds: Vec<(usize, usize)>,
     crossing: Vec<Link>,
+    /// Whether each atom belongs to an extended network.
+    network: Vec<bool>,
 }
 
 /// The boundary rule, molecule by molecule. A molecule (a finite connected
@@ -322,6 +324,7 @@ fn arrange(atoms: &[Atom], links: &[Link], lattice: Option<&Lattice>) -> Arrange
         xyz,
         bonds,
         crossing,
+        network,
     }
 }
 
@@ -347,12 +350,13 @@ pub(super) fn document(structure: Structure) -> Result<Document, Error> {
         .collect();
     let id = |i: usize| ids.get(i).copied();
     let mut bonded = HashSet::new();
-    for &(a, b) in &arranged.bonds {
+    let orders = orders(&atoms, &arranged.bonds, &arranged.network);
+    for (&(a, b), order) in arranged.bonds.iter().zip(orders) {
         let (Some(a), Some(b)) = (id(a), id(b)) else {
             continue;
         };
         if a != b && bonded.insert((a.min(b), a.max(b))) {
-            doc.add_bond(a, b, 1, "plain");
+            doc.add_bond(a, b, order, "plain");
         }
     }
     let narrow = |v: i32| i8::try_from(v).unwrap_or(0);
@@ -406,9 +410,104 @@ pub(super) fn document(structure: Structure) -> Result<Document, Error> {
     lay_out(&mut doc, &model);
     doc.models.push(model);
     models3d::require_version(&mut doc);
-    models3d::set_display(&mut doc, 0, Display::ThreeD);
+    // A crystal opens as a 2D drawing in its cell; a plain XYZ molecule as
+    // a 3D model.
+    if doc.models.iter().all(|m| m.cell.is_none()) {
+        models3d::set_display(&mut doc, 0, Display::ThreeD);
+    }
     doc.validate().map_err(|e| Error::new(&e))?;
     Ok(doc)
+}
+
+/// Bond orders for whole molecules: C, N, O and S without a charge take
+/// multiple bonds until each has its usual valence, an atom with one partner
+/// left first, as O=C=O and urea's C=O. A molecule keeps single bonds unless
+/// that fills every such atom exactly, as it does not where hydrogens are
+/// missing from the file.
+fn orders(atoms: &[Atom], bonds: &[(usize, usize)], network: &[bool]) -> Vec<u8> {
+    let valence = |a: &Atom| match (a.element.as_str(), a.charge) {
+        ("C", 0) => 4,
+        ("N", 0) => 3,
+        ("O" | "S", 0) => 2,
+        _ => 0,
+    };
+    let mut free: Vec<i32> = atoms.iter().map(valence).collect();
+    for &(a, b) in bonds {
+        for i in [a, b] {
+            if let Some(f) = free.get_mut(i) {
+                *f -= 1;
+            }
+        }
+    }
+    let open = |free: &[i32], i: usize| {
+        free.get(i).is_some_and(|f| *f > 0) && network.get(i) == Some(&false)
+    };
+    let mut orders = vec![1_u8; bonds.len()];
+    loop {
+        let candidates: Vec<usize> = (0..bonds.len())
+            .filter(|k| {
+                bonds
+                    .get(*k)
+                    .is_some_and(|&(a, b)| a != b && open(&free, a) && open(&free, b))
+            })
+            .collect();
+        let mut partners = vec![0; atoms.len()];
+        for &(a, b) in candidates.iter().filter_map(|k| bonds.get(*k)) {
+            for i in [a, b] {
+                if let Some(p) = partners.get_mut(i) {
+                    *p += 1;
+                }
+            }
+        }
+        let forced = candidates.iter().find(|k| {
+            bonds
+                .get(**k)
+                .is_some_and(|&(a, b)| partners.get(a) == Some(&1) || partners.get(b) == Some(&1))
+        });
+        let Some(&k) = forced.or(candidates.first()) else {
+            break;
+        };
+        let (Some(&(a, b)), Some(order)) = (bonds.get(k), orders.get_mut(k)) else {
+            break;
+        };
+        *order += 1;
+        for i in [a, b] {
+            if let Some(f) = free.get_mut(i) {
+                *f -= 1;
+            }
+        }
+    }
+    // A molecule left with an atom short of its valence keeps single bonds.
+    let mut component: Vec<usize> = (0..atoms.len()).collect();
+    fn root(component: &[usize], mut i: usize) -> usize {
+        while let Some(&parent) = component.get(i).filter(|p| **p != i) {
+            i = parent;
+        }
+        i
+    }
+    for &(a, b) in bonds {
+        let (ra, rb) = (root(&component, a), root(&component, b));
+        if let Some(slot) = component.get_mut(ra) {
+            *slot = rb;
+        }
+    }
+    let short: HashSet<usize> = (0..atoms.len())
+        .filter(|i| {
+            free.get(*i).is_some_and(|f| *f != 0) && atoms.get(*i).is_some_and(|a| valence(a) > 0)
+        })
+        .map(|i| root(&component, i))
+        .collect();
+    bonds
+        .iter()
+        .zip(orders)
+        .map(|(&(a, _), order)| {
+            if short.contains(&root(&component, a)) {
+                1
+            } else {
+                order
+            }
+        })
+        .collect()
 }
 
 /// Place each 2D atom where the opening view shows it, at the drawing's

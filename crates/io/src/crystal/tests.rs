@@ -53,7 +53,7 @@ fn nacl_keeps_each_atom_once_with_bonds_leaving_the_cell() {
     assert!(warnings.is_empty(), "{warnings:?}");
     let m = model(&doc);
     assert_eq!((count(&doc, "Na"), count(&doc, "Cl")), (4, 4));
-    assert_eq!(m.display, Display::ThreeD);
+    assert_eq!(m.display, Display::TwoD);
     assert_eq!(doc.version, CRYSTALS);
     for atom in &doc.atoms {
         assert!(
@@ -84,6 +84,8 @@ fn co2_keeps_whole_molecules_with_centres_in_the_cell() {
     let m = model(&doc);
     assert_eq!((count(&doc, "C"), count(&doc, "O")), (4, 8));
     assert_eq!(doc.bonds.len(), 8);
+    // O=C=O.
+    assert!(doc.bonds.iter().all(|b| b.order == 2));
     assert!(m.cell.as_ref().unwrap().crossing.is_empty());
     for carbon in doc.atoms.iter().filter(|a| a.element == "C") {
         let oxygens: Vec<_> = doc
@@ -137,6 +139,11 @@ fn pdb_reads_cryst1_and_a_whole_molecule() {
     let m = model(&doc);
     assert_eq!(doc.atoms.len(), 8);
     assert_eq!(doc.bonds.len(), 7);
+    // C=O is double; C–N and N–H stay single.
+    let double: Vec<_> = doc.bonds.iter().filter(|b| b.order == 2).collect();
+    assert_eq!(double.len(), 1);
+    let ends = [double[0].a, double[0].b].map(|id| doc.atom(id).unwrap().element.clone());
+    assert!(ends.contains(&"C".into()) && ends.contains(&"O".into()));
     let cell = m.cell.as_ref().unwrap();
     assert!((cell.vectors[2][2] - 4.684).abs() < 1e-4);
     assert!(cell.crossing.is_empty());
@@ -398,7 +405,7 @@ fn the_import_engine_reads_crystal_files_and_keeps_the_model() {
             .block_on(crate::formats::read(text.as_bytes().to_vec(), format))
             .unwrap();
         assert_eq!(doc.models.len(), 1, "{format}");
-        assert_eq!(doc.models[0].display, Display::ThreeD);
+        assert_eq!(doc.models[0].display, Display::TwoD);
         assert!(doc.models[0].cell.is_some());
     }
     let error = runtime
@@ -563,4 +570,97 @@ fn only_crystal_atoms_skip_chemistry_analysis() {
     assert!(touches(&doc, &[]));
     assert!(touches(&doc, &[doc.atoms[0].id]));
     assert!(!touches(&doc, &ethane));
+}
+
+#[test]
+fn molecules_missing_hydrogens_keep_single_bonds() {
+    // Urea without its hydrogens: the nitrogens stay short of their valence,
+    // so no bond order is guessed.
+    let text: String = UREA
+        .lines()
+        .filter(|l| !l.ends_with('H'))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let (doc, _) = open("pdb", &text);
+    assert_eq!(doc.atoms.len(), 4);
+    assert!(doc.bonds.iter().all(|b| b.order == 1));
+    // Networks never take multiple bonds.
+    let (doc, _) = open("xyz", SILICON);
+    assert!(doc.bonds.iter().all(|b| b.order == 1));
+}
+
+#[test]
+fn crystals_open_as_2d_drawings_in_their_cell_with_no_overlapping_labels() {
+    for (format, text) in [
+        ("cif", NACL),
+        ("cif", CO2),
+        ("poscar", RUTILE),
+        ("xyz", SILICON),
+        ("pdb", UREA),
+    ] {
+        let (doc, _) = open(format, text);
+        assert_eq!(model(&doc).display, Display::TwoD, "{format}");
+        let drawing = crate::scene::primitives(&doc);
+        // The cell box: nine solid edges and three dashed hidden ones, all
+        // parallel in threes, and the italic a, b and c labels.
+        let edges: Vec<_> = drawing
+            .iter()
+            .filter_map(|p| match p {
+                crate::scene::Primitive::Wire { from, to, dash, .. } => Some((*from, *to, *dash)),
+                _ => None,
+            })
+            .collect();
+        assert!(edges.iter().filter(|e| e.2 == 0.).count() >= 9, "{format}");
+        let labels: Vec<_> = drawing
+            .iter()
+            .filter_map(|p| match p {
+                crate::scene::Primitive::Text { text, style, .. } if style.italic => {
+                    Some(text.as_str())
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(labels, ["a", "b", "c"], "{format}");
+        // No two atom labels overlap.
+        let drawn = crate::models3d::drawn(&doc);
+        let boxes: Vec<_> = drawn
+            .atoms
+            .iter()
+            .filter_map(|a| Some((&a.element, crate::scene::atom_label_ink_bounds(a, &drawn)?)))
+            .collect();
+        for (i, (a, (lo, hi))) in boxes.iter().enumerate() {
+            for (b, (other_lo, other_hi)) in &boxes[i + 1..] {
+                let apart = hi.x < other_lo.x
+                    || other_hi.x < lo.x
+                    || hi.y < other_lo.y
+                    || other_hi.y < lo.y;
+                assert!(
+                    apart,
+                    "{format}: {a} {lo:?} {hi:?} overlaps {b} {other_lo:?} {other_hi:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn ion_charges_are_hidden_in_2d_until_shown() {
+    let (mut doc, _) = open("cif", NACL);
+    // Kept on the atoms, for the formula, but not drawn.
+    assert!(doc.atoms.iter().all(|a| a.charge != 0));
+    assert!(
+        crate::models3d::drawn(&doc)
+            .atoms
+            .iter()
+            .all(|a| a.charge == 0)
+    );
+    doc.models[0].charges = true;
+    assert!(
+        crate::models3d::drawn(&doc)
+            .atoms
+            .iter()
+            .all(|a| a.charge != 0)
+    );
+    let read = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert!(read.models[0].charges);
 }

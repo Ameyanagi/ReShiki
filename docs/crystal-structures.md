@@ -1,9 +1,9 @@
 # Crystal structures
 
-ReShiki opens crystal and periodic structures and shows them as a
-[3D model](3d-keyboard-drawing.md#show-a-molecule-as-a-3d-model) in their unit
-cell, with the same styles, panel and **Show as** menu as any molecule shown in
-3D.
+ReShiki opens crystal and periodic structures as a 2D drawing in their unit
+cell, and shows them as a
+[3D model](3d-keyboard-drawing.md#show-a-molecule-as-a-3d-model) with the same
+styles, panel and **Show as** menu as any molecule shown in 3D.
 
 ## Open a structure
 
@@ -18,21 +18,35 @@ file…** to insert it into the drawing. These files are read:
 | `.xyz`                       | A molecule without a cell                                                                            |
 | `.xyz`, `.extxyz` (extended) | `Lattice="…"` and the `species` and `pos` columns of `Properties`                                    |
 
-The structure opens in 3D, facing the cell as crystallographers draw it: _b_
-to the right, _c_ up and _a_ toward you, seen a little from above. A skewed
-cell, such as a rhombohedral primitive cell, is tilted further so no axis is
-seen end-on. Drag inside
-the frame to turn it, double-click to come back to that view, and use
-**Properties → 3D model** for **Ball & stick**, **Stick**, **Wireframe** or
-**Space-filling**. **Show as 2D** shows the 2D drawing, laid out as the opening
-view shows the atoms; **Both** puts the model beside it.
+A structure with a cell opens as a 2D drawing with depth, facing the cell as
+crystallographers draw it: _b_ to the right, _c_ up and _a_ toward you, seen a
+little from above, in a parallel projection so the cell's edges stay parallel.
+A skewed cell, such as a rhombohedral primitive cell, is tilted further so no
+axis is seen end-on, and where atoms would hide behind each other or an axis
+label, as rutile's Ti behind O, the nearest tilt that keeps every label apart
+is taken. A plain XYZ file without a cell opens as a 3D model.
+
+**Show as 3D** shows the model in that same view: drag inside the frame to turn
+it, double-click to come back to the opening view, and use **Properties → 3D
+model** for **Ball & stick**, **Stick**, **Wireframe** or **Space-filling**.
+**Show as 2D** brings back the opening drawing, or **From the 3D view**
+flattens the model as it is turned; **Both** puts the model beside the
+drawing.
 
 ## What you see
 
 - **The unit cell** is a box in the canvas's ink: the three edges hidden behind
   the cell are dashed, a dot marks the origin, and _a_, _b_ and _c_ label the
-  lattice vectors. The box turns with the model, appears in every style and in
-  PNG, SVG and PDF export, and the model's frame always holds it.
+  lattice vectors. In 3D the box turns with the model, appears in every style
+  and the model's frame always holds it. In 2D it follows the drawing's atoms
+  wherever they are moved, and atom labels sit on a halo of paper so no edge
+  runs through them. Both appear in PNG, SVG and PDF export.
+- **The 2D drawing** shows atom labels and bond lines. Carbons with bonds are
+  plain vertices, as in any skeletal drawing, and a bond behind another shows a
+  gap where they cross.
+- **Ion charges** are hidden in 2D, since the formula carries them; choose
+  **Properties → Structure → Ion charges → Show** to label each ion, as Na⁺
+  and Cl⁻. The choice is kept in the file.
 - **Molecular crystals** keep whole molecules. Each molecule is made whole
   across the cell boundary and kept once, where its centre lies in the cell, so
   atoms of a molecule on a corner or face stick out of the box.
@@ -42,7 +56,11 @@ view shows the atoms; **Both** puts the model beside it.
   toward the neighbouring cell.
 - **Bonds** come from covalent radii (Cordero et al., 2008): two atoms are
   bonded when they are closer than their radii plus 0.45 Å, across the cell
-  boundary too. All bonds are single. In a structure with oxygen, nitrogen,
+  boundary too. In whole molecules, uncharged C, N, O and S take double or
+  triple bonds until each has its usual valence, so CO₂ is O=C=O and urea has
+  its C=O; a molecule where that does not work out exactly, as one whose file
+  leaves out hydrogens, keeps single bonds, and so do extended networks. In a
+  structure with oxygen, nitrogen,
   carbon, sulfur, phosphorus or a halogen, two metal atoms are never bonded, so
   rutile's Ti–Ti at 2.96 Å is not drawn as a bond; in metals and alloys they
   are.
@@ -118,11 +136,21 @@ The model (`crates/model/src/models3d.rs`) stores the lattice in
 `Model3d::sites`; a model read from a file may hold several whole molecules.
 Model positions are Cartesian ångström with the cell's origin at (0, 0, 0), so
 a copy in another cell is the position plus whole lattice vectors, which later
-repeats and ghost copies use. The scene draws the hidden cell edges as dashed
+repeats and ghost copies use. In 3D the scene draws the hidden cell edges as dashed
 `Wire` primitives before the model, the front edges, origin and labels after
 it, and the half-bonds leaving the cell in depth order with the atoms. Labels
 are ordinary text primitives, so the canvas and exports turn them light on a
 dark canvas as they do atom labels.
+
+In 2D, `models3d::flat_cells` fits a parallel projection from the model's
+positions to the 2D atoms (least squares, held toward the model's view where
+the atoms span no volume) and draws the same box through it: hidden edges and
+half-bonds before the bonds, front edges after them, and the axis labels after
+the atom labels, which get a paper halo. `models3d::drawn` drops the charges
+of a crystal whose `Model3d::charges` is off, only for painting. The opening
+view (`crystal_rotation`) tries tilts nearest the standard one until labelled
+atoms (all but bonded carbons) and the axis labels are about a label's height
+apart, for up to 300 such atoms. Bond orders come from `crystal/build.rs`.
 
 Test fixtures in `tests/fixtures/crystal/` are hand-written from published cell
 parameters: NaCl (Fm-3m), dry ice CO₂ (Pa-3), urea (PDB), rutile TiO₂
