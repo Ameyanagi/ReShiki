@@ -289,10 +289,10 @@ impl App {
             return;
         };
         let before = self.tab.doc.clone();
-        let reset = before
-            .models
-            .get(index)
-            .map(|model| model.initial_view(&before));
+        // The opening view is a search for a crystal; only Reset view needs it.
+        let reset = matches!(setting, Setting::ResetView)
+            .then(|| before.models.get(index).map(|m| m.initial_view(&before)))
+            .flatten();
         let Some(model) = self.tab.doc.models.get_mut(index) else {
             return;
         };

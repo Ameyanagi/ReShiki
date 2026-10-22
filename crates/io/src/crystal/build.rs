@@ -420,11 +420,12 @@ pub(super) fn document(structure: Structure) -> Result<Document, Error> {
 }
 
 /// Bond orders for whole molecules: C, N, O and S without a charge take
-/// multiple bonds until each has its usual valence, an atom with one partner
-/// left first, as O=C=O and urea's C=O. A molecule keeps single bonds unless
-/// that fills every such atom exactly, as it does not where hydrogens are
-/// missing from the file.
-fn orders(atoms: &[Atom], bonds: &[(usize, usize)], network: &[bool]) -> Vec<u8> {
+/// double or triple bonds until each has its usual valence, as O=C=O and
+/// urea's C=O. Each molecule is filled by a search that backtracks, so the
+/// order of the atoms never matters (azulene's outer ring alternates); a
+/// molecule that cannot be filled exactly, as one whose file leaves out its
+/// hydrogens, keeps single bonds, and so do extended networks.
+pub(super) fn orders(atoms: &[Atom], bonds: &[(usize, usize)], network: &[bool]) -> Vec<u8> {
     let valence = |a: &Atom| match (a.element.as_str(), a.charge) {
         ("C", 0) => 4,
         ("N", 0) => 3,
@@ -439,77 +440,112 @@ fn orders(atoms: &[Atom], bonds: &[(usize, usize)], network: &[bool]) -> Vec<u8>
             }
         }
     }
-    let open = |free: &[i32], i: usize| {
-        free.get(i).is_some_and(|f| *f > 0) && network.get(i) == Some(&false)
-    };
-    let mut orders = vec![1_u8; bonds.len()];
-    loop {
-        // At most triple bonds; order 4 would mean aromatic.
-        let candidates: Vec<usize> = (0..bonds.len())
-            .filter(|k| {
-                orders.get(*k).is_some_and(|o| *o < 3)
-                    && bonds
-                        .get(*k)
-                        .is_some_and(|&(a, b)| a != b && open(&free, a) && open(&free, b))
-            })
-            .collect();
-        let mut partners = vec![0; atoms.len()];
-        for &(a, b) in candidates.iter().filter_map(|k| bonds.get(*k)) {
-            for i in [a, b] {
-                if let Some(p) = partners.get_mut(i) {
-                    *p += 1;
-                }
-            }
-        }
-        let forced = candidates.iter().find(|k| {
-            bonds
-                .get(**k)
-                .is_some_and(|&(a, b)| partners.get(a) == Some(&1) || partners.get(b) == Some(&1))
-        });
-        let Some(&k) = forced.or(candidates.first()) else {
-            break;
-        };
-        let (Some(&(a, b)), Some(order)) = (bonds.get(k), orders.get_mut(k)) else {
-            break;
-        };
-        *order += 1;
-        for i in [a, b] {
-            if let Some(f) = free.get_mut(i) {
-                *f -= 1;
-            }
-        }
-    }
-    // A molecule left with an atom short of its valence keeps single bonds.
-    let mut component: Vec<usize> = (0..atoms.len()).collect();
-    fn root(component: &[usize], mut i: usize) -> usize {
-        while let Some(&parent) = component.get(i).filter(|p| **p != i) {
-            i = parent;
+    // Molecules: atoms joined by bonds, outside any network.
+    let mut group: Vec<usize> = (0..atoms.len()).collect();
+    fn root(group: &[usize], mut i: usize) -> usize {
+        while let Some(&up) = group.get(i).filter(|up| **up != i) {
+            i = up;
         }
         i
     }
     for &(a, b) in bonds {
-        let (ra, rb) = (root(&component, a), root(&component, b));
-        if let Some(slot) = component.get_mut(ra) {
+        let (ra, rb) = (root(&group, a), root(&group, b));
+        if let Some(slot) = group.get_mut(ra) {
             *slot = rb;
         }
     }
-    let short: HashSet<usize> = (0..atoms.len())
-        .filter(|i| {
-            free.get(*i).is_some_and(|f| *f != 0) && atoms.get(*i).is_some_and(|a| valence(a) > 0)
-        })
-        .map(|i| root(&component, i))
-        .collect();
-    bonds
+    let mut orders = vec![1_u8; bonds.len()];
+    let mut members: HashMap<usize, Vec<usize>> = HashMap::new();
+    for i in 0..atoms.len() {
+        members.entry(root(&group, i)).or_default().push(i);
+    }
+    for atoms_of in members.values() {
+        let in_network = atoms_of.iter().any(|i| network.get(*i) == Some(&true));
+        let short = atoms_of.iter().any(|i| {
+            free.get(*i).is_some_and(|f| *f < 0) && atoms.get(*i).is_some_and(|a| valence(a) > 0)
+        });
+        let open = atoms_of
+            .iter()
+            .any(|i| free.get(*i).is_some_and(|f| *f > 0));
+        if in_network || short || !open {
+            continue;
+        }
+        let mut trial_free = free.clone();
+        let mut trial = orders.clone();
+        let mut budget = FILL_BUDGET;
+        if fill(atoms_of, bonds, &mut trial_free, &mut trial, &mut budget) {
+            orders = trial;
+            free = trial_free;
+        }
+    }
+    orders
+}
+
+/// The most steps the bond-order search takes for one molecule.
+const FILL_BUDGET: usize = 20_000;
+
+/// Raise bond orders among `atoms` until none of them has `free` valence
+/// left, trying the most constrained atom first and backtracking; false,
+/// with `orders` and `free` as they were, when that cannot be done.
+fn fill(
+    atoms: &[usize],
+    bonds: &[(usize, usize)],
+    free: &mut [i32],
+    orders: &mut [u8],
+    budget: &mut usize,
+) -> bool {
+    if *budget == 0 {
+        return false;
+    }
+    *budget -= 1;
+    let usable = |free: &[i32], orders: &[u8], i: usize| -> Vec<(usize, usize)> {
+        bonds
+            .iter()
+            .enumerate()
+            .filter(|(k, _)| orders.get(*k).is_some_and(|o| *o < 3))
+            .filter_map(|(k, &(a, b))| {
+                let other = if a == i {
+                    b
+                } else if b == i {
+                    a
+                } else {
+                    return None;
+                };
+                (other != i && free.get(other).is_some_and(|f| *f > 0)).then_some((k, other))
+            })
+            .collect()
+    };
+    let Some((atom, choices)) = atoms
         .iter()
-        .zip(orders)
-        .map(|(&(a, _), order)| {
-            if short.contains(&root(&component, a)) {
-                1
-            } else {
-                order
+        .filter(|i| free.get(**i).is_some_and(|f| *f > 0))
+        .map(|&i| (i, usable(free, orders, i)))
+        .min_by_key(|(_, c)| c.len())
+    else {
+        return true;
+    };
+    for (k, other) in choices {
+        let Some(order) = orders.get_mut(k) else {
+            continue;
+        };
+        *order += 1;
+        for i in [atom, other] {
+            if let Some(f) = free.get_mut(i) {
+                *f -= 1;
             }
-        })
-        .collect()
+        }
+        if fill(atoms, bonds, free, orders, budget) {
+            return true;
+        }
+        if let Some(order) = orders.get_mut(k) {
+            *order -= 1;
+        }
+        for i in [atom, other] {
+            if let Some(f) = free.get_mut(i) {
+                *f += 1;
+            }
+        }
+    }
+    false
 }
 
 /// Place each 2D atom where the opening view shows it, keeping its depth, as

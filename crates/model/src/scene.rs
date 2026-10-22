@@ -1104,14 +1104,18 @@ pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<
             grow(id, &mut corners.into_iter());
         }
     }
-    // A whole crystal drawn in 2D holds its cell box and axis labels too.
+    // A crystal drawn in 2D and wholly in one selection holds its cell box
+    // and axis labels too; split across selections, each part is measured
+    // alone.
     for model in doc
         .models
         .iter()
-        .filter(|m| m.display == crate::models3d::Display::TwoD && m.cell.is_some())
+        .filter(|m| m.display != crate::models3d::Display::ThreeD && m.cell.is_some())
     {
+        let owner = model.atoms.first().and_then(|a| owners.get(&a.id));
         if let Some(id) = model.atoms.first().map(|a| a.id)
-            && model.atoms.iter().all(|a| owners.contains_key(&a.id))
+            && owner.is_some()
+            && model.atoms.iter().all(|a| owners.get(&a.id) == owner)
         {
             let cells = crate::models3d::flat_cells(std::slice::from_ref(model), doc);
             let ink: Vec<_> = [cells.behind, cells.front, cells.above].concat();
