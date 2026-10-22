@@ -1,0 +1,25 @@
+url https://reshiki.com/demo/ showOpenFilePicker: function
+drop: default prevented = false ; drawing -> "ERR:Draw or import a molecule first"
+file chooser opened, multiple = false -> /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev428/files/naphthalene.rsk
+Open: rfd overlay after the chooser -> "Open a ReShiki, MOL, RXN, CDXML, CDX or SMILES document\nOk\nCancel"
+Open: drawing in front -> "ERR:Draw or import a molecule first"
+Insert: rfd overlay -> null
+Insert: drawing -> "ERR:Draw or import a molecule first"
+console error: Failed to load resource: the server responded with a status of 404 (Not Found)
+url http://localhost:8428/demo/ showOpenFilePicker: undefined
+drop: default prevented = true ; drawing -> "Cn1c(=O)c2c(ncn2C)n(C)c1=O"
+file chooser opened, multiple = false -> /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev428/files/naphthalene.rsk
+Open: rfd overlay after the chooser -> null
+Open: drawing in front -> "c1ccc2ccccc2c1"
+file chooser opened, multiple = true -> /private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev428/files/aspirin.mol,/private/tmp/claude-502/-Users-shiranui-dev-ReShiki/dd6a248f-7145-4e1e-bc5b-a50dfb88eed0/scratchpad/ev428/files/caffeine.mol
+Insert: rfd overlay -> null
+Insert: drawing -> "CC(=O)Oc1ccccc1C(=O)O.Cn1c(=O)c2c(ncn2C)n(C)c1=O"
+console error: Failed to load resource: the server responded with a status of 404 (Not Found)
+url http://localhost:8428/demo/ showOpenFilePicker: function
+drop: default prevented = true ; drawing -> "Cn1c(=O)c2c(ncn2C)n(C)c1=O"
+showOpenFilePicker called with {"multiple":false}
+Open: rfd overlay after the chooser -> null
+Open: drawing in front -> "c1ccc2ccccc2c1"
+showOpenFilePicker called with {"multiple":true}
+Insert: rfd overlay -> null
+Insert: drawing -> "CC(=O)Oc1ccccc1C(=O)O.Cn1c(=O)c2c(ncn2C)n(C)c1=O"
