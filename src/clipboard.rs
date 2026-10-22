@@ -536,7 +536,7 @@ fn copy_images(
     })
     .collect();
     #[cfg(windows)]
-    if !image_only {
+    if !image_only && !browser {
         images.push((
             "Office preview",
             crate::native_windows::office_metafile(doc)
