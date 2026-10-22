@@ -23,12 +23,13 @@ impl Os {
     /// "Linux x86_64".
     #[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
     pub(crate) fn from_name(name: &str) -> Self {
-        if ["Mac", "iPhone", "iPad", "iPod"]
+        let name = name.to_ascii_lowercase();
+        if ["mac", "iphone", "ipad", "ipod"]
             .iter()
             .any(|prefix| name.starts_with(prefix))
         {
             Self::Mac
-        } else if name.starts_with("Win") {
+        } else if name.starts_with("win") {
             Self::Windows
         } else {
             Self::Other
