@@ -175,7 +175,7 @@ impl App {
             // Tabs wait while the save dialog asks about the tab in front.
             Message::New | Message::Open if self.pending.is_some() => {}
             Message::New => return Some(self.new_document()),
-            Message::Open => return Some(self.open_dialog()),
+            Message::Open => return Some(super::files::open_dialog()),
             Message::Tabs(action) => return Some(self.tab_action(action)),
             Message::Close(window) => {
                 if self.pending.is_none() {
