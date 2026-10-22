@@ -5,20 +5,33 @@ pub fn load(path: &std::path::Path) -> Result<DrawingStyle, String> {
     use std::io::Read;
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
     let mut bytes = Vec::new();
-    let chemdraw = path.extension().and_then(|s| s.to_str()).is_some_and(|s| {
+    file.take(limit(path) as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|e| e.to_string())?;
+    load_bytes(path, bytes)
+}
+
+fn chemdraw(path: &std::path::Path) -> bool {
+    path.extension().and_then(|s| s.to_str()).is_some_and(|s| {
         ["cds", "cdx", "cdxml"]
             .iter()
             .any(|extension| s.eq_ignore_ascii_case(extension))
-    });
-    let limit = if chemdraw {
+    })
+}
+
+fn limit(path: &std::path::Path) -> usize {
+    if chemdraw(path) {
         crate::exchange::LIMIT
     } else {
         64 * 1024
-    };
-    file.take(limit as u64 + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|e| e.to_string())?;
-    if bytes.len() > limit {
+    }
+}
+
+/// A style read from `bytes`, in the format the extension of `name`, a file
+/// name or path, gives.
+pub fn load_bytes(name: &std::path::Path, bytes: Vec<u8>) -> Result<DrawingStyle, String> {
+    let chemdraw = chemdraw(name);
+    if bytes.len() > limit(name) {
         return Err(if chemdraw {
             "Stationery exceeds 16 MB."
         } else {
@@ -32,7 +45,7 @@ pub fn load(path: &std::path::Path) -> Result<DrawingStyle, String> {
         } else {
             String::from_utf8(bytes).map_err(|_| "Invalid ChemDraw stationery encoding")?
         };
-        let name = path
+        let name = name
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("Imported ChemDraw style");

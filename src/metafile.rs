@@ -12,21 +12,34 @@ pub const EMF_PANEL_NOTICE: &str =
     "Windows EMF export keeps the original vectors. PNG, SVG, PDF and print use a preview.";
 
 pub async fn open(path: &Path) -> Result<Picture, String> {
+    let source = path.to_owned();
+    let bytes = crate::task::spawn_blocking(move || {
+        crate::pictures::read_bounded(&source, "Choose a picture file no larger than 16 MB")
+    })
+    .await
+    .map_err(|error| error.to_string())??;
+    open_bytes(path, bytes).await
+}
+
+/// A picture from a file's contents; the extension of `name`, a file name or
+/// path, tells EMF apart.
+pub async fn open_bytes(name: &Path, bytes: Vec<u8>) -> Result<Picture, String> {
     #[cfg(windows)]
-    if path
+    if name
         .extension()
         .is_some_and(|ext| ext.eq_ignore_ascii_case("emf"))
     {
-        return open_emf(path).await;
+        return open_emf(bytes).await;
     }
-    let path = path.to_owned();
-    crate::task::spawn_blocking(move || Picture::open(&path))
+    #[cfg(not(windows))]
+    let _ = name;
+    crate::task::spawn_blocking(move || Picture::import(&bytes))
         .await
         .map_err(|error| error.to_string())?
 }
 
 #[cfg(windows)]
-async fn open_emf(path: &Path) -> Result<Picture, String> {
+async fn open_emf(bytes: Vec<u8>) -> Result<Picture, String> {
     use crate::workers::{CREATE_NO_WINDOW, EMF_IMPORT_WORKER};
     use reshiki_windows::PLAYBACK_LIMIT;
     use std::process::Stdio;
@@ -34,10 +47,10 @@ async fn open_emf(path: &Path) -> Result<Picture, String> {
         io::{AsyncReadExt, AsyncWriteExt},
         process::Command,
     };
-    let path = path.to_owned();
+    if bytes.len() > crate::pictures::MAX_BYTES {
+        return Err("Choose an EMF file no larger than 16 MB".into());
+    }
     let bytes = crate::task::spawn_blocking(move || {
-        let bytes =
-            crate::pictures::read_bounded(&path, "Choose an EMF file no larger than 16 MB")?;
         // from_emf validates again when accepting the completed preview.
         crate::pictures::emf_dimensions(&bytes)?;
         Ok::<_, String>(bytes)

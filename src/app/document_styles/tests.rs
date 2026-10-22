@@ -130,6 +130,13 @@ fn custom_keeps_current_dimensions_and_can_be_saved() {
     let path = directory.path().join("custom.reshiki-style");
     std::fs::write(&path, serde_json::to_vec(&custom).unwrap()).unwrap();
     assert_eq!(reshiki::document_styles::load(&path).unwrap(), custom);
+    // The browser reads a picked file's contents under its bare name.
+    let bytes = std::fs::read(&path).unwrap();
+    let name = std::path::Path::new(path.file_name().unwrap());
+    assert_eq!(
+        reshiki::document_styles::load_bytes(name, bytes).unwrap(),
+        custom
+    );
     let _ = app.update(Message::DrawingStyle(Action::Apply));
     assert_eq!(app.tab.doc.drawing_style, custom);
     let _ = app.update(Message::Undo);

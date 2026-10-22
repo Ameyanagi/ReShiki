@@ -106,6 +106,8 @@ mod wayland_qa;
 #[cfg(windows)]
 mod windows_libreoffice_save;
 mod workspace;
+#[cfg(target_arch = "wasm32")]
+pub(crate) use files::read_length;
 pub(crate) use workspace::text_width;
 
 /// The status bar's idle message.
@@ -778,22 +780,6 @@ impl App {
         self.error = false;
         self.status = "New document".into();
         iced::advanced::widget::operate(iced::advanced::widget::operation::focusable::unfocus())
-    }
-    fn open_dialog(&mut self) -> Task<Message> {
-        Task::perform(
-            async {
-                // Accept supported extensions without relying on macOS
-                // type registration; the worker validates the content.
-                let file = rfd::AsyncFileDialog::new()
-                    .set_title(
-                        "Open a ReShiki, MOL, RXN, CDXML, CDX, SMILES, CIF, PDB, POSCAR or XYZ file",
-                    )
-                    .pick_file()
-                    .await?;
-                files::read_picked(file).await
-            },
-            Message::FilePrepared,
-        )
     }
     fn display_document(&self) -> &Document {
         if let Some(session) =

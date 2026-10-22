@@ -506,7 +506,8 @@ fn completion(message: &Message) -> Option<Completion> {
         Message::Imports(action) => {
             use super::import::Action;
             match action {
-                Action::Loaded(..) => Some(Completion::Imports),
+                // A chosen file belongs to the drawing it was chosen for.
+                Action::Loaded(..) | Action::Read(..) => Some(Completion::Imports),
                 Action::InputKind(..)
                 | Action::Edit(..)
                 | Action::ReplaceText(..)

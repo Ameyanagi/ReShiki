@@ -18,6 +18,19 @@ impl App {
             Request::Close => return iced::exit(),
             // The canvas sees the new font when it draws after this update.
             Request::Redraw => {}
+            Request::Drag(files) => self.browser_drag(files),
+            // Open or insert them as chosen files, through the same checks.
+            // The import keeps the tab and drawing the files were dropped
+            // on, whichever is in front once they are read.
+            Request::Drop(files) => {
+                let (id, ticket) = (self.tab.id, self.import_ticket());
+                let read = crate::web::read_files(files, super::import::limit);
+                return Task::perform(read, move |files| {
+                    let files = files.map(super::files::browser_files);
+                    let read = super::import::Action::Read(ticket, files);
+                    Message::Tab(id, Box::new(Message::Imports(read)))
+                });
+            }
         }
         Task::none()
     }
