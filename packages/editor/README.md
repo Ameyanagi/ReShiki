@@ -217,3 +217,7 @@ cd packages/editor
 bun test                                          # needs a built dist/
 RESHIKI_CLI=../../target/debug/reshiki bun test   # also compares with the CLI
 ```
+
+Pull request CI runs these tests, after Clippy for wasm32, in the **Browser
+build (wasm32)** job of the Checks workflow; see
+[Development](../../docs/development.md#ci).

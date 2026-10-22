@@ -122,6 +122,13 @@ Everything that needs or captures from the pinned Python/RDKit reference lives i
 
 Pull requests run native tests and saved InChI, depiction, and aromatic-response fixtures on macOS ARM64, Linux x64, and Windows x64. Documentation-only changes skip native checks. Expected results come from pinned RDKit captures; fixture updates retain their source hashes and platform provenance.
 
+The **Browser build (wasm32)** job checks the browser build on the same pull requests: Clippy with `-D warnings` for the editor and the headless library (`reshiki-web`) for `wasm32-unknown-unknown`, with the crates and target `scripts/build_wasm.sh` builds, then `bun test` in `packages/editor` against a debug build of the headless library. It skips with the native checks for documentation-only changes, and only release tags build the optimised bundle. The `web` job lints `packages/editor` with oxlint on every pull request. To run the same checks locally:
+
+```sh
+cargo clippy -p reshiki-web -p reshiki --lib --bin reshiki --target wasm32-unknown-unknown --locked -- -D warnings
+scripts/build_wasm.sh --test
+```
+
 The complete live RDKit suite runs weekly, before publishing a tagged release, or on demand. Four parallel shards per platform retain every integration target, plus workspace unit and documentation tests:
 
 ```sh
