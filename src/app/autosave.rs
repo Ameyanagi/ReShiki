@@ -95,12 +95,9 @@ pub(super) async fn execute(path: PathBuf, work: Work) -> Result<Option<PathBuf>
                 source,
                 retire_candidate,
             } => {
-                recovery.save(&document, source)?;
                 // Keep the original recovery candidate until its replacement
                 // is durably written. A failed save must never lose it.
-                if let Some(path) = &retire_candidate {
-                    reshiki::recovery::remove(path)?;
-                }
+                recovery.save_replacing(&document, source, retire_candidate.as_deref())?;
                 Ok(retire_candidate)
             }
             Work::Clear => recovery.clear().map(|()| None),

@@ -245,6 +245,11 @@ impl ThemeFile {
 }
 pub fn load(path: &Path) -> Result<ThemeFile, String> {
     use std::io::Read;
+    // A saved theme in the browser, which [`save`] wrote within the limit.
+    #[cfg(target_arch = "wasm32")]
+    if crate::storage::browser::key(path).is_some() {
+        return from_bytes(&crate::storage::read(path).map_err(|e| e.to_string())?);
+    }
     let mut bytes = Vec::new();
     std::fs::File::open(path)
         .map_err(|e| e.to_string())?

@@ -17,6 +17,9 @@ use reshiki::{document::Document, formats};
 use std::{cell::RefCell, collections::HashMap, path::Path};
 use wasm_bindgen::{JsCast, prelude::*};
 
+mod ime;
+mod storage;
+
 /// What the page asks of the running editor.
 #[derive(Debug, Clone)]
 pub(crate) enum Request {
@@ -28,6 +31,14 @@ pub(crate) enum Request {
     Close,
     /// Draw again, as after a font arrives.
     Redraw,
+    /// Add fonts kept from earlier visits, by SHA-256, which text needs.
+    AddFonts(Vec<(String, Vec<u8>)>),
+    /// A file in browser storage changed under the app: another tab kept a
+    /// change, or one of this tab's own was not kept, with why.
+    Stored {
+        key: String,
+        failure: Option<String>,
+    },
     /// This many files are dragged over the editor, or none once they leave.
     /// Browsers name dragged files only when they are dropped.
     Drag(usize),
@@ -56,6 +67,14 @@ struct Host {
     /// answered requests they were looked up with.
     checked: ((usize, usize), std::collections::HashSet<char>),
     revision: Option<(u64, u64)>,
+    /// Whether any tab has unsaved changes, as of the last update.
+    dirty: bool,
+    on_dirty_change: Option<js_sys::Function>,
+    /// The window title, `Name • — ReShiki`, as of the last update.
+    title: Option<String>,
+    on_title_change: Option<js_sys::Function>,
+    /// Whether the title becomes the page's `document.title`.
+    sync_title: bool,
     /// winit runs one event loop per page, even after it exits.
     mounted: bool,
     /// The listener that trades ⌘ and Control on a Mac, until `destroy`.
@@ -65,6 +84,8 @@ struct Host {
     field_paste: Option<PasteListeners>,
     /// The element's file drop listener, until `destroy`.
     drops: Option<(web_sys::Element, DragListener)>,
+    /// The textarea that takes input method text, until `destroy`.
+    input_method: Option<ime::InputMethod>,
 }
 
 thread_local! {
@@ -89,14 +110,16 @@ fn js(message: impl std::fmt::Display) -> JsError {
 /// Start the editor in `element`, which it fills, showing `data` read as
 /// `format` when given. `on_missing_font` is called with "ja", "ko" or "zh",
 /// once for each, the first time text in that language has characters no
-/// loaded font draws. A page can mount one editor; put further editors in
-/// iframes.
+/// loaded font draws. With `sync_title`, the page's title follows the
+/// document's, as the desktop window's does. A page can mount one editor; put
+/// further editors in iframes.
 #[wasm_bindgen]
 pub async fn mount(
     element: web_sys::Element,
     data: Option<Vec<u8>>,
     format: Option<String>,
     on_missing_font: Option<js_sys::Function>,
+    sync_title: bool,
 ) -> Result<(), JsError> {
     const TARGET: &str = "reshiki-editor-canvas";
     if HOST.with_borrow(|host| host.mounted) {
@@ -146,9 +169,11 @@ pub async fn mount(
             receiver: Some(receiver),
             mounted: true,
             on_missing_font,
+            sync_title,
             ..Host::default()
         }
     });
+    ask_before_unload();
     // Before the ⌘ swap, so it sees the keys as pressed.
     let paste = field_paste(&element);
     HOST.with_borrow_mut(|host| host.field_paste = paste);
@@ -157,10 +182,17 @@ pub async fn mount(
         HOST.with_borrow_mut(|host| host.command_key = swap);
     }
     let drops = file_drops(&element);
-    HOST.with_borrow_mut(|host| host.drops = Some((element, drops)));
+    let input_method = ime::start(&element);
+    HOST.with_borrow_mut(|host| {
+        host.drops = Some((element, drops));
+        host.input_method = input_method;
+    });
     // iced's multisampling leaves most canvases blank on WebGL2, the fallback
     // when the browser offers no WebGPU adapter.
     let antialiasing = webgpu().await;
+    // Settings, templates, themes and fonts kept from earlier visits, before
+    // the app reads them.
+    storage::open().await;
     crate::run(
         crate::session::Arguments::default(),
         iced::window::Settings {
@@ -172,6 +204,26 @@ pub async fn mount(
         antialiasing,
     )
     .map_err(js)
+}
+
+/// Ask before the page unloads with unsaved changes. The browser never sends
+/// the window a close request, so the desktop's save dialog cannot run. The
+/// listener lives as long as the page; after `destroy` nothing is dirty.
+fn ask_before_unload() {
+    let ask = Closure::<dyn FnMut(web_sys::Event)>::new(|event: web_sys::Event| {
+        if HOST.with_borrow(|host| host.dirty) {
+            // Browsers show their own "Leave site?" text.
+            event.prevent_default();
+            if let Some(event) = event.dyn_ref::<web_sys::BeforeUnloadEvent>() {
+                event.set_return_value("");
+            }
+        }
+    });
+    if let Some(window) = web_sys::window() {
+        let _ =
+            window.add_event_listener_with_callback("beforeunload", ask.as_ref().unchecked_ref());
+    }
+    ask.forget();
 }
 
 /// The system the browser runs on, as `navigator.userAgentData.platform`
@@ -721,12 +773,40 @@ pub fn on_change(callback: Option<js_sys::Function>) {
     HOST.with_borrow_mut(|host| host.on_change = callback);
 }
 
+/// Whether any tab has unsaved changes.
+#[wasm_bindgen(js_name = isDirty)]
+pub fn is_dirty() -> bool {
+    HOST.with_borrow(|host| host.dirty)
+}
+
+/// Call `callback` with `true` when a tab gains unsaved changes and `false`
+/// when none has any left, or stop with none.
+#[wasm_bindgen(js_name = onDirtyChange)]
+pub fn on_dirty_change(callback: Option<js_sys::Function>) {
+    HOST.with_borrow_mut(|host| host.on_dirty_change = callback);
+}
+
+/// Call `callback` with the title, `Name • — ReShiki` while it has unsaved
+/// changes, whenever it changes, or stop with none.
+#[wasm_bindgen(js_name = onTitleChange)]
+pub fn on_title_change(callback: Option<js_sys::Function>) {
+    HOST.with_borrow_mut(|host| host.on_title_change = callback);
+}
+
+fn call(callback: &js_sys::Function, argument: &JsValue, name: &str) {
+    if let Err(thrown) = callback.call1(&JsValue::NULL, argument) {
+        error(&format!("The {name} callback failed: {thrown:?}"));
+    }
+}
+
 /// Add a TrueType or OpenType font (or collection) for drawing, measuring and
 /// export, before or after `mount`. Text whose own font lacks a glyph falls
-/// back to it. Returns how many faces it holds.
+/// back to it. The font is kept in browser storage and added again on a later
+/// visit once drawn text lacks a glyph; adding the same font again changes
+/// nothing. Returns how many faces it holds.
 #[wasm_bindgen(js_name = addFont)]
 pub fn add_font(bytes: Vec<u8>) -> Result<usize, JsError> {
-    let faces = reshiki::style::add_font(bytes).map_err(js)?;
+    let faces = storage::add_font(bytes).map_err(js)?;
     // Before mount the first frame has it anyway.
     let _ = send(Request::Redraw);
     Ok(faces)
@@ -751,10 +831,24 @@ fn cjk_language(c: char) -> Option<&'static str> {
     }
 }
 
-/// Tell the page when `text`, about to be drawn, needs a Chinese, Japanese
+/// Add the fonts kept from earlier visits when `text`, about to be drawn,
+/// lacks a glyph; then tell the page when it needs a Chinese, Japanese
 /// or Korean font. Ideographs that the Japanese font, once it has arrived,
 /// still lacks ask for the Chinese one.
 pub(crate) fn text_drawn(text: &str) {
+    // Kept fonts are added between draws, not while text is measured, and
+    // the page is asked only once they are in.
+    if storage::adding_kept() {
+        return;
+    }
+    if storage::has_kept() {
+        let missing =
+            |c: char| !c.is_whitespace() && !c.is_control() && !reshiki::style::has_glyph(c);
+        if text.chars().any(missing) {
+            let _ = send(Request::AddFonts(storage::take_kept()));
+        }
+        return;
+    }
     if HOST.with_borrow(|host| host.on_missing_font.is_none()) {
         return;
     }
@@ -822,6 +916,11 @@ pub(crate) fn text_drawn(text: &str) {
     }
 }
 
+/// Add fonts kept from earlier visits; see [`Request::AddFonts`].
+pub(crate) fn add_kept_fonts(fonts: Vec<(String, Vec<u8>)>) {
+    storage::add_kept(fonts);
+}
+
 /// The page finished answering the request for `lang`'s font.
 fn font_request_settled(lang: &str) {
     HOST.with_borrow_mut(|host| {
@@ -850,6 +949,9 @@ pub fn destroy() -> Result<(), JsError> {
             );
         }
     }
+    if let Some(input_method) = HOST.with_borrow_mut(|host| host.input_method.take()) {
+        ime::stop(input_method);
+    }
     let paste = HOST.with_borrow_mut(|host| host.field_paste.take());
     if let (Some(paste), Some(window)) = (paste, web_sys::window()) {
         for (name, listener) in &paste {
@@ -871,6 +973,10 @@ pub fn destroy() -> Result<(), JsError> {
         host.requests = None;
         host.on_change = None;
         host.on_missing_font = None;
+        host.on_dirty_change = None;
+        host.on_title_change = None;
+        // The drawings are gone, so leaving the page loses nothing more.
+        host.dirty = false;
     });
     Ok(())
 }
@@ -885,8 +991,8 @@ fn requests() -> impl iced::futures::Stream<Item = Message> {
     stream::iter(receiver).flatten().map(Message::Host)
 }
 
-/// The app's update, then the page's change callback when the drawing in
-/// front changed.
+/// The app's update, then the page's callbacks for what changed: the drawing
+/// in front, whether any tab has unsaved changes, and the title.
 pub(crate) fn update(app: &mut App, message: Message) -> Task<Message> {
     let task = app.update(message);
     // Captions ask for fonts as they are drawn; the interface's names do here.
@@ -894,17 +1000,45 @@ pub(crate) fn update(app: &mut App, message: Message) -> Task<Message> {
         text_drawn(&text);
     }
     let revision = app.revision();
-    let callback = HOST.with_borrow_mut(|host| {
+    let (dirty, title) = (app.unsaved(), app.title());
+    let (changed, dirty_changed, title_changed, sync_title) = HOST.with_borrow_mut(|host| {
         let previous = host.revision.replace(revision);
-        previous
+        let changed = previous
             .is_some_and(|previous| previous != revision)
             .then(|| host.on_change.clone())
-            .flatten()
+            .flatten();
+        // After `destroy` the drawings cannot be saved, so leaving loses
+        // nothing; its Close request still passes through here.
+        let dirty = dirty && host.requests.is_some();
+        let dirty_changed = (host.dirty != dirty)
+            .then(|| host.on_dirty_change.clone())
+            .flatten();
+        host.dirty = dirty;
+        let title_changed = host.title.as_ref() != Some(&title);
+        if title_changed {
+            host.title = Some(title.clone());
+        }
+        (
+            changed,
+            dirty_changed,
+            title_changed.then(|| host.on_title_change.clone()),
+            title_changed && host.sync_title,
+        )
     });
-    if let Some(callback) = callback
+    if let Some(callback) = changed
         && let Err(thrown) = callback.call0(&JsValue::NULL)
     {
         error(&format!("The change callback failed: {thrown:?}"));
+    }
+    if let Some(callback) = dirty_changed {
+        call(&callback, &dirty.into(), "dirty change");
+    }
+    // winit's set_title only labels the canvas, so the page's title is set here.
+    if sync_title && let Some(document) = web_sys::window().and_then(|window| window.document()) {
+        document.set_title(&title);
+    }
+    if let Some(Some(callback)) = title_changed {
+        call(&callback, &title.into(), "title change");
     }
     task
 }
@@ -953,11 +1087,6 @@ pub(crate) fn open_url(url: &str) -> Result<(), String> {
         .open_with_url_and_target(url, "_blank")
         .map(|_| ())
         .map_err(|_| "Could not open the link".into())
-}
-
-/// Ask with the browser's OK/Cancel prompt; true for OK.
-pub(crate) fn confirm(message: &str) -> bool {
-    web_sys::window().is_some_and(|window| window.confirm_with_message(message).unwrap_or(false))
 }
 
 fn clipboard() -> Option<web_sys::Clipboard> {

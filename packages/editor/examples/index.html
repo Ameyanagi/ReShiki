@@ -21,7 +21,8 @@
     <script type="module">
       import { mount } from "../src/editor.js";
 
-      window.editor = await mount(document.getElementById("editor"));
+      // The page's title follows the drawing's, as the desktop window's does.
+      window.editor = await mount(document.getElementById("editor"), { title: true });
     </script>
   </body>
 </html>

@@ -63,6 +63,7 @@ impl Settings {
                 directories_next::ProjectDirs::from("dev", "reshiki", "ReShiki")
                     .map(|dirs| dirs.data_local_dir().to_owned())
             })
+            .or_else(reshiki::storage::browser_data_directory)
             .ok_or("No application data directory")?;
         Ok(root.join("appearance.json"))
     }
@@ -72,7 +73,7 @@ impl Settings {
         }
         Self::path()
             .ok()
-            .and_then(|path| std::fs::read(path).ok())
+            .and_then(|path| reshiki::storage::read(&path).ok())
             .and_then(|bytes| {
                 let mut settings: Self = serde_json::from_slice(&bytes).ok()?;
                 let legacy: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
@@ -91,7 +92,7 @@ impl Settings {
         }
         let path = Self::path()?;
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            reshiki::storage::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
         reshiki::storage::write_atomic(&path, &serde_json::to_vec(self).map_err(|e| e.to_string())?)
     }
