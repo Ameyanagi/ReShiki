@@ -147,9 +147,11 @@ it.
   one under the drawing's name. Drawing styles, themes, templates and pictures
   cannot be loaded from files yet, Insert cannot insert files, and there are
   no recovery drafts.
-- Copy and paste carry text (SMILES, the drawing as text) through
-  `navigator.clipboard`, which asks for permission to read. There are no
-  image or ChemDraw clipboard formats.
+- Copying and pasting drawings goes through `navigator.clipboard`, which asks
+  for permission to read, and carries PNG, HTML, SVG (Chrome and Edge) and
+  text, not PDF, CDX or ChemDraw's own formats. Text fields copy, cut and
+  paste plain text; their paste uses the browser's paste event and needs no
+  permission.
 - Only Liberation Sans and a small subset of DejaVu Sans for the interface's
   key and arrow symbols are bundled, so drawing symbols they lack, such as ℃,
   ⇌ and superscript ⁺ and ⁻, need a font from `fonts`. Chinese, Japanese and
