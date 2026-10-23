@@ -139,20 +139,33 @@ web-sys = { version = "0.3", features = [
   "BlobPropertyBag",
   "Clipboard",
   "ClipboardItem",
+  "CompositionEvent",
   "console",
+  "CssStyleDeclaration",
   "DataTransfer",
   "DataTransferItemList",
+  "Document",
+  "DomRect",
   "DragEvent",
   "Event",
   "EventTarget",
   "File",
   "FileList",
+  "FocusEvent",
+  "FocusEventInit",
+  "HtmlElement",
   "HtmlInputElement",
+  "HtmlTextAreaElement",
+  "InputEvent",
+  "KeyboardEvent",
+  "KeyboardEventInit",
   "Navigator",
   "Node",
   "Window",
 ] }
 web-time = "1"
+# Input methods for Iced's text fields (vendor/iced_winit).
+iced_winit = "0.14"
 
 [profile.dev]
 debug = 1
@@ -266,6 +279,8 @@ usvg = { path = "vendor/usvg" }
 svg2pdf = { path = "vendor/svg2pdf" }
 # Share Iced's standard Wayland data device for bounded binary clipboard offers.
 smithay-clipboard = { path = "vendor/smithay-clipboard" }
+# Take a browser page's input method composition into Iced's text fields.
+iced_winit = { path = "vendor/iced_winit" }
 
 # Independent oracle suites live in reference/ and require the development reference.
 

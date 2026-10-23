@@ -147,6 +147,10 @@ it.
 - Copy and paste carry text (SMILES, the drawing as text) through
   `navigator.clipboard`, which asks for permission to read. There are no
   image or ChemDraw clipboard formats.
+- Input methods (Japanese, Chinese and Korean) type into text fields and
+  captions through a hidden textarea that the editor adds to the element.
+  Typing atom labels straight onto the drawing, without a text field, takes
+  keys only, not composed text.
 - Only Liberation Sans is bundled, so symbols it lacks, such as ℃, ⇌ and
   superscript ⁺ and ⁻, need a font from `fonts`. Japanese text loads a
   fallback (see [Fonts](#fonts)).

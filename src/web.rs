@@ -17,6 +17,8 @@ use reshiki::{document::Document, formats};
 use std::{cell::RefCell, collections::HashMap, path::Path};
 use wasm_bindgen::{JsCast, prelude::*};
 
+mod ime;
+
 /// What the page asks of the running editor.
 #[derive(Debug, Clone)]
 pub(crate) enum Request {
@@ -56,6 +58,8 @@ struct Host {
     command_key: Option<Closure<dyn FnMut(web_sys::Event)>>,
     /// The element's file drop listener, until `destroy`.
     drops: Option<(web_sys::Element, DragListener)>,
+    /// The textarea that takes input method text, until `destroy`.
+    input_method: Option<ime::InputMethod>,
 }
 
 thread_local! {
@@ -144,7 +148,11 @@ pub async fn mount(
         HOST.with_borrow_mut(|host| host.command_key = swap);
     }
     let drops = file_drops(&element);
-    HOST.with_borrow_mut(|host| host.drops = Some((element, drops)));
+    let input_method = ime::start(&element);
+    HOST.with_borrow_mut(|host| {
+        host.drops = Some((element, drops));
+        host.input_method = input_method;
+    });
     // iced's multisampling leaves most canvases blank on WebGL2, the fallback
     // when the browser offers no WebGPU adapter.
     let antialiasing = webgpu().await;
@@ -604,6 +612,9 @@ pub fn destroy() -> Result<(), JsError> {
                 true,
             );
         }
+    }
+    if let Some(input_method) = HOST.with_borrow_mut(|host| host.input_method.take()) {
+        ime::stop(input_method);
     }
     let drops = HOST.with_borrow_mut(|host| host.drops.take());
     if let Some((element, drops)) = drops {
