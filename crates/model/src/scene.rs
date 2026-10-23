@@ -110,9 +110,6 @@ pub struct Contact {
     pub rim: Vec<Vec<Point>>,
     /// Where it meets balls drawn before it, outlined.
     pub seams: Vec<Vec<Point>>,
-    /// Its soft contact shadow within the region: polygons filled black at
-    /// an alpha each, stacked darker toward the balls it meets.
-    pub shadow: Vec<(f32, Vec<crate::graphics::PathCommand>)>,
 }
 impl std::hash::Hash for Contact {
     /// Every coordinate's bits, cheaper than its `Debug` text for a cache key.
@@ -124,13 +121,6 @@ impl std::hash::Hash for Contact {
         for line in [&self.region, &self.rim, &self.seams] {
             for run in line {
                 run.iter().for_each(|p| point(*p, state));
-                u32::MAX.hash(state);
-            }
-        }
-        for (alpha, commands) in &self.shadow {
-            alpha.to_bits().hash(state);
-            for c in commands {
-                c.iter_points().for_each(|p| point(p, state));
                 u32::MAX.hash(state);
             }
         }

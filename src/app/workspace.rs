@@ -280,7 +280,6 @@ impl App {
                 None
             },
             morph: self.model_morph(),
-            model_sliding: self.tab.model_sliding.is_some(),
             element: &self.element,
             joining: self.tab.joining.as_ref().map(|s| (&s.prepared, s.anchor)),
             hidden_annotation: self.inline_label_id(),

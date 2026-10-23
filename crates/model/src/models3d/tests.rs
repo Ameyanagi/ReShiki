@@ -1044,7 +1044,7 @@ fn each_style_draws_the_prototype_shapes() {
 }
 
 /// Space-filling balls that overlap show only what lies in front, filled
-/// as paths with a contact shadow; ball & stick balls, apart, stay discs.
+/// as paths without a contact shadow; ball & stick balls, apart, stay discs.
 #[test]
 fn overlapping_balls_are_cut_where_they_meet() {
     let (doc, space) = styled(|m| m.style = Style::SpaceFilling);
@@ -1068,16 +1068,10 @@ fn overlapping_balls_are_cut_where_they_meet() {
         .filter(|c| !c.seams.is_empty())
         .count();
     assert!(seams >= 2, "{seams}");
-    assert!(
-        contacts
-            .iter()
-            .flatten()
-            .any(|c| c.shadow.iter().any(|(_, s)| !s.is_empty()))
-    );
     let svg = scene::svg(&doc);
-    let region = "fill-rule=\"evenodd\" clip-rule=\"evenodd\" fill=\"url(#";
+    let region = "fill-rule=\"evenodd\" fill=\"url(#";
     assert_eq!(svg.matches(region).count(), 5);
-    assert!(svg.contains("<clipPath"));
+    assert!(!svg.contains("<clipPath") && !svg.contains("fill-opacity="));
     // The flat look outlines the visible rim and seams, not whole circles.
     assert!(!svg.contains("<circle"));
 
@@ -1090,39 +1084,6 @@ fn overlapping_balls_are_cut_where_they_meet() {
         }
     )));
     assert_eq!(scene::svg(&doc).matches("<circle").count(), 5);
-}
-
-/// While the model turns, its balls keep their cuts but skip the contact
-/// shadow; the frame after draws it again.
-#[test]
-fn a_turning_model_draws_contacts_without_their_shadow() {
-    let shadows = |draft: bool| {
-        let (_, parts) = styled(|m| {
-            m.style = Style::SpaceFilling;
-            m.draft = draft;
-        });
-        parts
-            .iter()
-            .filter_map(|p| match p {
-                Primitive::Sphere {
-                    contact: Some(c), ..
-                } => Some((
-                    c.region.len(),
-                    c.shadow.iter().filter(|(_, s)| !s.is_empty()).count(),
-                )),
-                _ => None,
-            })
-            .collect::<Vec<_>>()
-    };
-    let (full, draft) = (shadows(false), shadows(true));
-    assert_eq!(full.len(), 5);
-    assert_eq!(draft.len(), 5);
-    assert!(full.iter().any(|(_, levels)| *levels > 0));
-    assert!(
-        draft
-            .iter()
-            .all(|(regions, levels)| *regions > 0 && *levels == 0)
-    );
 }
 
 #[test]

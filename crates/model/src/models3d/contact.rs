@@ -2,15 +2,13 @@
 //! disc whose surface facing the eye lies outside every ball it overlaps; the
 //! boundary is the facing arc of the circle where the two spheres meet. Seams
 //! are the runs of those circles facing the eye on both balls and inside no
-//! other ball. A soft contact shadow darkens each ball where its surface comes
-//! close to another, as a ray tracer's ambient occlusion does.
+//! other ball.
 //!
 //! Geometry is worked out in the rotated model (ångström, x right, y up, z
 //! toward the viewer) and projected point by point. Under perspective a ball's
 //! outline is the small circle where the eye's sight lines graze it, so that
 //! circle is its rim and every ball that meets another is drawn from it.
 use crate::document::Point;
-use crate::graphics::PathCommand;
 use i_overlay::core::fill_rule::FillRule;
 use i_overlay::core::overlay_rule::OverlayRule;
 use i_overlay::float::single::SingleFloatOverlay;
@@ -47,69 +45,12 @@ fn unit(a: V) -> V {
 
 /// Samples per full turn of a rim or a meeting circle.
 const STEPS: f32 = 64.;
-/// Samples per full turn while the model turns or morphs.
-const DRAFT_STEPS: f32 = 24.;
-
-/// How finely contacts are drawn.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(super) struct Quality {
-    /// Samples per full turn of a rim or a meeting circle.
-    steps: f32,
-    /// Whether to shade contacts at all.
-    shadow: bool,
-    /// Whether balls that only nearly touch shade each other.
-    nearly: bool,
-}
-
-impl Quality {
-    /// Every detail; `nearly` for space-filling.
-    pub fn full(nearly: bool) -> Self {
-        Self {
-            steps: STEPS,
-            shadow: true,
-            nearly,
-        }
-    }
-    /// The exact cuts and seams, more coarsely and without the shadow, for
-    /// frames drawn while the model turns or morphs.
-    pub fn draft() -> Self {
-        Self {
-            steps: DRAFT_STEPS,
-            shadow: false,
-            nearly: false,
-        }
-    }
-}
 /// Samples per full turn of a polygon's rim outside the disc: coarse, as the
-/// polygon there is cut away or clipped.
+/// polygon there is cut away.
 const PAST_STEPS: f32 = 16.;
 /// How far past the rim a polygon reaches there, as a fraction of the
 /// radius, so the disc's own polygon never leaves slivers along it.
 const PAST_RIM: f32 = 0.25;
-
-/// The contact shadow, as a ray tracer darkens a surface point at a gap g
-/// from another ball by 1 − 0.32 e^(−g / 0.12 Å) out to 0.5 Å: level k is the
-/// surface within k steps of a neighbour, filled black at an alpha such that
-/// the levels stacked over a band give that darkness at its middle.
-const SHADOW_STEP: f32 = 0.025;
-pub(super) const SHADOW_LEVELS: usize = 20;
-const SHADOW_DEPTH: f32 = 0.32;
-const SHADOW_FALL: f32 = 0.12;
-/// How far past a ball its shadow reaches.
-const SHADOW_REACH: f32 = SHADOW_STEP * SHADOW_LEVELS as f32;
-
-/// Each shadow level's gap and alpha, nearest first.
-pub(super) fn shadow_levels() -> [(f32, f32); SHADOW_LEVELS] {
-    // The brightness left in band j, and none past the last.
-    let left = |j: usize| {
-        if j > SHADOW_LEVELS {
-            1.
-        } else {
-            1. - SHADOW_DEPTH * (-((j as f32 - 0.5) * SHADOW_STEP) / SHADOW_FALL).exp()
-        }
-    };
-    std::array::from_fn(|k| (SHADOW_STEP * (k + 1) as f32, 1. - left(k + 1) / left(k + 2)))
-}
 
 /// A ball in the rotated model.
 #[derive(Debug, Clone, Copy)]
@@ -138,29 +79,6 @@ impl Ring {
                 mul(self.e2, self.r * t.sin()),
             ),
         )
-    }
-    /// The arc from `t0` to `t1` as cubic Béziers of at most a quarter turn,
-    /// each as its two control points and end, projected.
-    fn cubics(&self, t0: f32, t1: f32, project: &impl Fn(V) -> Point) -> Vec<PathCommand> {
-        let n = ((t1 - t0).abs() / (PI / 2.)).ceil().max(1.) as usize;
-        let step = (t1 - t0) / n as f32;
-        let k = 4. / 3. * (step / 4.).tan();
-        let tangent = |t: f32| {
-            add(
-                mul(self.e1, -self.r * t.sin()),
-                mul(self.e2, self.r * t.cos()),
-            )
-        };
-        (0..n)
-            .map(|i| {
-                let (a, b) = (t0 + step * i as f32, t0 + step * (i + 1) as f32);
-                PathCommand::Cubic(
-                    project(add(self.at(a), mul(tangent(a), k))),
-                    project(sub(self.at(b), mul(tangent(b), k))),
-                    project(self.at(b)),
-                )
-            })
-            .collect()
     }
 }
 
@@ -379,10 +297,6 @@ pub(super) enum Seen {
         region: Vec<Vec<Point>>,
         /// The visible runs of the rim.
         rim: Vec<Vec<Point>>,
-        /// For each [`shadow_levels`] level, the parts of the disc whose surface
-        /// lies within its gap of a neighbour: closed shapes to fill within
-        /// the region.
-        shadow: Vec<Vec<PathCommand>>,
     },
 }
 
@@ -396,10 +310,10 @@ pub(super) struct Contacts {
     pub seams: Vec<((usize, usize), Runs)>,
 }
 
-/// Each ball's neighbours less than `reach` apart (overlapping at 0), found
-/// on a grid of cells as wide as the largest ball and the reach.
-fn neighbours(balls: &[Ball], reach: f32) -> Vec<Vec<usize>> {
-    let cell = 2. * balls.iter().map(|b| b.r).fold(f32::EPSILON, f32::max) + reach;
+/// Each ball's overlapping neighbours, found on a grid of cells as wide as
+/// the largest ball.
+fn neighbours(balls: &[Ball]) -> Vec<Vec<usize>> {
+    let cell = 2. * balls.iter().map(|b| b.r).fold(f32::EPSILON, f32::max);
     let key = |p: V| p.map(|v| (v / cell).floor() as i64);
     let mut grid: HashMap<[i64; 3], Vec<usize>> = HashMap::new();
     for (i, b) in balls.iter().enumerate() {
@@ -417,9 +331,7 @@ fn neighbours(balls: &[Ball], reach: f32) -> Vec<Vec<usize>> {
                         for &j in grid.get(&[x + dx, y + dy, z + dz]).into_iter().flatten() {
                             // A fading ball covers only fading balls.
                             if balls.get(j).is_some_and(|b| {
-                                j != i
-                                    && len(sub(b.p, a.p)) < a.r + b.r + reach
-                                    && (a.fading || !b.fading)
+                                j != i && len(sub(b.p, a.p)) < a.r + b.r && (a.fading || !b.fading)
                             }) {
                                 near.push(j);
                             }
@@ -435,28 +347,15 @@ fn neighbours(balls: &[Ball], reach: f32) -> Vec<Vec<usize>> {
 
 /// What shows of every ball and the seams between them, seen from `eye`
 /// (the camera's distance along z, `None` from infinitely far), with
-/// `project` taking a rotated point to the drawing, at `quality`.
-pub(super) fn contacts(
-    balls: &[Ball],
-    eye: Option<f32>,
-    quality: Quality,
-    project: impl Fn(V) -> Point,
-) -> Contacts {
-    let near = neighbours(balls, 0.);
-    // Balls that nearly touch may still shade each other.
-    let close = if quality.nearly {
-        neighbours(balls, SHADOW_REACH)
-    } else {
-        near.clone()
-    };
+/// `project` taking a rotated point to the drawing.
+pub(super) fn contacts(balls: &[Ball], eye: Option<f32>, project: impl Fn(V) -> Point) -> Contacts {
+    let near = neighbours(balls);
     let facing: Vec<Facing> = balls.iter().map(|&b| Facing::new(b, eye)).collect();
     let seen = balls
         .iter()
         .zip(&facing)
-        .zip(near.iter().zip(&close))
-        .map(|((&a, f), (near, close))| {
-            (!close.is_empty()).then(|| seen(a, f, (near, close), balls, quality, &project))
-        })
+        .zip(&near)
+        .map(|((&a, f), near)| (!near.is_empty()).then(|| seen(a, f, near, balls, &project)))
         .collect();
     let mut seams = vec![];
     for (i, list) in near.iter().enumerate() {
@@ -465,7 +364,7 @@ pub(super) fn contacts(
             if !near.get(j).is_some_and(|other| other.contains(&i)) {
                 continue;
             }
-            let runs = seam(balls, &facing, (i, j), list, quality.steps, &project);
+            let runs = seam(balls, &facing, (i, j), list, &project);
             if !runs.is_empty() {
                 seams.push(((i, j), runs));
             }
@@ -495,7 +394,6 @@ fn point([x, y]: [f64; 2]) -> Point {
 /// One ball's rim and what its neighbours cover of its disc, as drawing
 /// polygons, counterclockwise.
 struct Disc<'a, P> {
-    steps: f32,
     ball: Ball,
     facing: &'a Facing,
     project: &'a P,
@@ -523,7 +421,7 @@ impl<P: Fn(V) -> Point> Disc<'_, P> {
     /// The whole disc.
     fn whole(&self) -> Vec<[f64; 2]> {
         Self::counterclockwise(
-            sample(0., TAU, self.steps)
+            sample(0., TAU, STEPS)
                 .skip(1)
                 .map(|s| flat((self.project)(self.facing.rim.at(s))))
                 .collect(),
@@ -537,7 +435,7 @@ impl<P: Fn(V) -> Point> Disc<'_, P> {
             Cover::None => Ok(None),
             Cover::Hidden => Err(()),
             Cover::Part(ring, (t0, t1), closing) => {
-                let mut polygon: Vec<[f64; 2]> = sample(t0, t1, self.steps)
+                let mut polygon: Vec<[f64; 2]> = sample(t0, t1, STEPS)
                     .map(|t| flat((self.project)(ring.at(t))))
                     .collect();
                 if let Some((s0, s1)) = closing {
@@ -547,42 +445,17 @@ impl<P: Fn(V) -> Point> Disc<'_, P> {
             }
         }
     }
-
-    /// What `other` covers as a closed shape of arcs, along the rim where it
-    /// meets it; `None` for nothing.
-    fn cover_shape(&self, other: Ball) -> Option<Vec<PathCommand>> {
-        let project = self.project;
-        let rim = self.facing.rim;
-        let (ring, (t0, t1), closing) = match cover(self.ball, self.facing, other) {
-            Cover::None => return None,
-            Cover::Hidden => (rim, (0., TAU), None),
-            Cover::Part(ring, arc, closing) => (ring, arc, closing),
-        };
-        let mut shape = vec![PathCommand::Move(project(ring.at(t0)))];
-        shape.extend(ring.cubics(t0, t1, project));
-        if let Some((s0, s1)) = closing {
-            shape.extend(rim.cubics(s0, s1, project));
-        }
-        shape.push(PathCommand::Close);
-        Some(shape)
-    }
 }
 
 fn seen(
     a: Ball,
     f: &Facing,
-    (near, close): (&[usize], &[usize]),
+    near: &[usize],
     balls: &[Ball],
-    quality: Quality,
     project: &impl Fn(V) -> Point,
 ) -> Seen {
     let near: Vec<Ball> = near.iter().filter_map(|&j| balls.get(j).copied()).collect();
-    let close: Vec<Ball> = close
-        .iter()
-        .filter_map(|&j| balls.get(j).copied())
-        .collect();
     let disc = Disc {
-        steps: quality.steps,
         ball: a,
         facing: f,
         project,
@@ -624,33 +497,12 @@ fn seen(
         .free()
         .into_iter()
         .map(|(s0, s1)| {
-            sample(s0, s1, quality.steps)
+            sample(s0, s1, STEPS)
                 .map(|s| project(f.rim.at(s)))
                 .collect()
         })
         .collect();
-    // Each level: what every neighbour grown by its gap covers, as one
-    // shape per level.
-    let levels = if quality.shadow {
-        shadow_levels().to_vec()
-    } else {
-        vec![]
-    };
-    let shadow = levels
-        .iter()
-        .map(|&(gap, _)| {
-            close
-                .iter()
-                .filter_map(|&b| disc.cover_shape(Ball { r: b.r + gap, ..b }))
-                .flatten()
-                .collect()
-        })
-        .collect();
-    Seen::Shown {
-        region,
-        rim,
-        shadow,
-    }
+    Seen::Shown { region, rim }
 }
 
 /// The visible runs of the seam between balls `i` and `j`: facing the eye on
@@ -660,7 +512,6 @@ fn seam(
     facing: &[Facing],
     (i, j): (usize, usize),
     near: &[usize],
-    steps: f32,
     project: &impl Fn(V) -> Point,
 ) -> Runs {
     let (Some(&a), Some(&b), Some(fa), Some(fb)) =
@@ -698,7 +549,7 @@ fn seam(
         .into_iter()
         .filter(|(t0, t1)| t1 - t0 > 1e-3)
         .map(|(t0, t1)| {
-            sample(t0, t1, steps)
+            sample(t0, t1, STEPS)
                 .map(|t| project(m.ring.at(t)))
                 .collect()
         })

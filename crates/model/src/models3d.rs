@@ -185,11 +185,6 @@ pub struct Model3d {
     /// drawing copy while it plays; never saved.
     #[serde(skip)]
     pub morph: Option<f32>,
-    /// Set on the canvas's drawing copy while the model is turned, tilted,
-    /// restyled with a slider or morphing: contacts are drawn quickly, without
-    /// their shadow, until it is cleared. Never saved.
-    #[serde(skip)]
-    pub draft: bool,
 }
 fn one_cell() -> [u8; 3] {
     [1; 3]
@@ -432,7 +427,6 @@ impl Model3d {
             layout: Layout::Original,
             drawn: None,
             morph: None,
-            draft: false,
         };
         model.fit(doc);
         model
@@ -2140,12 +2134,7 @@ impl View<'_> {
     /// by others its visible part, `None` when nothing of it shows. Each seam
     /// goes with the later ball of its pair. Balls fading in after `grown`
     /// cut only each other.
-    fn contacts(
-        &self,
-        atoms: &[usize],
-        grown: f32,
-        quality: contact::Quality,
-    ) -> HashMap<usize, Option<Contact>> {
+    fn contacts(&self, atoms: &[usize], grown: f32) -> HashMap<usize, Option<Contact>> {
         let balls: Vec<contact::Ball> = atoms
             .iter()
             .filter_map(|&i| {
@@ -2161,25 +2150,16 @@ impl View<'_> {
             return HashMap::new();
         }
         let eye = (self.perspective > 0.).then_some(self.camera);
-        let found = contact::contacts(&balls, eye, quality, |q| self.project(q).0);
+        let found = contact::contacts(&balls, eye, |q| self.project(q).0);
         let mut out: HashMap<usize, Option<Contact>> = HashMap::new();
         for (&atom, seen) in atoms.iter().zip(found.seen) {
             let value = match seen {
                 None => continue,
                 Some(contact::Seen::Hidden) => None,
-                Some(contact::Seen::Shown {
-                    region,
-                    rim,
-                    shadow,
-                }) => Some(Contact {
+                Some(contact::Seen::Shown { region, rim }) => Some(Contact {
                     region,
                     rim,
                     seams: vec![],
-                    shadow: contact::shadow_levels()
-                        .iter()
-                        .map(|(_, alpha)| *alpha)
-                        .zip(shadow)
-                        .collect(),
                 }),
             };
             out.insert(atom, value);
@@ -2368,13 +2348,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                 Item::Bond(..) | Item::Crossing(..) => None,
             })
             .collect();
-        // Frames drawn while the model moves skip the shadow.
-        let quality = if model.draft || model.morph.is_some_and(|m| m < 1.) {
-            contact::Quality::draft()
-        } else {
-            contact::Quality::full(style == Style::SpaceFilling)
-        };
-        view.contacts(&atoms, grown, quality)
+        view.contacts(&atoms, grown)
     } else {
         HashMap::new()
     };
