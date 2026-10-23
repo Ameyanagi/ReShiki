@@ -56,7 +56,7 @@ struct Host {
     command_key: Option<Closure<dyn FnMut(web_sys::Event)>>,
     /// The listener that lets Ctrl/⌘+V paste into text fields, until
     /// `destroy`.
-    field_paste: Option<Closure<dyn FnMut(web_sys::Event)>>,
+    field_paste: Option<PasteListeners>,
     /// The element's file drop listener, until `destroy`.
     drops: Option<(web_sys::Element, DragListener)>,
 }
@@ -184,8 +184,9 @@ pub(crate) fn platform_name() -> String {
         .unwrap_or_default()
 }
 
-/// The events `field_paste` handles.
-const PASTE_EVENTS: [&str; 2] = ["keydown", "paste"];
+/// `field_paste`'s listeners, one per event, as the paste listener's key
+/// reaches the key listener while it runs.
+type PasteListeners = [(&'static str, Closure<dyn FnMut(web_sys::Event)>); 2];
 
 thread_local! {
     /// A Ctrl/⌘+V press held back until the page has the clipboard's text.
@@ -201,40 +202,38 @@ thread_local! {
 /// clipboard Iced reads (vendor/window_clipboard), and the key then reaches
 /// the editor, which pastes into the field, or pastes a drawing as before.
 /// Copy and Cut need nothing here: Iced writes to the page's clipboard.
-fn field_paste(element: &web_sys::Element) -> Option<Closure<dyn FnMut(web_sys::Event)>> {
+fn field_paste(element: &web_sys::Element) -> Option<PasteListeners> {
     let window = web_sys::window()?;
     let element = element.clone();
     let mac = crate::platform::mac();
-    let listener = Closure::<dyn FnMut(web_sys::Event)>::new(move |event: web_sys::Event| {
-        if RELAYING.get() {
+    let paste = Closure::<dyn FnMut(web_sys::Event)>::new(move |event: web_sys::Event| {
+        let Some(paste) = event.dyn_ref::<web_sys::ClipboardEvent>() else {
             return;
+        };
+        let Some(key) = HELD_PASTE.take() else {
+            return;
+        };
+        // The field gets the text from the key, not the browser.
+        paste.prevent_default();
+        let text = paste
+            .clipboard_data()
+            .and_then(|data| data.get_data("text/plain").ok())
+            .filter(|text| !text.is_empty());
+        if let Some(text) = &text {
+            text_drawn(text);
         }
-        if let Some(paste) = event.dyn_ref::<web_sys::ClipboardEvent>() {
-            let Some(key) = HELD_PASTE.take() else {
-                return;
-            };
-            // The field gets the text from the key, not the browser.
-            paste.prevent_default();
-            let text = paste
-                .clipboard_data()
-                .and_then(|data| data.get_data("text/plain").ok())
-                .filter(|text| !text.is_empty());
-            if let Some(text) = &text {
-                text_drawn(text);
-            }
-            window_clipboard::set_contents(text);
-            relay_key(&key);
+        window_clipboard::set_contents(text);
+        relay_key(&key);
+    });
+    let keys = Closure::<dyn FnMut(web_sys::Event)>::new(move |event: web_sys::Event| {
+        if RELAYING.get() {
             return;
         }
         let Some(key) = event.dyn_ref::<web_sys::KeyboardEvent>() else {
             return;
         };
-        let inside = event
-            .target()
-            .and_then(|target| target.dyn_into::<web_sys::Node>().ok())
-            .is_some_and(|target| element.contains(Some(&target)));
         let command = if mac { key.meta_key() } else { key.ctrl_key() };
-        if !inside || !command || key.alt_key() || !is_v(key) {
+        if !command || key.alt_key() || !is_v(key) || !editor_keys(&event, &element) {
             return;
         }
         // winit would cancel the key, and with it the paste event.
@@ -254,7 +253,8 @@ fn field_paste(element: &web_sys::Element) -> Option<Closure<dyn FnMut(web_sys::
             let _ = window.set_timeout_with_callback(fallback.unchecked_ref());
         }
     });
-    for name in PASTE_EVENTS {
+    let listeners = [("keydown", keys), ("paste", paste)];
+    for (name, listener) in &listeners {
         // Capture runs before winit's listeners and the ⌘ swap.
         let _ = window.add_event_listener_with_callback_and_bool(
             name,
@@ -262,7 +262,22 @@ fn field_paste(element: &web_sys::Element) -> Option<Closure<dyn FnMut(web_sys::
             true,
         );
     }
-    Some(listener)
+    Some(listeners)
+}
+
+/// Whether `event` is for the editor's own keys: its canvas, or an element
+/// of the editor marked `data-reshiki-keys`, and not a page control placed
+/// inside the editor's element.
+fn editor_keys(event: &web_sys::Event, element: &web_sys::Element) -> bool {
+    let Some(target) = event
+        .target()
+        .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
+    else {
+        return false;
+    };
+    let canvas = element.query_selector("canvas").ok().flatten();
+    canvas.as_ref() == Some(&target)
+        || (target.has_attribute("data-reshiki-keys") && element.contains(Some(&target)))
 }
 
 /// Whether `key` is V, by the character it types on a Latin layout or else
@@ -746,10 +761,10 @@ pub fn destroy() -> Result<(), JsError> {
     }
     let paste = HOST.with_borrow_mut(|host| host.field_paste.take());
     if let (Some(paste), Some(window)) = (paste, web_sys::window()) {
-        for name in PASTE_EVENTS {
+        for (name, listener) in &paste {
             let _ = window.remove_event_listener_with_callback_and_bool(
                 name,
-                paste.as_ref().unchecked_ref(),
+                listener.as_ref().unchecked_ref(),
                 true,
             );
         }
