@@ -99,7 +99,8 @@ pub fn data_directory_location() -> Result<DataLocation, String> {
     resolve_data_location(
         environment("DATA_DIR"),
         directories_next::ProjectDirs::from("dev", "reshiki", "ReShiki")
-            .map(|project| project.data_local_dir().to_path_buf()),
+            .map(|project| project.data_local_dir().to_path_buf())
+            .or_else(crate::storage::browser_data_directory),
     )
 }
 

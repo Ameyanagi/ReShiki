@@ -1,0 +1,258 @@
+//! Application data in the browser (see `reshiki::storage::browser`): files by
+//! key in one IndexedDB object store, loaded before the app starts and kept
+//! after each change. Other tabs of the same site hear of each change through
+//! a BroadcastChannel, so a tab never saves over another's newer file.
+//!
+//! Fonts the page adds are kept here too, and added again at the next mount.
+use super::error;
+use reshiki::storage::{self, browser};
+use std::{cell::RefCell, collections::HashMap, path::PathBuf};
+use wasm_bindgen::{JsCast, prelude::*};
+use web_sys::{IdbDatabase, IdbOpenDbRequest, IdbRequest, IdbTransactionMode};
+
+const DATABASE: &str = "reshiki";
+const FILES: &str = "files";
+const CHANNEL: &str = "reshiki-storage";
+/// The folder of kept fonts, each named by its SHA-256.
+const FONTS: &str = "fonts";
+
+#[derive(Default)]
+struct Fonts {
+    /// Faces of each font added, by its SHA-256, so a font added again (by
+    /// the page at each mount, or kept from before) is added once.
+    added: HashMap<String, usize>,
+    /// Fonts added before storage opened, kept once it does.
+    waiting: Vec<(String, Vec<u8>)>,
+    open: bool,
+}
+
+thread_local! {
+    static FONTS_ADDED: RefCell<Fonts> = RefCell::default();
+}
+
+/// Open the page's storage, hand its files to the app and add the fonts kept
+/// in it. Without storage, as in some private windows, the app starts with
+/// none and its saves say that browser storage is unavailable.
+pub(super) async fn open() {
+    match load().await {
+        Ok(()) => {
+            let kept = browser::files(FONTS);
+            for (key, bytes) in kept {
+                let hash = key.rsplit('/').next().unwrap_or_default();
+                let hash = hash.split('.').next().unwrap_or_default().to_owned();
+                if let Err(message) = add(hash, bytes) {
+                    error(&format!("Could not add a kept font: {message}"));
+                }
+            }
+            let waiting = FONTS_ADDED.with_borrow_mut(|fonts| {
+                fonts.open = true;
+                std::mem::take(&mut fonts.waiting)
+            });
+            for (hash, bytes) in waiting {
+                keep(&hash, &bytes);
+            }
+            // Ask the browser not to evict drafts and settings under storage
+            // pressure; it may decline.
+            if let Some(window) = web_sys::window()
+                && let Ok(asked) = window.navigator().storage().persist()
+            {
+                drop(wasm_bindgen_futures::JsFuture::from(asked));
+            }
+        }
+        Err(message) => error(&format!("Browser storage is unavailable: {message}")),
+    }
+}
+
+/// Add a TrueType or OpenType font for drawing, measuring and export, and
+/// keep it for the next visit. Returns how many faces it holds.
+pub(super) fn add_font(bytes: Vec<u8>) -> Result<usize, String> {
+    use sha2::{Digest, Sha256};
+    let hash = format!("{:x}", Sha256::digest(&bytes));
+    if let Some(faces) = FONTS_ADDED.with_borrow(|fonts| fonts.added.get(&hash).copied()) {
+        return Ok(faces);
+    }
+    let faces = add(hash.clone(), bytes.clone())?;
+    let open = FONTS_ADDED.with_borrow_mut(|fonts| {
+        if !fonts.open {
+            fonts.waiting.push((hash.clone(), bytes.clone()));
+        }
+        fonts.open
+    });
+    if open {
+        keep(&hash, &bytes);
+    }
+    Ok(faces)
+}
+
+fn add(hash: String, bytes: Vec<u8>) -> Result<usize, String> {
+    if let Some(faces) = FONTS_ADDED.with_borrow(|fonts| fonts.added.get(&hash).copied()) {
+        return Ok(faces);
+    }
+    let faces = reshiki::style::add_font(bytes)?;
+    FONTS_ADDED.with_borrow_mut(|fonts| fonts.added.insert(hash, faces));
+    Ok(faces)
+}
+
+fn keep(hash: &str, bytes: &[u8]) {
+    let path = PathBuf::from(storage::BROWSER_ROOT)
+        .join(FONTS)
+        .join(format!("{hash}.font"));
+    if let Err(message) = storage::write_atomic(&path, bytes) {
+        error(&format!("Could not keep the font: {message}"));
+    }
+}
+
+fn describe(thrown: JsValue) -> String {
+    thrown
+        .dyn_ref::<web_sys::DomException>()
+        .map(|exception| exception.message())
+        .or_else(|| thrown.as_string())
+        .unwrap_or_else(|| format!("{thrown:?}"))
+}
+
+/// The result of `request` once it finishes.
+async fn finished(request: &IdbRequest) -> Result<JsValue, String> {
+    let done = js_sys::Promise::new(&mut |resolve, reject| {
+        request.set_onsuccess(Some(&resolve));
+        request.set_onerror(Some(&reject));
+    });
+    wasm_bindgen_futures::JsFuture::from(done)
+        .await
+        .map_err(|_| match request.error() {
+            Ok(Some(exception)) => exception.message(),
+            _ => "The request failed".into(),
+        })?;
+    request.result().map_err(describe)
+}
+
+/// Open the database, read every file and install them with a sink that keeps
+/// each change and tells other tabs.
+async fn load() -> Result<(), String> {
+    let window = web_sys::window().ok_or("The page has no window")?;
+    let factory = window
+        .indexed_db()
+        .map_err(describe)?
+        .ok_or("This browser has no IndexedDB")?;
+    let request: IdbOpenDbRequest = factory.open_with_u32(DATABASE, 1).map_err(describe)?;
+    let upgrade = Closure::<dyn FnMut()>::new({
+        let request = request.clone();
+        move || {
+            if let Some(database) = request
+                .result()
+                .ok()
+                .and_then(|database| database.dyn_into::<IdbDatabase>().ok())
+                && !database.object_store_names().contains(FILES)
+                && let Err(thrown) = database.create_object_store(FILES)
+            {
+                error(&format!("Could not set up browser storage: {thrown:?}"));
+            }
+        }
+    });
+    request.set_onupgradeneeded(Some(upgrade.as_ref().unchecked_ref()));
+    let database: IdbDatabase = finished(&request)
+        .await?
+        .dyn_into()
+        .map_err(|_| "Not a database")?;
+    request.set_onupgradeneeded(None);
+    drop(upgrade);
+
+    // Both requests go to the transaction before either finishes, which
+    // would end it.
+    let store = database
+        .transaction_with_str(FILES)
+        .and_then(|transaction| transaction.object_store(FILES))
+        .map_err(describe)?;
+    let keys = store.get_all_keys().map_err(describe)?;
+    let values = store.get_all().map_err(describe)?;
+    let keys = js_sys::Array::from(&finished(&keys).await?);
+    let values = js_sys::Array::from(&finished(&values).await?);
+    let files: Vec<(String, Vec<u8>)> = keys
+        .iter()
+        .zip(values.iter())
+        .filter_map(|(key, value)| {
+            let bytes = value.dyn_into::<js_sys::Uint8Array>().ok()?.to_vec();
+            Some((key.as_string()?, bytes))
+        })
+        .collect();
+
+    let channel = web_sys::BroadcastChannel::new(CHANNEL).ok();
+    if let Some(channel) = &channel {
+        let heard = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(heard);
+        channel.set_onmessage(Some(heard.as_ref().unchecked_ref()));
+        // The channel lives as long as the page.
+        heard.forget();
+    }
+    let failed = Closure::<dyn FnMut(web_sys::Event)>::new(|event: web_sys::Event| {
+        let reason = event
+            .target()
+            .and_then(|target| target.dyn_into::<web_sys::IdbTransaction>().ok())
+            .and_then(|transaction| transaction.error())
+            .map(|exception| exception.message())
+            .unwrap_or_default();
+        error(&format!(
+            "Could not keep a change in browser storage: {reason}"
+        ));
+    });
+    let failed: js_sys::Function = failed.into_js_value().unchecked_into();
+    browser::install(
+        files,
+        Box::new(move |key, bytes| {
+            if let Err(thrown) = put(&database, key, bytes, &failed) {
+                error(&format!(
+                    "Could not keep {key} in browser storage: {}",
+                    describe(thrown)
+                ));
+            }
+            if let Some(channel) = &channel {
+                let _ = channel.post_message(&message(key, bytes));
+            }
+        }),
+    );
+    Ok(())
+}
+
+/// Write or remove one file. Transactions on one store run in the order they
+/// start, so the last change wins.
+fn put(
+    database: &IdbDatabase,
+    key: &str,
+    bytes: Option<&[u8]>,
+    failed: &js_sys::Function,
+) -> Result<(), JsValue> {
+    let transaction =
+        database.transaction_with_str_and_mode(FILES, IdbTransactionMode::Readwrite)?;
+    transaction.set_onabort(Some(failed));
+    let store = transaction.object_store(FILES)?;
+    match bytes {
+        Some(bytes) => store.put_with_key(&js_sys::Uint8Array::from(bytes), &key.into())?,
+        None => store.delete(&key.into())?,
+    };
+    Ok(())
+}
+
+/// `{ key, bytes }`, with null bytes for a removal.
+fn message(key: &str, bytes: Option<&[u8]>) -> JsValue {
+    let message = js_sys::Object::new();
+    let _ = js_sys::Reflect::set(&message, &"key".into(), &key.into());
+    let bytes = bytes.map_or(JsValue::NULL, |bytes| {
+        js_sys::Uint8Array::from(bytes).into()
+    });
+    let _ = js_sys::Reflect::set(&message, &"bytes".into(), &bytes);
+    message.into()
+}
+
+/// Another tab's change, which it has already kept.
+fn heard(event: web_sys::MessageEvent) {
+    let data = event.data();
+    let Some(key) = js_sys::Reflect::get(&data, &"key".into())
+        .ok()
+        .and_then(|key| key.as_string())
+    else {
+        return;
+    };
+    let bytes = js_sys::Reflect::get(&data, &"bytes".into())
+        .ok()
+        .and_then(|bytes| bytes.dyn_into::<js_sys::Uint8Array>().ok())
+        .map(|bytes| bytes.to_vec());
+    browser::changed(&key, bytes);
+}

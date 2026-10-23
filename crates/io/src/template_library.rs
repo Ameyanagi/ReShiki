@@ -159,7 +159,7 @@ impl Library {
         Ok(library)
     }
     pub fn load(path: &Path) -> Result<Self, String> {
-        match std::fs::read(path) {
+        match crate::storage::read(path) {
             Ok(bytes) => Self::from_bytes(&bytes),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
             Err(e) => Err(e.to_string()),
@@ -194,6 +194,17 @@ pub struct SaveOutcome {
     pub release_warning: Option<String>,
 }
 
+/// The browser runs each tab's app on one thread, and a save in another tab
+/// reaches this one's storage before the next event, so nothing needs a lock.
+#[cfg(target_arch = "wasm32")]
+fn with_library_lock(
+    _: &Path,
+    operation: impl FnOnce() -> Result<(), String>,
+) -> Result<SaveOutcome, String> {
+    operation().map(|()| SaveOutcome::default())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn with_library_lock(
     path: &Path,
     operation: impl FnOnce() -> Result<(), String>,
@@ -213,8 +224,10 @@ fn with_library_lock(
     lock.finish(result, std::fs::File::unlock)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 struct LibraryLock(Option<std::fs::File>);
 
+#[cfg(not(target_arch = "wasm32"))]
 impl LibraryLock {
     fn release(
         &mut self,
@@ -251,12 +264,14 @@ impl LibraryLock {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Drop for LibraryLock {
     fn drop(&mut self) {
         let _ = self.release(std::fs::File::unlock);
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn lock_error(error: std::fs::TryLockError) -> String {
     match error {
         std::fs::TryLockError::WouldBlock => {
@@ -282,7 +297,7 @@ fn new_id() -> String {
 }
 pub fn standard_path() -> Result<PathBuf, String> {
     let root = crate::compatibility::data_directory()?;
-    std::fs::create_dir_all(&root).map_err(|e| e.to_string())?;
+    crate::storage::create_dir_all(&root).map_err(|e| e.to_string())?;
     Ok(root.join("templates.json"))
 }
 

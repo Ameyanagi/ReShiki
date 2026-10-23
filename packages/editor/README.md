@@ -118,6 +118,24 @@ takes `fonts` (URLs separated by spaces) and `cjk-font` (a URL, or `false`)
 attributes and fires `error` for a font that could not load. Fonts added this
 way also reach `save` and `exportImage` figures.
 
+Each font added with `fonts`, `addFont` or the Japanese fallback is kept in
+browser storage (below) and added again at the next mount, so the fallback is
+downloaded once per site rather than once per visit. The editor cannot list
+or read the computer's installed fonts by itself: browsers only offer them
+through Local Font Access, behind a permission prompt.
+
+### Storage
+
+The editor keeps what the desktop app keeps in its data folder in the
+browser's IndexedDB for the page's site (database `reshiki`): appearance
+settings, My templates and favorites, saved themes, your abbreviations and
+added fonts. They load before the editor starts, and a change in one tab
+reaches the site's other tabs. Messages name this storage "Browser storage".
+Where the browser offers no storage, as in some private windows, the editor
+starts with defaults and saving a setting, template, theme or abbreviation
+says that browser storage is unavailable. Clearing the site's data removes it
+all.
+
 ### Demo
 
 ```sh

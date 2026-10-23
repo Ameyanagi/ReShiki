@@ -17,6 +17,8 @@ use reshiki::{document::Document, formats};
 use std::{cell::RefCell, collections::HashMap, path::Path};
 use wasm_bindgen::{JsCast, prelude::*};
 
+mod storage;
+
 /// What the page asks of the running editor.
 #[derive(Debug, Clone)]
 pub(crate) enum Request {
@@ -148,6 +150,9 @@ pub async fn mount(
     // iced's multisampling leaves most canvases blank on WebGL2, the fallback
     // when the browser offers no WebGPU adapter.
     let antialiasing = webgpu().await;
+    // Settings, templates, themes and fonts kept from earlier visits, before
+    // the app reads them.
+    storage::open().await;
     crate::run(
         crate::session::Arguments::default(),
         iced::window::Settings {
@@ -556,10 +561,12 @@ pub fn on_change(callback: Option<js_sys::Function>) {
 
 /// Add a TrueType or OpenType font (or collection) for drawing, measuring and
 /// export, before or after `mount`. Text whose own font lacks a glyph falls
-/// back to it. Returns how many faces it holds.
+/// back to it. The font is kept in browser storage and added again at the
+/// next mount; adding the same font again changes nothing. Returns how many
+/// faces it holds.
 #[wasm_bindgen(js_name = addFont)]
 pub fn add_font(bytes: Vec<u8>) -> Result<usize, JsError> {
-    let faces = reshiki::style::add_font(bytes).map_err(js)?;
+    let faces = storage::add_font(bytes).map_err(js)?;
     // Before mount the first frame has it anyway.
     let _ = send(Request::Redraw);
     Ok(faces)
