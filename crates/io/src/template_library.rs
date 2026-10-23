@@ -289,9 +289,13 @@ fn new_id() -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
+    // A browser page has no process ID (asking for one panics there).
+    #[cfg(not(target_arch = "wasm32"))]
+    let process = std::process::id().to_string();
+    #[cfg(target_arch = "wasm32")]
+    let process = "web";
     format!(
-        "custom:{time:x}-{}-{}",
-        std::process::id(),
+        "custom:{time:x}-{process}-{}",
         SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     )
 }
