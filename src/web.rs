@@ -240,7 +240,13 @@ fn field_paste(element: &web_sys::Element) -> Option<PasteListeners> {
             return;
         };
         let command = if mac { key.meta_key() } else { key.ctrl_key() };
-        if !command || key.alt_key() || !is_v(key) || !editor_keys(&event, &element) {
+        // Shift+V is the drawing's flip, which must not read the clipboard.
+        if !command
+            || key.alt_key()
+            || key.shift_key()
+            || !is_v(key)
+            || !editor_keys(&event, &element)
+        {
             return;
         }
         // winit would cancel the key, and with it the paste event.
