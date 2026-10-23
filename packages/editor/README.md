@@ -130,11 +130,14 @@ The editor keeps what the desktop app keeps in its data folder in the
 browser's IndexedDB for the page's site (database `reshiki`): appearance
 settings, My templates and favorites, saved themes, your abbreviations and
 added fonts. They load before the editor starts, and a change in one tab
-reaches the site's other tabs. Messages name this storage "Browser storage".
-Where the browser offers no storage, as in some private windows, the editor
-starts with defaults and saving a setting, template, theme or abbreviation
-says that browser storage is unavailable. Clearing the site's data removes it
-all.
+reaches the site's other tabs while they run. A tab keeps a change only if the
+stored file is still the one it read, so tabs never save over each other; a
+save that another tab beat, or one the browser refuses because storage is
+full, is undone and the status bar says why. Messages name this storage
+"Browser storage". Where the browser offers no storage, as in some private
+windows, the editor starts with defaults and saving a setting, template, theme
+or abbreviation says that browser storage is unavailable. Clearing the site's
+data removes it all.
 
 ### Demo
 
