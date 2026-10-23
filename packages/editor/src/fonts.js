@@ -105,11 +105,22 @@ export async function loadFonts(wasm, options = {}, page = globalThis) {
   }
   if (options.cjkFont === false) return undefined;
   const requested = new Set();
+  let chosenLoaded = false;
+  const load = async (language) => {
+    const system = await systemCjkFonts(page, language);
+    if (system.length) return system;
+    if (options.cjkFont === undefined) {
+      return [await fontBytes(NOTO_SANS[language] ?? NOTO_SANS_JP, fetchFont)];
+    }
+    // The page's own fallback serves every language, so it loads once.
+    if (chosenLoaded) return [];
+    chosenLoaded = true;
+    return [await fontBytes(options.cjkFont, fetchFont)];
+  };
   return (language = "ja") => {
-    const key = options.cjkFont === undefined ? language : "chosen";
-    if (requested.has(key)) return Promise.resolve();
-    requested.add(key);
-    return cjkFonts(options.cjkFont, page, language).then(
+    if (requested.has(language)) return Promise.resolve();
+    requested.add(language);
+    return load(language).then(
       (fonts) => fonts.forEach(add),
       (error) => onError(error),
     );

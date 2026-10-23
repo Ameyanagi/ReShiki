@@ -49,12 +49,12 @@ struct Host {
     /// Called with "ja", "ko" or "zh", once for each, the first time text in
     /// that language has characters no loaded font draws.
     on_missing_font: Option<js_sys::Function>,
-    /// The languages `on_missing_font` was called with, and how many fonts
-    /// had been added by then.
-    fonts_asked: Vec<(&'static str, usize)>,
-    /// The CJK characters `text_drawn` has looked up, with the font count
-    /// they were looked up with.
-    checked: (usize, std::collections::HashSet<char>),
+    /// The languages `on_missing_font` was called with, and whether the
+    /// page has finished answering each.
+    fonts_asked: Vec<(&'static str, bool)>,
+    /// The CJK characters `text_drawn` has looked up, with the font count and
+    /// answered requests they were looked up with.
+    checked: ((usize, usize), std::collections::HashSet<char>),
     revision: Option<(u64, u64)>,
     /// winit runs one event loop per page, even after it exits.
     mounted: bool,
@@ -598,15 +598,18 @@ pub(crate) fn text_drawn(text: &str) {
     if HOST.with_borrow(|host| host.on_missing_font.is_none()) {
         return;
     }
-    let fonts = reshiki::style::font_generation();
+    // Lookups hold until a font is added or a request settles.
+    let state = HOST.with_borrow(|host| {
+        let settled = host.fonts_asked.iter().filter(|(_, done)| *done).count();
+        (reshiki::style::font_generation(), settled)
+    });
     for c in text.chars() {
         let Some(mut lang) = cjk_language(c) else {
             continue;
         };
-        // Each character is looked up once for each set of fonts.
         let known = HOST.with_borrow_mut(|host| {
-            if host.checked.0 != fonts {
-                host.checked = (fonts, Default::default());
+            if host.checked.0 != state {
+                host.checked = (state, Default::default());
             }
             !host.checked.1.insert(c)
         });
@@ -618,15 +621,16 @@ pub(crate) fn text_drawn(text: &str) {
                 host.fonts_asked
                     .iter()
                     .find(|(asked, _)| *asked == lang)
-                    .map(|(_, fonts)| *fonts)
+                    .map(|(_, done)| *done)
             })
         };
         if lang == "ja"
-            && let Some(then) = asked("ja")
+            && let Some(done) = asked("ja")
         {
             let ideograph = matches!(c, '\u{3400}'..='\u{9FFF}' | '\u{F900}'..='\u{FAFF}');
-            // Until the Japanese font arrives, it may still draw them.
-            if !ideograph || fonts <= then {
+            // Until the Japanese request settles, its font may still draw
+            // them.
+            if !ideograph || !done {
                 continue;
             }
             lang = "zh";
@@ -635,15 +639,40 @@ pub(crate) fn text_drawn(text: &str) {
             continue;
         }
         let callback = HOST.with_borrow_mut(|host| {
-            host.fonts_asked.push((lang, fonts));
+            host.fonts_asked.push((lang, false));
             host.on_missing_font.clone()
         });
-        if let Some(callback) = callback
-            && let Err(thrown) = callback.call1(&JsValue::NULL, &lang.into())
-        {
-            error(&format!("The missing font callback failed: {thrown:?}"));
+        let Some(callback) = callback else {
+            continue;
+        };
+        match callback.call1(&JsValue::NULL, &lang.into()) {
+            // A promise settles once the font is added, or failed to load.
+            Ok(result) => match result.dyn_into::<js_sys::Promise>() {
+                Ok(loading) => wasm_bindgen_futures::spawn_local(async move {
+                    let _ = wasm_bindgen_futures::JsFuture::from(loading).await;
+                    font_request_settled(lang);
+                }),
+                Err(_) => font_request_settled(lang),
+            },
+            Err(thrown) => {
+                error(&format!("The missing font callback failed: {thrown:?}"));
+                font_request_settled(lang);
+            }
         }
     }
+}
+
+/// The page finished answering the request for `lang`'s font.
+fn font_request_settled(lang: &str) {
+    HOST.with_borrow_mut(|host| {
+        for (asked, done) in &mut host.fonts_asked {
+            if *asked == lang {
+                *done = true;
+            }
+        }
+    });
+    // Text drawn meanwhile is looked up again.
+    let _ = send(Request::Redraw);
 }
 
 /// Stop the editor. Its canvas stays until the page removes it.

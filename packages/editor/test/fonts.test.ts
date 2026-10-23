@@ -176,6 +176,21 @@ describe("loadFonts", () => {
     expect(host.fetched).toEqual(["https://fonts.test/cjk.otc"]);
   });
 
+  test("a chosen fallback still lets each language use its system font", async () => {
+    const wasm = editor();
+    const host = page("granted", [
+      face("Hiragino Sans", "W3", 3),
+      face("Apple SD Gothic Neo", "Regular", 4),
+    ]);
+    const missing = await loadFonts(wasm, { cjkFont: "https://fonts.test/cjk.otc" }, host);
+    await missing?.("ja");
+    await missing?.("ko");
+    await missing?.("zh");
+    // Japanese and Korean system fonts; the chosen URL only for Chinese.
+    expect(wasm.added).toEqual([bytes(3), bytes(4), bytes(9)]);
+    expect(host.fetched).toEqual(["https://fonts.test/cjk.otc"]);
+  });
+
   test("cjkFont: false never asks", async () => {
     const wasm = editor();
     expect(await loadFonts(wasm, { cjkFont: false }, page("granted"))).toBeUndefined();

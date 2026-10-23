@@ -93,7 +93,7 @@ drawings lay out as on the desktop. Text that font lacks falls back to the
 fonts below.
 
 - **Chinese, Japanese and Korean text.** The first time a caption, a tab's
-  file name or text typed or pasted into a field has such characters that no
+  file name or the status line has such characters that no
   loaded font draws, the editor loads a fallback once for that language. If
   the page already has Local Font Access permission (Chrome and Edge), it uses
   the computer's own font, such as Hiragino Sans, Apple SD Gothic Neo or

@@ -18,7 +18,8 @@ export interface MountOptions {
    * falls back to them. URLs on another origin need CORS. */
   fonts?: FontSource[];
   /** The Chinese, Japanese and Korean (CJK) fallback, loaded the first time
-   * a caption, tab name or field needs one when no other font has its glyphs.
+   * a caption, tab name or the status line needs one when no other font has
+   * its glyphs.
    * The computer's own font for that language is used when the page already
    * has Local Font Access permission; otherwise this URL is downloaded once
    * for every language, or by default the language's Noto Sans subset (JP, KR
