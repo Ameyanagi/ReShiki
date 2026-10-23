@@ -59,6 +59,13 @@ impl State {
         }
         state
     }
+    /// Read the library again after another browser tab changed it, keeping
+    /// the open theme editor.
+    #[cfg(target_arch = "wasm32")]
+    pub(super) fn reload(&mut self) {
+        let loaded = Self::load();
+        self.themes = loaded.themes;
+    }
     fn load_from(&mut self, dir: &std::path::Path) {
         let Ok(entries) = reshiki::storage::read_dir(dir) else {
             return;

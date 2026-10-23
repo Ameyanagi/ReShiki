@@ -105,8 +105,18 @@ pub fn rename(from: &Path, to: &Path) -> io::Result<()> {
 pub mod browser {
     use std::{cell::RefCell, collections::BTreeMap, io, path::Path};
 
-    /// Keeps a write (the new contents) or a removal (none) of a file.
-    pub type Sink = Box<dyn Fn(&str, Option<&[u8]>)>;
+    /// One file's change: its new contents, or none to remove it, and what
+    /// the page held before, so a change another page kept first is not
+    /// overwritten (see [`settle`]).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct Change<'a> {
+        pub key: &'a str,
+        pub bytes: Option<&'a [u8]>,
+        pub previous: Option<&'a [u8]>,
+    }
+
+    /// Keeps changes, all of them or none, in the page's storage.
+    pub type Sink = Box<dyn Fn(&[Change<'_>])>;
 
     #[derive(Default)]
     struct Store {
@@ -132,6 +142,20 @@ pub mod browser {
         STORE.with_borrow_mut(|store| match bytes {
             Some(bytes) => store.files.insert(key.to_owned(), bytes),
             None => store.files.remove(key),
+        });
+    }
+
+    /// A change that could not be kept: the file goes back to `kept`, what
+    /// the page's storage holds, unless a later change replaced `failed`.
+    pub fn settle(key: &str, failed: Option<&[u8]>, kept: Option<Vec<u8>>) {
+        STORE.with_borrow_mut(|store| {
+            if store.files.get(key).map(Vec::as_slice) != failed {
+                return;
+            }
+            match kept {
+                Some(bytes) => store.files.insert(key.to_owned(), bytes),
+                None => store.files.remove(key),
+            };
         });
     }
 
@@ -181,34 +205,51 @@ pub mod browser {
         STORE.with_borrow(|store| store.files.get(key).cloned().ok_or_else(missing))
     }
 
-    pub(super) fn write(key: &str, bytes: &[u8]) -> Result<(), String> {
-        if key.is_empty() {
+    /// Make `changes` (new contents, or none to remove a file) here at once
+    /// and hand them to the sink to keep together.
+    pub(super) fn apply(changes: &[(&str, Option<&[u8]>)]) -> Result<(), String> {
+        if changes.iter().any(|(key, _)| key.is_empty()) {
             return Err("Not a file in browser storage".into());
         }
         STORE.with_borrow_mut(|store| {
             let sink = store.sink.as_ref().ok_or(UNAVAILABLE)?;
-            sink(key, Some(bytes));
-            store.files.insert(key.to_owned(), bytes.to_vec());
+            let previous: Vec<_> = changes
+                .iter()
+                .map(|(key, _)| store.files.get(*key).cloned())
+                .collect();
+            let kept: Vec<_> = changes
+                .iter()
+                .zip(&previous)
+                .map(|((key, bytes), previous)| Change {
+                    key,
+                    bytes: *bytes,
+                    previous: previous.as_deref(),
+                })
+                .collect();
+            sink(&kept);
+            for (key, bytes) in changes {
+                match bytes {
+                    Some(bytes) => store.files.insert((*key).to_owned(), bytes.to_vec()),
+                    None => store.files.remove(*key),
+                };
+            }
             Ok(())
         })
+    }
+
+    pub(super) fn write(key: &str, bytes: &[u8]) -> Result<(), String> {
+        apply(&[(key, Some(bytes))])
     }
 
     pub(super) fn remove(key: &str) -> io::Result<()> {
-        STORE.with_borrow_mut(|store| {
-            let sink = store
-                .sink
-                .as_ref()
-                .ok_or_else(|| io::Error::other(UNAVAILABLE))?;
-            store.files.remove(key).ok_or_else(missing)?;
-            sink(key, None);
-            Ok(())
-        })
+        read(key)?;
+        apply(&[(key, None)]).map_err(io::Error::other)
     }
 
+    /// Both changes are kept together, so the file is never lost or doubled.
     pub(super) fn rename(from: &str, to: &str) -> io::Result<()> {
         let bytes = read(from)?;
-        write(to, &bytes).map_err(io::Error::other)?;
-        remove(from)
+        apply(&[(to, Some(&bytes)), (from, None)]).map_err(io::Error::other)
     }
 
     /// The names of the files directly in the folder `prefix`.

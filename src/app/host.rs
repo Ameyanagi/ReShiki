@@ -20,6 +20,7 @@ impl App {
             Request::Redraw => {}
             // As Redraw, once the fonts are in.
             Request::AddFonts(fonts) => crate::web::add_kept_fonts(fonts),
+            Request::Stored { key, failure } => return self.stored(&key, failure),
             Request::Drag(files) => self.browser_drag(files),
             // Open or insert them as chosen files, through the same checks.
             // The import keeps the tab and drawing the files were dropped
@@ -33,6 +34,28 @@ impl App {
                     Message::Tab(id, Box::new(Message::Imports(read)))
                 });
             }
+        }
+        Task::none()
+    }
+
+    /// Read a file in browser storage again after it changed under the app,
+    /// so the next save starts from it, and say why a change was not kept.
+    fn stored(&mut self, key: &str, failure: Option<String>) -> Task<Message> {
+        if let Some(failure) = failure {
+            self.status = failure;
+            self.error = true;
+        }
+        match key {
+            "appearance.json" => self.appearance = crate::appearance::Settings::load(),
+            "abbreviations.json" => {
+                self.abbreviations.catalog_warning = super::abbreviations::load_user_catalog();
+            }
+            "templates.json" if !self.templates.pending() => {
+                let reload = super::template_library::Action::Reload;
+                return Task::done(Message::Templates(reload));
+            }
+            key if key.starts_with("themes/") => self.theme_library.reload(),
+            _ => {}
         }
         Task::none()
     }

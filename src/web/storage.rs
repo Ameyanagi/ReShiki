@@ -1,7 +1,8 @@
 //! Application data in the browser (see `reshiki::storage::browser`): files by
 //! key in one IndexedDB object store, loaded before the app starts and kept
-//! after each change. Other tabs of the same site hear of each change through
-//! a BroadcastChannel, so a tab never saves over another's newer file.
+//! after each change. A change is kept only if the stored file is still what
+//! the tab held, so a tab never saves over another tab's newer file, and the
+//! site's other tabs hear of it through a BroadcastChannel.
 //!
 //! Fonts the page adds are kept here too, and added again at the next mount
 //! when text needs them, as the page's own fallback would be.
@@ -27,10 +28,17 @@ struct Fonts {
     open: bool,
     /// Fonts kept from earlier visits, by SHA-256, until text needs them.
     kept: Vec<(String, Vec<u8>)>,
+    /// Kept fonts were handed out and are not added yet.
+    adding: bool,
 }
+
+/// A file another tab kept: its key and contents, or none once removed.
+type Heard = (String, Option<Vec<u8>>);
 
 thread_local! {
     static FONTS_ADDED: RefCell<Fonts> = RefCell::default();
+    /// Other tabs' changes heard while the files load, until they are in.
+    static EARLY: RefCell<Option<Vec<Heard>>> = const { RefCell::new(None) };
 }
 
 /// Open the page's storage, hand its files to the app and add the fonts kept
@@ -94,10 +102,19 @@ pub(super) fn has_kept() -> bool {
     FONTS_ADDED.with_borrow(|fonts| !fonts.kept.is_empty())
 }
 
+/// Whether kept fonts were handed out by [`take_kept`] and are not added yet,
+/// so missing glyphs may still arrive with them.
+pub(super) fn adding_kept() -> bool {
+    FONTS_ADDED.with_borrow(|fonts| fonts.adding)
+}
+
 /// The kept fonts not added yet, by SHA-256, which [`add_kept`] adds; each
 /// is handed out once.
 pub(super) fn take_kept() -> Vec<(String, Vec<u8>)> {
-    FONTS_ADDED.with_borrow_mut(|fonts| std::mem::take(&mut fonts.kept))
+    FONTS_ADDED.with_borrow_mut(|fonts| {
+        fonts.adding = !fonts.kept.is_empty();
+        std::mem::take(&mut fonts.kept)
+    })
 }
 
 /// Add fonts from [`take_kept`].
@@ -107,6 +124,7 @@ pub(super) fn add_kept(kept: Vec<(String, Vec<u8>)>) {
             error(&format!("Could not add a kept font: {message}"));
         }
     }
+    FONTS_ADDED.with_borrow_mut(|fonts| fonts.adding = false);
 }
 
 fn add(hash: String, bytes: Vec<u8>) -> Result<usize, String> {
@@ -181,6 +199,17 @@ async fn load() -> Result<(), String> {
     request.set_onupgradeneeded(None);
     drop(upgrade);
 
+    // Listen before reading, and hold what other tabs keep meanwhile until
+    // the files are installed, so no change falls between the two.
+    EARLY.set(Some(Vec::new()));
+    let channel = web_sys::BroadcastChannel::new(CHANNEL).ok();
+    if let Some(channel) = &channel {
+        let heard = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(heard);
+        channel.set_onmessage(Some(heard.as_ref().unchecked_ref()));
+        // The channel lives as long as the page.
+        heard.forget();
+    }
+
     // Both requests go to the transaction before either finishes, which
     // would end it.
     let store = database
@@ -200,59 +229,152 @@ async fn load() -> Result<(), String> {
         })
         .collect();
 
-    let channel = web_sys::BroadcastChannel::new(CHANNEL).ok();
-    if let Some(channel) = &channel {
-        let heard = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(heard);
-        channel.set_onmessage(Some(heard.as_ref().unchecked_ref()));
-        // The channel lives as long as the page.
-        heard.forget();
-    }
-    let failed = Closure::<dyn FnMut(web_sys::Event)>::new(|event: web_sys::Event| {
-        let reason = event
-            .target()
-            .and_then(|target| target.dyn_into::<web_sys::IdbTransaction>().ok())
-            .and_then(|transaction| transaction.error())
-            .map(|exception| exception.message())
-            .unwrap_or_default();
-        error(&format!(
-            "Could not keep a change in browser storage: {reason}"
-        ));
-    });
-    let failed: js_sys::Function = failed.into_js_value().unchecked_into();
     browser::install(
         files,
-        Box::new(move |key, bytes| {
-            if let Err(thrown) = put(&database, key, bytes, &failed) {
-                error(&format!(
-                    "Could not keep {key} in browser storage: {}",
-                    describe(thrown)
-                ));
-            }
-            if let Some(channel) = &channel {
-                let _ = channel.post_message(&message(key, bytes));
-            }
+        Box::new(move |changes| {
+            let changes = changes
+                .iter()
+                .map(|change| Change {
+                    key: change.key.to_owned(),
+                    bytes: change.bytes.map(<[u8]>::to_vec),
+                    previous: change.previous.map(<[u8]>::to_vec),
+                })
+                .collect();
+            commit(&database, changes, channel.clone());
         }),
     );
+    for (key, bytes) in EARLY.take().unwrap_or_default() {
+        browser::changed(&key, bytes);
+    }
     Ok(())
 }
 
-/// Write or remove one file. Transactions on one store run in the order they
-/// start, so the last change wins.
-fn put(
+/// A write (new bytes) or removal (none) of one file, and what the page held
+/// before it.
+struct Change {
+    key: String,
+    bytes: Option<Vec<u8>>,
+    previous: Option<Vec<u8>>,
+}
+
+/// Keep `changes` in one transaction, all or none, and only if each stored
+/// file is still what the page held; then tell other tabs. Transactions on
+/// one store run in the order they start, so this page's own changes keep
+/// their order.
+fn commit(
     database: &IdbDatabase,
-    key: &str,
-    bytes: Option<&[u8]>,
-    failed: &js_sys::Function,
-) -> Result<(), JsValue> {
-    let transaction =
-        database.transaction_with_str_and_mode(FILES, IdbTransactionMode::Readwrite)?;
-    transaction.set_onabort(Some(failed));
-    let store = transaction.object_store(FILES)?;
-    match bytes {
-        Some(bytes) => store.put_with_key(&js_sys::Uint8Array::from(bytes), &key.into())?,
-        None => store.delete(&key.into())?,
+    changes: Vec<Change>,
+    channel: Option<web_sys::BroadcastChannel>,
+) {
+    let started = database
+        .transaction_with_str_and_mode(FILES, IdbTransactionMode::Readwrite)
+        .and_then(|transaction| {
+            let store = transaction.object_store(FILES)?;
+            let stored = changes
+                .iter()
+                .map(|change| store.get(&change.key.as_str().into()))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok((transaction, store, stored))
+        });
+    let (transaction, store, stored) = match started {
+        Ok(started) => started,
+        Err(thrown) => return failed(changes, &describe(thrown)),
     };
-    Ok(())
+    let done =
+        wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |resolve, reject| {
+            transaction.set_oncomplete(Some(&resolve));
+            transaction.set_onabort(Some(&reject));
+        }));
+    wasm_bindgen_futures::spawn_local(async move {
+        // This runs in each read's success event, while the transaction is
+        // still open for the writes.
+        let mut held = Vec::with_capacity(stored.len());
+        for request in &stored {
+            match finished(request).await {
+                Ok(value) => held.push(
+                    value
+                        .dyn_into::<js_sys::Uint8Array>()
+                        .ok()
+                        .map(|bytes| bytes.to_vec()),
+                ),
+                Err(message) => {
+                    let _ = transaction.abort();
+                    let _ = done.await;
+                    return failed(changes, &message);
+                }
+            }
+        }
+        if changes
+            .iter()
+            .zip(&held)
+            .any(|(change, held)| change.previous != *held)
+        {
+            let _ = transaction.abort();
+            let _ = done.await;
+            let key = changes
+                .first()
+                .map(|change| change.key.clone())
+                .unwrap_or_default();
+            let message = format!("Not saved: another tab changed {key} first. Try again.");
+            for (change, held) in changes.iter().zip(held) {
+                browser::settle(&change.key, change.bytes.as_deref(), held);
+                notify(&change.key, Some(message.clone()));
+            }
+            return;
+        }
+        for change in &changes {
+            let key = JsValue::from(change.key.as_str());
+            let written = match &change.bytes {
+                Some(bytes) => store
+                    .put_with_key(&js_sys::Uint8Array::from(bytes.as_slice()), &key)
+                    .map(drop),
+                None => store.delete(&key).map(drop),
+            };
+            if let Err(thrown) = written {
+                let _ = transaction.abort();
+                let _ = done.await;
+                return failed(changes, &describe(thrown));
+            }
+        }
+        if done.await.is_err() {
+            let reason = transaction
+                .error()
+                .map(|exception| exception.message())
+                .unwrap_or_else(|| "the browser refused it".into());
+            return failed(changes, &reason);
+        }
+        if let Some(channel) = channel {
+            for change in &changes {
+                let _ = channel.post_message(&message(&change.key, change.bytes.as_deref()));
+            }
+        }
+    });
+}
+
+/// Changes that were not kept, as when storage is full: the page goes back
+/// to what it held, and the editor says so.
+fn failed(changes: Vec<Change>, reason: &str) {
+    let key = changes
+        .first()
+        .map(|change| change.key.clone())
+        .unwrap_or_default();
+    let message = format!("Could not keep {key} in browser storage: {reason}");
+    for change in changes {
+        browser::settle(&change.key, change.bytes.as_deref(), change.previous);
+        notify(&change.key, Some(message.clone()));
+    }
+}
+
+/// Tell the editor that the file `key` changed under it, with a message for
+/// the status bar when one of this page's own changes was not kept.
+fn notify(key: &str, failure: Option<String>) {
+    if let Some(failure) = &failure {
+        error(failure);
+    }
+    let _ = super::send(super::Request::Stored {
+        key: key.to_owned(),
+        failure,
+    });
 }
 
 /// `{ key, bytes }`, with null bytes for a removal.
@@ -279,5 +401,14 @@ fn heard(event: web_sys::MessageEvent) {
         .ok()
         .and_then(|bytes| bytes.dyn_into::<js_sys::Uint8Array>().ok())
         .map(|bytes| bytes.to_vec());
-    browser::changed(&key, bytes);
+    let early = EARLY.with_borrow_mut(|early| {
+        early
+            .as_mut()
+            .map(|early| early.push((key.clone(), bytes.clone())))
+            .is_some()
+    });
+    if !early {
+        browser::changed(&key, bytes);
+        notify(&key, None);
+    }
 }
