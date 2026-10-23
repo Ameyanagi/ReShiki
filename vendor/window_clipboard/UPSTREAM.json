@@ -1,0 +1,27 @@
+{
+  "upstream": "https://github.com/hecrj/window_clipboard",
+  "version": "0.5.1",
+  "commit": "42624c0fadf1998b1b804654cdae42a05a3c4628",
+  "license": "MIT",
+  "source": "crates.io window_clipboard 0.5.1",
+  "upstream_file_sha256": {
+    "Cargo.toml": "1722786340ce8d82b0b6c50d38aff8c850ae180a2d0f1f47d3014e994cc27602",
+    "Cargo.toml.orig": "e232f34e8a0eda21d131c68e62a89c44fa8a83d7f55fc859dbdcfc61cf3471c4",
+    "LICENSE": "7faec985f3e9b1c4a1df646bfedc304ba67e409447f7ab7f4f591f68708d85dc",
+    "README.md": "4cad722cceb0b4a93fc963372e60b091f534595f3002db1f14c7038b3ce34009",
+    "rustfmt.toml": "a93fb86040c045a6e7bcd4a0d4c115adafffc7c3830851c7cfb8d2a602bb565c",
+    "src/lib.rs": "46b918a9875e0eb685ee6915bb95c2c7b5c4a3b4d394f3870341e891ae9312c1",
+    "src/platform/android.rs": "d46fd55505a025a8c9addd935696f5c275a3830006fb391215ee5cc888028951",
+    "src/platform/dummy.rs": "374ffaaeb1c058f74d9ee90d5830187fc033172ba9a4bba9e21f4791f292735e",
+    "src/platform/ios.rs": "a67f236b77d5257dc21a238f98545a678ea8075e024cf952dbc7ba1221fa10ff",
+    "src/platform/linux.rs": "96b93e00da33ba977d3593c80fee41a9fe17a1ffd79b3a169dfeccd50ef5a688",
+    "src/platform/macos.rs": "b291b4a4eef30a4d8149e17799d21532135e845ca9878d9e0fc2428d82dbaf88",
+    "src/platform/windows.rs": "43a20b96a762f9dae5e37431584930b65714c10e311ac93a65a7cfe5db827c77"
+  },
+  "purpose": "Give Iced's text fields the system clipboard in the browser build, where upstream falls back to a dummy provider whose read and write always fail.",
+  "local_changes": [
+    "src/platform/web.rs (new): on wasm32, write puts the text on the system clipboard with navigator.clipboard.writeText inside the key press, and read returns the text the page handed over from the paste event with set_contents, or the text last written",
+    "src/lib.rs: use the web platform on wasm32 and export set_contents there",
+    "Cargo.toml: js-sys, wasm-bindgen, wasm-bindgen-futures and web-sys for wasm32 only; examples and the example-only dev-dependencies (rand, winit 0.29) omitted so the fork resolves from the locked parent workspace; the original manifest is kept as Cargo.toml.orig"
+  ]
+}
