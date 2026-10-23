@@ -1104,6 +1104,27 @@ pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<
             grow(id, &mut corners.into_iter());
         }
     }
+    // A crystal drawn in 2D and wholly in one selection holds its cell box
+    // and axis labels too; split across selections, each part is measured
+    // alone.
+    for model in doc
+        .models
+        .iter()
+        .filter(|m| m.display != crate::models3d::Display::ThreeD && m.cell.is_some())
+    {
+        let owner = model.atoms.first().and_then(|a| owners.get(&a.id));
+        if let Some(id) = model.atoms.first().map(|a| a.id)
+            && owner.is_some()
+            && model.atoms.iter().all(|a| owners.get(&a.id) == owner)
+        {
+            let cells = crate::models3d::flat_cells(std::slice::from_ref(model), doc);
+            let ink: Vec<_> = [cells.behind, cells.front, cells.above].concat();
+            if !ink.is_empty() {
+                let (lo, hi) = self::bounds(&ink);
+                grow(id, &mut [lo, hi].into_iter());
+            }
+        }
+    }
     for atom in doc
         .atoms
         .iter()
@@ -1221,7 +1242,7 @@ fn trimmed_span(
     })
 }
 
-fn label_end(
+pub(crate) fn label_end(
     origin: Point,
     ux: f32,
     uy: f32,
@@ -1372,8 +1393,15 @@ pub fn primitives_with_opacity(
     let mut out = vec![];
     let mut graphics: Vec<_> = doc.graphics.iter().collect();
     graphics.sort_by_key(|g| g.layer);
-    let halos = orbital_halos(doc, &graphics, &inputs.labels().runs, opacity);
+    let mut halos = orbital_halos(doc, &graphics, &inputs.labels().runs, opacity);
+    let cells = crate::models3d::flat_cells(&raw.models, doc);
+    for id in cells.haloed {
+        if !halos.contains(id) {
+            halos.atoms.push((id, None));
+        }
+    }
     push_underlays(&mut out, doc, &graphics, opacity);
+    out.extend(cells.behind);
     let rings = push_ring_strokes(&mut out, doc, opacity);
     let pass = BondPass::new(&inputs);
     let doc = pass.doc;
@@ -1405,9 +1433,11 @@ pub fn primitives_with_opacity(
     if opacity.has_visibility() {
         paint_rear_before_front(&mut out, bond_paint_start);
     }
+    out.extend(cells.front);
     let runs = &pass.labels.runs;
     push_atom_labels(&mut out, doc, runs, opacity, &halos);
     push_label_halo(&mut out, doc, runs, opacity, &halos.above(None));
+    out.extend(cells.above);
     out.extend(crate::models3d::primitives(raw));
     push_arrows_and_annotations(&mut out, doc);
     for graphic in graphics.iter().filter(|g| g.layer >= 0) {
