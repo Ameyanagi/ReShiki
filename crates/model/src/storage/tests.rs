@@ -158,4 +158,13 @@ fn a_change_that_was_not_kept_goes_back_unless_replaced() {
     assert_eq!(browser::read("appearance.json").unwrap(), b"4");
     browser::settle("appearance.json", Some(b"4"), None);
     assert!(browser::read("appearance.json").is_err());
+    // A removal that fails puts the file back.
+    browser::write("templates.json", b"[]").unwrap();
+    browser::remove("templates.json").unwrap();
+    assert_eq!(
+        browser::remove("templates.json").unwrap_err().kind(),
+        std::io::ErrorKind::NotFound
+    );
+    browser::settle("templates.json", None, Some(b"[]".to_vec()));
+    assert_eq!(browser::read("templates.json").unwrap(), b"[]");
 }
