@@ -44,6 +44,16 @@ impl App {
         if let Some(failure) = failure {
             self.status = failure;
             self.error = true;
+            // A draft reported saved was not kept: write it again on the
+            // next tick.
+            if key.starts_with("recovery/") {
+                self.each_tab(|app| {
+                    let session = app.tab.recovery.as_ref().map(|r| r.session.as_path());
+                    if session.and_then(reshiki::storage::browser::key).as_deref() == Some(key) {
+                        app.tab.autosaved_revision = None;
+                    }
+                });
+            }
         }
         match key {
             "appearance.json" => self.appearance = crate::appearance::Settings::load(),
