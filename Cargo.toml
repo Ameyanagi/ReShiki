@@ -139,6 +139,7 @@ web-sys = { version = "0.3", features = [
   "BlobPropertyBag",
   "BroadcastChannel",
   "Clipboard",
+  "ClipboardEvent",
   "ClipboardItem",
   "console",
   "DataTransfer",
@@ -158,6 +159,8 @@ web-sys = { version = "0.3", features = [
   "IdbRequest",
   "IdbTransaction",
   "IdbTransactionMode",
+  "KeyboardEvent",
+  "KeyboardEventInit",
   "MessageEvent",
   "Navigator",
   "Node",
@@ -165,6 +168,8 @@ web-sys = { version = "0.3", features = [
   "Window",
 ] }
 web-time = "1"
+# Iced's text fields reach the page's clipboard (vendor/window_clipboard).
+window_clipboard = "0.5"
 
 [profile.dev]
 debug = 1
@@ -278,6 +283,8 @@ usvg = { path = "vendor/usvg" }
 svg2pdf = { path = "vendor/svg2pdf" }
 # Share Iced's standard Wayland data device for bounded binary clipboard offers.
 smithay-clipboard = { path = "vendor/smithay-clipboard" }
+# Give Iced's text fields the system clipboard in the browser.
+window_clipboard = { path = "vendor/window_clipboard" }
 
 # Independent oracle suites live in reference/ and require the development reference.
 
