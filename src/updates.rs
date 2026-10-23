@@ -83,18 +83,18 @@ impl Default for Preferences {
 impl Preferences {
     fn load(directory: &std::path::Path) -> Self {
         Self {
-            automatic: std::fs::read(directory.join("update-preferences.json"))
+            automatic: crate::storage::read(&directory.join("update-preferences.json"))
                 .ok()
                 .and_then(|bytes| serde_json::from_slice(&bytes).ok())
                 .unwrap_or(true),
-            channel: std::fs::read(directory.join("update-channel.json"))
+            channel: crate::storage::read(&directory.join("update-channel.json"))
                 .ok()
                 .and_then(|bytes| serde_json::from_slice(&bytes).ok())
                 .unwrap_or_default(),
         }
     }
     fn save(self, directory: &std::path::Path) -> Result<(), String> {
-        std::fs::create_dir_all(directory).map_err(|e| e.to_string())?;
+        crate::storage::create_dir_all(directory).map_err(|e| e.to_string())?;
         // Preserve the boolean format read by older stable releases, including
         // when a user returns from a nightly after opting out of checks.
         crate::storage::write_atomic(

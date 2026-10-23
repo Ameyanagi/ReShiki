@@ -18,6 +18,7 @@ use std::{cell::RefCell, collections::HashMap, path::Path};
 use wasm_bindgen::{JsCast, prelude::*};
 
 mod ime;
+mod storage;
 
 /// What the page asks of the running editor.
 #[derive(Debug, Clone)]
@@ -30,6 +31,14 @@ pub(crate) enum Request {
     Close,
     /// Draw again, as after a font arrives.
     Redraw,
+    /// Add fonts kept from earlier visits, by SHA-256, which text needs.
+    AddFonts(Vec<(String, Vec<u8>)>),
+    /// A file in browser storage changed under the app: another tab kept a
+    /// change, or one of this tab's own was not kept, with why.
+    Stored {
+        key: String,
+        failure: Option<String>,
+    },
     /// This many files are dragged over the editor, or none once they leave.
     /// Browsers name dragged files only when they are dropped.
     Drag(usize),
@@ -169,6 +178,9 @@ pub async fn mount(
     // iced's multisampling leaves most canvases blank on WebGL2, the fallback
     // when the browser offers no WebGPU adapter.
     let antialiasing = webgpu().await;
+    // Settings, templates, themes and fonts kept from earlier visits, before
+    // the app reads them.
+    storage::open().await;
     crate::run(
         crate::session::Arguments::default(),
         iced::window::Settings {
@@ -731,10 +743,12 @@ pub fn on_change(callback: Option<js_sys::Function>) {
 
 /// Add a TrueType or OpenType font (or collection) for drawing, measuring and
 /// export, before or after `mount`. Text whose own font lacks a glyph falls
-/// back to it. Returns how many faces it holds.
+/// back to it. The font is kept in browser storage and added again on a later
+/// visit once drawn text lacks a glyph; adding the same font again changes
+/// nothing. Returns how many faces it holds.
 #[wasm_bindgen(js_name = addFont)]
 pub fn add_font(bytes: Vec<u8>) -> Result<usize, JsError> {
-    let faces = reshiki::style::add_font(bytes).map_err(js)?;
+    let faces = storage::add_font(bytes).map_err(js)?;
     // Before mount the first frame has it anyway.
     let _ = send(Request::Redraw);
     Ok(faces)
@@ -759,10 +773,24 @@ fn cjk_language(c: char) -> Option<&'static str> {
     }
 }
 
-/// Tell the page when `text`, about to be drawn, needs a Chinese, Japanese
+/// Add the fonts kept from earlier visits when `text`, about to be drawn,
+/// lacks a glyph; then tell the page when it needs a Chinese, Japanese
 /// or Korean font. Ideographs that the Japanese font, once it has arrived,
 /// still lacks ask for the Chinese one.
 pub(crate) fn text_drawn(text: &str) {
+    // Kept fonts are added between draws, not while text is measured, and
+    // the page is asked only once they are in.
+    if storage::adding_kept() {
+        return;
+    }
+    if storage::has_kept() {
+        let missing =
+            |c: char| !c.is_whitespace() && !c.is_control() && !reshiki::style::has_glyph(c);
+        if text.chars().any(missing) {
+            let _ = send(Request::AddFonts(storage::take_kept()));
+        }
+        return;
+    }
     if HOST.with_borrow(|host| host.on_missing_font.is_none()) {
         return;
     }
@@ -828,6 +856,11 @@ pub(crate) fn text_drawn(text: &str) {
             }
         }
     }
+}
+
+/// Add fonts kept from earlier visits; see [`Request::AddFonts`].
+pub(crate) fn add_kept_fonts(fonts: Vec<(String, Vec<u8>)>) {
+    storage::add_kept(fonts);
 }
 
 /// The page finished answering the request for `lang`'s font.
