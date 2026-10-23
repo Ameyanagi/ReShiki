@@ -56,9 +56,15 @@ struct Host {
     replies: HashMap<u64, oneshot::Sender<Result<Document, String>>>,
     next_reply: u64,
     on_change: Option<js_sys::Function>,
-    /// Called once, the first time a caption has Japanese (CJK) text that no
-    /// loaded font draws.
+    /// Called with "ja", "ko" or "zh", once for each, the first time text in
+    /// that language has characters no loaded font draws.
     on_missing_font: Option<js_sys::Function>,
+    /// The languages `on_missing_font` was called with, and whether the
+    /// page has finished answering each.
+    fonts_asked: Vec<(&'static str, bool)>,
+    /// The CJK characters `text_drawn` has looked up, with the font count and
+    /// answered requests they were looked up with.
+    checked: ((usize, usize), std::collections::HashSet<char>),
     revision: Option<(u64, u64)>,
     /// winit runs one event loop per page, even after it exits.
     mounted: bool,
@@ -88,8 +94,9 @@ fn js(message: impl std::fmt::Display) -> JsError {
 }
 
 /// Start the editor in `element`, which it fills, showing `data` read as
-/// `format` when given. `on_missing_font` is called once, the first time a
-/// caption has Japanese (CJK) text that no loaded font draws. A page can mount one editor; put further editors in
+/// `format` when given. `on_missing_font` is called with "ja", "ko" or "zh",
+/// once for each, the first time text in that language has characters no
+/// loaded font draws. A page can mount one editor; put further editors in
 /// iframes.
 #[wasm_bindgen]
 pub async fn mount(
@@ -570,7 +577,7 @@ pub fn on_change(callback: Option<js_sys::Function>) {
 /// Add a TrueType or OpenType font (or collection) for drawing, measuring and
 /// export, before or after `mount`. Text whose own font lacks a glyph falls
 /// back to it. The font is kept in browser storage and added again on a later
-/// visit once Japanese text needs it; adding the same font again changes
+/// visit once drawn text lacks a glyph; adding the same font again changes
 /// nothing. Returns how many faces it holds.
 #[wasm_bindgen(js_name = addFont)]
 pub fn add_font(bytes: Vec<u8>) -> Result<usize, JsError> {
@@ -580,45 +587,126 @@ pub fn add_font(bytes: Vec<u8>) -> Result<usize, JsError> {
     Ok(faces)
 }
 
+/// The language whose font draws `c`, for the Chinese, Japanese and Korean
+/// scripts; ideographs go to Japanese first.
+fn cjk_language(c: char) -> Option<&'static str> {
+    match c {
+        '\u{1100}'..='\u{11FF}' // Hangul jamo
+        | '\u{3130}'..='\u{318F}' // Hangul compatibility jamo
+        | '\u{A960}'..='\u{A97F}' // Hangul jamo extended A
+        | '\u{AC00}'..='\u{D7FF}' => Some("ko"), // Hangul syllables, jamo extended B
+        '\u{3100}'..='\u{312F}' | '\u{31A0}'..='\u{31BF}' => Some("zh"), // Bopomofo
+        '\u{3000}'..='\u{30FF}' // CJK punctuation, hiragana, katakana
+        | '\u{31F0}'..='\u{31FF}' // katakana phonetic extensions
+        | '\u{3400}'..='\u{4DBF}' // CJK extension A
+        | '\u{4E00}'..='\u{9FFF}' // CJK unified ideographs
+        | '\u{F900}'..='\u{FAFF}' // CJK compatibility ideographs
+        | '\u{FF00}'..='\u{FFEF}' => Some("ja"), // full- and half-width forms
+        _ => None,
+    }
+}
+
 /// Add the fonts kept from earlier visits when `text`, about to be drawn,
-/// lacks a glyph, and tell the page when it still needs a Japanese font.
+/// lacks a glyph; then tell the page when it needs a Chinese, Japanese
+/// or Korean font. Ideographs that the Japanese font, once it has arrived,
+/// still lacks ask for the Chinese one.
 pub(crate) fn text_drawn(text: &str) {
-    let missing = |c: char| !c.is_whitespace() && !c.is_control() && !reshiki::style::has_glyph(c);
-    // Fonts are added between draws, not while text is measured, and the
-    // page is asked only once they are in.
+    // Kept fonts are added between draws, not while text is measured, and
+    // the page is asked only once they are in.
     if storage::adding_kept() {
         return;
     }
     if storage::has_kept() {
+        let missing =
+            |c: char| !c.is_whitespace() && !c.is_control() && !reshiki::style::has_glyph(c);
         if text.chars().any(missing) {
             let _ = send(Request::AddFonts(storage::take_kept()));
         }
         return;
     }
-    let cjk = |c: char| {
-        matches!(c,
-            '\u{3000}'..='\u{30FF}' // CJK punctuation, hiragana, katakana
-            | '\u{3400}'..='\u{4DBF}' // CJK extension A
-            | '\u{4E00}'..='\u{9FFF}' // CJK unified ideographs
-            | '\u{F900}'..='\u{FAFF}' // CJK compatibility ideographs
-            | '\u{FF00}'..='\u{FFEF}') // full- and half-width forms
-    };
-    if HOST.with_borrow(|host| host.on_missing_font.is_none())
-        || !text.chars().any(|c| cjk(c) && missing(c))
-    {
+    if HOST.with_borrow(|host| host.on_missing_font.is_none()) {
         return;
     }
-    let callback = HOST.with_borrow_mut(|host| host.on_missing_font.take());
-    if let Some(callback) = callback
-        && let Err(thrown) = callback.call0(&JsValue::NULL)
-    {
-        error(&format!("The missing font callback failed: {thrown:?}"));
+    // Lookups hold until a font is added or a request settles.
+    let state = HOST.with_borrow(|host| {
+        let settled = host.fonts_asked.iter().filter(|(_, done)| *done).count();
+        (reshiki::style::font_generation(), settled)
+    });
+    for c in text.chars() {
+        let Some(mut lang) = cjk_language(c) else {
+            continue;
+        };
+        let known = HOST.with_borrow_mut(|host| {
+            if host.checked.0 != state {
+                host.checked = (state, Default::default());
+            }
+            !host.checked.1.insert(c)
+        });
+        if known {
+            continue;
+        }
+        let asked = |lang: &str| {
+            HOST.with_borrow(|host| {
+                host.fonts_asked
+                    .iter()
+                    .find(|(asked, _)| *asked == lang)
+                    .map(|(_, done)| *done)
+            })
+        };
+        if lang == "ja"
+            && let Some(done) = asked("ja")
+        {
+            let ideograph = matches!(c, '\u{3400}'..='\u{9FFF}' | '\u{F900}'..='\u{FAFF}');
+            // Until the Japanese request settles, its font may still draw
+            // them.
+            if !ideograph || !done {
+                continue;
+            }
+            lang = "zh";
+        }
+        if asked(lang).is_some() || reshiki::style::has_glyph(c) {
+            continue;
+        }
+        let callback = HOST.with_borrow_mut(|host| {
+            host.fonts_asked.push((lang, false));
+            host.on_missing_font.clone()
+        });
+        let Some(callback) = callback else {
+            continue;
+        };
+        match callback.call1(&JsValue::NULL, &lang.into()) {
+            // A promise settles once the font is added, or failed to load.
+            Ok(result) => match result.dyn_into::<js_sys::Promise>() {
+                Ok(loading) => wasm_bindgen_futures::spawn_local(async move {
+                    let _ = wasm_bindgen_futures::JsFuture::from(loading).await;
+                    font_request_settled(lang);
+                }),
+                Err(_) => font_request_settled(lang),
+            },
+            Err(thrown) => {
+                error(&format!("The missing font callback failed: {thrown:?}"));
+                font_request_settled(lang);
+            }
+        }
     }
 }
 
 /// Add fonts kept from earlier visits; see [`Request::AddFonts`].
 pub(crate) fn add_kept_fonts(fonts: Vec<(String, Vec<u8>)>) {
     storage::add_kept(fonts);
+}
+
+/// The page finished answering the request for `lang`'s font.
+fn font_request_settled(lang: &str) {
+    HOST.with_borrow_mut(|host| {
+        for (asked, done) in &mut host.fonts_asked {
+            if *asked == lang {
+                *done = true;
+            }
+        }
+    });
+    // Text drawn meanwhile is looked up again.
+    let _ = send(Request::Redraw);
 }
 
 /// Stop the editor. Its canvas stays until the page removes it.
@@ -665,6 +753,10 @@ fn requests() -> impl iced::futures::Stream<Item = Message> {
 /// front changed.
 pub(crate) fn update(app: &mut App, message: Message) -> Task<Message> {
     let task = app.update(message);
+    // Captions ask for fonts as they are drawn; the interface's names do here.
+    for text in app.interface_text() {
+        text_drawn(&text);
+    }
     let revision = app.revision();
     let callback = HOST.with_borrow_mut(|host| {
         let previous = host.revision.replace(revision);

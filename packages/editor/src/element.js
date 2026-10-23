@@ -3,7 +3,7 @@
 //
 //   <reshiki-editor src="caffeine.mol" format="mol" style="height: 600px">
 //
-// `fonts` lists font URLs separated by spaces, and `cjk-font` is the Japanese
+// `fonts` lists font URLs separated by spaces, and `cjk-font` is the CJK
 // fallback's URL, or "false" for none. It fires `ready` once the editor runs,
 // `change` after each edit and `error` for a font that could not load, and has
 // the editor's load, save and exportImage methods.

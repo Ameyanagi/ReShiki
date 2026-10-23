@@ -1,13 +1,17 @@
-Key symbols font for the browser build
-======================================
+Interface symbols font for the browser build
+============================================
 
 assets/fonts/ReShikiKeys.ttf is a subset of DejaVu Sans 2.37
-(DejaVuSans.ttf, SHA-256
-8bd787bf3048548345b304d61421c6c0de92b0f0108906845b0ac3f7ba6a3bf3;
-https://dejavu-fonts.github.io/) holding only the space and the macOS key
-symbols ⌘ ⇧ ⌥ ⌃ ⌫ ↩, made with fontTools' subsetter without hinting. As the
-license requires for a modified font, it is renamed ReShiki Keys; its
-copyright and license name records are kept.
+(dejavu-fonts-ttf-2.37/ttf/DejaVuSans.ttf, SHA-256
+7da195a74c55bef988d0d48f9508bd5d849425c1770dba5d7bfc6ce9ed848954;
+https://github.com/dejavu-fonts/dejavu-fonts/releases/tag/version_2_37)
+holding only the space, the plus and the symbols the interface draws that
+Liberation Sans lacks: the macOS key symbols ⌘ ⇧ ⌥ ⌃ ⌫ ↩ ↵, the arrows
+↗ ↶ ↷ ↺, the disclosures ⌄ ▴ ▸ ▾ ◂ ▶ △ ◢, ★ ☆ ✓ and ⠿. The full-width
+plus ＋ maps to the plus. scripts/subset_keys_font.py makes it with fontTools'
+subsetter, without hinting or layout tables. As the license requires for a
+modified font, it is renamed ReShiki Keys; its copyright and license name
+records are kept.
 
 Copyright (c) 2003 by Bitstream, Inc. All Rights Reserved.
 Copyright (c) 2006 by Tavmjong Bah. All Rights Reserved.
@@ -15,6 +19,5 @@ DejaVu changes are in public domain.
 Licensed under the Bitstream Vera and Arev font licenses; see LICENSE in this
 directory.
 
-Only the wasm32 build embeds it, because a browser has no system fonts and
-Liberation Sans lacks these symbols. Menus, tooltips and Help draw shortcut
-symbols from it on a Mac.
+Only the wasm32 build embeds it, because a browser has no system fonts.
+Menus, tooltips, Help, disclosures and buttons draw these symbols from it.

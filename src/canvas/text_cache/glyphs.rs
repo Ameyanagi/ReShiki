@@ -39,7 +39,16 @@ pub(super) fn prepare_fonts() {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         ADDED.fetch_add(added.len(), Ordering::Relaxed);
         for source in added {
-            fonts.raw().db_mut().load_font_source(source);
+            match source {
+                // Through Iced, so text it already shaped is shaped again
+                // and draws glyphs that were missing.
+                text::cosmic_text::fontdb::Source::Binary(bytes) => {
+                    fonts.load_font((*bytes).as_ref().to_vec().into());
+                }
+                source => {
+                    fonts.raw().db_mut().load_font_source(source);
+                }
+            }
         }
         variable::prepare_system_weights(fonts.raw());
     }
