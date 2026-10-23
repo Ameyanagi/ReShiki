@@ -21,6 +21,8 @@ mod atom_labels;
 mod atom_text;
 mod autosave;
 mod bond_edits;
+#[cfg(test)]
+mod browser_fonts_tests;
 mod canvas_edit;
 mod cleanup;
 mod clipboard;

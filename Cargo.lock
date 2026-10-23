@@ -2054,8 +2054,6 @@ dependencies = [
 [[package]]
 name = "iced_winit"
 version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7589888c8e951899cc688247a69933bb7a0511f0b4b2e122ac3fcd5dacb37f72"
 dependencies = [
  "iced_debug",
  "iced_program",
@@ -3724,6 +3722,7 @@ dependencies = [
  "iced",
  "iced_runtime",
  "iced_tiny_skia",
+ "iced_winit",
  "image",
  "js-sys",
  "open",
@@ -3762,6 +3761,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "web-time",
+ "window_clipboard",
  "zune-core 0.5.3",
  "zune-jpeg 0.5.15",
 ]
@@ -5673,15 +5673,17 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 [[package]]
 name = "window_clipboard"
 version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5654226305eaf2dde8853fb482861d28e5dcecbbd40cb88e8393d94bb80d733"
 dependencies = [
  "clipboard-win",
  "clipboard_macos",
  "clipboard_wayland",
  "clipboard_x11",
+ "js-sys",
  "raw-window-handle",
  "thiserror 2.0.20",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]

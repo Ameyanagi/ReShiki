@@ -17,6 +17,7 @@ use reshiki::{document::Document, formats};
 use std::{cell::RefCell, collections::HashMap, path::Path};
 use wasm_bindgen::{JsCast, prelude::*};
 
+mod ime;
 mod storage;
 
 /// What the page asks of the running editor.
@@ -56,16 +57,27 @@ struct Host {
     replies: HashMap<u64, oneshot::Sender<Result<Document, String>>>,
     next_reply: u64,
     on_change: Option<js_sys::Function>,
-    /// Called once, the first time a caption has Japanese (CJK) text that no
-    /// loaded font draws.
+    /// Called with "ja", "ko" or "zh", once for each, the first time text in
+    /// that language has characters no loaded font draws.
     on_missing_font: Option<js_sys::Function>,
+    /// The languages `on_missing_font` was called with, and whether the
+    /// page has finished answering each.
+    fonts_asked: Vec<(&'static str, bool)>,
+    /// The CJK characters `text_drawn` has looked up, with the font count and
+    /// answered requests they were looked up with.
+    checked: ((usize, usize), std::collections::HashSet<char>),
     revision: Option<(u64, u64)>,
     /// winit runs one event loop per page, even after it exits.
     mounted: bool,
     /// The listener that trades ⌘ and Control on a Mac, until `destroy`.
     command_key: Option<Closure<dyn FnMut(web_sys::Event)>>,
+    /// The listener that lets Ctrl/⌘+V paste into text fields, until
+    /// `destroy`.
+    field_paste: Option<PasteListeners>,
     /// The element's file drop listener, until `destroy`.
     drops: Option<(web_sys::Element, DragListener)>,
+    /// The textarea that takes input method text, until `destroy`.
+    input_method: Option<ime::InputMethod>,
 }
 
 thread_local! {
@@ -88,8 +100,9 @@ fn js(message: impl std::fmt::Display) -> JsError {
 }
 
 /// Start the editor in `element`, which it fills, showing `data` read as
-/// `format` when given. `on_missing_font` is called once, the first time a
-/// caption has Japanese (CJK) text that no loaded font draws. A page can mount one editor; put further editors in
+/// `format` when given. `on_missing_font` is called with "ja", "ko" or "zh",
+/// once for each, the first time text in that language has characters no
+/// loaded font draws. A page can mount one editor; put further editors in
 /// iframes.
 #[wasm_bindgen]
 pub async fn mount(
@@ -149,12 +162,19 @@ pub async fn mount(
             ..Host::default()
         }
     });
+    // Before the ⌘ swap, so it sees the keys as pressed.
+    let paste = field_paste(&element);
+    HOST.with_borrow_mut(|host| host.field_paste = paste);
     if crate::platform::mac() {
         let swap = command_key(&element);
         HOST.with_borrow_mut(|host| host.command_key = swap);
     }
     let drops = file_drops(&element);
-    HOST.with_borrow_mut(|host| host.drops = Some((element, drops)));
+    let input_method = ime::start(&element);
+    HOST.with_borrow_mut(|host| {
+        host.drops = Some((element, drops));
+        host.input_method = input_method;
+    });
     // iced's multisampling leaves most canvases blank on WebGL2, the fallback
     // when the browser offers no WebGPU adapter.
     let antialiasing = webgpu().await;
@@ -189,6 +209,160 @@ pub(crate) fn platform_name() -> String {
         .filter(|platform| !platform.is_empty())
         .or_else(|| navigator.platform().ok())
         .unwrap_or_default()
+}
+
+/// `field_paste`'s listeners, one per event, as the paste listener's key
+/// reaches the key listener while it runs.
+type PasteListeners = [(&'static str, Closure<dyn FnMut(web_sys::Event)>); 2];
+
+thread_local! {
+    /// A Ctrl/⌘+V press held back until the page has the clipboard's text.
+    static HELD_PASTE: RefCell<Option<web_sys::KeyboardEvent>> = const { RefCell::new(None) };
+    /// While `relay_key` hands a held key to the editor.
+    static RELAYING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Let Ctrl/⌘+V paste into text fields. iced reads the clipboard while it
+/// handles the key, but a page may only read it from a paste event, which
+/// fires after the key and only when winit does not cancel the key. So the
+/// key waits: the browser pastes, the paste event hands its text to the
+/// clipboard Iced reads (vendor/window_clipboard), and the key then reaches
+/// the editor, which pastes into the field, or pastes a drawing as before.
+/// Copy and Cut need nothing here: Iced writes to the page's clipboard.
+fn field_paste(element: &web_sys::Element) -> Option<PasteListeners> {
+    let window = web_sys::window()?;
+    let element = element.clone();
+    let mac = crate::platform::mac();
+    let paste = Closure::<dyn FnMut(web_sys::Event)>::new(move |event: web_sys::Event| {
+        let Some(paste) = event.dyn_ref::<web_sys::ClipboardEvent>() else {
+            return;
+        };
+        let Some(key) = HELD_PASTE.take() else {
+            return;
+        };
+        // The field gets the text from the key, not the browser.
+        paste.prevent_default();
+        let text = paste
+            .clipboard_data()
+            .and_then(|data| data.get_data("text/plain").ok())
+            .filter(|text| !text.is_empty());
+        if let Some(text) = &text {
+            text_drawn(text);
+        }
+        window_clipboard::set_contents(text);
+        relay_key(&key);
+    });
+    let keys = Closure::<dyn FnMut(web_sys::Event)>::new(move |event: web_sys::Event| {
+        if RELAYING.get() {
+            return;
+        }
+        let Some(key) = event.dyn_ref::<web_sys::KeyboardEvent>() else {
+            return;
+        };
+        let command = if mac { key.meta_key() } else { key.ctrl_key() };
+        // Shift+V is the drawing's flip, which must not read the clipboard.
+        if !command
+            || key.alt_key()
+            || key.shift_key()
+            || !is_v(key)
+            || !editor_keys(&event, &element)
+        {
+            return;
+        }
+        // winit would cancel the key, and with it the paste event.
+        key.stop_immediate_propagation();
+        HELD_PASTE.set(Some(key.clone()));
+        // Browsers that send no paste event here get the key next turn,
+        // with the text read through the Clipboard API where allowed.
+        let fallback = Closure::once_into_js(|| {
+            if let Some(key) = HELD_PASTE.take() {
+                wasm_bindgen_futures::spawn_local(async move {
+                    window_clipboard::set_contents(read_clipboard_text().await);
+                    relay_key(&key);
+                });
+            }
+        });
+        if let Some(window) = web_sys::window() {
+            let _ = window.set_timeout_with_callback(fallback.unchecked_ref());
+        }
+    });
+    let listeners = [("keydown", keys), ("paste", paste)];
+    for (name, listener) in &listeners {
+        // Capture runs before winit's listeners and the ⌘ swap.
+        let _ = window.add_event_listener_with_callback_and_bool(
+            name,
+            listener.as_ref().unchecked_ref(),
+            true,
+        );
+    }
+    Some(listeners)
+}
+
+/// Whether `event` is for the editor's own keys: its canvas, or an element
+/// of the editor marked `data-reshiki-keys`, and not a page control placed
+/// inside the editor's element.
+fn editor_keys(event: &web_sys::Event, element: &web_sys::Element) -> bool {
+    let Some(target) = event
+        .target()
+        .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
+    else {
+        return false;
+    };
+    let canvas = element.query_selector("canvas").ok().flatten();
+    canvas.as_ref() == Some(&target)
+        || (target.has_attribute("data-reshiki-keys") && element.contains(Some(&target)))
+}
+
+/// Whether `key` is V, by the character it types on a Latin layout or else
+/// where it sits, as iced reads shortcuts.
+fn is_v(key: &web_sys::KeyboardEvent) -> bool {
+    let typed = key.key();
+    let mut chars = typed.chars();
+    match (chars.next(), chars.next()) {
+        (Some(c), None) if c.is_ascii_alphabetic() => c.eq_ignore_ascii_case(&'v'),
+        _ => key.code() == "KeyV",
+    }
+}
+
+/// The clipboard's text through the Clipboard API, when the page may read it.
+async fn read_clipboard_text() -> Option<String> {
+    let clipboard = js_sys::Reflect::get(&web_sys::window()?.navigator(), &"clipboard".into())
+        .ok()?
+        .dyn_into::<web_sys::Clipboard>()
+        .ok()?;
+    wasm_bindgen_futures::JsFuture::from(clipboard.read_text())
+        .await
+        .ok()?
+        .as_string()
+        .filter(|text| !text.is_empty())
+}
+
+/// Hand a held key press to the editor's canvas as pressed.
+fn relay_key(key: &web_sys::KeyboardEvent) {
+    let canvas = HOST
+        .with_borrow(|host| host.drops.as_ref().map(|(element, _)| element.clone()))
+        .and_then(|element| element.query_selector("canvas").ok().flatten());
+    let Some(canvas) = canvas else {
+        return;
+    };
+    let init = web_sys::KeyboardEventInit::new();
+    init.set_bubbles(true);
+    init.set_cancelable(true);
+    init.set_key(&key.key());
+    init.set_code(&key.code());
+    init.set_location(key.location());
+    init.set_repeat(key.repeat());
+    init.set_ctrl_key(key.ctrl_key());
+    init.set_meta_key(key.meta_key());
+    init.set_shift_key(key.shift_key());
+    init.set_alt_key(key.alt_key());
+    let Ok(relayed) = web_sys::KeyboardEvent::new_with_keyboard_event_init_dict("keydown", &init)
+    else {
+        return;
+    };
+    RELAYING.set(true);
+    let _ = canvas.dispatch_event(&relayed);
+    RELAYING.set(false);
 }
 
 /// The events whose ⌘ and Control `command_key` trades.
@@ -570,7 +744,7 @@ pub fn on_change(callback: Option<js_sys::Function>) {
 /// Add a TrueType or OpenType font (or collection) for drawing, measuring and
 /// export, before or after `mount`. Text whose own font lacks a glyph falls
 /// back to it. The font is kept in browser storage and added again on a later
-/// visit once Japanese text needs it; adding the same font again changes
+/// visit once drawn text lacks a glyph; adding the same font again changes
 /// nothing. Returns how many faces it holds.
 #[wasm_bindgen(js_name = addFont)]
 pub fn add_font(bytes: Vec<u8>) -> Result<usize, JsError> {
@@ -580,45 +754,126 @@ pub fn add_font(bytes: Vec<u8>) -> Result<usize, JsError> {
     Ok(faces)
 }
 
+/// The language whose font draws `c`, for the Chinese, Japanese and Korean
+/// scripts; ideographs go to Japanese first.
+fn cjk_language(c: char) -> Option<&'static str> {
+    match c {
+        '\u{1100}'..='\u{11FF}' // Hangul jamo
+        | '\u{3130}'..='\u{318F}' // Hangul compatibility jamo
+        | '\u{A960}'..='\u{A97F}' // Hangul jamo extended A
+        | '\u{AC00}'..='\u{D7FF}' => Some("ko"), // Hangul syllables, jamo extended B
+        '\u{3100}'..='\u{312F}' | '\u{31A0}'..='\u{31BF}' => Some("zh"), // Bopomofo
+        '\u{3000}'..='\u{30FF}' // CJK punctuation, hiragana, katakana
+        | '\u{31F0}'..='\u{31FF}' // katakana phonetic extensions
+        | '\u{3400}'..='\u{4DBF}' // CJK extension A
+        | '\u{4E00}'..='\u{9FFF}' // CJK unified ideographs
+        | '\u{F900}'..='\u{FAFF}' // CJK compatibility ideographs
+        | '\u{FF00}'..='\u{FFEF}' => Some("ja"), // full- and half-width forms
+        _ => None,
+    }
+}
+
 /// Add the fonts kept from earlier visits when `text`, about to be drawn,
-/// lacks a glyph, and tell the page when it still needs a Japanese font.
+/// lacks a glyph; then tell the page when it needs a Chinese, Japanese
+/// or Korean font. Ideographs that the Japanese font, once it has arrived,
+/// still lacks ask for the Chinese one.
 pub(crate) fn text_drawn(text: &str) {
-    let missing = |c: char| !c.is_whitespace() && !c.is_control() && !reshiki::style::has_glyph(c);
-    // Fonts are added between draws, not while text is measured, and the
-    // page is asked only once they are in.
+    // Kept fonts are added between draws, not while text is measured, and
+    // the page is asked only once they are in.
     if storage::adding_kept() {
         return;
     }
     if storage::has_kept() {
+        let missing =
+            |c: char| !c.is_whitespace() && !c.is_control() && !reshiki::style::has_glyph(c);
         if text.chars().any(missing) {
             let _ = send(Request::AddFonts(storage::take_kept()));
         }
         return;
     }
-    let cjk = |c: char| {
-        matches!(c,
-            '\u{3000}'..='\u{30FF}' // CJK punctuation, hiragana, katakana
-            | '\u{3400}'..='\u{4DBF}' // CJK extension A
-            | '\u{4E00}'..='\u{9FFF}' // CJK unified ideographs
-            | '\u{F900}'..='\u{FAFF}' // CJK compatibility ideographs
-            | '\u{FF00}'..='\u{FFEF}') // full- and half-width forms
-    };
-    if HOST.with_borrow(|host| host.on_missing_font.is_none())
-        || !text.chars().any(|c| cjk(c) && missing(c))
-    {
+    if HOST.with_borrow(|host| host.on_missing_font.is_none()) {
         return;
     }
-    let callback = HOST.with_borrow_mut(|host| host.on_missing_font.take());
-    if let Some(callback) = callback
-        && let Err(thrown) = callback.call0(&JsValue::NULL)
-    {
-        error(&format!("The missing font callback failed: {thrown:?}"));
+    // Lookups hold until a font is added or a request settles.
+    let state = HOST.with_borrow(|host| {
+        let settled = host.fonts_asked.iter().filter(|(_, done)| *done).count();
+        (reshiki::style::font_generation(), settled)
+    });
+    for c in text.chars() {
+        let Some(mut lang) = cjk_language(c) else {
+            continue;
+        };
+        let known = HOST.with_borrow_mut(|host| {
+            if host.checked.0 != state {
+                host.checked = (state, Default::default());
+            }
+            !host.checked.1.insert(c)
+        });
+        if known {
+            continue;
+        }
+        let asked = |lang: &str| {
+            HOST.with_borrow(|host| {
+                host.fonts_asked
+                    .iter()
+                    .find(|(asked, _)| *asked == lang)
+                    .map(|(_, done)| *done)
+            })
+        };
+        if lang == "ja"
+            && let Some(done) = asked("ja")
+        {
+            let ideograph = matches!(c, '\u{3400}'..='\u{9FFF}' | '\u{F900}'..='\u{FAFF}');
+            // Until the Japanese request settles, its font may still draw
+            // them.
+            if !ideograph || !done {
+                continue;
+            }
+            lang = "zh";
+        }
+        if asked(lang).is_some() || reshiki::style::has_glyph(c) {
+            continue;
+        }
+        let callback = HOST.with_borrow_mut(|host| {
+            host.fonts_asked.push((lang, false));
+            host.on_missing_font.clone()
+        });
+        let Some(callback) = callback else {
+            continue;
+        };
+        match callback.call1(&JsValue::NULL, &lang.into()) {
+            // A promise settles once the font is added, or failed to load.
+            Ok(result) => match result.dyn_into::<js_sys::Promise>() {
+                Ok(loading) => wasm_bindgen_futures::spawn_local(async move {
+                    let _ = wasm_bindgen_futures::JsFuture::from(loading).await;
+                    font_request_settled(lang);
+                }),
+                Err(_) => font_request_settled(lang),
+            },
+            Err(thrown) => {
+                error(&format!("The missing font callback failed: {thrown:?}"));
+                font_request_settled(lang);
+            }
+        }
     }
 }
 
 /// Add fonts kept from earlier visits; see [`Request::AddFonts`].
 pub(crate) fn add_kept_fonts(fonts: Vec<(String, Vec<u8>)>) {
     storage::add_kept(fonts);
+}
+
+/// The page finished answering the request for `lang`'s font.
+fn font_request_settled(lang: &str) {
+    HOST.with_borrow_mut(|host| {
+        for (asked, done) in &mut host.fonts_asked {
+            if *asked == lang {
+                *done = true;
+            }
+        }
+    });
+    // Text drawn meanwhile is looked up again.
+    let _ = send(Request::Redraw);
 }
 
 /// Stop the editor. Its canvas stays until the page removes it.
@@ -632,6 +887,19 @@ pub fn destroy() -> Result<(), JsError> {
             let _ = window.remove_event_listener_with_callback_and_bool(
                 name,
                 swap.as_ref().unchecked_ref(),
+                true,
+            );
+        }
+    }
+    if let Some(input_method) = HOST.with_borrow_mut(|host| host.input_method.take()) {
+        ime::stop(input_method);
+    }
+    let paste = HOST.with_borrow_mut(|host| host.field_paste.take());
+    if let (Some(paste), Some(window)) = (paste, web_sys::window()) {
+        for (name, listener) in &paste {
+            let _ = window.remove_event_listener_with_callback_and_bool(
+                name,
+                listener.as_ref().unchecked_ref(),
                 true,
             );
         }
@@ -665,6 +933,10 @@ fn requests() -> impl iced::futures::Stream<Item = Message> {
 /// front changed.
 pub(crate) fn update(app: &mut App, message: Message) -> Task<Message> {
     let task = app.update(message);
+    // Captions ask for fonts as they are drawn; the interface's names do here.
+    for text in app.interface_text() {
+        text_drawn(&text);
+    }
     let revision = app.revision();
     let callback = HOST.with_borrow_mut(|host| {
         let previous = host.revision.replace(revision);
