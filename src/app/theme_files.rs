@@ -42,6 +42,7 @@ pub(super) fn directory() -> Result<PathBuf, String> {
             directories_next::ProjectDirs::from("dev", "reshiki", "ReShiki")
                 .map(|d| d.data_local_dir().to_owned())
         })
+        .or_else(reshiki::storage::browser_data_directory)
         .ok_or("No application data directory")?;
     Ok(root.join("themes"))
 }
@@ -58,14 +59,21 @@ impl State {
         }
         state
     }
+    /// Read the library again after another browser tab changed it, keeping
+    /// the open theme editor.
+    #[cfg(target_arch = "wasm32")]
+    pub(super) fn reload(&mut self) {
+        let loaded = Self::load();
+        self.themes = loaded.themes;
+    }
     fn load_from(&mut self, dir: &std::path::Path) {
-        let Ok(entries) = std::fs::read_dir(dir) else {
+        let Ok(entries) = reshiki::storage::read_dir(dir) else {
             return;
         };
         let mut themes: Vec<_> = entries
-            .flatten()
-            .filter(|e| e.path().extension().is_some_and(|x| x == "reshiki-theme"))
-            .filter_map(|e| theme_files::load(&e.path()).ok().map(|t| (e.path(), t)))
+            .into_iter()
+            .filter(|p| p.extension().is_some_and(|x| x == "reshiki-theme"))
+            .filter_map(|p| theme_files::load(&p).ok().map(|t| (p, t)))
             .collect();
         // Canonical app saves win over older, manually named files with the same ID.
         themes.sort_by_key(|(p, t)| (p.file_stem().is_some_and(|s| s == t.id.as_str()), p.clone()));
@@ -76,7 +84,7 @@ impl State {
     pub(super) fn persist(&mut self, theme: ThemeFile) -> Result<(), String> {
         if !cfg!(test) {
             let dir = directory()?;
-            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+            reshiki::storage::create_dir_all(&dir).map_err(|e| e.to_string())?;
             theme_files::save(&dir.join(format!("{}.reshiki-theme", theme.id)), &theme)?;
         }
         self.insert(theme);
@@ -95,14 +103,13 @@ impl State {
     /// Archive only validated library files with the selected ID. Original imports
     /// and embedded document snapshots are never touched. Keep a recoverable copy.
     fn archive_from(&self, dir: &std::path::Path, id: &str) -> Result<(), String> {
-        let entries = match std::fs::read_dir(dir) {
+        let entries = match reshiki::storage::read_dir(dir) {
             Ok(entries) => entries,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
             Err(e) => return Err(e.to_string()),
         };
         let paths: Vec<_> = entries
-            .flatten()
-            .map(|e| e.path())
+            .into_iter()
             .filter(|p| p.extension().is_some_and(|x| x == "reshiki-theme"))
             .filter(|p| theme_files::load(p).is_ok_and(|t| t.id == id))
             .collect();
@@ -114,13 +121,13 @@ impl State {
             .unwrap_or_default()
             .as_nanos();
         let archive = dir.join(".deleted").join(stamp.to_string());
-        std::fs::create_dir_all(&archive).map_err(|e| e.to_string())?;
-        let mut moved = Vec::new();
+        reshiki::storage::create_dir_all(&archive).map_err(|e| e.to_string())?;
+        let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
         for path in paths {
             let dest = archive.join(path.file_name().ok_or("Invalid library filename")?);
-            if let Err(e) = std::fs::rename(&path, &dest) {
+            if let Err(e) = reshiki::storage::rename(&path, &dest) {
                 for (old, new) in moved.iter().rev() {
-                    let _ = std::fs::rename(new, old);
+                    let _ = reshiki::storage::rename(new, old);
                 }
                 return Err(format!("Could not remove theme: {e}"));
             }
