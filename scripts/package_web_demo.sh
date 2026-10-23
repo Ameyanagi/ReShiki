@@ -46,6 +46,28 @@ cp "$package/src/editor.js" "$package/src/fonts.js" "$demo/src/"
 cp "$package/dist/editor/reshiki.js" "$package/dist/editor/reshiki_bg.wasm" "$demo/dist/editor/"
 cp -R "$package/dist/licenses" "$demo/licenses"
 
+# Name the modules and the WebAssembly by a hash of their content and point the
+# files that load them at the new names. A release then changes every name, so
+# a browser never pairs new JavaScript with old WebAssembly, and the files can
+# be cached for as long as the host allows. Dependencies go first, so each hash
+# covers the names the file loads. index.html keeps its name.
+hashed() {
+  local file=$demo/$1 name=${1##*/} hash new
+  hash=$(shasum -a 256 "$file" | cut -c1-12)
+  new=${name%.*}.$hash.${name##*.}
+  mv "$file" "${file%/*}/$new"
+  NAME=$name NEW=$new perl -pi -e 's/(?<![\w.-])\Q$ENV{NAME}\E(?![\w-])/$ENV{NEW}/g' \
+    "$demo/index.html" "$demo"/src/*.js "$demo"/dist/editor/*.js
+  if ! grep -qrF "$new" "$demo/index.html" "$demo/src" "$demo/dist/editor"; then
+    echo "No demo file loads $1 any more" >&2
+    exit 1
+  fi
+}
+hashed dist/editor/reshiki_bg.wasm
+hashed dist/editor/reshiki.js
+hashed src/fonts.js
+hashed src/editor.js
+
 # No macOS metadata, which GNU tar warns about when docs.yml extracts it.
 COPYFILE_DISABLE=1 tar --no-xattrs -czf "$output" -C "$stage" demo
 echo "$output: $(wc -c < "$output" | tr -d ' ') bytes"

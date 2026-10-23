@@ -135,6 +135,13 @@ gh workflow run docs.yml --ref main
 
 Skip `gh release create` when the `web-demo` release exists.
 
+The packaged demo names its JavaScript and WebAssembly by content hash (`src/editor.<hash>.js`, `dist/editor/reshiki_bg.<hash>.wasm` and so on), and only `index.html` keeps a fixed name, so a page always loads the JavaScript and WebAssembly from one build. GitHub Pages serves every file with `Cache-Control: max-age=600` and cannot set headers, and Cloudflare does not cache `.wasm` at the edge by default. To cache the hashed files for a year, add a Cloudflare Cache Rule on the reshiki.com zone:
+
+- **When:** `starts_with(http.request.uri.path, "/demo/src/") or starts_with(http.request.uri.path, "/demo/dist/")`
+- **Then:** Eligible for cache; Edge TTL: ignore cache-control header, 1 year; Browser TTL: override origin, 1 year.
+
+Leave `/demo/` and `/demo/index.html` out of the rule, so a release reaches visitors within the 10-minute default.
+
 The **npm** job then publishes the browser package `@ameyanagi/reshiki` (`packages/editor`) from the build the **web_demo** job tested, so the WebAssembly is built only once. It runs the package tests, sets the package version to the app's version from `Cargo.toml` (which the tag matches, so `v0.13.0` publishes `0.13.0`; the `version` in `packages/editor/package.json` is only a placeholder), and publishes with `npm publish --provenance`. Stable versions get the `latest` dist-tag. Prerelease tags such as `v0.13.0-rc.1` get `next`, and a stable version older than the current `latest` gets `release-<major.minor>`, so `bun add @ameyanagi/reshiki` keeps installing the newest stable release, the same way the GitHub release is marked as a prerelease. Nightly builds never publish to npm. A version already on npm is skipped, so rerunning a release is safe. Without a credential, or when npm refuses it (an expired token, or a trusted publisher that is not set up), the job leaves a notice and succeeds, so npm never fails a release. See [Configure npm publishing](#configure-npm-publishing).
 
 Package staging uses `build/release-bundles`, outside Cargo’s `target` directory, so cache pruning cannot traverse bundled dependency license sources.
