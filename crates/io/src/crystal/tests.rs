@@ -1177,3 +1177,59 @@ fn both_places_the_3d_frame_past_a_whole_repeat() {
     let (lo, _) = frame(&doc, &doc.models[0]).unwrap();
     assert!(lo.x > drawing.1.x, "{lo:?} {drawing:?}");
 }
+
+#[test]
+fn copies_on_the_box_sit_on_a_halo_over_its_edges() {
+    use crate::scene::Primitive;
+    let lighter_text = |p: &Primitive| {
+        matches!(p, Primitive::Opacity { alpha, primitive }
+            if (*alpha - 0.55).abs() < 1e-3 && matches!(**primitive, Primitive::Text { .. }))
+    };
+    for (format, text) in [
+        ("cif", NACL),
+        ("xyz", SILICON),
+        ("poscar", RUTILE),
+        ("cif", CO2),
+    ] {
+        let (doc, _) = open(format, text);
+        let drawing = crate::scene::primitives(&doc);
+        let last_edge = drawing
+            .iter()
+            .rposition(|p| matches!(p, Primitive::Wire { dash, .. } if *dash == 0.))
+            .unwrap();
+        // The copies' labels: lighter text after the box's front edges, on a
+        // halo that knocks the edges out beneath them.
+        let halo = drawing
+            .iter()
+            .position(|p| {
+                matches!(p, Primitive::Halo { primitives, .. }
+                    if primitives.iter().any(|q| matches!(q, Primitive::Text { .. })))
+            })
+            .unwrap();
+        assert!(halo > last_edge, "{format}: halo before the edges");
+        let copies = drawing[halo..].iter().filter(|p| lighter_text(p)).count();
+        assert!(copies > doc.atoms.len(), "{format}: {copies}");
+        assert!(
+            !drawing[..last_edge].iter().any(lighter_text),
+            "{format}: a copy's label under the edges"
+        );
+    }
+}
+
+#[test]
+fn large_repeats_still_keep_atom_labels_apart() {
+    // 4 × 4 × 4 rock salt: 512 labels. Looking straight down c would stack
+    // every Na on a Cl, so the view chosen along c must tilt off it.
+    let (mut doc, _) = open("cif", NACL);
+    doc.models[0].repeat = [4, 4, 4];
+    let cell = doc.models[0].cell.clone().unwrap();
+    assert!(crate::models3d::look_along(
+        &mut doc,
+        0,
+        crate::models3d::Along::C
+    ));
+    assert_ne!(
+        doc.models[0].rotation,
+        crate::models3d::Along::C.rotation(&cell)
+    );
+}

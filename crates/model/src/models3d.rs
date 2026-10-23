@@ -1695,9 +1695,11 @@ const EDGE_CLEAR: f32 = 0.45;
 /// A separation this good is as good as any: views that come near it are
 /// told apart by how close they are to the standard view.
 const GOOD_SEPARATION: f32 = 1.6;
-/// Above this many labelled atoms the opening view compares only the axis
-/// labels.
-const APART_ATOMS: usize = 300;
+/// Above this many labelled atoms (more than a 4 × 4 × 4 repeat of a large
+/// cell) the opening view compares only the axis labels.
+const APART_ATOMS: usize = 20_000;
+/// The separation score beyond which views count as equally clear.
+const SEPARATION_CAP: f32 = 4.;
 
 /// How well the labels keep apart seen through `q`: each of `atoms` (a
 /// position and its label's letter count) and each axis label past the end
@@ -1719,11 +1721,27 @@ fn separation(q: [f32; 4], labels: &Labels, vectors: [[f32; 3]; 3]) -> f32 {
         .iter()
         .map(|(p, n)| (rotate(q, *p), width(*n)))
         .collect();
-    let mut least = f32::INFINITY;
-    for (i, (s, ws)) in seen.iter().enumerate() {
-        for (j, (t, wt)) in seen.iter().enumerate().skip(i + 1) {
+    // Pairs far apart across the screen cannot be the closest: sweep the
+    // labels left to right and compare each only with those within reach,
+    // so large repeats stay cheap. Scores beyond [`SEPARATION_CAP`] all
+    // count as that much.
+    let widest = seen.iter().map(|(_, w)| *w).fold(0., f32::max);
+    let reach = SEPARATION_CAP * (widest + BOND_ROOM);
+    let mut order: Vec<usize> = (0..seen.len()).collect();
+    order.sort_by(|a, b| {
+        let x = |i: &usize| seen.get(*i).map_or(0., |(s, _)| s[0]);
+        x(a).total_cmp(&x(b))
+    });
+    let mut least = SEPARATION_CAP;
+    for (n, &i) in order.iter().enumerate() {
+        let Some((s, ws)) = seen.get(i) else { continue };
+        for &j in order.iter().skip(n + 1) {
+            let Some((t, wt)) = seen.get(j) else { continue };
+            if t[0] - s[0] > reach {
+                break;
+            }
             // A bond between two labels needs room to show.
-            let room = if labels.bonds.contains(&(i, j)) {
+            let room = if labels.bonds.contains(&(i.min(j), i.max(j))) {
                 BOND_ROOM
             } else {
                 0.
@@ -2783,18 +2801,44 @@ pub(crate) fn flat_cells(models: &[Model3d], doc: &Document) -> FlatCells {
         // The copies of the cell and of the atoms on its far faces, lighter,
         // with the bonds between them.
         let mut copies = None;
+        let mut ghost_labels = vec![];
         if sites.len() > model.atoms.len()
             && let Some((ghost, index)) = ghosts(doc, model, cell, &fit, &sites)
         {
-            out.behind.extend(
-                crate::scene::primitives(&ghost)
+            // The copies' bonds lie under the drawing's; their labels go over
+            // the cell's edges on a halo of paper, as the drawing's own labels
+            // do, so no edge runs through a copy on a corner.
+            let (labels, rest): (Vec<_>, Vec<_>) = crate::scene::primitives(&ghost)
+                .into_iter()
+                .filter(|p| !matches!(p, Primitive::Halo { .. }))
+                .partition(is_text);
+            let lighter = |p| Primitive::Opacity {
+                alpha: GHOST,
+                primitive: Box::new(p),
+            };
+            out.behind.extend(rest.into_iter().map(lighter));
+            if !labels.is_empty() {
+                // As for the drawing's labels, the middle of each glyph's
+                // box is covered too, so no edge shows through a counter.
+                let plain: Vec<_> = labels.iter().map(without_opacity).collect();
+                let middles = crate::scene::label_ink_boxes(&plain)
                     .into_iter()
-                    .filter(|p| !matches!(p, Primitive::Halo { .. }))
-                    .map(|p| Primitive::Opacity {
-                        alpha: GHOST,
-                        primitive: Box::new(p),
-                    }),
-            );
+                    .map(|(lo, hi)| {
+                        let inset = (hi.x - lo.x).min(hi.y - lo.y) * 0.25;
+                        let (lo, hi) = (lo.offset(inset, inset), hi.offset(-inset, -inset));
+                        Primitive::Polygon(vec![
+                            lo,
+                            Point::new(hi.x, lo.y),
+                            hi,
+                            Point::new(lo.x, hi.y),
+                        ])
+                    });
+                ghost_labels.push(Primitive::Halo {
+                    radius: crate::scientific::label_halo_radius(),
+                    primitives: labels.iter().cloned().chain(middles).collect(),
+                });
+                ghost_labels.extend(labels.into_iter().map(lighter));
+            }
             copies = Some((ghost, index));
         }
         // Each bond leaving the cells shown is a short, light dashed stub
@@ -2848,9 +2892,27 @@ pub(crate) fn flat_cells(models: &[Model3d], doc: &Document) -> FlatCells {
                 }
             }
         }
+        out.front.extend(ghost_labels);
         out.haloed.extend(model.atoms.iter().map(|a| a.id));
     }
     out
+}
+
+/// `p` without its fading.
+fn without_opacity(p: &Primitive) -> Primitive {
+    match p {
+        Primitive::Opacity { primitive, .. } => without_opacity(primitive),
+        other => other.clone(),
+    }
+}
+
+/// Whether `p` is text, as atom labels are, perhaps faded.
+fn is_text(p: &Primitive) -> bool {
+    match p {
+        Primitive::Text { .. } => true,
+        Primitive::Opacity { primitive, .. } => is_text(primitive),
+        _ => false,
+    }
 }
 
 /// A dashed stub from `atom`'s label along `(dx, dy)` in drawing units, or

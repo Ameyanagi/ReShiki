@@ -182,8 +182,11 @@ off, only for painting. `models3d::flat_scale` sets the 2D scale. The opening
 view (`crystal_rotation`) scores every tilt of three view families by
 `separation`, measured in label heights: label boxes against each other (with
 room for a bond between two), and labels against box edges, other atoms'
-bonds and stubs; atoms beyond 300 labels are not compared. Bond orders come
-from `crystal/build.rs`.
+bonds and stubs. Labels are compared with a left-to-right sweep that stops
+once two are too far apart across to matter, so a 4 × 4 × 4 repeat is still
+checked; beyond 20,000 labels only the box is. The lighter copies' labels sit
+on a paper halo over the box's edges, as the drawing's own labels do. Bond
+orders come from `crystal/build.rs`.
 
 Test fixtures in `tests/fixtures/crystal/` are hand-written from published cell
 parameters: NaCl (Fm-3m), dry ice CO₂ (Pa-3), urea (PDB), rutile TiO₂
