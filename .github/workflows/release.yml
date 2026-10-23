@@ -542,7 +542,14 @@ jobs:
         run: |
           set -euo pipefail
           args=()
-          if gh release view web-demo --json assets -q '.assets[].name' | grep -qx reshiki-web-demo.tar.gz; then
+          # Only a missing release skips the download; any other error fails,
+          # so the next step cannot skip its newer-version check.
+          if ! assets=$(gh release view web-demo --json assets -q '.assets[].name' 2> "$RUNNER_TEMP/error"); then
+            cat "$RUNNER_TEMP/error" >&2
+            grep -qx 'release not found' "$RUNNER_TEMP/error" || exit 1
+            assets=""
+          fi
+          if grep -qx reshiki-web-demo.tar.gz <<< "$assets"; then
             gh release download web-demo -p reshiki-web-demo.tar.gz -D "$RUNNER_TEMP/published"
             args=(--previous "$RUNNER_TEMP/published/reshiki-web-demo.tar.gz")
           fi
