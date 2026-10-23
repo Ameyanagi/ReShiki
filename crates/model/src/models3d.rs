@@ -11,7 +11,9 @@
 //!
 //! A model read from a crystal file (#417) may hold several molecules, or an
 //! extended network, with its unit cell: see [`crystal`].
+mod contact;
 pub mod crystal;
+use crate::scene::Contact;
 use crate::{
     depth_appearance::Scope,
     document::{Atom, AtomStereo, Bond, Document, Point},
@@ -311,7 +313,6 @@ const OUTLINE: ([u8; 3], f32) = ([30, 34, 38], 0.85);
 const RIM: ([u8; 3], f32) = ([225, 232, 238], 0.55);
 /// The radial gradient's inner circle, as a fraction of the ball radius.
 pub const FOCAL_RADIUS: f32 = 0.05;
-
 /// Hydrogen where the theme greys it like carbon, kept lighter than carbon,
 /// on a light canvas and on a dark one.
 const HYDROGEN: [u8; 3] = [0xee, 0xf0, 0xf2];
@@ -2076,6 +2077,60 @@ impl View<'_> {
     }
 }
 
+impl View<'_> {
+    /// Where the balls `atoms`, in drawing order, overlap: for each ball cut
+    /// by others its visible part, `None` when nothing of it shows. Each seam
+    /// goes with the later ball of its pair. Balls fading in after `grown`
+    /// cut only each other.
+    fn contacts(&self, atoms: &[usize], grown: f32) -> HashMap<usize, Option<Contact>> {
+        let balls: Vec<contact::Ball> = atoms
+            .iter()
+            .filter_map(|&i| {
+                let symbol = *self.symbols.get(i)?;
+                Some(contact::Ball {
+                    p: *self.rotated.get(i)?,
+                    r: self.style.atom_radius(symbol),
+                    fading: symbol == "H" && grown < 1.,
+                })
+            })
+            .collect();
+        if balls.len() != atoms.len() {
+            return HashMap::new();
+        }
+        let eye = (self.perspective > 0.).then_some(self.camera);
+        let found = contact::contacts(&balls, eye, |q| self.project(q).0);
+        let mut out: HashMap<usize, Option<Contact>> = HashMap::new();
+        for (&atom, seen) in atoms.iter().zip(found.seen) {
+            let value = match seen {
+                None => continue,
+                Some(contact::Seen::Hidden) => None,
+                Some(contact::Seen::Shown {
+                    region,
+                    rim,
+                    shadow,
+                }) => Some(Contact {
+                    region,
+                    rim,
+                    seams: vec![],
+                    shadow: contact::SHADOW
+                        .iter()
+                        .map(|(_, alpha)| *alpha)
+                        .zip(shadow)
+                        .collect(),
+                }),
+            };
+            out.insert(atom, value);
+        }
+        // Balls are in drawing order, so the later of a pair is the larger.
+        for ((_, b), runs) in found.seams {
+            if let Some(Some(later)) = atoms.get(b).and_then(|b| out.get_mut(b)) {
+                later.seams.extend(runs);
+            }
+        }
+        out
+    }
+}
+
 /// A stick half shorter on screen than this fraction of its half width is
 /// seen end-on and left to its joint.
 const END_ON: f32 = 0.25;
@@ -2241,6 +2296,19 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             Item::Atom(_) | Item::Crossing(..) => None,
         })
         .collect();
+    // Overlapping balls show only what lies in front, with seams between.
+    let mut contacts = if matches!(style, Style::SpaceFilling | Style::BallStick) {
+        let atoms: Vec<usize> = items
+            .iter()
+            .filter_map(|(.., item)| match item {
+                Item::Atom(i) => Some(*i),
+                Item::Bond(..) | Item::Crossing(..) => None,
+            })
+            .collect();
+        view.contacts(&atoms, grown)
+    } else {
+        HashMap::new()
+    };
     let shade = |base: [f32; 3], stops: &[(f32, [f32; 3], f32)]| {
         stops
             .iter()
@@ -2293,9 +2361,15 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                     focal: center,
                     stops: vec![(0., wire), (1., wire)],
                     outline: None,
+                    contact: None,
                 }
             }
             Item::Atom(i) => {
+                let contact = match contacts.remove(&i) {
+                    Some(None) => continue,
+                    Some(Some(contact)) => Some(Box::new(contact)),
+                    None => None,
+                };
                 let (q, f) = view.project(*rotated.get(i)?);
                 let r = style.atom_radius(symbol) * view.scale * f;
                 if style == Style::Stick {
@@ -2334,6 +2408,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                     } else {
                         outline(line)
                     },
+                    contact,
                 }
             }
             Item::Bond(s, o) => {
@@ -2620,6 +2695,7 @@ fn cell_ink(
             focal: center,
             stops: vec![(0., label), (1., label)],
             outline: None,
+            contact: None,
         });
     }
     let style = crate::typography::TextStyle {

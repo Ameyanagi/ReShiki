@@ -961,9 +961,9 @@ fn morphs_out_of_the_drawing(doc: &mut Document, atoms: &[u64]) {
             _ => None,
         })
         .collect();
-    assert_eq!(spheres.len(), 5);
-    // Every ball starts on a drawn atom; hydrogens start transparent, so
-    // they never cover the atom they grow out of.
+    // The hydrogens start inside the atoms they grow out of, so they are
+    // hidden; every other ball starts on a drawn atom.
+    assert_eq!(spheres.len(), 3);
     for (center, _) in &spheres {
         assert!(
             atoms
@@ -972,7 +972,7 @@ fn morphs_out_of_the_drawing(doc: &mut Document, atoms: &[u64]) {
             "{center:?} is off the drawing"
         );
     }
-    assert_eq!(spheres.iter().filter(|(_, alpha)| *alpha == 0.).count(), 2);
+    assert!(spheres.iter().all(|(_, alpha)| *alpha == 1.));
     // Never saved.
     let read = Document::from_json(&doc.file_json().unwrap()).unwrap();
     assert_eq!(read.models[0].morph, None);
@@ -1041,6 +1041,55 @@ fn each_style_draws_the_prototype_shapes() {
     let spread = |r: &[f32]| r[0] / r[r.len() - 1];
     assert!((spread(&s) - 1.10 / 1.70).abs() < 0.08, "{s:?}");
     assert!((spread(&b) - 0.23 / 0.33).abs() < 0.08, "{b:?}");
+}
+
+/// Space-filling balls that overlap show only what lies in front, filled
+/// as paths with a contact shadow; ball & stick balls, apart, stay discs.
+#[test]
+fn overlapping_balls_are_cut_where_they_meet() {
+    let (doc, space) = styled(|m| m.style = Style::SpaceFilling);
+    let contacts: Vec<_> = space
+        .iter()
+        .filter_map(|p| match p {
+            Primitive::Sphere { contact, .. } => Some(contact.as_deref()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(contacts.len(), 5);
+    assert!(
+        contacts
+            .iter()
+            .all(|c| c.is_some_and(|c| !c.region.is_empty()))
+    );
+    // Each seam goes with one ball of its pair.
+    let seams = contacts
+        .iter()
+        .flatten()
+        .filter(|c| !c.seams.is_empty())
+        .count();
+    assert!(seams >= 2, "{seams}");
+    assert!(
+        contacts
+            .iter()
+            .flatten()
+            .any(|c| c.shadow.iter().any(|(_, s)| !s.is_empty()))
+    );
+    let svg = scene::svg(&doc);
+    let region = "fill-rule=\"evenodd\" clip-rule=\"evenodd\" fill=\"url(#";
+    assert_eq!(svg.matches(region).count(), 5);
+    assert!(svg.contains("<clipPath"));
+    // The flat look outlines the visible rim and seams, not whole circles.
+    assert!(!svg.contains("<circle"));
+
+    let (doc, ball) = styled(|_| {});
+    assert!(ball.iter().all(|p| !matches!(
+        p,
+        Primitive::Sphere {
+            contact: Some(_),
+            ..
+        }
+    )));
+    assert_eq!(scene::svg(&doc).matches("<circle").count(), 5);
 }
 
 #[test]
