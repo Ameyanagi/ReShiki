@@ -44,6 +44,27 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
+/// [`write_atomic`] `path`, then remove `old` when given; an `old` already
+/// gone is fine. In the browser both are kept together or not at all, so a
+/// failed write never loses `old`.
+pub fn write_replacing(path: &Path, bytes: &[u8], old: Option<&Path>) -> Result<(), String> {
+    #[cfg(target_arch = "wasm32")]
+    if let Some(key) = browser::key(path) {
+        let old = old
+            .and_then(browser::key)
+            .filter(|old| *old != key && browser::read(old).is_ok());
+        return match old {
+            Some(old) => browser::apply(&[(&key, Some(bytes)), (&old, None)]),
+            None => browser::write(&key, bytes),
+        };
+    }
+    write_atomic(path, bytes)?;
+    match old.map(remove_file) {
+        Some(Err(error)) if error.kind() != io::ErrorKind::NotFound => Err(error.to_string()),
+        _ => Ok(()),
+    }
+}
+
 /// A file's contents, as [`std::fs::read`].
 pub fn read(path: &Path) -> io::Result<Vec<u8>> {
     #[cfg(target_arch = "wasm32")]
@@ -103,7 +124,12 @@ pub fn rename(from: &Path, to: &Path) -> io::Result<()> {
 /// then, or when the browser offers no storage, writes fail.
 #[cfg(any(target_arch = "wasm32", test))]
 pub mod browser {
-    use std::{cell::RefCell, collections::BTreeMap, io, path::Path};
+    use std::{
+        cell::RefCell,
+        collections::{BTreeMap, BTreeSet},
+        io,
+        path::Path,
+    };
 
     /// One file's change: its new contents, or none to remove it, and what
     /// the page held before, so a change another page kept first is not
@@ -122,6 +148,11 @@ pub mod browser {
     struct Store {
         files: BTreeMap<String, Vec<u8>>,
         sink: Option<Sink>,
+        /// This page's session, which names its recovery drafts.
+        session: String,
+        /// The sessions of the site's other open pages, whose drafts are not
+        /// offered for recovery.
+        open: BTreeSet<String>,
     }
 
     thread_local! {
@@ -129,12 +160,30 @@ pub mod browser {
     }
 
     /// Start with `files` from the page's storage, by key, and keep each later
-    /// change with `sink`.
-    pub fn install(files: impl IntoIterator<Item = (String, Vec<u8>)>, sink: Sink) {
+    /// change with `sink`. `session` names this page, and `open` the site's
+    /// other pages that are still open.
+    pub fn install(
+        files: impl IntoIterator<Item = (String, Vec<u8>)>,
+        sink: Sink,
+        session: String,
+        open: impl IntoIterator<Item = String>,
+    ) {
         STORE.with_borrow_mut(|store| {
             store.files = files.into_iter().collect();
             store.sink = Some(sink);
+            store.session = session;
+            store.open = open.into_iter().collect();
         });
+    }
+
+    /// This page's session, or none before storage is installed.
+    pub fn session() -> Option<String> {
+        STORE.with_borrow(|store| Some(store.session.clone()).filter(|s| !s.is_empty()))
+    }
+
+    /// Whether `session` is this page or another open page of the site.
+    pub fn open(session: &str) -> bool {
+        STORE.with_borrow(|store| store.session == session || store.open.contains(session))
     }
 
     /// A change another tab made and kept, which this one only remembers.

@@ -131,8 +131,8 @@ through Local Font Access, behind a permission prompt.
 
 The editor keeps what the desktop app keeps in its data folder in the
 browser's IndexedDB for the page's site (database `reshiki`): appearance
-settings, My templates and favorites, saved themes, your abbreviations and
-added fonts. They load before the editor starts, and a change in one tab
+settings, My templates and favorites, saved themes, your abbreviations,
+added fonts and recovery drafts. They load before the editor starts, and a change in one tab
 reaches the site's other tabs while they run. A tab keeps a change only if the
 stored file is still the one it read, so tabs never save over each other; a
 save that another tab beat, or one the browser refuses because storage is
@@ -141,6 +141,14 @@ full, is undone and the status bar says why. Messages name this storage
 windows, the editor starts with defaults and saving a setting, template, theme
 or abbreviation says that browser storage is unavailable. Clearing the site's
 data removes it all.
+
+As in the desktop app, each drawing with unsaved changes has a recovery draft,
+written within about a second of each change. If the page is reloaded, closed
+or crashes, the next page of the site offers the drafts in the status bar
+(**Recovery draft · Restore · Dismiss**). Drafts of the site's other open tabs
+are not offered (this needs Web Locks, which current browsers have). The page
+cannot write while it unloads, so a change made in the last second before a
+reload can be lost.
 
 ### Demo
 
@@ -166,8 +174,7 @@ it.
   updates, printing, Office and LibreOffice integration are not built.
 - Open and Save use the browser: Open picks a file, Save and Export download
   one under the drawing's name. Drawing styles, themes, templates and pictures
-  cannot be loaded from files yet, Insert cannot insert files, and there are
-  no recovery drafts.
+  cannot be loaded from files yet, and Insert cannot insert files.
 - Copying and pasting drawings goes through `navigator.clipboard`, which asks
   for permission to read, and carries PNG, HTML, SVG (Chrome and Edge) and
   text, not PDF, CDX or ChemDraw's own formats. Text fields copy, cut and

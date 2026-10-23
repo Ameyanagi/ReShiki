@@ -53,6 +53,22 @@ fn desktop_data_files_are_the_file_system() {
         std::io::ErrorKind::NotFound
     );
     assert_eq!(browser_data_directory(), None);
+    // A replacement removes the old file, and an old file already gone is fine.
+    write_atomic(&themes.join("old.json"), b"old").unwrap();
+    write_replacing(
+        &themes.join("new.json"),
+        b"new",
+        Some(&themes.join("old.json")),
+    )
+    .unwrap();
+    assert_eq!(read_dir(&themes).unwrap(), [themes.join("new.json")]);
+    write_replacing(
+        &themes.join("new.json"),
+        b"newer",
+        Some(&themes.join("old.json")),
+    )
+    .unwrap();
+    assert_eq!(read(&themes.join("new.json")).unwrap(), b"newer");
 }
 #[test]
 fn browser_keys_are_paths_under_the_browser_root() {
@@ -73,6 +89,7 @@ fn browser_storage_keeps_each_change_and_lists_one_folder() {
     assert!(browser::write("appearance.json", b"{}").is_err());
     let kept = Rc::new(RefCell::new(Vec::new()));
     let sink = kept.clone();
+    assert_eq!(browser::session(), None);
     browser::install(
         [("themes/a.reshiki-theme".to_owned(), b"a".to_vec())],
         Box::new(move |changes| {
@@ -88,7 +105,11 @@ fn browser_storage_keeps_each_change_and_lists_one_folder() {
                 .collect();
             sink.borrow_mut().push(changes)
         }),
+        "s1".into(),
+        ["s2".to_owned()],
     );
+    assert_eq!(browser::session().as_deref(), Some("s1"));
+    assert!(browser::open("s1") && browser::open("s2") && !browser::open("s3"));
     browser::write("themes/b.reshiki-theme", b"b").unwrap();
     browser::write("themes/.deleted/1/c.reshiki-theme", b"c").unwrap();
     browser::write("appearance.json", b"{}").unwrap();
@@ -147,6 +168,8 @@ fn a_change_that_was_not_kept_goes_back_unless_replaced() {
     browser::install(
         [("appearance.json".to_owned(), b"1".to_vec())],
         Box::new(|_| {}),
+        "s1".into(),
+        [],
     );
     browser::write("appearance.json", b"2").unwrap();
     // Another page kept 3 first: this page's 2 gives way to it.
