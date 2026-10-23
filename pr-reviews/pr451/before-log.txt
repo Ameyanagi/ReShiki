@@ -1,0 +1,13 @@
+url https://reshiki.com/demo/
+loaded: {"title":"ReShiki editor","canvasAlt":"Untitled — ReShiki","isDirty":"no isDirty()"}
+after drawing: {"title":"ReShiki editor","canvasAlt":"Untitled • — ReShiki","isDirty":"no isDirty()"}
+reload -> reloaded | dialogs: []
+before close: {"title":"ReShiki editor","canvasAlt":"Untitled • — ReShiki","isDirty":"no isDirty()"}
+DIALOG confirm "Save changes?\nDo you want to save the changes you made to “Untitled”? Your changes will be lost if you don’t save them."
+DIALOG confirm "Close without saving? OK discards your changes; Cancel keeps editing."
+close tab -> [{"type":"confirm","message":"Save changes?\nDo you want to save the changes you made to “Untitled”? Your changes will be lost if you don’t save them."},{"type":"confirm","message":"Close without saving? OK discards your changes; Cancel keeps editing."}]
+dirty events: null
+title events: null
+document.title after drawing: "ReShiki editor"
+DIALOG confirm "Save changes?\nDo you want to save the changes you made to “Untitled”? Your changes will be lost if you don’t save them."
+DIALOG confirm "Close without saving? OK discards your changes; Cancel keeps editing."

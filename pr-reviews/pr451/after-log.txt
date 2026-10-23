@@ -1,0 +1,13 @@
+console error: Failed to load resource: the server responded with a status of 404 (File not found)
+url http://127.0.0.1:8426/demo/
+loaded: {"title":"Untitled — ReShiki","canvasAlt":"Untitled — ReShiki","isDirty":false}
+after drawing: {"title":"Untitled • — ReShiki","canvasAlt":"Untitled • — ReShiki","isDirty":true}
+DIALOG beforeunload ""
+reload -> reload did not happen: page.reload: Timeout 8000ms exceeded. | dialogs: [{"type":"beforeunload","message":""}]
+before close: {"title":"Untitled • — ReShiki","canvasAlt":"Untitled • — ReShiki","isDirty":true}
+close tab -> []
+Escape -> {"title":"Untitled • — ReShiki","canvasAlt":"Untitled • — ReShiki","isDirty":true}
+dirty events: [true]
+title events: ["Untitled • — ReShiki"]
+document.title after drawing: "Untitled • — ReShiki"
+Don't Save -> {"title":"Untitled — ReShiki","isDirty":false}
