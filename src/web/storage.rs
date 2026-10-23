@@ -3,7 +3,8 @@
 //! after each change. Other tabs of the same site hear of each change through
 //! a BroadcastChannel, so a tab never saves over another's newer file.
 //!
-//! Fonts the page adds are kept here too, and added again at the next mount.
+//! Fonts the page adds are kept here too, and added again at the next mount
+//! when text needs them, as the page's own fallback would be.
 use super::error;
 use reshiki::storage::{self, browser};
 use std::{cell::RefCell, collections::HashMap, path::PathBuf};
@@ -24,6 +25,8 @@ struct Fonts {
     /// Fonts added before storage opened, kept once it does.
     waiting: Vec<(String, Vec<u8>)>,
     open: bool,
+    /// Fonts kept from earlier visits, by SHA-256, until text needs them.
+    kept: Vec<(String, Vec<u8>)>,
 }
 
 thread_local! {
@@ -36,16 +39,18 @@ thread_local! {
 pub(super) async fn open() {
     match load().await {
         Ok(()) => {
-            let kept = browser::files(FONTS);
-            for (key, bytes) in kept {
-                let hash = key.rsplit('/').next().unwrap_or_default();
-                let hash = hash.split('.').next().unwrap_or_default().to_owned();
-                if let Err(message) = add(hash, bytes) {
-                    error(&format!("Could not add a kept font: {message}"));
-                }
-            }
+            // Added only once text needs them: a font added before the app
+            // starts also becomes a fallback for the interface's own text.
+            let kept = browser::files(FONTS)
+                .into_iter()
+                .filter_map(|(key, bytes)| {
+                    let name = key.rsplit('/').next()?;
+                    Some((name.strip_suffix(".font")?.to_owned(), bytes))
+                })
+                .collect();
             let waiting = FONTS_ADDED.with_borrow_mut(|fonts| {
                 fonts.open = true;
+                fonts.kept = kept;
                 std::mem::take(&mut fonts.waiting)
             });
             for (hash, bytes) in waiting {
@@ -82,6 +87,26 @@ pub(super) fn add_font(bytes: Vec<u8>) -> Result<usize, String> {
         keep(&hash, &bytes);
     }
     Ok(faces)
+}
+
+/// Whether fonts kept from earlier visits wait to be added.
+pub(super) fn has_kept() -> bool {
+    FONTS_ADDED.with_borrow(|fonts| !fonts.kept.is_empty())
+}
+
+/// The kept fonts not added yet, by SHA-256, which [`add_kept`] adds; each
+/// is handed out once.
+pub(super) fn take_kept() -> Vec<(String, Vec<u8>)> {
+    FONTS_ADDED.with_borrow_mut(|fonts| std::mem::take(&mut fonts.kept))
+}
+
+/// Add fonts from [`take_kept`].
+pub(super) fn add_kept(kept: Vec<(String, Vec<u8>)>) {
+    for (hash, bytes) in kept {
+        if let Err(message) = add(hash, bytes) {
+            error(&format!("Could not add a kept font: {message}"));
+        }
+    }
 }
 
 fn add(hash: String, bytes: Vec<u8>) -> Result<usize, String> {

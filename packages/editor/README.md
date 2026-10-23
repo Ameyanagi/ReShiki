@@ -119,8 +119,8 @@ attributes and fires `error` for a font that could not load. Fonts added this
 way also reach `save` and `exportImage` figures.
 
 Each font added with `fonts`, `addFont` or the Japanese fallback is kept in
-browser storage (below) and added again at the next mount, so the fallback is
-downloaded once per site rather than once per visit. The editor cannot list
+browser storage (below) and added again on a later visit once a caption needs
+it, so the fallback is downloaded once per site rather than once per visit. The editor cannot list
 or read the computer's installed fonts by itself: browsers only offer them
 through Local Font Access, behind a permission prompt.
 

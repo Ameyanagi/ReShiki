@@ -18,6 +18,8 @@ impl App {
             Request::Close => return iced::exit(),
             // The canvas sees the new font when it draws after this update.
             Request::Redraw => {}
+            // As Redraw, once the fonts are in.
+            Request::AddFonts(fonts) => crate::web::add_kept_fonts(fonts),
             Request::Drag(files) => self.browser_drag(files),
             // Open or insert them as chosen files, through the same checks.
             // The import keeps the tab and drawing the files were dropped
