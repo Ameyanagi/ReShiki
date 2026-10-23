@@ -12,3 +12,13 @@ and bitmap/color fallback. Its adaptation restricts placement to top-left at the
 origin and reuses a bounded Swash glyph cache between text strings, with explicit
 memory/entry accounting and eviction. These adapted portions retain their MIT
 terms and are not represented as original dual-licensed ReShiki code.
+
+Patched iced_winit
+==================
+
+vendor/iced_winit is iced_winit 0.14.1 from crates.io
+(https://github.com/iced-rs/iced/tree/0.14/winit), patched so that the browser
+build receives input method text; vendor/iced_winit/UPSTREAM.json lists the
+upstream file hashes and every local change. Copyright 2019 Héctor Ramón,
+Iced contributors; licensed under MIT (vendor/iced_winit/LICENSE, the same text
+as LICENSE in this directory).

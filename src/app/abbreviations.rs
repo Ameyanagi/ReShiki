@@ -138,6 +138,7 @@ pub(super) fn user_catalog_path() -> Result<PathBuf, String> {
             directories_next::ProjectDirs::from("dev", "reshiki", "ReShiki")
                 .map(|d| d.data_local_dir().to_owned())
         })
+        .or_else(reshiki::storage::browser_data_directory)
         .ok_or("No application data directory")?;
     Ok(root.join("abbreviations.json"))
 }
@@ -149,13 +150,18 @@ pub(super) fn load_user_catalog() -> Option<String> {
         return None;
     }
     let path = user_catalog_path().ok()?;
-    let text = match std::fs::read_to_string(&path) {
+    let text = match read_text(&path) {
         Ok(text) => text,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return None,
         Err(error) => return Some(format!("Could not read {}: {error}", path.display())),
     };
     let errors = reshiki::chemistry::abbreviations::set_user(Some(&text));
     catalog_warning(&errors, &path)
+}
+
+fn read_text(path: &std::path::Path) -> std::io::Result<String> {
+    String::from_utf8(reshiki::storage::read(path)?)
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))
 }
 
 fn catalog_warning(errors: &[String], path: &std::path::Path) -> Option<String> {
@@ -178,10 +184,13 @@ impl App {
         let defined = catalog::from_selection(&self.tab.doc, &self.tab.selected, &label, &reverse)?;
         let path = user_catalog_path()?;
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            reshiki::storage::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
         // Hold the lock from read to write, so another ReShiki window saving
-        // at the same time cannot drop this group. Dropping it unlocks.
+        // at the same time cannot drop this group. Dropping it unlocks. A
+        // browser tab runs on one thread, and other tabs' saves reach its
+        // storage between events, so it needs none.
+        #[cfg(not(target_arch = "wasm32"))]
         let lock = std::fs::OpenOptions::new()
             .create(true)
             .truncate(false)
@@ -189,7 +198,7 @@ impl App {
             .open(path.with_extension("json.lock"))
             .and_then(|file| file.lock().map(|()| file))
             .map_err(|e| format!("Could not lock your abbreviations file: {e}"))?;
-        let existing = match std::fs::read_to_string(&path) {
+        let existing = match read_text(&path) {
             Ok(text) => Some(text),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
             Err(error) => return Err(format!("Could not read {}: {error}", path.display())),
@@ -223,10 +232,7 @@ impl App {
         let mut doc = self.tab.doc.clone();
         doc.contract(&defined.members, &label, &reverse)?;
         reshiki::storage::write_atomic(&path, text.as_bytes())?;
-        #[cfg_attr(
-            target_arch = "wasm32",
-            expect(clippy::drop_non_drop, reason = "Browser files hold no lock")
-        )]
+        #[cfg(not(target_arch = "wasm32"))]
         drop(lock);
         let skipped = catalog::set_user(Some(&text));
         self.abbreviations.catalog_warning = catalog_warning(&skipped, &path);

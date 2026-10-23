@@ -874,6 +874,96 @@ fn fitting_and_selecting_a_crystal_hold_its_whole_cell() {
     }
 }
 
+/// Dashed stubs, lighter copies and thin seam lines in a drawing.
+fn supercell_ink(doc: &Document) -> (usize, usize, usize) {
+    use crate::scene::Primitive;
+    let drawing = crate::scene::primitives(doc);
+    let line = doc.drawing_style.world(doc.drawing_style.line_width_pt);
+    let stub = |p: &Primitive| matches!(p, Primitive::Wire { dash, .. } if *dash > 0. && *dash < line * 3.);
+    let stubs = drawing
+        .iter()
+        .filter(|p| match p {
+            Primitive::Opacity { primitive, .. } => stub(primitive),
+            other => stub(other),
+        })
+        .count();
+    let copies = drawing
+        .iter()
+        .filter(|p| matches!(p, Primitive::Opacity { alpha, primitive } if (*alpha - 0.55).abs() < 1e-3 && matches!(**primitive, Primitive::Text { .. })))
+        .count();
+    let seams = drawing
+        .iter()
+        .filter(|p| matches!(p, Primitive::Wire { width, dash, .. } if *dash == 0. && *width < line * 0.9))
+        .count();
+    (stubs, copies, seams)
+}
+
+#[test]
+fn a_supercell_draws_lighter_copies_seams_and_bonds_between_cells() {
+    let (mut doc, _) = open("cif", NACL);
+    // One cell: its 27 ions as crystallographers draw it, as lighter copies
+    // (the model's own atoms' copies lie under them), no seams.
+    let (stubs, copies, seams) = supercell_ink(&doc);
+    assert_eq!((copies, seams), (27, 0));
+    doc.models[0].repeat = [2, 1, 1];
+    let (wide_stubs, copies, seams) = supercell_ink(&doc);
+    // Two cells: ions at every half step, 5 × 3 × 3; one plane between the
+    // cells, four lines.
+    assert_eq!(copies, 45);
+    assert_eq!(seams, 4);
+    // Bonds that leave the whole block are still stubs.
+    assert!(stubs > 0 && wide_stubs > 0, "{stubs} {wide_stubs}");
+    // The box and its a label reach the far end of both cells.
+    let (origin, ends) = drawn_cell(&crate::scene::primitives(&doc));
+    let (_, single) = drawn_cell(&crate::scene::primitives(&open("cif", NACL).0));
+    let (single_origin, _) = drawn_cell(&crate::scene::primitives(&open("cif", NACL).0));
+    let size = |o: Point, e: &[Point; 3]| e.iter().map(|p| p.distance(o)).product::<f32>();
+    assert!((size(origin, &ends) / size(single_origin, &single) - 2.).abs() < 0.05);
+    // Saved and read back; at most four cells along each axis.
+    let read = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(read.models[0].repeat, [2, 1, 1]);
+    doc.models[0].repeat = [5, 1, 1];
+    assert!(doc.validate().is_err());
+}
+
+#[test]
+fn looking_along_an_axis_keeps_the_drawing_on_its_box() {
+    use crate::models3d::{Along, look_along};
+    let (mut doc, _) = open("cif", CO2);
+    doc.models[0].repeat = [2, 2, 1];
+    let before = doc.atoms.clone();
+    assert!(look_along(&mut doc, 0, Along::C));
+    assert_ne!(doc.atoms, before);
+    let m = model(&doc);
+    // c points nearly at the viewer: its edge is short beside a's and b's.
+    let (origin, ends) = cell_in(&crate::scene::primitives(&doc), false);
+    let mut lengths: Vec<_> = ends.iter().map(|e| e.distance(origin)).collect();
+    lengths.sort_by(f32::total_cmp);
+    assert!(lengths[0] < 0.3 * lengths[1], "{lengths:?}");
+    // The atoms still sit where their fractions put them on the box.
+    let at_origin = doc
+        .atoms
+        .iter()
+        .find(|a| fractional(m, a.id).iter().all(|f| f.abs() < 1e-3));
+    if let Some(atom) = at_origin {
+        assert!(atom.position.distance(origin) < 0.1);
+    }
+    // An axis seen end-on has no label.
+    let mut doc = open("cif", NACL).0;
+    let cell = doc.models[0].cell.clone().unwrap();
+    doc.models[0].rotation = Along::C.rotation(&cell);
+    let turned = doc.models[0].clone();
+    crate::models3d::lay_out_flat(&mut doc, &turned);
+    let labels: Vec<_> = crate::scene::primitives(&doc)
+        .into_iter()
+        .filter_map(|p| match p {
+            crate::scene::Primitive::Text { text, style, .. } if style.italic => Some(text),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(labels, ["a", "b"]);
+}
+
 #[test]
 fn moving_a_crystal_needs_no_chemistry_for_its_labels() {
     // Rock salt's Cl has six bonds, which valence rules would refuse.
@@ -884,6 +974,38 @@ fn moving_a_crystal_needs_no_chemistry_for_its_labels() {
     let refresh =
         crate::atom_labels::refresh::Refresh::calculate(&doc, &Default::default()).unwrap();
     assert_eq!(refresh.notice, None);
+}
+
+#[test]
+fn rock_salt_fills_its_cell_as_crystallographers_draw_it() {
+    let (mut doc, _) = open("cif", NACL);
+    let m = model(&doc).clone();
+    let sites = crate::models3d::shown_sites(&doc, &m);
+    // 27 ions: 8 in the cell and 19 more on its far faces, edges and corners.
+    assert_eq!(sites.len(), 27);
+    let at = |(id, c): &(u64, [i32; 3])| {
+        let f = fractional(&m, *id);
+        [0, 1, 2].map(|k| f[k] + f64::from(c[k]))
+    };
+    for corner in 0..8_usize {
+        let want = [corner & 1, (corner >> 1) & 1, (corner >> 2) & 1].map(|v| v as f64);
+        assert!(
+            sites
+                .iter()
+                .any(|s| (0..3).all(|k| (at(s)[k] - want[k]).abs() < 1e-3)),
+            "no atom on corner {want:?}"
+        );
+    }
+    // The drawing still holds each atom once.
+    assert_eq!(doc.atoms.len(), 8);
+    // Two cells along each axis: ions at every half step, 5 × 5 × 5.
+    doc.models[0].repeat = [2, 2, 2];
+    assert_eq!(crate::models3d::shown_sites(&doc, model(&doc)).len(), 125);
+    // A molecular crystal copies whole molecules: CO₂ on the corners.
+    let (doc, _) = open("cif", CO2);
+    let sites = crate::models3d::shown_sites(&doc, model(&doc));
+    assert_eq!(sites.len() % 3, 0, "{}", sites.len());
+    assert!(sites.len() > doc.atoms.len());
 }
 
 #[test]
@@ -1014,4 +1136,100 @@ fn bond_orders_do_not_depend_on_atom_order() {
             .count();
         assert_eq!(doubles, 1, "carbon {c}: {orders:?}");
     }
+}
+
+#[test]
+fn a_plain_xyz_molecule_keeps_its_linear_carbon_label() {
+    let (doc, _) = open("xyz", "3\nCO2\nC 0 0 0\nO 1.16 0 0\nO -1.16 0 0\n");
+    let carbon = doc.atoms.iter().find(|a| a.element == "C").unwrap();
+    assert_eq!(
+        carbon.display.carbons,
+        Some(crate::atom_labels::Carbons::All)
+    );
+    assert!(crate::atom_labels::visible(carbon, &doc));
+}
+
+#[test]
+fn far_face_copies_draw_their_stubs_too() {
+    use crate::scene::Primitive;
+    let (doc, _) = open("cif", NACL);
+    let line = doc.drawing_style.world(doc.drawing_style.line_width_pt);
+    // Stubs drawn from the lighter copies on the far faces.
+    let ghost_stubs = crate::scene::primitives(&doc)
+        .into_iter()
+        .filter(|p| match p {
+            Primitive::Opacity { primitive, .. } => {
+                matches!(**primitive, Primitive::Wire { dash, .. } if dash > 0. && dash < line * 3.)
+            }
+            _ => false,
+        })
+        .count();
+    assert!(ghost_stubs > 0);
+}
+
+#[test]
+fn both_places_the_3d_frame_past_a_whole_repeat() {
+    use crate::models3d::{Display, frame, set_display};
+    let (mut doc, _) = open("cif", NACL);
+    doc.models[0].repeat = [3, 1, 1];
+    let drawing = crate::scene::bounds(&crate::scene::primitives(&doc));
+    set_display(&mut doc, 0, Display::Both);
+    let (lo, _) = frame(&doc, &doc.models[0]).unwrap();
+    assert!(lo.x > drawing.1.x, "{lo:?} {drawing:?}");
+}
+
+#[test]
+fn copies_on_the_box_sit_on_a_halo_over_its_edges() {
+    use crate::scene::Primitive;
+    let lighter_text = |p: &Primitive| {
+        matches!(p, Primitive::Opacity { alpha, primitive }
+            if (*alpha - 0.55).abs() < 1e-3 && matches!(**primitive, Primitive::Text { .. }))
+    };
+    for (format, text) in [
+        ("cif", NACL),
+        ("xyz", SILICON),
+        ("poscar", RUTILE),
+        ("cif", CO2),
+    ] {
+        let (doc, _) = open(format, text);
+        let drawing = crate::scene::primitives(&doc);
+        let last_edge = drawing
+            .iter()
+            .rposition(|p| matches!(p, Primitive::Wire { dash, .. } if *dash == 0.))
+            .unwrap();
+        // The copies' labels: lighter text after the box's front edges, on a
+        // halo that knocks the edges out beneath them.
+        let halo = drawing
+            .iter()
+            .position(|p| {
+                matches!(p, Primitive::Halo { primitives, .. }
+                    if primitives.iter().any(|q| matches!(q, Primitive::Text { .. })))
+            })
+            .unwrap();
+        assert!(halo > last_edge, "{format}: halo before the edges");
+        let copies = drawing[halo..].iter().filter(|p| lighter_text(p)).count();
+        assert!(copies > doc.atoms.len(), "{format}: {copies}");
+        assert!(
+            !drawing[..last_edge].iter().any(lighter_text),
+            "{format}: a copy's label under the edges"
+        );
+    }
+}
+
+#[test]
+fn large_repeats_still_keep_atom_labels_apart() {
+    // 4 × 4 × 4 rock salt: 512 labels. Looking straight down c would stack
+    // every Na on a Cl, so the view chosen along c must tilt off it.
+    let (mut doc, _) = open("cif", NACL);
+    doc.models[0].repeat = [4, 4, 4];
+    let cell = doc.models[0].cell.clone().unwrap();
+    assert!(crate::models3d::look_along(
+        &mut doc,
+        0,
+        crate::models3d::Along::C
+    ));
+    assert_ne!(
+        doc.models[0].rotation,
+        crate::models3d::Along::C.rotation(&cell)
+    );
 }

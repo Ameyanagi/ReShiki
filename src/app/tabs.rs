@@ -141,6 +141,12 @@ impl App {
         }
     }
 
+    /// Whether any tab has unsaved changes, which leaving the page would lose.
+    #[cfg(any(target_arch = "wasm32", test))]
+    pub(crate) fn unsaved(&self) -> bool {
+        self.strip().any(|tab| self.edited(tab))
+    }
+
     pub(super) fn tab_index(&self, id: TabId) -> Option<usize> {
         self.strip().position(|tab| tab.id == id)
     }
