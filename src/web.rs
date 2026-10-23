@@ -150,7 +150,7 @@ pub async fn mount(
             ..Host::default()
         }
     });
-    listen_to_page();
+    ask_before_unload();
     if crate::platform::mac() {
         let swap = command_key(&element);
         HOST.with_borrow_mut(|host| host.command_key = swap);
@@ -174,12 +174,10 @@ pub async fn mount(
 }
 
 /// Ask before the page unloads with unsaved changes. The browser never sends
-/// the window a close request, so the desktop's save dialog cannot run.
-fn listen_to_page() {
-    let Some(window) = web_sys::window() else {
-        return;
-    };
-    listen(&window, "beforeunload", |event| {
+/// the window a close request, so the desktop's save dialog cannot run. The
+/// listener lives as long as the page; after `destroy` nothing is dirty.
+fn ask_before_unload() {
+    let ask = Closure::<dyn FnMut(web_sys::Event)>::new(|event: web_sys::Event| {
         if HOST.with_borrow(|host| host.dirty) {
             // Browsers show their own "Leave site?" text.
             event.prevent_default();
@@ -188,32 +186,12 @@ fn listen_to_page() {
             }
         }
     });
-    listen(&window, "pagehide", |_| page_hidden());
-    if let Some(document) = window.document() {
-        listen(&document.clone(), "visibilitychange", move |_| {
-            if document.visibility_state() == web_sys::VisibilityState::Hidden {
-                page_hidden();
-            }
-        });
+    if let Some(window) = web_sys::window() {
+        let _ =
+            window.add_event_listener_with_callback("beforeunload", ask.as_ref().unchecked_ref());
     }
+    ask.forget();
 }
-
-/// Call `handler` for each `event` on `target` for as long as the page lives,
-/// as the editor does.
-fn listen(
-    target: &web_sys::EventTarget,
-    event: &str,
-    handler: impl FnMut(web_sys::Event) + 'static,
-) {
-    let handler = Closure::<dyn FnMut(web_sys::Event)>::new(handler);
-    let _ = target.add_event_listener_with_callback(event, handler.as_ref().unchecked_ref());
-    handler.forget();
-}
-
-/// The page was hidden or is being unloaded: the last moment to keep work the
-/// user may not come back for. This is where recovery drafts are to be written
-/// (#427); nothing is kept in the browser yet.
-fn page_hidden() {}
 
 /// The system the browser runs on, as `navigator.userAgentData.platform`
 /// ("macOS", "Windows") or else `navigator.platform` ("MacIntel", "Win32")

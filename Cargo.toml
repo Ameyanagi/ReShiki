@@ -152,7 +152,6 @@ web-sys = { version = "0.3", features = [
   "HtmlInputElement",
   "Navigator",
   "Node",
-  "VisibilityState",
   "Window",
 ] }
 web-time = "1"
