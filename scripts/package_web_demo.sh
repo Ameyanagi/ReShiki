@@ -4,16 +4,21 @@
 # JavaScript it imports, the editor's WebAssembly and the license texts, all
 # linked by relative paths. Run scripts/build_wasm.sh first, or pass --build to
 # run it here. The archive goes to dist/reshiki-web-demo.tar.gz unless a path
-# is given.
+# is given. --previous ARCHIVE keeps the files that archive's page loads, so a
+# page cached before this release can still load its own files.
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 package=$root/packages/editor
 
-if [[ ${1:-} == --build ]]; then
-  "$root/scripts/build_wasm.sh"
-  shift
-fi
+previous=
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --build) "$root/scripts/build_wasm.sh"; shift ;;
+    --previous) previous=$(cd "$(dirname "$2")" && pwd)/$(basename "$2"); shift 2 ;;
+    *) break ;;
+  esac
+done
 output=${1:-$root/dist/reshiki-web-demo.tar.gz}
 mkdir -p "$(dirname "$output")"
 output=$(cd "$(dirname "$output")" && pwd)/$(basename "$output")
@@ -67,6 +72,28 @@ hashed dist/editor/reshiki_bg.wasm
 hashed dist/editor/reshiki.js
 hashed src/fonts.js
 hashed src/editor.js
+
+# index.html can stay cached for 10 minutes after a deploy, and that page asks
+# for the previous release's names. Keep the files it loads, following its
+# imports, so files older than one release drop out.
+if [[ -n $previous ]]; then
+  old=$stage/previous
+  mkdir -p "$old"
+  tar -xzf "$previous" -C "$old"
+  queue=index.html seen=
+  while [[ -n $queue ]]; do
+    file=${queue%% *}
+    queue=${queue#"$file"}; queue=${queue# }
+    for name in $(grep -oE '[A-Za-z0-9_-]+\.[0-9a-f]{12}\.(js|wasm)' "$old/demo/$file" | sort -u); do
+      [[ " $seen " == *" $name "* ]] && continue
+      seen="$seen $name"
+      path=$(cd "$old/demo" && find src dist -name "$name" | head -n 1)
+      [[ -n $path ]] || continue
+      [[ -e $demo/$path ]] || cp "$old/demo/$path" "$demo/$path"
+      if [[ $name == *.js ]]; then queue="${queue:+$queue }$path"; fi
+    done
+  done
+fi
 
 # No macOS metadata, which GNU tar warns about when docs.yml extracts it.
 COPYFILE_DISABLE=1 tar --no-xattrs -czf "$output" -C "$stage" demo

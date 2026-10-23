@@ -124,18 +124,19 @@ git push origin v0.12.0
 
 A `v*` tag triggers builds. A mismatched version or a tagged commit outside `main` fails before packaging. The macOS archive must be signed, notarized, stapled and verified before the release publishes; missing credentials fail the job instead of silently publishing an unsigned macOS download. All six packages and the complete live reference tests on macOS ARM64, Linux x64, and Windows x64 must pass before publication. With `SIGNPATH_ENABLED=true`, the Windows application and final setup program must also pass release-signature verification before publication; missing credentials, approval, or signature verification fail the release. Until activation, Windows packages are unsigned. Linux packages remain unsigned. Tags containing a prerelease suffix create a GitHub prerelease. Manual **Release builds** runs never publish a release; **Nightly builds** runs publish prereleases from `main`.
 
-After a release publishes, the **web_demo** job builds the browser editor with `scripts/build_wasm.sh`, packages it with `scripts/package_web_demo.sh`, replaces `reshiki-web-demo.tar.gz` on the `web-demo` prerelease, and runs the **Documentation** workflow. It leaves the asset alone when the published demo's `demo/VERSION` is newer. The Documentation workflow copies the asset into the site at [reshiki.com/demo](https://reshiki.com/demo/). Without that release the site builds without a demo. To publish the demo by hand:
+After a release publishes, the **web_demo** job builds the browser editor with `scripts/build_wasm.sh`, packages it with `scripts/package_web_demo.sh --previous` and the published archive, replaces `reshiki-web-demo.tar.gz` on the `web-demo` prerelease, and runs the **Documentation** workflow. It leaves the asset alone when the published demo's `demo/VERSION` is newer. The Documentation workflow copies the asset into the site at [reshiki.com/demo](https://reshiki.com/demo/). Without that release the site builds without a demo. To publish the demo by hand:
 
 ```sh
-scripts/build_wasm.sh && scripts/package_web_demo.sh
+gh release download web-demo -p reshiki-web-demo.tar.gz -D build/published
+scripts/build_wasm.sh && scripts/package_web_demo.sh --previous build/published/reshiki-web-demo.tar.gz
 gh release create web-demo --prerelease --latest=false --title "Browser editor demo" --notes "The browser editor at https://reshiki.com/demo/."
 gh release upload web-demo dist/reshiki-web-demo.tar.gz --clobber
 gh workflow run docs.yml --ref main
 ```
 
-Skip `gh release create` when the `web-demo` release exists.
+Skip the download and `--previous` for the first demo, and `gh release create` when the `web-demo` release exists.
 
-The packaged demo names its JavaScript and WebAssembly by content hash (`src/editor.<hash>.js`, `dist/editor/reshiki_bg.<hash>.wasm` and so on), and only `index.html` keeps a fixed name, so a page always loads the JavaScript and WebAssembly from one build. GitHub Pages serves every file with `Cache-Control: max-age=600` and cannot set headers, and Cloudflare does not cache `.wasm` at the edge by default. To cache the hashed files for a year, add a Cloudflare Cache Rule on the reshiki.com zone:
+The packaged demo names its JavaScript and WebAssembly by content hash (`src/editor.<hash>.js`, `dist/editor/reshiki_bg.<hash>.wasm` and so on), and only `index.html` keeps a fixed name, so a page always loads the JavaScript and WebAssembly from one build. `--previous` also keeps the files the published demo's `index.html` loads, because a page cached for up to 10 minutes before a release still asks for them; files from older releases drop out. GitHub Pages serves every file with `Cache-Control: max-age=600` and cannot set headers, and Cloudflare does not cache `.wasm` at the edge by default. To cache the hashed files for a year, add a Cloudflare Cache Rule on the reshiki.com zone:
 
 - **When:** `starts_with(http.request.uri.path, "/demo/src/") or starts_with(http.request.uri.path, "/demo/dist/")`
 - **Then:** Eligible for cache; Edge TTL: ignore cache-control header, 1 year; Browser TTL: override origin, 1 year.

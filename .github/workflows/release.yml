@@ -533,7 +533,20 @@ jobs:
           path: packages/editor/dist
           if-no-files-found: error
           retention-days: 7
-      - run: scripts/package_web_demo.sh
+      # Keep the published demo's files, which a page cached before this
+      # release still loads.
+      - name: Package the demo
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          args=()
+          if gh release view web-demo --json assets -q '.assets[].name' | grep -qx reshiki-web-demo.tar.gz; then
+            gh release download web-demo -p reshiki-web-demo.tar.gz -D "$RUNNER_TEMP/published"
+            args=(--previous "$RUNNER_TEMP/published/reshiki-web-demo.tar.gz")
+          fi
+          scripts/package_web_demo.sh "${args[@]}"
       - name: Replace the web-demo asset and redeploy the site
         env:
           GH_TOKEN: ${{ github.token }}
@@ -543,10 +556,9 @@ jobs:
           set -euo pipefail
           version=$(tar -xzOf dist/reshiki-web-demo.tar.gz demo/VERSION)
           notes="The browser editor at https://reshiki.com/demo/, built from v$version."
-          if gh release view web-demo --json assets -q '.assets[].name' > "$RUNNER_TEMP/assets"; then
+          if gh release view web-demo > /dev/null; then
             # Leave a demo from a newer release in place (semver order).
-            if grep -qx reshiki-web-demo.tar.gz "$RUNNER_TEMP/assets"; then
-              gh release download web-demo -p reshiki-web-demo.tar.gz -D "$RUNNER_TEMP/published"
+            if [[ -f $RUNNER_TEMP/published/reshiki-web-demo.tar.gz ]]; then
               published=$(tar -xzOf "$RUNNER_TEMP/published/reshiki-web-demo.tar.gz" demo/VERSION 2> /dev/null || true)
               if [[ -n $published ]]; then
                 newest=$(uv run --no-project --python 3.12 python - "$published" "$version" << 'PY'
