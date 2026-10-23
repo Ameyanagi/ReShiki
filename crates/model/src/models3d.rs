@@ -2098,7 +2098,10 @@ impl View<'_> {
             return HashMap::new();
         }
         let eye = (self.perspective > 0.).then_some(self.camera);
-        let found = contact::contacts(&balls, eye, |q| self.project(q).0);
+        // Space-filling atoms that nearly touch shade each other; apart, the
+        // balls of ball & stick stay as they are.
+        let nearly = self.style == Style::SpaceFilling;
+        let found = contact::contacts(&balls, eye, nearly, |q| self.project(q).0);
         let mut out: HashMap<usize, Option<Contact>> = HashMap::new();
         for (&atom, seen) in atoms.iter().zip(found.seen) {
             let value = match seen {
@@ -2112,7 +2115,7 @@ impl View<'_> {
                     region,
                     rim,
                     seams: vec![],
-                    shadow: contact::SHADOW
+                    shadow: contact::shadow_levels()
                         .iter()
                         .map(|(_, alpha)| *alpha)
                         .zip(shadow)

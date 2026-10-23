@@ -54,19 +54,29 @@ const PAST_STEPS: f32 = 16.;
 /// radius, so the disc's own polygon never leaves slivers along it.
 const PAST_RIM: f32 = 0.25;
 
-/// A contact shadow's levels. A ray tracer darkens a surface point by
-/// 0.32 e^(−g / 0.12 Å) at a gap `g` from another ball; each level is the
-/// surface within its gap of a neighbour, in ångström, darkened by an alpha
-/// that, stacked on the levels inside it, makes that darkness.
-pub(super) const SHADOW: [(f32, f32); 7] = [
-    (0.015, 0.062),
-    (0.04, 0.07),
-    (0.075, 0.065),
-    (0.12, 0.055),
-    (0.18, 0.043),
-    (0.26, 0.028),
-    (0.36, 0.024),
-];
+/// The contact shadow, as a ray tracer darkens a surface point at a gap g
+/// from another ball by 1 − 0.32 e^(−g / 0.12 Å) out to 0.5 Å: level k is the
+/// surface within k steps of a neighbour, filled black at an alpha such that
+/// the levels stacked over a band give that darkness at its middle.
+const SHADOW_STEP: f32 = 0.025;
+pub(super) const SHADOW_LEVELS: usize = 20;
+const SHADOW_DEPTH: f32 = 0.32;
+const SHADOW_FALL: f32 = 0.12;
+/// How far past a ball its shadow reaches.
+const SHADOW_REACH: f32 = SHADOW_STEP * SHADOW_LEVELS as f32;
+
+/// Each shadow level's gap and alpha, nearest first.
+pub(super) fn shadow_levels() -> [(f32, f32); SHADOW_LEVELS] {
+    // The brightness left in band j, and none past the last.
+    let left = |j: usize| {
+        if j > SHADOW_LEVELS {
+            1.
+        } else {
+            1. - SHADOW_DEPTH * (-((j as f32 - 0.5) * SHADOW_STEP) / SHADOW_FALL).exp()
+        }
+    };
+    std::array::from_fn(|k| (SHADOW_STEP * (k + 1) as f32, 1. - left(k + 1) / left(k + 2)))
+}
 
 /// A ball in the rotated model.
 #[derive(Debug, Clone, Copy)]
@@ -336,7 +346,7 @@ pub(super) enum Seen {
         region: Vec<Vec<Point>>,
         /// The visible runs of the rim.
         rim: Vec<Vec<Point>>,
-        /// For each [`SHADOW`] level, the parts of the disc whose surface
+        /// For each [`shadow_levels`] level, the parts of the disc whose surface
         /// lies within its gap of a neighbour: closed shapes to fill within
         /// the region.
         shadow: Vec<Vec<PathCommand>>,
@@ -353,10 +363,10 @@ pub(super) struct Contacts {
     pub seams: Vec<((usize, usize), Runs)>,
 }
 
-/// Each ball's overlapping neighbours, found on a grid of cells as wide as
-/// the largest ball.
-fn overlaps(balls: &[Ball]) -> Vec<Vec<usize>> {
-    let cell = 2. * balls.iter().map(|b| b.r).fold(f32::EPSILON, f32::max);
+/// Each ball's neighbours less than `reach` apart (overlapping at 0), found
+/// on a grid of cells as wide as the largest ball and the reach.
+fn neighbours(balls: &[Ball], reach: f32) -> Vec<Vec<usize>> {
+    let cell = 2. * balls.iter().map(|b| b.r).fold(f32::EPSILON, f32::max) + reach;
     let key = |p: V| p.map(|v| (v / cell).floor() as i64);
     let mut grid: HashMap<[i64; 3], Vec<usize>> = HashMap::new();
     for (i, b) in balls.iter().enumerate() {
@@ -374,7 +384,9 @@ fn overlaps(balls: &[Ball]) -> Vec<Vec<usize>> {
                         for &j in grid.get(&[x + dx, y + dy, z + dz]).into_iter().flatten() {
                             // A fading ball covers only fading balls.
                             if balls.get(j).is_some_and(|b| {
-                                j != i && len(sub(b.p, a.p)) < a.r + b.r && (a.fading || !b.fading)
+                                j != i
+                                    && len(sub(b.p, a.p)) < a.r + b.r + reach
+                                    && (a.fading || !b.fading)
                             }) {
                                 near.push(j);
                             }
@@ -390,15 +402,25 @@ fn overlaps(balls: &[Ball]) -> Vec<Vec<usize>> {
 
 /// What shows of every ball and the seams between them, seen from `eye`
 /// (the camera's distance along z, `None` from infinitely far), with
-/// `project` taking a rotated point to the drawing.
-pub(super) fn contacts(balls: &[Ball], eye: Option<f32>, project: impl Fn(V) -> Point) -> Contacts {
-    let near = overlaps(balls);
+/// `project` taking a rotated point to the drawing. Balls that only nearly
+/// touch shade each other when `nearly` is set.
+pub(super) fn contacts(
+    balls: &[Ball],
+    eye: Option<f32>,
+    nearly: bool,
+    project: impl Fn(V) -> Point,
+) -> Contacts {
+    let near = neighbours(balls, 0.);
+    // With `nearly`, balls that nearly touch still shade each other.
+    let close = neighbours(balls, if nearly { SHADOW_REACH } else { 0. });
     let facing: Vec<Facing> = balls.iter().map(|&b| Facing::new(b, eye)).collect();
     let seen = balls
         .iter()
         .zip(&facing)
-        .zip(&near)
-        .map(|((&a, f), list)| (!list.is_empty()).then(|| seen(a, f, list, balls, &project)))
+        .zip(near.iter().zip(&close))
+        .map(|((&a, f), (near, close))| {
+            (!close.is_empty()).then(|| seen(a, f, (near, close), balls, &project))
+        })
         .collect();
     let mut seams = vec![];
     for (i, list) in near.iter().enumerate() {
@@ -512,11 +534,15 @@ impl<P: Fn(V) -> Point> Disc<'_, P> {
 fn seen(
     a: Ball,
     f: &Facing,
-    near: &[usize],
+    (near, close): (&[usize], &[usize]),
     balls: &[Ball],
     project: &impl Fn(V) -> Point,
 ) -> Seen {
     let near: Vec<Ball> = near.iter().filter_map(|&j| balls.get(j).copied()).collect();
+    let close: Vec<Ball> = close
+        .iter()
+        .filter_map(|&j| balls.get(j).copied())
+        .collect();
     let disc = Disc {
         ball: a,
         facing: f,
@@ -564,11 +590,13 @@ fn seen(
                 .collect()
         })
         .collect();
-    // Each level: what every neighbour grown by its gap covers.
-    let shadow = SHADOW
+    // Each level: what every neighbour grown by its gap covers, as one
+    // shape per level.
+    let shadow = shadow_levels()
         .iter()
         .map(|&(gap, _)| {
-            near.iter()
+            close
+                .iter()
                 .filter_map(|&b| disc.cover_shape(Ball { r: b.r + gap, ..b }))
                 .flatten()
                 .collect()

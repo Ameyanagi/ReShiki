@@ -38,6 +38,7 @@ pub(super) fn render_svg(doc: &Document, background: bool) -> String {
         lo,
         hi,
         gradients: Default::default(),
+        figure: true,
     };
     let mut content = String::new();
     push_svg(&mut content, drawing, &frame, &mut 0);
@@ -56,6 +57,7 @@ pub(super) fn render_part(drawing: Vec<Primitive>, lo: super::Point, hi: super::
         lo,
         hi,
         gradients: Default::default(),
+        figure: false,
     };
     let mut s = format!(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"{} {} {width} {height}\" width=\"{width}\" height=\"{height}\">",
@@ -74,6 +76,9 @@ struct Frame {
     hi: super::Point,
     /// Serial for 3D-model gradient IDs.
     gradients: std::cell::Cell<usize>,
+    /// A figure to save rather than the canvas: contact shadows use half
+    /// their levels, keeping files small.
+    figure: bool,
 }
 
 /// A gradient definition in drawing units with exact stop colors, and its ID.
@@ -214,7 +219,14 @@ fn push_shadow(s: &mut String, frame: &Frame, contact: &super::Contact, shape: &
     s.push_str(&format!(
         "<defs><clipPath id=\"{id}\">{shape}/></clipPath></defs><g clip-path=\"url(#{id})\" fill=\"rgb(0,0,0)\">"
     ));
-    for (alpha, shapes) in contact.shadow.iter().filter(|(_, p)| !p.is_empty()) {
+    // A figure merges each pair of levels into the outer one, with both
+    // alphas: its band starts a step further out.
+    let step = if frame.figure { 2 } else { 1 };
+    for levels in contact.shadow.chunks(step) {
+        let Some((_, shapes)) = levels.last().filter(|(_, p)| !p.is_empty()) else {
+            continue;
+        };
+        let alpha = 1. - levels.iter().map(|(a, _)| 1. - a).product::<f32>();
         s.push_str(&format!(
             "<path d=\"{}\" fill-opacity=\"{alpha}\"/>",
             compact_data(shapes)

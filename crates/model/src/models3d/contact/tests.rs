@@ -52,7 +52,7 @@ fn cut(seen: &Option<Seen>) -> bool {
 }
 
 fn contacts(balls: &[Ball], project: impl Fn(V) -> Point) -> Contacts {
-    super::contacts(balls, None, project)
+    super::contacts(balls, None, true, project)
 }
 
 /// The region's boundary points off the rim: the cut.
@@ -242,9 +242,9 @@ fn the_shadow_follows_where_the_surface_comes_within_each_gap_of_a_neighbour() {
     let Some(Seen::Shown { shadow, .. }) = &found.seen[0] else {
         panic!("expected a shown ball");
     };
-    assert_eq!(shadow.len(), SHADOW.len());
+    assert_eq!(shadow.len(), SHADOW_LEVELS);
     let mut last = d;
-    for ((gap, _), shape) in SHADOW.iter().zip(shadow) {
+    for ((gap, _), shape) in shadow_levels().iter().zip(shadow) {
         // Seen edge on, the surface within `gap` of the other ball is beyond
         // the plane where the grown ball meets this one.
         let h = (d * d + ra * ra - (rb + gap).powi(2)) / (2. * d);
@@ -277,4 +277,39 @@ fn the_shadow_follows_where_the_surface_comes_within_each_gap_of_a_neighbour() {
         assert!(h < last);
         last = h;
     }
+}
+
+#[test]
+fn shadow_levels_stack_to_the_ray_traced_falloff() {
+    let levels = shadow_levels();
+    // A point in band j lies within levels j..: its brightness is the
+    // product of what they leave.
+    for j in 0..SHADOW_LEVELS {
+        let left: f32 = levels[j..].iter().map(|(_, a)| 1. - a).product();
+        let g = (j as f32 + 0.5) * 0.025;
+        let expected = 1. - 0.32 * (-g / 0.12).exp();
+        assert!(
+            (left - expected).abs() < 1e-4,
+            "band {j}: {left} vs {expected}"
+        );
+    }
+    assert!((levels[SHADOW_LEVELS - 1].0 - 0.5).abs() < 1e-6);
+}
+
+#[test]
+fn balls_that_nearly_touch_shade_each_other_without_a_cut() {
+    let balls = [ball([0., 0., 0.], 1.5), ball([3.2, 0., 0.], 1.5)];
+    let found = contacts(&balls, flat);
+    for seen in &found.seen {
+        let Some(Seen::Shown { region, shadow, .. }) = seen else {
+            panic!("expected a shadow: {seen:?}");
+        };
+        assert!(whole(seen) && region.len() == 1);
+        // 0.2 Å apart: the levels from 0.2 Å out reach the other ball.
+        assert!(shadow[..7].iter().all(Vec::is_empty));
+        assert!(shadow[8..].iter().all(|s| !s.is_empty()));
+    }
+    assert!(found.seams.is_empty());
+    let apart = contacts(&[ball([0., 0., 0.], 1.5), ball([3.6, 0., 0.], 1.5)], flat);
+    assert_eq!(apart.seen, [None, None]);
 }
