@@ -73,13 +73,18 @@ fn browser_storage_keeps_each_change_and_lists_one_folder() {
     assert!(browser::write("appearance.json", b"{}").is_err());
     let kept = Rc::new(RefCell::new(Vec::new()));
     let sink = kept.clone();
+    assert_eq!(browser::session(), None);
     browser::install(
         [("themes/a.reshiki-theme".to_owned(), b"a".to_vec())],
         Box::new(move |key, bytes| {
             sink.borrow_mut()
                 .push((key.to_owned(), bytes.map(<[u8]>::to_vec)))
         }),
+        "s1".into(),
+        ["s2".to_owned()],
     );
+    assert_eq!(browser::session().as_deref(), Some("s1"));
+    assert!(browser::open("s1") && browser::open("s2") && !browser::open("s3"));
     browser::write("themes/b.reshiki-theme", b"b").unwrap();
     browser::write("themes/.deleted/1/c.reshiki-theme", b"c").unwrap();
     browser::write("appearance.json", b"{}").unwrap();

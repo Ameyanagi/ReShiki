@@ -103,7 +103,12 @@ pub fn rename(from: &Path, to: &Path) -> io::Result<()> {
 /// then, or when the browser offers no storage, writes fail.
 #[cfg(any(target_arch = "wasm32", test))]
 pub mod browser {
-    use std::{cell::RefCell, collections::BTreeMap, io, path::Path};
+    use std::{
+        cell::RefCell,
+        collections::{BTreeMap, BTreeSet},
+        io,
+        path::Path,
+    };
 
     /// Keeps a write (the new contents) or a removal (none) of a file.
     pub type Sink = Box<dyn Fn(&str, Option<&[u8]>)>;
@@ -112,6 +117,11 @@ pub mod browser {
     struct Store {
         files: BTreeMap<String, Vec<u8>>,
         sink: Option<Sink>,
+        /// This page's session, which names its recovery drafts.
+        session: String,
+        /// The sessions of the site's other open pages, whose drafts are not
+        /// offered for recovery.
+        open: BTreeSet<String>,
     }
 
     thread_local! {
@@ -119,12 +129,30 @@ pub mod browser {
     }
 
     /// Start with `files` from the page's storage, by key, and keep each later
-    /// change with `sink`.
-    pub fn install(files: impl IntoIterator<Item = (String, Vec<u8>)>, sink: Sink) {
+    /// change with `sink`. `session` names this page, and `open` the site's
+    /// other pages that are still open.
+    pub fn install(
+        files: impl IntoIterator<Item = (String, Vec<u8>)>,
+        sink: Sink,
+        session: String,
+        open: impl IntoIterator<Item = String>,
+    ) {
         STORE.with_borrow_mut(|store| {
             store.files = files.into_iter().collect();
             store.sink = Some(sink);
+            store.session = session;
+            store.open = open.into_iter().collect();
         });
+    }
+
+    /// This page's session, or none before storage is installed.
+    pub fn session() -> Option<String> {
+        STORE.with_borrow(|store| Some(store.session.clone()).filter(|s| !s.is_empty()))
+    }
+
+    /// Whether `session` is this page or another open page of the site.
+    pub fn open(session: &str) -> bool {
+        STORE.with_borrow(|store| store.session == session || store.open.contains(session))
     }
 
     /// A change another tab made and kept, which this one only remembers.

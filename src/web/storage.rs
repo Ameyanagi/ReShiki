@@ -3,8 +3,10 @@
 //! after each change. Other tabs of the same site hear of each change through
 //! a BroadcastChannel, so a tab never saves over another's newer file.
 //!
-//! Fonts the page adds are kept here too, and added again at the next mount
-//! when text needs them, as the page's own fallback would be.
+//! Each page has a random session, which names its recovery drafts, and holds
+//! a Web Lock for it while open, so a new page offers only drafts of pages
+//! that have closed. Fonts the page adds are kept here too, and added again at
+//! the next mount when text needs them, as the page's own fallback would be.
 use super::error;
 use reshiki::storage::{self, browser};
 use std::{cell::RefCell, collections::HashMap, path::PathBuf};
@@ -219,6 +221,8 @@ async fn load() -> Result<(), String> {
         ));
     });
     let failed: js_sys::Function = failed.into_js_value().unchecked_into();
+    let session = session();
+    let open = open_sessions(&window, &session).await;
     browser::install(
         files,
         Box::new(move |key, bytes| {
@@ -232,8 +236,66 @@ async fn load() -> Result<(), String> {
                 let _ = channel.post_message(&message(key, bytes));
             }
         }),
+        session,
+        open,
     );
     Ok(())
+}
+
+/// The prefix of the Web Lock each open page holds for its session.
+const SESSION_LOCK: &str = "reshiki-session:";
+
+/// A new random session, in hexadecimal so it fits a draft's name.
+fn session() -> String {
+    let part = || (js_sys::Math::random() * 2f64.powi(52)) as u64;
+    format!("{:013x}{:013x}", part(), part())
+}
+
+/// The sessions of the site's other open pages, which hold their session's
+/// Web Lock until they close, and then this page's lock for `session`. A
+/// browser without Web Locks reports none, so another open tab's drafts are
+/// offered too.
+async fn open_sessions(window: &web_sys::Window, session: &str) -> Vec<String> {
+    use js_sys::{Array, Function, Promise, Reflect};
+    let Some(locks) = Reflect::get(&window.navigator(), &"locks".into())
+        .ok()
+        .filter(|locks| locks.is_object())
+    else {
+        return vec![];
+    };
+    let method = |name: &str| {
+        Reflect::get(&locks, &name.into())
+            .ok()
+            .and_then(|method| method.dyn_into::<Function>().ok())
+    };
+    let (Some(query), Some(request)) = (method("query"), method("request")) else {
+        return vec![];
+    };
+    let held = match query
+        .call0(&locks)
+        .map(|promise| promise.dyn_into::<Promise>())
+    {
+        Ok(Ok(promise)) => wasm_bindgen_futures::JsFuture::from(promise).await.ok(),
+        _ => None,
+    };
+    let open = held
+        .and_then(|snapshot| Reflect::get(&snapshot, &"held".into()).ok())
+        .map(|held| Array::from(&held))
+        .into_iter()
+        .flat_map(|held| held.to_vec())
+        .filter_map(|lock| Reflect::get(&lock, &"name".into()).ok()?.as_string())
+        .filter_map(|name| name.strip_prefix(SESSION_LOCK).map(str::to_owned))
+        .collect();
+    // Hold this page's lock until it closes: the callback's promise never
+    // settles.
+    let hold = Closure::<dyn FnMut() -> Promise>::new(|| Promise::new(&mut |_, _| {}));
+    let _ = request.call2(
+        &locks,
+        &format!("{SESSION_LOCK}{session}").into(),
+        hold.as_ref(),
+    );
+    hold.forget();
+    open
 }
 
 /// Write or remove one file. Transactions on one store run in the order they

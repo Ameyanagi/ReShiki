@@ -415,6 +415,15 @@ pub struct App {
     template_index: usize,
     templates: template_library::State,
 }
+/// How often drafts catch up with their drawings. A browser page can be
+/// reloaded or closed at any moment, and cannot write when it unloads, so it
+/// writes sooner; a draft is written only when its drawing changed.
+const DRAFT_INTERVAL: std::time::Duration = if cfg!(target_arch = "wasm32") {
+    std::time::Duration::from_secs(1)
+} else {
+    std::time::Duration::from_secs(5)
+};
+
 impl App {
     /// Starts a file epoch, dropping per-file work so late results are ignored and new work can start.
     pub(super) fn begin_file_epoch(&mut self) {
@@ -568,7 +577,7 @@ impl App {
                 Subscription::none()
             },
             if self.strip().any(|tab| self.needs_draft(tab)) {
-                iced::time::every(std::time::Duration::from_secs(5)).map(|_| Message::Tick)
+                iced::time::every(DRAFT_INTERVAL).map(|_| Message::Tick)
             } else {
                 Subscription::none()
             },

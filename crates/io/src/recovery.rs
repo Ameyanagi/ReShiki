@@ -31,47 +31,43 @@ impl Recovery {
         let root = crate::compatibility::data_directory()?;
         Self::in_directory(&root.join("recovery"))
     }
-    /// A new draft file in `root`. Each document tab has its own, so the
-    /// count keeps drafts made within one clock tick apart.
+    /// A new draft file in `root`, named after this process (in the browser,
+    /// this page). Each document tab has its own, so the count keeps drafts
+    /// made within one clock tick apart.
     pub fn in_directory(root: &Path) -> Result<Self, String> {
         static COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        std::fs::create_dir_all(root).map_err(|e| e.to_string())?;
+        let owner = owner()?;
+        crate::storage::create_dir_all(root).map_err(|e| e.to_string())?;
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|e| e.to_string())?
             .as_nanos();
         let count = COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Ok(Self {
-            session: root.join(format!("{}-{now}-{count}.json", std::process::id())),
+            session: root.join(format!("{owner}-{now}-{count}.json")),
         })
     }
     pub fn candidates(&self) -> Vec<Candidate> {
         let Some(parent) = self.session.parent() else {
             return vec![];
         };
-        let Ok(entries) = std::fs::read_dir(parent) else {
+        let Ok(entries) = crate::storage::read_dir(parent) else {
             return vec![];
         };
         let mut candidates: Vec<_> = entries
-            .flatten()
-            .filter_map(|entry| {
-                let path = entry.path();
+            .into_iter()
+            .filter_map(|path| {
                 if path == self.session || path.extension().and_then(|e| e.to_str()) != Some("json")
                 {
                     return None;
                 }
                 // Do not offer another currently running instance's draft.
-                if let Some(pid) = path
-                    .file_stem()?
-                    .to_str()?
-                    .split('-')
-                    .next()
-                    .and_then(|s| s.parse::<u32>().ok())
-                    && process_alive(pid)
+                if let Some(owner) = path.file_stem()?.to_str()?.split('-').next()
+                    && running(owner)
                 {
                     return None;
                 }
-                let bytes = std::fs::read(&path).ok()?;
+                let bytes = crate::storage::read(&path).ok()?;
                 let mut snapshot: Snapshot = serde_json::from_slice(&bytes).ok()?;
                 snapshot.document.validate().ok()?;
                 snapshot.document.migrate();
@@ -113,12 +109,35 @@ impl Recovery {
     }
 }
 pub fn remove(path: &Path) -> Result<(), String> {
-    match std::fs::remove_file(path) {
+    match crate::storage::remove_file(path) {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(e.to_string()),
     }
 }
+/// What names this instance's drafts: the process ID, or in the browser the
+/// page's session, which needs browser storage.
+#[cfg(not(target_arch = "wasm32"))]
+fn owner() -> Result<String, String> {
+    Ok(std::process::id().to_string())
+}
+#[cfg(target_arch = "wasm32")]
+fn owner() -> Result<String, String> {
+    crate::storage::browser::session().ok_or_else(|| "Browser storage is unavailable".into())
+}
+
+/// Whether the instance that named a draft `owner` is still running.
+#[cfg(not(target_arch = "wasm32"))]
+fn running(owner: &str) -> bool {
+    owner.parse::<u32>().is_ok_and(process_alive)
+}
+/// Another open page of the site keeps its own drafts.
+#[cfg(target_arch = "wasm32")]
+fn running(owner: &str) -> bool {
+    crate::storage::browser::open(owner)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn process_alive(pid: u32) -> bool {
     if pid == std::process::id() {
         return true;
