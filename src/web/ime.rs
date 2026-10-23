@@ -141,6 +141,8 @@ pub(super) fn start(element: &web_sys::Element) -> Option<InputMethod> {
             "compositionstart" => web_ime::send(Ime::Enabled),
             "compositionupdate" => {
                 let text = composition_text(&event);
+                // The font arrives while the text is still being composed.
+                super::text_drawn(&text);
                 let end = text.len();
                 web_ime::send(Ime::Preedit(text, Some((end, end))));
             }
