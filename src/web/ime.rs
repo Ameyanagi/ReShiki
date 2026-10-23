@@ -23,7 +23,7 @@ type Listener = Closure<dyn FnMut(web_sys::Event)>;
 /// The textarea and its listeners, until `stop`.
 pub(super) struct InputMethod {
     textarea: web_sys::HtmlTextAreaElement,
-    textarea_listener: Listener,
+    textarea_listeners: Vec<(&'static str, Listener)>,
     window_listener: Listener,
 }
 
@@ -82,6 +82,8 @@ pub(super) fn start(element: &web_sys::Element) -> Option<InputMethod> {
         ("spellcheck", "false"),
         ("tabindex", "-1"),
         ("aria-hidden", "true"),
+        // The editor's own key target, which its other key listeners serve.
+        ("data-reshiki-keys", ""),
         (
             "style",
             "position: fixed; left: 0; top: 0; width: 1px; height: 1px; margin: 0; \
@@ -119,102 +121,23 @@ pub(super) fn start(element: &web_sys::Element) -> Option<InputMethod> {
         }
     });
 
+    // One closure per event: a key passed on to the canvas can move the focus
+    // and fire the textarea's blur while the key's closure still runs.
     let mac = crate::platform::mac();
-    let (listening, element_for_textarea) = (textarea.clone(), element.clone());
-    let textarea_listener = Listener::new(move |event: web_sys::Event| {
-        let Some(canvas) = canvas(&element_for_textarea) else {
-            return;
-        };
-        match event.type_().as_str() {
-            "keydown" | "keyup" => {
-                let Some(key) = event.dyn_ref::<web_sys::KeyboardEvent>() else {
-                    return;
-                };
-                // The input method's keys, and the key that ends a
-                // composition (229 in Chrome and Safari), stay with it.
-                if key.is_composing() || key.key_code() == 229 {
-                    return;
+    let textarea_listeners: Vec<_> = TEXTAREA_EVENTS
+        .into_iter()
+        .map(|name| {
+            let (listening, element) = (textarea.clone(), element.clone());
+            let listener = Listener::new(move |event: web_sys::Event| {
+                if let Some(canvas) = canvas(&element) {
+                    textarea_event(&event, &listening, &canvas, mac);
                 }
-                key.prevent_default();
-                forward(key, &canvas, mac);
-            }
-            "compositionstart" => web_ime::send(Ime::Enabled),
-            "compositionupdate" => {
-                let text = composition_text(&event);
-                // The font arrives while the text is still being composed.
-                super::text_drawn(&text);
-                let end = text.len();
-                web_ime::send(Ime::Preedit(text, Some((end, end))));
-            }
-            "compositionend" => {
-                let text = composition_text(&event);
-                web_ime::send(Ime::Preedit(String::new(), None));
-                if !text.is_empty() {
-                    super::text_drawn(&text);
-                    web_ime::send(Ime::Commit(text));
-                }
-                listening.set_value("");
-            }
-            // Text that comes without a key or a composition, such as from
-            // the emoji picker or dictation.
-            "beforeinput" => {
-                let Some(input) = event.dyn_ref::<web_sys::InputEvent>() else {
-                    return;
-                };
-                if input.is_composing() {
-                    return;
-                }
-                input.prevent_default();
-                if input.input_type() == "insertText"
-                    && let Some(text) = input.data().filter(|text| !text.is_empty())
-                {
-                    super::text_drawn(&text);
-                    web_ime::send(Ime::Commit(text));
-                }
-            }
-            "input" => {
-                let composing = event
-                    .dyn_ref::<web_sys::InputEvent>()
-                    .is_some_and(web_sys::InputEvent::is_composing);
-                if !composing {
-                    listening.set_value("");
-                }
-            }
-            "blur" => {
-                let to = event
-                    .dyn_ref::<web_sys::FocusEvent>()
-                    .and_then(web_sys::FocusEvent::related_target);
-                if to.as_ref().is_some_and(|to| is(to, &canvas)) {
-                    // A click on the canvas: once Iced has seen it, take
-                    // the focus back if the widget still wants text.
-                    let (textarea, canvas) = (listening.clone(), canvas.clone());
-                    let refocus = Closure::once_into_js(move || {
-                        if AREA.get().is_some() && has_focus(&canvas) {
-                            let _ = textarea.focus();
-                        }
-                    });
-                    if let Some(window) = web_sys::window() {
-                        let _ = window.set_timeout_with_callback(refocus.unchecked_ref());
-                    }
-                } else {
-                    // The focus left the editor, which winit hears from
-                    // the canvas.
-                    let init = web_sys::FocusEventInit::new();
-                    init.set_related_target(to.as_ref());
-                    if let Ok(blur) =
-                        web_sys::FocusEvent::new_with_focus_event_init_dict("blur", &init)
-                    {
-                        let _ = canvas.dispatch_event(&blur);
-                    }
-                }
-            }
-            _ => {}
-        }
-    });
-    for name in TEXTAREA_EVENTS {
-        let _ = textarea
-            .add_event_listener_with_callback(name, textarea_listener.as_ref().unchecked_ref());
-    }
+            });
+            let _ =
+                textarea.add_event_listener_with_callback(name, listener.as_ref().unchecked_ref());
+            (name, listener)
+        })
+        .collect();
 
     // Moving the focus from the canvas to the textarea is not leaving the
     // editor: winit must not hear the canvas's blur.
@@ -240,20 +163,112 @@ pub(super) fn start(element: &web_sys::Element) -> Option<InputMethod> {
     );
     Some(InputMethod {
         textarea,
-        textarea_listener,
+        textarea_listeners,
         window_listener,
     })
+}
+
+/// Handle one of the textarea's `TEXTAREA_EVENTS`.
+fn textarea_event(
+    event: &web_sys::Event,
+    listening: &web_sys::HtmlTextAreaElement,
+    canvas: &web_sys::HtmlElement,
+    mac: bool,
+) {
+    match event.type_().as_str() {
+        "keydown" | "keyup" => {
+            let Some(key) = event.dyn_ref::<web_sys::KeyboardEvent>() else {
+                return;
+            };
+            // The input method's keys, and the key that ends a
+            // composition (229 in Chrome and Safari), stay with it.
+            if key.is_composing() || key.key_code() == 229 {
+                return;
+            }
+            key.prevent_default();
+            forward(key, canvas, mac);
+        }
+        "compositionstart" => web_ime::send(Ime::Enabled),
+        "compositionupdate" => {
+            let text = composition_text(event);
+            // The font arrives while the text is still being composed.
+            super::text_drawn(&text);
+            let end = text.len();
+            web_ime::send(Ime::Preedit(text, Some((end, end))));
+        }
+        "compositionend" => {
+            let text = composition_text(event);
+            web_ime::send(Ime::Preedit(String::new(), None));
+            if !text.is_empty() {
+                super::text_drawn(&text);
+                web_ime::send(Ime::Commit(text));
+            }
+            listening.set_value("");
+        }
+        // Text that comes without a key or a composition, such as from
+        // the emoji picker or dictation.
+        "beforeinput" => {
+            let Some(input) = event.dyn_ref::<web_sys::InputEvent>() else {
+                return;
+            };
+            if input.is_composing() {
+                return;
+            }
+            input.prevent_default();
+            if input.input_type() == "insertText"
+                && let Some(text) = input.data().filter(|text| !text.is_empty())
+            {
+                super::text_drawn(&text);
+                web_ime::send(Ime::Commit(text));
+            }
+        }
+        "input" => {
+            let composing = event
+                .dyn_ref::<web_sys::InputEvent>()
+                .is_some_and(web_sys::InputEvent::is_composing);
+            if !composing {
+                listening.set_value("");
+            }
+        }
+        "blur" => {
+            let to = event
+                .dyn_ref::<web_sys::FocusEvent>()
+                .and_then(web_sys::FocusEvent::related_target);
+            if to.as_ref().is_some_and(|to| is(to, canvas)) {
+                // A click on the canvas: once Iced has seen it, take
+                // the focus back if the widget still wants text.
+                let (textarea, canvas) = (listening.clone(), canvas.clone());
+                let refocus = Closure::once_into_js(move || {
+                    if AREA.get().is_some() && has_focus(&canvas) {
+                        let _ = textarea.focus();
+                    }
+                });
+                if let Some(window) = web_sys::window() {
+                    let _ = window.set_timeout_with_callback(refocus.unchecked_ref());
+                }
+            } else {
+                // The focus left the editor, which winit hears from
+                // the canvas.
+                let init = web_sys::FocusEventInit::new();
+                init.set_related_target(to.as_ref());
+                if let Ok(blur) = web_sys::FocusEvent::new_with_focus_event_init_dict("blur", &init)
+                {
+                    let _ = canvas.dispatch_event(&blur);
+                }
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Remove the textarea and its listeners.
 pub(super) fn stop(input: InputMethod) {
     web_ime::clear_input_method();
     AREA.set(None);
-    for name in TEXTAREA_EVENTS {
-        let _ = input.textarea.remove_event_listener_with_callback(
-            name,
-            input.textarea_listener.as_ref().unchecked_ref(),
-        );
+    for (name, listener) in &input.textarea_listeners {
+        let _ = input
+            .textarea
+            .remove_event_listener_with_callback(name, listener.as_ref().unchecked_ref());
     }
     if let Some(window) = web_sys::window() {
         let _ = window.remove_event_listener_with_callback_and_bool(
