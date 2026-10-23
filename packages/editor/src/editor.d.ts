@@ -17,11 +17,13 @@ export interface MountOptions {
    * bytes. They load before the editor starts; text whose font lacks a glyph
    * falls back to them. URLs on another origin need CORS. */
   fonts?: FontSource[];
-  /** The Japanese (CJK) fallback, loaded the first time a caption needs it
-   * when no other font has its glyphs. The computer's own Japanese font is
-   * used when the page already has Local Font Access permission; otherwise
-   * this URL is downloaded: Noto Sans JP from jsDelivr by default. `false`
-   * loads nothing. */
+  /** The Chinese, Japanese and Korean (CJK) fallback, loaded the first time
+   * a caption, tab name or the status line needs one when no other font has
+   * its glyphs.
+   * The computer's own font for that language is used when the page already
+   * has Local Font Access permission; otherwise this URL is downloaded once
+   * for every language, or by default the language's Noto Sans subset (JP, KR
+   * or SC) from jsDelivr. `false` loads nothing. */
   cjkFont?: string | URL | false;
   /** Called with fonts that could not be loaded; they are logged by default. */
   onError?: (error: Error) => void;

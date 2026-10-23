@@ -92,14 +92,17 @@ Liberation Sans, which has Arial's letter widths and answers to Arial, so
 drawings lay out as on the desktop. Text that font lacks falls back to the
 fonts below.
 
-- **Japanese (CJK) text.** The first time a caption has Japanese characters
-  that no loaded font draws, the editor loads a fallback once. If the page
-  already has Local Font Access permission (Chrome and Edge), it uses the
-  computer's own Japanese font, such as Hiragino Sans, Yu Gothic or Meiryo,
-  without a prompt. Otherwise it downloads
-  [Noto Sans JP](https://github.com/notofonts/noto-cjk) Regular (4.5 MB, SIL
-  Open Font License 1.1) from jsDelivr. Pages without Japanese text download
-  nothing. The font is not bundled in this package.
+- **Chinese, Japanese and Korean text.** The first time a caption, a tab's
+  file name or the status line has such characters that no
+  loaded font draws, the editor loads a fallback once for that language. If
+  the page already has Local Font Access permission (Chrome and Edge), it uses
+  the computer's own font, such as Hiragino Sans, Apple SD Gothic Neo or
+  PingFang SC, without a prompt. Otherwise it downloads a
+  [Noto Sans](https://github.com/notofonts/noto-cjk) Regular subset (SIL Open
+  Font License 1.1) from jsDelivr: JP (4.5 MB) for kana and kanji, KR
+  (4.6 MB) for Hangul, and SC (8.3 MB) for Bopomofo and for ideographs the
+  Japanese font lacks. Pages without such text download nothing. The fonts
+  are not bundled in this package.
 - **The page's own fonts.** `fonts` takes TrueType or OpenType files (or
   collections) as URLs or bytes. They load before the editor starts, and
   text whose font lacks a glyph falls back to them. URLs on another origin
@@ -108,7 +111,7 @@ fonts below.
 ```js
 await mount(element, {
   fonts: ["/fonts/MyLabels.ttf"],
-  cjkFont: "/fonts/NotoSansJP-Regular.otf", // self-host the fallback, or false for none
+  cjkFont: "/fonts/NotoSansCJK-Regular.otc", // one self-hosted fallback for every language, or false for none
   onError: (error) => console.warn(error.message), // a font that could not load
 });
 ```
@@ -151,9 +154,10 @@ it.
   captions through a hidden textarea that the editor adds to the element.
   Typing atom labels straight onto the drawing, without a text field, takes
   keys only, not composed text.
-- Only Liberation Sans is bundled, so symbols it lacks, such as ℃, ⇌ and
-  superscript ⁺ and ⁻, need a font from `fonts`. Japanese text loads a
-  fallback (see [Fonts](#fonts)).
+- Only Liberation Sans and a small subset of DejaVu Sans for the interface's
+  key and arrow symbols are bundled, so drawing symbols they lack, such as ℃,
+  ⇌ and superscript ⁺ and ⁻, need a font from `fonts`. Chinese, Japanese and
+  Korean text loads a fallback (see [Fonts](#fonts)).
 - Shortcuts follow the desktop app, with ⌘ as Command on a Mac, except
   three that browsers keep for their own tabs: New is Alt+N, Close tab Alt+W
   and next/previous tab Alt+] / Alt+[ (⌃N, ⌃W, ⌃] / ⌃[ on a Mac).
