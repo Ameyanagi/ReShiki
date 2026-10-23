@@ -470,6 +470,8 @@ pub struct MoleculeCanvas<'a> {
     pub(crate) keyboard_target: Option<World>,
     /// The model (by an atom) that started its 2D → 3D morph, and when.
     pub(crate) morph: Option<(u64, iced::time::Instant)>,
+    /// A 3D-model slider is being dragged: models draw quickly until it ends.
+    pub(crate) model_sliding: bool,
     pub joining: Option<(&'a reshiki::joining::Prepared, reshiki::templates::Anchor)>,
     pub hidden_annotation: Option<u64>,
     pub bond_drawing: BondDrawing,
@@ -514,6 +516,7 @@ impl<'a> MoleculeCanvas<'a> {
             optimizer: None,
             keyboard_target: None,
             morph: None,
+            model_sliding: false,
             joining: None,
             hidden_annotation: None,
             bond_drawing: styles.bond_drawing,

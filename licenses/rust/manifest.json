@@ -1454,5 +1454,36 @@
         "source": "https://raw.githubusercontent.com/modelcontextprotocol/rust-sdk/79437f291b2c44053d00dcd5db969fd0cca7c887/LICENSE"
       }
     ]
+  },
+  "i_overlay@9.1.0": {
+    "license": "MIT OR Apache-2.0",
+    "repository": "https://github.com/iShape-Rust/iOverlay",
+    "revision": "117637e3a65804973da2bfd7c59f42773f4dcc0d",
+    "authors": ["Nail Sharipov"],
+    "files": [
+      {
+        "path": "texts/i_overlay-LICENSE-MIT-260cc580f53a.txt",
+        "sha256": "260cc580f53a756821a0f35475e2cd6da790f8fed0efc058252fe1bed8f2689e",
+        "source": "https://raw.githubusercontent.com/iShape-Rust/iOverlay/117637e3a65804973da2bfd7c59f42773f4dcc0d/LICENSE-MIT"
+      },
+      {
+        "path": "texts/i_overlay-LICENSE-APACHE-59899c6091b5.txt",
+        "sha256": "59899c6091b540582ed617e8eeaac4919dc985ccfc35459ee9752b699be5205b",
+        "source": "https://raw.githubusercontent.com/iShape-Rust/iOverlay/117637e3a65804973da2bfd7c59f42773f4dcc0d/LICENSE-APACHE"
+      }
+    ]
+  },
+  "i_key_sort@0.12.0": {
+    "license": "MIT",
+    "repository": "https://github.com/iShape-Rust/iKeySort",
+    "revision": "688424e09b7758d04e62e350160d164c7384f54b",
+    "authors": ["Nail Sharipov"],
+    "files": [
+      {
+        "path": "texts/i_key_sort-LICENSE-47e00f18b265.txt",
+        "sha256": "47e00f18b265d350a2860d3899f17dd1c7689b966545e929df8ffa7033f5acdc",
+        "source": "https://raw.githubusercontent.com/iShape-Rust/iKeySort/688424e09b7758d04e62e350160d164c7384f54b/LICENSE"
+      }
+    ]
   }
 }

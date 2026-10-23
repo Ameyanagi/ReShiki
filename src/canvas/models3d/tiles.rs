@@ -135,6 +135,29 @@ fn primitives(run: &[Primitive], parts: &[Part]) -> Vec<Primitive> {
         .collect()
 }
 
+/// Hash every coordinate and colour of `primitive` exactly: its `Debug`
+/// output, but a ball's contact by its bits, as that output would be long.
+fn key(primitive: &Primitive, hasher: &mut DefaultHasher) {
+    match primitive {
+        Primitive::Opacity { alpha, primitive } => {
+            alpha.to_bits().hash(hasher);
+            key(primitive, hasher);
+        }
+        Primitive::Sphere {
+            center,
+            radius,
+            focal,
+            stops,
+            outline,
+            contact,
+        } => {
+            format!("{center:?}{radius:?}{focal:?}{stops:?}{outline:?}").hash(hasher);
+            contact.hash(hasher);
+        }
+        p => format!("{p:?}").hash(hasher),
+    }
+}
+
 fn plan(run: &[Primitive], camera: Camera, bounds: Rectangle) -> Vec<Tile> {
     let scale = camera.zoom * OVERSAMPLE;
     let device = |p: World| [p.x * scale, p.y * scale];
@@ -156,8 +179,7 @@ fn plan(run: &[Primitive], camera: Camera, bounds: Rectangle) -> Vec<Tile> {
                 device(hi.offset(MARGIN, MARGIN)),
             );
             let mut hasher = DefaultHasher::new();
-            // Debug output names every coordinate and colour exactly.
-            format!("{p:?}").hash(&mut hasher);
+            key(&p, &mut hasher);
             (
                 [x0.floor(), y0.floor(), x1.ceil() + 1., y1.ceil() + 1.].map(|v| v as i64),
                 hasher.finish(),

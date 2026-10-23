@@ -45,13 +45,15 @@ pub enum Primitive {
     },
     /// A shaded 3D-model ball: a two-point radial gradient from a circle of
     /// `radius × models3d::FOCAL_RADIUS` at `focal` out to the disc. Colors
-    /// are exact; no canvas theme changes them.
+    /// are exact; no canvas theme changes them. With a `contact` it fills
+    /// only the part of the disc the balls it overlaps leave visible.
     Sphere {
         center: Point,
         radius: f32,
         focal: Point,
         stops: Vec<(f32, [u8; 3])>,
         outline: Option<Outline>,
+        contact: Option<Box<Contact>>,
     },
     /// A shaded 3D-model bond half: `corners` filled with a linear gradient
     /// from `from` to `to`, in exact colors. The outline strokes the two long
@@ -96,6 +98,43 @@ pub enum Primitive {
         fill: [u8; 3],
         outline: Outline,
     },
+}
+/// Where a 3D-model ball meets the balls it overlaps.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Contact {
+    /// The visible part of the ball, outer contours and holes filled
+    /// even-odd, drawn in place of the disc. Points on the disc's rim are
+    /// joined by its arc.
+    pub region: Vec<Vec<Point>>,
+    /// The visible runs of the rim, outlined in place of the whole circle.
+    pub rim: Vec<Vec<Point>>,
+    /// Where it meets balls drawn before it, outlined.
+    pub seams: Vec<Vec<Point>>,
+    /// Its soft contact shadow within the region: polygons filled black at
+    /// an alpha each, stacked darker toward the balls it meets.
+    pub shadow: Vec<(f32, Vec<crate::graphics::PathCommand>)>,
+}
+impl std::hash::Hash for Contact {
+    /// Every coordinate's bits, cheaper than its `Debug` text for a cache key.
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let point = |p: Point, state: &mut H| {
+            p.x.to_bits().hash(state);
+            p.y.to_bits().hash(state);
+        };
+        for line in [&self.region, &self.rim, &self.seams] {
+            for run in line {
+                run.iter().for_each(|p| point(*p, state));
+                u32::MAX.hash(state);
+            }
+        }
+        for (alpha, commands) in &self.shadow {
+            alpha.to_bits().hash(state);
+            for c in commands {
+                c.iter_points().for_each(|p| point(p, state));
+                u32::MAX.hash(state);
+            }
+        }
+    }
 }
 /// An exact, translucent stroke around a 3D-model shape.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -2441,10 +2480,19 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
                 center,
                 radius,
                 outline,
+                contact,
                 ..
             } => {
                 let r = radius + outline.map_or(0., |o| o.width / 2.);
                 points.extend([center.offset(-r, -r), center.offset(r, r)]);
+                // Under perspective a ball's outline reaches a little past
+                // its disc.
+                if let Some(contact) = contact {
+                    let r = outline.map_or(0., |o| o.width / 2.);
+                    for p in contact.region.iter().flatten() {
+                        points.extend([p.offset(-r, -r), p.offset(r, r)]);
+                    }
+                }
             }
             Primitive::ShadedQuad { corners, .. } => points.extend(corners),
             Primitive::ShadedPolygon { points: p, .. } => points.extend(p),

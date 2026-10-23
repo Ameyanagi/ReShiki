@@ -38,6 +38,7 @@ pub(super) fn render_svg(doc: &Document, background: bool) -> String {
         lo,
         hi,
         gradients: Default::default(),
+        figure: true,
     };
     let mut content = String::new();
     push_svg(&mut content, drawing, &frame, &mut 0);
@@ -56,6 +57,7 @@ pub(super) fn render_part(drawing: Vec<Primitive>, lo: super::Point, hi: super::
         lo,
         hi,
         gradients: Default::default(),
+        figure: false,
     };
     let mut s = format!(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"{} {} {width} {height}\" width=\"{width}\" height=\"{height}\">",
@@ -74,6 +76,9 @@ struct Frame {
     hi: super::Point,
     /// Serial for 3D-model gradient IDs.
     gradients: std::cell::Cell<usize>,
+    /// A figure to save rather than the canvas: contact shadows use half
+    /// their levels, keeping files small.
+    figure: bool,
 }
 
 /// A gradient definition in drawing units with exact stop colors, and its ID.
@@ -107,6 +112,127 @@ fn outline_paint(outline: Option<super::Outline>) -> String {
             o.alpha, o.width
         )
     })
+}
+
+/// Appends 3D-model path data: a command letter, then numbers to a
+/// hundredth of a drawing unit, written in place as these paths are long.
+fn push_command(d: &mut String, letter: char, numbers: &[f32]) {
+    use std::fmt::Write as _;
+    d.push(letter);
+    for (k, v) in numbers.iter().enumerate() {
+        if k > 0 {
+            d.push(' ');
+        }
+        let hundredths = (v * 100.).round() as i64;
+        if hundredths < 0 {
+            d.push('-');
+        }
+        let n = hundredths.unsigned_abs();
+        let _ = write!(d, "{}", n / 100);
+        let fraction = n % 100;
+        if fraction != 0 {
+            d.push('.');
+            d.push((b'0' + (fraction / 10) as u8) as char);
+            if !fraction.is_multiple_of(10) {
+                d.push((b'0' + (fraction % 10) as u8) as char);
+            }
+        }
+    }
+}
+
+/// Path data through `points`, each run of steps between points on the
+/// circle about `center` drawn as one arc of it, so a ball's rim stays round
+/// at any zoom.
+fn ring_data(points: &[super::Point], closed: bool, center: super::Point, radius: f32) -> String {
+    let (Some(&first), Some(&last)) = (points.first(), points.last()) else {
+        return String::new();
+    };
+    let on_rim = |p: super::Point| (p.distance(center) - radius).abs() <= radius * 2e-3;
+    // A step along the rim: its direction and the angle it turns.
+    let arc = |a: super::Point, p: super::Point| {
+        let chord = a.distance(p);
+        (radius > 0. && on_rim(a) && on_rim(p) && chord < radius * 0.8).then(|| {
+            let turn = (a.x - center.x) * (p.y - center.y) - (a.y - center.y) * (p.x - center.x);
+            (turn > 0., 2. * (chord / (2. * radius)).asin())
+        })
+    };
+    let mut d = String::new();
+    push_command(&mut d, 'M', &[first.x, first.y]);
+    let mut pending: Option<(bool, f32, super::Point)> = None;
+    let flush = |d: &mut String, pending: &mut Option<(bool, f32, super::Point)>| {
+        if let Some((sweep, _, end)) = pending.take() {
+            let sweep = if sweep { 1. } else { 0. };
+            push_command(d, 'A', &[radius, radius, 0., 0., sweep, end.x, end.y]);
+        }
+    };
+    let closing = closed.then_some((last, first));
+    let steps = points.iter().copied().zip(points.iter().copied().skip(1));
+    for (a, p) in steps.chain(closing) {
+        match (arc(a, p), pending) {
+            (Some((sweep, angle)), Some((along, turned, _)))
+                if sweep == along && turned + angle < 3. =>
+            {
+                pending = Some((sweep, turned + angle, p));
+            }
+            (step, _) => {
+                flush(&mut d, &mut pending);
+                match step {
+                    Some((sweep, angle)) => pending = Some((sweep, angle, p)),
+                    None => push_command(&mut d, 'L', &[p.x, p.y]),
+                }
+            }
+        }
+    }
+    flush(&mut d, &mut pending);
+    if closed {
+        d.push('Z');
+    }
+    d
+}
+
+/// Path data for `commands`, numbers to a hundredth of a drawing unit.
+fn compact_data(commands: &[crate::graphics::PathCommand]) -> String {
+    use crate::graphics::PathCommand;
+    let mut d = String::new();
+    for c in commands {
+        match c {
+            PathCommand::Move(p) => push_command(&mut d, 'M', &[p.x, p.y]),
+            PathCommand::Line(p) => push_command(&mut d, 'L', &[p.x, p.y]),
+            PathCommand::Cubic(a, b, p) => {
+                push_command(&mut d, 'C', &[a.x, a.y, b.x, b.y, p.x, p.y]);
+            }
+            PathCommand::Close => d.push('Z'),
+        }
+    }
+    d
+}
+
+/// A ball's contact shadow: each level filled black at its alpha within
+/// `shape`, the ball's visible part, so balls drawn later cover it as they
+/// cover the ball.
+fn push_shadow(s: &mut String, frame: &Frame, contact: &super::Contact, shape: &str) {
+    if contact.shadow.iter().all(|(_, levels)| levels.is_empty()) {
+        return;
+    }
+    frame.gradients.set(frame.gradients.get() + 1);
+    let id = format!("reshiki-3d-{}", frame.gradients.get());
+    s.push_str(&format!(
+        "<defs><clipPath id=\"{id}\">{shape}/></clipPath></defs><g clip-path=\"url(#{id})\" fill=\"rgb(0,0,0)\">"
+    ));
+    // A figure merges each pair of levels into the outer one, with both
+    // alphas: its band starts a step further out.
+    let step = if frame.figure { 2 } else { 1 };
+    for levels in contact.shadow.chunks(step) {
+        let Some((_, shapes)) = levels.last().filter(|(_, p)| !p.is_empty()) else {
+            continue;
+        };
+        let alpha = 1. - levels.iter().map(|(a, _)| 1. - a).product::<f32>();
+        s.push_str(&format!(
+            "<path d=\"{}\" fill-opacity=\"{alpha}\"/>",
+            compact_data(shapes)
+        ));
+    }
+    s.push_str("</g>");
 }
 
 fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut usize) {
@@ -199,6 +325,7 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                 focal,
                 stops,
                 outline,
+                contact,
             } => {
                 // `fr` is SVG 2: the vendored usvg 0.45 behind PNG and PDF
                 // export ignores it and starts the gradient at radius 0.
@@ -215,12 +342,45 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                     ),
                     &stops,
                 );
-                s.push_str(&format!(
-                    "{defs}<circle cx=\"{}\" cy=\"{}\" r=\"{radius}\" fill=\"url(#{id})\"{}/>",
-                    center.x,
-                    center.y,
-                    outline_paint(outline)
-                ));
+                let Some(contact) = contact else {
+                    s.push_str(&format!(
+                        "{defs}<circle cx=\"{}\" cy=\"{}\" r=\"{radius}\" fill=\"url(#{id})\"{}/>",
+                        center.x,
+                        center.y,
+                        outline_paint(outline)
+                    ));
+                    continue;
+                };
+                let region: String = contact
+                    .region
+                    .iter()
+                    .map(|contour| ring_data(contour, true, center, radius))
+                    .collect();
+                let shape = format!(
+                    "<path d=\"{region}\" fill-rule=\"evenodd\" clip-rule=\"evenodd\""
+                );
+                s.push_str(&format!("{defs}{shape} fill=\"url(#{id})\"/>"));
+                push_shadow(s, frame, &contact, &shape);
+                if outline.is_some() {
+                    let edges: String = contact
+                        .rim
+                        .iter()
+                        .map(|run| ring_data(run, false, center, radius))
+                        .chain(
+                            contact
+                                .seams
+                                .iter()
+                                .map(|run| ring_data(run, false, center, 0.)),
+                        )
+                        .collect();
+                    if !edges.is_empty() {
+                        s.push_str(&format!(
+                            "<path d=\"{}\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"{}/>",
+                            edges.trim_end(),
+                            outline_paint(outline)
+                        ));
+                    }
+                }
             }
             Primitive::ShadedQuad {
                 corners,
