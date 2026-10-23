@@ -16,8 +16,9 @@ impl App {
             // without ending the edit.
             Request::Snapshot(id) => crate::web::reply(id, self.inline_candidate()),
             Request::Close => return iced::exit(),
-            // The canvas sees the new font when it draws after this update.
-            Request::Redraw => {}
+            // The canvas sees the new font when it draws after this update;
+            // the interface's text is shaped again with it now.
+            Request::Redraw => crate::canvas::prepare_fonts(),
             Request::Drag(files) => self.browser_drag(files),
             // Open or insert them as chosen files, through the same checks.
             // The import keeps the tab and drawing the files were dropped
@@ -33,6 +34,15 @@ impl App {
             }
         }
         Task::none()
+    }
+
+    /// Interface text that can hold any script: the open tabs' names and the
+    /// status, which often names a file.
+    pub(crate) fn interface_text(&self) -> impl Iterator<Item = String> + '_ {
+        std::iter::once(&self.tab)
+            .chain(&self.tabs.background)
+            .map(|tab| tab.name())
+            .chain([self.status.clone()])
     }
 
     /// The drawing in front and its revision, which changes with every edit.
