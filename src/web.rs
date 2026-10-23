@@ -793,6 +793,9 @@ pub(crate) fn update(app: &mut App, message: Message) -> Task<Message> {
             .is_some_and(|previous| previous != revision)
             .then(|| host.on_change.clone())
             .flatten();
+        // After `destroy` the drawings cannot be saved, so leaving loses
+        // nothing; its Close request still passes through here.
+        let dirty = dirty && host.requests.is_some();
         let dirty_changed = (host.dirty != dirty)
             .then(|| host.on_dirty_change.clone())
             .flatten();
