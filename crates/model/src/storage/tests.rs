@@ -53,6 +53,22 @@ fn desktop_data_files_are_the_file_system() {
         std::io::ErrorKind::NotFound
     );
     assert_eq!(browser_data_directory(), None);
+    // A replacement removes the old file, and an old file already gone is fine.
+    write_atomic(&themes.join("old.json"), b"old").unwrap();
+    write_replacing(
+        &themes.join("new.json"),
+        b"new",
+        Some(&themes.join("old.json")),
+    )
+    .unwrap();
+    assert_eq!(read_dir(&themes).unwrap(), [themes.join("new.json")]);
+    write_replacing(
+        &themes.join("new.json"),
+        b"newer",
+        Some(&themes.join("old.json")),
+    )
+    .unwrap();
+    assert_eq!(read(&themes.join("new.json")).unwrap(), b"newer");
 }
 #[test]
 fn browser_keys_are_paths_under_the_browser_root() {
@@ -76,9 +92,18 @@ fn browser_storage_keeps_each_change_and_lists_one_folder() {
     assert_eq!(browser::session(), None);
     browser::install(
         [("themes/a.reshiki-theme".to_owned(), b"a".to_vec())],
-        Box::new(move |key, bytes| {
-            sink.borrow_mut()
-                .push((key.to_owned(), bytes.map(<[u8]>::to_vec)))
+        Box::new(move |changes| {
+            let changes: Vec<_> = changes
+                .iter()
+                .map(|change| {
+                    (
+                        change.key.to_owned(),
+                        change.bytes.map(<[u8]>::to_vec),
+                        change.previous.map(<[u8]>::to_vec),
+                    )
+                })
+                .collect();
+            sink.borrow_mut().push(changes)
         }),
         "s1".into(),
         ["s2".to_owned()],
@@ -115,18 +140,45 @@ fn browser_storage_keeps_each_change_and_lists_one_folder() {
         ]
     );
     let kept = kept.borrow();
-    let kept: Vec<_> = kept
+    let kept: Vec<Vec<_>> = kept
         .iter()
-        .map(|(key, bytes)| (key.as_str(), bytes.as_deref()))
+        .map(|changes| {
+            changes
+                .iter()
+                .map(|(key, bytes, previous)| (key.as_str(), bytes.as_deref(), previous.as_deref()))
+                .collect()
+        })
         .collect();
+    // A rename is one change of two files.
     assert_eq!(
         kept,
         [
-            ("themes/b.reshiki-theme", Some(&b"b"[..])),
-            ("themes/.deleted/1/c.reshiki-theme", Some(&b"c"[..])),
-            ("appearance.json", Some(&b"{}"[..])),
-            ("themes/d.reshiki-theme", Some(&b"a"[..])),
-            ("themes/a.reshiki-theme", None),
+            vec![("themes/b.reshiki-theme", Some(&b"b"[..]), None)],
+            vec![("themes/.deleted/1/c.reshiki-theme", Some(&b"c"[..]), None)],
+            vec![("appearance.json", Some(&b"{}"[..]), None)],
+            vec![
+                ("themes/d.reshiki-theme", Some(&b"a"[..]), None),
+                ("themes/a.reshiki-theme", None, Some(&b"a"[..])),
+            ],
         ]
     );
+}
+#[test]
+fn a_change_that_was_not_kept_goes_back_unless_replaced() {
+    browser::install(
+        [("appearance.json".to_owned(), b"1".to_vec())],
+        Box::new(|_| {}),
+        "s1".into(),
+        [],
+    );
+    browser::write("appearance.json", b"2").unwrap();
+    // Another page kept 3 first: this page's 2 gives way to it.
+    browser::settle("appearance.json", Some(b"2"), Some(b"3".to_vec()));
+    assert_eq!(browser::read("appearance.json").unwrap(), b"3");
+    // A failure of an older change leaves a later one alone.
+    browser::write("appearance.json", b"4").unwrap();
+    browser::settle("appearance.json", Some(b"2"), Some(b"1".to_vec()));
+    assert_eq!(browser::read("appearance.json").unwrap(), b"4");
+    browser::settle("appearance.json", Some(b"4"), None);
+    assert!(browser::read("appearance.json").is_err());
 }

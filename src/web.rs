@@ -32,6 +32,12 @@ pub(crate) enum Request {
     Redraw,
     /// Add fonts kept from earlier visits, by SHA-256, which text needs.
     AddFonts(Vec<(String, Vec<u8>)>),
+    /// A file in browser storage changed under the app: another tab kept a
+    /// change, or one of this tab's own was not kept, with why.
+    Stored {
+        key: String,
+        failure: Option<String>,
+    },
     /// This many files are dragged over the editor, or none once they leave.
     /// Browsers name dragged files only when they are dropped.
     Drag(usize),
@@ -574,8 +580,21 @@ pub fn add_font(bytes: Vec<u8>) -> Result<usize, JsError> {
     Ok(faces)
 }
 
-/// Tell the page when `text`, about to be drawn, needs a Japanese font.
+/// Add the fonts kept from earlier visits when `text`, about to be drawn,
+/// lacks a glyph, and tell the page when it still needs a Japanese font.
 pub(crate) fn text_drawn(text: &str) {
+    let missing = |c: char| !c.is_whitespace() && !c.is_control() && !reshiki::style::has_glyph(c);
+    // Fonts are added between draws, not while text is measured, and the
+    // page is asked only once they are in.
+    if storage::adding_kept() {
+        return;
+    }
+    if storage::has_kept() {
+        if text.chars().any(missing) {
+            let _ = send(Request::AddFonts(storage::take_kept()));
+        }
+        return;
+    }
     let cjk = |c: char| {
         matches!(c,
             '\u{3000}'..='\u{30FF}' // CJK punctuation, hiragana, katakana
@@ -584,19 +603,9 @@ pub(crate) fn text_drawn(text: &str) {
             | '\u{F900}'..='\u{FAFF}' // CJK compatibility ideographs
             | '\u{FF00}'..='\u{FFEF}') // full- and half-width forms
     };
-    if (HOST.with_borrow(|host| host.on_missing_font.is_none()) && !storage::has_kept())
-        || !text
-            .chars()
-            .any(|c| cjk(c) && !reshiki::style::has_glyph(c))
+    if HOST.with_borrow(|host| host.on_missing_font.is_none())
+        || !text.chars().any(|c| cjk(c) && missing(c))
     {
-        return;
-    }
-    // A font kept from an earlier visit may have them; the page is asked
-    // only if they are still missing once it is added. Fonts are added
-    // between draws, not while text is measured.
-    let kept = storage::take_kept();
-    if !kept.is_empty() {
-        let _ = send(Request::AddFonts(kept));
         return;
     }
     let callback = HOST.with_borrow_mut(|host| host.on_missing_font.take());

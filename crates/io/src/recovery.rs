@@ -1,7 +1,4 @@
-use crate::{
-    document::{Document, VERSION},
-    storage::write_atomic,
-};
+use crate::document::{Document, VERSION};
 use serde::{Deserialize, Serialize};
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -78,6 +75,16 @@ impl Recovery {
         candidates
     }
     pub fn save(&self, document: &Document, source: Option<PathBuf>) -> Result<(), String> {
+        self.save_replacing(document, source, None)
+    }
+    /// [`Self::save`], then remove the draft `old` this one replaces; in the
+    /// browser both happen together, so a failed save never loses `old`.
+    pub fn save_replacing(
+        &self,
+        document: &Document,
+        source: Option<PathBuf>,
+        old: Option<&Path>,
+    ) -> Result<(), String> {
         document.validate()?;
         #[derive(Serialize)]
         struct BorrowedSnapshot<'a> {
@@ -99,9 +106,10 @@ impl Recovery {
                 .unwrap_or_default()
                 .as_secs(),
         };
-        write_atomic(
+        crate::storage::write_replacing(
             &self.session,
             &serde_json::to_vec(&snapshot).map_err(|e| e.to_string())?,
+            old,
         )
     }
     pub fn clear(&self) -> Result<(), String> {
