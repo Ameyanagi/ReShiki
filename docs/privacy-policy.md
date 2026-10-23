@@ -1,7 +1,7 @@
 # Privacy policy
 
 This page describes ReShiki's application and project website. Updated
-2026-10-13. ReShiki is maintained by
+2026-10-23. ReShiki is maintained by
 [@Ameyanagi](https://github.com/Ameyanagi); its source and documentation are
 available in the [project repository](https://github.com/Ameyanagi/ReShiki).
 
@@ -118,10 +118,25 @@ that optional integration.
 
 ## Website and external links
 
-The project website is published through GitHub Pages. Its homepage requests the
-public GitHub releases API to display the latest stable version. The current
-website does not add a separate usage-analytics tracker. GitHub's hosting and API
-privacy practices apply to these requests.
+The project website is published through GitHub Pages and served through
+Cloudflare. Its homepage requests the public GitHub releases API to display the
+latest stable version. GitHub's hosting and API privacy practices apply to these
+requests.
+
+Cloudflare adds [Cloudflare Web Analytics](https://www.cloudflare.com/web-analytics/)
+to the website's pages, including the browser preview: each page loads a script
+from `static.cloudflareinsights.com` and reports the page address, referrer,
+browser type and page-load timing to Cloudflare. It sets no cookies, and the
+maintainer sees only aggregate visit counts and timings. Your drawings are never
+sent. [Cloudflare's privacy policy](https://www.cloudflare.com/privacypolicy/)
+applies.
+
+**Browser preview.** The editor at [reshiki.com/demo](https://reshiki.com/demo/)
+runs in your browser, and the files you open or save stay on your computer. The
+first time a drawing or file name needs Japanese, Korean or Chinese characters,
+and the page cannot read a font installed on your computer, the editor downloads
+a Noto Sans subset from [jsDelivr](https://www.jsdelivr.com/terms/privacy-policy-jsdelivr-net)
+once per language. That request carries no drawing data.
 
 Links to documentation, sponsors, release downloads, and other sites open those
 services in your browser. Their privacy policies apply when you visit them.
