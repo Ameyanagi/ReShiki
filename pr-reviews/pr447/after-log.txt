@@ -1,4 +1,4 @@
 console error: Failed to load resource: the server responded with a status of 404 (Not Found)
 stored at start: (empty)
-stored before reload: abbreviations.json, appearance.json, templates.json, themes/generated-18e1061a1fc3a580.reshiki-theme
-stored after reload: abbreviations.json, appearance.json, templates.json, themes/generated-18e1061a1fc3a580.reshiki-theme
+stored before reload: abbreviations.json, appearance.json, templates.json, themes/generated-18e1077faead44c0.reshiki-theme
+stored after reload: abbreviations.json, appearance.json, templates.json, themes/generated-18e1077faead44c0.reshiki-theme

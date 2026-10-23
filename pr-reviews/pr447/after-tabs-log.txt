@@ -1,0 +1,2 @@
+console error: Failed to load resource: the server responded with a status of 404 (Not Found)
+stored appearance: {"mode":"dark","arrange_controls":true,"smart_guides":false,"drawing_style_unit":"pt"}
