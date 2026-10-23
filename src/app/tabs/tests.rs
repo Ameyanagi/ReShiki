@@ -866,3 +866,34 @@ fn tab_shortcuts_route_before_fields_and_do_not_collide() {
     let w = Key::Character("w".into());
     assert!(key_message(&w, &w, command).is_none());
 }
+
+#[test]
+fn unsaved_counts_every_tab_and_the_title_marks_the_front() {
+    let mut app = ready();
+    assert!(!app.unsaved());
+    assert_eq!(app.title(), "Untitled — ReShiki");
+    edit(&mut app, "N");
+    let first = app.tab.id;
+    assert!(app.unsaved());
+    assert_eq!(app.title(), "Untitled • — ReShiki");
+    // The unsaved tab behind the front still counts; the title is the front's.
+    let _ = app.update(Message::New);
+    app.tab.path = Some("saved.rsk".into());
+    assert!(app.unsaved());
+    assert_eq!(app.title(), "saved.rsk — ReShiki");
+    let _ = app.update(Message::Tabs(Action::Close(Some(first))));
+    let _ = app.update(Message::Discard);
+    assert!(!app.unsaved(), "No tab has unsaved changes left");
+}
+
+#[test]
+fn window_titles_mark_unsaved_changes() {
+    assert_eq!(
+        crate::app::window_title("Caffeine.rsk", false),
+        "Caffeine.rsk — ReShiki"
+    );
+    assert_eq!(
+        crate::app::window_title("Caffeine.rsk", true),
+        "Caffeine.rsk • — ReShiki"
+    );
+}

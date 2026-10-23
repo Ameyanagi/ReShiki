@@ -78,6 +78,7 @@ mod performance;
 mod pictures;
 mod popover;
 mod printing;
+mod prompt;
 mod reaction_mapping;
 mod reactions;
 mod results;
@@ -329,6 +330,8 @@ pub enum Message {
     Close(iced::window::Id),
     Discard,
     Cancel,
+    /// The answer to the app's own dialog; see prompt.rs.
+    Prompt(prompt::Answer),
 }
 #[derive(Debug, Clone)]
 pub enum Job {
@@ -403,6 +406,8 @@ pub struct App {
     #[cfg(any(windows, target_os = "linux"))]
     desktop: desktop::State,
     pending: Option<Pending>,
+    /// The question the app's own dialog asks, in the browser.
+    prompt: Option<prompt::Prompt>,
     ring_size: u8,
     aromatic_ring: bool,
     custom_element: String,
@@ -496,6 +501,7 @@ impl App {
             #[cfg(any(windows, target_os = "linux"))]
             desktop: desktop::State::default(),
             pending: None,
+            prompt: None,
             ring_size: 6,
             aromatic_ring: false,
             custom_element: String::new(),
@@ -526,11 +532,7 @@ impl App {
         (app, Task::batch([task, update_check]))
     }
     pub fn title(&self) -> String {
-        format!(
-            "{}{} — ReShiki",
-            self.document_name(),
-            if self.dirty() { " •" } else { "" }
-        )
+        window_title(&self.document_name(), self.dirty())
     }
     fn document_name(&self) -> String {
         self.tab.name()
@@ -746,6 +748,10 @@ impl App {
             return Task::none();
         }
         self.pending = Some(action);
+        if prompt::IN_APP {
+            self.prompt = Some(prompt::Prompt::Save(self.document_name()));
+            return Task::none();
+        }
         files::ask_to_save(self.document_name())
     }
     /// Save chosen in the save dialog passes the gates of transient editors,
@@ -846,6 +852,13 @@ impl App {
         }
         if let Message::Accessibility(action) = message {
             return ControlFlow::Break(self.accessibility_action(action));
+        }
+        // The answer goes on as the system dialog's would have.
+        if let Message::Prompt(answer) = message {
+            return ControlFlow::Break(match self.prompt.take() {
+                Some(prompt) => self.update(prompt.answer(answer)),
+                None => Task::none(),
+            });
         }
         ControlFlow::Continue(message)
     }
@@ -1009,10 +1022,18 @@ impl App {
             file_shortcuts::wrap(
                 // The command palette sits above the floating NMR panel so its
                 // modal also keeps that panel from taking clicks.
-                self.with_updates(self.with_assistant_image(self.with_commands(self.with_nmr(
-                    self.with_atom_text(self.with_help(self.with_palette(self.workspace()))),
-                )))),
-                if self.help_open {
+                self.with_prompt(
+                    self.with_updates(self.with_assistant_image(self.with_commands(
+                        self.with_nmr(
+                            self.with_atom_text(
+                                self.with_help(self.with_palette(self.workspace())),
+                            ),
+                        ),
+                    ))),
+                ),
+                if self.prompt.is_some() {
+                    Some(prompt::modal_key)
+                } else if self.help_open {
                     Some(help::modal_key)
                 } else if self.commands.open {
                     Some(command_palette::modal_key)
@@ -1031,6 +1052,11 @@ impl App {
             traverse,
         )
     }
+}
+
+/// The window's title: the document's name, marked while it has unsaved changes.
+fn window_title(name: &str, dirty: bool) -> String {
+    format!("{name}{} — ReShiki", if dirty { " •" } else { "" })
 }
 
 /// Hydrogen labels are a computed display cache, not unsaved drawing edits.

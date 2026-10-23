@@ -703,7 +703,8 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Tabs(..)
         | Message::Close(..)
         | Message::Discard
-        | Message::Cancel => None,
+        | Message::Cancel
+        | Message::Prompt(_) => None,
     }
 }
 
