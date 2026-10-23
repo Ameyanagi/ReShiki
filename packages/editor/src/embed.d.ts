@@ -10,7 +10,7 @@ export interface EmbedOptions {
   onChange?: () => void;
   /** Font URLs, as for mount(); relative URLs resolve against this page. */
   fonts?: (string | URL)[];
-  /** The Japanese fallback's URL, or `false` for none, as for mount(). */
+  /** The CJK fallback's URL, or `false` for none, as for mount(). */
   cjkFont?: string | URL | false;
   /** Called with fonts that could not be loaded; they are logged by default. */
   onError?: (error: Error) => void;
