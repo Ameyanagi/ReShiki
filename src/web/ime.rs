@@ -180,9 +180,10 @@ fn textarea_event(
             let Some(key) = event.dyn_ref::<web_sys::KeyboardEvent>() else {
                 return;
             };
-            // The input method's keys, and the key that ends a
-            // composition (229 in Chrome and Safari), stay with it.
-            if key.is_composing() || key.key_code() == 229 {
+            // The input method's keys, the key that ends a composition (229
+            // in Chrome and Safari) and dead keys, which start one, stay
+            // with it.
+            if key.is_composing() || key.key_code() == 229 || key.key() == "Dead" {
                 return;
             }
             key.prevent_default();
