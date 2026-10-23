@@ -52,7 +52,7 @@ fn cut(seen: &Option<Seen>) -> bool {
 }
 
 fn contacts(balls: &[Ball], project: impl Fn(V) -> Point) -> Contacts {
-    super::contacts(balls, None, true, project)
+    super::contacts(balls, None, Quality::full(true), project)
 }
 
 /// The region's boundary points off the rim: the cut.
@@ -312,4 +312,38 @@ fn balls_that_nearly_touch_shade_each_other_without_a_cut() {
     assert!(found.seams.is_empty());
     let apart = contacts(&[ball([0., 0., 0.], 1.5), ball([3.6, 0., 0.], 1.5)], flat);
     assert_eq!(apart.seen, [None, None]);
+}
+
+#[test]
+fn a_draft_keeps_the_cuts_and_seams_but_not_the_shadow() {
+    let balls = [ball([0., 0., -0.5], 1.7), ball([1.2, 0., 0.6], 1.2)];
+    let full = contacts(&balls, flat);
+    let draft = super::contacts(&balls, None, Quality::draft(), flat);
+    for (full, draft) in full.seen.iter().zip(&draft.seen) {
+        let (
+            Some(Seen::Shown {
+                region: a,
+                shadow: s,
+                ..
+            }),
+            Some(Seen::Shown {
+                region: b,
+                shadow: t,
+                ..
+            }),
+        ) = (full, draft)
+        else {
+            panic!("both shown");
+        };
+        assert!(!s.is_empty() && t.is_empty());
+        // The same region, more coarsely: a few points, within 1% of the
+        // ball's size.
+        let (pa, pb): (Vec<Point>, Vec<Point>) = (a.concat(), b.concat());
+        assert!(pb.len() < pa.len());
+        for p in &pb {
+            let nearest = pa.iter().map(|q| q.distance(*p)).fold(f32::MAX, f32::min);
+            assert!(nearest < 0.12, "{p:?} is {nearest} from the full region");
+        }
+    }
+    assert_eq!(full.seams.len(), draft.seams.len());
 }

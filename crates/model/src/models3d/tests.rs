@@ -1092,6 +1092,39 @@ fn overlapping_balls_are_cut_where_they_meet() {
     assert_eq!(scene::svg(&doc).matches("<circle").count(), 5);
 }
 
+/// While the model turns, its balls keep their cuts but skip the contact
+/// shadow; the frame after draws it again.
+#[test]
+fn a_turning_model_draws_contacts_without_their_shadow() {
+    let shadows = |draft: bool| {
+        let (_, parts) = styled(|m| {
+            m.style = Style::SpaceFilling;
+            m.draft = draft;
+        });
+        parts
+            .iter()
+            .filter_map(|p| match p {
+                Primitive::Sphere {
+                    contact: Some(c), ..
+                } => Some((
+                    c.region.len(),
+                    c.shadow.iter().filter(|(_, s)| !s.is_empty()).count(),
+                )),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let (full, draft) = (shadows(false), shadows(true));
+    assert_eq!(full.len(), 5);
+    assert_eq!(draft.len(), 5);
+    assert!(full.iter().any(|(_, levels)| *levels > 0));
+    assert!(
+        draft
+            .iter()
+            .all(|(regions, levels)| *regions > 0 && *levels == 0)
+    );
+}
+
 #[test]
 fn hydrogens_can_be_all_polar_or_none() {
     // Hydrogens on C1 and on O; only the O–H is polar.

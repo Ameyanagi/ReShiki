@@ -47,6 +47,39 @@ fn unit(a: V) -> V {
 
 /// Samples per full turn of a rim or a meeting circle.
 const STEPS: f32 = 64.;
+/// Samples per full turn while the model turns or morphs.
+const DRAFT_STEPS: f32 = 24.;
+
+/// How finely contacts are drawn.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct Quality {
+    /// Samples per full turn of a rim or a meeting circle.
+    steps: f32,
+    /// Whether to shade contacts at all.
+    shadow: bool,
+    /// Whether balls that only nearly touch shade each other.
+    nearly: bool,
+}
+
+impl Quality {
+    /// Every detail; `nearly` for space-filling.
+    pub fn full(nearly: bool) -> Self {
+        Self {
+            steps: STEPS,
+            shadow: true,
+            nearly,
+        }
+    }
+    /// The exact cuts and seams, more coarsely and without the shadow, for
+    /// frames drawn while the model turns or morphs.
+    pub fn draft() -> Self {
+        Self {
+            steps: DRAFT_STEPS,
+            shadow: false,
+            nearly: false,
+        }
+    }
+}
 /// Samples per full turn of a polygon's rim outside the disc: coarse, as the
 /// polygon there is cut away or clipped.
 const PAST_STEPS: f32 = 16.;
@@ -402,24 +435,27 @@ fn neighbours(balls: &[Ball], reach: f32) -> Vec<Vec<usize>> {
 
 /// What shows of every ball and the seams between them, seen from `eye`
 /// (the camera's distance along z, `None` from infinitely far), with
-/// `project` taking a rotated point to the drawing. Balls that only nearly
-/// touch shade each other when `nearly` is set.
+/// `project` taking a rotated point to the drawing, at `quality`.
 pub(super) fn contacts(
     balls: &[Ball],
     eye: Option<f32>,
-    nearly: bool,
+    quality: Quality,
     project: impl Fn(V) -> Point,
 ) -> Contacts {
     let near = neighbours(balls, 0.);
-    // With `nearly`, balls that nearly touch still shade each other.
-    let close = neighbours(balls, if nearly { SHADOW_REACH } else { 0. });
+    // Balls that nearly touch may still shade each other.
+    let close = if quality.nearly {
+        neighbours(balls, SHADOW_REACH)
+    } else {
+        near.clone()
+    };
     let facing: Vec<Facing> = balls.iter().map(|&b| Facing::new(b, eye)).collect();
     let seen = balls
         .iter()
         .zip(&facing)
         .zip(near.iter().zip(&close))
         .map(|((&a, f), (near, close))| {
-            (!close.is_empty()).then(|| seen(a, f, (near, close), balls, &project))
+            (!close.is_empty()).then(|| seen(a, f, (near, close), balls, quality, &project))
         })
         .collect();
     let mut seams = vec![];
@@ -429,7 +465,7 @@ pub(super) fn contacts(
             if !near.get(j).is_some_and(|other| other.contains(&i)) {
                 continue;
             }
-            let runs = seam(balls, &facing, (i, j), list, &project);
+            let runs = seam(balls, &facing, (i, j), list, quality.steps, &project);
             if !runs.is_empty() {
                 seams.push(((i, j), runs));
             }
@@ -459,6 +495,7 @@ fn point([x, y]: [f64; 2]) -> Point {
 /// One ball's rim and what its neighbours cover of its disc, as drawing
 /// polygons, counterclockwise.
 struct Disc<'a, P> {
+    steps: f32,
     ball: Ball,
     facing: &'a Facing,
     project: &'a P,
@@ -486,7 +523,7 @@ impl<P: Fn(V) -> Point> Disc<'_, P> {
     /// The whole disc.
     fn whole(&self) -> Vec<[f64; 2]> {
         Self::counterclockwise(
-            sample(0., TAU, STEPS)
+            sample(0., TAU, self.steps)
                 .skip(1)
                 .map(|s| flat((self.project)(self.facing.rim.at(s))))
                 .collect(),
@@ -500,7 +537,7 @@ impl<P: Fn(V) -> Point> Disc<'_, P> {
             Cover::None => Ok(None),
             Cover::Hidden => Err(()),
             Cover::Part(ring, (t0, t1), closing) => {
-                let mut polygon: Vec<[f64; 2]> = sample(t0, t1, STEPS)
+                let mut polygon: Vec<[f64; 2]> = sample(t0, t1, self.steps)
                     .map(|t| flat((self.project)(ring.at(t))))
                     .collect();
                 if let Some((s0, s1)) = closing {
@@ -536,6 +573,7 @@ fn seen(
     f: &Facing,
     (near, close): (&[usize], &[usize]),
     balls: &[Ball],
+    quality: Quality,
     project: &impl Fn(V) -> Point,
 ) -> Seen {
     let near: Vec<Ball> = near.iter().filter_map(|&j| balls.get(j).copied()).collect();
@@ -544,6 +582,7 @@ fn seen(
         .filter_map(|&j| balls.get(j).copied())
         .collect();
     let disc = Disc {
+        steps: quality.steps,
         ball: a,
         facing: f,
         project,
@@ -585,14 +624,19 @@ fn seen(
         .free()
         .into_iter()
         .map(|(s0, s1)| {
-            sample(s0, s1, STEPS)
+            sample(s0, s1, quality.steps)
                 .map(|s| project(f.rim.at(s)))
                 .collect()
         })
         .collect();
     // Each level: what every neighbour grown by its gap covers, as one
     // shape per level.
-    let shadow = shadow_levels()
+    let levels = if quality.shadow {
+        shadow_levels().to_vec()
+    } else {
+        vec![]
+    };
+    let shadow = levels
         .iter()
         .map(|&(gap, _)| {
             close
@@ -616,6 +660,7 @@ fn seam(
     facing: &[Facing],
     (i, j): (usize, usize),
     near: &[usize],
+    steps: f32,
     project: &impl Fn(V) -> Point,
 ) -> Runs {
     let (Some(&a), Some(&b), Some(fa), Some(fb)) =
@@ -653,7 +698,7 @@ fn seam(
         .into_iter()
         .filter(|(t0, t1)| t1 - t0 > 1e-3)
         .map(|(t0, t1)| {
-            sample(t0, t1, STEPS)
+            sample(t0, t1, steps)
                 .map(|t| project(m.ring.at(t)))
                 .collect()
         })
