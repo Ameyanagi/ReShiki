@@ -56,6 +56,11 @@ impl Refresh {
                 continue;
             };
             let id = first.id;
+            // A crystal's bonds come from distances, not chemistry: its atoms
+            // are explicit and get no computed labels.
+            if crate::models3d::crystal::touches(source, &[id]) {
+                continue;
+            }
             let entry = previous
                 .cache
                 .get(&id)

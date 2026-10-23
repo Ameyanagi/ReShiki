@@ -49,6 +49,8 @@ pub(crate) enum Setting {
     DepthFade(f32),
     Perspective(f32),
     ResetView,
+    /// Show a crystal's ion charges in its 2D drawing.
+    Charges(bool),
 }
 
 /// The generation in flight; dropping it aborts the worker.
@@ -287,10 +289,10 @@ impl App {
             return;
         };
         let before = self.tab.doc.clone();
-        let reset = before
-            .models
-            .get(index)
-            .map(|model| model.initial_view(&before));
+        // The opening view is a search for a crystal; only Reset view needs it.
+        let reset = matches!(setting, Setting::ResetView)
+            .then(|| before.models.get(index).map(|m| m.initial_view(&before)))
+            .flatten();
         let Some(model) = self.tab.doc.models.get_mut(index) else {
             return;
         };
@@ -302,6 +304,7 @@ impl App {
             Setting::DepthFade(value) => model.depth_fade = value.clamp(0., 1.),
             Setting::Perspective(value) => model.perspective = value.clamp(0., 1.),
             Setting::ResetView => model.rotation = reset.unwrap_or(model.rotation),
+            Setting::Charges(shown) => model.charges = shown,
         }
         // The active choice again changes nothing and adds no Undo step.
         if self.tab.doc == before {
@@ -504,6 +507,36 @@ impl App {
                 .style(muted_text),
             );
         }
+        // A crystal's ion charges, hidden in 2D unless asked for.
+        let charged = |m: &&models3d::Model3d| {
+            m.cell.is_some()
+                && m.atoms
+                    .iter()
+                    .any(|a| self.tab.doc.atom(a.id).is_some_and(|a| a.charge != 0))
+        };
+        if let Some(model) = model.filter(charged) {
+            body = body.push(text("Ion charges").size(12)).push(
+                row(
+                    [(false, "Hide", "hide"), (true, "Show", "show")].map(|(shown, label, id)| {
+                        let active = model.charges == shown;
+                        accessible_command(
+                            format!("structure-charges-{id}"),
+                            format!("{label} ion charges"),
+                            label,
+                        )
+                        .checked(active)
+                        .style(control(active))
+                        .width(Length::Fill)
+                        .on_press_maybe(
+                            enabled
+                                .then_some(Message::Models3d(Action::Set(Setting::Charges(shown)))),
+                        )
+                        .into()
+                    }),
+                )
+                .spacing(4),
+            );
+        }
         Some(self.inspector_section(Section::Structure, "Structure", "", true, body))
     }
 }
@@ -661,11 +694,15 @@ impl App {
     }
 }
 
-/// The Structure section's note: the generation in flight, or the model's
-/// style (ball & stick before there is a model).
+/// The Structure section's note: the generation in flight, the 2D drawing
+/// while a model is kept but not shown, or the model's style (ball & stick
+/// before there is a model).
 fn subtitle(pending: Option<Display>, model: Option<&models3d::Model3d>) -> String {
     if pending.is_some() {
         return "Generating the conformer · ETKDG, then MMFF94s".into();
+    }
+    if model.is_some_and(|m| m.display == Display::TwoD) {
+        return "2D drawing · Chemistry and atom IDs stay the same".into();
     }
     let style = model.map_or(Style::BallStick, |m| m.style);
     format!("{} · Chemistry and atom IDs stay the same", name(style))
