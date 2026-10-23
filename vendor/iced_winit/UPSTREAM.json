@@ -1,0 +1,26 @@
+{
+  "upstream": "https://github.com/iced-rs/iced/tree/0.14/winit",
+  "version": "0.14.1",
+  "commit": "38237dd294da3256c2ac4d3f8288fc73956c91e0",
+  "license": "MIT",
+  "source": "crates.io iced_winit 0.14.1",
+  "upstream_file_sha256": {
+    "Cargo.toml": "1931e5f26d014a2b17a74028ae5d73f0d155aa2d1bc265b8db43fd43198835f1",
+    "Cargo.toml.orig": "7a684a0aca0cf8fb75c48f900662a0d10f0bc4a4cea6cd82181b428434c77a86",
+    "README.md": "4d630c9e4dfcfe0a61c8d61a7dedeb81e14a782312fdbe26c594eea43aa2921f",
+    "src/clipboard.rs": "a22787f6644d54c903e4f0a942ebd301a24b28ad64f730b9d66815117f00e757",
+    "src/conversion.rs": "1e382829eee4e06436ac485581a5eadc2c2f3d2a3f6c6625ae0531fa5316fa67",
+    "src/error.rs": "71ee4325daee93a87c897c933b3c4c4dfb2d8f6445b79d4c8fa54e192486ef94",
+    "src/lib.rs": "ba9fc11df9bc27959d5f26633bb81b42c47f459a3d4f8609cdacefddb133dce8",
+    "src/proxy.rs": "98fd36252bf8aec9b9708da5cbf5aaa3ab1bafee115366095b657972986aa53c",
+    "src/window.rs": "ce13c18da33760b65fb3402300de8d31e24f4cb0fe4cc0beec5d0b195d8ffc28",
+    "src/window/state.rs": "95482e880de39ce7ea0a7c9a200df2dd1c9ce8789e334736902061db23fb93c2"
+  },
+  "purpose": "Input methods in the browser build: winit 0.30's web backend implements none, so the page's composition events reach Iced's text widgets through this crate instead.",
+  "local_changes": [
+    "src/web_ime.rs (new, wasm32 only): on_input_method tells the page where a text widget's cursor is, or that none wants text; send queues winit Ime events from the page and wakes the window",
+    "src/lib.rs: declare web_ime on wasm32; deliver the queued Ime events before each window event; register the window that send wakes",
+    "src/window.rs: on wasm32, report the input method area to web_ime when Iced enables, moves or disables it",
+    "LICENSE (added): Iced's MIT license, which the crate package does not include; the same text as licenses/iced/LICENSE"
+  ]
+}

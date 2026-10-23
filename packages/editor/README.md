@@ -172,6 +172,10 @@ it.
   text, not PDF, CDX or ChemDraw's own formats. Text fields copy, cut and
   paste plain text; their paste uses the browser's paste event and needs no
   permission.
+- Input methods (Japanese, Chinese and Korean) type into text fields and
+  captions through a hidden textarea that the editor adds to the element.
+  Typing atom labels straight onto the drawing, without a text field, takes
+  keys only, not composed text.
 - Only Liberation Sans and a small subset of DejaVu Sans for the interface's
   key and arrow symbols are bundled, so drawing symbols they lack, such as ℃,
   ⇌ and superscript ⁺ and ⁻, need a font from `fonts`. Chinese, Japanese and

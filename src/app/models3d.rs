@@ -51,6 +51,10 @@ pub(crate) enum Setting {
     ResetView,
     /// Show a crystal's ion charges in its 2D drawing.
     Charges(bool),
+    /// How many cells along a, b and c a crystal's 2D drawing shows.
+    Repeat([u8; 3]),
+    /// Turn a crystal's 2D drawing to look along a lattice direction.
+    LookAlong(models3d::Along),
 }
 
 /// The generation in flight; dropping it aborts the worker.
@@ -305,6 +309,25 @@ impl App {
             Setting::Perspective(value) => model.perspective = value.clamp(0., 1.),
             Setting::ResetView => model.rotation = reset.unwrap_or(model.rotation),
             Setting::Charges(shown) => model.charges = shown,
+            Setting::Repeat(repeat) => model.repeat = repeat,
+            Setting::LookAlong(_) => {}
+        }
+        // Looking along an axis lays the drawing out again; so does a first
+        // repeat, along the axis whose labels keep farthest apart.
+        let first_repeat = matches!(setting, Setting::Repeat(r) if r != [1; 3])
+            && before.models.get(index).is_some_and(|m| m.repeat == [1; 3]);
+        let along = match setting {
+            Setting::LookAlong(along) => Some(along),
+            _ if first_repeat => self
+                .tab
+                .doc
+                .models
+                .get(index)
+                .map(|m| models3d::best_along(&self.tab.doc, m)),
+            _ => None,
+        };
+        if let Some(along) = along {
+            models3d::look_along(&mut self.tab.doc, index, along);
         }
         // The active choice again changes nothing and adds no Undo step.
         if self.tab.doc == before {
@@ -534,6 +557,50 @@ impl App {
                         .into()
                     }),
                 )
+                .spacing(4),
+            );
+        }
+        // A crystal's repeat and view direction, while drawn in 2D.
+        if let Some(model) = model.filter(|m| m.cell.is_some() && m.display == Display::TwoD) {
+            let set = move |setting| enabled.then_some(Message::Models3d(Action::Set(setting)));
+            body = body.push(text("Repeat").size(12));
+            for (k, axis) in ["a", "b", "c"].into_iter().enumerate() {
+                let counts = (1..=models3d::MAX_REPEAT).map(|n| {
+                    let active = model.repeat.get(k) == Some(&n);
+                    let mut repeat = model.repeat;
+                    if let Some(slot) = repeat.get_mut(k) {
+                        *slot = n;
+                    }
+                    accessible_command(
+                        format!("structure-repeat-{axis}-{n}"),
+                        format!("{n} cells along {axis}"),
+                        n.to_string(),
+                    )
+                    .checked(active)
+                    .style(control(active))
+                    .width(Length::Fill)
+                    .on_press_maybe(set(Setting::Repeat(repeat)))
+                    .into()
+                });
+                body = body.push(
+                    row![text(axis).size(12).width(16)]
+                        .extend(counts)
+                        .spacing(4)
+                        .align_y(Alignment::Center),
+                );
+            }
+            body = body.push(text("Look along").size(12)).push(
+                row(models3d::Along::ALL.map(|along| {
+                    let name = along.name();
+                    accessible_command(
+                        format!("structure-look-{name}"),
+                        format!("Look along {name}"),
+                        name,
+                    )
+                    .width(Length::Fill)
+                    .on_press_maybe(set(Setting::LookAlong(along)))
+                    .into()
+                }))
                 .spacing(4),
             );
         }
