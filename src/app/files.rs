@@ -31,7 +31,8 @@ pub(super) fn save_backend(host: Option<Host>) -> SaveBackend {
 }
 
 /// Asks with the system dialog whether to save `name` before continuing a
-/// pending action; the answer arrives as Save, Discard or Cancel.
+/// pending action; the answer arrives as Save, Discard or Cancel. The browser
+/// asks in the app instead (prompt.rs).
 pub(super) fn ask_to_save(name: String) -> Task<Message> {
     iced::window::latest().then(move |window| {
         let question = format!("Do you want to save the changes you made to “{name}”?");
@@ -73,17 +74,6 @@ fn save_answer(result: rfd::MessageDialogResult) -> Message {
         Answer::No => Message::Discard,
         Answer::Custom(label) if label == SAVE => Message::Save,
         Answer::Custom(label) if label == DONT_SAVE => Message::Discard,
-        // The browser asks with confirm(), which has two buttons: OK saves,
-        // and Cancel asks again whether to discard the changes.
-        #[cfg(target_arch = "wasm32")]
-        Answer::Ok => Message::Save,
-        #[cfg(target_arch = "wasm32")]
-        _ if crate::web::confirm(
-            "Close without saving? OK discards your changes; Cancel keeps editing.",
-        ) =>
-        {
-            Message::Discard
-        }
         _ => Message::Cancel,
     }
 }

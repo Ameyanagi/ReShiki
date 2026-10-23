@@ -19,6 +19,12 @@ impl App {
             // The canvas sees the new font when it draws after this update;
             // the interface's text is shaped again with it now.
             Request::Redraw => crate::canvas::prepare_fonts(),
+            // As Redraw, once the fonts are in.
+            Request::AddFonts(fonts) => {
+                crate::web::add_kept_fonts(fonts);
+                crate::canvas::prepare_fonts();
+            }
+            Request::Stored { key, failure } => return self.stored(&key, failure),
             Request::Drag(files) => self.browser_drag(files),
             // Open or insert them as chosen files, through the same checks.
             // The import keeps the tab and drawing the files were dropped
@@ -32,6 +38,38 @@ impl App {
                     Message::Tab(id, Box::new(Message::Imports(read)))
                 });
             }
+        }
+        Task::none()
+    }
+
+    /// Read a file in browser storage again after it changed under the app,
+    /// so the next save starts from it, and say why a change was not kept.
+    fn stored(&mut self, key: &str, failure: Option<String>) -> Task<Message> {
+        if let Some(failure) = failure {
+            self.status = failure;
+            self.error = true;
+            // A draft reported saved was not kept: write it again on the
+            // next tick.
+            if key.starts_with("recovery/") {
+                self.each_tab(|app| {
+                    let session = app.tab.recovery.as_ref().map(|r| r.session.as_path());
+                    if session.and_then(reshiki::storage::browser::key).as_deref() == Some(key) {
+                        app.tab.autosaved_revision = None;
+                    }
+                });
+            }
+        }
+        match key {
+            "appearance.json" => self.appearance = crate::appearance::Settings::load(),
+            "abbreviations.json" => {
+                self.abbreviations.catalog_warning = super::abbreviations::load_user_catalog();
+            }
+            "templates.json" if !self.templates.pending() => {
+                let reload = super::template_library::Action::Reload;
+                return Task::done(Message::Templates(reload));
+            }
+            key if key.starts_with("themes/") => self.theme_library.reload(),
+            _ => {}
         }
         Task::none()
     }

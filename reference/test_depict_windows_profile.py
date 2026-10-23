@@ -18,6 +18,7 @@ class WindowsProfileTests(unittest.TestCase):
     def test_independent_python_and_native_witnesses_select_the_capture(self):
         for profile, evidence in (
             ("server2022", AUDIT["capture"]["crt"]),
+            ("server2022", AUDIT["server2022_ucrt_5756"]["capture"]["crt"]),
             ("no-fma3", AUDIT["emulated_no_fma3"]["crt"]),
         ):
             with self.subTest(profile=profile):
@@ -70,6 +71,17 @@ class WindowsProfileTests(unittest.TestCase):
                     self.assertEqual(
                         hashlib.sha256(raw).hexdigest(), evidence["captured_jsonl_sha256"]
                     )
+
+    def test_updated_server_ucrt_recaptured_the_saved_rows(self):
+        refresh = AUDIT["server2022_ucrt_5756"]
+        self.assertEqual(refresh["capture"]["source_commit"], AUDIT["capture"]["source_commit"])
+        self.assertEqual(refresh["stages"].keys(), AUDIT["stages"].keys())
+        for stage, evidence in refresh["stages"].items():
+            with self.subTest(stage=stage):
+                saved = AUDIT["stages"][stage]
+                self.assertEqual(evidence["reference_fixture"], saved["fixture"])
+                self.assertEqual(evidence["cases"], saved["cases"])
+                self.assertEqual(evidence["captured_rows_sha256"], saved["captured_rows_sha256"])
 
 
 if __name__ == "__main__":

@@ -669,5 +669,145 @@
         "nan_sign_differences": 20
       }
     }
+  },
+  "server2022_ucrt_5756": {
+    "run_url": "https://github.com/Ameyanagi/ReShiki/actions/runs/39957835372",
+    "job_id": 120428011813,
+    "revision": "cab0815",
+    "runner_image": "windows-2022 20261021.343.1",
+    "note": "The windows-2022 image update replaced UCRT 10.0.20348.5622 with 10.0.20348.5756. Its acos and ring witnesses equal the saved Server 2022 capture, all 32 live Windows x64 depiction tests passed against fresh native observers, and every stage's captured data rows are byte-identical to the fixture the server2022 profile replays. No fixture changed.",
+    "result": {
+      "tests_passed": 32
+    },
+    "capture": {
+      "platform": "Windows-2022Server-10.0.20348-SP0",
+      "machine": "AMD64",
+      "processor": "AMD64 Family 26 Model 2 Stepping 1, AuthenticAMD",
+      "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+      "python_platform": "win-amd64",
+      "rdkit": "2026.03.6",
+      "source_commit": "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+      "boost_archive_sha256": "7009fe1faa1697476bdc7027703a2badb84e849b7b0baad5086b087b971f8617",
+      "crt": {
+        "python": {
+          "profile": "uncaptured",
+          "module": "C:\\Windows\\System32\\ucrtbase.dll",
+          "module_sha256": "d06d0a421398fb663c6c49586e09774143460fdb1dce489aa9844846b9398555",
+          "ring_bits": [
+            "3febb67ae8584cab",
+            "bfdffffffffffffc",
+            "bfebb67ae8584ca9",
+            "bfe0000000000004"
+          ],
+          "primitive_bits": [
+            "3ff29f25c111e686",
+            "3fed63011ebd161d",
+            "3fd954d5989f7ab7"
+          ],
+          "python_platform": "win-amd64",
+          "reference_version": "2026.03.6",
+          "forced_fma3": null,
+          "module_version": "10.0.20348.5756"
+        },
+        "native": {
+          "module": "C:\\Windows\\System32\\ucrtbase.dll",
+          "primitive_bits": [
+            "3ff29f25c111e686",
+            "3fed63011ebd161d",
+            "3fd954d5989f7ab7"
+          ],
+          "ring_bits": [
+            "3febb67ae8584cab",
+            "bfdffffffffffffc",
+            "bfebb67ae8584ca9",
+            "bfe0000000000004"
+          ],
+          "module_sha256": "d06d0a421398fb663c6c49586e09774143460fdb1dce489aa9844846b9398555",
+          "module_version": "10.0.20348.5756",
+          "observer_sha256": "dc89ef37e74dd3c9b7acc6a9ef9992b5ac6dc48d64bca512090f816dbec71aaf",
+          "binary_sha256": "3d437e8abd3143b47f050d919b26a0eb77f73942b10e1b4b051efaff03db4e9b",
+          "compiler_command": [
+            "cl",
+            "/nologo",
+            "/std:c++20",
+            "/O2",
+            "/MD",
+            "/EHsc",
+            "D:\\a\\ReShiki\\ReShiki\\reference\\depict_windows_crt_reference.cpp",
+            "/Fe:D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-live-windows\\crt-reference.exe",
+            "/FoD:\\a\\ReShiki\\ReShiki\\artifacts\\depict-live-windows\\"
+          ],
+          "compiler_log_sha256": "5afd82d0a83b4ba35c7ff5e340540f14e878c90000d2dbf787aa3f8dc27471cd"
+        }
+      },
+      "oracles": {
+        "geometry": "78bb69efeb46ba116939b537e462f0b167b1251ee283c0bf06228018f6f222ae",
+        "rings": "d400be490a3955abf5ef2f421ced1f949ac13bc9f3a0d6d9bcfc7f0d3b4a8031",
+        "attachment": "8e5416753249203aa9f483e328eadfa905ceadc270e6cf161b036fe75ef0bc56",
+        "seeds": "738f5af83fb2e0384bb61c5655af2857317a02131669c9bfa79ece19d313ff75",
+        "templates": "864090954ee7ce726a5054bcdaa9dd976382e817267700c53f1254e7ead76fec",
+        "collision": "aea33b4dff67ae92e6881e6c9782841dde67e88d6c4dc7ce116ed509005482a1",
+        "expansion": "b81ff03bbd46db2946b1c65074f0075e5523f078889e2f6a9a04b883cf034887",
+        "finalize": "ebe069e968d5b4a7cfd40946549eef1f124bf003c4fcf1c0b55004fb7c9b1736"
+      }
+    },
+    "stages": {
+      "geometry": {
+        "cases": 5310,
+        "captured_sha256": "c3ce64a31b51554bfef9c0c03530d8445b9d575717dd61ab1d96e3911405ae32",
+        "captured_jsonl_sha256": "47ce721637b97c1b5c6bef71f9fd535e35bc041f2853d5d3c1d08a8432c9c2ca",
+        "captured_rows_sha256": "7eb2b6aa0438d8a48d7826dcaf5d34d0098d7c5f9c80eaa521dbfd88f1edf9ca",
+        "reference_fixture": "depict-geometry-windows-server2022-native.json.gz"
+      },
+      "rings": {
+        "cases": 1338,
+        "captured_sha256": "64a58a1b49c028de9ee30115f5d11d7309c85c445a53b3522e9d52567da0e08c",
+        "captured_jsonl_sha256": "ca6903824a8a905c090ec9d770deba55e0266deb29540c4f9ecb6ceba78895bd",
+        "captured_rows_sha256": "6c1683baba7271d8da21eafef2e99d0a00a7467366947cebdccd13d630fa681a",
+        "reference_fixture": "depict-rings-windows-server2022-native.json.gz"
+      },
+      "attachment": {
+        "cases": 970,
+        "captured_sha256": "497e1d0c1cf5cdb176813fe2fea126bb3ef5b35f29e3ad87d539bd90512a1044",
+        "captured_jsonl_sha256": "04edabb1eb116a2b6006aebf93b45f92b8fdd4418b8750d755488f3ce44d08a5",
+        "captured_rows_sha256": "d9ccee2c728948931b1d6781ae72f2a32cb957123f421b4ca93aadca5af09571",
+        "reference_fixture": "depict-attachment-windows-native.json.gz"
+      },
+      "seeds": {
+        "cases": 991,
+        "captured_sha256": "839ffc2fcc199206a1851e809ea0b9fdd1fd8bbdc69e9ce1aaac766788e528ff",
+        "captured_jsonl_sha256": "53ebd3194c3ca5fe71eb9d0b346d637ef75e10a861bece32ece20b78b194411f",
+        "captured_rows_sha256": "b8e4404ed33564bc8bab1e33f845a5a550aa47115f6c5edd507c94f6d1be68d4",
+        "reference_fixture": "depict-seeds-windows-native.json.gz"
+      },
+      "templates": {
+        "cases": 1921,
+        "captured_sha256": "b7c209549b0bcd04b5117b20be04c9669c04709a4f89277124e080b8cc2d0f0c",
+        "captured_jsonl_sha256": "1c8cfc8db8b073c30110d747720bec439d9e48b39709a850e1bea05817756416",
+        "captured_rows_sha256": "664b80bb73a62556b151a0148182d5a835f587cd94df4d7d100e0fe787b4b73e",
+        "reference_fixture": "depict-templates-windows-server2022-native.json.gz"
+      },
+      "collision": {
+        "cases": 1634,
+        "captured_sha256": "fc03a5b9c407d6cb70d4b50edef627425d24453a1533b639eaeb1a0f7a6411f7",
+        "captured_jsonl_sha256": "de0feb995d773e9f12d632a3165f3ff051ebe44b536996d9c34754c612f285bf",
+        "captured_rows_sha256": "dc6672c69408a99c7f437a4966841ecbc42daa24c64d4ea15b98754c5b15aff8",
+        "reference_fixture": "depict-collision-windows-native.json.gz"
+      },
+      "expansion": {
+        "cases": 1877,
+        "captured_sha256": "ef9835d3b7c3a6e6c7dbbb745ca6ba397c0ee4906c643a97ca1e506aedfb2452",
+        "captured_jsonl_sha256": "196b174093a1707b7e37deed96047f87295a933d60b379715e40b011a9f0450a",
+        "captured_rows_sha256": "02347c33df0b0eaf715291c0b3fc731b59e7d20c23bb4823f4c0a089d3f00e93",
+        "reference_fixture": "depict-expansion-windows-server2022-native.json.gz"
+      },
+      "finalize": {
+        "cases": 2312,
+        "captured_sha256": "3dfb0da46a5738558f78394078d47e6e428f20af5880ee261a4ac7a89f2b65a9",
+        "captured_jsonl_sha256": "1b31e774b77e89fd4759c78c169d123bf14929cec898cb2d092361fde38c6871",
+        "captured_rows_sha256": "67fc12a704a64e301a7d967996610e9034617cb147b28d1386132a7b0cfc9191",
+        "reference_fixture": "depict-finalize-windows-native.json.gz"
+      }
+    }
   }
 }

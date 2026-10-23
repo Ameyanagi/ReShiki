@@ -68,15 +68,24 @@ fn model_images_match_figure_export_and_are_smooth() {
             .max()
             .unwrap();
         // Anti-aliased edges may round differently under the two transforms.
+        // A figure merges contact-shadow levels in pairs, so a band edge
+        // lands a step further out there.
+        let tolerance = if style == Style::SpaceFilling { 16 } else { 6 };
         assert!(
-            worst <= 6,
+            worst <= tolerance,
             "{style:?}: canvas differs from export by {worst}"
         );
 
         // Across the front ball's middle row, neighbouring pixels differ by
-        // at most a few levels: the gradient is continuous.
+        // at most a few levels: the gradient is continuous. A ball meeting
+        // others steps through its contact shadow's levels instead.
         let front = run.iter().rev().find_map(|p| match p {
-            Primitive::Sphere { center, radius, .. } => Some((center, radius)),
+            Primitive::Sphere {
+                center,
+                radius,
+                contact: None,
+                ..
+            } => Some((center, radius)),
             _ => None,
         });
         if let Some((center, radius)) = front {
@@ -308,7 +317,9 @@ fn a_morphing_model_draws_as_tiles_in_every_style() {
             parent: o,
             xyz: [1.8, 0.4, 0.3],
         });
-        doc.models[0].morph = Some(0.4);
+        // Far enough out that a space-filling hydrogen is no longer hidden
+        // inside its atom.
+        doc.models[0].morph = Some(0.8);
         let run = scene::primitives(&doc);
         assert!(run.iter().all(is_model), "{style:?}");
         assert!(

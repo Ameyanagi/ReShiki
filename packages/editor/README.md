@@ -51,6 +51,26 @@ const stop = editor.onChange(() => {}); // returns a function that stops it
 editor.destroy();
 ```
 
+Leaving the page while any tab has unsaved changes (reload, closing the
+browser tab, following a link) asks first with the browser's "Leave site?"
+prompt. Closing an unsaved tab inside the editor asks Save, Don't Save or
+Cancel. The page can follow the same state:
+
+```js
+const editor = await mount(element, {
+  title: true, // document.title follows the drawing: "Untitled • — ReShiki"
+  onDirtyChange: (dirty) => console.log(dirty ? "unsaved" : "saved"),
+  onTitleChange: (title) => console.log(title),
+});
+editor.isDirty(); // whether any tab has unsaved changes
+const stopDirty = editor.onDirtyChange((dirty) => {}); // returns a function that stops it
+const stopTitle = editor.onTitleChange((title) => {});
+```
+
+The title is `Name — ReShiki`, with a `•` after the name while the tab in
+front has unsaved changes, as on the desktop. Without `title: true` the page
+keeps its own title, and `onTitleChange` hands it the editor's.
+
 `load` takes the same formats as `convert` and rejects with the app's message
 when it cannot read the data; so does `mount` for its `data`, before the
 editor starts. Mount on an element in the page's body: the editor cannot
@@ -121,6 +141,35 @@ takes `fonts` (URLs separated by spaces) and `cjk-font` (a URL, or `false`)
 attributes and fires `error` for a font that could not load. Fonts added this
 way also reach `save` and `exportImage` figures.
 
+Each font added with `fonts`, `addFont` or the Japanese fallback is kept in
+browser storage (below) and added again on a later visit once a caption needs
+it, so the fallback is downloaded once per site rather than once per visit. The editor cannot list
+or read the computer's installed fonts by itself: browsers only offer them
+through Local Font Access, behind a permission prompt.
+
+### Storage
+
+The editor keeps what the desktop app keeps in its data folder in the
+browser's IndexedDB for the page's site (database `reshiki`): appearance
+settings, My templates and favorites, saved themes, your abbreviations,
+added fonts and recovery drafts. They load before the editor starts, and a change in one tab
+reaches the site's other tabs while they run. A tab keeps a change only if the
+stored file is still the one it read, so tabs never save over each other; a
+save that another tab beat, or one the browser refuses because storage is
+full, is undone and the status bar says why. Messages name this storage
+"Browser storage". Where the browser offers no storage, as in some private
+windows, the editor starts with defaults and saving a setting, template, theme
+or abbreviation says that browser storage is unavailable. Clearing the site's
+data removes it all.
+
+As in the desktop app, each drawing with unsaved changes has a recovery draft,
+written within about a second of each change. If the page is reloaded, closed
+or crashes, the next page of the site offers the drafts in the status bar
+(**Recovery draft · Restore · Dismiss**). Drafts of the site's other open tabs
+are not offered (this needs Web Locks, which current browsers have). The page
+cannot write while it unloads, so a change made in the last second before a
+reload can be lost.
+
 ### Demo
 
 ```sh
@@ -145,11 +194,16 @@ it.
   updates, printing, Office and LibreOffice integration are not built.
 - Open and Save use the browser: Open picks a file, Save and Export download
   one under the drawing's name. Drawing styles, themes, templates and pictures
-  cannot be loaded from files yet, Insert cannot insert files, and there are
-  no recovery drafts.
-- Copy and paste carry text (SMILES, the drawing as text) through
-  `navigator.clipboard`, which asks for permission to read. There are no
-  image or ChemDraw clipboard formats.
+  cannot be loaded from files yet, and Insert cannot insert files.
+- Copying and pasting drawings goes through `navigator.clipboard`, which asks
+  for permission to read, and carries PNG, HTML, SVG (Chrome and Edge) and
+  text, not PDF, CDX or ChemDraw's own formats. Text fields copy, cut and
+  paste plain text; their paste uses the browser's paste event and needs no
+  permission.
+- Input methods (Japanese, Chinese and Korean) type into text fields and
+  captions through a hidden textarea that the editor adds to the element.
+  Typing atom labels straight onto the drawing, without a text field, takes
+  keys only, not composed text.
 - Only Liberation Sans and a small subset of DejaVu Sans for the interface's
   key and arrow symbols are bundled, so drawing symbols they lack, such as ℃,
   ⇌ and superscript ⁺ and ⁻, need a font from `fonts`. Chinese, Japanese and
