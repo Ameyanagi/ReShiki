@@ -75,6 +75,21 @@ impl Cell {
         )
     }
 
+    /// The fractional coordinates of the point `p`.
+    pub fn fractional(&self, p: [f32; 3]) -> [f32; 3] {
+        let [a, b, c] = self.vectors;
+        let cross = |u: [f32; 3], w: [f32; 3]| {
+            [
+                u[1] * w[2] - u[2] * w[1],
+                u[2] * w[0] - u[0] * w[2],
+                u[0] * w[1] - u[1] * w[0],
+            ]
+        };
+        let dot = |u: [f32; 3], w: [f32; 3]| u[0] * w[0] + u[1] * w[1] + u[2] * w[2];
+        let volume = self.volume();
+        [cross(b, c), cross(c, a), cross(a, b)].map(|n| dot(p, n) / volume)
+    }
+
     /// The centre of the cell.
     pub fn center(&self) -> [f32; 3] {
         self.at([0.5; 3])
