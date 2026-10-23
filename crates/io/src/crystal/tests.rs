@@ -1,5 +1,5 @@
 use super::*;
-use crate::document::{CRYSTALS, MODELS_3D, VERSION};
+use crate::document::{CRYSTALS, MODELS_3D, Point, VERSION};
 use crate::models3d::{Display, Model3d};
 
 const NACL: &str = include_str!("../../../../tests/fixtures/crystal/nacl.cif");
@@ -53,7 +53,7 @@ fn nacl_keeps_each_atom_once_with_bonds_leaving_the_cell() {
     assert!(warnings.is_empty(), "{warnings:?}");
     let m = model(&doc);
     assert_eq!((count(&doc, "Na"), count(&doc, "Cl")), (4, 4));
-    assert_eq!(m.display, Display::ThreeD);
+    assert_eq!(m.display, Display::TwoD);
     assert_eq!(doc.version, CRYSTALS);
     for atom in &doc.atoms {
         assert!(
@@ -84,6 +84,8 @@ fn co2_keeps_whole_molecules_with_centres_in_the_cell() {
     let m = model(&doc);
     assert_eq!((count(&doc, "C"), count(&doc, "O")), (4, 8));
     assert_eq!(doc.bonds.len(), 8);
+    // O=C=O.
+    assert!(doc.bonds.iter().all(|b| b.order == 2));
     assert!(m.cell.as_ref().unwrap().crossing.is_empty());
     for carbon in doc.atoms.iter().filter(|a| a.element == "C") {
         let oxygens: Vec<_> = doc
@@ -137,6 +139,11 @@ fn pdb_reads_cryst1_and_a_whole_molecule() {
     let m = model(&doc);
     assert_eq!(doc.atoms.len(), 8);
     assert_eq!(doc.bonds.len(), 7);
+    // C=O is double; C–N and N–H stay single.
+    let double: Vec<_> = doc.bonds.iter().filter(|b| b.order == 2).collect();
+    assert_eq!(double.len(), 1);
+    let ends = [double[0].a, double[0].b].map(|id| doc.atom(id).unwrap().element.clone());
+    assert!(ends.contains(&"C".into()) && ends.contains(&"O".into()));
     let cell = m.cell.as_ref().unwrap();
     assert!((cell.vectors[2][2] - 4.684).abs() < 1e-4);
     assert!(cell.crossing.is_empty());
@@ -398,7 +405,7 @@ fn the_import_engine_reads_crystal_files_and_keeps_the_model() {
             .block_on(crate::formats::read(text.as_bytes().to_vec(), format))
             .unwrap();
         assert_eq!(doc.models.len(), 1, "{format}");
-        assert_eq!(doc.models[0].display, Display::ThreeD);
+        assert_eq!(doc.models[0].display, Display::TwoD);
         assert!(doc.models[0].cell.is_some());
     }
     let error = runtime
@@ -555,12 +562,456 @@ fn extended_xyz_follows_its_periodic_flags() {
 fn only_crystal_atoms_skip_chemistry_analysis() {
     let (mut doc, _) = open("cif", NACL);
     let ethane = [
-        doc.add_atom("C", crate::document::Point::new(500., 0.)),
-        doc.add_atom("C", crate::document::Point::new(540., 0.)),
+        doc.add_atom("C", Point::new(500., 0.)),
+        doc.add_atom("C", Point::new(540., 0.)),
     ];
     doc.add_bond(ethane[0], ethane[1], 1, "plain");
     use crate::models3d::crystal::touches;
     assert!(touches(&doc, &[]));
     assert!(touches(&doc, &[doc.atoms[0].id]));
     assert!(!touches(&doc, &ethane));
+}
+
+#[test]
+fn molecules_missing_hydrogens_keep_single_bonds() {
+    // Urea without its hydrogens: the nitrogens stay short of their valence,
+    // so no bond order is guessed.
+    let text: String = UREA
+        .lines()
+        .filter(|l| !l.ends_with('H'))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let (doc, _) = open("pdb", &text);
+    assert_eq!(doc.atoms.len(), 4);
+    assert!(doc.bonds.iter().all(|b| b.order == 1));
+    // Ethane without hydrogens: no bond beyond triple, so it stays single.
+    let (doc, _) = open("xyz", "2\nethane carbons\nC 0 0 0\nC 1.54 0 0\n");
+    assert_eq!(doc.bonds.len(), 1);
+    assert_eq!(doc.bonds[0].order, 1);
+    // Networks never take multiple bonds.
+    let (doc, _) = open("xyz", SILICON);
+    assert!(doc.bonds.iter().all(|b| b.order == 1));
+}
+
+#[test]
+fn crystals_open_as_2d_drawings_in_their_cell_with_no_overlapping_labels() {
+    for (format, text) in [
+        ("cif", NACL),
+        ("cif", CO2),
+        ("poscar", RUTILE),
+        ("xyz", SILICON),
+        ("pdb", UREA),
+    ] {
+        let (doc, _) = open(format, text);
+        assert_eq!(model(&doc).display, Display::TwoD, "{format}");
+        let drawing = crate::scene::primitives(&doc);
+        // The cell box: nine solid edges and three dashed hidden ones, all
+        // parallel in threes, and the italic a, b and c labels.
+        let edges: Vec<_> = drawing
+            .iter()
+            .filter_map(|p| match p {
+                crate::scene::Primitive::Wire { from, to, dash, .. } => Some((*from, *to, *dash)),
+                _ => None,
+            })
+            .collect();
+        assert!(edges.iter().filter(|e| e.2 == 0.).count() >= 9, "{format}");
+        let labels: Vec<_> = drawing
+            .iter()
+            .filter_map(|p| match p {
+                crate::scene::Primitive::Text { text, style, .. } if style.italic => {
+                    Some(text.as_str())
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(labels, ["a", "b", "c"], "{format}");
+        // No two atom labels overlap.
+        let drawn = crate::models3d::drawn(&doc);
+        let boxes: Vec<_> = drawn
+            .atoms
+            .iter()
+            .filter_map(|a| Some((&a.element, crate::scene::atom_label_ink_bounds(a, &drawn)?)))
+            .collect();
+        for (i, (a, (lo, hi))) in boxes.iter().enumerate() {
+            for (b, (other_lo, other_hi)) in &boxes[i + 1..] {
+                let apart = hi.x < other_lo.x
+                    || other_hi.x < lo.x
+                    || hi.y < other_lo.y
+                    || other_hi.y < lo.y;
+                assert!(
+                    apart,
+                    "{format}: {a} {lo:?} {hi:?} overlaps {b} {other_lo:?} {other_hi:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn ion_charges_are_hidden_in_2d_until_shown() {
+    let (mut doc, _) = open("cif", NACL);
+    // Kept on the atoms, for the formula, but not drawn.
+    assert!(doc.atoms.iter().all(|a| a.charge != 0));
+    assert!(
+        crate::models3d::drawn(&doc)
+            .atoms
+            .iter()
+            .all(|a| a.charge == 0)
+    );
+    doc.models[0].charges = true;
+    assert!(
+        crate::models3d::drawn(&doc)
+            .atoms
+            .iter()
+            .all(|a| a.charge != 0)
+    );
+    let read = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert!(read.models[0].charges);
+}
+
+const FIXTURES: [(&str, &str); 5] = [
+    ("cif", NACL),
+    ("cif", CO2),
+    ("poscar", RUTILE),
+    ("xyz", SILICON),
+    ("pdb", UREA),
+];
+
+/// The 2D cell's origin and the ends of the three box edges that leave it,
+/// from the drawing. The opening view keeps the origin at the back, so those
+/// edges are the dashed hidden ones.
+fn drawn_cell(drawing: &[crate::scene::Primitive]) -> (Point, [Point; 3]) {
+    cell_in(drawing, true)
+}
+
+/// [`drawn_cell`], with the origin's edges `hidden` or as they come.
+fn cell_in(drawing: &[crate::scene::Primitive], hidden: bool) -> (Point, [Point; 3]) {
+    use crate::scene::Primitive;
+    let origin = drawing
+        .iter()
+        .find_map(|p| match p {
+            Primitive::Sphere { center, .. } => Some(*center),
+            _ => None,
+        })
+        .unwrap();
+    let ends: Vec<_> = drawing
+        .iter()
+        .filter_map(|p| match p {
+            Primitive::Wire { from, to, dash, .. } if from.distance(origin) < 1e-3 => {
+                assert!(!hidden || *dash > 0., "a front edge at the origin");
+                Some(*to)
+            }
+            Primitive::Wire { from, to, dash, .. } if to.distance(origin) < 1e-3 => {
+                assert!(!hidden || *dash > 0., "a front edge at the origin");
+                Some(*from)
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(ends.len(), 3);
+    (origin, [ends[0], ends[1], ends[2]])
+}
+
+#[test]
+fn atoms_sit_on_the_2d_cell_box_where_their_fractions_put_them() {
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    for (format, text) in FIXTURES {
+        // As opened, and as the import engine hands it to the app.
+        let imported = runtime
+            .block_on(crate::formats::read(text.as_bytes().to_vec(), format))
+            .unwrap();
+        for doc in [open(format, text).0, imported] {
+            let m = model(&doc);
+            let (origin, ends) = drawn_cell(&crate::scene::primitives(&doc));
+            // Origin + Σ fₖ (endₖ − origin), with the drawn edges taken in
+            // whichever order is a, b, c.
+            let at = |f: [f64; 3], order: [usize; 3]| {
+                order.iter().zip(f).fold(origin, |p, (&e, t)| {
+                    let (end, t) = (ends[e], t as f32);
+                    p.offset((end.x - origin.x) * t, (end.y - origin.y) * t)
+                })
+            };
+            let orders = [
+                [0, 1, 2],
+                [0, 2, 1],
+                [1, 0, 2],
+                [1, 2, 0],
+                [2, 0, 1],
+                [2, 1, 0],
+            ];
+            let worst = orders
+                .iter()
+                .map(|order| {
+                    doc.atoms
+                        .iter()
+                        .map(|a| at(fractional(m, a.id), *order).distance(a.position))
+                        .fold(0., f32::max)
+                })
+                .fold(f32::INFINITY, f32::min);
+            assert!(worst < 0.1, "{format}: atoms are {worst} units off the box");
+        }
+    }
+    // Rock salt's origin Na is on the box's origin corner.
+    let (doc, _) = open("cif", NACL);
+    let (origin, _) = drawn_cell(&crate::scene::primitives(&doc));
+    let m = model(&doc);
+    assert!(doc.atoms.iter().any(|a| {
+        fractional(m, a.id).iter().all(|f| f.abs() < 1e-3) && a.position.distance(origin) < 0.1
+    }));
+}
+
+#[test]
+fn axis_labels_sit_outside_the_box_clear_of_edges_and_atoms() {
+    use crate::scene::Primitive;
+    for (format, text) in FIXTURES {
+        let (doc, _) = open(format, text);
+        let drawing = crate::scene::primitives(&doc);
+        let (origin, ends) = drawn_cell(&drawing);
+        let drawn = crate::models3d::drawn(&doc);
+        let atoms: Vec<_> = drawn
+            .atoms
+            .iter()
+            .filter_map(|a| crate::scene::atom_label_ink_bounds(a, &drawn))
+            .collect();
+        let edges: Vec<_> = drawing
+            .iter()
+            .filter_map(|p| match p {
+                Primitive::Wire { from, to, .. } => Some((*from, *to)),
+                _ => None,
+            })
+            .collect();
+        // The box's centre: half of each edge from the origin.
+        let centre = ends.iter().fold(origin, |c, e| {
+            c.offset((e.x - origin.x) / 2., (e.y - origin.y) / 2.)
+        });
+        let mut labels = 0;
+        for p in &drawing {
+            let Primitive::Text {
+                position,
+                text,
+                size,
+                style,
+                ..
+            } = p
+            else {
+                continue;
+            };
+            if !style.italic {
+                continue;
+            }
+            labels += 1;
+            let w = crate::style::styled_text_width(text, *size, style);
+            let at = position.offset(w / 2., size * 0.6);
+            let (lo, hi) = (at.offset(-w / 2., -size / 2.), at.offset(w / 2., size / 2.));
+            for (a_lo, a_hi) in &atoms {
+                let apart = hi.x < a_lo.x || a_hi.x < lo.x || hi.y < a_lo.y || a_hi.y < lo.y;
+                assert!(apart, "{format}: {text} on an atom");
+            }
+            for (from, to) in &edges {
+                let d = segment_distance(at, *from, *to);
+                assert!(d > size * 0.5, "{format}: {text} {d} from an edge");
+            }
+            // Past its axis's end, away from the box.
+            let end = ends
+                .iter()
+                .min_by(|a, b| a.distance(at).total_cmp(&b.distance(at)))
+                .unwrap();
+            assert!(
+                at.distance(centre) > end.distance(centre),
+                "{format}: {text} inside the box"
+            );
+        }
+        assert_eq!(labels, 3, "{format}");
+    }
+}
+
+fn segment_distance(p: Point, a: Point, b: Point) -> f32 {
+    let (dx, dy) = (b.x - a.x, b.y - a.y);
+    let n = dx * dx + dy * dy;
+    let t = if n > 0. {
+        (((p.x - a.x) * dx + (p.y - a.y) * dy) / n).clamp(0., 1.)
+    } else {
+        0.
+    };
+    p.distance(a.offset(t * dx, t * dy))
+}
+
+#[test]
+fn linear_carbons_show_their_label() {
+    let (doc, _) = open("cif", CO2);
+    let drawn = crate::models3d::drawn(&doc);
+    for carbon in drawn.atoms.iter().filter(|a| a.element == "C") {
+        assert!(crate::atom_labels::visible(carbon, &drawn));
+        assert!(crate::scene::atom_label_ink_bounds(carbon, &drawn).is_some());
+    }
+    // Urea's carbon is trigonal and stays a bare vertex.
+    let (doc, _) = open("pdb", UREA);
+    let carbon = doc.atoms.iter().find(|a| a.element == "C").unwrap();
+    assert!(!crate::atom_labels::visible(carbon, &doc));
+}
+
+#[test]
+fn fitting_and_selecting_a_crystal_hold_its_whole_cell() {
+    use crate::scene::Primitive;
+    for (format, text) in FIXTURES {
+        let (doc, _) = open(format, text);
+        let ids: Vec<_> = doc.atoms.iter().map(|a| a.id).collect();
+        let (lo, hi) = crate::scene::selection_bounds(&doc, &ids).unwrap();
+        for p in crate::scene::primitives(&doc) {
+            let ends = match p {
+                Primitive::Wire { from, to, .. } => [from, to],
+                Primitive::Text { position, .. } => [position, position],
+                _ => continue,
+            };
+            for e in ends {
+                assert!(
+                    (lo.x - 1e-3..=hi.x + 1e-3).contains(&e.x)
+                        && (lo.y - 1e-3..=hi.y + 1e-3).contains(&e.y),
+                    "{format}: {e:?} outside {lo:?} {hi:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn moving_a_crystal_needs_no_chemistry_for_its_labels() {
+    // Rock salt's Cl has six bonds, which valence rules would refuse.
+    let (mut doc, _) = open("cif", NACL);
+    for atom in &mut doc.atoms {
+        atom.position = atom.position.offset(10., 0.);
+    }
+    let refresh =
+        crate::atom_labels::refresh::Refresh::calculate(&doc, &Default::default()).unwrap();
+    assert_eq!(refresh.notice, None);
+}
+
+#[test]
+fn beside_its_3d_model_the_2d_drawing_keeps_its_cell() {
+    use crate::models3d::{Display, set_display};
+    let (mut doc, _) = open("cif", NACL);
+    let axes = |doc: &Document| {
+        crate::scene::primitives(doc)
+            .into_iter()
+            .filter(|p| matches!(p, crate::scene::Primitive::Text { text, style, .. } if style.italic && text == "a"))
+            .count()
+    };
+    assert_eq!(axes(&doc), 1);
+    set_display(&mut doc, 0, Display::Both);
+    // One a for the 2D drawing's cell, one for the 3D model's.
+    assert_eq!(axes(&doc), 2);
+}
+
+/// The drawn cell's three edges from the origin, as vectors on screen.
+fn edge_vectors(doc: &Document) -> Vec<Point> {
+    let (origin, ends) = cell_in(&crate::scene::primitives(doc), false);
+    let mut v: Vec<_> = ends
+        .iter()
+        .map(|e| Point::new(e.x - origin.x, e.y - origin.y))
+        .collect();
+    v.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+    v
+}
+
+#[test]
+fn the_cell_turns_and_mirrors_with_a_flat_or_straight_drawing() {
+    let close = |a: &[Point], b: &[Point]| {
+        a.len() == b.len() && a.iter().zip(b).all(|(p, q)| p.distance(*q) < 0.5)
+    };
+    // Silicon's two atoms lie on a line: turning the drawing turns the box.
+    let (mut doc, _) = open("xyz", SILICON);
+    let before = edge_vectors(&doc);
+    for atom in &mut doc.atoms {
+        atom.position = Point::new(-atom.position.y, atom.position.x);
+    }
+    let mut turned: Vec<_> = before.iter().map(|v| Point::new(-v.y, v.x)).collect();
+    turned.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+    assert!(
+        close(&edge_vectors(&doc), &turned),
+        "{:?} {turned:?}",
+        edge_vectors(&doc)
+    );
+    // Urea's atoms lie in a plane: mirroring the drawing mirrors the box.
+    let (mut doc, _) = open("pdb", UREA);
+    let before = edge_vectors(&doc);
+    for atom in &mut doc.atoms {
+        atom.position.x = -atom.position.x;
+    }
+    let mut mirrored: Vec<_> = before.iter().map(|v| Point::new(-v.x, v.y)).collect();
+    mirrored.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+    assert!(
+        close(&edge_vectors(&doc), &mirrored),
+        "{:?} {mirrored:?}",
+        edge_vectors(&doc)
+    );
+}
+
+#[test]
+fn a_crystal_split_across_selections_is_measured_in_parts() {
+    let (doc, _) = open("cif", CO2);
+    let all: Vec<_> = doc.atoms.iter().map(|a| a.id).collect();
+    // One molecule against the rest, as aligning molecules splits it.
+    let first = doc.bonds[0].a;
+    let molecule: Vec<_> = doc
+        .bonds
+        .iter()
+        .filter(|b| b.a == first || b.b == first)
+        .flat_map(|b| [b.a, b.b])
+        .collect();
+    let rest: Vec<_> = all
+        .iter()
+        .copied()
+        .filter(|id| !molecule.contains(id))
+        .collect();
+    let whole = crate::scene::selections_bounds(&doc, std::slice::from_ref(&all));
+    let split = crate::scene::selections_bounds(&doc, &[molecule, rest]);
+    let width = |b: &Option<(Point, Point)>| b.map_or(0., |(lo, hi)| hi.x - lo.x);
+    assert!(
+        width(&split[0]) < 0.6 * width(&whole[0]),
+        "{split:?} {whole:?}"
+    );
+}
+
+#[test]
+fn bond_orders_do_not_depend_on_atom_order() {
+    // Azulene with every hydrogen, its two shared ring carbons first: the
+    // outer ten-carbon ring alternates, the shared bond stays single.
+    let atom = |element: &str| Atom {
+        element: element.into(),
+        charge: 0,
+        label: String::new(),
+        xyz: [0.; 3],
+        adp: None,
+    };
+    let mut atoms: Vec<_> = (0..10).map(|_| atom("C")).collect();
+    let mut bonds = vec![(0, 1)];
+    // Seven-ring 0-2-3-4-5-6-1, five-ring 0-7-8-9-1.
+    for pair in [
+        (0, 2),
+        (2, 3),
+        (3, 4),
+        (4, 5),
+        (5, 6),
+        (6, 1),
+        (0, 7),
+        (7, 8),
+        (8, 9),
+        (9, 1),
+    ] {
+        bonds.push(pair);
+    }
+    for c in 2..10 {
+        atoms.push(atom("H"));
+        bonds.push((c, atoms.len() - 1));
+    }
+    let orders = build::orders(&atoms, &bonds, &vec![false; atoms.len()]);
+    assert_eq!(orders[0], 1, "the shared bond");
+    for c in 0..10 {
+        let doubles = bonds
+            .iter()
+            .zip(&orders)
+            .filter(|((a, b), o)| (*a == c || *b == c) && **o == 2)
+            .count();
+        assert_eq!(doubles, 1, "carbon {c}: {orders:?}");
+    }
 }
