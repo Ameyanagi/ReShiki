@@ -23,8 +23,16 @@ export async function mount(element, options = {}) {
   // rejects here and the page can mount again.
   const data = options.data === undefined ? undefined : bytes(options.data);
   const onMissingFont = await loadFonts(wasm, options);
-  await wasm.mount(element, data, options.format ?? "auto", onMissingFont);
-  let listeners = [];
+  await wasm.mount(element, data, options.format ?? "auto", onMissingFont, options.title === true);
+  // Each event's callbacks; the module holds one function per event.
+  const listeners = { change: [], dirty: [], title: [] };
+  const subscribe = (event, callback) => {
+    listeners[event] = [...listeners[event], callback];
+    return () => {
+      listeners[event] = listeners[event].filter((listener) => listener !== callback);
+    };
+  };
+  const emit = (event) => (value) => listeners[event].forEach((listener) => listener(value));
   const editor = {
     async load(data, format = "auto") {
       await wasm.load(bytes(data), format);
@@ -40,18 +48,28 @@ export async function mount(element, options = {}) {
       return editor.save(format);
     },
     onChange(callback) {
-      listeners = [...listeners, callback];
-      return () => {
-        listeners = listeners.filter((listener) => listener !== callback);
-      };
+      return subscribe("change", () => callback());
+    },
+    isDirty() {
+      return wasm.isDirty();
+    },
+    onDirtyChange(callback) {
+      return subscribe("dirty", callback);
+    },
+    onTitleChange(callback) {
+      return subscribe("title", callback);
     },
     destroy() {
       wasm.destroy();
-      listeners = [];
+      for (const event of Object.keys(listeners)) listeners[event] = [];
       element.replaceChildren();
     },
   };
-  wasm.onChange(() => listeners.forEach((listener) => listener()));
+  wasm.onChange(emit("change"));
+  wasm.onDirtyChange(emit("dirty"));
+  wasm.onTitleChange(emit("title"));
   if (options.onChange) editor.onChange(options.onChange);
+  if (options.onDirtyChange) editor.onDirtyChange(options.onDirtyChange);
+  if (options.onTitleChange) editor.onTitleChange(options.onTitleChange);
   return editor;
 }

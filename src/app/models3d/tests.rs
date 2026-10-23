@@ -888,3 +888,32 @@ fn a_crystal_opens_in_2d_and_shows_its_ion_charges_in_one_undo_step() {
     let _ = app.update(Message::Undo);
     assert!(!app.tab.doc.models[0].charges);
 }
+
+#[test]
+fn a_first_repeat_looks_along_the_clearest_axis_in_one_undo_step() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let text = include_str!("../../../tests/fixtures/crystal/rutile.vasp");
+    let (doc, _) = reshiki::crystal::read("poscar", text).unwrap();
+    app.tab.doc = doc;
+    app.tab.selected = app.tab.doc.atoms.iter().map(|a| a.id).collect();
+    let (atoms, rotation) = (app.tab.doc.atoms.clone(), app.tab.doc.models[0].rotation);
+    let start = frames(&app);
+    set(&mut app, Setting::Repeat([2, 2, 1]));
+    assert_eq!(app.tab.doc.models[0].repeat, [2, 2, 1]);
+    assert_ne!(app.tab.doc.models[0].rotation, rotation);
+    assert_ne!(app.tab.doc.atoms, atoms);
+    assert_eq!(frames(&app), start + 1);
+    // A later repeat keeps the view; looking along an axis turns it.
+    let turned = app.tab.doc.models[0].rotation;
+    set(&mut app, Setting::Repeat([2, 2, 2]));
+    assert_eq!(app.tab.doc.models[0].rotation, turned);
+    set(&mut app, Setting::LookAlong(models3d::Along::Diagonal));
+    assert_ne!(app.tab.doc.models[0].rotation, turned);
+    assert_eq!(frames(&app), start + 3);
+    for _ in 0..3 {
+        let _ = app.update(Message::Undo);
+    }
+    assert_eq!(app.tab.doc.models[0].repeat, [1, 1, 1]);
+    assert_eq!(app.tab.doc.atoms, atoms);
+}

@@ -1060,7 +1060,7 @@ fn text_bounds(runs: &[Primitive]) -> Option<(Point, Point)> {
         })
 }
 
-fn label_ink_boxes(runs: &[Primitive]) -> Vec<(Point, Point)> {
+pub(crate) fn label_ink_boxes(runs: &[Primitive]) -> Vec<(Point, Point)> {
     runs.iter()
         .flat_map(|run| {
             if let Primitive::Text {

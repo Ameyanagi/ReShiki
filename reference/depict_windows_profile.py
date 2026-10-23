@@ -10,7 +10,11 @@ import sysconfig
 from pathlib import Path
 
 PHYSICAL_UCRT = "5c52e3a303baaac0e0af8bd9b96134993da34bc9d834a31ef37e1d2cdc7fe192"
-SERVER2022_UCRT = "5e5ae0f8e4325ceb3ee767065dda6e03e980d401f00a2bdb8ca81ed90813920f"
+# Server 2022 UCRTs whose fresh native captures replay the saved server2022 rows.
+SERVER2022_UCRTS = (
+    "5e5ae0f8e4325ceb3ee767065dda6e03e980d401f00a2bdb8ca81ed90813920f",  # 10.0.20348.5622
+    "d06d0a421398fb663c6c49586e09774143460fdb1dce489aa9844846b9398555",  # 10.0.20348.5756
+)
 EMULATED_UCRT = "529e795875178b906ea8758abc8de5c28339f336b3e7a121d7778ae040908de9"
 PRIMITIVES = {
     "fma3": ("3ff29f25c111e687", "3fed63011ebd161e", "3fd954d5989f7ab4"),
@@ -28,8 +32,10 @@ def classify(module_sha256, observed, ring):
         (PHYSICAL_UCRT, PRIMITIVES["fma3"], RINGS["fma3"]): "fma3",
         (PHYSICAL_UCRT, PRIMITIVES["no-fma3"], RINGS["no-fma3"]): "no-fma3",
         (EMULATED_UCRT, PRIMITIVES["no-fma3"], RINGS["no-fma3"]): "no-fma3",
-        (SERVER2022_UCRT, PRIMITIVES["no-fma3"], RINGS["fma3"]): "server2022",
     }
+    profiles.update(
+        {(ucrt, PRIMITIVES["no-fma3"], RINGS["fma3"]): "server2022" for ucrt in SERVER2022_UCRTS}
+    )
     return profiles.get((module_sha256, tuple(observed), tuple(ring)), "uncaptured")
 
 
