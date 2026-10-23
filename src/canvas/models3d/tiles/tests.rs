@@ -68,17 +68,14 @@ fn model_images_match_figure_export_and_are_smooth() {
             .max()
             .unwrap();
         // Anti-aliased edges may round differently under the two transforms.
-        // A figure merges contact-shadow levels in pairs, so a band edge
-        // lands a step further out there.
-        let tolerance = if style == Style::SpaceFilling { 16 } else { 6 };
         assert!(
-            worst <= tolerance,
+            worst <= 6,
             "{style:?}: canvas differs from export by {worst}"
         );
 
         // Across the front ball's middle row, neighbouring pixels differ by
         // at most a few levels: the gradient is continuous. A ball meeting
-        // others steps through its contact shadow's levels instead.
+        // others has its seams across it instead.
         let front = run.iter().rev().find_map(|p| match p {
             Primitive::Sphere {
                 center,

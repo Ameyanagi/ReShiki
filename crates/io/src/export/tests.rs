@@ -379,7 +379,7 @@ fn transparent_label_halo_reaches_vector_readers_as_a_named_knockout_mask() {
 }
 
 /// Space-filling balls that overlap export as the visible part of each, a
-/// filled path, with its contact shadow clipped to it; PDF and PNG render it.
+/// filled path with no contact shadow over it; PDF and PNG render it.
 #[test]
 fn space_filling_models_export_their_visible_parts_as_clipped_paths() {
     use crate::models3d::{Display, ForceField, Model3d, Placed, Style, set_display};
@@ -397,10 +397,12 @@ fn space_filling_models_export_their_visible_parts_as_clipped_paths() {
     assert!(set_display(&mut doc, 0, Display::ThreeD));
 
     let svg = String::from_utf8(figure(&doc, "svg").unwrap().bytes).unwrap();
-    let region = "fill-rule=\"evenodd\" clip-rule=\"evenodd\" fill=\"url(#";
+    let region = "fill-rule=\"evenodd\" fill=\"url(#";
     assert_eq!(svg.matches(region).count(), 2);
     assert!(!svg.contains("<circle"));
-    assert!(svg.contains("<clipPath") && svg.contains("fill-opacity="));
+    // No shadow: nothing clipped to a ball and no translucent black fills.
+    assert!(!svg.contains("<clipPath") && !svg.contains("fill-opacity="));
+    assert!(!svg.contains("fill=\"rgb(0,0,0)\""));
     let pdf = figure(&doc, "pdf").unwrap().bytes;
     assert!(pdf.starts_with(b"%PDF"));
     let png = figure(&doc, "png").unwrap().bytes;

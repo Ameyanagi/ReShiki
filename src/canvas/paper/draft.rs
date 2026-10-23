@@ -25,10 +25,6 @@ impl MoleculeCanvas<'_> {
                 state.modifiers.shift(),
             );
             tilt::apply(preview.to_mut(), &drag.ids, x, y);
-            // A model turned by the tilt draws quickly until the drag ends.
-            for model in &mut preview.to_mut().models {
-                model.draft |= drag.ids.iter().any(|id| model.contains(*id));
-            }
             *ring_selection = Some(drag.ids.clone());
             let (x, y) = (tilt::wrap(x), tilt::wrap(y));
             *template_notice = Some((
@@ -48,21 +44,10 @@ impl MoleculeCanvas<'_> {
         if let (Some(Gesture::Turn(turn)), Some(p)) = (&state.gesture, state.cursor) {
             let point = Point::new(p.x - bounds.x, p.y - bounds.y);
             models3d::preview_turn(preview.to_mut(), turn, point, state.modifiers.shift());
-            // The turning model draws quickly until the drag ends.
-            if let Some(id) = turn.atoms.first()
-                && let Some(model) = preview.to_mut().models.iter_mut().find(|m| m.contains(*id))
-            {
-                model.draft = true;
-            }
             *template_notice = Some((
                 "Drag to rotate · Shift-drag to roll · Double-click to reset".into(),
                 true,
             ));
-        }
-        if self.model_sliding {
-            for model in &mut preview.to_mut().models {
-                model.draft = true;
-            }
         }
         if let Some((id, t)) = self.morph(iced::time::Instant::now())
             && let Some(model) = preview.to_mut().models.iter_mut().find(|m| m.contains(id))
