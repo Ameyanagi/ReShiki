@@ -17,6 +17,7 @@ use reshiki::{document::Document, formats};
 use std::{cell::RefCell, collections::HashMap, path::Path};
 use wasm_bindgen::{JsCast, prelude::*};
 
+mod ime;
 mod storage;
 
 /// What the page asks of the running editor.
@@ -75,6 +76,8 @@ struct Host {
     field_paste: Option<PasteListeners>,
     /// The element's file drop listener, until `destroy`.
     drops: Option<(web_sys::Element, DragListener)>,
+    /// The textarea that takes input method text, until `destroy`.
+    input_method: Option<ime::InputMethod>,
 }
 
 thread_local! {
@@ -167,7 +170,11 @@ pub async fn mount(
         HOST.with_borrow_mut(|host| host.command_key = swap);
     }
     let drops = file_drops(&element);
-    HOST.with_borrow_mut(|host| host.drops = Some((element, drops)));
+    let input_method = ime::start(&element);
+    HOST.with_borrow_mut(|host| {
+        host.drops = Some((element, drops));
+        host.input_method = input_method;
+    });
     // iced's multisampling leaves most canvases blank on WebGL2, the fallback
     // when the browser offers no WebGPU adapter.
     let antialiasing = webgpu().await;
@@ -883,6 +890,9 @@ pub fn destroy() -> Result<(), JsError> {
                 true,
             );
         }
+    }
+    if let Some(input_method) = HOST.with_borrow_mut(|host| host.input_method.take()) {
+        ime::stop(input_method);
     }
     let paste = HOST.with_borrow_mut(|host| host.field_paste.take());
     if let (Some(paste), Some(window)) = (paste, web_sys::window()) {
