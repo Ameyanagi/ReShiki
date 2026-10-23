@@ -1,0 +1,8 @@
+console error: Failed to load resource: the server responded with a status of 404 (Not Found)
+stored at start: no reshiki database
+console error: panicked at /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library/std/src/sys/process/unsupported.rs:335:5:
+no pids on this platform
+console error: panicked at /Users/shiranui/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/winit-0.30.13/src/platform_impl/web/event_loop/runner.rs:599:30:
+RefCell already borrowed
+stored before reload: no reshiki database
+stored after reload: no reshiki database

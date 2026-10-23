@@ -1,0 +1,7 @@
+console error: Failed to load resource: the server responded with a status of 404 (Not Found)
+-- first visit
+font download: https://cdn.jsdelivr.net/gh/notofonts/noto-cjk@Sans2.004/Sans/SubsetOTF/JP/NotoSansJP-Regular.otf
+stored: no reshiki database
+-- reload
+font download: https://cdn.jsdelivr.net/gh/notofonts/noto-cjk@Sans2.004/Sans/SubsetOTF/JP/NotoSansJP-Regular.otf
+stored: no reshiki database

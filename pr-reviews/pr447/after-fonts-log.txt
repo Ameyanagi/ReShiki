@@ -1,0 +1,6 @@
+console error: Failed to load resource: the server responded with a status of 404 (Not Found)
+-- first visit
+font download: https://cdn.jsdelivr.net/gh/notofonts/noto-cjk@Sans2.004/Sans/SubsetOTF/JP/NotoSansJP-Regular.otf
+stored: fonts/dff723ba59d57d136764a04b9b2d03205544f7cd785a711442d6d2d085ac5073.font
+-- reload
+stored: fonts/dff723ba59d57d136764a04b9b2d03205544f7cd785a711442d6d2d085ac5073.font
