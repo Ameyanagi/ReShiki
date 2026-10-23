@@ -147,9 +147,11 @@ it.
   one under the drawing's name. Drawing styles, themes, templates and pictures
   cannot be loaded from files yet, Insert cannot insert files, and there are
   no recovery drafts.
-- Copy and paste carry text (SMILES, the drawing as text) through
-  `navigator.clipboard`, which asks for permission to read. There are no
-  image or ChemDraw clipboard formats.
+- Copying and pasting drawings goes through `navigator.clipboard`, which asks
+  for permission to read, and carries PNG, HTML, SVG (Chrome and Edge) and
+  text, not PDF, CDX or ChemDraw's own formats. Text fields copy, cut and
+  paste plain text; their paste uses the browser's paste event and needs no
+  permission.
 - Input methods (Japanese, Chinese and Korean) type into text fields and
   captions through a hidden textarea that the editor adds to the element.
   Typing atom labels straight onto the drawing, without a text field, takes

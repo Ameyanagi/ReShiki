@@ -138,6 +138,7 @@ web-sys = { version = "0.3", features = [
   "Blob",
   "BlobPropertyBag",
   "Clipboard",
+  "ClipboardEvent",
   "ClipboardItem",
   "CompositionEvent",
   "console",
@@ -166,6 +167,8 @@ web-sys = { version = "0.3", features = [
 web-time = "1"
 # Input methods for Iced's text fields (vendor/iced_winit).
 iced_winit = "0.14"
+# Iced's text fields reach the page's clipboard (vendor/window_clipboard).
+window_clipboard = "0.5"
 
 [profile.dev]
 debug = 1
@@ -281,6 +284,8 @@ svg2pdf = { path = "vendor/svg2pdf" }
 smithay-clipboard = { path = "vendor/smithay-clipboard" }
 # Take a browser page's input method composition into Iced's text fields.
 iced_winit = { path = "vendor/iced_winit" }
+# Give Iced's text fields the system clipboard in the browser.
+window_clipboard = { path = "vendor/window_clipboard" }
 
 # Independent oracle suites live in reference/ and require the development reference.
 

@@ -62,6 +62,9 @@ struct Host {
     mounted: bool,
     /// The listener that trades ⌘ and Control on a Mac, until `destroy`.
     command_key: Option<Closure<dyn FnMut(web_sys::Event)>>,
+    /// The listener that lets Ctrl/⌘+V paste into text fields, until
+    /// `destroy`.
+    field_paste: Option<PasteListeners>,
     /// The element's file drop listener, until `destroy`.
     drops: Option<(web_sys::Element, DragListener)>,
     /// The textarea that takes input method text, until `destroy`.
@@ -150,6 +153,9 @@ pub async fn mount(
             ..Host::default()
         }
     });
+    // Before the ⌘ swap, so it sees the keys as pressed.
+    let paste = field_paste(&element);
+    HOST.with_borrow_mut(|host| host.field_paste = paste);
     if crate::platform::mac() {
         let swap = command_key(&element);
         HOST.with_borrow_mut(|host| host.command_key = swap);
@@ -191,6 +197,160 @@ pub(crate) fn platform_name() -> String {
         .filter(|platform| !platform.is_empty())
         .or_else(|| navigator.platform().ok())
         .unwrap_or_default()
+}
+
+/// `field_paste`'s listeners, one per event, as the paste listener's key
+/// reaches the key listener while it runs.
+type PasteListeners = [(&'static str, Closure<dyn FnMut(web_sys::Event)>); 2];
+
+thread_local! {
+    /// A Ctrl/⌘+V press held back until the page has the clipboard's text.
+    static HELD_PASTE: RefCell<Option<web_sys::KeyboardEvent>> = const { RefCell::new(None) };
+    /// While `relay_key` hands a held key to the editor.
+    static RELAYING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Let Ctrl/⌘+V paste into text fields. iced reads the clipboard while it
+/// handles the key, but a page may only read it from a paste event, which
+/// fires after the key and only when winit does not cancel the key. So the
+/// key waits: the browser pastes, the paste event hands its text to the
+/// clipboard Iced reads (vendor/window_clipboard), and the key then reaches
+/// the editor, which pastes into the field, or pastes a drawing as before.
+/// Copy and Cut need nothing here: Iced writes to the page's clipboard.
+fn field_paste(element: &web_sys::Element) -> Option<PasteListeners> {
+    let window = web_sys::window()?;
+    let element = element.clone();
+    let mac = crate::platform::mac();
+    let paste = Closure::<dyn FnMut(web_sys::Event)>::new(move |event: web_sys::Event| {
+        let Some(paste) = event.dyn_ref::<web_sys::ClipboardEvent>() else {
+            return;
+        };
+        let Some(key) = HELD_PASTE.take() else {
+            return;
+        };
+        // The field gets the text from the key, not the browser.
+        paste.prevent_default();
+        let text = paste
+            .clipboard_data()
+            .and_then(|data| data.get_data("text/plain").ok())
+            .filter(|text| !text.is_empty());
+        if let Some(text) = &text {
+            text_drawn(text);
+        }
+        window_clipboard::set_contents(text);
+        relay_key(&key);
+    });
+    let keys = Closure::<dyn FnMut(web_sys::Event)>::new(move |event: web_sys::Event| {
+        if RELAYING.get() {
+            return;
+        }
+        let Some(key) = event.dyn_ref::<web_sys::KeyboardEvent>() else {
+            return;
+        };
+        let command = if mac { key.meta_key() } else { key.ctrl_key() };
+        // Shift+V is the drawing's flip, which must not read the clipboard.
+        if !command
+            || key.alt_key()
+            || key.shift_key()
+            || !is_v(key)
+            || !editor_keys(&event, &element)
+        {
+            return;
+        }
+        // winit would cancel the key, and with it the paste event.
+        key.stop_immediate_propagation();
+        HELD_PASTE.set(Some(key.clone()));
+        // Browsers that send no paste event here get the key next turn,
+        // with the text read through the Clipboard API where allowed.
+        let fallback = Closure::once_into_js(|| {
+            if let Some(key) = HELD_PASTE.take() {
+                wasm_bindgen_futures::spawn_local(async move {
+                    window_clipboard::set_contents(read_clipboard_text().await);
+                    relay_key(&key);
+                });
+            }
+        });
+        if let Some(window) = web_sys::window() {
+            let _ = window.set_timeout_with_callback(fallback.unchecked_ref());
+        }
+    });
+    let listeners = [("keydown", keys), ("paste", paste)];
+    for (name, listener) in &listeners {
+        // Capture runs before winit's listeners and the ⌘ swap.
+        let _ = window.add_event_listener_with_callback_and_bool(
+            name,
+            listener.as_ref().unchecked_ref(),
+            true,
+        );
+    }
+    Some(listeners)
+}
+
+/// Whether `event` is for the editor's own keys: its canvas, or an element
+/// of the editor marked `data-reshiki-keys`, and not a page control placed
+/// inside the editor's element.
+fn editor_keys(event: &web_sys::Event, element: &web_sys::Element) -> bool {
+    let Some(target) = event
+        .target()
+        .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
+    else {
+        return false;
+    };
+    let canvas = element.query_selector("canvas").ok().flatten();
+    canvas.as_ref() == Some(&target)
+        || (target.has_attribute("data-reshiki-keys") && element.contains(Some(&target)))
+}
+
+/// Whether `key` is V, by the character it types on a Latin layout or else
+/// where it sits, as iced reads shortcuts.
+fn is_v(key: &web_sys::KeyboardEvent) -> bool {
+    let typed = key.key();
+    let mut chars = typed.chars();
+    match (chars.next(), chars.next()) {
+        (Some(c), None) if c.is_ascii_alphabetic() => c.eq_ignore_ascii_case(&'v'),
+        _ => key.code() == "KeyV",
+    }
+}
+
+/// The clipboard's text through the Clipboard API, when the page may read it.
+async fn read_clipboard_text() -> Option<String> {
+    let clipboard = js_sys::Reflect::get(&web_sys::window()?.navigator(), &"clipboard".into())
+        .ok()?
+        .dyn_into::<web_sys::Clipboard>()
+        .ok()?;
+    wasm_bindgen_futures::JsFuture::from(clipboard.read_text())
+        .await
+        .ok()?
+        .as_string()
+        .filter(|text| !text.is_empty())
+}
+
+/// Hand a held key press to the editor's canvas as pressed.
+fn relay_key(key: &web_sys::KeyboardEvent) {
+    let canvas = HOST
+        .with_borrow(|host| host.drops.as_ref().map(|(element, _)| element.clone()))
+        .and_then(|element| element.query_selector("canvas").ok().flatten());
+    let Some(canvas) = canvas else {
+        return;
+    };
+    let init = web_sys::KeyboardEventInit::new();
+    init.set_bubbles(true);
+    init.set_cancelable(true);
+    init.set_key(&key.key());
+    init.set_code(&key.code());
+    init.set_location(key.location());
+    init.set_repeat(key.repeat());
+    init.set_ctrl_key(key.ctrl_key());
+    init.set_meta_key(key.meta_key());
+    init.set_shift_key(key.shift_key());
+    init.set_alt_key(key.alt_key());
+    let Ok(relayed) = web_sys::KeyboardEvent::new_with_keyboard_event_init_dict("keydown", &init)
+    else {
+        return;
+    };
+    RELAYING.set(true);
+    let _ = canvas.dispatch_event(&relayed);
+    RELAYING.set(false);
 }
 
 /// The events whose ⌘ and Control `command_key` trades.
@@ -700,6 +860,16 @@ pub fn destroy() -> Result<(), JsError> {
     }
     if let Some(input_method) = HOST.with_borrow_mut(|host| host.input_method.take()) {
         ime::stop(input_method);
+    }
+    let paste = HOST.with_borrow_mut(|host| host.field_paste.take());
+    if let (Some(paste), Some(window)) = (paste, web_sys::window()) {
+        for (name, listener) in &paste {
+            let _ = window.remove_event_listener_with_callback_and_bool(
+                name,
+                listener.as_ref().unchecked_ref(),
+                true,
+            );
+        }
     }
     let drops = HOST.with_borrow_mut(|host| host.drops.take());
     if let Some((element, drops)) = drops {

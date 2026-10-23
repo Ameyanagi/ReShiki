@@ -12,6 +12,7 @@
     "vendor/svg2pdf/**",
     "vendor/smithay-clipboard/**",
     "vendor/iced_winit/**",
+    "vendor/window_clipboard/**",
     "reference/engine/cdx_schema.py",
     "website/.astro/**",
     "website/dist/**",
