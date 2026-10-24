@@ -188,6 +188,7 @@ impl App {
             }
             reshiki::atom_labels::refresh_computed(&mut self.tab.doc, &document);
             self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
+            self.settle_label_layout();
             self.tab.labels_dirty = false;
             self.tab.analysis = response.analysis;
             self.tool = Tool::Select;
@@ -223,6 +224,7 @@ impl App {
         if let Some(document) = response.document {
             reshiki::atom_labels::refresh_computed(&mut self.tab.doc, &document);
             self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
+            self.settle_label_layout();
         }
         self.tab.analysis = response.analysis;
         self.tab.chemistry_notice = None;
@@ -237,6 +239,7 @@ impl App {
             self.changed(before);
             reshiki::atom_labels::refresh_computed(&mut self.tab.doc, &document);
             self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
+            self.settle_label_layout();
             self.tab.labels_dirty = false;
             self.tab.chemistry_notice = None;
             self.tab.selected.clear();

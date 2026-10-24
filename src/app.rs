@@ -707,6 +707,7 @@ impl App {
             .nmr
             .invalidate_if_changed(&self.tab.doc, self.tab.file_epoch);
         let committed = reconciled.commit(&mut self.tab.doc, &mut self.tab.history, continuing);
+        self.label_layout_settled();
         if committed.chemistry_changed {
             self.tab.labels_dirty = true;
             self.tab.chemistry_notice = None;
@@ -822,6 +823,7 @@ impl App {
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
         let task = self.handle(message);
+        self.settle_deferred_label_layout();
         // Any message may change the drawing, some (previews, background
         // labels) without a new revision, so the next view compares afresh.
         self.tab.forget_unsaved();

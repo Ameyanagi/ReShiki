@@ -139,3 +139,47 @@ fn unsaved_changes_check() {
         view(&app, &format!("{atoms}_atoms_views_edited"));
     }
 }
+
+#[test]
+#[ignore = "release-mode label landing benchmark"]
+fn label_landing() {
+    use reshiki::atom_labels::refresh::Refresh;
+    use std::sync::Arc;
+    println!("workload,median_ms,p95_ms,revision_bumps");
+    let gallery: Document =
+        serde_json::from_str(include_str!("../../assets/examples/shortcut-examples.rsk")).unwrap();
+    for copies in [1, 4, 16] {
+        let mut doc = Document::default();
+        for copy in 0..copies {
+            editing::append(&mut doc, &gallery, Point::new(copy as f32 * 1800., 0.));
+        }
+        let atoms = doc.atoms.len();
+        let endpoint = doc.atoms.last().unwrap().id;
+        let (mut app, _) = App::new();
+        app.tab.doc = doc.clone();
+        app.tab.saved = doc;
+        app.tab.labels_dirty = true;
+        let mut bumps = 0;
+        let mut samples = Vec::new();
+        for run in 0..33 {
+            let element = if run % 2 == 0 { "o" } else { "c" };
+            app.tab.selected = vec![endpoint];
+            let _ = app.update(Message::ContextKey(element.into()));
+            let _ = app.start_label_refresh();
+            let key = app.tab.label_refresh.pending_key().unwrap();
+            let labels = Refresh::calculate(&app.tab.doc, &Refresh::default()).map(Arc::new);
+            let revision = app.tab.revision;
+            let start = Instant::now();
+            let _ = black_box(app.update(Message::LabelsReady(key, labels)));
+            if run >= 3 {
+                samples.push(start.elapsed().as_secs_f64() * 1000.);
+                bumps += usize::from(app.tab.revision != revision);
+            }
+        }
+        samples.sort_by(f64::total_cmp);
+        println!(
+            "{atoms}_atoms_labels_land,{:.4},{:.4},{bumps}",
+            samples[15], samples[28]
+        );
+    }
+}

@@ -2,7 +2,8 @@
 use super::{App, Message};
 use iced::Task;
 use reshiki::atom_labels::refresh::Refresh;
-use std::sync::Arc;
+use reshiki::document::Document;
+use std::sync::{Arc, Weak};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Key {
@@ -14,6 +15,13 @@ pub struct Key {
 pub(super) struct State {
     pending: Option<Key>,
     cache: Arc<Refresh>,
+    /// Labels landed while a preview or job keyed on the revision was open,
+    /// so the layout repair waits until it closes.
+    unsettled: bool,
+    /// The snapshot an in-flight save writes, and that snapshot repaired
+    /// for labels that landed meanwhile, which the save marks as saved.
+    saving: Weak<Document>,
+    saving_repaired: Option<Document>,
 }
 
 #[cfg(test)]
@@ -91,9 +99,81 @@ impl App {
                 }
                 self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
                 self.tab.chemistry_notice.clone_from(&computed.notice);
+                self.settle_label_layout();
             }
             Err(error) => self.tab.chemistry_notice = Some(error),
         }
+    }
+
+    /// Runs the edit pipeline's reconcile again after computed labels
+    /// changed their ink, so arrow ends clear new hydrogens and linked name
+    /// captions clear stereo labels without waiting for the next edit.
+    ///
+    /// The repair adds no Undo step: Undo still returns to the drawing before
+    /// the edit that changed the labels. A saved drawing, or the snapshot an
+    /// in-flight save writes, that is the same drawing as the one repaired
+    /// gets the same repair, so labels alone never leave a drawing unsaved.
+    pub(super) fn settle_label_layout(&mut self) {
+        let tab = &self.tab;
+        // These keep results for the current revision; their own edit
+        // reconciles, and a cancel settles on the next update.
+        self.tab.label_refresh.unsettled = tab.joining.is_some()
+            || tab.cleanup.is_some()
+            || tab.optimization.is_some()
+            || tab.busy
+            || tab.erase_stroke;
+        if self.tab.label_refresh.unsettled {
+            return;
+        }
+        let before = self.tab.doc.clone();
+        let Ok(reconciled) = reshiki::transaction::reconcile(&mut self.tab.doc, before) else {
+            return;
+        };
+        let before = reconciled.before();
+        if self.tab.doc == *before {
+            return;
+        }
+        self.tab.revision = self.tab.revision.wrapping_add(1);
+        if super::same_drawing(before, &self.tab.saved) {
+            self.tab.mark_saved(self.tab.doc.clone());
+        }
+        let state = &mut self.tab.label_refresh;
+        if let Some(saving) = state.saving.upgrade()
+            && super::same_drawing(before, &saving)
+        {
+            state.saving_repaired = Some(self.tab.doc.clone());
+        }
+        let ids: std::collections::HashSet<_> = self.tab.doc.all_ids().into_iter().collect();
+        self.tab.selected.retain(|id| ids.contains(id));
+    }
+
+    /// Settles a layout repair that waited for a preview or job to close.
+    pub(super) fn settle_deferred_label_layout(&mut self) {
+        if self.tab.label_refresh.unsettled {
+            self.settle_label_layout();
+        }
+    }
+
+    /// Edits reconcile the whole drawing, which settles any waiting repair.
+    pub(super) fn label_layout_settled(&mut self) {
+        self.tab.label_refresh.unsettled = false;
+    }
+
+    /// Remembers the snapshot a save starts writing.
+    pub(super) fn saving(&mut self, snapshot: &Arc<Document>) {
+        self.tab.label_refresh.saving = Arc::downgrade(snapshot);
+        self.tab.label_refresh.saving_repaired = None;
+    }
+
+    /// The drawing a finished save marks as saved: its snapshot, or the
+    /// snapshot repaired for labels that landed while it was written.
+    pub(super) fn saved_snapshot(&mut self, snapshot: Document) -> Document {
+        self.tab.label_refresh.saving = Weak::new();
+        self.tab
+            .label_refresh
+            .saving_repaired
+            .take()
+            .unwrap_or(snapshot)
     }
 }
 
