@@ -141,6 +141,15 @@ impl App {
         }
     }
 
+    /// [`Self::edited`] for the tab strip, which asks on every view.
+    fn shown_edited(&self, tab: &DocumentTab) -> bool {
+        if tab.id == self.tab.id {
+            self.tab.shown_dirty()
+        } else {
+            tab.edited
+        }
+    }
+
     /// Whether any tab has unsaved changes, which leaving the page would lose.
     #[cfg(any(target_arch = "wasm32", test))]
     pub(crate) fn unsaved(&self) -> bool {
@@ -520,7 +529,11 @@ impl App {
         let widths: Vec<f32> = tabs
             .iter()
             .map(|tab| {
-                let dot = if self.edited(tab) { DOT + SPACING } else { 0. };
+                let dot = if self.shown_edited(tab) {
+                    DOT + SPACING
+                } else {
+                    0.
+                };
                 (2. * TAB_PADDING + text_width(&tab.name(), 12.) + dot + SPACING + CLOSE)
                     .clamp(TAB_MIN, TAB_MAX)
             })
@@ -561,7 +574,7 @@ impl App {
 
     fn tab_button<'a>(&'a self, tab: &'a DocumentTab, width: f32) -> Element<'a, Message> {
         let active = tab.id == self.tab.id;
-        let edited = self.edited(tab);
+        let edited = self.shown_edited(tab);
         let room =
             width - 2. * TAB_PADDING - SPACING - CLOSE - if edited { DOT + SPACING } else { 0. };
         let mut label = row![
@@ -643,7 +656,7 @@ impl App {
                 let mut label = row![text(elide(&tab.name(), 170.)).size(12)]
                     .spacing(SPACING)
                     .align_y(Alignment::Center);
-                if self.edited(tab) {
+                if self.shown_edited(tab) {
                     label = label.push(dot());
                 }
                 items = items.push(
