@@ -30,7 +30,9 @@ mod web;
 #[cfg(any(windows, test))]
 mod window_fit;
 
-#[cfg(not(test))]
+// The browser editor sets no budget, so it keeps the default allocator; the
+// browser's worker for heavy jobs has its own (crates/web-worker).
+#[cfg(not(any(test, target_arch = "wasm32")))]
 #[global_allocator]
 static ALLOCATOR: reshiki_process_heap::BoundedHeap = reshiki_process_heap::BoundedHeap;
 
