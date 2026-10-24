@@ -106,3 +106,62 @@ fn changing_text_does_not_grow_the_cache_without_limit() {
         assert!(cache.glyphs.within_budget());
     }
 }
+
+#[test]
+fn zoom_steps_are_quarter_octaves_within_an_eighth_octave_of_the_zoom() {
+    for zoom in [0.25, 0.5, 1., 2., 8.] {
+        assert_eq!(zoom_step(zoom), zoom);
+    }
+    let mut zoom = 0.05;
+    while zoom < 20. {
+        let step = zoom_step(zoom);
+        assert!((zoom / step).log2().abs() <= 0.125 + 1e-5, "{zoom} {step}");
+        assert_eq!(zoom_step(step), step);
+        zoom *= 1.013;
+    }
+}
+
+#[test]
+fn scaled_step_outlines_land_where_exact_outlines_do() {
+    let style = TextStyle::default();
+    for zoom in [0.3, 0.455, 0.7, 1.25, 1.9, 3.1] {
+        let step = zoom_step(zoom);
+        let scale = zoom / step;
+        let scaled = outline("NH2 OH", 14., step, [0, 0, 0], &style)
+            .bounds
+            .unwrap();
+        let exact = outline("NH2 OH", 14., zoom, [0, 0, 0], &style)
+            .bounds
+            .unwrap();
+        // Vertical hinting snaps ink to whole pixels at each size: about a pixel apart.
+        for (a, b) in [
+            (scaled.x * scale, exact.x),
+            (scaled.y * scale, exact.y),
+            (scaled.width * scale, exact.width),
+            (scaled.height * scale, exact.height),
+        ] {
+            assert!((a - b).abs() <= 1. + 0.06 * b.abs(), "{zoom}: {a} vs {b}");
+        }
+    }
+}
+
+#[test]
+fn a_full_cache_evicts_the_least_recently_used_outlines() {
+    let mut cache = TextCache::default();
+    let style = TextStyle::default();
+    let kept = cache.get("kept", 14., 1., [0, 0, 0], &style);
+    let stale = cache.get("stale", 14., 1., [0, 0, 0], &style);
+    for i in 0..LIMIT {
+        cache.get(&i.to_string(), 14., 1., [0, 0, 0], &style);
+        // Text drawn every frame stays cached while new text fills the cache.
+        assert!(Rc::ptr_eq(
+            &kept,
+            &cache.get("kept", 14., 1., [0, 0, 0], &style)
+        ));
+    }
+    assert!(cache.entries.len() > LIMIT / 2 && cache.entries.len() < LIMIT);
+    assert!(!Rc::ptr_eq(
+        &stale,
+        &cache.get("stale", 14., 1., [0, 0, 0], &style)
+    ));
+}
