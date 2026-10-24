@@ -155,6 +155,11 @@ impl App {
         }
     }
 
+    /// Whether a layout repair waits for a preview or job to close.
+    pub(super) fn label_layout_waiting(&self) -> bool {
+        self.tab.label_refresh.unsettled
+    }
+
     /// Edits reconcile the whole drawing, which settles any waiting repair.
     pub(super) fn label_layout_settled(&mut self) {
         self.tab.label_refresh.unsettled = false;

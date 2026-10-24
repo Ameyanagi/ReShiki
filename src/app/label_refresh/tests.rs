@@ -415,3 +415,37 @@ fn labels_for_the_opened_gallery_change_no_layout() {
     assert_eq!(app.tab.revision, key.revision);
     assert!(!app.dirty());
 }
+
+#[test]
+fn applying_an_unchanged_text_draft_settles_the_repair_without_an_undo_step() {
+    use crate::app::inline_text::Action;
+    let (mut app, _) = carbonyl_with_arrow();
+    let mut file = app.tab.doc.clone();
+    file.bonds[0].order = 1;
+    let caption = file.next_id();
+    file.annotations.push(reshiki::document::Annotation {
+        id: caption,
+        position: Point::new(-40., 60.),
+        text: "Step 1".into(),
+        format: Default::default(),
+    });
+    app.show_opened(file.clone(), Some("old.rsk".into()));
+    app.tab.busy = false;
+    let _ = app.update(Message::InlineText(Action::Begin(
+        Some(caption),
+        Point::new(-30., 65.),
+    )));
+    assert!(app.tab.inline_text.is_some());
+    let _ = app.start_label_refresh();
+    let key = app.tab.label_refresh.pending.unwrap();
+    let _ = app.update(Message::LabelsReady(key, compute(&app)));
+    assert_eq!(
+        app.tab.doc.arrows, file.arrows,
+        "The draft holds the repair"
+    );
+    let _ = app.update(Message::InlineText(Action::Finish(true)));
+    assert!(app.tab.inline_text.is_none());
+    assert_ne!(app.tab.doc.arrows, file.arrows, "The arrow moved clear");
+    assert!(!app.tab.history.can_undo());
+    assert!(!app.dirty());
+}
