@@ -47,7 +47,13 @@ impl<'a> Joins<'a> {
         let atoms = doc
             .atoms
             .iter()
-            .map(|a| (a.id, (a, crate::atom_labels::visible(a, doc))))
+            .map(|a| {
+                let degree = || faces.graph().degree(a.id);
+                (
+                    a.id,
+                    (a, crate::atom_labels::visible_with_degree(a, doc, degree)),
+                )
+            })
             .collect();
         let mut incident: std::collections::HashMap<u64, Vec<(usize, &'a Bond)>> =
             Default::default();

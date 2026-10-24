@@ -103,7 +103,8 @@ The custom element wraps `mount`:
 <reshiki-editor src="caffeine.mol" format="mol" style="height: 600px"></reshiki-editor>
 ```
 
-It fires `ready` and `change`, and has `load`, `save` and `exportImage`.
+It fires `ready` and `change`, and `error` when the editor cannot start, for
+example when `src` answers 404, and has `load`, `save` and `exportImage`.
 
 ### Fonts
 
@@ -170,6 +171,40 @@ are not offered (this needs Web Locks, which current browsers have). The page
 cannot write while it unloads, so a change made in the last second before a
 reload can be lost.
 
+### Content Security Policy
+
+On a page with a Content-Security-Policy, the editor needs:
+
+- `script-src 'wasm-unsafe-eval'` (with the source the package is served
+  from), or the WebAssembly does not start and the page stays blank;
+- `connect-src https://cdn.jsdelivr.net` for the Chinese, Japanese and Korean
+  fallback font, unless `cjkFont` names a font on the page's own site or is
+  `false`, plus the sites `fonts` and `src` load from;
+- `worker-src blob:` on browsers without `scheduler.postTask`, where the
+  event loop's timer runs in a small worker made from a `blob:` URL.
+
+`style-src` can stay strict: `mount` and `<reshiki-editor>` style the editor
+through the CSSOM, which `style-src` does not restrict. `src/frame.html`, the
+page `embed()` loads, has an inline `<style>`, so serve it with
+`style-src 'unsafe-inline'` or a page of your own.
+
+### Naming
+
+Name ↔ structure conversion (**Import → Name**, **Name molecule**) runs the
+desktop's OPSIN Rust port and naming rules in a module Web Worker,
+`src/worker.js`, which loads its own WebAssembly
+(`dist/worker/reshiki_web_worker_bg.wasm`, about 2.3 MB gzipped) the first time
+a name is converted, never at startup. As on the desktop, a request stops after
+15 seconds and the worker's heap is limited to 96 MiB (its memory to
+128 MiB), so a runaway name cannot block or crash the editor; the next
+request starts a new worker.
+
+Browsers start workers only from the page's own origin, so serve the package
+from the page's site to use naming. A Content-Security-Policy whose
+`script-src` allows that site needs nothing more. If it sets `worker-src` (or
+`child-src`), that must allow the site too, for example
+`worker-src 'self' blob:`.
+
 ### Demo
 
 ```sh
@@ -190,11 +225,15 @@ it.
 
 ### What the browser editor leaves out
 
-- Naming, NMR prediction and 3D say they need the desktop app. The assistant,
-  updates, printing, Office and LibreOffice integration are not built.
-- Open and Save use the browser: Open picks a file, Save and Export download
-  one under the drawing's name. Drawing styles, themes, templates and pictures
-  cannot be loaded from files yet, and Insert cannot insert files.
+- Naming and NMR prediction work: naming runs in its own worker (see
+  [Naming](#naming)). 3D models and 3D optimization work, but pause the page
+  while they compute. The assistant panel only points to the desktop app,
+  Check for updates does not apply (the page updates the editor), and
+  printing, Office and LibreOffice integration are not available.
+- Open and Save use the browser: Open, Insert from file and the drawing style,
+  theme, template and picture choosers use the browser's file chooser, and
+  files dropped on the editor open or insert as in the desktop app. Save and
+  Export download a file under the drawing's name.
 - Copying and pasting drawings goes through `navigator.clipboard`, which asks
   for permission to read, and carries PNG, HTML, SVG (Chrome and Edge) and
   text, not PDF, CDX or ChemDraw's own formats. Text fields copy, cut and
@@ -211,7 +250,8 @@ it.
 - Shortcuts follow the desktop app, with ⌘ as Command on a Mac, except
   three that browsers keep for their own tabs: New is Alt+N, Close tab Alt+W
   and next/previous tab Alt+] / Alt+[ (⌃N, ⌃W, ⌃] / ⌃[ on a Mac).
-- Work runs on the page's thread, so a long cleanup or import pauses the page.
+- Work other than [naming](#naming) runs on the page's thread, so a long
+  cleanup, import, NMR prediction or 3D model pauses the page.
 - Without WebGPU, lines are drawn without antialiasing: WebGL2 loses most
   canvases with it.
 

@@ -21,6 +21,7 @@ fn gallery_is_an_unsaved_copy_on_the_normal_canvas() -> Result<(), String> {
     assert!((hi.y - lo.y) * app.tab.camera.zoom <= 520.1);
     assert_eq!(app.tab.doc, doc);
     app.tab.doc.add_atom("C", Point::default());
+    app.changed(doc);
     assert!(app.dirty());
     let _ = app.update(Message::Discard);
     let _ = app.update(Message::New);

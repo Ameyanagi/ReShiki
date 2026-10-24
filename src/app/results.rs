@@ -644,7 +644,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::TextColor(..)
         | Message::ApplyTextColor
         | Message::TextAlign(..)
-        | Message::GroupLabelAlign(..)
+        | Message::LabelAlign(..)
         | Message::TextSpacing(..)
         | Message::TextWidth(..)
         | Message::ApplyTextWidth

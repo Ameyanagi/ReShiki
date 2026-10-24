@@ -9,6 +9,7 @@ pub(crate) mod attachment_ink;
 mod bond_pass;
 mod charge_placement;
 pub(crate) mod depth_field;
+pub(crate) mod graph;
 mod occlusion;
 pub(crate) mod projected_bonds;
 mod svg;
@@ -145,8 +146,16 @@ pub(crate) fn label_trims_bonds(
     doc: &Document,
     opacity: Option<&crate::rear_opacity::Paint>,
 ) -> bool {
+    label_trims_bonds_with(atom, doc, opacity, || visible(atom, doc))
+}
+fn label_trims_bonds_with(
+    atom: &Atom,
+    doc: &Document,
+    opacity: Option<&crate::rear_opacity::Paint>,
+    shown: impl FnOnce() -> bool,
+) -> bool {
     opacity.is_none_or(|paint| paint.atom(atom.id) > 0.)
-        && (visible(atom, doc) || doc.abbreviation(atom.id).is_some())
+        && (shown() || doc.abbreviation(atom.id).is_some())
 }
 
 pub fn atom_label_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)> {
@@ -168,8 +177,14 @@ pub fn atom_label_ink_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)>
 /// The atom owning a visible label, including its hydrogens, isotope and charge.
 /// Keep this separate from geometric nearest-atom searches used for bond growth.
 pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
+    let reach = LabelReach::new(doc);
     doc.atoms.iter().rev().find_map(|atom| {
-        if crate::models3d::hides(doc, atom.id) {
+        // Laying out a label is costly, so skip atoms it cannot reach from.
+        let limit = reach.of(atom).map_or(f32::INFINITY, |reach| reach + radius);
+        if (atom.position.x - point.x).abs() > limit
+            || (atom.position.y - point.y).abs() > limit
+            || crate::models3d::hides(doc, atom.id)
+        {
             return None;
         }
         // Empty corners between a symbol and its stacked H/isotope/charge
@@ -184,6 +199,69 @@ pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> 
             })
             .then_some(atom.id)
     })
+}
+
+/// An upper bound on how far an atom's label ink reaches from the atom.
+struct LabelReach {
+    /// The largest label font size times its fonts' widest glyph (at least
+    /// two ems), or `None` when a label font cannot be bounded.
+    em: Option<f32>,
+    /// The longest text of each group label, by anchor.
+    groups: std::collections::HashMap<u64, usize>,
+}
+
+impl LabelReach {
+    fn new(doc: &Document) -> Self {
+        let styles = || {
+            doc.atoms
+                .iter()
+                .filter_map(|atom| atom.text_style.as_ref())
+                .chain(
+                    doc.abbreviations
+                        .iter()
+                        .filter_map(|g| g.label_style.as_ref()),
+                )
+        };
+        let size_pt = styles()
+            .map(|style| style.size_pt)
+            .fold(doc.drawing_style.font_size_pt, f32::max);
+        let families: std::collections::BTreeSet<_> = styles()
+            .map(|style| style.family.as_str())
+            .chain([doc.drawing_style.font_family.as_str()])
+            .collect();
+        let glyph = families.into_iter().try_fold(2f32, |em, family| {
+            Some(em.max(crate::style::label_glyph_reach(family)?))
+        });
+        let mut groups = std::collections::HashMap::new();
+        for group in &doc.abbreviations {
+            let longest: &mut usize = groups.entry(group.anchor).or_default();
+            *longest = (*longest)
+                .max(group.label.len())
+                .max(group.reverse_label.len());
+        }
+        Self {
+            em: glyph.map(|glyph| glyph * STYLE.world(size_pt)),
+            groups,
+        }
+    }
+
+    /// Every glyph the label can draw (its symbol, variable or group text,
+    /// hydrogens with their count, isotope, charge and radicals) in a row,
+    /// plus three ems for a stacked appendage, raised scripts and the
+    /// charge's clearance. Byte lengths count at least every character.
+    fn of(&self, atom: &Atom) -> Option<f32> {
+        let digits = |n: u32| n.checked_ilog10().map_or(1, |d| d as usize + 1);
+        let glyphs = atom.element.len()
+            + atom.display.variable.as_ref().map_or(0, String::len)
+            + self.groups.get(&atom.id).copied().unwrap_or_default()
+            + 1
+            + digits(atom.label_h.max(atom.explicit_h))
+            + digits(atom.isotope)
+            + 1
+            + digits(atom.charge.unsigned_abs())
+            + usize::from(atom.radical_electrons);
+        self.em.map(|em| em * (glyphs + 3) as f32)
+    }
 }
 
 pub(crate) fn atom_label_ink_boxes(a: &Atom, doc: &Document) -> Vec<(Point, Point)> {
@@ -216,7 +294,10 @@ pub(crate) fn atom_label_ink_shapes(a: &Atom, doc: &Document) -> Vec<((Point, Po
 }
 
 fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
-    atom_label_runs(a, doc)
+    atom_label_shown(a, doc, || visible(a, doc))
+}
+fn atom_label_shown(a: &Atom, doc: &Document, shown: impl FnOnce() -> bool) -> Vec<Primitive> {
+    label_runs(a, doc, ChargeLayout::Automatic, shown)
         .into_iter()
         .flat_map(resolve_label_fonts)
         .collect()
@@ -270,6 +351,16 @@ fn atom_label_runs_with_charge_layout(
     doc: &Document,
     charge_layout: ChargeLayout,
 ) -> Vec<Primitive> {
+    label_runs(a, doc, charge_layout, || visible(a, doc))
+}
+
+/// `shown`: whether the atom's element label is visible, see [`visible`].
+fn label_runs(
+    a: &Atom,
+    doc: &Document,
+    charge_layout: ChargeLayout,
+    shown: impl FnOnce() -> bool,
+) -> Vec<Primitive> {
     if !doc.atom_visible(a.id) || crate::attachments::hidden(a, doc) {
         return vec![];
     }
@@ -288,7 +379,7 @@ fn atom_label_runs_with_charge_layout(
     if let Some(group) = doc.abbreviation(a.id).filter(|_| internal_group.is_none()) {
         return abbreviation_label_runs(a, doc, group);
     }
-    let show_element = internal_group.is_some() || visible(a, doc);
+    let show_element = internal_group.is_some() || shown();
     if !show_element && a.charge == 0 {
         return vec![];
     }
@@ -815,8 +906,8 @@ fn nearby_label_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, P
     measuring(|| {
         doc.atoms
             .iter()
-            .filter(|other| other.id != a.id && doc.atom_visible(other.id))
-            .filter(|other| nearby(a, other, size))
+            .filter(|other| other.id != a.id && nearby(a, other, size))
+            .filter(|other| doc.atom_visible(other.id))
             .flat_map(|other| label_ink_boxes(&atom_label_runs(other, doc)))
             .collect()
     })
@@ -827,8 +918,8 @@ fn nearby_mark_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, Po
     measuring(|| {
         doc.atoms
             .iter()
-            .filter(|other| !other.marks.is_empty() && doc.atom_visible(other.id))
-            .filter(|other| nearby(a, other, size))
+            .filter(|other| !other.marks.is_empty() && nearby(a, other, size))
+            .filter(|other| doc.atom_visible(other.id))
             .flat_map(|other| crate::scientific::styled_mark_parts(other, &doc.drawing_style))
             .filter_map(|part| {
                 let pad = part.style.width() * 0.5;
@@ -1347,10 +1438,9 @@ pub(crate) fn automatic_double_side(faces: &FaceIndex<'_>, bond: &Bond) -> Optio
     {
         return Some(side);
     }
-    let doc = faces.doc();
-    let center = ring_center(doc, bond.a, bond.b)?;
-    let a = doc.atom(bond.a)?.position;
-    let b = doc.atom(bond.b)?.position;
+    let center = ring_center(faces, bond.a, bond.b)?;
+    let a = faces.atom(bond.a)?.position;
+    let b = faces.atom(bond.b)?.position;
     let dx = b.x - a.x;
     let dy = b.y - a.y;
     let cross = (center.x - (a.x + b.x) * 0.5) * (-dy) + (center.y - (a.y + b.y) * 0.5) * dx;
@@ -1358,12 +1448,12 @@ pub(crate) fn automatic_double_side(faces: &FaceIndex<'_>, bond: &Bond) -> Optio
 }
 
 /// Find the smallest ring containing this edge, using the alternate path.
-fn ring_center(doc: &Document, from: u64, to: u64) -> Option<Point> {
+fn ring_center(faces: &FaceIndex<'_>, from: u64, to: u64) -> Option<Point> {
     use std::collections::{HashMap, VecDeque};
     let mut previous = HashMap::from([(from, from)]);
     let mut queue = VecDeque::from([from]);
     while let Some(id) = queue.pop_front() {
-        for b in &doc.bonds {
+        for (_, b) in faces.graph().bonds(id) {
             if (b.a == from && b.b == to) || (b.a == to && b.b == from) {
                 continue;
             }
@@ -1387,7 +1477,7 @@ fn ring_center(doc: &Document, from: u64, to: u64) -> Option<Point> {
                 }
                 let points: Vec<_> = path
                     .iter()
-                    .filter_map(|id| doc.atom(*id).map(|a| a.position))
+                    .filter_map(|id| faces.atom(*id).map(|a| a.position))
                     .collect();
                 return Some(Point::new(
                     points.iter().map(|p| p.x).sum::<f32>() / points.len() as f32,
@@ -1669,18 +1759,19 @@ struct AtomLabels {
     bounds: std::collections::HashMap<u64, Vec<(Point, Point)>>,
 }
 fn collect_atom_labels(doc: &Document, opacity: &crate::rear_opacity::Paint) -> AtomLabels {
+    let graph = graph::Graph::new(doc);
     let labels: std::collections::HashMap<_, _> = doc
         .atoms
         .iter()
-        .map(|a| (a.id, atom_label(a, doc)))
+        .map(|a| (a.id, atom_label_shown(a, doc, || graph.visible(a))))
         .collect();
     let label_bounds: std::collections::HashMap<_, _> = labels
         .iter()
         .map(|(id, runs)| {
             // A charge beside an implicit carbon must not shorten its bonds.
-            let bounds = doc
+            let bounds = graph
                 .atom(*id)
-                .filter(|a| label_trims_bonds(a, doc, Some(opacity)))
+                .filter(|a| label_trims_bonds_with(a, doc, Some(opacity), || graph.visible(a)))
                 .map(|_| label_ink_boxes(runs))
                 .unwrap_or_default();
             (*id, bounds)
@@ -1889,12 +1980,12 @@ struct BondFrame<'a> {
 }
 fn bond_frame<'a>(scene: BondScene<'a, '_>, b: &Bond) -> Option<BondFrame<'a>> {
     let BondScene {
-        doc,
+        faces,
         style,
         label_bounds,
         ..
     } = scene;
-    let (Some(a), Some(z)) = (doc.atom(b.a), doc.atom(b.b)) else {
+    let (Some(a), Some(z)) = (faces.atom(b.a), faces.atom(b.b)) else {
         return None;
     };
     let span = trimmed_span(

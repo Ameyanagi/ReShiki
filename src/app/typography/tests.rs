@@ -147,7 +147,7 @@ fn toolbar_aligns_selected_groups_and_captions_in_one_undo_without_changing_chem
     });
     app.tab.selected = vec![boc];
     assert_eq!(
-        app.selected_group_alignment(),
+        app.selected_label_alignment(),
         Some(Some(LabelAlignment::Auto))
     );
     assert_eq!(
@@ -158,7 +158,7 @@ fn toolbar_aligns_selected_groups_and_captions_in_one_undo_without_changing_chem
     let _ = app.update(Message::TextAlign(TextAlign::Right));
     assert_eq!(app.toolbar_alignment(), Some(TextAlign::Right));
     app.tab.selected = vec![boc, cp, caption];
-    assert_eq!(app.selected_group_alignment(), Some(None));
+    assert_eq!(app.selected_label_alignment(), Some(None));
     assert_eq!(app.toolbar_alignment(), None);
     let before = app.tab.doc.clone();
     let _ = app.update(Message::TextAlign(TextAlign::Center));
@@ -205,9 +205,9 @@ fn toolbar_aligns_selected_groups_and_captions_in_one_undo_without_changing_chem
         None,
         "Mixed caption/group alignment"
     );
-    let _ = app.update(Message::GroupLabelAlign(LabelAlignment::Auto));
+    let _ = app.update(Message::LabelAlign(LabelAlignment::Auto));
     assert_eq!(
-        app.selected_group_alignment(),
+        app.selected_label_alignment(),
         Some(Some(LabelAlignment::Auto))
     );
     assert_eq!(
@@ -220,9 +220,9 @@ fn toolbar_aligns_selected_groups_and_captions_in_one_undo_without_changing_chem
             .alignment,
         TextAlign::Justified
     );
-    let _ = app.update(Message::GroupLabelAlign(LabelAlignment::Above));
+    let _ = app.update(Message::LabelAlign(LabelAlignment::Above));
     assert_eq!(
-        app.selected_group_alignment(),
+        app.selected_label_alignment(),
         Some(Some(LabelAlignment::Above))
     );
     assert_eq!(app.tab.doc.atoms, before.atoms);
@@ -282,8 +282,8 @@ fn inline_caption_alignment_never_moves_group_labels_and_can_be_cancelled() -> R
         super::super::inline_text::Action::Begin(Some(caption), Point::default()),
     ));
     app.tab.selected = vec![id, caption];
-    assert_eq!(app.selected_group_alignment(), None);
-    let _ = app.update(Message::GroupLabelAlign(LabelAlignment::Above));
+    assert_eq!(app.selected_label_alignment(), None);
+    let _ = app.update(Message::LabelAlign(LabelAlignment::Above));
     let _ = app.update(Message::TextAlign(TextAlign::Right));
     assert_eq!(app.toolbar_alignment(), Some(TextAlign::Right));
     assert_eq!(
@@ -405,4 +405,43 @@ fn mixed_text_label_scripts_all_take_the_toolbar_script() {
         );
     }
     assert_eq!(app.toolbar_script(), Script::Subscript);
+}
+
+/// Issue #458: Automatic sits in the Style bar beside Left, Center and Right
+/// for element labels too, and returns a forced OH to reading from its bond.
+#[test]
+fn element_labels_take_automatic_from_the_alignment_menu_and_the_label_editor() {
+    use super::super::atom_text::Action;
+    use reshiki::atom_labels::HydrogenPosition;
+    let (mut app, _) = App::new();
+    app.tab.doc = Document::default();
+    let o = app.tab.doc.add_atom("O", Point::default());
+    let c = app.tab.doc.add_atom("C", Point::new(42., 0.));
+    app.tab.doc.add_bond(o, c, 1, "plain");
+    app.tab.selected = vec![o, c];
+    let side = |app: &App| app.tab.doc.atom(o).unwrap().display.hydrogen_position;
+    assert_eq!(
+        app.selected_label_alignment(),
+        Some(Some(LabelAlignment::Auto))
+    );
+    let _ = app.update(Message::TextAlign(TextAlign::Left));
+    assert_eq!(side(&app), HydrogenPosition::Right, "Flush left reads OH");
+    assert_eq!(app.toolbar_alignment(), Some(TextAlign::Left));
+    let _ = app.update(Message::LabelAlign(LabelAlignment::Auto));
+    assert_eq!(side(&app), HydrogenPosition::Auto);
+    assert_eq!(
+        app.selected_label_alignment(),
+        Some(Some(LabelAlignment::Auto))
+    );
+
+    app.tab.selected = vec![o];
+    let _ = app.update(Message::AtomText(Action::Begin(None)));
+    assert_eq!(
+        app.selected_label_alignment(),
+        Some(Some(LabelAlignment::Auto)),
+        "Automatic is checked while typing"
+    );
+    let _ = app.update(Message::AtomText(Action::Align(LabelAlignment::Right)));
+    let _ = app.update(Message::AtomText(Action::Apply));
+    assert_eq!(side(&app), HydrogenPosition::Left, "Flush right reads HO");
 }

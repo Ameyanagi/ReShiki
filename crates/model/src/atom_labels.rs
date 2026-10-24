@@ -1,6 +1,7 @@
 //! Atom-label appearance and owned number/stereochemistry indicators.
 //! Indicator appearance never changes the molecular graph or map numbers.
 use crate::{
+    abbreviations::LabelAlignment,
     document::{Atom, Bond, Document, Point},
     typography::{ScriptRun, TextStyle},
 };
@@ -144,6 +145,72 @@ impl std::fmt::Display for LabelAttachment {
 /// attachment is a display choice. Generic lists and link nodes keep theirs.
 pub fn free_text(atom: &Atom, doc: &Document) -> bool {
     atom.element == "*" && atom.display.variable.is_some() && !doc.generic.owns_label(atom.id)
+}
+
+/// The text alignment of the label on `id`, as ChemDraw's Text menu names it:
+/// a group's own placement, a free text label's attachment, or the side of an
+/// element's hydrogens (flush left reads OH, flush right HO). None when the
+/// atom has no label of its own or its choice has no alignment name.
+pub fn alignment(doc: &Document, id: u64) -> Option<LabelAlignment> {
+    use LabelAlignment as A;
+    if let Some(group) = doc.abbreviation(id) {
+        return Some(group.alignment);
+    }
+    let atom = doc
+        .atom(id)
+        .filter(|atom| doc.atom_visible(id) && visible(atom, doc))?;
+    if free_text(atom, doc) {
+        return match atom.display.label_attachment {
+            LabelAttachment::Auto => Some(A::Auto),
+            LabelAttachment::Left => Some(A::Left),
+            LabelAttachment::Center => Some(A::Center),
+            LabelAttachment::Right => Some(A::Right),
+            LabelAttachment::Character(_) => None,
+        };
+    }
+    match atom.display.hydrogen_position {
+        HydrogenPosition::Auto => Some(A::Auto),
+        HydrogenPosition::Right => Some(A::Left),
+        HydrogenPosition::Left => Some(A::Right),
+        HydrogenPosition::Above => Some(A::Above),
+        HydrogenPosition::Below => None,
+    }
+}
+
+/// Sets the label alignment that [`alignment`] reads. Choices a label kind
+/// has no form for (a centered element, a stacked free text) leave it as is.
+pub fn set_alignment(doc: &mut Document, id: u64, alignment: LabelAlignment) {
+    use LabelAlignment as A;
+    if let Some(group) = doc.abbreviations.iter_mut().find(|g| g.anchor == id) {
+        group.alignment = alignment;
+        return;
+    }
+    let free = doc.atom(id).is_some_and(|atom| free_text(atom, doc));
+    let Some(display) = doc
+        .atoms
+        .iter_mut()
+        .find(|a| a.id == id)
+        .map(|a| &mut a.display)
+    else {
+        return;
+    };
+    if free {
+        display.label_attachment = match alignment {
+            A::Auto => LabelAttachment::Auto,
+            A::Left => LabelAttachment::Left,
+            A::Center => LabelAttachment::Center,
+            A::Right => LabelAttachment::Right,
+            A::Above => return,
+        };
+    } else {
+        display.hydrogen_position = match alignment {
+            A::Auto => HydrogenPosition::Auto,
+            A::Left => HydrogenPosition::Right,
+            A::Right => HydrogenPosition::Left,
+            A::Above => HydrogenPosition::Above,
+            A::Center => return,
+        };
+    }
 }
 
 /// The glyph of this atom's free text label that its bonds meet, or None to
@@ -916,6 +983,12 @@ pub fn clear_computed(doc: &mut Document) {
     crate::arrow_anchors::reconcile(doc);
 }
 pub fn refresh_computed(doc: &mut Document, checked: &Document) {
+    copy_computed(doc, checked);
+    crate::arrow_anchors::reconcile(doc);
+}
+/// Copies `checked`'s computed H counts and CIP labels by atom id and bond,
+/// without moving anything that depends on their ink.
+pub fn copy_computed(doc: &mut Document, checked: &Document) {
     let atoms: std::collections::HashMap<_, _> = checked.atoms.iter().map(|a| (a.id, a)).collect();
     let bonds: std::collections::HashMap<_, _> = checked
         .bonds
@@ -933,7 +1006,6 @@ pub fn refresh_computed(doc: &mut Document, checked: &Document) {
             .get(&(b.a.min(b.b), b.a.max(b.b)))
             .and_then(|s| s.cip_label.clone());
     }
-    crate::arrow_anchors::reconcile(doc);
 }
 
 /// Slab clipping catches a bond crossing a label between sample points.

@@ -9,6 +9,28 @@ mod placement;
 const BOND_TEXT_HINT: &str = "Drag to bond; this text becomes an atom label";
 
 impl App {
+    /// Moves the view for Pan and Zoom; false for any other edit.
+    fn move_camera(&mut self, edit: &Edit) -> bool {
+        match *edit {
+            Edit::Pan(dx, dy) => {
+                self.tab.fit_to_view = false;
+                self.tab.camera.center = self.tab.camera.center.offset(-dx, -dy);
+            }
+            Edit::Zoom(f, at) => {
+                self.tab.fit_to_view = false;
+                let old = self.tab.camera.zoom;
+                self.tab.camera.zoom = (old * f).clamp(0.005, 5.0);
+                let ratio = old / self.tab.camera.zoom;
+                self.tab.camera.center = Point::new(
+                    at.x + (self.tab.camera.center.x - at.x) * ratio,
+                    at.y + (self.tab.camera.center.y - at.y) * ratio,
+                );
+            }
+            _ => return false,
+        }
+        true
+    }
+
     pub(super) fn edit(&mut self, edit: Edit) {
         match edit {
             Edit::ArrowTarget(p, bypass) => {
@@ -93,6 +115,11 @@ impl App {
             }
             return;
         }
+        // Camera-only edits never touch the document, history or revision, so
+        // they skip the document snapshot and edit pipeline on every wheel tick.
+        if self.move_camera(&edit) {
+            return;
+        }
         let before = self.tab.doc.clone();
         if matches!(edit, Edit::Bond(..) | Edit::TextBond { .. }) {
             self.tab.arrows.cancel_source();
@@ -110,7 +137,9 @@ impl App {
             | Edit::BeginTransform(_)
             | Edit::EraseStart(_)
             | Edit::EraseTo(..)
-            | Edit::EraseEnd => return,
+            | Edit::EraseEnd
+            | Edit::Pan(..)
+            | Edit::Zoom(..) => return,
             Edit::ArrowClick(id) => self.apply_arrow_tool(id),
             Edit::Chain {
                 points,
@@ -261,23 +290,9 @@ impl App {
                     self.tab.selected = copy;
                 }
             }
-            Edit::Pan(dx, dy) => {
-                self.tab.fit_to_view = false;
-                self.tab.camera.center = self.tab.camera.center.offset(-dx, -dy);
-            }
-            Edit::Zoom(f, at) => {
-                self.tab.fit_to_view = false;
-                let old = self.tab.camera.zoom;
-                self.tab.camera.zoom = (old * f).clamp(0.005, 5.0);
-                let ratio = old / self.tab.camera.zoom;
-                self.tab.camera.center = Point::new(
-                    at.x + (self.tab.camera.center.x - at.x) * ratio,
-                    at.y + (self.tab.camera.center.y - at.y) * ratio,
-                );
-            }
             Edit::PlaneBond(start, end) => return self.place_plane_bond(start, end, before),
             Edit::Bond(start, end, a, b) => return self.place_bond(start, end, a, b, before),
-            Edit::Click(p) => return self.canvas_click(p, before),
+            Edit::Click(p) | Edit::RepeatLabel(p) => return self.canvas_click(p, before),
         }
         self.changed(before);
     }

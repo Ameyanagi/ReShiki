@@ -373,6 +373,7 @@ impl super::App {
         result: Result<Option<PathBuf>, String>,
     ) -> iced::Task<super::Message> {
         self.file_io.saving = false;
+        let snapshot = self.saved_snapshot(*snapshot);
         // The write still releases the serial save slot, but its dialog and
         // error belong to the document that started it.
         if epoch != self.tab.file_epoch {
@@ -387,7 +388,7 @@ impl super::App {
         match result {
             Ok(Some(path)) => {
                 // Continue the save dialog's action only when nothing is left unsaved.
-                self.tab.saved = *snapshot;
+                self.tab.mark_saved(snapshot);
                 if self
                     .tab
                     .office
@@ -409,10 +410,13 @@ impl super::App {
                     } else {
                         "Drawing updated in Office. Save the Office document to keep it."
                     }
+                    .into()
+                } else if cfg!(target_arch = "wasm32") {
+                    // The browser only starts a download, which can still be cancelled.
+                    format!("Downloaded {}", self.document_name())
                 } else {
-                    "Document saved"
-                }
-                .into();
+                    "Document saved".into()
+                };
                 self.error = false;
                 if !self.dirty() {
                     self.clear_recovery();
@@ -478,7 +482,7 @@ impl super::App {
         self.sync_drawing_defaults();
         self.tab.styles.editor = None;
         self.theme_library.editor = None;
-        self.tab.saved = self.tab.doc.clone();
+        self.tab.mark_saved(self.tab.doc.clone());
         self.tab.path = path;
         self.tab.untitled_name = None;
         self.tab.history = super::History::default();
@@ -522,6 +526,7 @@ impl super::App {
         }
         let snapshot = std::sync::Arc::new(self.tab.doc.clone());
         let save_snapshot = std::sync::Arc::clone(&snapshot);
+        self.saving(&snapshot);
         let epoch = self.tab.file_epoch;
         Task::perform(
             async move {

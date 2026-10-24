@@ -11,16 +11,13 @@ mod catalog;
 pub use catalog::VERSION as ALIAS_CATALOG_VERSION;
 pub use catalog::{Alias, AliasSource, aliases_for_smiles};
 
-// The parsers run in bounded worker processes, which the browser does not have.
+// The parsers run in bounded worker processes on the desktop, and in a
+// dedicated Web Worker with its own bounded memory in the browser.
 #[cfg(not(target_arch = "wasm32"))]
 mod client;
-#[cfg(not(target_arch = "wasm32"))]
 mod local;
-#[cfg(not(target_arch = "wasm32"))]
 mod reverse;
-#[cfg(not(target_arch = "wasm32"))]
 mod rules;
-#[cfg(not(target_arch = "wasm32"))]
 pub mod worker;
 #[cfg(not(target_arch = "wasm32"))]
 pub use {
@@ -30,7 +27,7 @@ pub use {
 #[cfg(target_arch = "wasm32")]
 mod browser;
 #[cfg(target_arch = "wasm32")]
-pub use browser::{Cancel, generate_name, resolve_name};
+pub use browser::{Cancel, generate_name, resolve_name, set_worker};
 
 /// Why a local name request produced no result. Display prints the message
 /// unchanged; the variant tells callers how to summarize it.

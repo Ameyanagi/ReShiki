@@ -47,6 +47,7 @@ pub(crate) struct FaceIndex<'d> {
     doc: &'d Document,
     depth: OnceCell<bool>,
     neighbors: OnceCell<BTreeMap<u64, Vec<u64>>>,
+    graph: OnceCell<super::graph::Graph<'d>>,
     memo: RefCell<FaceMemo>,
 }
 
@@ -157,12 +158,24 @@ impl<'d> FaceIndex<'d> {
             doc,
             depth: OnceCell::new(),
             neighbors: OnceCell::new(),
+            graph: OnceCell::new(),
             memo: RefCell::new(HashMap::new()),
         }
     }
 
     pub(crate) fn doc(&self) -> &'d Document {
         self.doc
+    }
+
+    /// Lookups by atom ID for this document, built on first use.
+    pub(crate) fn graph(&self) -> &super::graph::Graph<'d> {
+        self.graph
+            .get_or_init(|| super::graph::Graph::new(self.doc))
+    }
+
+    /// The first atom with this ID, like [`Document::atom`].
+    pub(crate) fn atom(&self, id: u64) -> Option<&'d crate::document::Atom> {
+        self.graph().atom(id)
     }
 
     fn paths(&self, bond: &Bond) -> Vec<Vec<u64>> {
@@ -197,15 +210,14 @@ impl<'d> FaceIndex<'d> {
 }
 
 fn find_face(faces: &FaceIndex<'_>, bond: &Bond) -> Option<Face> {
-    let doc = faces.doc;
-    let a = xyz(doc.atom(bond.a)?);
-    let b = xyz(doc.atom(bond.b)?);
+    let a = xyz(faces.atom(bond.a)?);
+    let b = xyz(faces.atom(bond.b)?);
     let t = unit(sub(b, a))?;
     let paths = faces.paths(bond);
     let (low, high) = paths
         .iter()
         .flatten()
-        .filter_map(|id| doc.atom(*id))
+        .filter_map(|id| faces.atom(*id))
         .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), a| {
             (lo.min(a.depth), hi.max(a.depth))
         });
@@ -215,7 +227,7 @@ fn find_face(faces: &FaceIndex<'_>, bond: &Bond) -> Option<Face> {
     // Test depth across incident candidates before choosing a face. A face
     // turning parallel to the screen must not switch to its tilted neighbor.
     for path in paths {
-        let atoms: Option<Vec<_>> = path.iter().map(|id| doc.atom(*id)).collect();
+        let atoms: Option<Vec<_>> = path.iter().map(|id| faces.atom(*id)).collect();
         let atoms = atoms?;
         if atoms
             .iter()

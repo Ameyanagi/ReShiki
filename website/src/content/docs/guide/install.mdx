@@ -67,10 +67,13 @@ from jsDelivr; see the [privacy policy](/developer/privacy-policy/#website-and-e
 The browser preview is not the full app. Use the [desktop app](#1-download-and-open)
 whenever you can. In the browser:
 
-- Naming, NMR prediction and 3D generation need the desktop app, and there is
-  no assistant, printing, or Office and LibreOffice integration.
-- Copy and paste carry text only (SMILES and drawings as text), not images or
-  ChemDraw clipboard data. There are no recovery drafts.
+- Naming and NMR prediction work, but there is no assistant, printing, or
+  Office and LibreOffice integration. 3D models work, but the page pauses
+  while one is computed.
+- Copy puts a picture and SMILES on the clipboard, and Paste takes ReShiki
+  drawings, chemical text and pictures, but not PDF, CDX or ChemDraw's own
+  clipboard data; see [Clipboard](/developer/clipboard/#in-the-browser). Settings,
+  templates and recovery drafts stay in the browser's storage for this site.
 - Shortcuts are the desktop app's, with ⌘ on a Mac, except New, Close tab and
   switching tabs, which the browser keeps: use Alt+N, Alt+W and Alt+] / Alt+[
   (⌃N, ⌃W and ⌃] / ⌃[ on a Mac). Long cleanups or imports pause the page.

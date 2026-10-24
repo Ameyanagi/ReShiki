@@ -84,16 +84,17 @@ pub(super) fn start(element: &web_sys::Element) -> Option<InputMethod> {
         ("aria-hidden", "true"),
         // The editor's own key target, which its other key listeners serve.
         ("data-reshiki-keys", ""),
-        (
-            "style",
-            "position: fixed; left: 0; top: 0; width: 1px; height: 1px; margin: 0; \
-             padding: 0; border: 0; outline: none; resize: none; overflow: hidden; \
-             opacity: 0; pointer-events: none; color: transparent; \
-             background: transparent; caret-color: transparent; white-space: pre",
-        ),
     ] {
         let _ = textarea.set_attribute(name, value);
     }
+    // Through CSSOM, which a strict Content-Security-Policy allows, unlike a
+    // style attribute.
+    textarea.style().set_css_text(
+        "position: fixed; left: 0; top: 0; width: 1px; height: 1px; margin: 0; \
+         padding: 0; border: 0; outline: none; resize: none; overflow: hidden; \
+         opacity: 0; pointer-events: none; color: transparent; \
+         background: transparent; caret-color: transparent; white-space: pre",
+    );
     element.append_child(&textarea).ok()?;
 
     // Iced says where text goes; the textarea follows, and leaves when no

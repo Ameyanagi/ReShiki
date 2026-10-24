@@ -224,7 +224,7 @@ pub enum Message {
     TextColor(String),
     ApplyTextColor,
     TextAlign(reshiki::typography::TextAlign),
-    GroupLabelAlign(reshiki::abbreviations::LabelAlignment),
+    LabelAlign(reshiki::abbreviations::LabelAlignment),
     TextSpacing(f32),
     TextWidth(String),
     ApplyTextWidth,
@@ -421,6 +421,10 @@ pub struct App {
     viewport: iced::Size,
     template_index: usize,
     templates: template_library::State,
+    /// The last committed atom label, which a Text-tool double-click repeats.
+    last_label: Option<String>,
+    /// The last Text-tool click on an atom, to recognize a double-click.
+    text_click: Option<(iced::time::Instant, u64)>,
 }
 /// How often drafts catch up with their drawings. A browser page can be
 /// reloaded or closed at any moment, and cannot write when it unloads, so it
@@ -515,6 +519,8 @@ impl App {
             viewport: iced::Size::new(850.0, 600.0),
             template_index: 0,
             templates: template_library::State::load(),
+            last_label: None,
+            text_click: None,
         };
         if let Some(message) = abbreviations::load_user_catalog() {
             if app.recovered.is_empty() {
@@ -532,10 +538,15 @@ impl App {
         (app, Task::batch([task, update_check]))
     }
     pub fn title(&self) -> String {
-        window_title(&self.document_name(), self.dirty())
+        window_title(&self.document_name(), self.tab.shown_dirty())
     }
     fn document_name(&self) -> String {
         self.tab.name()
+    }
+    /// The saved document's file name without its extension, for exports.
+    fn export_stem(&self) -> Option<String> {
+        let stem = self.tab.path.as_ref()?.file_stem()?;
+        Some(stem.to_string_lossy().into_owned())
     }
     pub fn theme(&self) -> Theme {
         if self.appearance.mode.is_dark(self.tab.doc.canvas_theme) {
@@ -634,6 +645,9 @@ impl App {
         self.changed_continuing(before, false);
     }
     fn changed_continuing(&mut self, before: Document, continuing: bool) {
+        if self.settles_unchanged(&before) {
+            return;
+        }
         self.prepare_document_change(self.tab.doc != before);
         let reconciled = match reshiki::transaction::reconcile(&mut self.tab.doc, before) {
             Ok(reconciled) => reconciled,
@@ -655,6 +669,10 @@ impl App {
         mut candidate: Document,
         selected: Vec<u64>,
     ) -> Result<(), String> {
+        if candidate == self.tab.doc && self.settles_unchanged(&candidate) {
+            self.tab.selected = selected;
+            return Ok(());
+        }
         let before = self.tab.doc.clone();
         let reconciled = reshiki::transaction::reconcile(&mut candidate, before)
             .map_err(|error| error.message().to_owned())?;
@@ -672,6 +690,17 @@ impl App {
         self.tab.selected = selected;
         self.commit_changed(reconciled, false);
         Ok(())
+    }
+    /// A commit that changes nothing, such as applying an unchanged text
+    /// draft, settles a waiting label-layout repair the way closing the
+    /// preview that held it back would, instead of recording it as an edit.
+    fn settles_unchanged(&mut self, before: &Document) -> bool {
+        if !self.label_layout_waiting() || self.tab.doc != *before {
+            return false;
+        }
+        self.prepare_document_change(false);
+        self.settle_label_layout();
+        true
     }
     fn prepare_document_change(&mut self, changed: bool) {
         if changed {
@@ -696,6 +725,7 @@ impl App {
             .nmr
             .invalidate_if_changed(&self.tab.doc, self.tab.file_epoch);
         let committed = reconciled.commit(&mut self.tab.doc, &mut self.tab.history, continuing);
+        self.label_layout_settled();
         if committed.chemistry_changed {
             self.tab.labels_dirty = true;
             self.tab.chemistry_notice = None;
@@ -810,6 +840,14 @@ impl App {
             .unwrap_or(&self.tab.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        let task = self.handle(message);
+        self.settle_deferred_label_layout();
+        // Any message may change the drawing, some (previews, background
+        // labels) without a new revision, so the next view compares afresh.
+        self.tab.forget_unsaved();
+        task
+    }
+    fn handle(&mut self, message: Message) -> Task<Message> {
         let message = match self.update_untagged(message) {
             ControlFlow::Break(task) => return task,
             ControlFlow::Continue(message) => message,
@@ -1069,13 +1107,7 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
         && a.page_layout == b.page_layout
         && a.atom_labels == b.atom_labels
         && a.bonds.len() == b.bonds.len()
-        && a.bonds.iter().zip(&b.bonds).all(|(a, b)| {
-            let mut a = a.clone();
-            let mut b = b.clone();
-            a.cip_label = None;
-            b.cip_label = None;
-            a == b
-        })
+        && a.bonds.iter().zip(&b.bonds).all(|(a, b)| same_bond(a, b))
         && a.annotations == b.annotations
         && a.molecule_names == b.molecule_names
         && a.arrows == b.arrows
@@ -1089,15 +1121,89 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
         && a.ring_fills == b.ring_fills
         && a.depth_appearance == b.depth_appearance
         && a.atoms.len() == b.atoms.len()
-        && a.atoms.iter().zip(&b.atoms).all(|(a, b)| {
-            let mut a = a.clone();
-            let mut b = b.clone();
-            a.label_h = 0;
-            b.label_h = 0;
-            a.cip_label = None;
-            b.cip_label = None;
-            a == b
-        })
+        && a.atoms.iter().zip(&b.atoms).all(|(a, b)| same_atom(a, b))
+}
+
+/// Compares bonds without their computed CIP label; listing every field makes a
+/// new one a compile error here instead of an edit the unsaved check misses.
+fn same_bond(a: &reshiki::document::Bond, b: &reshiki::document::Bond) -> bool {
+    let reshiki::document::Bond {
+        highlight,
+        ring_arc,
+        projection,
+        stereo_authoritative,
+        z_order,
+        indicator,
+        cip_label: _,
+        a: start,
+        b: end,
+        order,
+        display,
+        stereo,
+        stereo_atoms,
+        double_position,
+        secondary_display,
+        color,
+    } = a;
+    *highlight == b.highlight
+        && *ring_arc == b.ring_arc
+        && *projection == b.projection
+        && *stereo_authoritative == b.stereo_authoritative
+        && *z_order == b.z_order
+        && *indicator == b.indicator
+        && *start == b.a
+        && *end == b.b
+        && *order == b.order
+        && *display == b.display
+        && *stereo == b.stereo
+        && *stereo_atoms == b.stereo_atoms
+        && *double_position == b.double_position
+        && *secondary_display == b.secondary_display
+        && *color == b.color
+}
+
+/// Compares atoms without their computed hydrogen count and CIP label.
+fn same_atom(a: &reshiki::document::Atom, b: &reshiki::document::Atom) -> bool {
+    let reshiki::document::Atom {
+        display,
+        cip_label: _,
+        id,
+        element,
+        position,
+        depth,
+        centroid,
+        attachment,
+        charge,
+        radical_electrons,
+        marks,
+        mark_serial,
+        isotope,
+        explicit_h,
+        no_implicit,
+        aromatic,
+        stereo,
+        map_num,
+        label_h: _,
+        text_style,
+    } = a;
+    *display == b.display
+        && *id == b.id
+        && *element == b.element
+        && *position == b.position
+        && *depth == b.depth
+        && *centroid == b.centroid
+        && *attachment == b.attachment
+        && *charge == b.charge
+        && *radical_electrons == b.radical_electrons
+        && *marks == b.marks
+        && *mark_serial == b.mark_serial
+        && *isotope == b.isotope
+        && *explicit_h == b.explicit_h
+        && *no_implicit == b.no_implicit
+        && *aromatic == b.aromatic
+        && *stereo == b.stereo
+        && *map_num == b.map_num
+        && *text_style == b.text_style
 }
 
 /// Marks the results of `task` as belonging to tab `id`, unless already marked.
@@ -1108,24 +1214,35 @@ fn tagged(task: Task<Message>, id: document_tab::TabId) -> Task<Message> {
     })
 }
 
-fn export_file(contents: String, format: &'static str, details: Vec<String>) -> Task<Message> {
+fn export_file(
+    contents: String,
+    format: &'static str,
+    stem: Option<String>,
+    details: Vec<String>,
+) -> Task<Message> {
     Task::perform(
         async move {
-            Ok(save_export(contents.into_bytes(), format)
+            Ok(save_export(contents.into_bytes(), format, stem)
                 .await?
                 .map(|path| figure_export::Saved { path, details }))
         },
         Message::Exported,
     )
 }
-async fn save_export(bytes: Vec<u8>, format: &'static str) -> Result<Option<PathBuf>, String> {
+/// Exports are named after the document, or "Molecule" while it is untitled.
+async fn save_export(
+    bytes: Vec<u8>,
+    format: &'static str,
+    stem: Option<String>,
+) -> Result<Option<PathBuf>, String> {
     let extension = match format {
         "svg-office" => "svg",
         _ => format,
     };
+    let stem = stem.as_deref().unwrap_or("Molecule");
     files::save_bytes(
         "Export drawing",
-        &format!("Molecule.{extension}"),
+        &format!("{stem}.{extension}"),
         extension,
         &bytes,
     )

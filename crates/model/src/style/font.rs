@@ -7,6 +7,46 @@ pub(super) fn face(bytes: &[u8], index: u32, weight: u16) -> Option<ttf_parser::
     Some(face)
 }
 
+/// Read the files behind `families` (and the generic sans-serif) once and keep
+/// them in memory. A face backed only by its path maps the file again for
+/// every glyph lookup, which dominated export time; labels rarely use others.
+/// The crates forbid `unsafe`, so this reads rather than shares a mapping.
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn keep_resident(db: &mut resvg::usvg::fontdb::Database, families: &[&str]) {
+    use resvg::usvg::fontdb::{Family, Source};
+    let sans = db.family_name(&Family::SansSerif).to_owned();
+    let ids: Vec<_> = db
+        .faces()
+        .filter(|face| {
+            face.families
+                .iter()
+                .any(|(name, _)| *name == sans || families.contains(&name.as_str()))
+        })
+        .map(|face| face.id)
+        .collect();
+    let mut files = std::collections::HashMap::new();
+    for id in ids {
+        let Some(mut face) = db.face(id).cloned() else {
+            continue;
+        };
+        let Source::File(path) = &face.source else {
+            continue;
+        };
+        let data = files
+            .entry(path.clone())
+            .or_insert_with(|| std::fs::read(path).ok().map(std::sync::Arc::new))
+            .clone();
+        let Some(data) = data else {
+            continue;
+        };
+        face.source = Source::Binary(data);
+        // The face takes back the slot it just left, so faces keep their
+        // order and every query resolves as before.
+        db.remove_face(id);
+        db.push_face_info(face);
+    }
+}
+
 /// The browser has no system fonts. Liberation Sans has Arial's metrics, so
 /// its faces also answer to Arial, the default label family.
 /// Source and license: licenses/liberation-fonts.

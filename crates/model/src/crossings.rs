@@ -128,9 +128,9 @@ impl<'d> Sides<'d> {
         let width = width_of(display);
         let second = bond.secondary_display.as_deref().map_or(width, width_of);
         let length = self
-            .doc
+            .faces()
             .atom(bond.a)
-            .zip(self.doc.atom(bond.b))
+            .zip(self.faces().atom(bond.b))
             .map_or(0., |(a, b)| a.position.distance(b.position));
         let rail = |offset: f32, width: f32| Rail {
             span: (0., length),
@@ -209,8 +209,8 @@ impl<'d> Sides<'d> {
         trim: f32,
         width: f32,
     ) -> Option<Option<Rail>> {
-        let a = self.doc.atom(bond.a)?.position;
-        let b = self.doc.atom(bond.b)?.position;
+        let a = self.faces().atom(bond.a)?.position;
+        let b = self.faces().atom(bond.b)?.position;
         let length = a.distance(b).max(0.001);
         let axis = Point::new((b.x - a.x) / length, (b.y - a.y) / length);
         let rail = self
@@ -379,6 +379,7 @@ pub(crate) fn gaps_with_opacity(
         + style.world(style.bold_width_pt)
         + DEFAULT.world(1.1)
         + 0.001;
+    let graph = sides.faces().graph();
     let mut segments: Vec<_> = doc
         .bonds
         .iter()
@@ -387,7 +388,8 @@ pub(crate) fn gaps_with_opacity(
             if !doc.bond_visible(b.a, b.b) {
                 return None;
             }
-            Some((i, doc.atom(b.a)?.position, doc.atom(b.b)?.position))
+            let (from, to) = graph.ends(i)?;
+            Some((i, from, to))
         })
         .collect();
     segments.sort_by(|(_, a, b), (_, c, d)| a.x.min(b.x).total_cmp(&c.x.min(d.x)));
@@ -422,7 +424,7 @@ pub(crate) fn gaps_with_opacity(
                 let (Some(under), Some(over)) = (rail(rear.0), rail(front.0)) else {
                     continue;
                 };
-                let found = occlusion(doc, opacity, rear, under, front, over);
+                let found = occlusion(doc, graph, opacity, rear, under, front, over);
                 if let Some(list) = gaps.get_mut(rear.0) {
                     list.extend(found);
                 }
@@ -436,6 +438,7 @@ pub(crate) fn gaps_with_opacity(
 /// Gaps in bond `rear` (index, from, to) where it lies behind `front`'s ink.
 fn occlusion(
     doc: &Document,
+    graph: &crate::scene::graph::Graph<'_>,
     opacity: &crate::rear_opacity::Paint,
     (rear, from, to): (usize, Point, Point),
     under: &Rails,
@@ -497,7 +500,7 @@ fn occlusion(
         // knock out the ink beneath it.
         let behind = |s: f32| {
             let (t, front_t) = ((s / length).clamp(0., 1.), front_t(point(s)));
-            depth::bond_over(doc, front, front_t, rear, t)
+            depth::bond_over_with(doc, graph, front, front_t, rear, t)
                 && opacity.bond(front_bond, front_t) >= 1.
         };
         let range = (rail.span.0 - rail.width, rail.span.1 + rail.width);
@@ -528,8 +531,8 @@ fn occlusion(
             // only real crossings knock out ink, not bonds that merely pass close.
             let flat = stops.iter().all(|s| {
                 let t = (s / length).clamp(0., 1.);
-                let z = depth::at(doc, rear_bond, t);
-                let front_z = depth::at(doc, front_bond, front_t(point(*s)));
+                let z = depth::at(graph, rear_bond, t);
+                let front_z = depth::at(graph, front_bond, front_t(point(*s)));
                 z.zip(front_z)
                     .is_none_or(|(z, front_z)| (z - front_z).abs() <= 0.001)
             });
