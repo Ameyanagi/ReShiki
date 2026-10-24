@@ -826,20 +826,71 @@ pub struct History {
     undo: VecDeque<Document>,
     redo: VecDeque<Document>,
     limit: usize,
+    /// Estimated undo bytes ([`frame_bytes`]) above which the oldest frames
+    /// are dropped, down to [`History::MIN_STEPS`].
+    max_bytes: usize,
 }
-/// The editor keeps 100 undo frames.
+/// The editor keeps 100 undo frames, fewer on large drawings: about 128 MB of
+/// frames, but always at least [`History::MIN_STEPS`].
 impl Default for History {
     fn default() -> Self {
-        Self::with_limit(100)
+        Self {
+            max_bytes: 128 << 20,
+            ..Self::with_limit(100)
+        }
     }
 }
+/// Rough heap bytes of one history frame, from object counts. Pictures are
+/// shared between frames, so their data is not counted.
+fn frame_bytes(doc: &Document) -> usize {
+    use std::mem::{size_of, size_of_val as bytes};
+    // Small strings and lists each object owns, such as an element symbol.
+    const OWNED: usize = 16;
+    let objects = doc.atoms.len()
+        + doc.bonds.len()
+        + doc.annotations.len()
+        + doc.arrows.len()
+        + doc.arrow_labels.len()
+        + doc.molecule_names.len()
+        + doc.graphics.len()
+        + doc.groups.len()
+        + doc.reactions.len()
+        + doc.abbreviations.len();
+    let text: usize = doc.annotations.iter().map(|a| a.text.len()).sum();
+    let paths: usize = doc.graphics.iter().map(|g| bytes(&g.path[..])).sum();
+    let models: usize = doc
+        .models
+        .iter()
+        .map(|m| bytes(&m.atoms[..]) + bytes(&m.hydrogens[..]) + bytes(&m.sites[..]))
+        .sum();
+    size_of::<Document>()
+        + bytes(&doc.atoms[..])
+        + bytes(&doc.bonds[..])
+        + bytes(&doc.annotations[..])
+        + bytes(&doc.arrows[..])
+        + bytes(&doc.arrow_labels[..])
+        + bytes(&doc.molecule_names[..])
+        + bytes(&doc.graphics[..])
+        + bytes(&doc.groups[..])
+        + bytes(&doc.reactions[..])
+        + bytes(&doc.abbreviations[..])
+        + bytes(&doc.models[..])
+        + objects * OWNED
+        + text
+        + paths
+        + models
+}
 impl History {
-    /// An empty history that keeps at most `limit` undo frames (at least one).
+    /// Undo steps kept however large the drawing.
+    pub const MIN_STEPS: usize = 20;
+    /// An empty history that keeps at most `limit` undo frames (at least one),
+    /// whatever their size.
     pub fn with_limit(limit: usize) -> Self {
         Self {
             undo: VecDeque::new(),
             redo: VecDeque::new(),
             limit: limit.max(1),
+            max_bytes: usize::MAX,
         }
     }
     pub fn limit(&self) -> usize {
@@ -884,6 +935,12 @@ impl History {
         self.redo.clear();
         if self.undo.len() > self.limit {
             let _ = self.undo.pop_front();
+        }
+        if self.max_bytes != usize::MAX {
+            let mut total: usize = self.undo.iter().map(frame_bytes).sum();
+            while total > self.max_bytes && self.undo.len() > Self::MIN_STEPS {
+                total -= self.undo.pop_front().as_ref().map_or(0, frame_bytes);
+            }
         }
         true
     }

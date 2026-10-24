@@ -19,11 +19,14 @@ fn added_fonts_join_measurement_and_export() {
     assert!(order.contains(&family));
     assert!(order.ends_with(&fonts.added));
     drop(fonts);
-    // Export loads its own database; it gets the added font too.
+    // Export shares the measuring database; another renderer loads its own.
+    // Both get the added font.
     let mut db = resvg::usvg::fontdb::Database::new();
     load_fonts(&mut db);
-    assert!(
-        db.faces()
-            .any(|face| face.families.iter().any(|(name, _)| name == family))
-    );
+    for db in [&db, &*super::fontdb()] {
+        assert!(
+            db.faces()
+                .any(|face| face.families.iter().any(|(name, _)| name == family))
+        );
+    }
 }
