@@ -105,18 +105,21 @@ fn draw_primitives_with_opacity(
                 style,
                 filled,
             } => {
-                let path = world_path(commands, camera, bounds);
+                let width = if style.width_pt > 0. {
+                    (style.width() * camera.zoom).max(minimum)
+                } else {
+                    0.
+                };
+                let Some(path) = visible_path(commands, width, camera, bounds) else {
+                    continue;
+                };
                 if *filled && let Some(c) = style.fill {
                     frame.fill(&path, alpha(rgb(c.rgb())));
                 }
                 let dashes: Vec<_> = style.dashes().iter().map(|v| v * camera.zoom).collect();
                 let stroke = Stroke::default()
                     .with_color(alpha(rgb(style.stroke.rgb())))
-                    .with_width(if style.width_pt > 0. {
-                        (style.width() * camera.zoom).max(minimum)
-                    } else {
-                        0.
-                    })
+                    .with_width(width)
                     .with_line_cap(canvas::LineCap::Round)
                     .with_line_join(canvas::LineJoin::Round);
                 if dashes.is_empty() {
@@ -134,14 +137,22 @@ fn draw_primitives_with_opacity(
             | Primitive::Contour { .. }
             | Primitive::Wire { .. }
             | Primitive::Card { .. } => {}
-            Primitive::Line(a, b, width) => frame.stroke(
-                &Path::line(camera.screen(*a, bounds), camera.screen(*b, bounds)),
-                Stroke::default()
-                    .with_width((*width * camera.zoom).max(minimum))
-                    .with_line_cap(canvas::LineCap::Round)
-                    .with_color(alpha(Color::BLACK)),
-            ),
+            Primitive::Line(a, b, width) => {
+                let width = (*width * camera.zoom).max(minimum);
+                if !off_screen([*a, *b], width, camera, bounds) {
+                    frame.stroke(
+                        &Path::line(camera.screen(*a, bounds), camera.screen(*b, bounds)),
+                        Stroke::default()
+                            .with_width(width)
+                            .with_line_cap(canvas::LineCap::Round)
+                            .with_color(alpha(Color::BLACK)),
+                    );
+                }
+            }
             Primitive::Polygon(points) => {
+                if off_screen(points.iter().copied(), 0., camera, bounds) {
+                    continue;
+                }
                 let path = Path::new(|builder| {
                     if let Some(p) = points.first() {
                         builder.move_to(camera.screen(*p, bounds));
@@ -232,22 +243,33 @@ fn draw_halo(
                 style,
                 filled,
             } => {
-                let path = world_path(commands, camera, bounds);
-                if *filled && style.fill.is_some() {
-                    frame.fill(&path, Color::WHITE);
-                }
                 let width = if style.width_pt > 0. {
                     style.width()
                 } else {
                     0.
                 };
-                frame.stroke(&path, spread(width));
+                let stroke = spread(width);
+                let Some(path) = visible_path(commands, stroke.width, camera, bounds) else {
+                    continue;
+                };
+                if *filled && style.fill.is_some() {
+                    frame.fill(&path, Color::WHITE);
+                }
+                frame.stroke(&path, stroke);
             }
-            Primitive::Line(a, b, width) => frame.stroke(
-                &Path::line(camera.screen(*a, bounds), camera.screen(*b, bounds)),
-                spread(*width),
-            ),
+            Primitive::Line(a, b, width) => {
+                let stroke = spread(*width);
+                if !off_screen([*a, *b], stroke.width, camera, bounds) {
+                    frame.stroke(
+                        &Path::line(camera.screen(*a, bounds), camera.screen(*b, bounds)),
+                        stroke,
+                    );
+                }
+            }
             Primitive::Polygon(points) => {
+                if off_screen(points.iter().copied(), spread(0.).width, camera, bounds) {
+                    continue;
+                }
                 let path = Path::new(|builder| {
                     if let Some(p) = points.first() {
                         builder.move_to(camera.screen(*p, bounds));
@@ -275,6 +297,19 @@ fn draw_halo(
                     std::rc::Rc::new(text_cache::outline(text, *size, camera.zoom, *color, style))
                 };
                 let at = camera.screen(*position, bounds);
+                let pad = spread(0.).width;
+                let visible = paths.bounds.is_some_and(|b| {
+                    Rectangle {
+                        x: b.x + at.x - pad,
+                        y: b.y + at.y - pad,
+                        width: b.width + 2. * pad,
+                        height: b.height + 2. * pad,
+                    }
+                    .intersects(&Rectangle::with_size(bounds.size()))
+                });
+                if !visible && cull() {
+                    continue;
+                }
                 let transform =
                     iced::widget::canvas::path::lyon_path::math::Transform::translation(at.x, at.y);
                 for (path, _) in &paths.paths {
@@ -295,19 +330,82 @@ fn draw_halo(
     }
 }
 
-fn world_path(commands: &[PathCommand], camera: Camera, bounds: Rectangle) -> Path {
-    Path::new(|b| {
-        for c in commands {
-            match c {
-                PathCommand::Move(p) => b.move_to(camera.screen(*p, bounds)),
-                PathCommand::Line(p) => b.line_to(camera.screen(*p, bounds)),
-                PathCommand::Cubic(a, z, p) => b.bezier_curve_to(
-                    camera.screen(*a, bounds),
-                    camera.screen(*z, bounds),
-                    camera.screen(*p, bounds),
-                ),
-                PathCommand::Close => b.close(),
+#[cfg(test)]
+thread_local! {
+    /// Tests turn culling off to render the unculled reference.
+    pub(super) static CULL: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
+
+fn cull() -> bool {
+    #[cfg(test)]
+    return CULL.with(std::cell::Cell::get);
+    #[cfg(not(test))]
+    true
+}
+
+/// Whether a shape through `points` (a curve's control points bound it), widened
+/// by its stroke `width` and a pixel of antialiasing, misses the viewport.
+fn off_screen(
+    points: impl IntoIterator<Item = World>,
+    width: f32,
+    camera: Camera,
+    bounds: Rectangle,
+) -> bool {
+    let (mut lo, mut hi) = (
+        World::new(f32::MAX, f32::MAX),
+        World::new(f32::MIN, f32::MIN),
+    );
+    for p in points {
+        let p = camera.screen(p, bounds);
+        (lo.x, lo.y) = (lo.x.min(p.x), lo.y.min(p.y));
+        (hi.x, hi.y) = (hi.x.max(p.x), hi.y.max(p.y));
+    }
+    let pad = width + 1.;
+    cull()
+        && (hi.x < -pad || hi.y < -pad || lo.x > bounds.width + pad || lo.y > bounds.height + pad)
+}
+
+/// The subpaths that can reach the viewport, in screen space, or `None` when
+/// none can. One path may hold a whole drawing's bonds; a dropped subpath only
+/// adds winding, a stroke or dashes inside its own bounds, which are off screen.
+fn visible_path(
+    commands: &[PathCommand],
+    width: f32,
+    camera: Camera,
+    bounds: Rectangle,
+) -> Option<Path> {
+    let mut visible = false;
+    let path = Path::new(|b| {
+        let subpaths = commands.chunk_by(|_, c| !matches!(c, PathCommand::Move(_)));
+        for subpath in subpaths {
+            let points = subpath.iter().flat_map(|c| {
+                match *c {
+                    PathCommand::Move(p) | PathCommand::Line(p) => [None, None, Some(p)],
+                    PathCommand::Cubic(a, z, p) => [Some(a), Some(z), Some(p)],
+                    PathCommand::Close => [None; 3],
+                }
+                .into_iter()
+                .flatten()
+            });
+            // A path that does not begin with a move starts from the screen origin.
+            let moves = matches!(subpath.first(), Some(PathCommand::Move(_)));
+            if moves && off_screen(points, width, camera, bounds) {
+                continue;
+            }
+            visible = true;
+            for c in subpath {
+                match c {
+                    PathCommand::Move(p) => b.move_to(camera.screen(*p, bounds)),
+                    PathCommand::Line(p) => b.line_to(camera.screen(*p, bounds)),
+                    PathCommand::Cubic(a, z, p) => b.bezier_curve_to(
+                        camera.screen(*a, bounds),
+                        camera.screen(*z, bounds),
+                        camera.screen(*p, bounds),
+                    ),
+                    PathCommand::Close => b.close(),
+                }
             }
         }
-    })
+    });
+    visible.then_some(path)
 }

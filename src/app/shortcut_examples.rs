@@ -34,7 +34,7 @@ impl App {
         self.target_tab();
         self.reset_tab();
         self.tab.doc = doc;
-        self.tab.saved = self.tab.doc.clone();
+        self.tab.mark_saved(self.tab.doc.clone());
         self.tab.untitled_name = Some(NAME);
         self.sync_drawing_defaults();
         self.inspector_open = false;

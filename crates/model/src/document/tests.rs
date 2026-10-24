@@ -259,6 +259,42 @@ fn history_limits_and_exposes_frames_oldest_first() {
     assert_eq!(x(&doc), 4.);
 }
 #[test]
+fn history_caps_estimated_bytes_but_keeps_the_minimum_steps() {
+    let edits = |doc: &mut Document, history: &mut History| {
+        for _ in 0..100 {
+            let before = doc.clone();
+            doc.atoms[0].position.x += 1.;
+            assert!(history.commit(before, doc));
+        }
+    };
+    let mut small: Document = serde_json::from_str(include_str!(
+        "../../../../assets/examples/shortcut-examples.rsk"
+    ))
+    .unwrap();
+    let mut history = History::default();
+    edits(&mut small, &mut history);
+    assert_eq!(history.undo_frames().len(), 100);
+
+    let mut large = Document::default();
+    large.add_atom("C", Point::default());
+    large.atoms = vec![large.atoms[0].clone(); 12_000];
+    let mut history = History::default();
+    edits(&mut large, &mut history);
+    let kept = history.undo_frames().len();
+    assert!((History::MIN_STEPS..100).contains(&kept), "{kept}");
+    assert!(history.undo_frames().map(frame_bytes).sum::<usize>() <= history.max_bytes);
+    // The newest frames remain, and redo still replays them.
+    let last = large.clone();
+    while history.undo(&mut large) {}
+    assert_eq!(large.atoms[0].position.x, (100 - kept) as f32);
+    while history.redo(&mut large) {}
+    assert_eq!(large, last);
+
+    history.max_bytes = 0;
+    edits(&mut large, &mut history);
+    assert_eq!(history.undo_frames().len(), History::MIN_STEPS);
+}
+#[test]
 fn native_files_open_at_version_15_or_later_without_computed_labels() {
     let mut doc = Document::default();
     let a = doc.add_atom("C", Point::default());
