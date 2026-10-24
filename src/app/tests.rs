@@ -2427,6 +2427,30 @@ fn fit_uses_available_canvas_and_respects_manual_pan() {
 }
 
 #[test]
+fn pan_and_zoom_move_only_the_camera() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let before = app.tab.doc.clone();
+    app.tab.doc.add_atom("C", Point::new(0., 0.));
+    app.changed(before);
+    let document = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    let frames = app.tab.history.undo_frames().count();
+    let dirty = app.dirty();
+    app.edit(Edit::Pan(60., -20.));
+    assert_eq!(app.tab.camera.center, Point::new(-60., 20.));
+    app.edit(Edit::Zoom(1e9, Point::new(-60., 20.)));
+    assert_eq!(app.tab.camera.zoom, 5.0);
+    assert_eq!(app.tab.camera.center, Point::new(-60., 20.));
+    assert!(!app.tab.fit_to_view);
+    assert_eq!(app.tab.doc, document);
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(app.tab.history.undo_frames().count(), frames);
+    assert!(!app.tab.history.can_redo());
+    assert_eq!(app.dirty(), dirty);
+}
+
+#[test]
 fn view_aids_preserve_drawing_selection_history_and_manual_camera() {
     let (mut app, _) = App::new();
     let id = app.tab.doc.add_atom("O", Point::new(50., 20.));

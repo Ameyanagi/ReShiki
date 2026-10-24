@@ -106,3 +106,28 @@ fn editing_workloads() {
         }
     }
 }
+
+#[test]
+#[ignore = "release-mode camera benchmark"]
+fn camera_workloads() {
+    println!("workload,median_ms,p95_ms");
+    let gallery: Document =
+        serde_json::from_str(include_str!("../../assets/examples/shortcut-examples.rsk")).unwrap();
+    for copies in [1, 4, 16] {
+        let mut doc = Document::default();
+        for copy in 0..copies {
+            let offset = Point::new((copy % 4) as f32 * 1800., (copy / 4) as f32 * 1800.);
+            editing::append(&mut doc, &gallery, offset);
+        }
+        let (mut app, _) = App::new();
+        app.tab.doc = doc;
+        measure(&format!("gallery_{copies}x_pan"), || {
+            let _ = black_box(app.update(Message::Canvas(Edit::Pan(3., -2.))));
+        });
+        measure(&format!("gallery_{copies}x_zoom_in_out"), || {
+            let at = Point::new(10., 10.);
+            let _ = black_box(app.update(Message::Canvas(Edit::Zoom(1.1, at))));
+            let _ = black_box(app.update(Message::Canvas(Edit::Zoom(1. / 1.1, at))));
+        });
+    }
+}
