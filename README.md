@@ -22,7 +22,7 @@ Draw molecules, build reaction schemes, and prepare figures on an editable canva
 
 Start with JACS / ACS styling. Attach templates, refine selected structures, or ask the assistant to propose a drawing. Review edits and undo changes. Copy editable structures or export SVG, PDF, and PNG.
 
-Version 0.12 adds chemical names, NMR prediction, generic structures, atom maps, rear opacity, pen paths, attached mechanism arrows, ChemDraw-like atom labels and an experimental agent API. Older drawings open normally; drawings saved in 0.12 use document version 26 and cannot be opened in 0.11.0 or earlier. Keep a separate copy before saving if you need an earlier release. [Release notes](docs/changes-0.12.md) · [Styles and themes](docs/drawing-styles.md) · [Shortcut gallery and reference](docs/contextual-shortcuts.md).
+Version 0.13 adds 3D models (ball & stick, stick, wireframe and space-filling), crystal structures from CIF, PDB, POSCAR and XYZ files, the editor in a web browser and on npm, 359 group abbreviations and a command palette. Older drawings open normally; drawings saved in 0.13 use document version 29 and cannot be opened in 0.12.x or earlier. Keep a separate copy before saving if you need an earlier release. [Release notes](docs/changes-0.13.md) · [Styles and themes](docs/drawing-styles.md) · [Shortcut gallery and reference](docs/contextual-shortcuts.md).
 
 [Explore the color palettes](https://reshiki.com/guide/color-palettes/): each theme's Strong and Tint rows and every Presentation, Pastel, Jmol and VESTA element color in light and dark mode, with RGB, OKLCH, CSS variables and reusable theme downloads.
 
@@ -85,4 +85,4 @@ See the [documentation and evidence policy](docs/README.md) when adding guides, 
 
 ReShiki is under active development. [Report a problem](https://github.com/Ameyanagi/ReShiki/issues).
 
-See the [latest release notes](docs/changes-0.12.md) and the [shortcut list with one editable example document](docs/contextual-shortcuts.md). Group and template definitions may be extended or revised in future releases.
+See the [latest release notes](docs/changes-0.13.md) and the [shortcut list with one editable example document](docs/contextual-shortcuts.md). Group and template definitions may be extended or revised in future releases.
