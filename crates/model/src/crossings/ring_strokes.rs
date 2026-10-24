@@ -163,37 +163,37 @@ pub(crate) fn ring_stroke_with(
     let Some((lo, hi)) = bounds else {
         return (stroke, Vec::new());
     };
-    let rank = doc
-        .bonds
-        .iter()
-        .enumerate()
-        .filter(|(_, b)| ring.contains_bond(b.a, b.b))
+    // The scene's shared index: ring bonds come from their atoms' bonds, and
+    // bond ends resolve without scanning all atoms for every ring/bond pair.
+    debug_assert!(std::ptr::eq(doc, sides.doc));
+    let graph = sides.faces().graph();
+    let ring_bonds = || {
+        ring.atoms
+            .iter()
+            .flat_map(|id| graph.bonds(*id))
+            .filter(|(_, b)| ring.contains_bond(b.a, b.b))
+    };
+    let rank = ring_bonds()
         .map(|(i, b)| (b.z_order, i))
         .max()
         .unwrap_or_default();
     let mut gaps = Vec::new();
-    let plane = depth::Plane::fit(doc, &ring.atoms)
-        .or_else(|| depth::Plane::least_squares(doc, &ring.atoms));
-    let projected = doc
-        .bonds
-        .iter()
-        .any(|b| b.projection && ring.contains_bond(b.a, b.b));
-    // Resolve endpoints once instead of scanning all atoms for every ring/bond
-    // pair. Reject distant segments before checking abbreviation visibility.
-    let atoms: std::collections::HashMap<_, _> = doc.atoms.iter().map(|a| (a.id, a)).collect();
+    let atoms: Option<Vec<_>> = ring.atoms.iter().map(|id| graph.atom(*id)).collect();
+    let plane = atoms.and_then(|atoms| {
+        depth::Plane::fit(&atoms).or_else(|| depth::Plane::least_squares(&atoms))
+    });
+    let projected = ring_bonds().any(|(_, b)| b.projection);
+    // Reject distant segments before checking ring membership and
+    // abbreviation visibility.
     for (index, bond) in doc.bonds.iter().enumerate() {
-        if ring.contains_bond(bond.a, bond.b) {
-            continue;
-        }
-        let (Some(a), Some(b)) = (atoms.get(&bond.a), atoms.get(&bond.b)) else {
+        let Some((a, b)) = graph.ends(index) else {
             continue;
         };
-        let (a, b) = (a.position, b.position);
         if a.x.min(b.x) > hi.x || a.x.max(b.x) < lo.x || a.y.min(b.y) > hi.y || a.y.max(b.y) < lo.y
         {
             continue;
         }
-        if !doc.bond_visible(bond.a, bond.b) {
+        if ring.contains_bond(bond.a, bond.b) || !doc.bond_visible(bond.a, bond.b) {
             continue;
         }
         let length = a.distance(b);
@@ -225,10 +225,10 @@ pub(crate) fn ring_stroke_with(
         let rails = sides.rails(bond);
         let (lo, hi) = rails.band();
         let (lo, hi) = (lo - DEFAULT.world(1.1), hi + DEFAULT.world(1.1));
-        let layer = depth::layer(doc, bond, &ring.atoms, projected);
+        let layer = depth::layer(graph, bond, &ring.atoms, projected);
         let front = |t: f32| {
             if layer == rank.0
-                && let Some((plane, z)) = plane.as_ref().zip(depth::at(doc, bond, t))
+                && let Some((plane, z)) = plane.as_ref().zip(depth::at(graph, bond, t))
             {
                 let dz = z - plane.at(a.offset(ab.x * t, ab.y * t));
                 if dz.abs() > 0.001 {
