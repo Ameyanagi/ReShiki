@@ -277,7 +277,7 @@ impl App {
             }
             Edit::PlaneBond(start, end) => return self.place_plane_bond(start, end, before),
             Edit::Bond(start, end, a, b) => return self.place_bond(start, end, a, b, before),
-            Edit::Click(p) => return self.canvas_click(p, before),
+            Edit::Click(p) | Edit::RepeatLabel(p) => return self.canvas_click(p, before),
         }
         self.changed(before);
     }

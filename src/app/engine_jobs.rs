@@ -93,6 +93,7 @@ impl App {
             return export_file(
                 response.output.unwrap_or_default(),
                 format,
+                self.export_stem(),
                 response.warnings,
             );
         }
