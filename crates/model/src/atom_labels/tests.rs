@@ -158,3 +158,34 @@ fn atoms_hidden_in_a_collapsed_group_do_not_claim_map_numbers() {
         map.center
     );
 }
+
+/// Issue #458: the Style bar alignment reads and sets each kind of label the
+/// way ChemDraw names it, and Automatic returns a forced label to the bonds.
+#[test]
+fn label_alignment_round_trips_for_elements_and_free_text() {
+    use crate::abbreviations::LabelAlignment as A;
+    let mut doc = Document::default();
+    let o = doc.add_atom("O", Point::new(0., 0.));
+    let c = doc.add_atom("C", Point::new(20., 0.));
+    doc.add_bond(o, c, 1, "plain");
+    let text = doc.add_atom("*", Point::new(40., 0.));
+    doc.atom_mut(text).unwrap().display.variable = Some("MeO".into());
+    for id in [o, text] {
+        assert_eq!(alignment(&doc, id), Some(A::Auto));
+        for value in [A::Left, A::Right, A::Auto] {
+            set_alignment(&mut doc, id, value);
+            assert_eq!(alignment(&doc, id), Some(value));
+        }
+    }
+    set_alignment(&mut doc, o, A::Left);
+    assert_eq!(
+        doc.atom(o).unwrap().display.hydrogen_position,
+        HydrogenPosition::Right,
+        "Flush left reads OH"
+    );
+    set_alignment(&mut doc, o, A::Center);
+    assert_eq!(alignment(&doc, o), Some(A::Left), "no centered element");
+    set_alignment(&mut doc, text, A::Center);
+    set_alignment(&mut doc, text, A::Above);
+    assert_eq!(alignment(&doc, text), Some(A::Center), "no stacked text");
+}
