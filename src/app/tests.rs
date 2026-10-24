@@ -2433,6 +2433,78 @@ fn fit_uses_available_canvas_and_respects_manual_pan() {
 }
 
 #[test]
+fn pan_and_zoom_move_only_the_camera() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let before = app.tab.doc.clone();
+    app.tab.doc.add_atom("C", Point::new(0., 0.));
+    app.changed(before);
+    let document = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    let frames = app.tab.history.undo_frames().count();
+    let dirty = app.dirty();
+    app.edit(Edit::Pan(60., -20.));
+    assert_eq!(app.tab.camera.center, Point::new(-60., 20.));
+    app.edit(Edit::Zoom(1e9, Point::new(-60., 20.)));
+    assert_eq!(app.tab.camera.zoom, 5.0);
+    assert_eq!(app.tab.camera.center, Point::new(-60., 20.));
+    assert!(!app.tab.fit_to_view);
+    assert_eq!(app.tab.doc, document);
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(app.tab.history.undo_frames().count(), frames);
+    assert!(!app.tab.history.can_redo());
+    assert_eq!(app.dirty(), dirty);
+}
+
+#[test]
+fn pan_after_labels_land_moves_only_the_camera() {
+    use reshiki::arrow_anchors::{Anchor, Target};
+    use reshiki::arrows::{ArrowStyle, Preset};
+    use reshiki::atom_labels::refresh::Refresh;
+    use reshiki::document::Arrow;
+    let (mut app, _) = App::new();
+    app.tab.doc = Document::default();
+    let carbon = app.tab.doc.add_atom("C", Point::default());
+    let oxygen = app.tab.doc.add_atom("C", Point::new(42., 0.));
+    app.tab.doc.add_bond(carbon, oxygen, 1, "plain");
+    let mut arrow = Arrow::new(
+        app.tab.doc.next_id(),
+        Point::new(42., 0.),
+        Point::new(200., -140.),
+        Preset::Curved,
+        ArrowStyle::preset(Preset::Curved),
+    );
+    arrow.start_anchor = Some(Anchor {
+        target: Target::Atom { atom: oxygen },
+        offset: Point::default(),
+        direction: Point::new(0.75, -0.66),
+        gap: 0.,
+    });
+    app.tab.doc.arrows.push(arrow);
+    app.tab.selected = vec![oxygen];
+    let _ = app.update(Message::ContextKey("o".into()));
+    let key = app.tab.label_refresh.pending_key().unwrap();
+    let start = app.tab.doc.arrows[0].start;
+    let labels = Refresh::calculate(&app.tab.doc, &Default::default()).map(std::sync::Arc::new);
+    let _ = app.update(Message::LabelsReady(key, labels));
+    assert_eq!(app.tab.doc.atom(oxygen).unwrap().label_h, 1);
+    // The arrow cleared the new H as the labels landed.
+    assert!(app.tab.doc.arrows[0].start.distance(start) > 1.);
+    let document = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    let frames = app.tab.history.undo_frames().count();
+    let redo = app.tab.history.can_redo();
+    let dirty = app.dirty();
+    app.edit(Edit::Pan(3., -2.));
+    app.edit(Edit::Zoom(1.1, Point::new(10., 10.)));
+    assert_eq!(app.tab.doc, document);
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(app.tab.history.undo_frames().count(), frames);
+    assert_eq!(app.tab.history.can_redo(), redo);
+    assert_eq!(app.dirty(), dirty);
+}
+
+#[test]
 fn view_aids_preserve_drawing_selection_history_and_manual_camera() {
     let (mut app, _) = App::new();
     let id = app.tab.doc.add_atom("O", Point::new(50., 20.));
