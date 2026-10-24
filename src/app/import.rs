@@ -568,10 +568,6 @@ impl App {
     }
 
     pub(super) fn import_panel(&self) -> Element<'_, Message> {
-        // The browser build has no name parser yet, so it imports structures only.
-        if cfg!(target_arch = "wasm32") {
-            return self.structure_import_panel();
-        }
         let kind = self.imports.kind;
         let modes = row![
             reshiki::accessibility::button(

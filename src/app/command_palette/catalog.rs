@@ -371,14 +371,11 @@ pub(crate) fn build(app: &App) -> Vec<Command> {
 }
 
 /// Commands the browser build cannot run: the assistant needs a local Codex
-/// process, naming its parser workers, and printing a native dialog.
+/// process, and printing a native dialog.
 fn browser_unavailable(message: &Message) -> bool {
     matches!(
         message,
-        Message::Assistant(_)
-            | Message::Naming(_)
-            | Message::Printing(_)
-            | Message::Inspector(InspectorTab::Assistant | InspectorTab::Names)
+        Message::Assistant(_) | Message::Printing(_) | Message::Inspector(InspectorTab::Assistant)
     )
 }
 
