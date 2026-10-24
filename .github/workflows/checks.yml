@@ -259,6 +259,36 @@ jobs:
         run: cargo test --locked --features rdkit-reference --test inchi_reader --test depict_geometry --test depict_rings --test depict_attachment --test depict_seeds --test depict_templates --test depict_collision --test depict_expansion --test depict_finalize --no-fail-fast
       - name: Replay complete aromatic response fixtures
         run: cargo test --locked --features rdkit-reference --test native_aromatic complete_aromatic_responses_match_goldens -- --exact
+  # The browser build: the editor and the headless library for wasm32, as
+  # scripts/build_wasm.sh builds them, and the packages/editor tests. The
+  # tests load an unoptimised debug build; only releases build the bundle.
+  browser:
+    name: Browser build (wasm32)
+    needs: scope
+    if: needs.scope.outputs.native == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - run: rustup toolchain install 1.99.0 --profile minimal --component clippy --target wasm32-unknown-unknown
+      - run: rustup default 1.99.0
+      - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
+        with:
+          shared-key: wasm32
+      - name: Check the browser editor, its worker and the headless library for wasm32
+        run: cargo clippy -p reshiki-web -p reshiki -p reshiki-web-worker --lib --bin reshiki --target wasm32-unknown-unknown --locked -- -D warnings
+      - name: Build the headless library for the package tests
+        run: |
+          version=$(awk '$0 == "name = \"wasm-bindgen\"" { getline; gsub(/"/, "", $3); print $3 }' Cargo.lock)
+          cargo install wasm-bindgen-cli --version "$version" --locked
+          cargo build -p reshiki-web --lib --target wasm32-unknown-unknown --locked
+          wasm-bindgen --target web --out-dir packages/editor/dist/wasm target/wasm32-unknown-unknown/debug/reshiki_web.wasm
+      - name: Test the browser package
+        working-directory: packages/editor
+        run: bun test
   geometry:
     name: Rust geometry (${{ matrix.target }})
     needs: scope

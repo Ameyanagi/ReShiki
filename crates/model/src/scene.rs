@@ -45,13 +45,15 @@ pub enum Primitive {
     },
     /// A shaded 3D-model ball: a two-point radial gradient from a circle of
     /// `radius × models3d::FOCAL_RADIUS` at `focal` out to the disc. Colors
-    /// are exact; no canvas theme changes them.
+    /// are exact; no canvas theme changes them. With a `contact` it fills
+    /// only the part of the disc the balls it overlaps leave visible.
     Sphere {
         center: Point,
         radius: f32,
         focal: Point,
         stops: Vec<(f32, [u8; 3])>,
         outline: Option<Outline>,
+        contact: Option<Box<Contact>>,
     },
     /// A shaded 3D-model bond half: `corners` filled with a linear gradient
     /// from `from` to `to`, in exact colors. The outline strokes the two long
@@ -78,12 +80,15 @@ pub enum Primitive {
         polygons: Vec<Vec<Point>>,
         outline: Outline,
     },
-    /// A 3D-model wireframe half-bond: a round-capped line in an exact color.
+    /// A 3D-model wireframe half-bond: a round-capped line in an exact color,
+    /// or with `dash` above 0 a dashed one with dashes and gaps that long,
+    /// as a crystal's hidden cell edges and bonds leaving the cell are.
     Wire {
         from: Point,
         to: Point,
         width: f32,
         color: [u8; 3],
+        dash: f32,
     },
     /// A 3D model's soft background card: a rounded rectangle in exact colors.
     Card {
@@ -93,6 +98,33 @@ pub enum Primitive {
         fill: [u8; 3],
         outline: Outline,
     },
+}
+/// Where a 3D-model ball meets the balls it overlaps.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Contact {
+    /// The visible part of the ball, outer contours and holes filled
+    /// even-odd, drawn in place of the disc. Points on the disc's rim are
+    /// joined by its arc.
+    pub region: Vec<Vec<Point>>,
+    /// The visible runs of the rim, outlined in place of the whole circle.
+    pub rim: Vec<Vec<Point>>,
+    /// Where it meets balls drawn before it, outlined.
+    pub seams: Vec<Vec<Point>>,
+}
+impl std::hash::Hash for Contact {
+    /// Every coordinate's bits, cheaper than its `Debug` text for a cache key.
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let point = |p: Point, state: &mut H| {
+            p.x.to_bits().hash(state);
+            p.y.to_bits().hash(state);
+        };
+        for line in [&self.region, &self.rim, &self.seams] {
+            for run in line {
+                run.iter().for_each(|p| point(*p, state));
+                u32::MAX.hash(state);
+            }
+        }
+    }
 }
 /// An exact, translucent stroke around a 3D-model shape.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1018,7 +1050,7 @@ fn text_bounds(runs: &[Primitive]) -> Option<(Point, Point)> {
         })
 }
 
-fn label_ink_boxes(runs: &[Primitive]) -> Vec<(Point, Point)> {
+pub(crate) fn label_ink_boxes(runs: &[Primitive]) -> Vec<(Point, Point)> {
     runs.iter()
         .flat_map(|run| {
             if let Primitive::Text {
@@ -1099,6 +1131,27 @@ pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<
             && let Some(corners) = crate::models3d::frame_corners(doc, model)
         {
             grow(id, &mut corners.into_iter());
+        }
+    }
+    // A crystal drawn in 2D and wholly in one selection holds its cell box
+    // and axis labels too; split across selections, each part is measured
+    // alone.
+    for model in doc
+        .models
+        .iter()
+        .filter(|m| m.display != crate::models3d::Display::ThreeD && m.cell.is_some())
+    {
+        let owner = model.atoms.first().and_then(|a| owners.get(&a.id));
+        if let Some(id) = model.atoms.first().map(|a| a.id)
+            && owner.is_some()
+            && model.atoms.iter().all(|a| owners.get(&a.id) == owner)
+        {
+            let cells = crate::models3d::flat_cells(std::slice::from_ref(model), doc);
+            let ink: Vec<_> = [cells.behind, cells.front, cells.above].concat();
+            if !ink.is_empty() {
+                let (lo, hi) = self::bounds(&ink);
+                grow(id, &mut [lo, hi].into_iter());
+            }
         }
     }
     for atom in doc
@@ -1218,7 +1271,7 @@ fn trimmed_span(
     })
 }
 
-fn label_end(
+pub(crate) fn label_end(
     origin: Point,
     ux: f32,
     uy: f32,
@@ -1369,8 +1422,15 @@ pub fn primitives_with_opacity(
     let mut out = vec![];
     let mut graphics: Vec<_> = doc.graphics.iter().collect();
     graphics.sort_by_key(|g| g.layer);
-    let halos = orbital_halos(doc, &graphics, &inputs.labels().runs, opacity);
+    let mut halos = orbital_halos(doc, &graphics, &inputs.labels().runs, opacity);
+    let cells = crate::models3d::flat_cells(&raw.models, doc);
+    for id in cells.haloed {
+        if !halos.contains(id) {
+            halos.atoms.push((id, None));
+        }
+    }
     push_underlays(&mut out, doc, &graphics, opacity);
+    out.extend(cells.behind);
     let rings = push_ring_strokes(&mut out, doc, opacity);
     let pass = BondPass::new(&inputs);
     let doc = pass.doc;
@@ -1402,9 +1462,11 @@ pub fn primitives_with_opacity(
     if opacity.has_visibility() {
         paint_rear_before_front(&mut out, bond_paint_start);
     }
+    out.extend(cells.front);
     let runs = &pass.labels.runs;
     push_atom_labels(&mut out, doc, runs, opacity, &halos);
     push_label_halo(&mut out, doc, runs, opacity, &halos.above(None));
+    out.extend(cells.above);
     out.extend(crate::models3d::primitives(raw));
     push_arrows_and_annotations(&mut out, doc);
     for graphic in graphics.iter().filter(|g| g.layer >= 0) {
@@ -2408,10 +2470,19 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
                 center,
                 radius,
                 outline,
+                contact,
                 ..
             } => {
                 let r = radius + outline.map_or(0., |o| o.width / 2.);
                 points.extend([center.offset(-r, -r), center.offset(r, r)]);
+                // Under perspective a ball's outline reaches a little past
+                // its disc.
+                if let Some(contact) = contact {
+                    let r = outline.map_or(0., |o| o.width / 2.);
+                    for p in contact.region.iter().flatten() {
+                        points.extend([p.offset(-r, -r), p.offset(r, r)]);
+                    }
+                }
             }
             Primitive::ShadedQuad { corners, .. } => points.extend(corners),
             Primitive::ShadedPolygon { points: p, .. } => points.extend(p),

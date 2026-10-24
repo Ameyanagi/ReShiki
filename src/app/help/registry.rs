@@ -6,7 +6,7 @@
 //! drawing uses (`reshiki::hotkeys`), and their previews run those edits.
 use super::super::{
     Message, optimization, printing,
-    shortcuts::{self, keys},
+    shortcuts::{self, TabKey, keys, tab_keys},
 };
 use iced::keyboard::Modifiers;
 use reshiki::editing::Transform;
@@ -443,7 +443,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             &["conformer", "mmff", "uff", "geometry"],
         ),
         entry(
-            if cfg!(windows) {
+            if crate::platform::windows() {
                 keys(alt, "K")
             } else {
                 keys(command | alt, "K")
@@ -487,7 +487,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             &["file", "write", "store"],
         ),
         entry(
-            keys(command, "W"),
+            tab_keys(TabKey::Close),
             "Close tab",
             "Close the current tab",
             Anywhere,
@@ -496,8 +496,8 @@ pub(crate) fn entries() -> Vec<Entry> {
         entry(
             format!(
                 "{} / {}",
-                keys(Modifiers::CTRL, "Tab"),
-                keys(Modifiers::CTRL | shift, "Tab")
+                tab_keys(TabKey::Next),
+                tab_keys(TabKey::Previous)
             ),
             "Next / previous tab",
             "Switch between open drawings",
@@ -554,11 +554,11 @@ pub(crate) fn entries() -> Vec<Entry> {
             &["guides", "view", "measure"],
         ),
         entry(
-            if cfg!(target_os = "macos") {
+            if crate::platform::mac() {
                 format!(
                     "{} / {} scroll",
                     keys(command, ""),
-                    keys(Modifiers::CTRL, "")
+                    keys(crate::platform::control_modifier(), "")
                 )
             } else {
                 format!("{} scroll", keys(command, ""))
@@ -569,6 +569,10 @@ pub(crate) fn entries() -> Vec<Entry> {
             &["magnify", "pan", "scroll"],
         ),
     ]);
+    if cfg!(target_arch = "wasm32") {
+        // The browser has no print dialog to show.
+        list.retain(|entry| entry.name != "Print");
+    }
     list
 }
 

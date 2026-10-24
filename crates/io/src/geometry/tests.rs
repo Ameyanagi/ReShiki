@@ -588,3 +588,103 @@ fn flattening_a_model_projects_its_view_at_the_drawing_centre_and_scale() {
         assert!((depth + (i as f32 - 1.) * 1.5 * units).abs() < 1e-3);
     }
 }
+
+/// #409: links to what the prepared molecule leaves out (its name caption, an
+/// arrow's condition text, another molecule's depth fade) never stop a model.
+#[test]
+fn links_outside_the_molecule_do_not_stop_a_model() {
+    use crate::arrow_labels::{ArrowLabel, Side};
+    use crate::arrows::{ArrowStyle, Preset};
+    use crate::document::Arrow;
+    fn text(doc: &mut Document, text: &str, at: Point) -> u64 {
+        let id = doc.next_id();
+        doc.annotations.push(Annotation {
+            id,
+            position: at,
+            text: text.into(),
+            format: Default::default(),
+        });
+        id
+    }
+    let named: fn(&mut Document) = |doc| {
+        let annotation = text(doc, "ethanol", Point::new(120., 140.));
+        doc.molecule_names
+            .push(crate::molecule_names::MoleculeName {
+                annotation,
+                atoms: vec![41, 3, 89],
+                smiles: "CCO".into(),
+                text: "ethanol".into(),
+            });
+    };
+    let labelled: fn(&mut Document) = |doc| {
+        let arrow = doc.next_id();
+        doc.arrows.push(Arrow::new(
+            arrow,
+            Point::new(300., 100.),
+            Point::new(420., 100.),
+            Preset::Forward,
+            ArrowStyle::preset(Preset::Forward),
+        ));
+        let annotation = text(doc, "heat", Point::new(350., 80.));
+        doc.arrow_labels.push(ArrowLabel {
+            arrow,
+            annotation,
+            side: Side::Above,
+        });
+    };
+    let faded: fn(&mut Document) = |doc| {
+        let methane = doc.add_atom("C", Point::new(400., 100.));
+        let scope = crate::depth_appearance::Scope::alpha_only(doc, vec![methane], 0.5);
+        doc.depth_appearance.push(scope);
+    };
+    let linked: fn(&mut Document) = |doc| {
+        let chain: Vec<_> = (0..3)
+            .map(|n| doc.add_atom("C", Point::new(400. + n as f32 * 42., 100.)))
+            .collect();
+        doc.add_bond(chain[0], chain[1], 1, "plain");
+        doc.add_bond(chain[1], chain[2], 1, "plain");
+        doc.generic.links.push(crate::generic::LinkNode {
+            atom: chain[1],
+            min: 1,
+            max: 3,
+        });
+    };
+    for link in [named, labelled, faded, linked] {
+        let mut doc = ethanol();
+        link(&mut doc);
+        doc.validate().unwrap();
+        let prepared = Prepared::new(&doc, &[3]).unwrap();
+        let mut model = prepared.model(&optimized(&prepared, vec![])).unwrap();
+        model.display = crate::models3d::Display::Both;
+        let links = (
+            doc.molecule_names.clone(),
+            doc.arrow_labels.clone(),
+            doc.depth_appearance.clone(),
+            doc.generic.clone(),
+        );
+        doc.models.push(model);
+        doc.require_version(crate::document::MODELS_3D);
+        doc.validate().unwrap();
+        assert_eq!(
+            (
+                doc.molecule_names,
+                doc.arrow_labels,
+                doc.depth_appearance,
+                doc.generic
+            ),
+            links
+        );
+    }
+    // A link node on the molecule itself is still refused.
+    let mut doc = ethanol();
+    doc.generic.links.push(crate::generic::LinkNode {
+        atom: 3,
+        min: 1,
+        max: 3,
+    });
+    doc.validate().unwrap();
+    assert!(matches!(
+        Prepared::new(&doc, &[3]),
+        Err(Error::Unsupported(_))
+    ));
+}

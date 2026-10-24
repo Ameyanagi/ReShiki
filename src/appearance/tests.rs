@@ -24,6 +24,7 @@ fn dropdown_partial_redraws_preserve_unchanged_pixels() {
                 "Presentation",
                 "Pastel",
                 "Jmol",
+                "VESTA",
                 "Manage themes…",
             ],
         ] {

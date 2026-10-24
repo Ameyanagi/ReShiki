@@ -377,3 +377,34 @@ fn transparent_label_halo_reaches_vector_readers_as_a_named_knockout_mask() {
         "A transparent PDF knocks the halo out with a soft mask"
     );
 }
+
+/// Space-filling balls that overlap export as the visible part of each, a
+/// filled path with no contact shadow over it; PDF and PNG render it.
+#[test]
+fn space_filling_models_export_their_visible_parts_as_clipped_paths() {
+    use crate::models3d::{Display, ForceField, Model3d, Placed, Style, set_display};
+    let mut doc = Document::default();
+    let c = doc.add_atom("C", crate::document::Point::new(0., 0.));
+    let o = doc.add_atom("O", crate::document::Point::new(30., 0.));
+    doc.add_bond(c, o, 2, "plain");
+    let atoms = [(c, [-0.6, 0., -0.2]), (o, [0.6, 0., 0.2])]
+        .map(|(id, xyz)| Placed { id, xyz })
+        .to_vec();
+    let mut model = Model3d::new(&doc, atoms, vec![], ForceField::Mmff94s);
+    model.style = Style::SpaceFilling;
+    doc.models.push(model);
+    doc.require_version(crate::document::MODELS_3D);
+    assert!(set_display(&mut doc, 0, Display::ThreeD));
+
+    let svg = String::from_utf8(figure(&doc, "svg").unwrap().bytes).unwrap();
+    let region = "fill-rule=\"evenodd\" fill=\"url(#";
+    assert_eq!(svg.matches(region).count(), 2);
+    assert!(!svg.contains("<circle"));
+    // No shadow: nothing clipped to a ball and no translucent black fills.
+    assert!(!svg.contains("<clipPath") && !svg.contains("fill-opacity="));
+    assert!(!svg.contains("fill=\"rgb(0,0,0)\""));
+    let pdf = figure(&doc, "pdf").unwrap().bytes;
+    assert!(pdf.starts_with(b"%PDF"));
+    let png = figure(&doc, "png").unwrap().bytes;
+    assert!(png.starts_with(b"\x89PNG"));
+}

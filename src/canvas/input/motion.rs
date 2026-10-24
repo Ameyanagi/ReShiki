@@ -39,7 +39,7 @@ impl MoleculeCanvas<'_> {
             let p = self.camera.world(point?, bounds);
             *dragged |= pressed.distance(p) > 3.0 / self.camera.zoom;
             let bond = self.bond_drawing.unconstrained(state.modifiers.alt());
-            *snaking |= state.modifiers.control();
+            *snaking |= crate::platform::control(state.modifiers);
             if *snaking {
                 chains::snake(
                     points,

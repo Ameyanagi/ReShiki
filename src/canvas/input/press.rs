@@ -65,10 +65,6 @@ impl MoleculeCanvas<'_> {
         if self.tool == Tool::Tilt {
             return self.press_tilt(state, p, point);
         }
-        if let Some(action) = self.press_model_bar(state, point, bounds) {
-            state.last_click = None;
-            return Some(action);
-        }
         if let Tool::StretchBond { fixed, moving } = self.tool {
             return self.press_stretch(state, p, fixed, moving);
         }
@@ -393,6 +389,11 @@ impl MoleculeCanvas<'_> {
                     )
                     .is_some(),
             }),
+            // Option/Alt-click repeats the last label, as in ChemDraw. The app
+            // detects double-clicks: opening the label editor rebuilds the view.
+            Tool::Text if state.modifiers.alt() => {
+                return Some(Action::publish(Edit::RepeatLabel(p)).and_capture());
+            }
             _ => return Some(Action::publish(Edit::Click(p)).and_capture()),
         };
         Some(Action::publish(Edit::Hover(None)).and_capture())

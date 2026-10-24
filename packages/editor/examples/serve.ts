@@ -1,6 +1,7 @@
 // Serve this package for the demo pages: `bun examples/serve.ts`, then open
-// http://localhost:8080/ for the editor alone, /examples/api.html for the
-// JavaScript API demo or /examples/iframe.html for two embedded editors.
+// http://localhost:8080/ for the editor alone, /examples/demo.html for the
+// reshiki.com/demo/ page, /examples/api.html for the JavaScript API demo or
+// /examples/iframe.html for two embedded editors.
 // Set PORT to use another port.
 import { normalize, resolve, sep } from "node:path";
 
@@ -22,4 +23,5 @@ Bun.serve({
   },
 });
 console.log(`ReShiki editor: http://localhost:${port}/`);
+console.log(`reshiki.com/demo/ page: http://localhost:${port}/examples/demo.html`);
 console.log(`JavaScript API demo: http://localhost:${port}/examples/api.html`);

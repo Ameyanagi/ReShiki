@@ -180,16 +180,31 @@ impl Prepared {
                 "ring-centre or multi-centre attachment drawings",
             ));
         }
+        let generic = &source.generic;
+        if generic.links.iter().any(|l| selected.contains(&l.atom))
+            || generic
+                .repeats
+                .iter()
+                .any(|u| u.members.iter().any(|id| selected.contains(id)))
+        {
+            return Err(Error::Unsupported("link nodes or repeating units"));
+        }
         let mut part = source.clone();
         part.atoms.retain(|a| selected.contains(&a.id));
         part.bonds
             .retain(|b| selected.contains(&b.a) && selected.contains(&b.b));
+        // Only the molecule's own chemistry is kept. Whatever links to what is
+        // left out goes with it, such as its name caption (#409).
         part.annotations.clear();
+        part.molecule_names.clear();
         part.arrows.clear();
+        part.arrow_labels.clear();
         part.graphics.clear();
         part.groups.clear();
         part.reactions.clear();
         part.ring_fills.clear();
+        part.depth_appearance.clear();
+        part.generic = Default::default();
         part.models.clear();
         part.abbreviations
             .retain(|a| a.members.iter().all(|id| selected.contains(id)));

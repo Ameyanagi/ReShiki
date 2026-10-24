@@ -1,0 +1,116 @@
+//! Questions the app asks in its own dialog: whether to save a drawing before
+//! closing it, and notices to acknowledge. The desktop asks with the system's
+//! dialogs; the browser's confirm() has only OK and Cancel, so the browser
+//! build asks here instead.
+use super::{
+    App, Message,
+    help::modal,
+    workspace::{control, muted_text},
+};
+use iced::keyboard::{Key, Modifiers, key::Named};
+use iced::widget::{Space, column, row, stack, text};
+use iced::{Alignment, Element, Length};
+
+/// Whether this build asks in the app's own dialog.
+pub(super) const IN_APP: bool = cfg!(target_arch = "wasm32");
+
+#[derive(Debug, Clone)]
+pub(super) enum Prompt {
+    /// Save, Don’t Save or Cancel for the drawing with this name, before the
+    /// pending action goes on.
+    Save(String),
+    /// A notice with one OK button, which sends `then`.
+    Notice {
+        title: String,
+        text: String,
+        then: Box<Message>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Answer {
+    /// Save, or OK for a notice; Enter.
+    Save,
+    DontSave,
+    /// Cancel; Escape or a click outside the dialog. A notice takes it as OK.
+    Cancel,
+}
+
+impl Prompt {
+    /// The message that answers the question, as the system dialog's would.
+    pub(super) fn answer(self, answer: Answer) -> Message {
+        match self {
+            Self::Save(_) => match answer {
+                Answer::Save => Message::Save,
+                Answer::DontSave => Message::Discard,
+                Answer::Cancel => Message::Cancel,
+            },
+            Self::Notice { then, .. } => *then,
+        }
+    }
+}
+
+/// Enter answers with the default button and Escape cancels; other keys stay
+/// in the dialog.
+pub(super) fn modal_key(key: &Key, modifiers: Modifiers) -> Option<Message> {
+    if !modifiers.is_empty() {
+        return None;
+    }
+    match key {
+        Key::Named(Named::Enter) => Some(Message::Prompt(Answer::Save)),
+        Key::Named(Named::Escape) => Some(Message::Prompt(Answer::Cancel)),
+        _ => None,
+    }
+}
+
+impl App {
+    pub(super) fn with_prompt<'a>(&'a self, base: Element<'a, Message>) -> Element<'a, Message> {
+        let Some(prompt) = &self.prompt else {
+            // Keep the workspace at the same child position, as Help does.
+            return stack![base].into();
+        };
+        let button = |id, label: &'static str, answer, primary| {
+            reshiki::accessibility::button(id, label, text(label).size(13))
+                .padding([7, 14])
+                .on_press(Message::Prompt(answer))
+                .style(control(primary))
+        };
+        let (title, description, buttons) = match prompt {
+            Prompt::Save(name) => (
+                format!("Do you want to save the changes you made to “{name}”?"),
+                "Your changes will be lost if you don’t save them.".to_owned(),
+                row![
+                    button("prompt-dont-save", "Don’t Save", Answer::DontSave, false),
+                    Space::new().width(Length::Fill),
+                    button("prompt-cancel", "Cancel", Answer::Cancel, false),
+                    button("prompt-save", "Save", Answer::Save, true),
+                ],
+            ),
+            Prompt::Notice { title, text, .. } => (
+                title.clone(),
+                text.clone(),
+                row![
+                    Space::new().width(Length::Fill),
+                    button("prompt-ok", "OK", Answer::Save, true),
+                ],
+            ),
+        };
+        let content = column![
+            text(title).size(15),
+            text(description).size(13).style(muted_text),
+            Space::new().height(Length::Fill),
+            buttons.spacing(8).align_y(Alignment::Center),
+        ]
+        .spacing(10);
+        modal(
+            base,
+            content.into(),
+            440.,
+            180.,
+            Message::Prompt(Answer::Cancel),
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests;

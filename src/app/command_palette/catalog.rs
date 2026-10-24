@@ -6,7 +6,7 @@ use super::super::{
     keyboard_drawing, models3d, naming, nmr, numeric_transforms,
     numeric_transforms::Field,
     optimization, pages, palettes, printing, reaction_mapping, reactions,
-    shortcuts::{self, keys},
+    shortcuts::{self, TabKey, keys, tab_keys},
     tabs, view_settings,
 };
 use crate::canvas::Tool;
@@ -361,7 +361,22 @@ pub(crate) fn build(app: &App) -> Vec<Command> {
     list.extend(files());
     list.extend(view(app));
     list.extend(tools());
+    if cfg!(target_arch = "wasm32") {
+        list.retain(|command| match &command.run {
+            Run::Send(messages) => !messages.iter().any(browser_unavailable),
+            _ => true,
+        });
+    }
     list
+}
+
+/// Commands the browser build cannot run: the assistant needs a local Codex
+/// process, and printing a native dialog.
+fn browser_unavailable(message: &Message) -> bool {
+    matches!(
+        message,
+        Message::Assistant(_) | Message::Printing(_) | Message::Inspector(InspectorTab::Assistant)
+    )
 }
 
 fn inserts(app: &App) -> Vec<Command> {
@@ -985,7 +1000,7 @@ fn files() -> Vec<Command> {
             "quit",
             Message::Tabs(tabs::Action::Close(None)),
         )
-        .keys(keys(command, "W"))
+        .keys(tab_keys(TabKey::Close))
         .alias(&["q", "quit", "close"]),
         Command::new(
             "Close tab without saving",
@@ -1010,7 +1025,7 @@ fn files() -> Vec<Command> {
             "cycle switch",
             Message::Tabs(tabs::Action::Cycle(true)),
         )
-        .keys(keys(Modifiers::CTRL, "Tab"))
+        .keys(tab_keys(TabKey::Next))
         .alias(&["tabn", "tabnext"]),
         send(
             "Previous tab",
@@ -1019,7 +1034,7 @@ fn files() -> Vec<Command> {
             "cycle switch",
             Message::Tabs(tabs::Action::Cycle(false)),
         )
-        .keys(keys(Modifiers::CTRL | shift, "Tab"))
+        .keys(tab_keys(TabKey::Previous))
         .alias(&["tabp", "tabprevious"]),
         send(
             "Import structure or name",

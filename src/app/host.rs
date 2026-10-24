@@ -16,10 +16,71 @@ impl App {
             // without ending the edit.
             Request::Snapshot(id) => crate::web::reply(id, self.inline_candidate()),
             Request::Close => return iced::exit(),
-            // The canvas sees the new font when it draws after this update.
-            Request::Redraw => {}
+            // The canvas sees the new font when it draws after this update;
+            // the interface's text is shaped again with it now.
+            Request::Redraw => crate::canvas::prepare_fonts(),
+            // As Redraw, once the fonts are in.
+            Request::AddFonts(fonts) => {
+                crate::web::add_kept_fonts(fonts);
+                crate::canvas::prepare_fonts();
+            }
+            Request::Stored { key, failure } => return self.stored(&key, failure),
+            Request::Drag(files) => self.browser_drag(files),
+            // Open or insert them as chosen files, through the same checks.
+            // The import keeps the tab and drawing the files were dropped
+            // on, whichever is in front once they are read.
+            Request::Drop(files) => {
+                let (id, ticket) = (self.tab.id, self.import_ticket());
+                let read = crate::web::read_files(files, super::import::limit);
+                return Task::perform(read, move |files| {
+                    let files = files.map(super::files::browser_files);
+                    let read = super::import::Action::Read(ticket, files);
+                    Message::Tab(id, Box::new(Message::Imports(read)))
+                });
+            }
         }
         Task::none()
+    }
+
+    /// Read a file in browser storage again after it changed under the app,
+    /// so the next save starts from it, and say why a change was not kept.
+    fn stored(&mut self, key: &str, failure: Option<String>) -> Task<Message> {
+        if let Some(failure) = failure {
+            self.status = failure;
+            self.error = true;
+            // A draft reported saved was not kept: write it again on the
+            // next tick.
+            if key.starts_with("recovery/") {
+                self.each_tab(|app| {
+                    let session = app.tab.recovery.as_ref().map(|r| r.session.as_path());
+                    if session.and_then(reshiki::storage::browser::key).as_deref() == Some(key) {
+                        app.tab.autosaved_revision = None;
+                    }
+                });
+            }
+        }
+        match key {
+            "appearance.json" => self.appearance = crate::appearance::Settings::load(),
+            "abbreviations.json" => {
+                self.abbreviations.catalog_warning = super::abbreviations::load_user_catalog();
+            }
+            "templates.json" if !self.templates.pending() => {
+                let reload = super::template_library::Action::Reload;
+                return Task::done(Message::Templates(reload));
+            }
+            key if key.starts_with("themes/") => self.theme_library.reload(),
+            _ => {}
+        }
+        Task::none()
+    }
+
+    /// Interface text that can hold any script: the open tabs' names and the
+    /// status, which often names a file.
+    pub(crate) fn interface_text(&self) -> impl Iterator<Item = String> + '_ {
+        std::iter::once(&self.tab)
+            .chain(&self.tabs.background)
+            .map(|tab| tab.name())
+            .chain([self.status.clone()])
     }
 
     /// The drawing in front and its revision, which changes with every edit.

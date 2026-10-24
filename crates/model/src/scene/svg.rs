@@ -109,6 +109,82 @@ fn outline_paint(outline: Option<super::Outline>) -> String {
     })
 }
 
+/// Appends 3D-model path data: a command letter, then numbers to a
+/// hundredth of a drawing unit, written in place as these paths are long.
+fn push_command(d: &mut String, letter: char, numbers: &[f32]) {
+    use std::fmt::Write as _;
+    d.push(letter);
+    for (k, v) in numbers.iter().enumerate() {
+        if k > 0 {
+            d.push(' ');
+        }
+        let hundredths = (v * 100.).round() as i64;
+        if hundredths < 0 {
+            d.push('-');
+        }
+        let n = hundredths.unsigned_abs();
+        let _ = write!(d, "{}", n / 100);
+        let fraction = n % 100;
+        if fraction != 0 {
+            d.push('.');
+            d.push((b'0' + (fraction / 10) as u8) as char);
+            if !fraction.is_multiple_of(10) {
+                d.push((b'0' + (fraction % 10) as u8) as char);
+            }
+        }
+    }
+}
+
+/// Path data through `points`, each run of steps between points on the
+/// circle about `center` drawn as one arc of it, so a ball's rim stays round
+/// at any zoom.
+fn ring_data(points: &[super::Point], closed: bool, center: super::Point, radius: f32) -> String {
+    let (Some(&first), Some(&last)) = (points.first(), points.last()) else {
+        return String::new();
+    };
+    let on_rim = |p: super::Point| (p.distance(center) - radius).abs() <= radius * 2e-3;
+    // A step along the rim: its direction and the angle it turns.
+    let arc = |a: super::Point, p: super::Point| {
+        let chord = a.distance(p);
+        (radius > 0. && on_rim(a) && on_rim(p) && chord < radius * 0.8).then(|| {
+            let turn = (a.x - center.x) * (p.y - center.y) - (a.y - center.y) * (p.x - center.x);
+            (turn > 0., 2. * (chord / (2. * radius)).asin())
+        })
+    };
+    let mut d = String::new();
+    push_command(&mut d, 'M', &[first.x, first.y]);
+    let mut pending: Option<(bool, f32, super::Point)> = None;
+    let flush = |d: &mut String, pending: &mut Option<(bool, f32, super::Point)>| {
+        if let Some((sweep, _, end)) = pending.take() {
+            let sweep = if sweep { 1. } else { 0. };
+            push_command(d, 'A', &[radius, radius, 0., 0., sweep, end.x, end.y]);
+        }
+    };
+    let closing = closed.then_some((last, first));
+    let steps = points.iter().copied().zip(points.iter().copied().skip(1));
+    for (a, p) in steps.chain(closing) {
+        match (arc(a, p), pending) {
+            (Some((sweep, angle)), Some((along, turned, _)))
+                if sweep == along && turned + angle < 3. =>
+            {
+                pending = Some((sweep, turned + angle, p));
+            }
+            (step, _) => {
+                flush(&mut d, &mut pending);
+                match step {
+                    Some((sweep, angle)) => pending = Some((sweep, angle, p)),
+                    None => push_command(&mut d, 'L', &[p.x, p.y]),
+                }
+            }
+        }
+    }
+    flush(&mut d, &mut pending);
+    if closed {
+        d.push('Z');
+    }
+    d
+}
+
 fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut usize) {
     let theme = frame.theme;
     let [r, g, b] = theme.color([0; 3]);
@@ -199,6 +275,7 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                 focal,
                 stops,
                 outline,
+                contact,
             } => {
                 // `fr` is SVG 2: the vendored usvg 0.45 behind PNG and PDF
                 // export ignores it and starts the gradient at radius 0.
@@ -215,12 +292,43 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                     ),
                     &stops,
                 );
+                let Some(contact) = contact else {
+                    s.push_str(&format!(
+                        "{defs}<circle cx=\"{}\" cy=\"{}\" r=\"{radius}\" fill=\"url(#{id})\"{}/>",
+                        center.x,
+                        center.y,
+                        outline_paint(outline)
+                    ));
+                    continue;
+                };
+                let region: String = contact
+                    .region
+                    .iter()
+                    .map(|contour| ring_data(contour, true, center, radius))
+                    .collect();
                 s.push_str(&format!(
-                    "{defs}<circle cx=\"{}\" cy=\"{}\" r=\"{radius}\" fill=\"url(#{id})\"{}/>",
-                    center.x,
-                    center.y,
-                    outline_paint(outline)
+                    "{defs}<path d=\"{region}\" fill-rule=\"evenodd\" fill=\"url(#{id})\"/>"
                 ));
+                if outline.is_some() {
+                    let edges: String = contact
+                        .rim
+                        .iter()
+                        .map(|run| ring_data(run, false, center, radius))
+                        .chain(
+                            contact
+                                .seams
+                                .iter()
+                                .map(|run| ring_data(run, false, center, 0.)),
+                        )
+                        .collect();
+                    if !edges.is_empty() {
+                        s.push_str(&format!(
+                            "<path d=\"{}\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"{}/>",
+                            edges.trim_end(),
+                            outline_paint(outline)
+                        ));
+                    }
+                }
             }
             Primitive::ShadedQuad {
                 corners,
@@ -306,9 +414,18 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                 to,
                 width,
                 color: [r, g, b],
+                dash,
             } => s.push_str(&format!(
-                "<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"rgb({r},{g},{b})\" stroke-width=\"{width}\" stroke-linecap=\"round\"/>",
-                from.x, from.y, to.x, to.y
+                "<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"rgb({r},{g},{b})\" stroke-width=\"{width}\" {}/>",
+                from.x,
+                from.y,
+                to.x,
+                to.y,
+                if dash > 0. {
+                    format!("stroke-dasharray=\"{dash} {dash}\"")
+                } else {
+                    "stroke-linecap=\"round\"".into()
+                }
             )),
             Primitive::Card {
                 lo,

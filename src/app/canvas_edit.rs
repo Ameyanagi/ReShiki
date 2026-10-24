@@ -195,8 +195,6 @@ impl App {
             edit @ (Edit::ModelView { .. } | Edit::ResizeModels { .. }) => {
                 return self.model_edit(edit);
             }
-            // Dispatched as a Models3d action.
-            Edit::ShowAs(_) => return,
             Edit::RingPreset(preset, anchor, direction, connect, alternate) => {
                 return self
                     .place_ring_preset(preset, anchor, direction, connect, alternate, before);
@@ -279,7 +277,7 @@ impl App {
             }
             Edit::PlaneBond(start, end) => return self.place_plane_bond(start, end, before),
             Edit::Bond(start, end, a, b) => return self.place_bond(start, end, a, b, before),
-            Edit::Click(p) => return self.canvas_click(p, before),
+            Edit::Click(p) | Edit::RepeatLabel(p) => return self.canvas_click(p, before),
         }
         self.changed(before);
     }

@@ -281,3 +281,56 @@ async fn aromatic_shortcut_commits_once_keeps_hydrogens_and_ignores_late_results
     });
     assert!(super::super::same_drawing(&app.tab.doc, &circled));
 }
+
+/// Browsers report the typed character; the shortcut reads the key under it.
+#[test]
+fn shifted_and_option_characters_reach_their_shortcuts() {
+    use iced::keyboard::{
+        Key, Modifiers,
+        key::{Code, Physical},
+    };
+    let read = |typed: &str, code: Code, mods: Modifiers| {
+        let typed = Key::Character(typed.into());
+        let key = crate::platform::shortcut_key(&typed, Physical::Code(code));
+        key_message(&key, &typed, mods)
+    };
+    for (typed, code, size) in [
+        ("#", Code::Digit3, 3),
+        ("^", Code::Digit6, 6),
+        ("*", Code::Digit8, 8),
+    ] {
+        assert!(
+            matches!(
+                read(typed, code, Modifiers::SHIFT),
+                Some(Message::Shortcut(Action::SelectRing(s))) if s == size
+            ),
+            "Shift+{size}"
+        );
+    }
+    let option = Modifiers::COMMAND | Modifiers::ALT;
+    assert!(matches!(
+        read("ç", Code::KeyC, option),
+        Some(Message::Shortcut(Action::CopyText("smiles")))
+    ));
+    assert!(matches!(
+        read("ø", Code::KeyO, option),
+        Some(Message::Shortcut(Action::CopyText("mol")))
+    ));
+    assert!(matches!(
+        read("≈", Code::KeyX, option),
+        Some(Message::Shortcut(Action::Crosshair))
+    ));
+    assert!(matches!(
+        read("¬", Code::KeyL, option | Modifiers::SHIFT),
+        Some(Message::Arrange(reshiki::editing::Arrange::AlignLeft))
+    ));
+    // Help: Command+? arrives as "?" with Shift, also on a German keyboard.
+    assert!(matches!(
+        read("?", Code::Minus, Modifiers::COMMAND | Modifiers::SHIFT),
+        Some(Message::ToggleHelp)
+    ));
+    assert!(matches!(
+        read("?", Code::Slash, Modifiers::COMMAND | Modifiers::SHIFT),
+        Some(Message::ToggleHelp)
+    ));
+}

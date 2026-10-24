@@ -100,7 +100,7 @@ fn manager_protects_defaults_updates_customs_and_deletes_without_recoloring() {
     assert!(app.theme_library.themes().is_empty());
     assert_eq!(app.tab.doc, themed);
     let (choices, _) = app.theme_choices();
-    assert_eq!(choices.len(), 5); // Four protected defaults and Manage themes.
+    assert_eq!(choices.len(), 6); // Five protected defaults and Manage themes.
     assert_eq!(
         choices.last(),
         Some(&super::super::theme_files::Choice::Manage)
@@ -163,6 +163,38 @@ fn reference_choice_changes_both_modes_and_presets_restore_jmol() {
         app.theme_library.editor.as_ref().unwrap().recipe,
         Recipe::PRESENTATION
     );
+}
+#[test]
+fn vesta_is_a_reference_choice_and_the_default_for_the_vesta_theme() {
+    let (mut app, _) = App::new();
+    let _ = app.theme_generator_action(Action::Open);
+    let editor = app.theme_library.editor.as_ref().unwrap();
+    assert_eq!(editor.recipe.reference, None, "Jmol stays the default");
+    let vesta = editor
+        .references
+        .iter()
+        .find(|r| r.id == "vesta")
+        .unwrap()
+        .clone();
+    assert_eq!(vesta, Reference::vesta());
+    assert_eq!(ReferenceChoice::from(&vesta).to_string(), "VESTA");
+    let _ = app.theme_generator_action(Action::Reference((&vesta).into()));
+    let editor = app.theme_library.editor.as_ref().unwrap();
+    assert_eq!(editor.recipe.reference, Some(vesta.clone()));
+    // Titanium takes VESTA's blue hue, not Jmol's grey.
+    let hue = |rgb| reshiki::color_contrast::Oklch::from_rgb(rgb).h;
+    let ti = editor
+        .palette
+        .element_swatch("Ti", CanvasTheme::Light)
+        .unwrap();
+    assert!((hue(ti) - hue([120, 202, 255])).abs() < 0.03, "{ti:?}");
+    // A tweak of the built-in VESTA theme starts from VESTA, not Jmol.
+    let mut doc = Document::default();
+    ColorTheme::Vesta.apply(&mut doc);
+    let editor = Editor::new(&doc, 0, &[]);
+    assert_eq!(editor.recipe.reference, Some(vesta.clone()));
+    assert_eq!(editor.references[0], vesta, "VESTA stays listed after Jmol");
+    assert_eq!(editor.palette.base, ColorTheme::Vesta);
 }
 #[test]
 fn preview_nitrogen_has_a_chemically_correct_visible_hydrogen() {

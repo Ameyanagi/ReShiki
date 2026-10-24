@@ -32,7 +32,10 @@ fn check_color(value: &Value, expected: Rgb) {
 fn public_color_reference_matches_the_application_and_portable_themes() {
     let catalog: Value =
         serde_json::from_str(include_str!("../website/src/data/theme-colors.json")).unwrap();
-    assert_eq!(catalog["themes"].as_array().unwrap().len(), 4);
+    assert_eq!(
+        catalog["themes"].as_array().unwrap().len(),
+        ColorTheme::ALL.len()
+    );
     for (index, theme) in ColorTheme::ALL.into_iter().enumerate() {
         let exported = &catalog["themes"][index];
         assert_eq!(exported["name"], theme.to_string());

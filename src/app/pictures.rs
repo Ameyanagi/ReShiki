@@ -40,16 +40,17 @@ impl Default for State {
     }
 }
 async fn choose_picture() -> Result<Option<Picture>, String> {
-    let Some(file) = rfd::AsyncFileDialog::new()
-        .set_title("Replace the picture")
-        .add_filter("Pictures", reshiki::metafile::PICTURE_EXTENSIONS)
-        .pick_file()
-        .await
+    let filter = ("Pictures", reshiki::metafile::PICTURE_EXTENSIONS);
+    let limit = |_: &std::path::Path| reshiki::pictures::MAX_BYTES as u64;
+    let Some(file) = super::files::pick("Replace the picture", Some(filter), false, limit)
+        .await?
+        .pop()
     else {
         return Ok(None);
     };
-    let path = super::files::picked_path(&file)?;
-    reshiki::metafile::open(&path).await.map(Some)
+    reshiki::metafile::open_bytes(&file.path, file.contents)
+        .await
+        .map(Some)
 }
 fn millimetres(world: f32) -> f32 {
     world * reshiki::style::DEFAULT.points_per_world() * 25.4 / 72.

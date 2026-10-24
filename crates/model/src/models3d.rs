@@ -8,11 +8,18 @@
 //! the atoms carries it along. A chemical edit to the molecule drops the model
 //! instead of repairing it; a molecule shown in 3D then shows its 2D drawing.
 //! Chemical formats (MOL, CDX/CDXML, SMILES) keep the 2D atoms and omit models.
+//!
+//! A model read from a crystal file (#417) may hold several molecules, or an
+//! extended network, with its unit cell: see [`crystal`].
+mod contact;
+pub mod crystal;
+use crate::scene::Contact;
 use crate::{
     depth_appearance::Scope,
     document::{Atom, AtomStereo, Bond, Document, Point},
     scene::{Outline, Primitive},
 };
+pub use crystal::{Adp, Cell, Crossing, Site};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -129,10 +136,17 @@ pub struct Hydrogen {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Model3d {
     pub display: Display,
-    /// Every atom of one connected molecule.
+    /// Every atom of one connected molecule, or of several whole molecules
+    /// in a model read from a crystal or XYZ file.
     pub atoms: Vec<Placed>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hydrogens: Vec<Hydrogen>,
+    /// The unit cell of a crystal or periodic structure.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cell: Option<Cell>,
+    /// Labels and displacement parameters of atoms read from a file.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sites: Vec<Site>,
     /// View rotation as a unit quaternion `[w, x, y, z]`.
     pub rotation: [f32; 4],
     /// Frame centre minus the molecule's 2D centre, in drawing units.
@@ -150,6 +164,14 @@ pub struct Model3d {
     pub perspective: f32,
     #[serde(default)]
     pub show_hydrogens: Hydrogens,
+    /// Whether a crystal's 2D drawing shows its ion charges; hidden by
+    /// default, as the formula carries them.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub charges: bool,
+    /// How many cells along a, b and c a crystal's 2D drawing shows (1 to
+    /// [`MAX_REPEAT`] each): the model's own cell and lighter copies of it.
+    #[serde(default = "one_cell", skip_serializing_if = "is_one_cell")]
+    pub repeat: [u8; 3],
     #[serde(default)]
     pub background: Background,
     pub force_field: ForceField,
@@ -164,6 +186,17 @@ pub struct Model3d {
     #[serde(skip)]
     pub morph: Option<f32>,
 }
+fn one_cell() -> [u8; 3] {
+    [1; 3]
+}
+fn is_one_cell(repeat: &[u8; 3]) -> bool {
+    *repeat == one_cell()
+}
+/// The most cells a crystal's 2D drawing repeats along each axis.
+pub const MAX_REPEAT: u8 = 4;
+/// The opacity of the copies of a crystal's cell in 2D.
+const GHOST: f32 = 0.55;
+
 fn is_original(layout: &Layout) -> bool {
     *layout == Layout::Original
 }
@@ -278,6 +311,10 @@ fn perspective() -> f32 {
 }
 
 const MAX_ATOMS: usize = 100_000;
+/// How far past a lattice vector's end its label sits, as a fraction of it.
+const LABEL_AHEAD: f32 = 0.1;
+/// Room for the labels' text around the cell's bounding sphere.
+const LABEL_ROOM: f32 = 0.2;
 const MAX_COORDINATE: f32 = 10_000.;
 const GREY: [u8; 3] = [0x99; 3];
 const BOND_RADIUS: f32 = 0.085;
@@ -291,7 +328,6 @@ const OUTLINE: ([u8; 3], f32) = ([30, 34, 38], 0.85);
 const RIM: ([u8; 3], f32) = ([225, 232, 238], 0.55);
 /// The radial gradient's inner circle, as a fraction of the ball radius.
 pub const FOCAL_RADIUS: f32 = 0.05;
-
 /// Hydrogen where the theme greys it like carbon, kept lighter than carbon,
 /// on a light canvas and on a dark one.
 const HYDROGEN: [u8; 3] = [0xee, 0xf0, 0xf2];
@@ -374,6 +410,8 @@ impl Model3d {
             display: Display::TwoD,
             atoms,
             hydrogens,
+            cell: None,
+            sites: vec![],
             rotation: [1., 0., 0., 0.],
             offset: Point::default(),
             size: 1.,
@@ -382,23 +420,128 @@ impl Model3d {
             depth_fade: depth_fade(),
             perspective: perspective(),
             show_hydrogens: Hydrogens::default(),
+            charges: false,
+            repeat: one_cell(),
             background: Background::default(),
             force_field,
             layout: Layout::Original,
             drawn: None,
             morph: None,
         };
-        model.rotation = model.initial_view(doc);
-        let points = model.points(doc).unwrap_or_default();
-        // The model's ångström scale matches the drawing: 1.5 Å per bond length.
-        let units = doc.drawing_style.bond_length_world / 1.5;
-        model.size =
-            (reach(&points, heavy_center(&points), Style::BallStick) * units / 0.44).max(1.);
+        model.fit(doc);
         model
     }
 
-    /// The opening view, facing the broadest side; double-click restores it.
+    /// This model of the atoms read from a crystal or XYZ file, in `cell`
+    /// when it is periodic, with what the file gave for each atom's site.
+    pub fn with_cell(mut self, doc: &Document, cell: Option<Cell>, sites: Vec<Site>) -> Self {
+        self.cell = cell;
+        self.sites = sites;
+        self.fit(doc);
+        self
+    }
+
+    /// Face the opening view and size the frame at the drawing's scale.
+    fn fit(&mut self, doc: &Document) {
+        self.rotation = self.initial_view(doc);
+        let points = self.points(doc).unwrap_or_default();
+        // The model's ångström scale matches the drawing: 1.5 Å per bond length.
+        let units = doc.drawing_style.bond_length_world / 1.5;
+        let center = self.center(&points);
+        let reach = reach(&points, center, Style::BallStick).max(self.cell_reach(center));
+        self.size = (reach * units / 0.44).max(1.);
+    }
+
+    /// The centre the model turns about: its cell's, or its heavy atoms'.
+    fn center(&self, points: &[(&str, [f32; 3])]) -> [f32; 3] {
+        self.cell
+            .as_ref()
+            .map_or_else(|| heavy_center(points), Cell::center)
+    }
+
+    /// The farthest the cell box and its axis labels reach from `center`,
+    /// in ångström; 0 without a cell.
+    fn cell_reach(&self, center: [f32; 3]) -> f32 {
+        self.cell.as_ref().map_or(0., |cell| {
+            let labels = cell.vectors.map(|v| v.map(|x| x * (1. + LABEL_AHEAD)));
+            let box_reach = cell
+                .corners()
+                .iter()
+                .chain(&labels)
+                .map(|p| length(sub(*p, center)))
+                .fold(0., f32::max)
+                * (1. + LABEL_ROOM);
+            // The half-bonds leaving the cell end halfway to the next cell.
+            let at = |id: u64| self.atoms.iter().find(|a| a.id == id).map(|a| a.xyz);
+            let halves = cell
+                .crossing
+                .iter()
+                .filter_map(|c| {
+                    let (a, b) = (at(c.a)?, at(c.b)?);
+                    let far = zip3(b, cell.translation(c.image), |p, t| p + t);
+                    let middle = zip3(a, far, |p, q| (p + q) / 2.);
+                    // b's half runs from b by the same vector the other way.
+                    let other = zip3(b, sub(middle, a), |p, h| p - h);
+                    Some(length(sub(middle, center)).max(length(sub(other, center))))
+                })
+                .fold(0., f32::max);
+            box_reach.max(halves)
+        })
+    }
+
+    /// The opening view, facing the broadest side, or for a crystal the
+    /// cell with b to the right, c up and a toward the viewer; double-click
+    /// restores it.
     pub fn initial_view(&self, doc: &Document) -> [f32; 4] {
+        if let Some(cell) = &self.cell {
+            // Measured in label heights, as the 2D drawing will show it.
+            let k = flat_scale(doc, self) / doc.drawing_style.font_size().max(1e-3);
+            let scaled = |p: [f32; 3]| p.map(|v| v * k);
+            let labelled = self.labelled(doc);
+            let index: HashMap<u64, usize> =
+                labelled.iter().enumerate().map(|(i, l)| (l.0, i)).collect();
+            // Bonds to hydrogens are short; their labels need only not
+            // overlap.
+            let bonds = doc
+                .bonds
+                .iter()
+                .filter(|b| !hydrogen(doc, b.a) && !hydrogen(doc, b.b))
+                .filter_map(|b| {
+                    let (i, j) = (*index.get(&b.a)?, *index.get(&b.b)?);
+                    Some((i.min(j), i.max(j)))
+                })
+                .collect();
+            let atoms: Vec<_> = labelled.iter().map(|(_, p, n)| (scaled(*p), *n)).collect();
+            // The 2D stubs of the bonds that leave the cell.
+            let at = |id: u64| self.atoms.iter().find(|a| a.id == id).map(|a| a.xyz);
+            let stubs: Vec<_> = cell
+                .crossing
+                .iter()
+                .filter_map(|c| {
+                    let (pa, pb) = (at(c.a)?, at(c.b)?);
+                    let far = zip3(pb, cell.translation(c.image), |p, t| p + t);
+                    let stub = sub(far, pa).map(|v| v * STUB);
+                    Some([
+                        (scaled(pa), scaled(zip3(pa, stub, |p, s| p + s))),
+                        (scaled(pb), scaled(zip3(pb, stub, |p, s| p - s))),
+                    ])
+                })
+                .flatten()
+                .collect();
+            // Every bond drawn inside the cell, bare carbons' included.
+            let lines: Vec<_> = doc
+                .bonds
+                .iter()
+                .filter_map(|b| Some((scaled(at(b.a)?), scaled(at(b.b)?))))
+                .collect();
+            let labels = Labels {
+                atoms: &atoms,
+                bonds,
+                stubs: &stubs,
+                lines: &lines,
+            };
+            return crystal_rotation(cell.vectors.map(scaled), &labels);
+        }
         let points = self.points(doc).unwrap_or_default();
         let center = heavy_center(&points);
         let heavy: Vec<_> = points
@@ -407,6 +550,25 @@ impl Model3d {
             .map(|(_, p)| sub(*p, center))
             .collect();
         initial_rotation(&heavy)
+    }
+
+    /// The atoms a crystal's 2D drawing labels, with their positions and
+    /// letter counts: all but bonded carbons, which are bare vertices unless
+    /// linear.
+    fn labelled(&self, doc: &Document) -> Vec<(u64, [f32; 3], usize)> {
+        let crossing = self.cell.iter().flat_map(|c| &c.crossing);
+        let bonded = |id: u64| {
+            doc.bonds.iter().any(|b| b.a == id || b.b == id)
+                || crossing.clone().any(|c| c.a == id || c.b == id)
+        };
+        self.atoms
+            .iter()
+            .filter_map(|a| {
+                let element = &doc.atom(a.id)?.element;
+                let shown = element != "C" || !bonded(a.id) || linear_carbon(doc, self, a.id);
+                shown.then(|| (a.id, a.xyz, element.chars().count()))
+            })
+            .collect()
     }
 
     pub fn contains(&self, id: u64) -> bool {
@@ -442,12 +604,13 @@ impl Model3d {
                     Hydrogens::None => false,
                 }
         };
+        let crossing = self.cell.iter().flat_map(|c| &c.crossing);
         let atoms = self.atoms.iter().map(|p| {
             let hydrogen = doc.atom(p.id).is_some_and(|a| a.element == "H");
             keep(hydrogen, &|| {
-                doc.bonds
-                    .iter()
-                    .any(|b| (b.a == p.id && polar(b.b)) || (b.b == p.id && polar(b.a)))
+                let bonded = |a: u64, b: u64| (a == p.id && polar(b)) || (b == p.id && polar(a));
+                doc.bonds.iter().any(|b| bonded(b.a, b.b))
+                    || crossing.clone().any(|c| bonded(c.a, c.b))
             })
         });
         let hydrogens = self
@@ -470,6 +633,13 @@ impl Model3d {
         }
         for h in &mut self.hydrogens {
             h.parent = *mapping.get(&h.parent)?;
+        }
+        for c in self.cell.iter_mut().flat_map(|c| &mut c.crossing) {
+            c.a = *mapping.get(&c.a)?;
+            c.b = *mapping.get(&c.b)?;
+        }
+        for site in &mut self.sites {
+            site.id = *mapping.get(&site.id)?;
         }
         if let Some(drawn) = &mut self.drawn {
             drawn.remap(mapping)?;
@@ -515,8 +685,9 @@ impl Document {
     }
 }
 
-/// The 2D drawing without the atoms shown as 3D models, for painting and for
-/// the rear-opacity paint the scene is built with.
+/// The 2D drawing without the atoms shown as 3D models, and without the ion
+/// charges of crystals that hide them, for painting and for the rear-opacity
+/// paint the scene is built with.
 pub fn drawn(doc: &Document) -> std::borrow::Cow<'_, Document> {
     let hidden: HashSet<_> = doc
         .models
@@ -524,10 +695,23 @@ pub fn drawn(doc: &Document) -> std::borrow::Cow<'_, Document> {
         .filter(|m| m.display == Display::ThreeD)
         .flat_map(Model3d::ids)
         .collect();
-    if hidden.is_empty() {
+    let uncharged: HashSet<_> = doc
+        .models
+        .iter()
+        .filter(|m| m.cell.is_some() && !m.charges)
+        .flat_map(Model3d::ids)
+        .filter(|id| doc.atom(*id).is_some_and(|a| a.charge != 0))
+        .collect();
+    if hidden.is_empty() && uncharged.is_empty() {
         return std::borrow::Cow::Borrowed(doc);
     }
     let mut flat = doc.clone();
+    for atom in flat.atoms.iter_mut().filter(|a| uncharged.contains(&a.id)) {
+        atom.charge = 0;
+    }
+    if hidden.is_empty() {
+        return std::borrow::Cow::Owned(flat);
+    }
     flat.atoms.retain(|a| !hidden.contains(&a.id));
     flat.bonds
         .retain(|b| !hidden.contains(&b.a) && !hidden.contains(&b.b));
@@ -547,6 +731,8 @@ pub fn drawn(doc: &Document) -> std::borrow::Cow<'_, Document> {
 /// The model's projection: rotated ångström points about the heavy-atom
 /// centre, drawn around `origin` at `scale` drawing units per ångström.
 struct View<'a> {
+    /// The model point the view turns about.
+    center: [f32; 3],
     symbols: Vec<&'a str>,
     rotated: Vec<[f32; 3]>,
     /// Whether each point is drawn, see [`Model3d::shown`].
@@ -565,15 +751,17 @@ impl View<'_> {
         let center = layout_center(doc, model)?;
         let points = model.points(doc)?;
         let shown = model.shown(doc);
-        let c = heavy_center(&points);
+        let c = model.center(&points);
         let drawn: Vec<_> = points
             .iter()
             .zip(&shown)
             .filter(|(_, shown)| **shown)
             .map(|(p, _)| *p)
             .collect();
-        let reach = reach(&drawn, c, model.style);
+        // The bounding sphere holds the cell and its labels too.
+        let reach = reach(&drawn, c, model.style).max(model.cell_reach(c));
         Some(View {
+            center: c,
             rotated: points
                 .iter()
                 .map(|(_, p)| rotate(model.rotation, sub(*p, c)))
@@ -666,6 +854,18 @@ impl View<'_> {
     }
 }
 
+/// Each atom's place in the model's view as it is turned now, in ångström
+/// about the model's centre: x to the right, y up and z toward the viewer.
+pub fn viewed(doc: &Document, model: &Model3d) -> Vec<(u64, [f32; 3])> {
+    let points = model.points(doc).unwrap_or_default();
+    let center = model.center(&points);
+    model
+        .atoms
+        .iter()
+        .map(|a| (a.id, rotate(model.rotation, sub(a.xyz, center))))
+        .collect()
+}
+
 /// The frame's top-left and bottom-right corners in drawing units: a square
 /// that holds the model in every rotation, or `None` while an atom is missing.
 pub fn frame(doc: &Document, model: &Model3d) -> Option<(Point, Point)> {
@@ -719,7 +919,20 @@ pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
             let Some((left, _)) = frame(doc, &centered) else {
                 return false;
             };
-            Point::new(hi.x + doc.drawing_style.bond_length_world - left.x, 0.)
+            // A crystal's 2D drawing reaches as far as its cell box and the
+            // copies of a repeat.
+            let flat = Model3d {
+                display: Display::TwoD,
+                ..model.clone()
+            };
+            let cells = flat_cells(std::slice::from_ref(&flat), doc);
+            let ink = [cells.behind, cells.front, cells.above].concat();
+            let right = if ink.is_empty() {
+                hi.x
+            } else {
+                hi.x.max(crate::scene::bounds(&ink).1.x)
+            };
+            Point::new(right + doc.drawing_style.bond_length_world - left.x, 0.)
         }
         _ if model.display == Display::Both => Point::default(),
         Display::TwoD | Display::ThreeD => model.offset,
@@ -731,9 +944,30 @@ pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
     model.display = display;
     model.offset = offset;
     if changed {
-        doc.require_version(crate::document::MODELS_3D);
+        require_version(doc);
     }
     changed
+}
+
+/// The document version a drawing's models need: none without models,
+/// [`crate::document::CRYSTALS`] for a crystal's cell or atom sites, else
+/// [`crate::document::MODELS_3D`].
+pub fn required_version(models: &[Model3d]) -> Option<u32> {
+    let crystal = models
+        .iter()
+        .any(|m| m.cell.is_some() || !m.sites.is_empty());
+    match (models.is_empty(), crystal) {
+        (true, _) => None,
+        (false, true) => Some(crate::document::CRYSTALS),
+        (false, false) => Some(crate::document::MODELS_3D),
+    }
+}
+
+/// Raise `doc` to the version its models need.
+pub fn require_version(doc: &mut Document) {
+    if let Some(version) = required_version(&doc.models) {
+        doc.require_version(version);
+    }
 }
 
 /// Show model `index`'s molecule in its drawn layout again, if it was
@@ -787,7 +1021,17 @@ pub fn selected_molecule(doc: &Document, selected: &[u64]) -> Option<Vec<u64>> {
         .into_iter()
         .filter(|id| doc.atom(*id).is_some())
         .collect();
-    let component = crate::molecule_names::component(doc, *atoms.first()?);
+    let first = *atoms.first()?;
+    // A model of several molecules, read from a crystal file, is one.
+    let component = match model_of(doc, first) {
+        Some(model) if model.atoms.len() > 1 => doc
+            .atoms
+            .iter()
+            .map(|a| a.id)
+            .filter(|id| model.contains(*id))
+            .collect(),
+        _ => crate::molecule_names::component(doc, first),
+    };
     atoms
         .iter()
         .all(|id| component.contains(id))
@@ -977,6 +1221,17 @@ pub fn validate(doc: &Document) -> Result<(), String> {
             crate::document::MODELS_3D
         ));
     }
+    if doc.version < crate::document::CRYSTALS
+        && doc
+            .models
+            .iter()
+            .any(|m| m.cell.is_some() || !m.sites.is_empty())
+    {
+        return Err(format!(
+            "Crystal structures need document version {} or later",
+            crate::document::CRYSTALS
+        ));
+    }
     let finite = |p: &[f32; 3]| p.iter().all(|v| v.is_finite() && v.abs() <= MAX_COORDINATE);
     let mut owned = HashSet::new();
     for m in &doc.models {
@@ -1000,6 +1255,9 @@ pub fn validate(doc: &Document) -> Result<(), String> {
             || !(1. ..=1e5).contains(&m.size)
             || !(0. ..=1.).contains(&m.depth_fade)
             || !(0. ..=1.).contains(&m.perspective)
+            || !crystal::valid(m.cell.as_ref(), &m.sites, &ids)
+            || !m.repeat.iter().all(|n| (1..=MAX_REPEAT).contains(n))
+            || (m.cell.is_none() && !is_one_cell(&m.repeat))
             || m.drawn.as_ref().is_some_and(|d| {
                 d.atoms.len() != ids.len()
                     || d.at.is_some_and(|p| !p.is_finite())
@@ -1022,15 +1280,16 @@ pub fn prune(doc: &mut Document) {
         .retain(|m| m.atoms.iter().all(|a| present.contains(&a.id)));
 }
 
-/// Whether the model's atoms are exactly one whole connected molecule.
+/// Whether the model's atoms are whole molecules: one connected molecule, or
+/// several read from a crystal or XYZ file, with no bond leaving them.
 fn whole(doc: &Document, model: &Model3d) -> bool {
     let ids = model.ids();
-    let component = model
-        .atoms
-        .first()
-        .map(|a| crate::molecule_names::component(doc, a.id))
-        .unwrap_or_default();
-    component.len() == ids.len() && component.iter().all(|id| ids.contains(id))
+    if ids.is_empty() || ids.iter().any(|id| doc.atom(*id).is_none()) {
+        return false;
+    }
+    doc.bonds
+        .iter()
+        .all(|b| ids.contains(&b.a) == ids.contains(&b.b))
 }
 
 /// Drop a loaded file's models that are not one whole molecule. Unlike
@@ -1241,9 +1500,411 @@ pub fn initial_rotation(points: &[[f32; 3]]) -> [f32; 4] {
     };
     let x = principal([1., 0.3, 0.2], None);
     let y = principal([0.2, 1., 0.3], Some(x)).map(|v| -v);
-    let basis = [x, y, cross(x, y)];
-    let (sx, cx) = (-0.35_f64).sin_cos();
-    let (sy, cy) = 0.3_f64.sin_cos();
+    tilted([x, y, cross(x, y)], -0.35, 0.3)
+}
+
+/// Drawing units per ångström of a crystal's 2D drawing: the drawing's own
+/// scale (1.5 Å per bond length), or larger for a small cell or close
+/// labelled atoms, so the shortest cell edge is [`CELL_EDGE`] label heights
+/// and a bond between two labels other than H, as CO₂'s C=O,
+/// [`LABELLED_BOND`].
+pub fn flat_scale(doc: &Document, model: &Model3d) -> f32 {
+    let style = &doc.drawing_style;
+    let font = style.font_size();
+    let edge = model.cell.as_ref().map_or(f32::INFINITY, |cell| {
+        cell.vectors
+            .iter()
+            .map(|v| length(*v))
+            .fold(f32::INFINITY, f32::min)
+    });
+    let labelled: HashMap<u64, [f32; 3]> = model
+        .labelled(doc)
+        .into_iter()
+        .map(|(id, p, _)| (id, p))
+        .collect();
+    let bond = doc
+        .bonds
+        .iter()
+        .filter(|b| !hydrogen(doc, b.a) && !hydrogen(doc, b.b))
+        .filter_map(|b| Some(length(sub(*labelled.get(&b.a)?, *labelled.get(&b.b)?))))
+        .fold(f32::INFINITY, f32::min);
+    (style.bond_length_world / 1.5)
+        .max(CELL_EDGE * font / edge.max(1e-3))
+        .max(LABELLED_BOND * font / bond.max(1e-3))
+}
+
+/// The shortest cell edge, and the shortest bond between two labels, in a
+/// crystal's 2D drawing, in label heights.
+const CELL_EDGE: f32 = 8.;
+const LABELLED_BOND: f32 = 2.4;
+
+fn hydrogen(doc: &Document, id: u64) -> bool {
+    doc.atom(id).is_some_and(|a| a.element == "H")
+}
+
+/// Whether atom `id` of `model` is a carbon between exactly two bonded
+/// neighbours in a straight line (165° or more), as CO₂'s, which a 2D
+/// drawing labels so that O=C=O does not read as O=O.
+pub fn linear_carbon(doc: &Document, model: &Model3d, id: u64) -> bool {
+    if doc.atom(id).is_none_or(|a| a.element != "C") {
+        return false;
+    }
+    let at = |id: u64| model.atoms.iter().find(|a| a.id == id).map(|a| a.xyz);
+    let neighbours: Vec<_> = doc
+        .bonds
+        .iter()
+        .filter_map(|b| match (b.a == id, b.b == id) {
+            (true, _) => at(b.b),
+            (_, true) => at(b.a),
+            _ => None,
+        })
+        .collect();
+    let (Some(centre), [p, q]) = (at(id), neighbours.as_slice()) else {
+        return false;
+    };
+    let (u, v) = (sub(*p, centre), sub(*q, centre));
+    let cos = (u[0] * v[0] + u[1] * v[1] + u[2] * v[2]) / (length(u) * length(v)).max(1e-6);
+    cos <= 165_f32.to_radians().cos()
+}
+
+/// A crystal's opening view. Every tilt of three families is tried: the
+/// cell as crystallographers draw it (b to the right, c up, a toward the
+/// viewer), looking down c (a to the right, b up) and down the body
+/// diagonal. Each must show every axis and point c (or b) up, and where any
+/// view allows it, hide the origin behind the box, so that a, b and c end on
+/// its outline. Of the views that keep the `labels` nearly as far apart as
+/// the best one does (see [`separation`]), the one nearest a family's
+/// standard slight tilt wins, so the usual view is kept wherever it reads
+/// well.
+fn crystal_rotation(vectors: [[f32; 3]; 3], labels: &Labels) -> [f32; 4] {
+    type V = [f64; 3];
+    let dot = |a: V, b: V| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    let unit = |v: V| {
+        let n = dot(v, v).sqrt().max(1e-300);
+        v.map(|x| x / n)
+    };
+    let [a, b, c] = vectors.map(|v| v.map(f64::from));
+    let basis = |x: V, toward: V| {
+        let x = unit(x);
+        let d = dot(toward, x);
+        let y = unit(zip3(toward, x, |t, x| t - d * x));
+        let z = [
+            x[1] * y[2] - x[2] * y[1],
+            x[2] * y[0] - x[0] * y[2],
+            x[0] * y[1] - x[1] * y[0],
+        ];
+        [x, y, z]
+    };
+    // Down the body diagonal a + b + c, with c up: every axis comes toward
+    // the viewer, even in a skewed cell.
+    let diagonal = {
+        let z = unit(zip3(zip3(a, b, |a, b| a + b), c, |s, c| s + c));
+        let d = dot(c, z);
+        let y = unit(zip3(c, z, |c, z| c - d * z));
+        let x = [
+            y[1] * z[2] - y[2] * z[1],
+            y[2] * z[0] - y[0] * z[2],
+            y[0] * z[1] - y[1] * z[0],
+        ];
+        [x, y, z]
+    };
+    // b right and c up, a toward the viewer, turned up to 70° either way;
+    // a right and b up, c toward the viewer, turned a little; and down the
+    // diagonal, turned a little. Each with the lattice vector that must
+    // point up and a small preference for the first.
+    let families = [
+        (basis(b, c), 2, 0., 12),
+        (basis(a, b), 1, 0.05, 6),
+        (diagonal, 2, 0.1, 6),
+    ];
+    // Each lattice vector's on-screen length as a fraction of its length;
+    // the cell reads as a box only if none is seen end-on.
+    let shown = |q: [f32; 4]| {
+        vectors
+            .iter()
+            .map(|v| {
+                let p = rotate(q, *v);
+                p[0].hypot(p[1]) / length(*v).max(1e-6)
+            })
+            .fold(f32::INFINITY, f32::min)
+    };
+    let mut views = vec![];
+    for (basis, up, bias, turns) in families {
+        for i in 0..=12 {
+            for j in -turns..=turns {
+                let (x, y) = (0.05 * f64::from(i), 0.1 * f64::from(j));
+                let q = tilted(basis, x, y);
+                let turned = vectors.map(|v| rotate(q, v));
+                if shown(q) >= 0.3 && turned.get(up).is_some_and(|v| v[1] > 0.) {
+                    let near = (x - 0.3).hypot(y + 0.45) + bias;
+                    // The three faces at the origin face away, so it is the
+                    // hidden corner: each face's normal v₁ × v₂ (outward at
+                    // the far side for a right-handed cell) points at us.
+                    let back = (0..3).all(|k| {
+                        let at = |i: usize| turned.get((k + i) % 3).copied().unwrap_or_default();
+                        let ([x1, y1, _], [x2, y2, _]) = (at(1), at(2));
+                        x1 * y2 - y1 * x2 > 0.
+                    });
+                    views.push((separation(q, labels, vectors), near, q, back));
+                }
+            }
+        }
+    }
+    // The origin at the back where any view allows it.
+    if views.iter().any(|v| v.3) {
+        views.retain(|v| v.3);
+    }
+    let best = views.iter().map(|v| v.0).fold(f32::NEG_INFINITY, f32::max);
+    let good = 0.9 * best.min(GOOD_SEPARATION);
+    if let Some((_, _, q, _)) = views
+        .iter()
+        .filter(|v| v.0 >= good)
+        .min_by(|u, v| u.1.total_cmp(&v.1))
+    {
+        return *q;
+    }
+    // A skewed cell, such as a rhombohedral primitive cell, may allow no
+    // such view: take the tilt that shows all three axes best, c up.
+    let standard = basis(b, c);
+    let mut most = (f32::NEG_INFINITY, tilted(standard, 0.3, -0.45));
+    for i in 0..=12 {
+        for j in -12..=12 {
+            let q = tilted(standard, 0.05 * f64::from(i), 0.1 * f64::from(j));
+            let score = shown(q);
+            if score > most.0 && rotate(q, c.map(|v| v as f32))[1] > 0. {
+                most = (score, q);
+            }
+        }
+    }
+    most.1
+}
+
+/// The height and the width per letter of an atom label's ink in 2D, with a
+/// little room, in label heights (the font size), the unit the opening view
+/// measures in.
+const LABEL_HEIGHT: f32 = 0.95;
+const LETTER_WIDTH: f32 = 0.8;
+/// How far past its axis's end, away from the cell's centre, an axis label
+/// sits, and how far from every cell edge it should stay, in label heights.
+const AXIS_AHEAD: f32 = 0.8;
+const AXIS_CLEAR: f32 = 0.7;
+/// The room a bond between two labels needs to show, in label heights.
+const BOND_ROOM: f32 = 0.3;
+/// How far an atom label should stay from a box edge it is not on, in label
+/// heights: clear of its ink.
+const EDGE_CLEAR: f32 = 0.45;
+/// A separation this good is as good as any: views that come near it are
+/// told apart by how close they are to the standard view.
+const GOOD_SEPARATION: f32 = 1.6;
+/// Above this many labelled atoms (more than a 4 × 4 × 4 repeat of a large
+/// cell) the opening view compares only the axis labels.
+const APART_ATOMS: usize = 20_000;
+/// The separation score beyond which views count as equally clear.
+const SEPARATION_CAP: f32 = 4.;
+
+/// How well the labels keep apart seen through `q`: each of `atoms` (a
+/// position and its label's letter count) and each axis label past the end
+/// of one of the lattice `vectors`, from each other, and the axis labels from
+/// the cell's edges and the `stubs` of bonds leaving it. The least, over each
+/// pair, of how far apart they are, across or along, as a fraction of what
+/// keeps them apart: 1 or more when nothing overlaps.
+fn separation(q: [f32; 4], labels: &Labels, vectors: [[f32; 3]; 3]) -> f32 {
+    let width = |letters: usize| LETTER_WIDTH * letters.max(1) as f32;
+    let apart = |s: [f32; 3], t: [f32; 3], wide: f32, room: f32| {
+        ((s[0] - t[0]).abs() / (wide + room)).max((s[1] - t[1]).abs() / (LABEL_HEIGHT + room))
+    };
+    let atoms = if labels.atoms.len() > APART_ATOMS {
+        &[][..]
+    } else {
+        labels.atoms
+    };
+    let seen: Vec<_> = atoms
+        .iter()
+        .map(|(p, n)| (rotate(q, *p), width(*n)))
+        .collect();
+    // Pairs far apart across the screen cannot be the closest: sweep the
+    // labels left to right and compare each only with those within reach,
+    // so large repeats stay cheap. Scores beyond [`SEPARATION_CAP`] all
+    // count as that much.
+    let widest = seen.iter().map(|(_, w)| *w).fold(0., f32::max);
+    let reach = SEPARATION_CAP * (widest + BOND_ROOM);
+    let mut order: Vec<usize> = (0..seen.len()).collect();
+    order.sort_by(|a, b| {
+        let x = |i: &usize| seen.get(*i).map_or(0., |(s, _)| s[0]);
+        x(a).total_cmp(&x(b))
+    });
+    let mut least = SEPARATION_CAP;
+    for (n, &i) in order.iter().enumerate() {
+        let Some((s, ws)) = seen.get(i) else { continue };
+        for &j in order.iter().skip(n + 1) {
+            let Some((t, wt)) = seen.get(j) else { continue };
+            if t[0] - s[0] > reach {
+                break;
+            }
+            // A bond between two labels needs room to show.
+            let room = if labels.bonds.contains(&(i.min(j), i.max(j))) {
+                BOND_ROOM
+            } else {
+                0.
+            };
+            least = least.min(apart(*s, *t, (ws + wt) / 2., room));
+        }
+    }
+    let cell = Cell {
+        vectors,
+        crossing: vec![],
+    };
+    let corners = cell.corners();
+    // The twelve edges join corners that differ in one bit.
+    let edges: Vec<_> = (0..8_usize)
+        .flat_map(|j| ((j + 1)..8).map(move |k| (j, k)))
+        .filter(|(j, k)| (j ^ k).count_ones() == 1)
+        .filter_map(|(j, k)| Some(((j, k), *corners.get(j)?, *corners.get(k)?)))
+        .collect();
+    let turned: Vec<_> = edges
+        .iter()
+        .map(|(_, a, b)| (rotate(q, *a), rotate(q, *b)))
+        .collect();
+    // An atom's label keeps clear of the box's edges but those it lies on,
+    // and of the bonds and stubs of other atoms, which would seem to end at
+    // it.
+    let lines: Vec<_> = labels
+        .lines
+        .iter()
+        .chain(labels.stubs)
+        .map(|(a, b)| (*a, *b, rotate(q, *a), rotate(q, *b)))
+        .collect();
+    for ((p, _), (s, _)) in atoms.iter().zip(&seen) {
+        for ((_, a, b), (ta, tb)) in edges.iter().zip(&turned) {
+            if to_segment3(*p, *a, *b) > 1e-2 {
+                least = least.min(to_segment(*s, *ta, *tb) / EDGE_CLEAR);
+            }
+        }
+        for (a, b, ta, tb) in &lines {
+            if length(sub(*p, *a)) > 1e-2 && length(sub(*p, *b)) > 1e-2 {
+                least = least.min(to_segment(*s, *ta, *tb) / EDGE_CLEAR);
+            }
+        }
+    }
+    let flat = corners.map(|c| {
+        let p = rotate(q, c);
+        [p[0], p[1]]
+    });
+    let axes = [0, 1, 2].map(|k| axis_spot(&flat, k, 1.).map(|[x, y]| [x, y, 0.]));
+    for (i, label) in axes.iter().enumerate() {
+        let Some(label) = label else { continue };
+        for (s, ws) in &seen {
+            least = least.min(apart(*s, *label, (ws + width(1)) / 2., 0.));
+        }
+        for other in axes.iter().skip(i + 1).flatten() {
+            least = least.min(apart(*label, *other, width(1), 0.));
+        }
+        let stubs = labels
+            .stubs
+            .iter()
+            .map(|(a, b)| (rotate(q, *a), rotate(q, *b)));
+        // The edges at its own corner are kept clear by `axis_spot`.
+        let corner = 1 << i;
+        let others = edges
+            .iter()
+            .zip(&turned)
+            .filter(|(((j, k), ..), _)| *j != corner && *k != corner)
+            .map(|(_, t)| *t);
+        for (from, to) in others.chain(stubs) {
+            least = least.min(to_segment(*label, from, to) / AXIS_CLEAR);
+        }
+    }
+    least
+}
+
+/// What a crystal's opening view keeps apart, in label heights: each
+/// labelled atom's position and letter count, the bonds between them (as
+/// index pairs, the lower first) and the 2D stubs of the bonds that leave
+/// the cell.
+struct Labels<'a> {
+    atoms: &'a [([f32; 3], usize)],
+    bonds: HashSet<(usize, usize)>,
+    stubs: &'a [([f32; 3], [f32; 3])],
+    /// The bonds inside the cell, as the segments between their atoms.
+    lines: &'a [([f32; 3], [f32; 3])],
+}
+
+/// The distance from `p` to the segment from `a` to `b`.
+fn to_segment3(p: [f32; 3], a: [f32; 3], b: [f32; 3]) -> f32 {
+    let (d, w) = (sub(b, a), sub(p, a));
+    let n = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+    let t = if n > 1e-12 {
+        ((w[0] * d[0] + w[1] * d[1] + w[2] * d[2]) / n).clamp(0., 1.)
+    } else {
+        0.
+    };
+    length(sub(w, d.map(|v| v * t)))
+}
+
+/// Where the label of lattice vector `k` goes, its height `size`, given the
+/// cell's eight `corners` on screen (corner `i` at bits `i` of a, b, c): past
+/// the vector's end, in the widest gap between the three box edges that meet
+/// there, [`AXIS_CLEAR`] label heights from them and at least
+/// [`AXIS_AHEAD`] from the corner. `None` for an axis seen end-on, which has
+/// no edge to label.
+fn axis_spot(corners: &[[f32; 2]; 8], k: usize, size: f32) -> Option<[f32; 2]> {
+    use std::f32::consts::{FRAC_PI_2, PI, TAU};
+    let bit = 1 << k;
+    let at = |i: usize| corners.get(i).copied().unwrap_or_default();
+    let end = at(bit);
+    let origin = at(0);
+    if (end[0] - origin[0]).hypot(end[1] - origin[1]) < size {
+        return None;
+    }
+    let edges = [0, bit | ((bit << 1) % 7), bit | ((bit << 2) % 7)].map(|i| {
+        let n = at(i);
+        (n[1] - end[1]).atan2(n[0] - end[0])
+    });
+    let gap = |t: f32| {
+        edges
+            .iter()
+            .map(|e| {
+                let d = (t - e).rem_euclid(TAU);
+                d.min(TAU - d)
+            })
+            .fold(PI, f32::min)
+    };
+    let (best, wide) = (0..72)
+        .map(|i| {
+            let t = i as f32 * TAU / 72.;
+            (t, gap(t))
+        })
+        .fold(
+            (0., f32::NEG_INFINITY),
+            |b, c| if c.1 > b.1 { c } else { b },
+        );
+    let reach = if wide >= FRAC_PI_2 {
+        AXIS_AHEAD
+    } else {
+        (1.1 * AXIS_CLEAR / wide.sin().max(0.2)).clamp(AXIS_AHEAD, 2.)
+    } * size;
+    Some([end[0] + best.cos() * reach, end[1] + best.sin() * reach])
+}
+
+/// The on-screen distance from `p` to the segment from `a` to `b`.
+fn to_segment(p: [f32; 3], a: [f32; 3], b: [f32; 3]) -> f32 {
+    let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+    let n = dx * dx + dy * dy;
+    let t = if n > 1e-12 {
+        (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / n).clamp(0., 1.)
+    } else {
+        0.
+    };
+    (p[0] - a[0] - t * dx).hypot(p[1] - a[1] - t * dy)
+}
+
+/// The rotation taking the orthonormal rows of `basis` to screen x, y and z,
+/// then tilted by `about_x` and `about_y` radians so the view reads as 3D.
+fn tilted(basis: [[f64; 3]; 3], about_x: f64, about_y: f64) -> [f32; 4] {
+    type V = [f64; 3];
+    let dot = |a: V, b: V| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    let (sx, cx) = about_x.sin_cos();
+    let (sy, cy) = about_y.sin_cos();
     let rx = [[1., 0., 0.], [0., cx, -sx], [0., sx, cx]];
     let ry = [[cy, 0., sy], [0., 1., 0.], [-sy, 0., cy]];
     let mul = |a: [V; 3], b: [V; 3]| {
@@ -1468,6 +2129,51 @@ impl View<'_> {
     }
 }
 
+impl View<'_> {
+    /// Where the balls `atoms`, in drawing order, overlap: for each ball cut
+    /// by others its visible part, `None` when nothing of it shows. Each seam
+    /// goes with the later ball of its pair. Balls fading in after `grown`
+    /// cut only each other.
+    fn contacts(&self, atoms: &[usize], grown: f32) -> HashMap<usize, Option<Contact>> {
+        let balls: Vec<contact::Ball> = atoms
+            .iter()
+            .filter_map(|&i| {
+                let symbol = *self.symbols.get(i)?;
+                Some(contact::Ball {
+                    p: *self.rotated.get(i)?,
+                    r: self.style.atom_radius(symbol),
+                    fading: symbol == "H" && grown < 1.,
+                })
+            })
+            .collect();
+        if balls.len() != atoms.len() {
+            return HashMap::new();
+        }
+        let eye = (self.perspective > 0.).then_some(self.camera);
+        let found = contact::contacts(&balls, eye, |q| self.project(q).0);
+        let mut out: HashMap<usize, Option<Contact>> = HashMap::new();
+        for (&atom, seen) in atoms.iter().zip(found.seen) {
+            let value = match seen {
+                None => continue,
+                Some(contact::Seen::Hidden) => None,
+                Some(contact::Seen::Shown { region, rim }) => Some(Contact {
+                    region,
+                    rim,
+                    seams: vec![],
+                }),
+            };
+            out.insert(atom, value);
+        }
+        // Balls are in drawing order, so the later of a pair is the larger.
+        for ((_, b), runs) in found.seams {
+            if let Some(Some(later)) = atoms.get(b).and_then(|b| out.get_mut(b)) {
+                later.seams.extend(runs);
+            }
+        }
+        out
+    }
+}
+
 /// A stick half shorter on screen than this fraction of its half width is
 /// seen end-on and left to its joint.
 const END_ON: f32 = 0.25;
@@ -1568,6 +2274,8 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         /// The half-bond from a point toward another.
         Bond(usize, usize),
         Atom(usize),
+        /// A dashed half-bond leaving the cell from a point, with its end.
+        Crossing(usize, [f32; 3]),
     }
     // Each half-bond sorts at its own depth but never after its atom, so the
     // ball covers the half that points toward the viewer yet a half-bond
@@ -1604,6 +2312,12 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     } else {
         bonds.iter().flat_map(|&(a, b)| [a, b]).collect()
     };
+    let crossing = crossing_halves(&view, model);
+    for &(i, end) in &crossing {
+        let ps = *rotated.get(i)?;
+        let z = (ps[2] + end[2]) / 2. - 0.05;
+        items.push((z.min(ps[2]), 0, z, Item::Crossing(i, end)));
+    }
     items.extend(
         view.balls()
             .filter(|(i, ..)| {
@@ -1622,9 +2336,22 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         .enumerate()
         .filter_map(|(n, (.., item))| match item {
             Item::Bond(s, o) => Some(((*s, *o), n)),
-            Item::Atom(_) => None,
+            Item::Atom(_) | Item::Crossing(..) => None,
         })
         .collect();
+    // Overlapping balls show only what lies in front, with seams between.
+    let mut contacts = if matches!(style, Style::SpaceFilling | Style::BallStick) {
+        let atoms: Vec<usize> = items
+            .iter()
+            .filter_map(|(.., item)| match item {
+                Item::Atom(i) => Some(*i),
+                Item::Bond(..) | Item::Crossing(..) => None,
+            })
+            .collect();
+        view.contacts(&atoms, grown)
+    } else {
+        HashMap::new()
+    };
     let shade = |base: [f32; 3], stops: &[(f32, [f32; 3], f32)]| {
         stops
             .iter()
@@ -1640,7 +2367,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     let mut rims: (Vec<Vec<Point>>, Vec<Vec<Point>>) = Default::default();
     let mut drawn = vec![];
     for (n, (_, _, z, item)) in items.into_iter().enumerate() {
-        let (Item::Bond(i, _) | Item::Atom(i)) = item;
+        let (Item::Bond(i, _) | Item::Atom(i) | Item::Crossing(i, _)) = item;
         let fading = view.symbols.get(i) == Some(&"H") && grown < 1.;
         let symbol = *view.symbols.get(i)?;
         let base = mix(
@@ -1650,6 +2377,25 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         );
         let wire = rgb(mix(base, BLACK, if symbol == "C" { 0.35 } else { 0.1 }));
         let primitive = match item {
+            Item::Crossing(i, end) => {
+                let (start, f) = view.project(*rotated.get(i)?);
+                let (end, _) = view.project(end);
+                let width = match style {
+                    Style::Wireframe => view.wire,
+                    _ => 1.2 * BOND_RADIUS * view.scale * f,
+                };
+                Primitive::Wire {
+                    from: start,
+                    to: end,
+                    width,
+                    color: if style == Style::Wireframe {
+                        wire
+                    } else {
+                        rgb(base)
+                    },
+                    dash: width.max(line * 2.) * 1.5,
+                }
+            }
             Item::Atom(i) if style == Style::Wireframe => {
                 let center = view.project(*rotated.get(i)?).0;
                 Primitive::Sphere {
@@ -1658,9 +2404,15 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                     focal: center,
                     stops: vec![(0., wire), (1., wire)],
                     outline: None,
+                    contact: None,
                 }
             }
             Item::Atom(i) => {
+                let contact = match contacts.remove(&i) {
+                    Some(None) => continue,
+                    Some(Some(contact)) => Some(Box::new(contact)),
+                    None => None,
+                };
                 let (q, f) = view.project(*rotated.get(i)?);
                 let r = style.atom_radius(symbol) * view.scale * f;
                 if style == Style::Stick {
@@ -1699,6 +2451,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                     } else {
                         outline(line)
                     },
+                    contact,
                 }
             }
             Item::Bond(s, o) => {
@@ -1709,6 +2462,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                         to: e,
                         width: half * 2.,
                         color: wire,
+                        dash: 0.,
                     }
                 } else {
                     let (dx, dy) = (e.x - a.x, e.y - a.y);
@@ -1801,6 +2555,29 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             primitive
         }
     };
+    // The cell's hidden edges lie behind the model and its front edges,
+    // origin and labels in front; they fade in with the hydrogens.
+    let ink = float(doc.canvas_theme.color([0; 3]));
+    let place = |p| rotate(model.rotation, sub(p, view.center));
+    let project = |q| view.project(q).0;
+    let frame = CellView {
+        place: &place,
+        project: &project,
+        camera: (view.perspective > 0.).then_some(view.camera),
+        width: (model.size / 220.).clamp(1., 3.),
+        size: (model.size * 0.06).clamp(8., 60.),
+        crowded: [false; 3],
+    };
+    let (behind, front) = model
+        .cell
+        .as_ref()
+        .map(|cell| {
+            let (hidden, edges, marks) = cell_ink(&frame, cell, ink, float(backdrop));
+            (hidden, [edges, marks].concat())
+        })
+        .unwrap_or_default();
+    let cell_fading = grown < 1.;
+    out.extend(behind.into_iter().map(|p| fade_in(cell_fading, p)));
     if let Some(outline) = outline(line * 2.) {
         for (polygons, fading) in [(rims.0, false), (rims.1, true)] {
             if !polygons.is_empty() {
@@ -1809,7 +2586,931 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         }
     }
     out.extend(drawn.into_iter().map(|(fading, p)| fade_in(fading, p)));
+    out.extend(front.into_iter().map(|p| fade_in(cell_fading, p)));
     Some(())
+}
+
+/// Each bond leaving the cell as the point it starts from and the rotated
+/// middle of the bond to the partner's copy in the next cell, both ends shown;
+/// none in space-filling.
+fn crossing_halves(view: &View, model: &Model3d) -> Vec<(usize, [f32; 3])> {
+    let Some(cell) = model
+        .cell
+        .as_ref()
+        .filter(|_| model.style != Style::SpaceFilling)
+    else {
+        return vec![];
+    };
+    let index: HashMap<_, _> = model
+        .atoms
+        .iter()
+        .enumerate()
+        .map(|(i, a)| (a.id, i))
+        .collect();
+    let shown = |i: usize| view.shown.get(i) == Some(&true);
+    let mut halves = vec![];
+    for c in &cell.crossing {
+        let (Some(&ia), Some(&ib)) = (index.get(&c.a), index.get(&c.b)) else {
+            continue;
+        };
+        let (Some(pa), Some(pb), Some(&ra), Some(&rb)) = (
+            model.atoms.get(ia),
+            model.atoms.get(ib),
+            view.rotated.get(ia),
+            view.rotated.get(ib),
+        ) else {
+            continue;
+        };
+        if !shown(ia) || !shown(ib) {
+            continue;
+        }
+        let shift = cell.translation(c.image);
+        // From a toward b's copy, and from b toward a's copy the other way.
+        let ab = sub(zip3(pb.xyz, shift, |p, t| p + t), pa.xyz);
+        let half = rotate(model.rotation, ab.map(|v| v / 2.));
+        halves.push((ia, zip3(ra, half, |p, h| p + h)));
+        halves.push((ib, zip3(rb, half, |p, h| p - h)));
+    }
+    halves
+}
+
+/// How a cell box is drawn: each model point placed in view space (x right,
+/// y up, z toward the viewer), each view point projected to the drawing, the
+/// camera's distance with perspective, the line width and the label size.
+struct CellView<'a> {
+    place: &'a dyn Fn([f32; 3]) -> [f32; 3],
+    project: &'a dyn Fn([f32; 3]) -> Point,
+    camera: Option<f32>,
+    width: f32,
+    size: f32,
+    /// Whether an atom sits on the end of each lattice vector, so its label
+    /// keeps further off.
+    crowded: [bool; 3],
+}
+
+/// The cell box: its hidden edges dashed, its front edges with the origin
+/// marker, and the a, b and c labels, in the theme's ink softened toward the
+/// backdrop.
+fn cell_ink(
+    view: &CellView,
+    cell: &Cell,
+    ink: [f32; 3],
+    backdrop: [f32; 3],
+) -> (Vec<Primitive>, Vec<Primitive>, Vec<Primitive>) {
+    let place = view.place;
+    let corners = cell.corners().map(place);
+    let corner = |bits: [usize; 3]| corners.get(bits[0] | bits[1] << 1 | bits[2] << 2).copied();
+    let start = place([0.; 3]);
+    let vectors = cell.vectors.map(|v| sub(place(v), start));
+    let cross = |a: [f32; 3], b: [f32; 3]| {
+        [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ]
+    };
+    let dot = |a: [f32; 3], b: [f32; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    // Whether the face at side `s` of axis `k` faces the viewer.
+    let front = |k: usize, s: usize| -> bool {
+        let (k1, k2) = ((k + 1) % 3, (k + 2) % 3);
+        let (Some(&v), Some(&v1), Some(&v2)) = (vectors.get(k), vectors.get(k1), vectors.get(k2))
+        else {
+            return true;
+        };
+        let mut normal = cross(v1, v2);
+        // Outward: along +v on the far side, against it at the origin's.
+        if (dot(normal, v) < 0.) == (s == 1) {
+            normal = normal.map(|x| -x);
+        }
+        let mut bits = [0; 3];
+        if let Some(b) = bits.get_mut(k) {
+            *b = s;
+        }
+        let on = corner(bits).unwrap_or_default();
+        let toward = view
+            .camera
+            .map_or([0., 0., 1.], |camera| sub([0., 0., camera], on));
+        dot(normal, toward) > 0.
+    };
+    let (width, size) = (view.width, view.size);
+    let edge = rgb(mix(ink, backdrop, 0.45));
+    let hidden = rgb(mix(ink, backdrop, 0.6));
+    let (mut behind, mut edges, mut ahead) = (vec![], vec![], vec![]);
+    for k in 0..3 {
+        let (k1, k2) = ((k + 1) % 3, (k + 2) % 3);
+        for (i, j) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+            let mut bits = [0; 3];
+            for (axis, value) in [(k1, i), (k2, j)] {
+                if let Some(b) = bits.get_mut(axis) {
+                    *b = value;
+                }
+            }
+            let Some(from) = corner(bits) else { continue };
+            if let Some(b) = bits.get_mut(k) {
+                *b = 1;
+            }
+            let Some(to) = corner(bits) else { continue };
+            let (from, to) = ((view.project)(from), (view.project)(to));
+            if front(k1, i) || front(k2, j) {
+                edges.push(Primitive::Wire {
+                    from,
+                    to,
+                    width,
+                    color: edge,
+                    dash: 0.,
+                });
+            } else {
+                behind.push(Primitive::Wire {
+                    from,
+                    to,
+                    width,
+                    color: hidden,
+                    dash: width * 3.,
+                });
+            }
+        }
+    }
+    let label = rgb(mix(ink, backdrop, 0.15));
+    // Text colours are given for a light canvas; the canvas and exports
+    // turn them for a dark one, as they do atom labels.
+    let text = rgb(mix(BLACK, WHITE, 0.15));
+    if let Some(origin) = corner([0; 3]) {
+        let center = (view.project)(origin);
+        edges.push(Primitive::Sphere {
+            center,
+            radius: width * 1.8,
+            focal: center,
+            stops: vec![(0., label), (1., label)],
+            outline: None,
+            contact: None,
+        });
+    }
+    let style = crate::typography::TextStyle {
+        italic: true,
+        ..Default::default()
+    };
+    // Each label sits just past its axis's end, in the widest gap between
+    // the box edges that meet there.
+    let flat = corners.map(|c| {
+        let p = (view.project)(c);
+        [p.x, p.y]
+    });
+    let mut labels = vec![];
+    for (k, name) in ["a", "b", "c"].into_iter().enumerate() {
+        let w = crate::style::styled_text_width(name, size, &style);
+        let Some([mut x, mut y]) = axis_spot(&flat, k, size) else {
+            continue;
+        };
+        // Past an atom on the corner, one and a half label heights further out.
+        if view.crowded.get(k) == Some(&true)
+            && let Some(end) = flat.get(1 << k)
+        {
+            let (dx, dy) = (x - end[0], y - end[1]);
+            let n = dx.hypot(dy).max(1e-6);
+            (x, y) = (x + dx / n * 1.5 * size, y + dy / n * 1.5 * size);
+        }
+        let at = Point::new(x, y);
+        labels.push(Primitive::Text {
+            position: at.offset(-w / 2., -size * 0.6),
+            text: name.into(),
+            size,
+            color: text,
+            style: style.clone(),
+        });
+    }
+    // A label over the model stays legible on a halo of paper, as atom
+    // labels over bonds do.
+    ahead.push(Primitive::Halo {
+        radius: size * 0.15,
+        primitives: labels.clone(),
+    });
+    ahead.extend(labels);
+    (behind, edges, ahead)
+}
+
+/// What the scene adds for crystals shown in 2D: the cell's hidden edges and
+/// the dashed half-bonds leaving it, drawn under the bonds; its front edges
+/// and origin marker, drawn over them; its axis labels, drawn last; and the
+/// atoms whose labels sit on a halo of paper so no cell edge runs through
+/// them.
+#[derive(Default)]
+pub(crate) struct FlatCells {
+    pub behind: Vec<Primitive>,
+    pub front: Vec<Primitive>,
+    pub above: Vec<Primitive>,
+    pub haloed: Vec<u64>,
+}
+
+/// [`FlatCells`] for each model of `models` with a cell drawn in 2D (alone or
+/// beside its 3D model), drawn
+/// where `doc`'s 2D atoms are: a parallel projection of the model fitted to
+/// them, so the box follows the drawing however it was laid out or moved.
+pub(crate) fn flat_cells(models: &[Model3d], doc: &Document) -> FlatCells {
+    let mut out = FlatCells::default();
+    let style = &doc.drawing_style;
+    let line = style.world(style.line_width_pt);
+    let ink = float(doc.canvas_theme.color([0; 3]));
+    let backdrop = float(doc.canvas_theme.background());
+    // Beside a 3D model (Both) the 2D drawing keeps its own cell too.
+    for model in models.iter().filter(|m| m.display != Display::ThreeD) {
+        let (Some(cell), Some(fit)) = (&model.cell, Flat::fit(doc, model)) else {
+            continue;
+        };
+        let place = |p| fit.place(p);
+        let project = |q: [f32; 3]| Point::new(q[0], -q[1]);
+        // The box and its labels hold every cell shown.
+        let repeat = model.repeat.map(|n| i32::from(n.clamp(1, MAX_REPEAT)));
+        let sites = shown_sites(doc, model);
+        let at_origin: HashSet<u64> = model
+            .atoms
+            .iter()
+            .filter(|a| cell.fractional(a.xyz).iter().all(|f| f.abs() < ON_FACE))
+            .map(|a| a.id)
+            .collect();
+        let crowded = [0, 1, 2].map(|k| {
+            let mut end = [0; 3];
+            if let (Some(slot), Some(n)) = (end.get_mut(k), repeat.get(k)) {
+                *slot = *n;
+            }
+            sites
+                .iter()
+                .any(|(id, c)| *c == end && at_origin.contains(id))
+        });
+        let view = CellView {
+            place: &place,
+            project: &project,
+            camera: None,
+            width: line,
+            size: style.font_size(),
+            crowded,
+        };
+        let whole = Cell {
+            vectors: [0, 1, 2].map(|k| {
+                let n = repeat.get(k).copied().unwrap_or(1) as f32;
+                cell.vectors
+                    .get(k)
+                    .copied()
+                    .unwrap_or_default()
+                    .map(|v| v * n)
+            }),
+            crossing: vec![],
+        };
+        let (hidden, edges, marks) = cell_ink(&view, &whole, ink, backdrop);
+        out.behind.extend(hidden);
+        out.behind.extend(seams(&view, cell, repeat, ink, backdrop));
+        out.front.extend(edges);
+        out.above.extend(marks);
+        let cells = grid(repeat);
+        let inside = |c: [i32; 3]| cells.contains(&c);
+        let mut shown_cells: Vec<[i32; 3]> = sites.iter().map(|(_, c)| *c).collect();
+        shown_cells.sort_unstable();
+        shown_cells.dedup();
+        // The copies of the cell and of the atoms on its far faces, lighter,
+        // with the bonds between them.
+        let mut copies = None;
+        let mut ghost_labels = vec![];
+        if sites.len() > model.atoms.len()
+            && let Some((ghost, index)) = ghosts(doc, model, cell, &fit, &sites)
+        {
+            // The copies' bonds lie under the drawing's; their labels go over
+            // the cell's edges on a halo of paper, as the drawing's own labels
+            // do, so no edge runs through a copy on a corner.
+            let (labels, rest): (Vec<_>, Vec<_>) = crate::scene::primitives(&ghost)
+                .into_iter()
+                .filter(|p| !matches!(p, Primitive::Halo { .. }))
+                .partition(is_text);
+            let lighter = |p| Primitive::Opacity {
+                alpha: GHOST,
+                primitive: Box::new(p),
+            };
+            out.behind.extend(rest.into_iter().map(lighter));
+            if !labels.is_empty() {
+                // As for the drawing's labels, the middle of each glyph's
+                // box is covered too, so no edge shows through a counter.
+                let plain: Vec<_> = labels.iter().map(without_opacity).collect();
+                let middles = crate::scene::label_ink_boxes(&plain)
+                    .into_iter()
+                    .map(|(lo, hi)| {
+                        let inset = (hi.x - lo.x).min(hi.y - lo.y) * 0.25;
+                        let (lo, hi) = (lo.offset(inset, inset), hi.offset(-inset, -inset));
+                        Primitive::Polygon(vec![
+                            lo,
+                            Point::new(hi.x, lo.y),
+                            hi,
+                            Point::new(lo.x, hi.y),
+                        ])
+                    });
+                ghost_labels.push(Primitive::Halo {
+                    radius: crate::scientific::label_halo_radius(),
+                    primitives: labels.iter().cloned().chain(middles).collect(),
+                });
+                ghost_labels.extend(labels.into_iter().map(lighter));
+            }
+            copies = Some((ghost, index));
+        }
+        // Each bond leaving the cells shown is a short, light dashed stub
+        // from its atom's label, a little over a third of the way to the
+        // partner's copy, so it hints at the next cell without reaching far
+        // past the box.
+        let at = |id: u64| model.atoms.iter().find(|a| a.id == id).map(|a| a.xyz);
+        let origin = fit.place([0.; 3]);
+        for c in &cell.crossing {
+            let (Some(pa), Some(pb)) = (at(c.a), at(c.b)) else {
+                continue;
+            };
+            let far = zip3(pb, cell.translation(c.image), |p, t| p + t);
+            let stub = sub(fit.place(sub(far, pa).map(|v| v * STUB)), origin);
+            let image = c.image.map(i32::from);
+            for (id, partner, sign) in [(c.a, c.b, 1), (c.b, c.a, -1)] {
+                // From every shown copy, the far-face ones included.
+                for &from in &shown_cells {
+                    let to = zip3(from, image, |f, i| f + sign * i);
+                    let drawn = copies
+                        .as_ref()
+                        .is_some_and(|(_, index)| index.contains_key(&(partner, to)));
+                    if inside(to) || drawn {
+                        continue;
+                    }
+                    let (label_doc, atom, alpha) = if from == [0; 3] {
+                        (doc, doc.atom(id), 1.)
+                    } else {
+                        let Some((ghost, index)) = &copies else {
+                            continue;
+                        };
+                        let copy = index.get(&(id, from)).and_then(|i| ghost.atom(*i));
+                        (ghost, copy, GHOST)
+                    };
+                    let Some(atom) = atom.filter(|a| label_doc.atom_visible(a.id)) else {
+                        continue;
+                    };
+                    let s = sign as f32;
+                    if let Some(wire) =
+                        stub_wire(label_doc, atom, (s * stub[0], -s * stub[1]), ink, backdrop)
+                    {
+                        out.behind.push(if alpha < 1. {
+                            Primitive::Opacity {
+                                alpha,
+                                primitive: Box::new(wire),
+                            }
+                        } else {
+                            wire
+                        });
+                    }
+                }
+            }
+        }
+        out.front.extend(ghost_labels);
+        out.haloed.extend(model.atoms.iter().map(|a| a.id));
+    }
+    out
+}
+
+/// `p` without its fading.
+fn without_opacity(p: &Primitive) -> Primitive {
+    match p {
+        Primitive::Opacity { primitive, .. } => without_opacity(primitive),
+        other => other.clone(),
+    }
+}
+
+/// Whether `p` is text, as atom labels are, perhaps faded.
+fn is_text(p: &Primitive) -> bool {
+    match p {
+        Primitive::Text { .. } => true,
+        Primitive::Opacity { primitive, .. } => is_text(primitive),
+        _ => false,
+    }
+}
+
+/// A dashed stub from `atom`'s label along `(dx, dy)` in drawing units, or
+/// `None` where one seen nearly end-on would be a speck beside its label.
+fn stub_wire(
+    doc: &Document,
+    atom: &Atom,
+    (dx, dy): (f32, f32),
+    ink: [f32; 3],
+    backdrop: [f32; 3],
+) -> Option<Primitive> {
+    let style = &doc.drawing_style;
+    let line = style.world(style.line_width_pt);
+    let length = dx.hypot(dy);
+    if length < 0.1 {
+        return None;
+    }
+    let (ux, uy) = (dx / length, dy / length);
+    let boxes = crate::scene::atom_label_ink_boxes(atom, doc);
+    let margin = style.world(style.margin_width_pt);
+    let from = crate::scene::label_end(atom.position, ux, uy, &boxes, length, margin);
+    let to = atom.position.offset(dx, dy);
+    (from.distance(to) >= style.font_size() / 4.).then_some(Primitive::Wire {
+        from,
+        to,
+        width: line,
+        color: rgb(mix(ink, backdrop, 0.45)),
+        dash: line * 2.5,
+    })
+}
+
+/// Every cell of a `repeat` of cells, the model's own first.
+fn grid(repeat: [i32; 3]) -> Vec<[i32; 3]> {
+    let [na, nb, nc] = repeat;
+    (0..na)
+        .flat_map(|i| (0..nb).flat_map(move |j| (0..nc).map(move |k| [i, j, k])))
+        .collect()
+}
+
+/// Thin, light lines where neighbouring cells of a repeat meet, round the
+/// outside of the box: each inner lattice plane's outline.
+fn seams(
+    view: &CellView,
+    cell: &Cell,
+    repeat: [i32; 3],
+    ink: [f32; 3],
+    backdrop: [f32; 3],
+) -> Vec<Primitive> {
+    let mut out = vec![];
+    let color = rgb(mix(ink, backdrop, 0.7));
+    let n = repeat.map(|v| v as f32);
+    for k in 0..3 {
+        let (k1, k2) = ((k + 1) % 3, (k + 2) % 3);
+        for t in 1..repeat.get(k).copied().unwrap_or(1) {
+            let ring = [(0., 0.), (1., 0.), (1., 1.), (0., 1.)].map(|(u, v)| {
+                let mut f = [0.; 3];
+                let at = |axis: usize| n.get(axis).copied().unwrap_or(1.);
+                for (axis, value) in [(k, t as f32), (k1, u * at(k1)), (k2, v * at(k2))] {
+                    if let Some(slot) = f.get_mut(axis) {
+                        *slot = value;
+                    }
+                }
+                (view.project)((view.place)(cell.at(f)))
+            });
+            for (i, from) in ring.iter().enumerate() {
+                let to = ring.get((i + 1) % 4).copied().unwrap_or(*from);
+                out.push(Primitive::Wire {
+                    from: *from,
+                    to,
+                    width: view.width * 0.6,
+                    color,
+                    dash: 0.,
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Where each atom's copy in each cell of a repeat went, by atom and cell.
+type Copies = HashMap<(u64, [i32; 3]), u64>;
+
+/// Every copy of `model`'s atoms its 2D drawing shows, by atom and cell:
+/// each atom in every cell of the repeat, and again, as crystallographers
+/// draw a cell, one cell on along each axis where it lies on the near face of
+/// that axis, so the far faces, edges and corners of the whole repeat are
+/// filled too. A molecule goes by its centre, so it is copied whole.
+pub fn shown_sites(doc: &Document, model: &Model3d) -> Vec<(u64, [i32; 3])> {
+    let Some(cell) = &model.cell else {
+        return model.atoms.iter().map(|a| (a.id, [0; 3])).collect();
+    };
+    let repeat = model.repeat.map(|n| i32::from(n.clamp(1, MAX_REPEAT)));
+    // Molecules: groups joined by bonds inside the cell and none leaving it.
+    let index: HashMap<u64, usize> = model
+        .atoms
+        .iter()
+        .enumerate()
+        .map(|(i, a)| (a.id, i))
+        .collect();
+    let mut group: Vec<usize> = (0..model.atoms.len()).collect();
+    fn root(group: &[usize], mut i: usize) -> usize {
+        while let Some(&up) = group.get(i).filter(|up| **up != i) {
+            i = up;
+        }
+        i
+    }
+    for bond in &doc.bonds {
+        if let (Some(&a), Some(&b)) = (index.get(&bond.a), index.get(&bond.b)) {
+            let (ra, rb) = (root(&group, a), root(&group, b));
+            if let Some(slot) = group.get_mut(ra) {
+                *slot = rb;
+            }
+        }
+    }
+    let network: HashSet<usize> = cell
+        .crossing
+        .iter()
+        .flat_map(|c| [c.a, c.b])
+        .filter_map(|id| index.get(&id).map(|i| root(&group, *i)))
+        .collect();
+    let mut centres: HashMap<usize, ([f32; 3], f32)> = HashMap::new();
+    for (i, atom) in model.atoms.iter().enumerate() {
+        let entry = centres.entry(root(&group, i)).or_insert(([0.; 3], 0.));
+        entry.0 = zip3(entry.0, atom.xyz, |s, p| s + p);
+        entry.1 += 1.;
+    }
+    let mut sites = vec![];
+    let [na, nb, nc] = repeat;
+    for i in 0..=na {
+        for j in 0..=nb {
+            for k in 0..=nc {
+                let c = [i, j, k];
+                for (n, atom) in model.atoms.iter().enumerate() {
+                    let r = root(&group, n);
+                    let point = match centres.get(&r) {
+                        Some((sum, count)) if !network.contains(&r) => sum.map(|v| v / count),
+                        _ => atom.xyz,
+                    };
+                    let f = cell.fractional(point);
+                    let shown = (0..3).all(|axis| {
+                        let (at, n) = (c.get(axis), repeat.get(axis));
+                        at < n || f.get(axis).is_some_and(|v| v.abs() < ON_FACE)
+                    });
+                    if shown {
+                        sites.push((atom.id, c));
+                    }
+                }
+            }
+        }
+    }
+    sites
+}
+
+/// How near a fractional coordinate must be to 0 for an atom to lie on a
+/// face of its cell.
+const ON_FACE: f32 = 1e-3;
+
+/// The copies of `model`'s atoms at `sites` (by atom and cell, the model's
+/// own included) at their places in the drawing, with each cell's bonds and
+/// the bonds between cells where both ends are shown, as a drawing of their
+/// own, and where each atom's copy in each cell went.
+fn ghosts(
+    doc: &Document,
+    model: &Model3d,
+    cell: &Cell,
+    fit: &Flat,
+    sites: &[(u64, [i32; 3])],
+) -> Option<(Document, Copies)> {
+    let mut ghost = Document {
+        canvas_theme: doc.canvas_theme,
+        color_theme: doc.color_theme,
+        custom_theme: doc.custom_theme.clone(),
+        drawing_style: doc.drawing_style.clone(),
+        atom_labels: doc.atom_labels.clone(),
+        ..Default::default()
+    };
+    let ids = model.ids();
+    let origin = fit.place([0.; 3]);
+    let mut index = HashMap::new();
+    let mut next = 1;
+    for &(id, c) in sites {
+        let Some(atom) = doc.atom(id) else { continue };
+        let shift = sub(fit.place(cell.at(c.map(|v| v as f32))), origin);
+        let mut copy = atom.clone();
+        copy.id = next;
+        copy.position = atom.position.offset(shift[0], -shift[1]);
+        copy.depth = atom.depth + shift[2];
+        index.insert((id, c), next);
+        ghost.atoms.push(copy);
+        next += 1;
+    }
+    let mut cells: Vec<[i32; 3]> = sites.iter().map(|(_, c)| *c).collect();
+    cells.sort_unstable();
+    cells.dedup();
+    for &c in &cells {
+        for bond in doc.bonds.iter().filter(|b| ids.contains(&b.a)) {
+            let (Some(&a), Some(&b)) = (index.get(&(bond.a, c)), index.get(&(bond.b, c))) else {
+                continue;
+            };
+            let mut copy = bond.clone();
+            (copy.a, copy.b) = (a, b);
+            ghost.bonds.push(copy);
+        }
+        for x in &cell.crossing {
+            let to = zip3(c, x.image.map(i32::from), |c, i| c + i);
+            if let (Some(&a), Some(&b)) = (index.get(&(x.a, c)), index.get(&(x.b, to))) {
+                ghost
+                    .bonds
+                    .push(crate::document::Bond::plain(a, b, 1, "plain"));
+            }
+        }
+    }
+    (!ghost.atoms.is_empty()).then_some((ghost, index))
+}
+
+/// A direction a crystal's 2D drawing can look along.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Along {
+    A,
+    B,
+    C,
+    /// The body diagonal a + b + c.
+    Diagonal,
+}
+
+impl Along {
+    pub const ALL: [Self; 4] = [Self::A, Self::B, Self::C, Self::Diagonal];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::A => "a",
+            Self::B => "b",
+            Self::C => "c",
+            Self::Diagonal => "[111]",
+        }
+    }
+
+    /// The rotation looking straight down this direction of `cell`, with c
+    /// up, or b up looking down c.
+    pub fn rotation(self, cell: &Cell) -> [f32; 4] {
+        quaternion(self.basis(cell))
+    }
+
+    /// The rows of the rotation looking straight down this direction of
+    /// `cell`, with c up, or b up looking down c.
+    fn basis(self, cell: &Cell) -> [[f64; 3]; 3] {
+        type V = [f64; 3];
+        let dot = |a: V, b: V| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+        let unit = |v: V| {
+            let n = dot(v, v).sqrt().max(1e-300);
+            v.map(|x| x / n)
+        };
+        let [a, b, c] = cell.vectors.map(|v| v.map(f64::from));
+        let (toward, up) = match self {
+            Self::A => (a, c),
+            Self::B => (b, c),
+            Self::C => (c, b),
+            Self::Diagonal => (zip3(zip3(a, b, |a, b| a + b), c, |s, c| s + c), c),
+        };
+        let z = unit(toward);
+        let d = dot(up, z);
+        let y = unit(zip3(up, z, |u, z| u - d * z));
+        let x = [
+            y[1] * z[2] - y[2] * z[1],
+            y[2] * z[0] - y[0] * z[2],
+            y[0] * z[1] - y[1] * z[0],
+        ];
+        [x, y, z]
+    }
+}
+
+/// Place each of `model`'s 2D atoms where its view shows them, at its 2D
+/// scale ([`flat_scale`]), keeping their depth, as MOL import keeps 3D
+/// coordinates; a linear carbon, as CO₂'s, shows its C.
+pub fn lay_out_flat(doc: &mut Document, model: &Model3d) {
+    let units = flat_scale(doc, model);
+    let positions: HashMap<u64, [f32; 3]> = viewed(doc, model).into_iter().collect();
+    let linear: HashSet<u64> = model
+        .atoms
+        .iter()
+        .map(|a| a.id)
+        .filter(|id| linear_carbon(doc, model, *id))
+        .collect();
+    for atom in &mut doc.atoms {
+        if let Some([x, y, z]) = positions.get(&atom.id) {
+            atom.position = Point::new(x * units, -y * units);
+            atom.depth = z * units;
+        }
+        if linear.contains(&atom.id) {
+            atom.display.carbons = Some(crate::atom_labels::Carbons::All);
+        }
+    }
+}
+
+/// Turn model `index`'s crystal to look along `along` and lay its 2D drawing
+/// out again, centred where it was; returns whether the drawing changed.
+pub fn look_along(doc: &mut Document, index: usize, along: Along) -> bool {
+    let Some(model) = doc.models.get(index) else {
+        return false;
+    };
+    let Some(cell) = &model.cell else {
+        return false;
+    };
+    let mut turned = model.clone();
+    turned.rotation = along_view(doc, model, cell, along).1;
+    let before = layout_center(doc, model);
+    let atoms = doc.atoms.clone();
+    lay_out_flat(doc, &turned);
+    if let (Some(before), Some(after)) = (before, layout_center(doc, &turned)) {
+        let (dx, dy) = (before.x - after.x, before.y - after.y);
+        for atom in doc.atoms.iter_mut().filter(|a| turned.contains(a.id)) {
+            atom.position = atom.position.offset(dx, dy);
+        }
+    }
+    let changed = doc.atoms != atoms || doc.models.get(index) != Some(&turned);
+    if let Some(slot) = doc.models.get_mut(index) {
+        *slot = turned;
+    }
+    changed
+}
+
+/// The direction along which the labels of every cell `model` shows keep
+/// farthest apart, by [`separation`].
+pub fn best_along(doc: &Document, model: &Model3d) -> Along {
+    let Some(cell) = &model.cell else {
+        return Along::C;
+    };
+    Along::ALL
+        .into_iter()
+        .map(|along| (along_view(doc, model, cell, along).0, along))
+        .fold((f32::NEG_INFINITY, Along::C), |best, next| {
+            if next.0 > best.0 { next } else { best }
+        })
+        .1
+}
+
+/// The view looking along `along`, tilted a little, at most about 15°, where
+/// that keeps labels of atoms stacked one behind another apart, as rock
+/// salt's along c; with its score by [`separation`] over every cell shown.
+fn along_view(doc: &Document, model: &Model3d, cell: &Cell, along: Along) -> (f32, [f32; 4]) {
+    let k = flat_scale(doc, model) / doc.drawing_style.font_size().max(1e-3);
+    let repeat = model.repeat.map(|n| i32::from(n.clamp(1, MAX_REPEAT)));
+    let labelled = model.labelled(doc);
+    let atoms: Vec<_> = grid(repeat)
+        .into_iter()
+        .flat_map(|c| {
+            let shift = cell.at(c.map(|v| v as f32));
+            labelled
+                .iter()
+                .map(move |(_, p, n)| (zip3(*p, shift, |p, s| (p + s) * k), *n))
+        })
+        .collect();
+    let vectors = [0, 1, 2].map(|i| {
+        let n = repeat.get(i).copied().unwrap_or(1) as f32 * k;
+        cell.vectors
+            .get(i)
+            .copied()
+            .unwrap_or_default()
+            .map(|v| v * n)
+    });
+    let labels = Labels {
+        atoms: &atoms,
+        bonds: HashSet::new(),
+        stubs: &[],
+        lines: &[],
+    };
+    let basis = along.basis(cell);
+    let mut views = vec![];
+    for i in 0..=5 {
+        for j in -5..=5 {
+            let (x, y) = (0.05 * f64::from(i), 0.05 * f64::from(j));
+            let q = tilted(basis, x, y);
+            views.push((separation(q, &labels, vectors), x.hypot(y), q));
+        }
+    }
+    let best = views.iter().map(|v| v.0).fold(f32::NEG_INFINITY, f32::max);
+    let good = 0.9 * best.min(GOOD_SEPARATION);
+    views
+        .into_iter()
+        .filter(|v| v.0 >= good)
+        .min_by(|u, v| u.1.total_cmp(&v.1))
+        .map_or((best, quaternion(basis)), |(score, _, q)| (score, q))
+}
+
+/// How much of a bond leaving the cell its 2D stub draws.
+const STUB: f32 = 0.4;
+
+/// A parallel projection of a model onto its 2D drawing: each point in
+/// ångström to drawing x, y up and depth. Where the atoms span space it is
+/// the least-squares fit to the 2D atoms, exact for any linear layout, so the
+/// box follows the drawing however it was laid out, moved or transformed.
+/// Where they lie in one plane or line (as silicon's two atoms), it is the
+/// model's view at the scale the atoms show, turned or mirrored in the
+/// drawing's plane as far as the atoms were since, placed on the atoms.
+struct Flat {
+    rows: [[f64; 3]; 3],
+    offset: [f64; 3],
+}
+
+impl Flat {
+    fn fit(doc: &Document, model: &Model3d) -> Option<Self> {
+        type V = [f64; 3];
+        let pairs: Vec<(V, V)> = model
+            .atoms
+            .iter()
+            .filter_map(|p| {
+                let a = doc.atom(p.id)?;
+                let to = [a.position.x, -a.position.y, a.depth];
+                Some((p.xyz.map(f64::from), to.map(f64::from)))
+            })
+            .collect();
+        let n = pairs.len() as f64;
+        if pairs.is_empty() {
+            return None;
+        }
+        let add = |u: V, v: V| zip3(u, v, |x, y| x + y);
+        let dot = |u: V, v: V| u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+        let (sx, sy) = pairs.iter().fold(([0.; 3], [0.; 3]), |(sx, sy), (x, y)| {
+            (add(sx, *x), add(sy, *y))
+        });
+        let (mx, my) = (sx.map(|v| v / n), sy.map(|v| v / n));
+        // Sums of the centred outer products x xᵀ and y xᵀ.
+        let outer = |u: V, v: V| u.map(|a| v.map(|b| a * b));
+        let (xx, yx) = pairs
+            .iter()
+            .fold(([[0.; 3]; 3], [[0.; 3]; 3]), |(xx, yx), (x, y)| {
+                let (x, y) = (zip3(*x, mx, |a, b| a - b), zip3(*y, my, |a, b| a - b));
+                (zip3(xx, outer(x, x), add), zip3(yx, outer(y, x), add))
+            });
+        let [[a00, a01, a02], [a10, a11, a12], [a20, a21, a22]] = xx;
+        let det = a00 * (a11 * a22 - a12 * a21) - a01 * (a10 * a22 - a12 * a20)
+            + a02 * (a10 * a21 - a11 * a20);
+        let spread = (a00 + a11 + a22) / 3.;
+        let solved = (spread > 1e-9 && det > 1e-6 * spread.powi(3))
+            .then(|| {
+                let rows: Option<Vec<V>> = yx.iter().map(|b| solve3(xx, *b)).collect();
+                <[V; 3]>::try_from(rows?).ok()
+            })
+            .flatten();
+        let rows = match solved {
+            Some(rows) => rows,
+            None => {
+                // The scale the atoms show, else the crystal's 2D scale.
+                let moved: f64 = pairs
+                    .iter()
+                    .map(|(_, y)| {
+                        let d = zip3(*y, my, |a, b| a - b);
+                        dot(d, d)
+                    })
+                    .sum();
+                let scale = if spread > 1e-9 {
+                    (moved / (3. * spread)).sqrt()
+                } else {
+                    f64::from(flat_scale(doc, model))
+                };
+                let [e0, e1, e2] = [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]]
+                    .map(|e| rotate(model.rotation, e).map(|v| f64::from(v) * scale));
+                let [r0, r1, r2] = [
+                    [e0[0], e1[0], e2[0]],
+                    [e0[1], e1[1], e2[1]],
+                    [e0[2], e1[2], e2[2]],
+                ];
+                // The drawing may have been turned or flipped since: the
+                // turn (or mirror and turn) in its plane that best takes the
+                // view's places of the atoms to where they are drawn.
+                let turn = |mirror: f64| {
+                    let (mut along, mut across) = (0., 0.);
+                    for (x, y) in &pairs {
+                        let d = zip3(*x, mx, |a, b| a - b);
+                        let (ux, uy) = (mirror * dot(r0, d), dot(r1, d));
+                        let (vx, vy) = (y[0] - my[0], y[1] - my[1]);
+                        along += ux * vx + uy * vy;
+                        across += ux * vy - uy * vx;
+                    }
+                    (along.hypot(across), across.atan2(along))
+                };
+                let ((fit, angle), mirror) = [1., -1.].map(|m| (turn(m), m)).into_iter().fold(
+                    ((f64::NEG_INFINITY, 0.), 1.),
+                    |best, next| {
+                        if next.0.0 > best.0.0 + 1e-9 {
+                            next
+                        } else {
+                            best
+                        }
+                    },
+                );
+                let (sin, cos) = if fit > 1e-9 {
+                    angle.sin_cos()
+                } else {
+                    (0., 1.)
+                };
+                let mirrored = r0.map(|v| v * mirror);
+                [
+                    zip3(mirrored, r1, |a, b| cos * a - sin * b),
+                    zip3(mirrored, r1, |a, b| sin * a + cos * b),
+                    r2,
+                ]
+            }
+        };
+        let offset = zip3(my, rows.map(|r| dot(r, mx)), |y, v| y - v);
+        Some(Self { rows, offset })
+    }
+
+    fn place(&self, p: [f32; 3]) -> [f32; 3] {
+        let p = p.map(f64::from);
+        let moved = self.rows.map(|r| r[0] * p[0] + r[1] * p[1] + r[2] * p[2]);
+        zip3(moved, self.offset, |v, o| v + o).map(|v| v as f32)
+    }
+}
+
+/// The solution of the symmetric system `a x = b`, by its adjugate.
+fn solve3(a: [[f64; 3]; 3], b: [f64; 3]) -> Option<[f64; 3]> {
+    let [[a00, a01, a02], [a10, a11, a12], [a20, a21, a22]] = a;
+    let c00 = a11 * a22 - a12 * a21;
+    let c01 = a12 * a20 - a10 * a22;
+    let c02 = a10 * a21 - a11 * a20;
+    let c11 = a00 * a22 - a02 * a20;
+    let c12 = a01 * a20 - a00 * a21;
+    let c22 = a00 * a11 - a01 * a10;
+    let det = a00 * c00 + a01 * c01 + a02 * c02;
+    if !det.is_normal() {
+        return None;
+    }
+    let [b0, b1, b2] = b;
+    let x = [
+        c00 * b0 + c01 * b1 + c02 * b2,
+        c01 * b0 + c11 * b1 + c12 * b2,
+        c02 * b0 + c12 * b1 + c22 * b2,
+    ]
+    .map(|v| v / det);
+    x.iter().all(|v| v.is_finite()).then_some(x)
 }
 
 #[cfg(test)]

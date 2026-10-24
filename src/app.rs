@@ -21,6 +21,8 @@ mod atom_labels;
 mod atom_text;
 mod autosave;
 mod bond_edits;
+#[cfg(test)]
+mod browser_fonts_tests;
 mod canvas_edit;
 mod cleanup;
 mod clipboard;
@@ -76,6 +78,7 @@ mod performance;
 mod pictures;
 mod popover;
 mod printing;
+mod prompt;
 mod reaction_mapping;
 mod reactions;
 mod results;
@@ -105,6 +108,8 @@ mod wayland_qa;
 #[cfg(windows)]
 mod windows_libreoffice_save;
 mod workspace;
+#[cfg(target_arch = "wasm32")]
+pub(crate) use files::read_length;
 pub(crate) use workspace::text_width;
 
 /// The status bar's idle message.
@@ -219,7 +224,7 @@ pub enum Message {
     TextColor(String),
     ApplyTextColor,
     TextAlign(reshiki::typography::TextAlign),
-    GroupLabelAlign(reshiki::abbreviations::LabelAlignment),
+    LabelAlign(reshiki::abbreviations::LabelAlignment),
     TextSpacing(f32),
     TextWidth(String),
     ApplyTextWidth,
@@ -325,6 +330,8 @@ pub enum Message {
     Close(iced::window::Id),
     Discard,
     Cancel,
+    /// The answer to the app's own dialog; see prompt.rs.
+    Prompt(prompt::Answer),
 }
 #[derive(Debug, Clone)]
 pub enum Job {
@@ -399,6 +406,8 @@ pub struct App {
     #[cfg(any(windows, target_os = "linux"))]
     desktop: desktop::State,
     pending: Option<Pending>,
+    /// The question the app's own dialog asks, in the browser.
+    prompt: Option<prompt::Prompt>,
     ring_size: u8,
     aromatic_ring: bool,
     custom_element: String,
@@ -412,7 +421,20 @@ pub struct App {
     viewport: iced::Size,
     template_index: usize,
     templates: template_library::State,
+    /// The last committed atom label, which a Text-tool double-click repeats.
+    last_label: Option<String>,
+    /// The last Text-tool click on an atom, to recognize a double-click.
+    text_click: Option<(iced::time::Instant, u64)>,
 }
+/// How often drafts catch up with their drawings. A browser page can be
+/// reloaded or closed at any moment, and cannot write when it unloads, so it
+/// writes sooner; a draft is written only when its drawing changed.
+const DRAFT_INTERVAL: std::time::Duration = if cfg!(target_arch = "wasm32") {
+    std::time::Duration::from_secs(1)
+} else {
+    std::time::Duration::from_secs(5)
+};
+
 impl App {
     /// Starts a file epoch, dropping per-file work so late results are ignored and new work can start.
     pub(super) fn begin_file_epoch(&mut self) {
@@ -483,6 +505,7 @@ impl App {
             #[cfg(any(windows, target_os = "linux"))]
             desktop: desktop::State::default(),
             pending: None,
+            prompt: None,
             ring_size: 6,
             aromatic_ring: false,
             custom_element: String::new(),
@@ -496,6 +519,8 @@ impl App {
             viewport: iced::Size::new(850.0, 600.0),
             template_index: 0,
             templates: template_library::State::load(),
+            last_label: None,
+            text_click: None,
         };
         if let Some(message) = abbreviations::load_user_catalog() {
             if app.recovered.is_empty() {
@@ -513,14 +538,15 @@ impl App {
         (app, Task::batch([task, update_check]))
     }
     pub fn title(&self) -> String {
-        format!(
-            "{}{} — ReShiki",
-            self.document_name(),
-            if self.dirty() { " •" } else { "" }
-        )
+        window_title(&self.document_name(), self.dirty())
     }
     fn document_name(&self) -> String {
         self.tab.name()
+    }
+    /// The saved document's file name without its extension, for exports.
+    fn export_stem(&self) -> Option<String> {
+        let stem = self.tab.path.as_ref()?.file_stem()?;
+        Some(stem.to_string_lossy().into_owned())
     }
     pub fn theme(&self) -> Theme {
         if self.appearance.mode.is_dark(self.tab.doc.canvas_theme) {
@@ -566,7 +592,7 @@ impl App {
                 Subscription::none()
             },
             if self.strip().any(|tab| self.needs_draft(tab)) {
-                iced::time::every(std::time::Duration::from_secs(5)).map(|_| Message::Tick)
+                iced::time::every(DRAFT_INTERVAL).map(|_| Message::Tick)
             } else {
                 Subscription::none()
             },
@@ -580,6 +606,7 @@ impl App {
                 {
                     return Some(Message::TemplateNavigate(forward));
                 }
+                let event = crate::platform::shortcut_event(&event).unwrap_or(event);
                 let iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
                     key,
                     modified_key,
@@ -732,6 +759,10 @@ impl App {
             return Task::none();
         }
         self.pending = Some(action);
+        if prompt::IN_APP {
+            self.prompt = Some(prompt::Prompt::Save(self.document_name()));
+            return Task::none();
+        }
         files::ask_to_save(self.document_name())
     }
     /// Save chosen in the save dialog passes the gates of transient editors,
@@ -771,20 +802,6 @@ impl App {
         self.error = false;
         self.status = "New document".into();
         iced::advanced::widget::operate(iced::advanced::widget::operation::focusable::unfocus())
-    }
-    fn open_dialog(&mut self) -> Task<Message> {
-        Task::perform(
-            async {
-                // Accept supported extensions without relying on macOS
-                // type registration; the worker validates the content.
-                let file = rfd::AsyncFileDialog::new()
-                    .set_title("Open a ReShiki, MOL, RXN, CDXML, CDX or SMILES document")
-                    .pick_file()
-                    .await?;
-                files::read_picked(file).await
-            },
-            Message::FilePrepared,
-        )
     }
     fn display_document(&self) -> &Document {
         if let Some(session) =
@@ -846,6 +863,13 @@ impl App {
         }
         if let Message::Accessibility(action) = message {
             return ControlFlow::Break(self.accessibility_action(action));
+        }
+        // The answer goes on as the system dialog's would have.
+        if let Message::Prompt(answer) = message {
+            return ControlFlow::Break(match self.prompt.take() {
+                Some(prompt) => self.update(prompt.answer(answer)),
+                None => Task::none(),
+            });
         }
         ControlFlow::Continue(message)
     }
@@ -1009,10 +1033,18 @@ impl App {
             file_shortcuts::wrap(
                 // The command palette sits above the floating NMR panel so its
                 // modal also keeps that panel from taking clicks.
-                self.with_updates(self.with_assistant_image(self.with_commands(self.with_nmr(
-                    self.with_atom_text(self.with_help(self.with_palette(self.workspace()))),
-                )))),
-                if self.help_open {
+                self.with_prompt(
+                    self.with_updates(self.with_assistant_image(self.with_commands(
+                        self.with_nmr(
+                            self.with_atom_text(
+                                self.with_help(self.with_palette(self.workspace())),
+                            ),
+                        ),
+                    ))),
+                ),
+                if self.prompt.is_some() {
+                    Some(prompt::modal_key)
+                } else if self.help_open {
                     Some(help::modal_key)
                 } else if self.commands.open {
                     Some(command_palette::modal_key)
@@ -1031,6 +1063,11 @@ impl App {
             traverse,
         )
     }
+}
+
+/// The window's title: the document's name, marked while it has unsaved changes.
+fn window_title(name: &str, dirty: bool) -> String {
+    format!("{name}{} — ReShiki", if dirty { " •" } else { "" })
 }
 
 /// Hydrogen labels are a computed display cache, not unsaved drawing edits.
@@ -1082,24 +1119,35 @@ fn tagged(task: Task<Message>, id: document_tab::TabId) -> Task<Message> {
     })
 }
 
-fn export_file(contents: String, format: &'static str, details: Vec<String>) -> Task<Message> {
+fn export_file(
+    contents: String,
+    format: &'static str,
+    stem: Option<String>,
+    details: Vec<String>,
+) -> Task<Message> {
     Task::perform(
         async move {
-            Ok(save_export(contents.into_bytes(), format)
+            Ok(save_export(contents.into_bytes(), format, stem)
                 .await?
                 .map(|path| figure_export::Saved { path, details }))
         },
         Message::Exported,
     )
 }
-async fn save_export(bytes: Vec<u8>, format: &'static str) -> Result<Option<PathBuf>, String> {
+/// Exports are named after the document, or "Molecule" while it is untitled.
+async fn save_export(
+    bytes: Vec<u8>,
+    format: &'static str,
+    stem: Option<String>,
+) -> Result<Option<PathBuf>, String> {
     let extension = match format {
         "svg-office" => "svg",
         _ => format,
     };
+    let stem = stem.as_deref().unwrap_or("Molecule");
     files::save_bytes(
         "Export drawing",
-        &format!("Molecule.{extension}"),
+        &format!("{stem}.{extension}"),
         extension,
         &bytes,
     )

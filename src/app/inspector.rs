@@ -289,6 +289,7 @@ impl App {
         }
         let key = self.property_request_key();
         if key.atoms.is_empty()
+            || reshiki::models3d::crystal::touches(&self.tab.doc, &key.atoms)
             || self
                 .tab
                 .inspector_ui
@@ -526,12 +527,6 @@ impl App {
                 "{} atom label(s) have low contrast against the canvas or a ring fill. Adjust the label or fill color.", color_issues.len()
             )).size(11).style(muted_text));
         }
-        if let Some(section) = self.structure_section() {
-            body = body.push(section);
-        }
-        if let Some(section) = self.model_section() {
-            body = body.push(section);
-        }
         let molecular_first = self.tab.selected.is_empty()
             || self.property_key().is_some_and(|key| !key.atoms.is_empty());
         if molecular_first {
@@ -662,6 +657,13 @@ impl App {
                 }
             },
         ));
+        // Show as and the 3D model are secondary, so they follow the chemistry.
+        if let Some(section) = self.structure_section() {
+            body = body.push(section);
+        }
+        if let Some(section) = self.model_section() {
+            body = body.push(section);
+        }
         if let Some(section) = self.rear_opacity_section(self.depth_ids()) {
             body = body.push(section);
         }
@@ -703,6 +705,32 @@ impl App {
     }
 
     fn molecular_properties(&self) -> Element<'_, Message> {
+        let ids: Vec<u64> = self
+            .tab
+            .selected
+            .iter()
+            .copied()
+            .filter(|id| self.tab.doc.atom(*id).is_some())
+            .collect();
+        // Ordinary molecules beside a crystal keep their chemistry analysis.
+        if reshiki::models3d::crystal::touches(&self.tab.doc, &ids) {
+            let mut body = column![
+                text(reshiki::models3d::crystal::ANALYSIS_NOTICE)
+                    .size(11)
+                    .style(muted_text)
+            ]
+            .spacing(8);
+            if let Ok(composition) = reshiki::models3d::crystal::composition(&self.tab.doc, &ids) {
+                body = body.push(
+                    text(format!(
+                        "{} · {:.3} g/mol",
+                        composition.formula, composition.mass
+                    ))
+                    .size(14),
+                );
+            }
+            return container(body).padding(10).into();
+        }
         if reshiki::attachments::present(&self.tab.doc) {
             let selected = (!self.tab.selected.is_empty())
                 .then(|| reshiki::editing::selection(&self.tab.doc, &self.tab.selected));

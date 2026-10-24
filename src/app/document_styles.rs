@@ -519,29 +519,32 @@ impl App {
                 let epoch = self.tab.file_epoch;
                 return Task::perform(
                     async {
-                        let Some(file) = rfd::AsyncFileDialog::new()
-                            .set_title("Load drawing style")
-                            .add_filter(
-                                "Drawing styles and ChemDraw stationery",
-                                &[
-                                    "reshiki-style",
-                                    "moruno-style",
-                                    "json",
-                                    "cds",
-                                    "cdx",
-                                    "cdxml",
-                                ],
-                            )
-                            .pick_file()
-                            .await
+                        let filter = (
+                            "Drawing styles and ChemDraw stationery",
+                            &[
+                                "reshiki-style",
+                                "moruno-style",
+                                "json",
+                                "cds",
+                                "cdx",
+                                "cdxml",
+                            ][..],
+                        );
+                        let Some(file) =
+                            super::files::pick("Load drawing style", Some(filter), false, |_| {
+                                reshiki::exchange::LIMIT as u64
+                            })
+                            .await?
+                            .pop()
                         else {
                             return Ok(None);
                         };
-                        let path = super::files::picked_path(&file)?;
-                        reshiki::task::spawn_blocking(move || reshiki::document_styles::load(&path))
-                            .await
-                            .map_err(|e| e.to_string())?
-                            .map(Some)
+                        reshiki::task::spawn_blocking(move || {
+                            reshiki::document_styles::load_bytes(&file.path, file.contents)
+                        })
+                        .await
+                        .map_err(|e| e.to_string())?
+                        .map(Some)
                     },
                     move |result| Message::DrawingStyle(Action::Loaded(serial, epoch, result)),
                 );

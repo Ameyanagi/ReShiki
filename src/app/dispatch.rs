@@ -110,7 +110,7 @@ impl App {
             Message::TextColor(value) => self.set_text_color_input(value),
             Message::ApplyTextColor => self.apply_text_color_input(),
             Message::TextAlign(alignment) => self.apply_paragraph(Some(alignment), None, None),
-            Message::GroupLabelAlign(alignment) => self.apply_group_alignment(alignment),
+            Message::LabelAlign(alignment) => self.apply_label_alignment(alignment),
             Message::TextSpacing(spacing) => self.apply_paragraph(None, Some(spacing), None),
             Message::TextWidth(value) => self.tab.text_width_input = value,
             Message::ApplyTextWidth => self.apply_text_width_input(),
@@ -145,9 +145,6 @@ impl App {
             Message::Canvas(Edit::BeginTransform(field)) => {
                 return Some(self.begin_numeric_transform(field));
             }
-            Message::Canvas(Edit::ShowAs(display)) => {
-                return Some(self.models3d_action(self.show_as(display)));
-            }
             Message::Canvas(edit) => {
                 if let Some(task) = self.optimization_edit(edit.clone()) {
                     return Some(task);
@@ -178,7 +175,7 @@ impl App {
             // Tabs wait while the save dialog asks about the tab in front.
             Message::New | Message::Open if self.pending.is_some() => {}
             Message::New => return Some(self.new_document()),
-            Message::Open => return Some(self.open_dialog()),
+            Message::Open => return Some(super::files::open_dialog()),
             Message::Tabs(action) => return Some(self.tab_action(action)),
             Message::Close(window) => {
                 if self.pending.is_none() {
@@ -196,6 +193,8 @@ impl App {
             }
             Message::Cancel => self.pending = None,
             Message::Discard => return Some(self.discard_pending()),
+            // Answered before routing; see App::update_untagged.
+            Message::Prompt(_) => {}
             #[cfg(target_os = "macos")]
             Message::MacFiles(_) => {}
             Message::Opened(file) => return Some(files::open_contents(file)),

@@ -189,30 +189,7 @@ impl App {
         ]
         .spacing(4)
         .align_y(Alignment::Center);
-        let group_alignment = self.selected_group_alignment();
-        let has_captions = self
-            .tab
-            .doc
-            .annotations
-            .iter()
-            .any(|a| self.tab.selected.contains(&a.id));
-        tools = tools.push(self.alignment_menu(group_alignment.is_some() && !has_captions));
-        if let Some(alignment) = group_alignment {
-            use reshiki::abbreviations::LabelAlignment;
-            tools = tools.push(hover_hint(
-                crate::appearance::pick_list(
-                    [LabelAlignment::Auto, LabelAlignment::Above],
-                    alignment.filter(|a| matches!(a, LabelAlignment::Auto | LabelAlignment::Above)),
-                    Message::GroupLabelAlign,
-                )
-                .placeholder(if alignment.is_none() { "Mixed" } else { "Auto / above" })
-                .width(112)
-                .text_size(11)
-                .padding(6),
-                "Group labels: Automatic follows bonds; Stacked above places the nickname above its attachment. Left, Center and Right are in the alignment menu.",
-                tooltip::Position::Bottom,
-            ));
-        }
+        tools = tools.push(self.alignment_menu());
         tools = tools.push(self.color_button());
         container(tools)
             .padding([7, 14])
@@ -227,7 +204,12 @@ impl App {
             return self.theme_generator_workspace();
         }
         let background = |element| {
-            if self.context_menu.is_some() {
+            if self.label_click_through() {
+                // Only the drawing stays live; a click anywhere else commits.
+                iced::widget::mouse_area(reshiki::accessibility::inert(element))
+                    .on_press(Message::AtomText(super::atom_text::Action::Apply))
+                    .into()
+            } else if self.context_menu.is_some() {
                 reshiki::accessibility::inert(element)
             } else {
                 element
@@ -279,7 +261,6 @@ impl App {
             } else {
                 None
             },
-            model_bar: self.model_bar(),
             morph: self.model_morph(),
             element: &self.element,
             joining: self.tab.joining.as_ref().map(|s| (&s.prepared, s.anchor)),
@@ -388,17 +369,27 @@ impl App {
     }
 
     fn command_bar(&self) -> Element<'_, Message> {
+        // The browser build updates with its page and has no local assistant.
+        let browser = cfg!(target_arch = "wasm32");
         let bar = row![
             hover_hint(
                 reshiki::accessibility::button(
                     "header-about",
-                    "About ReShiki; check for updates",
+                    if browser {
+                        "About ReShiki"
+                    } else {
+                        "About ReShiki; check for updates"
+                    },
                     crate::branding::wordmark(21.0)
                 )
                 .padding(0)
                 .style(button::text)
                 .on_press(Message::Updates(super::updates::Action::Show(true))),
-                "About ReShiki · Check for updates",
+                if browser {
+                    "About ReShiki"
+                } else {
+                    "About ReShiki · Check for updates"
+                },
                 tooltip::Position::Bottom
             ),
             divider(),
@@ -447,7 +438,7 @@ impl App {
             responsive(move |size| self.tab_strip(size.width))
                 .width(Length::Fill)
                 .height(Length::Shrink),
-            icon_button(
+            (!browser).then(|| icon_button(
                 Icon::Assistant(self.assistant.busy),
                 if self.assistant.busy {
                     "Assistant · Working"
@@ -456,7 +447,7 @@ impl App {
                 },
                 Some(Message::Assistant(super::assistant::Action::Open)),
                 self.inspector_open && self.inspector_tab == InspectorTab::Assistant
-            ),
+            )),
             icon_button(
                 Icon::Import,
                 keyed("Import", &Message::Inspector(InspectorTab::Import)),
@@ -600,15 +591,9 @@ impl App {
             palette = palette.push(line);
         }
         palette = palette.push(Space::new().height(10)).push(section("ATOMS"));
-        for pair in [
-            ["C", "N"],
-            ["O", "S"],
-            ["P", "F"],
-            ["Cl", "Br"],
-            ["Fe", "*"],
-        ] {
+        for pair in PALETTE_ELEMENTS.chunks(2) {
             let mut line = row![].spacing(4);
-            for symbol in pair {
+            for &symbol in pair {
                 line = line.push(self.element_palette_button(symbol));
             }
             palette = palette.push(line);
@@ -2461,6 +2446,9 @@ impl App {
 }
 
 const PALETTE_WIDTH: f32 = 104.;
+/// The ATOMS buttons, two per line: H first, then the common organic
+/// elements, as in Ketcher's atom toolbar.
+const PALETTE_ELEMENTS: [&str; 11] = ["H", "C", "N", "O", "S", "P", "F", "Cl", "Br", "Fe", "*"];
 const CONTEXT_PADDING: f32 = 14.;
 pub(super) const CONTEXT_GAP: f32 = 10.;
 const DIVIDER: f32 = 11.;

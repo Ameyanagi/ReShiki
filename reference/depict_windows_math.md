@@ -20,6 +20,25 @@ compiler provenance, and fixture hashes are retained in
 No observers are compiled or queried during saved replay. Python reads the
 fixtures and probes the original CRT; it does not generate expected structures.
 
+### UCRT 10.0.20348.5756 (windows-2022 image 20261021)
+
+The windows-2022 image `20261021.343.1` replaced UCRT `10.0.20348.5622` with
+`10.0.20348.5756` (SHA-256
+`d06d0a421398fb663c6c49586e09774143460fdb1dce489aa9844846b9398555`), so saved
+replay failed as an uncaptured CRT. Its Python and native acos and ring
+witnesses equal the earlier Server 2022 capture.
+[Run 39957835372](https://github.com/Ameyanagi/ReShiki/actions/runs/39957835372)
+of the Windows depiction workflow rebuilt all eight observers on that image and
+passed all 32 live Windows x64 tests. Every stage's captured data rows are
+byte-identical to the fixture that the `server2022` profile replays, so this
+DLL selects the same fixtures and no fixture changed. The audit file records
+the capture under `server2022_ucrt_5756`.
+
+When a runner image changes the UCRT again, dispatch the Windows depiction
+workflow on a branch, compare each stage's captured rows with the saved
+fixtures, and add the DLL hash only when they match. Otherwise preserve the
+new capture as fixtures of its own profile.
+
 ## Refreshing native references
 
 `setup_windows_depict_reference.py` checks out the pinned source with LF bytes,

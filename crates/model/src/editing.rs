@@ -540,7 +540,7 @@ pub(crate) fn extend_append_part(doc: &mut Document, part: Document) {
     doc.generic.extend(part.generic);
     if !part.models.is_empty() {
         doc.models.extend(part.models);
-        doc.require_version(crate::document::MODELS_3D);
+        crate::models3d::require_version(doc);
     }
     if crate::rear_opacity::present(doc) {
         doc.require_version(crate::document::REAR_OPACITY);

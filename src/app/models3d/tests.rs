@@ -646,7 +646,7 @@ fn the_2d_buttons_follow_the_chosen_layout() {
         Action::Show(Display::ThreeD)
     ));
     let drawn = app.tab.doc.atoms.clone();
-    let _ = app.update(Message::Canvas(Edit::ShowAs(Display::TwoD)));
+    let _ = app.update(Message::Models3d(app.show_as(Display::TwoD)));
     assert_eq!(displays(&app.tab.doc), [Display::TwoD]);
     assert_ne!(app.tab.doc.atoms, drawn, "flattened from the view");
     // The choice and the drawn layout are the model's, and saved with it.
@@ -672,7 +672,7 @@ fn the_2d_buttons_follow_the_chosen_layout() {
     assert_eq!(app.tab.doc.depth_appearance, original.depth_appearance);
     assert_eq!(app.tab.doc.models[0].drawn, None);
     assert_eq!(app.status, "Original 2D drawing restored");
-    let _ = app.update(Message::Canvas(Edit::ShowAs(Display::TwoD)));
+    let _ = app.update(Message::Models3d(app.show_as(Display::TwoD)));
     assert_eq!(displays(&app.tab.doc), [Display::TwoD]);
     assert_eq!(app.tab.doc.atoms, original.atoms);
     // So does Show as 2D drawing on a flattened 2D molecule.
@@ -688,7 +688,7 @@ fn the_original_drawing_choice_and_the_2d_atoms_never_disagree() {
     let (mut app, atoms) = with_model(Display::ThreeD);
     let drawn = app.tab.doc.atoms.clone();
     let _ = app.update(Message::Models3d(Action::Layout(Layout::View)));
-    let _ = app.update(Message::Canvas(Edit::ShowAs(Display::TwoD)));
+    let _ = app.update(Message::Models3d(app.show_as(Display::TwoD)));
     let flat = app.tab.doc.atoms.clone();
     assert_ne!(flat, drawn);
     show(&mut app, Display::ThreeD);
@@ -734,7 +734,7 @@ fn showing_the_current_display_again_changes_nothing() {
     let resized = app.tab.doc.clone();
     let start = frames(&app);
     show(&mut app, Display::ThreeD);
-    let _ = app.update(Message::Canvas(Edit::ShowAs(Display::ThreeD)));
+    let _ = app.update(Message::Models3d(app.show_as(Display::ThreeD)));
     assert_eq!(app.tab.doc, resized, "the resized frame stays");
     assert_eq!(frames(&app), start);
     // Nor does 2D on a drawing that was never flattened, whatever the layout.
@@ -807,30 +807,10 @@ async fn model_section_controls_change_the_model() -> Result<(), String> {
 }
 
 #[test]
-fn the_bar_shows_above_a_whole_selected_molecule_and_the_morph_starts_from_2d() {
-    let (mut app, atoms, water) = drawing();
-    assert_eq!(app.model_bar(), None, "one atom is not the molecule");
+fn the_morph_starts_from_2d() {
+    let (mut app, atoms, _) = drawing();
     app.tab.selected = atoms.clone();
-    assert_eq!(app.model_bar(), Some(Display::TwoD));
-    app.tool = crate::canvas::Tool::Bond(1);
-    assert_eq!(app.model_bar(), None);
-    app.tool = crate::canvas::Tool::Select;
-    app.tab.selected = vec![atoms[0], water];
-    assert_eq!(app.model_bar(), None);
-    // Nor with any other object in the selection.
-    let text = app.tab.doc.next_id();
-    app.tab.doc.annotations.push(reshiki::document::Annotation {
-        id: text,
-        position: Point::new(0., 80.),
-        text: "Note".into(),
-        format: Default::default(),
-    });
-    app.tab.selected = [atoms.clone(), vec![text]].concat();
-    assert_eq!(app.model_bar(), None);
-
-    app.tab.selected = atoms.clone();
-    let _ = app.update(Message::Canvas(Edit::ShowAs(Display::ThreeD)));
-    assert_eq!(app.model_bar(), Some(Display::ThreeD), "pending");
+    let _ = app.update(Message::Models3d(app.show_as(Display::ThreeD)));
     let (key, result) = generated(&app);
     let _ = app.update(Message::Models3d(Action::Generated(key, Ok(result))));
     let (id, started) = app.model_morph().expect("2D → 3D morphs");
@@ -885,4 +865,55 @@ fn the_structure_note_names_the_current_style() {
         );
     }
     assert!(app.structure_section().is_some());
+}
+
+#[test]
+fn a_crystal_opens_in_2d_and_shows_its_ion_charges_in_one_undo_step() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let text = include_str!("../../../tests/fixtures/crystal/nacl.cif");
+    let (doc, _) = reshiki::crystal::read("cif", text).unwrap();
+    app.tab.doc = doc;
+    app.tab.selected = app.tab.doc.atoms.iter().map(|a| a.id).collect();
+    assert_eq!(displays(&app.tab.doc), [Display::TwoD]);
+    assert!(app.structure_section().is_some());
+    assert_eq!(
+        subtitle(None, app.tab.doc.models.first()),
+        "2D drawing · Chemistry and atom IDs stay the same"
+    );
+    let start = frames(&app);
+    set(&mut app, Setting::Charges(true));
+    assert!(app.tab.doc.models[0].charges);
+    assert_eq!(frames(&app), start + 1);
+    let _ = app.update(Message::Undo);
+    assert!(!app.tab.doc.models[0].charges);
+}
+
+#[test]
+fn a_first_repeat_looks_along_the_clearest_axis_in_one_undo_step() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let text = include_str!("../../../tests/fixtures/crystal/rutile.vasp");
+    let (doc, _) = reshiki::crystal::read("poscar", text).unwrap();
+    app.tab.doc = doc;
+    app.tab.selected = app.tab.doc.atoms.iter().map(|a| a.id).collect();
+    let (atoms, rotation) = (app.tab.doc.atoms.clone(), app.tab.doc.models[0].rotation);
+    let start = frames(&app);
+    set(&mut app, Setting::Repeat([2, 2, 1]));
+    assert_eq!(app.tab.doc.models[0].repeat, [2, 2, 1]);
+    assert_ne!(app.tab.doc.models[0].rotation, rotation);
+    assert_ne!(app.tab.doc.atoms, atoms);
+    assert_eq!(frames(&app), start + 1);
+    // A later repeat keeps the view; looking along an axis turns it.
+    let turned = app.tab.doc.models[0].rotation;
+    set(&mut app, Setting::Repeat([2, 2, 2]));
+    assert_eq!(app.tab.doc.models[0].rotation, turned);
+    set(&mut app, Setting::LookAlong(models3d::Along::Diagonal));
+    assert_ne!(app.tab.doc.models[0].rotation, turned);
+    assert_eq!(frames(&app), start + 3);
+    for _ in 0..3 {
+        let _ = app.update(Message::Undo);
+    }
+    assert_eq!(app.tab.doc.models[0].repeat, [1, 1, 1]);
+    assert_eq!(app.tab.doc.atoms, atoms);
 }

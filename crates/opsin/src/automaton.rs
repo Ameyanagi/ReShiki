@@ -2,38 +2,47 @@
 use crate::InitializationError;
 use std::collections::BTreeMap;
 
+static TABLES: &[u8] = include_bytes!("../resources/automata.bin");
+/// A transition's low and high symbols and target state, as big-endian u32s.
+const TRANSITION: usize = 12;
+
+/// Steps through its checked table in the embedded resource, which stays in
+/// memory anyway, rather than through a decoded copy of it.
 #[derive(Debug, Clone)]
 pub(crate) struct Automaton {
     pub initial: usize,
     pub symbols: Vec<u16>,
-    states: Vec<State>,
+    /// Where each state starts in `TABLES`: its acceptance flag, its
+    /// transition count, then its transitions in ascending symbol order.
+    states: Vec<u32>,
 }
 
-#[derive(Debug, Clone)]
-struct State {
-    accept: bool,
-    transitions: Vec<Transition>,
-}
-
-#[derive(Debug, Clone)]
-struct Transition {
-    low: u16,
-    high: u16,
-    target: usize,
+/// A big-endian u32 of `TABLES` that `load` checked.
+fn word(at: usize) -> u32 {
+    u32::from_be_bytes(TABLES[at..at + 4].try_into().expect("four bytes"))
 }
 
 impl Automaton {
     pub fn step(&self, state: usize, symbol: u16) -> Option<usize> {
-        let transitions = &self.states.get(state)?.transitions;
-        let index = transitions
-            .partition_point(|t| t.low <= symbol)
-            .checked_sub(1)?;
-        let transition = &transitions[index];
-        (symbol <= transition.high).then_some(transition.target)
+        let at = *self.states.get(state)? as usize;
+        let first = at + 5;
+        let symbol = u32::from(symbol);
+        // The first transition whose low symbol is above `symbol`.
+        let (mut low, mut high) = (0, word(at + 1) as usize);
+        while low < high {
+            let middle = (low + high) / 2;
+            if word(first + middle * TRANSITION) <= symbol {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        let transition = first + low.checked_sub(1)? * TRANSITION;
+        (symbol <= word(transition + 4)).then(|| word(transition + 8) as usize)
     }
 
     pub fn is_accept(&self, state: usize) -> bool {
-        self.states[state].accept
+        TABLES[self.states[state] as usize] == 1
     }
 
     /// Matches the longest accepted prefix, as `RunAutomaton.run` does.
@@ -54,7 +63,7 @@ impl Automaton {
 }
 
 pub(crate) fn load() -> Result<BTreeMap<String, Automaton>, InitializationError> {
-    let mut reader = Reader(include_bytes!("../resources/automata.bin"));
+    let mut reader = Reader(TABLES);
     if reader.take(8)? != b"OPSINDFA" || reader.number()? != 2 {
         return Err(InitializationError(
             "Unrecognised OPSIN DFA resource format".into(),
@@ -88,16 +97,18 @@ pub(crate) fn load() -> Result<BTreeMap<String, Automaton>, InitializationError>
         }
         let mut states = Vec::with_capacity(size);
         for _ in 0..size {
-            let accept = match reader.take(1)?[0] {
-                0 => false,
-                1 => true,
-                _ => return Err(InitializationError("Invalid DFA acceptance flag".into())),
-            };
+            states.push(
+                u32::try_from(TABLES.len() - reader.0.len())
+                    .map_err(|_| InitializationError("Oversized OPSIN DFA resource".into()))?,
+            );
+            if reader.take(1)?[0] > 1 {
+                return Err(InitializationError("Invalid DFA acceptance flag".into()));
+            }
             let transition_count = reader.number()?;
             if transition_count > 65_536 {
                 return Err(InitializationError("Invalid DFA transition count".into()));
             }
-            let mut transitions = Vec::with_capacity(transition_count);
+            let mut previous_high = None;
             for _ in 0..transition_count {
                 let low = reader.symbol()?;
                 let high = reader.symbol()?;
@@ -105,17 +116,13 @@ pub(crate) fn load() -> Result<BTreeMap<String, Automaton>, InitializationError>
                 if low > high || target >= size {
                     return Err(InitializationError("Invalid DFA transition".into()));
                 }
-                transitions.push(Transition { low, high, target });
+                if previous_high.is_some_and(|previous| previous >= low) {
+                    return Err(InitializationError(
+                        "Overlapping DFA transition intervals".into(),
+                    ));
+                }
+                previous_high = Some(high);
             }
-            if transitions.windows(2).any(|w| w[0].high >= w[1].low) {
-                return Err(InitializationError(
-                    "Overlapping DFA transition intervals".into(),
-                ));
-            }
-            states.push(State {
-                accept,
-                transitions,
-            });
         }
         if automata
             .insert(

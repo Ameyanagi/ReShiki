@@ -233,12 +233,8 @@ impl ThemeFile {
             id: base.to_string().to_lowercase(),
             name: base.to_string(),
             author: String::new(),
-            source: if base.is_publication() {
-                String::new()
-            } else {
-                "https://jmol.sourceforge.net/jscolors/".into()
-            },
-            license: String::new(),
+            source: base.source().into(),
+            license: base.license().into(),
             base,
             light: palette(CanvasTheme::Light),
             dark: palette(CanvasTheme::Dark),
@@ -249,17 +245,26 @@ impl ThemeFile {
 }
 pub fn load(path: &Path) -> Result<ThemeFile, String> {
     use std::io::Read;
+    // A saved theme in the browser, which [`save`] wrote within the limit.
+    #[cfg(target_arch = "wasm32")]
+    if crate::storage::browser::key(path).is_some() {
+        return from_bytes(&crate::storage::read(path).map_err(|e| e.to_string())?);
+    }
     let mut bytes = Vec::new();
     std::fs::File::open(path)
         .map_err(|e| e.to_string())?
         .take(LIMIT as u64 + 1)
         .read_to_end(&mut bytes)
         .map_err(|e| e.to_string())?;
+    from_bytes(&bytes)
+}
+/// A theme read from a file's contents.
+pub fn from_bytes(bytes: &[u8]) -> Result<ThemeFile, String> {
     if bytes.len() > LIMIT {
         return Err("Theme file exceeds 256 KB".into());
     }
     let theme: ThemeFile =
-        serde_json::from_slice(&bytes).map_err(|e| format!("Invalid theme: {e}"))?;
+        serde_json::from_slice(bytes).map_err(|e| format!("Invalid theme: {e}"))?;
     theme.validate()?;
     Ok(theme)
 }

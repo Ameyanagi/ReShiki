@@ -108,3 +108,57 @@ fn longer_chords_do_not_trigger_plain_file_commands() {
         assert!(file_message(&key, primary | Modifiers::ALT).is_none());
     }
 }
+
+#[test]
+fn browsers_move_the_tab_keys_they_keep() {
+    use TabKey::*;
+    use keyboard::Modifiers;
+    // Desktop: Command+N, Command+W, Control+(Shift+)Tab.
+    assert_eq!(
+        browser_tab_binding(New, false, false),
+        (Modifiers::COMMAND, "N")
+    );
+    assert_eq!(
+        browser_tab_binding(Close, false, true),
+        (Modifiers::COMMAND, "W")
+    );
+    assert_eq!(
+        browser_tab_binding(Next, false, false),
+        (Modifiers::CTRL, "Tab")
+    );
+    assert_eq!(
+        browser_tab_binding(Previous, false, false),
+        (Modifiers::CTRL | Modifiers::SHIFT, "Tab")
+    );
+    // A browser keeps Ctrl/⌘+N, W and Tab: Alt elsewhere, Control on a Mac.
+    for (tab, key) in [(New, "N"), (Close, "W"), (Next, "]"), (Previous, "[")] {
+        assert_eq!(browser_tab_binding(tab, true, false), (Modifiers::ALT, key));
+        assert_eq!(
+            browser_tab_binding(tab, true, true),
+            (crate::platform::control_modifier(), key)
+        );
+    }
+}
+
+#[test]
+fn tab_keys_reach_their_commands() {
+    use super::super::tabs::Action as Tabs;
+    for (tab, expected) in [
+        (TabKey::New, Message::New),
+        (TabKey::Close, Message::Tabs(Tabs::Close(None))),
+        (TabKey::Next, Message::Tabs(Tabs::Cycle(true))),
+        (TabKey::Previous, Message::Tabs(Tabs::Cycle(false))),
+    ] {
+        let (modifiers, name) = tab_binding(tab);
+        let key = if name == "Tab" {
+            keyboard::Key::Named(keyboard::key::Named::Tab)
+        } else {
+            keyboard::Key::Character(name.to_lowercase().into())
+        };
+        assert_eq!(
+            format!("{:?}", file_message(&key, modifiers)),
+            format!("{:?}", Some(expected)),
+            "{tab:?}"
+        );
+    }
+}

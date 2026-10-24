@@ -110,6 +110,8 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
+        let shortcut = crate::platform::shortcut_event(event);
+        let event = shortcut.as_ref().unwrap_or(event);
         // The Updates focus scope owns Tab, Enter and Space. Keep other keys
         // away from file routing and the focused editor behind the dialog.
         if self.updates_open
@@ -286,6 +288,8 @@ impl overlay::Overlay<Message, Theme, Renderer> for FieldKeys<'_> {
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
     ) {
+        let shortcut = crate::platform::shortcut_event(event);
+        let event = shortcut.as_ref().unwrap_or(event);
         let untyped = without_command_text(event);
         let event = untyped.as_ref().unwrap_or(event);
         self.0
@@ -323,6 +327,8 @@ impl overlay::Overlay<Message, Theme, Renderer> for FieldKeys<'_> {
 /// A Command key press without the character that macOS reports for it, which
 /// a focused field would otherwise insert (⌘Z typing "z"). Elsewhere Ctrl
 /// reports control characters, and Ctrl+Alt may be AltGr typing a character.
+/// A browser on a Mac also reports it for ⌃, the logo key there (see
+/// platform.rs).
 fn without_command_text(event: &Event) -> Option<Event> {
     let Event::Keyboard(keyboard::Event::KeyPressed {
         key,
@@ -340,6 +346,7 @@ fn without_command_text(event: &Event) -> Option<Event> {
         modifiers.logo()
     } else {
         modifiers.control() && !modifiers.alt()
+            || cfg!(target_arch = "wasm32") && crate::platform::mac() && modifiers.logo()
     };
     command.then(|| {
         Event::Keyboard(keyboard::Event::KeyPressed {
@@ -439,14 +446,67 @@ impl Operation for Fields {
     }
 }
 
+/// Document tab commands whose desktop keys a browser keeps for its own tabs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum TabKey {
+    New,
+    Close,
+    Next,
+    Previous,
+}
+
+/// The keys of a `TabKey`: Command+N, Command+W and Control+(Shift+)Tab on the
+/// desktop. Browsers never pass Ctrl/⌘+N, W or Tab to the page, so there they
+/// are Alt+N, Alt+W and Alt+] / Alt+[, or ⌃N, ⌃W and ⌃] / ⌃[ on a Mac, where
+/// Option types characters.
+pub(super) fn tab_binding(tab: TabKey) -> (keyboard::Modifiers, &'static str) {
+    browser_tab_binding(tab, cfg!(target_arch = "wasm32"), crate::platform::mac())
+}
+
+fn browser_tab_binding(
+    tab: TabKey,
+    browser: bool,
+    mac: bool,
+) -> (keyboard::Modifiers, &'static str) {
+    use keyboard::Modifiers;
+    if browser {
+        let held = if mac {
+            crate::platform::control_modifier()
+        } else {
+            Modifiers::ALT
+        };
+        return match tab {
+            TabKey::New => (held, "N"),
+            TabKey::Close => (held, "W"),
+            TabKey::Next => (held, "]"),
+            TabKey::Previous => (held, "["),
+        };
+    }
+    match tab {
+        TabKey::New => (Modifiers::COMMAND, "N"),
+        TabKey::Close => (Modifiers::COMMAND, "W"),
+        TabKey::Next => (Modifiers::CTRL, "Tab"),
+        TabKey::Previous => (Modifiers::CTRL | Modifiers::SHIFT, "Tab"),
+    }
+}
+
 pub(super) fn file_message(key: &keyboard::Key, modifiers: keyboard::Modifiers) -> Option<Message> {
     use super::tabs::Action as Tabs;
-    if modifiers.control()
-        && !modifiers.alt()
-        && !modifiers.logo()
-        && matches!(key, keyboard::Key::Named(keyboard::key::Named::Tab))
-    {
-        return Some(Message::Tabs(Tabs::Cycle(!modifiers.shift())));
+    for (tab, message) in [
+        (TabKey::New, Message::New),
+        (TabKey::Close, Message::Tabs(Tabs::Close(None))),
+        (TabKey::Next, Message::Tabs(Tabs::Cycle(true))),
+        (TabKey::Previous, Message::Tabs(Tabs::Cycle(false))),
+    ] {
+        let (held, name) = tab_binding(tab);
+        let pressed = match key {
+            keyboard::Key::Named(keyboard::key::Named::Tab) => name == "Tab",
+            keyboard::Key::Character(c) => c.eq_ignore_ascii_case(name),
+            _ => false,
+        };
+        if pressed && modifiers == held {
+            return Some(message);
+        }
     }
     if !modifiers.command() || modifiers.alt() {
         return None;
@@ -460,11 +520,10 @@ pub(super) fn file_message(key: &keyboard::Key, modifiers: keyboard::Modifiers) 
         return Some(Message::Tabs(Tabs::Number(n)));
     }
     Some(match c.to_ascii_lowercase().as_str() {
-        "w" if !modifiers.shift() => Message::Tabs(Tabs::Close(None)),
-        "p" if !modifiers.shift() => Message::Printing(super::printing::Action::Start(
-            reshiki::printing::Scope::Document,
-        )),
-        "n" if !modifiers.shift() => Message::New,
+        // The browser has no print dialog to show.
+        "p" if !modifiers.shift() && !cfg!(target_arch = "wasm32") => Message::Printing(
+            super::printing::Action::Start(reshiki::printing::Scope::Document),
+        ),
         "o" if !modifiers.shift() => Message::Open,
         "s" if modifiers.shift() => Message::SaveAs,
         "s" => Message::Save,

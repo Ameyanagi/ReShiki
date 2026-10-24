@@ -4,7 +4,7 @@ use crate::{
     automaton::{self, Automaton},
     trie::Trie,
 };
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TokenDefinition {
@@ -28,7 +28,8 @@ pub(crate) struct Resources {
     pub chemical: Automaton,
     pub reverse_chemical: Automaton,
     pub symbols: Vec<SymbolTokens>,
-    pub definitions: BTreeMap<(String, u16), TokenDefinition>,
+    /// One shared definition for all of a token's spellings.
+    pub definitions: BTreeMap<(String, u16), Arc<TokenDefinition>>,
     pub regex_definitions: BTreeMap<u16, TokenDefinition>,
     pub suffix_rules: crate::suffix_rules::SuffixRules,
 }
@@ -88,12 +89,12 @@ impl Resources {
                         attributes.insert(attr.name().into(), attr.value().into());
                         attribute_order.push((attr.name().into(), attr.value().into()));
                     }
-                    let definition = TokenDefinition {
+                    let definition = Arc::new(TokenDefinition {
                         tag_name: tag_name.clone(),
                         attributes,
                         attribute_order,
                         ignored,
-                    };
+                    });
                     for text in split_token_text(token.text().unwrap_or_default())? {
                         symbols[position].dictionary.insert(&text);
                         symbols[position]
@@ -143,6 +144,7 @@ impl Resources {
     pub fn definition(&self, text: &str, symbol: u16) -> Option<&TokenDefinition> {
         self.definitions
             .get(&(text.to_owned(), symbol))
+            .map(Arc::as_ref)
             .or_else(|| self.regex_definitions.get(&symbol))
     }
 }

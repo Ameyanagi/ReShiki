@@ -28,7 +28,7 @@ pub(crate) enum Action {
     Show(Display),
     /// Show as 2D, the drawing flattened from the model as it is turned now.
     Flatten,
-    /// The 2D layout that the 2D buttons of the bar and the section use.
+    /// The 2D layout that the Structure section's 2D button uses.
     Layout(Layout),
     Generated(Key, Result<Arc<Optimized>, String>),
     /// Change the selected model; each change is one Undo step, and a slider
@@ -49,6 +49,12 @@ pub(crate) enum Setting {
     DepthFade(f32),
     Perspective(f32),
     ResetView,
+    /// Show a crystal's ion charges in its 2D drawing.
+    Charges(bool),
+    /// How many cells along a, b and c a crystal's 2D drawing shows.
+    Repeat([u8; 3]),
+    /// Turn a crystal's 2D drawing to look along a lattice direction.
+    LookAlong(models3d::Along),
 }
 
 /// The generation in flight; dropping it aborts the worker.
@@ -169,7 +175,7 @@ impl App {
         !self.tab.busy && self.tab.optimization.is_none() && !self.tab.drawing_edit_active()
     }
 
-    /// A button of the bar or the section: 2D follows the model's 2D layout.
+    /// A button of the Structure section: 2D follows the model's 2D layout.
     pub(super) fn show_as(&self, display: Display) -> Action {
         let model = self
             .selected_model()
@@ -287,10 +293,10 @@ impl App {
             return;
         };
         let before = self.tab.doc.clone();
-        let reset = before
-            .models
-            .get(index)
-            .map(|model| model.initial_view(&before));
+        // The opening view is a search for a crystal; only Reset view needs it.
+        let reset = matches!(setting, Setting::ResetView)
+            .then(|| before.models.get(index).map(|m| m.initial_view(&before)))
+            .flatten();
         let Some(model) = self.tab.doc.models.get_mut(index) else {
             return;
         };
@@ -302,6 +308,26 @@ impl App {
             Setting::DepthFade(value) => model.depth_fade = value.clamp(0., 1.),
             Setting::Perspective(value) => model.perspective = value.clamp(0., 1.),
             Setting::ResetView => model.rotation = reset.unwrap_or(model.rotation),
+            Setting::Charges(shown) => model.charges = shown,
+            Setting::Repeat(repeat) => model.repeat = repeat,
+            Setting::LookAlong(_) => {}
+        }
+        // Looking along an axis lays the drawing out again; so does a first
+        // repeat, along the axis whose labels keep farthest apart.
+        let first_repeat = matches!(setting, Setting::Repeat(r) if r != [1; 3])
+            && before.models.get(index).is_some_and(|m| m.repeat == [1; 3]);
+        let along = match setting {
+            Setting::LookAlong(along) => Some(along),
+            _ if first_repeat => self
+                .tab
+                .doc
+                .models
+                .get(index)
+                .map(|m| models3d::best_along(&self.tab.doc, m)),
+            _ => None,
+        };
+        if let Some(along) = along {
+            models3d::look_along(&mut self.tab.doc, index, along);
         }
         // The active choice again changes nothing and adds no Undo step.
         if self.tab.doc == before {
@@ -413,21 +439,6 @@ impl App {
         (key == self.model_key()).then_some((id, start))
     }
 
-    /// The display the floating Show as bar marks above a whole selected
-    /// molecule, when the bar shows.
-    pub(super) fn model_bar(&self) -> Option<Display> {
-        if !self.tool.selects() || !self.idle() || self.context_menu.is_some() {
-            return None;
-        }
-        models3d::whole_molecule(&self.tab.doc, &self.tab.selected)?;
-        let (atoms, index) = self.selected_model()?;
-        Some(self.pending(&atoms).unwrap_or_else(|| {
-            index
-                .and_then(|i| self.tab.doc.models.get(i))
-                .map_or(Display::TwoD, |m| m.display)
-        }))
-    }
-
     fn add_model(&mut self, model: models3d::Model3d, display: Display) {
         let before = self.tab.doc.clone();
         let atoms: Vec<_> = model.atoms.iter().map(|a| a.id).collect();
@@ -517,6 +528,80 @@ impl App {
                 })
                 .size(11)
                 .style(muted_text),
+            );
+        }
+        // A crystal's ion charges, hidden in 2D unless asked for.
+        let charged = |m: &&models3d::Model3d| {
+            m.cell.is_some()
+                && m.atoms
+                    .iter()
+                    .any(|a| self.tab.doc.atom(a.id).is_some_and(|a| a.charge != 0))
+        };
+        if let Some(model) = model.filter(charged) {
+            body = body.push(text("Ion charges").size(12)).push(
+                row(
+                    [(false, "Hide", "hide"), (true, "Show", "show")].map(|(shown, label, id)| {
+                        let active = model.charges == shown;
+                        accessible_command(
+                            format!("structure-charges-{id}"),
+                            format!("{label} ion charges"),
+                            label,
+                        )
+                        .checked(active)
+                        .style(control(active))
+                        .width(Length::Fill)
+                        .on_press_maybe(
+                            enabled
+                                .then_some(Message::Models3d(Action::Set(Setting::Charges(shown)))),
+                        )
+                        .into()
+                    }),
+                )
+                .spacing(4),
+            );
+        }
+        // A crystal's repeat and view direction, while drawn in 2D.
+        if let Some(model) = model.filter(|m| m.cell.is_some() && m.display == Display::TwoD) {
+            let set = move |setting| enabled.then_some(Message::Models3d(Action::Set(setting)));
+            body = body.push(text("Repeat").size(12));
+            for (k, axis) in ["a", "b", "c"].into_iter().enumerate() {
+                let counts = (1..=models3d::MAX_REPEAT).map(|n| {
+                    let active = model.repeat.get(k) == Some(&n);
+                    let mut repeat = model.repeat;
+                    if let Some(slot) = repeat.get_mut(k) {
+                        *slot = n;
+                    }
+                    accessible_command(
+                        format!("structure-repeat-{axis}-{n}"),
+                        format!("{n} cells along {axis}"),
+                        n.to_string(),
+                    )
+                    .checked(active)
+                    .style(control(active))
+                    .width(Length::Fill)
+                    .on_press_maybe(set(Setting::Repeat(repeat)))
+                    .into()
+                });
+                body = body.push(
+                    row![text(axis).size(12).width(16)]
+                        .extend(counts)
+                        .spacing(4)
+                        .align_y(Alignment::Center),
+                );
+            }
+            body = body.push(text("Look along").size(12)).push(
+                row(models3d::Along::ALL.map(|along| {
+                    let name = along.name();
+                    accessible_command(
+                        format!("structure-look-{name}"),
+                        format!("Look along {name}"),
+                        name,
+                    )
+                    .width(Length::Fill)
+                    .on_press_maybe(set(Setting::LookAlong(along)))
+                    .into()
+                }))
+                .spacing(4),
             );
         }
         Some(self.inspector_section(Section::Structure, "Structure", "", true, body))
@@ -676,11 +761,15 @@ impl App {
     }
 }
 
-/// The Structure section's note: the generation in flight, or the model's
-/// style (ball & stick before there is a model).
+/// The Structure section's note: the generation in flight, the 2D drawing
+/// while a model is kept but not shown, or the model's style (ball & stick
+/// before there is a model).
 fn subtitle(pending: Option<Display>, model: Option<&models3d::Model3d>) -> String {
     if pending.is_some() {
         return "Generating the conformer · ETKDG, then MMFF94s".into();
+    }
+    if model.is_some_and(|m| m.display == Display::TwoD) {
+        return "2D drawing · Chemistry and atom IDs stay the same".into();
     }
     let style = model.map_or(Style::BallStick, |m| m.style);
     format!("{} · Chemistry and atom IDs stay the same", name(style))

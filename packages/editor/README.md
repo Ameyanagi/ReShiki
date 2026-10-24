@@ -51,6 +51,26 @@ const stop = editor.onChange(() => {}); // returns a function that stops it
 editor.destroy();
 ```
 
+Leaving the page while any tab has unsaved changes (reload, closing the
+browser tab, following a link) asks first with the browser's "Leave site?"
+prompt. Closing an unsaved tab inside the editor asks Save, Don't Save or
+Cancel. The page can follow the same state:
+
+```js
+const editor = await mount(element, {
+  title: true, // document.title follows the drawing: "Untitled • — ReShiki"
+  onDirtyChange: (dirty) => console.log(dirty ? "unsaved" : "saved"),
+  onTitleChange: (title) => console.log(title),
+});
+editor.isDirty(); // whether any tab has unsaved changes
+const stopDirty = editor.onDirtyChange((dirty) => {}); // returns a function that stops it
+const stopTitle = editor.onTitleChange((title) => {});
+```
+
+The title is `Name — ReShiki`, with a `•` after the name while the tab in
+front has unsaved changes, as on the desktop. Without `title: true` the page
+keeps its own title, and `onTitleChange` hands it the editor's.
+
 `load` takes the same formats as `convert` and rejects with the app's message
 when it cannot read the data; so does `mount` for its `data`, before the
 editor starts. Mount on an element in the page's body: the editor cannot
@@ -92,14 +112,17 @@ Liberation Sans, which has Arial's letter widths and answers to Arial, so
 drawings lay out as on the desktop. Text that font lacks falls back to the
 fonts below.
 
-- **Japanese (CJK) text.** The first time a caption has Japanese characters
-  that no loaded font draws, the editor loads a fallback once. If the page
-  already has Local Font Access permission (Chrome and Edge), it uses the
-  computer's own Japanese font, such as Hiragino Sans, Yu Gothic or Meiryo,
-  without a prompt. Otherwise it downloads
-  [Noto Sans JP](https://github.com/notofonts/noto-cjk) Regular (4.5 MB, SIL
-  Open Font License 1.1) from jsDelivr. Pages without Japanese text download
-  nothing. The font is not bundled in this package.
+- **Chinese, Japanese and Korean text.** The first time a caption, a tab's
+  file name or the status line has such characters that no
+  loaded font draws, the editor loads a fallback once for that language. If
+  the page already has Local Font Access permission (Chrome and Edge), it uses
+  the computer's own font, such as Hiragino Sans, Apple SD Gothic Neo or
+  PingFang SC, without a prompt. Otherwise it downloads a
+  [Noto Sans](https://github.com/notofonts/noto-cjk) Regular subset (SIL Open
+  Font License 1.1) from jsDelivr: JP (4.5 MB) for kana and kanji, KR
+  (4.6 MB) for Hangul, and SC (8.3 MB) for Bopomofo and for ideographs the
+  Japanese font lacks. Pages without such text download nothing. The fonts
+  are not bundled in this package.
 - **The page's own fonts.** `fonts` takes TrueType or OpenType files (or
   collections) as URLs or bytes. They load before the editor starts, and
   text whose font lacks a glyph falls back to them. URLs on another origin
@@ -108,7 +131,7 @@ fonts below.
 ```js
 await mount(element, {
   fonts: ["/fonts/MyLabels.ttf"],
-  cjkFont: "/fonts/NotoSansJP-Regular.otf", // self-host the fallback, or false for none
+  cjkFont: "/fonts/NotoSansCJK-Regular.otc", // one self-hosted fallback for every language, or false for none
   onError: (error) => console.warn(error.message), // a font that could not load
 });
 ```
@@ -117,6 +140,52 @@ await mount(element, {
 takes `fonts` (URLs separated by spaces) and `cjk-font` (a URL, or `false`)
 attributes and fires `error` for a font that could not load. Fonts added this
 way also reach `save` and `exportImage` figures.
+
+Each font added with `fonts`, `addFont` or the Japanese fallback is kept in
+browser storage (below) and added again on a later visit once a caption needs
+it, so the fallback is downloaded once per site rather than once per visit. The editor cannot list
+or read the computer's installed fonts by itself: browsers only offer them
+through Local Font Access, behind a permission prompt.
+
+### Storage
+
+The editor keeps what the desktop app keeps in its data folder in the
+browser's IndexedDB for the page's site (database `reshiki`): appearance
+settings, My templates and favorites, saved themes, your abbreviations,
+added fonts and recovery drafts. They load before the editor starts, and a change in one tab
+reaches the site's other tabs while they run. A tab keeps a change only if the
+stored file is still the one it read, so tabs never save over each other; a
+save that another tab beat, or one the browser refuses because storage is
+full, is undone and the status bar says why. Messages name this storage
+"Browser storage". Where the browser offers no storage, as in some private
+windows, the editor starts with defaults and saving a setting, template, theme
+or abbreviation says that browser storage is unavailable. Clearing the site's
+data removes it all.
+
+As in the desktop app, each drawing with unsaved changes has a recovery draft,
+written within about a second of each change. If the page is reloaded, closed
+or crashes, the next page of the site offers the drafts in the status bar
+(**Recovery draft · Restore · Dismiss**). Drafts of the site's other open tabs
+are not offered (this needs Web Locks, which current browsers have). The page
+cannot write while it unloads, so a change made in the last second before a
+reload can be lost.
+
+### Naming
+
+Name ↔ structure conversion (**Import → Name**, **Name molecule**) runs the
+desktop's OPSIN Rust port and naming rules in a module Web Worker,
+`src/worker.js`, which loads its own WebAssembly
+(`dist/worker/reshiki_web_worker_bg.wasm`, about 2.3 MB gzipped) the first time
+a name is converted, never at startup. As on the desktop, a request stops after
+15 seconds and the worker's heap is limited to 96 MiB (its memory to
+128 MiB), so a runaway name cannot block or crash the editor; the next
+request starts a new worker.
+
+Browsers start workers only from the page's own origin, so serve the package
+from the page's site to use naming. A Content-Security-Policy whose
+`script-src` allows that site needs nothing more. If it sets `worker-src` (or
+`child-src`), that must allow the site too, for example
+`worker-src 'self'`.
 
 ### Demo
 
@@ -138,20 +207,29 @@ it.
 
 ### What the browser editor leaves out
 
-- Naming, NMR prediction and 3D say they need the desktop app. The assistant,
+- NMR prediction and 3D say they need the desktop app. The assistant,
   updates, printing, Office and LibreOffice integration are not built.
 - Open and Save use the browser: Open picks a file, Save and Export download
   one under the drawing's name. Drawing styles, themes, templates and pictures
-  cannot be loaded from files yet, Insert cannot insert files, and there are
-  no recovery drafts.
-- Copy and paste carry text (SMILES, the drawing as text) through
-  `navigator.clipboard`, which asks for permission to read. There are no
-  image or ChemDraw clipboard formats.
-- Only Liberation Sans is bundled, so symbols it lacks, such as ℃, ⇌ and
-  superscript ⁺ and ⁻, need a font from `fonts`. Japanese text loads a
-  fallback (see [Fonts](#fonts)).
-- Shortcuts use Ctrl, also on macOS, where Cmd does not work yet.
-- Work runs on the page's thread, so a long cleanup or import pauses the page.
+  cannot be loaded from files yet, and Insert cannot insert files.
+- Copying and pasting drawings goes through `navigator.clipboard`, which asks
+  for permission to read, and carries PNG, HTML, SVG (Chrome and Edge) and
+  text, not PDF, CDX or ChemDraw's own formats. Text fields copy, cut and
+  paste plain text; their paste uses the browser's paste event and needs no
+  permission.
+- Input methods (Japanese, Chinese and Korean) type into text fields and
+  captions through a hidden textarea that the editor adds to the element.
+  Typing atom labels straight onto the drawing, without a text field, takes
+  keys only, not composed text.
+- Only Liberation Sans and a small subset of DejaVu Sans for the interface's
+  key and arrow symbols are bundled, so drawing symbols they lack, such as ℃,
+  ⇌ and superscript ⁺ and ⁻, need a font from `fonts`. Chinese, Japanese and
+  Korean text loads a fallback (see [Fonts](#fonts)).
+- Shortcuts follow the desktop app, with ⌘ as Command on a Mac, except
+  three that browsers keep for their own tabs: New is Alt+N, Close tab Alt+W
+  and next/previous tab Alt+] / Alt+[ (⌃N, ⌃W, ⌃] / ⌃[ on a Mac).
+- Work other than [naming](#naming) runs on the page's thread, so a long
+  cleanup or import pauses the page.
 - Without WebGPU, lines are drawn without antialiasing: WebGL2 loses most
   canvases with it.
 
@@ -217,3 +295,7 @@ cd packages/editor
 bun test                                          # needs a built dist/
 RESHIKI_CLI=../../target/debug/reshiki bun test   # also compares with the CLI
 ```
+
+Pull request CI runs these tests, after Clippy for wasm32, in the **Browser
+build (wasm32)** job of the Checks workflow; see
+[Development](../../docs/development.md#ci).
