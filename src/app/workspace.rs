@@ -227,7 +227,12 @@ impl App {
             return self.theme_generator_workspace();
         }
         let background = |element| {
-            if self.context_menu.is_some() {
+            if self.label_click_through() {
+                // Only the drawing stays live; a click anywhere else commits.
+                iced::widget::mouse_area(reshiki::accessibility::inert(element))
+                    .on_press(Message::AtomText(super::atom_text::Action::Apply))
+                    .into()
+            } else if self.context_menu.is_some() {
                 reshiki::accessibility::inert(element)
             } else {
                 element

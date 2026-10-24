@@ -681,3 +681,35 @@ fn caption_chain_press_and_release_preserve_the_text_source_id() {
     assert!(points[0].distance(point) < 0.001);
     assert_eq!(doc, before);
 }
+
+#[test]
+fn text_tool_double_or_option_click_on_an_atom_repeats_the_label() {
+    let mut doc = Document::default();
+    let atom = doc.add_atom("C", World::default());
+    let mut canvas = tests::chain_canvas(&doc, ChainMode::Straight);
+    canvas.tool = Tool::Text;
+    let mut state = State::default();
+    let empty = World::new(200., 200.);
+    let p = doc.atom(atom).unwrap().position;
+    for (point, repeats) in [
+        (empty, false),
+        (empty, false),
+        (p, false),
+        (p, true),
+        (p, false),
+    ] {
+        let edit = press(&canvas, &mut state, point);
+        assert_eq!(matches!(edit, Some(Edit::RepeatLabel(_))), repeats);
+        assert!(matches!(edit, Some(Edit::Click(_) | Edit::RepeatLabel(_))));
+    }
+    state.last_click = None;
+    state.modifiers = iced::keyboard::Modifiers::ALT;
+    assert!(matches!(
+        press(&canvas, &mut state, p),
+        Some(Edit::RepeatLabel(_))
+    ));
+    assert!(matches!(
+        press(&canvas, &mut state, empty),
+        Some(Edit::Click(_))
+    ));
+}
