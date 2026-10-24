@@ -613,7 +613,7 @@ fn label_dialog_preserves_toolbar_alignment_and_chemical_graph() -> Result<(), S
         app.tab.selected = vec![id];
         let before = app.tab.doc.clone();
         for alignment in LabelAlignment::ALL {
-            let _ = app.update(Message::GroupLabelAlign(alignment));
+            let _ = app.update(Message::LabelAlign(alignment));
             let _ = app.update(Message::AtomText(Action::Begin(None)));
             let _ = app.update(Message::AtomText(Action::Apply));
             assert_eq!(
@@ -867,6 +867,25 @@ fn switching_atoms_from_an_unchanged_or_empty_label_adds_no_undo_step() -> Resul
         assert_eq!(app.tab.history.undo_frames().len(), 0, "{input:?}");
         assert_eq!(app.last_label, None);
     }
+    Ok(())
+}
+
+#[test]
+fn switching_atoms_commits_a_changed_alignment() -> Result<(), String> {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let a = app.tab.doc.add_atom("N", Point::new(0., 0.));
+    let b = app.tab.doc.add_atom("C", Point::new(80., 0.));
+    app.tool = Tool::Text;
+    let _ = app.update(Message::Canvas(Edit::Click(Point::new(0., 0.))));
+    let _ = app.update(Message::AtomText(Action::Align(LabelAlignment::Left)));
+    let _ = app.update(Message::Canvas(Edit::Click(Point::new(80., 0.))));
+    assert_eq!(app.tab.atom_text.as_ref().ok_or("Draft")?.id, b);
+    assert_eq!(
+        reshiki::atom_labels::alignment(&app.tab.doc, a),
+        Some(LabelAlignment::Left)
+    );
+    assert_eq!(app.tab.history.undo_frames().len(), 1);
     Ok(())
 }
 
