@@ -15,7 +15,7 @@ use reshiki::typography::{Script, ScriptRun, StyleChange, TextFormat, TextStyle}
 #[derive(Debug, Clone)]
 pub enum Action {
     Begin(Option<u64>),
-    /// Begin on the atom with the last committed label as the draft.
+    /// Put the last committed label on the atom without opening the editor.
     Repeat(u64),
     Input(String),
     Editor(text_editor::Action),
@@ -313,15 +313,21 @@ impl App {
                 return iced::widget::operation::focus("atom-text");
             }
             Action::Repeat(id) => {
+                // Applied at once without asking; an atom that already shows
+                // the label, or one it cannot go on, keeps the editor open.
                 let task = self.atom_text_action(Action::Begin(Some(id)));
                 if let Some(label) = self.last_label.clone()
                     && let Some(state) = &mut self.tab.atom_text
                     && state.id == id
                     && state.members.is_none()
+                    && state.input != label
                 {
                     state.manual_scripts = false;
                     state.replace_input(label);
-                    state.editor.perform(text_editor::Action::SelectAll);
+                    let _ = self.atom_text_action(Action::Apply);
+                }
+                if self.tab.atom_text.is_none() {
+                    return Task::none();
                 }
                 return task;
             }

@@ -903,16 +903,15 @@ fn double_clicking_on_carries_the_label_atom_by_atom() -> Result<(), String> {
     let _ = app.update(Message::Canvas(Edit::Click(Point::new(0., 0.))));
     let _ = app.update(Message::AtomText(Action::Input("OMe".into())));
     double_click(&mut app, 80.);
-    let draft = app.tab.atom_text.as_ref().ok_or("Draft")?;
-    assert_eq!((draft.id, draft.input.as_str()), (atoms[1], "OMe"));
-    assert_eq!(
-        editor_range(&draft.editor, &draft.input),
-        Some(0..3),
-        "The carried label is selected to type over"
+    assert!(
+        app.tab.atom_text.is_none(),
+        "The label is repeated without asking"
     );
+    assert_eq!(element(&app, atoms[0]), Some("O"));
+    assert_eq!(element(&app, atoms[1]), Some("O"));
     double_click(&mut app, 160.);
-    let _ = app.update(Message::AtomText(Action::Apply));
-    assert_eq!(app.tool, Tool::Text, "Enter keeps the Text tool");
+    assert!(app.tab.atom_text.is_none());
+    assert_eq!(app.tool, Tool::Text);
     for id in &atoms {
         assert_eq!(element(&app, *id), Some("O"));
     }
@@ -928,24 +927,28 @@ fn double_clicking_on_carries_the_label_atom_by_atom() -> Result<(), String> {
 }
 
 #[test]
-fn a_repeat_after_enter_carries_but_typing_over_replaces_it() -> Result<(), String> {
+fn repeated_labels_can_be_edited_and_the_edit_repeats_next() -> Result<(), String> {
     let (mut app, atoms) = text_atoms(3);
     let _ = app.update(Message::Canvas(Edit::Click(Point::new(0., 0.))));
     let _ = app.update(Message::AtomText(Action::Input("OMe".into())));
     let _ = app.update(Message::AtomText(Action::Apply));
     double_click(&mut app, 80.);
+    // Double-clicking an atom that already shows the label edits it.
+    double_click(&mut app, 80.);
+    let draft = app.tab.atom_text.as_ref().ok_or("Draft")?;
+    assert_eq!((draft.id, draft.input.as_str()), (atoms[1], "OMe"));
+    let _ = app.update(Message::AtomText(Action::Cancel));
+    // A single click edits too; Esc above forgot the label, so type it anew.
+    let _ = app.update(Message::Canvas(Edit::Click(Point::new(80., 0.))));
+    assert_eq!(app.tab.atom_text.as_ref().ok_or("Draft")?.input, "OMe");
     let _ = app.update(Message::AtomText(Action::Input("NH2".into())));
     // Option/Alt-click is a RepeatLabel without the first click.
     let _ = app.update(Message::Canvas(Edit::RepeatLabel(Point::new(160., 0.))));
-    let _ = app.update(Message::AtomText(Action::Apply));
-    assert_eq!(
-        atoms
-            .iter()
-            .map(|id| element(&app, *id))
-            .collect::<Vec<_>>(),
-        [Some("O"), Some("N"), Some("N")]
-    );
-    assert_eq!(app.tab.history.undo_frames().len(), 3);
+    assert!(app.tab.atom_text.is_none());
+    assert_eq!(element(&app, atoms[2]), Some("N"));
+    assert_eq!(app.tab.history.undo_frames().len(), 4);
+    let _ = app.update(Message::Canvas(Edit::Click(Point::new(80., 0.))));
+    assert_eq!(app.tab.atom_text.as_ref().ok_or("Draft")?.input, "NH2");
     Ok(())
 }
 
