@@ -409,10 +409,13 @@ impl super::App {
                     } else {
                         "Drawing updated in Office. Save the Office document to keep it."
                     }
+                    .into()
+                } else if cfg!(target_arch = "wasm32") {
+                    // The browser only starts a download, which can still be cancelled.
+                    format!("Downloaded {}", self.document_name())
                 } else {
-                    "Document saved"
-                }
-                .into();
+                    "Document saved".into()
+                };
                 self.error = false;
                 if !self.dirty() {
                     self.clear_recovery();
