@@ -749,6 +749,7 @@ impl App {
     }
     pub(super) fn select_tool(&mut self, tool: Tool) {
         self.clear_bond_text_hint();
+        self.last_label = None;
         self.tab.arrows.cancel_source();
         self.tab.erase_stroke = false;
         self.palette = None;

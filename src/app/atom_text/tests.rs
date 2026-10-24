@@ -825,3 +825,186 @@ fn apply_keeps_placement_a_group_without_a_reverse_spelling_can_take() -> Result
     }
     Ok(())
 }
+
+#[test]
+fn clicking_another_atom_commits_the_open_label_as_one_undo_step() -> Result<(), String> {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let a = app.tab.doc.add_atom("C", Point::new(0., 0.));
+    let b = app.tab.doc.add_atom("C", Point::new(80., 0.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
+    let before = app.tab.doc.clone();
+    app.tool = Tool::Text;
+    let _ = app.update(Message::Canvas(Edit::Click(Point::new(0., 0.))));
+    let _ = app.update(Message::AtomText(Action::Input("OMe".into())));
+    let _ = app.update(Message::Canvas(Edit::Click(Point::new(80., 0.))));
+    let draft = app.tab.atom_text.as_ref().ok_or("Draft")?;
+    assert_eq!((draft.id, draft.input.as_str()), (b, "C"));
+    assert_eq!(app.tab.doc.atom(a).ok_or("A")?.element, "O");
+    assert_eq!(app.tab.history.undo_frames().len(), 1);
+    let _ = app.update(Message::AtomText(Action::Cancel));
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    Ok(())
+}
+
+#[test]
+fn switching_atoms_from_an_unchanged_or_empty_label_adds_no_undo_step() -> Result<(), String> {
+    for input in [None, Some(""), Some("  ")] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.doc.add_atom("N", Point::new(0., 0.));
+        let b = app.tab.doc.add_atom("C", Point::new(80., 0.));
+        let before = app.tab.doc.clone();
+        app.tool = Tool::Text;
+        let _ = app.update(Message::Canvas(Edit::Click(Point::new(0., 0.))));
+        if let Some(input) = input {
+            let _ = app.update(Message::AtomText(Action::Input(input.into())));
+        }
+        let _ = app.update(Message::Canvas(Edit::Click(Point::new(80., 0.))));
+        assert_eq!(app.tab.atom_text.as_ref().ok_or("Draft")?.id, b);
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.history.undo_frames().len(), 0, "{input:?}");
+        assert_eq!(app.last_label, None);
+    }
+    Ok(())
+}
+
+#[test]
+fn switching_atoms_commits_a_changed_alignment() -> Result<(), String> {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let a = app.tab.doc.add_atom("N", Point::new(0., 0.));
+    let b = app.tab.doc.add_atom("C", Point::new(80., 0.));
+    app.tool = Tool::Text;
+    let _ = app.update(Message::Canvas(Edit::Click(Point::new(0., 0.))));
+    let _ = app.update(Message::AtomText(Action::Align(LabelAlignment::Left)));
+    let _ = app.update(Message::Canvas(Edit::Click(Point::new(80., 0.))));
+    assert_eq!(app.tab.atom_text.as_ref().ok_or("Draft")?.id, b);
+    assert_eq!(
+        reshiki::atom_labels::alignment(&app.tab.doc, a),
+        Some(LabelAlignment::Left)
+    );
+    assert_eq!(app.tab.history.undo_frames().len(), 1);
+    Ok(())
+}
+
+/// Unbonded atoms, so that every one of them can take a substituent label.
+fn text_atoms(len: usize) -> (App, Vec<u64>) {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let atoms: Vec<u64> = (0..len)
+        .map(|i| app.tab.doc.add_atom("C", Point::new(80. * i as f32, 0.)))
+        .collect();
+    app.tool = Tool::Text;
+    (app, atoms)
+}
+
+fn element(app: &App, id: u64) -> Option<&str> {
+    Some(app.tab.doc.atom(id)?.element.as_str())
+}
+
+/// Two quick clicks on the same atom, as the canvas publishes a double-click.
+fn double_click(app: &mut App, x: f32) {
+    let p = Point::new(x, 0.);
+    let _ = app.update(Message::Canvas(Edit::Click(p)));
+    let _ = app.update(Message::Canvas(Edit::Click(p)));
+}
+
+#[test]
+fn double_clicking_on_carries_the_label_atom_by_atom() -> Result<(), String> {
+    let (mut app, atoms) = text_atoms(3);
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::Canvas(Edit::Click(Point::new(0., 0.))));
+    let _ = app.update(Message::AtomText(Action::Input("OMe".into())));
+    double_click(&mut app, 80.);
+    assert!(
+        app.tab.atom_text.is_none(),
+        "The label is repeated without asking"
+    );
+    assert_eq!(element(&app, atoms[0]), Some("O"));
+    assert_eq!(element(&app, atoms[1]), Some("O"));
+    double_click(&mut app, 160.);
+    assert!(app.tab.atom_text.is_none());
+    assert_eq!(app.tool, Tool::Text);
+    for id in &atoms {
+        assert_eq!(element(&app, *id), Some("O"));
+    }
+    assert_eq!(app.tab.doc.atoms.len(), 6, "Each OMe adds its methyl");
+    assert_eq!(app.tab.history.undo_frames().len(), 3);
+    let _ = app.update(Message::Undo);
+    assert_eq!(element(&app, atoms[2]), Some("C"));
+    assert_eq!(element(&app, atoms[1]), Some("O"));
+    let _ = app.update(Message::Undo);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    Ok(())
+}
+
+#[test]
+fn repeated_labels_can_be_edited_and_the_edit_repeats_next() -> Result<(), String> {
+    let (mut app, atoms) = text_atoms(3);
+    let _ = app.update(Message::Canvas(Edit::Click(Point::new(0., 0.))));
+    let _ = app.update(Message::AtomText(Action::Input("OMe".into())));
+    let _ = app.update(Message::AtomText(Action::Apply));
+    double_click(&mut app, 80.);
+    // Double-clicking an atom that already shows the label edits it.
+    double_click(&mut app, 80.);
+    let draft = app.tab.atom_text.as_ref().ok_or("Draft")?;
+    assert_eq!((draft.id, draft.input.as_str()), (atoms[1], "OMe"));
+    let _ = app.update(Message::AtomText(Action::Cancel));
+    // A single click edits too; Esc above forgot the label, so type it anew.
+    let _ = app.update(Message::Canvas(Edit::Click(Point::new(80., 0.))));
+    assert_eq!(app.tab.atom_text.as_ref().ok_or("Draft")?.input, "OMe");
+    let _ = app.update(Message::AtomText(Action::Input("NH2".into())));
+    // Option/Alt-click is a RepeatLabel without the first click.
+    let _ = app.update(Message::Canvas(Edit::RepeatLabel(Point::new(160., 0.))));
+    assert!(app.tab.atom_text.is_none());
+    assert_eq!(element(&app, atoms[2]), Some("N"));
+    assert_eq!(app.tab.history.undo_frames().len(), 4);
+    let _ = app.update(Message::Canvas(Edit::Click(Point::new(80., 0.))));
+    assert_eq!(app.tab.atom_text.as_ref().ok_or("Draft")?.input, "NH2");
+    Ok(())
+}
+
+#[test]
+fn escape_and_tool_changes_forget_the_carried_label() -> Result<(), String> {
+    for forget in [
+        Message::AtomText(Action::Cancel),
+        Message::Tool(Tool::Select),
+    ] {
+        let (mut app, atoms) = text_atoms(2);
+        let _ = app.update(Message::Canvas(Edit::Click(Point::new(0., 0.))));
+        let _ = app.update(Message::AtomText(Action::Input("OMe".into())));
+        let _ = app.update(Message::AtomText(Action::Apply));
+        assert_eq!(app.last_label.as_deref(), Some("OMe"));
+        if matches!(forget, Message::AtomText(_)) {
+            let _ = app.update(Message::Canvas(Edit::Click(Point::new(80., 0.))));
+        }
+        let _ = app.update(forget.clone());
+        app.tool = Tool::Text;
+        double_click(&mut app, 80.);
+        let draft = app.tab.atom_text.as_ref().ok_or("Draft")?;
+        assert_eq!((draft.id, draft.input.as_str()), (atoms[1], "C"));
+        assert_eq!(app.last_label, None, "{forget:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn an_invalid_label_stays_open_when_another_atom_is_clicked() -> Result<(), String> {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let a = app.tab.doc.add_atom("C", Point::new(0., 0.));
+    app.tab.doc.add_atom("C", Point::new(80., 0.));
+    let before = app.tab.doc.clone();
+    app.tool = Tool::Text;
+    let _ = app.update(Message::Canvas(Edit::Click(Point::new(0., 0.))));
+    let _ = app.update(Message::AtomText(Action::Input("O\u{7}".into())));
+    let _ = app.update(Message::Canvas(Edit::Click(Point::new(80., 0.))));
+    let draft = app.tab.atom_text.as_ref().ok_or("Draft")?;
+    assert_eq!(draft.id, a);
+    assert!(draft.error.is_some());
+    assert_eq!(app.tab.doc, before);
+    Ok(())
+}

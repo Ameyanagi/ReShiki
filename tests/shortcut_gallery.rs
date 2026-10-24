@@ -61,7 +61,7 @@ fn bundled_gallery_is_one_editable_document_and_samples_copy_independently() -> 
 
 #[test]
 fn atom_drag_adds_the_element_and_preserves_existing_endpoints() -> Result<(), String> {
-    for element in ["C", "N", "O", "S", "Cl", "Fe", "*"] {
+    for element in ["H", "C", "N", "O", "S", "Cl", "Fe", "*"] {
         let mut source = Document::default();
         let start = source.add_atom("C", Point::default());
         let (drawing, id) =

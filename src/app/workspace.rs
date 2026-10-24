@@ -204,7 +204,12 @@ impl App {
             return self.theme_generator_workspace();
         }
         let background = |element| {
-            if self.context_menu.is_some() {
+            if self.label_click_through() {
+                // Only the drawing stays live; a click anywhere else commits.
+                iced::widget::mouse_area(reshiki::accessibility::inert(element))
+                    .on_press(Message::AtomText(super::atom_text::Action::Apply))
+                    .into()
+            } else if self.context_menu.is_some() {
                 reshiki::accessibility::inert(element)
             } else {
                 element
@@ -576,15 +581,9 @@ impl App {
             palette = palette.push(line);
         }
         palette = palette.push(Space::new().height(10)).push(section("ATOMS"));
-        for pair in [
-            ["C", "N"],
-            ["O", "S"],
-            ["P", "F"],
-            ["Cl", "Br"],
-            ["Fe", "*"],
-        ] {
+        for pair in PALETTE_ELEMENTS.chunks(2) {
             let mut line = row![].spacing(4);
-            for symbol in pair {
+            for &symbol in pair {
                 line = line.push(self.element_palette_button(symbol));
             }
             palette = palette.push(line);
@@ -2437,6 +2436,9 @@ impl App {
 }
 
 const PALETTE_WIDTH: f32 = 104.;
+/// The ATOMS buttons, two per line: H first, then the common organic
+/// elements, as in Ketcher's atom toolbar.
+const PALETTE_ELEMENTS: [&str; 11] = ["H", "C", "N", "O", "S", "P", "F", "Cl", "Br", "Fe", "*"];
 const CONTEXT_PADDING: f32 = 14.;
 pub(super) const CONTEXT_GAP: f32 = 10.;
 const DIVIDER: f32 = 11.;

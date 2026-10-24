@@ -15,6 +15,8 @@ use reshiki::typography::{Script, ScriptRun, StyleChange, TextFormat, TextStyle}
 #[derive(Debug, Clone)]
 pub enum Action {
     Begin(Option<u64>),
+    /// Put the last committed label on the atom without opening the editor.
+    Repeat(u64),
     Input(String),
     Editor(text_editor::Action),
     Script(Script),
@@ -194,6 +196,38 @@ fn key_binding(key: text_editor::KeyPress) -> Option<text_editor::Binding<Messag
         .or_else(|| text_editor::Binding::from_key_press(key))
 }
 impl App {
+    /// While the Text tool edits a label, the drawing stays clickable.
+    pub(super) fn label_click_through(&self) -> bool {
+        self.tab.atom_text.is_some() && self.tool == crate::canvas::Tool::Text
+    }
+
+    /// A Text-tool click on an atom opens its label editor, committing any
+    /// open label first; a double-click or Option/Alt-click repeats the last.
+    pub(super) fn text_tool_atom_click(
+        &mut self,
+        edit: &crate::canvas::Edit,
+    ) -> Option<Task<Message>> {
+        use crate::canvas::Edit;
+        let (Edit::Click(p) | Edit::RepeatLabel(p)) = edit else {
+            return None;
+        };
+        let id = crate::canvas::hit_object(&self.tab.doc, *p, 8. / self.tab.camera.zoom)
+            .filter(|id| self.tab.doc.atom(*id).is_some())?;
+        // Counted here, not in the canvas, whose state the editor resets.
+        let now = iced::time::Instant::now();
+        let double = self
+            .text_click
+            .is_some_and(|(time, last)| last == id && now.duration_since(time).as_millis() < 450);
+        self.text_click = (!double).then_some((now, id));
+        Some(
+            self.atom_text_action(if double || matches!(edit, Edit::RepeatLabel(_)) {
+                Action::Repeat(id)
+            } else {
+                Action::Begin(Some(id))
+            }),
+        )
+    }
+
     pub(super) fn atom_text_target(&self) -> Option<u64> {
         if let [id] = self.tab.selected.as_slice()
             && self.tab.doc.atom(*id).is_some()
@@ -219,6 +253,21 @@ impl App {
             Action::Begin(id) => {
                 if self.tab.cleanup.is_some() || self.tab.busy || !self.finish_inline(true) {
                     return Task::none();
+                }
+                // Like ChemDraw, moving to another atom commits the open
+                // label as Enter would. An empty or unchanged draft is just
+                // closed; a failed one stays open with its error, not lost.
+                if let Some(state) = &self.tab.atom_text {
+                    if state.input.trim().is_empty()
+                        || !state.label_edited && !state.scripts_edited && !state.aligned
+                    {
+                        self.tab.atom_text = None;
+                    } else {
+                        let _ = self.atom_text_action(Action::Apply);
+                        if self.tab.atom_text.is_some() {
+                            return Task::none();
+                        }
+                    }
                 }
                 let Some(id) = id.or_else(|| self.atom_text_target()) else {
                     self.status = "Select one atom, then press Enter to edit its label".into();
@@ -277,6 +326,25 @@ impl App {
                 });
                 self.context_menu = None;
                 return iced::widget::operation::focus("atom-text");
+            }
+            Action::Repeat(id) => {
+                // Applied at once without asking; an atom that already shows
+                // the label, or one it cannot go on, keeps the editor open.
+                let task = self.atom_text_action(Action::Begin(Some(id)));
+                if let Some(label) = self.last_label.clone()
+                    && let Some(state) = &mut self.tab.atom_text
+                    && state.id == id
+                    && state.members.is_none()
+                    && state.input != label
+                {
+                    state.manual_scripts = false;
+                    state.replace_input(label);
+                    let _ = self.atom_text_action(Action::Apply);
+                }
+                if self.tab.atom_text.is_none() {
+                    return Task::none();
+                }
+                return task;
             }
             Action::Input(input) => {
                 if let Some(state) = &mut self.tab.atom_text {
@@ -349,7 +417,10 @@ impl App {
                     state.alignment = alignment;
                 }
             }
-            Action::Cancel => self.tab.atom_text = None,
+            Action::Cancel => {
+                self.tab.atom_text = None;
+                self.last_label = None;
+            }
             Action::Apply => {
                 let Some(state) = &self.tab.atom_text else {
                     return Task::none();
@@ -409,6 +480,9 @@ impl App {
                             }
                             return Task::none();
                         }
+                        if state.members.is_none() && state.label_edited {
+                            self.last_label = Some(state.input.trim().into());
+                        }
                         let before = std::mem::replace(&mut self.tab.doc, doc);
                         self.tab.atom_text = None;
                         self.changed(before);
@@ -427,7 +501,13 @@ impl App {
         let Some(state) = &self.tab.atom_text else {
             return base;
         };
-        let base = reshiki::accessibility::inert(base);
+        // The workspace makes the rest inert, so a click elsewhere commits.
+        let click_through = self.label_click_through();
+        let base = if click_through {
+            base
+        } else {
+            reshiki::accessibility::inert(base)
+        };
         let editor = text_editor(&state.editor)
             .id("atom-text")
             .font(iced::Font::with_name(reshiki::style::font_name(
@@ -652,6 +732,9 @@ impl App {
                 },
             )
         });
+        if click_through {
+            return stack![base, container(opaque(popup)).center(Length::Fill)].into();
+        }
         stack![
             base,
             opaque(

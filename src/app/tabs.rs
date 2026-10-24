@@ -696,6 +696,7 @@ fn export_result(
         Ok(response) => super::export_file(
             response.output.unwrap_or_default(),
             format,
+            None,
             response.warnings,
         ),
         Err(_) => Task::none(),
