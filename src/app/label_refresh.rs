@@ -86,7 +86,7 @@ impl App {
                 settle(&mut self.tab.doc);
                 // The settled geometry follows from labels, not from an edit.
                 if clean {
-                    self.tab.saved.clone_from(&self.tab.doc);
+                    self.tab.mark_saved(self.tab.doc.clone());
                 }
                 // An open Move & attach or Coordinate preparation builds its
                 // result from these copies. Keep them equal to the drawing, so

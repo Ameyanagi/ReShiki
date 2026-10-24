@@ -3,7 +3,7 @@ pub mod units;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    sync::{LazyLock, Mutex, PoisonError, RwLock, RwLockReadGuard},
+    sync::{Arc, LazyLock, Mutex, PoisonError, RwLock, RwLockReadGuard},
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -102,7 +102,9 @@ impl DrawingStyle {
 }
 
 struct Fonts {
-    db: resvg::usvg::fontdb::Database,
+    /// Shared with every export's usvg tree, so parsing an SVG neither scans
+    /// the system fonts again nor copies the database.
+    db: Arc<resvg::usvg::fontdb::Database>,
     names: &'static [&'static str],
     /// Families of the fonts added at runtime, searched after the usual
     /// fallbacks for glyphs a label's own font lacks.
@@ -112,9 +114,11 @@ struct Fonts {
 static FONTS: LazyLock<RwLock<Fonts>> = LazyLock::new(|| {
     let mut db = resvg::usvg::fontdb::Database::new();
     load_fonts(&mut db);
+    #[cfg(not(target_arch = "wasm32"))]
+    font::keep_resident(&mut db, &[&DEFAULT.font_family]);
     let names = family_names(&db);
     RwLock::new(Fonts {
-        db,
+        db: Arc::new(db),
         names,
         added: Vec::new(),
     })
@@ -122,6 +126,12 @@ static FONTS: LazyLock<RwLock<Fonts>> = LazyLock::new(|| {
 
 fn fonts() -> RwLockReadGuard<'static, Fonts> {
     FONTS.read().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// The fonts text is measured with, for drawing and export: one database for
+/// the whole process, so exports reuse it instead of loading their own.
+pub fn fontdb() -> Arc<resvg::usvg::fontdb::Database> {
+    fonts().db.clone()
 }
 
 /// Fonts a page added at runtime, after the system's or the bundled ones.
@@ -143,9 +153,10 @@ pub fn load_fonts(db: &mut resvg::usvg::fontdb::Database) {
 /// export, as the browser does with a page's fonts. Labels whose own family
 /// lacks a glyph fall back to it. Returns how many faces it holds.
 pub fn add_font(bytes: Vec<u8>) -> Result<usize, String> {
-    let source = resvg::usvg::fontdb::Source::Binary(std::sync::Arc::new(bytes));
+    let source = resvg::usvg::fontdb::Source::Binary(Arc::new(bytes));
     let mut fonts = FONTS.write().unwrap_or_else(PoisonError::into_inner);
-    let ids = fonts.db.load_font_source(source.clone());
+    // Trees parsed earlier keep the database they were laid out with.
+    let ids = Arc::make_mut(&mut fonts.db).load_font_source(source.clone());
     if ids.is_empty() {
         return Err("Not a TrueType or OpenType font".into());
     }
@@ -172,6 +183,10 @@ pub fn add_font(bytes: Vec<u8>) -> Result<usize, String> {
         .unwrap_or_else(PoisonError::into_inner)
         .clear();
     GLYPH_INK
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clear();
+    GLYPH_REACH
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .clear();
@@ -329,6 +344,55 @@ pub fn glyph_metrics(c: char, style: &crate::typography::TextStyle) -> GlyphMetr
         cache.insert(key, result);
     }
     result
+}
+
+static GLYPH_REACH: LazyLock<Mutex<HashMap<String, Option<f32>>>> = LazyLock::new(Default::default);
+
+/// An upper bound, in ems, on any glyph's advance and ink extent in a label
+/// set in `family`, counting the fallback faces its missing glyphs come from.
+/// `None` when a face has variation axes: its instances can be wider.
+pub fn label_glyph_reach(family: &str) -> Option<f32> {
+    if let Ok(cache) = GLYPH_REACH.lock()
+        && let Some(reach) = cache.get(family)
+    {
+        return *reach;
+    }
+    let fonts = fonts();
+    // Glyphs no face has are measured 0.6 em wide and 1 em tall.
+    let mut reach = Some(1f32);
+    for name in fallback_families(family, &fonts) {
+        for face in fonts.db.faces() {
+            if !face.families.iter().any(|(n, _)| n == name) {
+                continue;
+            }
+            let extent = fonts
+                .db
+                .with_face_data(face.id, |bytes, index| {
+                    let face = ttf_parser::Face::parse(bytes, index).ok()?;
+                    if face.is_variable() {
+                        return None;
+                    }
+                    let advance = (0..face.number_of_glyphs())
+                        .filter_map(|g| face.glyph_hor_advance(ttf_parser::GlyphId(g)))
+                        .max()
+                        .unwrap_or(0);
+                    let abs = |v: i16| i32::from(v).unsigned_abs();
+                    let b = face.global_bounding_box();
+                    // Ink is placed from the ascent down, as in `text_ink_shapes`.
+                    let ink = abs(b.x_min)
+                        .max(abs(b.x_max))
+                        .max(abs(face.ascender()) + abs(b.y_min).max(abs(b.y_max)));
+                    Some(u32::from(advance).max(ink) as f32 / f32::from(face.units_per_em()))
+                })
+                .flatten();
+            reach = reach.zip(extent).map(|(r, e)| r.max(e));
+        }
+    }
+    drop(fonts);
+    if let Ok(mut cache) = GLYPH_REACH.lock() {
+        cache.insert(family.to_owned(), reach);
+    }
+    reach
 }
 
 type InkBox = (crate::document::Point, crate::document::Point);

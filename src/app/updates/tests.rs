@@ -243,7 +243,7 @@ fn updates_cannot_discard_unsaved_drawing_or_assistant_work() {
     assert!(!app.updates.installing);
     assert!(!app.updates.restarting);
     assert!(app.updates.error.as_ref().unwrap().contains("Save"));
-    app.tab.saved = app.tab.doc.clone();
+    app.tab.mark_saved(app.tab.doc.clone());
     app.tab.path = Some("saved drawing.rsk".into());
     app.assistant.busy = true;
     let _ = app.update_action(Action::Install);
