@@ -322,3 +322,89 @@ fn ring_preparation_preserves_order_and_debits_failed_search() -> TestResult {
     assert!(insufficient < used - 1);
     Ok(())
 }
+
+#[test]
+fn bond_crossing_grid_matches_all_pairs_scan() -> TestResult {
+    let source = chain(60)?;
+    let initial = prepared(&source, &mut { MAX_WORK })?;
+    let graph = &initial.state.graph;
+    let input = collision::Input::new(graph, &initial.state.metadata, &initial.state.rings)?;
+    let mut fragment = initial
+        .fragments
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("missing fragment"))?
+        .clone();
+    // Scatter the chain over a few grid cells so many bonds cross.
+    let mut seed = 1u64;
+    for a in fragment.atoms.values_mut() {
+        for v in [&mut a.location.x, &mut a.location.y] {
+            seed = seed
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            *v = (seed >> 11) as f64 / (1u64 << 53) as f64 * 4.0 - 2.0;
+        }
+    }
+    let mut expected = input.find(&fragment, false)?.pairs;
+    let atoms = expected.len();
+    let p = |id: usize| fragment.atoms[&id].location;
+    let mid = |b: &Bond| ((p(b.a).x + p(b.b).x) / 2.0, (p(b.a).y + p(b.b).y) / 2.0);
+    let cross = |o: usize, a: usize, b: usize, c: usize| {
+        let (v1x, v1y) = (p(a).x - p(o).x, p(a).y - p(o).y);
+        let (v2x, v2y) = (p(b).x - p(o).x, p(b).y - p(o).y);
+        let (v3x, v3y) = (p(c).x - p(o).x, p(c).y - p(o).y);
+        (v1x * v2y - v1y * v2x) * (v1x * v3y - v1y * v3x)
+    };
+    for (i, b1) in graph.bonds.iter().enumerate() {
+        for b2 in &graph.bonds[i + 1..] {
+            let (m1, m2) = (mid(b1), mid(b2));
+            let d2 = (m2.0 - m1.0).powi(2) + (m2.1 - m1.1).powi(2);
+            if d2 < 0.25 && cross(b1.a, b1.b, b2.a, b2.b) < -1e-6 {
+                let candidates = [(b1.a, b2.a), (b1.a, b2.b), (b1.b, b2.a), (b1.b, b2.b)];
+                let mut best = candidates[0];
+                for pair in candidates {
+                    if pair.0.abs_diff(pair.1) < best.0.abs_diff(best.1) {
+                        best = pair;
+                    }
+                }
+                expected.push(best);
+            }
+        }
+    }
+    assert!(expected.len() > atoms + 10);
+    assert_eq!(input.find(&fragment, true)?.pairs, expected);
+    Ok(())
+}
+
+#[test]
+fn exhausted_collision_repair_keeps_the_unrepaired_layout() -> TestResult {
+    let count = 40;
+    let source = chain(count)?;
+    let mut remaining = MAX_WORK;
+    let initial = prepared(&source, &mut remaining)?;
+    let initial_cost = MAX_WORK - remaining;
+    let before_repair = remaining;
+    repair(&initial, &mut remaining)?;
+    let collision_cost = before_repair - remaining;
+    let mut remaining = MAX_WORK;
+    let expected = finalize::finish_with_work(
+        count,
+        &initial.fragments,
+        None,
+        finalize::Options::default(),
+        &mut remaining,
+    )?;
+    let final_cost = MAX_WORK - remaining;
+    assert!(collision_cost > final_cost);
+    // Too little for repair, enough for preparation and finalization.
+    let options = crate::depict::Options {
+        use_ring_templates: true,
+        work_limit: initial_cost + final_cost,
+        ..Default::default()
+    };
+    let conformer = crate::depict::compute(&source, &vec![None; count], None, options)?;
+    assert_eq!(
+        serde_json::to_value(conformer)?,
+        serde_json::to_value(expected.conformer)?
+    );
+    Ok(())
+}
