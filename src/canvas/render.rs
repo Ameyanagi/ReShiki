@@ -1,8 +1,11 @@
 //! Tessellates scene primitives into a layered frame; shared by the paper and every preview program.
 
 use super::{Camera, Document, World, dashes, layered, models3d, rgb, text_cache};
-use iced::widget::canvas::{self, Path, Stroke};
-use iced::{Color, Rectangle};
+use iced::widget::canvas::{
+    self, Path, Stroke,
+    path::lyon_path::math::{Transform, vector},
+};
+use iced::{Color, Point, Rectangle};
 use reshiki::{
     graphics::PathCommand,
     scene::{Primitive, primitives},
@@ -160,28 +163,19 @@ fn draw_primitives_with_opacity(
                 color,
                 style,
             } => {
-                let paths = if let Some(cache) = frame.text_cache {
-                    cache
-                        .borrow_mut()
-                        .get(text, *size, camera.zoom, *color, style)
-                } else {
-                    std::rc::Rc::new(text_cache::outline(text, *size, camera.zoom, *color, style))
-                };
-                let position_screen = camera.screen(*position, bounds);
+                let at = camera.screen(*position, bounds);
+                let (paths, scale) = outlined_text(frame, text, *size, camera.zoom, *color, style);
                 let visible = paths.bounds.is_some_and(|text_bounds| {
                     Rectangle {
-                        x: text_bounds.x + position_screen.x,
-                        y: text_bounds.y + position_screen.y,
-                        ..text_bounds
+                        x: text_bounds.x * scale + at.x,
+                        y: text_bounds.y * scale + at.y,
+                        width: text_bounds.width * scale,
+                        height: text_bounds.height * scale,
                     }
                     .intersects(&Rectangle::with_size(bounds.size()))
                 });
                 if visible {
-                    let transform =
-                        iced::widget::canvas::path::lyon_path::math::Transform::translation(
-                            position_screen.x,
-                            position_screen.y,
-                        );
+                    let transform = text_transform(at, scale);
                     for (path, color) in &paths.paths {
                         frame.fill(&path.transform(&transform), alpha(*color));
                     }
@@ -201,6 +195,28 @@ fn draw_primitives_with_opacity(
             }
         }
     }
+}
+
+/// Text outlined at the zoom step nearest `zoom`, and the scale from it to `zoom`.
+fn outlined_text(
+    frame: &layered::Frame<'_>,
+    text: &str,
+    size: f32,
+    zoom: f32,
+    color: [u8; 3],
+    style: &reshiki::typography::TextStyle,
+) -> (std::rc::Rc<text_cache::OutlinedText>, f32) {
+    let step = text_cache::zoom_step(zoom);
+    let paths = if let Some(cache) = frame.text_cache {
+        cache.borrow_mut().get(text, size, step, color, style)
+    } else {
+        std::rc::Rc::new(text_cache::outline(text, size, step, color, style))
+    };
+    (paths, zoom / step)
+}
+
+fn text_transform(at: Point, scale: f32) -> Transform {
+    Transform::scale(scale, scale).then_translate(vector(at.x, at.y))
 }
 
 /// Paper-colored label halos: each label shape filled and stroked `radius` wider.
@@ -267,16 +283,8 @@ fn draw_halo(
                 color,
                 style,
             } => {
-                let paths = if let Some(cache) = frame.text_cache {
-                    cache
-                        .borrow_mut()
-                        .get(text, *size, camera.zoom, *color, style)
-                } else {
-                    std::rc::Rc::new(text_cache::outline(text, *size, camera.zoom, *color, style))
-                };
-                let at = camera.screen(*position, bounds);
-                let transform =
-                    iced::widget::canvas::path::lyon_path::math::Transform::translation(at.x, at.y);
+                let (paths, scale) = outlined_text(frame, text, *size, camera.zoom, *color, style);
+                let transform = text_transform(camera.screen(*position, bounds), scale);
                 for (path, _) in &paths.paths {
                     let path = path.transform(&transform);
                     frame.fill(&path, Color::WHITE);

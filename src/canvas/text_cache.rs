@@ -1,4 +1,5 @@
-//! Bounded, position-independent text outlines. Pan and translation reuse glyphs.
+//! Bounded, position-independent text outlines. Pan and translation reuse glyphs,
+//! and zoom reuses them between quarter-octave steps.
 mod glyphs;
 use super::{Point, Rectangle, rgb};
 use iced::{
@@ -11,6 +12,19 @@ use std::{collections::HashMap, rc::Rc};
 pub(crate) fn prepare_fonts() {
     glyphs::prepare_fonts();
 }
+
+/// The zoom text is outlined at: the nearest power of 2^(1/4). Drawing scales
+/// the rest (at most 2^(1/8), about 9%), so zooming reuses cached outlines.
+pub(super) fn zoom_step(zoom: f32) -> f32 {
+    if zoom.is_finite() && zoom > 0. {
+        ((zoom.log2() * 4.).round() / 4.).exp2()
+    } else {
+        zoom
+    }
+}
+
+const BUDGET: usize = 8 * 1024 * 1024;
+const LIMIT: usize = 2048;
 
 #[derive(Hash, PartialEq, Eq)]
 struct Key {
@@ -25,9 +39,16 @@ struct Key {
 
 #[derive(Default)]
 pub(super) struct TextCache {
-    entries: HashMap<Key, Rc<OutlinedText>>,
+    entries: HashMap<Key, Entry>,
     cost: usize,
+    clock: u64,
     glyphs: glyphs::Glyphs,
+}
+
+struct Entry {
+    text: Rc<OutlinedText>,
+    cost: usize,
+    used: u64,
 }
 
 impl TextCache {
@@ -48,8 +69,10 @@ impl TextCache {
             italic: style.italic,
             color,
         };
-        if let Some(paths) = self.entries.get(&key) {
-            return paths.clone();
+        self.clock += 1;
+        if let Some(entry) = self.entries.get_mut(&key) {
+            entry.used = self.clock;
+            return entry.text.clone();
         }
         let result = Rc::new(outline_with_glyphs(
             text,
@@ -61,17 +84,42 @@ impl TextCache {
         ));
         // Bound both the entry count and the retained path data; large imported
         // captions may still render but cannot permanently fill this cache.
-        const BUDGET: usize = 8 * 1024 * 1024;
         let cost = result.cost + key.text.len() + key.family.len() + std::mem::size_of::<Key>();
         if cost <= BUDGET {
-            if self.cost + cost > BUDGET || self.entries.len() >= 2048 {
-                self.entries.clear();
-                self.cost = 0;
+            if self.cost + cost > BUDGET || self.entries.len() >= LIMIT {
+                self.evict(cost);
             }
             self.cost += cost;
-            self.entries.insert(key, result.clone());
+            self.entries.insert(
+                key,
+                Entry {
+                    text: result.clone(),
+                    cost,
+                    used: self.clock,
+                },
+            );
         }
         result
+    }
+
+    /// Drop the least recently used outlines until one more of `incoming`
+    /// cost fits in three quarters of the limits; text on screen stays cached.
+    fn evict(&mut self, incoming: usize) {
+        let mut ages: Vec<_> = self.entries.values().map(|e| (e.used, e.cost)).collect();
+        ages.sort_unstable();
+        let mut len = self.entries.len() + 1;
+        let mut total = self.cost + incoming;
+        let mut keep_from = 0;
+        for (used, cost) in ages {
+            if total <= BUDGET * 3 / 4 && len <= LIMIT * 3 / 4 {
+                break;
+            }
+            total -= cost;
+            len -= 1;
+            keep_from = used + 1;
+        }
+        self.entries.retain(|_, e| e.used >= keep_from);
+        self.cost = total - incoming;
     }
 }
 
