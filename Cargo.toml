@@ -33,6 +33,7 @@ members = [
   "crates/mcp",
   "crates/model",
   "crates/metafile",
+  "crates/naming-web",
   "crates/opsin",
   "crates/process-heap",
   "crates/web",
@@ -152,6 +153,7 @@ web-sys = { version = "0.3", features = [
   "DomRect",
   "DomStringList",
   "DragEvent",
+  "ErrorEvent",
   "Event",
   "EventTarget",
   "File",
@@ -176,6 +178,7 @@ web-sys = { version = "0.3", features = [
   "Node",
   "StorageManager",
   "Window",
+  "Worker",
 ] }
 web-time = "1"
 # Input methods for Iced's text fields (vendor/iced_winit).

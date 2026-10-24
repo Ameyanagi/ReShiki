@@ -278,8 +278,8 @@ jobs:
       - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
         with:
           shared-key: wasm32
-      - name: Check the browser editor and headless library for wasm32
-        run: cargo clippy -p reshiki-web -p reshiki --lib --bin reshiki --target wasm32-unknown-unknown --locked -- -D warnings
+      - name: Check the browser editor, its naming worker and the headless library for wasm32
+        run: cargo clippy -p reshiki-web -p reshiki -p reshiki-naming-web --lib --bin reshiki --target wasm32-unknown-unknown --locked -- -D warnings
       - name: Build the headless library for the package tests
         run: |
           version=$(awk '$0 == "name = \"wasm-bindgen\"" { getline; gsub(/"/, "", $3); print $3 }' Cargo.lock)

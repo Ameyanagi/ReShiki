@@ -3955,6 +3955,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "reshiki-naming-web"
+version = "0.1.0"
+dependencies = [
+ "reshiki",
+ "reshiki-process-heap",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "reshiki-process"
 version = "0.1.0"
 dependencies = [
