@@ -93,28 +93,14 @@ fn configurations(molecule: &Molecule<'_>, options: &Options) -> Result<Vec<Conf
     Ok(configurations)
 }
 
-// A pass retains graphs across the fast and full retries. Bound their aggregate
-// storage as well as each graph's existing node, visit-map and work limits.
+// Bound each centre's graph storage as well as its node, visit-map and work
+// limits. Only one graph is alive at a time.
 const STORAGE_UNITS: usize = 16_000_000;
-struct Storage {
-    units: Vec<usize>,
-    total: usize,
-}
-impl Storage {
-    fn observe(&mut self, index: usize, graph: &Digraph<'_>) -> Result<(), Error> {
-        let previous = at_mut(&mut self.units, index)?;
-        let units = graph.storage_units();
-        self.total = self
-            .total
-            .checked_sub(*previous)
-            .and_then(|n| n.checked_add(units))
-            .ok_or(Error::Limit)?;
-        *previous = units;
-        if self.total > STORAGE_UNITS {
-            return Err(Error::Limit);
-        }
-        Ok(())
+fn bounded(graph: &Digraph<'_>) -> Result<(), Error> {
+    if graph.storage_units() > STORAGE_UNITS {
+        return Err(Error::Limit);
     }
+    Ok(())
 }
 
 fn auxiliary<'a>(
@@ -219,80 +205,65 @@ pub fn assign(input: &State, options: &Options) -> Result<Assignment, Error> {
         .atoms
         .len()
         .div_ceil(std::mem::size_of::<usize>());
+    // Every centre builds a graph with an atom-sized visit map: bound the total.
     if count
         .checked_mul(seen_units + 64)
         .is_none_or(|n| n > STORAGE_UNITS)
     {
         return Err(Error::Limit);
     }
-    let mut graphs = Vec::with_capacity(count);
-    let mut storage = Storage {
-        units: vec![0; count],
-        total: 0,
-    };
-    for (i, configuration) in configurations.iter().enumerate() {
-        let graph = configuration.make_digraph(&molecule)?;
-        storage.observe(i, &graph)?;
-        graphs.push(graph);
-    }
-    let mut labels: Vec<Option<PrimaryLabel>> =
-        std::iter::repeat_with(|| None).take(count).collect();
+    let mut labels = Vec::new();
     let constitutional = Rules::constitutional();
     let full = Rules::full();
-    for (i, configuration) in configurations.iter_mut().enumerate() {
-        let graph = at_mut(&mut graphs, i)?;
-        let descriptor = configuration.label(
+    let mut iterations = Iterations::new(options.max_iterations);
+    // Each centre needs only its own graph (auxiliary labels are computed on
+    // it), so build it here and drop it once the centre is labelled. A fast
+    // pass with a small private budget comes first; centres it cannot decide
+    // continue on the same graph with the shared budget and the full rules.
+    for i in 0..count {
+        let mut graph = at(&configurations, i)?.make_digraph(&molecule)?;
+        bounded(&graph)?;
+        let fast = at_mut(&mut configurations, i)?.label(
             &mut molecule,
-            graph,
+            &mut graph,
             &constitutional,
             &mut Iterations::new(2000),
         );
-        storage.observe(i, graph)?;
-        match descriptor {
-            Ok(Descriptor::Unknown) | Err(Error::Iterations) => (),
-            Ok(descriptor) => {
-                *at_mut(&mut labels, i)? = Some(primary(configuration, descriptor, &molecule)?)
+        bounded(&graph)?;
+        let descriptor = match fast {
+            Ok(Descriptor::Unknown) | Err(Error::Iterations) => {
+                let mut descriptor = at_mut(&mut configurations, i)?.label(
+                    &mut molecule,
+                    &mut graph,
+                    &constitutional,
+                    &mut iterations,
+                )?;
+                bounded(&graph)?;
+                if descriptor == Descriptor::Unknown {
+                    auxiliary(
+                        &mut configurations,
+                        i,
+                        &mut molecule,
+                        &mut graph,
+                        &full,
+                        &mut iterations,
+                    )?;
+                    bounded(&graph)?;
+                    descriptor = at_mut(&mut configurations, i)?.label(
+                        &mut molecule,
+                        &mut graph,
+                        &full,
+                        &mut iterations,
+                    )?;
+                    bounded(&graph)?;
+                }
+                descriptor
             }
+            Ok(descriptor) => descriptor,
             Err(error) => return Err(error),
-        }
-    }
-    let mut iterations = Iterations::new(options.max_iterations);
-    for i in 0..count {
-        if at(&labels, i)?.is_some() {
-            continue;
-        }
-        let graph = at_mut(&mut graphs, i)?;
-        let descriptor = at_mut(&mut configurations, i)?.label(
-            &mut molecule,
-            graph,
-            &constitutional,
-            &mut iterations,
-        )?;
-        storage.observe(i, graph)?;
-        let descriptor = if descriptor == Descriptor::Unknown {
-            auxiliary(
-                &mut configurations,
-                i,
-                &mut molecule,
-                graph,
-                &full,
-                &mut iterations,
-            )?;
-            storage.observe(i, graph)?;
-            let descriptor = at_mut(&mut configurations, i)?.label(
-                &mut molecule,
-                graph,
-                &full,
-                &mut iterations,
-            )?;
-            storage.observe(i, graph)?;
-            descriptor
-        } else {
-            descriptor
         };
         if descriptor != Descriptor::Unknown {
-            *at_mut(&mut labels, i)? =
-                Some(primary(at(&configurations, i)?, descriptor, &molecule)?);
+            labels.push(primary(at(&configurations, i)?, descriptor, &molecule)?);
         }
     }
     let mut state = input.clone();
@@ -303,7 +274,6 @@ pub fn assign(input: &State, options: &Options) -> Result<Assignment, Error> {
             Target::Bond(bond) => *at_mut(&mut state.properties.bond_codes, bond)? = None,
         }
     }
-    let labels = labels.into_iter().flatten().collect::<Vec<_>>();
     for label in &labels {
         let code = match label.descriptor {
             Descriptor::R => "R",

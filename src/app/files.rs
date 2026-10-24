@@ -387,7 +387,7 @@ impl super::App {
         match result {
             Ok(Some(path)) => {
                 // Continue the save dialog's action only when nothing is left unsaved.
-                self.tab.saved = *snapshot;
+                self.tab.mark_saved(*snapshot);
                 if self
                     .tab
                     .office
@@ -481,7 +481,7 @@ impl super::App {
         self.sync_drawing_defaults();
         self.tab.styles.editor = None;
         self.theme_library.editor = None;
-        self.tab.saved = self.tab.doc.clone();
+        self.tab.mark_saved(self.tab.doc.clone());
         self.tab.path = path;
         self.tab.untitled_name = None;
         self.tab.history = super::History::default();

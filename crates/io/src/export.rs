@@ -1,8 +1,10 @@
 use crate::{document::Document, scene};
 
 pub fn parse_svg(svg: String) -> Result<resvg::usvg::Tree, String> {
-    let mut options = resvg::usvg::Options::default();
-    crate::style::load_fonts(options.fontdb_mut());
+    let options = resvg::usvg::Options {
+        fontdb: crate::style::fontdb(),
+        ..Default::default()
+    };
     resvg::usvg::Tree::from_str(&svg, &options).map_err(|error| error.to_string())
 }
 

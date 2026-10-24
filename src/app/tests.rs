@@ -138,7 +138,9 @@ fn idle_windows_stop_polling_and_pending_work_restarts_timers() -> Result<(), St
     app.tab.recovery = Some(Recovery::in_directory(directory.path())?);
     app.inspector_open = false;
     assert_eq!(subscriptions(&app), idle);
+    let before = app.tab.doc.clone();
     app.tab.doc.add_atom("O", Point::default());
+    app.changed(before);
     assert_eq!(subscriptions(&app), idle + 1);
     let _ = app.update(Message::Tick);
     assert_eq!(subscriptions(&app), idle);
@@ -152,7 +154,7 @@ fn idle_windows_stop_polling_and_pending_work_restarts_timers() -> Result<(), St
         .session
         .clone();
     assert!(path.exists());
-    app.tab.saved = app.tab.doc.clone();
+    app.tab.mark_saved(app.tab.doc.clone());
     assert_eq!(subscriptions(&app), idle + 1);
     let _ = app.update(Message::Tick);
     autosave::tests::finish_pending(&mut app);
@@ -590,7 +592,7 @@ fn ring_fill_edits_mark_saved_drawings_dirty_and_restore_through_undo_redo() {
     assert_eq!(app.tab.doc, filled);
     assert!(app.dirty());
 
-    app.tab.saved = filled.clone();
+    app.tab.mark_saved(filled.clone());
     assert!(!app.dirty());
     let _ = app.update(Message::ClearRingFill);
     assert_eq!(app.tab.doc, unfilled);
@@ -703,10 +705,14 @@ fn computed_hydrogen_labels_do_not_make_a_saved_drawing_dirty() {
     assert!(!app.dirty());
     assert!(!app.tab.history.can_undo());
     assert_ne!(app.tab.doc, app.tab.saved);
+    let before = app.tab.doc.clone();
     app.tab.doc.atoms[0].charge = 1;
+    app.changed(before);
     assert!(app.dirty());
+    let before = app.tab.doc.clone();
     app.tab.doc = app.tab.saved.clone();
     app.tab.doc.atoms[0].position.x += 1.;
+    app.changed(before);
     assert!(app.dirty());
 }
 
@@ -2638,7 +2644,9 @@ fn save_answer_closes_the_tab_only_after_it_is_saved() {
         saved.clone(),
     ));
     assert_eq!(app.tab.doc.atoms.len(), 1);
+    let before = app.tab.doc.clone();
     app.tab.doc.add_atom("N", Point::new(80., 0.));
+    app.changed(before);
     let _ = app.update(Message::Tabs(tabs::Action::Close(None)));
     let _ = app.update(Message::Saved(epoch, Box::new(app.tab.doc.clone()), saved));
     assert!(app.pending.is_none());

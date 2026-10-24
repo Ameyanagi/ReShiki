@@ -246,7 +246,7 @@ impl App {
             if matches!(kind, Job::ImportFile) {
                 self.tab.path = None;
                 self.tab.untitled_name = None;
-                self.tab.saved = Document::default();
+                self.tab.mark_saved(Document::default());
                 self.begin_file_epoch();
             }
         }
