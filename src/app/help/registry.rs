@@ -569,6 +569,10 @@ pub(crate) fn entries() -> Vec<Entry> {
             &["magnify", "pan", "scroll"],
         ),
     ]);
+    if cfg!(target_arch = "wasm32") {
+        // The browser has no print dialog to show.
+        list.retain(|entry| entry.name != "Print");
+    }
     list
 }
 

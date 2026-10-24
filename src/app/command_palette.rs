@@ -430,16 +430,19 @@ impl App {
                     ),
                 ));
             }
-            rows.push((
-                false,
-                Command::new(
-                    format!("Insert structure named “{query}”"),
-                    Category::Insert,
-                    "Convert the chemical name to a structure and insert it",
-                    "",
-                    Run::Name(query.into()),
-                ),
-            ));
+            // The browser build has no name parser yet.
+            if !cfg!(target_arch = "wasm32") {
+                rows.push((
+                    false,
+                    Command::new(
+                        format!("Insert structure named “{query}”"),
+                        Category::Insert,
+                        "Convert the chemical name to a structure and insert it",
+                        "",
+                        Run::Name(query.into()),
+                    ),
+                ));
+            }
         }
         // Query rows rank among the others by whether they can run too.
         let rows: Vec<_> = (rows.into_iter())

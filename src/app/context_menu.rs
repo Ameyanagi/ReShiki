@@ -320,7 +320,11 @@ impl App {
         if !atoms {
             return entries;
         }
-        if let Some(target) = self.context_name_target() {
+        // The browser build has no naming workers yet.
+        if let Some(target) = self
+            .context_name_target()
+            .filter(|_| !cfg!(target_arch = "wasm32"))
+        {
             let shown = reshiki::molecule_names::label(&self.tab.doc, &target).is_some();
             entries.push(command(
                 if shown {
