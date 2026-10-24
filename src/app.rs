@@ -691,7 +691,6 @@ impl App {
         self.tab.cleanup = None;
     }
     fn commit_changed(&mut self, reconciled: reshiki::transaction::Reconciled, continuing: bool) {
-        self.tab.labels_unsettled = false;
         self.tab.recent_molecules.record(
             reconciled.before(),
             &self.tab.doc,
@@ -731,6 +730,7 @@ impl App {
         }
         let existing: std::collections::HashSet<_> = self.tab.doc.all_ids().into_iter().collect();
         self.tab.selected.retain(|id| existing.contains(id));
+        self.tab.settled = Some(self.tab.settle_key());
     }
     fn fit(&mut self) {
         if self.display_document().all_ids().is_empty() {

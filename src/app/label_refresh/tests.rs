@@ -187,7 +187,7 @@ fn the_first_camera_edit_after_labels_land_reconciles_as_before() {
     app.edit(Edit::Pan(3., -2.));
     assert_eq!(app.tab.doc.arrows, expected.arrows);
     assert!(app.tab.doc.arrows[0].start.distance(stale) > 1.);
-    assert!(!app.tab.labels_unsettled);
+    assert_eq!(app.tab.settled, Some(app.tab.settle_key()));
     // Later camera edits skip the pipeline again.
     let (doc, revision) = (app.tab.doc.clone(), app.tab.revision);
     let frames = app.tab.history.undo_frames().count();
@@ -196,4 +196,42 @@ fn the_first_camera_edit_after_labels_land_reconciles_as_before() {
     assert_eq!(app.tab.doc, doc);
     assert_eq!(app.tab.revision, revision);
     assert_eq!(app.tab.history.undo_frames().count(), frames);
+}
+
+#[test]
+fn a_camera_edit_after_undo_reconciles_as_before() {
+    use crate::canvas::Edit;
+    use reshiki::arrow_anchors::{Anchor, Target};
+    use reshiki::arrows::{ArrowStyle, Preset};
+    use reshiki::document::Arrow;
+    let (mut app, oxygen) = fixture();
+    let mut arrow = Arrow::new(
+        app.tab.doc.next_id(),
+        Point::new(42., 0.),
+        Point::new(200., -140.),
+        Preset::Curved,
+        ArrowStyle::preset(Preset::Curved),
+    );
+    arrow.start_anchor = Some(Anchor {
+        target: Target::Atom { atom: oxygen },
+        offset: Point::default(),
+        direction: Point::new(0.75, -0.66),
+        gap: 0.,
+    });
+    app.tab.doc.arrows.push(arrow);
+    let _ = app.update(Message::ContextKey("o".into()));
+    let key = app.tab.label_refresh.pending.unwrap();
+    let labels = compute(&app);
+    let _ = app.update(Message::LabelsReady(key, labels));
+    // The first pan repairs the arrow and records that as a step.
+    app.edit(Edit::Pan(3., -2.));
+    let repaired = app.tab.doc.arrows.clone();
+    // Undo restores the arrow over the H; the next pan repairs it again,
+    // records the step and clears Redo, as every pan did before.
+    let _ = app.update(Message::Undo);
+    assert_ne!(app.tab.doc.arrows, repaired);
+    assert!(app.tab.history.can_redo());
+    app.edit(Edit::Pan(3., -2.));
+    assert_eq!(app.tab.doc.arrows, repaired);
+    assert!(!app.tab.history.can_redo());
 }

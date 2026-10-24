@@ -2439,8 +2439,8 @@ fn pan_and_zoom_move_only_the_camera() {
     let before = app.tab.doc.clone();
     app.tab.doc.add_atom("C", Point::new(0., 0.));
     app.changed(before);
-    // No computed labels are waiting to be reconciled.
-    assert!(!app.tab.labels_unsettled);
+    // The edit pipeline has reconciled the drawing as it is.
+    assert_eq!(app.tab.settled, Some(app.tab.settle_key()));
     let document = app.tab.doc.clone();
     let revision = app.tab.revision;
     let frames = app.tab.history.undo_frames().count();

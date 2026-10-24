@@ -36,9 +36,10 @@ pub(super) struct DocumentTab {
     unsaved: std::cell::Cell<Option<((u64, u64), bool)>>,
     pub(super) history: History,
     pub(super) revision: u64,
-    /// Computed labels landed since the edit pipeline last reconciled the
-    /// drawing; the next camera edit runs the pipeline, as all did before.
-    pub(super) labels_unsettled: bool,
+    /// The drawing's (revision, file epoch, label generation) when the edit
+    /// pipeline last reconciled it. A camera edit at any other state runs
+    /// the pipeline, as all camera edits did before.
+    pub(super) settled: Option<(u64, u64, u64)>,
     pub(super) file_epoch: u64,
     pub(super) recent_molecules: molecule_shortcuts::Recent,
     pub(super) path: Option<PathBuf>,
@@ -152,7 +153,7 @@ impl DocumentTab {
             unsaved: Default::default(),
             history: History::default(),
             revision: 0,
-            labels_unsettled: false,
+            settled: None,
             file_epoch: 0,
             recent_molecules: Default::default(),
             path: None,
@@ -236,6 +237,12 @@ impl DocumentTab {
             .and_then(|p| p.file_name())
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| self.untitled_name.unwrap_or("Untitled").into())
+    }
+
+    /// What [`Self::settled`] records: any change to it can change what the
+    /// edit pipeline's reconcile would do.
+    pub(super) fn settle_key(&self) -> (u64, u64, u64) {
+        (self.revision, self.file_epoch, self.label_generation)
     }
 
     pub(super) fn dirty(&self) -> bool {

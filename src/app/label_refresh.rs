@@ -81,7 +81,6 @@ impl App {
         match result {
             Ok(computed) => {
                 computed.apply(&mut self.tab.doc);
-                self.tab.labels_unsettled = true;
                 // An open Move & attach or Coordinate preparation builds its
                 // result from these copies. Keep them equal to the drawing, so
                 // placing neither reverts the labels nor adds an Undo step.

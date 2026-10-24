@@ -116,9 +116,10 @@ impl App {
             return;
         }
         // Camera edits skip the document snapshot and edit pipeline on every
-        // wheel tick. After computed labels land, one goes through it, as
-        // every camera edit did before, so it reconciles as it did then.
-        if !self.tab.labels_unsettled && self.move_camera(&edit) {
+        // wheel tick while the drawing is as the pipeline last left it. Once
+        // it changes (labels landing, Undo, opening), the next one runs it,
+        // as every camera edit did before.
+        if self.tab.settled == Some(self.tab.settle_key()) && self.move_camera(&edit) {
             return;
         }
         let before = self.tab.doc.clone();
