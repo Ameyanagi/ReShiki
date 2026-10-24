@@ -80,12 +80,19 @@ impl App {
         }
         match result {
             Ok(computed) => {
+                let clean = !self.tab.dirty();
                 computed.apply(&mut self.tab.doc);
+                settle(&mut self.tab.doc);
+                // The settled geometry follows from labels, not from an edit.
+                if clean {
+                    self.tab.saved.clone_from(&self.tab.doc);
+                }
                 // An open Move & attach or Coordinate preparation builds its
                 // result from these copies. Keep them equal to the drawing, so
                 // placing neither reverts the labels nor adds an Undo step.
                 if let Some(state) = &mut self.tab.joining {
                     computed.apply(&mut state.prepared.original);
+                    settle(&mut state.prepared.original);
                     computed.apply(&mut state.prepared.fragment);
                     computed.apply(&mut state.prepared.base);
                 }
@@ -95,6 +102,14 @@ impl App {
             Err(error) => self.tab.chemistry_notice = Some(error),
         }
     }
+}
+
+/// New label ink (an H appearing on OH) moves what keeps clear of it, such
+/// as attached arrow ends, as the next edit would. A rejected repair leaves
+/// the drawing as it is.
+fn settle(doc: &mut reshiki::document::Document) {
+    let before = doc.clone();
+    let _ = reshiki::transaction::reconcile(doc, before);
 }
 
 #[cfg(test)]
