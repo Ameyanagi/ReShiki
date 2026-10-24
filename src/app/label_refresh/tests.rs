@@ -218,3 +218,48 @@ fn a_save_started_before_new_hydrogens_leaves_the_drawing_saved() {
     let _ = app.file_saved(app.tab.file_epoch, snapshot, Ok(Some("saved.rsk".into())));
     assert!(app.dirty());
 }
+
+#[test]
+fn an_edit_undone_after_a_save_that_spanned_new_hydrogens_is_saved() {
+    let (mut app, _) = arrow_fixture();
+    let _ = app.update(Message::ContextKey("o".into()));
+    let key = app.tab.label_refresh.pending.unwrap();
+    let snapshot = Box::new(app.tab.doc.clone());
+    let labels = compute(&app);
+    let _ = app.update(Message::LabelsReady(key, labels));
+    // Recolor the arrow while the write is still pending.
+    let before = app.tab.doc.clone();
+    if let Some(style) = &mut app.tab.doc.arrows[0].style {
+        style.color = reshiki::palette::Color::Custom([200, 0, 0]);
+    }
+    app.changed(before);
+    let _ = app.file_saved(app.tab.file_epoch, snapshot, Ok(Some("saved.rsk".into())));
+    assert!(app.dirty(), "The recolor was not saved");
+    let _ = app.update(Message::Undo);
+    assert!(!app.dirty(), "Undo returns to the saved drawing");
+}
+
+#[test]
+fn new_hydrogens_during_a_cancelled_caption_draft_leave_the_drawing_saved() {
+    use crate::app::inline_text::Action as Inline;
+    let (mut app, _) = arrow_fixture();
+    let _ = app.update(Message::ContextKey("o".into()));
+    let key = app.tab.label_refresh.pending.unwrap();
+    let snapshot = Box::new(app.tab.doc.clone());
+    let _ = app.file_saved(app.tab.file_epoch, snapshot, Ok(Some("saved.rsk".into())));
+    assert!(!app.dirty());
+    let _ = app.update(Message::InlineText(Inline::Begin(
+        None,
+        Point::new(0., 80.),
+    )));
+    let _ = app.update(Message::InlineText(Inline::ReplaceText("draft".into())));
+    assert!(app.dirty(), "The draft is unsaved");
+    let labels = compute(&app);
+    let _ = app.update(Message::LabelsReady(key, labels));
+    let _ = app.update(Message::InlineText(Inline::Finish(false)));
+    assert!(app.tab.inline_text.is_none());
+    assert!(
+        !app.dirty(),
+        "Cancelling the draft leaves the saved drawing"
+    );
+}

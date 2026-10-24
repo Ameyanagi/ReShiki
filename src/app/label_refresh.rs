@@ -81,13 +81,11 @@ impl App {
         }
         match result {
             Ok(computed) => {
-                let clean = !self.tab.dirty();
                 computed.apply(&mut self.tab.doc);
                 settle(&mut self.tab.doc);
-                // The settled geometry follows from labels, not from an edit.
-                if clean {
-                    self.tab.mark_saved(self.tab.doc.clone());
-                }
+                let mut saved = std::mem::take(&mut self.tab.saved);
+                self.settle_saved(&mut saved);
+                self.tab.mark_saved(saved);
                 // An open Move & attach or Coordinate preparation builds its
                 // result from these copies. Keep them equal to the drawing, so
                 // placing neither reverts the labels nor adds an Undo step.
@@ -106,18 +104,11 @@ impl App {
 }
 
 impl App {
-    /// The drawing a finished save wrote, as `labels_ready` would have
-    /// settled it if the labels arrived while the save was open. Used only
-    /// when that is the drawing now, so the save leaves it saved.
-    pub(super) fn settled_save(&self, written: Document) -> Document {
-        let mut settled = written.clone();
-        self.tab.label_refresh.cache.apply(&mut settled);
-        settle(&mut settled);
-        if super::same_drawing(&settled, &self.tab.doc) {
-            settled
-        } else {
-            written
-        }
+    /// The saved baseline gets the same label repair as the drawing, so the
+    /// repair never reads as an unsaved change.
+    pub(super) fn settle_saved(&self, saved: &mut Document) {
+        self.tab.label_refresh.cache.apply(saved);
+        settle(saved);
     }
 }
 
