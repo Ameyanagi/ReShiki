@@ -1043,6 +1043,56 @@ fn each_style_draws_the_prototype_shapes() {
     assert!((spread(&b) - 0.23 / 0.33).abs() < 0.08, "{b:?}");
 }
 
+/// While it turns, a space-filling model draws every ball whole, back to
+/// front; let go, it is cut exactly as before.
+#[test]
+fn a_turning_model_draws_whole_balls_until_let_go() {
+    let (mut doc, at_rest) = styled(|m| m.style = Style::SpaceFilling);
+    doc.models[0].turning = true;
+    let turning = primitives(&doc);
+    let spheres = turning
+        .iter()
+        .filter(|p| matches!(p, Primitive::Sphere { contact: None, .. }))
+        .count();
+    assert_eq!(spheres, counts(&turning).0);
+    assert_eq!(spheres, 5);
+    doc.models[0].turning = false;
+    assert_eq!(format!("{:?}", primitives(&doc)), format!("{at_rest:?}"));
+}
+
+/// Turned during its opening morph, a ball & stick model keeps cutting its
+/// balls, so the hydrogens growing out of their atoms stay hidden.
+#[test]
+fn a_model_turned_while_it_morphs_keeps_its_contacts() {
+    let (mut doc, _) = styled(|m| m.morph = Some(0.25));
+    doc.models[0].rotation = turn(doc.models[0].rotation, 6., 0., false);
+    let still = format!("{:?}", primitives(&doc));
+    doc.models[0].turning = true;
+    assert_eq!(format!("{:?}", primitives(&doc)), still);
+}
+
+/// Contacts kept from earlier frames are the ones a fresh drawing works
+/// out, after edits elsewhere and as the model turns.
+#[test]
+fn kept_contacts_match_a_fresh_drawing() {
+    let (mut doc, _) = styled(|m| m.style = Style::SpaceFilling);
+    let fresh = |doc: &Document| {
+        let doc = doc.clone();
+        std::thread::spawn(move || format!("{:?}", primitives(&doc)))
+            .join()
+            .unwrap()
+    };
+    for step in 0..4 {
+        if step % 2 == 0 {
+            doc.add_atom("N", Point::new(900. + step as f32 * 40., 0.));
+        } else {
+            doc.models[0].rotation = turn(doc.models[0].rotation, 12., 5., false);
+        }
+        let _ = primitives(&doc);
+        assert_eq!(format!("{:?}", primitives(&doc)), fresh(&doc), "{step}");
+    }
+}
+
 /// Space-filling balls that overlap show only what lies in front, filled
 /// as paths without a contact shadow; ball & stick balls, apart, stay discs.
 #[test]
