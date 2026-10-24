@@ -144,3 +144,22 @@ fn complete_labeling_without_centers_preserves_large_graph_and_uninitialized_rin
     assert_eq!(serde_json::to_value(&state)?, before);
     Ok(())
 }
+
+#[test]
+fn long_stereo_chain_labels_every_center() -> anyhow::Result<()> {
+    // 400 centres once exhausted the storage of graphs retained for all centres.
+    let text = format!("C{}", "[C@H](O)C".repeat(400));
+    let state = crate::smiles::read(&text)?.prepared.state;
+    let result = label::assign(&state, &Default::default())?;
+    let codes = result
+        .state
+        .properties
+        .atoms
+        .iter()
+        .filter_map(|atom| atom.cip_code.as_deref())
+        .collect::<String>();
+    // The two halves mirror each other, so the descriptor flips at the middle.
+    assert_eq!(codes, "S".repeat(200) + &"R".repeat(200));
+    assert_eq!(result.labels.len(), 400);
+    Ok(())
+}
