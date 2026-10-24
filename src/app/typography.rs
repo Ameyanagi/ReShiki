@@ -41,21 +41,34 @@ impl std::fmt::Display for ColorScope {
 }
 
 impl App {
-    fn selected_label_groups(&self) -> impl Iterator<Item = &reshiki::abbreviations::Abbreviation> {
-        self.tab.doc.abbreviations.iter().filter(|group| {
-            self.tab.inline_text.is_none()
-                && group
-                    .members
-                    .iter()
-                    .any(|id| self.tab.selected.contains(id))
-        })
+    /// The selected atom and group labels with their alignment, each group
+    /// once by its anchor.
+    fn selected_labels(&self) -> Vec<(u64, LabelAlignment)> {
+        if self.tab.inline_text.is_some() {
+            return vec![];
+        }
+        let doc = &self.tab.doc;
+        let mut labels: Vec<(u64, LabelAlignment)> = vec![];
+        for &id in &self.tab.selected {
+            let id = doc.abbreviation_containing(id).map_or(id, |g| g.anchor);
+            if !labels.iter().any(|(label, _)| *label == id)
+                && let Some(alignment) = reshiki::atom_labels::alignment(doc, id)
+            {
+                labels.push((id, alignment));
+            }
+        }
+        labels
     }
 
-    /// Outer None: no group labels. Inner None: selected groups have mixed placement.
-    pub(super) fn selected_group_alignment(&self) -> Option<Option<LabelAlignment>> {
-        let mut groups = self.selected_label_groups();
-        let first = groups.next()?.alignment;
-        Some(groups.all(|g| g.alignment == first).then_some(first))
+    /// Outer None: no atom or group labels. Inner None: mixed alignments.
+    /// While a label is typed, the alignment it will take.
+    pub(super) fn selected_label_alignment(&self) -> Option<Option<LabelAlignment>> {
+        if let Some(alignment) = self.atom_text_alignment() {
+            return Some(Some(alignment));
+        }
+        let labels = self.selected_labels();
+        let (_, first) = *labels.first()?;
+        Some(labels.iter().all(|(_, a)| *a == first).then_some(first))
     }
 
     pub(super) fn toolbar_alignment(&self) -> Option<TextAlign> {
@@ -63,13 +76,9 @@ impl App {
             return Some(self.tab.caption_format.alignment);
         }
         let mut values = self
-            .selected_label_groups()
-            .map(|g| match g.alignment {
-                LabelAlignment::Left => Some(TextAlign::Left),
-                LabelAlignment::Center => Some(TextAlign::Center),
-                LabelAlignment::Right => Some(TextAlign::Right),
-                LabelAlignment::Auto | LabelAlignment::Above => None,
-            })
+            .selected_labels()
+            .into_iter()
+            .map(|(_, alignment)| text_align(alignment))
             .chain(
                 self.tab
                     .doc
@@ -84,19 +93,14 @@ impl App {
         first.filter(|_| values.all(|value| value == first))
     }
 
-    pub(super) fn apply_group_alignment(&mut self, alignment: LabelAlignment) {
-        if self.tab.inline_text.is_some() {
+    pub(super) fn apply_label_alignment(&mut self, alignment: LabelAlignment) {
+        let labels = self.selected_labels();
+        if labels.is_empty() {
             return;
         }
         let before = self.tab.doc.clone();
-        for group in &mut self.tab.doc.abbreviations {
-            if group
-                .members
-                .iter()
-                .any(|id| self.tab.selected.contains(id))
-            {
-                group.alignment = alignment;
-            }
+        for (id, _) in labels {
+            reshiki::atom_labels::set_alignment(&mut self.tab.doc, id, alignment);
         }
         self.changed(before);
     }
@@ -823,7 +827,7 @@ impl App {
             }
         };
         if self.tab.inline_text.is_some()
-            || self.selected_group_alignment().is_none()
+            || self.selected_labels().is_empty()
             || self
                 .tab
                 .doc
@@ -838,20 +842,14 @@ impl App {
             return;
         }
         let before = self.tab.doc.clone();
-        if let Some(group_alignment) = alignment.and_then(|value| match value {
+        if let Some(label_alignment) = alignment.and_then(|value| match value {
             TextAlign::Left => Some(LabelAlignment::Left),
             TextAlign::Center => Some(LabelAlignment::Center),
             TextAlign::Right => Some(LabelAlignment::Right),
             TextAlign::Justified => None,
         }) {
-            for group in &mut self.tab.doc.abbreviations {
-                if group
-                    .members
-                    .iter()
-                    .any(|id| self.tab.selected.contains(id))
-                {
-                    group.alignment = group_alignment;
-                }
+            for (id, _) in self.selected_labels() {
+                reshiki::atom_labels::set_alignment(&mut self.tab.doc, id, label_alignment);
             }
         }
         for label in &mut self.tab.doc.annotations {
@@ -918,6 +916,16 @@ impl App {
 }
 
 /// A free text label on a dummy atom, which can carry manual scripts.
+/// The caption alignment a label alignment shares: Left, Center or Right.
+pub(super) fn text_align(alignment: LabelAlignment) -> Option<TextAlign> {
+    match alignment {
+        LabelAlignment::Left => Some(TextAlign::Left),
+        LabelAlignment::Center => Some(TextAlign::Center),
+        LabelAlignment::Right => Some(TextAlign::Right),
+        LabelAlignment::Auto | LabelAlignment::Above => None,
+    }
+}
+
 fn text_label(generic: &reshiki::generic::Generic, atom: &reshiki::document::Atom) -> bool {
     atom.element == "*" && atom.display.variable.is_some() && !generic.owns_label(atom.id)
 }

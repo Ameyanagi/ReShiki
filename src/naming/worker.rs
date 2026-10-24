@@ -1,6 +1,8 @@
-//! One bounded native naming request, before GUI/runtime startup.
+//! One bounded native naming request, before GUI/runtime startup. The
+//! browser's naming Web Worker answers the same requests with `respond`.
 use super::rules;
 use serde::{Deserialize, Serialize};
+#[cfg(not(target_arch = "wasm32"))]
 use std::{
     io::{self, Read, Write},
     path::PathBuf,
@@ -10,7 +12,7 @@ pub(super) const PROTOCOL: u32 = 2;
 pub(super) const WIRE_LIMIT: usize = 32_768;
 pub(super) const OUTPUT_LIMIT: usize = 65_536;
 pub(super) const MAX_NAME_BYTES: usize = 2_048;
-pub(super) const HEAP_BYTES: usize = 96 * 1024 * 1024;
+pub const HEAP_BYTES: usize = 96 * 1024 * 1024;
 pub(super) const BACKEND: &str = "opsin-rust";
 pub(super) const PORT_VERSION: &str = opsin::PORT_VERSION;
 pub(super) const UPSTREAM_VERSION: &str = opsin::UPSTREAM_VERSION;
@@ -75,6 +77,7 @@ pub(super) enum Response {
     Generate(Generated),
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub(super) fn executable() -> Result<PathBuf, String> {
     if let Some(path) = std::env::var_os("RESHIKI_NAMING_HELPER") {
         let path = PathBuf::from(path);
@@ -156,7 +159,8 @@ fn parse(name: String) -> Result<Response, String> {
     }))
 }
 
-fn operation() -> Result<Response, String> {
+#[cfg(not(target_arch = "wasm32"))]
+fn operation() -> Result<Vec<u8>, String> {
     io::stderr().flush().map_err(|e| e.to_string())?;
     reshiki_process_heap::begin(HEAP_BYTES);
     let mut bytes = vec![];
@@ -164,11 +168,16 @@ fn operation() -> Result<Response, String> {
         .take((WIRE_LIMIT + 1) as u64)
         .read_to_end(&mut bytes)
         .map_err(|e| e.to_string())?;
+    respond(&bytes)
+}
+
+/// The serialized response to one serialized request, within the wire limits.
+pub fn respond(bytes: &[u8]) -> Result<Vec<u8>, String> {
     if bytes.len() > WIRE_LIMIT {
         return Err("Local naming request exceeds its wire limit".into());
     }
-    let request: Request = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
-    match request {
+    let request: Request = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+    let response = match request {
         Request::Parse { protocol, name } if protocol == PROTOCOL => parse(name),
         Request::Generate {
             protocol,
@@ -183,20 +192,21 @@ fn operation() -> Result<Response, String> {
             }))
         }
         _ => Err("Incompatible native naming protocol/profile".into()),
+    }?;
+    let bytes = serde_json::to_vec(&response).map_err(|e| e.to_string())?;
+    if bytes.len() > OUTPUT_LIMIT {
+        return Err("Local naming response exceeds its wire limit".into());
     }
+    Ok(bytes)
 }
 /// The executable installs BoundedHeap and enters before graphics or Tokio.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn run() {
-    match operation().and_then(|response| serde_json::to_vec(&response).map_err(|e| e.to_string()))
-    {
-        Ok(bytes) if bytes.len() <= OUTPUT_LIMIT => {
+    match operation() {
+        Ok(bytes) => {
             if io::stdout().write_all(&bytes).is_err() {
                 std::process::exit(1);
             }
-        }
-        Ok(_) => {
-            eprintln!("Local naming response exceeds its wire limit");
-            std::process::exit(1);
         }
         Err(error) => {
             eprintln!("{error}");
