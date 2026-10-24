@@ -189,30 +189,7 @@ impl App {
         ]
         .spacing(4)
         .align_y(Alignment::Center);
-        let group_alignment = self.selected_group_alignment();
-        let has_captions = self
-            .tab
-            .doc
-            .annotations
-            .iter()
-            .any(|a| self.tab.selected.contains(&a.id));
-        tools = tools.push(self.alignment_menu(group_alignment.is_some() && !has_captions));
-        if let Some(alignment) = group_alignment {
-            use reshiki::abbreviations::LabelAlignment;
-            tools = tools.push(hover_hint(
-                crate::appearance::pick_list(
-                    [LabelAlignment::Auto, LabelAlignment::Above],
-                    alignment.filter(|a| matches!(a, LabelAlignment::Auto | LabelAlignment::Above)),
-                    Message::GroupLabelAlign,
-                )
-                .placeholder(if alignment.is_none() { "Mixed" } else { "Auto / above" })
-                .width(112)
-                .text_size(11)
-                .padding(6),
-                "Group labels: Automatic follows bonds; Stacked above places the nickname above its attachment. Left, Center and Right are in the alignment menu.",
-                tooltip::Position::Bottom,
-            ));
-        }
+        tools = tools.push(self.alignment_menu());
         tools = tools.push(self.color_button());
         container(tools)
             .padding([7, 14])

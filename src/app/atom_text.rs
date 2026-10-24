@@ -19,6 +19,7 @@ pub enum Action {
     Editor(text_editor::Action),
     Script(Script),
     Mode(Mode),
+    Align(LabelAlignment),
     ContractSelection,
     ReverseInput(String),
     Apply,
@@ -35,6 +36,7 @@ pub struct State {
     scripts_edited: bool,
     manual_scripts: bool,
     alignment: LabelAlignment,
+    aligned: bool,
     members: Option<Vec<u64>>,
     reverse: String,
     reverse_edited: bool,
@@ -208,6 +210,10 @@ impl App {
             })
             .map(|g| g.anchor)
     }
+    /// The alignment the label being typed will take.
+    pub(super) fn atom_text_alignment(&self) -> Option<LabelAlignment> {
+        self.tab.atom_text.as_ref().map(|state| state.alignment)
+    }
     pub(super) fn atom_text_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Begin(id) => {
@@ -262,7 +268,9 @@ impl App {
                     label_edited: false,
                     scripts_edited: false,
                     manual_scripts: group.is_none() && !atom.display.label_scripts.is_empty(),
-                    alignment: group.map(|g| g.alignment).unwrap_or_default(),
+                    alignment: reshiki::atom_labels::alignment(&self.tab.doc, id)
+                        .unwrap_or_default(),
+                    aligned: false,
                     members: None,
                     reverse: group.map(|g| g.reverse_label.clone()).unwrap_or_default(),
                     reverse_edited: false,
@@ -305,6 +313,7 @@ impl App {
                                 scripts_edited: false,
                                 manual_scripts: false,
                                 alignment: LabelAlignment::Auto,
+                                aligned: false,
                                 members: Some(group.members.clone()),
                                 reverse: String::new(),
                                 reverse_edited: false,
@@ -332,6 +341,12 @@ impl App {
                     state.label_edited |= state.mode != mode;
                     state.mode = mode;
                     state.error = None;
+                }
+            }
+            Action::Align(alignment) => {
+                if let Some(state) = &mut self.tab.atom_text {
+                    state.aligned |= state.alignment != alignment;
+                    state.alignment = alignment;
                 }
             }
             Action::Cancel => self.tab.atom_text = None,
@@ -372,6 +387,7 @@ impl App {
                             // replaced, except that one without a reverse
                             // spelling (ONp) cannot take Right, which turns it.
                             if state.members.is_some()
+                                || state.aligned
                                 || old.is_some_and(|g| {
                                     g.label == group.label
                                         || !group.reverse_label.is_empty()
@@ -380,6 +396,12 @@ impl App {
                             {
                                 group.alignment = state.alignment;
                             }
+                        } else if state.aligned {
+                            reshiki::atom_labels::set_alignment(
+                                &mut doc,
+                                state.id,
+                                state.alignment,
+                            );
                         }
                         if let Err(error) = doc.validate() {
                             if let Some(state) = &mut self.tab.atom_text {
@@ -531,16 +553,34 @@ impl App {
                 .spacing(3),
             );
         }
+        let choice = |name, list: Element<'a, Message>| {
+            column![text(name).size(10).style(muted_text), list]
+                .spacing(3)
+                .width(Length::Fill)
+                .into()
+        };
+        let mut choices: Vec<Element<'a, Message>> = vec![];
         if state.members.is_none() {
-            content = content.push(
+            choices.push(choice(
+                "Label type",
                 crate::appearance::pick_list(
                     [Mode::Auto, Mode::Text, Mode::Group],
                     Some(state.mode),
                     |mode| Message::AtomText(Action::Mode(mode)),
                 )
-                .width(Length::Fill),
-            );
+                .width(Length::Fill)
+                .into(),
+            ));
         }
+        choices.push(choice(
+            "Alignment",
+            crate::appearance::pick_list(LabelAlignment::ALL, Some(state.alignment), |value| {
+                Message::AtomText(Action::Align(value))
+            })
+            .width(Length::Fill)
+            .into(),
+        ));
+        content = content.push(iced::widget::Row::with_children(choices).spacing(10));
         content = content.push(text(if state.members.is_some() {
                 "The selected atoms define this group. Its formula and bonds are retained; expand it to edit the structure."
             } else if state.mode != Mode::Text

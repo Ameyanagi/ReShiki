@@ -16,6 +16,7 @@ fn family(icon: Icon) -> &'static str {
         Icon::Moon => "moon",
         Icon::ColorTiles(_) => "color-tiles",
         Icon::TextAlign(_) => "text-align",
+        Icon::LabelAlign(_) => "label-align",
         Icon::Tool(tool) => tool_family(tool),
         Icon::Ring(..) => "ring",
         Icon::Arrow(_) => "arrow",
@@ -96,6 +97,10 @@ fn all_icons() -> Vec<(String, Icon)> {
             reshiki::typography::TextAlign::Justified,
         ]
         .map(|align| (format!("text-align-{align:?}"), Icon::TextAlign(align))),
+    );
+    icons.extend(
+        reshiki::abbreviations::LabelAlignment::ALL
+            .map(|align| (format!("label-align-{align:?}"), Icon::LabelAlign(align))),
     );
     icons.extend(
         [false, true].map(|working| (format!("assistant-{working}"), Icon::Assistant(working))),
@@ -213,6 +218,7 @@ fn expected_counts() -> BTreeMap<&'static str, usize> {
     counts.extend([
         ("color-tiles", 2),
         ("text-align", 4),
+        ("label-align", 5),
         ("assistant", 2),
         ("lock", 2),
         ("model-style", 4),
@@ -243,7 +249,7 @@ fn icon_fixtures_cover_every_variant() {
         *counts.entry(family(*icon)).or_insert(0) += 1;
     }
     assert_eq!(counts, expected_counts());
-    assert_eq!(icons.len(), 130);
+    assert_eq!(icons.len(), 135);
 }
 
 fn render(

@@ -110,7 +110,7 @@ impl App {
             Message::TextColor(value) => self.set_text_color_input(value),
             Message::ApplyTextColor => self.apply_text_color_input(),
             Message::TextAlign(alignment) => self.apply_paragraph(Some(alignment), None, None),
-            Message::GroupLabelAlign(alignment) => self.apply_group_alignment(alignment),
+            Message::LabelAlign(alignment) => self.apply_label_alignment(alignment),
             Message::TextSpacing(spacing) => self.apply_paragraph(None, Some(spacing), None),
             Message::TextWidth(value) => self.tab.text_width_input = value,
             Message::ApplyTextWidth => self.apply_text_width_input(),

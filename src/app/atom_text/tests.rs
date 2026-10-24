@@ -613,7 +613,7 @@ fn label_dialog_preserves_toolbar_alignment_and_chemical_graph() -> Result<(), S
         app.tab.selected = vec![id];
         let before = app.tab.doc.clone();
         for alignment in LabelAlignment::ALL {
-            let _ = app.update(Message::GroupLabelAlign(alignment));
+            let _ = app.update(Message::LabelAlign(alignment));
             let _ = app.update(Message::AtomText(Action::Begin(None)));
             let _ = app.update(Message::AtomText(Action::Apply));
             assert_eq!(
