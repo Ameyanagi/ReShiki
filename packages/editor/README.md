@@ -190,11 +190,15 @@ it.
 
 ### What the browser editor leaves out
 
-- Naming, NMR prediction and 3D say they need the desktop app. The assistant,
-  updates, printing, Office and LibreOffice integration are not built.
-- Open and Save use the browser: Open picks a file, Save and Export download
-  one under the drawing's name. Drawing styles, themes, templates and pictures
-  cannot be loaded from files yet, and Insert cannot insert files.
+- Naming and NMR prediction are not available yet. 3D models and 3D
+  optimization work, but pause the page while they compute. The assistant
+  panel only points to the desktop app, Check for updates does not apply (the
+  page updates the editor), and printing, Office and LibreOffice integration
+  are not available.
+- Open and Save use the browser: Open, Insert from file and the drawing style,
+  theme, template and picture choosers use the browser's file chooser, and
+  files dropped on the editor open or insert as in the desktop app. Save and
+  Export download a file under the drawing's name.
 - Copying and pasting drawings goes through `navigator.clipboard`, which asks
   for permission to read, and carries PNG, HTML, SVG (Chrome and Edge) and
   text, not PDF, CDX or ChemDraw's own formats. Text fields copy, cut and
@@ -211,7 +215,8 @@ it.
 - Shortcuts follow the desktop app, with ⌘ as Command on a Mac, except
   three that browsers keep for their own tabs: New is Alt+N, Close tab Alt+W
   and next/previous tab Alt+] / Alt+[ (⌃N, ⌃W, ⌃] / ⌃[ on a Mac).
-- Work runs on the page's thread, so a long cleanup or import pauses the page.
+- Work runs on the page's thread, so a long cleanup, import or 3D model pauses
+  the page.
 - Without WebGPU, lines are drawn without antialiasing: WebGL2 loses most
   canvases with it.
 
