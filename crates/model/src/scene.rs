@@ -168,8 +168,14 @@ pub fn atom_label_ink_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)>
 /// The atom owning a visible label, including its hydrogens, isotope and charge.
 /// Keep this separate from geometric nearest-atom searches used for bond growth.
 pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
+    let reach = LabelReach::new(doc);
     doc.atoms.iter().rev().find_map(|atom| {
-        if crate::models3d::hides(doc, atom.id) {
+        // Laying out a label is costly, so skip atoms it cannot reach from.
+        let limit = reach.of(atom).map_or(f32::INFINITY, |reach| reach + radius);
+        if (atom.position.x - point.x).abs() > limit
+            || (atom.position.y - point.y).abs() > limit
+            || crate::models3d::hides(doc, atom.id)
+        {
             return None;
         }
         // Empty corners between a symbol and its stacked H/isotope/charge
@@ -184,6 +190,69 @@ pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> 
             })
             .then_some(atom.id)
     })
+}
+
+/// An upper bound on how far an atom's label ink reaches from the atom.
+struct LabelReach {
+    /// The largest label font size times its fonts' widest glyph (at least
+    /// two ems), or `None` when a label font cannot be bounded.
+    em: Option<f32>,
+    /// The longest text of each group label, by anchor.
+    groups: std::collections::HashMap<u64, usize>,
+}
+
+impl LabelReach {
+    fn new(doc: &Document) -> Self {
+        let styles = || {
+            doc.atoms
+                .iter()
+                .filter_map(|atom| atom.text_style.as_ref())
+                .chain(
+                    doc.abbreviations
+                        .iter()
+                        .filter_map(|g| g.label_style.as_ref()),
+                )
+        };
+        let size_pt = styles()
+            .map(|style| style.size_pt)
+            .fold(doc.drawing_style.font_size_pt, f32::max);
+        let families: std::collections::BTreeSet<_> = styles()
+            .map(|style| style.family.as_str())
+            .chain([doc.drawing_style.font_family.as_str()])
+            .collect();
+        let glyph = families.into_iter().try_fold(2f32, |em, family| {
+            Some(em.max(crate::style::label_glyph_reach(family)?))
+        });
+        let mut groups = std::collections::HashMap::new();
+        for group in &doc.abbreviations {
+            let longest: &mut usize = groups.entry(group.anchor).or_default();
+            *longest = (*longest)
+                .max(group.label.len())
+                .max(group.reverse_label.len());
+        }
+        Self {
+            em: glyph.map(|glyph| glyph * STYLE.world(size_pt)),
+            groups,
+        }
+    }
+
+    /// Every glyph the label can draw (its symbol, variable or group text,
+    /// hydrogens with their count, isotope, charge and radicals) in a row,
+    /// plus three ems for a stacked appendage, raised scripts and the
+    /// charge's clearance. Byte lengths count at least every character.
+    fn of(&self, atom: &Atom) -> Option<f32> {
+        let digits = |n: u32| n.checked_ilog10().map_or(1, |d| d as usize + 1);
+        let glyphs = atom.element.len()
+            + atom.display.variable.as_ref().map_or(0, String::len)
+            + self.groups.get(&atom.id).copied().unwrap_or_default()
+            + 1
+            + digits(atom.label_h.max(atom.explicit_h))
+            + digits(atom.isotope)
+            + 1
+            + digits(atom.charge.unsigned_abs())
+            + usize::from(atom.radical_electrons);
+        self.em.map(|em| em * (glyphs + 3) as f32)
+    }
 }
 
 pub(crate) fn atom_label_ink_boxes(a: &Atom, doc: &Document) -> Vec<(Point, Point)> {
@@ -815,8 +884,8 @@ fn nearby_label_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, P
     measuring(|| {
         doc.atoms
             .iter()
-            .filter(|other| other.id != a.id && doc.atom_visible(other.id))
-            .filter(|other| nearby(a, other, size))
+            .filter(|other| other.id != a.id && nearby(a, other, size))
+            .filter(|other| doc.atom_visible(other.id))
             .flat_map(|other| label_ink_boxes(&atom_label_runs(other, doc)))
             .collect()
     })
@@ -827,8 +896,8 @@ fn nearby_mark_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, Po
     measuring(|| {
         doc.atoms
             .iter()
-            .filter(|other| !other.marks.is_empty() && doc.atom_visible(other.id))
-            .filter(|other| nearby(a, other, size))
+            .filter(|other| !other.marks.is_empty() && nearby(a, other, size))
+            .filter(|other| doc.atom_visible(other.id))
             .flat_map(|other| crate::scientific::styled_mark_parts(other, &doc.drawing_style))
             .filter_map(|part| {
                 let pad = part.style.width() * 0.5;
