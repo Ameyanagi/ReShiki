@@ -7,6 +7,7 @@ use super::workspace::{caret, control, hover_hint, muted_text};
 use super::{App, Message};
 use iced::widget::{Space, button, canvas, column, container, row, text, tooltip};
 use iced::{Alignment, Border, Color, Element, Length, Point, Rectangle, Renderer, Task, Theme};
+use reshiki::abbreviations::LabelAlignment;
 use reshiki::canvas_theme::CanvasTheme;
 use reshiki::color_contrast::{Rgb, contrast};
 use reshiki::palette::{Color as Paint, Hue, Hues, Palette, Row, Tones};
@@ -279,32 +280,66 @@ impl App {
             .map_or_else(|| self.tab.doc.color_theme.to_string(), |t| t.name.clone())
     }
 
-    pub(super) fn alignment_menu(&self, groups_only: bool) -> Element<'_, Message> {
-        const OPTIONS: [(&str, TextAlign); 4] = [
+    /// Atom and group labels alone offer Automatic and Stacked above, as
+    /// ChemDraw's Text menu does; captions keep Justify.
+    pub(super) fn alignment_menu(&self) -> Element<'_, Message> {
+        const TEXT: [(&str, TextAlign); 4] = [
             ("Left", TextAlign::Left),
             ("Center", TextAlign::Center),
             ("Right", TextAlign::Right),
             ("Justify", TextAlign::Justified),
         ];
-        let current = self.toolbar_alignment();
-        let open = matches!(self.style_menu, Some(Menu::Align));
-        let name = OPTIONS
+        let captions = self
+            .tab
+            .doc
+            .annotations
             .iter()
-            .find(|(_, align)| Some(*align) == current)
-            .map_or("Mixed or automatic", |(name, _)| name);
+            .any(|a| self.tab.selected.contains(&a.id));
+        let options: Vec<(&str, Icon, Message, bool)> = match self.selected_label_alignment() {
+            Some(current) if !captions => LabelAlignment::ALL
+                .into_iter()
+                .map(|value| {
+                    let name = match value {
+                        LabelAlignment::Auto => "Automatic",
+                        LabelAlignment::Left => "Left",
+                        LabelAlignment::Center => "Center",
+                        LabelAlignment::Right => "Right",
+                        LabelAlignment::Above => "Stacked above",
+                    };
+                    let message = Message::LabelAlign(value);
+                    (
+                        name,
+                        Icon::LabelAlign(value),
+                        message,
+                        current == Some(value),
+                    )
+                })
+                .collect(),
+            _ => {
+                let current = self.toolbar_alignment();
+                TEXT.into_iter()
+                    .map(|(name, align)| {
+                        let message = Message::TextAlign(align);
+                        (
+                            name,
+                            Icon::TextAlign(align),
+                            message,
+                            current == Some(align),
+                        )
+                    })
+                    .collect()
+            }
+        };
+        let (name, glyph, known) = options.iter().find(|option| option.3).map_or(
+            ("Mixed", Icon::TextAlign(TextAlign::Left), false),
+            |option| (option.0, option.1, true),
+        );
+        let open = matches!(self.style_menu, Some(Menu::Align));
         let anchor = hover_hint(
             button(
-                row![
-                    canvas(Glyph(
-                        Icon::TextAlign(current.unwrap_or(TextAlign::Left)),
-                        current.is_some()
-                    ))
-                    .width(24)
-                    .height(24),
-                    caret(9.)
-                ]
-                .spacing(1)
-                .align_y(Alignment::Center),
+                row![canvas(Glyph(glyph, known)).width(24).height(24), caret(9.)]
+                    .spacing(1)
+                    .align_y(Alignment::Center),
             )
             .height(36)
             .padding([6, 3])
@@ -314,28 +349,23 @@ impl App {
             tooltip::Position::Bottom,
         );
         let popup = open.then(|| {
-            let items = OPTIONS
-                .into_iter()
-                .filter(|(_, align)| !(groups_only && *align == TextAlign::Justified))
-                .map(|(label, align)| {
-                    button(
-                        row![
-                            canvas(Glyph(Icon::TextAlign(align), true))
-                                .width(24)
-                                .height(24),
-                            text(label).size(12)
-                        ]
-                        .spacing(8)
-                        .align_y(Alignment::Center),
-                    )
-                    .width(Length::Fill)
-                    .padding([3, 8])
-                    .style(control(current == Some(align)))
-                    .on_press(Message::TextAlign(align))
-                    .into()
-                });
+            let items = options.into_iter().map(|(label, icon, message, selected)| {
+                button(
+                    row![
+                        canvas(Glyph(icon, true)).width(24).height(24),
+                        text(label).size(12)
+                    ]
+                    .spacing(8)
+                    .align_y(Alignment::Center),
+                )
+                .width(Length::Fill)
+                .padding([3, 8])
+                .style(control(selected))
+                .on_press(message)
+                .into()
+            });
             container(column(items).spacing(2))
-                .width(140)
+                .width(160)
                 .padding(5)
                 .style(surface)
                 .into()

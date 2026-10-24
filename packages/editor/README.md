@@ -103,7 +103,8 @@ The custom element wraps `mount`:
 <reshiki-editor src="caffeine.mol" format="mol" style="height: 600px"></reshiki-editor>
 ```
 
-It fires `ready` and `change`, and has `load`, `save` and `exportImage`.
+It fires `ready` and `change`, and `error` when the editor cannot start, for
+example when `src` answers 404, and has `load`, `save` and `exportImage`.
 
 ### Fonts
 
@@ -170,6 +171,23 @@ are not offered (this needs Web Locks, which current browsers have). The page
 cannot write while it unloads, so a change made in the last second before a
 reload can be lost.
 
+### Content Security Policy
+
+On a page with a Content-Security-Policy, the editor needs:
+
+- `script-src 'wasm-unsafe-eval'` (with the source the package is served
+  from), or the WebAssembly does not start and the page stays blank;
+- `connect-src https://cdn.jsdelivr.net` for the Chinese, Japanese and Korean
+  fallback font, unless `cjkFont` names a font on the page's own site or is
+  `false`, plus the sites `fonts` and `src` load from;
+- `worker-src blob:` on browsers without `scheduler.postTask`, where the
+  event loop's timer runs in a small worker made from a `blob:` URL.
+
+`style-src` can stay strict: `mount` and `<reshiki-editor>` style the editor
+through the CSSOM, which `style-src` does not restrict. `src/frame.html`, the
+page `embed()` loads, has an inline `<style>`, so serve it with
+`style-src 'unsafe-inline'` or a page of your own.
+
 ### Naming
 
 Name ↔ structure conversion (**Import → Name**, **Name molecule**) runs the
@@ -185,7 +203,7 @@ Browsers start workers only from the page's own origin, so serve the package
 from the page's site to use naming. A Content-Security-Policy whose
 `script-src` allows that site needs nothing more. If it sets `worker-src` (or
 `child-src`), that must allow the site too, for example
-`worker-src 'self'`.
+`worker-src 'self' blob:`.
 
 ### Demo
 

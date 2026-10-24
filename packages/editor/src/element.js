@@ -16,6 +16,11 @@ export class ReshikiEditor extends HTMLElement {
     if (this.#editor) return;
     if (!this.style.display) this.style.display = "block";
     this.#editor = this.#start();
+    this.#editor.catch((error) => this.#error(error));
+  }
+
+  #error(error) {
+    this.dispatchEvent(new ErrorEvent("error", { error, message: error.message }));
   }
 
   // A move disconnects and reconnects the element at once; only stop the
@@ -31,15 +36,19 @@ export class ReshikiEditor extends HTMLElement {
   async #start() {
     const src = this.getAttribute("src");
     const cjkFont = this.getAttribute("cjk-font");
-    const data = src ? new Uint8Array(await (await fetch(src)).arrayBuffer()) : undefined;
+    let data;
+    if (src) {
+      const response = await fetch(src);
+      if (!response.ok) throw new Error(`Could not load ${src}: HTTP ${response.status}`);
+      data = new Uint8Array(await response.arrayBuffer());
+    }
     const editor = await mount(this, {
       data,
       format: this.getAttribute("format") ?? "auto",
       fonts: this.getAttribute("fonts")?.split(/\s+/).filter(Boolean),
       cjkFont: cjkFont === "false" ? false : (cjkFont ?? undefined),
       onChange: () => this.dispatchEvent(new Event("change")),
-      onError: (error) =>
-        this.dispatchEvent(new ErrorEvent("error", { error, message: error.message })),
+      onError: (error) => this.#error(error),
     });
     this.dispatchEvent(new Event("ready"));
     return editor;

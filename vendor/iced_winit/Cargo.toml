@@ -99,9 +99,11 @@ version = "0.4"
 [target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
 version = "0.3.69"
 features = [
+    "CssStyleDeclaration",
     "Document",
-    "Window",
     "HtmlCanvasElement",
+    "HtmlElement",
+    "Window",
 ]
 
 [target.'cfg(target_os = "linux")'.dependencies.mundy]

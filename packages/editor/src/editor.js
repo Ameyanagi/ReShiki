@@ -14,9 +14,13 @@ let loading;
 const worker = () => new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
 
 export function initEditor(module) {
-  loading ??= load(module === undefined ? undefined : { module_or_path: module }).then(() =>
-    wasm.setWorker(worker),
-  );
+  // A failed load is forgotten, so a later mount can try again.
+  loading ??= load(module === undefined ? undefined : { module_or_path: module })
+    .then(() => wasm.setWorker(worker))
+    .catch((error) => {
+      loading = undefined;
+      throw error;
+    });
   return loading.then(() => undefined);
 }
 
