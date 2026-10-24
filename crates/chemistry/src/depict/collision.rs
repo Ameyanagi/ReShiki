@@ -9,7 +9,7 @@ use super::{
     rings::{EmbeddedAtom, Fragment},
 };
 use crate::{graph::Graph, ranking::Metadata, stereo::perception::RingCache};
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
 pub const MAX_WORK: usize = 50_000_000;
 const MAX_DISTANCES: usize = 4_000_000;
@@ -484,30 +484,27 @@ impl<'a> Input<'a> {
         session: &mut Session,
     ) -> Result<Vec<(usize, usize)>, Error> {
         session.spend(value.atoms.len())?;
-        for a in value.atoms.values_mut() {
-            a.density = 0.0;
-        }
-        let mut result = Vec::new();
-        let ids = value.atoms.keys().copied().collect::<Vec<_>>();
-        for (i, &a) in ids.iter().enumerate() {
-            let factor1 = if at(&self.graph.atoms, a)?.atomic_number == 6 {
+        // Flat copies keep native pair order and each atom's summation order.
+        let mut atoms = Vec::with_capacity(value.atoms.len());
+        for (&id, a) in &value.atoms {
+            let factor = if at(&self.graph.atoms, id)?.atomic_number == 6 {
                 1.0
             } else {
                 HETEROATOM_SCALE
             };
-            for &b in ids.iter().take(i) {
-                session.spend(1)?;
-                let factor2 = if at(&self.graph.atoms, b)?.atomic_number == 6 {
-                    1.0
-                } else {
-                    HETEROATOM_SCALE
-                };
-                let mut d2 = squared(sub(atom(value, b)?.location, atom(value, a)?.location)?)?;
+            atoms.push((id, a.location, factor));
+        }
+        let mut densities = vec![0.0; atoms.len()];
+        let mut result = Vec::new();
+        for (i, &(a, location, factor1)) in atoms.iter().enumerate() {
+            session.spend(i)?;
+            let (earlier, rest) = densities.split_at_mut(i);
+            let mut own = 0.0;
+            for (sum, &(b, other, factor2)) in earlier.iter_mut().zip(&atoms) {
+                let mut d2 = squared(sub(other, location)?)?;
                 let density = if d2 > 1.0e-3 { 1.0 / d2 } else { 1000.0 };
-                for id in [a, b] {
-                    let a = atom_mut(value, id)?;
-                    a.density = number(a.density + density)?;
-                }
+                own = number(own + density)?;
+                *sum = number(*sum + density)?;
                 d2 /= factor1 * factor2;
                 if d2 < COLLISION_THRESHOLD * COLLISION_THRESHOLD {
                     if result.len() >= MAX_PAIRS {
@@ -516,27 +513,51 @@ impl<'a> Input<'a> {
                     result.push((a, b));
                 }
             }
+            *rest.first_mut().ok_or(Error::Invalid("density slot"))? = own;
+        }
+        for (a, density) in value.atoms.values_mut().zip(densities) {
+            a.density = density;
         }
         if include_bonds {
-            for (id, b1) in self.graph.bonds.iter().enumerate() {
-                session.spend(1)?;
-                let (Some(a1), Some(a2)) = (value.atoms.get(&b1.a), value.atoms.get(&b1.b)) else {
+            // Crossings need midpoints closer than 0.5, so they share or touch
+            // a 0.5-wide grid cell. Candidates keep native ascending bond order.
+            let cell = |p: Point| ((p.x * 2.0).floor() as i64, (p.y * 2.0).floor() as i64);
+            session.spend(self.graph.bonds.len())?;
+            let mut bonds = Vec::new();
+            let mut grid = HashMap::<_, Vec<usize>>::new();
+            for bond in &self.graph.bonds {
+                let (Some(a1), Some(a2)) = (value.atoms.get(&bond.a), value.atoms.get(&bond.b))
+                else {
                     continue;
                 };
-                let v1 = sub(a2.location, a1.location)?;
-                let avg1 = scale(add(a2.location, a1.location)?, 0.5)?;
-                for b2 in self.graph.bonds.iter().skip(id + 1) {
-                    session.spend(1)?;
-                    let (Some(a3), Some(a4)) = (value.atoms.get(&b2.a), value.atoms.get(&b2.b))
-                    else {
-                        continue;
-                    };
-                    let avg2 = sub(scale(add(a4.location, a3.location)?, 0.5)?, avg1)?;
+                let middle = scale(add(a2.location, a1.location)?, 0.5)?;
+                grid.entry(cell(middle)).or_default().push(bonds.len());
+                bonds.push((bond, a1.location, a2.location, middle));
+            }
+            let mut near = Vec::new();
+            for (index, &(b1, p1, p2, avg1)) in bonds.iter().enumerate() {
+                let v1 = sub(p2, p1)?;
+                let (x, y) = cell(avg1);
+                near.clear();
+                for dx in -1..=1 {
+                    for dy in -1..=1 {
+                        if let Some(list) = grid.get(&(x.saturating_add(dx), y.saturating_add(dy)))
+                        {
+                            near.extend(list.iter().copied().filter(|&other| other > index));
+                        }
+                    }
+                }
+                near.sort_unstable();
+                near.dedup();
+                session.spend(near.len())?;
+                for &other in &near {
+                    let &(b2, p3, p4, middle) = at(&bonds, other)?;
+                    let avg2 = sub(middle, avg1)?;
                     let avg_sq = squared(avg2)?;
                     // Native also tests < 0.5; the stricter squared threshold implies it.
                     if avg_sq < 0.5 * 0.5 {
-                        let v2 = sub(a3.location, a1.location)?;
-                        let v3 = sub(a4.location, a1.location)?;
+                        let v2 = sub(p3, p1)?;
+                        let v3 = sub(p4, p1)?;
                         if number(cross(v1, v2)? * cross(v1, v3)?)? < -1e-6 {
                             let mut best = (usize::MAX, (b1.a, b2.a));
                             for (a, b) in [(b1.a, b2.a), (b1.a, b2.b), (b1.b, b2.a), (b1.b, b2.b)] {
