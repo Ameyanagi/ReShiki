@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Package the browser editor demo for https://reshiki.com/demo/ as a
-# reshiki-web-demo.tar.gz holding one demo/ folder: the editor-only page, the
-# JavaScript it imports, the editor's WebAssembly and the license texts, all
-# linked by relative paths. Run scripts/build_wasm.sh first, or pass --build to
+# reshiki-web-demo.tar.gz holding one demo/ folder: examples/demo.html as its
+# page, the JavaScript it imports, the editor's WebAssembly and the license
+# texts, all linked by relative paths. Run scripts/build_wasm.sh first, or pass --build to
 # run it here. The archive goes to dist/reshiki-web-demo.tar.gz unless a path
 # is given. --previous ARCHIVE keeps the files that archive's page loads, so a
 # page cached before this release can still load its own files.
@@ -35,14 +35,14 @@ trap 'rm -rf "$stage"' EXIT
 demo=$stage/demo
 mkdir -p "$demo/src" "$demo/dist/editor"
 
-# The example page sits one folder below src/; the demo page sits beside it
-# and adds a note that it is a preview of the desktop app.
-awk -v notice="$package/examples/demo-notice.html" '
-  /<\/body>/ { while ((getline line < notice) > 0) print line }
-  { sub(/"\.\.\/src\/editor\.js"/, "\"./src/editor.js\""); print }
-' "$package/examples/index.html" > "$demo/index.html"
-if ! grep -q '"./src/editor.js"' "$demo/index.html" || ! grep -q 'id="demo-notice"' "$demo/index.html"; then
-  echo "packages/editor/examples/index.html no longer imports ../src/editor.js before </body>" >&2
+# The demo page sits one folder below src/ and dist/ in the package and beside
+# them in the demo. It shows a download progress bar, so it is told the
+# WebAssembly's size; a compressed response's Content-Length is smaller.
+size=$(wc -c < "$package/dist/editor/reshiki_bg.wasm" | tr -d ' ')
+SIZE=$size perl -pe 's#"\.\./(src|dist)/#"./$1/#g; s/data-bytes="0"/data-bytes="$ENV{SIZE}"/' \
+  "$package/examples/demo.html" > "$demo/index.html"
+if grep -q '"\.\./' "$demo/index.html" || ! grep -q "data-bytes=\"$size\"" "$demo/index.html"; then
+  echo "packages/editor/examples/demo.html no longer links ../src/ and ../dist/ as expected" >&2
   exit 1
 fi
 # release.yml compares this with the published demo's.
