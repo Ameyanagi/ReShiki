@@ -15,10 +15,13 @@ use reshiki::typography::{Script, ScriptRun, StyleChange, TextFormat, TextStyle}
 #[derive(Debug, Clone)]
 pub enum Action {
     Begin(Option<u64>),
+    /// Put the last committed label on the atom without opening the editor.
+    Repeat(u64),
     Input(String),
     Editor(text_editor::Action),
     Script(Script),
     Mode(Mode),
+    Align(LabelAlignment),
     ContractSelection,
     ReverseInput(String),
     Apply,
@@ -35,6 +38,7 @@ pub struct State {
     scripts_edited: bool,
     manual_scripts: bool,
     alignment: LabelAlignment,
+    aligned: bool,
     members: Option<Vec<u64>>,
     reverse: String,
     reverse_edited: bool,
@@ -192,6 +196,38 @@ fn key_binding(key: text_editor::KeyPress) -> Option<text_editor::Binding<Messag
         .or_else(|| text_editor::Binding::from_key_press(key))
 }
 impl App {
+    /// While the Text tool edits a label, the drawing stays clickable.
+    pub(super) fn label_click_through(&self) -> bool {
+        self.tab.atom_text.is_some() && self.tool == crate::canvas::Tool::Text
+    }
+
+    /// A Text-tool click on an atom opens its label editor, committing any
+    /// open label first; a double-click or Option/Alt-click repeats the last.
+    pub(super) fn text_tool_atom_click(
+        &mut self,
+        edit: &crate::canvas::Edit,
+    ) -> Option<Task<Message>> {
+        use crate::canvas::Edit;
+        let (Edit::Click(p) | Edit::RepeatLabel(p)) = edit else {
+            return None;
+        };
+        let id = crate::canvas::hit_object(&self.tab.doc, *p, 8. / self.tab.camera.zoom)
+            .filter(|id| self.tab.doc.atom(*id).is_some())?;
+        // Counted here, not in the canvas, whose state the editor resets.
+        let now = iced::time::Instant::now();
+        let double = self
+            .text_click
+            .is_some_and(|(time, last)| last == id && now.duration_since(time).as_millis() < 450);
+        self.text_click = (!double).then_some((now, id));
+        Some(
+            self.atom_text_action(if double || matches!(edit, Edit::RepeatLabel(_)) {
+                Action::Repeat(id)
+            } else {
+                Action::Begin(Some(id))
+            }),
+        )
+    }
+
     pub(super) fn atom_text_target(&self) -> Option<u64> {
         if let [id] = self.tab.selected.as_slice()
             && self.tab.doc.atom(*id).is_some()
@@ -208,11 +244,30 @@ impl App {
             })
             .map(|g| g.anchor)
     }
+    /// The alignment the label being typed will take.
+    pub(super) fn atom_text_alignment(&self) -> Option<LabelAlignment> {
+        self.tab.atom_text.as_ref().map(|state| state.alignment)
+    }
     pub(super) fn atom_text_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Begin(id) => {
                 if self.tab.cleanup.is_some() || self.tab.busy || !self.finish_inline(true) {
                     return Task::none();
+                }
+                // Like ChemDraw, moving to another atom commits the open
+                // label as Enter would. An empty or unchanged draft is just
+                // closed; a failed one stays open with its error, not lost.
+                if let Some(state) = &self.tab.atom_text {
+                    if state.input.trim().is_empty()
+                        || !state.label_edited && !state.scripts_edited && !state.aligned
+                    {
+                        self.tab.atom_text = None;
+                    } else {
+                        let _ = self.atom_text_action(Action::Apply);
+                        if self.tab.atom_text.is_some() {
+                            return Task::none();
+                        }
+                    }
                 }
                 let Some(id) = id.or_else(|| self.atom_text_target()) else {
                     self.status = "Select one atom, then press Enter to edit its label".into();
@@ -262,13 +317,34 @@ impl App {
                     label_edited: false,
                     scripts_edited: false,
                     manual_scripts: group.is_none() && !atom.display.label_scripts.is_empty(),
-                    alignment: group.map(|g| g.alignment).unwrap_or_default(),
+                    alignment: reshiki::atom_labels::alignment(&self.tab.doc, id)
+                        .unwrap_or_default(),
+                    aligned: false,
                     members: None,
                     reverse: group.map(|g| g.reverse_label.clone()).unwrap_or_default(),
                     reverse_edited: false,
                 });
                 self.context_menu = None;
                 return iced::widget::operation::focus("atom-text");
+            }
+            Action::Repeat(id) => {
+                // Applied at once without asking; an atom that already shows
+                // the label, or one it cannot go on, keeps the editor open.
+                let task = self.atom_text_action(Action::Begin(Some(id)));
+                if let Some(label) = self.last_label.clone()
+                    && let Some(state) = &mut self.tab.atom_text
+                    && state.id == id
+                    && state.members.is_none()
+                    && state.input != label
+                {
+                    state.manual_scripts = false;
+                    state.replace_input(label);
+                    let _ = self.atom_text_action(Action::Apply);
+                }
+                if self.tab.atom_text.is_none() {
+                    return Task::none();
+                }
+                return task;
             }
             Action::Input(input) => {
                 if let Some(state) = &mut self.tab.atom_text {
@@ -305,6 +381,7 @@ impl App {
                                 scripts_edited: false,
                                 manual_scripts: false,
                                 alignment: LabelAlignment::Auto,
+                                aligned: false,
                                 members: Some(group.members.clone()),
                                 reverse: String::new(),
                                 reverse_edited: false,
@@ -334,7 +411,16 @@ impl App {
                     state.error = None;
                 }
             }
-            Action::Cancel => self.tab.atom_text = None,
+            Action::Align(alignment) => {
+                if let Some(state) = &mut self.tab.atom_text {
+                    state.aligned |= state.alignment != alignment;
+                    state.alignment = alignment;
+                }
+            }
+            Action::Cancel => {
+                self.tab.atom_text = None;
+                self.last_label = None;
+            }
             Action::Apply => {
                 let Some(state) = &self.tab.atom_text else {
                     return Task::none();
@@ -372,6 +458,7 @@ impl App {
                             // replaced, except that one without a reverse
                             // spelling (ONp) cannot take Right, which turns it.
                             if state.members.is_some()
+                                || state.aligned
                                 || old.is_some_and(|g| {
                                     g.label == group.label
                                         || !group.reverse_label.is_empty()
@@ -380,12 +467,21 @@ impl App {
                             {
                                 group.alignment = state.alignment;
                             }
+                        } else if state.aligned {
+                            reshiki::atom_labels::set_alignment(
+                                &mut doc,
+                                state.id,
+                                state.alignment,
+                            );
                         }
                         if let Err(error) = doc.validate() {
                             if let Some(state) = &mut self.tab.atom_text {
                                 state.error = Some(error);
                             }
                             return Task::none();
+                        }
+                        if state.members.is_none() && state.label_edited {
+                            self.last_label = Some(state.input.trim().into());
                         }
                         let before = std::mem::replace(&mut self.tab.doc, doc);
                         self.tab.atom_text = None;
@@ -405,7 +501,13 @@ impl App {
         let Some(state) = &self.tab.atom_text else {
             return base;
         };
-        let base = reshiki::accessibility::inert(base);
+        // The workspace makes the rest inert, so a click elsewhere commits.
+        let click_through = self.label_click_through();
+        let base = if click_through {
+            base
+        } else {
+            reshiki::accessibility::inert(base)
+        };
         let editor = text_editor(&state.editor)
             .id("atom-text")
             .font(iced::Font::with_name(reshiki::style::font_name(
@@ -531,16 +633,34 @@ impl App {
                 .spacing(3),
             );
         }
+        let choice = |name, list: Element<'a, Message>| {
+            column![text(name).size(10).style(muted_text), list]
+                .spacing(3)
+                .width(Length::Fill)
+                .into()
+        };
+        let mut choices: Vec<Element<'a, Message>> = vec![];
         if state.members.is_none() {
-            content = content.push(
+            choices.push(choice(
+                "Label type",
                 crate::appearance::pick_list(
                     [Mode::Auto, Mode::Text, Mode::Group],
                     Some(state.mode),
                     |mode| Message::AtomText(Action::Mode(mode)),
                 )
-                .width(Length::Fill),
-            );
+                .width(Length::Fill)
+                .into(),
+            ));
         }
+        choices.push(choice(
+            "Alignment",
+            crate::appearance::pick_list(LabelAlignment::ALL, Some(state.alignment), |value| {
+                Message::AtomText(Action::Align(value))
+            })
+            .width(Length::Fill)
+            .into(),
+        ));
+        content = content.push(iced::widget::Row::with_children(choices).spacing(10));
         content = content.push(text(if state.members.is_some() {
                 "The selected atoms define this group. Its formula and bonds are retained; expand it to edit the structure."
             } else if state.mode != Mode::Text
@@ -612,6 +732,9 @@ impl App {
                 },
             )
         });
+        if click_through {
+            return stack![base, container(opaque(popup)).center(Length::Fill)].into();
+        }
         stack![
             base,
             opaque(

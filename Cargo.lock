@@ -3981,6 +3981,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "reshiki-web-worker"
+version = "0.1.0"
+dependencies = [
+ "reshiki",
+ "reshiki-process-heap",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "reshiki-windows"
 version = "0.1.0"
 dependencies = [

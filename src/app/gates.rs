@@ -187,6 +187,16 @@ impl App {
             if matches!(message, Message::Escape) {
                 return Break(self.atom_text_action(atom_text::Action::Cancel));
             }
+            // The Text tool keeps the drawing clickable: another atom moves the
+            // editor there and anywhere else commits the label.
+            if let Message::Canvas(edit @ (Edit::Click(_) | Edit::RepeatLabel(_))) = &message
+                && self.tool == Tool::Text
+            {
+                return Break(
+                    self.text_tool_atom_click(edit)
+                        .unwrap_or_else(|| self.atom_text_action(atom_text::Action::Apply)),
+                );
+            }
             if !atom_text::background(&message) && !self.answers_save_dialog(&message) {
                 return Break(Task::none());
             }
@@ -316,13 +326,11 @@ impl App {
                 self.inline_action(inline_text::Action::Begin(Some(id), Point::default())),
             );
         }
-        if let Message::Canvas(Edit::Click(p)) = message
+        if let Message::Canvas(ref edit @ (Edit::Click(p) | Edit::RepeatLabel(p))) = message
             && self.tool == Tool::Text
         {
-            if let Some(id) = canvas::hit_object(&self.tab.doc, p, 8. / self.tab.camera.zoom)
-                .filter(|id| self.tab.doc.atom(*id).is_some())
-            {
-                return Break(self.atom_text_action(atom_text::Action::Begin(Some(id))));
+            if let Some(task) = self.text_tool_atom_click(edit) {
+                return Break(task);
             }
             let id = canvas::hit_object(&self.tab.doc, p, 8. / self.tab.camera.zoom)
                 .filter(|id| self.tab.doc.annotations.iter().any(|a| a.id == *id));

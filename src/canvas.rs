@@ -139,6 +139,9 @@ pub enum Edit {
     EraseTo(World, World),
     EraseEnd,
     BeginText(u64),
+    /// A Text-tool Option/Alt-click: label the atom there
+    /// with the last committed label, as ChemDraw repeats labels.
+    RepeatLabel(World),
     /// Open an existing numeric control without transforming the drawing.
     BeginTransform(TransformField),
     Hover(Option<World>),

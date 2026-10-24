@@ -23,7 +23,8 @@ output=${1:-$root/dist/reshiki-web-demo.tar.gz}
 mkdir -p "$(dirname "$output")"
 output=$(cd "$(dirname "$output")" && pwd)/$(basename "$output")
 
-for file in dist/editor/reshiki.js dist/editor/reshiki_bg.wasm dist/licenses; do
+for file in dist/editor/reshiki.js dist/editor/reshiki_bg.wasm dist/worker/reshiki_web_worker.js \
+  dist/worker/reshiki_web_worker_bg.wasm dist/licenses; do
   if [[ ! -e $package/$file ]]; then
     echo "Missing packages/editor/$file: run scripts/build_wasm.sh first" >&2
     exit 1
@@ -33,7 +34,7 @@ done
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 demo=$stage/demo
-mkdir -p "$demo/src" "$demo/dist/editor"
+mkdir -p "$demo/src" "$demo/dist/editor" "$demo/dist/worker"
 
 # The demo page sits one folder below src/ and dist/ in the package and beside
 # them in the demo. It shows a download progress bar, so it is told the
@@ -47,8 +48,11 @@ if grep -q '"\.\./' "$demo/index.html" || ! grep -q "data-bytes=\"$size\"" "$dem
 fi
 # release.yml compares this with the published demo's.
 awk -F '"' '/^version = / { print $2; exit }' "$root/Cargo.toml" > "$demo/VERSION"
-cp "$package/src/editor.js" "$package/src/fonts.js" "$demo/src/"
+cp "$package/src/editor.js" "$package/src/fonts.js" "$package/src/worker.js" "$demo/src/"
 cp "$package/dist/editor/reshiki.js" "$package/dist/editor/reshiki_bg.wasm" "$demo/dist/editor/"
+# The worker for naming loads only when first used.
+cp "$package/dist/worker/reshiki_web_worker.js" "$package/dist/worker/reshiki_web_worker_bg.wasm" \
+  "$demo/dist/worker/"
 cp -R "$package/dist/licenses" "$demo/licenses"
 
 # Name the modules and the WebAssembly by a hash of their content and point the
@@ -62,13 +66,16 @@ hashed() {
   new=${name%.*}.$hash.${name##*.}
   mv "$file" "${file%/*}/$new"
   NAME=$name NEW=$new perl -pi -e 's/(?<![\w.-])\Q$ENV{NAME}\E(?![\w-])/$ENV{NEW}/g' \
-    "$demo/index.html" "$demo"/src/*.js "$demo"/dist/editor/*.js
-  if ! grep -qrF "$new" "$demo/index.html" "$demo/src" "$demo/dist/editor"; then
+    "$demo/index.html" "$demo"/src/*.js "$demo"/dist/editor/*.js "$demo"/dist/worker/*.js
+  if ! grep -qrF "$new" "$demo/index.html" "$demo/src" "$demo/dist/editor" "$demo/dist/worker"; then
     echo "No demo file loads $1 any more" >&2
     exit 1
   fi
 }
 hashed dist/editor/reshiki_bg.wasm
+hashed dist/worker/reshiki_web_worker_bg.wasm
+hashed dist/worker/reshiki_web_worker.js
+hashed src/worker.js
 hashed dist/editor/reshiki.js
 hashed src/fonts.js
 hashed src/editor.js

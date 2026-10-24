@@ -100,7 +100,7 @@ impl Tool {
                 "Click to place or change an arrow · Click again to switch · Drag to draw"
             }
             Self::Text => {
-                "Click an atom to name it · Click empty space for a caption · Escape cancels"
+                "Click an atom to name it · Double-click another atom to repeat the label · Click empty space for a caption · Escape cancels"
             }
             Self::Erase => {
                 "Drag to erase atoms, bonds and objects along the stroke · Undo restores the whole stroke"
