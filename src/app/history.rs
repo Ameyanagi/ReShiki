@@ -26,6 +26,11 @@ impl App {
                 self.tab.chemistry_notice = None;
                 reshiki::atom_labels::clear_computed(&mut self.tab.doc);
                 self.tab.labels_dirty = true;
+            } else {
+                // Same chemistry, same labels: a snapshot taken before the
+                // labels landed gets them, and the layout they need.
+                reshiki::atom_labels::copy_computed(&mut self.tab.doc, &before);
+                self.settle_label_layout();
             }
             let ids = self.tab.doc.all_ids();
             self.tab.selected.retain(|id| ids.contains(id));

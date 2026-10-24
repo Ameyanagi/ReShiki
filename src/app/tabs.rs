@@ -484,6 +484,8 @@ impl App {
                 let (tool, inspector_open, inspector_tab) =
                     (app.tool, app.inspector_open, app.inspector_tab);
                 let task = app.update_front(message, true);
+                // A job that held back a layout repair may have finished.
+                app.settle_deferred_label_layout();
                 (app.tool, app.inspector_open, app.inspector_tab) =
                     (tool, inspector_open, inspector_tab);
                 task

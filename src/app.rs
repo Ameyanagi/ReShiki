@@ -645,6 +645,9 @@ impl App {
         self.changed_continuing(before, false);
     }
     fn changed_continuing(&mut self, before: Document, continuing: bool) {
+        if self.settles_unchanged(&before) {
+            return;
+        }
         self.prepare_document_change(self.tab.doc != before);
         let reconciled = match reshiki::transaction::reconcile(&mut self.tab.doc, before) {
             Ok(reconciled) => reconciled,
@@ -666,6 +669,10 @@ impl App {
         mut candidate: Document,
         selected: Vec<u64>,
     ) -> Result<(), String> {
+        if candidate == self.tab.doc && self.settles_unchanged(&candidate) {
+            self.tab.selected = selected;
+            return Ok(());
+        }
         let before = self.tab.doc.clone();
         let reconciled = reshiki::transaction::reconcile(&mut candidate, before)
             .map_err(|error| error.message().to_owned())?;
@@ -683,6 +690,17 @@ impl App {
         self.tab.selected = selected;
         self.commit_changed(reconciled, false);
         Ok(())
+    }
+    /// A commit that changes nothing, such as applying an unchanged text
+    /// draft, settles a waiting label-layout repair the way closing the
+    /// preview that held it back would, instead of recording it as an edit.
+    fn settles_unchanged(&mut self, before: &Document) -> bool {
+        if !self.label_layout_waiting() || self.tab.doc != *before {
+            return false;
+        }
+        self.prepare_document_change(false);
+        self.settle_label_layout();
+        true
     }
     fn prepare_document_change(&mut self, changed: bool) {
         if changed {
@@ -707,6 +725,7 @@ impl App {
             .nmr
             .invalidate_if_changed(&self.tab.doc, self.tab.file_epoch);
         let committed = reconciled.commit(&mut self.tab.doc, &mut self.tab.history, continuing);
+        self.label_layout_settled();
         if committed.chemistry_changed {
             self.tab.labels_dirty = true;
             self.tab.chemistry_notice = None;
@@ -822,6 +841,7 @@ impl App {
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
         let task = self.handle(message);
+        self.settle_deferred_label_layout();
         // Any message may change the drawing, some (previews, background
         // labels) without a new revision, so the next view compares afresh.
         self.tab.forget_unsaved();
