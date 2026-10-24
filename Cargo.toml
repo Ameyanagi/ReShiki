@@ -1,6 +1,6 @@
 [package]
 name = "reshiki"
-version = "0.12.1"
+version = "0.13.0"
 edition = "2024"
 default-run = "reshiki"
 description = "A molecular drawing workspace"

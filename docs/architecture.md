@@ -132,7 +132,7 @@ Leaf crates depend on no layer crate; only `reshiki-windows` uses another leaf, 
 | `crates/model/src/style.rs` and `assets/drawing_style.json` | Shared JACS / ACS defaults, publication units and font advances                |
 | `reference/engine/worker.py`                                | Independent Python/RDKit reference, enabled by `rdkit-reference`               |
 
-Document coordinates use screen-style positive-down Y, with 28 world units per RDKit coordinate unit. The default single bond is 42 world units, representing 14.4 publication points in the JACS / ACS preset. The camera never changes stored coordinates or export size. Native documents are saved as JSON format version 28 and accept versions 1–28 when reading; see [document format versions](#document-format-versions). Version 17 stores theme palette colors by name and custom colors as displayed; reading an older dark-canvas drawing converts its custom colors once to the lightness-flipped values it showed. Version 16 embeds custom themes and version 15 adds explicit reaction roles tied to arrow and atom IDs. A drawing from a newer ReShiki reports the document version it needs instead of a parse error. Version 14 adds validated per-document drawing settings; the physical coordinate scale remains fixed at 14.4/42 points per world unit. New presentation fields prompted version increments so older editors reject unsupported documents. History and camera are session state.
+Document coordinates use screen-style positive-down Y, with 28 world units per RDKit coordinate unit. The default single bond is 42 world units, representing 14.4 publication points in the JACS / ACS preset. The camera never changes stored coordinates or export size. Native documents are saved as JSON format version 29 and accept versions 1–29 when reading; see [document format versions](#document-format-versions). Version 17 stores theme palette colors by name and custom colors as displayed; reading an older dark-canvas drawing converts its custom colors once to the lightness-flipped values it showed. Version 16 embeds custom themes and version 15 adds explicit reaction roles tied to arrow and atom IDs. A drawing from a newer ReShiki reports the document version it needs instead of a parse error. Version 14 adds validated per-document drawing settings; the physical coordinate scale remains fixed at 14.4/42 points per world unit. New presentation fields prompted version increments so older editors reject unsupported documents. History and camera are session state.
 
 Atoms retain formal charge, isotope, explicit-H count, implicit-H policy, map number and tetrahedral winding. Winding refers to an explicit ordered list of stable neighbor IDs. Molecule preparation compensates for neighbor permutations, preventing array reordering from reversing a stereocenter. Double-bond stereo stores its reference atoms separately. Topology edits invalidate affected stereo and derived labels; a background refresh recomputes chemistry. Explicit Check also refreshes computed properties.
 
@@ -140,10 +140,9 @@ Atoms retain formal charge, isotope, explicit-H count, implicit-H policy, map nu
 
 `VERSION` in `crates/model/src/document.rs` is the newest format this build
 reads, and every saved file is marked with it. Its doc comment holds the table
-below; update both together. ReShiki 0.12.0 saves version 26. ReShiki 0.11.0
-reads versions up to 19, so it cannot open a drawing saved by 0.12.0 and reports
-the version it needs. Every file is now saved as version 29, with or without a
-3D model or crystal, so builds that read up to 28 cannot open it either.
+below; update both together. ReShiki 0.13.0 saves version 29, with or without
+a 3D model or crystal. ReShiki 0.12.x reads versions up to 26, so it cannot open
+a drawing saved by 0.13.0 and reports the version it needs.
 
 | Version | Added                                                                           |
 | ------- | ------------------------------------------------------------------------------- |
@@ -168,7 +167,7 @@ the version it needs. Every file is now saved as version 29, with or without a
 | 26      | Generic structures and coordination joining (#300; 0.12.0).                     |
 | 27      | Condition text attached to reaction arrows.                                     |
 | 28      | 3D models of structures (#386).                                                 |
-| 29      | Crystal unit cells and atom sites on 3D models (#417).                          |
+| 29      | Crystal unit cells and atom sites on 3D models (#417; 0.13.0).                  |
 
 ## Chemistry requests
 

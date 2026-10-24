@@ -227,9 +227,9 @@ it.
 
 - Naming and NMR prediction work: naming runs in its own worker (see
   [Naming](#naming)). 3D models and 3D optimization work, but pause the page
-  while they compute. The assistant panel only points to the desktop app,
-  Check for updates does not apply (the page updates the editor), and
-  printing, Office and LibreOffice integration are not available.
+  while they compute. The assistant and printing need the desktop app and are
+  hidden, Check for updates does not apply (the page updates the editor), and
+  Office and LibreOffice integration are not available.
 - Open and Save use the browser: Open, Insert from file and the drawing style,
   theme, template and picture choosers use the browser's file chooser, and
   files dropped on the editor open or insert as in the desktop app. Save and
