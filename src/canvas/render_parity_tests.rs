@@ -1142,3 +1142,55 @@ async fn rear_opacity_canvas_matches_reference_alpha_and_keeps_cage_rim_and_mark
         }
     }
 }
+
+/// Skipping shapes outside the viewport must not change a pixel, also for
+/// shapes and label halos that only reach in at the edges.
+#[tokio::test]
+#[ignore = "Viewport culling pixels; requires a headless renderer"]
+async fn off_screen_culling_matches_unculled_pixels() {
+    let mut renderer = <Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .expect("Headless renderer");
+    let doc: Document =
+        serde_json::from_str(include_str!("../../assets/examples/shortcut-examples.rsk")).unwrap();
+    let mixed: Vec<_> = mixed_primitives()
+        .into_iter()
+        .filter(|p| !matches!(p, Primitive::Picture(_)))
+        .collect();
+    let mut primitives = reshiki::scene::primitives(&doc);
+    primitives.push(Primitive::Halo {
+        radius: 3.,
+        primitives: mixed.clone(),
+    });
+    primitives.extend(mixed);
+    let bounds = Rectangle::with_size(iced::Size::new(640., 400.));
+    let cache = std::cell::RefCell::new(text_cache::TextCache::default());
+    for zoom in [0.3, 1., 2.5] {
+        for x in (-200..=900).step_by(110) {
+            for y in (-150..=700).step_by(85) {
+                let camera = Camera {
+                    center: World::new(x as f32, y as f32),
+                    zoom,
+                };
+                let mut render = |cull| {
+                    render::CULL.with(|c| c.set(cull));
+                    renderer.reset(bounds);
+                    let mut frame = layered::Frame::new(&renderer, bounds.size());
+                    frame.text_cache = Some(&cache);
+                    draw_primitives(&mut frame, &primitives, camera, bounds, 0.6);
+                    for geometry in frame.finish() {
+                        renderer.draw_geometry(geometry);
+                    }
+                    Headless::screenshot(&mut renderer, iced::Size::new(640, 400), 1., Color::WHITE)
+                };
+                let reference = render(false);
+                assert_same_pixels(&format!("Culled at {camera:?}"), &render(true), &reference);
+            }
+        }
+    }
+    render::CULL.with(|c| c.set(true));
+}
