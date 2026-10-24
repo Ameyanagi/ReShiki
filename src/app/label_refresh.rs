@@ -2,6 +2,7 @@
 use super::{App, Message};
 use iced::Task;
 use reshiki::atom_labels::refresh::Refresh;
+use reshiki::document::Document;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,7 +25,7 @@ impl State {
 }
 
 pub(super) async fn calculate(
-    source: reshiki::document::Document,
+    source: Document,
     previous: Arc<Refresh>,
 ) -> Result<Arc<Refresh>, String> {
     reshiki::task::spawn_blocking(move || Refresh::calculate(&source, &previous))
@@ -104,10 +105,26 @@ impl App {
     }
 }
 
+impl App {
+    /// The drawing a finished save wrote, as `labels_ready` would have
+    /// settled it if the labels arrived while the save was open. Used only
+    /// when that is the drawing now, so the save leaves it saved.
+    pub(super) fn settled_save(&self, written: Document) -> Document {
+        let mut settled = written.clone();
+        self.tab.label_refresh.cache.apply(&mut settled);
+        settle(&mut settled);
+        if super::same_drawing(&settled, &self.tab.doc) {
+            settled
+        } else {
+            written
+        }
+    }
+}
+
 /// New label ink (an H appearing on OH) moves what keeps clear of it, such
 /// as attached arrow ends, as the next edit would. A rejected repair leaves
 /// the drawing as it is.
-fn settle(doc: &mut reshiki::document::Document) {
+fn settle(doc: &mut Document) {
     let before = doc.clone();
     let _ = reshiki::transaction::reconcile(doc, before);
 }
