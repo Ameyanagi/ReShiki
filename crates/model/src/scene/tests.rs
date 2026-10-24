@@ -72,6 +72,55 @@ fn overlapping_atom_label_ink_keeps_reverse_paint_order() {
 }
 
 #[test]
+fn label_reach_bounds_label_ink_so_far_label_ends_still_hit() -> Result<(), String> {
+    let mut long = Document::default();
+    let id = long.add_atom("C", Point::default());
+    let end = long.add_atom("C", Point::new(-42., 0.));
+    long.add_bond(id, end, 1, "plain");
+    long = crate::atom_text::apply(
+        &long,
+        id,
+        "CH2CH2CH2CH2CH2CH2CH2CH2CH2CH2OH",
+        crate::atom_text::Mode::Text,
+    )?;
+    let atom = long.atom_mut(id).ok_or("Atom")?;
+    atom.text_style = Some(crate::typography::TextStyle {
+        size_pt: 36.,
+        ..atom.text_style.clone().unwrap_or_default()
+    });
+    atom.charge = -2;
+    atom.isotope = 13;
+    let shortcuts: Document = serde_json::from_str(include_str!(
+        "../../../../assets/examples/shortcut-examples.rsk"
+    ))
+    .map_err(|e| e.to_string())?;
+    for doc in [&long, &shortcuts] {
+        let reach = LabelReach::new(doc);
+        for atom in &doc.atoms {
+            for (lo, hi) in atom_label_ink_boxes(atom, doc) {
+                for corner in [lo, hi, Point::new(lo.x, hi.y), Point::new(hi.x, lo.y)] {
+                    assert!(
+                        atom.position.distance(corner) < reach.of(atom),
+                        "Atom {} label ink beyond its reach",
+                        atom.id
+                    );
+                }
+            }
+        }
+    }
+    // The far end of a long label is many ems away, and still hits.
+    let atom = long.atom(id).ok_or("Atom")?;
+    let (lo, hi) = atom_label_ink_boxes(atom, &long)
+        .into_iter()
+        .max_by(|a, b| a.1.x.total_cmp(&b.1.x))
+        .ok_or("Label ink")?;
+    let point = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+    assert!(atom.position.distance(point) > 20. * STYLE.font_size());
+    assert_eq!(atom_label_hit(&long, point, 0.), Some(id));
+    Ok(())
+}
+
+#[test]
 fn batched_bounds_match_each_selection() {
     let doc: Document = serde_json::from_str(include_str!(
         "../../../../assets/examples/shortcut-examples.rsk"
