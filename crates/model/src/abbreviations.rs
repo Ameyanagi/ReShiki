@@ -398,13 +398,12 @@ impl Document {
             .iter()
             .any(|a| a.anchor != id && a.members.contains(&id))
     }
+    /// Both atoms are visible and no abbreviation hides the bond between them.
     pub fn bond_visible(&self, a: u64, b: u64) -> bool {
-        self.atom_visible(a)
-            && self.atom_visible(b)
-            && !self
-                .abbreviations
-                .iter()
-                .any(|g| g.members.contains(&a) && g.members.contains(&b))
+        !self.abbreviations.iter().any(|g| {
+            let (has_a, has_b) = (g.members.contains(&a), g.members.contains(&b));
+            has_a && (has_b || g.anchor != a) || has_b && g.anchor != b
+        })
     }
     /// Any selected member pulls in the whole abbreviation. The result is in
     /// [`Document::all_ids`] order.
@@ -490,6 +489,32 @@ impl Document {
             return;
         }
         let connectivity = Connectivity::new(self);
+        // Index member atoms and their bonds once so each group only looks at
+        // its own members instead of rescanning the whole drawing.
+        let members: HashSet<u64> = self
+            .abbreviations
+            .iter()
+            .flat_map(|g| g.members.iter().copied())
+            .collect();
+        let index = |d| index_members(d, &members);
+        let (atoms, incident) = index(self);
+        let (before_atoms, before_incident) = index(before);
+        let bonds = |d: &Document, incident: &HashMap<u64, Vec<usize>>, g: &Abbreviation| {
+            let mut indices: Vec<_> = g
+                .members
+                .iter()
+                .flat_map(|id| incident.get(id).into_iter().flatten().copied())
+                .collect();
+            indices.sort_unstable();
+            indices.dedup();
+            let mut bonds: Vec<_> = indices
+                .into_iter()
+                .filter_map(|i| d.bonds.get(i))
+                .map(|b| (b.a.min(b.b), b.a.max(b.b), b.order))
+                .collect();
+            bonds.sort_unstable();
+            bonds
+        };
         let keep: Vec<_> = self
             .abbreviations
             .iter()
@@ -497,50 +522,72 @@ impl Document {
                 if g.validate_with(&connectivity).is_err() {
                     return false;
                 }
-                if !before.abbreviations.contains(g) {
+                if !before
+                    .abbreviations
+                    .iter()
+                    .any(|b| b.anchor == g.anchor && b == *g)
+                {
                     return true;
                 }
                 let atoms_unchanged = g.members.iter().all(|id| {
-                    self.atom(*id).zip(before.atom(*id)).is_some_and(|(a, b)| {
-                        (
-                            &a.element,
-                            a.charge,
-                            a.isotope,
-                            a.explicit_h,
-                            a.no_implicit,
-                            a.radical_electrons,
-                            a.map_num,
-                            a.attachment,
-                            &a.centroid,
-                        ) == (
-                            &b.element,
-                            b.charge,
-                            b.isotope,
-                            b.explicit_h,
-                            b.no_implicit,
-                            b.radical_electrons,
-                            b.map_num,
-                            b.attachment,
-                            &b.centroid,
-                        )
-                    })
+                    atoms
+                        .get(id)
+                        .zip(before_atoms.get(id))
+                        .is_some_and(|(a, b)| {
+                            (
+                                &a.element,
+                                a.charge,
+                                a.isotope,
+                                a.explicit_h,
+                                a.no_implicit,
+                                a.radical_electrons,
+                                a.map_num,
+                                a.attachment,
+                                &a.centroid,
+                            ) == (
+                                &b.element,
+                                b.charge,
+                                b.isotope,
+                                b.explicit_h,
+                                b.no_implicit,
+                                b.radical_electrons,
+                                b.map_num,
+                                b.attachment,
+                                &b.centroid,
+                            )
+                        })
                 });
-                let bonds = |d: &Document| {
-                    let mut bonds: Vec<_> = d
-                        .bonds
-                        .iter()
-                        .filter(|b| g.members.contains(&b.a) || g.members.contains(&b.b))
-                        .map(|b| (b.a.min(b.b), b.a.max(b.b), b.order))
-                        .collect();
-                    bonds.sort_unstable();
-                    bonds
-                };
-                atoms_unchanged && bonds(self) == bonds(before)
+                atoms_unchanged && bonds(self, &incident, g) == bonds(before, &before_incident, g)
             })
             .cloned()
             .collect();
         self.abbreviations = keep;
     }
+}
+
+/// Member atoms by ID, the first one for a duplicate ID like
+/// [`Document::atom`], and the indices of the bonds touching each member.
+type MemberIndex<'a> = (
+    HashMap<u64, &'a crate::document::Atom>,
+    HashMap<u64, Vec<usize>>,
+);
+fn index_members<'a>(doc: &'a Document, members: &HashSet<u64>) -> MemberIndex<'a> {
+    let atoms = doc
+        .atoms
+        .iter()
+        .rev()
+        .filter(|a| members.contains(&a.id))
+        .map(|a| (a.id, a))
+        .collect();
+    let mut incident = HashMap::<u64, Vec<usize>>::new();
+    for (i, b) in doc.bonds.iter().enumerate() {
+        for id in [b.a, b.b] {
+            if members.contains(&id) {
+                incident.entry(id).or_default().push(i);
+            }
+        }
+    }
+    (atoms, incident)
 }
 
 pub fn label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
