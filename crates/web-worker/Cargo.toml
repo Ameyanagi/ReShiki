@@ -1,0 +1,17 @@
+[package]
+name = "reshiki-web-worker"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "MIT OR Apache-2.0"
+description = "The browser editor's Web Worker for heavy jobs: name and structure conversion"
+
+[lib]
+crate-type = ["cdylib"]
+
+# Only the browser build has a naming Web Worker; elsewhere this is empty.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+reshiki = { path = "../.." }
+reshiki-process-heap = { path = "../process-heap" }
+# scripts/build_wasm.sh installs the wasm-bindgen CLI of exactly this version.
+wasm-bindgen = "=0.2.128"
