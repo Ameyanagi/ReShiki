@@ -102,3 +102,24 @@ fn unsaved_changes_follow_save_edit_undo_and_redo() {
     let _ = app.update(Message::Undo);
     assert!(app.dirty());
 }
+
+#[test]
+fn hue_previews_show_the_unsaved_dot_until_cancelled() {
+    use crate::app::color_popover::Action;
+    let (mut app, _) = App::new();
+    app.show_opened(
+        reshiki::rings::Preset::Benzene.document(42., false),
+        Some("saved.rsk".into()),
+    );
+    app.tab.selected = app.tab.doc.all_ids();
+    assert_eq!(app.title(), "saved.rsk — ReShiki");
+    let revision = app.tab.revision;
+    for action in [Action::Color, Action::EditHues, Action::Step(1)] {
+        let _ = app.update(Message::StyleMenu(action));
+    }
+    // The live preview recolors the drawing without a new revision.
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(app.title(), "saved.rsk • — ReShiki");
+    let _ = app.update(Message::StyleMenu(Action::Cancel));
+    assert_eq!(app.title(), "saved.rsk — ReShiki");
+}

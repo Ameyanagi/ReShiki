@@ -538,7 +538,7 @@ impl App {
         (app, Task::batch([task, update_check]))
     }
     pub fn title(&self) -> String {
-        window_title(&self.document_name(), self.dirty())
+        window_title(&self.document_name(), self.tab.shown_dirty())
     }
     fn document_name(&self) -> String {
         self.tab.name()
@@ -821,6 +821,13 @@ impl App {
             .unwrap_or(&self.tab.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        let task = self.handle(message);
+        // Any message may change the drawing, some (previews, background
+        // labels) without a new revision, so the next view compares afresh.
+        self.tab.forget_unsaved();
+        task
+    }
+    fn handle(&mut self, message: Message) -> Task<Message> {
         let message = match self.update_untagged(message) {
             ControlFlow::Break(task) => return task,
             ControlFlow::Continue(message) => message,

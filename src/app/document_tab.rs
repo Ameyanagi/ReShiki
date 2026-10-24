@@ -30,8 +30,9 @@ pub(super) struct DocumentTab {
     // Document, history and file identity.
     pub(super) doc: Document,
     pub(super) saved: Document,
-    /// Whether `doc` differed from `saved` at this revision and file epoch.
-    /// Edits bump the revision; `mark_saved` clears it.
+    /// [`Self::dirty`] as views showed it, at this revision and file epoch.
+    /// `App::update` forgets it as it returns, as some changes (previews,
+    /// background labels) keep the revision.
     unsaved: std::cell::Cell<Option<((u64, u64), bool)>>,
     pub(super) history: History,
     pub(super) revision: u64,
@@ -234,32 +235,38 @@ impl DocumentTab {
     }
 
     pub(super) fn dirty(&self) -> bool {
-        self.inline_changed() || self.drawing_changed()
+        self.inline_changed() || !super::same_drawing(&self.doc, &self.saved)
     }
 
-    /// Compares the drawing with the saved one once per revision; the window
-    /// title and tab strip ask on every update.
-    fn drawing_changed(&self) -> bool {
+    /// [`Self::dirty`] for the window title and tab strip, which ask several
+    /// times per view: compared once, then remembered until the next update
+    /// returns. Only views may ask, since an update can still change `doc`.
+    pub(super) fn shown_dirty(&self) -> bool {
         let key = (self.revision, self.file_epoch);
-        if let Some((cached, changed)) = self.unsaved.get()
+        if let Some((cached, dirty)) = self.unsaved.get()
             && cached == key
         {
             debug_assert_eq!(
-                changed,
-                !super::same_drawing(&self.doc, &self.saved),
-                "the drawing changed without a new revision"
+                dirty,
+                self.dirty(),
+                "the drawing changed since it was shown"
             );
-            return changed;
+            return dirty;
         }
-        let changed = !super::same_drawing(&self.doc, &self.saved);
-        self.unsaved.set(Some((key, changed)));
-        changed
+        let dirty = self.dirty();
+        self.unsaved.set(Some((key, dirty)));
+        dirty
+    }
+
+    /// Drops the remembered answer once an update may have changed `doc`.
+    pub(super) fn forget_unsaved(&self) {
+        self.unsaved.set(None);
     }
 
     /// Records `saved` as the drawing's saved state.
     pub(super) fn mark_saved(&mut self, saved: Document) {
         self.saved = saved;
-        self.unsaved.set(None);
+        self.forget_unsaved();
     }
 
     /// An unchanged empty Untitled drawing with nothing in progress, which New,

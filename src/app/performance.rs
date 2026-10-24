@@ -122,18 +122,20 @@ fn unsaved_changes_check() {
         let (mut app, _) = App::new();
         app.tab.doc = doc.clone();
         app.tab.saved = doc;
-        measure(&format!("{atoms}_atoms_title_saved"), || {
-            black_box(app.title());
-        });
+        // What one update's views ask: the title, then the front tab's dot
+        // twice in the tab strip. Each update forgets the answer.
+        let view = |app: &App, name: &str| {
+            measure(name, || {
+                app.tab.forget_unsaved();
+                black_box(app.title());
+                black_box(app.tab.shown_dirty());
+                black_box(app.tab.shown_dirty());
+            });
+        };
+        view(&app, &format!("{atoms}_atoms_views_saved"));
         // The last atom moved, so a comparison walks the whole drawing.
         app.tab.doc.atoms.last_mut().unwrap().position.x += 1.;
         app.tab.revision = app.tab.revision.wrapping_add(1);
-        measure(&format!("{atoms}_atoms_title_edited"), || {
-            black_box(app.title());
-        });
-        measure(&format!("{atoms}_atoms_title_after_each_edit"), || {
-            app.tab.revision = app.tab.revision.wrapping_add(1);
-            black_box(app.title());
-        });
+        view(&app, &format!("{atoms}_atoms_views_edited"));
     }
 }
