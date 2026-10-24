@@ -36,6 +36,9 @@ pub(super) struct DocumentTab {
     unsaved: std::cell::Cell<Option<((u64, u64), bool)>>,
     pub(super) history: History,
     pub(super) revision: u64,
+    /// Computed labels landed since the edit pipeline last reconciled the
+    /// drawing; the next camera edit runs the pipeline, as all did before.
+    pub(super) labels_unsettled: bool,
     pub(super) file_epoch: u64,
     pub(super) recent_molecules: molecule_shortcuts::Recent,
     pub(super) path: Option<PathBuf>,
@@ -149,6 +152,7 @@ impl DocumentTab {
             unsaved: Default::default(),
             history: History::default(),
             revision: 0,
+            labels_unsettled: false,
             file_epoch: 0,
             recent_molecules: Default::default(),
             path: None,

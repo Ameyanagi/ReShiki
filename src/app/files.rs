@@ -387,9 +387,7 @@ impl super::App {
         match result {
             Ok(Some(path)) => {
                 // Continue the save dialog's action only when nothing is left unsaved.
-                let mut saved = *snapshot;
-                self.settle_saved(&mut saved);
-                self.tab.mark_saved(saved);
+                self.tab.mark_saved(*snapshot);
                 if self
                     .tab
                     .office

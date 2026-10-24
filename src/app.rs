@@ -691,6 +691,7 @@ impl App {
         self.tab.cleanup = None;
     }
     fn commit_changed(&mut self, reconciled: reshiki::transaction::Reconciled, continuing: bool) {
+        self.tab.labels_unsettled = false;
         self.tab.recent_molecules.record(
             reconciled.before(),
             &self.tab.doc,

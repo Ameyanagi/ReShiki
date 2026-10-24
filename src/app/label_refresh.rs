@@ -2,7 +2,6 @@
 use super::{App, Message};
 use iced::Task;
 use reshiki::atom_labels::refresh::Refresh;
-use reshiki::document::Document;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,7 +24,7 @@ impl State {
 }
 
 pub(super) async fn calculate(
-    source: Document,
+    source: reshiki::document::Document,
     previous: Arc<Refresh>,
 ) -> Result<Arc<Refresh>, String> {
     reshiki::task::spawn_blocking(move || Refresh::calculate(&source, &previous))
@@ -82,16 +81,12 @@ impl App {
         match result {
             Ok(computed) => {
                 computed.apply(&mut self.tab.doc);
-                settle(&mut self.tab.doc);
-                let mut saved = std::mem::take(&mut self.tab.saved);
-                self.settle_saved(&mut saved);
-                self.tab.mark_saved(saved);
+                self.tab.labels_unsettled = true;
                 // An open Move & attach or Coordinate preparation builds its
                 // result from these copies. Keep them equal to the drawing, so
                 // placing neither reverts the labels nor adds an Undo step.
                 if let Some(state) = &mut self.tab.joining {
                     computed.apply(&mut state.prepared.original);
-                    settle(&mut state.prepared.original);
                     computed.apply(&mut state.prepared.fragment);
                     computed.apply(&mut state.prepared.base);
                 }
@@ -101,23 +96,6 @@ impl App {
             Err(error) => self.tab.chemistry_notice = Some(error),
         }
     }
-}
-
-impl App {
-    /// The saved baseline gets the same label repair as the drawing, so the
-    /// repair never reads as an unsaved change.
-    pub(super) fn settle_saved(&self, saved: &mut Document) {
-        self.tab.label_refresh.cache.apply(saved);
-        settle(saved);
-    }
-}
-
-/// New label ink (an H appearing on OH) moves what keeps clear of it, such
-/// as attached arrow ends, as the next edit would. A rejected repair leaves
-/// the drawing as it is.
-fn settle(doc: &mut Document) {
-    let before = doc.clone();
-    let _ = reshiki::transaction::reconcile(doc, before);
 }
 
 #[cfg(test)]

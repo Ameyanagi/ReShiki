@@ -147,17 +147,17 @@ fn document_replacement_rejects_old_labels_even_with_reused_ids_and_revision() {
     assert!(app.tab.chemistry_notice.is_none());
 }
 
-/// An atom about to become O, with a curved arrow attached to it.
-fn arrow_fixture() -> (App, u64) {
+#[test]
+fn the_first_camera_edit_after_labels_land_reconciles_as_before() {
+    use crate::canvas::Edit;
     use reshiki::arrow_anchors::{Anchor, Target};
     use reshiki::arrows::{ArrowStyle, Preset};
     use reshiki::document::Arrow;
     let (mut app, oxygen) = fixture();
     let target = app.tab.doc.add_atom("C", Point::new(200., -140.));
-    let start = Point::new(42., 0.);
     let mut arrow = Arrow::new(
         app.tab.doc.next_id(),
-        start,
+        Point::new(42., 0.),
         Point::new(200., -140.),
         Preset::Curved,
         ArrowStyle::preset(Preset::Curved),
@@ -175,91 +175,25 @@ fn arrow_fixture() -> (App, u64) {
         gap: 0.,
     });
     app.tab.doc.arrows.push(arrow);
-    (app, oxygen)
-}
-
-#[test]
-fn new_hydrogens_push_attached_arrows_clear_without_an_edit() {
-    let (mut app, oxygen) = arrow_fixture();
     let _ = app.update(Message::ContextKey("o".into()));
     let key = app.tab.label_refresh.pending.unwrap();
-    app.tab.saved = app.tab.doc.clone();
-    let undo = app.tab.history.undo_frames().count();
-    let before = app.tab.doc.arrows[0].start;
     let labels = compute(&app);
     let _ = app.update(Message::LabelsReady(key, labels));
     assert_eq!(app.tab.doc.atom(oxygen).unwrap().label_h, 1);
-    let mut repaired = app.tab.doc.clone();
-    reshiki::arrow_anchors::reconcile(&mut repaired);
-    assert_eq!(
-        app.tab.doc.arrows, repaired.arrows,
-        "Arrow clears the new H"
-    );
-    assert!(app.tab.doc.arrows[0].start.distance(before) > 1.);
-    assert_eq!(app.tab.revision, key.revision);
-    assert_eq!(app.tab.history.undo_frames().count(), undo);
-    assert!(!app.dirty(), "Repairing computed geometry is not an edit");
-}
-
-#[test]
-fn a_save_started_before_new_hydrogens_leaves_the_drawing_saved() {
-    let (mut app, _) = arrow_fixture();
-    let _ = app.update(Message::ContextKey("o".into()));
-    let key = app.tab.label_refresh.pending.unwrap();
-    // Save As starts and its dialog stays open while the labels arrive.
-    let snapshot = Box::new(app.tab.doc.clone());
-    let labels = compute(&app);
-    let _ = app.update(Message::LabelsReady(key, labels));
-    let _ = app.file_saved(app.tab.file_epoch, snapshot, Ok(Some("saved.rsk".into())));
-    assert!(!app.dirty(), "The saved drawing differs only by the repair");
-    // An edit made while the dialog was open still needs saving.
-    let snapshot = Box::new(app.tab.doc.clone());
-    let _ = app.update(Message::ContextKey("n".into()));
-    let _ = app.file_saved(app.tab.file_epoch, snapshot, Ok(Some("saved.rsk".into())));
-    assert!(app.dirty());
-}
-
-#[test]
-fn an_edit_undone_after_a_save_that_spanned_new_hydrogens_is_saved() {
-    let (mut app, _) = arrow_fixture();
-    let _ = app.update(Message::ContextKey("o".into()));
-    let key = app.tab.label_refresh.pending.unwrap();
-    let snapshot = Box::new(app.tab.doc.clone());
-    let labels = compute(&app);
-    let _ = app.update(Message::LabelsReady(key, labels));
-    // Recolor the arrow while the write is still pending.
-    let before = app.tab.doc.clone();
-    if let Some(style) = &mut app.tab.doc.arrows[0].style {
-        style.color = reshiki::palette::Color::Custom([200, 0, 0]);
-    }
-    app.changed(before);
-    let _ = app.file_saved(app.tab.file_epoch, snapshot, Ok(Some("saved.rsk".into())));
-    assert!(app.dirty(), "The recolor was not saved");
-    let _ = app.update(Message::Undo);
-    assert!(!app.dirty(), "Undo returns to the saved drawing");
-}
-
-#[test]
-fn new_hydrogens_during_a_cancelled_caption_draft_leave_the_drawing_saved() {
-    use crate::app::inline_text::Action as Inline;
-    let (mut app, _) = arrow_fixture();
-    let _ = app.update(Message::ContextKey("o".into()));
-    let key = app.tab.label_refresh.pending.unwrap();
-    let snapshot = Box::new(app.tab.doc.clone());
-    let _ = app.file_saved(app.tab.file_epoch, snapshot, Ok(Some("saved.rsk".into())));
-    assert!(!app.dirty());
-    let _ = app.update(Message::InlineText(Inline::Begin(
-        None,
-        Point::new(0., 80.),
-    )));
-    let _ = app.update(Message::InlineText(Inline::ReplaceText("draft".into())));
-    assert!(app.dirty(), "The draft is unsaved");
-    let labels = compute(&app);
-    let _ = app.update(Message::LabelsReady(key, labels));
-    let _ = app.update(Message::InlineText(Inline::Finish(false)));
-    assert!(app.tab.inline_text.is_none());
-    assert!(
-        !app.dirty(),
-        "Cancelling the draft leaves the saved drawing"
-    );
+    let stale = app.tab.doc.arrows[0].start;
+    let mut expected = app.tab.doc.clone();
+    reshiki::arrow_anchors::reconcile(&mut expected);
+    // As every pan did before: the edit pipeline moves the arrow clear of H.
+    app.edit(Edit::Pan(3., -2.));
+    assert_eq!(app.tab.doc.arrows, expected.arrows);
+    assert!(app.tab.doc.arrows[0].start.distance(stale) > 1.);
+    assert!(!app.tab.labels_unsettled);
+    // Later camera edits skip the pipeline again.
+    let (doc, revision) = (app.tab.doc.clone(), app.tab.revision);
+    let frames = app.tab.history.undo_frames().count();
+    app.edit(Edit::Pan(3., -2.));
+    app.edit(Edit::Zoom(1.1, Point::new(10., 10.)));
+    assert_eq!(app.tab.doc, doc);
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(app.tab.history.undo_frames().count(), frames);
 }
