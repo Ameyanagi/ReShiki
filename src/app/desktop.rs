@@ -163,7 +163,7 @@ impl App {
         self.in_tab(id, |app| {
             app.tab.office = None;
             app.tab.path = None;
-            app.tab.saved = reshiki::document::Document::default();
+            app.tab.mark_saved(Default::default());
             app.begin_file_epoch();
             app.request_autosave();
             app.status = LOST_PROXY_STATUS.into();
