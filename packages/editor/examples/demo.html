@@ -1,0 +1,266 @@
+<!doctype html>
+<!-- The reshiki.com/demo/ page: the editor with a loading screen, a note that
+     it is a preview of the desktop app, and a notice on phones.
+     scripts/package_web_demo.sh publishes it as demo/index.html. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ReShiki editor</title>
+    <meta
+      name="description"
+      content="Try ReShiki in the browser: draw molecules and reaction schemes with the desktop app's editor, built for the web. Files stay on your computer."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ReShiki" />
+    <meta property="og:title" content="ReShiki editor in the browser" />
+    <meta
+      property="og:description"
+      content="Draw molecules and reaction schemes with the ReShiki editor, built for the web."
+    />
+    <meta property="og:url" content="https://reshiki.com/demo/" />
+    <meta property="og:image" content="https://reshiki.com/brand/promotion-light.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="ReShiki — Chemical drawing, reinvented." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- Fetch the modules and the WebAssembly at once instead of one after the
+         other. Phones wait for "Continue anyway" before downloading. -->
+    <link rel="modulepreload" href="../src/editor.js" />
+    <link rel="modulepreload" href="../src/fonts.js" />
+    <link rel="modulepreload" href="../dist/editor/reshiki.js" />
+    <link
+      id="demo-wasm"
+      rel="preload"
+      as="fetch"
+      crossorigin
+      media="(min-width: 601px)"
+      href="../dist/editor/reshiki_bg.wasm"
+      data-bytes="0"
+    />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #fff;
+        color: #202124;
+        font:
+          14px/1.45 system-ui,
+          sans-serif;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+      }
+      a {
+        color: #c2410c;
+      }
+      button {
+        font: inherit;
+        cursor: pointer;
+      }
+      /* A banner that takes its own row, so it never covers the editor. */
+      #demo-notice {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 3px 8px 3px 16px;
+        background: #fff4ed;
+        border-bottom: 1px solid #f3d3c2;
+        font-size: 13px;
+      }
+      #demo-notice[hidden] {
+        display: none;
+      }
+      #demo-notice button {
+        border: 0;
+        background: none;
+        color: inherit;
+        font-size: 16px;
+        line-height: 1;
+        padding: 2px 6px;
+      }
+      main {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+      }
+      #editor {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+      #demo-loading {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        background: #fff;
+        text-align: center;
+      }
+      #demo-loading[hidden] {
+        display: none;
+      }
+      #demo-loading > div {
+        max-width: 360px;
+      }
+      #demo-loading h1 {
+        margin: 0 0 12px;
+        font-size: 20px;
+        font-weight: 600;
+      }
+      #demo-loading p {
+        margin: 8px 0;
+      }
+      #demo-loading progress {
+        width: 100%;
+        accent-color: #ea580c;
+      }
+      #demo-loading .demo-small {
+        color: #5f6368;
+        font-size: 13px;
+      }
+      #demo-loading .demo-error {
+        color: #b3261e;
+      }
+      #demo-loading .demo-actions button {
+        padding: 6px 14px;
+        border: 1px solid #dadce0;
+        border-radius: 6px;
+        background: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="demo-notice" role="note" hidden>
+      <span>
+        Browser preview, not the full app. For the complete ReShiki,
+        <a href="https://reshiki.com/guide/install/" target="_blank" rel="noopener"
+          >download the desktop app</a
+        >.
+      </span>
+      <button type="button" aria-label="Close">×</button>
+    </div>
+    <main>
+      <div id="editor"></div>
+      <div id="demo-loading" role="status">
+        <div>
+          <h1>ReShiki</h1>
+          <noscript><p>The editor needs JavaScript.</p></noscript>
+          <div id="demo-phone" hidden>
+            <p>
+              ReShiki is made for a computer: on a phone its panels leave no room to draw, and the
+              first visit downloads about 9 MB.
+            </p>
+            <p class="demo-actions"><button type="button">Continue anyway</button></p>
+          </div>
+          <div id="demo-progress" hidden>
+            <progress></progress>
+            <p class="demo-small">Loading the editor…</p>
+          </div>
+          <div id="demo-failed" hidden>
+            <p class="demo-error"></p>
+            <p class="demo-actions"><button type="button">Reload</button></p>
+            <p class="demo-small">
+              Or
+              <a href="https://reshiki.com/guide/install/">download the desktop app</a>.
+            </p>
+          </div>
+        </div>
+      </div>
+    </main>
+    <script>
+      {
+        const key = "reshiki-demo-notice-closed";
+        const notice = document.getElementById("demo-notice");
+        let closed = false;
+        try {
+          closed = localStorage.getItem(key) === "1";
+        } catch {}
+        notice.hidden = closed;
+        notice.querySelector("button").addEventListener("click", () => {
+          notice.remove();
+          try {
+            localStorage.setItem(key, "1");
+          } catch {}
+        });
+      }
+    </script>
+    <script type="module">
+      const wasm = document.getElementById("demo-wasm");
+      const loading = document.getElementById("demo-loading");
+      const phone = document.getElementById("demo-phone");
+      const progress = document.getElementById("demo-progress");
+      const bar = progress.querySelector("progress");
+      const label = progress.querySelector("p");
+      const failed = document.getElementById("demo-failed");
+      const megabytes = (bytes) => (bytes / 1e6).toFixed(1);
+
+      // The WebAssembly as a Response that reports its progress as it streams.
+      // The packaged page knows the file's size; a compressed response's
+      // Content-Length is smaller than what the stream delivers.
+      async function download(url) {
+        const response = await fetch(url);
+        if (!response.ok)
+          throw new Error(`Downloading the editor failed (HTTP ${response.status}).`);
+        const total = Number(wasm.dataset.bytes) || Number(response.headers.get("content-length"));
+        let received = 0;
+        const counted = response.body.pipeThrough(
+          new TransformStream({
+            transform(chunk, controller) {
+              received += chunk.byteLength;
+              if (total) bar.value = Math.min(received / total, 1);
+              label.textContent = total
+                ? `Downloading the editor… ${megabytes(received)} of ${megabytes(total)} MB`
+                : `Downloading the editor… ${megabytes(received)} MB`;
+              if (total && received >= total) label.textContent = "Starting the editor…";
+              controller.enqueue(chunk);
+            },
+          }),
+        );
+        return new Response(counted, { headers: { "Content-Type": "application/wasm" } });
+      }
+
+      async function start() {
+        phone.hidden = true;
+        progress.hidden = false;
+        try {
+          if (!("gpu" in navigator) && !document.createElement("canvas").getContext("webgl2")) {
+            throw new Error(
+              "This browser has neither WebGPU nor WebGL 2, which the editor draws with. Try a current Chrome, Edge, Firefox or Safari.",
+            );
+          }
+          const [{ mount }, module] = await Promise.all([
+            import("../src/editor.js"),
+            download(wasm.href),
+          ]);
+          // The page's title follows the drawing's, as the desktop window's does.
+          window.editor = await mount(document.getElementById("editor"), { module, title: true });
+          loading.remove();
+        } catch (error) {
+          console.error(error);
+          progress.hidden = true;
+          failed.hidden = false;
+          failed.querySelector("p").textContent =
+            `ReShiki could not start. ${error instanceof Error ? error.message : error}`;
+        }
+      }
+
+      failed.querySelector("button").addEventListener("click", () => location.reload());
+      if (matchMedia(wasm.media).matches) {
+        start();
+      } else {
+        phone.hidden = false;
+        phone.querySelector("button").addEventListener("click", start);
+      }
+    </script>
+  </body>
+</html>
