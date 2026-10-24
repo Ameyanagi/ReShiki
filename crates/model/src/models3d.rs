@@ -2395,8 +2395,8 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     // Overlapping balls show only what lies in front, with seams between,
     // once the model stops turning. A morph keeps them: they hide the
     // hydrogens growing out of their atoms.
-    let mut contacts = if matches!(style, Style::SpaceFilling | Style::BallStick) && !model.turning
-    {
+    let cut = !model.turning || grown < 1.;
+    let mut contacts = if matches!(style, Style::SpaceFilling | Style::BallStick) && cut {
         let atoms: Vec<usize> = items
             .iter()
             .filter_map(|(.., item)| match item {

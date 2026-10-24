@@ -1060,6 +1060,17 @@ fn a_turning_model_draws_whole_balls_until_let_go() {
     assert_eq!(format!("{:?}", primitives(&doc)), format!("{at_rest:?}"));
 }
 
+/// Turned during its opening morph, a ball & stick model keeps cutting its
+/// balls, so the hydrogens growing out of their atoms stay hidden.
+#[test]
+fn a_model_turned_while_it_morphs_keeps_its_contacts() {
+    let (mut doc, _) = styled(|m| m.morph = Some(0.25));
+    doc.models[0].rotation = turn(doc.models[0].rotation, 6., 0., false);
+    let still = format!("{:?}", primitives(&doc));
+    doc.models[0].turning = true;
+    assert_eq!(format!("{:?}", primitives(&doc)), still);
+}
+
 /// Contacts kept from earlier frames are the ones a fresh drawing works
 /// out, after edits elsewhere and as the model turns.
 #[test]
