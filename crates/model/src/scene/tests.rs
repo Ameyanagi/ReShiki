@@ -100,7 +100,9 @@ fn label_reach_bounds_label_ink_so_far_label_ends_still_hit() -> Result<(), Stri
             for (lo, hi) in atom_label_ink_boxes(atom, doc) {
                 for corner in [lo, hi, Point::new(lo.x, hi.y), Point::new(hi.x, lo.y)] {
                     assert!(
-                        atom.position.distance(corner) < reach.of(atom),
+                        reach
+                            .of(atom)
+                            .is_some_and(|r| atom.position.distance(corner) < r),
                         "Atom {} label ink beyond its reach",
                         atom.id
                     );
@@ -117,6 +119,34 @@ fn label_reach_bounds_label_ink_so_far_label_ends_still_hit() -> Result<(), Stri
     let point = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
     assert!(atom.position.distance(point) > 20. * STYLE.font_size());
     assert_eq!(atom_label_hit(&long, point, 0.), Some(id));
+    Ok(())
+}
+
+#[test]
+fn label_reach_covers_fonts_with_glyphs_wider_than_two_ems() -> Result<(), String> {
+    // STIXSizeFiveSym ships with macOS; its underscore is three ems wide.
+    let family = "STIXSizeFiveSym";
+    if !crate::style::font_families().contains(&family) {
+        return Ok(());
+    }
+    let mut doc = Document::default();
+    let id = doc.add_atom("*", Point::default());
+    doc = crate::atom_text::apply(&doc, id, &"_".repeat(32), crate::atom_text::Mode::Text)?;
+    let atom = doc.atom_mut(id).ok_or("Atom")?;
+    atom.display.label_attachment = crate::atom_labels::LabelAttachment::Left;
+    atom.text_style = Some(crate::typography::TextStyle {
+        family: family.into(),
+        size_pt: 10.,
+        ..Default::default()
+    });
+    let atom = doc.atom(id).ok_or("Atom")?;
+    let (lo, hi) = atom_label_ink_boxes(atom, &doc)
+        .into_iter()
+        .max_by(|a, b| a.1.x.total_cmp(&b.1.x))
+        .ok_or("Label ink")?;
+    assert!(hi.x < atom.position.x + LabelReach::new(&doc).of(atom).unwrap_or(f32::INFINITY));
+    let point = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+    assert_eq!(atom_label_hit(&doc, point, 0.), Some(id));
     Ok(())
 }
 

@@ -175,6 +175,10 @@ pub fn add_font(bytes: Vec<u8>) -> Result<usize, String> {
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .clear();
+    GLYPH_REACH
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clear();
     Ok(faces)
 }
 
@@ -329,6 +333,55 @@ pub fn glyph_metrics(c: char, style: &crate::typography::TextStyle) -> GlyphMetr
         cache.insert(key, result);
     }
     result
+}
+
+static GLYPH_REACH: LazyLock<Mutex<HashMap<String, Option<f32>>>> = LazyLock::new(Default::default);
+
+/// An upper bound, in ems, on any glyph's advance and ink extent in a label
+/// set in `family`, counting the fallback faces its missing glyphs come from.
+/// `None` when a face has variation axes: its instances can be wider.
+pub fn label_glyph_reach(family: &str) -> Option<f32> {
+    if let Ok(cache) = GLYPH_REACH.lock()
+        && let Some(reach) = cache.get(family)
+    {
+        return *reach;
+    }
+    let fonts = fonts();
+    // Glyphs no face has are measured 0.6 em wide and 1 em tall.
+    let mut reach = Some(1f32);
+    for name in fallback_families(family, &fonts) {
+        for face in fonts.db.faces() {
+            if !face.families.iter().any(|(n, _)| n == name) {
+                continue;
+            }
+            let extent = fonts
+                .db
+                .with_face_data(face.id, |bytes, index| {
+                    let face = ttf_parser::Face::parse(bytes, index).ok()?;
+                    if face.is_variable() {
+                        return None;
+                    }
+                    let advance = (0..face.number_of_glyphs())
+                        .filter_map(|g| face.glyph_hor_advance(ttf_parser::GlyphId(g)))
+                        .max()
+                        .unwrap_or(0);
+                    let abs = |v: i16| i32::from(v).unsigned_abs();
+                    let b = face.global_bounding_box();
+                    // Ink is placed from the ascent down, as in `text_ink_shapes`.
+                    let ink = abs(b.x_min)
+                        .max(abs(b.x_max))
+                        .max(abs(face.ascender()) + abs(b.y_min).max(abs(b.y_max)));
+                    Some(u32::from(advance).max(ink) as f32 / f32::from(face.units_per_em()))
+                })
+                .flatten();
+            reach = reach.zip(extent).map(|(r, e)| r.max(e));
+        }
+    }
+    drop(fonts);
+    if let Ok(mut cache) = GLYPH_REACH.lock() {
+        cache.insert(family.to_owned(), reach);
+    }
+    reach
 }
 
 type InkBox = (crate::document::Point, crate::document::Point);
