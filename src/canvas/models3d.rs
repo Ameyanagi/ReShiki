@@ -12,7 +12,7 @@ use std::ops::ControlFlow;
 use std::time::Duration;
 
 mod tiles;
-pub(super) use tiles::{draw, is_model};
+pub(super) use tiles::{begin, draw, end, is_model};
 
 /// Screen pixels inside a frame's edge that still move the model.
 const EDGE_PX: f32 = 8.;

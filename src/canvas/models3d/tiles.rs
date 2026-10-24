@@ -14,12 +14,16 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 /// Device pixels per logical pixel: Retina exactly, downsampled on 1× screens.
 const OVERSAMPLE: f32 = 2.;
+/// Device pixels per logical pixel while a model turns or morphs: a quarter
+/// of the pixels to render, sharp again once it stops.
+const TURNING: f32 = 1.;
 /// Tile side in device pixels, on a grid fixed to the drawing so a pan
 /// reuses its tiles. Iced uploads images of 2 MB or more on a worker and
 /// skips them until then, so a new zoom would flash blank.
 const TILE: i64 = 512;
-/// Tile pixels kept for redraws, pans and zoom steps back.
-const BUDGET: usize = 128 << 20;
+/// Tile pixels kept for redraws, pans and zoom steps back: a little more than
+/// a 5K screen.
+const BUDGET: usize = 64 << 20;
 /// Drawing units around each primitive's bounds: its outline and edge.
 const MARGIN: f32 = 1.;
 
@@ -62,6 +66,26 @@ impl Cache {
 
 thread_local! {
     static TILES: RefCell<Cache> = RefCell::default();
+    static SAMPLES: std::cell::Cell<f32> = const { std::cell::Cell::new(OVERSAMPLE) };
+}
+
+/// Set up the paper's next frame of `doc`: models render coarser while one
+/// turns or morphs, and with none drawn in 3D the tiles are let go.
+pub(in crate::canvas) fn begin(doc: &reshiki::document::Document) {
+    use reshiki::models3d::Display;
+    let moving = doc
+        .models
+        .iter()
+        .any(|m| m.turning || m.morph.is_some_and(|t| t < 1.));
+    SAMPLES.set(if moving { TURNING } else { OVERSAMPLE });
+    if doc.models.iter().all(|m| m.display == Display::TwoD) {
+        TILES.take();
+    }
+}
+
+/// End the paper's frame: other drawings render sharp.
+pub(in crate::canvas) fn end() {
+    SAMPLES.set(OVERSAMPLE);
 }
 
 /// A model primitive, or one fading in during the 2D → 3D morph.
@@ -159,7 +183,7 @@ fn key(primitive: &Primitive, hasher: &mut DefaultHasher) {
 }
 
 fn plan(run: &[Primitive], camera: Camera, bounds: Rectangle) -> Vec<Tile> {
-    let scale = camera.zoom * OVERSAMPLE;
+    let scale = camera.zoom * SAMPLES.get();
     let device = |p: World| [p.x * scale, p.y * scale];
     // A contour strokes every bond's outline at once; each polygon is its own
     // part so a tile copies and renders only the outlines reaching it.
@@ -237,7 +261,8 @@ pub(in crate::canvas) fn draw(
     bounds: Rectangle,
     opacity: f32,
 ) {
-    let scale = camera.zoom * OVERSAMPLE;
+    let oversample = SAMPLES.get();
+    let scale = camera.zoom * oversample;
     let tiles = plan(run, camera, bounds);
     let Some([ox, oy, ..]) = tiles.first().map(|tile| tile.rect) else {
         return;
@@ -247,10 +272,10 @@ pub(in crate::canvas) fn draw(
     let world = |x: i64, y: i64| World::new(x as f32 / scale, y as f32 / scale);
     let anchor = camera.screen(world(ox, oy), bounds);
     let anchor = Point::new(
-        (anchor.x * OVERSAMPLE).round() / OVERSAMPLE,
-        (anchor.y * OVERSAMPLE).round() / OVERSAMPLE,
+        (anchor.x * oversample).round() / oversample,
+        (anchor.y * oversample).round() / oversample,
     );
-    let logical = |v: i64| v as f32 / OVERSAMPLE;
+    let logical = |v: i64| v as f32 / oversample;
     frame.split();
     for tile in tiles {
         let [x0, y0, x1, y1] = tile.rect;
