@@ -190,7 +190,7 @@ it.
 
 ### What the browser editor leaves out
 
-- Naming and NMR prediction are not available yet. 3D models and 3D
+- Naming is not available yet. NMR prediction works. 3D models and 3D
   optimization work, but pause the page while they compute. The assistant
   panel only points to the desktop app, Check for updates does not apply (the
   page updates the editor), and printing, Office and LibreOffice integration
