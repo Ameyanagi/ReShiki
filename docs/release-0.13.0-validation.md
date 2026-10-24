@@ -54,7 +54,8 @@ The maintainer runs these on a manual **Release builds** run of the merged
       drawing.
 - [ ] **Browser demo:** a demo built with `scripts/build_wasm.sh` and
       `scripts/package_web_demo.sh` loads in Chrome, Safari and Firefox, draws,
-      copies and pastes, opens and saves a file and shows a 3D model.
+      copies and pastes, opens and saves a file, shows a 3D model, converts a
+      name with **Import → Name** and predicts NMR.
 - [ ] **npm package:** the package built by the release workflow passes its
       tests; after publication `@ameyanagi/reshiki@0.13.0` is `latest`.
 - [ ] **Compatibility:** a drawing saved by 0.13.0 is refused by 0.12.1 with the

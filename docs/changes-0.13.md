@@ -5,9 +5,10 @@ and space-filling) beside or in place of their drawings, and opens crystal
 structures from CIF, PDB, POSCAR and XYZ files with their unit cell. The full
 editor now also runs in a web browser, as a preview on
 [reshiki.com/demo](https://reshiki.com/demo/) and as the `@ameyanagi/reshiki`
-npm package. Typing groups, the command palette and many drawing details work
-better. Installed applications still work on your computer without Python,
-RDKit or uv.
+npm package, with naming and NMR prediction. Typing groups, the command
+palette and many drawing details work better, and large drawings pan, zoom,
+edit and export much faster. Installed applications still work on your
+computer without Python, RDKit or uv.
 
 ## File compatibility
 
@@ -25,9 +26,12 @@ keep a copy saved by 0.12.
 - Open CIF, PDB, POSCAR/CONTCAR and XYZ crystal files. They open as 2D drawings
   with their unit cell, and can repeat cells and look along an axis.
 - Try the editor in your browser at [reshiki.com/demo](https://reshiki.com/demo/),
-  or embed it in your own page with `bun add @ameyanagi/reshiki`.
+  or embed it in your own page with `bun add @ameyanagi/reshiki`. Naming and
+  NMR prediction work there too.
 - Type 359 group abbreviations, define your own, and run any command from the
   command palette (**:**).
+- Pan, zoom, hover, edit, copy and export large drawings much faster, with
+  less memory for Undo and long stereo chains.
 
 Previous release: [ReShiki 0.12.0](changes-0.12.md). The changes below keep
 their contributor credits and links to their issues and reviews.
@@ -148,12 +152,73 @@ their contributor credits and links to their issues and reviews.
 - **Browser preview.** The full editor runs in the browser (WebGPU, with WebGL2
   as a fallback) at [reshiki.com/demo](https://reshiki.com/demo/), linked from
   the home page and the install guide. It is a preview, not the full app:
-  naming, NMR prediction, the assistant, printing and Office integration need
-  the desktop app, and 3D models pause the page while they are computed. Your
-  files stay on your computer. The first load downloads about 8 MB, and
-  Japanese, Korean or Chinese text may download a font from jsDelivr.
+  naming and NMR prediction work, but printing, the assistant and Office
+  integration need the desktop app, and 3D models pause the page while they
+  are computed. Your files stay on your computer. The first load downloads
+  about 8 MB, and Japanese, Korean or Chinese text may download a font from
+  jsDelivr.
   [Install guide](https://reshiki.com/guide/install/#try-it-in-your-browser) ·
   [Issue #405](https://github.com/Ameyanagi/ReShiki/issues/405) · @Ameyanagi.
+- **The demo page shows its progress.** [reshiki.com/demo](https://reshiki.com/demo/)
+  shows a progress bar while the editor downloads, and a message with a
+  **Reload** button and a desktop-app link when the browser has neither WebGPU
+  nor WebGL 2 or the download fails. The editor's JavaScript and WebAssembly
+  download together instead of one after the other. On a phone the page says
+  ReShiki is made for a computer and downloads nothing until you choose
+  **Continue anyway**. The "Browser preview" note is a banner above the editor
+  instead of floating over the canvas, menus and status bar, and the page has a
+  favicon, a description and a link preview.
+  [PR #461](https://github.com/Ameyanagi/ReShiki/pull/461) ·
+  [Issues #433](https://github.com/Ameyanagi/ReShiki/issues/433),
+  [#434](https://github.com/Ameyanagi/ReShiki/issues/434) · @Ameyanagi.
+- **Name ↔ structure conversion.** **Import → Name** and **Generate selected
+  name** work in the browser editor instead of saying "Naming is not available
+  in the browser yet". The OPSIN Rust port and naming rules run in the editor's
+  own Web Worker and WebAssembly module (`dist/worker/`, 2.3 MB gzipped),
+  loaded on the first conversion, so drawing and typing carry on while a name
+  is read. As on the desktop, a request stops after 15 seconds and its heap is
+  capped at 96 MiB, and the next request starts a new worker. The parser's
+  resources also take less memory, on the desktop too: 7.5 MiB instead of
+  33.8 MiB after loading.
+  [Package README](https://github.com/Ameyanagi/ReShiki/tree/main/packages/editor#naming) ·
+  [PR #471](https://github.com/Ameyanagi/ReShiki/pull/471) ·
+  [Issue #430](https://github.com/Ameyanagi/ReShiki/issues/430) · @Ameyanagi.
+- **NMR prediction.** **Predict NMR** (the Predict tab, **Properties → Predict
+  NMR…** and the command palette) predicts ¹H and ¹³C shifts in the browser
+  editor, with the same bundled data and report as the desktop app, instead of
+  saying it needs the desktop app. The prediction runs on the page's own
+  thread, so the page pauses while it runs, at most about 3 seconds; the busy
+  state shows first.
+  [PR #465](https://github.com/Ameyanagi/ReShiki/pull/465) ·
+  [Issue #430](https://github.com/Ameyanagi/ReShiki/issues/430) · @Ameyanagi.
+- **Only what the browser can run.** The **Assistant** button, the command
+  palette's **AI assistant** and **Assistant panel**, and **Print…** with
+  Cmd/Ctrl+P no longer appear in the browser editor, since each only said it
+  needs the desktop app. Clicking the ReShiki logo opens **About ReShiki** with
+  the version and a **Get the desktop app ↗** link instead of an update check
+  that always failed.
+  [PR #469](https://github.com/Ameyanagi/ReShiki/pull/469) ·
+  [Issue #434](https://github.com/Ameyanagi/ReShiki/issues/434) · @Ameyanagi.
+- **The npm editor recovers and reports errors.** After the editor's
+  WebAssembly fails to download once, the next `mount()` tries again instead of
+  failing until the page is reloaded. A `<reshiki-editor src>` that answers
+  with an HTTP error, such as a 404 page, fires `error` with
+  `Could not load <src>: HTTP 404` instead of reading the page as a drawing. On a page whose
+  Content-Security-Policy keeps `style-src` strict, the editor fills its
+  element instead of shrinking to a 300×150 canvas, and the package README
+  lists what the editor needs.
+  [Package README](https://github.com/Ameyanagi/ReShiki/tree/main/packages/editor#readme) ·
+  [PR #468](https://github.com/Ameyanagi/ReShiki/pull/468) ·
+  [Issue #431](https://github.com/Ameyanagi/ReShiki/issues/431) · @Ameyanagi.
+- **Docs match the browser editor.** The npm README, the install guide and the
+  home page no longer say that 3D needs the desktop app (3D models work but
+  pause the page while they compute), that drawing styles, themes, templates
+  and pictures cannot be loaded from files, that Insert cannot insert files,
+  that copy and paste carry text only or that there are no recovery drafts.
+  All three say that naming and NMR prediction work in the browser editor.
+  [Install guide](https://reshiki.com/guide/install/#try-it-in-your-browser) ·
+  [PR #460](https://github.com/Ameyanagi/ReShiki/pull/460) ·
+  [Issue #434](https://github.com/Ameyanagi/ReShiki/issues/434) · @Ameyanagi.
 - **`@ameyanagi/reshiki` on npm.** `bun add @ameyanagi/reshiki` installs the
   editor for your own page: `mount(element)` with `load`, `save`,
   `exportImage`, `onChange` and `destroy`, a `<reshiki-editor>` element, and
@@ -265,6 +330,30 @@ their contributor credits and links to their issues and reviews.
   place it freely.
   [Chemical symbols](scientific-symbols.md#add-a-mark-to-an-atom) ·
   [Issue #387](https://github.com/Ameyanagi/ReShiki/issues/387) · @Ameyanagi.
+- **Automatic label alignment.** The Style bar's alignment menu offers
+  **Automatic**, **Left**, **Center**, **Right** and **Stacked above** when
+  atom or group labels are selected, with Automatic checked by default, as
+  ChemDraw's Text menu does. Automatic reads the label from its bonds (HO on a
+  left-pointing bond, OH on a right-pointing one, MeO and OMe), and choosing it
+  again returns a label forced to Left, Center or Right to automatic. It covers
+  element labels (Left reads OH, Right HO) and free text labels as well as
+  groups, and replaces the group-only **Auto / above** list. The **Edit atom
+  label** dialog gains an **Alignment** list, Automatic by default. Captions
+  keep Left / Center / Right / Justify.
+  [Chemical abbreviations](abbreviations.md) ·
+  [PR #466](https://github.com/Ameyanagi/ReShiki/pull/466) ·
+  [Issue #458](https://github.com/Ameyanagi/ReShiki/issues/458) · @Ameyanagi.
+- **The Text tool keeps and repeats labels.** Clicking or double-clicking
+  another atom while typing a label commits it, as Enter does, instead of
+  throwing it away, and so does a click anywhere else outside the label editor.
+  The Text tool stays active after a label is committed. Double-clicking
+  another atom, or Option/Alt-clicking it as in ChemDraw, puts the last label
+  on it at once without opening the editor, so OMe typed once can go on atom
+  after atom. Click an atom to change a repeated label. Each labelled atom is
+  its own Undo step, and Escape or switching tools forgets the label.
+  [Drawing tools](drawing-tools-validation.md) ·
+  [PR #467](https://github.com/Ameyanagi/ReShiki/pull/467) ·
+  [Issue #457](https://github.com/Ameyanagi/ReShiki/issues/457) · @Ameyanagi.
 
 ## Commands and drawing
 
@@ -305,8 +394,115 @@ their contributor credits and links to their issues and reviews.
   only between words, or next to CJK characters. `reshiki --version` prints the
   version and exits without opening a window.
   [PR #343](https://github.com/Ameyanagi/ReShiki/pull/343) · @Ameyanagi.
+- **Exports named after the drawing.** PNG, SVG, PDF and structure exports
+  suggest the saved drawing's name, such as `aspirin.png` for `aspirin.rsk`,
+  instead of always `Molecule.png`; an untitled drawing still suggests
+  `Molecule`. This applies to the desktop save dialog and to browser downloads.
+  In the browser editor, downloads carry their file type, and **Save** says
+  "Downloaded Untitled.rsk" instead of "Document saved".
+  [PR #463](https://github.com/Ameyanagi/ReShiki/pull/463) ·
+  [Issue #428](https://github.com/Ameyanagi/ReShiki/issues/428) · @Ameyanagi.
+
+## Performance
+
+Measured on the shortcut examples (483 atoms), or on those examples tiled 16
+times (7,700 atoms). Drawings, labels, files and exports look the same as
+before.
+
+- **Panning and zooming.** Scrolling, panning and zooming only move the view
+  instead of also running the whole edit pipeline (copying and comparing the
+  drawing, checking it and the Undo history) on every scroll tick, so they stay
+  smooth on drawings with thousands of atoms. They add no Undo step and leave
+  the drawing unchanged and saved; layout that depends on computed labels is
+  repaired as the labels land.
+  [PR #474](https://github.com/Ameyanagi/ReShiki/pull/474),
+  [#488](https://github.com/Ameyanagi/ReShiki/pull/488) · @Ameyanagi.
+- **Building the scene.** After an edit, the drawing's shapes look atoms and
+  bonds up in an index made once per build, instead of scanning the whole
+  drawing for every atom label, double bond, bond end and ring circle. A build
+  takes about 160 ms instead of 600 ms on 7,700 atoms, and about 21 ms instead
+  of 40 ms on 1,900 atoms.
+  [PR #485](https://github.com/Ameyanagi/ReShiki/pull/485) · @Ameyanagi.
+- **Redraws when zoomed in.** The canvas skips bonds, shapes, lines and label
+  halos that lie entirely outside the window before turning them into
+  triangles. Zoomed in on 7,700 atoms, drawing the scene takes about 1 ms
+  instead of 8–12 ms, with the same pixels on screen.
+  [PR #479](https://github.com/Ameyanagi/ReShiki/pull/479) · @Ameyanagi.
+- **Zooming text.** The canvas outlines text at quarter-octave zoom steps and
+  scales the small remainder, and a full text cache drops the outlines used
+  least recently instead of all of them. A zoom frame of the 483-atom examples
+  takes 1.5 ms instead of 11 ms and allocates 1.6 MB instead of 10 MB. At ½×,
+  1×, 2× and the other steps text draws pixel for pixel as before; between
+  steps, glyph edges can move by about one pixel.
+  [PR #482](https://github.com/Ameyanagi/ReShiki/pull/482) · @Ameyanagi.
+- **Hover.** Finding the atom label under the pointer, on every mouse move,
+  skips atoms whose labels cannot reach the pointer instead of laying out
+  every label. Each check takes about 1 ms or less instead of 0.7–1.0 s on
+  7,700 atoms, and 0.1–0.3 ms instead of 17–20 ms on 1,900 atoms.
+  [PR #473](https://github.com/Ameyanagi/ReShiki/pull/473) · @Ameyanagi.
+- **Edits with many group labels.** Moving or editing atoms in a drawing with
+  many collapsed groups (such as Boc, OTBS or CO2Et) no longer rescans every
+  bond and atom once per group. A move on 7,700 atoms with 256 group labels
+  commits in about 17 ms instead of 50 ms. Which groups stay collapsed is
+  unchanged.
+  [PR #481](https://github.com/Ameyanagi/ReShiki/pull/481) · @Ameyanagi.
+- **Unsaved-changes check.** The unsaved-changes dot in the window title and
+  tab strip compares the drawing with the saved one once per update instead of
+  three times, without copying every atom and bond: about 0.3 ms instead of
+  6.5 ms per update on 7,700 atoms. Undoing back to the saved drawing still
+  clears the dot.
+  [PR #475](https://github.com/Ameyanagi/ReShiki/pull/475) · @Ameyanagi.
+- **Undo memory.** Each tab's Undo history keeps at most about 128 MB of
+  drawing copies, dropping the oldest steps first but always keeping at least
+  twenty. Drawings of up to about 1,700 atoms keep all 100 steps as before; a
+  7,700-atom drawing keeps 22 steps in 122 MB instead of 100 steps in 553 MB.
+  Redo is unchanged.
+  [PR #472](https://github.com/Ameyanagi/ReShiki/pull/472) · @Ameyanagi.
+- **Copy and export.** Copying as PDF or a picture, and exporting PNG, PDF or
+  Office SVG, no longer loads and scans every installed font each time, and
+  the default label font (Arial) is read from disk once. A PDF of the 483-atom
+  examples takes about 40 ms instead of 350–550 ms, and of 7,700 atoms about
+  2.4 s instead of 8.5–11 s. The files are the same as before.
+  [PR #478](https://github.com/Ameyanagi/ReShiki/pull/478) · @Ameyanagi.
+- **Turning 3D models and crystal repeats.** While you turn or tilt a
+  space-filling or ball & stick model, its balls draw whole, back to front, at
+  screen resolution; seams and sharp Retina rendering return when you let go.
+  A dense 512-atom space-filling model turns at about 0.15–0.18 s per frame
+  instead of 0.6–1.6 s. Each model's seams and each crystal repeat's lighter
+  copies are kept, so an edit beside a 4 × 4 × 4 rock-salt repeat takes about
+  1 ms instead of 0.43–0.48 s. The canvas keeps at most 64 MB of rendered 3D
+  tiles instead of 128 MB, and none once no model is shown in 3D.
+  [PR #484](https://github.com/Ameyanagi/ReShiki/pull/484) · @Ameyanagi.
+- **2D layout of long chains and polymers.** Laying out a long chain or
+  polymer from SMILES, a name or a structure without coordinates is about
+  3–10× faster: polystyrene with 75 units takes 0.4 s instead of 2.8 s, and
+  poly-alanine with 200 units 0.4 s instead of 3.8 s. Polystyrene with 100
+  units now lays out instead of failing with "Depiction collision work or
+  storage limit exceeded", and a still larger molecule whose overlap repair
+  runs out of work keeps its layout before that repair instead of failing.
+  [PR #477](https://github.com/Ameyanagi/ReShiki/pull/477) · @Ameyanagi.
+- **R/S and E/Z labels on long stereo chains.** Stereo labelling keeps one
+  centre's ranking data at a time instead of all of them, so a chain with 300
+  stereocentres peaks at about 6 MB instead of 76 MB. Chains with 400 or more
+  centres, which failed with "CIP resource limit exceeded" and showed no
+  labels, are now labelled.
+  [PR #476](https://github.com/Ameyanagi/ReShiki/pull/476) · @Ameyanagi.
+- **Browser editor memory.** Fonts the browser editor keeps for later visits,
+  such as the Japanese and Korean fallbacks, stay in browser storage until text
+  needs them instead of being loaded into memory on every visit. With Noto Sans
+  JP and KR saved (9.2 MB), the editor starts in 41.4 MiB instead of 59.0 MiB.
+  The browser editor also drops the desktop worker allocator, so its
+  WebAssembly is 140 KB smaller. The desktop app is unchanged.
+  [PR #483](https://github.com/Ameyanagi/ReShiki/pull/483) · @Ameyanagi.
 
 ## Fixes
+
+- Curved arrows move clear of a new H or R/S or E/Z label, and a linked name
+  caption below a molecule clear of a new stereo label, as soon as the labels
+  appear instead of on the next edit, pan or zoom. The move belongs to the
+  edit, so one Undo still returns to the drawing before it, and opening a file
+  makes the same move without marking it as changed
+  ([#488](https://github.com/Ameyanagi/ReShiki/pull/488)).
 
 - Curved arrows keep their heads off bond lines, also after you aim their end,
   and clicking any visible stroke of a double or triple bond picks it as the
@@ -353,9 +549,9 @@ All fixes above are by @Ameyanagi.
 
 ## Known limits and pending checks
 
-- **Browser preview:** naming, NMR prediction, the assistant, printing and
-  Office integration need the desktop app. Long 3D generation, cleanups and
-  imports pause the page. Fonts installed on the computer are not listed
+- **Browser preview:** printing, the assistant and Office integration need
+  the desktop app. NMR prediction, long 3D generation, cleanups and imports
+  pause the page. Fonts installed on the computer are not listed
   without a permission prompt, so other fonts show a substitute.
 - **3D models:** a molecule with a link node or repeating unit can't be shown
   in 3D. A flip leaves a model alone, since a mirrored model would be the
