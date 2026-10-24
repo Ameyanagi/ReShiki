@@ -110,8 +110,8 @@ them, for thermal ellipsoids in a later version. Everything else in the file —
 bibliography, reflections, other data blocks, other XYZ properties or PDB
 records — is read past and not kept, so a saved drawing stays small.
 
-Saving a crystal needs document version 29. Every file is now saved as version
-29, so ReShiki versions that read up to 28 cannot open it.
+Saving a crystal needs document version 29. ReShiki 0.13.0 saves every file as
+version 29, so ReShiki 0.12.x and earlier cannot open it.
 
 ## Limits
 

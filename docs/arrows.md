@@ -46,8 +46,6 @@ keeps the link.
 
 ### Write conditions on an arrow
 
-Available in Nightly builds; not in ReShiki 0.12.0.
-
 1. Choose **Text** (`T`) and click above or below a straight arrow.
 2. Type the conditions and apply them. The text attaches to the arrow, centred
    on that side.

@@ -224,7 +224,7 @@ pub const CRYSTALS: u32 = 29;
 /// | 26 | Generic structures and coordination joining (#300; 0.12.0). |
 /// | 27 | Condition text attached to reaction arrows. |
 /// | 28 | 3D models of structures (#386). |
-/// | 29 | Crystal unit cells and atom sites on 3D models (#417). |
+/// | 29 | Crystal unit cells and atom sites on 3D models (#417; 0.13.0). |
 pub const VERSION: u32 = 29;
 
 fn newer_version(version: u64) -> String {

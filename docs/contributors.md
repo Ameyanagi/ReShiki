@@ -4,13 +4,13 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
-Under review: @Ameyanagi — searchable shortcut finder with live before/after
+Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).
 
-Merged for nightly builds: @Ameyanagi — Intel Mac panic recovery and native global-allocator
+Released in 0.13.0: @Ameyanagi — Intel Mac panic recovery and native global-allocator
 regression coverage in [PR #328](https://github.com/Ameyanagi/ReShiki/pull/328).
 
-Merged for nightly builds: @Ameyanagi — consistent Direct3D 12 Windows
+Released in 0.13.0: @Ameyanagi — consistent Direct3D 12 Windows
 startup and graphics diagnostics in [PR #327](https://github.com/Ameyanagi/ReShiki/pull/327).
 The [security investigation](release-0.12.0-windows-security.md) records the
 startup comparison and unresolved installer antivirus detections.
@@ -163,6 +163,10 @@ agent skill and the MOL and polymer fixes (released in 0.12.0): @Ameyanagi in
 
 Release preparation and documentation for 0.12.0: @Ameyanagi in [PR #320](https://github.com/Ameyanagi/ReShiki/pull/320).
 
-Public-download validation for 0.12.0: @Ameyanagi in [PR #324](https://github.com/Ameyanagi/ReShiki/pull/324) (under review).
+Public-download validation for 0.12.0: @Ameyanagi in [PR #324](https://github.com/Ameyanagi/ReShiki/pull/324).
 
-The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.12.md) credit contributors alongside their changes.
+Nix flake for Linux and Apple Silicon Macs (released in 0.13.0): @Stefanomarton in [PR #366](https://github.com/Ameyanagi/ReShiki/pull/366).
+
+Release preparation and documentation for 0.13.0: @Ameyanagi.
+
+The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.13.md) credit contributors alongside their changes.
