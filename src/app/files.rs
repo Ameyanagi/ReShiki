@@ -387,7 +387,7 @@ impl super::App {
         match result {
             Ok(Some(path)) => {
                 // Continue the save dialog's action only when nothing is left unsaved.
-                self.tab.saved = *snapshot;
+                self.tab.saved = self.settled_save(*snapshot);
                 if self
                     .tab
                     .office

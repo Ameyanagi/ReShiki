@@ -146,3 +146,75 @@ fn document_replacement_rejects_old_labels_even_with_reused_ids_and_revision() {
     assert_eq!(app.tab.doc.atom(id).unwrap().label_h, 0);
     assert!(app.tab.chemistry_notice.is_none());
 }
+
+/// An atom about to become O, with a curved arrow attached to it.
+fn arrow_fixture() -> (App, u64) {
+    use reshiki::arrow_anchors::{Anchor, Target};
+    use reshiki::arrows::{ArrowStyle, Preset};
+    use reshiki::document::Arrow;
+    let (mut app, oxygen) = fixture();
+    let target = app.tab.doc.add_atom("C", Point::new(200., -140.));
+    let start = Point::new(42., 0.);
+    let mut arrow = Arrow::new(
+        app.tab.doc.next_id(),
+        start,
+        Point::new(200., -140.),
+        Preset::Curved,
+        ArrowStyle::preset(Preset::Curved),
+    );
+    arrow.start_anchor = Some(Anchor {
+        target: Target::Atom { atom: oxygen },
+        offset: Point::default(),
+        direction: Point::new(0.75, -0.66),
+        gap: 0.,
+    });
+    arrow.end_anchor = Some(Anchor {
+        target: Target::Atom { atom: target },
+        offset: Point::default(),
+        direction: Point::new(-0.75, 0.66),
+        gap: 0.,
+    });
+    app.tab.doc.arrows.push(arrow);
+    (app, oxygen)
+}
+
+#[test]
+fn new_hydrogens_push_attached_arrows_clear_without_an_edit() {
+    let (mut app, oxygen) = arrow_fixture();
+    let _ = app.update(Message::ContextKey("o".into()));
+    let key = app.tab.label_refresh.pending.unwrap();
+    app.tab.saved = app.tab.doc.clone();
+    let undo = app.tab.history.undo_frames().count();
+    let before = app.tab.doc.arrows[0].start;
+    let labels = compute(&app);
+    let _ = app.update(Message::LabelsReady(key, labels));
+    assert_eq!(app.tab.doc.atom(oxygen).unwrap().label_h, 1);
+    let mut repaired = app.tab.doc.clone();
+    reshiki::arrow_anchors::reconcile(&mut repaired);
+    assert_eq!(
+        app.tab.doc.arrows, repaired.arrows,
+        "Arrow clears the new H"
+    );
+    assert!(app.tab.doc.arrows[0].start.distance(before) > 1.);
+    assert_eq!(app.tab.revision, key.revision);
+    assert_eq!(app.tab.history.undo_frames().count(), undo);
+    assert!(!app.dirty(), "Repairing computed geometry is not an edit");
+}
+
+#[test]
+fn a_save_started_before_new_hydrogens_leaves_the_drawing_saved() {
+    let (mut app, _) = arrow_fixture();
+    let _ = app.update(Message::ContextKey("o".into()));
+    let key = app.tab.label_refresh.pending.unwrap();
+    // Save As starts and its dialog stays open while the labels arrive.
+    let snapshot = Box::new(app.tab.doc.clone());
+    let labels = compute(&app);
+    let _ = app.update(Message::LabelsReady(key, labels));
+    let _ = app.file_saved(app.tab.file_epoch, snapshot, Ok(Some("saved.rsk".into())));
+    assert!(!app.dirty(), "The saved drawing differs only by the repair");
+    // An edit made while the dialog was open still needs saving.
+    let snapshot = Box::new(app.tab.doc.clone());
+    let _ = app.update(Message::ContextKey("n".into()));
+    let _ = app.file_saved(app.tab.file_epoch, snapshot, Ok(Some("saved.rsk".into())));
+    assert!(app.dirty());
+}
