@@ -380,8 +380,10 @@ where
                                         .canvas()
                                         .expect("Get window canvas");
 
-                                    let _ = canvas.set_attribute(
-                                        "style",
+                                    // Through CSSOM, which a strict
+                                    // Content-Security-Policy allows, unlike
+                                    // a style attribute.
+                                    canvas.style().set_css_text(
                                         "display: block; width: 100%; height: 100%",
                                     );
 
