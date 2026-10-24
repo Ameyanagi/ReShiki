@@ -1,21 +1,37 @@
 //! Resolve crossings at their actual XYZ intersection, with explicit layers
 //! taking precedence over automatic depth. Positive Z faces the viewer.
-use crate::document::{Bond, Document, Point};
+use crate::document::{Atom, Bond, Document, Point};
+use crate::scene::graph::Graph;
 
-pub(super) fn at(doc: &Document, bond: &Bond, t: f32) -> Option<f32> {
-    let a = doc.atom(bond.a)?.depth;
-    let b = doc.atom(bond.b)?.depth;
+/// Atoms by ID: a document's own search, or a scene's index of it.
+pub(super) trait Atoms {
+    fn atom(&self, id: u64) -> Option<&Atom>;
+}
+impl Atoms for Document {
+    fn atom(&self, id: u64) -> Option<&Atom> {
+        Document::atom(self, id)
+    }
+}
+impl Atoms for Graph<'_> {
+    fn atom(&self, id: u64) -> Option<&Atom> {
+        Graph::atom(self, id)
+    }
+}
+
+pub(super) fn at(atoms: &impl Atoms, bond: &Bond, t: f32) -> Option<f32> {
+    let a = atoms.atom(bond.a)?.depth;
+    let b = atoms.atom(bond.b)?.depth;
     Some(a + (b - a) * t)
 }
 
 // Early projected pi shortcuts assigned -1 to every contact. Recognize that
 // old default only against its own projected ligand; unrelated layers remain
 // explicit. New shortcuts use layer 0, and Send backward uses -2 or lower.
-pub(super) fn layer(doc: &Document, bond: &Bond, ring: &[u64], projected: bool) -> i16 {
+pub(super) fn layer(atoms: &impl Atoms, bond: &Bond, ring: &[u64], projected: bool) -> i16 {
     if bond.z_order == -1
         && projected
         && [bond.a, bond.b].iter().any(|id| {
-            doc.atom(*id).is_some_and(|a| {
+            atoms.atom(*id).is_some_and(|a| {
                 a.attachment == Some(crate::attachments::Kind::MultiCenter)
                     && ring.iter().all(|id| a.centroid.contains(id))
             })
@@ -28,13 +44,25 @@ pub(super) fn layer(doc: &Document, bond: &Bond, ring: &[u64], projected: bool) 
 }
 
 pub fn bond_over(doc: &Document, i: usize, t: f32, j: usize, u: f32) -> bool {
+    bond_over_with(doc, doc, i, t, j, u)
+}
+
+/// [`bond_over`] with `doc`'s atoms looked up in `atoms`.
+pub(super) fn bond_over_with(
+    doc: &Document,
+    atoms: &impl Atoms,
+    i: usize,
+    t: f32,
+    j: usize,
+    u: f32,
+) -> bool {
     let (Some(a), Some(b)) = (doc.bonds.get(i), doc.bonds.get(j)) else {
         return i > j;
     };
-    let za = layer(doc, a, &[b.a, b.b], b.projection);
-    let zb = layer(doc, b, &[a.a, a.b], a.projection);
+    let za = layer(atoms, a, &[b.a, b.b], b.projection);
+    let zb = layer(atoms, b, &[a.a, a.b], a.projection);
     if za == zb
-        && let Some(dz) = at(doc, a, t).zip(at(doc, b, u)).map(|(a, b)| a - b)
+        && let Some(dz) = at(atoms, a, t).zip(at(atoms, b, u)).map(|(a, b)| a - b)
         && dz.abs() > 0.001
     {
         return dz > 0.;
@@ -56,9 +84,7 @@ impl Plane {
     // still in f32. Area starts at 0 with area.max(0.001), versus 1e-6 there,
     // and residual limits are 0.01 here versus 0.001 after f32 rounding there.
     // These fits must remain separate to preserve output.
-    pub(super) fn fit(doc: &Document, ids: &[u64]) -> Option<Self> {
-        let atoms: Option<Vec<_>> = ids.iter().map(|id| doc.atom(*id)).collect();
-        let atoms = atoms?;
+    pub(super) fn fit(atoms: &[&Atom]) -> Option<Self> {
         let first = *atoms.first()?;
         let mut best = None;
         let mut area = 0_f32;
@@ -94,9 +120,7 @@ impl Plane {
     /// its tolerance. Without it, rear cage rings fall back to bond index
     /// order and can cut front bonds. A ring projected to a line keeps its
     /// mean depth; a ring without depth variation stays undecided.
-    pub(super) fn least_squares(doc: &Document, ids: &[u64]) -> Option<Self> {
-        let atoms: Option<Vec<_>> = ids.iter().map(|id| doc.atom(*id)).collect();
-        let atoms = atoms?;
+    pub(super) fn least_squares(atoms: &[&Atom]) -> Option<Self> {
         let n = atoms.len() as f32;
         if atoms.len() < 3 {
             return None;
@@ -110,7 +134,7 @@ impl Plane {
             return None;
         }
         let (mut xx, mut xy, mut yy, mut xz, mut yz) = (0., 0., 0., 0., 0.);
-        for a in &atoms {
+        for a in atoms {
             let (x, y, w) = (
                 a.position.x - origin.x,
                 a.position.y - origin.y,

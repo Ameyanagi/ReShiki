@@ -373,6 +373,7 @@ impl super::App {
         result: Result<Option<PathBuf>, String>,
     ) -> iced::Task<super::Message> {
         self.file_io.saving = false;
+        let snapshot = self.saved_snapshot(*snapshot);
         // The write still releases the serial save slot, but its dialog and
         // error belong to the document that started it.
         if epoch != self.tab.file_epoch {
@@ -387,7 +388,7 @@ impl super::App {
         match result {
             Ok(Some(path)) => {
                 // Continue the save dialog's action only when nothing is left unsaved.
-                self.tab.mark_saved(*snapshot);
+                self.tab.mark_saved(snapshot);
                 if self
                     .tab
                     .office
@@ -525,6 +526,7 @@ impl super::App {
         }
         let snapshot = std::sync::Arc::new(self.tab.doc.clone());
         let save_snapshot = std::sync::Arc::clone(&snapshot);
+        self.saving(&snapshot);
         let epoch = self.tab.file_epoch;
         Task::perform(
             async move {

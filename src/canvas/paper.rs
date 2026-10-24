@@ -10,7 +10,9 @@ mod placement;
 
 use super::render::{draw_document, draw_primitives};
 use super::smart_guides::Guide;
-use super::{Camera, MoleculeCanvas, State, World, layered, markers, pages, smart_guides};
+use super::{
+    Camera, MoleculeCanvas, State, World, layered, markers, models3d, pages, smart_guides,
+};
 use iced::{Color, Point, Rectangle, mouse};
 use reshiki::document::Document;
 use std::borrow::Cow;
@@ -51,6 +53,14 @@ impl MoleculeCanvas<'_> {
         reshiki::arrow_anchors::reconcile(&mut doc);
         reshiki::arrow_labels::reconcile(&mut doc, self.doc);
         doc
+    }
+
+    /// The drawing copy a model turn or morph shows.
+    #[cfg(test)]
+    pub(super) fn model_preview_document(&self, state: &State, bounds: Rectangle) -> Document {
+        let mut draft = Draft::new(self.doc);
+        self.preview_model(&mut draft, state, bounds);
+        draft.preview.into_owned()
     }
 
     pub(super) fn draw_paper(
@@ -108,6 +118,7 @@ impl MoleculeCanvas<'_> {
                     ..self.camera
                 }
             });
+        models3d::begin(&preview);
         if let Some(camera) = cached_camera {
             let (markers, scene) = state.scene.borrow_mut().render(self.doc, selected);
             markers.draw_with_nmr(frame, camera, bounds, true, &nmr_ids);
@@ -125,6 +136,7 @@ impl MoleculeCanvas<'_> {
         if let Some(drawing) = bond_preview {
             draw_document(frame, &drawing, self.camera, bounds);
         }
+        models3d::end();
         let nmr_cache = (cached_camera.is_some() && translation.is_none()).then_some(&state.scene);
         self.draw_nmr_assignments(frame, &preview, selected, bounds, nmr_cache);
         self.draw_editor_markers(frame, &preview, bounds);

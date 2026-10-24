@@ -187,6 +187,29 @@ fn a_double_click_restores_the_opening_view() {
     assert_eq!(rotation, opening);
 }
 
+/// The turned model draws quickly while dragged, and not before it turns.
+#[test]
+fn a_model_is_turning_only_while_the_drag_turns_it() {
+    let (doc, atoms) = drawing();
+    let canvas = canvas(&doc, &atoms);
+    let c = frame_center(&canvas);
+    let mut state = State::default();
+    let turning = |state: &State| {
+        canvas
+            .model_preview_document(state, BOUNDS)
+            .models
+            .iter()
+            .any(|m| m.turning)
+    };
+    send(&canvas, &mut state, moved(c));
+    send(&canvas, &mut state, PRESS);
+    assert!(!turning(&state));
+    send(&canvas, &mut state, moved(c + Vector::new(20., 6.)));
+    assert!(turning(&state));
+    send(&canvas, &mut state, RELEASE);
+    assert!(!turning(&state));
+}
+
 #[test]
 fn a_short_drag_inside_a_selected_model_is_a_click() {
     let (doc, atoms) = drawing();

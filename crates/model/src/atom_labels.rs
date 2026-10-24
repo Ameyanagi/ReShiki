@@ -983,6 +983,12 @@ pub fn clear_computed(doc: &mut Document) {
     crate::arrow_anchors::reconcile(doc);
 }
 pub fn refresh_computed(doc: &mut Document, checked: &Document) {
+    copy_computed(doc, checked);
+    crate::arrow_anchors::reconcile(doc);
+}
+/// Copies `checked`'s computed H counts and CIP labels by atom id and bond,
+/// without moving anything that depends on their ink.
+pub fn copy_computed(doc: &mut Document, checked: &Document) {
     let atoms: std::collections::HashMap<_, _> = checked.atoms.iter().map(|a| (a.id, a)).collect();
     let bonds: std::collections::HashMap<_, _> = checked
         .bonds
@@ -1000,7 +1006,6 @@ pub fn refresh_computed(doc: &mut Document, checked: &Document) {
             .get(&(b.a.min(b.b), b.a.max(b.b)))
             .and_then(|s| s.cip_label.clone());
     }
-    crate::arrow_anchors::reconcile(doc);
 }
 
 /// Slab clipping catches a bond crossing a label between sample points.

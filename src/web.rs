@@ -852,7 +852,7 @@ pub(crate) fn text_drawn(text: &str) {
         let missing =
             |c: char| !c.is_whitespace() && !c.is_control() && !reshiki::style::has_glyph(c);
         if text.chars().any(missing) {
-            let _ = send(Request::AddFonts(storage::take_kept()));
+            storage::read_kept();
         }
         return;
     }

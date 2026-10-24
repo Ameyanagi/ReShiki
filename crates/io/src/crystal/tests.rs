@@ -926,6 +926,27 @@ fn a_supercell_draws_lighter_copies_seams_and_bonds_between_cells() {
     assert!(doc.validate().is_err());
 }
 
+/// A supercell's copies kept from an earlier frame draw as a fresh drawing
+/// does, after an edit elsewhere and after one to the crystal.
+#[test]
+fn kept_supercell_copies_match_a_fresh_drawing() {
+    let (mut doc, _) = open("cif", NACL);
+    doc.models[0].repeat = [2, 2, 1];
+    let fresh = |doc: &Document| {
+        let doc = doc.clone();
+        std::thread::spawn(move || crate::scene::svg(&doc))
+            .join()
+            .unwrap()
+    };
+    let _ = crate::scene::svg(&doc);
+    doc.add_atom("C", Point::new(900., 900.));
+    assert_eq!(crate::scene::svg(&doc), fresh(&doc));
+    if let Some(atom) = doc.atoms.first_mut() {
+        atom.position = atom.position.offset(3., 2.);
+    }
+    assert_eq!(crate::scene::svg(&doc), fresh(&doc));
+}
+
 #[test]
 fn looking_along_an_axis_keeps_the_drawing_on_its_box() {
     use crate::models3d::{Along, look_along};

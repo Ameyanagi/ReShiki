@@ -115,11 +115,9 @@ impl App {
             }
             return;
         }
-        // Camera edits skip the document snapshot and edit pipeline on every
-        // wheel tick while the drawing is as the pipeline last left it. Once
-        // it changes (labels landing, Undo, opening), the next one runs it,
-        // as every camera edit did before.
-        if self.tab.settled == Some(self.tab.settle_key()) && self.move_camera(&edit) {
+        // Camera-only edits never touch the document, history or revision, so
+        // they skip the document snapshot and edit pipeline on every wheel tick.
+        if self.move_camera(&edit) {
             return;
         }
         let before = self.tab.doc.clone();
@@ -139,7 +137,9 @@ impl App {
             | Edit::BeginTransform(_)
             | Edit::EraseStart(_)
             | Edit::EraseTo(..)
-            | Edit::EraseEnd => return,
+            | Edit::EraseEnd
+            | Edit::Pan(..)
+            | Edit::Zoom(..) => return,
             Edit::ArrowClick(id) => self.apply_arrow_tool(id),
             Edit::Chain {
                 points,
@@ -289,9 +289,6 @@ impl App {
                 if !copy.is_empty() {
                     self.tab.selected = copy;
                 }
-            }
-            Edit::Pan(..) | Edit::Zoom(..) => {
-                self.move_camera(&edit);
             }
             Edit::PlaneBond(start, end) => return self.place_plane_bond(start, end, before),
             Edit::Bond(start, end, a, b) => return self.place_bond(start, end, a, b, before),

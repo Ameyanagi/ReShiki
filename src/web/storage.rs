@@ -8,29 +8,36 @@
 //! a Web Lock for it while open, so a new page offers only drafts of pages
 //! that have closed. Fonts the page adds are kept here too, and added again at
 //! the next mount when text needs them, as the page's own fallback would be.
+//! They stay out of the files held in memory and are read only then.
 use super::error;
-use reshiki::storage::{self, browser};
-use std::{cell::RefCell, collections::HashMap, path::PathBuf};
+use reshiki::storage::browser;
+use std::{cell::RefCell, collections::HashMap};
 use wasm_bindgen::{JsCast, prelude::*};
-use web_sys::{IdbDatabase, IdbOpenDbRequest, IdbRequest, IdbTransactionMode};
+use web_sys::{
+    IdbDatabase, IdbKeyRange, IdbOpenDbRequest, IdbRequest, IdbTransaction, IdbTransactionMode,
+};
 
 const DATABASE: &str = "reshiki";
 const FILES: &str = "files";
 const CHANNEL: &str = "reshiki-storage";
-/// The folder of kept fonts, each named by its SHA-256.
-const FONTS: &str = "fonts";
+/// The folder of kept fonts, each named by its SHA-256: their keys run from
+/// here up to [`AFTER_FONTS`], as '0' follows '/'.
+const FONTS: &str = "fonts/";
+const AFTER_FONTS: &str = "fonts0";
 
 #[derive(Default)]
 struct Fonts {
     /// Faces of each font added, by its SHA-256, so a font added again (by
     /// the page at each mount, or kept from before) is added once.
     added: HashMap<String, usize>,
-    /// Fonts added before storage opened, kept once it does.
-    waiting: Vec<(String, Vec<u8>)>,
+    /// Fonts added before storage opened, kept once it does; the copies are
+    /// JavaScript's, not this module's memory.
+    waiting: Vec<(String, js_sys::Uint8Array)>,
     open: bool,
-    /// Fonts kept from earlier visits, by SHA-256, until text needs them.
-    kept: Vec<(String, Vec<u8>)>,
-    /// Kept fonts were handed out and are not added yet.
+    /// The SHA-256 of each font kept from earlier visits, which is read from
+    /// storage once text needs it.
+    kept: Vec<String>,
+    /// Kept fonts are being read and are not added yet.
     adding: bool,
 }
 
@@ -41,6 +48,8 @@ thread_local! {
     static FONTS_ADDED: RefCell<Fonts> = RefCell::default();
     /// Other tabs' changes heard while the files load, until they are in.
     static EARLY: RefCell<Option<Vec<Heard>>> = const { RefCell::new(None) };
+    /// The open database, which fonts are kept in and read from directly.
+    static OPENED: RefCell<Option<IdbDatabase>> = const { RefCell::new(None) };
 }
 
 /// Open the page's storage, hand its files to the app and add the fonts kept
@@ -48,16 +57,9 @@ thread_local! {
 /// none and its saves say that browser storage is unavailable.
 pub(super) async fn open() {
     match load().await {
-        Ok(()) => {
-            // Added only once text needs them: a font added before the app
-            // starts also becomes a fallback for the interface's own text.
-            let kept = browser::files(FONTS)
-                .into_iter()
-                .filter_map(|(key, bytes)| {
-                    let name = key.rsplit('/').next()?;
-                    Some((name.strip_suffix(".font")?.to_owned(), bytes))
-                })
-                .collect();
+        // Added only once text needs them: a font added before the app starts
+        // also becomes a fallback for the interface's own text.
+        Ok(kept) => {
             let waiting = FONTS_ADDED.with_borrow_mut(|fonts| {
                 fonts.open = true;
                 fonts.kept = kept;
@@ -86,15 +88,16 @@ pub(super) fn add_font(bytes: Vec<u8>) -> Result<usize, String> {
     if let Some(faces) = FONTS_ADDED.with_borrow(|fonts| fonts.added.get(&hash).copied()) {
         return Ok(faces);
     }
-    let faces = add(hash.clone(), bytes.clone())?;
+    let copy = js_sys::Uint8Array::from(bytes.as_slice());
+    let faces = add(hash.clone(), bytes)?;
     let open = FONTS_ADDED.with_borrow_mut(|fonts| {
         if !fonts.open {
-            fonts.waiting.push((hash.clone(), bytes.clone()));
+            fonts.waiting.push((hash.clone(), copy.clone()));
         }
         fonts.open
     });
     if open {
-        keep(&hash, &bytes);
+        keep(&hash, &copy);
     }
     Ok(faces)
 }
@@ -110,16 +113,49 @@ pub(super) fn adding_kept() -> bool {
     FONTS_ADDED.with_borrow(|fonts| fonts.adding)
 }
 
-/// The kept fonts not added yet, by SHA-256, which [`add_kept`] adds; each
-/// is handed out once.
-pub(super) fn take_kept() -> Vec<(String, Vec<u8>)> {
-    FONTS_ADDED.with_borrow_mut(|fonts| {
+/// Read the kept fonts not added yet from storage, each once, and hand them
+/// by SHA-256 to the app, which adds them with [`add_kept`].
+pub(super) fn read_kept() {
+    let kept = FONTS_ADDED.with_borrow_mut(|fonts| {
         fonts.adding = !fonts.kept.is_empty();
         std::mem::take(&mut fonts.kept)
-    })
+    });
+    if kept.is_empty() {
+        return;
+    }
+    wasm_bindgen_futures::spawn_local(async move {
+        let fonts = read_fonts(&kept).await.unwrap_or_else(|message| {
+            error(&format!("Could not read the kept fonts: {message}"));
+            vec![]
+        });
+        if super::send(super::Request::AddFonts(fonts)).is_err() {
+            FONTS_ADDED.with_borrow_mut(|fonts| fonts.adding = false);
+        }
+    });
 }
 
-/// Add fonts from [`take_kept`].
+/// The fonts kept as `hashes` that storage still holds, by SHA-256.
+async fn read_fonts(hashes: &[String]) -> Result<Vec<(String, Vec<u8>)>, String> {
+    let database = OPENED.with_borrow(Clone::clone).ok_or("Not open")?;
+    let store = database
+        .transaction_with_str(FILES)
+        .and_then(|transaction| transaction.object_store(FILES))
+        .map_err(describe)?;
+    let requests = hashes
+        .iter()
+        .map(|hash| store.get(&font_key(hash).into()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(describe)?;
+    let mut fonts = Vec::with_capacity(hashes.len());
+    for (hash, request) in hashes.iter().zip(&requests) {
+        if let Ok(bytes) = finished(request).await?.dyn_into::<js_sys::Uint8Array>() {
+            fonts.push((hash.clone(), bytes.to_vec()));
+        }
+    }
+    Ok(fonts)
+}
+
+/// Add fonts from [`read_kept`].
 pub(super) fn add_kept(kept: Vec<(String, Vec<u8>)>) {
     for (hash, bytes) in kept {
         if let Err(message) = add(hash, bytes) {
@@ -138,13 +174,50 @@ fn add(hash: String, bytes: Vec<u8>) -> Result<usize, String> {
     Ok(faces)
 }
 
-fn keep(hash: &str, bytes: &[u8]) {
-    let path = PathBuf::from(storage::BROWSER_ROOT)
-        .join(FONTS)
-        .join(format!("{hash}.font"));
-    if let Err(message) = storage::write_atomic(&path, bytes) {
-        error(&format!("Could not keep the font: {message}"));
+fn font_key(hash: &str) -> String {
+    format!("{FONTS}{hash}.font")
+}
+
+/// Keep a font in storage, unless it is kept already. Its key names its
+/// contents, so it is written as is, without the checks of [`commit`].
+fn keep(hash: &str, bytes: &js_sys::Uint8Array) {
+    let kept =
+        FONTS_ADDED.with_borrow_mut(|fonts| crate::kept_fonts::forget(&mut fonts.kept, hash));
+    let Some(database) = OPENED.with_borrow(Clone::clone).filter(|_| !kept) else {
+        return;
+    };
+    let written = database
+        .transaction_with_str_and_mode(FILES, IdbTransactionMode::Readwrite)
+        .and_then(|transaction| {
+            let store = transaction.object_store(FILES)?;
+            store.put_with_key(bytes, &font_key(hash).into())?;
+            Ok(transaction)
+        });
+    match written {
+        Ok(transaction) => wasm_bindgen_futures::spawn_local(async move {
+            if let Err(message) = completed(&transaction).await {
+                error(&format!("Could not keep the font: {message}"));
+            }
+        }),
+        Err(thrown) => error(&format!("Could not keep the font: {}", describe(thrown))),
     }
+}
+
+/// Once `transaction` completes, or why it did not.
+async fn completed(transaction: &IdbTransaction) -> Result<(), String> {
+    let done = js_sys::Promise::new(&mut |resolve, reject| {
+        transaction.set_oncomplete(Some(&resolve));
+        transaction.set_onabort(Some(&reject));
+    });
+    wasm_bindgen_futures::JsFuture::from(done)
+        .await
+        .map(drop)
+        .map_err(|_| {
+            transaction
+                .error()
+                .map(|exception| exception.message())
+                .unwrap_or_else(|| "the browser refused it".into())
+        })
 }
 
 fn describe(thrown: JsValue) -> String {
@@ -170,9 +243,10 @@ async fn finished(request: &IdbRequest) -> Result<JsValue, String> {
     request.result().map_err(describe)
 }
 
-/// Open the database, read every file and install them with a sink that keeps
-/// each change and tells other tabs.
-async fn load() -> Result<(), String> {
+/// Open the database, read every file but the kept fonts and install them
+/// with a sink that keeps each change and tells other tabs. Returns the
+/// SHA-256 of each kept font.
+async fn load() -> Result<Vec<String>, String> {
     let window = web_sys::window().ok_or("The page has no window")?;
     let factory = window
         .indexed_db()
@@ -212,24 +286,48 @@ async fn load() -> Result<(), String> {
         heard.forget();
     }
 
-    // Both requests go to the transaction before either finishes, which
-    // would end it.
-    let store = database
+    // The files before and after the fonts, and the fonts' keys only. Every
+    // request goes to the transaction before any finishes, which would end
+    // it.
+    let (others, fonts) = database
         .transaction_with_str(FILES)
         .and_then(|transaction| transaction.object_store(FILES))
+        .and_then(|store| {
+            let (fonts, after) = (JsValue::from(FONTS), JsValue::from(AFTER_FONTS));
+            let others = [
+                IdbKeyRange::upper_bound_with_open(&fonts, true)?,
+                IdbKeyRange::lower_bound(&after)?,
+            ]
+            .iter()
+            .map(|range| {
+                Ok((
+                    store.get_all_keys_with_key(range)?,
+                    store.get_all_with_key(range)?,
+                ))
+            })
+            .collect::<Result<Vec<_>, JsValue>>()?;
+            let range =
+                IdbKeyRange::bound_with_lower_open_and_upper_open(&fonts, &after, false, true)?;
+            Ok((others, store.get_all_keys_with_key(&range)?))
+        })
         .map_err(describe)?;
-    let keys = store.get_all_keys().map_err(describe)?;
-    let values = store.get_all().map_err(describe)?;
-    let keys = js_sys::Array::from(&finished(&keys).await?);
-    let values = js_sys::Array::from(&finished(&values).await?);
-    let files: Vec<(String, Vec<u8>)> = keys
-        .iter()
-        .zip(values.iter())
-        .filter_map(|(key, value)| {
+    let mut files = Vec::new();
+    for (keys, values) in &others {
+        let keys = js_sys::Array::from(&finished(keys).await?);
+        let values = js_sys::Array::from(&finished(values).await?);
+        files.extend(keys.iter().zip(values.iter()).filter_map(|(key, value)| {
             let bytes = value.dyn_into::<js_sys::Uint8Array>().ok()?.to_vec();
             Some((key.as_string()?, bytes))
+        }));
+    }
+    let kept = js_sys::Array::from(&finished(&fonts).await?)
+        .iter()
+        .filter_map(|key| {
+            let key = key.as_string()?;
+            Some(key.strip_prefix(FONTS)?.strip_suffix(".font")?.to_owned())
         })
         .collect();
+    OPENED.set(Some(database.clone()));
 
     let session = session();
     let open = open_sessions(&window, &session).await;
@@ -252,7 +350,7 @@ async fn load() -> Result<(), String> {
     for (key, bytes) in EARLY.take().unwrap_or_default() {
         browser::changed(&key, bytes);
     }
-    Ok(())
+    Ok(kept)
 }
 
 /// The prefix of the Web Lock each open page holds for its session.
@@ -459,6 +557,10 @@ fn heard(event: web_sys::MessageEvent) {
     else {
         return;
     };
+    // Kept fonts stay out of memory; an earlier version still tells of them.
+    if key.starts_with(FONTS) {
+        return;
+    }
     let bytes = js_sys::Reflect::get(&data, &"bytes".into())
         .ok()
         .and_then(|bytes| bytes.dyn_into::<js_sys::Uint8Array>().ok())
