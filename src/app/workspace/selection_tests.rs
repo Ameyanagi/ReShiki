@@ -2,6 +2,18 @@ use super::*;
 use reshiki::document::{Annotation, Point};
 
 #[test]
+fn the_atoms_palette_offers_h_first_and_each_button_picks_its_element() {
+    assert_eq!(PALETTE_ELEMENTS[..2], ["H", "C"]);
+    assert_eq!(super::super::palettes::element_hint("H"), "H · h");
+    let (mut app, _) = App::new();
+    for symbol in PALETTE_ELEMENTS {
+        assert!(symbol == "*" || reshiki::editing::ELEMENTS.contains(&symbol));
+        let _ = app.update(Message::Element(symbol.into()));
+        assert_eq!((app.tool, app.element.as_str()), (Tool::Atom, symbol));
+    }
+}
+
+#[test]
 fn short_rows_fold_commands_then_arrange_then_summary_then_name() {
     let commands = [120., 56.];
     let row = Fold {
