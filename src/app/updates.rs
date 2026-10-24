@@ -385,19 +385,31 @@ impl App {
             format!("Check for the latest {} release.", state.channel)
         };
         let msg = |action| Message::Updates(action);
-        let panel = column![
-            row![
-                crate::branding::wordmark(24.0),
-                Space::new().width(Length::Fill),
-                reshiki::accessibility::button("updates-close", "Close updates", "Close")
-                    .on_press(msg(Action::Show(false)))
-                    .padding([7, 10])
-                    .style(button::text)
+        let header = row![
+            crate::branding::wordmark(24.0),
+            Space::new().width(Length::Fill),
+            reshiki::accessibility::button("updates-close", "Close updates", "Close")
+                .on_press(msg(Action::Show(false)))
+                .padding([7, 10])
+                .style(button::text)
+        ]
+        .align_y(Alignment::Center);
+        let version = text(format!("Version {}", updates::CURRENT_VERSION))
+            .size(13)
+            .style(super::workspace::muted_text);
+        let panel = if cfg!(target_arch = "wasm32") {
+            // The host page ships browser updates; there is nothing to check.
+            column![
+                header,
+                version,
+                text("The browser editor updates with the page that hosts it.").size(15),
+                reshiki::accessibility::button("updates-notes", "Get the desktop app", "Get the desktop app ↗")
+                    .on_press(msg(Action::Download))
+                    .style(button::text),
             ]
-            .align_y(Alignment::Center),
-            text(format!("Version {}", updates::CURRENT_VERSION))
-                .size(13)
-                .style(super::workspace::muted_text),
+        } else { column![
+            header,
+            version,
             row![
                 text("Channel").size(13),
                 reshiki::accessibility::button("updates-stable", "Stable update channel", "Stable").checked(state.channel == Channel::Stable)
@@ -440,7 +452,7 @@ impl App {
             text(if state.channel == Channel::Nightly { "Checks once a day. Nightlies are installed manually. Downloads prefer installers when available; Release notes also links portable archives." } else { "Checks once a day. Stable updates are verified before installation. Your saved tabs reopen after restarting." })
                 .size(12)
                 .style(super::workspace::muted_text),
-        ]
+        ] }
         .spacing(18);
         let backdrop = mouse_area(
             container(Space::new())

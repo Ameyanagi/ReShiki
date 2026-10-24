@@ -2,11 +2,14 @@
 
 The bundled groups and templates are the current implementation. Their coverage, labels and layouts may be extended or revised in future releases. Existing examples can be saved as editable native drawings.
 
-Select a collapsed group and use the top **Left / Center / Right** buttons to
-align its label. **Automatic** (the default) follows the bond direction; restore
-it or choose Stacked above from the adjacent **Auto / above** menu. Multiple
-groups and captions can use the same toolbar in one Undo step. Press **Enter**
-to edit the label or its chemical/text meaning; the dialog does not repeat alignment.
+Select a collapsed group or an atom label and open the Style bar's alignment
+menu: **Automatic** (the default, checked) follows the bond direction, as
+ChemDraw's Text menu does, and **Left**, **Center**, **Right** and **Stacked
+above** force a placement; choosing Automatic again restores it. On an element
+label, Left reads OH and Right HO. Multiple labels can change in one Undo step;
+with captions in the selection the menu shows Left / Center / Right / Justify.
+Press **Enter** to edit the label or its chemical/text meaning; the dialog's
+**Alignment** list sets the same choice while you type.
 Above places a single nickname above the attachment. Automatic internal labels
 such as CCl₂ or NMe keep the attachment element at the bond junction and place
 the remaining part according to the bond angles. General multiline formula-token
