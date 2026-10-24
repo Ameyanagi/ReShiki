@@ -3,7 +3,7 @@ pub mod units;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    sync::{LazyLock, Mutex, PoisonError, RwLock, RwLockReadGuard},
+    sync::{Arc, LazyLock, Mutex, PoisonError, RwLock, RwLockReadGuard},
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -102,7 +102,9 @@ impl DrawingStyle {
 }
 
 struct Fonts {
-    db: resvg::usvg::fontdb::Database,
+    /// Shared with every export's usvg tree, so parsing an SVG neither scans
+    /// the system fonts again nor copies the database.
+    db: Arc<resvg::usvg::fontdb::Database>,
     names: &'static [&'static str],
     /// Families of the fonts added at runtime, searched after the usual
     /// fallbacks for glyphs a label's own font lacks.
@@ -112,9 +114,11 @@ struct Fonts {
 static FONTS: LazyLock<RwLock<Fonts>> = LazyLock::new(|| {
     let mut db = resvg::usvg::fontdb::Database::new();
     load_fonts(&mut db);
+    #[cfg(not(target_arch = "wasm32"))]
+    font::keep_resident(&mut db, &[&DEFAULT.font_family]);
     let names = family_names(&db);
     RwLock::new(Fonts {
-        db,
+        db: Arc::new(db),
         names,
         added: Vec::new(),
     })
@@ -122,6 +126,12 @@ static FONTS: LazyLock<RwLock<Fonts>> = LazyLock::new(|| {
 
 fn fonts() -> RwLockReadGuard<'static, Fonts> {
     FONTS.read().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// The fonts text is measured with, for drawing and export: one database for
+/// the whole process, so exports reuse it instead of loading their own.
+pub fn fontdb() -> Arc<resvg::usvg::fontdb::Database> {
+    fonts().db.clone()
 }
 
 /// Fonts a page added at runtime, after the system's or the bundled ones.
@@ -143,9 +153,10 @@ pub fn load_fonts(db: &mut resvg::usvg::fontdb::Database) {
 /// export, as the browser does with a page's fonts. Labels whose own family
 /// lacks a glyph fall back to it. Returns how many faces it holds.
 pub fn add_font(bytes: Vec<u8>) -> Result<usize, String> {
-    let source = resvg::usvg::fontdb::Source::Binary(std::sync::Arc::new(bytes));
+    let source = resvg::usvg::fontdb::Source::Binary(Arc::new(bytes));
     let mut fonts = FONTS.write().unwrap_or_else(PoisonError::into_inner);
-    let ids = fonts.db.load_font_source(source.clone());
+    // Trees parsed earlier keep the database they were laid out with.
+    let ids = Arc::make_mut(&mut fonts.db).load_font_source(source.clone());
     if ids.is_empty() {
         return Err("Not a TrueType or OpenType font".into());
     }

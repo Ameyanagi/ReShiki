@@ -408,3 +408,14 @@ fn space_filling_models_export_their_visible_parts_as_clipped_paths() {
     let png = figure(&doc, "png").unwrap().bytes;
     assert!(png.starts_with(b"\x89PNG"));
 }
+
+/// Every export used to load and scan the system fonts again; it now lays text
+/// out with the database labels are measured with.
+#[test]
+fn exports_share_the_measuring_font_database() {
+    let tree = parse_svg(scene::svg(&Document::default())).unwrap();
+    assert!(std::sync::Arc::ptr_eq(
+        tree.fontdb(),
+        &crate::style::fontdb()
+    ));
+}
