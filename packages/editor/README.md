@@ -188,6 +188,23 @@ through the CSSOM, which `style-src` does not restrict. `src/frame.html`, the
 page `embed()` loads, has an inline `<style>`, so serve it with
 `style-src 'unsafe-inline'` or a page of your own.
 
+### Naming
+
+Name ↔ structure conversion (**Import → Name**, **Name molecule**) runs the
+desktop's OPSIN Rust port and naming rules in a module Web Worker,
+`src/worker.js`, which loads its own WebAssembly
+(`dist/worker/reshiki_web_worker_bg.wasm`, about 2.3 MB gzipped) the first time
+a name is converted, never at startup. As on the desktop, a request stops after
+15 seconds and the worker's heap is limited to 96 MiB (its memory to
+128 MiB), so a runaway name cannot block or crash the editor; the next
+request starts a new worker.
+
+Browsers start workers only from the page's own origin, so serve the package
+from the page's site to use naming. A Content-Security-Policy whose
+`script-src` allows that site needs nothing more. If it sets `worker-src` (or
+`child-src`), that must allow the site too, for example
+`worker-src 'self' blob:`.
+
 ### Demo
 
 ```sh
@@ -208,7 +225,7 @@ it.
 
 ### What the browser editor leaves out
 
-- Naming, NMR prediction and 3D say they need the desktop app. The assistant,
+- NMR prediction and 3D say they need the desktop app. The assistant,
   updates, printing, Office and LibreOffice integration are not built.
 - Open and Save use the browser: Open picks a file, Save and Export download
   one under the drawing's name. Drawing styles, themes, templates and pictures
@@ -229,7 +246,8 @@ it.
 - Shortcuts follow the desktop app, with ⌘ as Command on a Mac, except
   three that browsers keep for their own tabs: New is Alt+N, Close tab Alt+W
   and next/previous tab Alt+] / Alt+[ (⌃N, ⌃W, ⌃] / ⌃[ on a Mac).
-- Work runs on the page's thread, so a long cleanup or import pauses the page.
+- Work other than [naming](#naming) runs on the page's thread, so a long
+  cleanup or import pauses the page.
 - Without WebGPU, lines are drawn without antialiasing: WebGL2 loses most
   canvases with it.
 

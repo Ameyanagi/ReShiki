@@ -793,6 +793,13 @@ pub fn on_title_change(callback: Option<js_sys::Function>) {
     HOST.with_borrow_mut(|host| host.on_title_change = callback);
 }
 
+/// Run heavy jobs, so far naming, in workers that `factory` returns: a new
+/// module `Worker` running `worker.js` each time, made on first use.
+#[wasm_bindgen(js_name = setWorker)]
+pub fn set_worker(factory: js_sys::Function) {
+    reshiki::naming::set_worker(factory);
+}
+
 fn call(callback: &js_sys::Function, argument: &JsValue, name: &str) {
     if let Err(thrown) = callback.call1(&JsValue::NULL, argument) {
         error(&format!("The {name} callback failed: {thrown:?}"));
@@ -1055,8 +1062,21 @@ pub(crate) fn download(path: &Path, bytes: &[u8]) -> Result<(), String> {
     const FAILED: &str = "Could not download the file";
     let window = web_sys::window().ok_or(FAILED)?;
     let document = window.document().ok_or(FAILED)?;
+    let mime = match path.extension().and_then(|extension| extension.to_str()) {
+        Some("png") => "image/png",
+        Some("svg") => "image/svg+xml",
+        Some("pdf") => "application/pdf",
+        Some("mol") => "chemical/x-mdl-molfile",
+        Some("rxn") => "chemical/x-mdl-rxnfile",
+        Some("cdxml") => "chemical/x-cdxml",
+        Some("smiles" | "rsmi" | "inchi") => "text/plain",
+        _ => "application/octet-stream",
+    };
+    let options = web_sys::BlobPropertyBag::new();
+    options.set_type(mime);
     let parts = js_sys::Array::of1(&js_sys::Uint8Array::from(bytes));
-    let blob = web_sys::Blob::new_with_u8_array_sequence(&parts).map_err(|_| FAILED)?;
+    let blob = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &options)
+        .map_err(|_| FAILED)?;
     let url = web_sys::Url::create_object_url_with_blob(&blob).map_err(|_| FAILED)?;
     let link: web_sys::HtmlAnchorElement = document
         .create_element("a")

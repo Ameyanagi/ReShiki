@@ -23,6 +23,7 @@ impl App {
         self.status = format!("Preparing {label} export…");
         let doc = self.tab.doc.clone();
         let engine = self.engine.clone();
+        let stem = self.export_stem();
         Task::perform(
             async move {
                 let p = reshiki::export::publication(
@@ -33,7 +34,7 @@ impl App {
                     reshiki::export::FILE_PIXELS,
                 )
                 .await?;
-                Ok(super::save_export(p.bytes, format)
+                Ok(super::save_export(p.bytes, format, stem)
                     .await?
                     .map(|path| Saved {
                         path,

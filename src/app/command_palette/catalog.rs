@@ -361,7 +361,22 @@ pub(crate) fn build(app: &App) -> Vec<Command> {
     list.extend(files());
     list.extend(view(app));
     list.extend(tools());
+    if cfg!(target_arch = "wasm32") {
+        list.retain(|command| match &command.run {
+            Run::Send(messages) => !messages.iter().any(browser_unavailable),
+            _ => true,
+        });
+    }
     list
+}
+
+/// Commands the browser build cannot run: the assistant needs a local Codex
+/// process, and printing a native dialog.
+fn browser_unavailable(message: &Message) -> bool {
+    matches!(
+        message,
+        Message::Assistant(_) | Message::Printing(_) | Message::Inspector(InspectorTab::Assistant)
+    )
 }
 
 fn inserts(app: &App) -> Vec<Command> {

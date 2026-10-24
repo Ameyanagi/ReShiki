@@ -13,6 +13,7 @@ mock.module("../dist/editor/reshiki.js", () => ({
     mounts += 1;
   },
   onChange() {},
+  setWorker() {},
   onDirtyChange() {},
   onTitleChange() {},
 }));
