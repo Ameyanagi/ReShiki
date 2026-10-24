@@ -1,0 +1,34 @@
+changeCount=999 items=1
+item0	com.microsoft.Object-Descriptor	120
+item0	public.rtf	1445935
+item0	public.utf16-external-plain-text	18
+item0	public.utf8-plain-text	23
+item0	public.html	364074
+item0	public.utf16-plain-text	46
+item0	com.adobe.pdf	58145
+item0	com.microsoft.Embed-Source	156016
+item0	com.microsoft.Link-Source	156
+item0	com.microsoft.Link-Source-Descriptor	140
+item0	com.microsoft.ObjectLink	37
+item0	com.apple.webarchive	364412
+item0	com.apple.flat-rtfd	140022
+item0	com.microsoft.ole.source.56969.0x105f38b90	0
+item0	com.microsoft.DataObject	16
+item0	com.microsoft.appbundleid	18
+--- markers:
+word-all/item0__com.adobe.pdf	-
+word-all/item0__com.apple.flat-rtfd	PNG-ITXT
+word-all/item0__com.apple.webarchive	-
+word-all/item0__com.microsoft.DataObject	-
+word-all/item0__com.microsoft.Embed-Source	PNG-ITXT
+word-all/item0__com.microsoft.Link-Source	-
+word-all/item0__com.microsoft.Link-Source-Descriptor	-
+word-all/item0__com.microsoft.Object-Descriptor	-
+word-all/item0__com.microsoft.ObjectLink	-
+word-all/item0__com.microsoft.appbundleid	-
+word-all/item0__com.microsoft.ole.source.56969.0x105f38b90	-
+word-all/item0__public.html	-
+word-all/item0__public.rtf	-
+word-all/item0__public.utf16-external-plain-text	-
+word-all/item0__public.utf16-plain-text	-
+word-all/item0__public.utf8-plain-text	-

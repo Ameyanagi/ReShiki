@@ -1,0 +1,4 @@
+probe-word.docx	-
+probe-word.docx!word/media/image1.emf	PDF-EMBED, PDF-INFO, PDF-XMP
+probe-word.docx!word/media/image2.png	PNG-ITXT, PNG-ZTXT
+probe-word.docx!word/media/image6.emf	EMF-COMMENT

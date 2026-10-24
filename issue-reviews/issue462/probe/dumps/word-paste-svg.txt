@@ -1,0 +1,4 @@
+changeCount=992 items=1
+item0	public.svg-image	4543
+--- markers:
+word-paste-svg/item0__public.svg-image	SVG-META

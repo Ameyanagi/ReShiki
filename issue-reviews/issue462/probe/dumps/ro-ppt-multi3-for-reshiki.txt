@@ -1,0 +1,29 @@
+changeCount=983 items=1
+item0	com.microsoft.PowerPoint-12.0-Internal-Shapes	8
+item0	com.microsoft.Object-Descriptor	344
+item0	com.microsoft.PowerPoint-12.0-Internal-Theme	8
+item0	com.microsoft.PowerPoint-12.0-Internal-Color-Scheme	8
+item0	com.microsoft.Art--GVML-ClipFormat	221749
+item0	com.microsoft.image-svg-xml	190167
+item0	public.png	37517
+item0	com.adobe.pdf	60390
+item0	public.tiff	1583430
+item0	com.microsoft.ole.source.5593.0x7cc778fc00	0
+item0	com.microsoft.DataObject	16
+item0	com.microsoft.appbundleid	24
+--- markers:
+ro-ppt-multi3-for-reshiki/item0__com.adobe.pdf	-
+ro-ppt-multi3-for-reshiki/item0__com.microsoft.Art--GVML-ClipFormat	-
+ro-ppt-multi3-for-reshiki/item0__com.microsoft.Art--GVML-ClipFormat!clipboard/media/image1.png	PNG-ITXT, PNG-ZTXT
+ro-ppt-multi3-for-reshiki/item0__com.microsoft.Art--GVML-ClipFormat!clipboard/media/image2.png	PNG-ITXT, PNG-ZTXT
+ro-ppt-multi3-for-reshiki/item0__com.microsoft.Art--GVML-ClipFormat!clipboard/media/image3.svg	SVG-META
+ro-ppt-multi3-for-reshiki/item0__com.microsoft.DataObject	-
+ro-ppt-multi3-for-reshiki/item0__com.microsoft.Object-Descriptor	-
+ro-ppt-multi3-for-reshiki/item0__com.microsoft.PowerPoint-12.0-Internal-Color-Scheme	-
+ro-ppt-multi3-for-reshiki/item0__com.microsoft.PowerPoint-12.0-Internal-Shapes	-
+ro-ppt-multi3-for-reshiki/item0__com.microsoft.PowerPoint-12.0-Internal-Theme	-
+ro-ppt-multi3-for-reshiki/item0__com.microsoft.appbundleid	-
+ro-ppt-multi3-for-reshiki/item0__com.microsoft.image-svg-xml	-
+ro-ppt-multi3-for-reshiki/item0__com.microsoft.ole.source.5593.0x7cc778fc00	-
+ro-ppt-multi3-for-reshiki/item0__public.png	-
+ro-ppt-multi3-for-reshiki/item0__public.tiff	-

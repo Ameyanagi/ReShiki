@@ -1,0 +1,28 @@
+changeCount=979 items=1
+item0	com.microsoft.PowerPoint-12.0-Internal-Shapes	8
+item0	com.microsoft.Object-Descriptor	344
+item0	com.microsoft.PowerPoint-12.0-Internal-Theme	8
+item0	com.microsoft.PowerPoint-12.0-Internal-Color-Scheme	8
+item0	com.microsoft.Art--GVML-ClipFormat	217013
+item0	com.microsoft.image-svg-xml	184872
+item0	public.png	25876
+item0	com.adobe.pdf	49715
+item0	public.tiff	976910
+item0	com.microsoft.ole.source.5593.0x7ccb10f780	0
+item0	com.microsoft.DataObject	16
+item0	com.microsoft.appbundleid	24
+--- markers:
+ro-ppt-multi2/item0__com.adobe.pdf	-
+ro-ppt-multi2/item0__com.microsoft.Art--GVML-ClipFormat	-
+ro-ppt-multi2/item0__com.microsoft.Art--GVML-ClipFormat!clipboard/media/image1.png	PNG-ITXT, PNG-ZTXT
+ro-ppt-multi2/item0__com.microsoft.Art--GVML-ClipFormat!clipboard/media/image2.png	PNG-ITXT, PNG-ZTXT
+ro-ppt-multi2/item0__com.microsoft.DataObject	-
+ro-ppt-multi2/item0__com.microsoft.Object-Descriptor	-
+ro-ppt-multi2/item0__com.microsoft.PowerPoint-12.0-Internal-Color-Scheme	-
+ro-ppt-multi2/item0__com.microsoft.PowerPoint-12.0-Internal-Shapes	-
+ro-ppt-multi2/item0__com.microsoft.PowerPoint-12.0-Internal-Theme	-
+ro-ppt-multi2/item0__com.microsoft.appbundleid	-
+ro-ppt-multi2/item0__com.microsoft.image-svg-xml	-
+ro-ppt-multi2/item0__com.microsoft.ole.source.5593.0x7ccb10f780	-
+ro-ppt-multi2/item0__public.png	-
+ro-ppt-multi2/item0__public.tiff	-

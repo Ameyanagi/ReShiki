@@ -1,0 +1,23 @@
+changeCount=998 items=1
+item0	com.microsoft.Art--GVML-ClipFormat	7663
+item0	com.adobe.pdf	6537
+item0	public.tiff	1376390
+item0	public.png	23907
+item0	public.jpeg	35154
+item0	com.microsoft.Object-Descriptor	148
+item0	com.microsoft.image-svg-xml	0
+item0	com.microsoft.ole.source.56969.0x105f38b90	0
+item0	com.microsoft.DataObject	16
+item0	com.microsoft.appbundleid	18
+--- markers:
+word-insert-emf/item0__com.adobe.pdf	-
+word-insert-emf/item0__com.microsoft.Art--GVML-ClipFormat	-
+word-insert-emf/item0__com.microsoft.Art--GVML-ClipFormat!clipboard/media/image1.emf	EMF-COMMENT
+word-insert-emf/item0__com.microsoft.DataObject	-
+word-insert-emf/item0__com.microsoft.Object-Descriptor	-
+word-insert-emf/item0__com.microsoft.appbundleid	-
+word-insert-emf/item0__com.microsoft.image-svg-xml	-
+word-insert-emf/item0__com.microsoft.ole.source.56969.0x105f38b90	-
+word-insert-emf/item0__public.jpeg	-
+word-insert-emf/item0__public.png	-
+word-insert-emf/item0__public.tiff	-

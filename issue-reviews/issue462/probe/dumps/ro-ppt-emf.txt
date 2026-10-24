@@ -1,0 +1,23 @@
+changeCount=977 items=1
+item0	com.microsoft.PowerPoint-12.0-Internal-Shapes	8
+item0	com.microsoft.Object-Descriptor	344
+item0	com.microsoft.PowerPoint-12.0-Internal-Theme	8
+item0	com.microsoft.PowerPoint-12.0-Internal-Color-Scheme	8
+item0	com.microsoft.Art--GVML-ClipFormat	7260
+item0	com.adobe.pdf	6537
+item0	public.tiff	1127414
+item0	com.microsoft.ole.source.5593.0x7ccc22ec80	0
+item0	com.microsoft.DataObject	16
+item0	com.microsoft.appbundleid	24
+--- markers:
+ro-ppt-emf/item0__com.adobe.pdf	-
+ro-ppt-emf/item0__com.microsoft.Art--GVML-ClipFormat	-
+ro-ppt-emf/item0__com.microsoft.Art--GVML-ClipFormat!clipboard/media/image1.emf	EMF-COMMENT
+ro-ppt-emf/item0__com.microsoft.DataObject	-
+ro-ppt-emf/item0__com.microsoft.Object-Descriptor	-
+ro-ppt-emf/item0__com.microsoft.PowerPoint-12.0-Internal-Color-Scheme	-
+ro-ppt-emf/item0__com.microsoft.PowerPoint-12.0-Internal-Shapes	-
+ro-ppt-emf/item0__com.microsoft.PowerPoint-12.0-Internal-Theme	-
+ro-ppt-emf/item0__com.microsoft.appbundleid	-
+ro-ppt-emf/item0__com.microsoft.ole.source.5593.0x7ccc22ec80	-
+ro-ppt-emf/item0__public.tiff	-
