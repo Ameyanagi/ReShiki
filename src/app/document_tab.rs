@@ -30,6 +30,10 @@ pub(super) struct DocumentTab {
     // Document, history and file identity.
     pub(super) doc: Document,
     pub(super) saved: Document,
+    /// [`Self::dirty`] as views showed it, at this revision and file epoch.
+    /// `App::update` forgets it as it returns, as some changes (previews,
+    /// background labels) keep the revision.
+    unsaved: std::cell::Cell<Option<((u64, u64), bool)>>,
     pub(super) history: History,
     pub(super) revision: u64,
     pub(super) file_epoch: u64,
@@ -142,6 +146,7 @@ impl DocumentTab {
             error: false,
             doc: Document::default(),
             saved: Document::default(),
+            unsaved: Default::default(),
             history: History::default(),
             revision: 0,
             file_epoch: 0,
@@ -231,6 +236,37 @@ impl DocumentTab {
 
     pub(super) fn dirty(&self) -> bool {
         self.inline_changed() || !super::same_drawing(&self.doc, &self.saved)
+    }
+
+    /// [`Self::dirty`] for the window title and tab strip, which ask several
+    /// times per view: compared once, then remembered until the next update
+    /// returns. Only views may ask, since an update can still change `doc`.
+    pub(super) fn shown_dirty(&self) -> bool {
+        let key = (self.revision, self.file_epoch);
+        if let Some((cached, dirty)) = self.unsaved.get()
+            && cached == key
+        {
+            debug_assert_eq!(
+                dirty,
+                self.dirty(),
+                "the drawing changed since it was shown"
+            );
+            return dirty;
+        }
+        let dirty = self.dirty();
+        self.unsaved.set(Some((key, dirty)));
+        dirty
+    }
+
+    /// Drops the remembered answer once an update may have changed `doc`.
+    pub(super) fn forget_unsaved(&self) {
+        self.unsaved.set(None);
+    }
+
+    /// Records `saved` as the drawing's saved state.
+    pub(super) fn mark_saved(&mut self, saved: Document) {
+        self.saved = saved;
+        self.forget_unsaved();
     }
 
     /// An unchanged empty Untitled drawing with nothing in progress, which New,

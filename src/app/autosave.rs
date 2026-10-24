@@ -435,7 +435,7 @@ impl App {
         self.theme_library.editor = None;
         self.tab.path = None;
         self.tab.untitled_name = None;
-        self.tab.saved = Document::default();
+        self.tab.mark_saved(Document::default());
         self.begin_file_epoch();
         self.changed(before);
         self.tab.revision = self.tab.revision.wrapping_add(1);
