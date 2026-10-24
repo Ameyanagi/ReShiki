@@ -10,13 +10,12 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 let loading;
 
-// Naming loads its own module in a worker, only when first used.
-const namingWorker = () =>
-  new Worker(new URL("./naming-worker.js", import.meta.url), { type: "module" });
+// Heavy jobs such as naming load their own module in a worker, on first use.
+const worker = () => new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
 
 export function initEditor(module) {
   loading ??= load(module === undefined ? undefined : { module_or_path: module }).then(() =>
-    wasm.setNamingWorker(namingWorker),
+    wasm.setWorker(worker),
   );
   return loading.then(() => undefined);
 }

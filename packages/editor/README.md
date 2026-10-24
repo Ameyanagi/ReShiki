@@ -174,9 +174,9 @@ reload can be lost.
 
 Name ↔ structure conversion (**Import → Name**, **Name molecule**) runs the
 desktop's OPSIN Rust port and naming rules in a module Web Worker,
-`src/naming-worker.js`, which loads its own WebAssembly
-(`dist/naming/reshiki_naming_web_bg.wasm`, about 2.3 MB gzipped) the first time a
-name is converted, never at startup. As on the desktop, a request stops after
+`src/worker.js`, which loads its own WebAssembly
+(`dist/worker/reshiki_web_worker_bg.wasm`, about 2.3 MB gzipped) the first time
+a name is converted, never at startup. As on the desktop, a request stops after
 15 seconds and the worker's heap is limited to 96 MiB (its memory to
 128 MiB), so a runaway name cannot block or crash the editor; the next
 request starts a new worker.

@@ -33,7 +33,7 @@ members = [
   "crates/mcp",
   "crates/model",
   "crates/metafile",
-  "crates/naming-web",
+  "crates/web-worker",
   "crates/opsin",
   "crates/process-heap",
   "crates/web",

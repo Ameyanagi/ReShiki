@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build the headless browser library (crates/web), the browser editor (the app
-# itself, for wasm32) and the editor's naming worker (crates/naming-web) into
-# packages/editor/dist/{wasm,editor,naming}.
+# itself, for wasm32) and the editor's Web Worker for heavy jobs
+# (crates/web-worker) into packages/editor/dist/{wasm,editor,worker}.
 #
 # Installs the wasm-bindgen CLI that matches Cargo.lock and a pinned binaryen
 # release (for wasm-opt) under the target directory, so no global tools are
@@ -50,13 +50,13 @@ CARGO_PROFILE_RELEASE_OPT_LEVEL=s \
   CARGO_PROFILE_RELEASE_PANIC=abort \
   CARGO_PROFILE_RELEASE_DEBUG=false \
   CARGO_PROFILE_RELEASE_STRIP=true \
-  cargo build --manifest-path "$root/Cargo.toml" -p reshiki-web -p reshiki -p reshiki-naming-web \
+  cargo build --manifest-path "$root/Cargo.toml" -p reshiki-web -p reshiki -p reshiki-web-worker \
   --lib --bin reshiki \
   --target wasm32-unknown-unknown --release --locked
 
 rm -rf "$package/dist"
 # The features are those Rust enables by default for wasm32-unknown-unknown.
-for module in reshiki_web:wasm reshiki:editor reshiki_naming_web:naming; do
+for module in reshiki_web:wasm reshiki:editor reshiki_web_worker:worker; do
   name=${module%%:*}
   out=$package/dist/${module##*:}
   "$bindgen" --target web --out-dir "$out" "$target/wasm32-unknown-unknown/release/$name.wasm"

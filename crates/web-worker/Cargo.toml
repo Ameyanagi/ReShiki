@@ -1,10 +1,10 @@
 [package]
-name = "reshiki-naming-web"
+name = "reshiki-web-worker"
 version = "0.1.0"
 edition = "2024"
 publish = false
 license = "MIT OR Apache-2.0"
-description = "The browser editor's name and structure conversion, for its naming Web Worker"
+description = "The browser editor's Web Worker for heavy jobs: name and structure conversion"
 
 [lib]
 crate-type = ["cdylib"]

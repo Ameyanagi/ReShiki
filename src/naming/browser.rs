@@ -1,8 +1,9 @@
-//! The browser sends the desktop worker's requests to a dedicated Web Worker
-//! (`packages/editor/src/naming-worker.js`). It has its own WebAssembly memory,
-//! bounded like the desktop worker process, so a runaway parse cannot take the
-//! editor down. A request past its time limit, cancelled or dropped terminates
-//! the worker, and the next request starts another.
+//! The browser sends the desktop worker's requests, as the `naming` job, to
+//! the editor's Web Worker (`packages/editor/src/worker.js`). It has its own
+//! WebAssembly memory, bounded like the desktop worker process, so a runaway
+//! parse cannot take the editor down. A request past its time limit,
+//! cancelled or dropped terminates the worker, and the next request starts
+//! another. Other jobs can share this worker once they move off the page.
 use super::{Error, Identity, Record, local, reverse};
 use std::{
     cell::{Cell, RefCell},
@@ -15,8 +16,10 @@ use std::{
 use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 use web_time::{Duration, Instant};
 
+/// The worker job that answers the desktop naming worker's requests.
+const JOB: &str = "naming";
 const DEADLINE: Duration = Duration::from_secs(15);
-/// Downloading and compiling the naming WebAssembly, before the first request.
+/// Downloading and compiling the worker's WebAssembly, before the first request.
 const LOAD_DEADLINE: Duration = Duration::from_secs(60);
 const POLL: Duration = Duration::from_millis(25);
 const PARSE_CANCELLED: &str = "Local name parsing was cancelled";
@@ -42,7 +45,8 @@ thread_local! {
     static BUSY: Cell<bool> = const { Cell::new(false) };
 }
 
-/// Start naming workers with `factory`, which returns a new module `Worker`.
+/// Start workers with `factory`, which returns a new module `Worker`
+/// running `worker.js`.
 pub fn set_worker(factory: js_sys::Function) {
     FACTORY.set(Some(factory));
     if let Some(worker) = IDLE.take() {
@@ -185,7 +189,10 @@ fn start(request: &[u8]) -> Result<(Request, bool), Error> {
     };
     if let Some(worker) = &state.worker {
         worker
-            .post_message(&js_sys::Uint8Array::from(request))
+            .post_message(&js_sys::Array::of2(
+                &JsValue::from_str(JOB),
+                &js_sys::Uint8Array::from(request),
+            ))
             .map_err(|error| {
                 Error::Worker(format!(
                     "Could not reach the local naming worker: {error:?}"

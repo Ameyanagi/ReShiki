@@ -793,10 +793,10 @@ pub fn on_title_change(callback: Option<js_sys::Function>) {
     HOST.with_borrow_mut(|host| host.on_title_change = callback);
 }
 
-/// Convert names and structures in workers that `factory` returns, a new
-/// module `Worker` running `naming-worker.js` each time, made on first use.
-#[wasm_bindgen(js_name = setNamingWorker)]
-pub fn set_naming_worker(factory: js_sys::Function) {
+/// Run heavy jobs, so far naming, in workers that `factory` returns: a new
+/// module `Worker` running `worker.js` each time, made on first use.
+#[wasm_bindgen(js_name = setWorker)]
+pub fn set_worker(factory: js_sys::Function) {
     reshiki::naming::set_worker(factory);
 }
 
