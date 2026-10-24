@@ -1,6 +1,9 @@
 //! Native Rust OPSIN adapter, isolated in the bounded same-executable worker.
-use super::{Error, Provenance, Record, canonical_smiles, client, worker};
-use client::{CancelOnDrop, POLL};
+//! The browser sends the same request to its naming Web Worker instead.
+#[cfg(not(target_arch = "wasm32"))]
+use super::client::{self, CancelOnDrop, POLL};
+use super::{Error, Provenance, Record, canonical_smiles, worker};
+#[cfg(not(target_arch = "wasm32"))]
 use std::{
     path::Path,
     sync::{
@@ -9,9 +12,12 @@ use std::{
     },
 };
 const OUTPUT_LIMIT: usize = worker::OUTPUT_LIMIT;
+#[cfg(not(target_arch = "wasm32"))]
 static SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug, Clone, Default)]
 pub struct Cancel(Arc<AtomicBool>);
+#[cfg(not(target_arch = "wasm32"))]
 impl Cancel {
     pub fn stop(&self) {
         self.0.store(true, Ordering::Release);
@@ -28,27 +34,19 @@ impl Cancel {
 
 /// One deterministic local parse. Dropping the future cancels the supervised
 /// worker, which kills and waits for its child before releasing its directory.
+#[cfg(not(target_arch = "wasm32"))]
 pub async fn resolve_name(name: &str, cancel: Cancel) -> Result<Record, Error> {
     resolve_with(name, cancel, &SLOTS, run).await
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 async fn resolve_with(
     name: &str,
     cancel: Cancel,
     slots: &'static tokio::sync::Semaphore,
     run: impl FnOnce(&str, &Cancel) -> Result<Record, Error> + Send + 'static,
 ) -> Result<Record, Error> {
-    if name.len() > worker::MAX_NAME_BYTES || name.chars().any(char::is_control) {
-        return Err(Error::Rejected(
-            "Enter a chemical name of at most 2048 bytes without control characters".into(),
-        ));
-    }
-    let name = name.trim();
-    if name.is_empty() {
-        return Err(Error::Rejected(
-            "Enter a chemical name of at most 2048 bytes without control characters".into(),
-        ));
-    }
+    let name = checked_name(name)?;
     let stop = CancelOnDrop(cancel.clone());
     let result = client::on_slot(
         name,
@@ -64,21 +62,45 @@ async fn resolve_with(
     result
 }
 
+/// The trimmed name, if the parser accepts its length and characters.
+pub(super) fn checked_name(name: &str) -> Result<&str, Error> {
+    const MESSAGE: &str = "Enter a chemical name of at most 2048 bytes without control characters";
+    if name.len() > worker::MAX_NAME_BYTES || name.chars().any(char::is_control) {
+        return Err(Error::Rejected(MESSAGE.into()));
+    }
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(Error::Rejected(MESSAGE.into()));
+    }
+    Ok(name)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn run(name: &str, cancel: &Cancel) -> Result<Record, Error> {
     run_with_executable(name, cancel, &worker::executable().map_err(Error::Worker)?)
 }
+#[cfg(not(target_arch = "wasm32"))]
 fn run_with_executable(name: &str, cancel: &Cancel, executable: &Path) -> Result<Record, Error> {
     if cancel.stopped() {
         return Err(Error::Cancelled("Local name parsing was cancelled".into()));
     }
-    let interpreted_name = retained_parser_name(name);
-    let request = serde_json::to_vec(&worker::Request::Parse {
-        protocol: worker::PROTOCOL,
-        name: interpreted_name.into(),
-    })
-    .map_err(|error| Error::Worker(error.to_string()))?;
+    let request = parse_request(name)?;
     let output = client::run_worker("reshiki-native-name-", &request, cancel, || Ok(executable))?;
-    certify_retained_name(name, parse_reply(&output, interpreted_name)?)
+    parse_result(name, &output)
+}
+
+/// The worker request that parses `name`.
+pub(super) fn parse_request(name: &str) -> Result<Vec<u8>, Error> {
+    serde_json::to_vec(&worker::Request::Parse {
+        protocol: worker::PROTOCOL,
+        name: retained_parser_name(name).into(),
+    })
+    .map_err(|error| Error::Worker(error.to_string()))
+}
+
+/// The record for the worker's reply to `parse_request(name)`.
+pub(super) fn parse_result(name: &str, output: &[u8]) -> Result<Record, Error> {
+    certify_retained_name(name, parse_reply(output, retained_parser_name(name))?)
 }
 
 // A curated retained-name equivalence, not a rule from optical rotation to R/S.

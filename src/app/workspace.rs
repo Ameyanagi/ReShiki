@@ -369,17 +369,27 @@ impl App {
     }
 
     fn command_bar(&self) -> Element<'_, Message> {
+        // The browser build updates with its page and has no local assistant.
+        let browser = cfg!(target_arch = "wasm32");
         let bar = row![
             hover_hint(
                 reshiki::accessibility::button(
                     "header-about",
-                    "About ReShiki; check for updates",
+                    if browser {
+                        "About ReShiki"
+                    } else {
+                        "About ReShiki; check for updates"
+                    },
                     crate::branding::wordmark(21.0)
                 )
                 .padding(0)
                 .style(button::text)
                 .on_press(Message::Updates(super::updates::Action::Show(true))),
-                "About ReShiki · Check for updates",
+                if browser {
+                    "About ReShiki"
+                } else {
+                    "About ReShiki · Check for updates"
+                },
                 tooltip::Position::Bottom
             ),
             divider(),
@@ -428,7 +438,7 @@ impl App {
             responsive(move |size| self.tab_strip(size.width))
                 .width(Length::Fill)
                 .height(Length::Shrink),
-            icon_button(
+            (!browser).then(|| icon_button(
                 Icon::Assistant(self.assistant.busy),
                 if self.assistant.busy {
                     "Assistant · Working"
@@ -437,7 +447,7 @@ impl App {
                 },
                 Some(Message::Assistant(super::assistant::Action::Open)),
                 self.inspector_open && self.inspector_tab == InspectorTab::Assistant
-            ),
+            )),
             icon_button(
                 Icon::Import,
                 keyed("Import", &Message::Inspector(InspectorTab::Import)),

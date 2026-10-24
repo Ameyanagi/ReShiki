@@ -793,6 +793,13 @@ pub fn on_title_change(callback: Option<js_sys::Function>) {
     HOST.with_borrow_mut(|host| host.on_title_change = callback);
 }
 
+/// Run heavy jobs, so far naming, in workers that `factory` returns: a new
+/// module `Worker` running `worker.js` each time, made on first use.
+#[wasm_bindgen(js_name = setWorker)]
+pub fn set_worker(factory: js_sys::Function) {
+    reshiki::naming::set_worker(factory);
+}
+
 fn call(callback: &js_sys::Function, argument: &JsValue, name: &str) {
     if let Err(thrown) = callback.call1(&JsValue::NULL, argument) {
         error(&format!("The {name} callback failed: {thrown:?}"));
