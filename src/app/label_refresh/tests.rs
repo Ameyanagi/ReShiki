@@ -317,17 +317,45 @@ fn opening_a_drawing_whose_arrow_overlaps_new_hydrogens_leaves_it_saved() {
 fn a_save_written_while_labels_landed_leaves_the_drawing_saved() {
     let (mut app, _) = carbonyl_with_arrow();
     let key = single_bond(&mut app);
-    // Save starts before the labels land and finishes after.
+    // Save starts before the labels land; its write, and even its
+    // completion message, finish before they land too.
     let snapshot = Arc::new(app.tab.doc.clone());
     app.saving(&snapshot);
+    let written = Arc::unwrap_or_clone(snapshot);
     let _ = app.update(Message::LabelsReady(key, compute(&app)));
     assert!(app.dirty());
-    let snapshot = Arc::try_unwrap(snapshot).unwrap();
     let _ = app.file_saved(
         app.tab.file_epoch,
-        Box::new(snapshot),
+        Box::new(written),
         Ok(Some("a.rsk".into())),
     );
+    assert!(!app.dirty());
+}
+
+#[test]
+fn undoing_display_edits_made_before_the_labels_landed_leaves_the_drawing_saved() {
+    let (mut app, _) = carbonyl_with_arrow();
+    let mut file = app.tab.doc.clone();
+    file.bonds[0].order = 1;
+    app.show_opened(file, Some("old.rsk".into()));
+    // Two display-only edits that cancel out, before any labels land.
+    for hide in [true, false] {
+        let before = app.tab.doc.clone();
+        app.tab.doc.atoms[2].display.hide_charge = hide;
+        app.changed(before);
+    }
+    assert!(!app.dirty());
+    let _ = app.start_label_refresh();
+    let key = app.tab.label_refresh.pending.unwrap();
+    let _ = app.update(Message::LabelsReady(key, compute(&app)));
+    assert!(!app.dirty());
+    let repaired = app.tab.doc.arrows.clone();
+    let _ = app.update(Message::Undo);
+    assert!(app.dirty(), "The hidden charge is not saved");
+    let _ = app.update(Message::Undo);
+    // The opened snapshot gets the labels and the layout they need.
+    assert!(!app.tab.history.can_undo());
+    assert_eq!(app.tab.doc.arrows, repaired);
     assert!(!app.dirty());
 }
 

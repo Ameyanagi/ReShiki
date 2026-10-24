@@ -3,7 +3,7 @@ use super::{App, Message};
 use iced::Task;
 use reshiki::atom_labels::refresh::Refresh;
 use reshiki::document::Document;
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Key {
@@ -20,7 +20,7 @@ pub(super) struct State {
     unsettled: bool,
     /// The snapshot an in-flight save writes, and that snapshot repaired
     /// for labels that landed meanwhile, which the save marks as saved.
-    saving: Weak<Document>,
+    saving: Option<Arc<Document>>,
     saving_repaired: Option<Document>,
 }
 
@@ -121,7 +121,8 @@ impl App {
             || tab.cleanup.is_some()
             || tab.optimization.is_some()
             || tab.busy
-            || tab.erase_stroke;
+            || tab.erase_stroke
+            || tab.inline_text.is_some();
         if self.tab.label_refresh.unsettled {
             return;
         }
@@ -138,8 +139,8 @@ impl App {
             self.tab.mark_saved(self.tab.doc.clone());
         }
         let state = &mut self.tab.label_refresh;
-        if let Some(saving) = state.saving.upgrade()
-            && super::same_drawing(before, &saving)
+        if let Some(saving) = &state.saving
+            && super::same_drawing(before, saving)
         {
             state.saving_repaired = Some(self.tab.doc.clone());
         }
@@ -161,14 +162,14 @@ impl App {
 
     /// Remembers the snapshot a save starts writing.
     pub(super) fn saving(&mut self, snapshot: &Arc<Document>) {
-        self.tab.label_refresh.saving = Arc::downgrade(snapshot);
+        self.tab.label_refresh.saving = Some(Arc::clone(snapshot));
         self.tab.label_refresh.saving_repaired = None;
     }
 
     /// The drawing a finished save marks as saved: its snapshot, or the
     /// snapshot repaired for labels that landed while it was written.
     pub(super) fn saved_snapshot(&mut self, snapshot: Document) -> Document {
-        self.tab.label_refresh.saving = Weak::new();
+        self.tab.label_refresh.saving = None;
         self.tab
             .label_refresh
             .saving_repaired

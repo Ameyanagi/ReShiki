@@ -186,7 +186,8 @@ impl App {
             if self.error {
                 return;
             }
-            reshiki::atom_labels::refresh_computed(&mut self.tab.doc, &document);
+            // The layout repair below moves what the labels' ink pushes.
+            reshiki::atom_labels::copy_computed(&mut self.tab.doc, &document);
             self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
             self.settle_label_layout();
             self.tab.labels_dirty = false;
@@ -222,7 +223,8 @@ impl App {
         // computed H labels without rewriting the user's bond
         // orders/stereo or inserting a step into Undo/Redo.
         if let Some(document) = response.document {
-            reshiki::atom_labels::refresh_computed(&mut self.tab.doc, &document);
+            // The layout repair below moves what the labels' ink pushes.
+            reshiki::atom_labels::copy_computed(&mut self.tab.doc, &document);
             self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
             self.settle_label_layout();
         }
@@ -237,7 +239,8 @@ impl App {
             let before = self.tab.doc.clone();
             self.tab.doc = document.clone();
             self.changed(before);
-            reshiki::atom_labels::refresh_computed(&mut self.tab.doc, &document);
+            // The layout repair below moves what the labels' ink pushes.
+            reshiki::atom_labels::copy_computed(&mut self.tab.doc, &document);
             self.tab.label_generation = self.tab.label_generation.wrapping_add(1);
             self.settle_label_layout();
             self.tab.labels_dirty = false;
