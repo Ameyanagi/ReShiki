@@ -262,6 +262,55 @@ pub fn finish(
     finish_with_work(atom_count, fragments, coord_map, options, &mut remaining)
 }
 
+/// The work [`finish_with_work`] charges when it succeeds. It depends only
+/// on the fragments' atoms and links, not on where the atoms are, so collision
+/// repair can hold it back before it moves them.
+pub(crate) fn required_work(
+    atom_count: usize,
+    fragments: &[Fragment],
+    coord_map: Option<&Coordinates>,
+    options: Options,
+) -> usize {
+    let atoms: usize = fragments.iter().map(|f| f.atoms.len()).sum();
+    let attachments: usize = fragments.iter().map(|f| f.attachment_points.len()).sum();
+    let neighbors: usize = fragments
+        .iter()
+        .flat_map(|f| f.atoms.values())
+        .map(|a| a.neighbors.len())
+        .sum();
+    let anchors = coord_map.map_or(0, |c| c.len());
+    let canonical = options.canonical_orientation && coord_map.is_none_or(Coordinates::is_empty);
+    let packed_after_first = fragments
+        .iter()
+        .skip(1)
+        .map(|f| f.atoms.len().saturating_add(1))
+        .sum::<usize>();
+    [
+        // validate
+        atom_count,
+        fragments.len(),
+        attachments,
+        atoms.saturating_mul(8),
+        neighbors,
+        anchors,
+        atoms.saturating_mul(2),
+        attachments.saturating_add(neighbors),
+        // canonicalize, pack, assemble and the single-anchor shift
+        if canonical {
+            atoms.saturating_mul(8)
+        } else {
+            0
+        },
+        atoms.saturating_mul(2),
+        packed_after_first,
+        atom_count,
+        atoms,
+        if anchors == 1 { atom_count } else { 0 },
+    ]
+    .into_iter()
+    .fold(0, usize::saturating_add)
+}
+
 /// Share the solver's cumulative budget; inputs remain atomic on failure.
 /// Already performed work is charged even if a later stage returns an error.
 pub(crate) fn finish_with_work(
