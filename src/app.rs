@@ -423,6 +423,8 @@ pub struct App {
     templates: template_library::State,
     /// The last committed atom label, which a Text-tool double-click repeats.
     last_label: Option<String>,
+    /// The last Text-tool click on an atom, to recognize a double-click.
+    text_click: Option<(iced::time::Instant, u64)>,
 }
 /// How often drafts catch up with their drawings. A browser page can be
 /// reloaded or closed at any moment, and cannot write when it unloads, so it
@@ -518,6 +520,7 @@ impl App {
             template_index: 0,
             templates: template_library::State::load(),
             last_label: None,
+            text_click: None,
         };
         if let Some(message) = abbreviations::load_user_catalog() {
             if app.recovered.is_empty() {

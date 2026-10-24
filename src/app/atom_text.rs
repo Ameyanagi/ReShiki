@@ -211,8 +211,14 @@ impl App {
         };
         let id = crate::canvas::hit_object(&self.tab.doc, *p, 8. / self.tab.camera.zoom)
             .filter(|id| self.tab.doc.atom(*id).is_some())?;
+        // Counted here, not in the canvas, whose state the editor resets.
+        let now = iced::time::Instant::now();
+        let double = self
+            .text_click
+            .is_some_and(|(time, last)| last == id && now.duration_since(time).as_millis() < 450);
+        self.text_click = (!double).then_some((now, id));
         Some(
-            self.atom_text_action(if matches!(edit, Edit::RepeatLabel(_)) {
+            self.atom_text_action(if double || matches!(edit, Edit::RepeatLabel(_)) {
                 Action::Repeat(id)
             } else {
                 Action::Begin(Some(id))

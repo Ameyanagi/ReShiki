@@ -1,6 +1,6 @@
 //! Mouse presses on the paper: the context menu and the gesture a left press starts.
 
-use crate::canvas::hit::{bond_text_at, hit_object, hit_selection};
+use crate::canvas::hit::{bond_text_at, hit_selection};
 use crate::canvas::pick::{HANDLE_PICK_PX, PICK_RADIUS_PX};
 use crate::canvas::{
     Edit, Gesture, HandleClick, MoleculeCanvas, State, Tool, TransformDrag, World, tilt,
@@ -389,29 +389,13 @@ impl MoleculeCanvas<'_> {
                     )
                     .is_some(),
             }),
-            Tool::Text => return Some(Action::publish(self.text_click(state, p)).and_capture()),
+            // Option/Alt-click repeats the last label, as in ChemDraw. The app
+            // detects double-clicks: opening the label editor rebuilds the view.
+            Tool::Text if state.modifiers.alt() => {
+                return Some(Action::publish(Edit::RepeatLabel(p)).and_capture());
+            }
             _ => return Some(Action::publish(Edit::Click(p)).and_capture()),
         };
         Some(Action::publish(Edit::Hover(None)).and_capture())
-    }
-
-    /// A double-click or Option/Alt-click on an atom repeats the last label.
-    fn text_click(&self, state: &mut State, p: World) -> Edit {
-        let Some(atom) = hit_object(self.doc, p, self.camera.world_len(HANDLE_PICK_PX))
-            .filter(|id| self.doc.atom(*id).is_some())
-        else {
-            state.last_click = None;
-            return Edit::Click(p);
-        };
-        let now = iced::time::Instant::now();
-        let double = state
-            .last_click
-            .is_some_and(|(time, id)| id == atom && now.duration_since(time).as_millis() < 450);
-        state.last_click = (!double).then_some((now, atom));
-        if double || state.modifiers.alt() {
-            Edit::RepeatLabel(p)
-        } else {
-            Edit::Click(p)
-        }
     }
 }

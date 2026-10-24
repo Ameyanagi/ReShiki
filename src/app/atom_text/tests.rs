@@ -828,27 +828,23 @@ fn apply_keeps_placement_a_group_without_a_reverse_spelling_can_take() -> Result
 
 #[test]
 fn clicking_another_atom_commits_the_open_label_as_one_undo_step() -> Result<(), String> {
-    for clicks in [1, 2] {
-        let (mut app, _) = App::new();
-        app.tab.busy = false;
-        let a = app.tab.doc.add_atom("C", Point::new(0., 0.));
-        let b = app.tab.doc.add_atom("C", Point::new(80., 0.));
-        app.tab.doc.add_bond(a, b, 1, "plain");
-        let before = app.tab.doc.clone();
-        app.tool = Tool::Text;
-        let _ = app.update(Message::Canvas(Edit::Click(Point::new(0., 0.))));
-        let _ = app.update(Message::AtomText(Action::Input("OMe".into())));
-        for _ in 0..clicks {
-            let _ = app.update(Message::Canvas(Edit::Click(Point::new(80., 0.))));
-        }
-        let draft = app.tab.atom_text.as_ref().ok_or("Draft")?;
-        assert_eq!((draft.id, draft.input.as_str()), (b, "C"));
-        assert_eq!(app.tab.doc.atom(a).ok_or("A")?.element, "O");
-        assert_eq!(app.tab.history.undo_frames().len(), 1, "{clicks} clicks");
-        let _ = app.update(Message::AtomText(Action::Cancel));
-        let _ = app.update(Message::Undo);
-        assert_eq!(app.tab.doc, before);
-    }
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let a = app.tab.doc.add_atom("C", Point::new(0., 0.));
+    let b = app.tab.doc.add_atom("C", Point::new(80., 0.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
+    let before = app.tab.doc.clone();
+    app.tool = Tool::Text;
+    let _ = app.update(Message::Canvas(Edit::Click(Point::new(0., 0.))));
+    let _ = app.update(Message::AtomText(Action::Input("OMe".into())));
+    let _ = app.update(Message::Canvas(Edit::Click(Point::new(80., 0.))));
+    let draft = app.tab.atom_text.as_ref().ok_or("Draft")?;
+    assert_eq!((draft.id, draft.input.as_str()), (b, "C"));
+    assert_eq!(app.tab.doc.atom(a).ok_or("A")?.element, "O");
+    assert_eq!(app.tab.history.undo_frames().len(), 1);
+    let _ = app.update(Message::AtomText(Action::Cancel));
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
     Ok(())
 }
 
@@ -889,11 +885,11 @@ fn element(app: &App, id: u64) -> Option<&str> {
     Some(app.tab.doc.atom(id)?.element.as_str())
 }
 
-/// A double-click is a Click then a RepeatLabel on the same atom.
+/// Two quick clicks on the same atom, as the canvas publishes a double-click.
 fn double_click(app: &mut App, x: f32) {
     let p = Point::new(x, 0.);
     let _ = app.update(Message::Canvas(Edit::Click(p)));
-    let _ = app.update(Message::Canvas(Edit::RepeatLabel(p)));
+    let _ = app.update(Message::Canvas(Edit::Click(p)));
 }
 
 #[test]
