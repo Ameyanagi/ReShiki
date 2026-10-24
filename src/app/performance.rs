@@ -106,3 +106,34 @@ fn editing_workloads() {
         }
     }
 }
+
+#[test]
+#[ignore = "release-mode unsaved-changes benchmark"]
+fn unsaved_changes_check() {
+    println!("workload,median_ms,p95_ms");
+    let gallery: Document =
+        serde_json::from_str(include_str!("../../assets/examples/shortcut-examples.rsk")).unwrap();
+    for copies in [1, 4, 16] {
+        let mut doc = Document::default();
+        for copy in 0..copies {
+            editing::append(&mut doc, &gallery, Point::new(copy as f32 * 1800., 0.));
+        }
+        let atoms = doc.atoms.len();
+        let (mut app, _) = App::new();
+        app.tab.doc = doc.clone();
+        app.tab.saved = doc;
+        measure(&format!("{atoms}_atoms_title_saved"), || {
+            black_box(app.title());
+        });
+        // The last atom moved, so a comparison walks the whole drawing.
+        app.tab.doc.atoms.last_mut().unwrap().position.x += 1.;
+        app.tab.revision = app.tab.revision.wrapping_add(1);
+        measure(&format!("{atoms}_atoms_title_edited"), || {
+            black_box(app.title());
+        });
+        measure(&format!("{atoms}_atoms_title_after_each_edit"), || {
+            app.tab.revision = app.tab.revision.wrapping_add(1);
+            black_box(app.title());
+        });
+    }
+}

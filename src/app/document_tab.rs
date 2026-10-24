@@ -30,6 +30,9 @@ pub(super) struct DocumentTab {
     // Document, history and file identity.
     pub(super) doc: Document,
     pub(super) saved: Document,
+    /// Whether `doc` differed from `saved` at this revision and file epoch.
+    /// Edits bump the revision; `mark_saved` clears it.
+    unsaved: std::cell::Cell<Option<((u64, u64), bool)>>,
     pub(super) history: History,
     pub(super) revision: u64,
     pub(super) file_epoch: u64,
@@ -142,6 +145,7 @@ impl DocumentTab {
             error: false,
             doc: Document::default(),
             saved: Document::default(),
+            unsaved: Default::default(),
             history: History::default(),
             revision: 0,
             file_epoch: 0,
@@ -230,7 +234,32 @@ impl DocumentTab {
     }
 
     pub(super) fn dirty(&self) -> bool {
-        self.inline_changed() || !super::same_drawing(&self.doc, &self.saved)
+        self.inline_changed() || self.drawing_changed()
+    }
+
+    /// Compares the drawing with the saved one once per revision; the window
+    /// title and tab strip ask on every update.
+    fn drawing_changed(&self) -> bool {
+        let key = (self.revision, self.file_epoch);
+        if let Some((cached, changed)) = self.unsaved.get()
+            && cached == key
+        {
+            debug_assert_eq!(
+                changed,
+                !super::same_drawing(&self.doc, &self.saved),
+                "the drawing changed without a new revision"
+            );
+            return changed;
+        }
+        let changed = !super::same_drawing(&self.doc, &self.saved);
+        self.unsaved.set(Some((key, changed)));
+        changed
+    }
+
+    /// Records `saved` as the drawing's saved state.
+    pub(super) fn mark_saved(&mut self, saved: Document) {
+        self.saved = saved;
+        self.unsaved.set(None);
     }
 
     /// An unchanged empty Untitled drawing with nothing in progress, which New,

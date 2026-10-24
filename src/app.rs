@@ -1080,13 +1080,7 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
         && a.page_layout == b.page_layout
         && a.atom_labels == b.atom_labels
         && a.bonds.len() == b.bonds.len()
-        && a.bonds.iter().zip(&b.bonds).all(|(a, b)| {
-            let mut a = a.clone();
-            let mut b = b.clone();
-            a.cip_label = None;
-            b.cip_label = None;
-            a == b
-        })
+        && a.bonds.iter().zip(&b.bonds).all(|(a, b)| same_bond(a, b))
         && a.annotations == b.annotations
         && a.molecule_names == b.molecule_names
         && a.arrows == b.arrows
@@ -1100,15 +1094,89 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
         && a.ring_fills == b.ring_fills
         && a.depth_appearance == b.depth_appearance
         && a.atoms.len() == b.atoms.len()
-        && a.atoms.iter().zip(&b.atoms).all(|(a, b)| {
-            let mut a = a.clone();
-            let mut b = b.clone();
-            a.label_h = 0;
-            b.label_h = 0;
-            a.cip_label = None;
-            b.cip_label = None;
-            a == b
-        })
+        && a.atoms.iter().zip(&b.atoms).all(|(a, b)| same_atom(a, b))
+}
+
+/// Compares bonds without their computed CIP label; listing every field makes a
+/// new one a compile error here instead of an edit the unsaved check misses.
+fn same_bond(a: &reshiki::document::Bond, b: &reshiki::document::Bond) -> bool {
+    let reshiki::document::Bond {
+        highlight,
+        ring_arc,
+        projection,
+        stereo_authoritative,
+        z_order,
+        indicator,
+        cip_label: _,
+        a: start,
+        b: end,
+        order,
+        display,
+        stereo,
+        stereo_atoms,
+        double_position,
+        secondary_display,
+        color,
+    } = a;
+    *highlight == b.highlight
+        && *ring_arc == b.ring_arc
+        && *projection == b.projection
+        && *stereo_authoritative == b.stereo_authoritative
+        && *z_order == b.z_order
+        && *indicator == b.indicator
+        && *start == b.a
+        && *end == b.b
+        && *order == b.order
+        && *display == b.display
+        && *stereo == b.stereo
+        && *stereo_atoms == b.stereo_atoms
+        && *double_position == b.double_position
+        && *secondary_display == b.secondary_display
+        && *color == b.color
+}
+
+/// Compares atoms without their computed hydrogen count and CIP label.
+fn same_atom(a: &reshiki::document::Atom, b: &reshiki::document::Atom) -> bool {
+    let reshiki::document::Atom {
+        display,
+        cip_label: _,
+        id,
+        element,
+        position,
+        depth,
+        centroid,
+        attachment,
+        charge,
+        radical_electrons,
+        marks,
+        mark_serial,
+        isotope,
+        explicit_h,
+        no_implicit,
+        aromatic,
+        stereo,
+        map_num,
+        label_h: _,
+        text_style,
+    } = a;
+    *display == b.display
+        && *id == b.id
+        && *element == b.element
+        && *position == b.position
+        && *depth == b.depth
+        && *centroid == b.centroid
+        && *attachment == b.attachment
+        && *charge == b.charge
+        && *radical_electrons == b.radical_electrons
+        && *marks == b.marks
+        && *mark_serial == b.mark_serial
+        && *isotope == b.isotope
+        && *explicit_h == b.explicit_h
+        && *no_implicit == b.no_implicit
+        && *aromatic == b.aromatic
+        && *stereo == b.stereo
+        && *map_num == b.map_num
+        && *text_style == b.text_style
 }
 
 /// Marks the results of `task` as belonging to tab `id`, unless already marked.
