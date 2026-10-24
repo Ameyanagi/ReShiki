@@ -49,6 +49,13 @@ impl MoleculeCanvas<'_> {
                 true,
             ));
         }
+        // A model turned by the drag or the tilt draws quickly until it is
+        // let go.
+        if let Cow::Owned(doc) = preview {
+            for (model, before) in doc.models.iter_mut().zip(&self.doc.models) {
+                model.turning |= model.rotation != before.rotation;
+            }
+        }
         if let Some((id, t)) = self.morph(iced::time::Instant::now())
             && let Some(model) = preview.to_mut().models.iter_mut().find(|m| m.contains(id))
         {

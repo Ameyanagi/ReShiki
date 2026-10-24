@@ -185,6 +185,11 @@ pub struct Model3d {
     /// drawing copy while it plays; never saved.
     #[serde(skip)]
     pub morph: Option<f32>,
+    /// Set on the canvas's drawing copy while the model is turned or tilted:
+    /// its balls are drawn whole, back to front, and cut where they meet only
+    /// once it is let go. Never saved.
+    #[serde(skip)]
+    pub turning: bool,
 }
 fn one_cell() -> [u8; 3] {
     [1; 3]
@@ -427,6 +432,7 @@ impl Model3d {
             layout: Layout::Original,
             drawn: None,
             morph: None,
+            turning: false,
         };
         model.fit(doc);
         model
@@ -2133,8 +2139,45 @@ impl View<'_> {
     /// Where the balls `atoms`, in drawing order, overlap: for each ball cut
     /// by others its visible part, `None` when nothing of it shows. Each seam
     /// goes with the later ball of its pair. Balls fading in after `grown`
-    /// cut only each other.
-    fn contacts(&self, atoms: &[usize], grown: f32) -> HashMap<usize, Option<Contact>> {
+    /// cut only each other. The last few views are kept, so an edit
+    /// elsewhere in the drawing does not work them out again.
+    fn contacts(&self, atoms: &[usize], grown: f32) -> Contacts {
+        // Everything the result depends on, exactly.
+        let mut key: Vec<u32> = [self.origin.x, self.origin.y, self.scale, self.camera]
+            .map(f32::to_bits)
+            .to_vec();
+        key.push(u32::from(self.perspective > 0.));
+        for &i in atoms {
+            let symbol = self.symbols.get(i).copied().unwrap_or_default();
+            key.push(i as u32);
+            key.extend(
+                self.rotated
+                    .get(i)
+                    .copied()
+                    .unwrap_or_default()
+                    .map(f32::to_bits),
+            );
+            key.push(self.style.atom_radius(symbol).to_bits());
+            key.push(u32::from(symbol == "H" && grown < 1.));
+        }
+        let kept = CONTACTS.with_borrow(|kept| {
+            kept.iter()
+                .find(|(k, _)| *k == key)
+                .map(|(_, found)| found.clone())
+        });
+        kept.unwrap_or_else(|| {
+            let found = self.find_contacts(atoms, grown);
+            CONTACTS.with_borrow_mut(|kept| {
+                if kept.len() >= KEPT {
+                    kept.remove(0);
+                }
+                kept.push((key, found.clone()));
+            });
+            found
+        })
+    }
+
+    fn find_contacts(&self, atoms: &[usize], grown: f32) -> Contacts {
         let balls: Vec<contact::Ball> = atoms
             .iter()
             .filter_map(|&i| {
@@ -2172,6 +2215,16 @@ impl View<'_> {
         }
         out
     }
+}
+
+/// How many models' contacts, and crystal repeats' copies, are kept.
+const KEPT: usize = 4;
+
+type Contacts = HashMap<usize, Option<Contact>>;
+
+thread_local! {
+    static CONTACTS: std::cell::RefCell<Vec<(Vec<u32>, Contacts)>> = Default::default();
+    static COPIES: std::cell::RefCell<Vec<std::rc::Rc<Copied>>> = Default::default();
 }
 
 /// A stick half shorter on screen than this fraction of its half width is
@@ -2339,8 +2392,11 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             Item::Atom(_) | Item::Crossing(..) => None,
         })
         .collect();
-    // Overlapping balls show only what lies in front, with seams between.
-    let mut contacts = if matches!(style, Style::SpaceFilling | Style::BallStick) {
+    // Overlapping balls show only what lies in front, with seams between,
+    // once the model stops turning. A morph keeps them: they hide the
+    // hydrogens growing out of their atoms.
+    let mut contacts = if matches!(style, Style::SpaceFilling | Style::BallStick) && !model.turning
+    {
         let atoms: Vec<usize> = items
             .iter()
             .filter_map(|(.., item)| match item {
@@ -2872,41 +2928,10 @@ pub(crate) fn flat_cells(models: &[Model3d], doc: &Document) -> FlatCells {
         if sites.len() > model.atoms.len()
             && let Some((ghost, index)) = ghosts(doc, model, cell, &fit, &sites)
         {
-            // The copies' bonds lie under the drawing's; their labels go over
-            // the cell's edges on a halo of paper, as the drawing's own labels
-            // do, so no edge runs through a copy on a corner.
-            let (labels, rest): (Vec<_>, Vec<_>) = crate::scene::primitives(&ghost)
-                .into_iter()
-                .filter(|p| !matches!(p, Primitive::Halo { .. }))
-                .partition(is_text);
-            let lighter = |p| Primitive::Opacity {
-                alpha: GHOST,
-                primitive: Box::new(p),
-            };
-            out.behind.extend(rest.into_iter().map(lighter));
-            if !labels.is_empty() {
-                // As for the drawing's labels, the middle of each glyph's
-                // box is covered too, so no edge shows through a counter.
-                let plain: Vec<_> = labels.iter().map(without_opacity).collect();
-                let middles = crate::scene::label_ink_boxes(&plain)
-                    .into_iter()
-                    .map(|(lo, hi)| {
-                        let inset = (hi.x - lo.x).min(hi.y - lo.y) * 0.25;
-                        let (lo, hi) = (lo.offset(inset, inset), hi.offset(-inset, -inset));
-                        Primitive::Polygon(vec![
-                            lo,
-                            Point::new(hi.x, lo.y),
-                            hi,
-                            Point::new(lo.x, hi.y),
-                        ])
-                    });
-                ghost_labels.push(Primitive::Halo {
-                    radius: crate::scientific::label_halo_radius(),
-                    primitives: labels.iter().cloned().chain(middles).collect(),
-                });
-                ghost_labels.extend(labels.into_iter().map(lighter));
-            }
-            copies = Some((ghost, index));
+            let copied = drawn_copies(ghost);
+            out.behind.extend(copied.behind.iter().cloned());
+            ghost_labels.extend(copied.labels.iter().cloned());
+            copies = Some((copied, index));
         }
         // Each bond leaving the cells shown is a short, light dashed stub
         // from its atom's label, a little over a third of the way to the
@@ -2934,9 +2959,10 @@ pub(crate) fn flat_cells(models: &[Model3d], doc: &Document) -> FlatCells {
                     let (label_doc, atom, alpha) = if from == [0; 3] {
                         (doc, doc.atom(id), 1.)
                     } else {
-                        let Some((ghost, index)) = &copies else {
+                        let Some((copied, index)) = &copies else {
                             continue;
                         };
+                        let ghost = &copied.ghost;
                         let copy = index.get(&(id, from)).and_then(|i| ghost.atom(*i));
                         (ghost, copy, GHOST)
                     };
@@ -2963,6 +2989,73 @@ pub(crate) fn flat_cells(models: &[Model3d], doc: &Document) -> FlatCells {
         out.haloed.extend(model.atoms.iter().map(|a| a.id));
     }
     out
+}
+
+/// A crystal repeat's copies as drawn: their drawing, its bonds lighter
+/// and its labels lighter on their halo.
+struct Copied {
+    ghost: Document,
+    /// The fonts it was laid out with, see [`crate::style::font_generation`].
+    fonts: usize,
+    behind: Vec<Primitive>,
+    labels: Vec<Primitive>,
+}
+
+/// `ghost` drawn, or as it was the last few times it was the same, so an
+/// edit elsewhere does not draw every copy again.
+fn drawn_copies(ghost: Document) -> std::rc::Rc<Copied> {
+    let fonts = crate::style::font_generation();
+    let kept = COPIES.with_borrow(|kept| {
+        kept.iter()
+            .find(|c| c.fonts == fonts && c.ghost == ghost)
+            .cloned()
+    });
+    if let Some(copied) = kept {
+        return copied;
+    }
+    // The copies' bonds lie under the drawing's; their labels go over
+    // the cell's edges on a halo of paper, as the drawing's own labels
+    // do, so no edge runs through a copy on a corner.
+    let (labels, rest): (Vec<_>, Vec<_>) = crate::scene::primitives(&ghost)
+        .into_iter()
+        .filter(|p| !matches!(p, Primitive::Halo { .. }))
+        .partition(is_text);
+    let lighter = |p| Primitive::Opacity {
+        alpha: GHOST,
+        primitive: Box::new(p),
+    };
+    let behind = rest.into_iter().map(lighter).collect();
+    let mut ghost_labels = vec![];
+    if !labels.is_empty() {
+        // As for the drawing's labels, the middle of each glyph's
+        // box is covered too, so no edge shows through a counter.
+        let plain: Vec<_> = labels.iter().map(without_opacity).collect();
+        let middles = crate::scene::label_ink_boxes(&plain)
+            .into_iter()
+            .map(|(lo, hi)| {
+                let inset = (hi.x - lo.x).min(hi.y - lo.y) * 0.25;
+                let (lo, hi) = (lo.offset(inset, inset), hi.offset(-inset, -inset));
+                Primitive::Polygon(vec![lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y)])
+            });
+        ghost_labels.push(Primitive::Halo {
+            radius: crate::scientific::label_halo_radius(),
+            primitives: labels.iter().cloned().chain(middles).collect(),
+        });
+        ghost_labels.extend(labels.into_iter().map(lighter));
+    }
+    let copied = std::rc::Rc::new(Copied {
+        ghost,
+        fonts,
+        behind,
+        labels: ghost_labels,
+    });
+    COPIES.with_borrow_mut(|kept| {
+        if kept.len() >= KEPT {
+            kept.remove(0);
+        }
+        kept.push(copied.clone());
+    });
+    copied
 }
 
 /// `p` without its fading.
