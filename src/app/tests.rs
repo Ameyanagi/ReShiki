@@ -162,6 +162,14 @@ fn idle_windows_stop_polling_and_pending_work_restarts_timers() -> Result<(), St
 }
 
 #[test]
+fn exports_are_named_after_the_saved_document() {
+    let (mut app, _) = App::new();
+    assert_eq!(app.export_stem(), None);
+    app.tab.path = Some(std::path::PathBuf::from("dir").join("aspirin.rsk"));
+    assert_eq!(app.export_stem().as_deref(), Some("aspirin"));
+}
+
+#[test]
 fn dismissing_the_recovery_offer_restores_the_ready_message() {
     use reshiki::recovery::Snapshot;
     let (mut app, _) = App::new();

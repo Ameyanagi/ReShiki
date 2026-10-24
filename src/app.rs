@@ -537,6 +537,11 @@ impl App {
     fn document_name(&self) -> String {
         self.tab.name()
     }
+    /// The saved document's file name without its extension, for exports.
+    fn export_stem(&self) -> Option<String> {
+        let stem = self.tab.path.as_ref()?.file_stem()?;
+        Some(stem.to_string_lossy().into_owned())
+    }
     pub fn theme(&self) -> Theme {
         if self.appearance.mode.is_dark(self.tab.doc.canvas_theme) {
             return Theme::custom(
@@ -1108,24 +1113,35 @@ fn tagged(task: Task<Message>, id: document_tab::TabId) -> Task<Message> {
     })
 }
 
-fn export_file(contents: String, format: &'static str, details: Vec<String>) -> Task<Message> {
+fn export_file(
+    contents: String,
+    format: &'static str,
+    stem: Option<String>,
+    details: Vec<String>,
+) -> Task<Message> {
     Task::perform(
         async move {
-            Ok(save_export(contents.into_bytes(), format)
+            Ok(save_export(contents.into_bytes(), format, stem)
                 .await?
                 .map(|path| figure_export::Saved { path, details }))
         },
         Message::Exported,
     )
 }
-async fn save_export(bytes: Vec<u8>, format: &'static str) -> Result<Option<PathBuf>, String> {
+/// Exports are named after the document, or "Molecule" while it is untitled.
+async fn save_export(
+    bytes: Vec<u8>,
+    format: &'static str,
+    stem: Option<String>,
+) -> Result<Option<PathBuf>, String> {
     let extension = match format {
         "svg-office" => "svg",
         _ => format,
     };
+    let stem = stem.as_deref().unwrap_or("Molecule");
     files::save_bytes(
         "Export drawing",
-        &format!("Molecule.{extension}"),
+        &format!("{stem}.{extension}"),
         extension,
         &bytes,
     )
