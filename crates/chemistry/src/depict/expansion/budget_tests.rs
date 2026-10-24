@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    depict::{collision, finalize},
+    depict::{collision, finalize, geometry::Point},
     electronic::Hybridization,
     graph::{Atom, Bond},
     kekulize::Direction,
@@ -406,5 +406,98 @@ fn exhausted_collision_repair_keeps_the_unrepaired_layout() -> TestResult {
         serde_json::to_value(conformer)?,
         serde_json::to_value(expected.conformer)?
     );
+    Ok(())
+}
+
+#[test]
+fn abandoned_collision_repair_stays_charged_to_a_shared_allowance() -> TestResult {
+    let count = 40;
+    let source = chain(count)?;
+    let mut remaining = MAX_WORK;
+    let initial = prepared(&source, &mut remaining)?;
+    let initial_cost = MAX_WORK - remaining;
+    let before_repair = remaining;
+    repair(&initial, &mut remaining)?;
+    let collision_cost = before_repair - remaining;
+    let mut remaining = MAX_WORK;
+    let expected = finalize::finish_with_work(
+        count,
+        &initial.fragments,
+        None,
+        finalize::Options::default(),
+        &mut remaining,
+    )?;
+    let final_cost = MAX_WORK - remaining;
+    // Exactly enough for preparation and finalization, then some repair too.
+    for repair_allowance in [0, collision_cost / 2] {
+        let allowance = initial_cost + final_cost + repair_allowance;
+        let options = crate::depict::Options {
+            use_ring_templates: true,
+            work_limit: allowance,
+            ..Default::default()
+        };
+        let mut remaining = allowance;
+        let conformer = crate::depict::compute_with_work(
+            &source,
+            &vec![None; count],
+            None,
+            options,
+            &mut remaining,
+        )?;
+        assert_eq!(
+            serde_json::to_value(conformer)?,
+            serde_json::to_value(&expected.conformer)?
+        );
+        // The repair work done before it ran out stays charged.
+        let used = allowance - remaining;
+        if repair_allowance == 0 {
+            assert_eq!(used, initial_cost + final_cost);
+        } else {
+            assert!(used > initial_cost + final_cost, "repair work refunded");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn finalization_reserve_is_what_finalization_charges() -> TestResult {
+    // Two separate chains, so packing places a second fragment.
+    let mut source = chain(30)?;
+    source.graph.bonds.remove(11);
+    let source = State {
+        metadata: Metadata::unspecified(&source.graph),
+        directions: vec![Direction::None; source.graph.bonds.len()],
+        valences: source
+            .graph
+            .provisional_valences()
+            .map_err(anyhow::Error::msg)?,
+        conjugated: vec![false; source.graph.bonds.len()],
+        properties: Properties::unspecified(&source.graph),
+        ..source
+    };
+    let initial = prepared(&source, &mut { MAX_WORK })?;
+    assert_eq!(initial.fragments.len(), 2);
+    let one = Coordinates::from([(0, Point { x: 1.0, y: 2.0 })]);
+    let two = Coordinates::from([(0, Point::default()), (5, Point { x: 1.0, y: 0.0 })]);
+    for coordinates in [None, Some(&Coordinates::new()), Some(&one), Some(&two)] {
+        for canonical_orientation in [true, false] {
+            let options = finalize::Options {
+                canonical_orientation,
+                ..Default::default()
+            };
+            let mut remaining = MAX_WORK;
+            finalize::finish_with_work(
+                30,
+                &initial.fragments,
+                coordinates,
+                options,
+                &mut remaining,
+            )?;
+            assert_eq!(
+                finalize::required_work(30, &initial.fragments, coordinates, options),
+                MAX_WORK - remaining
+            );
+        }
+    }
     Ok(())
 }

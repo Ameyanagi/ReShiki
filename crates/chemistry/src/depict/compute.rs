@@ -128,22 +128,33 @@ fn compute_inner(
         },
         remaining,
     )?;
+    let finalize_options = finalize::Options {
+        canonical_orientation: options.canonical_orientation,
+        work_limit: options.work_limit,
+    };
     // RDKit has no work cap. When ours stops collision repair, keep the
-    // unrepaired layout rather than failing; the abandoned repair is not charged.
-    let before = *remaining;
-    match repair(&initial, remaining) {
+    // unrepaired layout rather than failing: finalization's work is held back
+    // first, and the repair work already done stays charged.
+    let reserve = finalize::required_work(
+        state.graph.atoms.len(),
+        &initial.fragments,
+        coordinates,
+        finalize_options,
+    );
+    let allowance = remaining.saturating_sub(reserve);
+    let mut available = allowance;
+    let repaired = repair(&initial, &mut available);
+    *remaining -= allowance - available;
+    match repaired {
         Ok(fragments) => initial.fragments = fragments,
-        Err(collision::Error::Limit) => *remaining = before,
+        Err(collision::Error::Limit) => {}
         Err(error) => return Err(error.into()),
     }
     let result = finalize::finish_with_work(
         state.graph.atoms.len(),
         &initial.fragments,
         coordinates,
-        finalize::Options {
-            canonical_orientation: options.canonical_orientation,
-            work_limit: options.work_limit,
-        },
+        finalize_options,
         remaining,
     )?;
     Ok(result.conformer)
