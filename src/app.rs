@@ -224,7 +224,7 @@ pub enum Message {
     TextColor(String),
     ApplyTextColor,
     TextAlign(reshiki::typography::TextAlign),
-    GroupLabelAlign(reshiki::abbreviations::LabelAlignment),
+    LabelAlign(reshiki::abbreviations::LabelAlignment),
     TextSpacing(f32),
     TextWidth(String),
     ApplyTextWidth,

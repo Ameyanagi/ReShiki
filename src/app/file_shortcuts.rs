@@ -520,9 +520,10 @@ pub(super) fn file_message(key: &keyboard::Key, modifiers: keyboard::Modifiers) 
         return Some(Message::Tabs(Tabs::Number(n)));
     }
     Some(match c.to_ascii_lowercase().as_str() {
-        "p" if !modifiers.shift() => Message::Printing(super::printing::Action::Start(
-            reshiki::printing::Scope::Document,
-        )),
+        // The browser has no print dialog to show.
+        "p" if !modifiers.shift() && !cfg!(target_arch = "wasm32") => Message::Printing(
+            super::printing::Action::Start(reshiki::printing::Scope::Document),
+        ),
         "o" if !modifiers.shift() => Message::Open,
         "s" if modifiers.shift() => Message::SaveAs,
         "s" => Message::Save,
