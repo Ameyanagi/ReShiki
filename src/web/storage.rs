@@ -181,11 +181,8 @@ fn font_key(hash: &str) -> String {
 /// Keep a font in storage, unless it is kept already. Its key names its
 /// contents, so it is written as is, without the checks of [`commit`].
 fn keep(hash: &str, bytes: &js_sys::Uint8Array) {
-    let kept = FONTS_ADDED.with_borrow_mut(|fonts| {
-        let kept = fonts.kept.iter().position(|kept| kept == hash);
-        // Added now, so not read later.
-        kept.map(|index| fonts.kept.swap_remove(index)).is_some()
-    });
+    let kept =
+        FONTS_ADDED.with_borrow_mut(|fonts| crate::kept_fonts::forget(&mut fonts.kept, hash));
     let Some(database) = OPENED.with_borrow(Clone::clone).filter(|_| !kept) else {
         return;
     };

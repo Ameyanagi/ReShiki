@@ -19,6 +19,8 @@ mod branding;
 mod canvas;
 #[cfg(any(windows, target_os = "linux"))]
 mod desktop;
+#[cfg(any(target_arch = "wasm32", test))]
+mod kept_fonts;
 #[cfg(not(target_arch = "wasm32"))]
 mod launch;
 mod platform;
