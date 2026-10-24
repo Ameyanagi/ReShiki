@@ -11,7 +11,11 @@ const decoder = new TextDecoder();
 let loading;
 
 export function initEditor(module) {
-  loading ??= load(module === undefined ? undefined : { module_or_path: module });
+  // A failed load is forgotten, so a later mount can try again.
+  loading ??= load(module === undefined ? undefined : { module_or_path: module }).catch((error) => {
+    loading = undefined;
+    throw error;
+  });
   return loading.then(() => undefined);
 }
 
