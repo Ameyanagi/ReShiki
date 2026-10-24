@@ -102,6 +102,34 @@ pub(super) fn text_align(f: &mut Frame<'_>, ink: Color, alignment: reshiki::typo
     }
 }
 
+/// Flush sides reuse the text glyphs; Automatic adds a two-way arrow under
+/// centered lines and Stacked above sets short lines over long ones.
+pub(super) fn label_align(
+    f: &mut Frame<'_>,
+    ink: Color,
+    alignment: reshiki::abbreviations::LabelAlignment,
+) {
+    use reshiki::{abbreviations::LabelAlignment as L, typography::TextAlign as T};
+    match alignment {
+        L::Left => text_align(f, ink, T::Left),
+        L::Center => text_align(f, ink, T::Center),
+        L::Right => text_align(f, ink, T::Right),
+        L::Auto => {
+            line(f, ink, &[(4., 5.), (20., 5.)]);
+            line(f, ink, &[(7., 9.5), (17., 9.5)]);
+            line(f, ink, &[(4., 16.), (20., 16.)]);
+            line(f, ink, &[(7., 13.), (4., 16.), (7., 19.)]);
+            line(f, ink, &[(17., 13.), (20., 16.), (17., 19.)]);
+        }
+        L::Above => {
+            for (i, width) in [6., 6., 16., 16.].into_iter().enumerate() {
+                let y = 5. + i as f32 * 4.5;
+                line(f, ink, &[((24. - width) / 2., y), ((24. + width) / 2., y)]);
+            }
+        }
+    }
+}
+
 pub(super) fn more(f: &mut Frame<'_>, ink: Color) {
     for x in [5., 12., 19.] {
         f.fill(&Path::circle(Point::new(x, 12.), 1.8), ink);
