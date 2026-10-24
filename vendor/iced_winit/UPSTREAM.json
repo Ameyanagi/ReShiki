@@ -20,6 +20,8 @@
   "local_changes": [
     "src/web_ime.rs (new, wasm32 only): on_input_method tells the page where a text widget's cursor is, or that none wants text; send queues winit Ime events from the page and wakes the window",
     "src/lib.rs: declare web_ime on wasm32; deliver the queued Ime events before each window event; register the window that send wakes",
+    "src/lib.rs: on wasm32, size the canvas through CSSOM instead of a style attribute, which a strict Content-Security-Policy (style-src without 'unsafe-inline') blocks, leaving a 300x150 canvas",
+    "Cargo.toml: web-sys CssStyleDeclaration and HtmlElement for that",
     "src/window.rs: on wasm32, report the input method area to web_ime when Iced enables, moves or disables it",
     "LICENSE (added): Iced's MIT license, which the crate package does not include; the same text as licenses/iced/LICENSE"
   ]
