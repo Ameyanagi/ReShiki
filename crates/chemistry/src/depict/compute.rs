@@ -1,6 +1,6 @@
 //! RDKit 2026.03.6 RDDepictor.cpp compute2DCoords orchestration.
 //! BSD-3-Clause; see licenses/rdkit/NOTICE.
-use super::{collision, expansion, finalize, geometry::Coordinates, ranks, seeds};
+use super::{collision, expansion, finalize, geometry::Coordinates, ranks, rings, seeds};
 use crate::stereo::{perception::State, wedging::Conformer};
 
 #[derive(Debug, thiserror::Error)]
@@ -128,32 +128,59 @@ fn compute_inner(
         },
         remaining,
     )?;
+    let finalize_options = finalize::Options {
+        canonical_orientation: options.canonical_orientation,
+        work_limit: options.work_limit,
+    };
+    // RDKit has no work cap. When ours stops collision repair, keep the
+    // unrepaired layout rather than failing: finalization's work is held back
+    // first, and the repair work already done stays charged.
+    let reserve = finalize::required_work(
+        state.graph.atoms.len(),
+        &initial.fragments,
+        coordinates,
+        finalize_options,
+    );
+    let allowance = remaining.saturating_sub(reserve);
+    let mut available = allowance;
+    let repaired = repair(&initial, &mut available);
+    *remaining -= allowance - available;
+    match repaired {
+        Ok(fragments) => initial.fragments = fragments,
+        Err(collision::Error::Limit) => {}
+        Err(error) => return Err(error.into()),
+    }
+    let result = finalize::finish_with_work(
+        state.graph.atoms.len(),
+        &initial.fragments,
+        coordinates,
+        finalize_options,
+        remaining,
+    )?;
+    Ok(result.conformer)
+}
+
+fn repair(
+    initial: &expansion::Initial,
+    remaining: &mut usize,
+) -> Result<Vec<rings::Fragment>, collision::Error> {
     let collision = collision::Input::new_with_work(
         &initial.state.graph,
         &initial.state.metadata,
         &initial.state.rings,
         remaining,
     )?;
+    let mut fragments = initial.fragments.clone();
     // Native ordering completes flips for every fragment before opening angles
     // or shortening bonds. Never publish the temporary stereo/ring state.
-    for fragment in &mut initial.fragments {
+    for fragment in &mut fragments {
         *fragment =
             collision.apply_with_work(fragment, collision::Stage::BondAndSpiroFlip, remaining)?;
     }
-    for fragment in &mut initial.fragments {
+    for fragment in &mut fragments {
         *fragment = collision.apply_with_work(fragment, collision::Stage::OpenAngles, remaining)?;
         *fragment =
             collision.apply_with_work(fragment, collision::Stage::ShortenBonds, remaining)?;
     }
-    let result = finalize::finish_with_work(
-        state.graph.atoms.len(),
-        &initial.fragments,
-        coordinates,
-        finalize::Options {
-            canonical_orientation: options.canonical_orientation,
-            work_limit: options.work_limit,
-        },
-        remaining,
-    )?;
-    Ok(result.conformer)
+    Ok(fragments)
 }
