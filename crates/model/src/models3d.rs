@@ -147,6 +147,9 @@ pub struct Model3d {
     /// Labels and displacement parameters of atoms read from a file.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sites: Vec<Site>,
+    /// Import decisions that affect the atoms shown, retained as provenance.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<String>,
     /// View rotation as a unit quaternion `[w, x, y, z]`.
     pub rotation: [f32; 4],
     /// Frame centre minus the molecule's 2D centre, in drawing units.
@@ -417,6 +420,7 @@ impl Model3d {
             hydrogens,
             cell: None,
             sites: vec![],
+            notes: vec![],
             rotation: [1., 0., 0., 0.],
             offset: Point::default(),
             size: 1.,
@@ -1262,6 +1266,10 @@ pub fn validate(doc: &Document) -> Result<(), String> {
             || !(0. ..=1.).contains(&m.depth_fade)
             || !(0. ..=1.).contains(&m.perspective)
             || !crystal::valid(m.cell.as_ref(), &m.sites, &ids)
+            || m.notes.len() > 16
+            || m.notes.iter().any(|note| {
+                note.trim().is_empty() || note.len() > 512 || note.chars().any(char::is_control)
+            })
             || !m.repeat.iter().all(|n| (1..=MAX_REPEAT).contains(n))
             || (m.cell.is_none() && !is_one_cell(&m.repeat))
             || m.drawn.as_ref().is_some_and(|d| {

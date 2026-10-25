@@ -223,10 +223,12 @@ impl App {
             .height(Length::Fill)
             .into();
         let paper = self.with_drop_overlay(
-            sensor(self.with_context_menu(self.with_inline_text(drawing.map(Message::Canvas))))
-                .on_show(Message::Viewport)
-                .on_resize(Message::Viewport)
-                .into(),
+            sensor(super::atom_text::canvas_anchor(self.with_context_menu(
+                self.with_inline_text(drawing.map(Message::Canvas)),
+            )))
+            .on_show(Message::Viewport)
+            .on_resize(Message::Viewport)
+            .into(),
         );
         let context: Element<'_, Message> = if let Some(preview) = &self.tab.cleanup {
             self.cleanup_bar(preview)
