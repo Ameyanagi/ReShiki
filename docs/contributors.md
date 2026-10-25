@@ -174,3 +174,5 @@ The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/con
 Space-filling hydrogen visibility: @Ameyanagi in [PR #535](https://github.com/Ameyanagi/ReShiki/pull/535) (merged); [validation and reusable evidence](changes/qa-513.md).
 
 PDF gradient alignment for molecular and crystal models: @Ameyanagi in [PR #536](https://github.com/Ameyanagi/ReShiki/pull/536) (under review); [validation and reusable evidence](changes/qa-522.md).
+
+Clear CLI errors for unsupported crystal input: @Ameyanagi in [PR #537](https://github.com/Ameyanagi/ReShiki/pull/537) (under review); [validation](changes/qa-490.md).

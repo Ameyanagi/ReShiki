@@ -17,4 +17,9 @@ PDF export keeps 3D model and crystal shading aligned at publication size.
 
 ![Matched PDF exports before and after the fix: Flat and Glossy molecular models and a sodium chloride unit cell retain their shading](images/qa-522/pdf-gradient-before-after.png)
 
+Crystal files passed to the CLI now produce a clear unsupported-format message
+instead of a SMILES parse error. Rejection happens before input is read or output
+is created. @Ameyanagi, [PR #537](https://github.com/Ameyanagi/ReShiki/pull/537),
+under review. [Command examples and validation](changes/qa-490.md).
+
 See [ReShiki 0.13.0](changes-0.13.md) for the latest release notes.
