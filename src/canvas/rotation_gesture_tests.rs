@@ -99,11 +99,7 @@ pub(crate) fn rotation_drag(
         before_release.extend(send(&mut state, event));
         assert!(state.gesture.is_none());
     }
-    assert!(
-        before_release
-            .iter()
-            .all(|edit| matches!(edit, Edit::Hover(_)))
-    );
+    assert!(before_release.iter().all(|edit| edit.is_hover()));
     let release = send(
         &mut state,
         Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),

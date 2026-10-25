@@ -184,7 +184,7 @@ fn canceled_label_gestures_never_restore_stale_hover() {
                 &mut state,
                 Event::Mouse(mouse::Event::CursorMoved { position })
             ),
-            Some(Edit::Hover(Some(_)))
+            Some(Edit::PointerHover(Some(_)))
         ));
         assert!(matches!(
             send(
@@ -196,7 +196,7 @@ fn canceled_label_gestures_never_restore_stale_hover() {
         ));
         assert!(!matches!(
             send(&canvas, &mut state, cancel),
-            Some(Edit::Hover(Some(_)))
+            Some(Edit::PointerHover(Some(_)))
         ));
         assert!(
             send(

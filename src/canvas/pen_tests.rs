@@ -106,12 +106,7 @@ fn pen_offset_click_selects_exact_nodes_and_controls_without_changing_the_previe
                 );
                 assert_eq!(events.pressed_preview, doc);
                 assert_eq!(events.preview, doc);
-                assert!(
-                    events
-                        .before_release
-                        .iter()
-                        .all(|edit| matches!(edit, Edit::Hover(_)))
-                );
+                assert!(events.before_release.iter().all(|edit| edit.is_hover()));
                 let Edit::GraphicPoint(id, index, point) = events.release else {
                     panic!("handle selection")
                 };

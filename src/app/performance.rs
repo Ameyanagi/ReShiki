@@ -124,7 +124,7 @@ fn camera_workloads() {
         let (mut app, _) = App::new();
         app.tab.doc = doc;
         measure(&format!("gallery_{copies}x_pan"), || {
-            let _ = black_box(app.update(Message::Canvas(Edit::Pan(3., -2., None))));
+            let _ = black_box(app.update(Message::Canvas(Edit::Pan(3., -2.))));
         });
         measure(&format!("gallery_{copies}x_zoom_in_out"), || {
             let at = Point::new(10., 10.);

@@ -272,7 +272,9 @@ also provides a position where a shortcut can start another structure.
 Wheel panning and Cmd/Ctrl-scroll zooming retarget a pointer-owned hotspot at
 the drawing point now under the pointer, using the new zoom's picking radius.
 Once arrow navigation or an edit owns the hotspot, scrolling keeps that chosen
-target; only actual pointer motion or a canvas click transfers it back.
+target; only actual pointer motion or a canvas click transfers it back. Wheel
+and subsequent pointer-motion events also retain their physical canvas positions
+when delivered together, so the latest camera determines the hover point.
 
 Letters and digits reuse the existing [atom shortcuts](contextual-shortcuts.md#at-an-atom)
 and [bond shortcuts](contextual-shortcuts.md#at-a-bond). Their chemical mappings

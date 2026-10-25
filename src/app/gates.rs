@@ -235,7 +235,7 @@ impl App {
     fn close_transient_menus(&mut self, message: &Message) {
         if !matches!(
             message,
-            Message::Canvas(Edit::Hover(_))
+            Message::Canvas(Edit::Hover(_) | Edit::PointerHover(_))
                 | Message::Tick
                 | Message::InspectorScroll(_)
                 | Message::EngineDone { .. }
@@ -414,8 +414,13 @@ impl App {
 pub(super) fn preview_passthrough(message: &Message) -> bool {
     matches!(
         message,
-        Message::Canvas(Edit::Pan(..) | Edit::Zoom(..) | Edit::Hover(_))
-            | Message::InspectorScroll(_)
+        Message::Canvas(
+            Edit::Pan(..)
+                | Edit::Zoom(..)
+                | Edit::Navigate(..)
+                | Edit::Hover(_)
+                | Edit::PointerHover(_)
+        ) | Message::InspectorScroll(_)
             | Message::Viewport(_)
             | Message::Fit
             | Message::Zoom(_)

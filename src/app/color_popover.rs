@@ -75,7 +75,7 @@ pub(super) fn keeps_open(message: &Message) -> bool {
             | Message::ClearRingFill
             | Message::ClearHighlights
             | Message::TextStyle(StyleChange::Color(_))
-            | Message::Canvas(crate::canvas::Edit::Hover(_))
+            | Message::Canvas(crate::canvas::Edit::Hover(_) | crate::canvas::Edit::PointerHover(_))
             | Message::InspectorScroll(_)
             | Message::Nmr(super::nmr::Action::RenderedSize(_))
             | Message::InspectorAction(

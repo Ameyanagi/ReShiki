@@ -806,7 +806,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::Graphics(super::graphics::Action::Style(_))
             | Message::ArrowAction(_)
             | Message::Assistant(super::assistant::Action::Send)
-    ) || matches!(message, Message::Canvas(edit) if !matches!(edit, crate::canvas::Edit::Hover(_) | crate::canvas::Edit::Pan(..) | crate::canvas::Edit::Zoom(..) | crate::canvas::Edit::BeginTransform(_)))
+    ) || matches!(message, Message::Canvas(edit) if !edit.is_camera() && !edit.is_hover() && !matches!(edit, crate::canvas::Edit::BeginTransform(_)))
 }
 
 #[cfg(test)]

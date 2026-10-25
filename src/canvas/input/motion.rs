@@ -3,7 +3,7 @@
 use crate::canvas::hit::bond_text_at;
 use crate::canvas::{Edit, Gesture, MoleculeCanvas, State, Tool};
 use iced::widget::canvas::Action;
-use iced::{Point, Rectangle};
+use iced::{Point, Rectangle, Vector};
 use reshiki::chains;
 
 impl MoleculeCanvas<'_> {
@@ -83,7 +83,6 @@ impl MoleculeCanvas<'_> {
                 Action::publish(Edit::Pan(
                     delta.x / self.camera.zoom,
                     delta.y / self.camera.zoom,
-                    None,
                 ))
                 .and_capture(),
             );
@@ -113,11 +112,11 @@ impl MoleculeCanvas<'_> {
                 return Some(Action::request_redraw());
             }
             let hover = if inside && state.gesture.is_none() {
-                point.map(|p| self.camera.world(p, bounds))
+                point.map(|p| Vector::new(p.x - bounds.width / 2., p.y - bounds.height / 2.))
             } else {
                 None
             };
-            Some(Action::publish(Edit::Hover(hover)))
+            Some(Action::publish(Edit::PointerHover(hover)))
         } else {
             None
         }

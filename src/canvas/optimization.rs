@@ -139,11 +139,7 @@ pub(super) fn update(
                 Some(Drag::Pan { last }) => {
                     let delta = point - *last;
                     *last = point;
-                    Edit::Pan(
-                        delta.x / canvas.camera.zoom,
-                        delta.y / canvas.camera.zoom,
-                        None,
-                    )
+                    Edit::Pan(delta.x / canvas.camera.zoom, delta.y / canvas.camera.zoom)
                 }
                 None => Edit::Hover(inside.then(|| canvas.camera.world(point, bounds))),
             };
@@ -175,7 +171,7 @@ pub(super) fn update(
             let edit = if super::command_held(state.modifiers) {
                 Edit::Zoom((zoom * 0.9).exp(), canvas.camera.world(point?, bounds))
             } else {
-                Edit::Pan(-x / canvas.camera.zoom, -y / canvas.camera.zoom, None)
+                Edit::Pan(-x / canvas.camera.zoom, -y / canvas.camera.zoom)
             };
             Some(Action::publish(edit).and_capture())
         }

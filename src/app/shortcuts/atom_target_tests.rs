@@ -649,7 +649,7 @@ fn clicked_hydrogen_label_targets_its_atom_after_real_mouse_press_and_release() 
                 );
                 assert!(matches!(
                     edits.as_slice(),
-                    [Edit::Hover(Some(_)), Edit::Hover(None), Edit::Select(ids)]
+                    [Edit::PointerHover(Some(_)), Edit::Hover(None), Edit::Select(ids)]
                         if ids.as_slice() == [target]
                 ));
                 for edit in edits {

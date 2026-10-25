@@ -49,6 +49,7 @@ fn scroll_pans_both_axes_and_command_or_control_zooms_at_pointer() -> Result<(),
             let mut canvas = chain_canvas(&doc, ChainMode::Straight);
             canvas.guides.rulers = rulers;
             canvas.camera.zoom = zoom;
+            canvas.camera.center = World::new(1000., -2000.);
             let paper = canvas.guides.paper(bounds);
             let local = Point::new(123., 87.);
             let pointer = Point::new(paper.x + local.x, paper.y + local.y);
@@ -67,12 +68,18 @@ fn scroll_pans_both_axes_and_command_or_control_zooms_at_pointer() -> Result<(),
                         cursor,
                     )
                     .ok_or("Scroll action")?;
-                let Some(Edit::Pan(dx, dy, at)) = action.into_inner().0 else {
+                let Some(Edit::Navigate(Navigation::Pan(pan_delta), offset)) =
+                    action.into_inner().0
+                else {
                     return Err("Unmodified scroll must pan".into());
                 };
-                assert_eq!(at, Some(anchor));
+                assert_eq!(pan_delta, Vector::new(expected_x, expected_y));
+                assert_eq!(
+                    offset,
+                    Vector::new(local.x - paper.width / 2., local.y - paper.height / 2.)
+                );
                 let mut moved = canvas.camera;
-                moved.center = moved.center.offset(-dx, -dy);
+                moved.navigate(Navigation::Pan(pan_delta), offset, 0.005);
                 let position = moved.screen(anchor, paper);
                 assert!((position.x - local.x - expected_x).abs() < 0.001);
                 assert!((position.y - local.y - expected_y).abs() < 0.001);
@@ -89,10 +96,19 @@ fn scroll_pans_both_axes_and_command_or_control_zooms_at_pointer() -> Result<(),
                             cursor,
                         )
                         .ok_or("Zoom action")?;
-                    let Some(Edit::Zoom(factor, point)) = action.into_inner().0 else {
+                    let Some(Edit::Navigate(Navigation::Zoom(factor), offset)) =
+                        action.into_inner().0
+                    else {
                         return Err("Modified scroll must zoom".into());
                     };
-                    assert_eq!(point, anchor);
+                    assert_eq!(
+                        offset,
+                        Vector::new(local.x - paper.width / 2., local.y - paper.height / 2.)
+                    );
+                    let mut moved = canvas.camera;
+                    let target = moved.navigate(Navigation::Zoom(factor), offset, 0.005);
+                    assert!(target.distance(anchor) < 0.001);
+                    assert!(moved.world(local, paper).distance(anchor) < 0.001);
                     assert!((factor - 1.) * expected_y > 0.);
                 }
             }
@@ -167,7 +183,7 @@ fn rulers_exclude_editing_and_pointer_coordinates_use_the_inset_paper() {
         .expect("zoom on drawing");
     assert!(matches!(
         action.into_inner().0,
-        Some(Edit::Zoom(_, World { x: 0., y: 0. }))
+        Some(Edit::Navigate(Navigation::Zoom(_), offset)) if offset == Vector::ZERO
     ));
     canvas.update(
         &mut state,
@@ -176,6 +192,165 @@ fn rulers_exclude_editing_and_pointer_coordinates_use_the_inset_paper() {
         mouse::Cursor::Unavailable,
     );
     assert!(state.cursor.is_none());
+}
+
+#[test]
+fn one_unchanged_canvas_view_emits_camera_independent_mixed_wheel_packets() {
+    let doc = Document::default();
+    let bounds = Rectangle::new(Point::new(20., 50.), iced::Size::new(500., 350.));
+    for zoom in [0.5, 2.] {
+        for pan_first in [false, true] {
+            for rulers in [false, true] {
+                let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+                canvas.guides.rulers = rulers;
+                canvas.camera = Camera {
+                    center: World::new(1000., -2000.),
+                    zoom,
+                };
+                let paper = canvas.guides.paper(bounds);
+                let local = Point::new(123., 87.);
+                let pointer = Point::new(paper.x + local.x, paper.y + local.y);
+                let offset = Vector::new(local.x - paper.width / 2., local.y - paper.height / 2.);
+                let mut state = State {
+                    cursor: Some(pointer),
+                    ..Default::default()
+                };
+                let pan = mouse::ScrollDelta::Pixels { x: 42., y: -18. };
+                let scale = mouse::ScrollDelta::Pixels { x: 0., y: 45. };
+                let mut packets = Vec::new();
+                // Match Iced: emit the entire event batch from one immutable
+                // view before applying any of its messages to the app camera.
+                for is_pan in [pan_first, !pan_first] {
+                    let modifiers = if is_pan {
+                        iced::keyboard::Modifiers::empty()
+                    } else {
+                        iced::keyboard::Modifiers::COMMAND
+                    };
+                    canvas.update(
+                        &mut state,
+                        &Event::Keyboard(iced::keyboard::Event::ModifiersChanged(modifiers)),
+                        bounds,
+                        mouse::Cursor::Available(pointer),
+                    );
+                    let action = canvas
+                        .update(
+                            &mut state,
+                            &Event::Mouse(mouse::Event::WheelScrolled {
+                                delta: if is_pan { pan } else { scale },
+                            }),
+                            bounds,
+                            mouse::Cursor::Available(pointer),
+                        )
+                        .unwrap();
+                    let Some(Edit::Navigate(navigation, emitted_offset)) = action.into_inner().0
+                    else {
+                        panic!("Wheel packet")
+                    };
+                    assert_eq!(emitted_offset, offset);
+                    match navigation {
+                        Navigation::Pan(delta) => {
+                            assert!(is_pan);
+                            assert_eq!(delta, Vector::new(42., -18.));
+                        }
+                        Navigation::Zoom(factor) => {
+                            assert!(!is_pan);
+                            assert!((factor - 0.135f32.exp()).abs() < 0.00001);
+                        }
+                    }
+                    packets.push((navigation, emitted_offset));
+                }
+                assert_eq!(canvas.camera.center, World::new(1000., -2000.));
+                assert_eq!(canvas.camera.zoom, zoom);
+                let mut current = canvas.camera;
+                for (navigation, offset) in packets {
+                    let target = current.navigate(navigation, offset, 0.005);
+                    assert!(current.screen(target, paper).distance(local) < 0.002);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn one_unchanged_canvas_view_emits_pointer_motion_after_wheel_in_screen_coordinates() {
+    let doc = Document::default();
+    let bounds = Rectangle::new(Point::new(20., 50.), iced::Size::new(500., 350.));
+    for zoom in [0.5, 2.] {
+        for zooming in [false, true] {
+            for keyboard_owned in [false, true] {
+                let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+                canvas.camera = Camera {
+                    center: World::new(10., 20.),
+                    zoom,
+                };
+                canvas.keyboard_target = keyboard_owned.then_some(World::new(900., 800.));
+                let paper = canvas.guides.paper(bounds);
+                let offset = Vector::new(100., -40.);
+                let moved_offset = Vector::new(110., -34.);
+                let screen = |offset: Vector| {
+                    Point::new(
+                        paper.x + paper.width / 2. + offset.x,
+                        paper.y + paper.height / 2. + offset.y,
+                    )
+                };
+                let pointer = screen(offset);
+                let moved = screen(moved_offset);
+                let mut state = State {
+                    cursor: Some(pointer),
+                    modifiers: if zooming {
+                        iced::keyboard::Modifiers::COMMAND
+                    } else {
+                        iced::keyboard::Modifiers::empty()
+                    },
+                    ..Default::default()
+                };
+                let wheel = canvas
+                    .update(
+                        &mut state,
+                        &Event::Mouse(mouse::Event::WheelScrolled {
+                            delta: if zooming {
+                                mouse::ScrollDelta::Pixels { x: 0., y: 45. }
+                            } else {
+                                mouse::ScrollDelta::Pixels { x: 42., y: -18. }
+                            },
+                        }),
+                        bounds,
+                        mouse::Cursor::Available(pointer),
+                    )
+                    .unwrap()
+                    .into_inner()
+                    .0
+                    .unwrap();
+                let motion = canvas
+                    .update(
+                        &mut state,
+                        &Event::Mouse(mouse::Event::CursorMoved { position: moved }),
+                        bounds,
+                        mouse::Cursor::Available(moved),
+                    )
+                    .unwrap()
+                    .into_inner()
+                    .0
+                    .unwrap();
+                let Edit::Navigate(navigation, wheel_offset) = wheel else {
+                    panic!("Wheel packet")
+                };
+                let Edit::PointerHover(Some(hover_offset)) = motion else {
+                    panic!("Native motion packet")
+                };
+                assert_eq!(wheel_offset, offset);
+                assert_eq!(hover_offset, moved_offset);
+                // Both packets came from the unchanged old view. Resolve them
+                // only now, in the same order as the application message loop.
+                let mut current = canvas.camera;
+                current.navigate(navigation, wheel_offset, 0.005);
+                let hover = current.pointer(hover_offset);
+                let local = Point::new(moved.x - paper.x, moved.y - paper.y);
+                assert!(current.screen(hover, paper).distance(local) < 0.001);
+                assert!(hover.distance(canvas.camera.pointer(hover_offset)) > 0.1);
+            }
+        }
+    }
 }
 
 #[test]
@@ -2213,7 +2388,7 @@ fn keyboard_click_preserves_world_point_and_stationary_screen_motion_does_not_ha
         .unwrap()
         .into_inner()
         .0;
-    assert!(matches!(first, Some(Edit::Hover(Some(point))) if point == World::default()));
+    assert!(matches!(first, Some(Edit::PointerHover(Some(offset))) if offset == Vector::ZERO));
     canvas.camera.center = World::new(100., 100.);
     let stationary = canvas
         .update(&mut state, &motion, bounds, cursor)
@@ -2235,7 +2410,9 @@ fn keyboard_click_preserves_world_point_and_stationary_screen_motion_does_not_ha
         .unwrap()
         .into_inner()
         .0;
-    assert!(matches!(moved, Some(Edit::Hover(Some(point))) if point == World::new(101., 100.)));
+    assert!(
+        matches!(moved, Some(Edit::PointerHover(Some(offset))) if offset == Vector::new(1., 0.))
+    );
 }
 
 #[test]

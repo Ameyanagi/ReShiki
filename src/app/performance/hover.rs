@@ -1,7 +1,14 @@
 //! Hover profiling through the application update and the real widget renderer.
 use super::*;
 use iced::advanced::{Layout, layout, mouse, renderer, renderer::Headless, widget::Tree};
-use iced::{Rectangle, Size};
+use iced::{Rectangle, Size, Vector};
+
+fn hover(camera: crate::canvas::Camera, point: Point) -> Edit {
+    Edit::PointerHover(Some(Vector::new(
+        (point.x - camera.center.x) * camera.zoom,
+        (point.y - camera.center.y) * camera.zoom,
+    )))
+}
 
 fn drawing() -> Document {
     if let Some(path) = std::env::var_os("RESHIKI_PERF_HOVER_DRAWING") {
@@ -98,6 +105,16 @@ async fn hover_workloads() {
         doc.atoms[0].position.offset(300., 100.),
         doc.bounds().1.offset(100., 100.),
     ];
+    // Match physical positions in both sources, including the native packet's
+    // f32 screen/world round trip. The baseline driver emits the equivalent
+    // legacy world Hover after the same round trip.
+    let points = points.map(|p| {
+        let camera = app.tab.camera;
+        camera.center.offset(
+            (p.x - camera.center.x) * camera.zoom / camera.zoom,
+            (p.y - camera.center.y) * camera.zoom / camera.zoom,
+        )
+    });
     println!("workload,median_ms,p95_ms");
     let mut step = 0;
     measure("gallery_16x_atom_label_hit", || {
@@ -121,13 +138,14 @@ async fn hover_workloads() {
         step += 1;
     });
     for point in points {
-        let _ = app.update(Message::Canvas(Edit::Hover(Some(point))));
+        let _ = app.update(Message::Canvas(hover(app.tab.camera, point)));
         println!("target,{point:?},{:?}", app.tab.keyboard_drawing.target());
     }
     measure("gallery_16x_hover_complete_app_update", || {
-        let _ = black_box(app.update(Message::Canvas(Edit::Hover(Some(
+        let _ = black_box(app.update(Message::Canvas(hover(
+            app.tab.camera,
             points[step % points.len()],
-        )))));
+        ))));
         step += 1;
     });
     let mut ui = Ui {
@@ -147,9 +165,10 @@ async fn hover_workloads() {
         ui.draw(&app, cursor);
     });
     measure("gallery_16x_hover_update_through_draw", || {
-        let _ = black_box(app.update(Message::Canvas(Edit::Hover(Some(
+        let _ = black_box(app.update(Message::Canvas(hover(
+            app.tab.camera,
             points[step % points.len()],
-        )))));
+        ))));
         step += 1;
         ui.draw(&app, cursor);
     });

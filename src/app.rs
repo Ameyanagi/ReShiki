@@ -861,7 +861,10 @@ impl App {
         let controls_unchanged = matches!(
             &message,
             Message::Canvas(
-                Edit::Hover(_) | Edit::RelaxDragTarget { .. } | Edit::RelaxRotate { .. }
+                Edit::Hover(_)
+                    | Edit::PointerHover(_)
+                    | Edit::RelaxDragTarget { .. }
+                    | Edit::RelaxRotate { .. }
             )
         );
         let task = self.update_routed(message);

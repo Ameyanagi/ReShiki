@@ -855,7 +855,7 @@ async fn rendered_nmr_controls_publish_values_and_live_native_actions() {
 #[tokio::test]
 #[ignore = "Opt-in real renderer, viewport and pointer routing check"]
 async fn floating_nmr_preserves_canvas_and_owns_only_its_pointer_input() {
-    use crate::canvas::{Edit, Tool};
+    use crate::canvas::Tool;
     use iced::{Event, Point as ScreenPoint, Rectangle, Size, mouse};
     for size in [Size::new(940., 620.), Size::new(1280., 820.)] {
         for inspector in [false, true] {
@@ -1057,7 +1057,7 @@ async fn floating_nmr_preserves_canvas_and_owns_only_its_pointer_input() {
             assert!(
                 messages
                     .iter()
-                    .any(|m| matches!(m, Message::Canvas(Edit::Pan(..)))),
+                    .any(|m| matches!(m, Message::Canvas(edit) if edit.is_camera())),
                 "Outside drawing input blocked: window={size:?}, inspector={inspector}, canvas={canvas:?}, panel={panel:?}, probe={outside:?}, previous_probe={previous_probe:?}, previous_probe_inside_panel={}, messages={messages:?}",
                 panel.contains(previous_probe)
             );
@@ -1477,7 +1477,7 @@ fn nearby_plot_markers_cycle_distinct_original_atoms_without_editing() {
 #[tokio::test]
 #[ignore = "Opt-in real renderer hybrid NMR interaction check"]
 async fn hybrid_nmr_docks_drags_resizes_and_links_plot_labels_without_canvas_edits() {
-    use crate::canvas::{Edit, Tool};
+    use crate::canvas::Tool;
     use iced::{Event, Rectangle, mouse};
     for size in [Size::new(940., 620.), Size::new(1280., 820.)] {
         for inspector in [false, true] {
@@ -1653,7 +1653,7 @@ async fn hybrid_nmr_docks_drags_resizes_and_links_plot_labels_without_canvas_edi
             assert!(
                 messages
                     .iter()
-                    .any(|m| matches!(m, Message::Canvas(Edit::Pan(..))))
+                    .any(|m| matches!(m, Message::Canvas(edit) if edit.is_camera()))
             );
         }
     }
@@ -1961,7 +1961,6 @@ async fn native_batched_palette_drags_keep_press_position_and_release_ownership(
 #[tokio::test]
 #[ignore = "Opt-in real renderer native child button batch ordering check"]
 async fn native_batched_palette_buttons_use_ordered_press_and_release_targets() {
-    use crate::canvas::Edit;
     use iced::{Event, mouse};
     let mut app = ethyl_acetate();
     let mut ui = NmrUi::new(Size::new(1280., 820.)).await;
@@ -2008,7 +2007,7 @@ async fn native_batched_palette_buttons_use_ordered_press_and_release_targets() 
     assert!(
         !messages
             .iter()
-            .any(|m| matches!(m, Message::Canvas(edit) if !matches!(edit, Edit::Hover(_))))
+            .any(|m| matches!(m, Message::Canvas(edit) if !edit.is_hover()))
     );
     let (_, messages) = ui.events(
         &app,
@@ -2554,7 +2553,7 @@ async fn label_checkbox_and_popup_use_real_checked_actions_and_own_batched_click
     assert!(
         !messages
             .iter()
-            .any(|message| matches!(message, Message::Canvas(edit) if !matches!(edit, crate::canvas::Edit::Hover(_))))
+            .any(|message| matches!(message, Message::Canvas(edit) if !edit.is_hover()))
     );
     for message in messages {
         let _ = app.update(message);
@@ -2680,9 +2679,11 @@ async fn label_menu_dismissal_and_foreign_canvas_release_keep_pointer_ownership(
                 .count(),
             1
         );
-        assert!(!messages.iter().any(
-            |message| matches!(message, Message::Canvas(edit) if !matches!(edit, Edit::Hover(_)))
-        ));
+        assert!(
+            !messages
+                .iter()
+                .any(|message| matches!(message, Message::Canvas(edit) if !edit.is_hover()))
+        );
         for message in messages {
             let _ = app.update(message);
         }
@@ -2695,9 +2696,11 @@ async fn label_menu_dismissal_and_foreign_canvas_release_keep_pointer_ownership(
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
         };
         let (_, messages) = ui.event(&app, release, mouse::Cursor::Available(outside));
-        assert!(!messages.iter().any(
-            |message| matches!(message, Message::Canvas(edit) if !matches!(edit, Edit::Hover(_)))
-        ));
+        assert!(
+            !messages
+                .iter()
+                .any(|message| matches!(message, Message::Canvas(edit) if !edit.is_hover()))
+        );
         assert!(!app.tab.nmr.labels.menu);
     }
     let _ = app.nmr_action(Action::LabelMenu(true));

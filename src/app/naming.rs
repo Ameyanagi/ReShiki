@@ -521,7 +521,10 @@ impl App {
             Edit::ScaleAxes { ids, pivot, x, y } => {
                 editing::scale_axes_about(&mut preview.document, &ids, pivot, x, y)
             }
-            Edit::Pan(dx, dy, _) => preview.camera.center = preview.camera.center.offset(-dx, -dy),
+            Edit::Pan(dx, dy) => preview.camera.center = preview.camera.center.offset(-dx, -dy),
+            Edit::Navigate(navigation, offset) => {
+                preview.camera.navigate(navigation, offset, 0.05);
+            }
             Edit::Zoom(factor, at) => {
                 let old = preview.camera.zoom;
                 preview.camera.zoom = (old * factor).clamp(0.05, 5.);

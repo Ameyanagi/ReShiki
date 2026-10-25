@@ -5,7 +5,7 @@ mod press;
 mod release;
 
 use crate::canvas::pick::{HANDLE_PICK_PX, PICK_RADIUS_PX};
-use crate::canvas::{Edit, Gesture, Handle, MoleculeCanvas, State, Tool, optimization};
+use crate::canvas::{Edit, Gesture, Handle, MoleculeCanvas, Navigation, State, Tool, optimization};
 use iced::widget::canvas::Action;
 use iced::{Event, Point, Rectangle, mouse};
 
@@ -107,16 +107,17 @@ impl MoleculeCanvas<'_> {
                     return None;
                 }
                 // A trackpad pinch arrives as Control-scroll.
-                let edit = if state.modifiers.command() || crate::platform::control(state.modifiers)
-                {
-                    Edit::Zoom(zoom_amount.exp(), self.camera.world(point?, bounds))
-                } else {
-                    Edit::Pan(
-                        x / self.camera.zoom,
-                        y / self.camera.zoom,
-                        Some(self.camera.world(point?, bounds)),
-                    )
-                };
+                let navigation =
+                    if state.modifiers.command() || crate::platform::control(state.modifiers) {
+                        Navigation::Zoom(zoom_amount.exp())
+                    } else {
+                        Navigation::Pan(iced::Vector::new(x, y))
+                    };
+                let point = point?;
+                let edit = Edit::Navigate(
+                    navigation,
+                    iced::Vector::new(point.x - bounds.width / 2., point.y - bounds.height / 2.),
+                );
                 Some(Action::publish(edit).and_capture())
             }
             // macOS can report Control-click as a secondary click.

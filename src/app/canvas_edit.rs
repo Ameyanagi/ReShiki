@@ -9,13 +9,13 @@ mod placement;
 const BOND_TEXT_HINT: &str = "Drag to bond; this text becomes an atom label";
 
 impl App {
-    /// Moves the view for Pan and Zoom; false for any other edit.
+    /// Move the view for legacy camera edits or batched wheel packets.
     fn move_camera(&mut self, edit: &Edit) -> bool {
         let pointer = match *edit {
-            Edit::Pan(dx, dy, at) => {
+            Edit::Pan(dx, dy) => {
                 self.tab.fit_to_view = false;
                 self.tab.camera.center = self.tab.camera.center.offset(-dx, -dy);
-                at.map(|point| point.offset(-dx, -dy))
+                None
             }
             Edit::Zoom(f, at) => {
                 self.tab.fit_to_view = false;
@@ -26,7 +26,11 @@ impl App {
                     at.x + (self.tab.camera.center.x - at.x) * ratio,
                     at.y + (self.tab.camera.center.y - at.y) * ratio,
                 );
-                Some(at)
+                None
+            }
+            Edit::Navigate(navigation, offset) => {
+                self.tab.fit_to_view = false;
+                Some(self.tab.camera.navigate(navigation, offset, 0.005))
             }
             _ => return false,
         };
@@ -35,6 +39,10 @@ impl App {
     }
 
     pub(super) fn edit(&mut self, edit: Edit) {
+        let edit = match edit {
+            Edit::PointerHover(offset) => Edit::Hover(offset.map(|p| self.tab.camera.pointer(p))),
+            edit => edit,
+        };
         match edit {
             Edit::ArrowTarget(p, bypass) => {
                 self.arrow_target_click(p, bypass);
@@ -87,7 +95,7 @@ impl App {
             Edit::Hover(_) | Edit::ContextMenu { .. } => {}
             _ => self.tab.erase_stroke = false,
         }
-        if matches!(edit, Edit::Pan(..) | Edit::Zoom(..)) {
+        if edit.is_camera() {
             self.tab.pages.fit = None;
         }
         if let Edit::Hover(point) = edit {
@@ -96,13 +104,13 @@ impl App {
             self.hover_bond_text(point);
             return;
         }
-        if matches!(edit, Edit::Pan(..) | Edit::Zoom(..)) {
+        if edit.is_camera() {
             self.tab.hover = None;
             self.hover_bond_text(None);
         }
         if self.tab.cleanup.is_some() {
             match edit {
-                Edit::Pan(dx, dy, _) => {
+                Edit::Pan(dx, dy) => {
                     self.tab.camera.center = self
                         .tab
                         .camera
@@ -112,6 +120,11 @@ impl App {
                 }
                 Edit::Zoom(factor, _) => {
                     self.tab.camera.zoom = (self.tab.camera.zoom * factor).clamp(0.005, 5.);
+                    self.tab.fit_to_view = false;
+                }
+                Edit::Navigate(navigation, offset) => {
+                    let point = self.tab.camera.navigate(navigation, offset, 0.005);
+                    self.keyboard_pointer_camera(Some(point));
                     self.tab.fit_to_view = false;
                 }
                 _ => {}
@@ -131,6 +144,7 @@ impl App {
             // These edits are handled by the leading match, before preview gates.
             Edit::ContextMenu { .. } | Edit::ArrowTarget(..) | Edit::CancelArrowSource => return,
             Edit::Hover(_)
+            | Edit::PointerHover(_)
             | Edit::RelaxDragStart { .. }
             | Edit::RelaxDragTarget { .. }
             | Edit::RelaxDragEnd { .. }
@@ -142,6 +156,7 @@ impl App {
             | Edit::EraseTo(..)
             | Edit::EraseEnd
             | Edit::Pan(..)
+            | Edit::Navigate(..)
             | Edit::Zoom(..) => return,
             Edit::ArrowClick(id) => self.apply_arrow_tool(id),
             Edit::Chain {
