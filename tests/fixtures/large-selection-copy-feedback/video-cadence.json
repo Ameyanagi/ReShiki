@@ -1,0 +1,71 @@
+{
+  "baseline": {
+    "first_preparing_frame": 768,
+    "first_preparing_pts_s": 14.866666666666667,
+    "last_menu_frame": 767,
+    "first_copied_frame": 823,
+    "first_copied_pts_s": 15.816666666666666,
+    "original_duration_s": 44.986666666666665,
+    "original_frame_count": 2499,
+    "original_nominal_fps": 55.53127670288086,
+    "original_median_interval_ms": 16.66666666666572,
+    "original_max_interval_ms": 599.9999999999997,
+    "method": "All original samples decoded; footer-pixel classifier locates boundaries, and last-menu/first-preparing/first-copied frames are visually inspected. PTS is video local; it is not the OS click time. The whole-video maximum can include idle capture gaps.",
+    "preparing_transition_interval_ms": 33.333333333333215,
+    "progress_through_completion_max_interval_ms": 33.33333333333499,
+    "progress_through_completion_median_interval_ms": 16.666666666667496,
+    "surrounding_range_frames": [
+      738,
+      838
+    ],
+    "surrounding_max_interval_ms": 33.33333333333499,
+    "surrounding_median_interval_ms": 16.666666666667496,
+    "surrounding_range_note": "Includes video samples before the first Preparing frame; the combined surrounding maximum includes an idle capture gap, not an aligned command interval."
+  },
+  "stable": {
+    "first_preparing_frame": 364,
+    "first_preparing_pts_s": 6.45,
+    "last_menu_frame": 363,
+    "first_copied_frame": 405,
+    "first_copied_pts_s": 7.166666666666667,
+    "original_duration_s": 44.99166666666667,
+    "original_frame_count": 2574,
+    "original_nominal_fps": 57.197879791259766,
+    "original_median_interval_ms": 16.66666666666572,
+    "original_max_interval_ms": 116.66666666666667,
+    "method": "All original samples decoded; footer-pixel classifier locates boundaries, and last-menu/first-preparing/first-copied frames are visually inspected. PTS is video local; it is not the OS click time. The whole-video maximum can include idle capture gaps.",
+    "preparing_transition_interval_ms": 16.666666666666607,
+    "progress_through_completion_max_interval_ms": 33.333333333333215,
+    "progress_through_completion_median_interval_ms": 16.666666666666607,
+    "surrounding_range_frames": [
+      334,
+      420
+    ],
+    "surrounding_max_interval_ms": 33.333333333333215,
+    "surrounding_median_interval_ms": 16.666666666666607,
+    "surrounding_range_note": "Includes video samples before the first Preparing frame; the combined surrounding maximum includes an idle capture gap, not an aligned command interval."
+  },
+  "combined": {
+    "first_preparing_frame": 268,
+    "first_preparing_pts_s": 5.233333333333333,
+    "last_menu_frame": 267,
+    "first_copied_frame": 308,
+    "first_copied_pts_s": 5.95,
+    "original_duration_s": 45.00333333333333,
+    "original_frame_count": 2541,
+    "original_nominal_fps": 56.44367218017578,
+    "original_median_interval_ms": 16.66666666666572,
+    "original_max_interval_ms": 300.0000000000007,
+    "method": "All original samples decoded; footer-pixel classifier locates boundaries, and last-menu/first-preparing/first-copied frames are visually inspected. PTS is video local; it is not the OS click time. The whole-video maximum can include idle capture gaps.",
+    "preparing_transition_interval_ms": 16.666666666666607,
+    "progress_through_completion_max_interval_ms": 33.3333333333341,
+    "progress_through_completion_median_interval_ms": 16.666666666666607,
+    "surrounding_range_frames": [
+      238,
+      323
+    ],
+    "surrounding_max_interval_ms": 300.0000000000007,
+    "surrounding_median_interval_ms": 16.666666666666607,
+    "surrounding_range_note": "Includes video samples before the first Preparing frame; the combined surrounding maximum includes an idle capture gap, not an aligned command interval."
+  }
+}

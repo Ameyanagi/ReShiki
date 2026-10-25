@@ -609,6 +609,7 @@ fn completion(message: &Message) -> Option<Completion> {
         Message::LinuxClipboardWindow(_) => None,
         // Controls, view/window lifecycle and sub-enums without completion variants.
         Message::ContextMenu(..)
+        | Message::CopyFrame(..)
         | Message::StyleMenu(..)
         | Message::ObjectToolbar(..)
         | Message::NumericTransform(..)

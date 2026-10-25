@@ -4,6 +4,11 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
+Under review: @Ameyanagi — earlier PDF copy progress for large selections,
+retained canvas caches, measured native response and unchanged copied output in
+[PR #582](https://github.com/Ameyanagi/ReShiki/pull/582).
+[Native evidence and verification](changes/large-selection-copy-feedback.md).
+
 Under review: @Ameyanagi — readable long-chain imports with retained molecular
 identity and stereochemistry in [PR #539](https://github.com/Ameyanagi/ReShiki/pull/539).
 Under review: @Ameyanagi — moving 3D models from their visible frame edges in

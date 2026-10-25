@@ -849,15 +849,20 @@ impl App {
     }
 
     fn molecular_properties(&self) -> Element<'_, Message> {
-        let ids: Vec<u64> = self
-            .tab
-            .selected
-            .iter()
-            .copied()
-            .filter(|id| self.tab.doc.atom(*id).is_some())
-            .collect();
+        // Let the crystal subsystem decide which drawings need a constrained
+        // analysis scope, including distance provenance retained without a cell.
+        let crystal_ids = reshiki::models3d::crystal::touches(&self.tab.doc, &[]).then(|| {
+            self.tab
+                .selected
+                .iter()
+                .copied()
+                .filter(|id| self.tab.doc.atom(*id).is_some())
+                .collect::<Vec<_>>()
+        });
         // Ordinary molecules beside a crystal keep their chemistry analysis.
-        if reshiki::models3d::crystal::touches(&self.tab.doc, &ids) {
+        if let Some(ids) =
+            crystal_ids.filter(|ids| reshiki::models3d::crystal::touches(&self.tab.doc, ids))
+        {
             let mut body = column![
                 text(reshiki::models3d::crystal::analysis_notice(&self.tab.doc))
                     .size(11)
