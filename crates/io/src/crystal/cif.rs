@@ -511,7 +511,7 @@ pub(super) fn read(text: &str) -> Result<Structure, Error> {
     }
     if alternatives > 0 {
         warnings.push(format!(
-            "Disordered sites: kept the first alternative, left out {alternatives} atom{}",
+            "Disordered sites: kept the first alternative, left out {alternatives} alternative site record{}",
             if alternatives == 1 { "" } else { "s" }
         ));
     }

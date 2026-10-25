@@ -564,3 +564,23 @@ fn caption_chain_conversion_and_all_bonds_are_one_undo_step() {
     assert_eq!(app.tab.doc, before);
     assert!(!app.tab.history.can_undo());
 }
+
+#[test]
+fn symbol_placements_repeat_until_escape_and_undo_individually() {
+    use reshiki::{graphics::GraphicKind, scientific::SymbolKind};
+    let mut app = app();
+    let oxygen = app.tab.doc.add_atom("O", Point::default());
+    let tool = Tool::Graphic(GraphicKind::Symbol(SymbolKind::LonePair));
+    app.tool = tool;
+    for count in 1..=2 {
+        let before = app.tab.doc.clone();
+        app.place_graphic(Point::default(), Point::default(), false, true, before);
+        assert_eq!(app.tool, tool);
+        assert_eq!(app.tab.doc.atom(oxygen).unwrap().marks.len(), count);
+    }
+    assert_eq!(app.tab.history.undo_frames().len(), 2);
+    app.step_history(false);
+    assert_eq!(app.tab.doc.atom(oxygen).unwrap().marks.len(), 1);
+    let _ = app.update(crate::app::Message::Escape);
+    assert_eq!(app.tool, Tool::Select);
+}

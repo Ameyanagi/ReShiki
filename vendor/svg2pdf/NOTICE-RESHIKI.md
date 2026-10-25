@@ -22,6 +22,8 @@ Apache-2.0 terms:
 - Read PDF widths by the subset's new glyph IDs, and use actual subset glyph
   bounds for variable instances. The original head bounds may cover only Thin.
 - Make two existing `Name` lifetimes explicit for the current Rust warning set.
+- Include the standalone page's DPI transform in gradient and pattern coordinates.
+  Keep Form XObject paint coordinates local and apply content scaling only once.
 
 No text outlining fallback is used; selectable PDF text is retained. The
 usvg 0.45 tree API and pdf-writer 0.12 remain in use. Tests cover TrueType and

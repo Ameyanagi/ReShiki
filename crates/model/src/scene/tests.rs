@@ -925,3 +925,54 @@ fn sideways_alternative_lists_grow_away_from_their_bond() {
     let (lo, hi) = bounds(ids[4]);
     assert!(((lo.x + hi.x) / 2. - 24.).abs() < 1., "{lo:?} {hi:?}");
 }
+
+#[test]
+fn terminal_double_bonds_do_not_walk_the_backbone_in_either_direction() {
+    use crate::bonds::DoublePosition;
+    for count in [8, 1000] {
+        let mut doc = Document::default();
+        let chain: Vec<_> = (0..count)
+            .map(|i| doc.add_atom("C", Point::new(i as f32 * 42., 0.)))
+            .collect();
+        for pair in chain.windows(2) {
+            doc.add_bond(pair[0], pair[1], 1, "plain");
+        }
+        let oxygen = doc.add_atom("O", Point::new(0., 42.));
+        doc.add_bond(chain[0], oxygen, 2, "plain");
+        let faces = FaceIndex::new(&doc);
+        let before = RING_SEARCH_VISITS.with(std::cell::Cell::get);
+        let mut bond = doc.bonds.last().unwrap().clone();
+        for _ in 0..2 {
+            assert_eq!(double_position(&faces, &bond), DoublePosition::Center);
+            bond.reverse();
+        }
+        assert_eq!(RING_SEARCH_VISITS.with(std::cell::Cell::get), before);
+    }
+}
+
+#[test]
+fn terminal_ring_shortcut_keeps_the_smallest_ring_and_exocyclic_rails() {
+    use crate::bonds::DoublePosition;
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::new(0., 0.));
+    let b = doc.add_atom("C", Point::new(42., 0.));
+    let c = doc.add_atom("C", Point::new(21., 42.));
+    let oxygen = doc.add_atom("O", Point::new(21., 84.));
+    doc.add_bond(a, b, 2, "plain");
+    doc.add_bond(b, c, 1, "plain");
+    doc.add_bond(c, a, 1, "plain");
+    doc.add_bond(c, oxygen, 2, "plain");
+    let faces = FaceIndex::new(&doc);
+    assert_eq!(ring_center(&faces, a, b), Some(Point::new(21., 14.)));
+    assert_eq!(
+        double_position(&faces, &doc.bonds[0]),
+        DoublePosition::Right
+    );
+    let mut reverse = doc.bonds[0].clone();
+    reverse.reverse();
+    assert_eq!(double_position(&faces, &reverse), DoublePosition::Left);
+    assert_eq!(
+        double_position(&faces, &doc.bonds[3]),
+        DoublePosition::Center
+    );
+}

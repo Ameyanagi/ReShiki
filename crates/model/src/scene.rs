@@ -174,6 +174,23 @@ pub fn atom_label_ink_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)>
         })
 }
 
+/// Visible atom-label and owned-indicator ink for a reaction participant.
+/// Atom maps, numbers and stereo labels are separate renderer primitives and
+/// must be included when spacing a participant beside another molecule.
+pub fn participant_label_ink_boxes(doc: &Document, atoms: &[u64]) -> Vec<(Point, Point)> {
+    let mut ink: Vec<_> = atoms
+        .iter()
+        .filter_map(|id| doc.atom(*id))
+        .flat_map(|atom| atom_label_ink_boxes(atom, doc))
+        .collect();
+    for indicator in crate::atom_labels::indicators(doc) {
+        if indicator.owner.selected(atoms) && indicator.owner.drawn(doc) {
+            ink.extend(label_ink_boxes(&[indicator.primitive()]));
+        }
+    }
+    ink
+}
+
 /// The atom owning a visible label, including its hydrogens, isotope and charge.
 /// Keep this separate from geometric nearest-atom searches used for bond growth.
 pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
@@ -451,7 +468,17 @@ fn label_runs(
     // A generic label meets its single horizontal bond with its near edge.
     let generic_side = (internal_group.is_none() && condensed.is_none())
         .then(|| crate::atom_labels::generic_label_side(a, doc))
-        .flatten();
+        .flatten()
+        .or_else(|| {
+            (free_text
+                && attachment.is_auto()
+                && condensed.is_none()
+                && attached.is_none()
+                && crate::abbreviations::atom_anchor(label, false).is_none()
+                && crate::abbreviations::atom_anchor(label, true).is_none())
+            .then(|| crate::atom_labels::short_bond_label_side(a, doc, element_width))
+            .flatten()
+        });
     let centered = match generic_side {
         Some(true) => element_width,
         Some(false) => 0.,
@@ -1496,12 +1523,25 @@ pub(crate) fn automatic_double_side(faces: &FaceIndex<'_>, bond: &Bond) -> Optio
     Some(if cross >= 0. { 1. } else { -1. })
 }
 
+#[cfg(test)]
+thread_local! {
+    static RING_SEARCH_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Find the smallest ring containing this edge, using the alternate path.
 fn ring_center(faces: &FaceIndex<'_>, from: u64, to: u64) -> Option<Point> {
     use std::collections::{HashMap, VecDeque};
+    // A terminal endpoint has no alternate path. Carbonyl bonds are queried
+    // repeatedly while crowded hydrogen labels avoid nearby bond strokes;
+    // walking the whole peptide from the carbon end cannot find a ring.
+    if faces.graph().degree(from) < 2 || faces.graph().degree(to) < 2 {
+        return None;
+    }
     let mut previous = HashMap::from([(from, from)]);
     let mut queue = VecDeque::from([from]);
     while let Some(id) = queue.pop_front() {
+        #[cfg(test)]
+        RING_SEARCH_VISITS.with(|count| count.set(count.get() + 1));
         for (_, b) in faces.graph().bonds(id) {
             if (b.a == from && b.b == to) || (b.a == to && b.b == from) {
                 continue;

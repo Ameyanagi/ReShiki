@@ -11,7 +11,8 @@ to the page. Orbitals are editable drawing shapes that can snap to an atom.
    18 choices: circled and plain charges, radicals and diradicals, lone pairs
    and bars, radical ions, H-dot and H-dash, attachment diamond, star, wave and
    bead, and single and double daggers.
-2. With **Attach to atoms** on, click an atom to add the mark. Drag from the
+2. With **Attach to atoms** on, click an atom to add the mark. The symbol tool
+   stays active for more placements; press Escape or choose another tool to stop. Drag from the
    atom to choose its side: the mark orbits the atom in 15° steps, just
    outside the label with the same gap a click uses. Hold Option/Alt or Shift
    to place it at any offset.
@@ -71,7 +72,10 @@ charge or radical state.
 Click-created lone pairs and bars sit just outside the visible label ink, with
 a modest gap scaled to its font size. New placements try the top, left, bottom
 and right sides, avoiding nearby label ink, bonds and existing atom marks.
-Pairs beside the label turn vertically. A dragged mark's orbit follows the
+Pairs beside the label turn vertically. Click-created charges and radicals
+keep their usual side when it is clear; otherwise they try the nearest 15°
+steps, avoiding bond ink, nearby labels and existing marks after the changed
+charge's hydrogens are refreshed. Saved marks keep their exact offsets. A dragged mark's orbit follows the
 label at the same gap a click uses, measured from the label's outline: each
 glyph counts as a rounded rectangle fitted to its outline (O is nearly round,
 while N and H keep the corners their stems reach), and the glyphs together

@@ -65,6 +65,36 @@ fn draw_direction_line(frame: &mut layered::Frame<'_>, from: Point, to: Point) {
 }
 
 impl MoleculeCanvas<'_> {
+    pub(super) fn draw_model_generation(
+        &self,
+        frame: &mut layered::Frame<'_>,
+        bounds: Rectangle,
+        now: iced::time::Instant,
+    ) {
+        let Some(generation) = self.model_generation else {
+            return;
+        };
+        let Some(elapsed) = generation.elapsed(now) else {
+            return;
+        };
+        let Some((lo, hi)) = reshiki::scene::selection_bounds(self.doc, generation.atoms) else {
+            return;
+        };
+        let lo = self.camera.screen(lo, bounds) - Vector::new(8., 8.);
+        let hi = self.camera.screen(hi, bounds) + Vector::new(8., 8.);
+        frame.stroke(
+            &Path::rectangle(lo, iced::Size::new(hi.x - lo.x, hi.y - lo.y)),
+            Stroke::default().with_width(1.).with_color(ACCENT),
+        );
+        badge(
+            frame,
+            bounds,
+            lo - Vector::new(14., 48.),
+            format!("Generating 3D… {} s · Esc cancels", elapsed.as_secs()),
+            true,
+        );
+    }
+
     pub(super) fn scientific_drawing(
         &self,
         kind: GraphicKind,

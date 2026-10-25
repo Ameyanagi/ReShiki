@@ -490,8 +490,11 @@ Converts a structure or drawing, making the file as the app's Export does.
 Input, exactly one of:
   INPUT          A file. Without --from, its extension picks the format:
                  .rsk, .reshiki and .moruno are ReShiki drawings; .mol, .rxn,
-                 .rsmi, .cdxml, .cdx and .inchi are read as such; anything
-                 else is read as SMILES.
+                 .rsmi, .cdxml, .cdx and .inchi are read as such. Crystal files
+                 (.cif, .pdb, .ent, .vasp, .poscar, .contcar, .xyz, .extxyz,
+                 or POSCAR/CONTCAR names without a molecular extension)
+                 are not supported by the CLI, including with --from auto.
+                 Other names are read as SMILES.
   -              Standard input; needs --from.
   --smiles TEXT  SMILES text; cannot be combined with --from.
 

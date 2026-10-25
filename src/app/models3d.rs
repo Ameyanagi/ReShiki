@@ -66,6 +66,7 @@ pub(crate) struct Job {
     current: Key,
     display: Display,
     prepared: Arc<Prepared>,
+    started: iced::time::Instant,
     _handle: iced::task::Handle,
 }
 
@@ -161,6 +162,24 @@ impl App {
             .map(|job| job.display)
     }
 
+    /// The current generation's own target, independent of later selection.
+    pub(super) fn model_generation(&self) -> Option<crate::canvas::ModelGeneration<'_>> {
+        let job = self.tab.model_job.as_ref()?;
+        (job.current == self.model_key()).then_some(crate::canvas::ModelGeneration {
+            atoms: job.prepared.ids(),
+            started: job.started,
+        })
+    }
+
+    pub(super) fn cancel_model_generation(&mut self) -> bool {
+        if self.tab.model_job.take().is_none() {
+            return false;
+        }
+        self.status = "3D model cancelled · Drawing unchanged".into();
+        self.error = false;
+        true
+    }
+
     /// The selected molecule and the index of its model, if it has one.
     pub(super) fn selected_model(&self) -> Option<(Vec<u64>, Option<usize>)> {
         let atoms = models3d::selected_molecule(&self.tab.doc, &self.tab.selected)?;
@@ -239,15 +258,14 @@ impl App {
                         status(display, previous)
                     };
                     self.start_morph(&atoms, previous, display);
+                    self.reveal_model(&atoms, display);
                 }
             }
             return Task::none();
         }
         if display == Display::TwoD {
             if self.pending(&atoms).is_some() {
-                self.tab.model_job = None;
-                self.status = "3D model cancelled · Drawing unchanged".into();
-                self.error = false;
+                self.cancel_model_generation();
             }
             return Task::none();
         }
@@ -278,6 +296,7 @@ impl App {
             current: key,
             display,
             prepared,
+            started: iced::time::Instant::now(),
             _handle: handle.abort_on_drop(),
         });
         self.status = "Generating 3D model · MMFF94s".into();
@@ -382,29 +401,41 @@ impl App {
             .drawn
             .clone()
             .unwrap_or_else(|| models3d::Drawn::of(&self.tab.doc, model));
-        let flat = Prepared::new(&self.tab.doc, &atoms)
-            .and_then(|prepared| prepared.flattened(model))
-            .map_err(|error| error.to_string())
-            .and_then(|mut doc| {
-                // The model keeps its place for showing it in 3D again.
-                if let Some(origin) = origin {
-                    models3d::keep_place(&mut doc, index, origin);
-                }
-                models3d::set_display(&mut doc, index, Display::TwoD);
-                // Kept where the flattened drawing is, to come back wherever
-                // the molecule goes.
-                let drawn = doc.models.get(index).map(|m| drawn.kept(&doc, m));
-                if let Some(model) = doc.models.get_mut(index) {
-                    model.layout = Layout::View;
-                    model.drawn = drawn;
-                }
-                reshiki::depth_appearance::enable(
-                    &mut doc,
-                    &atoms,
-                    reshiki::depth_appearance::DEFAULT_STRENGTH,
-                )?;
-                Ok(doc)
-            });
+        let flat = if model.cell.is_some() {
+            // A crystal's distances are drawing data, not chemical stereo.
+            // Flatten its retained coordinates directly, keeping the drawing
+            // centre instead of preparing a molecular identity.
+            let mut doc = self.tab.doc.clone();
+            let centre = reshiki::editing::center(&doc, &atoms);
+            models3d::lay_out_flat(&mut doc, model);
+            let projected = reshiki::editing::center(&doc, &atoms);
+            doc.translate(&atoms, centre.x - projected.x, centre.y - projected.y);
+            Ok(doc)
+        } else {
+            Prepared::new(&self.tab.doc, &atoms)
+                .and_then(|prepared| prepared.flattened(model))
+                .map_err(|error| error.to_string())
+        }
+        .and_then(|mut doc| {
+            // The model keeps its place for showing it in 3D again.
+            if let Some(origin) = origin {
+                models3d::keep_place(&mut doc, index, origin);
+            }
+            models3d::set_display(&mut doc, index, Display::TwoD);
+            // Kept where the flattened drawing is, to come back wherever
+            // the molecule goes.
+            let drawn = doc.models.get(index).map(|m| drawn.kept(&doc, m));
+            if let Some(model) = doc.models.get_mut(index) {
+                model.layout = Layout::View;
+                model.drawn = drawn;
+            }
+            reshiki::depth_appearance::enable(
+                &mut doc,
+                &atoms,
+                reshiki::depth_appearance::DEFAULT_STRENGTH,
+            )?;
+            Ok(doc)
+        });
         match flat {
             Ok(doc) => {
                 let before = std::mem::replace(&mut self.tab.doc, doc);
@@ -459,6 +490,20 @@ impl App {
         if !self.error {
             self.status = status(display, previous);
             self.start_morph(&atoms, previous, display);
+            self.reveal_model(&atoms, display);
+        }
+    }
+
+    fn reveal_model(&mut self, atoms: &[u64], display: Display) {
+        if display == Display::TwoD {
+            return;
+        }
+        let ids = reshiki::molecule_names::include_annotations(&self.tab.doc, atoms);
+        if let Some((lo, hi)) = reshiki::scene::selection_bounds(&self.tab.doc, &ids) {
+            // Include the visible selected-model outline without moving an
+            // already visible result or zooming in on a smaller molecule.
+            let margin = 12. / self.tab.camera.zoom;
+            self.reveal_if_clipped(lo.offset(-margin, -margin), hi.offset(margin, margin));
         }
     }
 
@@ -856,3 +901,6 @@ fn restored(previous: Display) -> &'static str {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod crystal_tests;

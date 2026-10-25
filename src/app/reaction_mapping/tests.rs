@@ -117,7 +117,7 @@ fn background_analysis_refreshes_the_review_thumbnail_without_an_edit() {
             kind: Job::Analyze,
             result: Box::new(Ok(Response {
                 document: Some(checked),
-                analysis: None,
+                analysis: Some(crate::app::tests::completed_analysis()),
                 output: None,
                 engine_version: "test".into(),
                 warnings: vec![],

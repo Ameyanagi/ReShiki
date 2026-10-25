@@ -27,7 +27,13 @@ pub use {
 #[cfg(target_arch = "wasm32")]
 mod browser;
 #[cfg(target_arch = "wasm32")]
-pub use browser::{Cancel, generate_name, resolve_name, set_worker};
+pub use browser::{Cancel, generate_name, resolve_name, set_worker, worker_loading};
+
+/// Desktop workers do not download a naming module.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn worker_loading() -> bool {
+    false
+}
 
 /// Why a local name request produced no result. Display prints the message
 /// unchanged; the variant tells callers how to summarize it.

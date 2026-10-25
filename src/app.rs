@@ -33,6 +33,8 @@ mod depth_appearance;
 mod dispatch;
 mod document_styles;
 mod document_tab;
+#[cfg(test)]
+mod drawing_panel_capture;
 use document_tab::DocumentTab;
 mod engine_jobs;
 mod event_slot;
@@ -81,6 +83,9 @@ mod printing;
 mod prompt;
 mod reaction_mapping;
 mod reactions;
+#[cfg(test)]
+mod recovery_capture;
+mod recovery_manager;
 mod results;
 mod ring_edits;
 #[cfg(test)]
@@ -114,6 +119,7 @@ pub(crate) use workspace::text_width;
 
 /// The status bar's idle message.
 const READY: &str = "Ready · Choose a tool to start drawing";
+const CELL_REMOVED_NOTICE: &str = "Unit cell removed by the edit · Undo restores it";
 
 // App::fit_bounds: screen pixels kept free around the fitted drawing, the
 // smallest usable viewport side (pixels) and the smallest fitted extent (world
@@ -296,9 +302,19 @@ pub enum Message {
     Autosaved(autosave::Key, Result<Option<PathBuf>, String>),
     Restore,
     DismissRecovery,
+    Recovery(recovery_manager::Action),
     Charge(i32),
     Isotope(String),
     ApplyIsotope,
+    CancelEngine(engine_jobs::Key),
+    EngineFinished {
+        key: engine_jobs::Key,
+        result: Box<Result<Response, String>>,
+    },
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "Legacy completion for editor-boundary tests")
+    )]
     EngineDone {
         revision: u64,
         kind: Job,
@@ -412,6 +428,7 @@ pub struct App {
     aromatic_ring: bool,
     custom_element: String,
     recovered: Vec<Candidate>,
+    recovery_manager: recovery_manager::State,
     exit: autosave::Exit,
     inspector_open: bool,
     inspector_tab: InspectorTab,
@@ -422,7 +439,7 @@ pub struct App {
     template_index: usize,
     templates: template_library::State,
     /// The last committed atom label, which a Text-tool double-click repeats.
-    last_label: Option<String>,
+    last_label: Option<atom_text::RememberedLabel>,
     /// The last Text-tool click on an atom, to recognize a double-click.
     text_click: Option<(iced::time::Instant, u64)>,
 }
@@ -438,6 +455,8 @@ const DRAFT_INTERVAL: std::time::Duration = if cfg!(target_arch = "wasm32") {
 impl App {
     /// Starts a file epoch, dropping per-file work so late results are ignored and new work can start.
     pub(super) fn begin_file_epoch(&mut self) {
+        self.sync_drawing_panel_context();
+        self.cancel_engine_job();
         self.tab.file_epoch = self.next_epoch();
         // Invalidate tickets before clearing gestures that may switch the front tab's tool.
         self.tab.naming.invalidate_name();
@@ -445,6 +464,7 @@ impl App {
         self.tab.arrows.cancel_source();
         self.cancel_reference_stretch();
         self.tab.nmr.clear_pending();
+        self.sync_drawing_panel_context();
     }
 
     #[cfg(test)]
@@ -510,6 +530,7 @@ impl App {
             aromatic_ring: false,
             custom_element: String::new(),
             recovered,
+            recovery_manager: recovery_manager::State::default(),
             exit: autosave::Exit::default(),
             inspector_open: true,
             inspector_tab: InspectorTab::Properties,
@@ -585,6 +606,9 @@ impl App {
             iced::window::open_events().map(Message::LinuxClipboardWindow),
             self.updates.subscription(),
             self.properties_subscription(),
+            self.engine_subscription(),
+            #[cfg(target_arch = "wasm32")]
+            self.naming_subscription(),
             if self.assistant.needs_poll() {
                 iced::time::every(std::time::Duration::from_millis(200))
                     .map(|_| Message::Assistant(assistant::Action::Poll))
@@ -724,6 +748,14 @@ impl App {
         self.tab
             .nmr
             .invalidate_if_changed(&self.tab.doc, self.tab.file_epoch);
+        let unit_cell_removed = reconciled.before().models.iter().any(|old| {
+            old.cell.is_some()
+                && !self.tab.doc.models.iter().any(|m| {
+                    m.cell.is_some()
+                        && m.atoms.len() == old.atoms.len()
+                        && old.atoms.iter().all(|atom| m.contains(atom.id))
+                })
+        });
         let committed = reconciled.commit(&mut self.tab.doc, &mut self.tab.history, continuing);
         self.label_layout_settled();
         if committed.chemistry_changed {
@@ -736,8 +768,10 @@ impl App {
                 self.tab.analysis = None;
             }
             self.error = false;
-            self.status = if committed.chemistry_changed {
-                "Drawing changed · Check structure to refresh properties"
+            self.status = if unit_cell_removed {
+                CELL_REMOVED_NOTICE
+            } else if committed.chemistry_changed {
+                "Drawing changed"
             } else {
                 "Drawing updated"
             }
@@ -840,7 +874,14 @@ impl App {
             .unwrap_or(&self.tab.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        // Readiness polling only redraws; it must not commit drafts or dismiss menus.
+        #[cfg(target_arch = "wasm32")]
+        if matches!(message, Message::Naming(naming::Action::Refresh)) {
+            return Task::none();
+        }
+        self.sync_drawing_panel_context();
         let task = self.handle(message);
+        self.sync_drawing_panel_context();
         self.settle_deferred_label_layout();
         // Any message may change the drawing, some (previews, background
         // labels) without a new revision, so the next view compares afresh.
@@ -880,6 +921,13 @@ impl App {
     /// Handle them before tab routing, modal gates and the routing tail; their
     /// tasks must not acquire a document tag.
     fn update_untagged(&mut self, message: Message) -> ControlFlow<Task<Message>, Message> {
+        let message = match message {
+            Message::Recovery(action) if recovery_manager::completion(&action) => {
+                let task = self.recovery_action(action);
+                return ControlFlow::Break(Task::batch([task, self.accessibility_refresh()]));
+            }
+            message => message,
+        };
         #[cfg(any(windows, target_os = "linux"))]
         if let Message::Desktop(action) = message {
             return ControlFlow::Break(self.desktop_update(action));
@@ -950,6 +998,13 @@ impl App {
             ControlFlow::Continue(message) => message,
         };
         let previous = self.inspector_tab;
+        let inspector_before = (
+            self.tab.id,
+            self.tab.file_epoch,
+            self.inspector_open,
+            self.inspector_width(),
+            self.viewport,
+        );
         let pointer_selection = match &message {
             Message::Canvas(Edit::Select(_)) => Some(
                 self.tab
@@ -972,7 +1027,7 @@ impl App {
         );
         let refresh_dimensions = matches!(
             &message,
-            Message::EngineDone { .. } | Message::LabelsReady(..)
+            Message::EngineDone { .. } | Message::EngineFinished { .. } | Message::LabelsReady(..)
         );
         let task = if background {
             self.update_document_result(message)
@@ -1002,6 +1057,15 @@ impl App {
             self.refresh_numeric_dimensions();
         }
         self.sync_mapping_preview();
+        if !background
+            && inspector_before.0 == self.tab.id
+            && inspector_before.1 == self.tab.file_epoch
+            && inspector_before.2
+            && self.inspector_open
+            && previous != self.inspector_tab
+        {
+            self.preserve_inspector_page_position(inspector_before.3, inspector_before.4);
+        }
         // Include inspector changes made by tool-specific handlers, which can
         // return early. Ordinary updates within a panel retain its scroll state.
         if !background
@@ -1060,17 +1124,15 @@ impl App {
             file_shortcuts::wrap(
                 // The command palette sits above the floating NMR panel so its
                 // modal also keeps that panel from taking clicks.
-                self.with_prompt(
-                    self.with_updates(self.with_assistant_image(self.with_commands(
-                        self.with_nmr(
-                            self.with_atom_text(
-                                self.with_help(self.with_palette(self.workspace())),
-                            ),
-                        ),
+                self.with_prompt(self.with_recovery_manager(self.with_updates(
+                    self.with_assistant_image(self.with_commands(self.with_nmr(
+                        self.with_atom_text(self.with_help(self.with_palette(self.workspace()))),
                     ))),
-                ),
+                ))),
                 if self.prompt.is_some() {
                     Some(prompt::modal_key)
+                } else if self.recovery_manager.open() {
+                    Some(recovery_manager::modal_key)
                 } else if self.help_open {
                     Some(help::modal_key)
                 } else if self.commands.open {
@@ -1128,6 +1190,7 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
 /// new one a compile error here instead of an edit the unsaved check misses.
 fn same_bond(a: &reshiki::document::Bond, b: &reshiki::document::Bond) -> bool {
     let reshiki::document::Bond {
+        distance_derived,
         highlight,
         ring_arc,
         projection,
@@ -1145,7 +1208,8 @@ fn same_bond(a: &reshiki::document::Bond, b: &reshiki::document::Bond) -> bool {
         secondary_display,
         color,
     } = a;
-    *highlight == b.highlight
+    *distance_derived == b.distance_derived
+        && *highlight == b.highlight
         && *ring_arc == b.ring_arc
         && *projection == b.projection
         && *stereo_authoritative == b.stereo_authoritative
@@ -1210,6 +1274,9 @@ fn same_atom(a: &reshiki::document::Atom, b: &reshiki::document::Atom) -> bool {
 fn tagged(task: Task<Message>, id: document_tab::TabId) -> Task<Message> {
     task.map(move |message| match message {
         Message::Tab(..) => message,
+        Message::Recovery(action) if recovery_manager::completion(&action) => {
+            Message::Recovery(action)
+        }
         message => Message::Tab(id, Box::new(message)),
     })
 }
@@ -1241,13 +1308,20 @@ async fn save_export(
     };
     let stem = stem.as_deref().unwrap_or("Molecule");
     files::save_bytes(
-        "Export drawing",
+        &format!("Export {}", export_format_label(format)),
         &format!("{stem}.{extension}"),
         extension,
         &bytes,
     )
     .await
 }
+fn export_format_label(format: &str) -> String {
+    match format {
+        "svg-office" => inspector::FigureFormat::SvgOffice.to_string(),
+        _ => format.to_uppercase(),
+    }
+}
+
 fn input_request(text: &str) -> Request {
     reshiki::clipboard::text_request(text)
 }
