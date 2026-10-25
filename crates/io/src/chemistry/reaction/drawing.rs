@@ -147,25 +147,26 @@ fn layout_ink(doc: &mut Document) {
 }
 
 fn participant_bounds(doc: &Document, part: &Participant) -> (Point, Point) {
-    part.atoms
+    let positions = part
+        .atoms
         .iter()
         .filter_map(|id| doc.atom(*id))
-        .flat_map(|atom| {
-            let label = crate::scene::atom_label_ink_bounds(atom, doc);
-            std::iter::once(atom.position).chain(label.into_iter().flat_map(|(lo, hi)| [lo, hi]))
-        })
-        .fold(
+        .map(|atom| atom.position);
+    let labels = crate::scene::participant_label_ink_boxes(doc, &part.atoms)
+        .into_iter()
+        .flat_map(|(lo, hi)| [lo, hi]);
+    positions.chain(labels).fold(
+        (
+            Point::new(f32::INFINITY, f32::INFINITY),
+            Point::new(f32::NEG_INFINITY, f32::NEG_INFINITY),
+        ),
+        |(lo, hi), p| {
             (
-                Point::new(f32::INFINITY, f32::INFINITY),
-                Point::new(f32::NEG_INFINITY, f32::NEG_INFINITY),
-            ),
-            |(lo, hi), p| {
-                (
-                    Point::new(lo.x.min(p.x), lo.y.min(p.y)),
-                    Point::new(hi.x.max(p.x), hi.y.max(p.y)),
-                )
-            },
-        )
+                Point::new(lo.x.min(p.x), lo.y.min(p.y)),
+                Point::new(hi.x.max(p.x), hi.y.max(p.y)),
+            )
+        },
+    )
 }
 
 #[derive(Default)]

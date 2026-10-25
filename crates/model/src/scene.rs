@@ -174,6 +174,23 @@ pub fn atom_label_ink_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)>
         })
 }
 
+/// Visible atom-label and owned-indicator ink for a reaction participant.
+/// Atom maps, numbers and stereo labels are separate renderer primitives and
+/// must be included when spacing a participant beside another molecule.
+pub fn participant_label_ink_boxes(doc: &Document, atoms: &[u64]) -> Vec<(Point, Point)> {
+    let mut ink: Vec<_> = atoms
+        .iter()
+        .filter_map(|id| doc.atom(*id))
+        .flat_map(|atom| atom_label_ink_boxes(atom, doc))
+        .collect();
+    for indicator in crate::atom_labels::indicators(doc) {
+        if indicator.owner.selected(atoms) && indicator.owner.drawn(doc) {
+            ink.extend(label_ink_boxes(&[indicator.primitive()]));
+        }
+    }
+    ink
+}
+
 /// The atom owning a visible label, including its hydrogens, isotope and charge.
 /// Keep this separate from geometric nearest-atom searches used for bond growth.
 pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {

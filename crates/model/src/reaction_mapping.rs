@@ -358,21 +358,15 @@ fn lanes(doc: &Document, reaction: &Reaction, axis: Point) -> Vec<Lane> {
                     (lo.min(v), hi.max(v))
                 })
             };
-            let extents: Vec<_> = part
+            let positions = part
                 .atoms
                 .iter()
                 .filter_map(|id| doc.atom(*id))
-                .flat_map(|atom| {
-                    let corners = crate::scene::atom_label_ink_bounds(atom, doc)
-                        .into_iter()
-                        .flat_map(|(lo, hi)| {
-                            [lo, Point::new(lo.x, hi.y), hi, Point::new(hi.x, lo.y)]
-                        });
-                    std::iter::once(atom.position)
-                        .chain(corners)
-                        .map(|p| project(axis, p))
-                })
-                .collect();
+                .map(|atom| atom.position);
+            let labels = crate::scene::participant_label_ink_boxes(doc, &part.atoms)
+                .into_iter()
+                .flat_map(|(lo, hi)| [lo, Point::new(lo.x, hi.y), hi, Point::new(hi.x, lo.y)]);
+            let extents: Vec<_> = positions.chain(labels).map(|p| project(axis, p)).collect();
             let (lo, hi) = range(&mut extents.iter().map(|p| p.0));
             let across = range(&mut extents.iter().map(|p| p.1));
             let mean = points.iter().map(|p| p.1).sum::<f32>() / points.len().max(1) as f32;

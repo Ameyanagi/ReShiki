@@ -278,6 +278,7 @@ async fn reaction_import_centres_each_separator_between_visible_ion_labels() {
     for input in [
         "[CH3:1][CH:2]=[O:3]>[BH4-].[Na+]>[CH3:1][CH2:2][OH:3]",
         "[BH4-].[Na+]>>[AlH4-].[Li+]",
+        "[BH4-:123456].[Na+:1]>>[BH4-:123456].[Na+:1]",
     ] {
         let doc = LocalEngine::default()
             .request(Request::import("rsmi", input))
@@ -290,14 +291,9 @@ async fn reaction_import_centres_each_separator_between_visible_ion_labels() {
         for row in [&reaction.reactants, &reaction.agents, &reaction.products] {
             for pair in row.windows(2) {
                 let extent = |part: &crate::reactions::Participant| {
-                    part.atoms
-                        .iter()
-                        .filter_map(|id| doc.atom(*id))
-                        .flat_map(|a| {
-                            crate::scene::atom_label_ink_bounds(a, &doc)
-                                .into_iter()
-                                .flat_map(|(lo, hi)| [lo.x, hi.x])
-                        })
+                    crate::scene::participant_label_ink_boxes(&doc, &part.atoms)
+                        .into_iter()
+                        .flat_map(|(lo, hi)| [lo.x, hi.x])
                         .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), x| {
                             (lo.min(x), hi.max(x))
                         })
