@@ -2069,10 +2069,7 @@ impl App {
             .map(|a| a.display.hydrogen_position)
             .filter(|p| atoms.iter().all(|a| a.display.hydrogen_position == *p));
         let mut body = column![
-            command(
-                "← Structure properties",
-                Message::Inspector(InspectorTab::Properties)
-            ),
+            command("‹ Properties", Message::Inspector(InspectorTab::Properties)),
             section("ATOM LABELS"),
             crate::appearance::pick_list(
                 [Scope::Drawing, Scope::Selection],

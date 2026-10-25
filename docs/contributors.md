@@ -56,6 +56,9 @@ Under review: @Ameyanagi — retained tetrahedral configuration during atom-labe
 edits, clear reversible-group placement and repeat gestures without an editor
 flash in [PR #568](https://github.com/Ameyanagi/ReShiki/pull/568).
 [Matched chemistry, rendering and native evidence](changes/qa-stereo-repeat.md).
+Unreleased: @Ameyanagi — selected-arrow scope counts and consistent Properties
+navigation in [PR #577](https://github.com/Ameyanagi/ReShiki/pull/577), with
+[matched native review](changes/qa-properties-clarity.md).
 
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).
