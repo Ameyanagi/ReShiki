@@ -370,3 +370,28 @@ async fn rendered_panel_keeps_whole_mass_and_uses_singular_counts() {
     assert!(text.contains("1 atom · 0 bonds"));
     assert!(!text.contains("1 atoms"));
 }
+
+#[tokio::test]
+async fn selected_receipt_cannot_fill_whole_or_another_revision_selection_or_file() {
+    for stale in ["selection", "revision", "epoch"] {
+        let (mut app, _) = App::new();
+        let o = app.tab.doc.add_atom("O", Default::default());
+        let n = app
+            .tab
+            .doc
+            .add_atom("N", reshiki::document::Point::new(80., 0.));
+        app.tab.selected = vec![o];
+        let key = app.property_request_key();
+        let result = analyze(&app, &key).await;
+        let _ = app.inspector_action(Action::RefreshProperties);
+        match stale {
+            "revision" => app.tab.revision += 1,
+            "epoch" => app.tab.file_epoch += 1,
+            _ => app.tab.selected = vec![n],
+        }
+        let _ = app.inspector_action(Action::PropertiesCalculated(key, Box::new(Ok(result))));
+        assert!(app.tab.inspector_ui.pending.is_none());
+        assert!(app.whole_property_analysis().is_none());
+        assert!(app.property_analysis().is_none());
+    }
+}
