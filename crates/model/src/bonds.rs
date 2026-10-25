@@ -291,6 +291,7 @@ impl Bond {
     /// touches a document (`Document::add_bond` builds on it).
     pub fn plain(a: u64, b: u64, order: u8, display: &str) -> Bond {
         Bond {
+            distance_derived: false,
             highlight: None,
             ring_arc: false,
             projection: false,

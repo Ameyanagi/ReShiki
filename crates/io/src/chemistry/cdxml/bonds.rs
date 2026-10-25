@@ -87,6 +87,7 @@ pub struct NativeBond {
 impl NativeBond {
     pub fn into_document(self) -> Result<Bond> {
         Ok(Bond {
+            distance_derived: false,
             ring_arc: false,
             projection: self.order == DATIVE && dative_projects(&self.display),
             stereo_authoritative: false,

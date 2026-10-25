@@ -176,6 +176,23 @@ pub fn atom_label_ink_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)>
         })
 }
 
+/// Visible atom-label and owned-indicator ink for a reaction participant.
+/// Atom maps, numbers and stereo labels are separate renderer primitives and
+/// must be included when spacing a participant beside another molecule.
+pub fn participant_label_ink_boxes(doc: &Document, atoms: &[u64]) -> Vec<(Point, Point)> {
+    let mut ink: Vec<_> = atoms
+        .iter()
+        .filter_map(|id| doc.atom(*id))
+        .flat_map(|atom| atom_label_ink_boxes(atom, doc))
+        .collect();
+    for indicator in crate::atom_labels::indicators(doc) {
+        if indicator.owner.selected(atoms) && indicator.owner.drawn(doc) {
+            ink.extend(label_ink_boxes(&[indicator.primitive()]));
+        }
+    }
+    ink
+}
+
 /// The atom owning a visible label, including its hydrogens, isotope and charge.
 /// Keep this separate from geometric nearest-atom searches used for bond growth.
 pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
@@ -462,7 +479,17 @@ fn label_runs(
     // A generic label meets its single horizontal bond with its near edge.
     let generic_side = (internal_group.is_none() && condensed.is_none())
         .then(|| crate::atom_labels::generic_label_side(a, doc))
-        .flatten();
+        .flatten()
+        .or_else(|| {
+            (free_text
+                && attachment.is_auto()
+                && condensed.is_none()
+                && attached.is_none()
+                && crate::abbreviations::atom_anchor(label, false).is_none()
+                && crate::abbreviations::atom_anchor(label, true).is_none())
+            .then(|| crate::atom_labels::short_bond_label_side(a, doc, element_width))
+            .flatten()
+        });
     let centered = match generic_side {
         Some(true) => element_width,
         Some(false) => 0.,
@@ -1152,26 +1179,30 @@ fn text_bounds(runs: &[Primitive]) -> Option<(Point, Point)> {
         })
 }
 
-pub(crate) fn label_ink_boxes(runs: &[Primitive]) -> Vec<(Point, Point)> {
-    runs.iter()
-        .flat_map(|run| {
-            if let Primitive::Text {
+/// Visible text ink from an already rendered scene, without rebuilding its chemistry.
+pub fn label_ink_boxes(runs: &[Primitive]) -> Vec<(Point, Point)> {
+    fn collect(run: &Primitive, boxes: &mut Vec<(Point, Point)>) {
+        match run {
+            Primitive::Text {
                 position,
                 text,
                 size,
                 style,
                 ..
-            } = run
-            {
+            } => boxes.extend(
                 crate::style::text_ink_boxes(text, *size, style)
                     .into_iter()
-                    .map(|(lo, hi)| (position.offset(lo.x, lo.y), position.offset(hi.x, hi.y)))
-                    .collect()
-            } else {
-                Vec::new()
-            }
-        })
-        .collect()
+                    .map(|(lo, hi)| (position.offset(lo.x, lo.y), position.offset(hi.x, hi.y))),
+            ),
+            Primitive::Opacity { alpha, primitive } if *alpha > 0. => collect(primitive, boxes),
+            _ => {}
+        }
+    }
+    let mut boxes = Vec::new();
+    for run in runs {
+        collect(run, &mut boxes);
+    }
+    boxes
 }
 
 /// Visible selected extents, including atom labels in the original graph.
@@ -1182,6 +1213,28 @@ pub fn selection_bounds(doc: &Document, ids: &[u64]) -> Option<(Point, Point)> {
 /// `selection_bounds` of several disjoint selections, such as the Align menu's
 /// units, in one pass over the drawing.
 pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<(Point, Point)>> {
+    selections_bounds_in_axes(doc, selections, None)
+}
+
+/// The live drawing's extents in axes turned clockwise about `pivot`.
+/// Upright text boxes contribute all four corners; the caller rotates the
+/// resulting display frame back, without changing its gesture or document.
+pub fn selection_bounds_in_axes(
+    doc: &Document,
+    ids: &[u64],
+    pivot: Point,
+    degrees: f32,
+) -> Option<(Point, Point)> {
+    selections_bounds_in_axes(doc, &[ids.to_vec()], Some((pivot, degrees)))
+        .pop()
+        .flatten()
+}
+
+fn selections_bounds_in_axes(
+    doc: &Document,
+    selections: &[Vec<u64>],
+    axes: Option<(Point, f32)>,
+) -> Vec<Option<(Point, Point)>> {
     use crate::atom_labels::Owner;
     let owners: std::collections::HashMap<u64, usize> = selections
         .iter()
@@ -1189,11 +1242,12 @@ pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<
         .flat_map(|(i, ids)| ids.iter().map(move |id| (*id, i)))
         .collect();
     let mut bounds: Vec<Option<(Point, Point)>> = vec![None; selections.len()];
+    let axes = axes.map(|(pivot, degrees)| (pivot, (-degrees).to_radians().sin_cos()));
     let mut grow = |id: u64, points: &mut dyn Iterator<Item = Point>| {
         let Some(extent) = owners.get(&id).and_then(|i| bounds.get_mut(*i)) else {
             return;
         };
-        for p in points {
+        let mut add = |p: Point| {
             *extent = Some(match *extent {
                 None => (p, p),
                 Some((lo, hi)) => (
@@ -1201,6 +1255,28 @@ pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<
                     Point::new(hi.x.max(p.x), hi.y.max(p.y)),
                 ),
             });
+        };
+        if let Some((pivot, (s, c))) = axes {
+            // Every supplied extent may contain upright ink. Its other two
+            // corners are essential when measuring in the turned axes.
+            let Some((lo, hi)) = points.map(|p| (p, p)).reduce(|(lo, hi), (p, _)| {
+                (
+                    Point::new(lo.x.min(p.x), lo.y.min(p.y)),
+                    Point::new(hi.x.max(p.x), hi.y.max(p.y)),
+                )
+            }) else {
+                return;
+            };
+            for p in [lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y)] {
+                add(Point::new(
+                    pivot.x + (p.x - pivot.x) * c - (p.y - pivot.y) * s,
+                    pivot.y + (p.x - pivot.x) * s + (p.y - pivot.y) * c,
+                ));
+            }
+        } else {
+            for p in points {
+                add(p);
+            }
         }
     };
     for label in crate::atom_labels::indicators(doc) {
@@ -1458,12 +1534,25 @@ pub(crate) fn automatic_double_side(faces: &FaceIndex<'_>, bond: &Bond) -> Optio
     Some(if cross >= 0. { 1. } else { -1. })
 }
 
+#[cfg(test)]
+thread_local! {
+    static RING_SEARCH_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Find the smallest ring containing this edge, using the alternate path.
 fn ring_center(faces: &FaceIndex<'_>, from: u64, to: u64) -> Option<Point> {
     use std::collections::{HashMap, VecDeque};
+    // A terminal endpoint has no alternate path. Carbonyl bonds are queried
+    // repeatedly while crowded hydrogen labels avoid nearby bond strokes;
+    // walking the whole peptide from the carbon end cannot find a ring.
+    if faces.graph().degree(from) < 2 || faces.graph().degree(to) < 2 {
+        return None;
+    }
     let mut previous = HashMap::from([(from, from)]);
     let mut queue = VecDeque::from([from]);
     while let Some(id) = queue.pop_front() {
+        #[cfg(test)]
+        RING_SEARCH_VISITS.with(|count| count.set(count.get() + 1));
         for (_, b) in faces.graph().bonds(id) {
             if (b.a == from && b.b == to) || (b.a == to && b.b == from) {
                 continue;

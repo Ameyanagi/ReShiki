@@ -260,8 +260,8 @@ fn edits_during_a_save_reopen_the_pending_dialog() {
     assert_eq!(app.tab.doc, edited);
 }
 
-/// `reshiki --cli` picks the import format for a file's extension exactly as
-/// opening the file in the app does.
+/// The CLI and app agree on their supported molecular file extensions.
+/// Crystal inputs are recognized but rejected by the CLI argument parser.
 #[test]
 fn cli_input_formats_match_the_app() {
     let native = Document::default().file_json().unwrap();

@@ -1,0 +1,170 @@
+[
+  {
+    "browser": "chromium",
+    "version": "156.0.8078.4",
+    "scenario": "success",
+    "before": 3,
+    "after": 0,
+    "unhandled": [],
+    "result": "passed"
+  },
+  {
+    "browser": "chromium",
+    "version": "156.0.8078.4",
+    "scenario": "abort-retry",
+    "before": 3,
+    "after": 0,
+    "unhandled": [],
+    "result": "passed",
+    "keptAfterFailure": 3,
+    "injectedFailures": 1
+  },
+  {
+    "browser": "chromium",
+    "version": "156.0.8078.4",
+    "scenario": "query-retry",
+    "before": 3,
+    "after": 0,
+    "unhandled": [],
+    "result": "passed",
+    "keptAfterFailure": 3,
+    "injectedFailures": 1
+  },
+  {
+    "browser": "chromium",
+    "version": "156.0.8078.4",
+    "scenario": "query-restore-all",
+    "before": 3,
+    "after": 3,
+    "unhandled": [],
+    "result": "passed",
+    "keptAfterFailure": 3,
+    "injectedFailures": 1,
+    "restoredAfterOwnerQueryFailure": 6
+  },
+  {
+    "browser": "chromium",
+    "version": "156.0.8078.4",
+    "scenario": "query-restore-selected",
+    "before": 3,
+    "after": 3,
+    "unhandled": [],
+    "result": "passed",
+    "keptAfterFailure": 3,
+    "injectedFailures": 1,
+    "restoredAfterOwnerQueryFailure": 6
+  },
+  {
+    "browser": "chromium",
+    "version": "156.0.8078.4",
+    "scenario": "live-owner",
+    "before": 3,
+    "after": 1,
+    "unhandled": [],
+    "result": "passed"
+  },
+  {
+    "browser": "chromium",
+    "version": "156.0.8078.4",
+    "scenario": "rejected-lock",
+    "before": 3,
+    "after": 0,
+    "unhandled": [],
+    "result": "passed",
+    "keptAfterRejectedOwnerAutosave": 3,
+    "unprotectedDraftsPublished": 0
+  },
+  {
+    "browser": "chromium",
+    "version": "156.0.8078.4",
+    "scenario": "restore-selected",
+    "before": 3,
+    "after": 3,
+    "unhandled": [],
+    "result": "passed"
+  },
+  {
+    "browser": "webkit",
+    "version": "27.2",
+    "scenario": "success",
+    "before": 3,
+    "after": 0,
+    "unhandled": [],
+    "result": "passed"
+  },
+  {
+    "browser": "webkit",
+    "version": "27.2",
+    "scenario": "abort-retry",
+    "before": 3,
+    "after": 0,
+    "unhandled": [],
+    "result": "passed",
+    "keptAfterFailure": 3,
+    "injectedFailures": 1
+  },
+  {
+    "browser": "webkit",
+    "version": "27.2",
+    "scenario": "query-retry",
+    "before": 3,
+    "after": 0,
+    "unhandled": [],
+    "result": "passed",
+    "keptAfterFailure": 3,
+    "injectedFailures": 1
+  },
+  {
+    "browser": "webkit",
+    "version": "27.2",
+    "scenario": "query-restore-all",
+    "before": 3,
+    "after": 3,
+    "unhandled": [],
+    "result": "passed",
+    "keptAfterFailure": 3,
+    "injectedFailures": 1,
+    "restoredAfterOwnerQueryFailure": 6
+  },
+  {
+    "browser": "webkit",
+    "version": "27.2",
+    "scenario": "query-restore-selected",
+    "before": 3,
+    "after": 3,
+    "unhandled": [],
+    "result": "passed",
+    "keptAfterFailure": 3,
+    "injectedFailures": 1,
+    "restoredAfterOwnerQueryFailure": 6
+  },
+  {
+    "browser": "webkit",
+    "version": "27.2",
+    "scenario": "live-owner",
+    "before": 3,
+    "after": 1,
+    "unhandled": [],
+    "result": "passed"
+  },
+  {
+    "browser": "webkit",
+    "version": "27.2",
+    "scenario": "rejected-lock",
+    "before": 3,
+    "after": 0,
+    "unhandled": [],
+    "result": "passed",
+    "keptAfterRejectedOwnerAutosave": 3,
+    "unprotectedDraftsPublished": 0
+  },
+  {
+    "browser": "webkit",
+    "version": "27.2",
+    "scenario": "restore-selected",
+    "before": 3,
+    "after": 3,
+    "unhandled": [],
+    "result": "passed"
+  }
+]

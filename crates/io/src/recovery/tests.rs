@@ -1,4 +1,110 @@
 use super::*;
+
+fn abandoned(directory: &Path, name: &str, saved_at: u64) -> Candidate {
+    let mut document = Document::default();
+    document.add_atom("O", Default::default());
+    let snapshot = Snapshot {
+        document,
+        source: Some(PathBuf::from(name)),
+        saved_at,
+    };
+    let path = directory.join(format!("4294967294-{name}-{saved_at}.json"));
+    std::fs::write(&path, serde_json::to_vec(&snapshot).unwrap()).unwrap();
+    Candidate { path, snapshot }
+}
+
+#[test]
+fn discarding_valid_abandoned_drafts_moves_them_out_of_recovery() {
+    let directory = tempfile::Builder::new()
+        .prefix("reshiki-recovery-discard-test-")
+        .tempdir()
+        .unwrap();
+    let store = Recovery::in_directory(directory.path()).unwrap();
+    let first = abandoned(directory.path(), "ethanol.rsk", 100);
+    let second = abandoned(directory.path(), "aspirin.rsk", 200);
+    let candidates = store.candidates();
+    assert_eq!(candidates.len(), 2, "Seeded files were actually scanned");
+    for candidate in candidates {
+        discard(&candidate).unwrap();
+    }
+    assert!(!first.path.exists() && !second.path.exists());
+    assert!(
+        store.candidates().is_empty(),
+        "A fresh scan must stay empty"
+    );
+}
+
+#[test]
+fn discard_rechecks_live_owners_and_changed_snapshots() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = Recovery::in_directory(directory.path()).unwrap();
+    let mut candidate = abandoned(directory.path(), "drawing.rsk", 100);
+    assert_eq!(store.candidates().len(), 1);
+    let live = directory
+        .path()
+        .join(format!("{}-live.json", std::process::id()));
+    std::fs::rename(&candidate.path, &live).unwrap();
+    candidate.path = live.clone();
+    assert!(!candidate.available());
+    assert!(store.candidates().is_empty());
+    assert!(
+        discard(&candidate).is_err(),
+        "Even a stale/forged offer is protected"
+    );
+    assert!(live.exists());
+    let candidate = abandoned(directory.path(), "changed.rsk", 100);
+    let mut changed = candidate.snapshot.clone();
+    changed.document.add_atom("N", Default::default());
+    std::fs::write(&candidate.path, serde_json::to_vec(&changed).unwrap()).unwrap();
+    assert!(discard(&candidate).is_err());
+    assert!(candidate.path.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn another_running_process_is_never_offered_or_discarded() {
+    struct Child(std::process::Child);
+    impl Drop for Child {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    let child = Child(
+        std::process::Command::new("/bin/sleep")
+            .arg("60")
+            .spawn()
+            .unwrap(),
+    );
+    let directory = tempfile::tempdir().unwrap();
+    let store = Recovery::in_directory(directory.path()).unwrap();
+    let mut candidate = abandoned(directory.path(), "running.rsk", 100);
+    let path = directory
+        .path()
+        .join(format!("{}-running.json", child.0.id()));
+    std::fs::rename(&candidate.path, &path).unwrap();
+    candidate.path = path;
+    assert!(store.candidates().is_empty());
+    assert!(discard(&candidate).is_err());
+    assert!(candidate.path.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn recovery_scan_and_discard_do_not_follow_symbolic_links() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = Recovery::in_directory(directory.path()).unwrap();
+    let source = abandoned(directory.path(), "source.rsk", 100);
+    let link = directory.path().join("4294967294-link.json");
+    std::os::unix::fs::symlink(&source.path, &link).unwrap();
+    assert_eq!(store.candidates().len(), 1);
+    let candidate = Candidate {
+        path: link,
+        snapshot: source.snapshot,
+    };
+    assert!(discard(&candidate).is_err());
+    assert!(source.path.exists());
+}
 #[cfg(windows)]
 #[test]
 fn windows_does_not_recover_a_live_editors_draft() {

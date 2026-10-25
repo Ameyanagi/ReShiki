@@ -1657,10 +1657,9 @@ fn mechanism_attachment_379_clear_aim_leaves_the_arrow_unchanged() {
     assert_eq!((a.start, a.end, a.cubic), (b.start, b.end, b.cubic));
 }
 #[test]
-fn mechanism_attachment_379_aim_along_a_bond_keeps_the_aim_and_base_gap() {
+fn mechanism_attachment_506_aim_along_a_bond_keeps_the_aim_and_clears_ink() {
     let (d, c, id) = acetone_arrow();
-    // Straight down the C=O bond: no gap clears it, so the end keeps the
-    // base gap, as on arrival, and the aim never turns.
+    // Straight down the C=O bond needs sideways clearance; the aim never turns.
     let mut aimed = d.clone();
     edit_handle(&mut aimed, id, 4, aim(&d, id, 270.));
     let a = arrow(&aimed, id);
@@ -1668,6 +1667,8 @@ fn mechanism_attachment_379_aim_along_a_bond_keeps_the_aim_and_base_gap() {
     let anchor = a.end_anchor.as_ref().unwrap();
     assert_eq!(anchor.target, Target::Atom { atom: c });
     assert!((anchor.gap - end_gap()).abs() < 0.0001);
+    assert!(rendered_head_ink_gap(&aimed, a) > 0.);
+    assert!(a.end.x.abs() > 0.1);
     let once = aimed.clone();
     reconcile(&mut aimed);
     assert_eq!(aimed, once);
@@ -1749,7 +1750,13 @@ fn mechanism_attachment_379_an_aimed_end_depends_only_on_its_aim() {
         let a = arrow(&d, id);
         if degrees == 235. {
             let end = (a.end, a.end_anchor.clone());
-            assert_eq!(*first.get_or_insert(end.clone()), end, "{degrees}");
+            let previous = first.get_or_insert(end.clone());
+            near(previous.0, end.0);
+            let (previous, current) = (previous.1.as_ref().unwrap(), end.1.as_ref().unwrap());
+            assert_eq!(previous.target, current.target);
+            near(previous.offset, current.offset);
+            near(previous.direction, current.direction);
+            assert!((previous.gap - current.gap).abs() < 0.0001);
         }
     }
 }
@@ -1766,4 +1773,25 @@ fn mechanism_attachment_379_aim_after_detaching_the_start_still_clears_bonds() {
     edit_handle(&mut d, id, 4, p);
     let a = arrow(&d, id);
     assert!(rendered_head_ink_gap(&d, a) > 0.);
+}
+
+#[test]
+fn mechanism_attachment_506_carbonyl_aim_sweep_has_positive_rendered_clearance() {
+    let (d, c, id) = acetone_arrow();
+    for degrees in (235..=305).step_by(5) {
+        let mut aimed = d.clone();
+        edit_handle(&mut aimed, id, 4, aim(&d, id, degrees as f32));
+        let a = arrow(&aimed, id);
+        let gap = rendered_head_ink_gap(&aimed, a);
+        assert!(gap > 0., "{degrees}°: rendered head overlaps by {}", -gap);
+        assert_eq!(
+            a.end_anchor.as_ref().unwrap().target,
+            Target::Atom { atom: c }
+        );
+        let (s, c) = (degrees as f32).to_radians().sin_cos();
+        near(arrival(a), Point::new(c, s));
+        let once = aimed.clone();
+        reconcile(&mut aimed);
+        assert_eq!(aimed, once, "{degrees}° changes on reconciliation");
+    }
 }
