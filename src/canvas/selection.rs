@@ -4,6 +4,9 @@ use iced::widget::canvas::{Path, Stroke};
 use iced::{Color, Point, Rectangle, Size, mouse};
 use reshiki::{document::Document, editing, scene};
 
+/// Room between selection bounds and the outline, in screen pixels.
+pub(super) const FRAME_PADDING_PX: f32 = 12.;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Handle {
     Resize(usize),
@@ -87,13 +90,27 @@ impl SelectionBox {
     }
 
     fn grips(self) -> [Point; 4] {
-        let offsets = [(-12.0, -12.0), (12.0, -12.0), (12.0, 12.0), (-12.0, 12.0)];
+        let pad = FRAME_PADDING_PX;
+        let offsets = [(-pad, -pad), (pad, -pad), (pad, pad), (-pad, pad)];
         let mut pairs = self.corners.into_iter().zip(offsets);
         std::array::from_fn(|_| {
             let (corner, (x, y)) = pairs.next().unwrap_or((self.pivot, (0., 0.)));
             let p = self.camera.screen(corner, self.bounds);
             Point::new(p.x + x, p.y + y)
         })
+    }
+
+    /// A screen-space band on either side of the same outline that is drawn.
+    pub(super) fn edge_hit(self, p: Point, tolerance: f32) -> bool {
+        let [lo, _, hi, _] = self.grips();
+        let inside = |pad: f32| {
+            p.x >= lo.x - pad && p.x <= hi.x + pad && p.y >= lo.y - pad && p.y <= hi.y + pad
+        };
+        inside(tolerance)
+            && (p.x <= lo.x + tolerance
+                || p.x >= hi.x - tolerance
+                || p.y <= lo.y + tolerance
+                || p.y >= hi.y - tolerance)
     }
 
     fn rotation_grip(self) -> Point {
