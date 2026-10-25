@@ -279,7 +279,11 @@ pub fn analysis_document(doc: &Document, atoms: &[u64]) -> Document {
         metal_kept: bool,
     }
     let mut valence: HashMap<u64, Valence> = HashMap::new();
+    let distance_atoms = crate::models3d::crystal::analysis_atoms(doc);
     for b in &doc.bonds {
+        if distance_atoms.contains(&b.a) || distance_atoms.contains(&b.b) {
+            continue;
+        }
         for (atom, other) in [(b.a, b.b), (b.b, b.a)] {
             if !kept.contains(&atom) {
                 continue;
@@ -542,6 +546,7 @@ pub(crate) fn extend_append_part(doc: &mut Document, part: Document) {
         doc.models.extend(part.models);
         crate::models3d::require_version(doc);
     }
+    crate::models3d::crystal::require_distance_version(doc);
     if crate::rear_opacity::present(doc) {
         doc.require_version(crate::document::REAR_OPACITY);
     }

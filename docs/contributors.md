@@ -18,6 +18,8 @@ Under review: @Ameyanagi — drawing-specific inspector state, fresh fragment-na
 Under review: @Ameyanagi — chemical mark placement, reaction label spacing, visible terminal bonds, repeated chemical symbols and attached-arrow clearance in [PR #545](https://github.com/Ameyanagi/ReShiki/pull/545).
 Under review: @Ameyanagi — Export dialogs name their format, browser progress and download receipts describe what happened, and the npm package has a complete HTML recipe with the correct release version.
 [PR #557](https://github.com/Ameyanagi/ReShiki/pull/557) · [QA report](changes/qa-browser-polish.md).
+Under review: @Ameyanagi — Crystal substitutions keep their cell and copies, update the drawn formula, and preserve unvalidated bond context after unsupported edits.
+[PR #558](https://github.com/Ameyanagi/ReShiki/pull/558) · [QA report](changes/qa-crystal-substitution.md).
 
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).
