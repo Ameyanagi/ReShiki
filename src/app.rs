@@ -33,6 +33,8 @@ mod depth_appearance;
 mod dispatch;
 mod document_styles;
 mod document_tab;
+#[cfg(test)]
+mod drawing_panel_capture;
 use document_tab::DocumentTab;
 mod engine_jobs;
 mod event_slot;
@@ -438,6 +440,7 @@ const DRAFT_INTERVAL: std::time::Duration = if cfg!(target_arch = "wasm32") {
 impl App {
     /// Starts a file epoch, dropping per-file work so late results are ignored and new work can start.
     pub(super) fn begin_file_epoch(&mut self) {
+        self.sync_drawing_panel_context();
         self.tab.file_epoch = self.next_epoch();
         // Invalidate tickets before clearing gestures that may switch the front tab's tool.
         self.tab.naming.invalidate_name();
@@ -445,6 +448,7 @@ impl App {
         self.tab.arrows.cancel_source();
         self.cancel_reference_stretch();
         self.tab.nmr.clear_pending();
+        self.sync_drawing_panel_context();
     }
 
     #[cfg(test)]
@@ -840,7 +844,9 @@ impl App {
             .unwrap_or(&self.tab.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        self.sync_drawing_panel_context();
         let task = self.handle(message);
+        self.sync_drawing_panel_context();
         self.settle_deferred_label_layout();
         // Any message may change the drawing, some (previews, background
         // labels) without a new revision, so the next view compares afresh.
