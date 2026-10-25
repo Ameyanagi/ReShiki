@@ -4,6 +4,9 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
+Under review: @Ameyanagi — Large peptide imports avoid repeated ring searches during label placement. Long-running Structure-input operations show elapsed time and can be cancelled without changing the drawing.
+[PR #559](https://github.com/Ameyanagi/ReShiki/pull/559) · [QA report](changes/qa-508-import-performance.md).
+
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).
 
