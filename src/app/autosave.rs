@@ -401,20 +401,42 @@ impl App {
     }
 
     pub(super) fn restore_recovered(&mut self) {
+        self.restore_recovered_selection(|_| true);
+    }
+
+    pub(super) fn restore_recovered_selection(&mut self, selected: impl Fn(&Candidate) -> bool) {
+        #[cfg(target_arch = "wasm32")]
+        if !reshiki::storage::browser::owners_verified() {
+            self.status = "Could not verify open ReShiki pages · The recovery drafts are still available · Try again".into();
+            self.error = true;
+            return;
+        }
         // Oldest first, so the latest draft ends up in front.
         let candidates = std::mem::take(&mut self.recovered);
-        let count = candidates.len();
+        let mut count = 0;
         for candidate in candidates.into_iter().rev() {
-            self.restore(candidate);
+            if !candidate.available() {
+                continue;
+            }
+            if selected(&candidate) {
+                self.restore(candidate);
+                count += 1;
+            } else {
+                self.recovered.push(candidate);
+            }
         }
+        self.recovered.reverse();
+        self.recovery_manager.close();
         self.status = match count {
             0 => return,
             1 => "Recovered drawing · Save to keep a new copy".into(),
             n => format!("Recovered {n} drawings as tabs · Save them to keep new copies"),
         };
+        self.error = false;
     }
 
     pub(super) fn dismiss_recovery(&mut self) {
+        self.recovery_manager.close();
         self.recovered.clear();
         if self.status.is_empty() {
             self.status = super::READY.into();

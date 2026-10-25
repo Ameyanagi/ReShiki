@@ -31,6 +31,13 @@ struct Draft<'d> {
     smart: Vec<Guide>,
 }
 
+struct SelectionPreview<'a> {
+    document: &'a Document,
+    ids: &'a [u64],
+    translation: Option<World>,
+    ink: &'a [(World, World)],
+}
+
 impl<'d> Draft<'d> {
     fn new(base: &'d Document) -> Self {
         Self {
@@ -121,8 +128,13 @@ impl MoleculeCanvas<'_> {
                 }
             });
         models3d::begin(&preview);
+        let mut rotation_ink = Vec::new();
+        let rotating = matches!(&state.gesture, Some(super::Gesture::Transform(drag)) if matches!(drag.handle, super::Handle::Rotate));
         if let Some(camera) = cached_camera {
             let (markers, scene) = state.scene.borrow_mut().render(self.doc, selected);
+            if rotating {
+                rotation_ink = reshiki::scene::label_ink_boxes(&scene);
+            }
             markers.draw_with_nmr(frame, camera, bounds, true, &nmr_ids);
             draw_primitives(frame, &scene, camera, bounds, 0.);
         } else {
@@ -133,7 +145,13 @@ impl MoleculeCanvas<'_> {
                 true,
                 &nmr_ids,
             );
-            draw_document(frame, &preview, self.camera, bounds);
+            if rotating {
+                let scene = reshiki::scene::primitives(&preview);
+                rotation_ink = reshiki::scene::label_ink_boxes(&scene);
+                draw_primitives(frame, &scene, self.camera, bounds, 0.);
+            } else {
+                draw_document(frame, &preview, self.camera, bounds);
+            }
         }
         if let Some(drawing) = bond_preview {
             draw_document(frame, &drawing, self.camera, bounds);
@@ -166,11 +184,15 @@ impl MoleculeCanvas<'_> {
             frame,
             state,
             bounds,
-            &preview,
-            selected,
-            cached_camera.map(|_| translation.unwrap_or_default()),
+            SelectionPreview {
+                document: &preview,
+                ids: selected,
+                translation: cached_camera.map(|_| translation.unwrap_or_default()),
+                ink: &rotation_ink,
+            },
         );
         self.draw_tilt_bounds(frame, &preview, selected, bounds);
+        self.draw_model_generation(frame, bounds, iced::time::Instant::now());
         // Above the selection, so that gap labels stay legible.
         smart_guides::draw(
             frame,

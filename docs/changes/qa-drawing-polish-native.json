@@ -1,0 +1,75 @@
+{
+  "commit": "fb15e12a",
+  "checks": [
+    {
+      "check": "native palette dummy button",
+      "selected": true
+    },
+    {
+      "check": "rotation draft while focused",
+      "valueMinus60": true,
+      "focused": true
+    },
+    {
+      "check": "rotation Enter",
+      "reset": true,
+      "undoEnabled": true
+    },
+    {
+      "check": "one Undo after native -60",
+      "undoDisabled": true
+    },
+    {
+      "check": "real native rotation-handle drag",
+      "undoEnabled": true,
+      "dirtyTitle": true
+    },
+    {
+      "check": "one Undo after real rotation drag",
+      "undoDisabled": true,
+      "cleanTitle": true
+    },
+    {
+      "check": "caffeine retained after closing every drawing",
+      "untitled": true,
+      "oldDraft": true
+    },
+    {
+      "check": "one native paste replaces retained Structure draft",
+      "line": "\t\t65 text entry area (settable) Structure or reaction to import, Value: CCO, ID: import-input"
+    },
+    {
+      "check": "native Clear resets input",
+      "insertDisabled": true,
+      "clearDisabled": true
+    },
+    {
+      "check": "typing continues after Clear",
+      "valueC": "\t\t65 text entry area (settable) Structure or reaction to import, Value: C, ID: import-input"
+    },
+    {
+      "check": "Command Enter still inserts",
+      "undoEnabled": true
+    },
+    {
+      "check": "Name to Structure selects retained draft",
+      "line": "\t\t70 text entry area (settable) Structure or reaction to import, Value: CO, ID: import-input"
+    }
+  ],
+  "closed": true,
+  "host": {
+    "cpu": "Apple M1",
+    "os": "macOS 27.0.1",
+    "build": "26A434",
+    "architecture": "arm64"
+  },
+  "source_commit": "fb15e12af420b956d78c5d8930fe5e2c7fb8fcc6",
+  "capture_harness_commit": "50f1ec3ce5353c9c4209ff1f92c1b072e6269227",
+  "native_view": {
+    "window": "expanded with the macOS window zoom action",
+    "zoom_percent": 250,
+    "drawing_style": "JACS / ACS",
+    "colours": "Publication",
+    "canvas": "light"
+  }
+}

@@ -284,16 +284,24 @@ impl App {
         self.status = "Arrow updated · Drag the diamond to bend".into();
     }
     pub(super) fn arrow_panel(&self) -> Element<'_, Message> {
-        use super::workspace::{accessible_command, command, hover_hint, muted_text, section};
+        use super::workspace::{accessible_command, command, hover_hint, muted_text};
         use iced::widget::{Space, checkbox, column, row, text, tooltip};
         use iced::{Alignment, Length};
         let s = &self.tab.arrows.style;
-        let has_selection = self
+        let selected_arrows = self
             .tab
             .doc
             .arrows
             .iter()
-            .any(|a| self.tab.selected.contains(&a.id));
+            .filter(|a| self.tab.selected.contains(&a.id))
+            .count();
+        let has_selection = selected_arrows > 0;
+        let heading = match (selected_arrows, self.tab.selected.len()) {
+            (0, _) => "ARROW TOOL".into(),
+            (1, 1) => "ARROW PROPERTIES".into(),
+            (1, _) => "ARROW PROPERTIES · 1 arrow".into(),
+            (count, _) => format!("ARROW PROPERTIES · {count} arrows"),
+        };
         let number = |label: &'static str, field: Field| {
             let value = self
                 .tab
@@ -333,11 +341,7 @@ impl App {
             .align_y(Alignment::Center)
         };
         let mut panel = column![
-            section(if has_selection {
-                "ARROW PROPERTIES"
-            } else {
-                "ARROW TOOL"
-            }),
+            text(heading).size(10).style(muted_text),
             canvas(crate::canvas::ArrowPreview {
                 arrow: self
                     .tab

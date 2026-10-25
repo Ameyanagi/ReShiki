@@ -653,6 +653,7 @@ fn reconstruct_bonds(
             let b = at(&work.state.graph.bonds, i)?;
             let meta = at(&work.state.metadata.bonds, i)?;
             let mut bond = Bond {
+                distance_derived: false,
                 highlight: None,
                 ring_arc: false,
                 projection: false,

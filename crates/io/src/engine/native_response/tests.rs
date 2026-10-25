@@ -1,6 +1,98 @@
 use super::*;
 use crate::chemistry::{depict, stereo::perception::RingKind};
 
+#[tokio::test]
+async fn protected_glucose_exports_and_native_roundtrips_keep_all_configurations()
+-> anyhow::Result<()> {
+    if !loss_notice_helper_available() {
+        return Ok(());
+    }
+    use crate::{atom_text, haworth};
+    let mut template =
+        haworth::sugar_document(haworth::Sugar::Glucose, haworth::Anomer::Alpha, 42.)
+            .map_err(anyhow::Error::msg)?;
+    let ids = template
+        .atoms
+        .iter()
+        .map(|atom| atom.id)
+        .collect::<Vec<_>>();
+    template.expand_abbreviations(&ids);
+    let mut products = Vec::new();
+    for oxygen in 7..=10 {
+        for label in ["OAc", "OBn", "MeO"] {
+            products.push((
+                format!("O{oxygen} {label}"),
+                atom_text::apply(&template, oxygen, label, atom_text::Mode::Auto)
+                    .map_err(anyhow::Error::msg)?,
+            ));
+        }
+    }
+    let mut full = template.clone();
+    for (oxygen, label) in [(12, "OBn"), (9, "OBn"), (8, "OBn"), (10, "OBn"), (7, "MeO")] {
+        full = atom_text::apply(&full, oxygen, label, atom_text::Mode::Auto)
+            .map_err(anyhow::Error::msg)?;
+    }
+    products.push(("full protection".into(), full));
+    for (case, product) in products {
+        // The expected product has this exact molecular graph and the named
+        // template's physical winding by persistent atom ID. Protection can
+        // change canonical InChI numbering and CIP priorities.
+        let mut reference = product.clone();
+        for atom in template.atoms.iter().filter(|atom| atom.stereo.is_some()) {
+            reference.atom_mut(atom.id).unwrap().stereo = atom.stereo.clone();
+        }
+        let expected = execute(Request::molecule("analyze", reference))
+            .await?
+            .analysis
+            .unwrap();
+        let layers = |inchi: &str| {
+            inchi
+                .split('/')
+                .filter(|part| matches!(part.as_bytes().first(), Some(b't' | b'm' | b's')))
+                .collect::<Vec<_>>()
+                .join("/")
+        };
+        assert!(
+            !layers(&expected.inchi).contains('?'),
+            "{case}: {}",
+            expected.inchi
+        );
+        let reopened = Document::from_json(&product.file_json().map_err(anyhow::Error::msg)?)
+            .map_err(anyhow::Error::msg)?;
+        let response = execute(Request::molecule("analyze", reopened)).await?;
+        assert_eq!(
+            response.analysis.unwrap().inchi,
+            expected.inchi,
+            "{case}: native reopen"
+        );
+        for format in ["smiles", "mol"] {
+            let mut request = Request::molecule("export", product.clone());
+            request.format = Some(format.into());
+            let response = execute(request).await?;
+            let analysis = response.analysis.unwrap();
+            assert_eq!(
+                layers(&analysis.inchi),
+                layers(&expected.inchi),
+                "{case}/{format}"
+            );
+            assert_eq!(analysis.smiles, expected.smiles, "{case}/{format}");
+            let output = response.output.unwrap();
+            if format == "smiles" {
+                assert_eq!(output.trim(), expected.smiles, "{case}: Copy as SMILES");
+            } else {
+                let imported = molfile::read(&output)?.display_document()?.0;
+                let response = execute(Request::molecule("analyze", imported)).await?;
+                assert_eq!(
+                    response.analysis.unwrap().inchi,
+                    expected.inchi,
+                    "{case}: MOL reopen"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 #[test]
 fn projected_inchi_retains_captured_stereo_without_guessing_from_xy() -> anyhow::Result<()> {
     for (text, expected) in [

@@ -4,6 +4,9 @@ use iced::widget::canvas::{Path, Stroke};
 use iced::{Color, Point, Rectangle, Size, mouse};
 use reshiki::{document::Document, editing, scene};
 
+/// Room between selection bounds and the outline, in screen pixels.
+pub(super) const FRAME_PADDING_PX: f32 = 12.;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Handle {
     Resize(usize),
@@ -96,14 +99,41 @@ impl SelectionBox {
         self
     }
 
+    /// A display-only frame enclosing the current preview's upright labels.
+    pub(super) fn rotating_preview(
+        mut self,
+        preview: &Document,
+        ids: &[u64],
+        degrees: f32,
+    ) -> Self {
+        if let Some((lo, hi)) = scene::selection_bounds_in_axes(preview, ids, self.pivot, degrees) {
+            self.corners = [lo, World::new(hi.x, lo.y), hi, World::new(lo.x, hi.y)];
+        }
+        self
+    }
+
     fn grips(self) -> [Point; 4] {
-        let offsets = [(-12.0, -12.0), (12.0, -12.0), (12.0, 12.0), (-12.0, 12.0)];
+        let pad = FRAME_PADDING_PX;
+        let offsets = [(-pad, -pad), (pad, -pad), (pad, pad), (-pad, pad)];
         let mut pairs = self.corners.into_iter().zip(offsets);
         std::array::from_fn(|_| {
             let (corner, (x, y)) = pairs.next().unwrap_or((self.pivot, (0., 0.)));
             let p = self.camera.screen(corner, self.bounds);
             Point::new(p.x + x, p.y + y)
         })
+    }
+
+    /// A screen-space band on either side of the same outline that is drawn.
+    pub(super) fn edge_hit(self, p: Point, tolerance: f32) -> bool {
+        let [lo, _, hi, _] = self.grips();
+        let inside = |pad: f32| {
+            p.x >= lo.x - pad && p.x <= hi.x + pad && p.y >= lo.y - pad && p.y <= hi.y + pad
+        };
+        inside(tolerance)
+            && (p.x <= lo.x + tolerance
+                || p.x >= hi.x - tolerance
+                || p.y <= lo.y + tolerance
+                || p.y >= hi.y - tolerance)
     }
 
     fn rotation_grip(self) -> Point {
@@ -129,6 +159,11 @@ impl SelectionBox {
             Point::new((c.x + d.x) / 2., c.y),
             Point::new(a.x, (a.y + d.y) / 2.),
         ]
+    }
+
+    #[cfg(test)]
+    pub(super) fn drawn_edge_centers(self) -> [Point; 4] {
+        self.edge_grips()
     }
 
     fn edge_enabled(self, edge: usize) -> bool {
@@ -225,6 +260,39 @@ pub fn rotation_readout(angle: f32) -> [String; 2] {
         format!("Rotate {}°", angle.round() + 0.),
         format!("Shift: 15° steps · {keys}"),
     ]
+}
+
+/// Keep the usual pointer offset when clear, then try its other sides and
+/// wider offsets. Every candidate remains inside the canvas.
+pub(super) fn rotation_readout_bounds(
+    pointer: Point,
+    canvas: Size,
+    ink: &[Rectangle],
+) -> Rectangle {
+    let candidate = |x: f32, y: f32| {
+        Rectangle::new(
+            Point::new(
+                x.clamp(4., (canvas.width - 260.).max(4.)) - 4.,
+                y.clamp(4., (canvas.height - 42.).max(4.)) - 3.,
+            ),
+            Size::new(256., 39.),
+        )
+    };
+    let original = candidate(pointer.x + 16., pointer.y + 18.);
+    for extra in [0., 32., 64., 112.] {
+        for (x, y) in [
+            (pointer.x + 16. + extra, pointer.y + 18. + extra),
+            (pointer.x + 16. + extra, pointer.y - 42. - extra),
+            (pointer.x - 260. - extra, pointer.y + 18. + extra),
+            (pointer.x - 260. - extra, pointer.y - 42. - extra),
+        ] {
+            let rect = candidate(x, y);
+            if ink.iter().all(|label| !rect.expand(2.).intersects(label)) {
+                return rect;
+            }
+        }
+    }
+    original
 }
 
 /// The rotation handle's transform, in its preview and commit alike: what is

@@ -689,6 +689,16 @@ impl Drawing {
                     atom.label_h = h;
                 }
             }
+            if start.distance(end) < 3.
+                && automatic_pair.is_none()
+                && let Some(atom) = doc.atom(id)
+                && let Some(mark) = atom.marks.last()
+            {
+                let offset = mark_placement::charge_click(doc, atom, mark);
+                if let Some(mark) = doc.atom_mut(id).and_then(|a| a.marks.last_mut()) {
+                    mark.offset = offset;
+                }
+            }
             // A drag orbits the atom like moving the mark; `constrain` frees it.
             if start.distance(end) >= 3.
                 && let Some(atom) = doc.atom(id)
