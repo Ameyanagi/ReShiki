@@ -21,22 +21,26 @@ pub mod text;
 
 /// Write a tree into a stream. Assumes that the stream belongs to transparency group and the object
 /// that contains it has the correct bounding box set.
+/// `initial_transform` is already applied to the stream; include it in paint
+/// coordinates without emitting it a second time.
 pub fn tree_to_stream(
     tree: &Tree,
     chunk: &mut Chunk,
     content: &mut Content,
     ctx: &mut Context,
     rc: &mut ResourceContainer,
+    initial_transform: Transform,
 ) -> Result<()> {
     content.save_state_checked()?;
 
     // From PDF coordinate system to SVG coordinate system
-    let initial_transform =
+    let svg_transform =
         Transform::from_row(1.0, 0.0, 0.0, -1.0, 0.0, tree.size().height());
 
-    content.transform(initial_transform.to_pdf_transform());
+    content.transform(svg_transform.to_pdf_transform());
 
-    group::render(tree.root(), chunk, content, ctx, initial_transform, None, rc)?;
+    let accumulated_transform = initial_transform.pre_concat(svg_transform);
+    group::render(tree.root(), chunk, content, ctx, accumulated_transform, None, rc)?;
     content.restore_state();
 
     Ok(())
@@ -50,7 +54,7 @@ pub fn tree_to_xobject(tree: &Tree, chunk: &mut Chunk, ctx: &mut Context) -> Res
     let mut rc = ResourceContainer::new();
 
     let mut content = Content::new();
-    tree_to_stream(tree, chunk, &mut content, ctx, &mut rc)?;
+    tree_to_stream(tree, chunk, &mut content, ctx, &mut rc, Transform::default())?;
     let stream = ctx.finish_content(content);
 
     let mut x_object = chunk.form_xobject(x_ref, &stream);

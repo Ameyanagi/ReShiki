@@ -355,6 +355,16 @@ fn input(command: &str, options: &Options) -> Result<Input, String> {
                 .to_owned(),
         ),
     };
+    // `auto` detects supported molecular formats from their contents. It must
+    // not turn a known crystal path into the SMILES fallback. An explicit
+    // supported format still overrides a misleading filename.
+    if let Source::File(path) = &source
+        && options.from.as_deref().is_none_or(|from| from == "auto")
+        && let Some(format) = crate::compatibility::file_format(path)
+        && crate::crystal::is_crystal_format(format)
+    {
+        return Err(unsupported_crystal_input(command, format));
+    }
     let format = match (&source, &options.from) {
         (Source::Smiles(_), Some(_)) => {
             return Err("--smiles cannot be combined with --from".into());
@@ -368,6 +378,9 @@ fn input(command: &str, options: &Options) -> Result<Input, String> {
             let from = from.to_string_lossy();
             let formats = input_formats();
             if !formats.contains(&from.as_ref()) {
+                if let Some(format) = crate::crystal::extension_format(&from) {
+                    return Err(unsupported_crystal_input(command, format));
+                }
                 return Err(format!(
                     "unknown input format `{from}`; supported: {}",
                     formats.join(", ")
@@ -377,6 +390,13 @@ fn input(command: &str, options: &Options) -> Result<Input, String> {
         }
     };
     Ok(Input { source, format })
+}
+
+fn unsupported_crystal_input(command: &str, format: &str) -> String {
+    format!(
+        "{command} does not support crystal input ({format}); supported input formats: {}",
+        input_formats().join(", ")
+    )
 }
 
 /// The extension as the app reads it: empty unless it is UTF-8.
