@@ -1,6 +1,6 @@
 //! Crystal and periodic structures (#417): CIF, PDB, VASP POSCAR/CONTCAR and
-//! plain or extended XYZ, read into a drawing shown as a 3D model in its unit
-//! cell.
+//! plain or extended XYZ, read into a 2D drawing in its unit cell, or a 3D
+//! model when there is no cell.
 //!
 //! Each reader keeps only what the structure needs: the lattice, each atom's
 //! element, position, charge and label, and from CIF its displacement
@@ -101,8 +101,8 @@ pub fn is_crystal_format(format: &str) -> bool {
     matches!(format, "cif" | "pdb" | "poscar" | "xyz")
 }
 
-/// Read `text` as `format` (see [`is_crystal_format`]) into a drawing whose
-/// atoms are shown as one 3D model, with warnings about what was left out.
+/// Read `text` as `format` (see [`is_crystal_format`]) into a 2D drawing in its
+/// unit cell, or a 3D model when there is no cell, with import warnings.
 pub fn read(format: &str, text: &str) -> Result<(Document, Vec<String>), Error> {
     let mut structure = match format {
         "cif" => cif::read(text)?,
