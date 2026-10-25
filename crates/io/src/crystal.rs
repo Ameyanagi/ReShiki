@@ -133,7 +133,7 @@ pub fn read(format: &str, text: &str) -> Result<(Document, Vec<String>), Error> 
             if removed == 1 { "" } else { "s" }
         ));
     }
-    let warnings = std::mem::take(&mut structure.warnings);
+    let warnings = structure.warnings.clone();
     Ok((build::document(structure)?, warnings))
 }
 
