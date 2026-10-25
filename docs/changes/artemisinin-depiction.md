@@ -260,3 +260,19 @@ Follow-up capture receipt (SHA-256):
 Updated release caption: “Artemisinin import and cleanup place the
 peroxide-adjacent methyl outside the cage and keep the peroxide bond visible,
 while preserving all seven stereocentres.”
+
+### CI test portability
+
+Linux CI exposed a font-dependent assumption in the thin-gap test. Its fixed
+sampling grid admitted a small positive unpadded gap, then incorrectly required
+the midpoint to belong to an atom label. The renderer correctly refused that
+short connector, and the picker correctly found no target in the clear gap.
+
+The test now derives two fixtures from the measured glyph bounds: a genuine
+overlap and a small positive gap. It checks rectangle ownership independently,
+requires an atom target for the overlap and no target for the open gap, and
+requires no actual bond stroke in either refused case. The accepted connector
+still has separate real-scene and actual-picker checks. The full composed model
+suite passes **848 tests**, with 11 existing opt-in tests ignored, and focused
+model Clippy including tests passes. This correction changes tests only;
+production geometry and the recorded native/stereo evidence remain unchanged.

@@ -169,44 +169,78 @@ fn a_connector_covered_by_unpadded_label_corners_is_not_exposed() {
     assert!(kept.along <= 0.1);
 }
 
-#[test]
-fn thin_stroke_corner_refusal_matches_actual_label_pick_priority() {
-    let mut refused = 0;
-    for step in 160..320 {
-        let mut doc = peroxide(false);
-        doc.drawing_style.line_width_pt = 0.1;
-        doc.drawing_style.margin_width_pt = 0.8;
-        let a = doc.atoms[0].position;
-        doc.atoms[1].position = a.offset(step as f32 * 0.1, step as f32 * 0.1);
-        let b = doc.atoms[1].position;
-        let a_shapes = atom_label_ink_shapes(&doc.atoms[0], &doc);
-        let b_shapes = atom_label_ink_shapes(&doc.atoms[1], &doc);
-        let unpadded = trimmed_span(
-            a,
-            b,
-            &atom_label_ink_boxes(&doc.atoms[0], &doc),
-            &atom_label_ink_boxes(&doc.atoms[1], &doc),
+/// Derive the separation from measured glyph bounds instead of assuming that a
+/// platform font will hit an overlap on a fixed 0.1-unit sampling grid.
+fn measured_gap_fixture(target: f32) -> (Document, TrimmedSpan, Point) {
+    let mut doc = peroxide(false);
+    doc.drawing_style.line_width_pt = 0.1;
+    doc.drawing_style.margin_width_pt = 0.8;
+    let a = doc.atoms[0].position;
+    doc.atoms[1].position = a.offset(25., 25.);
+    let measure = |doc: &Document| {
+        trimmed_span(
+            doc.atoms[0].position,
+            doc.atoms[1].position,
+            &atom_label_ink_boxes(&doc.atoms[0], doc),
+            &atom_label_ink_boxes(&doc.atoms[1], doc),
             0.,
         )
-        .unwrap();
-        let margin = doc.drawing_style.world(0.8) + doc.drawing_style.line_width() * 0.5;
-        let length = a.distance(b);
-        let start = rounded_label_end(a, unpadded.ux, unpadded.uy, &a_shapes, length, margin);
-        let end = rounded_label_end(b, -unpadded.ux, -unpadded.uy, &b_shapes, length, margin);
-        if unpadded.along <= 0.1
-            && (end.x - start.x) * unpadded.ux + (end.y - start.y) * unpadded.uy > 0.1
-        {
-            refused += 1;
-            assert!(bond_segment(&doc, &doc.bonds[0], None).is_none());
-            let point = a.offset((b.x - a.x) * 0.5, (b.y - a.y) * 0.5);
-            assert!(matches!(
-                crate::arrow_anchors::pick(&doc, point, 0.01),
-                Some(crate::arrow_anchors::Pick::Atom(_))
-            ));
-        }
-    }
-    assert!(
-        refused > 0,
-        "The actual round font must exercise the recovered-but-unpickable corner class"
+        .unwrap()
+    };
+    let original = measure(&doc);
+    let shift = target - original.along;
+    doc.atoms[1].position = doc.atoms[1]
+        .position
+        .offset(original.ux * shift, original.uy * shift);
+    let span = measure(&doc);
+    assert!((span.along - target).abs() < 0.001);
+    let point = span.start.offset(
+        (span.end.x - span.start.x) * 0.5,
+        (span.end.y - span.start.y) * 0.5,
     );
+    (doc, span, point)
+}
+
+fn label_contains(doc: &Document, atom: usize, point: Point, padding: f32) -> bool {
+    atom_label_ink_boxes(&doc.atoms[atom], doc)
+        .iter()
+        .any(|&(lo, hi)| {
+            point.x >= lo.x - padding
+                && point.x <= hi.x + padding
+                && point.y >= lo.y - padding
+                && point.y <= hi.y + padding
+        })
+}
+
+fn assert_thin_connector_refused(doc: &Document, point: Point) {
+    assert!(bond_segment(doc, &doc.bonds[0], None).is_none());
+    assert!(
+        !primitives(doc).iter().any(|part| paints(point, part)),
+        "A refused connector must have no actual scene stroke"
+    );
+}
+
+#[test]
+fn thin_stroke_overlap_refusal_keeps_actual_label_pick_priority() {
+    let (doc, span, point) = measured_gap_fixture(-0.25);
+    assert!(span.along < 0.);
+    assert!(label_contains(&doc, 0, point, 0.));
+    assert!(label_contains(&doc, 1, point, 0.));
+    assert_thin_connector_refused(&doc, point);
+    assert!(matches!(
+        crate::arrow_anchors::pick(&doc, point, 0.01),
+        Some(crate::arrow_anchors::Pick::Atom(_))
+    ));
+}
+
+#[test]
+fn thin_stroke_positive_gap_has_no_drawn_or_pickable_bond() {
+    let (doc, span, point) = measured_gap_fixture(0.05);
+    // A positive but sub-threshold gap is not label overlap. Its midpoint is
+    // clear of both rectangles, including the actual picker's label padding.
+    assert!(span.along > 0. && span.along <= 0.1);
+    assert!(!label_contains(&doc, 0, point, 0.01 * 0.35));
+    assert!(!label_contains(&doc, 1, point, 0.01 * 0.35));
+    assert_thin_connector_refused(&doc, point);
+    assert!(crate::arrow_anchors::pick(&doc, point, 0.01).is_none());
 }
