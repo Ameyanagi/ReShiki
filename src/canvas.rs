@@ -295,6 +295,36 @@ pub struct State {
     modifiers: iced::keyboard::Modifiers,
 }
 
+/// A context menu suspends pointer gestures, not the expensive drawing caches.
+/// Clear coordinates on both boundaries so the next press can use the live
+/// cursor even if menu motion never reached the canvas.
+pub(crate) fn reset_menu_pointer(tree: &mut iced::advanced::widget::Tree) {
+    if let iced::advanced::widget::tree::State::Some(state) = &mut tree.state
+        && let Some(state) = state.downcast_mut::<State>()
+    {
+        state.end_gesture();
+        state.cursor = None;
+        state.last_click = None;
+        state.last_transform_click = None;
+        state.relaxation = None;
+    }
+    for child in &mut tree.children {
+        reset_menu_pointer(child);
+    }
+}
+
+#[cfg(test)]
+impl State {
+    /// Observe the retained scene itself when testing widget-tree transitions.
+    pub(crate) fn scene_cache_identity(
+        &self,
+        doc: &Document,
+        selected: &[u64],
+    ) -> std::rc::Rc<[Primitive]> {
+        self.scene.borrow_mut().render(doc, selected).1
+    }
+}
+
 struct HandleClick {
     at: iced::time::Instant,
     handle: Handle,

@@ -21,6 +21,7 @@ fn view(app: &App) -> Element<'_, Message> {
                 .height(Length::Fill),
         )
         .on_press(Message::Delete)
+        .interaction(mouse::Interaction::Pointer)
         .into(),
     )
 }
@@ -732,5 +733,297 @@ async fn scrollable_bond_menu_reserves_gutter_for_text_and_shortcuts() {
                 "The wider menus must still fit the compact canvas"
             );
         }
+    }
+}
+
+fn canvas_scene(tree: &Tree, app: &App) -> Option<std::rc::Rc<[reshiki::scene::Primitive]>> {
+    if let iced::advanced::widget::tree::State::Some(state) = &tree.state
+        && let Some(canvas) = state.downcast_ref::<crate::canvas::State>()
+    {
+        return Some(canvas.scene_cache_identity(&app.tab.doc, &app.tab.selected));
+    }
+    tree.children
+        .iter()
+        .find_map(|tree| canvas_scene(tree, app))
+}
+
+#[test]
+fn actual_app_canvas_scene_survives_menu_open_submenu_and_pdf_dismissal() {
+    let (mut app, _) = App::new();
+    app.recovered.clear();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+    app.tab.selected = app.tab.doc.all_ids();
+    let document = app.tab.doc.clone();
+    let selected = app.tab.selected.clone();
+    let camera = app.tab.camera;
+    let mut tree = Tree::new(app.view().as_widget());
+    // Keep the Rc alive: allocator address reuse cannot fake continuity.
+    let scene = canvas_scene(&tree, &app).expect("actual drawing canvas");
+    app.context_menu = Some(State::new(Point::new(100., 100.), Page::Main));
+    tree.diff(app.view().as_widget());
+    assert!(std::rc::Rc::ptr_eq(
+        &scene,
+        &canvas_scene(&tree, &app).unwrap()
+    ));
+    let _ = app.context_action(Action::Open(Page::CopyAs, 120.));
+    tree.diff(app.view().as_widget());
+    assert!(std::rc::Rc::ptr_eq(
+        &scene,
+        &canvas_scene(&tree, &app).unwrap()
+    ));
+    let _ = app.update(Message::ContextMenu(Action::Run(Box::new(
+        Message::CopyAs(reshiki::clipboard::CopyFormat::Pdf),
+    ))));
+    assert!(app.context_menu.is_none());
+    tree.diff(app.view().as_widget());
+    assert!(std::rc::Rc::ptr_eq(
+        &scene,
+        &canvas_scene(&tree, &app).unwrap()
+    ));
+    assert_eq!(app.tab.doc, document);
+    assert_eq!(app.tab.selected, selected);
+    assert_eq!(app.tab.camera.center, camera.center);
+    assert_eq!(app.tab.camera.zoom, camera.zoom);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer/closed-menu forwarding regression"]
+async fn closed_cascade_forwards_real_cursor_mouse_and_widget_operations() {
+    let (mut app, _) = App::new();
+    app.context_menu = None;
+    let mut ui = Ui::new(Size::new(640., 480.)).await;
+    let mut view = view(&app);
+    ui.tree.diff(view.as_widget());
+    let node = view.as_widget_mut().layout(
+        &mut ui.tree,
+        &ui.renderer,
+        &layout::Limits::new(ui.viewport.size(), ui.viewport.size()),
+    );
+    let cursor = mouse::Cursor::Available(Point::new(200., 200.));
+    let mut messages = vec![];
+    view.as_widget_mut().update(
+        &mut ui.tree,
+        &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+        Layout::new(&node),
+        cursor,
+        &ui.renderer,
+        &mut iced::advanced::clipboard::Null,
+        &mut Shell::new(&mut messages),
+        &ui.viewport,
+    );
+    assert!(matches!(messages.as_slice(), [Message::Delete]));
+    assert_eq!(
+        view.as_widget().mouse_interaction(
+            &ui.tree,
+            Layout::new(&node),
+            cursor,
+            &ui.viewport,
+            &ui.renderer,
+        ),
+        mouse::Interaction::Pointer,
+    );
+    // The closed wrapper must expose the base to accessibility/focus operations.
+    struct Count(usize);
+    impl Operation for Count {
+        fn container(&mut self, _: Option<&Id>, _: Rectangle) {
+            self.0 += 1;
+        }
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+    }
+    let mut count = Count(0);
+    view.as_widget_mut()
+        .operate(&mut ui.tree, Layout::new(&node), &ui.renderer, &mut count);
+    assert!(count.0 > 0);
+}
+
+fn input_canvas_view(app: &App) -> Element<'_, Message> {
+    let canvas = crate::canvas::MoleculeCanvas::preview(
+        &app.tab.doc,
+        &app.tab.selected,
+        app.tab.camera,
+        crate::canvas::PreviewStyles {
+            bond_drawing: app.tab.bond_drawing,
+            chain_drawing: app.tab.chain_drawing,
+            arrow_preset: app.tab.arrow_style,
+            arrow_style: &app.tab.arrows.style,
+            orbital_phase: app.tab.orbital_phase,
+            graphic_style: &app.tab.graphic_style,
+            bracket_sides: app.tab.bracket_sides,
+        },
+    );
+    let canvas: Element<'_, crate::canvas::Edit> = iced::widget::canvas(canvas)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into();
+    app.with_context_menu(canvas.map(Message::Canvas))
+}
+
+fn input_canvas_event(
+    ui: &mut Ui,
+    app: &mut App,
+    event: Event,
+    cursor: mouse::Cursor,
+) -> Vec<Message> {
+    let mut messages = vec![];
+    {
+        let mut view = input_canvas_view(app);
+        ui.tree.diff(view.as_widget());
+        let node = view.as_widget_mut().layout(
+            &mut ui.tree,
+            &ui.renderer,
+            &layout::Limits::new(ui.viewport.size(), ui.viewport.size()),
+        );
+        view.as_widget_mut().update(
+            &mut ui.tree,
+            &event,
+            Layout::new(&node),
+            cursor,
+            &ui.renderer,
+            &mut iced::advanced::clipboard::Null,
+            &mut Shell::new(&mut messages),
+            &ui.viewport,
+        );
+    }
+    for message in &messages {
+        if matches!(
+            message,
+            Message::ContextMenu(_) | Message::Canvas(crate::canvas::Edit::ContextMenu { .. })
+        ) {
+            let _ = app.update(message.clone());
+        }
+    }
+    messages
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real canvas/menu retained-input regression"]
+async fn menu_boundaries_keep_caches_but_not_stale_pointer_or_released_modifiers() {
+    use iced::keyboard::Modifiers;
+    for release_shift in [false, true] {
+        let (mut app, _) = App::new();
+        app.recovered.clear();
+        app.tab.busy = false;
+        app.tab.camera = Default::default();
+        let a = app
+            .tab
+            .doc
+            .add_atom("O", reshiki::document::Point::new(-100., 0.));
+        let b = app
+            .tab
+            .doc
+            .add_atom("N", reshiki::document::Point::new(300., 0.));
+        app.tab.selected = vec![a];
+        let original = app.tab.doc.clone();
+        let mut ui = Ui::new(Size::new(800., 600.)).await;
+        let pa = Point::new(300., 300.);
+        let pb = Point::new(700., 300.); // Outside the menu opened at A.
+        let cursor = mouse::Cursor::Available(pa);
+        input_canvas_event(
+            &mut ui,
+            &mut app,
+            Event::Keyboard(iced::keyboard::Event::ModifiersChanged(Modifiers::SHIFT)),
+            cursor,
+        );
+        input_canvas_event(
+            &mut ui,
+            &mut app,
+            Event::Mouse(mouse::Event::CursorMoved { position: pa }),
+            cursor,
+        );
+        input_canvas_event(
+            &mut ui,
+            &mut app,
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)),
+            cursor,
+        );
+        assert!(app.context_menu.is_some());
+        input_canvas_event(
+            &mut ui,
+            &mut app,
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Right)),
+            cursor,
+        );
+        let scene = canvas_scene(&ui.tree, &app).unwrap();
+        if release_shift {
+            let messages = input_canvas_event(
+                &mut ui,
+                &mut app,
+                Event::Keyboard(iced::keyboard::Event::ModifiersChanged(Modifiers::empty())),
+                cursor,
+            );
+            assert!(
+                messages.is_empty(),
+                "Modifier bookkeeping must not edit/hover the drawing"
+            );
+        }
+        let cursor = mouse::Cursor::Available(pb);
+        let messages = input_canvas_event(
+            &mut ui,
+            &mut app,
+            Event::Mouse(mouse::Event::CursorMoved { position: pb }),
+            cursor,
+        );
+        assert!(
+            !messages
+                .iter()
+                .any(|message| matches!(message, Message::Canvas(_))),
+            "An open menu must keep canvas pointer interactions suspended"
+        );
+        input_canvas_event(
+            &mut ui,
+            &mut app,
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            cursor,
+        );
+        assert!(app.context_menu.is_none());
+        input_canvas_event(
+            &mut ui,
+            &mut app,
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            cursor,
+        );
+        assert!(std::rc::Rc::ptr_eq(
+            &scene,
+            &canvas_scene(&ui.tree, &app).unwrap()
+        ));
+        // No CursorMoved after dismissal: the live click cursor must select B,
+        // rather than the retained opening position A.
+        input_canvas_event(
+            &mut ui,
+            &mut app,
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            cursor,
+        );
+        let messages = input_canvas_event(
+            &mut ui,
+            &mut app,
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            cursor,
+        );
+        let selected = messages
+            .iter()
+            .find_map(|message| match message {
+                Message::Canvas(crate::canvas::Edit::Select(ids)) => Some(ids),
+                _ => None,
+            })
+            .expect("The click must select an atom");
+        if release_shift {
+            assert_eq!(
+                selected,
+                &[b],
+                "Released Shift must not extend the selection"
+            );
+        } else {
+            assert!(
+                selected.contains(&a) && selected.contains(&b),
+                "Held Shift remains additive"
+            );
+        }
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo());
     }
 }
