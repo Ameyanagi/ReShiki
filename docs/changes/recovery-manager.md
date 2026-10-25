@@ -83,6 +83,10 @@ asynchronous discard receipt. Follow-up `66c1b8a6` collects a fresh tree when th
 dialog closes and invalidates queued controls when the recovery dialog, pending
 state, offered paths or checked paths change. Two regressions cover that receipt
 and controls queued against changed selection or reused list rows.
+A final native check at `66c1b8a6` used a fresh isolated one-draft folder: after
+**Move to Trash**, the immediate accessibility tree replaced the confirmation
+buttons with the normal drawing controls. The fixture folder was empty and the
+disposable app was closed afterward.
 
 ## Browser durability and ownership checks
 
