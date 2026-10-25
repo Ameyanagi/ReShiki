@@ -61,6 +61,40 @@ fn copy_as_conversion_failure_is_nonmutating_and_retains_the_error() {
     assert!(!app.copy_as_busy && !app.tab.clipboard_busy);
 }
 
+#[tokio::test]
+async fn strict_text_label_copy_refusal_keeps_the_clipboard_and_names_the_copy_shortcut() {
+    use iced::futures::StreamExt;
+
+    for format in [CopyFormat::Cdxml, CopyFormat::Cdx] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let left = app.tab.doc.add_atom("*", Point::default());
+        app.tab.doc.atom_mut(left).unwrap().display.variable = Some("MeO".into());
+        let right = app.tab.doc.add_atom("C", Point::new(42., 0.));
+        app.tab.doc.add_bond(left, right, 1, "plain");
+        app.tab.selected = app.tab.doc.all_ids();
+        let before = app.tab.doc.clone();
+        let mut stream = iced_runtime::task::into_stream(app.copy_as(format)).unwrap();
+        let Some(iced_runtime::Action::Output(Message::CopyAsPrepared(key, result))) =
+            stream.next().await
+        else {
+            panic!("Expected conversion failure before clipboard publication");
+        };
+        assert!(result.is_err());
+        assert_eq!(app.copy_as_prepared(key, *result).units(), 0);
+        assert!(app.error && app.status.contains("text label “MeO”"));
+        assert!(app.status.contains(&super::super::shortcuts::keys(
+            iced::keyboard::Modifiers::COMMAND,
+            "C"
+        )));
+        assert!(app.status.ends_with("Clipboard unchanged"));
+        assert!(!app.status.contains("Invalid") && !app.status.contains("ring"));
+        assert!(!app.copy_as_busy && !app.tab.clipboard_busy);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+    }
+}
+
 #[test]
 fn copy_as_work_and_receipts_stay_with_the_originating_tab() {
     use crate::app::tabs::tests::Front;

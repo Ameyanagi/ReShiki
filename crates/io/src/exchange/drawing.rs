@@ -21,6 +21,8 @@ use tree::{Key, Tree};
 pub enum Error {
     #[error("Invalid editable drawing: {0}")]
     Invalid(String),
+    #[error("{0}")]
+    Unsupported(String),
     #[error(transparent)]
     Chemistry(#[from] crate::chemistry::document::Error),
     #[error("Editable drawing exceeds its size or work limit")]
@@ -29,6 +31,45 @@ pub enum Error {
 type Result<T> = std::result::Result<T, Error>;
 fn invalid(message: impl Into<String>) -> Error {
     Error::Invalid(message.into())
+}
+
+/// Generic advice transported by the engine; the application names its Copy shortcut.
+pub const TEXT_LABEL_COPY_ADVICE: &str =
+    "Try Copy for an editable copy · Save as .rsk keeps everything";
+
+fn label_excerpt(label: &str) -> String {
+    let mut excerpt = String::new();
+    let mut count = 0;
+    for character in label.chars().filter(|character| {
+        !matches!(
+            character,
+            '\u{061c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'
+        )
+    }) {
+        let character = if character.is_whitespace() || character.is_control() {
+            ' '
+        } else if matches!(character, '"' | '“' | '”') {
+            '\''
+        } else {
+            character
+        };
+        if character == ' ' && (excerpt.is_empty() || excerpt.ends_with(' ')) {
+            continue;
+        }
+        if count == 24 {
+            excerpt.truncate(excerpt.trim_end().len());
+            excerpt.push('…');
+            return excerpt;
+        }
+        excerpt.push(character);
+        count += 1;
+    }
+    excerpt.truncate(excerpt.trim_end().len());
+    if excerpt.is_empty() {
+        "(empty)".into()
+    } else {
+        excerpt
+    }
 }
 
 #[derive(Default)]
@@ -180,16 +221,30 @@ fn write_impl(
     } else {
         document
     };
-    if document.bonds.iter().any(|b| b.ring_arc)
-        || (!variable_labels
-            && document
-                .atoms
-                .iter()
-                .any(|a| a.display.variable.is_some() && !document.generic.owns_label(a.id)))
-    {
-        return Err(invalid(
-            "CDXML cannot yet preserve inner ring curves or variable atom labels. Save as ReShiki (.rsk) or export SVG/PDF to keep this appearance.",
+    if document.bonds.iter().any(|b| b.ring_arc) {
+        return Err(Error::Unsupported(
+            "CDXML/CDX cannot keep inner ring curves yet · Save as .rsk or export SVG/PDF to keep this appearance".into(),
         ));
+    }
+    if !variable_labels {
+        let mut labels = document.atoms.iter().filter_map(|atom| {
+            atom.display
+                .variable
+                .as_deref()
+                .filter(|_| !document.generic.owns_label(atom.id))
+        });
+        if let Some(label) = labels.next() {
+            let remaining = labels.count();
+            let more = if remaining == 0 {
+                String::new()
+            } else {
+                format!(" and {remaining} more")
+            };
+            return Err(Error::Unsupported(format!(
+                "CDXML/CDX cannot keep text label “{}”{more} yet · {TEXT_LABEL_COPY_ADVICE}",
+                label_excerpt(label)
+            )));
+        }
     }
     let interchange = crate::attachments::interchange_graph(document).map_err(invalid)?;
     let (graph, rings) = match crate::chemistry::document::prepare(&interchange) {
@@ -329,6 +384,9 @@ fn write_impl(
     }
     w.tree.serialize()
 }
+
+#[cfg(test)]
+mod tests;
 
 impl<'a> Writer<'a> {
     fn spend(&mut self, n: usize) -> Result<()> {

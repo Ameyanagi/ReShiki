@@ -18,6 +18,8 @@ mod layout_snapshots;
 #[cfg(test)]
 mod selection_canvas_qa;
 #[cfg(test)]
+mod status_tests;
+#[cfg(test)]
 mod view_parity_tests;
 
 impl App {
@@ -2292,7 +2294,8 @@ impl App {
         } else {
             160.
         };
-        let message = if self.status.contains('\n') || text_width(summary, 11.) > room {
+        let has_details = self.status.contains('\n') || text_width(summary, 11.) > room;
+        let message = if has_details {
             hover_hint(message, self.status.as_str(), tooltip::Position::Top).into()
         } else {
             message
@@ -2320,7 +2323,23 @@ impl App {
                     tooltip::Position::Top,
                 ));
         }
-        status = status.push(container(message).width(Length::Fill).clip(true));
+        status = status.push(
+            container(message)
+                .id("status-message")
+                .width(Length::Fill)
+                .clip(true),
+        );
+        if has_details {
+            // Keep the cue outside the clipped message so it remains visible
+            // beside the document controls even when the line runs out of room.
+            status = status.push(hover_hint(
+                container(text("…").size(14).style(style))
+                    .id("status-details")
+                    .padding([0, 3]),
+                self.status.as_str(),
+                tooltip::Position::Top,
+            ));
+        }
         if self.updates.available() {
             status = status.push(
                 command(
