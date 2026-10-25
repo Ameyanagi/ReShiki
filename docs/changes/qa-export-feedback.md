@@ -102,9 +102,61 @@ cargo test --locked -p reshiki --bin reshiki app::clipboard::tests -- --test-thr
 cargo test --locked -p reshiki --bin reshiki long_status_keeps_its_full_message_cue_outside_the_clipped_text -- --ignored
 ```
 
-The renderer bounds check does not cover simultaneous recovery and update
-controls. It supplements native interaction evidence; it does not establish
-external ChemDraw import behavior or add supported interchange features.
+## Combined footer layout check
+
+The footer reserves its notification row before delayed progress appears.
+Below 1280 logical pixels wide, document style, color, View and zoom controls
+occupy a second row. At 1280 and 1600 pixels they retain a single row. Row count
+depends on window width, so showing progress or update controls does not resize
+the canvas.
+
+A combined QA working tree on `3d80590a` includes this change, the recovery
+review controls from #491 and delayed engine progress/Cancel from #508. The
+application's real headless renderer produced the following original PNGs on
+the same M1 host, at 1× scale and 820 logical pixels high. These are renderer
+captures, separate from the native menu/hover evidence above. The scene has two
+carbon atoms, camera center (11, 17), 170% zoom, 100 synthetic recovery
+candidates, an available-update state, a saved-draft indicator and a multiline
+status. Engine progress and the update result are supplied by the test without
+launching a worker or making a network request.
+
+At 1040 pixels, the status, recovery and update controls occupy the first row;
+View, zoom and Fit remain fully visible in the second row before progress:
+
+![Combined 1040-pixel footer before delayed progress, with recovery and update controls above the document and view controls](../images/qa-export-feedback/combined-1040-before-progress.png)
+
+When Working · 1 s and Cancel appear, both rows keep the same position:
+
+![Combined 1040-pixel footer with delayed progress and Cancel, retaining the complete rightmost Fit control](../images/qa-export-feedback/combined-1040-progress.png)
+
+The combined recovery, update and progress controls fit a single row at 1280:
+
+![Combined 1280-pixel footer keeps its full-message cue, recovery controls, Update, Cancel and rightmost Fit inside the window](../images/qa-export-feedback/combined-1280-progress.png)
+
+The 1600-pixel layout also remains a single row:
+
+![Combined 1600-pixel footer with all notification and view controls visible](../images/qa-export-feedback/combined-1600-progress.png)
+
+The combined check measures the complete visible bounds of Restore, Discard,
+Dismiss, Update, Cancel, View, zoom out/in and Fit. It also checks the full-status
+cue. At each width, recovery and update are independently on/off and elapsed
+progress changes from 0 to 1 to 4 seconds: all 36 states pass. Footer bounds,
+Fit bounds, canvas viewport, camera center and zoom stay identical across those
+progress transitions.
+
+| Window width | Footer height | Fit horizontal bounds | Right margin |
+| ------------ | ------------- | --------------------- | ------------ |
+| 1040         | 80            | 992.796–1026          | 14           |
+| 1280         | 44            | 1232.796–1266         | 14           |
+| 1600         | 44            | 1552.796–1586         | 14           |
+
+The permanent opt-in status test additionally covers both sides of the width
+breakpoint (1279 and 1280), short/long/multiline notices, and recovery/update
+combinations. It verifies unchanged footer height and Fit position as those
+notifications change, plus complete visible bounds for the View/zoom/Fit and
+Update controls. These checks supplement native interaction evidence; they do
+not establish external ChemDraw import behavior or add supported interchange
+features.
 
 Release-note caption: **Copy as names unsupported text labels, points to ordinary
 Copy and exposes the full refusal behind a visible status cue.** Reuse the
