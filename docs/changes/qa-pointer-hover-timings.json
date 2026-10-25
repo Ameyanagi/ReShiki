@@ -1,0 +1,180 @@
+{
+  "baseline_source": "3d80590a41b9d9e8efd818d23395ac51bd264ca8",
+  "head_source": "50c64766e69aec9a36b7b021250fe9784c74f2ca",
+  "renderer_capture_commit": "324f0df53547e4e3c3f9895c90c936e5fdd90023",
+  "final_renderer_revalidated_source": "50c64766e69aec9a36b7b021250fe9784c74f2ca",
+  "host": {
+    "cpu": "Apple M1",
+    "arch": "arm64",
+    "os": "macOS27.0.1 (26A434)",
+    "rust": "1.99.0"
+  },
+  "fixture": {
+    "url": "https://gist.githubusercontent.com/Ameyanagi/0f2d480dd9a4e8cb1843ecd12660f93f/raw/tiled16-v26.rsk",
+    "sha256": "71229e202a3a0ba5765af5ac4bd94f4396613237f421cb4c828925c589b553da",
+    "bytes": 5796846,
+    "atoms": 7728,
+    "bonds": 6864,
+    "abbreviations": 256,
+    "annotations": 2112,
+    "arrows": 16
+  },
+  "benchmark": {
+    "profile": "release; default optimization; CARGO_BUILD_JOBS=2",
+    "warmups": 3,
+    "samples": 30,
+    "renderer": "wgpu",
+    "client_size": [1680, 988],
+    "zoom": 1.04,
+    "camera_center": [-8631.204, -5557.835],
+    "inspector": "closed",
+    "keyboard_drawing": "on; Select; crosshair on",
+    "scope": "Real widget CursorMoved update, emitted App messages, fresh widget view/tree/layout/drawing commands and interaction, including retained idle hover overlay; input layout and post-update layout included. Returned Task execution, OS delivery, GPU rasterization/presentation excluded.",
+    "ordering": [
+      "saved3d baseline components",
+      "saved3d baseline widget workload",
+      "savedfixed components",
+      "savedfixed widget workload"
+    ],
+    "coordination": "All host owners explicitly held compiler, GPU and native input work; process snapshots retained in QA archive",
+    "executable_sha256": {
+      "before": "5cc69dbdc2232b1dee24040f0d8dd9d73dae203094895543835b2e27fa219b2f",
+      "after": "b43d25628ec098008d699e682e1961482dc1f0c8d24121f28e73684fd22a2901"
+    },
+    "driver": "src/app/performance/hover.rs::native_pointer_hover_workloads; event and benchmark bodies byte-identical in both sources",
+    "baseline_driver_patch_sha256": "db25c4f2e9721d174aa180c3f012583bf33095234a90cb757ad3241bad3b16a4",
+    "baseline_driver_file_sha256": "570193923816351787eadfc9c2e3aa27071818c327da4c8bd6199411d857b096"
+  },
+  "before": {
+    "native_pointer_widget_app_overlay_draw": {
+      "median_ms": 213.3407,
+      "p95_ms": 216.2108
+    },
+    "indicator_preparation": {
+      "median_ms": 10.4713,
+      "p95_ms": 10.5405
+    },
+    "object_hit": {
+      "median_ms": 51.1969,
+      "p95_ms": 51.4139
+    },
+    "selection_hit": {
+      "median_ms": 95.3372,
+      "p95_ms": 97.0177
+    },
+    "live_ring_at": {
+      "median_ms": 54.1133,
+      "p95_ms": 55.0602
+    }
+  },
+  "after": {
+    "native_pointer_widget_app_overlay_draw": {
+      "median_ms": 19.9917,
+      "p95_ms": 20.5143
+    },
+    "indicator_preparation": {
+      "median_ms": 0.0247,
+      "p95_ms": 0.0268
+    },
+    "object_hit": {
+      "median_ms": 1.602,
+      "p95_ms": 1.6487
+    },
+    "selection_hit": {
+      "median_ms": 2.0075,
+      "p95_ms": 2.0248
+    },
+    "cached_ring_at": {
+      "median_ms": 0.3584,
+      "p95_ms": 0.3646
+    },
+    "unchanged_live_ring_at": {
+      "median_ms": 54.1529,
+      "p95_ms": 55.1551
+    }
+  },
+  "earlier_incomplete_driver": {
+    "head_source": "2a6d007415ccd1376aae1920187841ddebfb05e2",
+    "limitation": "Only App hover was supplied; retained widget cursor remained absent, omitting idle Select-hover overlay. The58.2897\u219212.6085ms row is not a full-hover performance result.",
+    "original_before": {
+      "gallery_16x_atom_label_hit": {
+        "median_ms": 0.2625,
+        "p95_ms": 0.3905
+      },
+      "gallery_16x_nearest_atom": {
+        "median_ms": 11.1809,
+        "p95_ms": 11.2188
+      },
+      "gallery_16x_nearest_bond": {
+        "median_ms": 34.7414,
+        "p95_ms": 35.1962
+      },
+      "gallery_16x_hover_complete_app_update": {
+        "median_ms": 46.06,
+        "p95_ms": 46.4589
+      },
+      "gallery_16x_view_layout_draw_interaction": {
+        "median_ms": 11.8475,
+        "p95_ms": 12.2127
+      },
+      "gallery_16x_hover_update_through_draw": {
+        "median_ms": 58.2897,
+        "p95_ms": 58.9928
+      }
+    },
+    "original_after": {
+      "gallery_16x_atom_label_hit": {
+        "median_ms": 0.2715,
+        "p95_ms": 0.3948
+      },
+      "gallery_16x_nearest_atom": {
+        "median_ms": 0.2043,
+        "p95_ms": 0.2797
+      },
+      "gallery_16x_nearest_bond": {
+        "median_ms": 0.3784,
+        "p95_ms": 0.3826
+      },
+      "gallery_16x_hover_complete_app_update": {
+        "median_ms": 0.7715,
+        "p95_ms": 0.9936
+      },
+      "gallery_16x_view_layout_draw_interaction": {
+        "median_ms": 11.6824,
+        "p95_ms": 11.879
+      },
+      "gallery_16x_hover_update_through_draw": {
+        "median_ms": 12.6085,
+        "p95_ms": 12.9743
+      }
+    },
+    "executable_sha256": {
+      "reshiki-profile-before": "a1963668b2cbf4df46f6a2e91885c7e0c988ed456f608a52d792bb20533f8168",
+      "reshiki-profile-after": "b8fde4a9c204104564b2c076e2aec15781f15ab816aa4d0cf0d378d9b44e21ad"
+    }
+  },
+  "native_diagnosis_at_da683e85": {
+    "canvas_draw_median_ms": 80.481521,
+    "app_update_median_ms": 1.172,
+    "task_drain_median_ms": 0.036125,
+    "present_return_median_ms": 0.962854,
+    "backend": "Apple M1 Metal;3360x1976physical/1680x988logical",
+    "limit": "API present return does not measure GPU completion/display; one off-path ingress retained and excluded from ellipse-position correlation"
+  },
+  "renderer_parity": {
+    "positions": 151,
+    "same_target_trace": true,
+    "byte_identical_png_frames": [0, 38, 75, 113, 150],
+    "final_source_revalidated": "50c64766e69aec9a36b7b021250fe9784c74f2ca",
+    "sha256": {
+      "hover-targets.txt": "d904853294dd48d912e86f5d49b2a2336f43f0f579fa868ac98293b344b5d7d3",
+      "hover-000.png": "2648603b6eaf74befde5771fe74e1591f8036b549029931364eb0d2f823f1bdf",
+      "hover-038.png": "2671a28d8250c2a60cd904949796a7ebc64a06db0d84778d39eee27cea69404f",
+      "hover-075.png": "533354e30b86ccc5d3ad824c3596380f496c78179d95c4ed8d2769af069778e1",
+      "hover-113.png": "e687ba1928ccb4a4ad22b8d95e282a0f5a4c4a0a93bd8854a8ae391969d255db",
+      "hover-150.png": "2648603b6eaf74befde5771fe74e1591f8036b549029931364eb0d2f823f1bdf"
+    },
+    "published_fixed_images_byte_identical_on_final_source": true
+  },
+  "native_comparison_receipt": "qa-pointer-hover-native.json"
+}

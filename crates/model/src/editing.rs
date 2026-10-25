@@ -3,6 +3,8 @@ use std::collections::{HashMap, HashSet};
 
 #[cfg(test)]
 mod arrange_tests;
+#[cfg(test)]
+mod nearest_tests;
 mod rotation;
 pub use rotation::center as rotation_center;
 pub mod reference;
@@ -989,15 +991,26 @@ pub fn arrange(doc: &mut Document, ids: &[u64], action: Arrange) {
 }
 
 pub fn nearest_bond(doc: &Document, p: Point, r: f32) -> Option<usize> {
+    if doc.bonds.is_empty() {
+        return None;
+    }
+    // One index per query replaces two linear atom searches for every bond.
+    // Reversed insertion retains Document::atom's first-ID behavior even for
+    // an unvalidated document containing duplicate IDs.
+    let positions: HashMap<_, _> = doc
+        .atoms
+        .iter()
+        .rev()
+        .map(|atom| (atom.id, atom.position))
+        .collect();
     doc.bonds
         .iter()
         .enumerate()
-        .filter(|(_, b)| doc.bond_drawn(b.a, b.b))
         .filter_map(|(i, b)| {
-            let a = doc.atom(b.a)?.position;
-            let z = doc.atom(b.b)?.position;
+            let a = *positions.get(&b.a)?;
+            let z = *positions.get(&b.b)?;
             let d = crate::graphics::segment_distance(p, a, z);
-            (d < r).then_some((i, d))
+            (d < r && doc.bond_drawn(b.a, b.b)).then_some((i, d))
         })
         .min_by(|a, b| a.1.total_cmp(&b.1))
         .map(|x| x.0)
@@ -1754,6 +1767,50 @@ fn isolated_ring(doc: &Document, ids: &[u64]) -> Option<Vec<u64>> {
         }
         ordered.push(next);
         previous = current;
+    }
+}
+
+/// Prepared hit geometry for drawn ring interiors. Rebuild after any document
+/// change; construction retains the ordinary ring search's order and budget.
+pub struct RingInteriors(Vec<(Vec<u64>, Vec<Point>)>);
+
+impl RingInteriors {
+    /// Prepare the same visible rings, in the same stable radius order, as `ring_at`.
+    pub fn new(doc: &Document) -> Self {
+        let mut rings = crate::aromatic::ring_circles(doc, false);
+        rings.retain(|ring| ring.atoms.iter().all(|id| doc.atom_drawn(*id)));
+        rings.sort_by(|a, b| a.radius.total_cmp(&b.radius));
+        Self(
+            rings
+                .into_iter()
+                .filter_map(|ring| {
+                    let points: Option<Vec<_>> = ring
+                        .atoms
+                        .iter()
+                        .map(|id| doc.atom(*id).map(|a| a.position))
+                        .collect();
+                    Some((ring.atoms, points?))
+                })
+                .collect(),
+        )
+    }
+
+    /// Hit the original drawing polygons, choosing the first enclosing ring.
+    pub fn at(&self, p: Point) -> Option<Vec<u64>> {
+        self.0.iter().find_map(|(ids, points)| {
+            let mut inside = false;
+            for (a, b) in points
+                .iter()
+                .zip(points.iter().cycle().skip(1))
+                .take(points.len())
+            {
+                if (a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x
+                {
+                    inside = !inside;
+                }
+            }
+            inside.then(|| ids.clone())
+        })
     }
 }
 

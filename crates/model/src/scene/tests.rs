@@ -170,7 +170,10 @@ fn label_reach_bounds_label_ink_so_far_label_ends_still_hit() -> Result<(), Stri
     for doc in [&long, &shortcuts] {
         let reach = LabelReach::new(doc);
         for atom in &doc.atoms {
-            for (lo, hi) in atom_label_ink_boxes(atom, doc) {
+            for (lo, hi) in atom_label_ink_boxes(atom, doc)
+                .into_iter()
+                .chain(atom_label_bounds(atom, doc))
+            {
                 for corner in [lo, hi, Point::new(lo.x, hi.y), Point::new(hi.x, lo.y)] {
                     assert!(
                         reach

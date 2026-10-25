@@ -223,6 +223,7 @@ pub struct State {
     initialized: bool,
     automatic_blank: bool,
     pointer: Option<Point>,
+    pointer_owned: bool,
     epoch: u64,
     current: Snapshot,
     undo: VecDeque<Snapshot>,
@@ -237,6 +238,7 @@ impl Default for State {
             initialized: false,
             automatic_blank: false,
             pointer: None,
+            pointer_owned: false,
             epoch: 0,
             current: Snapshot {
                 target: Target::Blank(Point::default()),
@@ -369,14 +371,17 @@ impl State {
         self.current.target = Target::Blank(self.current.position);
         self.current.marked = None;
         self.pointer = None;
+        self.pointer_owned = false;
     }
 
     pub fn leave(&mut self) {
         self.enabled = false;
+        self.pointer_owned = false;
         self.current.marked = None;
     }
 
     pub fn set_target(&mut self, target: Target, doc: &Document) {
+        self.pointer_owned = false;
         self.initialized = true;
         self.automatic_blank = false;
         self.current.target = target;
@@ -399,11 +404,29 @@ impl State {
         }
         self.pointer = Some(point);
         self.set_target(target, doc);
+        self.pointer_owned = true;
         true
+    }
+
+    /// Wheel navigation changes the drawing point or picking radius beneath
+    /// a stationary pointer, but cannot take a keyboard/edit-owned target.
+    pub fn camera_target(&mut self, point: Point, target: Target, doc: &Document) -> bool {
+        self.pointer_owned && self.pointer_target(point, target, doc, true)
+    }
+
+    /// Reproject the last physical pointer even when a keyboard-owned target
+    /// stays put. A later genuine move can return to its former world point.
+    /// Returns whether the camera should also retarget pointer-owned hover.
+    pub fn camera_pointer(&mut self, point: Point) -> bool {
+        if self.pointer.is_some() {
+            self.pointer = Some(point);
+        }
+        self.pointer_owned
     }
 
     pub fn pointer_left(&mut self) {
         self.pointer = None;
+        self.pointer_owned = false;
     }
 
     pub fn mark(&mut self, id: u64) {
@@ -414,6 +437,7 @@ impl State {
     }
 
     pub fn move_target(&mut self, doc: &Document, direction: Direction, same_kind: bool) -> bool {
+        self.pointer_owned = false;
         if let Some(target) = navigate(doc, self.current.target, direction, same_kind) {
             self.set_target(target, doc);
             true
@@ -447,6 +471,7 @@ impl State {
         if before == after {
             return;
         }
+        self.pointer_owned = false;
         // Capture pre-edit positions while deleted or moved atoms still exist.
         if let Some(position) = self.current.target.point(before) {
             self.current.position = position;
@@ -463,6 +488,7 @@ impl State {
 
     pub fn restore(&mut self, redo: bool, doc: &Document, epoch: u64) {
         self.check_epoch(epoch);
+        self.pointer_owned = false;
         let (source, destination) = if redo {
             (&mut self.redo, &mut self.undo)
         } else {

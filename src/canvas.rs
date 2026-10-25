@@ -147,6 +147,9 @@ pub enum Edit {
     /// Open an existing numeric control without transforming the drawing.
     BeginTransform(TransformField),
     Hover(Option<World>),
+    /// Native pointer motion stays relative to the canvas center until consumed,
+    /// so preceding wheel packets in the same Iced batch cannot stale its world point.
+    PointerHover(Option<Vector>),
     Chain {
         points: Vec<World>,
         source: Option<u64>,
@@ -244,8 +247,28 @@ pub enum Edit {
     RingPreset(reshiki::rings::Preset, World, Option<World>, bool, bool),
     Template(World, Option<World>),
     Click(World),
+    /// Legacy/programmatic camera edits use world coordinates.
     Pan(f32, f32),
     Zoom(f32, World),
+    /// Wheel packets retain screen pixels across an Iced event batch. The
+    /// pointer is an offset from the canvas center, independent of its camera.
+    Navigate(Navigation, Vector),
+}
+
+impl Edit {
+    pub(crate) fn is_hover(&self) -> bool {
+        matches!(self, Self::Hover(_) | Self::PointerHover(_))
+    }
+
+    pub(crate) fn is_camera(&self) -> bool {
+        matches!(self, Self::Pan(..) | Self::Zoom(..) | Self::Navigate(..))
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Navigation {
+    Pan(Vector),
+    Zoom(f32),
 }
 #[derive(Debug, Clone, Copy)]
 pub struct Camera {
@@ -261,6 +284,42 @@ impl Default for Camera {
     }
 }
 impl Camera {
+    /// Resolve a wheel packet through the current camera, not the view that
+    /// emitted it: Iced can collect mixed pan/zoom events before rebuilding.
+    pub(crate) fn navigate(
+        &mut self,
+        navigation: Navigation,
+        offset: Vector,
+        min_zoom: f32,
+    ) -> World {
+        match navigation {
+            Navigation::Pan(delta) => {
+                self.center = self
+                    .center
+                    .offset(-delta.x / self.zoom, -delta.y / self.zoom);
+                self.center
+                    .offset(offset.x / self.zoom, offset.y / self.zoom)
+            }
+            Navigation::Zoom(factor) => {
+                let at = self
+                    .center
+                    .offset(offset.x / self.zoom, offset.y / self.zoom);
+                let old = self.zoom;
+                self.zoom = (old * factor).clamp(min_zoom, 5.);
+                let ratio = old / self.zoom;
+                self.center = World::new(
+                    at.x + (self.center.x - at.x) * ratio,
+                    at.y + (self.center.y - at.y) * ratio,
+                );
+                at
+            }
+        }
+    }
+    pub(crate) fn pointer(self, offset: Vector) -> World {
+        self.center
+            .offset(offset.x / self.zoom, offset.y / self.zoom)
+    }
+
     /// Convert a screen-pixel length to world units at this zoom.
     pub(crate) fn world_len(self, px: f32) -> f32 {
         px / self.zoom

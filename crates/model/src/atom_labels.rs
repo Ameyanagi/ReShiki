@@ -806,6 +806,24 @@ pub(crate) fn bond_indicator_shown(b: &Bond, doc: &Document) -> bool {
 /// atom-number text is justified away from the atom. Manual offsets remain
 /// exact. The same positions are used by canvas and all exports.
 pub fn indicators(doc: &Document) -> Vec<Indicator> {
+    // Most drawings have no indicators. Check their inexpensive display rules
+    // before resolving collapsed-group visibility across the whole graph.
+    let atom_candidate = doc.atoms.iter().any(|a| {
+        a.display.number.is_some()
+            || map_indicator_shown(a, doc)
+            || (stereo_indicator_shown(a, doc) && a.cip_label.is_some())
+    });
+    let bond_candidate = doc
+        .bonds
+        .iter()
+        .any(|b| bond_indicator_shown(b, doc) && b.cip_label.is_some());
+    if !atom_candidate && !bond_candidate {
+        return Vec::new();
+    }
+    layout_indicators(doc)
+}
+
+fn layout_indicators(doc: &Document) -> Vec<Indicator> {
     let mut labels = Vec::new();
     for a in doc.atoms.iter().filter(|a| doc.atom_visible(a.id)) {
         if let Some(n) = &a.display.number {

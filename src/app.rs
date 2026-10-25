@@ -69,6 +69,8 @@ mod object_toolbar;
 mod office;
 #[cfg(any(windows, target_os = "linux"))]
 pub(crate) use desktop::install_document_events as install_desktop_events;
+#[cfg(test)]
+mod hover_qa;
 mod models3d;
 #[cfg(test)]
 mod ops_parity_tests;
@@ -902,20 +904,37 @@ impl App {
             self.tab.keyboard_drawing.target(),
             self.tab.keyboard_drawing.marked(),
         );
+        let hover = matches!(
+            &message,
+            Message::Canvas(Edit::Hover(_) | Edit::PointerHover(_))
+        );
         let controls_unchanged = matches!(
             &message,
             Message::Canvas(
-                Edit::Hover(_) | Edit::RelaxDragTarget { .. } | Edit::RelaxRotate { .. }
+                Edit::Hover(_)
+                    | Edit::PointerHover(_)
+                    | Edit::RelaxDragTarget { .. }
+                    | Edit::RelaxRotate { .. }
             )
         );
         let task = self.update_routed(message);
-        if controls_unchanged
-            && keyboard_before
-                == (
-                    self.tab.keyboard_drawing.target(),
-                    self.tab.keyboard_drawing.marked(),
-                )
-        {
+        let keyboard_after = (
+            self.tab.keyboard_drawing.target(),
+            self.tab.keyboard_drawing.marked(),
+        );
+        // Blank motion changes the drawing point, but not its available controls.
+        // Keep that point and ownership current without scheduling another native
+        // Collect/Snapshot round trip. Actual target identities and marks remain exact.
+        let same_target = keyboard_before.0 == keyboard_after.0
+            || (hover
+                && matches!(
+                    (keyboard_before.0, keyboard_after.0),
+                    (
+                        reshiki::keyboard_drawing::Target::Blank(_),
+                        reshiki::keyboard_drawing::Target::Blank(_)
+                    )
+                ));
+        if controls_unchanged && same_target && keyboard_before.1 == keyboard_after.1 {
             task
         } else {
             Task::batch([task, self.accessibility_refresh()])

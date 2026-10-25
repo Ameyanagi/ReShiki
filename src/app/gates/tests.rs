@@ -4,7 +4,7 @@ use crate::app::{
     App, CleanupPreview, Message, atom_text, cleanup, color_popover, context_menu, graphics,
     inline_text, inspector, joining, nmr, tabs, updates, view_settings,
 };
-use crate::canvas::{Tool, guides::Unit};
+use crate::canvas::{Edit, Tool, guides::Unit};
 use reshiki::cleanup::Scope;
 use reshiki::graphics::{BracketSides, GraphicChange, GraphicKind, LinePattern};
 use reshiki::scientific::{Phase, SymbolKind};
@@ -121,6 +121,24 @@ fn ordinary_tool_change_closes_transient_menus() {
 /// Columns: (message, passes the cleanup-preview gate, preview_passthrough, commits_draft).
 fn cases() -> Vec<(Message, bool, bool, bool)> {
     vec![
+        (
+            Message::Canvas(Edit::Navigate(
+                crate::canvas::Navigation::Pan(iced::Vector::new(42., -18.)),
+                iced::Vector::new(100., -40.),
+            )),
+            true,
+            true,
+            false,
+        ),
+        (
+            Message::Canvas(Edit::Navigate(
+                crate::canvas::Navigation::Zoom(2.),
+                iced::Vector::new(100., -40.),
+            )),
+            true,
+            true,
+            false,
+        ),
         (Message::Cleanup(cleanup::Action::Begin), false, false, true),
         (Message::Cleanup(cleanup::Action::Apply), true, false, false),
         (
@@ -332,4 +350,28 @@ fn cleanup_preview_admits_only_its_controls_and_view_aids() {
     );
     assert!(app.tab.cleanup.is_none());
     assert_eq!(app.status, "Cleanup cancelled · Drawing unchanged");
+}
+
+#[test]
+fn native_pointer_hover_preserves_the_existing_hover_gates_and_transient_menus() {
+    for message in [
+        Message::Canvas(Edit::PointerHover(Some(iced::Vector::new(100., -40.)))),
+        Message::Canvas(Edit::PointerHover(None)),
+    ] {
+        assert!(preview_passthrough(&message));
+        assert!(!inline_text::commits_draft(&message));
+        assert!(!joining::cancels_draft(&message));
+        assert!(color_popover::keeps_open(&message));
+        let mut app = open_transient_menus(inspector::Action::FigureMenu(true));
+        app.close_transient_menus(&message);
+        assert!(app.context_menu.is_some());
+        assert!(app.tabs.menu);
+        assert!(app.imports.menu);
+        assert!(app.imports.examples_menu);
+        let mut app = previewing();
+        let document = app.tab.doc.clone();
+        let _ = app.update(message);
+        assert!(app.tab.cleanup.is_some());
+        assert_eq!(app.tab.doc, document);
+    }
 }

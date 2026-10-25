@@ -189,3 +189,57 @@ fn label_alignment_round_trips_for_elements_and_free_text() {
     set_alignment(&mut doc, text, A::Above);
     assert_eq!(alignment(&doc, text), Some(A::Center), "no stacked text");
 }
+
+#[test]
+fn absent_indicator_fast_path_matches_full_layout_for_visibility_and_display_overrides() {
+    for maps in [false, true] {
+        for stereo in [false, true] {
+            for override_show in [None, Some(false), Some(true)] {
+                for has_cip in [false, true] {
+                    for numbered in [false, true] {
+                        let mut doc = Document::default();
+                        let a = doc.add_atom("N", Point::default());
+                        let b = doc.add_atom("O", Point::new(42., 0.));
+                        doc.add_bond(a, b, 2, "plain");
+                        doc.atom_labels.maps = maps;
+                        doc.atom_labels.stereo = stereo;
+                        for atom in &mut doc.atoms {
+                            atom.map_num = 12;
+                            atom.cip_label = has_cip.then(|| "R".into());
+                            atom.display.mapping.show = override_show;
+                            atom.display.stereo.show = override_show;
+                            atom.display.number = numbered.then(|| Number {
+                                text: "12".into(),
+                                offset: None,
+                                style: number_style(),
+                            });
+                        }
+                        doc.bonds[0].cip_label = has_cip.then(|| "E".into());
+                        doc.bonds[0].indicator.show = override_show;
+                        let original = doc.clone();
+                        let compare = |doc: &Document| {
+                            assert_eq!(
+                                serde_json::to_value(indicators(doc)).unwrap(),
+                                serde_json::to_value(layout_indicators(doc)).unwrap()
+                            );
+                        };
+                        compare(&doc);
+                        doc.abbreviations.push(crate::abbreviations::Abbreviation {
+                            label: "NO".into(),
+                            reverse_label: String::new(),
+                            anchor: a,
+                            members: vec![a, b],
+                            alignment: Default::default(),
+                            label_style: None,
+                            label_color_override: false,
+                            highlight: None,
+                        });
+                        compare(&doc);
+                        doc.abbreviations.clear();
+                        assert_eq!(doc, original);
+                    }
+                }
+            }
+        }
+    }
+}

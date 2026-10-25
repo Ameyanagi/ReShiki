@@ -3,6 +3,8 @@ use super::*;
 use reshiki::engine::ChemistryEngine;
 use std::{hint::black_box, time::Instant};
 
+mod hover;
+
 fn measure(name: &str, mut work: impl FnMut()) {
     for _ in 0..3 {
         work();

@@ -765,3 +765,64 @@ fn analysis_caps_fixed_hydrogen_atoms_only_at_cut_bonds() {
     (nh.no_implicit, nh.explicit_h) = (true, 1);
     assert_eq!(analyse(&analysis_document(&pyrrole, &[ring[0]])), [(3, 0)]);
 }
+
+#[test]
+fn prepared_ring_interiors_match_live_hits_including_ties_and_hidden_drawings() {
+    fn polygon(doc: &mut Document, radius: f32, count: usize, aromatic: bool) -> Vec<u64> {
+        let ids: Vec<_> = (0..count)
+            .map(|i| {
+                let angle = std::f32::consts::TAU * i as f32 / count as f32;
+                doc.add_atom("C", Point::new(radius * angle.cos(), radius * angle.sin()))
+            })
+            .collect();
+        for (&a, &b) in ids.iter().zip(ids.iter().cycle().skip(1)).take(ids.len()) {
+            doc.add_bond(a, b, if aromatic { 4 } else { 1 }, "plain");
+        }
+        ids
+    }
+    let mut doc = Document::default();
+    let inner = polygon(&mut doc, 25., 6, true);
+    polygon(&mut doc, 25., 6, false); // Equal-radius tie keeps enumeration order.
+    polygon(&mut doc, 60., 5, false);
+    let compare = |doc: &Document| {
+        let prepared = RingInteriors::new(doc);
+        for x in -8..=8 {
+            for y in -8..=8 {
+                let p = Point::new(x as f32 * 9., y as f32 * 9.);
+                assert_eq!(prepared.at(p), ring_at(doc, p), "{p:?}");
+            }
+        }
+    };
+    compare(&doc);
+    crate::projection::tilt(&mut doc, &inner, 52., true);
+    compare(&doc);
+    doc.abbreviations.push(crate::abbreviations::Abbreviation {
+        label: "Ph".into(),
+        reverse_label: String::new(),
+        anchor: inner[0],
+        members: inner.clone(),
+        alignment: Default::default(),
+        label_style: None,
+        label_color_override: false,
+        highlight: None,
+    });
+    compare(&doc);
+    doc.abbreviations.clear();
+    let placed = inner
+        .iter()
+        .map(|id| {
+            let p = doc.atom(*id).unwrap().position;
+            crate::models3d::Placed {
+                id: *id,
+                xyz: [p.x, p.y, 0.],
+            }
+        })
+        .collect();
+    let mut model =
+        crate::models3d::Model3d::new(&doc, placed, vec![], crate::models3d::ForceField::Mmff94s);
+    model.display = crate::models3d::Display::ThreeD;
+    doc.models.push(model);
+    compare(&doc);
+    doc.bonds.retain(|b| !b.connects(inner[0], inner[1]));
+    compare(&doc);
+}

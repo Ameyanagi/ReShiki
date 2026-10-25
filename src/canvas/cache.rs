@@ -22,6 +22,7 @@ pub(super) struct SceneCache {
     guides: Option<(Vec<u64>, Option<Rc<super::smart_guides::Layout>>)>,
     nmr: NmrCache,
     foreground_orbital: Option<bool>,
+    ring_interiors: Option<Rc<reshiki::editing::RingInteriors>>,
 }
 
 #[derive(Default)]
@@ -87,7 +88,15 @@ impl SceneCache {
             self.guides = None;
             self.nmr.entry = None;
             self.foreground_orbital = None;
+            self.ring_interiors = None;
         }
+    }
+
+    pub fn ring_at(&mut self, doc: &Document, point: reshiki::document::Point) -> Option<Vec<u64>> {
+        self.document(doc);
+        self.ring_interiors
+            .get_or_insert_with(|| Rc::new(reshiki::editing::RingInteriors::new(doc)))
+            .at(point)
     }
 
     fn selected(&mut self, doc: &Document, ids: &[u64]) {
