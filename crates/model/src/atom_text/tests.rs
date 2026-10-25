@@ -118,6 +118,10 @@ fn polyol_protection_faces_clear_ink_and_keeps_the_fourth_oxygen_targetable() ->
     let (source, oxygens) = pentaerythritol()?;
     let mut product = source.clone();
     for &oxygen in &oxygens[..3] {
+        let refresh =
+            crate::atom_labels::refresh::Refresh::calculate(&product, &Default::default())
+                .map_err(anyhow::Error::msg)?;
+        refresh.apply(&mut product);
         product = apply(&product, oxygen, "OAc", Mode::Auto).map_err(anyhow::Error::msg)?;
     }
     let last = *oxygens.last().unwrap();

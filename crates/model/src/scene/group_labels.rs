@@ -6,6 +6,14 @@ use crate::abbreviations::LabelAlignment;
 /// This is an edit-time decision; rendering and hit tests never recursively
 /// choose new directions for neighboring groups.
 pub(crate) fn clearer_orientation(doc: &Document, id: u64) -> Option<LabelAlignment> {
+    clearer_orientation_with_reach(doc, id, LabelReach::new(doc))
+}
+
+fn clearer_orientation_with_reach(
+    doc: &Document,
+    id: u64,
+    reach: LabelReach,
+) -> Option<LabelAlignment> {
     let atom = doc.atom(id)?;
     let group = doc.abbreviation(id)?;
     if group.reverse_label.trim().is_empty() {
@@ -26,17 +34,16 @@ pub(crate) fn clearer_orientation(doc: &Document, id: u64) -> Option<LabelAlignm
                 Point::new(hi.x.max(b.x), hi.y.max(b.y)),
             )
         })?;
-    let reach = LabelReach::new(doc);
     let mut nearby = Vec::new();
     for other in &doc.atoms {
         if other.id == id || !doc.atom_visible(other.id) || crate::models3d::hides(doc, other.id) {
             continue;
         }
-        let limit = reach.of(other)?;
-        if other.position.x + limit < lo.x
-            || other.position.x - limit > hi.x
-            || other.position.y + limit < lo.y
-            || other.position.y - limit > hi.y
+        if let Some(limit) = reach.of(other)
+            && (other.position.x + limit < lo.x
+                || other.position.x - limit > hi.x
+                || other.position.y + limit < lo.y
+                || other.position.y - limit > hi.y)
         {
             continue;
         }
@@ -45,24 +52,102 @@ pub(crate) fn clearer_orientation(doc: &Document, id: u64) -> Option<LabelAlignm
         if nearby.len() == 64 {
             return None;
         }
-        nearby.push(other);
+        nearby.push(other.id);
     }
-    let obstacles = measuring(|| {
-        nearby
-            .into_iter()
-            .flat_map(|other| label_ink_boxes(&atom_label_runs(other, doc)))
-            .collect::<Vec<_>>()
-    })?;
+    // Automatic hydrogens on neighboring atoms must respond to each proposed
+    // fixed group side just as they do in the real scene. Their own measuring
+    // guard bounds recursion; an outer guard would freeze them on the old
+    // bond-based side and falsely reject both choices after label refresh.
+    let obstacles = |alignment| {
+        let mut context = doc.clone();
+        context
+            .abbreviations
+            .iter_mut()
+            .find(|g| g.anchor == id)?
+            .alignment = alignment;
+        Some(
+            nearby
+                .iter()
+                .filter_map(|id| context.atom(*id))
+                .flat_map(|other| label_ink_boxes(&atom_label_runs(other, &context)))
+                .collect::<Vec<_>>(),
+        )
+    };
     let bonds = unrelated_bonds(atom, doc);
     let size = STYLE.world(group.text_style(doc).size_pt);
-    let (preferred, alternative, alignment) = if group.faces_left(doc) {
-        (&reverse, &forward, LabelAlignment::Left)
+    let (preferred, alternative, current, alignment) = if group.faces_left(doc) {
+        (
+            &reverse,
+            &forward,
+            LabelAlignment::Right,
+            LabelAlignment::Left,
+        )
     } else {
-        (&forward, &reverse, LabelAlignment::Right)
+        (
+            &forward,
+            &reverse,
+            LabelAlignment::Left,
+            LabelAlignment::Right,
+        )
     };
-    (!clear_of(preferred, &obstacles, &bonds, size)
-        && clear_of(alternative, &obstacles, &bonds, size))
+    (!clear_of(preferred, &obstacles(current)?, &bonds, size)
+        && clear_of(alternative, &obstacles(alignment)?, &bonds, size))
     .then_some(alignment)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn unbounded_font_reach_measures_a_complete_small_drawing_but_caps_large_ones() {
+        // Runtime font registration is process-global. Isolate this variable
+        // fallback face from other font-generation and layout tests.
+        const CHILD: &str = "RESHIKI_UNBOUNDED_LABEL_FONT_TEST";
+        if std::env::var_os(CHILD).is_none() {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "scene::group_labels::tests::unbounded_font_reach_measures_a_complete_small_drawing_but_caps_large_ones", "--nocapture"])
+                .env(CHILD, "1")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return;
+        }
+        crate::style::add_font(
+            include_bytes!(
+                "../../../../tests/fixtures/font-export-103/variable-default-100.subset.ttf"
+            )
+            .to_vec(),
+        )
+        .unwrap();
+        let mut doc = Document::from_json(include_bytes!(
+            "../../../../tests/fixtures/stereo-repeat/pentaerythritol-input.rsk"
+        ))
+        .unwrap();
+        for id in [7, 1, 9] {
+            doc = crate::atom_text::apply(&doc, id, "OAc", crate::atom_text::Mode::Auto).unwrap();
+        }
+        doc.abbreviations
+            .iter_mut()
+            .find(|g| g.anchor == 9)
+            .unwrap()
+            .alignment = LabelAlignment::Auto;
+        assert!(
+            LabelReach::new(&doc).em.is_none(),
+            "A real variable fallback face has no conservative reach"
+        );
+        assert_eq!(clearer_orientation(&doc, 9), Some(LabelAlignment::Left));
+        for index in 0..65 {
+            doc.add_atom("O", Point::new(1000. + index as f32 * 42., 1000.));
+        }
+        assert_eq!(clearer_orientation(&doc, 9), None);
+    }
 }
 
 /// Only the displayed attachment element gets core-glyph priority. Nicknames

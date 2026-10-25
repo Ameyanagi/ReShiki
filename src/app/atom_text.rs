@@ -493,17 +493,10 @@ impl App {
                             {
                                 group.reverse_label = state.reverse.trim().into();
                             }
-                            // A new group keeps the placement of the label it
-                            // replaced, except that one without a reverse
-                            // spelling (ONp) cannot take Right, which turns it.
-                            if state.members.is_some()
-                                || state.aligned
-                                || old.is_some_and(|g| {
-                                    g.label == group.label
-                                        || !group.reverse_label.is_empty()
-                                        || state.alignment != LabelAlignment::Right
-                                })
-                            {
+                            // The model preserves explicit placement and may
+                            // choose a clearer side for Automatic. Only an
+                            // actual alignment edit or contraction overrides it.
+                            if state.members.is_some() || state.aligned {
                                 group.alignment = state.alignment;
                             }
                         } else if state.aligned {

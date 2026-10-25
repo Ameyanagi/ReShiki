@@ -8,7 +8,7 @@ use iced::advanced::{
 use iced::{Event, Point, Rectangle, Size};
 
 pub(super) struct Ui {
-    renderer: iced::Renderer,
+    pub(super) renderer: iced::Renderer,
     pub(super) tree: Tree,
     pub(super) size: Size,
     pub(super) canvas: Option<Rectangle>,

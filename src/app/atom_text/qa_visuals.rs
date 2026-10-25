@@ -128,6 +128,7 @@ async fn stereo_repeat_visual_evidence() {
     let _ = polyol.update(Message::Tool(crate::canvas::Tool::Text));
     edit(&mut polyol, 7, "OAc");
     for id in [1, 9] {
+        let _ = refresh(&mut polyol).await;
         let _ = polyol.update(Message::AtomText(Action::Repeat(id)));
         assert!(polyol.tab.atom_text.is_none());
     }

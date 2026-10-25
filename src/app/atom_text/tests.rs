@@ -22,6 +22,50 @@ pub(super) fn remembered_methoxy() -> (App, u64, u64) {
 }
 
 #[test]
+fn refreshed_polyol_placement_and_retyping_keep_the_models_clear_side() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::document::Document::from_json(include_bytes!(
+        "../../../tests/fixtures/stereo-repeat/pentaerythritol-input.rsk"
+    ))
+    .unwrap();
+    for id in [7, 1, 9] {
+        let refresh =
+            reshiki::atom_labels::refresh::Refresh::calculate(&app.tab.doc, &Default::default())
+                .unwrap();
+        refresh.apply(&mut app.tab.doc);
+        let _ = app.update(Message::AtomText(Action::Begin(Some(id))));
+        let _ = app.update(Message::AtomText(Action::Input("OAc".into())));
+        let _ = app.update(Message::AtomText(Action::Apply));
+        assert!(app.tab.atom_text.is_none());
+    }
+    assert_eq!(
+        app.tab.doc.abbreviation(9).unwrap().alignment,
+        LabelAlignment::Left
+    );
+    // Existing documents can still have Automatic placement. Retyping must
+    // retain the model's newly measured side rather than restore that Auto.
+    app.tab
+        .doc
+        .abbreviations
+        .iter_mut()
+        .find(|g| g.anchor == 9)
+        .unwrap()
+        .alignment = LabelAlignment::Auto;
+    let refresh =
+        reshiki::atom_labels::refresh::Refresh::calculate(&app.tab.doc, &Default::default())
+            .unwrap();
+    refresh.apply(&mut app.tab.doc);
+    let _ = app.update(Message::AtomText(Action::Begin(Some(9))));
+    let _ = app.update(Message::AtomText(Action::Input("OEt".into())));
+    let _ = app.update(Message::AtomText(Action::Apply));
+    assert_eq!(
+        app.tab.doc.abbreviation(9).unwrap().alignment,
+        LabelAlignment::Left
+    );
+}
+
+#[test]
 fn double_click_window_defers_only_presentation_and_repeat_is_one_undo_step() {
     for elapsed in [1, 200, 449] {
         let (mut app, _, target) = remembered_methoxy();

@@ -1,7 +1,7 @@
 //! Real pointer, keyboard, IME and deadline verification.
 use super::qa_ui::Ui;
 use super::*;
-use iced::advanced::{mouse, widget::Tree};
+use iced::advanced::{Layout, layout, mouse, widget::Tree};
 use iced::{Event, Point, Rectangle, Size};
 
 fn key(character: char) -> Event {
@@ -65,6 +65,39 @@ fn prepare(ui: &mut Ui) -> (App, u64, Point, Vec<u8>) {
 #[ignore = "Opt-in real renderer pointer/focus/IME and 450 ms frame checks"]
 async fn delayed_editor_real_pointer_focus_keyboard_and_ime() {
     let mut ui = Ui::new(Size::new(1040., 680.)).await;
+    // Exercise hidden opacity directly too: anchored layouts intentionally
+    // place the real dialog away from its opening atom, so the canvas target
+    // below need not lie inside that layout's popup rectangle.
+    let mut hidden = super::presentation::wrap(
+        iced::widget::opaque(
+            iced::widget::container(iced::widget::text("Popup"))
+                .width(200)
+                .height(200),
+        ),
+        Some(iced::time::Instant::now() + DOUBLE_CLICK_INTERVAL),
+    );
+    let mut tree = Tree::new(hidden.as_widget());
+    let node = hidden.as_widget_mut().layout(
+        &mut tree,
+        &ui.renderer,
+        &layout::Limits::new(Size::new(200., 200.), Size::new(200., 200.)),
+    );
+    let mut messages = Vec::new();
+    let mut shell = iced::advanced::Shell::new(&mut messages);
+    hidden.as_widget_mut().update(
+        &mut tree,
+        &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+        Layout::new(&node),
+        mouse::Cursor::Available(Point::new(100., 100.)),
+        &ui.renderer,
+        &mut iced::advanced::clipboard::Null,
+        &mut shell,
+        &Rectangle::with_size(Size::new(200., 200.)),
+    );
+    assert!(
+        !shell.is_event_captured(),
+        "Hidden opaque popup must not capture a press inside its bounds"
+    );
     let (mut app, target, point, closed) = prepare(&mut ui);
     let before = app.tab.doc.clone();
     ui.click(&mut app, point);
@@ -76,14 +109,6 @@ async fn delayed_editor_real_pointer_focus_keyboard_and_ime() {
         true,
     );
     let editor = ui.editor.unwrap();
-    assert!(
-        Rectangle::new(
-            Point::new(editor.x - 22., editor.y - 60.),
-            Size::new(430., 500.)
-        )
-        .contains(point),
-        "Target must lie under the hidden dialog"
-    );
     for frame in 0..27 {
         let now = deadline - DOUBLE_CLICK_INTERVAL
             + std::time::Duration::from_nanos(frame * 1_000_000_000 / 60);
