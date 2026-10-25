@@ -95,11 +95,10 @@ fn clearer_orientation_with_reach(
     .then_some(alignment)
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
 
-    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn unbounded_font_reach_measures_a_complete_small_drawing_but_caps_large_ones() {
         // Runtime font registration is process-global. Isolate this variable
