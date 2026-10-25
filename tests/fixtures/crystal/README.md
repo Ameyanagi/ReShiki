@@ -1,6 +1,6 @@
 # Crystal structure fixtures
 
-Hand-written for ReShiki's crystal readers (#417). No file is copied from a
+Except for `cod-7033930.cif` (see below), hand-written for ReShiki's crystal readers (#417). No file is copied from a
 database; each is typed from published cell and atom parameters, with the
 symmetry operators of the International Tables for Crystallography. They are
 offered under the project's license (`MIT OR Apache-2.0`).
@@ -17,3 +17,14 @@ offered under the project's license (`MIT OR Apache-2.0`).
 `nacl.cif` also carries a bibliography text field, a reflection loop and a
 second data block, and `silicon.extxyz` extra comment keys, each holding a
 `DROPPED-…-MARKER`: the tests check that a saved drawing keeps none of them.
+
+`cod-7033930.cif` is an unmodified Crystallography Open Database entry
+[7033930](https://www.crystallography.net/cod/7033930.cif), revision 180045
+(2016-03-25), downloaded 2026-10-25. It is third-party data, dedicated to the
+public domain under [CC0](https://www.crystallography.net/cod/); the original
+public-domain notice is preserved in the file. The structure is from Yasuhiro
+Miyamoto and Satoshi Takamizawa, “Deformation twinning of ferrocene crystals
+assisted by the rotational mobility of cyclopentadienyl rings,” *Dalton
+Transactions* **44** (2015), 5688–5691,
+[doi:10.1039/C4DT03922J](https://doi.org/10.1039/C4DT03922J). The fixture tests
+the saved import note for ten excluded alternative site records.
