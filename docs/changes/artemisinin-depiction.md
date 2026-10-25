@@ -71,3 +71,44 @@ The native no-template result has two nonbonded atom pairs separated by less tha
 (normal bond length: 1.5). The accepted template result has no pairs below 0.75
 and no intersecting atom-label ink boxes. The existing native depiction reference
 API and its default coordinate output are unchanged.
+
+## Native desktop import and cleanup
+
+The native debug application at `e2c479d8` was also checked on 2026-10-25,
+on macOS 27.0.1 arm64. It ran in a separate application bundle with an isolated
+data directory. The window was 1280 × 852 logical pixels on a 2× display;
+the screenshots are original 2560 × 1704 JPEG captures, without cropping,
+resizing or retouching. The drawing uses Arial 10 pt, JACS / ACS,
+Publication colors and a white canvas.
+
+The exact SMILES above was pasted into **Import → Structure** and inserted.
+The imported molecule had separated oxygen labels. With the entire imported
+molecule selected, **Clean up** opened a preview and **Apply** succeeded.
+The application displayed “Cleanup applied · Undo restores the original layout”.
+Properties confirmed that the selection contained all **20 atoms and 23 bonds**,
+with formula **C15H22O5**, molecular weight **282.336 g/mol** and the canonical
+isomeric SMILES recorded above. The import fitted at 232% zoom; opening the
+cleanup preview used 223%, and applying it returned to 232%.
+
+The selection overlay in this diagnostic capture establishes the whole-molecule
+selection, while the status line records the completed cleanup:
+
+![Native cleanup succeeded for all 20 atoms, with C15H22O5 and 282.336 g/mol shown in Properties](../images/artemisinin-depiction/native-cleanup-applied.jpg)
+
+After deselecting the molecule and turning keyboard drawing off, the separated
+oxygen labels and whole-drawing properties remain visible:
+
+![Native artemisinin drawing after cleanup, without selection handles, beside its formula, molecular weight and canonical SMILES](../images/artemisinin-depiction/native-after-cleanup.jpg)
+
+These native captures supplement the matched renderer comparison above.
+A separate native check of `3d80590a` reproduced both the overlapping labels
+and the whole-molecule cleanup refusal. Its fitted zoom was 221% and its
+inspector state differed, so it is not presented as a matched screenshot pair.
+The checks establish the observed desktop behavior; no performance timing is
+claimed.
+
+Capture receipt (SHA-256):
+
+- Debug executable: `11d9ab248326d09d1288038a0aeb8f523dfa55f1249b9890d7ef27cf18ced9bc`.
+- Native cleanup/status image: `9cb1db22fb05d7ad6e0d144b62522c2262197bc930cac7494567f10527ebaf86`.
+- Native drawing/properties image: `7779d72966be6229d0bacdc91156ec97ac64e743a2e3b626d400ddf24e9643f8`.
