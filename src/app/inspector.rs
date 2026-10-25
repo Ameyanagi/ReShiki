@@ -1598,7 +1598,7 @@ impl App {
         self.inspector_open = true;
         if tab == InspectorTab::Import {
             self.help_open = false;
-            return Some(iced::widget::operation::focus(self.import_input_id()));
+            return Some(self.focus_import_input());
         }
         None
     }

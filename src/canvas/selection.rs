@@ -86,6 +86,19 @@ impl SelectionBox {
         self
     }
 
+    /// A display-only frame enclosing the current preview's upright labels.
+    pub(super) fn rotating_preview(
+        mut self,
+        preview: &Document,
+        ids: &[u64],
+        degrees: f32,
+    ) -> Self {
+        if let Some((lo, hi)) = scene::selection_bounds_in_axes(preview, ids, self.pivot, degrees) {
+            self.corners = [lo, World::new(hi.x, lo.y), hi, World::new(lo.x, hi.y)];
+        }
+        self
+    }
+
     fn grips(self) -> [Point; 4] {
         let offsets = [(-12.0, -12.0), (12.0, -12.0), (12.0, 12.0), (-12.0, 12.0)];
         let mut pairs = self.corners.into_iter().zip(offsets);
@@ -215,6 +228,39 @@ pub fn rotation_readout(angle: f32) -> [String; 2] {
         format!("Rotate {}°", angle.round() + 0.),
         format!("Shift: 15° steps · {keys}"),
     ]
+}
+
+/// Keep the usual pointer offset when clear, then try its other sides and
+/// wider offsets. Every candidate remains inside the canvas.
+pub(super) fn rotation_readout_bounds(
+    pointer: Point,
+    canvas: Size,
+    ink: &[Rectangle],
+) -> Rectangle {
+    let candidate = |x: f32, y: f32| {
+        Rectangle::new(
+            Point::new(
+                x.clamp(4., (canvas.width - 260.).max(4.)) - 4.,
+                y.clamp(4., (canvas.height - 42.).max(4.)) - 3.,
+            ),
+            Size::new(256., 39.),
+        )
+    };
+    let original = candidate(pointer.x + 16., pointer.y + 18.);
+    for extra in [0., 32., 64., 112.] {
+        for (x, y) in [
+            (pointer.x + 16. + extra, pointer.y + 18. + extra),
+            (pointer.x + 16. + extra, pointer.y - 42. - extra),
+            (pointer.x - 260. - extra, pointer.y + 18. + extra),
+            (pointer.x - 260. - extra, pointer.y - 42. - extra),
+        ] {
+            let rect = candidate(x, y);
+            if ink.iter().all(|label| !rect.expand(2.).intersects(label)) {
+                return rect;
+            }
+        }
+    }
+    original
 }
 
 /// The rotation handle's transform, in its preview and commit alike: what is

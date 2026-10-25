@@ -29,6 +29,20 @@ fn highlighted_selection_bounds_build_join_geometry_once_at_any_selection_size()
             1,
             "{count} selected atoms"
         );
+        let expected = super::selection_bounds(&doc, &ids);
+        for degrees in [0., 30., 45., 60.] {
+            let before = crate::bond_joins::construction_count();
+            let turned = super::selection_bounds_in_axes(&doc, &ids, Point::default(), degrees);
+            assert!(turned.is_some());
+            assert_eq!(
+                crate::bond_joins::construction_count() - before,
+                1,
+                "Turned bounds must share join geometry for {count} atoms at {degrees}°"
+            );
+            if degrees == 0. {
+                assert_eq!(turned, expected);
+            }
+        }
     }
 }
 

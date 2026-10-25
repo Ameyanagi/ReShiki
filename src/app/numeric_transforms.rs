@@ -10,6 +10,7 @@ use reshiki::{
 };
 
 mod focus;
+mod hint;
 mod reference;
 
 #[cfg(test)]
@@ -610,7 +611,7 @@ impl App {
             field,
             enabled,
         );
-        hover_hint(
+        hint::idle(hover_hint(
             container(accessible_unit_field(input, field.unit())).width(ROTATION_FIELD),
             if enabled {
                 format!(
@@ -622,8 +623,7 @@ impl App {
                 "Rotate by angle · Select objects first".to_owned()
             },
             tooltip::Position::Bottom,
-        )
-        .into()
+        ))
     }
 
     /// Rotate | Scale and W 🔒 H, with tilt under More and one Apply.
@@ -640,15 +640,18 @@ impl App {
             let input = field_input(state, field.id(), field, enabled);
             row![
                 container(label).width(label_width),
-                hover_hint(
-                    accessible_unit_field(input, field.unit()),
-                    match field {
-                        _ if enabled => field.hint(),
-                        Field::TiltX | Field::TiltY =>
-                            "Select at least two atoms or a shape to tilt",
-                        _ => "Select objects to transform",
-                    },
-                    tooltip::Position::Top
+                hint::when_idle(
+                    field == Field::Rotation,
+                    hover_hint(
+                        accessible_unit_field(input, field.unit()),
+                        match field {
+                            _ if enabled => field.hint(),
+                            Field::TiltX | Field::TiltY =>
+                                "Select at least two atoms or a shape to tilt",
+                            _ => "Select objects to transform",
+                        },
+                        tooltip::Position::Top
+                    )
                 ),
             ]
             .spacing(4)
