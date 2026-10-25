@@ -170,3 +170,5 @@ Nix flake for Linux and Apple Silicon Macs (released in 0.13.0): @Stefanomarton 
 Release preparation and documentation for 0.13.0: @Ameyanagi.
 
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.13.md) credit contributors alongside their changes.
+
+Artemisinin depiction and whole-molecule cleanup diagnostics: @Ameyanagi in [PR #538](https://github.com/Ameyanagi/ReShiki/pull/538) (under review); [validation and matched renderer evidence](changes/artemisinin-depiction.md).
