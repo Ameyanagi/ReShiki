@@ -82,9 +82,91 @@ impl Drawing {
             .collect();
         doc.arrows.push(self.arrow);
         doc.reactions.push(self.reaction);
+        layout_ink(&mut doc);
         doc.validate().map_err(invalid)?;
         Ok(doc)
     }
+}
+
+/// Labels exist only after participant chemistry finishes. Arrange the final
+/// rows from their visible extents, then fit the arrow to the agent row.
+fn layout_ink(doc: &mut Document) {
+    let Some(reaction) = doc.reactions.first().cloned() else {
+        return;
+    };
+    let mut separators = reaction.annotations.iter().copied();
+    let mut row = |doc: &mut Document, parts: &[Participant], mut x: f32| {
+        for (index, part) in parts.iter().enumerate() {
+            if index > 0
+                && let Some(id) = separators.next()
+                && let Some(sign) = doc.annotations.iter_mut().find(|a| a.id == id)
+            {
+                let layout = crate::typography::layout(&sign.text, &sign.format);
+                // Keep a fixed gap on both sides of the visible + glyph.
+                let gap = doc.drawing_style.world(6.);
+                sign.position.x = x + gap;
+                x += gap * 2. + layout.width;
+            }
+            let (lo, hi) = participant_bounds(doc, part);
+            let dx = x - lo.x;
+            for atom in doc.atoms.iter_mut().filter(|a| part.atoms.contains(&a.id)) {
+                atom.position.x += dx;
+            }
+            x += hi.x - lo.x;
+        }
+        x
+    };
+    let reactant_end = row(doc, &reaction.reactants, 0.);
+    let agent_width = row(doc, &reaction.agents, 0.);
+    let start = reactant_end + 42.;
+    let width = 140_f32.max(agent_width + 42.);
+    let agent_shift = start + (width - agent_width) * 0.5;
+    for atom in doc
+        .atoms
+        .iter_mut()
+        .filter(|a| reaction.agents.iter().any(|p| p.atoms.contains(&a.id)))
+    {
+        atom.position.x += agent_shift;
+    }
+    let first_agent_sign = reaction.reactants.len().saturating_sub(1);
+    for id in reaction
+        .annotations
+        .iter()
+        .skip(first_agent_sign)
+        .take(reaction.agents.len().saturating_sub(1))
+    {
+        if let Some(sign) = doc.annotations.iter_mut().find(|a| a.id == *id) {
+            sign.position.x += agent_shift;
+        }
+    }
+    row(doc, &reaction.products, start + width + 42.);
+    if let Some(arrow) = doc.arrows.iter_mut().find(|a| a.id == reaction.arrow) {
+        arrow.start.x = start;
+        arrow.end.x = start + width;
+    }
+}
+
+fn participant_bounds(doc: &Document, part: &Participant) -> (Point, Point) {
+    let positions = part
+        .atoms
+        .iter()
+        .filter_map(|id| doc.atom(*id))
+        .map(|atom| atom.position);
+    let labels = crate::scene::participant_label_ink_boxes(doc, &part.atoms)
+        .into_iter()
+        .flat_map(|(lo, hi)| [lo, hi]);
+    positions.chain(labels).fold(
+        (
+            Point::new(f32::INFINITY, f32::INFINITY),
+            Point::new(f32::NEG_INFINITY, f32::NEG_INFINITY),
+        ),
+        |(lo, hi), p| {
+            (
+                Point::new(lo.x.min(p.x), lo.y.min(p.y)),
+                Point::new(hi.x.max(p.x), hi.y.max(p.y)),
+            )
+        },
+    )
 }
 
 #[derive(Default)]

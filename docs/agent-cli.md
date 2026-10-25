@@ -57,16 +57,24 @@ has every help text as the program prints it.
 
 The input extension picks the format, ignoring case:
 
-| Extension                     | Format                       |
-| ----------------------------- | ---------------------------- |
-| `.rsk`, `.reshiki`, `.moruno` | `reshiki`, a ReShiki drawing |
-| `.mol`                        | `mol`                        |
-| `.rxn`                        | `rxn`                        |
-| `.rsmi`                       | `rsmi`, reaction SMILES      |
-| `.cdxml`                      | `cdxml`                      |
-| `.cdx`                        | `cdx`                        |
-| `.inchi`                      | `inchi`                      |
-| Any other, or none            | `smiles`                     |
+| Extension                                                                 | Format                             |
+| ------------------------------------------------------------------------- | ---------------------------------- |
+| `.rsk`, `.reshiki`, `.moruno`                                             | `reshiki`, a ReShiki drawing       |
+| `.mol`                                                                    | `mol`                              |
+| `.rxn`                                                                    | `rxn`                              |
+| `.rsmi`                                                                   | `rsmi`, reaction SMILES            |
+| `.cdxml`                                                                  | `cdxml`                            |
+| `.cdx`                                                                    | `cdx`                              |
+| `.inchi`                                                                  | `inchi`                            |
+| `.cif`, `.pdb`, `.ent`, `.vasp`, `.poscar`, `.contcar`, `.xyz`, `.extxyz` | Unsupported crystal input (exit 2) |
+| Any other, or none                                                        | `smiles`                           |
+
+Filenames beginning with `POSCAR` or `CONTCAR` are also recognized as crystal input,
+ignoring case, when no supported molecular extension identifies the file.
+For example, `POSCAR.mol` remains MOL input and `CONTCAR.rsk` remains a
+ReShiki drawing. The CLI rejects crystal inputs before reading them or writing
+output, including when `--from auto` is used. Open crystal files in the
+desktop or browser editor instead.
 
 `--from FORMAT` sets the format instead: `auto`, `smiles`, `mol`, `rxn`,
 `rsmi`, `inchi`, `cdxml`, `cdx` or `reshiki`. `auto` tells SMILES, MOL, RXN,

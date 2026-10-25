@@ -66,5 +66,5 @@ export function inchi(data: Input, format: InputFormat): Promise<string>;
  * falls back to it. Resolves to the number of faces added. */
 export function addFont(font: string | URL | Uint8Array | ArrayBuffer): Promise<number>;
 
-/** The library version. */
+/** The ReShiki release version, shared with the application and npm package. */
 export function version(): Promise<string>;

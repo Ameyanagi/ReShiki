@@ -51,6 +51,7 @@ impl Refresh {
         if unresolved {
             refresh.notice = Some(GENERIC_NOTICE.into());
         }
+        let distance_atoms = crate::models3d::crystal::analysis_atoms(source);
         for component in components {
             let Some(first) = component.atoms.first() else {
                 continue;
@@ -58,7 +59,11 @@ impl Refresh {
             let id = first.id;
             // A crystal's bonds come from distances, not chemistry: its atoms
             // are explicit and get no computed labels.
-            if crate::models3d::crystal::touches(source, &[id]) {
+            if component
+                .atoms
+                .iter()
+                .any(|a| distance_atoms.contains(&a.id))
+            {
                 continue;
             }
             let entry = previous

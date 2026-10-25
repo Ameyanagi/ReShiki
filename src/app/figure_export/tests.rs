@@ -79,3 +79,31 @@ fn exporting_a_snapshot_blocks_duplicate_exports_and_always_resets() {
         &Message::FigureExported(Ok(None))
     ));
 }
+
+#[test]
+fn export_format_labels_cover_figure_and_structure_formats() {
+    for (format, expected) in [
+        ("png", "PNG"),
+        ("svg", "SVG"),
+        ("svg-office", "SVG for Office"),
+        ("pdf", "PDF"),
+        ("mol", "MOL"),
+        ("cdxml", "CDXML"),
+    ] {
+        assert_eq!(super::super::export_format_label(format), expected);
+    }
+}
+
+#[test]
+fn export_receipts_distinguish_browser_handoff_from_desktop_write() {
+    let path = std::path::Path::new("/exports/aspirin.pdf");
+    let details = vec!["PDF: 2 pages".into()];
+    assert_eq!(
+        super::super::files::export_status(path, &details, false),
+        "Exported aspirin.pdf · PDF: 2 pages"
+    );
+    assert_eq!(
+        super::super::files::export_status(path, &details, true),
+        "aspirin.pdf sent to browser downloads · PDF: 2 pages"
+    );
+}

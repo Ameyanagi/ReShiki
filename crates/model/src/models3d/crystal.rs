@@ -159,21 +159,158 @@ pub fn present(doc: &crate::document::Document) -> bool {
     doc.models.iter().any(|m| m.cell.is_some())
 }
 
-/// Whether any of the atoms `ids` (all of `doc`'s when empty) belongs to a
-/// crystal, whose bonds come from distances and cannot be analysed.
-pub fn touches(doc: &crate::document::Document, ids: &[u64]) -> bool {
-    doc.models.iter().filter(|m| m.cell.is_some()).any(|m| {
-        if ids.is_empty() {
-            !m.atoms.is_empty()
-        } else {
-            ids.iter().any(|id| m.contains(*id))
+/// Preserve source provenance before a live crystal model can be discarded.
+/// Legacy native files did not record this flag, so their cell supplies it.
+pub(crate) fn mark_distance_bonds(doc: &mut crate::document::Document) {
+    let cells: Vec<_> = doc
+        .models
+        .iter()
+        .filter(|m| m.cell.is_some())
+        .map(|m| m.ids())
+        .collect();
+    for bond in &mut doc.bonds {
+        if cells
+            .iter()
+            .any(|ids| ids.contains(&bond.a) && ids.contains(&bond.b))
+        {
+            bond.distance_derived = true;
         }
-    })
+    }
+    require_distance_version(doc);
+}
+
+/// Restore legacy provenance from the transaction's snapshot even if deleting
+/// an atom already pruned the live cell model. Existing marked bonds retain
+/// their provenance through order, stereo and appearance edits.
+pub(super) fn inherit_distance_bonds(
+    doc: &mut crate::document::Document,
+    before: &crate::document::Document,
+) {
+    let cells: Vec<_> = before
+        .models
+        .iter()
+        .filter(|m| m.cell.is_some())
+        .map(|m| m.ids())
+        .collect();
+    let pairs: HashSet<_> = before
+        .bonds
+        .iter()
+        .filter(|bond| {
+            bond.distance_derived
+                || cells
+                    .iter()
+                    .any(|ids| ids.contains(&bond.a) && ids.contains(&bond.b))
+        })
+        .map(|bond| (bond.a.min(bond.b), bond.a.max(bond.b)))
+        .collect();
+    for bond in &mut doc.bonds {
+        if pairs.contains(&(bond.a.min(bond.b), bond.a.max(bond.b))) {
+            bond.distance_derived = true;
+        }
+    }
+    // Only a newly introduced cell supplies provenance for all of its edges.
+    // A new user-drawn bond inside an existing cell invalidates that model; it
+    // must not be relabelled as an imported distance edge during the edit.
+    let new_cells: Vec<_> = doc
+        .models
+        .iter()
+        .filter(|model| {
+            model.cell.is_some()
+                && !before
+                    .models
+                    .iter()
+                    .any(|old| old.cell.is_some() && old.ids() == model.ids())
+        })
+        .map(|model| model.ids())
+        .collect();
+    for bond in &mut doc.bonds {
+        if new_cells
+            .iter()
+            .any(|ids| ids.contains(&bond.a) && ids.contains(&bond.b))
+        {
+            bond.distance_derived = true;
+        }
+    }
+    require_distance_version(doc);
+}
+
+pub(crate) fn require_distance_version(doc: &mut crate::document::Document) {
+    if doc.bonds.iter().any(|bond| bond.distance_derived) {
+        doc.require_version(crate::document::DISTANCE_BONDS);
+    }
+}
+
+/// Every atom of a connected component containing a live crystal or a bond
+/// inferred from crystal distances. A connected ordinary extension cannot
+/// turn the remaining unvalidated edges into a chemical graph.
+pub fn analysis_atoms(doc: &crate::document::Document) -> HashSet<u64> {
+    let mut blocked: HashSet<_> = doc
+        .models
+        .iter()
+        .filter(|m| m.cell.is_some())
+        .flat_map(|m| m.atoms.iter().map(|a| a.id))
+        .collect();
+    for bond in doc.bonds.iter().filter(|b| b.distance_derived) {
+        blocked.extend([bond.a, bond.b]);
+    }
+    if blocked.is_empty() {
+        return blocked;
+    }
+    let mut neighbors: std::collections::HashMap<u64, Vec<u64>> = std::collections::HashMap::new();
+    for bond in &doc.bonds {
+        neighbors.entry(bond.a).or_default().push(bond.b);
+        neighbors.entry(bond.b).or_default().push(bond.a);
+    }
+    let mut pending: Vec<_> = blocked.iter().copied().collect();
+    while let Some(id) = pending.pop() {
+        for other in neighbors.get(&id).into_iter().flatten() {
+            if blocked.insert(*other) {
+                pending.push(*other);
+            }
+        }
+    }
+    blocked
+}
+
+/// Whether `ids` (all atoms when empty) intersect a connected component whose
+/// distance-derived bonds have not been assigned as chemistry. Query the
+/// source before creating a selected fragment, since its cut bonds disappear.
+pub fn touches(doc: &crate::document::Document, ids: &[u64]) -> bool {
+    if ids.is_empty() {
+        present(doc) || doc.bonds.iter().any(|b| b.distance_derived)
+    } else {
+        let blocked = analysis_atoms(doc);
+        ids.iter().any(|id| blocked.contains(id))
+    }
+}
+
+/// The molecular-properties notice after an edit has removed the lattice.
+pub const DISTANCE_ANALYSIS_NOTICE: &str = "Distance-derived bonds: chemical analysis is unavailable. The formula counts the atoms shown, with charges as entered. Save as ReShiki or export a figure to retain this drawing.";
+
+/// Distinguish a live unit cell from the provenance retained after its removal.
+pub fn analysis_notice(doc: &crate::document::Document) -> &'static str {
+    if present(doc) {
+        ANALYSIS_NOTICE
+    } else {
+        DISTANCE_ANALYSIS_NOTICE
+    }
+}
+
+/// Import notes of the models containing `ids`, or all models for an empty
+/// selection. Notes describe the source import, rather than chemistry errors.
+pub fn import_notes<'a>(doc: &'a crate::document::Document, ids: &[u64]) -> Vec<&'a str> {
+    let mut seen = HashSet::new();
+    doc.models
+        .iter()
+        .filter(|m| ids.is_empty() || ids.iter().any(|id| m.contains(*id)))
+        .flat_map(|m| m.notes.iter().map(String::as_str))
+        .filter(|note| seen.insert(*note))
+        .collect()
 }
 
 /// What the Properties panel says of a crystal, whose bonds come from
 /// distances, not chemistry.
-pub const ANALYSIS_NOTICE: &str = "Crystal structure: bonds come from atom distances, so chemical analysis is unavailable. The formula counts the atoms shown, with charges as read.";
+pub const ANALYSIS_NOTICE: &str = "Crystal structure: bonds come from atom distances, so chemical analysis is unavailable. The formula counts the atoms shown, with charges as entered.";
 
 /// The formula and mass of the atoms `ids` of `doc` (all of them when
 /// empty), counted as drawn, without perceiving bonds or hydrogens.
@@ -202,3 +339,6 @@ pub fn composition(
         .collect::<Result<Vec<_>, String>>()?;
     crate::chemistry::properties(&facts)
 }
+
+#[cfg(test)]
+mod tests;

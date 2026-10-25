@@ -54,6 +54,7 @@ impl App {
             Message::StyleMenu(action) => return Some(self.style_menu_action(action)),
             Message::Shortcut(action) => return Some(self.shortcut_action(action)),
             Message::AromaticDisplay => return Some(self.request_aromatic_display()),
+            Message::CancelEngine(key) => self.cancel_engine_request(key),
             Message::Abbreviations(action) => return Some(self.abbreviation_action(action)),
             Message::Generic(action) => return Some(self.generic_action(action)),
             Message::Labels(action) => self.label_action(action),
@@ -142,6 +143,7 @@ impl App {
             Message::Restore if self.pending.is_some() => {}
             Message::Restore => self.restore_recovered(),
             Message::DismissRecovery => self.dismiss_recovery(),
+            Message::Recovery(action) => return Some(self.recovery_action(action)),
             Message::Canvas(Edit::BeginTransform(field)) => {
                 return Some(self.begin_numeric_transform(field));
             }
@@ -203,6 +205,7 @@ impl App {
             Message::Export(format) => return Some(self.export_drawing(format)),
             Message::FigureExported(result) => self.figure_exported(result),
             message @ (Message::EngineDone { .. }
+            | Message::EngineFinished { .. }
             | Message::ClipboardWritten { .. }
             | Message::CopyAsPrepared(..)
             | Message::CopyAsWritten(..)
@@ -250,6 +253,7 @@ impl App {
                 kind,
                 result,
             } => return self.engine_done(revision, kind, *result),
+            Message::EngineFinished { key, result } => return self.engine_finished(key, *result),
             Message::Exported(result) => self.structure_exported(result),
             _ => {}
         }

@@ -14,13 +14,24 @@ use reshiki::bonds::BondPreset;
 use reshiki::typography::{Script, StyleChange};
 
 #[cfg(test)]
-mod layout_snapshots;
+pub(super) mod layout_snapshots;
+#[cfg(test)]
+mod model_controls_qa;
 #[cfg(test)]
 mod selection_canvas_qa;
 #[cfg(test)]
 mod status_tests;
 #[cfg(test)]
 mod view_parity_tests;
+
+/// Counts used by molecular properties and both naming preview layouts.
+pub(super) fn atom_bond_counts(atoms: usize, bonds: usize) -> String {
+    format!(
+        "{atoms} atom{} · {bonds} bond{}",
+        if atoms == 1 { "" } else { "s" },
+        if bonds == 1 { "" } else { "s" }
+    )
+}
 
 impl App {
     fn keyboard_context_summary(&self) -> String {
@@ -225,10 +236,12 @@ impl App {
             .height(Length::Fill)
             .into();
         let paper = self.with_drop_overlay(
-            sensor(self.with_context_menu(self.with_inline_text(drawing.map(Message::Canvas))))
-                .on_show(Message::Viewport)
-                .on_resize(Message::Viewport)
-                .into(),
+            sensor(super::atom_text::canvas_anchor(self.with_context_menu(
+                self.with_inline_text(drawing.map(Message::Canvas)),
+            )))
+            .on_show(Message::Viewport)
+            .on_resize(Message::Viewport)
+            .into(),
         );
         let context: Element<'_, Message> = if let Some(preview) = &self.tab.cleanup {
             self.cleanup_bar(preview)
@@ -264,6 +277,7 @@ impl App {
                 None
             },
             morph: self.model_morph(),
+            model_generation: self.model_generation(),
             element: &self.element,
             joining: self.tab.joining.as_ref().map(|s| (&s.prepared, s.anchor)),
             hidden_annotation: self.inline_label_id(),
@@ -2307,27 +2321,8 @@ impl App {
             message
         };
         let mut status = row![].spacing(8).align_y(Alignment::Center);
-        // Short enough to fit the minimum window beside Update available.
         if !self.recovered.is_empty() {
-            status = status
-                .push(
-                    text("Recovery draft")
-                        .size(11)
-                        .wrapping(text::Wrapping::None),
-                )
-                .push(hover_hint(
-                    command("Restore", Message::Restore).style(control(true)),
-                    match self.recovered.len() {
-                        1 => "Open the draft in a tab · Save it to keep a copy".to_owned(),
-                        n => format!("Open all {n} drafts as tabs · Save them to keep copies"),
-                    },
-                    tooltip::Position::Top,
-                ))
-                .push(hover_hint(
-                    command("Dismiss", Message::DismissRecovery),
-                    "Hide until the next launch",
-                    tooltip::Position::Top,
-                ));
+            status = status.push(self.recovery_banner());
         }
         status = status.push(
             container(message)
@@ -2343,6 +2338,14 @@ impl App {
                     .id("status-details")
                     .padding([0, 3]),
                 self.status.as_str(),
+                tooltip::Position::Top,
+            ));
+        }
+        if let Some((key, progress)) = self.engine_progress() {
+            status = status.push(text(progress).size(11)).push(hover_hint(
+                accessible_command("engine.cancel", "Cancel chemistry operation", "Cancel")
+                    .on_press(Message::CancelEngine(key)),
+                "Cancel this operation · Escape",
                 tooltip::Position::Top,
             ));
         }

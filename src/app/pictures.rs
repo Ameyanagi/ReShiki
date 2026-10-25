@@ -156,6 +156,19 @@ impl App {
             self.reveal_bounds(lo, hi);
         }
     }
+    /// Preserve the camera when these explicit bounds are already on the paper.
+    pub(super) fn reveal_if_clipped(&mut self, lo: Point, hi: Point) {
+        let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
+        // Camera positions are relative to the paper, whose local origin is
+        // below/right of the rulers rather than the full canvas origin.
+        let visible = iced::Rectangle::with_size(paper.size());
+        if !(visible.contains(self.tab.camera.screen(lo, paper))
+            && visible.contains(self.tab.camera.screen(hi, paper)))
+        {
+            self.reveal_bounds(lo, hi);
+        }
+    }
+
     /// Centers the view on these bounds, zooming out if they do not fit.
     pub(super) fn reveal_bounds(&mut self, lo: Point, hi: Point) {
         let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
