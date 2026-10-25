@@ -94,6 +94,8 @@ fn dragging_the_visible_model_outline_is_one_undo_step() {
     assert_eq!(app.tab.doc.bonds, before.bonds);
     assert_eq!(app.tab.doc.models[0].rotation, before.models[0].rotation);
     let after = app.tab.doc.clone();
+    let reopened = Document::from_native_file(&after.file_json().unwrap()).unwrap();
+    assert_eq!(reopened.models, after.models);
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
     let _ = app.update(Message::Redo);
