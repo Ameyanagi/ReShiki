@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ReShiki browser paste check</title>
+    <style>
+      body {
+        margin: 0;
+        font: 14px system-ui;
+      }
+      header {
+        height: 40px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 12px;
+      }
+      #editor {
+        height: calc(100vh - 40px);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <strong>Browser paste check</strong>
+      <label>Clipboard fixture <input id="fixture" value="CCOC(C)=O" /></label>
+      <input id="outside" aria-label="Outside editor" placeholder="Outside editor focus control" />
+    </header>
+    <div id="editor"></div>
+    <script type="module">
+      import { mount } from "../src/editor.js";
+      window.editor = await mount(document.getElementById("editor"));
+    </script>
+  </body>
+</html>

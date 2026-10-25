@@ -172,6 +172,15 @@ impl MoleculeCanvas<'_> {
         ) {
             return mouse::Interaction::Grabbing;
         }
+        if let Some(Gesture::Move { ids, .. }) = &state.gesture
+            && reshiki::models3d::shows_3d(self.doc, ids)
+        {
+            return if self.copies(state.modifiers) {
+                mouse::Interaction::Copy
+            } else {
+                mouse::Interaction::Move
+            };
+        }
         if let Tool::StretchBond { fixed, moving } = self.tool
             && cursor.is_over(bounds)
         {
@@ -236,12 +245,18 @@ impl MoleculeCanvas<'_> {
                 {
                     return handle.cursor();
                 }
-                if let Some(p) = cursor.position_in(bounds)
-                    && self
-                        .turn_target(state, self.camera.world(p, bounds))
-                        .is_some()
-                {
-                    return mouse::Interaction::Grab;
+                if let Some(p) = cursor.position_in(bounds) {
+                    let p = self.camera.world(p, bounds);
+                    if self.model_frame_hit(state, p, bounds).is_some() {
+                        return if self.copies(state.modifiers) {
+                            mouse::Interaction::Copy
+                        } else {
+                            mouse::Interaction::Move
+                        };
+                    }
+                    if self.turn_target(state, p).is_some() {
+                        return mouse::Interaction::Grab;
+                    }
                 }
                 mouse::Interaction::default()
             } else {
