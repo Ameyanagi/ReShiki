@@ -3,6 +3,8 @@ use super::*;
 use reshiki::engine::ChemistryEngine;
 use std::{hint::black_box, time::Instant};
 
+mod hover;
+
 fn measure(name: &str, mut work: impl FnMut()) {
     for _ in 0..3 {
         work();
@@ -122,7 +124,7 @@ fn camera_workloads() {
         let (mut app, _) = App::new();
         app.tab.doc = doc;
         measure(&format!("gallery_{copies}x_pan"), || {
-            let _ = black_box(app.update(Message::Canvas(Edit::Pan(3., -2.))));
+            let _ = black_box(app.update(Message::Canvas(Edit::Pan(3., -2., None))));
         });
         measure(&format!("gallery_{copies}x_zoom_in_out"), || {
             let at = Point::new(10., 10.);

@@ -591,18 +591,7 @@ fn index_members<'a>(doc: &'a Document, members: &HashSet<u64>) -> MemberIndex<'
 }
 
 pub fn label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
-    doc.abbreviations.iter().rev().find_map(|g| {
-        if crate::models3d::hides(doc, g.anchor) {
-            return None;
-        }
-        let atom = doc.atom(g.anchor)?;
-        let (lo, hi) = crate::scene::atom_label_bounds(atom, doc)?;
-        (point.x >= lo.x - radius
-            && point.x <= hi.x + radius
-            && point.y >= lo.y - radius
-            && point.y <= hi.y + radius)
-            .then_some(g.anchor)
-    })
+    crate::scene::abbreviation_label_hit(doc, point, radius)
 }
 
 #[cfg(test)]

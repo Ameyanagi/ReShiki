@@ -269,6 +269,11 @@ that hotspot until the pointer moves or is clicked again. A stationary pointer
 does not pull the hotspot back to an older hover target. Moving to empty canvas
 also provides a position where a shortcut can start another structure.
 
+Wheel panning and Cmd/Ctrl-scroll zooming retarget a pointer-owned hotspot at
+the drawing point now under the pointer, using the new zoom's picking radius.
+Once arrow navigation or an edit owns the hotspot, scrolling keeps that chosen
+target; only actual pointer motion or a canvas click transfers it back.
+
 Letters and digits reuse the existing [atom shortcuts](contextual-shortcuts.md#at-an-atom)
 and [bond shortcuts](contextual-shortcuts.md#at-a-bond). Their chemical mappings
 are not new shortcuts. On empty canvas, an atom letter creates the first atom,
@@ -334,6 +339,8 @@ visible target; Left, Right, Up, and Down prefer connected targets.
 | Shift+arrow                     | From the same chain, navigate first from an atom, then from a bond                                      | Atom → atom or bond → bond; the other kind is skipped without editing                                                                             |
 | Mouse motion / click            | Move to or click an atom, a bond, then empty canvas                                                     | The hotspot transfers to that atom, bond, or drawing position                                                                                     |
 | Stationary pointer              | Move onto one atom, use Shift+arrow to another, then type n without moving the pointer                  | The keyboard-chosen atom changes to N; the previous hover does not steal the target                                                               |
+| Wheel after hover               | Hover an atom, then pan or Cmd/Ctrl-scroll without moving the pointer                                   | The hotspot and context row retarget the atom, bond or empty position now under the pointer                                                       |
+| Wheel after navigation or edit  | Hover an atom, choose another with an arrow or edit it, then scroll with a still pointer                | The keyboard/edit-owned target stays chosen; scrolling does not transfer it back to hover                                                         |
 | 1 / 0                           | At an atom with available valence, press 1; navigate back and press 0                                   | 1 advances to the new endpoint; 0 leaves the branch origin active                                                                                 |
 | v / l                           | Try v at an atom, a bond, or an empty hotspot; try l at an atom or empty hotspot, then at a double bond | v attaches/fuses/seeds a three-member ring; l enters Cl or places the double line left; neither selects a tool while its chemistry action applies |
 | Enter / Escape                  | Seed a ring with 3 and press Enter with its ring selection intact; press Escape                         | Only the active atom's label draft opens; Escape closes the draft and keyboard drawing remains on                                                 |

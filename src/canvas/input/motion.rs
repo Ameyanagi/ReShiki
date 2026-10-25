@@ -83,6 +83,7 @@ impl MoleculeCanvas<'_> {
                 Action::publish(Edit::Pan(
                     delta.x / self.camera.zoom,
                     delta.y / self.camera.zoom,
+                    None,
                 ))
                 .and_capture(),
             );

@@ -3,6 +3,8 @@ use std::collections::{HashMap, HashSet};
 
 #[cfg(test)]
 mod arrange_tests;
+#[cfg(test)]
+mod nearest_tests;
 mod rotation;
 pub use rotation::center as rotation_center;
 pub mod reference;
@@ -984,15 +986,26 @@ pub fn arrange(doc: &mut Document, ids: &[u64], action: Arrange) {
 }
 
 pub fn nearest_bond(doc: &Document, p: Point, r: f32) -> Option<usize> {
+    if doc.bonds.is_empty() {
+        return None;
+    }
+    // One index per query replaces two linear atom searches for every bond.
+    // Reversed insertion retains Document::atom's first-ID behavior even for
+    // an unvalidated document containing duplicate IDs.
+    let positions: HashMap<_, _> = doc
+        .atoms
+        .iter()
+        .rev()
+        .map(|atom| (atom.id, atom.position))
+        .collect();
     doc.bonds
         .iter()
         .enumerate()
-        .filter(|(_, b)| doc.bond_drawn(b.a, b.b))
         .filter_map(|(i, b)| {
-            let a = doc.atom(b.a)?.position;
-            let z = doc.atom(b.b)?.position;
+            let a = *positions.get(&b.a)?;
+            let z = *positions.get(&b.b)?;
             let d = crate::graphics::segment_distance(p, a, z);
-            (d < r).then_some((i, d))
+            (d < r && doc.bond_drawn(b.a, b.b)).then_some((i, d))
         })
         .min_by(|a, b| a.1.total_cmp(&b.1))
         .map(|x| x.0)

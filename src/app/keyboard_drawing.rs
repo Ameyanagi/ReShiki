@@ -80,6 +80,20 @@ impl App {
         }
     }
 
+    pub(super) fn keyboard_pointer_camera(&mut self, point: Option<Point>) {
+        if let Some(point) = point {
+            let pointer_owned = self.tab.keyboard_drawing.camera_pointer(point);
+            if !pointer_owned || !self.keyboard_drawing_active() {
+                return;
+            }
+            let target = self.keyboard_target_at(point);
+            self.tab
+                .keyboard_drawing
+                .camera_target(point, target, &self.tab.doc);
+            self.tab.hover = Some((point, self.tab.file_epoch));
+        }
+    }
+
     pub(super) fn keyboard_pointer_selection(&mut self, point: Option<Point>) {
         if !self.keyboard_drawing_active() {
             return;
@@ -348,5 +362,7 @@ fn begin_drawing(
     })())
 }
 
+#[cfg(test)]
+mod camera_tests;
 #[cfg(test)]
 mod tests;

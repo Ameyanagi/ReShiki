@@ -67,6 +67,8 @@ mod object_toolbar;
 mod office;
 #[cfg(any(windows, target_os = "linux"))]
 pub(crate) use desktop::install_document_events as install_desktop_events;
+#[cfg(test)]
+mod hover_qa;
 mod models3d;
 #[cfg(test)]
 mod ops_parity_tests;

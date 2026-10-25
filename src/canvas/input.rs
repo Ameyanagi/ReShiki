@@ -111,7 +111,11 @@ impl MoleculeCanvas<'_> {
                 {
                     Edit::Zoom(zoom_amount.exp(), self.camera.world(point?, bounds))
                 } else {
-                    Edit::Pan(x / self.camera.zoom, y / self.camera.zoom)
+                    Edit::Pan(
+                        x / self.camera.zoom,
+                        y / self.camera.zoom,
+                        Some(self.camera.world(point?, bounds)),
+                    )
                 };
                 Some(Action::publish(edit).and_capture())
             }

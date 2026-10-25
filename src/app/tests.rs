@@ -2404,7 +2404,7 @@ fn blank_drawings_keep_starting_zoom_through_resize_and_first_edits() {
 #[test]
 fn fitting_an_empty_drawing_restores_starting_view() {
     let (mut app, _) = App::new();
-    app.edit(Edit::Pan(60., -20.));
+    app.edit(Edit::Pan(60., -20., None));
     let _ = app.update(Message::Zoom(2.));
     let _ = app.update(Message::Fit);
     assert_eq!(app.tab.camera.zoom, 1.0);
@@ -2424,7 +2424,7 @@ fn fit_uses_available_canvas_and_respects_manual_pan() {
     let small_zoom = app.tab.camera.zoom;
     let _ = app.update(Message::Viewport(iced::Size::new(1000.0, 700.0)));
     assert!(app.tab.camera.zoom > small_zoom);
-    app.edit(Edit::Pan(60.0, -20.0));
+    app.edit(Edit::Pan(60.0, -20.0, None));
     let camera = app.tab.camera;
     let _ = app.update(Message::Viewport(iced::Size::new(700.0, 500.0)));
     assert_eq!(app.tab.camera.center, camera.center);
@@ -2443,7 +2443,7 @@ fn pan_and_zoom_move_only_the_camera() {
     let revision = app.tab.revision;
     let frames = app.tab.history.undo_frames().count();
     let dirty = app.dirty();
-    app.edit(Edit::Pan(60., -20.));
+    app.edit(Edit::Pan(60., -20., None));
     assert_eq!(app.tab.camera.center, Point::new(-60., 20.));
     app.edit(Edit::Zoom(1e9, Point::new(-60., 20.)));
     assert_eq!(app.tab.camera.zoom, 5.0);
@@ -2495,7 +2495,7 @@ fn pan_after_labels_land_moves_only_the_camera() {
     let frames = app.tab.history.undo_frames().count();
     let redo = app.tab.history.can_redo();
     let dirty = app.dirty();
-    app.edit(Edit::Pan(3., -2.));
+    app.edit(Edit::Pan(3., -2., None));
     app.edit(Edit::Zoom(1.1, Point::new(10., 10.)));
     assert_eq!(app.tab.doc, document);
     assert_eq!(app.tab.revision, revision);
@@ -2509,7 +2509,7 @@ fn view_aids_preserve_drawing_selection_history_and_manual_camera() {
     let (mut app, _) = App::new();
     let id = app.tab.doc.add_atom("O", Point::new(50., 20.));
     app.tab.selected = vec![id];
-    app.edit(Edit::Pan(60., -20.));
+    app.edit(Edit::Pan(60., -20., None));
     let document = app.tab.doc.clone();
     let camera = app.tab.camera;
     let revision = app.tab.revision;

@@ -11,10 +11,11 @@ const BOND_TEXT_HINT: &str = "Drag to bond; this text becomes an atom label";
 impl App {
     /// Moves the view for Pan and Zoom; false for any other edit.
     fn move_camera(&mut self, edit: &Edit) -> bool {
-        match *edit {
-            Edit::Pan(dx, dy) => {
+        let pointer = match *edit {
+            Edit::Pan(dx, dy, at) => {
                 self.tab.fit_to_view = false;
                 self.tab.camera.center = self.tab.camera.center.offset(-dx, -dy);
+                at.map(|point| point.offset(-dx, -dy))
             }
             Edit::Zoom(f, at) => {
                 self.tab.fit_to_view = false;
@@ -25,9 +26,11 @@ impl App {
                     at.x + (self.tab.camera.center.x - at.x) * ratio,
                     at.y + (self.tab.camera.center.y - at.y) * ratio,
                 );
+                Some(at)
             }
             _ => return false,
-        }
+        };
+        self.keyboard_pointer_camera(pointer);
         true
     }
 
@@ -99,7 +102,7 @@ impl App {
         }
         if self.tab.cleanup.is_some() {
             match edit {
-                Edit::Pan(dx, dy) => {
+                Edit::Pan(dx, dy, _) => {
                     self.tab.camera.center = self
                         .tab
                         .camera

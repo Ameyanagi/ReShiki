@@ -177,7 +177,7 @@ fn selection_preserves_manual_pan_and_zoom_then_inspector_toggle_resizes_normall
         Default::default(),
         Default::default(),
     ));
-    app.edit(Edit::Pan(60., -20.));
+    app.edit(Edit::Pan(60., -20., None));
     app.edit(Edit::Zoom(1.5, Point::new(-40., 10.)));
     let at = app.tab.doc.arrows[0].start;
     let before = app
@@ -195,7 +195,7 @@ fn selection_preserves_manual_pan_and_zoom_then_inspector_toggle_resizes_normall
     let _ = app.update(Message::Viewport(app.viewport));
     assert_eq!(app.tab.camera.center, camera.center);
     assert_eq!(app.tab.camera.zoom, camera.zoom);
-    app.edit(Edit::Pan(10., 20.));
+    app.edit(Edit::Pan(10., 20., None));
     assert_eq!(app.tab.camera.center, camera.center.offset(-10., -20.));
     let _ = app.update(Message::Fit);
     let zoom = app.tab.camera.zoom;

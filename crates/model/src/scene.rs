@@ -201,6 +201,34 @@ pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> 
     })
 }
 
+/// Geometric nearest-atom searches also accept a collapsed label's full text
+/// box. Cull it with the same conservative glyph/advance reach before laying
+/// it out; retain the exact box, margin and reverse group-order hit priority.
+pub(crate) fn abbreviation_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
+    if doc.abbreviations.is_empty() {
+        return None;
+    }
+    let reach = LabelReach::new(doc);
+    let atoms: std::collections::HashMap<_, _> =
+        doc.atoms.iter().rev().map(|atom| (atom.id, atom)).collect();
+    doc.abbreviations.iter().rev().find_map(|group| {
+        let atom = *atoms.get(&group.anchor)?;
+        let limit = reach.of(atom).map_or(f32::INFINITY, |reach| reach + radius);
+        if (atom.position.x - point.x).abs() > limit
+            || (atom.position.y - point.y).abs() > limit
+            || crate::models3d::hides(doc, group.anchor)
+        {
+            return None;
+        }
+        let (lo, hi) = atom_label_bounds(atom, doc)?;
+        (point.x >= lo.x - radius
+            && point.x <= hi.x + radius
+            && point.y >= lo.y - radius
+            && point.y <= hi.y + radius)
+            .then_some(group.anchor)
+    })
+}
+
 /// An upper bound on how far an atom's label ink reaches from the atom.
 struct LabelReach {
     /// The largest label font size times its fonts' widest glyph (at least

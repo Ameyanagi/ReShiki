@@ -67,9 +67,10 @@ fn scroll_pans_both_axes_and_command_or_control_zooms_at_pointer() -> Result<(),
                         cursor,
                     )
                     .ok_or("Scroll action")?;
-                let Some(Edit::Pan(dx, dy)) = action.into_inner().0 else {
+                let Some(Edit::Pan(dx, dy, at)) = action.into_inner().0 else {
                     return Err("Unmodified scroll must pan".into());
                 };
+                assert_eq!(at, Some(anchor));
                 let mut moved = canvas.camera;
                 moved.center = moved.center.offset(-dx, -dy);
                 let position = moved.screen(anchor, paper);

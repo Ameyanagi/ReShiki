@@ -440,7 +440,9 @@ impl Document {
     pub fn nearest(&self, point: Point, radius: f32) -> Option<u64> {
         self.atoms
             .iter()
-            .filter(|a| self.atom_drawn(a.id) && a.position.distance(point) < radius)
+            // Most pointer queries are nowhere near most atoms. Resolve the
+            // collapsed-group/model visibility only for geometric candidates.
+            .filter(|a| a.position.distance(point) < radius && self.atom_drawn(a.id))
             .min_by(|a, b| {
                 a.position
                     .distance(point)

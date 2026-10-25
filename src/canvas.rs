@@ -242,7 +242,8 @@ pub enum Edit {
     RingPreset(reshiki::rings::Preset, World, Option<World>, bool, bool),
     Template(World, Option<World>),
     Click(World),
-    Pan(f32, f32),
+    /// World-space pan delta and, for wheel navigation, its pointer before pan.
+    Pan(f32, f32, Option<World>),
     Zoom(f32, World),
 }
 #[derive(Debug, Clone, Copy)]
