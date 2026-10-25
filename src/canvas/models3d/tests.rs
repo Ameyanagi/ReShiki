@@ -168,15 +168,13 @@ fn an_unselected_model_or_its_edge_moves_and_alt_or_copy_drags_move() {
 }
 
 fn outline_edges(canvas: &MoleculeCanvas<'_>) -> [Point; 4] {
-    let (lo, hi) = reshiki::scene::selection_bounds(canvas.doc, canvas.selected).unwrap();
-    let lo = canvas.camera.screen(lo, BOUNDS) - Vector::new(12., 12.);
-    let hi = canvas.camera.screen(hi, BOUNDS) + Vector::new(12., 12.);
-    [
-        Point::new(lo.x, (lo.y + hi.y) / 2.),
-        Point::new(hi.x, (lo.y + hi.y) / 2.),
-        Point::new((lo.x + hi.x) / 2., lo.y),
-        Point::new((lo.x + hi.x) / 2., hi.y),
-    ]
+    // Probe the frame that is actually drawn. A model's own caption can be
+    // selected for movement while remaining outside its resize frame.
+    let [top, right, bottom, left] =
+        SelectionBox::new(canvas.doc, canvas.selected, canvas.camera, BOUNDS)
+            .unwrap()
+            .drawn_edge_centers();
+    [left, right, top, bottom]
 }
 
 #[test]

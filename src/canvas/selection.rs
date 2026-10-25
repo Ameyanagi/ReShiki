@@ -138,6 +138,11 @@ impl SelectionBox {
         ]
     }
 
+    #[cfg(test)]
+    pub(super) fn drawn_edge_centers(self) -> [Point; 4] {
+        self.edge_grips()
+    }
+
     fn edge_enabled(self, edge: usize) -> bool {
         if !self.resizable || self.models {
             return false;
