@@ -12,6 +12,8 @@ Under review: @Ameyanagi — Safari pastes clipboard text into captions and Impo
 [PR #541](https://github.com/Ameyanagi/ReShiki/pull/541).
 Under review: @Ameyanagi — Crystal import notes stay with the drawing and survive native save/reopen; the guide now explains the opening view correctly.
 [PR #542](https://github.com/Ameyanagi/ReShiki/pull/542).
+Under review: @Ameyanagi — atom-label placement, readable controls and chemical
+suggestions in [PR #543](https://github.com/Ameyanagi/ReShiki/pull/543).
 
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).
