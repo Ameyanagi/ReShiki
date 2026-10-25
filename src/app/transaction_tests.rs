@@ -857,3 +857,21 @@ fn element_tool_keeps_crystal_sites_explicit_and_retains_the_cell() {
     app.step_history(false);
     assert_eq!(app.tab.doc, before);
 }
+
+#[test]
+fn bond_shortcuts_keep_the_transaction_unit_cell_removal_notice() {
+    let mut app = app();
+    app.tab.doc =
+        reshiki::crystal::read("cif", include_str!("../../tests/fixtures/crystal/nacl.cif"))
+            .unwrap()
+            .0;
+    let before = app.tab.doc.clone();
+    let bond = app.tab.doc.bonds[0].clone();
+    let _ = app.context_key_resolved("2", None, Some((bond.a, bond.b)), false, true);
+    assert_eq!(app.status, CELL_REMOVED_NOTICE);
+    assert!(!app.error);
+    assert!(app.tab.doc.models.is_empty());
+    assert!(reshiki::models3d::crystal::touches(&app.tab.doc, &[]));
+    app.step_history(false);
+    assert_eq!(app.tab.doc, before);
+}

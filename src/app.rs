@@ -114,6 +114,7 @@ pub(crate) use workspace::text_width;
 
 /// The status bar's idle message.
 const READY: &str = "Ready · Choose a tool to start drawing";
+const CELL_REMOVED_NOTICE: &str = "Unit cell removed by the edit · Undo restores it";
 
 // App::fit_bounds: screen pixels kept free around the fitted drawing, the
 // smallest usable viewport side (pixels) and the smallest fitted extent (world
@@ -745,7 +746,7 @@ impl App {
             }
             self.error = false;
             self.status = if unit_cell_removed {
-                "Unit cell removed by the edit · Undo restores it"
+                CELL_REMOVED_NOTICE
             } else if committed.chemistry_changed {
                 "Drawing changed · Check structure to refresh properties"
             } else {
