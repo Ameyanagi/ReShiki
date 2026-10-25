@@ -589,6 +589,8 @@ impl App {
             iced::window::open_events().map(Message::LinuxClipboardWindow),
             self.updates.subscription(),
             self.properties_subscription(),
+            #[cfg(target_arch = "wasm32")]
+            self.naming_subscription(),
             if self.assistant.needs_poll() {
                 iced::time::every(std::time::Duration::from_millis(200))
                     .map(|_| Message::Assistant(assistant::Action::Poll))
@@ -844,6 +846,11 @@ impl App {
             .unwrap_or(&self.tab.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        // Readiness polling only redraws; it must not commit drafts or dismiss menus.
+        #[cfg(target_arch = "wasm32")]
+        if matches!(message, Message::Naming(naming::Action::Refresh)) {
+            return Task::none();
+        }
         self.sync_drawing_panel_context();
         let task = self.handle(message);
         self.sync_drawing_panel_context();
@@ -1247,13 +1254,20 @@ async fn save_export(
     };
     let stem = stem.as_deref().unwrap_or("Molecule");
     files::save_bytes(
-        "Export drawing",
+        &format!("Export {}", export_format_label(format)),
         &format!("{stem}.{extension}"),
         extension,
         &bytes,
     )
     .await
 }
+fn export_format_label(format: &str) -> String {
+    match format {
+        "svg-office" => inspector::FigureFormat::SvgOffice.to_string(),
+        _ => format.to_uppercase(),
+    }
+}
+
 fn input_request(text: &str) -> Request {
     reshiki::clipboard::text_request(text)
 }

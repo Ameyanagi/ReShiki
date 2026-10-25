@@ -91,7 +91,10 @@ describe("headless library", () => {
   });
 
   test("version", async () => {
-    expect(await version()).toMatch(/^\d+\.\d+\.\d+$/);
+    const manifest = Bun.TOML.parse(
+      readFileSync(new URL("../../../Cargo.toml", import.meta.url), "utf8"),
+    );
+    expect(await version()).toBe(manifest.package.version);
   });
 });
 
