@@ -4,6 +4,10 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
+Unreleased: @Ameyanagi — selected-arrow scope counts and consistent Properties
+navigation in [PR #577](https://github.com/Ameyanagi/ReShiki/pull/577), with
+[matched native review](changes/qa-properties-clarity.md).
+
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).
 
