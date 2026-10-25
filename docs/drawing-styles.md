@@ -44,7 +44,7 @@ The interface was rendered offscreen at 1280 × 820 and 1040 × 680. Pointer eve
 
 ## Canvas colors and interface appearance
 
-The status bar controls left of **View** separate **journal style**, **canvas color theme**, and **canvas brightness**. The sun/moon button shows the current canvas mode; click it to switch between white and black paper. These controls are also available in **Page setup**. They do not change bond dimensions, font sizes, or bold formatting.
+The status bar controls left of **View** separate **journal style**, **canvas color theme**, and **canvas brightness**. The sun/moon button shows the current canvas mode; click it to switch between white and black paper. The brightness you choose is remembered for new drawings and the next launch. Opening a saved drawing keeps that drawing’s canvas brightness, and Undo/Redo changes only the drawing. These controls are also available in **Page setup**. They do not change bond dimensions, font sizes, or bold formatting.
 
 The color theme offers:
 

@@ -174,7 +174,7 @@ impl App {
             .recovery_root
             .as_deref()
             .and_then(|root| reshiki::recovery::Recovery::in_directory(root).ok());
-        let mut tab = DocumentTab::new(recovery);
+        let mut tab = DocumentTab::new(recovery, self.appearance.canvas_theme);
         self.tabs.next += 1;
         tab.id = TabId(self.tabs.next);
         tab.file_epoch = self.next_epoch();
@@ -207,7 +207,10 @@ impl App {
         self.cancel_reference_stretch();
         self.nmr_leave_tab();
         self.retire_assistant(self.tab.id);
-        let old = std::mem::replace(&mut self.tab, DocumentTab::new(None));
+        let old = std::mem::replace(
+            &mut self.tab,
+            DocumentTab::new(None, self.appearance.canvas_theme),
+        );
         self.tab.id = old.id;
         self.tab.recovery = old.recovery;
         self.tab.autosave = old.autosave;

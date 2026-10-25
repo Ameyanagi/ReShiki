@@ -54,7 +54,7 @@ fn a_replaced_tab_keeps_its_document_selection_view_and_undo() {
     app.tab.camera.zoom = 2.0;
     app.tool = Tool::Erase;
 
-    let first = std::mem::replace(&mut app.tab, DocumentTab::new(None));
+    let first = std::mem::replace(&mut app.tab, DocumentTab::new(None, Default::default()));
     assert!(app.tab.doc.all_ids().is_empty());
     let before = app.tab.doc.clone();
     app.tab.doc.add_atom("O", Point::default());
@@ -122,4 +122,16 @@ fn hue_previews_show_the_unsaved_dot_until_cancelled() {
     assert_eq!(app.title(), "saved.rsk • — ReShiki");
     let _ = app.update(Message::StyleMenu(Action::Cancel));
     assert_eq!(app.title(), "saved.rsk — ReShiki");
+}
+
+#[test]
+fn preferred_canvas_initializes_a_clean_reusable_drawing() {
+    for canvas in reshiki::canvas_theme::CanvasTheme::ALL {
+        let tab = DocumentTab::new(None, canvas);
+        assert_eq!(tab.doc.canvas_theme, canvas);
+        assert_eq!(tab.saved, tab.doc);
+        assert!(!tab.dirty());
+        assert!(tab.reusable());
+        assert_eq!(tab.revision, 0);
+    }
 }

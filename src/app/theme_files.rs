@@ -294,6 +294,13 @@ impl App {
             self.status =
                 format!("{theme} canvas · Copies retain ink colors on a transparent background");
         }
+        // An explicit choice also sets the starting canvas for future drawings.
+        // Opening a file and Undo/Redo never pass through this preference update.
+        self.appearance.canvas_theme = theme;
+        if let Err(error) = self.appearance.save() {
+            self.status = format!("Canvas changed, but could not save preference: {error}");
+            self.error = true;
+        }
     }
 }
 

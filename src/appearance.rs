@@ -1,4 +1,4 @@
-//! Application chrome only. Document page colors live in canvas_theme.
+//! Interface preferences and defaults for new drawings. Existing drawings keep their page colors.
 use iced::advanced::{Clipboard, Layout, Shell, layout, overlay, renderer, widget};
 use iced::{Color, Theme};
 use serde::{Deserialize, Serialize};
@@ -34,6 +34,8 @@ impl std::fmt::Display for Mode {
 #[serde(default)]
 pub struct Settings {
     pub mode: Mode,
+    /// Last explicitly chosen canvas brightness, used only for new blank drawings.
+    pub canvas_theme: reshiki::canvas_theme::CanvasTheme,
     /// Arrange group in the Select context row. A new key: the retired
     /// `object_toolbar` preference (off by default) must not hide it.
     pub arrange_controls: bool,
@@ -46,6 +48,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             mode: Mode::default(),
+            canvas_theme: Default::default(),
             arrange_controls: true,
             smart_guides: true,
             drawing_style_unit: Default::default(),
@@ -72,8 +75,12 @@ impl Settings {
             return Self::default();
         }
         Self::path()
+            .map(|path| Self::load_from(&path))
+            .unwrap_or_default()
+    }
+    fn load_from(path: &std::path::Path) -> Self {
+        reshiki::storage::read(path)
             .ok()
-            .and_then(|path| reshiki::storage::read(&path).ok())
             .and_then(|bytes| {
                 let mut settings: Self = serde_json::from_slice(&bytes).ok()?;
                 let legacy: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
@@ -90,11 +97,13 @@ impl Settings {
         if cfg!(test) {
             return Ok(());
         }
-        let path = Self::path()?;
+        self.save_to(&Self::path()?)
+    }
+    fn save_to(&self, path: &std::path::Path) -> Result<(), String> {
         if let Some(parent) = path.parent() {
             reshiki::storage::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
-        reshiki::storage::write_atomic(&path, &serde_json::to_vec(self).map_err(|e| e.to_string())?)
+        reshiki::storage::write_atomic(path, &serde_json::to_vec(self).map_err(|e| e.to_string())?)
     }
 }
 
