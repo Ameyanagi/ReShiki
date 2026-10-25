@@ -2321,6 +2321,14 @@ impl App {
                 ));
         }
         status = status.push(container(message).width(Length::Fill).clip(true));
+        if let Some(progress) = self.engine_progress() {
+            status = status.push(text(progress).size(11)).push(hover_hint(
+                accessible_command("engine.cancel", "Cancel chemistry operation", "Cancel")
+                    .on_press(Message::CancelEngine),
+                "Cancel this operation · Escape",
+                tooltip::Position::Top,
+            ));
+        }
         if self.updates.available() {
             status = status.push(
                 command(
