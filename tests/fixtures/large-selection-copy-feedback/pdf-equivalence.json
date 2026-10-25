@@ -1,0 +1,49 @@
+{
+  "pypdf_version": "6.21.2",
+  "method": "Every indirect object and full trailer; dictionary keys sorted; encoded/decoded stream bytes hashed. Compare resolved trailer graph plus a multiplicity-preserving sorted hash of every object-rooted resolved graph; cycles use ancestor depth. This ignores dictionary order, physical serialization order, object IDs and xref file offsets.",
+  "records": {
+    "before": {
+      "file_bytes": 776466,
+      "file_sha256": "9323937c63731a2e96a12da44f4aecb62e7b15a1dbae8eb30ef3b809a0329ed6",
+      "pages": 1,
+      "indirect_objects": 16,
+      "canonical_by_id_sha256": "f066f660463d7a07511a136ba9e3add57a4343c807b0a604e014644d79f0d02f",
+      "resolved_graph_sha256": "1c7d167d99c1417973f0f2d24cc9b7aa6dc44d5eff40a3d619c81fe5622a3eb2",
+      "render_png_sha256": "146276a90765d75034f8b88561992cd1106cd57c44ba02242e8d239600cfe25e"
+    },
+    "after": {
+      "file_bytes": 776466,
+      "file_sha256": "97b1a4b3cbef662aa29db317dbac20f6d244a210fd082393a6f4021810c13c39",
+      "pages": 1,
+      "indirect_objects": 16,
+      "canonical_by_id_sha256": "3c13c6054a6ca53c17ca10925f18dccd297af63006de81175305fdbb9d14c43d",
+      "resolved_graph_sha256": "1c7d167d99c1417973f0f2d24cc9b7aa6dc44d5eff40a3d619c81fe5622a3eb2",
+      "render_png_sha256": "146276a90765d75034f8b88561992cd1106cd57c44ba02242e8d239600cfe25e"
+    },
+    "combined": {
+      "file_bytes": 776466,
+      "file_sha256": "97b1a4b3cbef662aa29db317dbac20f6d244a210fd082393a6f4021810c13c39",
+      "pages": 1,
+      "indirect_objects": 16,
+      "canonical_by_id_sha256": "3c13c6054a6ca53c17ca10925f18dccd297af63006de81175305fdbb9d14c43d",
+      "resolved_graph_sha256": "1c7d167d99c1417973f0f2d24cc9b7aa6dc44d5eff40a3d619c81fe5622a3eb2",
+      "render_png_sha256": "146276a90765d75034f8b88561992cd1106cd57c44ba02242e8d239600cfe25e"
+    }
+  },
+  "canonical_objects_by_id_equal": false,
+  "resolved_graphs_equal": true,
+  "different_object_ids": [
+    "1 0",
+    "10 0",
+    "11 0",
+    "12 0",
+    "13 0",
+    "14 0",
+    "15 0",
+    "2 0",
+    "8 0",
+    "9 0"
+  ],
+  "all_resolved_graphs_equal": true,
+  "all_render_pngs_equal": true
+}

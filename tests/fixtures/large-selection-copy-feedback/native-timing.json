@@ -1,0 +1,320 @@
+{
+  "metric": "Accepted context-menu command dispatch to successful native compositor presentation submission, same process monotonic clock",
+  "excludes": [
+    "OS input delivery",
+    "GPU scanout"
+  ],
+  "sampling": "One quiet warm copy per variant after one warm native PDF copy; not a latency distribution",
+  "stage1_condition": "Footer status exactly Preparing PDF for the clipboard\u2026 and context menu closed, captured at view construction; style callback runs during actual draw",
+  "stage2_condition": "Footer status starts Selection copied as PDF and context menu closed",
+  "records": {
+    "before": {
+      "sources": {
+        "base": "3d80590a41b9d9e8efd818d23395ac51bd264ca8"
+      },
+      "trace": "trace-before.jsonl",
+      "sequence": 2,
+      "events": [
+        {
+          "phase": "dispatch_copy_pdf",
+          "sequence": 2,
+          "t_ns": 610822658625,
+          "wall_ns": 1792952347175179000,
+          "stage": 0,
+          "draw_ns": 0,
+          "draw_serial": 0,
+          "pid": 35235
+        },
+        {
+          "phase": "preparing_status_set",
+          "sequence": 2,
+          "t_ns": 610826024208,
+          "wall_ns": 1792952347178544000,
+          "stage": 1,
+          "draw_ns": 0,
+          "draw_serial": 0,
+          "pid": 35235
+        },
+        {
+          "phase": "status_draw",
+          "sequence": 2,
+          "t_ns": 611437664625,
+          "wall_ns": 1792952347790181000,
+          "stage": 1,
+          "draw_ns": 611437664625,
+          "draw_serial": 1,
+          "pid": 35235
+        },
+        {
+          "phase": "present_ok",
+          "sequence": 2,
+          "t_ns": 611438920666,
+          "wall_ns": 1792952347791437000,
+          "stage": 1,
+          "draw_ns": 611437664625,
+          "draw_serial": 1,
+          "pid": 35235
+        },
+        {
+          "phase": "status_draw",
+          "sequence": 2,
+          "t_ns": 612386038416,
+          "wall_ns": 1792952348738549000,
+          "stage": 2,
+          "draw_ns": 612386038416,
+          "draw_serial": 4,
+          "pid": 35235
+        },
+        {
+          "phase": "present_ok",
+          "sequence": 2,
+          "t_ns": 612387180083,
+          "wall_ns": 1792952348739690000,
+          "stage": 2,
+          "draw_ns": 612386038416,
+          "draw_serial": 4,
+          "pid": 35235
+        }
+      ],
+      "accepted_to_preparing_present_ms": 616.262041,
+      "accepted_to_copied_present_ms": 1564.521458,
+      "first_preparing_draw_serial": 1,
+      "copied_draw_serial": 4,
+      "movie": "trace-before-original.mov",
+      "movie_bytes": 7267130,
+      "movie_sha256": "0c4f8764b63226235ecd934d185038be33915f83f40837b693c6a73a89b25ae4",
+      "pdf": "trace-before.pdf",
+      "pdf_receipt": {
+        "bytes": 776466,
+        "page_bounds_points": [
+          [
+            0,
+            0,
+            7352.1934,
+            5877.6963
+          ]
+        ],
+        "pages": 1,
+        "pasteboard_pdf_type": "com.adobe.pdf",
+        "sha256": "9323937c63731a2e96a12da44f4aecb62e7b15a1dbae8eb30ef3b809a0329ed6"
+      }
+    },
+    "after": {
+      "sources": {
+        "574": "dcfef98c4b8d0f8795bdf601060c803f8af8a6c0"
+      },
+      "trace": "trace-stable-after.jsonl",
+      "sequence": 2,
+      "events": [
+        {
+          "phase": "dispatch_copy_pdf",
+          "sequence": 2,
+          "t_ns": 203066019041,
+          "wall_ns": 1792957584788773000,
+          "stage": 0,
+          "draw_ns": 0,
+          "draw_serial": 0,
+          "pid": 66772
+        },
+        {
+          "phase": "preparing_status_set",
+          "sequence": 2,
+          "t_ns": 203070069041,
+          "wall_ns": 1792957584792823000,
+          "stage": 1,
+          "draw_ns": 0,
+          "draw_serial": 0,
+          "pid": 66772
+        },
+        {
+          "phase": "status_draw",
+          "sequence": 2,
+          "t_ns": 203118404541,
+          "wall_ns": 1792957584841158000,
+          "stage": 1,
+          "draw_ns": 203118404541,
+          "draw_serial": 1,
+          "pid": 66772
+        },
+        {
+          "phase": "present_ok",
+          "sequence": 2,
+          "t_ns": 203119696958,
+          "wall_ns": 1792957584842450000,
+          "stage": 1,
+          "draw_ns": 203118404541,
+          "draw_serial": 1,
+          "pid": 66772
+        },
+        {
+          "phase": "status_draw",
+          "sequence": 2,
+          "t_ns": 203841449916,
+          "wall_ns": 1792957585564199000,
+          "stage": 2,
+          "draw_ns": 203841449916,
+          "draw_serial": 6,
+          "pid": 66772
+        },
+        {
+          "phase": "present_ok",
+          "sequence": 2,
+          "t_ns": 203842814208,
+          "wall_ns": 1792957585565563000,
+          "stage": 2,
+          "draw_ns": 203841449916,
+          "draw_serial": 6,
+          "pid": 66772
+        }
+      ],
+      "accepted_to_preparing_present_ms": 53.677917,
+      "accepted_to_copied_present_ms": 776.795167,
+      "first_preparing_draw_serial": 1,
+      "copied_draw_serial": 6,
+      "movie": "stable-after-original.mov",
+      "movie_bytes": 7246435,
+      "movie_sha256": "47d0e362ddee98ac07923ba3009e5bb446b8016659c4d7dfab4c6184ab56a664",
+      "pdf": "stable-after.pdf",
+      "pdf_receipt": {
+        "bytes": 776466,
+        "page_bounds_points": [
+          [
+            0,
+            0,
+            7352.1934,
+            5877.6963
+          ]
+        ],
+        "pages": 1,
+        "pasteboard_pdf_type": "com.adobe.pdf",
+        "sha256": "97b1a4b3cbef662aa29db317dbac20f6d244a210fd082393a6f4021810c13c39"
+      }
+    },
+    "combined": {
+      "sources": {
+        "574": "dcfef98c4b8d0f8795bdf601060c803f8af8a6c0",
+        "572_573": "2a6d007415ccd1376aae1920187841ddebfb05e2"
+      },
+      "trace": "trace-stable-combined.jsonl",
+      "sequence": 2,
+      "events": [
+        {
+          "phase": "dispatch_copy_pdf",
+          "sequence": 2,
+          "t_ns": 150086300750,
+          "wall_ns": 1792957647360950000,
+          "stage": 0,
+          "draw_ns": 0,
+          "draw_serial": 0,
+          "pid": 67599
+        },
+        {
+          "phase": "preparing_status_set",
+          "sequence": 2,
+          "t_ns": 150089801875,
+          "wall_ns": 1792957647364451000,
+          "stage": 1,
+          "draw_ns": 0,
+          "draw_serial": 0,
+          "pid": 67599
+        },
+        {
+          "phase": "status_draw",
+          "sequence": 2,
+          "t_ns": 150137127958,
+          "wall_ns": 1792957647411777000,
+          "stage": 1,
+          "draw_ns": 150137127958,
+          "draw_serial": 1,
+          "pid": 67599
+        },
+        {
+          "phase": "present_ok",
+          "sequence": 2,
+          "t_ns": 150138491916,
+          "wall_ns": 1792957647413140000,
+          "stage": 1,
+          "draw_ns": 150137127958,
+          "draw_serial": 1,
+          "pid": 67599
+        },
+        {
+          "phase": "status_draw",
+          "sequence": 2,
+          "t_ns": 150856549666,
+          "wall_ns": 1792957648131198000,
+          "stage": 2,
+          "draw_ns": 150856549666,
+          "draw_serial": 6,
+          "pid": 67599
+        },
+        {
+          "phase": "present_ok",
+          "sequence": 2,
+          "t_ns": 150857751833,
+          "wall_ns": 1792957648132395000,
+          "stage": 2,
+          "draw_ns": 150856549666,
+          "draw_serial": 6,
+          "pid": 67599
+        }
+      ],
+      "accepted_to_preparing_present_ms": 52.191166,
+      "accepted_to_copied_present_ms": 771.451083,
+      "first_preparing_draw_serial": 1,
+      "copied_draw_serial": 6,
+      "movie": "stable-combined-original.mov",
+      "movie_bytes": 6987671,
+      "movie_sha256": "c1dc793478c7e7fc02d102d7c9bc12b75f8b19ff4d7686470d963177acd4d4b1",
+      "pdf": "stable-combined.pdf",
+      "pdf_receipt": {
+        "bytes": 776466,
+        "page_bounds_points": [
+          [
+            0,
+            0,
+            7352.1934,
+            5877.6963
+          ]
+        ],
+        "pages": 1,
+        "pasteboard_pdf_type": "com.adobe.pdf",
+        "sha256": "97b1a4b3cbef662aa29db317dbac20f6d244a210fd082393a6f4021810c13c39"
+      }
+    }
+  },
+  "limit": "Local M1 observed 53.678/52.191 ms does not verify literal 33.3 ms or original M4 target",
+  "binary_provenance": {
+    "before": {
+      "source": "3d80590a41b9d9e8efd818d23395ac51bd264ca8",
+      "patch_sha256": "4d1aaf60191fc7655fe29211fdb935362184ea1625b7eb6cf387f866890686cb",
+      "cargo_lock_delta": "",
+      "binary_sha256": "61a5c18c4d06c2ded219e9d00e1a9eb7bb2db5fe320001da89b49e2b470506b4",
+      "cargo_lock_delta_after_build": ""
+    },
+    "after": {
+      "production_source": "dcfef98c4b8d0f8795bdf601060c803f8af8a6c0",
+      "qa_patch_sha256": "866a6d086c75bfc92875d3cad3d94e101f2b480a1d8d6c19e6c49716e06babac",
+      "binary_sha256": "35cd2a5e90e56a2adce3788a56c33cbd6202381f2207f170e040dd38c23ccfef",
+      "binary_bytes": 76475088,
+      "lockfile_delta": "none",
+      "qa_instrumentation": "same minimal accepted/status-draw/successful-present logger; no phase diagnostic spans"
+    },
+    "combined": {
+      "production_sources": {
+        "574": "dcfef98c4b8d0f8795bdf601060c803f8af8a6c0",
+        "572_573": "2a6d007415ccd1376aae1920187841ddebfb05e2",
+        "shared_base": "3d80590a41b9d9e8efd818d23395ac51bd264ca8"
+      },
+      "pointer_delta_sha256": "656a0cf0e46f4b58723bdac3ead4f4822f76f700f26e4f4b114ec2b02eee8937",
+      "qa_patch_sha256": "866a6d086c75bfc92875d3cad3d94e101f2b480a1d8d6c19e6c49716e06babac",
+      "all_applied_source_sha256": "2071afa1934dc179aaf746948877cfda581203462d218ffa27e13681e5602ff8",
+      "binary_sha256": "50c653dd9b9612ae7bfdd3ac54f111d7d1c5fae73acaaa5e8a63cf3b38423d3d",
+      "binary_bytes": 76428064,
+      "lockfile_delta": "none",
+      "merge_conflicts": "none",
+      "central_docs": "excluded",
+      "qa_instrumentation": "same exact patch bytes as final standalone; no diagnostic spans"
+    }
+  }
+}
