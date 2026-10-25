@@ -104,6 +104,52 @@ For the baseline, the same self-contained harness was temporarily added with
 `RESHIKI_QA_MODELS_BASELINE=1`; cleanup restored both temporary files and verified
 a clean baseline worktree.
 
+## Native desktop interaction
+
+The desktop checks used isolated baseline and fixed app bundles, separate empty
+`RESHIKI_DATA_DIR` directories, the same saved fixtures, and the same M1/macOS
+27.0.1 host. Window bounds were **1280 × 852 points**, including the native title
+bar; the unmodified app-window captures are **2560 × 1704 PNGs** at Retina scale.
+Native input was performed through the application, and window captures were
+saved with macOS `screencapture`. No published pixels were edited.
+
+For generation, open paclitaxel, turn keyboard drawing off with F8, select all,
+set `zoom 150` in the command palette, then run **Show as 3D model**. A recorder
+watched the app's actual geometry subprocess and took samples while that process
+was alive. The following four-second baseline/fixed pair has the same input,
+selection, 150% zoom, framing, style, and command. The baseline has only its
+status-line message; the fixed canvas identifies the molecule, elapsed time, and
+Escape action.
+
+![Native before: paclitaxel is generating with no pending cue on the molecule at four seconds](../images/qa-model-controls/native-before-pending-4s.png)
+
+![Native after: the target molecule shows Generating 3D, four seconds, and Esc cancels](../images/qa-model-controls/native-after-pending-4s.png)
+
+This additional one-second capture comes from a fresh retry at the same 150%
+zoom. Its camera is slightly panned after Undo of an earlier completed model; it
+is a timing example rather than the matched four-second comparison above. The
+subprocess was observed alive in both the one- and four-second samples.
+
+![Native one-second example: the real pending job has just revealed its elapsed indicator](../images/qa-model-controls/native-after-pending-1s.png)
+
+A separate native Escape run observed its geometry process alive in sample 0
+and absent in samples 1–4. The application displayed **3D model cancelled ·
+Drawing unchanged**, kept the original unedited 2D drawing, and added no Undo
+step. Subsequent fresh generation still worked. This exercises actual task and
+subprocess cancellation; the automated late-result test separately verifies
+that a cancelled key cannot apply an already queued result.
+
+The same desktop pass also verified:
+
+- Caffeine and its caption: click **3D model controls…** once; Style, Look, and
+  Hydrogens are immediately visible in the smaller native window.
+- Caffeine: `scale 150`, Return, Down, Return runs the offered 2D switch; run
+  `scale 150` again. The first Undo restores the unscaled 2D drawing, and the
+  second restores the original 3D model with the document unedited.
+- Aspirin: `zoom 250`, then **Show as 2D and 3D** reveals the drawing, model, and
+  caption together. The smaller desktop paper needs about 160% zoom; this differs
+  from the 225% result in the 1600 × 1000 renderer comparison.
+
 ## Automated checks
 
 - Model UI tests: 33 passed, with two existing opt-in renderer tests excluded.
