@@ -162,9 +162,15 @@ fn label_attachment_overrides_choose_flush_side_or_character() -> Result<(), Str
 }
 
 #[test]
-fn automatic_text_without_an_atom_stays_centered() -> Result<(), String> {
-    let (doc, id) = labeled("Boc", Mode::Text, false)?;
+fn automatic_text_without_an_atom_stays_centered_when_the_bond_is_long_enough() -> Result<(), String>
+{
+    let (mut doc, id) = labeled("Boc", Mode::Text, false)?;
+    for atom in doc.atoms.iter_mut().filter(|a| a.id != id) {
+        atom.position.x += 42.;
+    }
     assert_eq!(glyph_at_atom(&doc, id)?, 'o');
+    let (doc, id) = labeled("M", Mode::Text, false)?;
+    assert_eq!(glyph_at_atom(&doc, id)?, 'M');
     Ok(())
 }
 
@@ -276,6 +282,51 @@ fn generic_labels_stay_centered_on_vertical_or_internal_bonds() -> Result<(), St
         let doc = apply(&doc, id, text, Mode::Auto)?;
         assert!(doc.generic.owns_label(id), "{text}");
         centered(&doc, id)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn long_automatic_terminal_text_keeps_a_short_horizontal_bond_visible() -> Result<(), String> {
+    for from_left in [true, false] {
+        let mut source = Document::default();
+        let id = source.add_atom("C", Point::default());
+        let other = source.add_atom("C", Point::new(if from_left { -42. } else { 42. }, 0.));
+        source.add_bond(id, other, 1, "plain");
+        let doc = apply(&source, id, "MOrph", Mode::Text)?;
+        let (a, b) = bond_segment(&doc, &doc.bonds[0], None).ok_or("Hidden bond")?;
+        assert!(a.distance(b) > 21., "{from_left}: {a:?} {b:?}");
+        let ink = atom_label_ink_bounds(doc.atom(id).unwrap(), &doc).unwrap();
+        assert!(if from_left {
+            a.x.max(b.x) < ink.0.x
+        } else {
+            a.x.min(b.x) > ink.1.x
+        });
+        for text in ["M", "NC"] {
+            let doc = apply(&source, id, text, Mode::Text)?;
+            let mut longer = source.clone();
+            longer.atom_mut(other).unwrap().position.x *= 2.;
+            let longer = apply(&longer, id, text, Mode::Text)?;
+            assert_eq!(
+                atom_label_bounds(doc.atom(id).unwrap(), &doc),
+                atom_label_bounds(longer.atom(id).unwrap(), &longer)
+            );
+        }
+        let mut centered = doc.clone();
+        centered.atom_mut(id).unwrap().display.label_attachment = LabelAttachment::Center;
+        let ink = atom_label_ink_bounds(centered.atom(id).unwrap(), &centered).unwrap();
+        assert!(ink.0.x < 0. && ink.1.x > 0.);
+        let mut internal = source.clone();
+        let second = internal.add_atom("C", Point::new(if from_left { 42. } else { -42. }, 0.));
+        internal.add_bond(id, second, 1, "plain");
+        let internal = apply(&internal, id, "MOrph", Mode::Text)?;
+        let ink = atom_label_ink_bounds(internal.atom(id).unwrap(), &internal).unwrap();
+        assert!(ink.0.x < 0. && ink.1.x > 0.);
+        let mut vertical = source.clone();
+        vertical.atom_mut(other).unwrap().position = Point::new(0., -42.);
+        let doc = apply(&vertical, id, "MOrph", Mode::Text)?;
+        let ink = atom_label_ink_bounds(doc.atom(id).unwrap(), &doc).unwrap();
+        assert!(ink.0.x < 0. && ink.1.x > 0.);
     }
     Ok(())
 }

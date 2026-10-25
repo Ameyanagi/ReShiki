@@ -237,6 +237,53 @@ pub(super) fn lone_pair(doc: &Document, atom: &Atom, kind: MarkKind) -> (Point, 
     fallback
 }
 
+/// Keep an unobstructed click default; otherwise try the nearest 15° side.
+/// Called only for a newly attached charge or radical, after its label refresh.
+pub(super) fn charge_click(doc: &Document, atom: &Atom, mark: &AtomMark) -> Point {
+    let (_, gap) = font_gap(doc, atom);
+    let labels: Vec<_> = doc
+        .atoms
+        .iter()
+        .flat_map(|a| crate::scene::atom_label_ink_boxes(a, doc))
+        .collect();
+    let mut chemistry = doc.clone();
+    chemistry.graphics.clear();
+    chemistry.arrows.clear();
+    chemistry.annotations.clear();
+    if let Some(owner) = chemistry.atom_mut(atom.id) {
+        owner.marks.retain(|m| m.id != mark.id);
+    }
+    let obstacles: Vec<_> = crate::scene::primitives(&chemistry)
+        .into_iter()
+        .flat_map(primitive_obstacles)
+        .collect();
+    let preferred = mark.offset.y.atan2(mark.offset.x).to_degrees();
+    let radius = mark.offset.distance(Point::default());
+    for turn in std::iter::once(0.).chain((1..=12).flat_map(|i| {
+        let turn = i as f32 * super::MARK_ORBIT_STEP;
+        [-turn, turn]
+    })) {
+        let (s, c) = (preferred + turn).to_radians().sin_cos();
+        let offset = Point::new(radius * c, radius * s);
+        let mut candidate = atom.clone();
+        candidate.marks = vec![AtomMark {
+            offset,
+            ..mark.clone()
+        }];
+        let bounds = bounds(&styled_mark_parts(&candidate, &doc.drawing_style));
+        if labels
+            .iter()
+            .all(|&label| !overlaps(bounds, expand(label, gap)))
+            && obstacles
+                .iter()
+                .all(|obstacle| !intersects(obstacle, expand(bounds, gap + obstacle.width * 0.5)))
+        {
+            return offset;
+        }
+    }
+    mark.offset
+}
+
 fn primitive_obstacles(primitive: Primitive) -> Vec<Obstacle> {
     match primitive {
         Primitive::Opacity { alpha, primitive } if alpha > 0. => primitive_obstacles(*primitive),

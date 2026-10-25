@@ -165,5 +165,14 @@ fn align_keeps_the_product_plus_inside_a_narrowed_gap() {
     // Keeping its offset would put the sign at 1020, before both products;
     // it is centred in the narrowed gap instead.
     assert!((x(p2_id) - x(p1_id) - 100.).abs() < 0.01 && w < 50.);
-    assert!(centre.distance(Point::new((x(p1_id) + x(p2_id)) / 2., 0.)) < 0.01);
+    let extent = |id| {
+        crate::scene::participant_label_ink_boxes(&aligned, &[id])
+            .into_iter()
+            .fold((x(id), x(id)), |(lo, hi), (a, b)| {
+                (lo.min(a.x), hi.max(b.x))
+            })
+    };
+    let left = extent(p1_id).1;
+    let right = extent(p2_id).0;
+    assert!(centre.distance(Point::new((left + right) / 2., 0.)) < 0.01);
 }

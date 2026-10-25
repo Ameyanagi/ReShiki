@@ -15,6 +15,7 @@ Under review: @Ameyanagi — Crystal import notes stay with the drawing and surv
 Under review: @Ameyanagi — atom-label placement, readable controls and chemical
 suggestions in [PR #543](https://github.com/Ameyanagi/ReShiki/pull/543).
 Under review: @Ameyanagi — drawing-specific inspector state, fresh fragment-name drafts, and concise abbreviation confirmation in [PR #544](https://github.com/Ameyanagi/ReShiki/pull/544).
+Under review: @Ameyanagi — chemical mark placement, reaction label spacing, visible terminal bonds, repeated chemical symbols and attached-arrow clearance in [PR #545](https://github.com/Ameyanagi/ReShiki/pull/545).
 
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).
