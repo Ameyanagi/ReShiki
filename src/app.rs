@@ -1327,4 +1327,6 @@ fn input_request(text: &str) -> Request {
 }
 
 #[cfg(test)]
+mod drawing_polish_qa;
+#[cfg(test)]
 mod tests;

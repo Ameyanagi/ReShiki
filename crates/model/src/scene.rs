@@ -1168,26 +1168,30 @@ fn text_bounds(runs: &[Primitive]) -> Option<(Point, Point)> {
         })
 }
 
-pub(crate) fn label_ink_boxes(runs: &[Primitive]) -> Vec<(Point, Point)> {
-    runs.iter()
-        .flat_map(|run| {
-            if let Primitive::Text {
+/// Visible text ink from an already rendered scene, without rebuilding its chemistry.
+pub fn label_ink_boxes(runs: &[Primitive]) -> Vec<(Point, Point)> {
+    fn collect(run: &Primitive, boxes: &mut Vec<(Point, Point)>) {
+        match run {
+            Primitive::Text {
                 position,
                 text,
                 size,
                 style,
                 ..
-            } = run
-            {
+            } => boxes.extend(
                 crate::style::text_ink_boxes(text, *size, style)
                     .into_iter()
-                    .map(|(lo, hi)| (position.offset(lo.x, lo.y), position.offset(hi.x, hi.y)))
-                    .collect()
-            } else {
-                Vec::new()
-            }
-        })
-        .collect()
+                    .map(|(lo, hi)| (position.offset(lo.x, lo.y), position.offset(hi.x, hi.y))),
+            ),
+            Primitive::Opacity { alpha, primitive } if *alpha > 0. => collect(primitive, boxes),
+            _ => {}
+        }
+    }
+    let mut boxes = Vec::new();
+    for run in runs {
+        collect(run, &mut boxes);
+    }
+    boxes
 }
 
 /// Visible selected extents, including atom labels in the original graph.
@@ -1198,6 +1202,28 @@ pub fn selection_bounds(doc: &Document, ids: &[u64]) -> Option<(Point, Point)> {
 /// `selection_bounds` of several disjoint selections, such as the Align menu's
 /// units, in one pass over the drawing.
 pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<(Point, Point)>> {
+    selections_bounds_in_axes(doc, selections, None)
+}
+
+/// The live drawing's extents in axes turned clockwise about `pivot`.
+/// Upright text boxes contribute all four corners; the caller rotates the
+/// resulting display frame back, without changing its gesture or document.
+pub fn selection_bounds_in_axes(
+    doc: &Document,
+    ids: &[u64],
+    pivot: Point,
+    degrees: f32,
+) -> Option<(Point, Point)> {
+    selections_bounds_in_axes(doc, &[ids.to_vec()], Some((pivot, degrees)))
+        .pop()
+        .flatten()
+}
+
+fn selections_bounds_in_axes(
+    doc: &Document,
+    selections: &[Vec<u64>],
+    axes: Option<(Point, f32)>,
+) -> Vec<Option<(Point, Point)>> {
     use crate::atom_labels::Owner;
     let owners: std::collections::HashMap<u64, usize> = selections
         .iter()
@@ -1205,11 +1231,12 @@ pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<
         .flat_map(|(i, ids)| ids.iter().map(move |id| (*id, i)))
         .collect();
     let mut bounds: Vec<Option<(Point, Point)>> = vec![None; selections.len()];
+    let axes = axes.map(|(pivot, degrees)| (pivot, (-degrees).to_radians().sin_cos()));
     let mut grow = |id: u64, points: &mut dyn Iterator<Item = Point>| {
         let Some(extent) = owners.get(&id).and_then(|i| bounds.get_mut(*i)) else {
             return;
         };
-        for p in points {
+        let mut add = |p: Point| {
             *extent = Some(match *extent {
                 None => (p, p),
                 Some((lo, hi)) => (
@@ -1217,6 +1244,28 @@ pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<
                     Point::new(hi.x.max(p.x), hi.y.max(p.y)),
                 ),
             });
+        };
+        if let Some((pivot, (s, c))) = axes {
+            // Every supplied extent may contain upright ink. Its other two
+            // corners are essential when measuring in the turned axes.
+            let Some((lo, hi)) = points.map(|p| (p, p)).reduce(|(lo, hi), (p, _)| {
+                (
+                    Point::new(lo.x.min(p.x), lo.y.min(p.y)),
+                    Point::new(hi.x.max(p.x), hi.y.max(p.y)),
+                )
+            }) else {
+                return;
+            };
+            for p in [lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y)] {
+                add(Point::new(
+                    pivot.x + (p.x - pivot.x) * c - (p.y - pivot.y) * s,
+                    pivot.y + (p.x - pivot.x) * s + (p.y - pivot.y) * c,
+                ));
+            }
+        } else {
+            for p in points {
+                add(p);
+            }
         }
     };
     for label in crate::atom_labels::indicators(doc) {

@@ -25,6 +25,8 @@
 
 mod cache;
 mod dashes;
+#[cfg(test)]
+mod drawing_polish_qa;
 mod grid;
 pub mod guides;
 mod hit;

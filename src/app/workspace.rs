@@ -607,8 +607,8 @@ impl App {
             palette = palette.push(line);
         }
         palette = palette.push(Space::new().height(10)).push(section("ATOMS"));
-        for pair in PALETTE_ELEMENTS.chunks(2) {
-            let mut line = row![].spacing(4);
+        for pair in PALETTE_ELEMENTS.chunks(3) {
+            let mut line = row![].spacing(2);
             for &symbol in pair {
                 line = line.push(self.element_palette_button(symbol));
             }
@@ -680,7 +680,7 @@ impl App {
                 text(symbol).size(13).center(),
             )
             .checked(self.tool == Tool::Atom && self.element == symbol)
-            .width(36)
+            .width(28)
             .height(30)
             .on_press(Message::Element(symbol.into()))
             .style(element_control(

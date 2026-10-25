@@ -714,10 +714,14 @@ impl MoleculeCanvas<'_> {
         frame: &mut layered::Frame<'_>,
         state: &State,
         bounds: Rectangle,
-        preview: &Document,
-        selected: &[u64],
-        cached: Option<World>,
+        selection: super::SelectionPreview<'_>,
     ) {
+        let super::SelectionPreview {
+            document: preview,
+            ids: selected,
+            translation: cached,
+            ink: rotation_ink,
+        } = selection;
         if self.tool.selects() && self.optimizer.is_none() {
             if let (Some(Gesture::Transform(drag)), Some(p)) = (&state.gesture, state.cursor)
                 && matches!(drag.handle, Handle::Rotate)
@@ -726,17 +730,25 @@ impl MoleculeCanvas<'_> {
                     .camera
                     .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
                 let angle = drag.values(end, state.modifiers.shift()).1;
-                drag.selection.draw(frame, angle);
+                drag.selection
+                    .rotating_preview(preview, selected, angle)
+                    .draw(frame, angle);
                 let [readout, hint] = selection::rotation_readout(angle);
-                let position = Point::new(
-                    (p.x - bounds.x + 16.).clamp(4., (bounds.width - 260.).max(4.)),
-                    (p.y - bounds.y + 18.).clamp(4., (bounds.height - 42.).max(4.)),
+                let ink: Vec<_> = rotation_ink
+                    .iter()
+                    .map(|(lo, hi)| {
+                        let lo = self.camera.screen(*lo, bounds);
+                        let hi = self.camera.screen(*hi, bounds);
+                        Rectangle::new(lo, iced::Size::new(hi.x - lo.x, hi.y - lo.y))
+                    })
+                    .collect();
+                let plate = selection::rotation_readout_bounds(
+                    Point::new(p.x - bounds.x, p.y - bounds.y),
+                    bounds.size(),
+                    &ink,
                 );
-                frame.fill_rectangle(
-                    position - Vector::new(4., 3.),
-                    iced::Size::new(256., 39.),
-                    Color::WHITE,
-                );
+                let position = plate.position() + Vector::new(4., 3.);
+                frame.fill_rectangle(plate.position(), plate.size(), Color::WHITE);
                 frame.fill_text(canvas::Text {
                     content: readout,
                     position,

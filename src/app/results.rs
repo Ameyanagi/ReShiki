@@ -526,6 +526,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 // A chosen file belongs to the drawing it was chosen for.
                 Action::Loaded(..) | Action::Read(..) => Some(Completion::Imports),
                 Action::InputKind(..)
+                | Action::Clear
                 | Action::Edit(..)
                 | Action::ReplaceText(..)
                 | Action::Menu(..)

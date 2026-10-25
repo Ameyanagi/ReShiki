@@ -50,6 +50,7 @@ pub enum Action {
     InputKind(InputKind),
     Edit(text_editor::Action),
     ReplaceText(String),
+    Clear,
     /// Opens or closes the Insert ▾ menu.
     Menu(bool),
     ExamplesMenu(bool),
@@ -349,7 +350,7 @@ impl App {
                 if kind == InputKind::Structure {
                     self.cancel_name_import();
                 }
-                return iced::widget::operation::focus(self.import_input_id());
+                return self.focus_import_input();
             }
             Action::Edit(action) => {
                 let edit = action.is_edit();
@@ -368,6 +369,10 @@ impl App {
                         std::sync::Arc::new(value),
                     )));
                 self.imports.format = detect(&self.imports.input.text());
+            }
+            Action::Clear => {
+                self.imports.set_text("");
+                return self.focus_import_input();
             }
             Action::Menu(open) => {
                 self.imports.menu = open;
@@ -596,6 +601,14 @@ impl App {
         }
     }
 
+    /// Reopening Structure keeps its draft ready to replace in one paste.
+    pub(super) fn focus_import_input(&mut self) -> Task<Message> {
+        if self.imports.kind == InputKind::Structure {
+            self.imports.input.perform(text_editor::Action::SelectAll);
+        }
+        iced::widget::operation::focus(self.import_input_id())
+    }
+
     fn structure_import_panel(&self) -> Element<'_, Message> {
         let state = &self.imports;
         let ready = state.format.is_some() && !self.tab.busy;
@@ -619,7 +632,10 @@ impl App {
             })
             .height(120)
             .size(12)
-            .padding(8)
+            .padding(iced::Padding {
+                right: 32.,
+                ..iced::Padding::new(8.)
+            })
             .wrapping(text::Wrapping::WordOrGlyph)
             .style(crate::appearance::editor_style);
         let editor = reshiki::accessibility::editor(
@@ -629,6 +645,25 @@ impl App {
             editor,
             |value| Message::Imports(Action::ReplaceText(value)),
         );
+        let clear =
+            super::workspace::accessible_command("import-clear", "Clear structure input", "×")
+                .padding(0)
+                .width(24)
+                .height(24)
+                .on_press_maybe(
+                    (!state.input.text().is_empty()).then_some(Message::Imports(Action::Clear)),
+                );
+        let editor = stack![
+            editor,
+            container(hover_hint(
+                clear,
+                "Clear structure input",
+                tooltip::Position::Left
+            ))
+            .padding(4)
+            .width(Length::Fill)
+            .align_right(Length::Fill),
+        ];
         let split = |content: Element<'static, Message>, message, left: bool| {
             reshiki::accessibility::button(
                 if left {
