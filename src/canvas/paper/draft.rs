@@ -48,6 +48,17 @@ impl MoleculeCanvas<'_> {
                 "Drag to rotate · Shift-drag to roll · Double-click to reset".into(),
                 true,
             ));
+        } else if state.gesture.is_none()
+            && self.tool.selects()
+            && state.cursor.is_some_and(|p| bounds.contains(p))
+            && reshiki::models3d::shows_3d(self.doc, self.selected)
+            && reshiki::models3d::whole_molecule(self.doc, self.selected)
+                .is_some_and(|atoms| reshiki::models3d::only_shown(self.doc, &atoms))
+        {
+            *template_notice = Some((
+                "Drag to rotate · Shift-drag to roll · Double-click to reset".into(),
+                true,
+            ));
         }
         // A model turned by the drag or the tilt draws quickly until it is
         // let go.
@@ -254,6 +265,20 @@ impl MoleculeCanvas<'_> {
                 .camera
                 .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
             drag.apply(preview.to_mut(), end, state.modifiers.shift());
+            if drag.resizes_models() {
+                // Even an atom-only subset in Both resizes its entire model.
+                // Follow the captions of those actual frames, as release does.
+                let resized: Vec<_> = preview
+                    .models
+                    .iter()
+                    .filter(|model| {
+                        model.display != reshiki::models3d::Display::TwoD
+                            && drag.ids.iter().any(|id| model.contains(*id))
+                    })
+                    .flat_map(|model| model.atoms.iter().map(|atom| atom.id))
+                    .collect();
+                reshiki::molecule_names::preview_layout(preview.to_mut(), &resized);
+            }
             *ring_selection = Some(drag.ids.clone());
         }
     }

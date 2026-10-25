@@ -1,0 +1,150 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index f2e23ba7..cd54c80a 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -111,6 +111,7 @@ sha2 = { version = "0.10.9", default-features = false, features = ["force-soft"]
+ 
+ # The CLI, MCP server, assistant, updater and helper processes are desktop-only.
+ [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
++iced_winit = { version = "0.14", default-features = false }
+ reshiki-process = { path = "native/process" }
+ reshiki-agent = { path = "crates/agent" }
+ reshiki-mcp = { path = "crates/mcp" }
+diff --git a/src/app/clipboard.rs b/src/app/clipboard.rs
+index 4e815db5..1d760219 100644
+--- a/src/app/clipboard.rs
++++ b/src/app/clipboard.rs
+@@ -90,6 +90,9 @@ impl App {
+         self.tab.clipboard_busy = true;
+         self.error = false;
+         self.status = format!("Preparing {} for the clipboard…", format.label());
++        if format == CopyFormat::Pdf {
++            iced_winit::qa574_mark("preparing_status_set", 1);
++        }
+         let engine = self.engine.clone();
+         Task::perform(
+             async move {
+diff --git a/src/app/context_menu.rs b/src/app/context_menu.rs
+index 38d142b7..50467267 100644
+--- a/src/app/context_menu.rs
++++ b/src/app/context_menu.rs
+@@ -739,6 +739,12 @@ impl App {
+                 return self.context_key_action(key);
+             }
+             Action::Run(message) => {
++                if matches!(
++                    message.as_ref(),
++                    Message::CopyAs(reshiki::clipboard::CopyFormat::Pdf)
++                ) {
++                    iced_winit::qa574_mark("dispatch_copy_pdf", 0);
++                }
+                 self.context_menu = None;
+                 return self.update(*message);
+             }
+diff --git a/src/app/workspace.rs b/src/app/workspace.rs
+index 8e6d0332..09e86a78 100644
+--- a/src/app/workspace.rs
++++ b/src/app/workspace.rs
+@@ -2376,7 +2376,22 @@ impl App {
+             )
+             .push(command("+", Message::Zoom(1.25)))
+             .push(command("Fit", Message::Fit));
+-        container(status).padding([6, 14]).style(panel).into()
++        let qa574_stage = if self.context_menu.is_some() {
++            0
++        } else if self.status == "Preparing PDF for the clipboard…" {
++            1
++        } else if self.status.starts_with("Selection copied as PDF") {
++            2
++        } else {
++            0
++        };
++        container(status)
++            .padding([6, 14])
++            .style(move |theme| {
++                iced_winit::qa574_mark("status_draw", qa574_stage);
++                panel(theme)
++            })
++            .into()
+     }
+ 
+     /// Journal preset, color theme and canvas light/dark: whole-document
+diff --git a/vendor/iced_winit/src/lib.rs b/vendor/iced_winit/src/lib.rs
+index 262cd1be..fcf05426 100644
+--- a/vendor/iced_winit/src/lib.rs
++++ b/vendor/iced_winit/src/lib.rs
+@@ -67,6 +67,66 @@ use std::mem::ManuallyDrop;
+ use std::slice;
+ use std::sync::Arc;
+ 
++
++/// Temporary owned QA574 instrumentation; never included in the published PR.
++pub fn qa574_mark(event: &str, stage: u8) {
++    use std::sync::{Mutex, OnceLock};
++    use std::time::{Instant, SystemTime, UNIX_EPOCH};
++    #[derive(Default)]
++    struct Trace {
++        sequence: u64,
++        draw_stage: u8,
++        draw_serial: u64,
++        draw_ns: u128,
++        drawn: u8,
++        presented: u8,
++    }
++    static ENABLED: OnceLock<bool> = OnceLock::new();
++    static CLOCK: OnceLock<Instant> = OnceLock::new();
++    static TRACE: OnceLock<Mutex<Trace>> = OnceLock::new();
++    if !*ENABLED.get_or_init(|| std::env::var_os("RESHIKI_QA_COPY_FRAME_TRACE").is_some()) {
++        return;
++    }
++    let clock = CLOCK.get_or_init(Instant::now);
++    let mut trace = TRACE.get_or_init(|| Mutex::new(Trace::default())).lock().unwrap();
++    let now = clock.elapsed().as_nanos();
++    let current;
++    match event {
++        "dispatch_copy_pdf" => {
++            let sequence = trace.sequence + 1;
++            *trace = Trace { sequence, ..Trace::default() };
++            current = 0;
++        }
++        "status_draw" => {
++            trace.draw_stage = stage;
++            trace.draw_serial += 1;
++            trace.draw_ns = now;
++            if trace.sequence == 0 || stage == 0 || trace.drawn & (1 << stage) != 0 {
++                return;
++            }
++            trace.drawn |= 1 << stage;
++            current = stage;
++        }
++        "present_ok" => {
++            current = trace.draw_stage;
++            if trace.sequence == 0 || current == 0 || trace.presented & (1 << current) != 0 {
++                return;
++            }
++            trace.presented |= 1 << current;
++        }
++        "preparing_status_set" => {
++            if trace.sequence == 0 { return; }
++            current = 1;
++        }
++        _ => return,
++    }
++    let wall = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
++    eprintln!(
++        "QA574 {{\"phase\":\"{}\",\"sequence\":{},\"t_ns\":{},\"wall_ns\":{},\"stage\":{},\"draw_ns\":{},\"draw_serial\":{},\"pid\":{}}}",
++        event, trace.sequence, now, wall, current, trace.draw_ns, trace.draw_serial, std::process::id(),
++    );
++}
++
+ /// Runs a [`Program`] with the provided settings.
+ pub fn run<P>(program: P) -> Result<(), Error>
+ where
+@@ -1011,6 +1071,7 @@ async fn run_instance<P>(
+                             || window.raw.pre_present_notify(),
+                         ) {
+                             Ok(()) => {
++                                qa574_mark("present_ok", 0);
+                                 present_span.finish();
+                             }
+                             Err(error) => match error {

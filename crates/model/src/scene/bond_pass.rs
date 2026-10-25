@@ -101,6 +101,7 @@ impl<'a> BondPass<'a> {
             arcs: &rings.arcs,
             circles: &rings.circles,
             label_bounds: &self.labels.bounds,
+            label_runs: &self.labels.runs,
             joins: &self.joins,
             faces: &self.faces,
             crossing_gaps: &rings.crossing_gaps,

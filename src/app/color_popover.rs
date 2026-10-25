@@ -295,8 +295,13 @@ impl App {
             .annotations
             .iter()
             .any(|a| self.tab.selected.contains(&a.id));
-        let options: Vec<(&str, Icon, Message, bool)> = match self.selected_label_alignment() {
-            Some(current) if !captions => LabelAlignment::ALL
+        let label_alignment = if captions {
+            None
+        } else {
+            self.selected_label_alignment()
+        };
+        let options: Vec<(&str, Icon, Message, bool)> = match label_alignment {
+            Some(current) => LabelAlignment::ALL
                 .into_iter()
                 .map(|value| {
                     let name = match value {

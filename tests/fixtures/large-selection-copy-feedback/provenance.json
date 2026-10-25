@@ -1,0 +1,69 @@
+{
+  "fixture": {
+    "url": "https://gist.githubusercontent.com/Ameyanagi/0f2d480dd9a4e8cb1843ecd12660f93f/raw/tiled16-v26.rsk",
+    "sha256": "71229e202a3a0ba5765af5ac4bd94f4396613237f421cb4c828925c589b553da",
+    "bytes": 5796846,
+    "atoms": 7728,
+    "bonds": 6864,
+    "abbreviations": 256,
+    "captions": 2112,
+    "arrows": 16,
+    "selected_ids": 9856
+  },
+  "platform": {
+    "os": "macOS 27.0.1",
+    "cpu": "Apple M1",
+    "architecture": "arm64",
+    "build": "local release",
+    "native_outer_window_points": [
+      1680,
+      1020
+    ],
+    "headless_client_points": [
+      1600,
+      968
+    ],
+    "zoom_percent": 100,
+    "inspector": "Properties",
+    "keyboard_drawing": true
+  },
+  "limits": [
+    "Local main baseline 3d80590a, not original 0.13 release/M4",
+    "Native 100% camera is between gallery tiles; full selection context menu target is inside selection bounds, differs from reported NO\u2082 chain and visible ink workload",
+    "Native metric starts at accepted context-menu command dispatch and ends at successful compositor presentation submission; excludes OS input delivery and GPU scanout",
+    "Both sides use the same temporary non-shipped draw/present trace and separate QA data directories",
+    "Menu-opening positions differ within the blank central gap; all variants copy the same complete selection. This does not reproduce the report\u2019s pointer-off-menu workload."
+  ],
+  "before": {
+    "source": "3d80590a41b9d9e8efd818d23395ac51bd264ca8",
+    "patch_sha256": "4d1aaf60191fc7655fe29211fdb935362184ea1625b7eb6cf387f866890686cb",
+    "cargo_lock_delta": "",
+    "binary_sha256": "61a5c18c4d06c2ded219e9d00e1a9eb7bb2db5fe320001da89b49e2b470506b4",
+    "cargo_lock_delta_after_build": ""
+  },
+  "after": {
+    "production_source": "dcfef98c4b8d0f8795bdf601060c803f8af8a6c0",
+    "qa_patch_sha256": "866a6d086c75bfc92875d3cad3d94e101f2b480a1d8d6c19e6c49716e06babac",
+    "binary_sha256": "35cd2a5e90e56a2adce3788a56c33cbd6202381f2207f170e040dd38c23ccfef",
+    "binary_bytes": 76475088,
+    "lockfile_delta": "none",
+    "qa_instrumentation": "same minimal accepted/status-draw/successful-present logger; no phase diagnostic spans"
+  },
+  "native_receipts": "native-timing.json and pdf-equivalence.json",
+  "combined": {
+    "production_sources": {
+      "574": "dcfef98c4b8d0f8795bdf601060c803f8af8a6c0",
+      "572_573": "2a6d007415ccd1376aae1920187841ddebfb05e2",
+      "shared_base": "3d80590a41b9d9e8efd818d23395ac51bd264ca8"
+    },
+    "pointer_delta_sha256": "656a0cf0e46f4b58723bdac3ead4f4822f76f700f26e4f4b114ec2b02eee8937",
+    "qa_patch_sha256": "866a6d086c75bfc92875d3cad3d94e101f2b480a1d8d6c19e6c49716e06babac",
+    "all_applied_source_sha256": "2071afa1934dc179aaf746948877cfda581203462d218ffa27e13681e5602ff8",
+    "binary_sha256": "50c653dd9b9612ae7bfdd3ac54f111d7d1c5fae73acaaa5e8a63cf3b38423d3d",
+    "binary_bytes": 76428064,
+    "lockfile_delta": "none",
+    "merge_conflicts": "none",
+    "central_docs": "excluded",
+    "qa_instrumentation": "same exact patch bytes as final standalone; no diagnostic spans"
+  }
+}

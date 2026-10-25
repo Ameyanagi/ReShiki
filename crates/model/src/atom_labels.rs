@@ -252,6 +252,35 @@ pub(crate) fn generic_label_side(atom: &Atom, doc: &Document) -> Option<bool> {
     }
 }
 
+/// Long automatic terminal text must leave at least half of its horizontal
+/// bond visible. Use atom centers here: asking for a trimmed bond would call
+/// label layout again. Short, internal and explicit label attachments keep
+/// their existing positioning.
+pub(crate) fn short_bond_label_side(atom: &Atom, doc: &Document, width: f32) -> Option<bool> {
+    let mut neighbours = doc.bonds.iter().filter_map(|bond| {
+        let other = if bond.a == atom.id {
+            bond.b
+        } else if bond.b == atom.id {
+            bond.a
+        } else {
+            return None;
+        };
+        doc.bond_visible(atom.id, other)
+            .then(|| doc.atom(other))
+            .flatten()
+    });
+    let other = neighbours.next()?;
+    if neighbours.next().is_some() {
+        return None;
+    }
+    let direction = Point::new(
+        other.position.x - atom.position.x,
+        other.position.y - atom.position.y,
+    );
+    let horizontal = direction.y.abs() <= direction.x.abs() * 22.5_f32.to_radians().tan();
+    (horizontal && width > direction.x.abs()).then_some(direction.x > 0.)
+}
+
 /// Resolve the side of an atom-label appendage without changing chemistry or
 /// saved preferences. Terminal labels retain the usual inline form.
 pub(crate) fn appendage_position(atom: &Atom, doc: &Document) -> HydrogenPosition {

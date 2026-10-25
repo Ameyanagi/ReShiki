@@ -17,4 +17,8 @@ valence validation. Malformed attachment targets and solver errors remain errors
 
 Cleanup checks molecular identity, including stereochemistry. Fixed-atom constraints can prevent a satisfactory layout; an error leaves the drawing unchanged. If regenerated coordinates would assign previously unspecified alkene stereochemistry, an affected double bond receives a crossed depiction and the preview explains why. Invalid chemistry outside a selected component does not prevent that component from being cleaned; a warning explains when whole-document properties cannot be computed.
 
+A stereochemistry refusal suggests including the whole molecule only when some
+of its atoms were held fixed. If the whole molecule was already included, the
+message confirms that the drawing was left unchanged.
+
 Automated coverage includes separate molecule centers, fixed unselected atoms, partial side-chain cleanup, selected-molecule expansion, abbreviations, unselected invalid chemistry, orientation control, tetrahedral and alkene identity, and cancellation of late cleanup results. Reaction layout and general geometric optimization remain separate work.

@@ -4,7 +4,95 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
-Under review: @Ameyanagi — keyboard hotspot ownership during wheel navigation
+@Ameyanagi — earlier PDF copy progress for large selections,
+retained canvas caches, measured native response and unchanged copied output in
+[PR #582](https://github.com/Ameyanagi/ReShiki/pull/582).
+[Native evidence and verification](changes/large-selection-copy-feedback.md).
+
+@Ameyanagi — readable long-chain imports with retained molecular
+identity and stereochemistry in [PR #539](https://github.com/Ameyanagi/ReShiki/pull/539).
+
+@Ameyanagi — moving 3D models from their visible frame edges in
+[PR #540](https://github.com/Ameyanagi/ReShiki/pull/540).
+
+@Ameyanagi — Safari pastes clipboard text into captions and Import fields without turning Command-V into a typed v.
+[PR #541](https://github.com/Ameyanagi/ReShiki/pull/541).
+
+@Ameyanagi — Crystal import notes stay with the drawing and survive native save/reopen; the guide now explains the opening view correctly.
+[PR #542](https://github.com/Ameyanagi/ReShiki/pull/542).
+
+@Ameyanagi — atom-label placement, readable controls and chemical
+suggestions in [PR #543](https://github.com/Ameyanagi/ReShiki/pull/543).
+
+@Ameyanagi — drawing-specific inspector state, fresh fragment-name drafts, and concise abbreviation confirmation in [PR #544](https://github.com/Ameyanagi/ReShiki/pull/544).
+
+@Ameyanagi — chemical mark placement, reaction label spacing, visible terminal bonds, repeated chemical symbols and attached-arrow clearance in [PR #545](https://github.com/Ameyanagi/ReShiki/pull/545).
+
+@Ameyanagi — Export dialogs name their format, browser progress and download receipts describe what happened, and the npm package has a complete HTML recipe with the correct release version.
+[PR #557](https://github.com/Ameyanagi/ReShiki/pull/557) · [QA report](changes/qa-browser-polish.md).
+
+@Ameyanagi — Crystal substitutions keep their cell and copies, update the drawn formula, and preserve unvalidated bond context after unsupported edits.
+[PR #558](https://github.com/Ameyanagi/ReShiki/pull/558) · [QA report](changes/qa-crystal-substitution.md).
+
+@Ameyanagi — Large peptide imports avoid repeated ring searches during label placement. Long-running Structure-input operations show elapsed time and can be cancelled without changing the drawing.
+[PR #559](https://github.com/Ameyanagi/ReShiki/pull/559) · [QA report](changes/qa-508-import-performance.md).
+
+@Ameyanagi — See the label the Text tool will repeat, keep its chemical meaning, and read clear feedback for generic and refreshed drawings.
+[PR #560](https://github.com/Ameyanagi/ReShiki/pull/560) · [QA report](changes/qa-label-feedback.md).
+
+@Ameyanagi — Reach 3D controls in one click, bring clipped models into view, recover directly from blocked scale commands, and cancel long native model generation with Escape.
+[PR #561](https://github.com/Ameyanagi/ReShiki/pull/561) · [QA report](changes/qa-model-controls.md).
+
+@Ameyanagi — mode-aware Help ranking, labelled ring-fusion examples
+and a readable Shift search hint.
+[PR #562](https://github.com/Ameyanagi/ReShiki/pull/562) · [QA report](changes/qa-help-polish.md).
+
+@Ameyanagi — recovery draft review, selective restore and safe
+discard of abandoned copies for [issue #491](https://github.com/Ameyanagi/ReShiki/issues/491)
+in [PR #563](https://github.com/Ameyanagi/ReShiki/pull/563).
+[QA report and reusable images](changes/recovery-manager.md).
+
+@Ameyanagi — whole-drawing and selected-fragment Properties
+continuity, singular atom/bond counts, remembered Molecular header choices in new
+tabs, and drawing-tool visibility in
+[PR #564](https://github.com/Ameyanagi/ReShiki/pull/564).
+[Matched renderer and native evidence](changes/qa-property-continuity.md).
+
+@Ameyanagi — specific unsupported-label Copy as refusals,
+platform Copy advice, a visible full-message cue and narrow-window footer
+controls in [PR #565](https://github.com/Ameyanagi/ReShiki/pull/565), addressing
+[#499](https://github.com/Ameyanagi/ReShiki/issues/499).
+[Native interaction and combined renderer evidence](changes/qa-export-feedback.md).
+
+@Ameyanagi — stable drawing position across inspector pages,
+retained atom-mark positioning controls, and marked-atom context entry in
+[PR #566](https://github.com/Ameyanagi/ReShiki/pull/566), with
+[matched renderer and native QA](changes/qa-inspector-motion.md).
+
+@Ameyanagi — rotation overlays that clear upright labels,
+rotation hints that yield to editing, a three-column atom palette and retained
+Structure drafts ready to replace or clear in
+[PR #567](https://github.com/Ameyanagi/ReShiki/pull/567), with
+[matched visual and native interaction review](changes/qa-drawing-polish.md).
+
+@Ameyanagi — retained tetrahedral configuration during atom-label
+edits, clear reversible-group placement and repeat gestures without an editor
+flash in [PR #568](https://github.com/Ameyanagi/ReShiki/pull/568).
+[Matched chemistry, rendering and native evidence](changes/qa-stereo-repeat.md).
+
+Unreleased: @Ameyanagi — selected-arrow scope counts and consistent Properties
+navigation in [PR #577](https://github.com/Ameyanagi/ReShiki/pull/577), with
+[matched native review](changes/qa-properties-clarity.md).
+
+@Ameyanagi — drawing-aligned proper 3D opening views, captioned
+model frame handles and preview placement, resting rotation hints, and native/
+browser regression evidence in [PR #579](https://github.com/Ameyanagi/ReShiki/pull/579).
+
+@Ameyanagi — remembered canvas brightness for new drawings and
+restart/reload persistence coverage in
+[PR #581](https://github.com/Ameyanagi/ReShiki/pull/581).
+
+@Ameyanagi — keyboard hotspot ownership during wheel navigation
 and large-gallery hover performance in
 [PR #578](https://github.com/Ameyanagi/ReShiki/pull/578), with
 [matched renderer/native evidence and quiet CPU measurements](changes/qa-pointer-hover.md).
@@ -175,3 +263,11 @@ Nix flake for Linux and Apple Silicon Macs (released in 0.13.0): @Stefanomarton 
 Release preparation and documentation for 0.13.0: @Ameyanagi.
 
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.13.md) credit contributors alongside their changes.
+
+Space-filling hydrogen visibility: @Ameyanagi in [PR #535](https://github.com/Ameyanagi/ReShiki/pull/535); [validation and reusable evidence](changes/qa-513.md).
+
+PDF gradient alignment for molecular and crystal models: @Ameyanagi in [PR #536](https://github.com/Ameyanagi/ReShiki/pull/536); [validation and reusable evidence](changes/qa-522.md).
+
+Clear CLI errors for unsupported crystal input: @Ameyanagi in [PR #537](https://github.com/Ameyanagi/ReShiki/pull/537); [validation](changes/qa-490.md).
+
+Artemisinin depiction and whole-molecule cleanup diagnostics: @Ameyanagi in [PR #538](https://github.com/Ameyanagi/ReShiki/pull/538); [validation and matched renderer evidence](changes/artemisinin-depiction.md).

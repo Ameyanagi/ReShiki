@@ -6,7 +6,7 @@
 use super::*;
 use reshiki::palette::{Color, Hue, Row};
 
-const CHEMISTRY: &str = "Drawing changed · Check structure to refresh properties";
+const CHEMISTRY: &str = "Drawing changed";
 const DISPLAY: &str = "Drawing updated";
 const RESTORED: &str = "History restored";
 const JOINS: &str =
@@ -771,4 +771,107 @@ fn generic_repeat_define_clear_undo_redo_invalidate_cached_properties_and_notice
         assert!(!app.error);
         app.tab.doc.validate().unwrap();
     }
+}
+
+#[test]
+fn crystal_substitution_and_charge_shortcut_are_single_undo_steps() {
+    for (source, label) in [("Na", "K+"), ("Cl", "Br")] {
+        let mut app = app();
+        app.tab.doc =
+            reshiki::crystal::read("cif", include_str!("../../tests/fixtures/crystal/nacl.cif"))
+                .unwrap()
+                .0;
+        app.tab.doc.models[0].repeat = [2, 1, 1];
+        let id = app
+            .tab
+            .doc
+            .atoms
+            .iter()
+            .find(|a| a.element == source)
+            .unwrap()
+            .id;
+        let before = app.tab.doc.clone();
+        let _ = app.atom_text_action(atom_text::Action::Begin(Some(id)));
+        let _ = app.atom_text_action(atom_text::Action::Input(label.into()));
+        let _ = app.atom_text_action(atom_text::Action::Apply);
+        assert_eq!(app.tab.doc.models, before.models);
+        assert!(app.tab.doc.atom(id).unwrap().no_implicit);
+        assert!(!app.status.contains("removed"));
+        app.step_history(false);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+        app.tab.selected = vec![id];
+        app.change_charge(1);
+        assert_eq!(app.tab.doc.models, before.models);
+        assert!(app.tab.doc.atom(id).unwrap().no_implicit);
+        app.step_history(false);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+    }
+}
+
+#[test]
+fn an_edit_removing_the_unit_cell_reports_it_and_preserves_analysis_provenance() {
+    let mut app = app();
+    app.tab.doc =
+        reshiki::crystal::read("cif", include_str!("../../tests/fixtures/crystal/nacl.cif"))
+            .unwrap()
+            .0;
+    let before = app.tab.doc.clone();
+    app.tab.doc.bonds[0].order = 2;
+    app.changed(before.clone());
+    assert_eq!(
+        app.status,
+        "Unit cell removed by the edit · Undo restores it"
+    );
+    assert!(!app.error);
+    assert!(app.tab.doc.models.is_empty());
+    assert!(reshiki::models3d::crystal::touches(&app.tab.doc, &[]));
+    assert!(app.tab.doc.bonds.iter().all(|b| b.distance_derived));
+    app.step_history(false);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn element_tool_keeps_crystal_sites_explicit_and_retains_the_cell() {
+    let mut app = app();
+    app.tab.doc =
+        reshiki::crystal::read("cif", include_str!("../../tests/fixtures/crystal/nacl.cif"))
+            .unwrap()
+            .0;
+    let atom = app
+        .tab
+        .doc
+        .atoms
+        .iter()
+        .find(|a| a.element == "Na")
+        .unwrap()
+        .clone();
+    let before = app.tab.doc.clone();
+    app.tool = Tool::Atom;
+    app.element = "K".into();
+    app.edit(Edit::Click(atom.position));
+    assert_eq!(app.tab.doc.models, before.models);
+    assert_eq!(app.tab.doc.atom(atom.id).unwrap().element, "K");
+    assert!(app.tab.doc.atom(atom.id).unwrap().no_implicit);
+    app.step_history(false);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
+fn bond_shortcuts_keep_the_transaction_unit_cell_removal_notice() {
+    let mut app = app();
+    app.tab.doc =
+        reshiki::crystal::read("cif", include_str!("../../tests/fixtures/crystal/nacl.cif"))
+            .unwrap()
+            .0;
+    let before = app.tab.doc.clone();
+    let bond = app.tab.doc.bonds[0].clone();
+    let _ = app.context_key_resolved("2", None, Some((bond.a, bond.b)), false, true);
+    assert_eq!(app.status, CELL_REMOVED_NOTICE);
+    assert!(!app.error);
+    assert!(app.tab.doc.models.is_empty());
+    assert!(reshiki::models3d::crystal::touches(&app.tab.doc, &[]));
+    app.step_history(false);
+    assert_eq!(app.tab.doc, before);
 }

@@ -12,6 +12,43 @@ fn ready() -> App {
 }
 
 #[test]
+fn reopening_structure_or_switching_from_name_selects_the_retained_draft() {
+    const CAFFEINE: &str = "Cn1cnc2c1c(=O)n(C)c(=O)n2C";
+    for from_name in [false, true] {
+        let mut app = ready();
+        app.imports.set_text(CAFFEINE);
+        if from_name {
+            let _ = app.update(Message::Imports(Action::InputKind(InputKind::Name)));
+            let _ = app.update(Message::Imports(Action::InputKind(InputKind::Structure)));
+        } else {
+            let _ = app.update(Message::Inspector(InspectorTab::Import));
+        }
+        assert_eq!(app.imports.input.selection().as_deref(), Some(CAFFEINE));
+        let _ = app.update(Message::Imports(Action::Edit(text_editor::Action::Edit(
+            text_editor::Edit::Paste("CCO".to_owned().into()),
+        ))));
+        assert_eq!(app.imports.input.text(), "CCO");
+        assert_eq!(app.imports.format, Some("smiles"));
+    }
+}
+
+#[test]
+fn clearing_structure_input_resets_detection_without_editing_the_drawing() {
+    let mut app = ready();
+    app.imports.set_text("InChI=1S/CH4/h1H4");
+    let before = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    let frames = app.tab.history.frames();
+    let task = app.update(Message::Imports(Action::Clear));
+    assert!(task.units() > 0, "Clear returns focus to the Structure box");
+    assert!(app.imports.input.text().is_empty());
+    assert!(app.imports.is_blank());
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(app.tab.history.frames(), frames);
+}
+
+#[test]
 fn background_file_insertion_keeps_its_status_guards_and_undo() {
     use crate::app::tabs::{Action as Tabs, tests::Front};
     for stale in [false, true] {

@@ -100,7 +100,11 @@ impl Tool {
                 "Click to place or change an arrow · Click again to switch · Drag to draw"
             }
             Self::Text => {
-                "Click an atom to name it · Double-click another atom to repeat the label · Click empty space for a caption · Escape cancels"
+                if crate::platform::mac() {
+                    "Click an atom to name it · Double-click or Option-click another atom to repeat the label · Click empty space for a caption · Escape clears the remembered label"
+                } else {
+                    "Click an atom to name it · Double-click or Alt-click another atom to repeat the label · Click empty space for a caption · Escape clears the remembered label"
+                }
             }
             Self::Erase => {
                 "Drag to erase atoms, bonds and objects along the stroke · Undo restores the whole stroke"

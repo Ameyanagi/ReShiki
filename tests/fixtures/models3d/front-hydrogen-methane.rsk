@@ -1,0 +1,99 @@
+{
+  "atom_labels": {
+    "carbons": "skeletal",
+    "hydrogens": true,
+    "stereo": false
+  },
+  "version": 29,
+  "atoms": [
+    {
+      "id": 1,
+      "element": "C",
+      "position": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    }
+  ],
+  "bonds": [],
+  "annotations": [],
+  "arrows": [],
+  "graphics": [],
+  "groups": [],
+  "models": [
+    {
+      "display": "three_d",
+      "atoms": [
+        {
+          "id": 1,
+          "xyz": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      ],
+      "hydrogens": [
+        {
+          "parent": 1,
+          "xyz": [
+            0.0,
+            0.0,
+            1.09
+          ]
+        },
+        {
+          "parent": 1,
+          "xyz": [
+            1.0276619,
+            0.0,
+            -0.36333334
+          ]
+        },
+        {
+          "parent": 1,
+          "xyz": [
+            -0.51383096,
+            0.8899813,
+            -0.36333334
+          ]
+        },
+        {
+          "parent": 1,
+          "xyz": [
+            -0.51383096,
+            -0.8899813,
+            -0.36333334
+          ]
+        }
+      ],
+      "rotation": [
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "offset": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "size": 84.00001,
+      "style": "space_filling",
+      "look": "glossy",
+      "depth_fade": 0.0,
+      "perspective": 0.0,
+      "show_hydrogens": "all",
+      "background": "none",
+      "force_field": "mmff94s"
+    }
+  ]
+}

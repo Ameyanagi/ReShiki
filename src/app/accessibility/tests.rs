@@ -209,6 +209,78 @@ fn queued_native_command_cannot_move_to_a_new_selection() {
     );
     assert_eq!(app.tab.id, before);
 }
+
+fn recovery_app() -> App {
+    let (mut app, _) = App::new();
+    app.recovered.push(reshiki::recovery::Candidate {
+        path: "4294967294-accessibility.json".into(),
+        snapshot: reshiki::recovery::Snapshot {
+            document: reshiki::document::Document::default(),
+            source: None,
+            saved_at: 0,
+        },
+    });
+    app
+}
+
+#[test]
+fn queued_recovery_controls_cannot_act_on_changed_checks_or_reused_rows() {
+    use super::super::recovery_manager::Action as Recovery;
+    let mut app = recovery_app();
+    let _ = app.update(Message::Recovery(Recovery::Show));
+    let request = native_request(
+        &mut app,
+        "recovery-draft-0",
+        reshiki::accessibility::Role::Button,
+    );
+    let (sender, mut receiver) = mpsc::channel(1);
+    enqueue_native(
+        &sender,
+        &app.accessibility.context_epoch,
+        app.accessibility.generation,
+        request.clone(),
+    );
+    let version = app.accessibility.context_version;
+    let path = app.recovered[0].path.clone();
+    let _ = app.update(Message::Recovery(Recovery::Toggle(path)));
+    assert_ne!(version, app.accessibility.context_version);
+    assert!(app.accessibility.tree.resolve(&request).is_none());
+    assert_eq!(
+        app.accessibility_action(receiver.try_recv().unwrap())
+            .units(),
+        0
+    );
+
+    // A later owner scan can replace row zero while the picker stays open.
+    let version = app.accessibility.context_version;
+    app.recovered[0].path = "4294967294-replacement.json".into();
+    let _ = app.accessibility_refresh();
+    assert_ne!(version, app.accessibility.context_version);
+}
+
+#[test]
+fn app_owned_recovery_completion_refreshes_the_closed_native_dialog() {
+    use super::super::recovery_manager::{Action as Recovery, Outcome};
+    let mut app = recovery_app();
+    app.accessibility.window = Some(window::Id::unique());
+    let _ = app.update(Message::Recovery(Recovery::Discard));
+    // Do not poll the deletion task: this test covers the app-owned receipt,
+    // while the recovery manager tests exercise real durable file removal.
+    let _ = app.update(Message::Recovery(Recovery::ConfirmDiscard));
+    let sequence = app.accessibility.sequence;
+    let version = app.accessibility.context_version;
+    let task = app.update(Message::Recovery(Recovery::Finished(1, Outcome::default())));
+    assert!(!app.recovery_manager.open());
+    assert_ne!(version, app.accessibility.context_version);
+    if SUPPORTED {
+        assert!(app.accessibility.sequence > sequence);
+        assert!(
+            task.units() > 0,
+            "Collect a new native accessibility snapshot"
+        );
+    }
+}
+
 #[test]
 fn updater_exit_uses_the_same_pending_install_barrier() {
     let (mut app, _) = App::new();

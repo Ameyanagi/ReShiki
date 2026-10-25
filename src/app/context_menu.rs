@@ -417,6 +417,19 @@ impl App {
         if self.selected_model().is_some() {
             entries.push(submenu("Show as", Page::Model));
         }
+        if self
+            .tab
+            .doc
+            .atoms
+            .iter()
+            .any(|atom| self.tab.selected.contains(&atom.id) && !atom.marks.is_empty())
+        {
+            entries.push(command(
+                "Position atom marks",
+                Message::Tool(Tool::EditPoints),
+                true,
+            ));
+        }
         if self.tab.doc.atoms.iter().any(|a| {
             self.tab.selected.contains(&a.id)
                 && a.attachment.is_some()
@@ -1071,13 +1084,17 @@ impl App {
         &'a self,
         base: Element<'a, Message>,
     ) -> Element<'a, Message> {
-        let Some(menu) = &self.context_menu else {
-            return base;
-        };
-        let panels = (0..=menu.children.len())
-            .filter_map(|level| {
-                menu.page_at(level)
-                    .map(|page| self.context_panel(menu, page, level))
+        // Keep the canvas at the same child path when a menu opens or closes.
+        // Replacing the wrapper discards its scene, selection and text caches
+        // just before a command's first feedback frame.
+        let menu = self.context_menu.as_ref();
+        let panels = menu
+            .into_iter()
+            .flat_map(|menu| {
+                (0..=menu.children.len()).filter_map(move |level| {
+                    menu.page_at(level)
+                        .map(|page| self.context_panel(menu, page, level))
+                })
             })
             .collect();
         Element::new(cascade::Cascade::new(base, panels, menu))

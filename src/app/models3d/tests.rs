@@ -57,6 +57,179 @@ fn displays(doc: &Document) -> Vec<Display> {
     doc.models.iter().map(|m| m.display).collect()
 }
 
+fn assert_model_visible(app: &App, atoms: &[u64]) {
+    let (lo, hi) = reshiki::scene::selection_bounds(&app.tab.doc, atoms).unwrap();
+    let paper = app.guides.paper(iced::Rectangle::with_size(app.viewport));
+    let visible = iced::Rectangle::with_size(paper.size());
+    for point in [lo, hi] {
+        assert!(
+            visible.contains(app.tab.camera.screen(point, paper)),
+            "{point:?}"
+        );
+    }
+}
+
+#[test]
+fn showing_a_stored_model_reveals_clipped_bounds_and_preserves_fitting_camera() {
+    for rulers in [false, true] {
+        let (mut app, atoms) = with_model(Display::ThreeD);
+        show(&mut app, Display::TwoD);
+        app.guides.rulers = rulers;
+        app.viewport = iced::Size::new(900., 600.);
+        app.tab.camera.zoom = 2.5;
+        app.tab.camera.center = Point::new(-200., 0.);
+        let before = app.tab.doc.clone();
+        let zoom = app.tab.camera.zoom;
+        show(&mut app, Display::Both);
+        assert_model_visible(&app, &atoms);
+        assert!(app.tab.camera.zoom <= zoom);
+        assert!(!app.tab.fit_to_view);
+        let both = app.tab.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, both);
+
+        // When the entire result fits, a new display switch causes no pan or
+        // zoom. A large paper also checks the pure-pan case at high zoom.
+        show(&mut app, Display::TwoD);
+        let mut preview = app.tab.doc.clone();
+        models3d::set_display(&mut preview, 0, Display::Both);
+        let (lo, hi) = reshiki::scene::selection_bounds(&preview, &atoms).unwrap();
+        app.viewport = iced::Size::new(2000., 1400.);
+        app.tab.camera.zoom = 1.;
+        app.tab.camera.center = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+        let camera = app.tab.camera;
+        show(&mut app, Display::Both);
+        assert_eq!(app.tab.camera.center, camera.center);
+        assert_eq!(app.tab.camera.zoom, camera.zoom);
+        show(&mut app, Display::TwoD);
+        app.tab.camera.zoom = 2.5;
+        app.tab.camera.center = Point::new(-1000., 0.);
+        show(&mut app, Display::ThreeD);
+        assert_model_visible(&app, &atoms);
+        assert_eq!(app.tab.camera.zoom, 2.5, "Pan without unnecessary zoom-out");
+    }
+}
+
+#[test]
+fn generated_model_reveals_its_target_after_selection_changed() {
+    let (mut app, atoms, water) = drawing();
+    app.viewport = iced::Size::new(900., 600.);
+    app.tab.camera.zoom = 2.5;
+    show(&mut app, Display::Both);
+    let (key, result) = generated(&app);
+    app.tab.selected = vec![water];
+    app.tab.camera.center = Point::new(5000., 4000.);
+    let _ = app.update(Message::Models3d(Action::Generated(key, Ok(result))));
+    assert_eq!(app.tab.selected, [water]);
+    assert_model_visible(&app, &atoms);
+    assert!(app.tab.camera.zoom <= 2.5);
+}
+
+#[test]
+fn delayed_generation_feedback_tracks_its_job_and_escape_really_cancels() {
+    let (mut app, atoms, water) = drawing();
+    let before = app.tab.doc.clone();
+    show(&mut app, Display::ThreeD);
+    let (key, result) = generated(&app);
+    let start = app.tab.model_job.as_ref().unwrap().started;
+    app.tab.selected = vec![water];
+    let generation = app.model_generation().unwrap();
+    assert_eq!(generation.atoms, atoms);
+    assert!(
+        generation
+            .elapsed(start + std::time::Duration::from_millis(999))
+            .is_none()
+    );
+    assert_eq!(
+        generation
+            .elapsed(start + std::time::Duration::from_secs(4))
+            .unwrap()
+            .as_secs(),
+        4
+    );
+
+    // Palette Escape closes its own modal first; the following Escape owns the
+    // generation, even when another molecule is now selected.
+    let _ = app.update(Message::Commands(
+        super::super::command_palette::Action::Open,
+    ));
+    let _ = app.update(Message::Escape);
+    assert!(!app.commands.open && app.tab.model_job.is_some());
+    let _ = app.update(Message::Escape);
+    assert!(app.tab.model_job.is_none());
+    assert!(app.model_generation().is_none());
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(frames(&app), 0);
+    assert_eq!(app.status, "3D model cancelled · Drawing unchanged");
+    let _ = app.update(Message::Models3d(Action::Generated(key, Ok(result))));
+    assert_eq!(
+        app.tab.doc, before,
+        "Late results cannot apply after cancellation"
+    );
+    assert_eq!(frames(&app), 0);
+}
+
+#[test]
+fn stale_generation_has_no_canvas_feedback_and_escape_preserves_the_edit() {
+    let (mut app, _, _) = drawing();
+    show(&mut app, Display::Both);
+    let before = app.tab.doc.clone();
+    app.tab.doc.atoms[0].position.x += 10.;
+    app.changed(before);
+    let edited = app.tab.doc.clone();
+    assert!(app.model_generation().is_none());
+    let _ = app.update(Message::Escape);
+    assert_eq!(app.tab.doc, edited);
+    assert!(app.tab.model_job.is_none());
+}
+
+#[test]
+fn dragging_the_visible_model_outline_is_one_undo_step() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = Document::from_native_file(include_bytes!(
+        "../../../tests/fixtures/models3d/model-frame-methanol.rsk"
+    ))
+    .unwrap();
+    let atoms: Vec<_> = app.tab.doc.atoms.iter().map(|atom| atom.id).collect();
+    app.tab.selected = atoms.clone();
+    let before = app.tab.doc.clone();
+    let count = frames(&app);
+    let (lo, hi) = models3d::frame(&before, &before.models[0]).unwrap();
+    // Four screen pixels inside the visible outline, which is twelve pixels
+    // outside the model frame, at the helper's fixed zoom of one.
+    let from = Point::new(lo.x - 8., (lo.y + hi.y) / 2.);
+    let edits = crate::canvas::select_drag(
+        &before,
+        &atoms,
+        from,
+        from.offset(60., 25.),
+        Default::default(),
+    );
+    assert!(
+        edits
+            .iter()
+            .any(|edit| matches!(edit, Edit::Move(ids, ..) if *ids == atoms))
+    );
+    for edit in edits {
+        app.edit(edit);
+    }
+    assert_eq!(frames(&app), count + 1);
+    assert_eq!(app.tab.selected, atoms);
+    assert_ne!(app.tab.doc.atoms, before.atoms);
+    assert_eq!(app.tab.doc.bonds, before.bonds);
+    assert_eq!(app.tab.doc.models[0].rotation, before.models[0].rotation);
+    let after = app.tab.doc.clone();
+    let reopened = Document::from_native_file(&after.file_json().unwrap()).unwrap();
+    assert_eq!(reopened.models, after.models);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, after);
+}
+
 #[test]
 fn each_switch_is_one_undo_step_and_keeps_chemistry() {
     let (mut app, atoms, _) = drawing();
@@ -743,6 +916,73 @@ fn showing_the_current_display_again_changes_nothing() {
     show(&mut app, Display::TwoD);
     assert_eq!(app.tab.doc, drawn);
     assert_eq!(frames(&app), start + 1);
+}
+
+#[test]
+fn resizing_a_captioned_model_keeps_its_name_attached_and_is_one_undo_step() {
+    let (mut app, atoms) = with_model(Display::ThreeD);
+    let caption = reshiki::molecule_names::show(
+        &mut app.tab.doc,
+        &atoms,
+        "ethanol".into(),
+        "CCO".into(),
+        Default::default(),
+    )
+    .unwrap();
+    app.tab.selected = app.tab.doc.expand_groups(&atoms);
+    assert!(app.tab.selected.contains(&caption));
+    let before = app.tab.doc.clone();
+    let previous_frames = frames(&app);
+    let (lo, _) = reshiki::models3d::frame(&before, &before.models[0]).unwrap();
+    let _ = app.update(Message::Canvas(Edit::ResizeModels {
+        ids: app.tab.selected.clone(),
+        pivot: lo,
+        scale: 1.4,
+    }));
+    assert_eq!(frames(&app), previous_frames + 1);
+    assert!(!app.error, "{}", app.status);
+    let resized = app.tab.doc.clone();
+    assert_eq!(resized.atoms, before.atoms);
+    assert_eq!(resized.bonds, before.bonds);
+    assert_eq!(resized.models[0].atoms, before.models[0].atoms);
+    assert_eq!(resized.models[0].rotation, before.models[0].rotation);
+    assert_eq!(resized.molecule_names, before.molecule_names);
+    let name = resized
+        .annotations
+        .iter()
+        .find(|a| a.id == caption)
+        .unwrap();
+    let (lo, hi) = reshiki::scene::selection_bounds(&resized, &atoms).unwrap();
+    assert!((name.position.x + name.size().0 / 2. - (lo.x + hi.x) / 2.).abs() < 1e-3);
+    assert!(name.position.y > hi.y);
+    let at = name.position;
+    let _ = app.update(Message::Canvas(Edit::Move(
+        app.tab.selected.clone(),
+        60.,
+        25.,
+    )));
+    assert_eq!(app.tab.doc.molecule_names, resized.molecule_names);
+    let moved = app
+        .tab
+        .doc
+        .annotations
+        .iter()
+        .find(|a| a.id == caption)
+        .unwrap();
+    assert!(
+        moved.position.distance(at.offset(60., 25.)) < 1e-3,
+        "The caption still follows a later move: {:?}",
+        moved.position
+    );
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, resized);
+    let _ = app.update(Message::Undo);
+    assert_eq!(
+        app.tab.doc, before,
+        "One Undo restores the resized frame and caption together"
+    );
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, resized);
 }
 
 #[test]

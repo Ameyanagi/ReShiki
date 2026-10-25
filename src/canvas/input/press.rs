@@ -79,10 +79,13 @@ impl MoleculeCanvas<'_> {
         {
             return Some(action);
         }
-        if let Some(action) = self.press_turn(state, p, point) {
+        let model_frame = self.model_frame_hit(state, p, bounds);
+        if model_frame.is_none()
+            && let Some(action) = self.press_turn(state, p, point)
+        {
             return Some(action);
         }
-        self.start_gesture(state, p)
+        self.start_gesture(state, p, model_frame)
     }
 
     fn press_tilt(&self, state: &mut State, p: World, point: Point) -> Option<Action<Edit>> {
@@ -279,8 +282,14 @@ impl MoleculeCanvas<'_> {
         None
     }
 
-    fn start_gesture(&self, state: &mut State, p: World) -> Option<Action<Edit>> {
-        let mut hit = hit_selection(self.doc, p, self.camera.world_len(PICK_RADIUS_PX));
+    fn start_gesture(
+        &self,
+        state: &mut State,
+        p: World,
+        model_frame: Option<Vec<u64>>,
+    ) -> Option<Action<Edit>> {
+        let mut hit = model_frame
+            .unwrap_or_else(|| hit_selection(self.doc, p, self.camera.world_len(PICK_RADIUS_PX)));
         if self.tool.selects() && hit.is_empty() {
             hit = reshiki::editing::ring_at(self.doc, p).unwrap_or_default();
         }

@@ -92,6 +92,11 @@ pub struct Atom {
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Bond {
+    /// Part of an imported crystal distance graph whose chemical bond
+    /// assignments remain unvalidated. Kept after cell removal and edge edits;
+    /// compound edits within a live cell conservatively retain that context.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub distance_derived: bool,
     /// Persistent paint behind the bond, independent of its ordinary ink.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub highlight: Option<crate::palette::Color>,
@@ -198,6 +203,8 @@ pub const REAR_OPACITY: u32 = 22;
 pub const MODELS_3D: u32 = 28;
 /// Crystal unit cells, bonds leaving the cell and atom sites on 3D models.
 pub const CRYSTALS: u32 = 29;
+/// Persistent provenance preventing distance bonds from becoming chemical input.
+pub const DISTANCE_BONDS: u32 = 30;
 
 /// The newest document format this build reads. Saved files are marked with it.
 ///
@@ -225,7 +232,8 @@ pub const CRYSTALS: u32 = 29;
 /// | 27 | Condition text attached to reaction arrows. |
 /// | 28 | 3D models of structures (#386). |
 /// | 29 | Crystal unit cells and atom sites on 3D models (#417; 0.13.0). |
-pub const VERSION: u32 = 29;
+/// | 30 | Persistent distance-derived bond provenance (#517). |
+pub const VERSION: u32 = 30;
 
 fn newer_version(version: u64) -> String {
     format!(
@@ -463,6 +471,7 @@ impl Document {
         let retained = previous.as_deref();
         let mut fresh = Bond::plain(a, b, order, display);
         if let Some(retained) = retained {
+            fresh.distance_derived = retained.distance_derived;
             fresh.highlight = retained.highlight;
             fresh.z_order = retained.z_order;
             fresh.indicator = retained.indicator.clone();
@@ -520,6 +529,7 @@ impl Document {
         }
     }
     pub fn delete(&mut self, ids: &[u64]) {
+        crate::models3d::crystal::mark_distance_bonds(self);
         let ids = self.expand_abbreviation_selection(ids);
         let ids = ids.as_slice();
         self.expand_abbreviations(ids);
@@ -665,6 +675,11 @@ impl Document {
             || !generic.is_empty()
     }
     pub fn validate(&self) -> Result<(), String> {
+        if self.version < DISTANCE_BONDS && self.bonds.iter().any(|b| b.distance_derived) {
+            return Err(format!(
+                "Distance-derived bonds need document version {DISTANCE_BONDS} or later"
+            ));
+        }
         crate::projection::validate(self)?;
         crate::depth_appearance::validate(self)?;
         crate::ring_fills::validate(self)?;

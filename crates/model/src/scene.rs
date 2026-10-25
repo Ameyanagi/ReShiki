@@ -10,6 +10,8 @@ mod bond_pass;
 mod charge_placement;
 pub(crate) mod depth_field;
 pub(crate) mod graph;
+mod group_labels;
+pub(crate) use group_labels::clearer_orientation;
 mod occlusion;
 pub(crate) mod projected_bonds;
 mod svg;
@@ -174,31 +176,57 @@ pub fn atom_label_ink_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)>
         })
 }
 
+/// Visible atom-label and owned-indicator ink for a reaction participant.
+/// Atom maps, numbers and stereo labels are separate renderer primitives and
+/// must be included when spacing a participant beside another molecule.
+pub fn participant_label_ink_boxes(doc: &Document, atoms: &[u64]) -> Vec<(Point, Point)> {
+    let mut ink: Vec<_> = atoms
+        .iter()
+        .filter_map(|id| doc.atom(*id))
+        .flat_map(|atom| atom_label_ink_boxes(atom, doc))
+        .collect();
+    for indicator in crate::atom_labels::indicators(doc) {
+        if indicator.owner.selected(atoms) && indicator.owner.drawn(doc) {
+            ink.extend(label_ink_boxes(&[indicator.primitive()]));
+        }
+    }
+    ink
+}
+
 /// The atom owning a visible label, including its hydrogens, isotope and charge.
 /// Keep this separate from geometric nearest-atom searches used for bond growth.
 pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
     let reach = LabelReach::new(doc);
-    doc.atoms.iter().rev().find_map(|atom| {
+    let mut best: Option<(bool, f32, u64)> = None;
+    for atom in doc.atoms.iter().rev() {
         // Laying out a label is costly, so skip atoms it cannot reach from.
         let limit = reach.of(atom).map_or(f32::INFINITY, |reach| reach + radius);
         if (atom.position.x - point.x).abs() > limit
             || (atom.position.y - point.y).abs() > limit
             || crate::models3d::hides(doc, atom.id)
         {
-            return None;
+            continue;
         }
         // Empty corners between a symbol and its stacked H/isotope/charge
         // must not hide a neighboring atom or bond from pointer targeting.
-        label_ink_boxes(&atom_label(atom, doc))
-            .into_iter()
-            .any(|(lo, hi)| {
-                point.x >= lo.x - radius
-                    && point.x <= hi.x + radius
-                    && point.y >= lo.y - radius
-                    && point.y <= hi.y + radius
-            })
-            .then_some(atom.id)
-    })
+        let runs = atom_label(atom, doc);
+        if !label_ink_boxes(&runs).into_iter().any(|(lo, hi)| {
+            point.x >= lo.x - radius
+                && point.x <= hi.x + radius
+                && point.y >= lo.y - radius
+                && point.y <= hi.y + radius
+        }) {
+            continue;
+        }
+        let core = group_labels::element_glyph_hit(atom, doc, &runs, point);
+        let distance = (atom.position.x - point.x).powi(2) + (atom.position.y - point.y).powi(2);
+        if best.is_none_or(|(old_core, old_distance, _)| {
+            core && !old_core || core == old_core && distance < old_distance
+        }) {
+            best = Some((core, distance, atom.id));
+        }
+    }
+    best.map(|(_, _, id)| id)
 }
 
 /// Geometric nearest-atom searches also accept a collapsed label's full text
@@ -298,8 +326,11 @@ pub(crate) fn atom_label_ink_boxes(a: &Atom, doc: &Document) -> Vec<(Point, Poin
 
 /// Each label glyph's ink box with the corner radius its outline leaves free.
 pub(crate) fn atom_label_ink_shapes(a: &Atom, doc: &Document) -> Vec<((Point, Point), f32)> {
-    atom_label(a, doc)
-        .iter()
+    label_ink_shapes(&atom_label(a, doc))
+}
+
+fn label_ink_shapes(runs: &[Primitive]) -> Vec<((Point, Point), f32)> {
+    runs.iter()
         .flat_map(|run| match run {
             Primitive::Text {
                 position,
@@ -479,7 +510,17 @@ fn label_runs(
     // A generic label meets its single horizontal bond with its near edge.
     let generic_side = (internal_group.is_none() && condensed.is_none())
         .then(|| crate::atom_labels::generic_label_side(a, doc))
-        .flatten();
+        .flatten()
+        .or_else(|| {
+            (free_text
+                && attachment.is_auto()
+                && condensed.is_none()
+                && attached.is_none()
+                && crate::abbreviations::atom_anchor(label, false).is_none()
+                && crate::abbreviations::atom_anchor(label, true).is_none())
+            .then(|| crate::atom_labels::short_bond_label_side(a, doc, element_width))
+            .flatten()
+        });
     let centered = match generic_side {
         Some(true) => element_width,
         Some(false) => 0.,
@@ -1169,26 +1210,30 @@ fn text_bounds(runs: &[Primitive]) -> Option<(Point, Point)> {
         })
 }
 
-pub(crate) fn label_ink_boxes(runs: &[Primitive]) -> Vec<(Point, Point)> {
-    runs.iter()
-        .flat_map(|run| {
-            if let Primitive::Text {
+/// Visible text ink from an already rendered scene, without rebuilding its chemistry.
+pub fn label_ink_boxes(runs: &[Primitive]) -> Vec<(Point, Point)> {
+    fn collect(run: &Primitive, boxes: &mut Vec<(Point, Point)>) {
+        match run {
+            Primitive::Text {
                 position,
                 text,
                 size,
                 style,
                 ..
-            } = run
-            {
+            } => boxes.extend(
                 crate::style::text_ink_boxes(text, *size, style)
                     .into_iter()
-                    .map(|(lo, hi)| (position.offset(lo.x, lo.y), position.offset(hi.x, hi.y)))
-                    .collect()
-            } else {
-                Vec::new()
-            }
-        })
-        .collect()
+                    .map(|(lo, hi)| (position.offset(lo.x, lo.y), position.offset(hi.x, hi.y))),
+            ),
+            Primitive::Opacity { alpha, primitive } if *alpha > 0. => collect(primitive, boxes),
+            _ => {}
+        }
+    }
+    let mut boxes = Vec::new();
+    for run in runs {
+        collect(run, &mut boxes);
+    }
+    boxes
 }
 
 /// Visible selected extents, including atom labels in the original graph.
@@ -1199,6 +1244,28 @@ pub fn selection_bounds(doc: &Document, ids: &[u64]) -> Option<(Point, Point)> {
 /// `selection_bounds` of several disjoint selections, such as the Align menu's
 /// units, in one pass over the drawing.
 pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<(Point, Point)>> {
+    selections_bounds_in_axes(doc, selections, None)
+}
+
+/// The live drawing's extents in axes turned clockwise about `pivot`.
+/// Upright text boxes contribute all four corners; the caller rotates the
+/// resulting display frame back, without changing its gesture or document.
+pub fn selection_bounds_in_axes(
+    doc: &Document,
+    ids: &[u64],
+    pivot: Point,
+    degrees: f32,
+) -> Option<(Point, Point)> {
+    selections_bounds_in_axes(doc, &[ids.to_vec()], Some((pivot, degrees)))
+        .pop()
+        .flatten()
+}
+
+fn selections_bounds_in_axes(
+    doc: &Document,
+    selections: &[Vec<u64>],
+    axes: Option<(Point, f32)>,
+) -> Vec<Option<(Point, Point)>> {
     use crate::atom_labels::Owner;
     let owners: std::collections::HashMap<u64, usize> = selections
         .iter()
@@ -1206,11 +1273,12 @@ pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<
         .flat_map(|(i, ids)| ids.iter().map(move |id| (*id, i)))
         .collect();
     let mut bounds: Vec<Option<(Point, Point)>> = vec![None; selections.len()];
+    let axes = axes.map(|(pivot, degrees)| (pivot, (-degrees).to_radians().sin_cos()));
     let mut grow = |id: u64, points: &mut dyn Iterator<Item = Point>| {
         let Some(extent) = owners.get(&id).and_then(|i| bounds.get_mut(*i)) else {
             return;
         };
-        for p in points {
+        let mut add = |p: Point| {
             *extent = Some(match *extent {
                 None => (p, p),
                 Some((lo, hi)) => (
@@ -1218,6 +1286,28 @@ pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<
                     Point::new(hi.x.max(p.x), hi.y.max(p.y)),
                 ),
             });
+        };
+        if let Some((pivot, (s, c))) = axes {
+            // Every supplied extent may contain upright ink. Its other two
+            // corners are essential when measuring in the turned axes.
+            let Some((lo, hi)) = points.map(|p| (p, p)).reduce(|(lo, hi), (p, _)| {
+                (
+                    Point::new(lo.x.min(p.x), lo.y.min(p.y)),
+                    Point::new(hi.x.max(p.x), hi.y.max(p.y)),
+                )
+            }) else {
+                return;
+            };
+            for p in [lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y)] {
+                add(Point::new(
+                    pivot.x + (p.x - pivot.x) * c - (p.y - pivot.y) * s,
+                    pivot.y + (p.x - pivot.x) * s + (p.y - pivot.y) * c,
+                ));
+            }
+        } else {
+            for p in points {
+                add(p);
+            }
         }
     };
     for label in crate::atom_labels::indicators(doc) {
@@ -1349,7 +1439,30 @@ pub(crate) fn bond_segment(
         }
     };
     let margin = doc.drawing_style.world(doc.drawing_style.margin_width_pt);
-    let span = trimmed_span(a.position, b.position, &boxes(a), &boxes(b), margin)?;
+    let a_boxes = boxes(a);
+    let b_boxes = boxes(b);
+    let span = trimmed_span(a.position, b.position, &a_boxes, &b_boxes, margin)?;
+    let span = if span.along <= 0.1 && rounded_connector(bond) {
+        let shapes = |atom: &Atom, boxes: &[_]| {
+            if boxes.is_empty() {
+                vec![]
+            } else {
+                atom_label_ink_shapes(atom, doc)
+            }
+        };
+        recover_rounded_span(
+            span,
+            a.position,
+            b.position,
+            &shapes(a, &a_boxes),
+            &shapes(b, &b_boxes),
+            margin,
+            doc.drawing_style.line_width() * 0.5,
+        )
+        .0
+    } else {
+        span
+    };
     // Unlike bond_frame, picking rejects a NaN visible span.
     (span.along > 0.1).then_some((span.start, span.end))
 }
@@ -1361,6 +1474,124 @@ struct TrimmedSpan {
     ux: f32,
     uy: f32,
     along: f32,
+}
+
+/// Rectangular ink boxes can consume an entire diagonal O–O connector even
+/// when the rounded outlines leave a clear span. Retry only that missing span;
+/// ordinary visible bonds retain their existing endpoints exactly.
+fn recover_rounded_span(
+    span: TrimmedSpan,
+    a: Point,
+    z: Point,
+    a_shapes: &[((Point, Point), f32)],
+    z_shapes: &[((Point, Point), f32)],
+    margin: f32,
+    half_width: f32,
+) -> (TrimmedSpan, bool) {
+    if !span.along.is_finite() || span.along > 0.1 {
+        return (span, false);
+    }
+    let extent = a_shapes
+        .iter()
+        .chain(z_shapes)
+        .map(|&((lo, hi), _)| (hi.x - lo.x).max(hi.y - lo.y))
+        .fold(0f32, f32::max);
+    if !a_shapes.iter().chain(z_shapes).any(|(_, radius)| *radius > 0.)
+        // Font corner radii use sampled outlines. Keep the conservative boxes
+        // when a tiny requested gap or thick stroke leaves no safety band.
+        || margin < half_width + extent * 0.1
+    {
+        return (span, false);
+    }
+    // Mechanism-arrow picking deliberately prioritizes rectangular label ink.
+    // Do not expose a connector that exists only in an unpickable ink-box
+    // corner. This repair is for missing margin space, not overlapping ink.
+    let a_boxes: Vec<_> = a_shapes.iter().map(|&(bounds, _)| bounds).collect();
+    let z_boxes: Vec<_> = z_shapes.iter().map(|&(bounds, _)| bounds).collect();
+    let Some(unpadded) = trimmed_span(a, z, &a_boxes, &z_boxes, 0.) else {
+        return (span, false);
+    };
+    if unpadded.along <= half_width * 2. + 0.1 {
+        return (span, false);
+    }
+    let length = a.distance(z);
+    let mut start = rounded_label_end(a, span.ux, span.uy, a_shapes, length, margin + half_width);
+    let mut end = rounded_label_end(z, -span.ux, -span.uy, z_shapes, length, margin + half_width);
+    let projection = |point: Point| (point.x - a.x) * span.ux + (point.y - a.y) * span.uy;
+    if projection(start) < projection(unpadded.start) {
+        start = unpadded.start;
+    }
+    if projection(end) > projection(unpadded.end) {
+        end = unpadded.end;
+    }
+    let along = (end.x - start.x) * span.ux + (end.y - start.y) * span.uy;
+    (
+        TrimmedSpan {
+            start,
+            end,
+            along,
+            ..span
+        },
+        true,
+    )
+}
+
+fn rounded_connector(bond: &Bond) -> bool {
+    bond.order == 1 && bond.display == "plain" && !bond.projection
+}
+
+fn rounded_label_end(
+    origin: Point,
+    ux: f32,
+    uy: f32,
+    shapes: &[((Point, Point), f32)],
+    max: f32,
+    margin: f32,
+) -> Point {
+    let along = |point: Point| (point.x - origin.x) * ux + (point.y - origin.y) * uy;
+    let mut far = 0f32;
+    for &((lo, hi), radius) in shapes {
+        if radius <= 0. || !radius.is_finite() {
+            far = far.max(along(label_box_end(origin, ux, uy, lo, hi, max, margin)));
+            continue;
+        }
+        // Padding the conservative glyph outline by the requested margin is
+        // the same rounded rectangle with larger bounds and corner radius.
+        let low = lo.offset(-margin, -margin);
+        let high = hi.offset(margin, margin);
+        let radius = (radius + margin).min((high.x - low.x).min(high.y - low.y) * 0.5);
+        let inner_low = low.offset(radius, radius);
+        let inner_high = high.offset(-radius, -radius);
+        for (a, b) in [
+            (
+                Point::new(low.x, inner_low.y),
+                Point::new(high.x, inner_high.y),
+            ),
+            (
+                Point::new(inner_low.x, low.y),
+                Point::new(inner_high.x, high.y),
+            ),
+        ] {
+            far = far.max(along(label_box_end(origin, ux, uy, a, b, max, 0.)));
+        }
+        // Two central rectangles plus four discs exactly cover the rounded
+        // rectangle. Intersect the finite ray with each convex piece.
+        for x in [inner_low.x, inner_high.x] {
+            for y in [inner_low.y, inner_high.y] {
+                let (dx, dy) = (f64::from(x - origin.x), f64::from(y - origin.y));
+                let projection = dx * f64::from(ux) + dy * f64::from(uy);
+                let perpendicular = dx * f64::from(uy) - dy * f64::from(ux);
+                let square = f64::from(radius).powi(2) - perpendicular * perpendicular;
+                if square >= 0. {
+                    let half = square.sqrt();
+                    if projection + half >= 0. && projection - half <= f64::from(max) {
+                        far = far.max((projection + half).min(f64::from(max)) as f32);
+                    }
+                }
+            }
+        }
+    }
+    origin.offset(ux * far, uy * far)
 }
 
 /// Shared trimming arithmetic. Each caller keeps its own visible-span test:
@@ -1475,12 +1706,25 @@ pub(crate) fn automatic_double_side(faces: &FaceIndex<'_>, bond: &Bond) -> Optio
     Some(if cross >= 0. { 1. } else { -1. })
 }
 
+#[cfg(test)]
+thread_local! {
+    static RING_SEARCH_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Find the smallest ring containing this edge, using the alternate path.
 fn ring_center(faces: &FaceIndex<'_>, from: u64, to: u64) -> Option<Point> {
     use std::collections::{HashMap, VecDeque};
+    // A terminal endpoint has no alternate path. Carbonyl bonds are queried
+    // repeatedly while crowded hydrogen labels avoid nearby bond strokes;
+    // walking the whole peptide from the carbon end cannot find a ring.
+    if faces.graph().degree(from) < 2 || faces.graph().degree(to) < 2 {
+        return None;
+    }
     let mut previous = HashMap::from([(from, from)]);
     let mut queue = VecDeque::from([from]);
     while let Some(id) = queue.pop_front() {
+        #[cfg(test)]
+        RING_SEARCH_VISITS.with(|count| count.set(count.get() + 1));
         for (_, b) in faces.graph().bonds(id) {
             if (b.a == from && b.b == to) || (b.a == to && b.b == from) {
                 continue;
@@ -1989,6 +2233,7 @@ struct BondScene<'a, 'd> {
     arcs: &'a crate::ring_arcs::Arcs,
     circles: &'a [crate::aromatic::Circle],
     label_bounds: &'a std::collections::HashMap<u64, Vec<(Point, Point)>>,
+    label_runs: &'a std::collections::HashMap<u64, Vec<Primitive>>,
     joins: &'a crate::bond_joins::Joins<'d>,
     faces: &'a FaceIndex<'d>,
     crossing_gaps: &'a [Vec<crate::crossings::Gap>],
@@ -2005,7 +2250,19 @@ struct BondFrame<'a> {
     uy: f32,
     nx: f32,
     ny: f32,
+    rounded: bool,
 }
+fn connector_shapes(scene: BondScene<'_, '_>, id: u64) -> Vec<((Point, Point), f32)> {
+    if scene.label_bounds.get(&id).is_none_or(Vec::is_empty) {
+        return vec![];
+    }
+    scene
+        .label_runs
+        .get(&id)
+        .map(|runs| label_ink_shapes(runs))
+        .unwrap_or_default()
+}
+
 fn bond_frame<'a>(scene: BondScene<'a, '_>, b: &Bond) -> Option<BondFrame<'a>> {
     let BondScene {
         faces,
@@ -2029,6 +2286,19 @@ fn bond_frame<'a>(scene: BondScene<'a, '_>, b: &Bond) -> Option<BondFrame<'a>> {
             .unwrap_or_default(),
         style.world(style.margin_width_pt),
     )?;
+    let (span, rounded) = if span.along <= 0.1 && rounded_connector(b) {
+        recover_rounded_span(
+            span,
+            a.position,
+            z.position,
+            &connector_shapes(scene, a.id),
+            &connector_shapes(scene, z.id),
+            style.world(style.margin_width_pt),
+            style.line_width() * 0.5,
+        )
+    } else {
+        (span, false)
+    };
     // Unlike bond_segment, rendering retains a NaN visible span.
     if span.along <= 0.1 {
         return None;
@@ -2047,6 +2317,7 @@ fn bond_frame<'a>(scene: BondScene<'a, '_>, b: &Bond) -> Option<BondFrame<'a>> {
         uy,
         nx,
         ny,
+        rounded,
     })
 }
 
@@ -2268,7 +2539,10 @@ fn push_bond_rails(
         uy,
         nx,
         ny,
+        rounded,
     } = frame;
+    let a_shapes = rounded.then(|| connector_shapes(scene, a.id));
+    let z_shapes = rounded.then(|| connector_shapes(scene, z.id));
     let spacing = style.bond_length_world * style.bond_spacing_ratio;
     let inward = if b.order == 4 {
         automatic_double_side(faces, b).unwrap_or(1.)
@@ -2335,28 +2609,50 @@ fn push_bond_rails(
         if available <= 0.1 {
             continue;
         }
-        let first = label_end(
-            first,
-            ux,
-            uy,
-            label_bounds
-                .get(&a.id)
-                .map(Vec::as_slice)
-                .unwrap_or_default(),
-            available,
-            style.world(style.margin_width_pt),
-        );
-        let last = label_end(
-            last,
-            -ux,
-            -uy,
-            label_bounds
-                .get(&z.id)
-                .map(Vec::as_slice)
-                .unwrap_or_default(),
-            available,
-            style.world(style.margin_width_pt),
-        );
+        let first = if rounded {
+            rounded_label_end(
+                first,
+                ux,
+                uy,
+                a_shapes.as_deref().unwrap_or_default(),
+                available,
+                style.world(style.margin_width_pt) + style.line_width() * 0.5,
+            )
+        } else {
+            label_end(
+                first,
+                ux,
+                uy,
+                label_bounds
+                    .get(&a.id)
+                    .map(Vec::as_slice)
+                    .unwrap_or_default(),
+                available,
+                style.world(style.margin_width_pt),
+            )
+        };
+        let last = if rounded {
+            rounded_label_end(
+                last,
+                -ux,
+                -uy,
+                z_shapes.as_deref().unwrap_or_default(),
+                available,
+                style.world(style.margin_width_pt) + style.line_width() * 0.5,
+            )
+        } else {
+            label_end(
+                last,
+                -ux,
+                -uy,
+                label_bounds
+                    .get(&z.id)
+                    .map(Vec::as_slice)
+                    .unwrap_or_default(),
+                available,
+                style.world(style.margin_width_pt),
+            )
+        };
         if (last.x - first.x) * ux + (last.y - first.y) * uy <= 0.1 {
             continue;
         }
@@ -2676,5 +2972,7 @@ mod label_attachment_tests;
 mod label_parity_tests;
 #[cfg(test)]
 mod primitives_parity_tests;
+#[cfg(test)]
+mod round_label_trim_tests;
 #[cfg(test)]
 mod tests;
