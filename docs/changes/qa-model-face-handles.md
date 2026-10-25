@@ -6,6 +6,8 @@ chemical-name caption exposes the model frame’s corner handles, and the captio
 follows the frame throughout a resize. Selected shown models explain rotation,
 roll and reset before the first drag.
 
+Under review in [PR #579](https://github.com/Ameyanagi/ReShiki/pull/579).
+
 This addresses [#569](https://github.com/Ameyanagi/ReShiki/issues/569),
 [#570](https://github.com/Ameyanagi/ReShiki/issues/570) and
 [#571](https://github.com/Ameyanagi/ReShiki/issues/571).

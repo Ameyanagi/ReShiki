@@ -4,6 +4,10 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
+Under review: @Ameyanagi — drawing-aligned proper 3D opening views, captioned
+model frame handles and preview placement, resting rotation hints, and native/
+browser regression evidence in [PR #579](https://github.com/Ameyanagi/ReShiki/pull/579).
+
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).
 
