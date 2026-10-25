@@ -4,6 +4,12 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
+Under review: @Ameyanagi — rotation overlays that clear upright labels,
+rotation hints that yield to editing, a three-column atom palette and retained
+Structure drafts ready to replace or clear in
+[PR #567](https://github.com/Ameyanagi/ReShiki/pull/567), with
+[matched visual and native interaction review](changes/qa-drawing-polish.md).
+
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).
 

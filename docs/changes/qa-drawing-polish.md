@@ -1,5 +1,7 @@
 # Rotation overlays, atom palette and Structure input
 
+Under review: @Ameyanagi in [PR #567](https://github.com/Ameyanagi/ReShiki/pull/567).
+
 This review covers [#552](https://github.com/Ameyanagi/ReShiki/issues/552),
 [#553](https://github.com/Ameyanagi/ReShiki/issues/553),
 [#555](https://github.com/Ameyanagi/ReShiki/issues/555) and
@@ -61,7 +63,7 @@ The geometry regression turns phenylalanine through 30°, 45° and 60°, checks
 every upright label-ink corner against the turned display frame, and checks the
 readout rectangle against label ink. It preserves the gesture pivot and confirms
 the released box is axis aligned. Highlighted selections reuse one join-geometry
-construction at each angle for both small and large selections.
+construction at each angle for both 8- and 128-atom selections.
 
 The real-widget checks cover both rotation fields: idle hover still opens the
 hint, typing retains focus, the focused hint is absent, Enter applies −60° as one

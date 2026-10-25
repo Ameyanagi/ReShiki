@@ -59,7 +59,7 @@
   "closed": true,
   "host": {
     "cpu": "Apple M1",
-    "os": "macOS27.0.1",
+    "os": "macOS 27.0.1",
     "build": "26A434",
     "architecture": "arm64"
   },
