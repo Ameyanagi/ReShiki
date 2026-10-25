@@ -83,6 +83,9 @@ mod printing;
 mod prompt;
 mod reaction_mapping;
 mod reactions;
+#[cfg(test)]
+mod recovery_capture;
+mod recovery_manager;
 mod results;
 mod ring_edits;
 #[cfg(test)]
@@ -299,6 +302,7 @@ pub enum Message {
     Autosaved(autosave::Key, Result<Option<PathBuf>, String>),
     Restore,
     DismissRecovery,
+    Recovery(recovery_manager::Action),
     Charge(i32),
     Isotope(String),
     ApplyIsotope,
@@ -424,6 +428,7 @@ pub struct App {
     aromatic_ring: bool,
     custom_element: String,
     recovered: Vec<Candidate>,
+    recovery_manager: recovery_manager::State,
     exit: autosave::Exit,
     inspector_open: bool,
     inspector_tab: InspectorTab,
@@ -525,6 +530,7 @@ impl App {
             aromatic_ring: false,
             custom_element: String::new(),
             recovered,
+            recovery_manager: recovery_manager::State::default(),
             exit: autosave::Exit::default(),
             inspector_open: true,
             inspector_tab: InspectorTab::Properties,
@@ -915,6 +921,13 @@ impl App {
     /// Handle them before tab routing, modal gates and the routing tail; their
     /// tasks must not acquire a document tag.
     fn update_untagged(&mut self, message: Message) -> ControlFlow<Task<Message>, Message> {
+        let message = match message {
+            Message::Recovery(action) if recovery_manager::completion(&action) => {
+                let task = self.recovery_action(action);
+                return ControlFlow::Break(Task::batch([task, self.accessibility_refresh()]));
+            }
+            message => message,
+        };
         #[cfg(any(windows, target_os = "linux"))]
         if let Message::Desktop(action) = message {
             return ControlFlow::Break(self.desktop_update(action));
@@ -1095,17 +1108,15 @@ impl App {
             file_shortcuts::wrap(
                 // The command palette sits above the floating NMR panel so its
                 // modal also keeps that panel from taking clicks.
-                self.with_prompt(
-                    self.with_updates(self.with_assistant_image(self.with_commands(
-                        self.with_nmr(
-                            self.with_atom_text(
-                                self.with_help(self.with_palette(self.workspace())),
-                            ),
-                        ),
+                self.with_prompt(self.with_recovery_manager(self.with_updates(
+                    self.with_assistant_image(self.with_commands(self.with_nmr(
+                        self.with_atom_text(self.with_help(self.with_palette(self.workspace()))),
                     ))),
-                ),
+                ))),
                 if self.prompt.is_some() {
                     Some(prompt::modal_key)
+                } else if self.recovery_manager.open() {
+                    Some(recovery_manager::modal_key)
                 } else if self.help_open {
                     Some(help::modal_key)
                 } else if self.commands.open {
@@ -1247,6 +1258,9 @@ fn same_atom(a: &reshiki::document::Atom, b: &reshiki::document::Atom) -> bool {
 fn tagged(task: Task<Message>, id: document_tab::TabId) -> Task<Message> {
     task.map(move |message| match message {
         Message::Tab(..) => message,
+        Message::Recovery(action) if recovery_manager::completion(&action) => {
+            Message::Recovery(action)
+        }
         message => Message::Tab(id, Box::new(message)),
     })
 }

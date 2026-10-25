@@ -153,6 +153,11 @@ pub mod browser {
         /// The sessions of the site's other open pages, whose drafts are not
         /// offered for recovery.
         open: BTreeSet<String>,
+        /// Without a successful Web Locks query, other pages' drafts stay
+        /// protected instead of guessing that their owners have closed.
+        owners_verified: bool,
+        /// Querying other owners does not revoke this page's held lock.
+        session_locked: bool,
     }
 
     thread_local! {
@@ -173,17 +178,40 @@ pub mod browser {
             store.sink = Some(sink);
             store.session = session;
             store.open = open.into_iter().collect();
+            store.owners_verified = true;
+            store.session_locked = true;
         });
     }
 
-    /// This page's session, or none before storage is installed.
+    /// This page's protected recovery owner, or none without its held lock.
     pub fn session() -> Option<String> {
-        STORE.with_borrow(|store| Some(store.session.clone()).filter(|s| !s.is_empty()))
+        STORE.with_borrow(|store| {
+            Some(store.session.clone()).filter(|s| store.session_locked && !s.is_empty())
+        })
     }
 
     /// Whether `session` is this page or another open page of the site.
     pub fn open(session: &str) -> bool {
-        STORE.with_borrow(|store| store.session == session || store.open.contains(session))
+        STORE.with_borrow(|store| {
+            !store.owners_verified || store.session == session || store.open.contains(session)
+        })
+    }
+
+    /// Refresh the known live pages. A failed query protects all owners.
+    pub fn set_open_sessions(open: Option<Vec<String>>) {
+        STORE.with_borrow_mut(|store| {
+            store.owners_verified = open.is_some();
+            store.open = open.unwrap_or_default().into_iter().collect();
+        });
+    }
+
+    pub fn owners_verified() -> bool {
+        STORE.with_borrow(|store| store.owners_verified)
+    }
+
+    /// Set only after this page's own acquisition succeeds or fails.
+    pub fn set_session_lock(locked: bool) {
+        STORE.with_borrow_mut(|store| store.session_locked = locked);
     }
 
     /// A change another tab made and kept, which this one only remembers.
@@ -262,6 +290,9 @@ pub mod browser {
         }
         STORE.with_borrow_mut(|store| {
             let sink = store.sink.as_ref().ok_or(UNAVAILABLE)?;
+            if !store.session_locked && changes.iter().any(|(key, bytes)| key.starts_with("recovery/") && bytes.is_some()) {
+                return Err("Recovery saving is unavailable because this page does not hold its session lock".into());
+            }
             let previous: Vec<_> = changes
                 .iter()
                 .map(|(key, _)| store.files.get(*key).cloned())

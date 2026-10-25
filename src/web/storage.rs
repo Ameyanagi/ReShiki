@@ -330,7 +330,7 @@ async fn load() -> Result<Vec<String>, String> {
     OPENED.set(Some(database.clone()));
 
     let session = session();
-    let open = open_sessions(&window, &session).await;
+    let open = open_sessions(&window, &session, true).await;
     browser::install(
         files,
         Box::new(move |changes| {
@@ -345,8 +345,14 @@ async fn load() -> Result<Vec<String>, String> {
             commit(&database, changes, channel.clone());
         }),
         session,
-        open,
+        open.clone().unwrap_or_default(),
     );
+    let verified = open.is_some();
+    browser::set_session_lock(verified);
+    browser::set_open_sessions(open);
+    if !verified {
+        notify("recovery/ownership", Some(LOCK_WARNING.into()));
+    }
     for (key, bytes) in EARLY.take().unwrap_or_default() {
         browser::changed(&key, bytes);
     }
@@ -355,6 +361,7 @@ async fn load() -> Result<Vec<String>, String> {
 
 /// The prefix of the Web Lock each open page holds for its session.
 const SESSION_LOCK: &str = "reshiki-session:";
+const LOCK_WARNING: &str = "Recovery saving is unavailable because the browser could not keep this page’s session lock. Save drawings to keep a copy.";
 
 /// A new random session, in hexadecimal so it fits a draft's name.
 fn session() -> String {
@@ -364,23 +371,20 @@ fn session() -> String {
 
 /// The sessions of the site's other open pages, which hold their session's
 /// Web Lock until they close, and then this page's lock for `session`. A
-/// browser without Web Locks reports none, so another open tab's drafts are
-/// offered too.
-async fn open_sessions(window: &web_sys::Window, session: &str) -> Vec<String> {
+/// browser without Web Locks protects every draft. `hold` registers this page
+/// once at startup; later checks only query the locks.
+async fn open_sessions(window: &web_sys::Window, session: &str, hold: bool) -> Option<Vec<String>> {
     use js_sys::{Array, Function, Promise, Reflect};
-    let Some(locks) = Reflect::get(&window.navigator(), &"locks".into())
+    let locks = Reflect::get(&window.navigator(), &"locks".into())
         .ok()
-        .filter(|locks| locks.is_object())
-    else {
-        return vec![];
-    };
+        .filter(|locks| locks.is_object())?;
     let method = |name: &str| {
         Reflect::get(&locks, &name.into())
             .ok()
             .and_then(|method| method.dyn_into::<Function>().ok())
     };
     let (Some(query), Some(request)) = (method("query"), method("request")) else {
-        return vec![];
+        return None;
     };
     let held = match query
         .call0(&locks)
@@ -389,24 +393,162 @@ async fn open_sessions(window: &web_sys::Window, session: &str) -> Vec<String> {
         Ok(Ok(promise)) => wasm_bindgen_futures::JsFuture::from(promise).await.ok(),
         _ => None,
     };
-    let open = held
-        .and_then(|snapshot| Reflect::get(&snapshot, &"held".into()).ok())
-        .map(|held| Array::from(&held))
+    let open = held?;
+    let open = Array::from(&Reflect::get(&open, &"held".into()).ok()?)
+        .to_vec()
         .into_iter()
-        .flat_map(|held| held.to_vec())
         .filter_map(|lock| Reflect::get(&lock, &"name".into()).ok()?.as_string())
         .filter_map(|name| name.strip_prefix(SESSION_LOCK).map(str::to_owned))
         .collect();
     // Hold this page's lock until it closes: the callback's promise never
     // settles.
-    let hold = Closure::<dyn FnMut() -> Promise>::new(|| Promise::new(&mut |_, _| {}));
-    let _ = request.call2(
-        &locks,
-        &format!("{SESSION_LOCK}{session}").into(),
-        hold.as_ref(),
-    );
-    hold.forget();
-    open
+    if hold {
+        let (acquired, ready) = iced::futures::channel::oneshot::channel();
+        let acquired = std::rc::Rc::new(RefCell::new(Some(acquired)));
+        let failed = std::rc::Rc::new(std::cell::Cell::new(false));
+        let callback = Closure::<dyn FnMut() -> Promise>::new({
+            let acquired = acquired.clone();
+            move || {
+                if let Some(acquired) = acquired.borrow_mut().take() {
+                    let _ = acquired.send(true);
+                }
+                Promise::new(&mut |_, _| {})
+            }
+        });
+        let pending = request
+            .call2(
+                &locks,
+                &format!("{SESSION_LOCK}{session}").into(),
+                callback.as_ref(),
+            )
+            .ok()?
+            .dyn_into::<Promise>()
+            .ok()?;
+        let rejected = Closure::<dyn FnMut(JsValue)>::new({
+            let failed = failed.clone();
+            move |_| {
+                failed.set(true);
+                browser::set_session_lock(false);
+                browser::set_open_sessions(None);
+                if let Some(acquired) = acquired.borrow_mut().take() {
+                    let _ = acquired.send(false);
+                }
+                notify("recovery/ownership", Some(LOCK_WARNING.into()));
+            }
+        });
+        // Consume asynchronous rejection too; a request returning a Promise
+        // is not evidence that its callback acquired the lock.
+        let _ = pending.catch(&rejected);
+        callback.forget();
+        rejected.forget();
+        if !ready.await.ok()? || failed.get() {
+            return None;
+        }
+    }
+    Some(open)
+}
+
+/// A destructive recovery action waits for IndexedDB, unlike routine queued
+/// writes. Keep the offered copies in memory and in the UI on any failure.
+pub(super) async fn discard_recovery(
+    candidates: &[reshiki::recovery::Candidate],
+) -> Result<Vec<std::path::PathBuf>, String> {
+    refresh_recovery_owners().await?;
+    discard_verified(candidates).await
+}
+
+/// A failed query protects unknown owners without revoking our own held lock.
+pub(super) async fn refresh_recovery_owners() -> Result<(), String> {
+    let window = web_sys::window().ok_or("The page has no window")?;
+    let session = browser::session().ok_or("Browser storage is unavailable")?;
+    let open = open_sessions(&window, &session, false).await;
+    browser::set_open_sessions(open.clone());
+    open.ok_or("Could not verify which ReShiki pages are open; no recovery drafts were deleted")?;
+    Ok(())
+}
+
+async fn discard_verified(
+    candidates: &[reshiki::recovery::Candidate],
+) -> Result<Vec<std::path::PathBuf>, String> {
+    let database = OPENED
+        .with_borrow(Clone::clone)
+        .ok_or("Browser storage is unavailable")?;
+    let mut copies = Vec::with_capacity(candidates.len());
+    for candidate in candidates {
+        if !candidate.available() {
+            return Err(
+                "A recovery draft belongs to an open ReShiki page; no drafts were deleted".into(),
+            );
+        }
+        let key = browser::key(&candidate.path)
+            .filter(|key| key.starts_with("recovery/"))
+            .ok_or("Not a recovery draft in browser storage")?;
+        let bytes = reshiki::storage::read(&candidate.path).map_err(|error| error.to_string())?;
+        let mut snapshot: reshiki::recovery::Snapshot =
+            serde_json::from_slice(&bytes).map_err(|error| error.to_string())?;
+        snapshot.document.validate()?;
+        snapshot.document.migrate();
+        if snapshot.saved_at != candidate.snapshot.saved_at
+            || snapshot.source != candidate.snapshot.source
+            || snapshot.document != candidate.snapshot.document
+        {
+            return Err("A recovery draft changed; reload ReShiki to review it again".into());
+        }
+        copies.push((candidate.path.clone(), key, bytes));
+    }
+    let transaction = database
+        .transaction_with_str_and_mode(FILES, IdbTransactionMode::Readwrite)
+        .map_err(describe)?;
+    let store = transaction.object_store(FILES).map_err(describe)?;
+    let requests = copies
+        .iter()
+        .map(|(_, key, _)| store.get(&key.as_str().into()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(describe)?;
+    let done =
+        wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |resolve, reject| {
+            transaction.set_oncomplete(Some(&resolve));
+            transaction.set_onabort(Some(&reject));
+        }));
+    for ((_, _, previous), request) in copies.iter().zip(&requests) {
+        let stored = match finished(request).await {
+            Ok(value) => value
+                .dyn_into::<js_sys::Uint8Array>()
+                .ok()
+                .map(|bytes| bytes.to_vec()),
+            Err(error) => {
+                let _ = transaction.abort();
+                let _ = done.await;
+                return Err(error);
+            }
+        };
+        if stored.as_deref() != Some(previous.as_slice()) {
+            let _ = transaction.abort();
+            let _ = done.await;
+            return Err("Another page changed a recovery draft; no drafts were deleted. Reload to review them again".into());
+        }
+    }
+    for (_, key, _) in &copies {
+        if let Err(error) = store.delete(&key.as_str().into()) {
+            let _ = transaction.abort();
+            let _ = done.await;
+            return Err(describe(error));
+        }
+    }
+    if done.await.is_err() {
+        return Err(transaction
+            .error()
+            .map(|error| error.message())
+            .unwrap_or_else(|| "The browser refused deletion".into()));
+    }
+    let channel = web_sys::BroadcastChannel::new(CHANNEL).ok();
+    for (_, key, _) in &copies {
+        browser::changed(key, None);
+        if let Some(channel) = &channel {
+            let _ = channel.post_message(&message(key, None));
+        }
+    }
+    Ok(copies.into_iter().map(|(path, _, _)| path).collect())
 }
 
 /// A write (new bytes) or removal (none) of one file, and what the page held

@@ -2303,27 +2303,8 @@ impl App {
             message
         };
         let mut status = row![].spacing(8).align_y(Alignment::Center);
-        // Short enough to fit the minimum window beside Update available.
         if !self.recovered.is_empty() {
-            status = status
-                .push(
-                    text("Recovery draft")
-                        .size(11)
-                        .wrapping(text::Wrapping::None),
-                )
-                .push(hover_hint(
-                    command("Restore", Message::Restore).style(control(true)),
-                    match self.recovered.len() {
-                        1 => "Open the draft in a tab · Save it to keep a copy".to_owned(),
-                        n => format!("Open all {n} drafts as tabs · Save them to keep copies"),
-                    },
-                    tooltip::Position::Top,
-                ))
-                .push(hover_hint(
-                    command("Dismiss", Message::DismissRecovery),
-                    "Hide until the next launch",
-                    tooltip::Position::Top,
-                ));
+            status = status.push(self.recovery_banner());
         }
         status = status.push(container(message).width(Length::Fill).clip(true));
         if let Some((key, progress)) = self.engine_progress() {

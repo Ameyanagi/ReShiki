@@ -72,6 +72,8 @@ enum Completion {
     Updates,
     /// Accessibility(Geometry | Snapshot | Installed | Published).
     Accessibility,
+    /// Recovery(Finished), delivered before tab routing and modal gates.
+    Recovery,
     /// Desktop(Ready | Finished | Office).
     #[cfg(any(windows, target_os = "linux"))]
     Desktop,
@@ -110,7 +112,8 @@ impl Completion {
             | Self::Opened
             | Self::OfficePrepared
             | Self::Updates
-            | Self::Accessibility => Owner::App,
+            | Self::Accessibility
+            | Self::Recovery => Owner::App,
             #[cfg(any(windows, target_os = "linux"))]
             Self::Desktop => Owner::App,
             #[cfg(target_os = "macos")]
@@ -221,7 +224,7 @@ fn admission(completion: Completion) -> Admission {
         // is open (generic_expansion_blocked), so no modal gate sees them.
         Completion::Templates | Completion::Generic => NOWHERE,
         // Handled in App::update or update_front before any gate.
-        Completion::OfficePrepared | Completion::Accessibility => NOWHERE,
+        Completion::OfficePrepared | Completion::Accessibility | Completion::Recovery => NOWHERE,
         #[cfg(any(windows, target_os = "linux"))]
         Completion::Desktop => NOWHERE,
         #[cfg(target_os = "macos")]
@@ -254,6 +257,18 @@ pub(super) fn admitted(modal: Modal, message: &Message) -> bool {
 /// No wildcard arms: a new Message variant or sub-action fails to compile until classified.
 fn completion(message: &Message) -> Option<Completion> {
     match message {
+        Message::Recovery(action) => match action {
+            super::recovery_manager::Action::Finished(..) => Some(Completion::Recovery),
+            #[cfg(target_arch = "wasm32")]
+            super::recovery_manager::Action::OwnersReady(..) => Some(Completion::Recovery),
+            super::recovery_manager::Action::Show
+            | super::recovery_manager::Action::Toggle(..)
+            | super::recovery_manager::Action::RestoreSelected
+            | super::recovery_manager::Action::RestoreAll
+            | super::recovery_manager::Action::Discard
+            | super::recovery_manager::Action::ConfirmDiscard
+            | super::recovery_manager::Action::Close => None,
+        },
         Message::Accessibility(action) => {
             use super::accessibility::Action;
             match action {

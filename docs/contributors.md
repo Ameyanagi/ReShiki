@@ -29,6 +29,10 @@ Under review: @Ameyanagi — Reach 3D controls in one click, bring clipped model
 Under review: @Ameyanagi — mode-aware Help ranking, labelled ring-fusion examples
 and a readable Shift search hint.
 [PR #562](https://github.com/Ameyanagi/ReShiki/pull/562) · [QA report](changes/qa-help-polish.md).
+Under review: @Ameyanagi — recovery draft review, selective restore and safe
+discard of abandoned copies for [issue #491](https://github.com/Ameyanagi/ReShiki/issues/491)
+in [PR #563](https://github.com/Ameyanagi/ReShiki/pull/563).
+[QA report and reusable images](changes/recovery-manager.md).
 
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).
