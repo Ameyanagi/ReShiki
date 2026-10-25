@@ -1,5 +1,7 @@
 # Typed groups: stereochemistry, clear labels and repeat gestures
 
+Under review in [PR #568](https://github.com/Ameyanagi/ReShiki/pull/568), by @Ameyanagi.
+
 This change addresses [#530](https://github.com/Ameyanagi/ReShiki/issues/530),
 [#531](https://github.com/Ameyanagi/ReShiki/issues/531) and
 [#532](https://github.com/Ameyanagi/ReShiki/issues/532). The source is

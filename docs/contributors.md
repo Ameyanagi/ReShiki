@@ -4,6 +4,11 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
+Under review: @Ameyanagi — retained tetrahedral configuration during atom-label
+edits, clear reversible-group placement and repeat gestures without an editor
+flash in [PR #568](https://github.com/Ameyanagi/ReShiki/pull/568).
+[Matched chemistry, rendering and native evidence](changes/qa-stereo-repeat.md).
+
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).
 
