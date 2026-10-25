@@ -705,15 +705,25 @@ impl App {
     }
 
     fn molecular_properties(&self) -> Element<'_, Message> {
-        let ids: Vec<u64> = self
+        // Only crystal models need this atom-only selection scope.
+        let crystal_ids = self
             .tab
-            .selected
+            .doc
+            .models
             .iter()
-            .copied()
-            .filter(|id| self.tab.doc.atom(*id).is_some())
-            .collect();
+            .any(|model| model.cell.is_some())
+            .then(|| {
+                self.tab
+                    .selected
+                    .iter()
+                    .copied()
+                    .filter(|id| self.tab.doc.atom(*id).is_some())
+                    .collect::<Vec<_>>()
+            });
         // Ordinary molecules beside a crystal keep their chemistry analysis.
-        if reshiki::models3d::crystal::touches(&self.tab.doc, &ids) {
+        if let Some(ids) =
+            crystal_ids.filter(|ids| reshiki::models3d::crystal::touches(&self.tab.doc, ids))
+        {
             let mut body = column![
                 text(reshiki::models3d::crystal::ANALYSIS_NOTICE)
                     .size(11)

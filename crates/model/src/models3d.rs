@@ -1022,12 +1022,11 @@ pub fn keep_place(doc: &mut Document, index: usize, origin: Point) {
 /// The selected molecule: the whole connected component of the selected atoms
 /// when they all belong to one, in document order.
 pub fn selected_molecule(doc: &Document, selected: &[u64]) -> Option<Vec<u64>> {
-    let atoms: Vec<_> = doc
+    let mut atoms = doc
         .expand_abbreviation_selection(selected)
         .into_iter()
-        .filter(|id| doc.atom(*id).is_some())
-        .collect();
-    let first = *atoms.first()?;
+        .filter(|id| doc.atom(*id).is_some());
+    let first = atoms.next()?;
     // A model of several molecules, read from a crystal file, is one.
     let component = match model_of(doc, first) {
         Some(model) if model.atoms.len() > 1 => doc
@@ -1038,9 +1037,11 @@ pub fn selected_molecule(doc: &Document, selected: &[u64]) -> Option<Vec<u64>> {
             .collect(),
         _ => crate::molecule_names::component(doc, first),
     };
-    atoms
-        .iter()
-        .all(|id| component.contains(id))
+    // A selection spanning molecules is common in large drawings. Stop at
+    // its first atom outside the component instead of resolving every ID.
+    std::iter::once(first)
+        .chain(atoms)
+        .all(|id| component.contains(&id))
         .then_some(component)
 }
 

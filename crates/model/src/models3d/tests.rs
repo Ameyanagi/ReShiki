@@ -48,6 +48,36 @@ fn shown(display: Display) -> (Document, Vec<u64>, u64) {
     (doc, atoms, methane)
 }
 
+#[test]
+fn selected_molecule_preserves_document_order_groups_and_ignored_nonatoms() {
+    let (mut doc, atoms, other) = drawing();
+    let note = doc.next_id();
+    doc.annotations.push(crate::document::Annotation {
+        id: note,
+        position: Point::new(0., 80.),
+        text: "Ethanol".into(),
+        format: Default::default(),
+    });
+    for modeled in [true, false] {
+        if !modeled {
+            doc.models.clear();
+        }
+        let before = doc.clone();
+        assert_eq!(selected_molecule(&doc, &[]), None);
+        assert_eq!(selected_molecule(&doc, &[note, u64::MAX]), None);
+        assert_eq!(
+            selected_molecule(&doc, &[note, atoms[2], u64::MAX, atoms[0], atoms[2]]),
+            Some(atoms.clone())
+        );
+        assert_eq!(selected_molecule(&doc, &[atoms[0], other]), None);
+        assert_eq!(selected_molecule(&doc, &[other, atoms[0]]), None);
+        assert_eq!(doc, before);
+    }
+    doc.contract(&[atoms[2], atoms[1], atoms[0]], "EtOH", "HOEt")
+        .unwrap();
+    assert_eq!(selected_molecule(&doc, &[atoms[1]]), Some(atoms));
+}
+
 fn commit(doc: &mut Document, before: Document) {
     transaction::apply(doc, &mut History::default(), before, false).unwrap();
 }
