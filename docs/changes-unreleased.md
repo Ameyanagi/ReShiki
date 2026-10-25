@@ -231,8 +231,6 @@ unchanged instead of asking for an already complete selection.
 | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | ![Artemisinin with overlapping peroxide oxygen labels](images/artemisinin-depiction/before.png) | ![Artemisinin with an outward methyl, separated oxygen labels and visible peroxide bond](images/artemisinin-depiction/after.png) |
 
-## Under review
-
 [@Ameyanagi](https://github.com/Ameyanagi) in
 [PR #578](https://github.com/Ameyanagi/ReShiki/pull/578):
 
