@@ -1,5 +1,12 @@
 # Native import layout completion
 
+The application now has a separate bounded policy for crowded long-backbone
+imports; see [the long-chain regression evidence](../docs/changes/long-chain-layout.md).
+It may replace those application coordinates after the default native call, or
+return a warning with the original drawing. The low-level public depiction
+reference contract, source chemistry, and the historical checkpoint below remain
+unchanged. The product policy has separate geometry and stereo regression tests.
+
 This checkpoint completes `native_import::execute` for SMILES, InChI, CDXML/CDX
 without a conformer, and reaction SMILES participants without a conformer. It
 uses the detached public solver from `00b8f1d`; it does not edit engine routing
