@@ -182,3 +182,129 @@ fn a_template_that_increases_collisions_is_not_published() -> anyhow::Result<()>
     );
     Ok(())
 }
+
+fn visible_identity(document: &crate::document::Document) -> anyhow::Result<String> {
+    let mut drawing = document.clone();
+    for atom in &mut drawing.atoms {
+        atom.stereo = None;
+        atom.cip_label = None;
+    }
+    for bond in &mut drawing.bonds {
+        bond.stereo = None;
+        bond.stereo_atoms.clear();
+    }
+    let visible = molecular::prepare(&drawing)?;
+    assert_eq!(
+        visible
+            .state
+            .metadata
+            .atoms
+            .iter()
+            .filter(|atom| atom.chiral_tag != 0)
+            .count(),
+        7
+    );
+    Ok(smiles::write::write(&visible.state, Default::default())?.text)
+}
+
+fn outward_methyl(document: &crate::document::Document) {
+    let center = document.atom(15).unwrap().position;
+    let methyl = document.atom(19).unwrap().position;
+    for neighbor in [14, 16, 17] {
+        let ring = document.atom(neighbor).unwrap().position;
+        assert!(
+            (methyl.x - center.x) * (ring.x - center.x)
+                + (methyl.y - center.y) * (ring.y - center.y)
+                < 0.,
+            "The methyl must be outside all three ring rays"
+        );
+    }
+}
+
+fn peroxide_ink(document: &crate::document::Document) {
+    use crate::{document::Point, scene::Primitive};
+    let a = document.atom(17).unwrap().position;
+    let b = document.atom(18).unwrap().position;
+    let point = a.offset((b.x - a.x) * 0.5, (b.y - a.y) * 0.5);
+    let inside = |polygon: &[Point]| {
+        polygon
+            .iter()
+            .zip(polygon.iter().cycle().skip(1))
+            .take(polygon.len())
+            .filter(|(a, b)| {
+                (a.y > point.y) != (b.y > point.y)
+                    && point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x
+            })
+            .count()
+            % 2
+            == 1
+    };
+    assert!(
+        crate::scene::primitives(document)
+            .iter()
+            .any(|part| match part {
+                Primitive::Polygon(points) => inside(points),
+                Primitive::Path {
+                    commands,
+                    filled: true,
+                    ..
+                } => crate::graphics::flattened(commands)
+                    .iter()
+                    .any(|points| inside(points)),
+                _ => false,
+            }),
+        "The actual scene must contain the peroxide O–O connector, not just its graph edge"
+    );
+}
+
+#[test]
+fn exterior_methyl_and_visible_peroxide_keep_all_seven_visible_stereocentres() -> anyhow::Result<()>
+{
+    let input = smiles::read(ARTEMISININ)?;
+    let expected = smiles::write::write(&input.prepared.state, Default::default())?.text;
+    let document = imported(ARTEMISININ, true)?;
+    outward_methyl(&document);
+    peroxide_ink(&document);
+    assert_eq!(visible_identity(&document)?, expected);
+    let cleaned = clean(&document)?.document;
+    outward_methyl(&cleaned);
+    peroxide_ink(&cleaned);
+    assert_eq!(visible_identity(&cleaned)?, expected);
+    let repeated = clean(&cleaned)?.document;
+    outward_methyl(&repeated);
+    peroxide_ink(&repeated);
+    assert_eq!(visible_identity(&repeated)?, expected);
+    for (a, b) in cleaned.atoms.iter().zip(&repeated.atoms) {
+        assert!(
+            a.position.distance(b.position) < 0.001,
+            "Repeated cleanup must not drift"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn cleanup_repairs_the_previous_inward_template_without_changing_visible_identity()
+-> anyhow::Result<()> {
+    let input = smiles::read(ARTEMISININ)?;
+    let mut molecule = super::super::molecule(input.prepared.state)?;
+    molecule.positions = depict::compute(
+        &molecule.state,
+        &vec![None; molecule.ids.len()],
+        None,
+        depict::Options {
+            use_ring_templates: true,
+            ..Default::default()
+        },
+    )?
+    .positions;
+    let drawing = molecular::for_import(&molecule, false, &input.prepared.dummy_labels)?;
+    let labels = drawing.labels()?;
+    let old = drawing.finish(labels)?;
+    let expected = visible_identity(&old)?;
+    let cleaned = clean(&old)?.document;
+    outward_methyl(&cleaned);
+    peroxide_ink(&cleaned);
+    assert_eq!(visible_identity(&cleaned)?, expected);
+    Ok(())
+}

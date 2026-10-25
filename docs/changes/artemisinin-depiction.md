@@ -112,3 +112,59 @@ Capture receipt (SHA-256):
 - Debug executable: `11d9ab248326d09d1288038a0aeb8f523dfa55f1249b9890d7ef27cf18ced9bc`.
 - Native cleanup/status image: `9cb1db22fb05d7ad6e0d144b62522c2262197bc930cac7494567f10527ebaf86`.
 - Native drawing/properties image: `7779d72966be6229d0bacdc91156ec97ac64e743a2e3b626d400ddf24e9643f8`.
+
+## Peroxide-adjacent methyl follow-up
+
+Review of the first implementation found a second readability problem. The
+peroxide-adjacent methyl pointed into the cage between the oxygen labels. The
+graph contained the peroxide O–O bond, but padded rectangular label bounds
+clipped its entire visible connector. Separating atom centres alone did not
+catch either defect.
+
+The input SMILES is correct. It matches the structures supplied by
+[PubChem](https://pubchem.ncbi.nlm.nih.gov/compound/artemisinin) and
+[ChEBI](https://www.ebi.ac.uk/chebi/CHEBI:223316). The first implementation's
+visible wedges also describe the correct seven stereocentres; its inward methyl
+was a poor projection, rather than a reason to flip one wedge or change the
+input. An independent RDKit 2026.03.6 check reconstructs the drawing from atom
+coordinates and wedge/hash directions, without reading stored stereo or CIP
+tags. Both the earlier template drawing and the refined drawing have InChIKey
+`BLUAFEHZUWYNDE-NNWCWBAJSA-N`.
+
+The follow-up moves a terminal carbon into the empty exterior sector of a
+crowded bridged-ring junction. It keeps the attachment bond length and ring
+coordinates, respects fixed atoms, and rejects a move that introduces a severe
+atom collision or a bond crossing. Import and cleanup use the same refinement;
+wedges are generated from the unchanged chemical state. A separate fused ring
+component cannot acquire this treatment merely because another component is
+bridged.
+
+For an otherwise missing plain single bond, the renderer can recover the clear
+span around rounded glyph corners using its existing font outline
+approximation. It retains the requested gap and stroke clearance, and requires
+a real gap between the unpadded label rectangles so that the visible connector
+also remains available to mechanism-arrow picking. Normal visible bond
+endpoints stay unchanged. Unknown rectangular glyph metrics, overlapping ink,
+very small label margins and excessively thick strokes retain conservative clipping.
+
+Saved coordinates are not rewritten on opening. Cleanup can refine the
+earlier inward-methyl drawing while preserving its visible stereochemistry.
+The original overlapping pre-template drawing still receives the existing
+atomic refusal instead of silently losing an ambiguous centre.
+
+The independent check after both import and cleanup finds all seven mapped
+centres: atom IDs **2 R, 5 S, 6 R, 10 S, 11 R, 12 S and 15 R**. The formula,
+molecular weight and canonical isomeric SMILES remain those recorded above.
+The source change uses no downloaded reference coordinates, images or molecular
+template data. The primary reference depictions were used for comparison.
+
+Follow-up source validation:
+
+- Full model library suite: **806 passed**, with 10 existing opt-in tests ignored.
+- Full IO library suite: **263 passed**, with five existing opt-in tests ignored.
+- Focused model and IO Clippy, including tests, passed with warnings denied.
+- New regressions check actual peroxide scene ink and mechanism-arrow picking,
+  fixed atoms, exterior collisions, crossing/touching/collinear bonds, separate
+  fused components, visible-only stereo perception, repeated cleanup, unknown
+  rectangular glyph metrics, underline bands, thick strokes and conservative
+  refusal of an unpickable rounded-corner span.

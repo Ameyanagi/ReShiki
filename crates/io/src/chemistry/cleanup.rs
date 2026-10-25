@@ -374,6 +374,11 @@ impl Prepared {
             {
                 return Err(Error::Layout.into());
             }
+            super::layout_refinement::exterior_terminals(
+                &part.molecule.state,
+                &mut layout,
+                &part.fixed,
+            );
             numeric::orient(
                 &part.molecule.positions,
                 &mut layout,

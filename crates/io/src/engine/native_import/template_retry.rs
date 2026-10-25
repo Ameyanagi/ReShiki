@@ -1,32 +1,9 @@
 //! Retry crowded bridged systems with native ring templates. The exact native
 //! depiction API and every collision-free import retain their existing output.
 use super::{State, depict};
+use crate::chemistry::layout_refinement::{bridged, exterior_terminals};
 use crate::chemistry::stereo::Point3;
 use std::collections::{HashMap, HashSet};
-
-fn bridged(state: &State) -> bool {
-    let mut remaining = 1_000_000usize;
-    let mut shared = HashMap::<(usize, usize), usize>::new();
-    let mut memberships = HashMap::<usize, Vec<usize>>::new();
-    for (ring, atoms) in state.rings.atoms.iter().enumerate() {
-        for &atom in atoms {
-            let previous = memberships.entry(atom).or_default();
-            for &other in previous.iter() {
-                let Some(next) = remaining.checked_sub(1) else {
-                    return false;
-                };
-                remaining = next;
-                let count = shared.entry((other, ring)).or_default();
-                *count += 1;
-                if *count >= 3 {
-                    return true;
-                }
-            }
-            previous.push(ring);
-        }
-    }
-    false
-}
 
 /// Count severe nonbonded collisions using a bounded-neighborhood grid rather
 /// than scanning every atom pair. Counts saturate once the result is known to
@@ -91,7 +68,9 @@ pub(super) fn improve(
         },
     ) && collisions(state, &candidate.positions, count) < count
     {
-        return candidate.positions;
+        let mut positions = candidate.positions;
+        exterior_terminals(state, &mut positions, &Default::default());
+        return positions;
     }
     original
 }
