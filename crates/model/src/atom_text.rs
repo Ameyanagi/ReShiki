@@ -300,6 +300,17 @@ fn apply_entry(
         {
             group.alignment = alignment;
         }
+        if doc
+            .abbreviation(id)
+            .is_none_or(|group| group.alignment.is_auto())
+            && let Some(alignment) = crate::scene::clearer_orientation(&result, id)
+            && let Some(group) = result
+                .abbreviations
+                .iter_mut()
+                .find(|group| group.anchor == id)
+        {
+            group.alignment = alignment;
+        }
         stereo::invalidate(doc, &mut result, &selected)?;
         result.validate()?;
         return Ok(result);

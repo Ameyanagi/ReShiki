@@ -12,6 +12,220 @@ fn alpha_glucose() -> Result<Document, String> {
     Ok(doc)
 }
 
+fn depicted_smiles(text: &str) -> anyhow::Result<Document> {
+    use crate::chemistry::{depict, document, smiles};
+    let prepared = smiles::prepare(text)?;
+    let state = prepared.state;
+    let ranks = state
+        .properties
+        .atoms
+        .iter()
+        .map(|atom| atom.cip_rank)
+        .collect::<Vec<_>>();
+    let conformer = depict::compute(&state, &ranks, None, Default::default())?;
+    let molecule = document::Molecule {
+        rdkit_version: crate::chemistry::RDKIT_VERSION,
+        ids: (1..=state.graph.atoms.len() as u64).collect(),
+        positions: conformer.positions,
+        state,
+    };
+    let drawing = document::for_import_scene(&molecule, false)?;
+    let labels = drawing.labels()?;
+    let doc = drawing.finish(labels)?;
+    Ok(doc)
+}
+
+fn pentaerythritol() -> anyhow::Result<(Document, Vec<u64>)> {
+    let doc = depicted_smiles("OCC(CO)(CO)CO")?;
+    let mut oxygens = doc
+        .atoms
+        .iter()
+        .filter(|atom| atom.element == "O")
+        .map(|atom| (atom.id, atom.position))
+        .collect::<Vec<_>>();
+    oxygens.sort_by(|a, b| a.1.y.total_cmp(&b.1.y));
+    oxygens[..2].sort_by(|a, b| a.1.x.total_cmp(&b.1.x));
+    oxygens[2..].sort_by(|a, b| b.1.x.total_cmp(&a.1.x));
+    Ok((doc, oxygens.into_iter().map(|(id, _)| id).collect()))
+}
+
+#[test]
+fn durene_methoxy_repeats_keep_the_established_outward_readings() -> anyhow::Result<()> {
+    let source = depicted_smiles("Cc1cc(C)c(C)cc1C")?;
+    let mut ends = source
+        .atoms
+        .iter()
+        .filter(|atom| {
+            atom.element == "C"
+                && source
+                    .bonds
+                    .iter()
+                    .filter(|bond| bond.a == atom.id || bond.b == atom.id)
+                    .count()
+                    == 1
+        })
+        .map(|atom| (atom.id, atom.position))
+        .collect::<Vec<_>>();
+    ends.sort_by(|a, b| a.1.y.total_cmp(&b.1.y).then(a.1.x.total_cmp(&b.1.x)));
+    assert_eq!(ends.len(), 4);
+    ends.swap(2, 3);
+    let mut product = source.clone();
+    let mut three = None;
+    for (index, &(id, position)) in ends.iter().enumerate() {
+        let bond = source
+            .bonds
+            .iter()
+            .find(|bond| bond.a == id || bond.b == id)
+            .unwrap();
+        let neighbor = source
+            .atom(if bond.a == id { bond.b } else { bond.a })
+            .unwrap();
+        let left = neighbor.position.x > position.x + 0.1;
+        product = apply(&product, id, "OMe", Mode::Auto).map_err(anyhow::Error::msg)?;
+        assert_eq!(
+            product.abbreviation(id).unwrap().text(&product),
+            if left { "MeO" } else { "OMe" }
+        );
+        if index == 2 {
+            three = Some(product.clone());
+        }
+    }
+    assert_eq!(
+        formula(&product).map_err(|error| anyhow::anyhow!("{error}"))?,
+        "C10H14O4"
+    );
+    if let Some(directory) = std::env::var_os("RESHIKI_STEREO_REPEAT_QA_DIR") {
+        let directory = std::path::PathBuf::from(directory);
+        std::fs::create_dir_all(&directory)?;
+        for (name, doc) in [
+            ("durene-input", source),
+            ("durene-three-methoxy", three.unwrap()),
+            ("durene-four-methoxy", product),
+        ] {
+            std::fs::write(
+                directory.join(format!("{name}.rsk")),
+                doc.file_json().map_err(anyhow::Error::msg)?,
+            )?;
+        }
+        eprintln!("Durene methyl ends: {ends:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn polyol_protection_faces_clear_ink_and_keeps_the_fourth_oxygen_targetable() -> anyhow::Result<()>
+{
+    let (source, oxygens) = pentaerythritol()?;
+    let mut product = source.clone();
+    for &oxygen in &oxygens[..3] {
+        product = apply(&product, oxygen, "OAc", Mode::Auto).map_err(anyhow::Error::msg)?;
+    }
+    let last = *oxygens.last().unwrap();
+    assert_eq!(
+        crate::scene::atom_label_hit(&product, product.atom(last).unwrap().position, 0.),
+        Some(last)
+    );
+    product = apply(&product, last, "OAc", Mode::Auto).map_err(anyhow::Error::msg)?;
+    assert_eq!(
+        formula(&product).map_err(|error| anyhow::anyhow!("{error}"))?,
+        "C13H20O8"
+    );
+    let mut overlaps = Vec::new();
+    for (index, a) in oxygens.iter().enumerate() {
+        for b in &oxygens[index + 1..] {
+            let a_ink = crate::scene::atom_label_ink_boxes(product.atom(*a).unwrap(), &product);
+            let b_ink = crate::scene::atom_label_ink_boxes(product.atom(*b).unwrap(), &product);
+            if a_ink.iter().any(|(lo, hi)| {
+                b_ink
+                    .iter()
+                    .any(|(a, b)| hi.x > a.x && lo.x < b.x && hi.y > a.y && lo.y < b.y)
+            }) {
+                overlaps.push((*a, *b));
+            }
+        }
+    }
+    assert!(overlaps.is_empty(), "Overlapping acetate ink: {overlaps:?}");
+    for &id in &oxygens {
+        let ink = crate::scene::atom_label_ink_boxes(product.atom(id).unwrap(), &product);
+        for bond in product
+            .bonds
+            .iter()
+            .filter(|bond| bond.a != id && bond.b != id && product.bond_visible(bond.a, bond.b))
+        {
+            let a = product.atom(bond.a).unwrap().position;
+            let b = product.atom(bond.b).unwrap().position;
+            assert!(
+                !ink.iter()
+                    .any(|&(lo, hi)| crate::atom_labels::segment_hits_rect(a, b, lo, hi)),
+                "Atom{id} ink crosses unrelated bond{}-{}",
+                bond.a,
+                bond.b
+            );
+        }
+    }
+    if let Some(directory) = std::env::var_os("RESHIKI_STEREO_REPEAT_QA_DIR") {
+        let directory = std::path::PathBuf::from(directory);
+        std::fs::create_dir_all(&directory)?;
+        std::fs::write(
+            directory.join("pentaerythritol-input.rsk"),
+            source.file_json().map_err(anyhow::Error::msg)?,
+        )?;
+        std::fs::write(
+            directory.join("pentaerythritol-tetraacetate.rsk"),
+            product.file_json().map_err(anyhow::Error::msg)?,
+        )?;
+        eprintln!("Polyol oxygen order: {oxygens:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn polyol_retyping_keeps_explicit_alignment() -> anyhow::Result<()> {
+    use crate::abbreviations::LabelAlignment;
+    let (source, oxygens) = pentaerythritol()?;
+    let id = oxygens[2];
+    let product = apply(&source, id, "OAc", Mode::Auto).map_err(anyhow::Error::msg)?;
+    for alignment in [
+        LabelAlignment::Left,
+        LabelAlignment::Right,
+        LabelAlignment::Center,
+        LabelAlignment::Above,
+    ] {
+        let mut placed = product.clone();
+        placed
+            .abbreviations
+            .iter_mut()
+            .find(|group| group.anchor == id)
+            .unwrap()
+            .alignment = alignment;
+        let retyped = apply(&placed, id, "OBn", Mode::Auto).map_err(anyhow::Error::msg)?;
+        assert_eq!(retyped.abbreviation(id).unwrap().alignment, alignment);
+    }
+    Ok(())
+}
+
+#[test]
+#[ignore = "Opt-in actual-model inputs for native protection QA"]
+fn glucose_protection_qa_inputs() -> Result<(), String> {
+    let directory = std::path::PathBuf::from(
+        std::env::var_os("RESHIKI_STEREO_REPEAT_QA_DIR")
+            .ok_or("Set RESHIKI_STEREO_REPEAT_QA_DIR")?,
+    );
+    std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+    let source = alpha_glucose()?;
+    std::fs::write(directory.join("glucose-input.rsk"), source.file_json()?)
+        .map_err(|error| error.to_string())?;
+    for label in ["OAc", "OBn"] {
+        let product = apply(&source, 10, label, Mode::Auto)?;
+        std::fs::write(
+            directory.join(format!("glucose-c4-{label}.rsk")),
+            product.file_json()?,
+        )
+        .map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
 fn restore_reference_windings(template: &Document, product: &Document) -> Document {
     let mut expected = product.clone();
     for source in template.atoms.iter().filter(|atom| atom.stereo.is_some()) {
@@ -121,6 +335,12 @@ fn chiral_alcohol() -> (Document, u64, u64) {
 fn label_edits_clear_nonstereogenic_centers_and_computed_priorities() -> Result<(), String> {
     let (mut source, center, oxygen) = chiral_alcohol();
     source.atom_mut(center).unwrap().cip_label = Some("old priority".into());
+    source.atom_mut(center).unwrap().explicit_h = 1;
+    source.atom_mut(center).unwrap().no_implicit = true;
+    source.bonds[0].stereo_authoritative = true;
+    source.bonds[0].projection = true;
+    source.bonds[0].z_order = 7;
+    source.bonds[0].color = crate::palette::Color::Custom([30, 80, 140]);
     let retained = apply(&source, oxygen, "Br", Mode::Auto)?;
     assert_eq!(
         retained.atom(center).unwrap().stereo,
@@ -131,6 +351,13 @@ fn label_edits_clear_nonstereogenic_centers_and_computed_priorities() -> Result<
     assert!(
         duplicate.atom(center).unwrap().stereo.is_none(),
         "Two identical fluorine ligands remove the center"
+    );
+    let mut without_stereo = source.clone();
+    without_stereo.atom_mut(center).unwrap().stereo = None;
+    let pre_cleanup_candidate = apply(&without_stereo, oxygen, "F", Mode::Auto)?;
+    assert_eq!(
+        duplicate, pre_cleanup_candidate,
+        "Cleanup may remove the tag, not its explicit H, implicit-H policy, bonds or drawing metadata"
     );
     let edited_center = apply(&source, center, "N", Mode::Auto)?;
     assert!(edited_center.atom(center).unwrap().stereo.is_none());
@@ -206,6 +433,22 @@ fn stereo_validation_is_scoped_and_failure_keeps_the_original_configuration() ->
     );
     assert_eq!(invalid, original);
     assert!(invalid.atom(center).unwrap().stereo.is_some());
+    let (mut generic, center, oxygen) = chiral_alcohol();
+    let winding = generic.atom_mut(center).unwrap().stereo.take();
+    generic = apply(&generic, 2, "Cl,Br", Mode::Auto)?;
+    generic.atom_mut(center).unwrap().stereo = winding;
+    generic.validate()?;
+    let before = generic.clone();
+    let failure = apply(&generic, oxygen, "OBn", Mode::Auto).unwrap_err();
+    assert!(
+        failure.starts_with("Could not verify stereochemistry after this label edit:"),
+        "{failure}"
+    );
+    assert!(failure.contains(crate::generic::NOTICE), "{failure}");
+    assert_eq!(
+        generic, before,
+        "An inconclusive connected generic case must remain atomic"
+    );
     Ok(())
 }
 

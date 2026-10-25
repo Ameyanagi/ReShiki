@@ -10,6 +10,8 @@ mod bond_pass;
 mod charge_placement;
 pub(crate) mod depth_field;
 pub(crate) mod graph;
+mod group_labels;
+pub(crate) use group_labels::clearer_orientation;
 mod occlusion;
 pub(crate) mod projected_bonds;
 mod svg;
@@ -178,27 +180,36 @@ pub fn atom_label_ink_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)>
 /// Keep this separate from geometric nearest-atom searches used for bond growth.
 pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
     let reach = LabelReach::new(doc);
-    doc.atoms.iter().rev().find_map(|atom| {
+    let mut best: Option<(bool, f32, u64)> = None;
+    for atom in doc.atoms.iter().rev() {
         // Laying out a label is costly, so skip atoms it cannot reach from.
         let limit = reach.of(atom).map_or(f32::INFINITY, |reach| reach + radius);
         if (atom.position.x - point.x).abs() > limit
             || (atom.position.y - point.y).abs() > limit
             || crate::models3d::hides(doc, atom.id)
         {
-            return None;
+            continue;
         }
         // Empty corners between a symbol and its stacked H/isotope/charge
         // must not hide a neighboring atom or bond from pointer targeting.
-        label_ink_boxes(&atom_label(atom, doc))
-            .into_iter()
-            .any(|(lo, hi)| {
-                point.x >= lo.x - radius
-                    && point.x <= hi.x + radius
-                    && point.y >= lo.y - radius
-                    && point.y <= hi.y + radius
-            })
-            .then_some(atom.id)
-    })
+        let runs = atom_label(atom, doc);
+        if !label_ink_boxes(&runs).into_iter().any(|(lo, hi)| {
+            point.x >= lo.x - radius
+                && point.x <= hi.x + radius
+                && point.y >= lo.y - radius
+                && point.y <= hi.y + radius
+        }) {
+            continue;
+        }
+        let core = group_labels::element_glyph_hit(atom, doc, &runs, point);
+        let distance = (atom.position.x - point.x).powi(2) + (atom.position.y - point.y).powi(2);
+        if best.is_none_or(|(old_core, old_distance, _)| {
+            core && !old_core || core == old_core && distance < old_distance
+        }) {
+            best = Some((core, distance, atom.id));
+        }
+    }
+    best.map(|(_, _, id)| id)
 }
 
 /// An upper bound on how far an atom's label ink reaches from the atom.

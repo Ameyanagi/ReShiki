@@ -7,6 +7,117 @@ use iced::keyboard::{
 use iced::widget::text_editor::{Action as Input, Edit as TextEdit, Motion};
 use reshiki::document::Point;
 
+pub(super) fn remembered_methoxy() -> (App, u64, u64) {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tool = Tool::Text;
+    app.tab.keyboard_drawing.leave();
+    let source = app.tab.doc.add_atom("C", Point::default());
+    let target = app.tab.doc.add_atom("C", Point::new(84., 0.));
+    app.tab.doc.add_bond(source, target, 1, "plain");
+    let _ = app.update(Message::AtomText(Action::Begin(Some(source))));
+    let _ = app.update(Message::AtomText(Action::Input("OMe".into())));
+    let _ = app.update(Message::AtomText(Action::Apply));
+    (app, source, target)
+}
+
+#[test]
+fn double_click_window_defers_only_presentation_and_repeat_is_one_undo_step() {
+    for elapsed in [1, 200, 449] {
+        let (mut app, _, target) = remembered_methoxy();
+        let before = app.tab.doc.clone();
+        let point = app.tab.doc.atom(target).unwrap().position;
+        let now = iced::time::Instant::now();
+        let _ = app.text_tool_atom_click_at(&Edit::Click(point), now);
+        assert_eq!(
+            app.tab.atom_text.as_ref().unwrap().present_after,
+            Some(now + DOUBLE_CLICK_INTERVAL)
+        );
+        assert_eq!(
+            app.tab
+                .atom_text
+                .as_ref()
+                .unwrap()
+                .editor
+                .selection()
+                .as_deref(),
+            Some("C")
+        );
+        let _ = app.text_tool_atom_click_at(
+            &Edit::Click(point),
+            now + std::time::Duration::from_millis(elapsed),
+        );
+        assert!(app.tab.atom_text.is_none(), "{elapsed} ms repeat");
+        assert_eq!(app.tab.doc.abbreviation(target).unwrap().label, "OMe");
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+    }
+}
+
+#[test]
+fn matching_label_and_modified_repeat_keep_their_immediate_editor_behavior() {
+    let (mut app, source, target) = remembered_methoxy();
+    let now = iced::time::Instant::now();
+    let point = app.tab.doc.atom(source).unwrap().position;
+    let before = app.tab.doc.clone();
+    let _ = app.text_tool_atom_click_at(&Edit::Click(point), now);
+    let _ = app.text_tool_atom_click_at(
+        &Edit::Click(point),
+        now + std::time::Duration::from_millis(200),
+    );
+    let state = app.tab.atom_text.as_ref().unwrap();
+    assert!(state.present_after.is_none());
+    assert_eq!(state.input, "OMe");
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::AtomText(Action::Apply));
+    let point = app.tab.doc.atom(target).unwrap().position;
+    let _ = app.text_tool_atom_click_at(
+        &Edit::RepeatLabel(point),
+        now + std::time::Duration::from_secs(1),
+    );
+    assert!(app.tab.atom_text.is_none());
+    assert_eq!(app.tab.doc.abbreviation(target).unwrap().label, "OMe");
+}
+
+#[test]
+fn the_450_ms_boundary_starts_a_new_edit_instead_of_repeating() {
+    let (mut app, _, target) = remembered_methoxy();
+    let before = app.tab.doc.clone();
+    let point = app.tab.doc.atom(target).unwrap().position;
+    let now = iced::time::Instant::now();
+    let _ = app.text_tool_atom_click_at(&Edit::Click(point), now);
+    let _ = app.text_tool_atom_click_at(&Edit::Click(point), now + DOUBLE_CLICK_INTERVAL);
+    assert_eq!(app.tab.doc, before);
+    assert!(app.tab.atom_text.is_some());
+}
+
+#[test]
+fn immediate_editing_reveals_and_stale_reveals_do_not_replace_a_new_draft() {
+    let (mut app, source, target) = remembered_methoxy();
+    let now = iced::time::Instant::now();
+    let point = app.tab.doc.atom(target).unwrap().position;
+    let _ = app.text_tool_atom_click_at(&Edit::Click(point), now);
+    let old = app.tab.atom_text.as_ref().unwrap().present_after.unwrap();
+    let _ = app.update(Message::AtomText(Action::Editor(Input::Edit(
+        TextEdit::Insert('N'),
+    ))));
+    let state = app.tab.atom_text.as_ref().unwrap();
+    assert_eq!(state.input, "N");
+    assert!(state.present_after.is_none());
+    let _ = app.update(Message::AtomText(Action::Apply));
+    let point = app.tab.doc.atom(source).unwrap().position;
+    let _ = app.text_tool_atom_click_at(
+        &Edit::Click(point),
+        now + std::time::Duration::from_millis(300),
+    );
+    let current = app.tab.atom_text.as_ref().unwrap().present_after;
+    assert_ne!(current, Some(old));
+    let _ = app.update(Message::AtomText(Action::Reveal(old)));
+    assert_eq!(app.tab.atom_text.as_ref().unwrap().present_after, current);
+    let _ = app.update(Message::AtomText(Action::Reveal(current.unwrap())));
+    assert!(app.tab.atom_text.as_ref().unwrap().present_after.is_none());
+}
+
 #[test]
 fn repeated_glucose_protection_retains_configuration_and_one_step_undo() -> anyhow::Result<()> {
     let mut template = reshiki::haworth::sugar_document(
