@@ -720,6 +720,9 @@ impl App {
                     .style(muted_text)
             ]
             .spacing(8);
+            for note in reshiki::models3d::crystal::import_notes(&self.tab.doc, &ids) {
+                body = body.push(text(note).size(11).style(muted_text));
+            }
             if let Ok(composition) = reshiki::models3d::crystal::composition(&self.tab.doc, &ids) {
                 body = body.push(
                     text(format!(
@@ -785,6 +788,10 @@ impl App {
                 .style(muted_text)
         ]
         .spacing(8);
+        let selected: Vec<_> = ids.iter().copied().collect();
+        for note in reshiki::models3d::crystal::import_notes(&self.tab.doc, &selected) {
+            body = body.push(text(note).size(11).style(muted_text));
+        }
         if key.is_some()
             && self
                 .tab

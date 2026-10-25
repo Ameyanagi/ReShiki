@@ -79,9 +79,8 @@ struct Host {
     mounted: bool,
     /// The listener that trades ⌘ and Control on a Mac, until `destroy`.
     command_key: Option<Closure<dyn FnMut(web_sys::Event)>>,
-    /// The listener that lets Ctrl/⌘+V paste into text fields, until
-    /// `destroy`.
-    field_paste: Option<PasteListeners>,
+    /// The clipboard handoff for canvas drawing shortcuts, until `destroy`.
+    canvas_paste: Option<PasteListeners>,
     /// The element's file drop listener, until `destroy`.
     drops: Option<(web_sys::Element, DragListener)>,
     /// The textarea that takes input method text, until `destroy`.
@@ -175,8 +174,8 @@ pub async fn mount(
     });
     ask_before_unload();
     // Before the ⌘ swap, so it sees the keys as pressed.
-    let paste = field_paste(&element);
-    HOST.with_borrow_mut(|host| host.field_paste = paste);
+    let paste = canvas_paste(&element);
+    HOST.with_borrow_mut(|host| host.canvas_paste = paste);
     if crate::platform::mac() {
         let swap = command_key(&element);
         HOST.with_borrow_mut(|host| host.command_key = swap);
@@ -243,7 +242,7 @@ pub(crate) fn platform_name() -> String {
         .unwrap_or_default()
 }
 
-/// `field_paste`'s listeners, one per event, as the paste listener's key
+/// `canvas_paste`'s listeners, one per event, as the paste listener's key
 /// reaches the key listener while it runs.
 type PasteListeners = [(&'static str, Closure<dyn FnMut(web_sys::Event)>); 2];
 
@@ -254,14 +253,11 @@ thread_local! {
     static RELAYING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-/// Let Ctrl/⌘+V paste into text fields. iced reads the clipboard while it
-/// handles the key, but a page may only read it from a paste event, which
-/// fires after the key and only when winit does not cancel the key. So the
-/// key waits: the browser pastes, the paste event hands its text to the
-/// clipboard Iced reads (vendor/window_clipboard), and the key then reaches
-/// the editor, which pastes into the field, or pastes a drawing as before.
-/// Copy and Cut need nothing here: Iced writes to the page's clipboard.
-fn field_paste(element: &web_sys::Element) -> Option<PasteListeners> {
+/// Keep the canvas's Ctrl/⌘+V clipboard handoff. The native paste event
+/// supplies clipboard text where available; otherwise a browser API read
+/// precedes the drawing shortcut. Text widgets use the input-method textarea's
+/// native paste event instead and never replay a key (see `ime`).
+fn canvas_paste(element: &web_sys::Element) -> Option<PasteListeners> {
     let window = web_sys::window()?;
     let element = element.clone();
     let mac = crate::platform::mac();
@@ -272,7 +268,7 @@ fn field_paste(element: &web_sys::Element) -> Option<PasteListeners> {
         let Some(key) = HELD_PASTE.take() else {
             return;
         };
-        // The field gets the text from the key, not the browser.
+        // The canvas handles the drawing shortcut, not native text insertion.
         paste.prevent_default();
         let text = paste
             .clipboard_data()
@@ -298,6 +294,15 @@ fn field_paste(element: &web_sys::Element) -> Option<PasteListeners> {
             || key.shift_key()
             || !is_v(key)
             || !editor_keys(&event, &element)
+        {
+            return;
+        }
+        // A real editable target can receive the browser's native paste.
+        // Replaying V after an asynchronous clipboard permission prompt can
+        // reach Iced before its modifier update and type a literal "v".
+        if key
+            .target()
+            .is_some_and(|target| target.is_instance_of::<web_sys::HtmlTextAreaElement>())
         {
             return;
         }
@@ -377,6 +382,14 @@ fn relay_key(key: &web_sys::KeyboardEvent) {
     let Some(canvas) = canvas else {
         return;
     };
+    // The read may have waited for browser permission. Do not deliver its
+    // drawing shortcut to a text widget or another page control focused since.
+    let focus = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.active_element());
+    if focus.as_ref() != Some(&canvas) {
+        return;
+    }
     let init = web_sys::KeyboardEventInit::new();
     init.set_bubbles(true);
     init.set_cancelable(true);
@@ -959,7 +972,7 @@ pub fn destroy() -> Result<(), JsError> {
     if let Some(input_method) = HOST.with_borrow_mut(|host| host.input_method.take()) {
         ime::stop(input_method);
     }
-    let paste = HOST.with_borrow_mut(|host| host.field_paste.take());
+    let paste = HOST.with_borrow_mut(|host| host.canvas_paste.take());
     if let (Some(paste), Some(window)) = (paste, web_sys::window()) {
         for (name, listener) in &paste {
             let _ = window.remove_event_listener_with_callback_and_bool(

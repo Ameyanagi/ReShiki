@@ -66,7 +66,7 @@ fn hit_selection_with_object(
         .map(|b| vec![b.a, b.b])
         .unwrap_or_default()
 }
-fn above_models(doc: &Document, id: u64) -> bool {
+pub(super) fn above_models(doc: &Document, id: u64) -> bool {
     doc.arrows.iter().any(|a| a.id == id)
         || doc.annotations.iter().any(|a| a.id == id)
         || doc.graphics.iter().any(|g| g.id == id && g.layer >= 0)
