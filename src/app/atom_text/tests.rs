@@ -956,14 +956,20 @@ fn repeated_labels_can_be_edited_and_the_edit_repeats_next() -> Result<(), Strin
     // A single click edits too; Esc above forgot the label, so type it anew.
     let _ = app.update(Message::Canvas(Edit::Click(Point::new(80., 0.))));
     assert_eq!(app.tab.atom_text.as_ref().ok_or("Draft")?.input, "OMe");
-    let _ = app.update(Message::AtomText(Action::Input("NH2".into())));
+    let _ = app.update(Message::AtomText(Action::Input("OEt".into())));
     // Option/Alt-click is a RepeatLabel without the first click.
     let _ = app.update(Message::Canvas(Edit::RepeatLabel(Point::new(160., 0.))));
     assert!(app.tab.atom_text.is_none());
-    assert_eq!(element(&app, atoms[2]), Some("N"));
+    assert_eq!(element(&app, atoms[2]), Some("O"));
+    for id in [atoms[1], atoms[2]] {
+        assert_eq!(
+            app.tab.doc.abbreviation(id).ok_or("Repeated group")?.label,
+            "OEt"
+        );
+    }
     assert_eq!(app.tab.history.undo_frames().len(), 4);
     let _ = app.update(Message::Canvas(Edit::Click(Point::new(80., 0.))));
-    assert_eq!(app.tab.atom_text.as_ref().ok_or("Draft")?.input, "NH2");
+    assert_eq!(app.tab.atom_text.as_ref().ok_or("Draft")?.input, "OEt");
     Ok(())
 }
 
@@ -977,7 +983,10 @@ fn escape_and_tool_changes_forget_the_carried_label() -> Result<(), String> {
         let _ = app.update(Message::Canvas(Edit::Click(Point::new(0., 0.))));
         let _ = app.update(Message::AtomText(Action::Input("OMe".into())));
         let _ = app.update(Message::AtomText(Action::Apply));
-        assert_eq!(app.last_label.as_deref(), Some("OMe"));
+        assert_eq!(
+            app.last_label.as_ref().map(|label| label.text.as_str()),
+            Some("OMe")
+        );
         if matches!(forget, Message::AtomText(_)) {
             let _ = app.update(Message::Canvas(Edit::Click(Point::new(80., 0.))));
         }
@@ -1005,6 +1014,134 @@ fn an_invalid_label_stays_open_when_another_atom_is_clicked() -> Result<(), Stri
     let draft = app.tab.atom_text.as_ref().ok_or("Draft")?;
     assert_eq!(draft.id, a);
     assert!(draft.error.is_some());
+    assert_eq!(app.tab.doc, before);
+    Ok(())
+}
+
+#[test]
+fn repeating_keeps_group_text_and_element_meanings_even_when_the_characters_match()
+-> Result<(), String> {
+    for (label, mode, target_label, target_mode) in [
+        ("Ac", Mode::Group, "Ac", Mode::Text),
+        ("Morph", Mode::Group, "Morph", Mode::Text),
+        ("Ac", Mode::Text, "Ac", Mode::Auto),
+        ("Morph", Mode::Text, "C", Mode::Auto),
+        ("N", Mode::Text, "N", Mode::Auto),
+        ("N", Mode::Auto, "N", Mode::Text),
+        ("Cl", Mode::Auto, "Cl", Mode::Text),
+        ("C", Mode::Auto, "C", Mode::Text),
+        ("Ac", Mode::Auto, "Ac", Mode::Text),
+    ] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tool = Tool::Text;
+        let mut ends = vec![];
+        for y in [0., 120.] {
+            let start = app.tab.doc.add_atom("C", Point::new(0., y));
+            let end = app.tab.doc.add_atom("C", Point::new(42., y));
+            app.tab.doc.add_bond(start, end, 1, "plain");
+            ends.push(end);
+        }
+        if label == "C" {
+            app.tab.doc.atom_mut(ends[0]).ok_or("Source")?.element = "F".into();
+        }
+        app.tab.doc = reshiki::atom_text::apply(&app.tab.doc, ends[1], target_label, target_mode)?;
+        let original = app.tab.doc.clone();
+        let _ = app.update(Message::AtomText(Action::Begin(Some(ends[0]))));
+        let _ = app.update(Message::AtomText(Action::Input(label.into())));
+        let _ = app.update(Message::AtomText(Action::Mode(mode)));
+        let _ = app.update(Message::AtomText(Action::Apply));
+        assert!(app.tab.atom_text.is_none(), "{label} {mode:?}");
+        assert_eq!(app.last_label.as_ref().ok_or("Remembered")?.mode, mode);
+        let source = app.tab.doc.clone();
+        let _ = app.update(Message::AtomText(Action::Repeat(ends[1])));
+        assert!(
+            app.tab.atom_text.is_none(),
+            "same spelling with another meaning must apply: {label} {mode:?}"
+        );
+        let atom = app.tab.doc.atom(ends[1]).ok_or("Target")?;
+        match mode {
+            Mode::Group => {
+                assert_eq!(
+                    app.tab.doc.abbreviation(ends[1]).ok_or("Group")?.label,
+                    label
+                );
+                assert_ne!(atom.element, "Ac");
+            }
+            Mode::Text => {
+                assert!(app.tab.doc.abbreviation(ends[1]).is_none());
+                assert_eq!(atom.element, "*");
+                assert_eq!(atom.display.variable.as_deref(), Some(label));
+            }
+            Mode::Auto => {
+                assert!(app.tab.doc.abbreviation(ends[1]).is_none());
+                assert_eq!(atom.element, label);
+                assert!(atom.display.variable.is_none());
+            }
+        }
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, source, "Undo repeat: {label} {mode:?}");
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, original, "Undo source: {label} {mode:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn repeating_a_group_keeps_its_reverse_caption_and_uses_the_new_bond_direction()
+-> Result<(), String> {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tool = Tool::Text;
+    let left = app.tab.doc.add_atom("C", Point::new(0., 0.));
+    let source = app.tab.doc.add_atom("C", Point::new(42., 0.));
+    app.tab.doc.add_bond(left, source, 1, "plain");
+    let target = app.tab.doc.add_atom("C", Point::new(0., 120.));
+    let right = app.tab.doc.add_atom("C", Point::new(42., 120.));
+    app.tab.doc.add_bond(target, right, 1, "plain");
+    let _ = app.update(Message::AtomText(Action::Begin(Some(source))));
+    let _ = app.update(Message::AtomText(Action::Input("OMe".into())));
+    let _ = app.update(Message::AtomText(Action::Apply));
+    assert_eq!(
+        app.last_label.as_ref().ok_or("Remembered")?.mode,
+        Mode::Group,
+        "Automatic OMe committed a real group"
+    );
+    let _ = app.update(Message::AtomText(Action::Begin(Some(source))));
+    let _ = app.update(Message::AtomText(Action::ReverseInput("H3CO".into())));
+    let _ = app.update(Message::AtomText(Action::Align(LabelAlignment::Above)));
+    let _ = app.update(Message::AtomText(Action::Apply));
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::AtomText(Action::Repeat(target)));
+    let group = app.tab.doc.abbreviation(target).ok_or("Repeated group")?;
+    assert_eq!(
+        (group.label.as_str(), group.reverse_label.as_str()),
+        ("OMe", "H3CO")
+    );
+    assert_eq!(group.text(&app.tab.doc), "H3CO");
+    assert_eq!(group.alignment, LabelAlignment::Auto);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    Ok(())
+}
+
+#[test]
+fn repeating_a_generic_list_keeps_its_choices_instead_of_literal_text() -> Result<(), String> {
+    let (mut app, atoms) = text_atoms(2);
+    app.tab.doc = reshiki::atom_text::apply(&app.tab.doc, atoms[1], "[Cl,Br,I]", Mode::Text)?;
+    let _ = app.update(Message::AtomText(Action::Begin(Some(atoms[0]))));
+    let _ = app.update(Message::AtomText(Action::Input("[Cl,Br,I]".into())));
+    let _ = app.update(Message::AtomText(Action::Apply));
+    assert_eq!(
+        app.last_label.as_ref().ok_or("Remembered")?.mode,
+        Mode::Auto
+    );
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::AtomText(Action::Repeat(atoms[1])));
+    assert!(app.tab.atom_text.is_none());
+    assert_eq!(app.tab.doc.generic.alternatives.len(), 2);
+    assert!(app.tab.doc.generic.owns_label(atoms[1]));
+    let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, before);
     Ok(())
 }

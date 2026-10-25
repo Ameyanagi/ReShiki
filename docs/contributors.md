@@ -22,6 +22,8 @@ Under review: @Ameyanagi — Crystal substitutions keep their cell and copies, u
 [PR #558](https://github.com/Ameyanagi/ReShiki/pull/558) · [QA report](changes/qa-crystal-substitution.md).
 Under review: @Ameyanagi — Large peptide imports avoid repeated ring searches during label placement. Long-running Structure-input operations show elapsed time and can be cancelled without changing the drawing.
 [PR #559](https://github.com/Ameyanagi/ReShiki/pull/559) · [QA report](changes/qa-508-import-performance.md).
+Under review: @Ameyanagi — See the label the Text tool will repeat, keep its chemical meaning, and read clear feedback for generic and refreshed drawings.
+[PR #560](https://github.com/Ameyanagi/ReShiki/pull/560) · [QA report](changes/qa-label-feedback.md).
 
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).

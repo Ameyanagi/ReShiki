@@ -218,6 +218,16 @@ impl State {
         }
     }
 }
+const GENERIC_PROPERTIES: &str =
+    "Generic structure · molecular properties are calculated after expansion.";
+
+/// This is the engine's specific deferred-analysis result, not a generic
+/// presence check: unrelated errors must retain their warning presentation.
+fn deferred_generic_properties(error: &str) -> Option<&'static str> {
+    (error.strip_prefix("Invalid drawing: ") == Some(reshiki::generic::NOTICE))
+        .then_some(GENERIC_PROPERTIES)
+}
+
 fn card<'a>(body: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
     container(body)
         .width(Length::Fill)
@@ -620,11 +630,13 @@ impl App {
             .as_deref()
             .filter(|notice| *notice != reshiki::atom_labels::refresh::GENERIC_NOTICE)
         {
-            body = body.push(
+            body = body.push(if let Some(notice) = deferred_generic_properties(error) {
+                text(notice).size(12).style(muted_text)
+            } else {
                 text(error)
                     .size(12)
-                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61))),
-            );
+                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61)))
+            });
         }
         if !molecular_first {
             body = body.push(self.molecular_section());
@@ -849,11 +861,13 @@ impl App {
             .as_ref()
             .filter(|(saved, _)| *saved == self.property_request_key())
         {
-            body = body.push(
+            body = body.push(if let Some(notice) = deferred_generic_properties(error) {
+                text(notice).size(12).style(muted_text)
+            } else {
                 text(error)
                     .size(12)
-                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61))),
-            );
+                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61)))
+            });
         } else {
             body = body.push(
                 text(if key.is_some() {
@@ -1613,3 +1627,9 @@ impl App {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod feedback_tests;
+
+#[cfg(test)]
+mod feedback_visual_tests;
