@@ -86,6 +86,65 @@ fn overlapping_atom_label_ink_keeps_reverse_paint_order() {
 }
 
 #[test]
+fn an_element_glyph_wins_over_a_nearer_overlapping_nickname() -> Result<(), String> {
+    let mut doc = Document::default();
+    let anchor = doc.add_atom("O", Point::default());
+    let neighbor = doc.add_atom("C", Point::new(42., 0.));
+    doc.add_bond(anchor, neighbor, 1, "plain");
+    doc = crate::atom_text::apply(&doc, anchor, "OAc", crate::atom_text::Mode::Auto)?;
+    doc.abbreviations
+        .iter_mut()
+        .find(|group| group.anchor == anchor)
+        .unwrap()
+        .alignment = crate::abbreviations::LabelAlignment::Right;
+    let (lo, hi) = atom_label_ink_boxes(doc.atom(anchor).unwrap(), &doc)[0];
+    let point = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+    let distance = doc.atom(anchor).unwrap().position.distance(point);
+    let oxygen = doc.add_atom("O", point.offset(-distance - 1., 0.));
+    doc.atom_mut(oxygen).unwrap().text_style = Some(crate::typography::TextStyle {
+        size_pt: 128.,
+        ..Default::default()
+    });
+    let contains = |(lo, hi): &(Point, Point)| {
+        point.x >= lo.x && point.x <= hi.x && point.y >= lo.y && point.y <= hi.y
+    };
+    assert!(
+        atom_label_ink_boxes(doc.atom(anchor).unwrap(), &doc)
+            .iter()
+            .any(contains)
+    );
+    assert!(
+        atom_label_ink_boxes(doc.atom(oxygen).unwrap(), &doc)
+            .iter()
+            .any(contains)
+    );
+    assert!(
+        doc.atom(anchor).unwrap().position.distance(point)
+            < doc.atom(oxygen).unwrap().position.distance(point),
+        "Core glyph priority must precede distance"
+    );
+    doc.atoms.sort_by_key(|atom| atom.id == anchor);
+    assert_eq!(atom_label_hit(&doc, point, 0.), Some(oxygen));
+    doc.atoms.reverse();
+    assert_eq!(atom_label_hit(&doc, point, 0.), Some(oxygen));
+    Ok(())
+}
+
+#[test]
+fn overlapping_free_labels_use_nearest_atom_before_paint_order() -> Result<(), String> {
+    let mut doc = Document::default();
+    let first = doc.add_atom("C", Point::default());
+    let last = doc.add_atom("C", Point::new(1., 0.));
+    for id in [first, last] {
+        doc = crate::atom_text::apply(&doc, id, "X", crate::atom_text::Mode::Text)?;
+    }
+    assert_eq!(atom_label_hit(&doc, Point::default(), 0.), Some(first));
+    doc.atoms.reverse();
+    assert_eq!(atom_label_hit(&doc, Point::default(), 0.), Some(first));
+    Ok(())
+}
+
+#[test]
 fn label_reach_bounds_label_ink_so_far_label_ends_still_hit() -> Result<(), String> {
     let mut long = Document::default();
     let id = long.add_atom("C", Point::default());

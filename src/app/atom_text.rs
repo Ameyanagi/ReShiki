@@ -9,12 +9,15 @@ use iced::{Element, Length, Task};
 use reshiki::abbreviations::LabelAlignment;
 use reshiki::atom_text::{self, Mode};
 use reshiki::typography::{Script, ScriptRun, StyleChange, TextFormat, TextStyle};
+mod presentation;
+const DOUBLE_CLICK_INTERVAL: std::time::Duration = std::time::Duration::from_millis(450);
 
 #[derive(Debug, Clone)]
 pub enum Action {
     Begin(Option<u64>),
     /// Put the last committed label on the atom without opening the editor.
     Repeat(u64),
+    Reveal(iced::time::Instant),
     Input(String),
     Suggest(String),
     Editor(text_editor::Action),
@@ -60,6 +63,7 @@ impl RememberedLabel {
 
 pub struct State {
     session: iced::widget::Id,
+    present_after: Option<iced::time::Instant>,
     id: u64,
     epoch: u64,
     input: String,
@@ -252,6 +256,14 @@ impl App {
         &mut self,
         edit: &crate::canvas::Edit,
     ) -> Option<Task<Message>> {
+        self.text_tool_atom_click_at(edit, iced::time::Instant::now())
+    }
+
+    fn text_tool_atom_click_at(
+        &mut self,
+        edit: &crate::canvas::Edit,
+        now: iced::time::Instant,
+    ) -> Option<Task<Message>> {
         use crate::canvas::Edit;
         let (Edit::Click(p) | Edit::RepeatLabel(p)) = edit else {
             return None;
@@ -259,18 +271,27 @@ impl App {
         let id = crate::canvas::hit_object(&self.tab.doc, *p, 8. / self.tab.camera.zoom)
             .filter(|id| self.tab.doc.atom(*id).is_some())?;
         // Counted here, not in the canvas, whose state the editor resets.
-        let now = iced::time::Instant::now();
-        let double = self
-            .text_click
-            .is_some_and(|(time, last)| last == id && now.duration_since(time).as_millis() < 450);
+        let double = self.text_click.is_some_and(|(time, last)| {
+            last == id && now.duration_since(time) < DOUBLE_CLICK_INTERVAL
+        });
         self.text_click = (!double).then_some((now, id));
-        Some(
-            self.atom_text_action(if double || matches!(edit, Edit::RepeatLabel(_)) {
-                Action::Repeat(id)
-            } else {
-                Action::Begin(Some(id))
-            }),
-        )
+        if double || matches!(edit, Edit::RepeatLabel(_)) {
+            return Some(self.atom_text_action(Action::Repeat(id)));
+        }
+        let task = self.atom_text_action(Action::Begin(Some(id)));
+        if self.last_label.is_some()
+            && let Some(state) = &mut self.tab.atom_text
+            && state.id == id
+            && state.members.is_none()
+            && state.error.is_none()
+            && !state.label_edited
+            && !state.scripts_edited
+            && !state.aligned
+            && !state.reverse_edited
+        {
+            state.present_after = Some(now + DOUBLE_CLICK_INTERVAL);
+        }
+        Some(task)
     }
 
     pub(super) fn atom_text_target(&self) -> Option<u64> {
@@ -347,6 +368,7 @@ impl App {
                 );
                 self.tab.atom_text = Some(State {
                     session: iced::widget::Id::unique(),
+                    present_after: None,
                     id,
                     epoch: self.tab.file_epoch,
                     input,
@@ -402,7 +424,9 @@ impl App {
                 return task;
             }
             Action::Input(input) => {
+                self.text_click = None;
                 if let Some(state) = &mut self.tab.atom_text {
+                    state.present_after = None;
                     state.replace_input(input);
                 }
             }
@@ -420,12 +444,15 @@ impl App {
                 return iced::widget::operation::focus("atom-text");
             }
             Action::Editor(action) => {
+                self.text_click = None;
                 if let Some(state) = &mut self.tab.atom_text {
+                    state.present_after = None;
                     state.editor_action(action);
                 }
             }
             Action::Script(script) => {
                 if let Some(state) = &mut self.tab.atom_text {
+                    state.present_after = None;
                     state.apply_script(script);
                 }
                 return iced::widget::operation::focus("atom-text");
@@ -440,6 +467,7 @@ impl App {
                         if let Some(group) = candidate.abbreviations.last() {
                             self.tab.atom_text = Some(State {
                                 session: iced::widget::Id::unique(),
+                                present_after: None,
                                 id: group.anchor,
                                 epoch: self.tab.file_epoch,
                                 input: String::new(),
@@ -469,6 +497,7 @@ impl App {
             }
             Action::ReverseInput(value) => {
                 if let Some(state) = &mut self.tab.atom_text {
+                    state.present_after = None;
                     state.reverse = value;
                     state.reverse_edited = true;
                     state.error = None;
@@ -476,6 +505,7 @@ impl App {
             }
             Action::Mode(mode) => {
                 if let Some(state) = &mut self.tab.atom_text {
+                    state.present_after = None;
                     state.label_edited |= state.mode != mode;
                     state.mode = mode;
                     state.error = None;
@@ -483,6 +513,7 @@ impl App {
             }
             Action::Align(alignment) => {
                 if let Some(state) = &mut self.tab.atom_text {
+                    state.present_after = None;
                     state.aligned |= state.alignment != alignment;
                     state.alignment = alignment;
                 }
@@ -490,6 +521,14 @@ impl App {
             Action::Cancel => {
                 self.tab.atom_text = None;
                 self.last_label = None;
+            }
+            Action::Reveal(until) => {
+                if let Some(state) = &mut self.tab.atom_text
+                    && state.present_after == Some(until)
+                {
+                    state.present_after = None;
+                    self.text_click = None;
+                }
             }
             Action::Apply => {
                 let Some(state) = &self.tab.atom_text else {
@@ -524,17 +563,10 @@ impl App {
                             {
                                 group.reverse_label = state.reverse.trim().into();
                             }
-                            // A new group keeps the placement of the label it
-                            // replaced, except that one without a reverse
-                            // spelling (ONp) cannot take Right, which turns it.
-                            if state.members.is_some()
-                                || state.aligned
-                                || old.is_some_and(|g| {
-                                    g.label == group.label
-                                        || !group.reverse_label.is_empty()
-                                        || state.alignment != LabelAlignment::Right
-                                })
-                            {
+                            // The model preserves explicit placement and may
+                            // choose a clearer side for Automatic. Only an
+                            // actual alignment edit or contraction overrides it.
+                            if state.members.is_some() || state.aligned {
                                 group.alignment = state.alignment;
                             }
                         } else if state.aligned {
@@ -546,6 +578,7 @@ impl App {
                         }
                         if let Err(error) = doc.validate() {
                             if let Some(state) = &mut self.tab.atom_text {
+                                state.present_after = None;
                                 state.error = Some(error);
                             }
                             return Task::none();
@@ -559,6 +592,7 @@ impl App {
                     }
                     Err(error) => {
                         if let Some(state) = &mut self.tab.atom_text {
+                            state.present_after = None;
                             state.error = Some(error);
                         }
                     }
@@ -839,6 +873,7 @@ impl App {
                 },
             )
         });
+        let popup = presentation::wrap(opaque(popup), state.present_after);
         let target = self.tab.doc.atom(state.id).map(|atom| atom.position);
         let away = target
             .map(|target| {
@@ -870,7 +905,7 @@ impl App {
             .unwrap_or(iced::Vector::ZERO);
         Element::new(placement::Anchored::new(
             base,
-            opaque(popup),
+            popup,
             state.session.clone(),
             target,
             away,
@@ -908,6 +943,12 @@ pub(super) fn canvas_anchor(base: Element<'_, Message>) -> Element<'_, Message> 
         .into()
 }
 
+#[cfg(test)]
+mod presentation_tests;
+#[cfg(test)]
+mod qa_ui;
+#[cfg(test)]
+mod qa_visuals;
 #[cfg(test)]
 mod tests;
 

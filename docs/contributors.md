@@ -52,6 +52,10 @@ rotation hints that yield to editing, a three-column atom palette and retained
 Structure drafts ready to replace or clear in
 [PR #567](https://github.com/Ameyanagi/ReShiki/pull/567), with
 [matched visual and native interaction review](changes/qa-drawing-polish.md).
+Under review: @Ameyanagi — retained tetrahedral configuration during atom-label
+edits, clear reversible-group placement and repeat gestures without an editor
+flash in [PR #568](https://github.com/Ameyanagi/ReShiki/pull/568).
+[Matched chemistry, rendering and native evidence](changes/qa-stereo-repeat.md).
 
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).

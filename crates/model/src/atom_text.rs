@@ -54,6 +54,7 @@ fn catalog_text(text: &str) -> bool {
     known_group(text) || !crate::abbreviations::named(text).is_empty()
 }
 mod hydride;
+mod stereo;
 pub use hydride::entry;
 mod from_text;
 pub use from_text::{
@@ -304,7 +305,18 @@ fn apply_entry(
         {
             group.alignment = alignment;
         }
-        result.invalidate_chemistry(&selected);
+        if doc
+            .abbreviation(id)
+            .is_none_or(|group| group.alignment.is_auto())
+            && let Some(alignment) = crate::scene::clearer_orientation(&result, id)
+            && let Some(group) = result
+                .abbreviations
+                .iter_mut()
+                .find(|group| group.anchor == id)
+        {
+            group.alignment = alignment;
+        }
+        stereo::invalidate(doc, &mut result, &selected)?;
         result.validate()?;
         return Ok(result);
     }
@@ -379,7 +391,7 @@ fn apply_entry(
         a.display.carbons = Some(crate::atom_labels::Carbons::All);
     }
     if previous != (a.element.clone(), a.charge, a.explicit_h, a.no_implicit) {
-        result.invalidate_chemistry(&[id]);
+        stereo::invalidate(doc, &mut result, &[id])?;
     }
     result.validate()?;
     Ok(result)
