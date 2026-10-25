@@ -31,6 +31,13 @@ Right-click and choose **Copy as…** to choose one format: **PNG**, **SVG**, **
 
 PNG, SVG and PDF copy the visible figure without the canvas background. Molecular formats copy chemical data, not captions or figure layout. Select a molecule within a reaction for MOL, SMILES or InChI. RXN and reaction SMILES require one complete, explicitly defined reaction with reactants and products; a drawn arrow alone does not assign roles. The submenu explains unavailable formats. CDXML and CDX use the strict drawing exporters and do not silently substitute a picture when a feature cannot be represented.
 
+A text-label refusal names the first label and counts any others. It suggests
+ordinary **Cmd/Ctrl+C** as an editable-copy alternative and native `.rsk` to keep
+the complete drawing. Ordinary Copy can still use its documented picture
+fallback when editable exchange is unavailable. Inner ring curves have their
+own refusal. Long status messages show a visible **…** beside the text; hover
+over the message or that cue to read the full explanation.
+
 Conversion finishes before the clipboard changes. If conversion fails, or the drawing or selection changes before it is ready, the previous clipboard stays intact. Format warnings appear in the copy receipt. Switching tabs keeps the request with its source drawing; closing that tab before preparation completes discards it. No drawing, selection or Undo history is changed by Copy as.
 
 **ChemDoodle JSON · reaction** prepares plain text for a compatible sketcher's explicit JSON import, using the [published ChemDoodle JSON schema](https://web.chemdoodle.com/docs/chemdoodle-json-format). It preserves reactant/product membership through the arrow's atom-ID references, molecular connectivity, coordinates, charge, isotopes and attached hydrogen counts. Separate explicit H atoms remain separate. It currently requires one forward reaction, one connected molecule per participant and coefficients of one. Valid aromatic molecules use Kekulé single/double bonds with preserved attached hydrogen counts. Agents, atom maps, stereo (including stereo inferred from geometry), radicals, special bonds, attachment atoms and collapsed abbreviations are rejected before the clipboard changes. Captions and drawing styles are omitted with a visible receipt notice. The copied text does not contact CAS or submit a search; see the [manual SciFinder handoff](scifinder-handoff.md).
@@ -98,7 +105,7 @@ their ownership metadata survives.
 
 The browser editor uses the page's clipboard, which holds only text, HTML, PNG and, in Chrome and Edge, SVG. **Cmd/Ctrl+C** puts a PNG picture of the selection on it, the same picture as HTML for Word, Google Docs and mail, and SMILES as text when the selection has molecules; the picture in the HTML also carries the ReShiki drawing, so pasting it back into a browser editor keeps it editable. **Cmd/Ctrl+Shift+C** copies just the picture, **Copy as → PNG** the PNG and **Copy as → SVG** the SVG with its source as text. **Cmd/Ctrl+V** tries a ReShiki drawing, then text that imports as chemistry (SMILES, MOL, CDXML, InChI and the others above), then a PNG as a picture; **Import → Paste picture** takes the picture. Browsers cannot put PDF or CDX on the clipboard, or read ChemDraw's or Office's own formats, so use **Export** for PDF and CDX, and copy CDXML text from ChemDraw (**Edit → Copy As → CDXML Text**) for an editable structure. The status bar says when a copy or paste worked, or why the browser refused: for example, when clipboard access is blocked for the site or the page is not on https. A page that embeds the editor in its own iframe must allow `clipboard-read` and `clipboard-write`.
 
-Text fields, such as the font box, Help search, the Import boxes, captions and property fields, copy, cut and paste plain text through the system clipboard with **Cmd/Ctrl+C**, **X** and **V**, as on the desktop. Pasting into a field uses the browser's own paste, so it needs no clipboard permission. A browser that sends no paste event reads the text through the Clipboard API instead, where the page may read it.
+Text fields, such as the font box, Help search, the Import boxes, captions and property fields, copy, cut and paste plain text through the system clipboard with **Cmd/Ctrl+C**, **X** and **V**, as on the desktop. Pasting into a field uses the browser's own paste, so it needs no clipboard-read permission or asynchronous clipboard prompt. The clipboard text goes directly to the focused field, including Japanese and other composed text.
 
 ## Boundaries
 

@@ -71,6 +71,8 @@ pub(super) struct DocumentTab {
     // Derived chemistry and in-flight work.
     pub(super) analysis: Option<Analysis>,
     pub(super) busy: bool,
+    pub(super) engine_job: Option<super::engine_jobs::Pending>,
+    pub(super) engine_serial: u64,
     pub(super) clipboard_busy: bool,
     pub(super) labels_dirty: bool,
     pub(super) label_refresh: label_refresh::State,
@@ -182,6 +184,8 @@ impl DocumentTab {
             model_morph: None,
             analysis: None,
             busy: false,
+            engine_job: None,
+            engine_serial: 0,
             clipboard_busy: false,
             labels_dirty: false,
             label_refresh: Default::default(),

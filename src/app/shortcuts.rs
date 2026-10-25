@@ -466,7 +466,11 @@ impl App {
                     self.tab.selected = previous_selection;
                     return false;
                 }
-                self.status = status.into();
+                // Keep the transaction's data-loss notice above a shortcut's
+                // ordinary success caption, such as “Double bond”.
+                if self.status != super::CELL_REMOVED_NOTICE {
+                    self.status = status.into();
+                }
                 self.sync_typography();
                 self.sync_bonds();
                 true

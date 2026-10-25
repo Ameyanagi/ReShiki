@@ -46,6 +46,67 @@ fn top(app: &App) -> &Command {
     app.commands.current().expect("a result")
 }
 
+#[test]
+fn blocked_3d_scale_offers_an_explicit_2d_recovery_and_two_undo_steps() {
+    let mut app = app();
+    let (doc, molecule, _) = crate::canvas::tilt::shown(reshiki::models3d::Display::ThreeD);
+    app.tab.doc = doc;
+    app.tab.selected = molecule.to_vec();
+    let original = app.tab.doc.clone();
+    search(&mut app, "scale 150");
+    let ranked = app.commands.ranked();
+    assert_eq!(ranked[0].name, "Scale selection to 150%");
+    assert_eq!(ranked[1].name, "Show as 2D drawing");
+    assert!(app.command_unavailable(ranked[0]).is_some());
+    assert!(app.command_unavailable(ranked[1]).is_none());
+    let _ = app.update(Message::Commands(Action::Move(1)));
+    let _ = app.update(Message::Commands(Action::Submit));
+    assert!(!app.commands.open);
+    assert_eq!(
+        app.tab.doc.models[0].display,
+        reshiki::models3d::Display::TwoD
+    );
+    let two_d = app.tab.doc.clone();
+    let (lo, hi) = reshiki::scene::selection_bounds(&two_d, &molecule).unwrap();
+    run(&mut app, "scale 150");
+    assert!(!app.error, "{}", app.status);
+    let scaled = app.tab.doc.clone();
+    let (scaled_lo, scaled_hi) = reshiki::scene::selection_bounds(&scaled, &molecule).unwrap();
+    // Atom positions, rather than fixed-size label ink, follow the scale.
+    let distance = |doc: &Document| {
+        doc.atom(molecule[0])
+            .unwrap()
+            .position
+            .distance(doc.atom(molecule[1]).unwrap().position)
+    };
+    assert!((distance(&scaled) / distance(&two_d) - 1.5).abs() < 1e-4);
+    assert!(scaled_hi.x - scaled_lo.x > hi.x - lo.x);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, two_d);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, original);
+    assert!(!app.tab.history.can_undo());
+
+    // An ordinary selection or an unrelated unavailable numeric command does
+    // not acquire a model-switch suggestion.
+    app.tab.doc.models.clear();
+    search(&mut app, "scale 150");
+    assert!(
+        !app.commands
+            .ranked()
+            .iter()
+            .any(|row| row.name == "Show as 2D drawing")
+    );
+    app.tab.selected.clear();
+    search(&mut app, "scale 150");
+    assert!(
+        !app.commands
+            .ranked()
+            .iter()
+            .any(|row| row.name == "Show as 2D drawing")
+    );
+}
+
 fn ethane(app: &mut App) -> (u64, u64) {
     let a = app.tab.doc.add_atom("C", Point::new(0., 0.));
     let b = app.tab.doc.add_atom("C", Point::new(42., 0.));

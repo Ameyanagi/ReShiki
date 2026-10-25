@@ -193,6 +193,29 @@ fn position(doc: &Document, atoms: &[u64], caption: &Annotation) -> Option<Point
     Some(Point::new((lo.x + hi.x - width) / 2., hi.y + gap))
 }
 
+/// Follow a geometry-only preview for complete named molecules among `ids`.
+/// This only places existing captions. The final transaction still checks
+/// their chemical identity and association through [`reconcile`].
+pub fn preview_layout(doc: &mut Document, ids: &[u64]) {
+    let positions: Vec<_> = doc
+        .molecule_names
+        .iter()
+        .filter(|name| name.atoms.iter().all(|id| ids.contains(id)))
+        .filter_map(|name| {
+            let caption = doc.annotations.iter().find(|a| a.id == name.annotation)?;
+            (caption.text == name.text)
+                .then(|| position(doc, &name.atoms, caption))
+                .flatten()
+                .map(|at| (name.annotation, at))
+        })
+        .collect();
+    for (id, at) in positions {
+        if let Some(caption) = doc.annotations.iter_mut().find(|a| a.id == id) {
+            caption.position = at;
+        }
+    }
+}
+
 /// Insert or reuse the verified caption; all visible text uses the regular
 /// renderer, editing, native save and figure/clipboard export paths.
 pub fn show(

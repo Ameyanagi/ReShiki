@@ -1,0 +1,74 @@
+[
+  {
+    "after": {
+      "acceptors": 3,
+      "donors": 0,
+      "exact_mass": 194.08037556,
+      "formula": "C8H10N4O2",
+      "inchi": "InChI=1S/C8H10N4O2/c1-10-4-9-6-5(10)7(13)12(3)8(14)11(6)2/h4H,1-3H3",
+      "inchikey": "RYYVLZVUVIJVGH-UHFFFAOYSA-N",
+      "logp": -1.029300000000001,
+      "mass": 194.19399999999996,
+      "rings": 2,
+      "smiles": "Cn1c(=O)c2c(ncn2C)n(C)c1=O",
+      "tpsa": 61.82,
+      "unpaired_electrons": 0
+    },
+    "before": {
+      "acceptors": 3,
+      "donors": 0,
+      "exact_mass": 194.08037556,
+      "formula": "C8H10N4O2",
+      "inchi": "InChI=1S/C8H10N4O2/c1-10-4-9-6-5(10)7(13)12(3)8(14)11(6)2/h4H,1-3H3",
+      "inchikey": "RYYVLZVUVIJVGH-UHFFFAOYSA-N",
+      "logp": -1.029300000000001,
+      "mass": 194.19399999999996,
+      "rings": 2,
+      "smiles": "Cn1c(=O)c2c(ncn2C)n(C)c1=O",
+      "tpsa": 61.82,
+      "unpaired_electrons": 0
+    },
+    "formula": "C8H10N4O2",
+    "generated_hydrogens": 10,
+    "name": "caffeine",
+    "original_atom_count": 14,
+    "parser": "OPSIN Rust port · local deterministic parser",
+    "stereocenters": 0
+  },
+  {
+    "after": {
+      "acceptors": 6,
+      "donors": 5,
+      "exact_mass": 180.063388104,
+      "formula": "C6H12O6",
+      "inchi": "InChI=1S/C6H12O6/c7-1-2-3(8)4(9)5(10)6(11)12-2/h2-11H,1H2/t2-,3-,4+,5-,6-/m1/s1",
+      "inchikey": "WQZGKKKJIJFFOK-VFUOTHLCSA-N",
+      "logp": -3.2214000000000005,
+      "mass": 180.15599999999998,
+      "rings": 1,
+      "smiles": "OC[C@H]1O[C@@H](O)[C@H](O)[C@@H](O)[C@@H]1O",
+      "tpsa": 110.38000000000001,
+      "unpaired_electrons": 0
+    },
+    "before": {
+      "acceptors": 6,
+      "donors": 5,
+      "exact_mass": 180.063388104,
+      "formula": "C6H12O6",
+      "inchi": "InChI=1S/C6H12O6/c7-1-2-3(8)4(9)5(10)6(11)12-2/h2-11H,1H2/t2-,3-,4+,5-,6-/m1/s1",
+      "inchikey": "WQZGKKKJIJFFOK-VFUOTHLCSA-N",
+      "logp": -3.2214000000000005,
+      "mass": 180.15599999999998,
+      "rings": 1,
+      "smiles": "OC[C@H]1O[C@@H](O)[C@H](O)[C@@H](O)[C@@H]1O",
+      "tpsa": 110.38000000000001,
+      "unpaired_electrons": 0
+    },
+    "formula": "C6H12O6",
+    "generated_hydrogens": 12,
+    "name": "β-D-glucopyranose",
+    "original_atom_count": 12,
+    "parser": "OPSIN Rust port · local deterministic parser",
+    "stereocenters": 5
+  }
+]

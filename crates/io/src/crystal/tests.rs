@@ -1,5 +1,5 @@
 use super::*;
-use crate::document::{CRYSTALS, MODELS_3D, Point, VERSION};
+use crate::document::{DISTANCE_BONDS, MODELS_3D, Point, VERSION};
 use crate::models3d::{Display, Model3d};
 
 const NACL: &str = include_str!("../../../../tests/fixtures/crystal/nacl.cif");
@@ -54,7 +54,7 @@ fn nacl_keeps_each_atom_once_with_bonds_leaving_the_cell() {
     let m = model(&doc);
     assert_eq!((count(&doc, "Na"), count(&doc, "Cl")), (4, 4));
     assert_eq!(m.display, Display::TwoD);
-    assert_eq!(doc.version, CRYSTALS);
+    assert_eq!(doc.version, DISTANCE_BONDS);
     for atom in &doc.atoms {
         assert!(
             fractional(m, atom.id)
@@ -264,6 +264,32 @@ fn disorder_keeps_the_first_alternative() {
     let labels: Vec<_> = model(&doc).sites.iter().map(|s| s.label.clone()).collect();
     assert_eq!(labels, ["C1", "O1A"]);
     assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert_eq!(warnings, model(&doc).notes);
+    assert!(warnings[0].contains("2 alternative site records"));
+}
+
+#[test]
+fn cod_ferrocene_import_note_survives_native_save_and_reopen() {
+    let (doc, warnings) = open(
+        "cif",
+        include_str!("../../../../tests/fixtures/crystal/cod-7033930.cif"),
+    );
+    assert_eq!(model(&doc).notes, warnings);
+    assert!(
+        warnings
+            .iter()
+            .any(|note| note.contains("10 alternative site records"))
+    );
+    let composition = crate::models3d::crystal::composition(&doc, &[]).unwrap();
+    assert_eq!(composition.formula, "C20H20Fe2");
+    let saved = doc.file_json().unwrap();
+    let reopened = Document::from_json(&saved).unwrap();
+    assert_eq!(model(&reopened).notes, warnings);
+    assert_eq!(reopened.models, doc.models);
+    assert_eq!(
+        crate::models3d::crystal::import_notes(&reopened, &[]),
+        warnings
+    );
 }
 
 #[test]
@@ -273,6 +299,7 @@ fn atoms_on_the_cell_boundary_are_kept_once() {
     );
     let (doc, warnings) = open("cif", &text);
     assert_eq!(doc.atoms.len(), 1);
+    assert_eq!(model(&doc).notes, warnings);
     assert!(
         warnings.iter().any(|w| w.contains("no symmetry operators")),
         "{warnings:?}"
@@ -452,7 +479,13 @@ fn pdb_keeps_the_first_alternate_location_of_each_residue() {
     .concat();
     let (doc, warnings) = open("pdb", &text);
     assert_eq!(doc.atoms.len(), 2);
-    assert!(warnings[0].contains("left out 2 atoms"), "{warnings:?}");
+    assert!(
+        warnings[0].contains("left out 2 atom records"),
+        "{warnings:?}"
+    );
+    assert_eq!(model(&doc).notes, warnings);
+    let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(model(&reopened).notes, warnings);
 }
 
 #[test]
@@ -1253,4 +1286,76 @@ fn large_repeats_still_keep_atom_labels_apart() {
         doc.models[0].rotation,
         crate::models3d::Along::C.rotation(&cell)
     );
+}
+
+#[test]
+fn crystal_substitutions_keep_the_cell_copies_and_formula_after_save() {
+    use crate::{atom_text, document::History, transaction};
+    for (source, label, expected) in [("Na", "K+", "Cl4KNa3"), ("Cl", "Br", "BrCl3Na4+")] {
+        let (mut doc, _) = open("cif", NACL);
+        doc.models[0].repeat = [2, 1, 1];
+        let before = doc.clone();
+        // Prime the renderer's kept-copy cache before changing the element.
+        let _ = crate::scene::svg(&before);
+        let id = doc.atoms.iter().find(|a| a.element == source).unwrap().id;
+        doc = atom_text::apply(&doc, id, label, atom_text::Mode::Auto).unwrap();
+        let mut history = History::default();
+        transaction::apply(&mut doc, &mut history, before.clone(), false).unwrap();
+        assert_eq!(doc.models, before.models, "{source} → {label}");
+        assert!(doc.atom(id).unwrap().no_implicit);
+        let symbol = if source == "Na" { "K" } else { "Br" };
+        let svg = crate::scene::svg(&doc);
+        assert!(
+            svg.matches(&format!(">{symbol}</text>")).count() > 1,
+            "copies must show {symbol}"
+        );
+        let fresh = doc.clone();
+        let fresh_svg = std::thread::spawn(move || crate::scene::svg(&fresh))
+            .join()
+            .unwrap();
+        assert_eq!(
+            svg, fresh_svg,
+            "the kept-copy cache must follow the element edit"
+        );
+        assert_eq!(
+            crate::models3d::crystal::composition(&doc, &[])
+                .unwrap()
+                .formula,
+            expected
+        );
+        let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+        assert_eq!(reopened.models, doc.models);
+        assert_eq!(reopened.atoms, doc.atoms);
+        assert!(history.undo(&mut doc));
+        assert_eq!(doc, before);
+        assert!(!history.undo(&mut doc));
+    }
+}
+
+#[test]
+fn typed_crystal_charge_changes_keep_explicit_sites_and_the_cell() {
+    use crate::{atom_text, transaction};
+    for (label, charge) in [("Na+2", 2), ("Na", 0)] {
+        let (before, _) = open("cif", NACL);
+        let id = before.atoms.iter().find(|a| a.element == "Na").unwrap().id;
+        let mut doc = atom_text::apply(&before, id, label, atom_text::Mode::Auto).unwrap();
+        let _ = transaction::reconcile(&mut doc, before.clone()).unwrap();
+        assert_eq!(doc.models, before.models);
+        assert_eq!(doc.atom(id).unwrap().charge, charge);
+        assert!(doc.atom(id).unwrap().no_implicit);
+    }
+}
+
+#[test]
+fn overlap_note_is_kept_on_a_model_without_a_cell_too() {
+    let (doc, warnings) = open("xyz", "3\nargon duplicates\nAr 0 0 0\nAr 0 0 0\nAr 0 0 0\n");
+    assert_eq!(doc.atoms.len(), 1);
+    assert!(
+        warnings
+            .iter()
+            .any(|note| note.contains("2 overlapping atoms"))
+    );
+    assert_eq!(model(&doc).notes, warnings);
+    let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(model(&reopened).notes, warnings);
 }

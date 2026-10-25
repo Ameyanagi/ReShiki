@@ -2,11 +2,11 @@
 
 ## Find a shortcut
 
-Open **Help** at the bottom of the tool strip, or press **?** (away from atoms and bonds; over one, **?** opens its properties), **F1** or **Cmd/Ctrl+Shift+/** (Cmd+? on macOS). **Cmd/Ctrl+/** remains **Fit drawing**. Help is a searchable list of every shortcut. Type part of an action, description or key: **wedge**, **boc**, **ring**, **⇧R** or **shift r** all work, and a few synonyms per entry such as **stereo** or **naphthalene** find the matching key. Lowercase and uppercase keys rank separately, so **r** lists the ring tool first and **R** the saturated/aromatic toggle.
+Open **Help** at the bottom of the tool strip, or press **?** (away from atoms and bonds; over one, **?** opens its properties), **F1** or **Cmd/Ctrl+Shift+/** (Cmd+? on macOS). **Cmd/Ctrl+/** remains **Fit drawing**. Help is a searchable list of every shortcut. Type part of an action, description or key: **wedge**, **boc**, **ring**, **⇧R** or **shift r** all work, and a few synonyms per entry such as **stereo** or **naphthalene** find the matching key. Lowercase and uppercase keys rank separately: **r** finds the ring tool and Variable R, while **R** finds the saturated/aromatic toggle. With keyboard drawing on and Select or Lasso active, rows that work in that mode win equal-score ties; classic empty-canvas keys carry an **F8 off** note. With keyboard drawing off or another drawing tool active, the usual registry tie-break applies. An empty search always keeps registry order.
 
 Each row shows the keys as the menus show them (symbols on macOS, words elsewhere), the action, a one-line description and where it applies: atom, bond, selection, empty canvas, keyboard drawing or anywhere. **Up/Down** (or Page Up/Page Down) move the selection, **Enter** or a click selects a row, and **Escape** closes Help. Selecting a row never runs the command; Help is a reference only.
 
-For atom and bond keys, the preview pane draws a small chain before and after the key, made live by ReShiki's own drawing code from the same edit the key performs. The atom or bond the key acts on is highlighted in the **Before** drawing.
+The preview pane labels its drawings **Example: before** and **Example: after**. They use a small fixture, separate from your drawing, and ReShiki's own drawing code applies the same edit as the key. Atom keys and most bond keys use a chain; ring-fusion keys use a benzene bond, so **a** shows benzene becoming naphthalene. The target atom or bond is highlighted in the example's before drawing.
 
 ## Run a command
 

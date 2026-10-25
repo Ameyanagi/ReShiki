@@ -1,0 +1,304 @@
+{
+  "production_source": "41ebe4d6",
+  "test_oracle_source": "d4c41d76",
+  "baseline": "3d80590a41b9d9e8efd818d23395ac51bd264ca8",
+  "platform": {
+    "os": "macOS 27.0.1",
+    "os_build": "26A434",
+    "cpu": "Apple M1",
+    "architecture": "arm64"
+  },
+  "renderer": {
+    "viewport_points": [1600, 1000],
+    "format": "PNG",
+    "light_theme": true,
+    "caffeine_zoom": 1.75,
+    "glucose_zoom": 2.0,
+    "interaction_renderer": "Fresh actual headless renderer after the hero cases, identically on both sources",
+    "input_worker_conformer_shared": true,
+    "before": [
+      {
+        "case": "caffeine",
+        "correlations": [-1395.896240234375, 880.0814819335938],
+        "rotation": [
+          0.06486901640892029, 0.9797534942626953, -0.05592622235417366, -0.18096229434013367
+        ],
+        "zoom": 1.75
+      },
+      {
+        "case": "glucose",
+        "correlations": [-1129.009033203125, -570.8991088867188],
+        "rotation": [
+          0.20156988501548767, 0.9792311787605286, -0.02174241840839386, 0.0017587223555892706
+        ],
+        "zoom": 2.0
+      },
+      {
+        "case": "caption-corner-drag",
+        "resized": false,
+        "selection": []
+      }
+    ],
+    "head": [
+      {
+        "case": "caffeine",
+        "correlations": [1395.896240234375, 877.3359985351562],
+        "rotation": [
+          0.009516003541648388, 0.1891680210828781, 0.2750191390514374, 0.9425971508026123
+        ],
+        "zoom": 1.75
+      },
+      {
+        "case": "glucose",
+        "correlations": [1128.97900390625, 582.6846313476562],
+        "rotation": [
+          -0.2838384807109833, 0.07965611666440964, 0.9442898631095886, -0.14631237089633942
+        ],
+        "zoom": 2.0
+      },
+      {
+        "case": "caption-corner-drag",
+        "resized": true,
+        "selection": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+      }
+    ],
+    "retained_pose_body": {
+      "roi_xywh": [490, 330, 426, 360],
+      "format": "row-major RGBA8",
+      "before_head_identical": true,
+      "sha256": "bdde15d8628e6bcc5e1f1a44b8ec10d575a712dba21e24f874e149afec3ea203",
+      "condition": "An existing 1x headless tile-edge fringe occurs identically in baseline/head. Native 2x and actual WASM 1x bodies are clear. No images retouched."
+    }
+  },
+  "native": {
+    "baseline_binary_sha256": "b02b0ce7571b30f20105728b5650aba88e4c619030094f985f1c1c2e0c1102c5",
+    "head_binary_sha256": "8fcd02d15607b631e12ddf87498e9430a5c49f23b92424db0f9398e54c1f39d9",
+    "window_points": [1680, 1020],
+    "display_scale": 2,
+    "build_profile": "dev; debug0; incremental0; aarch64-apple-darwin",
+    "plain_click": [1450, 1145],
+    "resize_drag": [
+      [1842, 1518],
+      [1920, 1596]
+    ],
+    "one_undo_restores_frame_and_caption": true,
+    "right_key_count": 3,
+    "saved_receipt": {
+      "file": "fixed-glucose-resized-moved.rsk",
+      "sha256": "3e83e939f9607caf577f340b4a26f817036c72849aaef0ae3715d53154bde419",
+      "association_unchanged": true,
+      "atoms_except_position_unchanged": true,
+      "bonds_unchanged": true,
+      "conformer_and_generated_hydrogens_unchanged": true,
+      "reset_rotation_max_error": 0.0,
+      "size_before": 244.83957,
+      "size_after": 266.84106,
+      "later_move_world": [3, 0]
+    }
+  },
+  "browsers": [
+    {
+      "browser": "chromium",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.8078.4 Safari/537.36",
+      "viewport": {
+        "width": 1600,
+        "height": 1000,
+        "deviceScaleFactor": 1
+      },
+      "errors": [],
+      "checks": [
+        "rest-empty",
+        "rest-inside",
+        "outside-canvas",
+        "deselected",
+        "plain-click",
+        "Ring",
+        "Tilt",
+        "actual-turn",
+        "Shift-roll",
+        "double-click-reset",
+        "caption-resize-held",
+        "one-Undo"
+      ],
+      "initialRotation": [-0.28383848, 0.07965612, 0.94428986, -0.14631237],
+      "turnedRotation": [-0.5170291, 0.0026393847, 0.85575604, -0.018857542],
+      "resetRotation": [-0.28383848, 0.07965612, 0.94428986, -0.14631237],
+      "rolledRotation": [-0.3049775, 0.24284805, 0.91599846, -0.09465909],
+      "sizeBefore": 244.83957,
+      "sizeResized": 269.66177,
+      "captionAssociationRetained": true,
+      "stereocenters": 5,
+      "hint_pixels": {
+        "rest-empty": {
+          "rgba": [204, 226, 220, 255],
+          "visible": true
+        },
+        "rest-inside": {
+          "rgba": [204, 226, 220, 255],
+          "visible": true
+        },
+        "outside-canvas": {
+          "rgba": [255, 255, 255, 255],
+          "visible": false
+        },
+        "deselected": {
+          "rgba": [255, 255, 255, 255],
+          "visible": false
+        },
+        "plain-click": {
+          "rgba": [204, 226, 220, 255],
+          "visible": true
+        },
+        "ring": {
+          "rgba": [255, 255, 255, 255],
+          "visible": false
+        },
+        "tilt": {
+          "rgba": [255, 255, 255, 255],
+          "visible": false
+        },
+        "turn-held": {
+          "rgba": [204, 226, 220, 255],
+          "visible": true
+        },
+        "resize-held": {
+          "rgba": [255, 255, 255, 255],
+          "visible": false
+        },
+        "resized": {
+          "rgba": [204, 226, 220, 255],
+          "visible": true
+        },
+        "undo-rest": {
+          "rgba": [204, 226, 220, 255],
+          "visible": true
+        }
+      },
+      "document_after_undo_sha256": "a018cc47efe6739497c9633309af990a548af6b6aeb426f7fc9ba42f90dcb322"
+    },
+    {
+      "browser": "webkit",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Safari/605.1.15",
+      "viewport": {
+        "width": 1600,
+        "height": 1000,
+        "deviceScaleFactor": 1
+      },
+      "errors": [],
+      "checks": [
+        "rest-empty",
+        "rest-inside",
+        "outside-canvas",
+        "deselected",
+        "plain-click",
+        "Ring",
+        "Tilt",
+        "actual-turn",
+        "Shift-roll",
+        "double-click-reset",
+        "caption-resize-held",
+        "one-Undo"
+      ],
+      "initialRotation": [-0.28383848, 0.07965612, 0.94428986, -0.14631237],
+      "turnedRotation": [-0.51695603, 0.0023134884, 0.85580033, -0.018893886],
+      "resetRotation": [-0.28383848, 0.07965612, 0.94428986, -0.14631237],
+      "rolledRotation": [-0.30497754, 0.24284805, 0.9159985, -0.09465911],
+      "sizeBefore": 244.83957,
+      "sizeResized": 269.66177,
+      "captionAssociationRetained": true,
+      "stereocenters": 5,
+      "hint_pixels": {
+        "rest-empty": {
+          "rgba": [204, 226, 220, 255],
+          "visible": true
+        },
+        "rest-inside": {
+          "rgba": [204, 226, 220, 255],
+          "visible": true
+        },
+        "outside-canvas": {
+          "rgba": [255, 255, 255, 255],
+          "visible": false
+        },
+        "deselected": {
+          "rgba": [255, 255, 255, 255],
+          "visible": false
+        },
+        "plain-click": {
+          "rgba": [204, 226, 220, 255],
+          "visible": true
+        },
+        "ring": {
+          "rgba": [255, 255, 255, 255],
+          "visible": false
+        },
+        "tilt": {
+          "rgba": [255, 255, 255, 255],
+          "visible": false
+        },
+        "turn-held": {
+          "rgba": [204, 226, 220, 255],
+          "visible": true
+        },
+        "resize-held": {
+          "rgba": [255, 255, 255, 255],
+          "visible": false
+        },
+        "resized": {
+          "rgba": [204, 226, 220, 255],
+          "visible": true
+        },
+        "undo-rest": {
+          "rgba": [204, 226, 220, 255],
+          "visible": true
+        }
+      },
+      "document_after_undo_sha256": "a018cc47efe6739497c9633309af990a548af6b6aeb426f7fc9ba42f90dcb322"
+    }
+  ],
+  "wasm": {
+    "target": "wasm32-unknown-unknown",
+    "profile": "dev; debug0; incremental0",
+    "wasm_bindgen": "0.2.128",
+    "modules": {
+      "reshiki": "b8eebddc7e161dce68614f0f0e5f05bfe5da664ca191e461dfb9b748cc2a7911",
+      "reshiki_web": "7a63643d7838c91e43b666293afc60d600cd05cb5f4c61c3a22ace06c3cfcf9a",
+      "reshiki_web_worker": "759cfb19fb7f372a1ed19c1afe21ff0a3ab4db55c8b24684b838536baf0d2732"
+    }
+  },
+  "fixtures": {
+    "tests/fixtures/model-face-handles/caffeine-2d.rsk": "aaacdd833f75e14200834f42fb36d55e202dceb48ed7ed30272c704105c65158",
+    "tests/fixtures/model-face-handles/glucose-2d.rsk": "dd32b8dd959d4af467591d48d67a2bf7ac46073207c9524e2395b1709c349c73",
+    "tests/fixtures/model-face-handles/caffeine-model.rsk": "c9c176c3446f8040319453ee365e71cccc0cc0546d1e809ba58d6b474820c804",
+    "tests/fixtures/model-face-handles/chemistry-receipts.json": "d7a1b64cf22de51287fa20ada8f09b8e7fd3fc0b35e70d59bca3810ea9ba83a2",
+    "tests/fixtures/model-face-handles/glucose-model.rsk": "7b58c10baf8fb38bed4946e6d7acbefaa7bf01b889c2ec3e77888860051e86ba"
+  },
+  "images": {
+    "before-caffeine-both.png": "e65593404f8b0acdcaa4546494de838e88bb3faa896f05d4602256f2194518a2",
+    "webkit-resize-held.png": "fee8287b561ffcdeab131f354f7995758657026cbcbab507db51fb5371fde319",
+    "head-selected-rest-empty.png": "e1af9c46a4c760536a9acc7e9a321a133eb13b8c1b65bee2da29696ffa69cbaa",
+    "before-selected-rest-empty.png": "0ebe27855e8b561d2bad3f06f1833d25b46b001eecbb47b9b1ddf5af5ea7cf91",
+    "native-head-glucose-after-resize.png": "0d3da54d05feeb592c483e51e3cc2d01fe2e35cc91a986f1a4a175e423c1804c",
+    "before-caffeine-morph-400ms.png": "ff770cc035baa86a83b3ddf1147fbee359b0738fa8f68773b5e4bad2ffccbed8",
+    "before-glucose-both.png": "d6bab27d77592f29c945a0a7c9286422c2f0db86617125685dfbaa7bba5504bb",
+    "head-caffeine-morph-400ms.png": "65dd94878382655fa5a4ffe3c7f9fd0481d527d23ab412c64e5b405246da1aa6",
+    "head-held-corner-drag.png": "a6171d192f7627bf7912a63cd9c3f5b3c75352abe95db9534aef8d80e2e706e0",
+    "head-caffeine-both.png": "39f8dd4b21c2a5b7900859da12852946094445ed88a6591f35c0a778a063dd21",
+    "native-head-glucose-plain-click.png": "942e69bcf594d142e1d2da2cfcf74405838fcefc05a4d3f6988206c978c5dbd9",
+    "native-before-glucose-plain-click.png": "bdeef308fd66e6371bff45a91849df7228d6a217cde1ee089618d46bca4cd0d8",
+    "chromium-rest-empty.png": "32c58f2750261576ddb44758a6048ff654d5c2df4bb28aac07621f81433a9d70",
+    "head-glucose-both.png": "12bd5b8343fa87a004f581c8dd345c943ab3924d741dcb72c40ed9cfce3e84f8"
+  },
+  "checks": {
+    "model_3d_tests_passed": 72,
+    "preview_identity_guard_passed": 1,
+    "full_app_passed": 1114,
+    "full_app_ignored": 122,
+    "after_independent_bounds_guard_tiles_passed": 10,
+    "after_independent_bounds_guard_tiles_ignored": 1,
+    "real_renderer_baseline_head": "passed",
+    "mandatory_3package_wasm_clippy": "passed",
+    "actual_3package_wasm_build": "passed",
+    "normal_hooks": "passed"
+  }
+}
