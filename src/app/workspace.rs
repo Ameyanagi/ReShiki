@@ -1494,6 +1494,25 @@ impl App {
         }
     }
 
+    /// A page change moves only the inspector's left edge. Keep the drawing
+    /// anchored to the window, including when a handler already adjusted the
+    /// viewport while revealing a selection or optimization controls.
+    pub(super) fn preserve_inspector_page_position(
+        &mut self,
+        old_width: f32,
+        old_viewport: iced::Size,
+    ) {
+        let change = old_width - self.inspector_width();
+        if change == 0. {
+            return;
+        }
+        let size = iced::Size::new(old_viewport.width + change, old_viewport.height);
+        self.tab.camera.center.x +=
+            (size.width - self.viewport.width) / (2. * self.tab.camera.zoom);
+        self.viewport = size;
+        self.tab.inspector_ui.expect_viewport(size);
+    }
+
     /// The inspector's panel at the current tab's width.
     fn inspector_frame<'a>(
         &self,
@@ -3045,5 +3064,7 @@ fn tool_name(tool: Tool) -> (&'static str, &'static str) {
     (name, name)
 }
 
+#[cfg(test)]
+mod inspector_motion_tests;
 #[cfg(test)]
 mod selection_tests;

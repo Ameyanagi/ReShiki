@@ -9,11 +9,11 @@ impl App {
             message,
             Message::Inspector(_)
                 | Message::InsertTemplate(_)
-                | Message::Tool(
-                    Tool::Arrow | Tool::Graphic(_) | Tool::EditPoints | Tool::RingPreset(_)
-                )
-        ) || (self.inspector_tab != InspectorTab::Templates
-            && matches!(message, Message::Canvas(Edit::Select(ids)) if ids.iter().any(|id| self.tab.doc.annotations.iter().any(|a| a.id == *id) || self.tab.doc.graphics.iter().any(|g|g.id==*id))))
+                | Message::Tool(Tool::Arrow | Tool::Graphic(_) | Tool::RingPreset(_))
+        ) || (matches!(message, Message::Tool(Tool::EditPoints))
+            && !(self.inspector_open && self.inspector_tab == InspectorTab::Properties))
+            || (self.inspector_tab != InspectorTab::Templates
+                && matches!(message, Message::Canvas(Edit::Select(ids)) if ids.iter().any(|id| self.tab.doc.annotations.iter().any(|a| a.id == *id) || self.tab.doc.graphics.iter().any(|g|g.id==*id))))
     }
 
     pub(super) fn dispatch_message(&mut self, message: Message) -> Option<Task<Message>> {
