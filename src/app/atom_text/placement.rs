@@ -327,19 +327,19 @@ impl Widget<Message, Theme, Renderer> for Anchored<'_> {
             return;
         }
         if self.click_through || matches!(event, Event::Window(_)) {
+            // A mounted popup can be transparent while waiting to appear.
+            // Let its hit policy decide whether it covers the canvas cursor.
+            let cursor = if self.children[1]
+                .as_widget()
+                .mouse_interaction(popup_tree, popup, cursor, viewport, renderer)
+                != mouse::Interaction::None
+            {
+                cursor.levitate()
+            } else {
+                cursor
+            };
             self.children[0].as_widget_mut().update(
-                base_tree,
-                event,
-                base,
-                if cursor.is_over(popup.bounds()) {
-                    cursor.levitate()
-                } else {
-                    cursor
-                },
-                renderer,
-                clipboard,
-                shell,
-                viewport,
+                base_tree, event, base, cursor, renderer, clipboard, shell, viewport,
             );
         } else if matches!(
             event,
@@ -360,12 +360,15 @@ impl Widget<Message, Theme, Renderer> for Anchored<'_> {
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        let canvas_cursor = if self.click_through
-            && layout
-                .children()
-                .nth(1)
-                .is_none_or(|popup| !cursor.is_over(popup.bounds()))
-        {
+        let popup_interaction = layout.children().nth(1).zip(tree.children.get(1)).map_or(
+            mouse::Interaction::None,
+            |(popup, popup_tree)| {
+                self.children[1]
+                    .as_widget()
+                    .mouse_interaction(popup_tree, popup, cursor, viewport, renderer)
+            },
+        );
+        let canvas_cursor = if self.click_through && popup_interaction == mouse::Interaction::None {
             cursor
         } else {
             mouse::Cursor::Unavailable
@@ -459,6 +462,9 @@ impl Widget<Message, Theme, Renderer> for Anchored<'_> {
         }
     }
 }
+
+#[cfg(test)]
+mod interaction_tests;
 
 #[cfg(test)]
 mod tests {

@@ -167,6 +167,13 @@ before accepting popup mouse input. Compact drawings also use visible molecule
 bounds captured once when opening the editor; drawings above 64 atoms skip this
 optional measurement and retain the measured popup/target fallback.
 
+The anchored wrapper respects the popup child's pointer-hit policy. A mounted
+transparent popup leaves canvas hover, clicks and its draw cursor available even
+inside the measured popup rectangle; an opaque popup still blocks those events
+and retains click-to-focus. A focused real-widget regression checks these paths
+with an actual Iced canvas, mouse area, opaque popup and text field. This routing
+check adds no drawing output; the matched editor images above remain unchanged.
+
 Chemical regression checks apply and undo Morph, Ac and COMe on ethane, confirming
 C5H11NO and C3H6O, respectively, and no actinium atoms. Existing script, label,
 alignment, Text-tool click-through and modal shortcut regressions remain covered.
@@ -175,6 +182,7 @@ alignment, Text-tool click-through and modal shortcut regressions remain covered
 cargo test --locked -p reshiki-model --lib atom_text
 cargo test --locked -p reshiki --bin reshiki app::atom_text -- --include-ignored --test-threads=1
 cargo test --locked -p reshiki --bin reshiki first_escape_cancels_focused_atom_label_without_applying_the_draft -- --ignored
+cargo test --locked -p reshiki --bin reshiki popup_hit_policy_preserves_canvas_cursor_clicks_and_opaque_focus -- --ignored
 ```
 
 To regenerate the full uncropped renderer outputs, set
