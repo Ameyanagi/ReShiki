@@ -4,6 +4,8 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
+Under review: @Ameyanagi — chemical mark placement, reaction label spacing, visible terminal bonds, repeated chemical symbols and attached-arrow clearance in [PR #545](https://github.com/Ameyanagi/ReShiki/pull/545).
+
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).
 
