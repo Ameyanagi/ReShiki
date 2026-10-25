@@ -5,8 +5,9 @@ Fixes [#515](https://github.com/Ameyanagi/ReShiki/issues/515).
 Artemisinin imported from SMILES previously had overlapping peroxide oxygen
 labels. Import now retries native ring templates when a bridged ring system has
 severe atom overlaps, and uses the retry only when it reduces those overlaps.
-The resulting drawing retains C15H22O5 and its isomeric identity, and whole-molecule
-cleanup succeeds.
+The resulting drawing places the peroxide-adjacent methyl outside the cage,
+keeps the peroxide O–O connector visible, and retains C15H22O5 and all seven
+stereocentres. Whole-molecule cleanup succeeds.
 
 Saved drawings keep their existing coordinates. Cleanup still refuses a change
 that would alter the stereochemistry read independently from the original wedges.
@@ -20,12 +21,14 @@ cleanup retains the advice to include the whole molecule.
 
 ![Artemisinin before the fix, with overlapping peroxide oxygen labels](../images/artemisinin-depiction/before.png)
 
-**After:** the oxygen labels are separated, with the molecular identity retained.
+**After:** the oxygen labels are separated, the methyl points outside the cage,
+and the peroxide connector is visible, with the molecular identity retained.
 
-![Artemisinin after import retries ring templates, with separated peroxide oxygen labels](../images/artemisinin-depiction/after.png)
+![Final artemisinin import with an outward methyl, separated oxygen labels and a visible peroxide connector](../images/artemisinin-depiction/after.png)
 
-Reusable release caption: “Artemisinin imports with separated peroxide oxygen
-labels and can be cleaned up without changing its stereochemistry.”
+Reusable release caption: “Artemisinin import and cleanup place the
+peroxide-adjacent methyl outside the cage and keep the peroxide bond visible,
+while preserving all seven stereocentres.”
 
 ## Reproduce
 
@@ -50,21 +53,25 @@ selection.
 
 ## Capture and verification
 
-- Base: `3d80590a`; implementation: `d33d213e`.
+- Base: `3d80590a`; initial retry: `d33d213e`; final functional follow-up: `6b7373c5`.
 - Captured on macOS arm64 with Rust 1.99.0, using the application scene renderer
   and its normal font database. Both images use the same union bounds, white
-  background, and 3× raster scale. They contain no selection overlay.
+  background, and 3× raster scale. The final matched pair is 750 × 717 pixels
+  and contains no selection overlay.
 - The before image reconstructs the baseline import using the unchanged native
-  no-template depiction API. The after image uses the current engine import
-  response. These are renderer captures, rather than screenshots of the desktop
+  no-template depiction API. The after image uses the final `6b7373c5` engine
+  import response. These are renderer captures, rather than screenshots of the desktop
   import dialog. The cleanup result was also rendered and was visually identical
   to the after image.
-- Four focused regression tests cover deterministic artemisinin import, rendered
+- Focused regression tests cover deterministic artemisinin import, rendered
   label-ink separation, source and cleanup isomeric identity, unchanged native
   coordinates for clear imports, rejection of a template that worsens collisions,
-  and distinct whole/partial-selection stereo refusal messages.
-- The full IO library suite passed: 258 tests, with five opt-in tests ignored.
-  Focused Clippy and the normal commit hooks passed.
+  distinct whole/partial-selection stereo refusal messages, exterior methyl
+  placement and the actual peroxide connector. The follow-up checks below
+  cover the final clipping, picking and visible-stereo controls.
+- The final full IO library suite passed: 263 tests, with five opt-in tests ignored;
+  the model suite passed 806 tests, with 10 opt-in tests ignored. Focused Clippy
+  and the normal commit hooks passed.
 
 The native no-template result has two nonbonded atom pairs separated by less than
 0.75 depiction units, including an oxygen pair separated by only 0.0731 units
@@ -72,7 +79,11 @@ The native no-template result has two nonbonded atom pairs separated by less tha
 and no intersecting atom-label ink boxes. The existing native depiction reference
 API and its default coordinate output are unchanged.
 
-## Native desktop import and cleanup
+## Earlier native desktop check of the first template retry
+
+These historical captures record the first retry before the peroxide-adjacent
+methyl refinement. The corrected matched native comparison is in the follow-up
+section below.
 
 The native debug application at `e2c479d8` was also checked on 2026-10-25,
 on macOS 27.0.1 arm64. It ran in a separate application bundle with an isolated
