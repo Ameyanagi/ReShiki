@@ -33,7 +33,7 @@ fn model(style: Style) -> Document {
 /// Keep the actual exported viewBox and paint body, while registering its
 /// physical viewport in world units for pixel comparison. Independent f32 pt
 /// conversions and xMidYMid meet can otherwise move an antialias sample.
-fn registered_svg(svg: &str) -> String {
+fn registered_svg(svg: &str, (lo, hi): (World, World)) -> String {
     let xml = roxmltree::Document::parse(svg).unwrap();
     let root = xml.root_element();
     let view_box: Vec<_> = root
@@ -42,6 +42,14 @@ fn registered_svg(svg: &str) -> String {
         .split_whitespace()
         .collect();
     assert_eq!(view_box.len(), 4);
+    assert_eq!(
+        view_box
+            .iter()
+            .map(|value| value.parse::<f32>().unwrap())
+            .collect::<Vec<_>>(),
+        [lo.x, lo.y, hi.x - lo.x, hi.y - lo.y],
+        "The export viewBox must match the canvas bounds"
+    );
     let mut replacements = vec![];
     for (attribute, extent) in [("width", view_box[2]), ("height", view_box[3])] {
         let attribute = root.attribute_node(attribute).unwrap();
@@ -66,8 +74,15 @@ fn registered_svg(svg: &str) -> String {
     normalized
 }
 
-fn render_export(svg: &str, scale: f32, width: u32, height: u32) -> resvg::tiny_skia::Pixmap {
-    let tree = resvg::usvg::Tree::from_str(&registered_svg(svg), &Default::default()).unwrap();
+fn render_export(
+    svg: &str,
+    bounds: (World, World),
+    scale: f32,
+    width: u32,
+    height: u32,
+) -> resvg::tiny_skia::Pixmap {
+    let tree =
+        resvg::usvg::Tree::from_str(&registered_svg(svg, bounds), &Default::default()).unwrap();
     let mut image = resvg::tiny_skia::Pixmap::new(width, height).unwrap();
     resvg::render(
         &tree,
@@ -96,9 +111,11 @@ fn worst_difference(canvas: &[u8], export: &resvg::tiny_skia::Pixmap) -> u8 {
 fn pixel_registration_preserves_export_paint_and_detects_a_real_displacement() {
     let doc = model(Style::Stick);
     let svg = scene::svg(&doc);
+    let run = scene::primitives(&doc);
+    let (lo, hi) = scene::bounds(&run);
     let start = svg.find('>').unwrap() + 1;
     let end = svg.rfind("</svg>").unwrap();
-    let normalized = registered_svg(&svg);
+    let normalized = registered_svg(&svg, (lo, hi));
     assert_eq!(
         &normalized[normalized.find('>').unwrap() + 1..],
         &svg[start..]
@@ -109,8 +126,6 @@ fn pixel_registration_preserves_export_paint_and_detects_a_real_displacement() {
         &svg[start..end],
         &svg[end..]
     );
-    let run = scene::primitives(&doc);
-    let (lo, hi) = scene::bounds(&run);
     let scale = 4. * OVERSAMPLE;
     let (width, height) = (
         ((hi.x - lo.x) * scale).ceil() as u32,
@@ -118,9 +133,39 @@ fn pixel_registration_preserves_export_paint_and_detects_a_real_displacement() {
     );
     let canvas = pixels(&run, lo, scale, width, height).unwrap();
     assert!(
-        worst_difference(&canvas, &render_export(&displaced, scale, width, height)) > 6,
+        worst_difference(
+            &canvas,
+            &render_export(&displaced, (lo, hi), scale, width, height)
+        ) > 6,
         "Viewport registration must not hide a visible paint/position error"
     );
+}
+
+#[test]
+#[should_panic(expected = "The export viewBox must match the canvas bounds")]
+fn pixel_registration_rejects_coupled_viewbox_and_physical_width_changes() {
+    let doc = model(Style::Stick);
+    let svg = scene::svg(&doc);
+    let (lo, hi) = scene::bounds(&scene::primitives(&doc));
+    let xml = roxmltree::Document::parse(&svg).unwrap();
+    let root = xml.root_element();
+    let width = hi.x - lo.x + 1.;
+    let mut replacements = [
+        (
+            root.attribute_node("viewBox").unwrap().range_value(),
+            format!("{} {} {width} {}", lo.x, lo.y, hi.y - lo.y),
+        ),
+        (
+            root.attribute_node("width").unwrap().range_value(),
+            format!("{}pt", width * reshiki::style::DEFAULT.points_per_world()),
+        ),
+    ];
+    replacements.sort_by_key(|(range, _)| std::cmp::Reverse(range.start));
+    let mut inflated = svg.clone();
+    for (range, value) in replacements {
+        inflated.replace_range(range, &value);
+    }
+    let _ = registered_svg(&inflated, (lo, hi));
 }
 
 /// The canvas image of a model is the figure export's rendering of it, and
@@ -139,7 +184,7 @@ fn model_images_match_figure_export_and_are_smooth() {
         );
         let canvas = pixels(&run, lo, scale, width, height).unwrap();
 
-        let export = render_export(&scene::svg(&doc), scale, width, height);
+        let export = render_export(&scene::svg(&doc), (lo, hi), scale, width, height);
         let worst = worst_difference(&canvas, &export);
         // Anti-aliased edges may round differently under the two transforms.
         assert!(
