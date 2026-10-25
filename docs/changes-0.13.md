@@ -399,7 +399,7 @@ their contributor credits and links to their issues and reviews.
   instead of always `Molecule.png`; an untitled drawing still suggests
   `Molecule`. This applies to the desktop save dialog and to browser downloads.
   In the browser editor, downloads carry their file type, and **Save** says
-  "Downloaded Untitled.rsk" instead of "Document saved".
+  "Untitled.rsk sent to browser downloads" instead of "Document saved".
   [PR #463](https://github.com/Ameyanagi/ReShiki/pull/463) ·
   [Issue #428](https://github.com/Ameyanagi/ReShiki/issues/428) · @Ameyanagi.
 

@@ -1241,13 +1241,20 @@ async fn save_export(
     };
     let stem = stem.as_deref().unwrap_or("Molecule");
     files::save_bytes(
-        "Export drawing",
+        &format!("Export {}", export_format_label(format)),
         &format!("{stem}.{extension}"),
         extension,
         &bytes,
     )
     .await
 }
+fn export_format_label(format: &str) -> String {
+    match format {
+        "svg-office" => inspector::FigureFormat::SvgOffice.to_string(),
+        _ => format.to_uppercase(),
+    }
+}
+
 fn input_request(text: &str) -> Request {
     reshiki::clipboard::text_request(text)
 }
