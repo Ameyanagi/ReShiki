@@ -1,5 +1,5 @@
 use super::{App, Document, Job, Message, Point, Tool, editing, input_request};
-use iced::Task;
+use iced::{Subscription, Task, time::Instant, window};
 use reshiki::clipboard::{CopyFormat, CopyOutcome, PasteOutcome, PreparedCopy};
 
 // Plain text goes through iced's clipboard, or the page's in the browser,
@@ -19,6 +19,34 @@ pub struct CopyAsKey {
     pub revision: u64,
     pub format: CopyFormat,
     pub selected: Vec<u64>,
+}
+
+#[derive(Default)]
+pub(super) struct PdfCopy {
+    serial: u64,
+    pending: Option<PendingPdf>,
+}
+
+struct PendingPdf {
+    serial: u64,
+    tab: super::document_tab::TabId,
+    key: CopyAsKey,
+    snapshot: Document,
+    window: Option<window::Id>,
+    armed_at: Instant,
+}
+
+#[derive(Debug, Clone)]
+pub enum FrameAction {
+    Bound(u64, Option<window::Id>),
+    Redrawn(u64, window::Id, Instant),
+    Closed(u64, window::Id),
+}
+
+fn request_copy_frame() -> Task<Message> {
+    iced_runtime::task::effect(iced_runtime::Action::Window(
+        iced_runtime::window::Action::RedrawAll,
+    ))
 }
 
 impl App {
@@ -86,10 +114,49 @@ impl App {
             format,
             selected: self.tab.selected.clone(),
         };
+        self.start_copy_as(key, snapshot, chemical_text)
+    }
+
+    /// Admission and platform availability are checked before acquiring work.
+    fn start_copy_as(
+        &mut self,
+        key: CopyAsKey,
+        snapshot: Document,
+        chemical_text: bool,
+    ) -> Task<Message> {
+        let format = key.format;
         self.copy_as_busy = true;
         self.tab.clipboard_busy = true;
         self.error = false;
         self.status = format!("Preparing {} for the clipboard…", format.label());
+        if format == CopyFormat::Pdf {
+            self.pdf_copy.serial = self.pdf_copy.serial.wrapping_add(1);
+            let serial = self.pdf_copy.serial;
+            let window = self.accessibility_window();
+            self.pdf_copy.pending = Some(PendingPdf {
+                serial,
+                tab: self.tab.id,
+                key,
+                snapshot,
+                window,
+                armed_at: Instant::now(),
+            });
+            return if window.is_some() {
+                request_copy_frame()
+            } else {
+                window::latest().map(move |id| Message::CopyFrame(FrameAction::Bound(serial, id)))
+            };
+        }
+        self.prepare_copy_as(key, snapshot, chemical_text)
+    }
+
+    fn prepare_copy_as(
+        &self,
+        key: CopyAsKey,
+        snapshot: Document,
+        chemical_text: bool,
+    ) -> Task<Message> {
+        let format = key.format;
         let engine = self.engine.clone();
         Task::perform(
             async move {
@@ -101,6 +168,95 @@ impl App {
             },
             move |result| Message::CopyAsPrepared(key.clone(), Box::new(result)),
         )
+    }
+
+    pub(super) fn pdf_copy_subscription(&self) -> Subscription<Message> {
+        let Some(pending) = self
+            .pdf_copy
+            .pending
+            .as_ref()
+            .filter(|p| p.window.is_some())
+        else {
+            return Subscription::none();
+        };
+        // `frames()` drops the window ID and `listen_with` excludes redraws.
+        // Preserve the real event ID; only its owner's post-request draw may
+        // release preparation. The runtime dispatches this message after the
+        // current redraw handler has drawn and attempted presentation.
+        iced::event::listen_raw(|event, _, id| match event {
+            iced::Event::Window(window::Event::RedrawRequested(at)) => Some((id, Some(at))),
+            iced::Event::Window(window::Event::Closed) => Some((id, None)),
+            _ => None,
+        })
+        .with(pending.serial)
+        .map(|(serial, (id, at))| {
+            Message::CopyFrame(match at {
+                Some(at) => FrameAction::Redrawn(serial, id, at),
+                None => FrameAction::Closed(serial, id),
+            })
+        })
+    }
+
+    pub(super) fn copy_frame(&mut self, action: FrameAction) -> Task<Message> {
+        let Some(pending) = self.pdf_copy.pending.as_mut() else {
+            return Task::none();
+        };
+        match action {
+            FrameAction::Bound(serial, window) if serial == pending.serial => {
+                // Bind once; an old binding result cannot re-arm this request.
+                if pending.window.is_some() {
+                    return Task::none();
+                }
+                if let Some(window) = window {
+                    pending.window = Some(window);
+                    pending.armed_at = Instant::now();
+                    return request_copy_frame();
+                }
+                self.cancel_pending_pdf("The drawing window is unavailable")
+            }
+            FrameAction::Closed(serial, window)
+                if serial == pending.serial && pending.window == Some(window) =>
+            {
+                self.cancel_pending_pdf("The drawing window closed")
+            }
+            FrameAction::Redrawn(serial, window, at)
+                if serial == pending.serial
+                    && pending.window == Some(window)
+                    && at > pending.armed_at =>
+            {
+                let Some(pending) = self.pdf_copy.pending.take() else {
+                    return Task::none();
+                };
+                let task = self.in_tab(pending.tab, |app| {
+                    if pending.key.epoch != app.tab.file_epoch
+                        || pending.key.revision != app.tab.revision
+                        || pending.key.selected != app.tab.selected
+                    {
+                        return app.copy_as_prepared(pending.key, Err(String::new()));
+                    }
+                    app.prepare_copy_as(pending.key, pending.snapshot, false)
+                });
+                match task {
+                    Some(task) => super::tagged(task, pending.tab),
+                    None => {
+                        self.copy_as_busy = false;
+                        Task::none()
+                    }
+                }
+            }
+            _ => Task::none(),
+        }
+    }
+
+    fn cancel_pending_pdf(&mut self, reason: &str) -> Task<Message> {
+        let Some(pending) = self.pdf_copy.pending.take() else {
+            return Task::none();
+        };
+        let _ = self.in_tab(pending.tab, |app| {
+            app.copy_as_prepared(pending.key, Err(reason.into()))
+        });
+        self.copy_as_busy = false;
+        Task::none()
     }
 
     fn finish_copy_as(&mut self) {
@@ -462,3 +618,6 @@ mod tests;
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod latency_qa;
+
+#[cfg(test)]
+mod frame_tests;

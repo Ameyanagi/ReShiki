@@ -258,6 +258,7 @@ pub enum Message {
     Copy(bool),
     CopyImage,
     CopyAs(reshiki::clipboard::CopyFormat),
+    CopyFrame(clipboard::FrameAction),
     CopyAsPrepared(
         clipboard::CopyAsKey,
         Box<Result<reshiki::clipboard::PreparedCopy, String>>,
@@ -395,6 +396,7 @@ pub struct App {
     figure_exporting: bool,
     /// Serializes clipboard preparation/publication across document tabs.
     copy_as_busy: bool,
+    pdf_copy: clipboard::PdfCopy,
     /// Native writes can outlive a closed tab; do not let them overtake a new copy.
     native_copy_busy: bool,
     // The current tab's status; parked with its document when it leaves the front.
@@ -495,6 +497,7 @@ impl App {
             engine: LocalEngine::default(),
             figure_exporting: false,
             copy_as_busy: false,
+            pdf_copy: Default::default(),
             native_copy_busy: false,
             // A recovery offer in the status bar is the launch message.
             status: if recovered.is_empty() { READY } else { "" }.into(),
@@ -577,6 +580,7 @@ impl App {
     pub fn subscription(&self) -> Subscription<Message> {
         Subscription::batch([
             accessibility::subscription(),
+            self.pdf_copy_subscription(),
             #[cfg(any(windows, target_os = "linux"))]
             desktop::subscription(self),
             #[cfg(target_os = "macos")]
@@ -890,6 +894,9 @@ impl App {
         }
         if let Message::Accessibility(action) = message {
             return ControlFlow::Break(self.accessibility_action(action));
+        }
+        if let Message::CopyFrame(action) = message {
+            return ControlFlow::Break(self.copy_frame(action));
         }
         // The answer goes on as the system dialog's would have.
         if let Message::Prompt(answer) = message {
@@ -1209,7 +1216,7 @@ fn same_atom(a: &reshiki::document::Atom, b: &reshiki::document::Atom) -> bool {
 /// Marks the results of `task` as belonging to tab `id`, unless already marked.
 fn tagged(task: Task<Message>, id: document_tab::TabId) -> Task<Message> {
     task.map(move |message| match message {
-        Message::Tab(..) => message,
+        Message::Tab(..) | Message::CopyFrame(..) => message,
         message => Message::Tab(id, Box::new(message)),
     })
 }

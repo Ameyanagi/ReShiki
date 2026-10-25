@@ -102,20 +102,40 @@ async fn gallery_pdf_copy_phase_profile() {
             settle(&mut app, &mut renderer, &mut tree, size);
         }
 
+        // Give the real routed task a window, then drain its immediately
+        // available effects just as iced_winit does. No PDF future exists yet.
+        let window = iced::window::Id::unique();
+        let _ = app.accessibility_action(super::super::accessibility::Action::Window(
+            window,
+            iced::window::Event::Opened {
+                position: None,
+                size,
+            },
+        ));
         let start = Instant::now();
         let routed = app.update(Message::CopyAs(CopyFormat::Pdf));
         let routed_update_ms = elapsed(start);
-        drop(routed);
-        app.finish_copy_as();
-        let start = Instant::now();
-        let task = app.copy_as(CopyFormat::Pdf);
-        let copy_update_ms = elapsed(start);
         assert!(app.copy_as_busy && app.tab.clipboard_busy);
         assert_eq!(app.status, "Preparing PDF for the clipboard…");
-        let mut stream = iced_runtime::task::into_stream(task).unwrap();
+        let mut stream = iced_runtime::task::into_stream(routed).unwrap();
         let start = Instant::now();
-        let first = poll!(stream.next());
-        let first_poll_ms = elapsed(start);
+        for _ in 0..32 {
+            match poll!(stream.next()) {
+                std::task::Poll::Ready(Some(iced_runtime::Action::Output(message))) => {
+                    assert!(!matches!(message, Message::CopyAsPrepared(..)));
+                    if let Message::Tab(_, message) = message {
+                        assert!(!matches!(*message, Message::CopyAsPrepared(..)));
+                    }
+                }
+                std::task::Poll::Ready(Some(_)) | std::task::Poll::Pending => {
+                    tokio::task::yield_now().await;
+                }
+                std::task::Poll::Ready(None) => break,
+            }
+        }
+        let pre_frame_task_poll_ms = elapsed(start);
+        drop(stream);
+        assert!(app.pdf_copy.pending.is_some());
         let start = Instant::now();
         std::hint::black_box(app.selected_label_alignment());
         let label_alignment_ms = elapsed(start);
@@ -152,11 +172,18 @@ async fn gallery_pdf_copy_phase_profile() {
         );
         let draw_ms = elapsed(start);
         drop(view);
-        let action = match first {
-            std::task::Poll::Ready(action) => action,
-            std::task::Poll::Pending => stream.next().await,
+        let pending = app.pdf_copy.pending.as_ref().unwrap();
+        let task = app.update(Message::CopyFrame(FrameAction::Redrawn(
+            pending.serial,
+            window,
+            iced::time::Instant::now(),
+        )));
+        let mut stream = iced_runtime::task::into_stream(task).unwrap();
+        let Some(iced_runtime::Action::Output(Message::Tab(_, message))) = stream.next().await
+        else {
+            panic!("Expected the owning tab's preparation receipt");
         };
-        let Some(iced_runtime::Action::Output(Message::CopyAsPrepared(_, result))) = action else {
+        let Message::CopyAsPrepared(_, result) = *message else {
             panic!("Expected preparation receipt, without clipboard publication");
         };
         let prepared = result.unwrap();
@@ -166,10 +193,10 @@ async fn gallery_pdf_copy_phase_profile() {
             serde_json::json!({
                 "trial": trial, "atoms": source.atoms.len(), "selected_ids": selected.len(),
                 "clone_ms": clone_ms, "selection_ms": selection_ms,
-                "availability_ms": availability_ms, "copy_update_ms": copy_update_ms,
+                "availability_ms": availability_ms,
             "validation_ms": validation_ms,
                 "routed_update_ms": routed_update_ms,
-                "first_task_poll_ms": first_poll_ms, "view_ms": view_ms,
+                "pre_frame_task_poll_ms": pre_frame_task_poll_ms, "view_ms": view_ms,
             "label_alignment_ms": label_alignment_ms,
             "toolbar_alignment_ms": toolbar_alignment_ms,
                 "tree_ms": tree_ms, "layout_ms": layout_ms, "draw_ms": draw_ms,

@@ -179,6 +179,9 @@ pub(super) fn subscription() -> Subscription<Message> {
 }
 
 impl App {
+    pub(super) fn accessibility_window(&self) -> Option<window::Id> {
+        self.accessibility.window
+    }
     pub(super) fn accessibility_refresh(&mut self) -> Task<Message> {
         if !SUPPORTED && !cfg!(test) {
             return Task::none();
