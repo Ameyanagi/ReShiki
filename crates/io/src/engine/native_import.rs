@@ -16,6 +16,7 @@ use crate::{
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use std::sync::Arc;
+mod template_retry;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Deferred {
@@ -329,7 +330,7 @@ fn coordinates(
             .map(|pairs| depict::ranks::AtomProperties::from_pairs(pairs))
             .collect()
     };
-    Ok(depict::compute_with_rank_properties(
+    let conformer = depict::compute_with_rank_properties(
         state,
         &ranks,
         None,
@@ -339,8 +340,8 @@ fn coordinates(
             use_ring_templates: false,
             ..depict::Options::default()
         },
-    )?
-    .positions)
+    )?;
+    Ok(template_retry::improve(state, &ranks, conformer.positions))
 }
 
 fn layout(
