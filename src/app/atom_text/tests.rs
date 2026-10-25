@@ -1145,3 +1145,89 @@ fn repeating_a_generic_list_keeps_its_choices_instead_of_literal_text() -> Resul
     assert_eq!(app.tab.doc, before);
     Ok(())
 }
+
+#[test]
+fn accepting_a_catalog_suggestion_keeps_apply_explicit_and_chooses_chemistry() -> Result<(), String>
+{
+    for (name, label, expected_formula) in [
+        ("morpholino", "Morph", "C5H11NO"),
+        ("Acetyl", "Ac", "C3H6O"),
+        ("Acetyl", "COMe", "C3H6O"),
+    ] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let methyl = app.tab.doc.add_atom("C", Point::new(-42., 0.));
+        let id = app.tab.doc.add_atom("C", Point::default());
+        app.tab.doc.add_bond(methyl, id, 1, "plain");
+        let before = app.tab.doc.clone();
+        let _ = app.update(Message::AtomText(Action::Begin(Some(id))));
+        let _ = app.update(Message::AtomText(Action::Input(name.into())));
+        let _ = app.update(Message::AtomText(Action::Script(Script::Superscript)));
+        let _ = app.update(Message::AtomText(Action::Suggest(label.into())));
+        let draft = app.tab.atom_text.as_ref().ok_or("Draft")?;
+        assert_eq!((draft.input.as_str(), draft.mode), (label, Mode::Group));
+        assert!(!draft.manual_scripts);
+        assert!(draft.scripts().is_empty());
+        assert_eq!(
+            app.tab.doc, before,
+            "Accepting a suggestion still requires Apply"
+        );
+        let _ = app.update(Message::AtomText(Action::Apply));
+        assert!(app.tab.atom_text.is_none());
+        assert_eq!(app.tab.doc.abbreviation(id).ok_or("Group")?.label, label);
+        let molecule =
+            reshiki::chemistry::document::prepare(&app.tab.doc).map_err(|e| e.to_string())?;
+        let facts = molecule
+            .state
+            .graph
+            .atoms
+            .iter()
+            .zip(&molecule.state.valences)
+            .map(|(atom, valence)| reshiki::chemistry::AtomFacts {
+                atomic_number: atom.atomic_number,
+                isotope: atom.isotope,
+                charge: atom.charge,
+                hydrogens: (u32::from(atom.explicit_hydrogens) + valence.implicit_hydrogens) as u8,
+                radical_electrons: atom.radical_electrons,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            reshiki::chemistry::properties(&facts)?.formula,
+            expected_formula
+        );
+        assert!(app.tab.doc.atoms.iter().all(|atom| atom.element != "Ac"));
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+    }
+    Ok(())
+}
+
+#[test]
+fn switching_label_type_retains_the_reverse_spelling_draft() -> Result<(), String> {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let id = app.tab.doc.add_atom("C", Point::default());
+    let methyl = app.tab.doc.add_atom("C", Point::new(42., 0.));
+    app.tab.doc.add_bond(id, methyl, 1, "plain");
+    app.tab.doc = reshiki::atom_text::apply(&app.tab.doc, id, "MeO", Mode::Auto)?;
+    let _ = app.update(Message::AtomText(Action::Begin(Some(id))));
+    let _ = app.update(Message::AtomText(Action::ReverseInput("H3CO".into())));
+    let _ = app.update(Message::AtomText(Action::Mode(Mode::Text)));
+    assert_eq!(app.tab.atom_text.as_ref().ok_or("Draft")?.reverse, "H3CO");
+    let _ = app.update(Message::AtomText(Action::Mode(Mode::Group)));
+    let _ = app.update(Message::AtomText(Action::Apply));
+    assert_eq!(
+        app.tab.doc.abbreviation(id).ok_or("Group")?.reverse_label,
+        "H3CO"
+    );
+    Ok(())
+}
+
+#[test]
+fn large_drawings_skip_optional_molecular_ink_measurement() {
+    let mut doc = reshiki::document::Document::default();
+    for _ in 0..65 {
+        doc.add_atom("O", Point::default());
+    }
+    assert!(context_bounds(&doc, 1).is_none());
+}

@@ -991,10 +991,10 @@ pub fn edit_handle(doc: &mut Document, arrow: u64, index: usize, p: Point) {
 }
 /// After the user aims an end attached to an atom or bond, keeps the head,
 /// which lies along the aimed tangent, off that target's bond ink. The aim
-/// is never rotated: the end only backs away along the target's projection
-/// direction by the smallest extra gap (up to another end gap) that clears
-/// the ink, or not at all when none does, as on arrival. The tangent is
-/// preserved.
+/// is never rotated: the end backs away by up to another end gap. If that
+/// route follows a bond stroke, it instead shifts sideways by the smallest
+/// clear distance, preferring the side of the default arrival. Each aim starts
+/// from that same default, so offsets never accumulate.
 pub fn aim_end(doc: &mut Document, arrow: u64) {
     let Some(a) = doc.arrows.iter().find(|a| a.id == arrow) else {
         return;
@@ -1029,11 +1029,32 @@ pub fn aim_end(doc: &mut Document, arrow: u64) {
     let ink = HeadInk::around(doc, anchor.target.atoms());
     let extra = (0..=8)
         .map(|i| gap * i as f32 / 8.)
-        .find(|e| !ink.touches(tip.offset(push.x * e, push.y * e), d, a.start, &style))
-        .unwrap_or(0.);
-    // The endpoint already clears `gap`, so the larger gap resolves in place.
-    let end = tip.offset(push.x * extra, push.y * extra);
-    anchor.gap = gap + extra;
+        .find(|e| !ink.touches(tip.offset(push.x * e, push.y * e), d, a.start, &style));
+    let end = if let Some(extra) = extra {
+        anchor.gap = gap + extra;
+        tip.offset(push.x * extra, push.y * extra)
+    } else {
+        let normal = Point::new(d.y, -d.x);
+        let side = if dot(delta(base, center), normal) >= 0. {
+            1.
+        } else {
+            -1.
+        };
+        (1..=128)
+            .flat_map(|i| [side, -side].map(|side| i as f32 * gap / 8. * side))
+            .filter_map(|shift| {
+                let candidate = tip.offset(normal.x * shift, normal.y * shift);
+                let candidate = Anchor {
+                    offset: delta(candidate, center),
+                    ..anchor.clone()
+                }
+                .resolved(doc, pen)?;
+                (!ink.touches(candidate, d, a.start, &style)).then_some(candidate)
+            })
+            .next()
+            .unwrap_or(tip)
+    };
+    // The stored offset includes both kinds of clearance and resolves in place.
     anchor.offset = delta(end, center);
     let Some(a) = doc.arrows.iter_mut().find(|a| a.id == arrow) else {
         return;

@@ -413,7 +413,7 @@ impl super::App {
                     .into()
                 } else if cfg!(target_arch = "wasm32") {
                     // The browser only starts a download, which can still be cancelled.
-                    format!("Downloaded {}", self.document_name())
+                    download_status(&self.document_name())
                 } else {
                     "Document saved".into()
                 };
@@ -623,14 +623,8 @@ impl super::App {
     ) {
         match result {
             Ok(Some(saved)) => {
-                self.status = format!(
-                    "Exported {}",
-                    saved.path.file_name().unwrap_or_default().to_string_lossy()
-                );
-                for detail in saved.details {
-                    self.status.push_str(" · ");
-                    self.status.push_str(&detail);
-                }
+                self.status =
+                    export_status(&saved.path, &saved.details, cfg!(target_arch = "wasm32"));
                 self.error = false;
             }
             Ok(None) => {}
@@ -663,3 +657,22 @@ mod tests;
 
 #[cfg(test)]
 mod performance;
+
+/// A browser download can still be blocked or cancelled after this handoff.
+fn download_status(filename: &str) -> String {
+    format!("{filename} sent to browser downloads")
+}
+
+pub(super) fn export_status(path: &std::path::Path, details: &[String], browser: bool) -> String {
+    let filename = path.file_name().unwrap_or_default().to_string_lossy();
+    let mut status = if browser {
+        download_status(&filename)
+    } else {
+        format!("Exported {filename}")
+    };
+    for detail in details {
+        status.push_str(" · ");
+        status.push_str(detail);
+    }
+    status
+}

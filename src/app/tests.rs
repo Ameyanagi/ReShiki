@@ -196,6 +196,25 @@ fn dismissing_the_recovery_offer_restores_the_ready_message() {
     assert_eq!(app.status, "Drawing updated");
 }
 
+// State-only completion fixtures distinguish a completed molecular analysis
+// from an unavailable analysis. Descriptor values are not chemistry oracles.
+pub(super) fn completed_analysis() -> reshiki::engine::Analysis {
+    reshiki::engine::Analysis {
+        smiles: String::new(),
+        formula: String::new(),
+        mass: 0.,
+        exact_mass: 0.,
+        logp: 0.,
+        tpsa: 0.,
+        donors: 0,
+        acceptors: 0,
+        rings: 0,
+        unpaired_electrons: 0,
+        inchi: String::new(),
+        inchikey: String::new(),
+    }
+}
+
 fn checked_labels(app: &mut App) {
     let mut checked = app.tab.doc.clone();
     for atom in &mut checked.atoms {
@@ -210,7 +229,7 @@ fn checked_labels(app: &mut App) {
         kind: Job::Analyze,
         result: Box::new(Ok(Response {
             document: Some(checked),
-            analysis: None,
+            analysis: Some(completed_analysis()),
             output: None,
             engine_version: "test".into(),
             warnings: vec![],
