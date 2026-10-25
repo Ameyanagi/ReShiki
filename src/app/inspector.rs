@@ -705,21 +705,16 @@ impl App {
     }
 
     fn molecular_properties(&self) -> Element<'_, Message> {
-        // Only crystal models need this atom-only selection scope.
-        let crystal_ids = self
-            .tab
-            .doc
-            .models
-            .iter()
-            .any(|model| model.cell.is_some())
-            .then(|| {
-                self.tab
-                    .selected
-                    .iter()
-                    .copied()
-                    .filter(|id| self.tab.doc.atom(*id).is_some())
-                    .collect::<Vec<_>>()
-            });
+        // Let the crystal subsystem decide which drawings need a constrained
+        // analysis scope, including distance provenance retained without a cell.
+        let crystal_ids = reshiki::models3d::crystal::touches(&self.tab.doc, &[]).then(|| {
+            self.tab
+                .selected
+                .iter()
+                .copied()
+                .filter(|id| self.tab.doc.atom(*id).is_some())
+                .collect::<Vec<_>>()
+        });
         // Ordinary molecules beside a crystal keep their chemistry analysis.
         if let Some(ids) =
             crystal_ids.filter(|ids| reshiki::models3d::crystal::touches(&self.tab.doc, ids))
