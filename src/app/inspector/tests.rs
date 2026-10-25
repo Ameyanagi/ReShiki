@@ -1,5 +1,119 @@
 use super::*;
 use reshiki::editing::Transform;
+
+#[tokio::test]
+#[ignore = "Opt-in actual-widget crystal and disconnected ordinary Properties regression"]
+async fn lazy_crystal_properties_keep_scope_and_ordinary_analysis() {
+    use iced::advanced::{renderer::Headless, widget::operation};
+    use reshiki::models3d::{Cell, ForceField, Model3d, Placed};
+    #[derive(Default)]
+    struct PanelText(Vec<String>);
+    impl iced::advanced::widget::Operation for PanelText {
+        fn traverse(
+            &mut self,
+            operate: &mut dyn FnMut(&mut dyn iced::advanced::widget::Operation),
+        ) {
+            operate(self);
+        }
+        fn text(
+            &mut self,
+            _: Option<&iced::advanced::widget::Id>,
+            _: iced::Rectangle,
+            value: &str,
+        ) {
+            self.0.push(value.into());
+        }
+    }
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .unwrap();
+    let panel_text = |app: &App, renderer: &mut iced::Renderer| {
+        let mut ui = iced_runtime::UserInterface::build(
+            app.molecular_properties(),
+            iced::Size::new(300., 800.),
+            iced_runtime::user_interface::Cache::new(),
+            renderer,
+        );
+        let mut text = PanelText::default();
+        ui.operate(renderer, &mut operation::black_box(&mut text));
+        text.0.join("\n")
+    };
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let carbon = app.tab.doc.add_atom("C", Default::default());
+    let oxygen = app
+        .tab
+        .doc
+        .add_atom("O", reshiki::document::Point::new(42., 0.));
+    app.tab.doc.add_bond(carbon, oxygen, 1, "plain");
+    let mut model = Model3d::new(
+        &app.tab.doc,
+        vec![
+            Placed {
+                id: carbon,
+                xyz: [0.; 3],
+            },
+            Placed {
+                id: oxygen,
+                xyz: [1.4, 0., 0.],
+            },
+        ],
+        vec![],
+        ForceField::Mmff94s,
+    );
+    model.cell = Some(Cell {
+        vectors: [[5., 0., 0.], [0., 5., 0.], [0., 0., 5.]],
+        crossing: vec![],
+    });
+    app.tab.doc.models.push(model);
+    for selected in [vec![], vec![carbon, oxygen]] {
+        app.tab.selected = selected;
+        let text = panel_text(&app, &mut renderer);
+        assert!(
+            text.contains(reshiki::models3d::crystal::ANALYSIS_NOTICE),
+            "{text}"
+        );
+        let composition =
+            reshiki::models3d::crystal::composition(&app.tab.doc, &app.tab.selected).unwrap();
+        assert!(text.contains(&format!(
+            "{} · {:.3} g/mol",
+            composition.formula, composition.mass
+        )));
+        assert!(!text.contains("Calculating"));
+    }
+    let ordinary = app
+        .tab
+        .doc
+        .add_atom("N", reshiki::document::Point::new(200., 0.));
+    for cell_present in [true, false] {
+        if !cell_present {
+            app.tab.doc.models[0].cell = None;
+        }
+        app.tab.selected = vec![ordinary];
+        let key = app.property_request_key();
+        let _ = app.inspector_action(Action::RefreshProperties);
+        assert_eq!(app.tab.inspector_ui.pending.as_ref(), Some(&key));
+        let response = app
+            .engine
+            .execute(Request::molecule("analyze", app.property_document(&key)))
+            .await
+            .unwrap();
+        let _ = app.inspector_action(Action::PropertiesCalculated(
+            key,
+            Box::new(Ok(response.analysis.unwrap())),
+        ));
+        let text = panel_text(&app, &mut renderer);
+        assert!(text.contains("Weight (g/mol)"), "{text}");
+        assert!(text.contains("Canonical SMILES"), "{text}");
+        assert!(!text.contains("Crystal structure"));
+        assert!(!text.contains("Calculating"));
+    }
+}
+
 #[test]
 fn background_properties_use_their_tabs_snapshot_and_selection() {
     use crate::app::tabs::tests::Front;

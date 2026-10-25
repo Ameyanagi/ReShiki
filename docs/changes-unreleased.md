@@ -2,6 +2,15 @@
 
 ## Fixes
 
+Under review: @Ameyanagi — PDF copies of large selections show progress before
+conversion and retain the canvas caches in
+[PR #582](https://github.com/Ameyanagi/ReShiki/pull/582).
+[Native timing, copied-output comparison and reproduction](changes/large-selection-copy-feedback.md).
+Local M1 acknowledgment improves from 616.262 ms to 53.678 ms, with completion
+from 1,564.521 ms to 776.795 ms. The literal 33.3 ms/M4 target remains unverified.
+
+![Matched first native PDF progress frames and readable footer close-ups](images/qa-large-selection-copy/native-first-progress.png)
+
 Space-filling models keep hydrogens facing the viewer visible where overlapping
 atoms meet. The front cap no longer leaves a hole through its carbon.
 @Ameyanagi, [PR #535](https://github.com/Ameyanagi/ReShiki/pull/535), merged.

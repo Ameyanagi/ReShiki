@@ -2,6 +2,125 @@ use super::*;
 use reshiki::document::Annotation;
 
 #[test]
+fn caption_color_mismatch_preserves_paint_identity_spans_empty_text_and_bond_scope() {
+    let (mut app, _) = App::new();
+    app.tab.doc = Document::default();
+    let a = app.tab.doc.add_atom("C", Point::default());
+    let b = app.tab.doc.add_atom("O", Point::new(42., 0.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
+    let bond_color = Paint::Custom([11, 22, 33]);
+    app.tab.doc.bonds[0].color = bond_color;
+    let empty = app.tab.doc.next_id();
+    app.tab.doc.annotations.push(Annotation {
+        id: empty,
+        position: Point::new(0., 80.),
+        text: String::new(),
+        format: TextFormat::default(),
+    });
+    let caption = app.tab.doc.next_id();
+    let mut format = TextFormat::default();
+    // These paints can resolve to the same black, but retain distinct identity.
+    format.style.color = Paint::Custom([0; 3]);
+    app.tab.doc.annotations.push(Annotation {
+        id: caption,
+        position: Point::new(0., 120.),
+        text: "酸X".into(),
+        format,
+    });
+    app.tab.selected = vec![a, b, empty, caption];
+    let before = app.tab.doc.clone();
+    for scope in [ColorScope::All, ColorScope::Text] {
+        app.tab.color_scope = scope;
+        assert_eq!(app.current_selection_color(), None);
+    }
+    app.tab.color_scope = ColorScope::Bonds;
+    assert_eq!(app.current_selection_color(), Some(bond_color));
+    assert_eq!(app.tab.doc, before);
+
+    app.tab.selected = vec![empty, caption];
+    app.tab.color_scope = ColorScope::Text;
+    assert_eq!(
+        app.current_selection_color(),
+        None,
+        "Empty text contributes its style"
+    );
+    app.tab.doc.annotations[1].format.style.color = Paint::Ink;
+    assert_eq!(app.current_selection_color(), Some(Paint::Ink));
+    app.tab.doc.annotations[1].format.apply(
+        "酸X",
+        Some(3..4),
+        &StyleChange::Color(Paint::Custom([0; 3])),
+    );
+    assert_eq!(
+        app.current_selection_color(),
+        None,
+        "Inspect UTF-8 span colors"
+    );
+    app.tab.selected.clear();
+    assert_eq!(
+        app.current_selection_color(),
+        Some(app.current_text_style().color)
+    );
+}
+
+#[test]
+fn selected_label_order_ignores_missing_hidden_and_repeated_group_members() -> Result<(), String> {
+    let (mut app, _) = App::new();
+    app.tab.doc = Document::default();
+    app.tab.doc.atom_labels.carbons = reshiki::atom_labels::Carbons::Skeletal;
+    let hidden = app.tab.doc.add_atom("C", Point::default());
+    let other = app.tab.doc.add_atom("C", Point::new(42., 0.));
+    app.tab.doc.add_bond(hidden, other, 1, "plain");
+    let oxygen = app.tab.doc.add_atom("O", Point::new(84., 0.));
+    let anchor = group(&mut app, "OMe", 168.)?;
+    reshiki::atom_labels::set_alignment(&mut app.tab.doc, anchor, LabelAlignment::Above);
+    let member = app
+        .tab
+        .doc
+        .abbreviation(anchor)
+        .unwrap()
+        .members
+        .iter()
+        .copied()
+        .find(|id| *id != anchor)
+        .unwrap();
+    let text = app.tab.doc.add_atom("*", Point::new(252., 0.));
+    let atom = app.tab.doc.atom_mut(text).unwrap();
+    atom.display.variable = Some("Tag".into());
+    atom.display.label_attachment = reshiki::atom_labels::LabelAttachment::Left;
+    let character = app.tab.doc.add_atom("*", Point::new(336., 0.));
+    let atom = app.tab.doc.atom_mut(character).unwrap();
+    atom.display.variable = Some("Tag".into());
+    atom.display.label_attachment = reshiki::atom_labels::LabelAttachment::Character(1);
+    app.tab.selected = vec![
+        u64::MAX,
+        hidden,
+        member,
+        oxygen,
+        anchor,
+        member,
+        text,
+        text,
+        character,
+    ];
+    let before = app.tab.doc.clone();
+    let selected = app.tab.selected.clone();
+    assert_eq!(
+        app.selected_labels().collect::<Vec<_>>(),
+        vec![
+            (anchor, LabelAlignment::Above),
+            (oxygen, LabelAlignment::Auto),
+            (text, LabelAlignment::Left),
+        ]
+    );
+    assert_eq!(app.selected_label_alignment(), Some(None));
+    assert_eq!(app.toolbar_alignment(), None);
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.selected, selected);
+    Ok(())
+}
+
+#[test]
 fn selected_wrapper_typography_and_color_leave_internal_atom_and_bond_styles_untouched() {
     let (mut app, _) = App::new();
     app.tab.doc = Document::default();

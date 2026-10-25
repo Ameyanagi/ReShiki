@@ -43,21 +43,21 @@ impl std::fmt::Display for ColorScope {
 impl App {
     /// The selected atom and group labels with their alignment, each group
     /// once by its anchor.
-    fn selected_labels(&self) -> Vec<(u64, LabelAlignment)> {
-        if self.tab.inline_text.is_some() {
-            return vec![];
-        }
+    fn selected_labels(&self) -> impl Iterator<Item = (u64, LabelAlignment)> + '_ {
         let doc = &self.tab.doc;
-        let mut labels: Vec<(u64, LabelAlignment)> = vec![];
-        for &id in &self.tab.selected {
+        let selected: &[u64] = if self.tab.inline_text.is_some() {
+            &[]
+        } else {
+            &self.tab.selected
+        };
+        let mut seen = std::collections::HashSet::new();
+        selected.iter().copied().filter_map(move |id| {
             let id = doc.abbreviation_containing(id).map_or(id, |g| g.anchor);
-            if !labels.iter().any(|(label, _)| *label == id)
-                && let Some(alignment) = reshiki::atom_labels::alignment(doc, id)
-            {
-                labels.push((id, alignment));
+            if !seen.insert(id) {
+                return None;
             }
-        }
-        labels
+            reshiki::atom_labels::alignment(doc, id).map(|alignment| (id, alignment))
+        })
     }
 
     /// Outer None: no atom or group labels. Inner None: mixed alignments.
@@ -66,9 +66,13 @@ impl App {
         if let Some(alignment) = self.atom_text_alignment() {
             return Some(Some(alignment));
         }
-        let labels = self.selected_labels();
-        let (_, first) = *labels.first()?;
-        Some(labels.iter().all(|(_, a)| *a == first).then_some(first))
+        let mut labels = self.selected_labels();
+        let (_, first) = labels.next()?;
+        Some(
+            labels
+                .all(|(_, alignment)| alignment == first)
+                .then_some(first),
+        )
     }
 
     pub(super) fn toolbar_alignment(&self) -> Option<TextAlign> {
@@ -77,7 +81,6 @@ impl App {
         }
         let mut values = self
             .selected_labels()
-            .into_iter()
             .map(|(_, alignment)| text_align(alignment))
             .chain(
                 self.tab
@@ -94,7 +97,7 @@ impl App {
     }
 
     pub(super) fn apply_label_alignment(&mut self, alignment: LabelAlignment) {
-        let labels = self.selected_labels();
+        let labels: Vec<_> = self.selected_labels().collect();
         if labels.is_empty() {
             return;
         }
@@ -244,6 +247,30 @@ impl App {
         }
         let mut colors = Vec::new();
         if self.tab.color_scope != ColorScope::Bonds {
+            // Mixed captions already establish a mixed selection. Check them
+            // before resolving automatic ink for every selected atom.
+            let mut captions = self
+                .tab
+                .doc
+                .annotations
+                .iter()
+                .filter(|a| self.tab.selected.contains(&a.id))
+                .flat_map(|a| {
+                    a.text
+                        .is_empty()
+                        .then_some(a.format.style.color)
+                        .into_iter()
+                        .chain(a.text.char_indices().map(|(i, _)| a.format.at(i).color))
+                });
+            if let Some(first) = captions.next() {
+                colors.push(first);
+                for color in captions {
+                    if color != first {
+                        return None;
+                    }
+                    colors.push(color);
+                }
+            }
             colors.extend(
                 self.tab
                     .doc
@@ -254,19 +281,6 @@ impl App {
                     })
                     .map(|a| self.atom_paint(a)),
             );
-            for a in self
-                .tab
-                .doc
-                .annotations
-                .iter()
-                .filter(|a| self.tab.selected.contains(&a.id))
-            {
-                if a.text.is_empty() {
-                    colors.push(a.format.style.color);
-                } else {
-                    colors.extend(a.text.char_indices().map(|(i, _)| a.format.at(i).color));
-                }
-            }
         }
         if self.tab.color_scope != ColorScope::Text {
             colors.extend(
@@ -848,7 +862,7 @@ impl App {
             }
         };
         if self.tab.inline_text.is_some()
-            || self.selected_labels().is_empty()
+            || self.selected_labels().next().is_none()
             || self
                 .tab
                 .doc
@@ -869,7 +883,7 @@ impl App {
             TextAlign::Right => Some(LabelAlignment::Right),
             TextAlign::Justified => None,
         }) {
-            for (id, _) in self.selected_labels() {
+            for (id, _) in self.selected_labels().collect::<Vec<_>>() {
                 reshiki::atom_labels::set_alignment(&mut self.tab.doc, id, label_alignment);
             }
         }

@@ -2,7 +2,7 @@
 use super::{Action, Message, Page, State};
 use iced::advanced::Renderer as _;
 use iced::advanced::{
-    Clipboard, Layout, Shell, Widget, layout, mouse, renderer,
+    Clipboard, Layout, Shell, Widget, layout, mouse, overlay, renderer,
     widget::{
         Id, Operation, Tree,
         operation::{Scrollable, scrollable},
@@ -31,10 +31,13 @@ pub(super) struct Panel<'a> {
 pub(super) struct Cascade<'a> {
     base: Element<'a, Message>,
     panels: Vec<Panel<'a>>,
-    menu: &'a State,
+    menu: Option<&'a State>,
 }
 
-struct Pages(Vec<Page>);
+struct Pages {
+    open: bool,
+    panels: Vec<Page>,
+}
 
 fn application_shortcut(event: &Event) -> Option<Message> {
     let Event::Keyboard(keyboard::Event::KeyPressed {
@@ -53,7 +56,11 @@ fn application_shortcut(event: &Event) -> Option<Message> {
 }
 
 impl<'a> Cascade<'a> {
-    pub fn new(base: Element<'a, Message>, panels: Vec<Panel<'a>>, menu: &'a State) -> Self {
+    pub fn new(
+        base: Element<'a, Message>,
+        panels: Vec<Panel<'a>>,
+        menu: Option<&'a State>,
+    ) -> Self {
         Self { base, panels, menu }
     }
 }
@@ -64,7 +71,10 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
     }
 
     fn state(&self) -> tree::State {
-        tree::State::new(Pages(self.panels.iter().map(|panel| panel.page).collect()))
+        tree::State::new(Pages {
+            open: self.menu.is_some(),
+            panels: self.panels.iter().map(|panel| panel.page).collect(),
+        })
     }
 
     fn children(&self) -> Vec<Tree> {
@@ -76,8 +86,9 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
 
     fn diff(&self, tree: &mut Tree) {
         let previous = tree.state.downcast_mut::<Pages>();
+        let boundary = previous.open != self.menu.is_some();
         for (level, panel) in self.panels.iter().enumerate() {
-            if previous.0.get(level) != Some(&panel.page)
+            if previous.panels.get(level) != Some(&panel.page)
                 && let Some(child) = tree.children.get_mut(level + 1)
             {
                 // A sibling submenu starts at its own first row, not at the
@@ -85,11 +96,15 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
                 *child = Tree::new(&panel.content);
             }
         }
-        previous.0 = self.panels.iter().map(|panel| panel.page).collect();
+        previous.open = self.menu.is_some();
+        previous.panels = self.panels.iter().map(|panel| panel.page).collect();
         let children: Vec<_> = std::iter::once(self.base.as_widget())
             .chain(self.panels.iter().map(|panel| panel.content.as_widget()))
             .collect();
         tree.diff_children(&children);
+        if boundary && let Some(base) = tree.children.first_mut() {
+            crate::canvas::reset_menu_pointer(base);
+        }
     }
 
     fn size(&self) -> Size<Length> {
@@ -123,6 +138,9 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
         );
         let mut nodes = vec![base];
         for level in 0..self.panels.len() {
+            let Some(menu) = self.menu else {
+                break;
+            };
             let anchor = if let Some(parent_level) = level.checked_sub(1) {
                 let Some(index) = self.panels.get(level).and_then(|panel| panel.anchor) else {
                     break;
@@ -160,8 +178,8 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
                 .content
                 .as_widget_mut()
                 .layout(panel_state, renderer, &panel_limits);
-            if self.menu.keyboard
-                && let Some((focused_level, index)) = self.menu.focused
+            if menu.keyboard
+                && let Some((focused_level, index)) = menu.focused
                 && focused_level == level
             {
                 reveal(
@@ -175,7 +193,7 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
             }
             let position = match anchor {
                 Some((parent, row)) => child_position(parent, row, node.size(), size),
-                None => clamp(self.menu.position, node.size(), size),
+                None => clamp(menu.position, node.size(), size),
             };
             nodes.push(node.move_to(position));
         }
@@ -205,7 +223,11 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
             theme,
             style,
             base_layout,
-            mouse::Cursor::Unavailable,
+            if self.menu.is_some() {
+                mouse::Cursor::Unavailable
+            } else {
+                cursor
+            },
             viewport,
         );
         let layouts: Vec<_> = layouts.collect();
@@ -251,7 +273,12 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
         let Some(base_layout) = layouts.next() else {
             return;
         };
-        let _ = (base_state, base_layout);
+        if self.menu.is_none() {
+            self.base
+                .as_widget_mut()
+                .operate(base_state, base_layout, renderer, operation);
+            return;
+        }
         operation.custom(
             None,
             layout.bounds(),
@@ -276,6 +303,44 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
+        let Some(menu) = self.menu else {
+            if let Some((base_state, base_layout)) =
+                tree.children.first_mut().zip(layout.children().next())
+            {
+                self.base.as_widget_mut().update(
+                    base_state,
+                    event,
+                    base_layout,
+                    cursor,
+                    renderer,
+                    clipboard,
+                    shell,
+                    viewport,
+                );
+            }
+            return;
+        };
+        if matches!(event, Event::Keyboard(keyboard::Event::ModifiersChanged(_))) {
+            // Keep retained canvas modifiers current while the menu owns keys.
+            // This event carries no pointer action; the unavailable cursor also
+            // prevents background hit testing by the base widgets.
+            if let Some((base_state, base_layout)) =
+                tree.children.first_mut().zip(layout.children().next())
+            {
+                self.base.as_widget_mut().update(
+                    base_state,
+                    event,
+                    base_layout,
+                    mouse::Cursor::Unavailable,
+                    renderer,
+                    clipboard,
+                    shell,
+                    viewport,
+                );
+            }
+            shell.capture_event();
+            return;
+        }
         if let Some(message) = application_shortcut(event) {
             // Close before running the command, just like selecting its menu
             // row. Keep it captured so neither the base nor the application's
@@ -394,13 +459,13 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
             {
                 let rows = rows(panel, level, state, *panel_layout, renderer);
                 if let Some(index) = cursor.position().and_then(|point| rows.at(point))
-                    && (self.menu.focused != Some((level, index)) || self.menu.keyboard)
+                    && (menu.focused != Some((level, index)) || menu.keyboard)
                 {
                     shell.publish(Message::ContextMenu(Action::Hover(level, index)));
                 }
             }
             if matches!(event, Event::Mouse(mouse::Event::WheelScrolled { .. }))
-                && self.menu.children.len() > level
+                && menu.children.len() > level
             {
                 shell.publish(Message::ContextMenu(Action::CloseAfter(level)));
             }
@@ -458,6 +523,16 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
+        if self.menu.is_none() {
+            return tree.children.first().zip(layout.children().next()).map_or(
+                mouse::Interaction::None,
+                |(state, layout)| {
+                    self.base
+                        .as_widget()
+                        .mouse_interaction(state, layout, cursor, viewport, renderer)
+                },
+            );
+        }
         for ((panel, state), layout) in self
             .panels
             .iter()
@@ -481,6 +556,26 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
         } else {
             mouse::Interaction::None
         }
+    }
+
+    fn overlay<'a>(
+        &'a mut self,
+        tree: &'a mut Tree,
+        layout: Layout<'a>,
+        renderer: &Renderer,
+        viewport: &Rectangle,
+        translation: Vector,
+    ) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
+        if self.menu.is_some() {
+            return None;
+        }
+        self.base.as_widget_mut().overlay(
+            tree.children.first_mut()?,
+            layout.children().next()?,
+            renderer,
+            viewport,
+            translation,
+        )
     }
 }
 
