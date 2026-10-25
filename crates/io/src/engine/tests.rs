@@ -272,3 +272,124 @@ async fn cleanup_keeps_the_hidden_drawing_of_a_molecule_shown_in_3d() {
             .any(|w| w.contains("shown in 3D kept unchanged"))
     );
 }
+
+#[tokio::test]
+async fn reaction_import_centres_each_separator_between_visible_ion_labels() {
+    for input in [
+        "[CH3:1][CH:2]=[O:3]>[BH4-].[Na+]>[CH3:1][CH2:2][OH:3]",
+        "[BH4-].[Na+]>>[AlH4-].[Li+]",
+    ] {
+        let doc = LocalEngine::default()
+            .request(Request::import("rsmi", input))
+            .await
+            .unwrap()
+            .document
+            .unwrap();
+        let reaction = &doc.reactions[0];
+        let mut signs = reaction.annotations.iter();
+        for row in [&reaction.reactants, &reaction.agents, &reaction.products] {
+            for pair in row.windows(2) {
+                let extent = |part: &crate::reactions::Participant| {
+                    part.atoms
+                        .iter()
+                        .filter_map(|id| doc.atom(*id))
+                        .flat_map(|a| {
+                            crate::scene::atom_label_ink_bounds(a, &doc)
+                                .into_iter()
+                                .flat_map(|(lo, hi)| [lo.x, hi.x])
+                        })
+                        .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), x| {
+                            (lo.min(x), hi.max(x))
+                        })
+                };
+                let left = extent(&pair[0]).1;
+                let right = extent(&pair[1]).0;
+                let id = signs.next().unwrap();
+                let sign = doc.annotations.iter().find(|a| a.id == *id).unwrap();
+                let layout = crate::typography::layout(&sign.text, &sign.format);
+                let centre = sign.position.x + layout.width * 0.5;
+                assert!(
+                    (centre - (left + right) * 0.5).abs() < doc.drawing_style.world(1.),
+                    "{input}: left={left} sign={centre} right={right}"
+                );
+                assert!(sign.position.x > left && sign.position.x + layout.width < right);
+            }
+        }
+        let arrow = &doc.arrows[0];
+        let products_left = reaction
+            .products
+            .iter()
+            .flat_map(|p| &p.atoms)
+            .filter_map(|id| doc.atom(*id))
+            .filter_map(|a| crate::scene::atom_label_ink_bounds(a, &doc))
+            .map(|(lo, _)| lo.x)
+            .fold(f32::INFINITY, f32::min);
+        assert!(arrow.end.x < products_left);
+        if reaction.agents.len() > 1 {
+            let bounds = reaction
+                .agents
+                .iter()
+                .flat_map(|p| &p.atoms)
+                .filter_map(|id| doc.atom(*id))
+                .filter_map(|a| crate::scene::atom_label_ink_bounds(a, &doc))
+                .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), (a, b)| {
+                    (lo.min(a.x), hi.max(b.x))
+                });
+            assert!(bounds.0 > arrow.start.x && bounds.1 < arrow.end.x);
+        }
+    }
+}
+
+#[tokio::test]
+async fn clicked_circled_charge_keeps_its_clear_offset_through_cdxml() {
+    use crate::{
+        document::Point,
+        graphics::{GraphicKind, GraphicStyle},
+        scientific::{Drawing, Phase, SymbolKind},
+    };
+    let mut doc = LocalEngine::default()
+        .request(Request::import("smiles", "C[N+](=O)[O-]"))
+        .await
+        .unwrap()
+        .document
+        .unwrap();
+    let n = doc.atoms.iter().find(|a| a.element == "N").unwrap().id;
+    let center = doc.atom(n).unwrap().position;
+    let oxygen = doc
+        .bonds
+        .iter()
+        .find(|b| b.order == 2 && (b.a == n || b.b == n))
+        .map(|b| if b.a == n { b.b } else { b.a })
+        .unwrap();
+    let vector = doc.atom(oxygen).unwrap().position;
+    let angle = -90.
+        - (vector.y - center.y)
+            .atan2(vector.x - center.x)
+            .to_degrees();
+    let ids = doc.all_ids();
+    crate::editing::transform_about(&mut doc, &ids, center, 1., angle);
+    doc.atom_mut(n).unwrap().charge = 0;
+    Drawing {
+        kind: GraphicKind::Symbol(SymbolKind::CirclePlus),
+        style: GraphicStyle::default(),
+        phase: Phase::Solid,
+        flipped: false,
+        attach: true,
+        snap_orbitals: true,
+    }
+    .place(&mut doc, center, center, false, 10.)
+    .unwrap();
+    let offset = doc.atom(n).unwrap().marks[0].offset;
+    assert!(offset.distance(Point::default()) > 0.);
+    let cdxml = crate::exchange::drawing::write(&doc, Default::default()).unwrap();
+    let reopened = LocalEngine::default()
+        .request(Request::import("cdxml", &cdxml))
+        .await
+        .unwrap()
+        .document
+        .unwrap();
+    let restored = reopened.atoms.iter().find(|a| a.element == "N").unwrap();
+    assert_eq!(restored.charge, 1);
+    assert_eq!(restored.marks.len(), 1);
+    assert!(restored.marks[0].offset.distance(offset) < 0.01);
+}

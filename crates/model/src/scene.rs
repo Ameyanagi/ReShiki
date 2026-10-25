@@ -451,7 +451,17 @@ fn label_runs(
     // A generic label meets its single horizontal bond with its near edge.
     let generic_side = (internal_group.is_none() && condensed.is_none())
         .then(|| crate::atom_labels::generic_label_side(a, doc))
-        .flatten();
+        .flatten()
+        .or_else(|| {
+            (free_text
+                && attachment.is_auto()
+                && condensed.is_none()
+                && attached.is_none()
+                && crate::abbreviations::atom_anchor(label, false).is_none()
+                && crate::abbreviations::atom_anchor(label, true).is_none())
+            .then(|| crate::atom_labels::short_bond_label_side(a, doc, element_width))
+            .flatten()
+        });
     let centered = match generic_side {
         Some(true) => element_width,
         Some(false) => 0.,
