@@ -86,6 +86,11 @@ Base: `3d80590a`; implementation: `7979a5c4`.
   It preserves the document and Undo history, adds the platform's ordinary Copy
   shortcut and returns without a clipboard publication task. All 18 application
   clipboard tests pass, including stale selection/revision/tab handling.
+  CDX exercises this path where binary clipboard transport is available.
+  Headless Linux correctly refuses CDX synchronously because that transport is
+  unavailable; the test checks that existing refusal and a zero-task result,
+  while CDXML still exercises asynchronous conversion. Both paths preserve the
+  drawing, selection and Undo history without publishing clipboard data.
 - The application renderer measures the cue at 1040, 1280 and 1600 pixels wide.
   It remains outside the message's clipped bounds and inside the status bar.
   Short messages omit the cue; multiline notices retain it.

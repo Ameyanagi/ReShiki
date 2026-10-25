@@ -74,23 +74,37 @@ async fn strict_text_label_copy_refusal_keeps_the_clipboard_and_names_the_copy_s
         app.tab.doc.add_bond(left, right, 1, "plain");
         app.tab.selected = app.tab.doc.all_ids();
         let before = app.tab.doc.clone();
-        let mut stream = iced_runtime::task::into_stream(app.copy_as(format)).unwrap();
-        let Some(iced_runtime::Action::Output(Message::CopyAsPrepared(key, result))) =
-            stream.next().await
-        else {
-            panic!("Expected conversion failure before clipboard publication");
-        };
-        assert!(result.is_err());
-        assert_eq!(app.copy_as_prepared(key, *result).units(), 0);
-        assert!(app.error && app.status.contains("text label “MeO”"));
-        assert!(app.status.contains(&super::super::shortcuts::keys(
-            iced::keyboard::Modifiers::COMMAND,
-            "C"
-        )));
-        assert!(app.status.ends_with("Clipboard unchanged"));
-        assert!(!app.status.contains("Invalid") && !app.status.contains("ring"));
+        let selected = app.tab.selected.clone();
+        let task = app.copy_as(format);
+        if !format.available() {
+            // A headless Linux process has no binary CDX clipboard transport.
+            // Its existing UI guard refuses synchronously before conversion.
+            assert_eq!(format, CopyFormat::Cdx);
+            assert_eq!(task.units(), 0);
+            assert_eq!(app.status, format.unavailable_reason(&before).unwrap());
+        } else {
+            let mut stream = iced_runtime::task::into_stream(task)
+                .expect("An available format starts asynchronous conversion");
+            let Some(iced_runtime::Action::Output(Message::CopyAsPrepared(key, result))) =
+                stream.next().await
+            else {
+                panic!("Expected conversion failure before clipboard publication");
+            };
+            assert!(result.is_err());
+            assert_eq!(app.copy_as_prepared(key, *result).units(), 0);
+            assert!(app.status.contains("text label “MeO”"));
+            assert!(app.status.contains(&super::super::shortcuts::keys(
+                iced::keyboard::Modifiers::COMMAND,
+                "C"
+            )));
+            assert!(app.status.contains("Save as .rsk keeps everything"));
+            assert!(app.status.ends_with("Clipboard unchanged"));
+            assert!(!app.status.contains("Invalid") && !app.status.contains("ring"));
+        }
+        assert!(app.error);
         assert!(!app.copy_as_busy && !app.tab.clipboard_busy);
         assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.selected, selected);
         assert!(!app.tab.history.can_undo());
     }
 }
