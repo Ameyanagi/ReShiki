@@ -20,6 +20,8 @@ mod model_controls_qa;
 #[cfg(test)]
 mod selection_canvas_qa;
 #[cfg(test)]
+mod status_tests;
+#[cfg(test)]
 mod view_parity_tests;
 
 /// Counts used by molecular properties and both naming preview layouts.
@@ -2273,6 +2275,12 @@ impl App {
     }
 
     fn status_bar(&self) -> Element<'_, Message> {
+        responsive(|size| self.status_bar_at(size.width))
+            .height(Length::Shrink)
+            .into()
+    }
+
+    fn status_bar_at(&self, width: f32) -> Element<'_, Message> {
         let summary = self.status.lines().next().unwrap_or(&self.status);
         let error = self.error;
         let style = move |theme: &Theme| iced::widget::text::Style {
@@ -2306,7 +2314,8 @@ impl App {
         } else {
             160.
         };
-        let message = if self.status.contains('\n') || text_width(summary, 11.) > room {
+        let has_details = self.status.contains('\n') || text_width(summary, 11.) > room;
+        let message = if has_details {
             hover_hint(message, self.status.as_str(), tooltip::Position::Top).into()
         } else {
             message
@@ -2315,7 +2324,23 @@ impl App {
         if !self.recovered.is_empty() {
             status = status.push(self.recovery_banner());
         }
-        status = status.push(container(message).width(Length::Fill).clip(true));
+        status = status.push(
+            container(message)
+                .id("status-message")
+                .width(Length::Fill)
+                .clip(true),
+        );
+        if has_details {
+            // Keep the cue outside the clipped message so it remains visible
+            // beside the document controls even when the line runs out of room.
+            status = status.push(hover_hint(
+                container(text("…").size(14).style(style))
+                    .id("status-details")
+                    .padding([0, 3]),
+                self.status.as_str(),
+                tooltip::Position::Top,
+            ));
+        }
         if let Some((key, progress)) = self.engine_progress() {
             status = status.push(text(progress).size(11)).push(hover_hint(
                 accessible_command("engine.cancel", "Cancel chemistry operation", "Cancel")
@@ -2326,11 +2351,9 @@ impl App {
         }
         if self.updates.available() {
             status = status.push(
-                command(
-                    "Update available",
-                    Message::Updates(super::updates::Action::Show(true)),
-                )
-                .style(control(true)),
+                accessible_command("status-update", "Update available", "Update available")
+                    .on_press(Message::Updates(super::updates::Action::Show(true)))
+                    .style(control(true)),
             );
         }
         if !self.tab.autosave_status.is_empty() {
@@ -2363,23 +2386,50 @@ impl App {
                 tooltip::Position::Top,
             ));
         }
-        let status = status
-            .extend(self.document_settings())
+        let controls = iced::widget::Row::with_children(self.document_settings())
+            .spacing(8)
+            .align_y(Alignment::Center)
+            .height(32)
             .push(divider())
             .push(
-                command("View", Message::View(super::view_settings::Action::Toggle))
+                accessible_command("status-view", "Drawing view options", "View")
+                    .on_press(Message::View(super::view_settings::Action::Toggle))
                     .style(control(self.view_open)),
             )
-            .push(command("−", Message::Zoom(0.8)))
+            .push(
+                accessible_command("status-zoom-out", "Zoom out", "−").on_press(Message::Zoom(0.8)),
+            )
             .push(
                 text(format!("{:.0}%", self.tab.camera.zoom * 100.0))
                     .size(11)
                     .width(38)
                     .center(),
             )
-            .push(command("+", Message::Zoom(1.25)))
-            .push(command("Fit", Message::Fit));
-        container(status).padding([6, 14]).style(panel).into()
+            .push(
+                accessible_command("status-zoom-in", "Zoom in", "+").on_press(Message::Zoom(1.25)),
+            )
+            .push(
+                accessible_command("status-fit", "Fit drawing in view", "Fit")
+                    .on_press(Message::Fit),
+            );
+        // Reserve the notification row's height before delayed progress appears.
+        // At narrower widths, its controls must not compete with view/zoom.
+        let status = status.width(Length::Fill).height(32);
+        let content: Element<'_, Message> = if width < 1280. {
+            column![status, container(controls).align_right(Length::Fill)]
+                .spacing(4)
+                .into()
+        } else {
+            row![status, controls]
+                .spacing(8)
+                .align_y(Alignment::Center)
+                .into()
+        };
+        container(content)
+            .id("status-bar")
+            .padding([6, 14])
+            .style(panel)
+            .into()
     }
 
     /// Journal preset, color theme and canvas light/dark: whole-document

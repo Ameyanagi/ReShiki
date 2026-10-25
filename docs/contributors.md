@@ -38,6 +38,11 @@ continuity, singular atom/bond counts, remembered Molecular header choices in ne
 tabs, and drawing-tool visibility in
 [PR #564](https://github.com/Ameyanagi/ReShiki/pull/564).
 [Matched renderer and native evidence](changes/qa-property-continuity.md).
+Under review: @Ameyanagi — specific unsupported-label Copy as refusals,
+platform Copy advice, a visible full-message cue and narrow-window footer
+controls in [PR #565](https://github.com/Ameyanagi/ReShiki/pull/565), addressing
+[#499](https://github.com/Ameyanagi/ReShiki/issues/499).
+[Native interaction and combined renderer evidence](changes/qa-export-feedback.md).
 
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).
