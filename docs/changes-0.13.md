@@ -154,9 +154,10 @@ their contributor credits and links to their issues and reviews.
   the home page and the install guide. It is a preview, not the full app:
   naming and NMR prediction work, but printing, the assistant and Office
   integration need the desktop app, and 3D models pause the page while they
-  are computed. Your files stay on your computer. The first load downloads
-  about 8 MB, and Japanese, Korean or Chinese text may download a font from
-  jsDelivr.
+  are computed. Your files stay on your computer. The editor's JavaScript and
+  WebAssembly have an estimated first download of 9 MB compressed (gzip -9).
+  The naming worker loads on demand; Japanese, Korean or Chinese text may
+  also download a font from jsDelivr.
   [Install guide](https://reshiki.com/guide/install/#try-it-in-your-browser) ·
   [Issue #405](https://github.com/Ameyanagi/ReShiki/issues/405) · @Ameyanagi.
 - **The demo page shows its progress.** [reshiki.com/demo](https://reshiki.com/demo/)
@@ -164,8 +165,8 @@ their contributor credits and links to their issues and reviews.
   **Reload** button and a desktop-app link when the browser has neither WebGPU
   nor WebGL 2 or the download fails. The editor's JavaScript and WebAssembly
   download together instead of one after the other. On a phone the page says
-  ReShiki is made for a computer and downloads nothing until you choose
-  **Continue anyway**. The "Browser preview" note is a banner above the editor
+  ReShiki is made for a computer and waits to download the editor's WebAssembly
+  until you choose **Continue anyway**. The "Browser preview" note is a banner above the editor
   instead of floating over the canvas, menus and status bar, and the page has a
   favicon, a description and a link preview.
   [PR #461](https://github.com/Ameyanagi/ReShiki/pull/461) ·
