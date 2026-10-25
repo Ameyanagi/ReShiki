@@ -170,3 +170,5 @@ Nix flake for Linux and Apple Silicon Macs (released in 0.13.0): @Stefanomarton 
 Release preparation and documentation for 0.13.0: @Ameyanagi.
 
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.13.md) credit contributors alongside their changes.
+
+PDF gradient alignment for molecular and crystal models: @Ameyanagi in [PR #536](https://github.com/Ameyanagi/ReShiki/pull/536) (under review); [validation and reusable evidence](changes/qa-522.md).
