@@ -31,6 +31,13 @@ Right-click and choose **Copy as…** to choose one format: **PNG**, **SVG**, **
 
 PNG, SVG and PDF copy the visible figure without the canvas background. Molecular formats copy chemical data, not captions or figure layout. Select a molecule within a reaction for MOL, SMILES or InChI. RXN and reaction SMILES require one complete, explicitly defined reaction with reactants and products; a drawn arrow alone does not assign roles. The submenu explains unavailable formats. CDXML and CDX use the strict drawing exporters and do not silently substitute a picture when a feature cannot be represented.
 
+A text-label refusal names the first label and counts any others. It suggests
+ordinary **Cmd/Ctrl+C** as an editable-copy alternative and native `.rsk` to keep
+the complete drawing. Ordinary Copy can still use its documented picture
+fallback when editable exchange is unavailable. Inner ring curves have their
+own refusal. Long status messages show a visible **…** beside the text; hover
+over the message or that cue to read the full explanation.
+
 Conversion finishes before the clipboard changes. If conversion fails, or the drawing or selection changes before it is ready, the previous clipboard stays intact. Format warnings appear in the copy receipt. Switching tabs keeps the request with its source drawing; closing that tab before preparation completes discards it. No drawing, selection or Undo history is changed by Copy as.
 
 **ChemDoodle JSON · reaction** prepares plain text for a compatible sketcher's explicit JSON import, using the [published ChemDoodle JSON schema](https://web.chemdoodle.com/docs/chemdoodle-json-format). It preserves reactant/product membership through the arrow's atom-ID references, molecular connectivity, coordinates, charge, isotopes and attached hydrogen counts. Separate explicit H atoms remain separate. It currently requires one forward reaction, one connected molecule per participant and coefficients of one. Valid aromatic molecules use Kekulé single/double bonds with preserved attached hydrogen counts. Agents, atom maps, stereo (including stereo inferred from geometry), radicals, special bonds, attachment atoms and collapsed abbreviations are rejected before the clipboard changes. Captions and drawing styles are omitted with a visible receipt notice. The copied text does not contact CAS or submit a search; see the [manual SciFinder handoff](scifinder-handoff.md).
