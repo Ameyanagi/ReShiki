@@ -30,8 +30,10 @@ The model links to the molecule by atom ID. It never changes chemistry, atom IDs
 or the 2D layout, which is kept for switching back. Clicking or lassoing the
 model selects the molecule, so moving, aligning, copying and Duplicate carry it
 along; while the molecule is shown in 3D, its hidden 2D atoms cannot be picked.
-A chemical edit to the molecule (element, charge, bonds or stereo) removes the
-model.
+A chemical edit to an ordinary molecule (element, charge, bonds or stereo)
+removes its conformer. A crystal keeps its imported unit cell and copies when
+only an atom’s element or charge changes; see
+[Editing a crystal](crystal-structures.md#editing-a-crystal).
 
 The model sits in a square frame that holds it in any rotation, so the frame and
 its handles stay put while the model turns. On the canvas, a model
@@ -122,8 +124,10 @@ Each change is one Undo step; dragging a slider is one step when you release
 it. The canvas draws the model with the same renderer as PNG export, so the
 shading looks the same at any zoom.
 
-Crystal and periodic structures (CIF, PDB, POSCAR/CONTCAR and plain or
-extended XYZ) open as a model in their unit cell; see
+Crystal and periodic structures with a cell (CIF, PDB, POSCAR/CONTCAR and
+extended XYZ) open as a 2D drawing in their unit cell; **Show as 3D** turns
+them into a model in the cell. A structure without a cell, such as a plain
+XYZ molecule, opens as a 3D model. See
 [Crystal structures](crystal-structures.md).
 
 ## Preview an optimized molecule

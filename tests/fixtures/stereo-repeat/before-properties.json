@@ -1,0 +1,59 @@
+{
+  "durene_result": {
+    "acceptors": 4,
+    "donors": 0,
+    "exact_mass": 198.089208928,
+    "formula": "C10H14O4",
+    "inchi": "InChI=1S/C10H14O4/c1-11-7-5-9(13-3)10(14-4)6-8(7)12-2/h5-6H,1-4H3",
+    "inchikey": "JUVJUCAKSWHQEE-UHFFFAOYSA-N",
+    "logp": 1.7209999999999994,
+    "mass": 198.21799999999996,
+    "rings": 1,
+    "smiles": "COc1cc(OC)c(OC)cc1OC",
+    "tpsa": 36.92,
+    "unpaired_electrons": 0
+  },
+  "glucose_input": {
+    "acceptors": 6,
+    "donors": 5,
+    "exact_mass": 180.063388104,
+    "formula": "C6H12O6",
+    "inchi": "InChI=1S/C6H12O6/c7-1-2-3(8)4(9)5(10)6(11)12-2/h2-11H,1H2/t2-,3-,4+,5-,6+/m1/s1",
+    "inchikey": "WQZGKKKJIJFFOK-DVKNGEFBSA-N",
+    "logp": -3.2213999999999987,
+    "mass": 180.15599999999998,
+    "rings": 1,
+    "smiles": "OC[C@H]1O[C@H](O)[C@H](O)[C@@H](O)[C@@H]1O",
+    "tpsa": 110.38000000000001,
+    "unpaired_electrons": 0
+  },
+  "glucose_result": {
+    "acceptors": 7,
+    "donors": 4,
+    "exact_mass": 222.073952788,
+    "formula": "C8H14O7",
+    "inchi": "InChI=1S/C8H14O7/c1-3(10)14-7-4(2-9)15-8(13)6(12)5(7)11/h4-9,11-13H,2H2,1H3/t4-,5-,6-,7?,8+/m1/s1",
+    "inchikey": "OIVLYXCVVKTZBH-ZUROPKBXSA-N",
+    "logp": -2.650599999999999,
+    "mass": 222.19299999999996,
+    "rings": 1,
+    "smiles": "CC(=O)OC1[C@@H](CO)O[C@H](O)[C@H](O)[C@H]1O",
+    "tpsa": 116.45000000000002,
+    "unpaired_electrons": 0
+  },
+  "polyol_fourth_oxygen_hit": 9,
+  "polyol_result": {
+    "acceptors": 7,
+    "donors": 1,
+    "exact_mass": 262.10525291600004,
+    "formula": "C11H18O7",
+    "inchi": "InChI=1S/C11H18O7/c1-8(13)16-5-11(4-12,6-17-9(2)14)7-18-10(3)15/h12H,4-7H2,1-3H3",
+    "inchikey": "PFCZNPZAITUKLI-UHFFFAOYSA-N",
+    "logp": -0.3456000000000006,
+    "mass": 262.258,
+    "rings": 0,
+    "smiles": "CC(=O)OCC(CO)(COC(C)=O)COC(C)=O",
+    "tpsa": 99.13000000000002,
+    "unpaired_electrons": 0
+  }
+}

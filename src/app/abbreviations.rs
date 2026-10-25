@@ -1,6 +1,14 @@
+use super::document_tab::TabId;
 use super::{App, InspectorTab, Job, Message, Request, Tool};
 use iced::Task;
 use std::path::PathBuf;
+
+#[derive(PartialEq, Eq)]
+struct Context {
+    tab: TabId,
+    epoch: u64,
+    selection: Vec<u64>,
+}
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -20,6 +28,7 @@ pub struct State {
     pub reverse_label: String,
     /// Skipped user entries, kept in the panel after the status line changes.
     pub catalog_warning: Option<String>,
+    context: Option<Context>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -28,11 +37,62 @@ impl Default for State {
             label: String::new(),
             reverse_label: String::new(),
             catalog_warning: None,
+            context: None,
         }
     }
 }
+impl State {
+    fn clear_draft(&mut self) {
+        self.label.clear();
+        self.reverse_label.clear();
+    }
+
+    fn synchronize(&mut self, tab: TabId, epoch: u64, selection: &[u64]) -> bool {
+        let mut selection = selection.to_vec();
+        selection.sort_unstable();
+        selection.dedup();
+        let context = Context {
+            tab,
+            epoch,
+            selection,
+        };
+        if self.context.as_ref() == Some(&context) {
+            return false;
+        }
+        let drawing_changed = self
+            .context
+            .as_ref()
+            .is_some_and(|old| old.tab != tab || old.epoch != epoch);
+        self.clear_draft();
+        self.context = Some(context);
+        drawing_changed
+    }
+}
 impl App {
+    /// Only the visible drawing owns these drafts and drawing-specific pages.
+    /// Background result routing temporarily swaps `tab`, without user focus.
+    pub(super) fn sync_drawing_panel_context(&mut self) {
+        if self.tabs.temporary_depth != 0 {
+            return;
+        }
+        if self
+            .abbreviations
+            .synchronize(self.tab.id, self.tab.file_epoch, &self.tab.selected)
+            && matches!(
+                self.inspector_tab,
+                InspectorTab::Reactions
+                    | InspectorTab::Labels
+                    | InspectorTab::Abbreviations
+                    | InspectorTab::Names
+            )
+        {
+            self.inspector_tab = InspectorTab::Properties;
+        }
+    }
+
     pub(super) fn abbreviation_action(&mut self, action: Action) -> Task<Message> {
+        // Bind a first keystroke before storing it, including direct callers.
+        self.sync_drawing_panel_context();
         let before = self.tab.doc.clone();
         match action {
             Action::Preset(value) => self.abbreviations.preset = value,
@@ -99,6 +159,7 @@ impl App {
             }
             Action::Define => match self.define_user_group() {
                 Ok(message) => {
+                    self.abbreviations.clear_draft();
                     self.changed(before);
                     self.tool = Tool::Select;
                     self.status = message;
@@ -238,8 +299,10 @@ impl App {
         self.abbreviations.catalog_warning = catalog_warning(&skipped, &path);
         self.tab.doc = doc;
         Ok(format!(
-            "Saved {label} to your abbreviations · Type it on any endpoint · {}",
-            path.display()
+            "Saved {label} to your abbreviations · Type it on any endpoint"
         ))
     }
 }
+
+#[cfg(test)]
+mod tests;

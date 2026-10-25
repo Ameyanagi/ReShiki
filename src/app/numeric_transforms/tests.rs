@@ -574,7 +574,7 @@ fn computed_label_refresh_updates_dimensions_without_discarding_pending_input() 
         kind: super::super::Job::Analyze,
         result: Box::new(Ok(reshiki::engine::Response {
             document: Some(checked),
-            analysis: None,
+            analysis: Some(crate::app::tests::completed_analysis()),
             output: None,
             engine_version: "test".into(),
             warnings: vec![],

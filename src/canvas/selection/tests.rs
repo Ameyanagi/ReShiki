@@ -1,5 +1,90 @@
 use super::*;
 
+fn phenylalanine() -> Document {
+    Document::from_json(include_bytes!(
+        "../../../tests/fixtures/phenylalanine-rotation.rsk"
+    ))
+    .unwrap()
+}
+
+#[test]
+fn rotating_display_frames_and_readouts_keep_upright_label_ink_clear() {
+    let source = phenylalanine();
+    let ids = source.all_ids();
+    let camera = Camera {
+        zoom: 2.,
+        ..Camera::default()
+    };
+    let bounds = Rectangle::with_size(Size::new(1600., 1000.));
+    let selection = SelectionBox::new(&source, &ids, camera, bounds).unwrap();
+    for degrees in [30_f32, 45., 60.] {
+        let mut preview = source.clone();
+        rotate(&mut preview, &ids, selection.pivot, 1., degrees);
+        let display = selection.rotating_preview(&preview, &ids, degrees);
+        assert_eq!(
+            display.pivot, selection.pivot,
+            "Only the display extents change"
+        );
+        let ink = scene::label_ink_boxes(&scene::primitives(&preview));
+        assert!(!ink.is_empty());
+        let (s, c) = (-degrees).to_radians().sin_cos();
+        for &(lo, hi) in &ink {
+            for p in [lo, World::new(hi.x, lo.y), hi, World::new(lo.x, hi.y)] {
+                let x = display.pivot.x + (p.x - display.pivot.x) * c - (p.y - display.pivot.y) * s;
+                let y = display.pivot.y + (p.x - display.pivot.x) * s + (p.y - display.pivot.y) * c;
+                assert!(
+                    x >= display.corners[0].x - 0.001 && x <= display.corners[2].x + 0.001,
+                    "{degrees}° label ink escapes horizontally"
+                );
+                assert!(
+                    y >= display.corners[0].y - 0.001 && y <= display.corners[2].y + 0.001,
+                    "{degrees}° label ink escapes vertically"
+                );
+            }
+        }
+        let screen_ink: Vec<_> = ink
+            .into_iter()
+            .map(|(lo, hi)| {
+                let lo = camera.screen(lo, bounds);
+                let hi = camera.screen(hi, bounds);
+                Rectangle::new(lo, Size::new(hi.x - lo.x, hi.y - lo.y))
+            })
+            .collect();
+        let label = screen_ink[0];
+        let mut pointers = vec![Point::new(label.x - 12., label.y - 15.)];
+        let grip = selection.rotation_grip();
+        let pivot = camera.screen(selection.pivot, bounds);
+        let (s, c) = degrees.to_radians().sin_cos();
+        let dx = grip.x - pivot.x;
+        let dy = grip.y - pivot.y;
+        let radius = (dx * dx + dy * dy).sqrt();
+        for distance in [radius, 230.] {
+            pointers.push(Point::new(
+                pivot.x + (dx * c - dy * s) * distance / radius,
+                pivot.y + (dx * s + dy * c) * distance / radius,
+            ));
+        }
+        for pointer in pointers {
+            let rect = rotation_readout_bounds(pointer, bounds.size(), &screen_ink);
+            assert!(
+                screen_ink.iter().all(|ink| !rect.intersects(ink)),
+                "{degrees}° readout covers label ink"
+            );
+        }
+        let released = SelectionBox::new(&preview, &ids, camera, bounds).unwrap();
+        let (lo, hi) = scene::selection_bounds(&preview, &ids).unwrap();
+        assert_eq!(
+            released.corners,
+            [lo, World::new(hi.x, lo.y), hi, World::new(lo.x, hi.y)]
+        );
+    }
+    assert_eq!(
+        source,
+        phenylalanine(),
+        "Overlay queries leave the source untouched"
+    );
+}
+
 #[test]
 fn centroid_only_selection_keeps_handles_without_an_independent_rotation_site() -> Result<(), String>
 {

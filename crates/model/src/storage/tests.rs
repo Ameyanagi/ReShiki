@@ -1,5 +1,47 @@
 use super::*;
 #[test]
+fn unverified_browser_owners_stay_protected() {
+    browser::install(
+        [],
+        Box::new(|_| {}),
+        "this-page".into(),
+        ["another-page".into()],
+    );
+    assert!(browser::open("this-page") && browser::open("another-page"));
+    assert!(!browser::open("closed-page"));
+    browser::set_open_sessions(None);
+    assert!(
+        browser::session().is_some(),
+        "A query failure does not revoke this page's held lock"
+    );
+    assert!(!browser::owners_verified());
+    browser::set_session_lock(false);
+    assert_eq!(
+        browser::session(),
+        None,
+        "An unprotected owner must not publish new drafts"
+    );
+    assert!(browser::write("recovery/this-page-new.json", b"unprotected draft").is_err());
+    assert!(browser::files("recovery").is_empty());
+    assert!(
+        browser::write("appearance.json", b"{}").is_ok(),
+        "Unrelated settings remain writable"
+    );
+    assert!(
+        browser::open("closed-page"),
+        "No ownership query means no destructive assumptions"
+    );
+    browser::set_open_sessions(Some(vec!["another-page".into()]));
+    assert!(browser::owners_verified());
+    assert_eq!(
+        browser::session(),
+        None,
+        "An owner query cannot acquire this page's lock"
+    );
+    assert!(browser::open("another-page"));
+    assert!(!browser::open("closed-page"));
+}
+#[test]
 fn save_names_keep_explicit_suffixes_and_gain_missing_format_extensions() {
     for (name, extension, expected) in [
         ("Ethanol", "rsk", "Ethanol.rsk"),

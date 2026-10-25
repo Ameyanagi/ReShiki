@@ -24,7 +24,8 @@ offers bold, dashed, hollow and unequal-equilibrium variants.
 1. Select the arrow with **Select** or the arrow tool.
 2. Drag a round end handle to move that end. Drag the diamond to bend the arrow.
 3. On a curved arrow, drag a square handle to change how that end leaves or
-   arrives. Both ends stay where they are.
+   arrives. The endpoints stay attached; an attached head may move a little
+   back or sideways to keep it clear of bond ink.
 
 Each drag is one Undo step; Escape cancels it. In **Properties**, **Reverse**
 changes the direction, **Flip bend** mirrors the curve and **Straighten**

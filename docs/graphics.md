@@ -57,7 +57,8 @@ segment is one Undo step; Escape cancels the segment you are drawing.
 
 ## Implementation notes
 
-Single-shape tools return to Select after committing. Stroke swatches are the
+Single-shape and orbital tools return to Select after committing. Chemical
+symbol tools keep placing, attached or free, until Escape or another tool. Stroke swatches are the
 palette's Ink and Strong row, and fill swatches its Tint row, where the
 crossed-out swatch removes the fill; RGB hex entry is available. Brackets offer
 both, left or right sides. Background graphics leave molecular atoms and bonds
