@@ -1548,10 +1548,7 @@ fn matching_dative_click_swaps_direction_like_reverse_bonds_in_one_undo_step() {
     assert!(clicked.bonds[0].stereo_atoms.is_empty());
     assert!(clicked.atoms.iter().all(|atom| atom.label_h == 0));
     assert_eq!(app.tab.selected, vec![donor, acceptor]);
-    assert_eq!(
-        app.status,
-        "Drawing changed · Check structure to refresh properties"
-    );
+    assert_eq!(app.status, "Drawing changed");
     assert_eq!(app.tab.history.undo_frames().count(), 1);
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, original);

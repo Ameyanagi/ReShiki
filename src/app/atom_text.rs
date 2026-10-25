@@ -27,6 +27,38 @@ pub enum Action {
     Apply,
     Cancel,
 }
+
+/// The label that was actually committed, including its chemical/text meaning.
+/// Formatting and alignment belong to each target, rather than to this memory.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct RememberedLabel {
+    pub(super) text: String,
+    mode: Mode,
+    reverse: Option<String>,
+}
+
+impl RememberedLabel {
+    fn committed(doc: &reshiki::document::Document, id: u64) -> Option<Self> {
+        if let Some(group) = doc.abbreviation(id) {
+            return Some(Self {
+                text: group.label.clone(),
+                mode: Mode::Group,
+                reverse: Some(group.reverse_label.clone()),
+            });
+        }
+        let atom = doc.atom(id)?;
+        Some(Self {
+            text: atom_text::entry(atom),
+            mode: if atom.display.variable.is_some() && !doc.generic.owns_label(id) {
+                Mode::Text
+            } else {
+                Mode::Auto
+            },
+            reverse: None,
+        })
+    }
+}
+
 pub struct State {
     id: u64,
     epoch: u64,
@@ -335,10 +367,18 @@ impl App {
                     && let Some(state) = &mut self.tab.atom_text
                     && state.id == id
                     && state.members.is_none()
-                    && state.input != label
+                    && RememberedLabel::committed(&self.tab.doc, id).as_ref() != Some(&label)
                 {
                     state.manual_scripts = false;
-                    state.replace_input(label);
+                    state.replace_input(label.text);
+                    state.mode = label.mode;
+                    // Identical characters can still have a different meaning,
+                    // such as literal Ac, the acetyl group and actinium.
+                    state.label_edited = true;
+                    if let Some(reverse) = label.reverse {
+                        state.reverse = reverse;
+                        state.reverse_edited = true;
+                    }
                     let _ = self.atom_text_action(Action::Apply);
                 }
                 if self.tab.atom_text.is_none() {
@@ -480,8 +520,8 @@ impl App {
                             }
                             return Task::none();
                         }
-                        if state.members.is_none() && state.label_edited {
-                            self.last_label = Some(state.input.trim().into());
+                        if state.members.is_none() && (state.label_edited || state.reverse_edited) {
+                            self.last_label = RememberedLabel::committed(&doc, state.id);
                         }
                         let before = std::mem::replace(&mut self.tab.doc, doc);
                         self.tab.atom_text = None;

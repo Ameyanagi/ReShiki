@@ -422,7 +422,7 @@ pub struct App {
     template_index: usize,
     templates: template_library::State,
     /// The last committed atom label, which a Text-tool double-click repeats.
-    last_label: Option<String>,
+    last_label: Option<atom_text::RememberedLabel>,
     /// The last Text-tool click on an atom, to recognize a double-click.
     text_click: Option<(iced::time::Instant, u64)>,
 }
@@ -737,7 +737,7 @@ impl App {
             }
             self.error = false;
             self.status = if committed.chemistry_changed {
-                "Drawing changed · Check structure to refresh properties"
+                "Drawing changed"
             } else {
                 "Drawing updated"
             }

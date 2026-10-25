@@ -6,7 +6,7 @@
 use super::*;
 use reshiki::palette::{Color, Hue, Row};
 
-const CHEMISTRY: &str = "Drawing changed · Check structure to refresh properties";
+const CHEMISTRY: &str = "Drawing changed";
 const DISPLAY: &str = "Drawing updated";
 const RESTORED: &str = "History restored";
 const JOINS: &str =
