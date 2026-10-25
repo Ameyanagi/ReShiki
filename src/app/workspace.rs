@@ -3065,6 +3065,8 @@ fn tool_name(tool: Tool) -> (&'static str, &'static str) {
 }
 
 #[cfg(test)]
+mod inspector_motion_qa;
+#[cfg(test)]
 mod inspector_motion_tests;
 #[cfg(test)]
 mod selection_tests;
