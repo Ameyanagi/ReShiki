@@ -137,6 +137,7 @@ impl std::fmt::Display for ChemicalFormat {
 #[derive(Debug, Clone)]
 pub enum Action {
     Section(Section, bool),
+    ModelControls(bool),
     Figure(FigureFormat),
     /// Open or close the figure format menu.
     FigureMenu(bool),
@@ -159,6 +160,7 @@ pub struct PropertyKey {
 pub(super) struct State {
     expected_viewport: Option<iced::Size>,
     expanded: HashMap<Section, bool>,
+    model_controls: bool,
     figure: FigureFormat,
     figure_menu: bool,
     chemical: ChemicalFormat,
@@ -192,6 +194,12 @@ impl State {
         match action {
             Action::Section(section, expanded) => {
                 self.expanded.insert(section, expanded);
+            }
+            Action::ModelControls(open) => {
+                self.model_controls = open;
+                if open {
+                    self.expanded.insert(Section::Model3d, true);
+                }
             }
             Action::Figure(format) => {
                 self.figure = format;
@@ -307,6 +315,16 @@ impl App {
 
     pub(super) fn inspector_action(&mut self, action: Action) -> Task<Message> {
         match action {
+            Action::ModelControls(open) => {
+                if open && !self.selected_visible_model() {
+                    return Task::none();
+                }
+                self.tab.inspector_ui.update(Action::ModelControls(open));
+                iced::widget::operation::snap_to(
+                    "inspector-content",
+                    iced::widget::operation::RelativeOffset { x: 0., y: 0. },
+                )
+            }
             Action::RingArc => {
                 let before = self.tab.doc.clone();
                 match reshiki::ring_arcs::toggle(&mut self.tab.doc, &self.tab.selected) {
@@ -501,7 +519,30 @@ impl App {
             .spacing(10)
             .into();
         }
+        if self.tab.inspector_ui.model_controls && self.selected_visible_model() {
+            let mut body = column![
+                command(
+                    "‹ All properties",
+                    Message::InspectorAction(Action::ModelControls(false)),
+                ),
+                text("3D model controls").size(14),
+            ]
+            .spacing(10);
+            if let Some(section) = self.model_section() {
+                body = body.push(section);
+            }
+            if let Some(section) = self.structure_section() {
+                body = body.push(section);
+            }
+            return body.into();
+        }
         self.ordinary_properties_panel()
+    }
+
+    fn selected_visible_model(&self) -> bool {
+        self.selected_model()
+            .and_then(|(_, index)| self.tab.doc.models.get(index?))
+            .is_some_and(|model| model.display != reshiki::models3d::Display::TwoD)
     }
 
     fn ordinary_properties_panel(&self) -> Element<'_, Message> {
@@ -521,6 +562,21 @@ impl App {
             .style(muted_text)
         ]
         .spacing(10);
+        if self
+            .selected_model()
+            .and_then(|(_, index)| self.tab.doc.models.get(index?))
+            .is_some_and(|model| model.display == reshiki::models3d::Display::ThreeD)
+        {
+            body = body.push(
+                super::workspace::accessible_command(
+                    "model-controls-open",
+                    "Open the selected 3D model's controls",
+                    "3D model controls…",
+                )
+                .width(Length::Fill)
+                .on_press(Message::InspectorAction(Action::ModelControls(true))),
+            );
+        }
         let color_issues = reshiki::canvas_theme::label_contrast_issues(&self.tab.doc);
         if !color_issues.is_empty() {
             body = body.push(text(format!(

@@ -273,6 +273,7 @@ fn completion(message: &Message) -> Option<Completion> {
             match action {
                 Action::PropertiesCalculated(..) => Some(Completion::Properties),
                 Action::Section(..)
+                | Action::ModelControls(_)
                 | Action::Figure(..)
                 | Action::FigureMenu(..)
                 | Action::Chemical(..)

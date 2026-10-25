@@ -169,6 +169,7 @@ impl MoleculeCanvas<'_> {
             cached_camera.map(|_| translation.unwrap_or_default()),
         );
         self.draw_tilt_bounds(frame, &preview, selected, bounds);
+        self.draw_model_generation(frame, bounds, iced::time::Instant::now());
         // Above the selection, so that gap labels stay legible.
         smart_guides::draw(
             frame,

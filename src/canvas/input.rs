@@ -149,6 +149,9 @@ impl MoleculeCanvas<'_> {
             {
                 Some(Action::request_redraw())
             }
+            Event::Window(iced::window::Event::RedrawRequested(now)) => self
+                .model_generation
+                .map(|generation| Action::request_redraw_at(generation.next_tick(*now))),
             _ => None,
         }
     }

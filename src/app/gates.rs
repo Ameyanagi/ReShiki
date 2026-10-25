@@ -308,6 +308,8 @@ impl App {
                 self.inline_action(inline_text::Action::Finish(false))
             } else if self.tab.optimization.is_some() {
                 self.optimization_action(optimization::Action::Cancel)
+            } else if self.cancel_model_generation() {
+                Task::none()
             } else {
                 self.update(Message::Tool(Tool::Select))
             });

@@ -53,6 +53,44 @@ fn canvas<'a>(doc: &'a Document, selected: &'a [u64]) -> MoleculeCanvas<'a> {
     }
 }
 
+#[test]
+fn pending_model_redraws_at_whole_seconds_without_a_continuous_animation_loop() {
+    let (doc, ids) = drawing();
+    let mut canvas = canvas(&doc, &ids);
+    let started = Instant::now();
+    canvas.model_generation = Some(crate::canvas::ModelGeneration {
+        atoms: &ids,
+        started,
+    });
+    for millis in [0, 999, 1000, 4250] {
+        let now = started + Duration::from_millis(millis);
+        let action = canvas
+            .update(
+                &mut State::default(),
+                &Event::Window(iced::window::Event::RedrawRequested(now)),
+                BOUNDS,
+                mouse::Cursor::Unavailable,
+            )
+            .unwrap();
+        let (message, redraw, status) = action.into_inner();
+        assert!(message.is_none());
+        assert_eq!(status, iced::event::Status::Ignored);
+        let expected = started + Duration::from_secs(millis / 1000 + 1);
+        assert!(matches!(redraw, iced::window::RedrawRequest::At(at) if at == expected));
+    }
+    canvas.model_generation = None;
+    assert!(
+        canvas
+            .update(
+                &mut State::default(),
+                &Event::Window(iced::window::Event::RedrawRequested(started)),
+                BOUNDS,
+                mouse::Cursor::Unavailable,
+            )
+            .is_none()
+    );
+}
+
 fn send(canvas: &MoleculeCanvas<'_>, state: &mut State, event: Event) -> Option<Edit> {
     canvas
         .update(state, &event, BOUNDS, mouse::Cursor::Unavailable)

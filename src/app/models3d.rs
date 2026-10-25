@@ -66,6 +66,7 @@ pub(crate) struct Job {
     current: Key,
     display: Display,
     prepared: Arc<Prepared>,
+    started: iced::time::Instant,
     _handle: iced::task::Handle,
 }
 
@@ -161,6 +162,24 @@ impl App {
             .map(|job| job.display)
     }
 
+    /// The current generation's own target, independent of later selection.
+    pub(super) fn model_generation(&self) -> Option<crate::canvas::ModelGeneration<'_>> {
+        let job = self.tab.model_job.as_ref()?;
+        (job.current == self.model_key()).then_some(crate::canvas::ModelGeneration {
+            atoms: job.prepared.ids(),
+            started: job.started,
+        })
+    }
+
+    pub(super) fn cancel_model_generation(&mut self) -> bool {
+        if self.tab.model_job.take().is_none() {
+            return false;
+        }
+        self.status = "3D model cancelled · Drawing unchanged".into();
+        self.error = false;
+        true
+    }
+
     /// The selected molecule and the index of its model, if it has one.
     pub(super) fn selected_model(&self) -> Option<(Vec<u64>, Option<usize>)> {
         let atoms = models3d::selected_molecule(&self.tab.doc, &self.tab.selected)?;
@@ -239,15 +258,14 @@ impl App {
                         status(display, previous)
                     };
                     self.start_morph(&atoms, previous, display);
+                    self.reveal_model(&atoms, display);
                 }
             }
             return Task::none();
         }
         if display == Display::TwoD {
             if self.pending(&atoms).is_some() {
-                self.tab.model_job = None;
-                self.status = "3D model cancelled · Drawing unchanged".into();
-                self.error = false;
+                self.cancel_model_generation();
             }
             return Task::none();
         }
@@ -278,6 +296,7 @@ impl App {
             current: key,
             display,
             prepared,
+            started: iced::time::Instant::now(),
             _handle: handle.abort_on_drop(),
         });
         self.status = "Generating 3D model · MMFF94s".into();
@@ -459,6 +478,20 @@ impl App {
         if !self.error {
             self.status = status(display, previous);
             self.start_morph(&atoms, previous, display);
+            self.reveal_model(&atoms, display);
+        }
+    }
+
+    fn reveal_model(&mut self, atoms: &[u64], display: Display) {
+        if display == Display::TwoD {
+            return;
+        }
+        let ids = reshiki::molecule_names::include_annotations(&self.tab.doc, atoms);
+        if let Some((lo, hi)) = reshiki::scene::selection_bounds(&self.tab.doc, &ids) {
+            // Include the visible selected-model outline without moving an
+            // already visible result or zooming in on a smaller molecule.
+            let margin = 12. / self.tab.camera.zoom;
+            self.reveal_if_clipped(lo.offset(-margin, -margin), hi.offset(margin, margin));
         }
     }
 
