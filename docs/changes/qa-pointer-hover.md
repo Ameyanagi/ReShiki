@@ -2,7 +2,8 @@
 
 Under review: fixes for [#572](https://github.com/Ameyanagi/ReShiki/issues/572)
 and [#573](https://github.com/Ameyanagi/ReShiki/issues/573), by
-[@Ameyanagi](https://github.com/Ameyanagi).
+[@Ameyanagi](https://github.com/Ameyanagi) in
+[PR #578](https://github.com/Ameyanagi/ReShiki/pull/578).
 
 The source and renderer checks are complete. The native continuous-hover
 comparison is awaiting explicit authorization for the reviewed input replay
