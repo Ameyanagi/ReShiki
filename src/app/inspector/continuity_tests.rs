@@ -306,3 +306,67 @@ async fn automatic_queued_request_rechecks_cache_selection_and_revision_before_s
     );
     assert!(app.tab.inspector_ui.pending.is_none());
 }
+
+#[derive(Default)]
+struct PanelText(Vec<String>);
+impl iced::advanced::widget::Operation for PanelText {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn iced::advanced::widget::Operation)) {
+        operate(self);
+    }
+    fn text(&mut self, _: Option<&iced::advanced::widget::Id>, _: iced::Rectangle, value: &str) {
+        self.0.push(value.into());
+    }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer Molecular Properties text regression"]
+async fn rendered_panel_keeps_whole_mass_and_uses_singular_counts() {
+    use iced::advanced::{renderer::Headless, widget::operation};
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .unwrap();
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let response = app
+        .engine
+        .execute(Request::import_smiles("CCc1ccccc1"))
+        .await
+        .unwrap();
+    app.tab.doc = response.document.unwrap();
+    app.tab.analysis = response.analysis;
+    let first = app.tab.doc.atoms[0].id;
+    let second = app.tab.doc.atoms[1].id;
+    let _ = app.context_key_at("2", reshiki::keyboard_drawing::Target::Bond(first, second));
+    settle(&mut app, true).await;
+    settle(&mut app, false).await;
+    let panel_text = |app: &App, renderer: &mut iced::Renderer| {
+        let mut ui = iced_runtime::UserInterface::build(
+            app.molecular_section(),
+            iced::Size::new(300., 800.),
+            iced_runtime::user_interface::Cache::new(),
+            renderer,
+        );
+        let mut text = PanelText::default();
+        ui.operate(renderer, &mut operation::black_box(&mut text));
+        text.0.join("\n")
+    };
+    for expanded in [None, Some(true), Some(false)] {
+        app.tab.inspector_ui.expanded.clear();
+        if let Some(expanded) = expanded {
+            choose(&mut app, expanded);
+        }
+        let text = panel_text(&app, &mut renderer);
+        assert!(text.contains("Whole drawing · C8H8 · 104.152 g/mol"));
+        assert!(text.contains("Selection · C2H4 · 28.054 g/mol"));
+    }
+    app.tab.selected = vec![first];
+    choose(&mut app, true);
+    settle(&mut app, false).await;
+    let text = panel_text(&app, &mut renderer);
+    assert!(text.contains("1 atom · 0 bonds"));
+    assert!(!text.contains("1 atoms"));
+}
