@@ -27,6 +27,8 @@ of adaptations, copyright notices, and license texts are recorded in:
   vendor/usvg/            Variable-font weight support in the SVG dependency
   vendor/svg2pdf/         Variable-font PDF instances and upstream notices
 
+  tests/fixtures/crystal/  COD ferrocene data (CC0; source notice retained)
+
 Individual files and fixture directories may contain additional notices.
 Dependencies retain the licenses declared by their respective projects;
 the project-level dual license does not relicense them.

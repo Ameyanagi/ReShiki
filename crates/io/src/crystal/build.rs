@@ -332,7 +332,11 @@ fn arrange(atoms: &[Atom], links: &[Link], lattice: Option<&Lattice>) -> Arrange
 /// 3D view shows them, with a model shown in 3D that holds them all and the
 /// cell, if there is one.
 pub(super) fn document(structure: Structure) -> Result<Document, Error> {
-    let Structure { atoms, lattice, .. } = structure;
+    let Structure {
+        atoms,
+        lattice,
+        warnings,
+    } = structure;
     let links = links(&atoms, lattice.as_ref())?;
     let arranged = arrange(&atoms, &links, lattice.as_ref());
     let mut doc = Document::default();
@@ -405,8 +409,9 @@ pub(super) fn document(structure: Structure) -> Result<Document, Error> {
         vectors: l.vectors.map(narrow_xyz),
         crossing,
     });
-    let model =
+    let mut model =
         Model3d::new(&doc, placed, vec![], ForceField::default()).with_cell(&doc, cell, sites);
+    model.notes = warnings;
     lay_out(&mut doc, &model);
     doc.models.push(model);
     models3d::require_version(&mut doc);

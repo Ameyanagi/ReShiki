@@ -1204,6 +1204,13 @@ fn names_with_locants_never_reach_the_link_node_parser() -> Result<(), Box<dyn s
 
 #[test]
 fn catalog_names_suggest_their_labels_without_making_the_group() -> Result<(), String> {
+    assert_eq!(suggestions("morpholino", Mode::Auto), ["Morph"]);
+    assert_eq!(suggestions("Acetyl", Mode::Auto), ["Ac", "COMe"]);
+    assert!(suggestions("morpholino", Mode::Text).is_empty());
+    assert!(suggestions("Morph", Mode::Auto).is_empty());
+    assert!(
+        description("OBn", &[], Mode::Auto).contains("Labels & chemistry → Chemical abbreviations")
+    );
     assert_eq!(
         suggestion("morpholino", Mode::Auto).as_deref(),
         Some("Did you mean Morph?")

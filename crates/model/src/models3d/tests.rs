@@ -2187,3 +2187,34 @@ fn crystal_presentation_edits_keep_the_cell_without_relaxing_stereo_sources() {
         assert_eq!(doc.models, before.models, "{order}/{display}");
     }
 }
+
+#[test]
+fn import_notes_are_optional_and_bounded_provenance() {
+    let (mut doc, [na, _]) = crystal();
+    let original = doc.file_json().unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&original).unwrap();
+    assert!(value["models"][0].get("notes").is_none());
+    assert!(
+        Document::from_json(&original).unwrap().models[0]
+            .notes
+            .is_empty()
+    );
+    doc.models[0].notes =
+        vec!["First alternative kept; 10 alternative site records left out".into()];
+    assert_eq!(crystal::import_notes(&doc, &[na]), doc.models[0].notes);
+    assert!(crystal::import_notes(&doc, &[999]).is_empty());
+    let saved = doc.file_json().unwrap();
+    assert_eq!(
+        Document::from_json(&saved).unwrap().models[0].notes,
+        doc.models[0].notes
+    );
+    for notes in [
+        vec!["x".repeat(513)],
+        vec!["x".into(); 17],
+        vec!["  ".into()],
+        vec!["line\ncontrol".into()],
+    ] {
+        doc.models[0].notes = notes;
+        assert!(validate(&doc).is_err());
+    }
+}

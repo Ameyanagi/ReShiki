@@ -33,6 +33,8 @@ mod depth_appearance;
 mod dispatch;
 mod document_styles;
 mod document_tab;
+#[cfg(test)]
+mod drawing_panel_capture;
 use document_tab::DocumentTab;
 mod engine_jobs;
 mod event_slot;
@@ -439,6 +441,7 @@ const DRAFT_INTERVAL: std::time::Duration = if cfg!(target_arch = "wasm32") {
 impl App {
     /// Starts a file epoch, dropping per-file work so late results are ignored and new work can start.
     pub(super) fn begin_file_epoch(&mut self) {
+        self.sync_drawing_panel_context();
         self.tab.file_epoch = self.next_epoch();
         // Invalidate tickets before clearing gestures that may switch the front tab's tool.
         self.tab.naming.invalidate_name();
@@ -446,6 +449,7 @@ impl App {
         self.tab.arrows.cancel_source();
         self.cancel_reference_stretch();
         self.tab.nmr.clear_pending();
+        self.sync_drawing_panel_context();
     }
 
     #[cfg(test)]
@@ -586,6 +590,8 @@ impl App {
             iced::window::open_events().map(Message::LinuxClipboardWindow),
             self.updates.subscription(),
             self.properties_subscription(),
+            #[cfg(target_arch = "wasm32")]
+            self.naming_subscription(),
             if self.assistant.needs_poll() {
                 iced::time::every(std::time::Duration::from_millis(200))
                     .map(|_| Message::Assistant(assistant::Action::Poll))
@@ -851,7 +857,14 @@ impl App {
             .unwrap_or(&self.tab.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        // Readiness polling only redraws; it must not commit drafts or dismiss menus.
+        #[cfg(target_arch = "wasm32")]
+        if matches!(message, Message::Naming(naming::Action::Refresh)) {
+            return Task::none();
+        }
+        self.sync_drawing_panel_context();
         let task = self.handle(message);
+        self.sync_drawing_panel_context();
         self.settle_deferred_label_layout();
         // Any message may change the drawing, some (previews, background
         // labels) without a new revision, so the next view compares afresh.
@@ -1254,13 +1267,20 @@ async fn save_export(
     };
     let stem = stem.as_deref().unwrap_or("Molecule");
     files::save_bytes(
-        "Export drawing",
+        &format!("Export {}", export_format_label(format)),
         &format!("{stem}.{extension}"),
         extension,
         &bytes,
     )
     .await
 }
+fn export_format_label(format: &str) -> String {
+    match format {
+        "svg-office" => inspector::FigureFormat::SvgOffice.to_string(),
+        _ => format.to_uppercase(),
+    }
+}
+
 fn input_request(text: &str) -> Request {
     reshiki::clipboard::text_request(text)
 }

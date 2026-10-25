@@ -141,7 +141,14 @@ A saved `.rsk` file keeps only what the structure needs: the lattice vectors,
 each atom's element, position and charge, the bonds, the bonds that leave the
 cell, and from the file each atom's label and displacement parameters. ADPs are
 kept as U in Å² (B values are divided by 8π²), anisotropic U as CIF writes
-them, for thermal ellipsoids in a later version. Everything else in the file —
+them, for thermal ellipsoids in a later version. Import notes, including omitted
+alternative sites and overlapping atoms, stay in **Properties → Molecular
+properties** and survive saving and reopening. CIF disorder counts refer to
+alternative site records before symmetry expansion; PDB alternate-location
+counts refer to atom records. Overlap counts refer to atoms after expansion
+and wrapping. These notes describe the import, not a continuing chemistry
+error. Older readers can open the file but may discard these optional notes.
+Everything else in the file —
 bibliography, reflections, other data blocks, other XYZ properties or PDB
 records — is read past and not kept, so a saved drawing stays small.
 

@@ -141,6 +141,89 @@ fn long_names_end_with_an_ellipsis() {
 }
 
 #[test]
+fn drawing_pages_return_to_properties_on_switch_new_close_and_last_tab_reset() {
+    use crate::app::InspectorTab as I;
+    for page in [I::Reactions, I::Labels, I::Abbreviations, I::Names] {
+        let mut app = ready();
+        edit(&mut app, "C");
+        let first = app.tab.id;
+        let _ = app.update(Message::New);
+        edit(&mut app, "O");
+        let second = app.tab.id;
+        app.inspector_tab = page;
+        select(&mut app, first);
+        assert_eq!(app.inspector_tab, I::Properties, "switch from {page:?}");
+        app.inspector_tab = page;
+        select(&mut app, second);
+        assert_eq!(app.inspector_tab, I::Properties, "return from {page:?}");
+        app.inspector_tab = page;
+        let _ = app.update(Message::New);
+        assert_eq!(app.inspector_tab, I::Properties, "new from {page:?}");
+        app.inspector_tab = page;
+        let _ = app.update(Message::Tabs(Action::Close(None)));
+        assert_eq!(app.tab.id, second);
+        assert_eq!(
+            app.inspector_tab,
+            I::Properties,
+            "close empty from {page:?}"
+        );
+        app.inspector_tab = page;
+        let _ = app.update(Message::Tabs(Action::Close(None)));
+        assert!(app.pending.is_some());
+        let _ = app.update(Message::Discard);
+        assert_eq!(app.tab.id, first);
+        assert_eq!(app.inspector_tab, I::Properties, "discard from {page:?}");
+        app.inspector_tab = page;
+        let _ = app.update(Message::Tabs(Action::Close(None)));
+        let _ = app.update(Message::Discard);
+        assert_eq!(app.strip().count(), 1);
+        assert!(app.tab.doc.atoms.is_empty());
+        assert_eq!(app.inspector_tab, I::Properties, "last tab from {page:?}");
+        app.inspector_tab = page;
+        let id = app.tab.id;
+        let epoch = app.tab.file_epoch;
+        let _ = app.update(Message::New);
+        assert_eq!(app.tab.id, id);
+        assert_ne!(app.tab.file_epoch, epoch);
+        assert_eq!(
+            app.inspector_tab,
+            I::Properties,
+            "new default tab from {page:?}"
+        );
+    }
+}
+
+#[test]
+fn drawing_pages_reset_on_file_replacement_while_session_pages_stay_selected() {
+    use crate::app::InspectorTab as I;
+    for page in [I::Reactions, I::Labels, I::Abbreviations, I::Names] {
+        let mut app = ready();
+        app.inspector_tab = page;
+        app.show_opened(Document::default(), None);
+        assert_eq!(app.inspector_tab, I::Properties);
+    }
+    for page in [
+        I::DrawingStyle,
+        I::Templates,
+        I::Import,
+        I::Export,
+        I::ThemeGenerator,
+        I::Pages,
+        I::Assistant,
+    ] {
+        let mut app = ready();
+        edit(&mut app, "C");
+        app.inspector_tab = page;
+        let _ = app.update(Message::New);
+        assert_eq!(app.inspector_tab, page);
+        app.reset_tab();
+        assert_eq!(app.inspector_tab, page);
+        app.show_opened(Document::default(), None);
+        assert_eq!(app.inspector_tab, page);
+    }
+}
+
+#[test]
 fn new_takes_an_unchanged_empty_tab_and_otherwise_adds_one() {
     let mut app = ready();
     let first = app.tab.id;

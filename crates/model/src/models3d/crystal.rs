@@ -296,6 +296,18 @@ pub fn analysis_notice(doc: &crate::document::Document) -> &'static str {
     }
 }
 
+/// Import notes of the models containing `ids`, or all models for an empty
+/// selection. Notes describe the source import, rather than chemistry errors.
+pub fn import_notes<'a>(doc: &'a crate::document::Document, ids: &[u64]) -> Vec<&'a str> {
+    let mut seen = HashSet::new();
+    doc.models
+        .iter()
+        .filter(|m| ids.is_empty() || ids.iter().any(|id| m.contains(*id)))
+        .flat_map(|m| m.notes.iter().map(String::as_str))
+        .filter(|note| seen.insert(*note))
+        .collect()
+}
+
 /// What the Properties panel says of a crystal, whose bonds come from
 /// distances, not chemistry.
 pub const ANALYSIS_NOTICE: &str = "Crystal structure: bonds come from atom distances, so chemical analysis is unavailable. The formula counts the atoms shown, with charges as entered.";

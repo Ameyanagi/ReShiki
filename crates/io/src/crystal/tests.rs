@@ -264,6 +264,32 @@ fn disorder_keeps_the_first_alternative() {
     let labels: Vec<_> = model(&doc).sites.iter().map(|s| s.label.clone()).collect();
     assert_eq!(labels, ["C1", "O1A"]);
     assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert_eq!(warnings, model(&doc).notes);
+    assert!(warnings[0].contains("2 alternative site records"));
+}
+
+#[test]
+fn cod_ferrocene_import_note_survives_native_save_and_reopen() {
+    let (doc, warnings) = open(
+        "cif",
+        include_str!("../../../../tests/fixtures/crystal/cod-7033930.cif"),
+    );
+    assert_eq!(model(&doc).notes, warnings);
+    assert!(
+        warnings
+            .iter()
+            .any(|note| note.contains("10 alternative site records"))
+    );
+    let composition = crate::models3d::crystal::composition(&doc, &[]).unwrap();
+    assert_eq!(composition.formula, "C20H20Fe2");
+    let saved = doc.file_json().unwrap();
+    let reopened = Document::from_json(&saved).unwrap();
+    assert_eq!(model(&reopened).notes, warnings);
+    assert_eq!(reopened.models, doc.models);
+    assert_eq!(
+        crate::models3d::crystal::import_notes(&reopened, &[]),
+        warnings
+    );
 }
 
 #[test]
@@ -273,6 +299,7 @@ fn atoms_on_the_cell_boundary_are_kept_once() {
     );
     let (doc, warnings) = open("cif", &text);
     assert_eq!(doc.atoms.len(), 1);
+    assert_eq!(model(&doc).notes, warnings);
     assert!(
         warnings.iter().any(|w| w.contains("no symmetry operators")),
         "{warnings:?}"
@@ -452,7 +479,13 @@ fn pdb_keeps_the_first_alternate_location_of_each_residue() {
     .concat();
     let (doc, warnings) = open("pdb", &text);
     assert_eq!(doc.atoms.len(), 2);
-    assert!(warnings[0].contains("left out 2 atoms"), "{warnings:?}");
+    assert!(
+        warnings[0].contains("left out 2 atom records"),
+        "{warnings:?}"
+    );
+    assert_eq!(model(&doc).notes, warnings);
+    let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(model(&reopened).notes, warnings);
 }
 
 #[test]
@@ -1311,4 +1344,18 @@ fn typed_crystal_charge_changes_keep_explicit_sites_and_the_cell() {
         assert_eq!(doc.atom(id).unwrap().charge, charge);
         assert!(doc.atom(id).unwrap().no_implicit);
     }
+}
+
+#[test]
+fn overlap_note_is_kept_on_a_model_without_a_cell_too() {
+    let (doc, warnings) = open("xyz", "3\nargon duplicates\nAr 0 0 0\nAr 0 0 0\nAr 0 0 0\n");
+    assert_eq!(doc.atoms.len(), 1);
+    assert!(
+        warnings
+            .iter()
+            .any(|note| note.contains("2 overlapping atoms"))
+    );
+    assert_eq!(model(&doc).notes, warnings);
+    let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(model(&reopened).notes, warnings);
 }

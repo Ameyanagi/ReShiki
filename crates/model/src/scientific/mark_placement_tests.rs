@@ -740,3 +740,15 @@ fn dragged_charges_and_radicals_orbit_the_label_they_will_have() {
         assert!(gap < DEFAULT.world(10. * 0.3), "{kind}: {gap}");
     }
 }
+
+#[test]
+fn methylamine_circled_plus_retains_the_clear_upward_default() {
+    let mut doc = Document::default();
+    let c = doc.add_atom("C", p(-42., 0.));
+    let n = doc.add_atom("N", p(0., 0.));
+    doc.add_bond(c, n, 1, "plain");
+    click(&mut doc, n, SymbolKind::CirclePlus);
+    let atom = doc.atom(n).unwrap();
+    assert_eq!(atom.label_h, 3);
+    assert!(atom.marks[0].offset.distance(p(0., -DEFAULT.font_size())) < 0.001);
+}
