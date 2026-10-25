@@ -302,6 +302,15 @@ pub enum Message {
     Charge(i32),
     Isotope(String),
     ApplyIsotope,
+    CancelEngine(engine_jobs::Key),
+    EngineFinished {
+        key: engine_jobs::Key,
+        result: Box<Result<Response, String>>,
+    },
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "Legacy completion for editor-boundary tests")
+    )]
     EngineDone {
         revision: u64,
         kind: Job,
@@ -442,6 +451,7 @@ impl App {
     /// Starts a file epoch, dropping per-file work so late results are ignored and new work can start.
     pub(super) fn begin_file_epoch(&mut self) {
         self.sync_drawing_panel_context();
+        self.cancel_engine_job();
         self.tab.file_epoch = self.next_epoch();
         // Invalidate tickets before clearing gestures that may switch the front tab's tool.
         self.tab.naming.invalidate_name();
@@ -590,6 +600,7 @@ impl App {
             iced::window::open_events().map(Message::LinuxClipboardWindow),
             self.updates.subscription(),
             self.properties_subscription(),
+            self.engine_subscription(),
             #[cfg(target_arch = "wasm32")]
             self.naming_subscription(),
             if self.assistant.needs_poll() {
@@ -996,7 +1007,7 @@ impl App {
         );
         let refresh_dimensions = matches!(
             &message,
-            Message::EngineDone { .. } | Message::LabelsReady(..)
+            Message::EngineDone { .. } | Message::EngineFinished { .. } | Message::LabelsReady(..)
         );
         let task = if background {
             self.update_document_result(message)

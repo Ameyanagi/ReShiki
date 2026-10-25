@@ -561,7 +561,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::ClipboardRead { .. } => Some(Completion::Clipboard),
         Message::Pasted(..) => Some(Completion::Pasted),
         Message::Autosaved(..) => Some(Completion::Autosave),
-        Message::EngineDone { .. } => Some(Completion::Engine),
+        Message::EngineDone { .. } | Message::EngineFinished { .. } => Some(Completion::Engine),
         Message::Opened(..) => Some(Completion::Opened),
         Message::FilePrepared(..) => Some(Completion::FilePrepared),
         Message::OfficePrepared(..) => Some(Completion::OfficePrepared),
@@ -602,6 +602,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::KeyboardDrawing(..)
         | Message::Pages(..)
         | Message::Escape
+        | Message::CancelEngine(..)
         | Message::Palette(..)
         | Message::ContextKey(..)
         | Message::Shortcut(..)

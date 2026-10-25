@@ -1474,12 +1474,25 @@ pub(crate) fn automatic_double_side(faces: &FaceIndex<'_>, bond: &Bond) -> Optio
     Some(if cross >= 0. { 1. } else { -1. })
 }
 
+#[cfg(test)]
+thread_local! {
+    static RING_SEARCH_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Find the smallest ring containing this edge, using the alternate path.
 fn ring_center(faces: &FaceIndex<'_>, from: u64, to: u64) -> Option<Point> {
     use std::collections::{HashMap, VecDeque};
+    // A terminal endpoint has no alternate path. Carbonyl bonds are queried
+    // repeatedly while crowded hydrogen labels avoid nearby bond strokes;
+    // walking the whole peptide from the carbon end cannot find a ring.
+    if faces.graph().degree(from) < 2 || faces.graph().degree(to) < 2 {
+        return None;
+    }
     let mut previous = HashMap::from([(from, from)]);
     let mut queue = VecDeque::from([from]);
     while let Some(id) = queue.pop_front() {
+        #[cfg(test)]
+        RING_SEARCH_VISITS.with(|count| count.set(count.get() + 1));
         for (_, b) in faces.graph().bonds(id) {
             if (b.a == from && b.b == to) || (b.a == to && b.b == from) {
                 continue;
