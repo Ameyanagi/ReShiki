@@ -246,6 +246,17 @@ async fn model_face_frames_and_hints_renderer_evidence() {
 
     // The interaction comparison retains exactly the same saved pose on both
     // sources, so the face-alignment change cannot obscure frame/hint results.
+    // Isolate this fixture's image packing from the differently oriented
+    // hero images. Its retained model body must compare under the same
+    // renderer/atlas conditions on both sources.
+    drop(renderer);
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .unwrap();
     let mut app = setup(&inputs.join("glucose-model.rsk"), false);
     show_only(&mut app);
     let original = app.tab.doc.clone();
