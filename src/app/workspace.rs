@@ -14,7 +14,7 @@ use reshiki::bonds::BondPreset;
 use reshiki::typography::{Script, StyleChange};
 
 #[cfg(test)]
-mod layout_snapshots;
+pub(super) mod layout_snapshots;
 #[cfg(test)]
 mod selection_canvas_qa;
 #[cfg(test)]
