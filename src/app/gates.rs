@@ -22,6 +22,18 @@ impl App {
             return Break(task);
         }
         let message = self.file_prepared_gate(message)?;
+        if self.recovery_manager.open() {
+            match &message {
+                Message::Recovery(_) => {}
+                Message::Escape => {
+                    return Break(self.recovery_action(super::recovery_manager::Action::Close));
+                }
+                _ if !atom_text::background(&message) && !self.answers_save_dialog(&message) => {
+                    return Break(Task::none());
+                }
+                _ => {}
+            }
+        }
         let message = self.updates_dialog_gate(message)?;
         let Some(message) = self.prepare_molecule_shortcut(message) else {
             return Break(Task::none());

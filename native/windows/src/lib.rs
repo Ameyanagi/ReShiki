@@ -20,6 +20,7 @@ pub mod desktop;
 mod metafile_worker;
 mod ole;
 mod printing;
+mod recovery;
 mod stdio;
 pub mod window;
 
@@ -27,6 +28,11 @@ pub use metafile_worker::{EMF_FILE_WORKER, EMF_IMPORT_WORKER, EMF_OFFICE_WORKER,
 pub use stdio::{
     Protected, StdHandle, StdioError, disinherit_standard_handles, standard_handle_inheritable,
 };
+
+/// Recycle a recovery copy, or fail without a permanent-deletion fallback.
+pub fn trash_recovery_draft(path: &std::path::Path) -> Result<(), String> {
+    recovery::discard(path)
+}
 
 /// Prefer DX12 for automatic startup without replacing an existing backend value.
 /// The caller preserves explicit ICED_BACKEND preferences before calling this.

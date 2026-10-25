@@ -142,6 +142,7 @@ impl App {
             Message::Restore if self.pending.is_some() => {}
             Message::Restore => self.restore_recovered(),
             Message::DismissRecovery => self.dismiss_recovery(),
+            Message::Recovery(action) => return Some(self.recovery_action(action)),
             Message::Canvas(Edit::BeginTransform(field)) => {
                 return Some(self.begin_numeric_transform(field));
             }

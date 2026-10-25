@@ -23,6 +23,21 @@ pub struct Candidate {
 pub struct Recovery {
     pub session: PathBuf,
 }
+impl Candidate {
+    /// Only an abandoned draft may be restored or discarded. Recheck before
+    /// acting: a process ID may have been reused since the startup scan.
+    pub fn available(&self) -> bool {
+        !owned_by_running_instance(&self.path)
+    }
+}
+
+fn owned_by_running_instance(path: &Path) -> bool {
+    path.file_stem()
+        .and_then(|stem| stem.to_str())
+        .and_then(|stem| stem.split('-').next())
+        .is_some_and(running)
+}
+
 impl Recovery {
     pub fn standard() -> Result<Self, String> {
         let root = crate::compatibility::data_directory()?;
@@ -59,9 +74,11 @@ impl Recovery {
                     return None;
                 }
                 // Do not offer another currently running instance's draft.
-                if let Some(owner) = path.file_stem()?.to_str()?.split('-').next()
-                    && running(owner)
-                {
+                if owned_by_running_instance(&path) {
+                    return None;
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                if !std::fs::symlink_metadata(&path).ok()?.is_file() {
                     return None;
                 }
                 let bytes = crate::storage::read(&path).ok()?;
@@ -71,7 +88,12 @@ impl Recovery {
                 Some(Candidate { path, snapshot })
             })
             .collect();
-        candidates.sort_by_key(|c| std::cmp::Reverse(c.snapshot.saved_at));
+        candidates.sort_by(|a, b| {
+            b.snapshot
+                .saved_at
+                .cmp(&a.snapshot.saved_at)
+                .then_with(|| a.path.cmp(&b.path))
+        });
         candidates
     }
     pub fn save(&self, document: &Document, source: Option<PathBuf>) -> Result<(), String> {
@@ -116,6 +138,58 @@ impl Recovery {
         remove(&self.session)
     }
 }
+
+/// Move one offered draft to the operating system's Trash. A live owner's
+/// file is protected even if it was offered by an earlier scan. There is no
+/// permanent-delete fallback when the Trash is unavailable.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn discard(candidate: &Candidate) -> Result<(), String> {
+    if !candidate.available() {
+        return Err("The draft belongs to a running ReShiki instance".into());
+    }
+    let metadata = match std::fs::symlink_metadata(&candidate.path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.to_string()),
+    };
+    if !metadata.is_file() {
+        return Err("The recovery draft is no longer a regular file".into());
+    }
+    // Do not discard a draft replaced or edited after the offer was made.
+    let bytes = crate::storage::read(&candidate.path).map_err(|error| error.to_string())?;
+    let mut current: Snapshot =
+        serde_json::from_slice(&bytes).map_err(|error| error.to_string())?;
+    current.document.validate()?;
+    current.document.migrate();
+    if current.saved_at != candidate.snapshot.saved_at
+        || current.source != candidate.snapshot.source
+        || current.document != candidate.snapshot.document
+    {
+        return Err("The recovery draft changed; reopen ReShiki to review it again".into());
+    }
+    if !candidate.available() {
+        return Err("The draft belongs to a running ReShiki instance".into());
+    }
+    #[cfg(windows)]
+    {
+        reshiki_windows::trash_recovery_draft(&candidate.path)
+    }
+    #[cfg(not(windows))]
+    {
+        let context = trash::TrashContext::new();
+        #[cfg(target_os = "macos")]
+        let context = {
+            use trash::macos::{DeleteMethod, TrashContextExtMacos};
+            let mut context = context;
+            // Use the filesystem API, with no Finder automation permission.
+            context.set_delete_method(DeleteMethod::NsFileManager);
+            context
+        };
+        context
+            .delete(&candidate.path)
+            .map_err(|error| error.to_string())
+    }
+}
 pub fn remove(path: &Path) -> Result<(), String> {
     match crate::storage::remove_file(path) {
         Ok(()) => Ok(()),
@@ -131,7 +205,9 @@ fn owner() -> Result<String, String> {
 }
 #[cfg(target_arch = "wasm32")]
 fn owner() -> Result<String, String> {
-    crate::storage::browser::session().ok_or_else(|| "Browser storage is unavailable".into())
+    crate::storage::browser::session().ok_or_else(|| {
+        "Recovery saving is unavailable: this page does not hold its session lock".into()
+    })
 }
 
 /// Whether the instance that named a draft `owner` is still running.
@@ -152,12 +228,14 @@ fn process_alive(pid: u32) -> bool {
     }
     #[cfg(unix)]
     {
-        std::process::Command::new("/bin/kill")
-            .args(["-0", &pid.to_string()])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .is_ok_and(|s| s.success())
+        let Some(pid) = i32::try_from(pid)
+            .ok()
+            .and_then(rustix::process::Pid::from_raw)
+        else {
+            return false;
+        };
+        // An inaccessible or otherwise unqueryable process is protected.
+        rustix::process::test_kill_process(pid) != Err(rustix::io::Errno::SRCH)
     }
     #[cfg(windows)]
     {

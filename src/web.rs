@@ -20,6 +20,26 @@ use wasm_bindgen::{JsCast, prelude::*};
 mod ime;
 mod storage;
 
+/// Remove recovery copies only after the browser's durable transaction succeeds.
+pub(crate) async fn discard_recovery(
+    candidates: &[reshiki::recovery::Candidate],
+) -> Result<Vec<std::path::PathBuf>, String> {
+    storage::discard_recovery(candidates)
+        .await
+        .map_err(|reason| {
+            error(&format!("Recovery discard failed: {reason}"));
+            "The browser could not finish deleting recovery drafts. Review them and try again"
+                .into()
+        })
+}
+
+pub(crate) async fn refresh_recovery_owners() -> Result<(), String> {
+    storage::refresh_recovery_owners().await.map_err(|reason| {
+        error(&format!("Recovery ownership query failed: {reason}"));
+        "The recovery drafts are still available".into()
+    })
+}
+
 /// What the page asks of the running editor.
 #[derive(Debug, Clone)]
 pub(crate) enum Request {
