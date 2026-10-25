@@ -16,6 +16,8 @@ use reshiki::typography::{Script, StyleChange};
 #[cfg(test)]
 pub(super) mod layout_snapshots;
 #[cfg(test)]
+mod model_controls_qa;
+#[cfg(test)]
 mod selection_canvas_qa;
 #[cfg(test)]
 mod view_parity_tests;
@@ -223,10 +225,12 @@ impl App {
             .height(Length::Fill)
             .into();
         let paper = self.with_drop_overlay(
-            sensor(self.with_context_menu(self.with_inline_text(drawing.map(Message::Canvas))))
-                .on_show(Message::Viewport)
-                .on_resize(Message::Viewport)
-                .into(),
+            sensor(super::atom_text::canvas_anchor(self.with_context_menu(
+                self.with_inline_text(drawing.map(Message::Canvas)),
+            )))
+            .on_show(Message::Viewport)
+            .on_resize(Message::Viewport)
+            .into(),
         );
         let context: Element<'_, Message> = if let Some(preview) = &self.tab.cleanup {
             self.cleanup_bar(preview)
@@ -262,6 +266,7 @@ impl App {
                 None
             },
             morph: self.model_morph(),
+            model_generation: self.model_generation(),
             element: &self.element,
             joining: self.tab.joining.as_ref().map(|s| (&s.prepared, s.anchor)),
             hidden_annotation: self.inline_label_id(),
@@ -2302,6 +2307,14 @@ impl App {
             status = status.push(self.recovery_banner());
         }
         status = status.push(container(message).width(Length::Fill).clip(true));
+        if let Some((key, progress)) = self.engine_progress() {
+            status = status.push(text(progress).size(11)).push(hover_hint(
+                accessible_command("engine.cancel", "Cancel chemistry operation", "Cancel")
+                    .on_press(Message::CancelEngine(key)),
+                "Cancel this operation · Escape",
+                tooltip::Position::Top,
+            ));
+        }
         if self.updates.available() {
             status = status.push(
                 command(

@@ -251,6 +251,7 @@ impl App {
                 | Message::Tick
                 | Message::InspectorScroll(_)
                 | Message::EngineDone { .. }
+                | Message::EngineFinished { .. }
                 | Message::InspectorAction(_)
                 | Message::Viewport(_)
                 | Message::Nmr(super::nmr::Action::RenderedSize(_))
@@ -320,6 +321,11 @@ impl App {
                 self.inline_action(inline_text::Action::Finish(false))
             } else if self.tab.optimization.is_some() {
                 self.optimization_action(optimization::Action::Cancel)
+            } else if self.tab.engine_job.is_some() {
+                self.cancel_engine_job();
+                Task::none()
+            } else if self.cancel_model_generation() {
+                Task::none()
             } else {
                 self.update(Message::Tool(Tool::Select))
             });
@@ -444,6 +450,7 @@ pub(super) fn preview_passthrough(message: &Message) -> bool {
             )
             | Message::ObjectToolbar(object_toolbar::Action::Visible(_))
             | Message::Tick
+            | Message::CancelEngine(..)
             | Message::Close(_)
             | Message::Discard
             | Message::Cancel

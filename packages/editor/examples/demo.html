@@ -28,7 +28,7 @@
     <link rel="icon" href="/favicon.png" type="image/png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <!-- Fetch the modules and the WebAssembly at once instead of one after the
-         other. Phones wait for "Continue anyway" before downloading. -->
+         other. Phones wait for "Continue anyway" before downloading WebAssembly. -->
     <link rel="modulepreload" href="../src/editor.js" />
     <link rel="modulepreload" href="../src/fonts.js" />
     <link rel="modulepreload" href="../dist/editor/reshiki.js" />
@@ -40,6 +40,7 @@
       media="(min-width: 601px)"
       href="../dist/editor/reshiki_bg.wasm"
       data-bytes="0"
+      data-gzip-bytes="0"
     />
     <style>
       html,
@@ -156,16 +157,16 @@
           <h1>ReShiki</h1>
           <noscript><p>The editor needs JavaScript.</p></noscript>
           <div id="demo-phone" hidden>
-            <p>
-              ReShiki is made for a computer: on a phone its panels leave no room to draw, and the
-              first visit downloads about 9 MB.
-            </p>
+            <p>ReShiki is made for a computer: on a phone its panels leave no room to draw.</p>
             <p class="demo-actions"><button type="button">Continue anyway</button></p>
           </div>
           <div id="demo-progress" hidden>
             <progress></progress>
             <p class="demo-small">Loading the editor…</p>
           </div>
+          <p id="demo-estimate" class="demo-small">
+            The editor's JavaScript and WebAssembly load first. Naming and CJK fonts load on demand.
+          </p>
           <div id="demo-failed" hidden>
             <p class="demo-error"></p>
             <p class="demo-actions"><button type="button">Reload</button></p>
@@ -202,7 +203,11 @@
       const bar = progress.querySelector("progress");
       const label = progress.querySelector("p");
       const failed = document.getElementById("demo-failed");
-      const megabytes = (bytes) => (bytes / 1e6).toFixed(1);
+      const estimatedBytes = Number(wasm.dataset.gzipBytes);
+      if (estimatedBytes > 0) {
+        document.getElementById("demo-estimate").textContent =
+          `Estimated first download: ${Math.round(estimatedBytes / 1e6)} MB compressed for the editor's JavaScript and WebAssembly. Naming and CJK fonts load on demand.`;
+      }
 
       // The WebAssembly as a Response that reports its progress as it streams.
       // The packaged page knows the file's size; a compressed response's
@@ -211,7 +216,9 @@
         const response = await fetch(url);
         if (!response.ok)
           throw new Error(`Downloading the editor failed (HTTP ${response.status}).`);
-        const total = Number(wasm.dataset.bytes) || Number(response.headers.get("content-length"));
+        // Fetch streams decoded bytes. Content-Length may describe compressed
+        // bytes, so only the packager's unpacked size is a valid denominator.
+        const total = Number(wasm.dataset.bytes);
         let received = 0;
         const counted = response.body.pipeThrough(
           new TransformStream({
@@ -219,8 +226,8 @@
               received += chunk.byteLength;
               if (total) bar.value = Math.min(received / total, 1);
               label.textContent = total
-                ? `Downloading the editor… ${megabytes(received)} of ${megabytes(total)} MB`
-                : `Downloading the editor… ${megabytes(received)} MB`;
+                ? `Downloading the editor… ${Math.min(Math.round((received / total) * 100), 100)}%`
+                : "Downloading the editor…";
               if (total && received >= total) label.textContent = "Starting the editor…";
               controller.enqueue(chunk);
             },

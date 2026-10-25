@@ -33,6 +33,8 @@ mod depth_appearance;
 mod dispatch;
 mod document_styles;
 mod document_tab;
+#[cfg(test)]
+mod drawing_panel_capture;
 use document_tab::DocumentTab;
 mod engine_jobs;
 mod event_slot;
@@ -117,6 +119,7 @@ pub(crate) use workspace::text_width;
 
 /// The status bar's idle message.
 const READY: &str = "Ready · Choose a tool to start drawing";
+const CELL_REMOVED_NOTICE: &str = "Unit cell removed by the edit · Undo restores it";
 
 // App::fit_bounds: screen pixels kept free around the fitted drawing, the
 // smallest usable viewport side (pixels) and the smallest fitted extent (world
@@ -303,6 +306,15 @@ pub enum Message {
     Charge(i32),
     Isotope(String),
     ApplyIsotope,
+    CancelEngine(engine_jobs::Key),
+    EngineFinished {
+        key: engine_jobs::Key,
+        result: Box<Result<Response, String>>,
+    },
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "Legacy completion for editor-boundary tests")
+    )]
     EngineDone {
         revision: u64,
         kind: Job,
@@ -427,7 +439,7 @@ pub struct App {
     template_index: usize,
     templates: template_library::State,
     /// The last committed atom label, which a Text-tool double-click repeats.
-    last_label: Option<String>,
+    last_label: Option<atom_text::RememberedLabel>,
     /// The last Text-tool click on an atom, to recognize a double-click.
     text_click: Option<(iced::time::Instant, u64)>,
 }
@@ -443,6 +455,8 @@ const DRAFT_INTERVAL: std::time::Duration = if cfg!(target_arch = "wasm32") {
 impl App {
     /// Starts a file epoch, dropping per-file work so late results are ignored and new work can start.
     pub(super) fn begin_file_epoch(&mut self) {
+        self.sync_drawing_panel_context();
+        self.cancel_engine_job();
         self.tab.file_epoch = self.next_epoch();
         // Invalidate tickets before clearing gestures that may switch the front tab's tool.
         self.tab.naming.invalidate_name();
@@ -450,6 +464,7 @@ impl App {
         self.tab.arrows.cancel_source();
         self.cancel_reference_stretch();
         self.tab.nmr.clear_pending();
+        self.sync_drawing_panel_context();
     }
 
     #[cfg(test)]
@@ -591,6 +606,9 @@ impl App {
             iced::window::open_events().map(Message::LinuxClipboardWindow),
             self.updates.subscription(),
             self.properties_subscription(),
+            self.engine_subscription(),
+            #[cfg(target_arch = "wasm32")]
+            self.naming_subscription(),
             if self.assistant.needs_poll() {
                 iced::time::every(std::time::Duration::from_millis(200))
                     .map(|_| Message::Assistant(assistant::Action::Poll))
@@ -730,6 +748,14 @@ impl App {
         self.tab
             .nmr
             .invalidate_if_changed(&self.tab.doc, self.tab.file_epoch);
+        let unit_cell_removed = reconciled.before().models.iter().any(|old| {
+            old.cell.is_some()
+                && !self.tab.doc.models.iter().any(|m| {
+                    m.cell.is_some()
+                        && m.atoms.len() == old.atoms.len()
+                        && old.atoms.iter().all(|atom| m.contains(atom.id))
+                })
+        });
         let committed = reconciled.commit(&mut self.tab.doc, &mut self.tab.history, continuing);
         self.label_layout_settled();
         if committed.chemistry_changed {
@@ -742,8 +768,10 @@ impl App {
                 self.tab.analysis = None;
             }
             self.error = false;
-            self.status = if committed.chemistry_changed {
-                "Drawing changed · Check structure to refresh properties"
+            self.status = if unit_cell_removed {
+                CELL_REMOVED_NOTICE
+            } else if committed.chemistry_changed {
+                "Drawing changed"
             } else {
                 "Drawing updated"
             }
@@ -846,7 +874,14 @@ impl App {
             .unwrap_or(&self.tab.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        // Readiness polling only redraws; it must not commit drafts or dismiss menus.
+        #[cfg(target_arch = "wasm32")]
+        if matches!(message, Message::Naming(naming::Action::Refresh)) {
+            return Task::none();
+        }
+        self.sync_drawing_panel_context();
         let task = self.handle(message);
+        self.sync_drawing_panel_context();
         self.settle_deferred_label_layout();
         // Any message may change the drawing, some (previews, background
         // labels) without a new revision, so the next view compares afresh.
@@ -985,7 +1020,7 @@ impl App {
         );
         let refresh_dimensions = matches!(
             &message,
-            Message::EngineDone { .. } | Message::LabelsReady(..)
+            Message::EngineDone { .. } | Message::EngineFinished { .. } | Message::LabelsReady(..)
         );
         let task = if background {
             self.update_document_result(message)
@@ -1139,6 +1174,7 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
 /// new one a compile error here instead of an edit the unsaved check misses.
 fn same_bond(a: &reshiki::document::Bond, b: &reshiki::document::Bond) -> bool {
     let reshiki::document::Bond {
+        distance_derived,
         highlight,
         ring_arc,
         projection,
@@ -1156,7 +1192,8 @@ fn same_bond(a: &reshiki::document::Bond, b: &reshiki::document::Bond) -> bool {
         secondary_display,
         color,
     } = a;
-    *highlight == b.highlight
+    *distance_derived == b.distance_derived
+        && *highlight == b.highlight
         && *ring_arc == b.ring_arc
         && *projection == b.projection
         && *stereo_authoritative == b.stereo_authoritative
@@ -1255,13 +1292,20 @@ async fn save_export(
     };
     let stem = stem.as_deref().unwrap_or("Molecule");
     files::save_bytes(
-        "Export drawing",
+        &format!("Export {}", export_format_label(format)),
         &format!("{stem}.{extension}"),
         extension,
         &bytes,
     )
     .await
 }
+fn export_format_label(format: &str) -> String {
+    match format {
+        "svg-office" => inspector::FigureFormat::SvgOffice.to_string(),
+        _ => format.to_uppercase(),
+    }
+}
+
 fn input_request(text: &str) -> Request {
     reshiki::clipboard::text_request(text)
 }

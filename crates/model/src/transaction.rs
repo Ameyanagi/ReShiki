@@ -31,6 +31,8 @@ pub fn chemistry_changed(before: &Document, after: &Document) -> bool {
         || before.bonds.iter().zip(&after.bonds).any(|(a, b)| {
             let mut a = a.clone();
             let mut b = b.clone();
+            a.distance_derived = false;
+            b.distance_derived = false;
             a.z_order = 0;
             b.z_order = 0;
             a.color = Default::default();

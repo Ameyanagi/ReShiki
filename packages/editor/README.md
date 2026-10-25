@@ -34,7 +34,8 @@ the license texts and third-party notices to `dist/licenses`.
 
 The editor is the desktop app's window, drawn into a page element with
 WebGPU, or WebGL2 where the browser has no WebGPU. It fills the element, so
-give the element a size.
+give the element a size. The bare imports below work with a bundler or the
+[import map in the plain HTML recipe](#plain-html-page).
 
 ```js
 import { mount } from "@ameyanagi/reshiki/editor";
@@ -105,6 +106,66 @@ The custom element wraps `mount`:
 
 It fires `ready` and `change`, and `error` when the editor cannot start, for
 example when `src` answers 404, and has `load`, `save` and `exportImage`.
+`await element.ready` resolves to the mounted editor once it runs, or rejects
+if it could not start. This promise also works when the `ready` event has
+already fired.
+
+### Plain HTML page
+
+This example uses the installed npm package without a bundler. Start in an
+empty folder with Bun and Python 3 installed:
+
+```sh
+bun init -y
+bun add @ameyanagi/reshiki
+bun -e 'import { convert } from "@ameyanagi/reshiki"; await Bun.write("caffeine.mol", await convert("CN1C=NC2=C1C(=O)N(C(=O)N2C)C", "smiles", "mol"))'
+```
+
+Save the following as `index.html` in that folder:
+
+```html
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My ReShiki page</title>
+  <script type="importmap">
+    {
+      "imports": {
+        "@ameyanagi/reshiki/editor": "./node_modules/@ameyanagi/reshiki/src/editor.js",
+        "@ameyanagi/reshiki/element": "./node_modules/@ameyanagi/reshiki/src/element.js",
+        "@ameyanagi/reshiki/embed": "./node_modules/@ameyanagi/reshiki/src/embed.js"
+      }
+    }
+  </script>
+  <reshiki-editor src="caffeine.mol" format="mol" style="height: 600px"></reshiki-editor>
+  <script type="module">
+    import "@ameyanagi/reshiki/element";
+    const element = document.querySelector("reshiki-editor");
+    await element.ready;
+    console.log("Ready:", await element.save("smiles"));
+  </script>
+</html>
+```
+
+Serve this folder, including `node_modules`, over HTTP:
+
+```sh
+python3 -m http.server 8080 --bind 127.0.0.1
+```
+
+Open `http://127.0.0.1:8080/` in Safari or Chrome. The page shows caffeine
+(C8H10N4O2), and the browser console prints `Ready:` followed by its SMILES.
+Import → Name can preview `ethanol` locally. Python 3's server serves `.wasm`
+as `application/wasm`; a production server must do the same.
+
+Keep the package's `src/` and `dist/` folders beside each other when copying
+them to a public directory: `src/editor.js` and `src/worker.js` load
+`../dist/…`. Adjust the three import-map URLs to that directory together.
+The page and package must share an origin for the naming worker; see
+[Naming](#naming). Open the HTTP URL, rather than `index.html` as a local file.
+The repository's `examples/serve.ts` is a development tool and is not part
+of the installed package.
 
 ### Fonts
 
@@ -285,7 +346,7 @@ await init(new URL("/assets/reshiki_web_bg.wasm", location.href));
 | `smiles(data, format)`                             | The canonical SMILES.                                                         |
 | `inchi(data, format)`                              | The standard InChI.                                                           |
 | `addFont(font)`                                    | Adds a font (a URL or bytes) that figures fall back to, such as for Japanese. |
-| `version()`                                        | The library version.                                                          |
+| `version()`                                        | The ReShiki release version, e.g. `0.13.0` (including any prerelease suffix). |
 
 `data` is a string or a `Uint8Array`; `cdx` input must be bytes.
 

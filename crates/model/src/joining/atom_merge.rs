@@ -98,6 +98,7 @@ fn merge_atoms_with_position(
     let n = atoms.len() as f64;
     let depth = (atoms.iter().map(|a| f64::from(a.depth)).sum::<f64>() / n) as f32;
     let mut result = doc.clone();
+    crate::models3d::crystal::mark_distance_bonds(&mut result);
     result
         .atoms
         .retain(|a| !selected_set.contains(&a.id) || a.id == survivor);
@@ -158,10 +159,11 @@ fn merge_atoms_with_position(
         }
         let pair = (bond.a.min(bond.b), bond.a.max(bond.b));
         if let Some(index) = pairs.get(&pair).copied() {
-            let existing = bonds.get(index).ok_or("Missing joined bond.")?;
+            let existing = bonds.get_mut(index).ok_or("Missing joined bond.")?;
             if !same_bond(existing, &bond) {
                 return Err("Joining would combine bonds with conflicting order, direction, stereo or appearance. Edit those bonds first.".into());
             }
+            existing.distance_derived |= bond.distance_derived;
         } else {
             pairs.insert(pair, bonds.len());
             bonds.push(bond);
@@ -253,6 +255,8 @@ fn dedup(ids: &mut Vec<u64>) {
 fn same_bond(a: &Bond, b: &Bond) -> bool {
     let mut a = a.clone();
     let mut b = b.clone();
+    a.distance_derived = false;
+    b.distance_derived = false;
     a.cip_label = None;
     b.cip_label = None;
     if a.a != b.a {
@@ -287,6 +291,9 @@ fn remap_weights(
 /// Check only the surviving atom's local valence; unrelated chemistry or
 /// nonchemical attachment nodes must not prevent this local drawing edit.
 fn survivor_valence(doc: &Document, survivor: u64) -> Result<(), String> {
+    if crate::models3d::crystal::touches(doc, &[survivor]) {
+        return Ok(());
+    }
     use crate::chemistry::{
         ELEMENTS,
         graph::{Atom, Bond, Graph},
