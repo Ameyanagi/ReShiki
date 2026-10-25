@@ -234,9 +234,11 @@ fn drawing() -> App {
 }
 
 #[tokio::test]
-#[ignore = "Real renderer palette geometry, native actions and matched1600/default captures"]
+#[ignore = "Real renderer palette geometry, native actions and matched 1600/default captures"]
 async fn drawing_polish_renderer_palette() {
-    for size in [Size::new(1600., 1000.), Size::new(1280., 820.)] {
+    // A 1000 pt outer macOS window has a 32 pt native title bar. The
+    // default 1280 × 820 setting names the client size in main.rs.
+    for size in [Size::new(1600., 968.), Size::new(1280., 820.)] {
         let (mut app, _) = App::new();
         app.recovered.clear();
         app.appearance.mode = crate::appearance::Mode::Light;
@@ -261,7 +263,7 @@ async fn drawing_polish_renderer_palette() {
         assert!(h.bounds.x < c.bounds.x);
         assert_eq!(h.bounds.y, c.bounds.y);
         let star = elements.iter().find(|n| n.id == "element-*").unwrap();
-        if size.height == 1000. && !baseline() {
+        if size.width == 1600. && !baseline() {
             assert_eq!(
                 star.visible_bounds,
                 Some(star.bounds),
@@ -276,11 +278,18 @@ async fn drawing_polish_renderer_palette() {
                 );
             }
         }
+        if size.width == 1600. && baseline() {
+            assert_ne!(
+                star.visible_bounds,
+                Some(star.bounds),
+                "The retained baseline must reproduce the clipped last row"
+            );
+        }
         ui.capture(
             &app,
             Some(&directory().join(format!("palette-{}.png", size.width))),
         );
-        if !baseline() && size.height == 1000. {
+        if !baseline() && size.width == 1600. {
             for symbol in ["H", "C", "N", "O", "S", "P", "F", "Cl", "Br", "Fe", "*"] {
                 ui.activate(&mut app, &format!("element-{symbol}"));
                 assert_eq!(app.element, symbol);
