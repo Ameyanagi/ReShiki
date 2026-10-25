@@ -85,9 +85,24 @@ impl App {
         }
     }
 
-    pub(super) fn engine_progress(&self) -> Option<String> {
-        let elapsed = self.tab.engine_job.as_ref()?.started.elapsed();
-        (elapsed >= PROGRESS_DELAY).then(|| format!("Working · {} s", elapsed.as_secs()))
+    pub(super) fn engine_progress(&self) -> Option<(Key, String)> {
+        let job = self.tab.engine_job.as_ref()?;
+        let elapsed = job.started.elapsed();
+        (elapsed >= PROGRESS_DELAY).then(|| (job.key, format!("Working · {} s", elapsed.as_secs())))
+    }
+
+    /// An activation queued on a previous job must never cancel a newer one.
+    pub(super) fn cancel_engine_request(&mut self, key: Key) {
+        if key.tab == self.tab.id
+            && key.epoch == self.tab.file_epoch
+            && self
+                .tab
+                .engine_job
+                .as_ref()
+                .is_some_and(|job| job.key == key)
+        {
+            self.cancel_engine_job();
+        }
     }
 
     /// Cancel affects only transient work. Drawing, history, selection and camera stay put.

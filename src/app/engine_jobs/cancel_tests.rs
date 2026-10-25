@@ -67,10 +67,11 @@ async fn cancel_drops_the_active_future_and_preserves_the_drawing() {
         let _guard = guard;
         future::pending().await
     });
+    let key = app.tab.engine_job.as_ref().unwrap().key;
     let mut stream = iced_runtime::task::into_stream(task).unwrap();
     assert!(poll!(stream.next()).is_pending());
     assert!(!dropped.load(Ordering::SeqCst));
-    let _ = app.update(Message::CancelEngine);
+    let _ = app.update(Message::CancelEngine(key));
     assert!(
         stream.next().await.is_none(),
         "Aborted tasks cannot publish a completion"
@@ -99,6 +100,12 @@ fn cancelled_receipts_cannot_apply_or_clear_a_newer_job() {
     app.cancel_engine_job();
     let (new, _new_task) = pending(&mut app);
     assert_ne!(old, new);
+    let _ = app.update(Message::CancelEngine(old));
+    assert_eq!(app.tab.engine_job.as_ref().unwrap().key, new);
+    assert!(
+        app.tab.busy,
+        "An old Cancel activation cannot cancel a new job"
+    );
     for result in [imported(), Err("Late failure".into())] {
         let _ = app.update(finished(old, result));
         assert!(app.tab.doc.atoms.is_empty());
@@ -144,7 +151,7 @@ fn progress_appears_after_one_second_and_escape_respects_modal_priority() {
     let _ = pending(&mut app);
     assert!(app.engine_progress().is_none());
     app.tab.engine_job.as_mut().unwrap().started -= PROGRESS_DELAY;
-    assert_eq!(app.engine_progress().as_deref(), Some("Working · 1 s"));
+    assert_eq!(app.engine_progress().unwrap().1, "Working · 1 s");
     app.help_open = true;
     let _ = app.update(Message::Escape);
     assert!(!app.help_open);
@@ -185,7 +192,7 @@ fn cancel_remains_available_while_rerunning_a_cleanup_preview() {
     let _ = app.update(Message::Cleanup(cleanup::Action::Orientation(false)));
     let rerun = app.tab.engine_job.as_ref().unwrap().key;
     assert!(app.tab.busy);
-    let _ = app.update(Message::CancelEngine);
+    let _ = app.update(Message::CancelEngine(rerun));
     assert!(app.tab.engine_job.is_none());
     assert!(!app.tab.busy);
     assert!(
@@ -220,6 +227,9 @@ fn completion_is_classified_and_keeps_its_background_tab() {
     }
     app.add_tab();
     let (front, _task) = pending(&mut app);
+    let _ = app.update(Message::CancelEngine(key));
+    assert_eq!(app.tab.engine_job.as_ref().unwrap().key, front);
+    assert!(app.tab.busy, "Another tab's Cancel activation is ignored");
     let _ = app.update(Message::Tab(owner, Box::new(message)));
     assert!(app.tab.doc.atoms.is_empty());
     assert!(app.tab.busy);
@@ -285,7 +295,7 @@ async fn real_native_import_aborts_without_publishing_or_changing_the_drawing() 
     // Native parsing and layout yield to their worker, so the application can cancel.
     assert!(poll!(stream.next()).is_pending());
     let key = app.tab.engine_job.as_ref().unwrap().key;
-    let _ = app.update(Message::CancelEngine);
+    let _ = app.update(Message::CancelEngine(key));
     assert!(stream.next().await.is_none());
     drop(stream);
     let _ = app.update(finished(key, imported()));
@@ -338,7 +348,7 @@ async fn delayed_cancel_control_is_accessible_and_activates_cancellation() -> Re
             let mut activate = reshiki::accessibility::Activate::<Message>::new("engine.cancel");
             ui.operate(&renderer, &mut operation::black_box(&mut activate));
             match activate.finish() {
-                operation::Outcome::Some(message @ Message::CancelEngine) => {
+                operation::Outcome::Some(message @ Message::CancelEngine(_)) => {
                     drop(ui);
                     let _ = app.update(message);
                     assert!(!app.tab.busy);

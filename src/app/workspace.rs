@@ -2321,10 +2321,10 @@ impl App {
                 ));
         }
         status = status.push(container(message).width(Length::Fill).clip(true));
-        if let Some(progress) = self.engine_progress() {
+        if let Some((key, progress)) = self.engine_progress() {
             status = status.push(text(progress).size(11)).push(hover_hint(
                 accessible_command("engine.cancel", "Cancel chemistry operation", "Cancel")
-                    .on_press(Message::CancelEngine),
+                    .on_press(Message::CancelEngine(key)),
                 "Cancel this operation · Escape",
                 tooltip::Position::Top,
             ));

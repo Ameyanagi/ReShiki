@@ -600,7 +600,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::KeyboardDrawing(..)
         | Message::Pages(..)
         | Message::Escape
-        | Message::CancelEngine
+        | Message::CancelEngine(..)
         | Message::Palette(..)
         | Message::ContextKey(..)
         | Message::Shortcut(..)

@@ -54,7 +54,7 @@ impl App {
             Message::StyleMenu(action) => return Some(self.style_menu_action(action)),
             Message::Shortcut(action) => return Some(self.shortcut_action(action)),
             Message::AromaticDisplay => return Some(self.request_aromatic_display()),
-            Message::CancelEngine => self.cancel_engine_job(),
+            Message::CancelEngine(key) => self.cancel_engine_request(key),
             Message::Abbreviations(action) => return Some(self.abbreviation_action(action)),
             Message::Generic(action) => return Some(self.generic_action(action)),
             Message::Labels(action) => self.label_action(action),

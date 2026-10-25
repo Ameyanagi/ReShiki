@@ -299,7 +299,7 @@ pub enum Message {
     Charge(i32),
     Isotope(String),
     ApplyIsotope,
-    CancelEngine,
+    CancelEngine(engine_jobs::Key),
     EngineFinished {
         key: engine_jobs::Key,
         result: Box<Result<Response, String>>,

@@ -436,7 +436,7 @@ pub(super) fn preview_passthrough(message: &Message) -> bool {
             )
             | Message::ObjectToolbar(object_toolbar::Action::Visible(_))
             | Message::Tick
-            | Message::CancelEngine
+            | Message::CancelEngine(..)
             | Message::Close(_)
             | Message::Discard
             | Message::Cancel
