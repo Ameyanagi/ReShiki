@@ -163,6 +163,42 @@ fn progress_appears_after_one_second_and_escape_respects_modal_priority() {
 }
 
 #[test]
+fn cancel_remains_available_while_rerunning_a_cleanup_preview() {
+    use super::super::cleanup;
+    let mut app = ready();
+    let atom = app.tab.doc.add_atom("C", Point::default());
+    app.tab.selected = vec![atom];
+    let drawing = app.tab.doc.clone();
+    let _ = app.cleanup_action(cleanup::Action::Begin);
+    let key = app.tab.engine_job.as_ref().unwrap().key;
+    let _ = app.update(finished(
+        key,
+        Ok(Response {
+            document: Some(drawing.clone()),
+            analysis: None,
+            output: None,
+            engine_version: "test".into(),
+            warnings: vec![],
+        }),
+    ));
+    assert!(app.tab.cleanup.is_some());
+    let _ = app.update(Message::Cleanup(cleanup::Action::Orientation(false)));
+    let rerun = app.tab.engine_job.as_ref().unwrap().key;
+    assert!(app.tab.busy);
+    let _ = app.update(Message::CancelEngine);
+    assert!(app.tab.engine_job.is_none());
+    assert!(!app.tab.busy);
+    assert!(
+        app.tab.cleanup.is_some(),
+        "The prior preview remains available"
+    );
+    let _ = app.update(finished(rerun, imported()));
+    assert_eq!(app.tab.doc, drawing);
+    assert_eq!(app.tab.cleanup.as_ref().unwrap().document, drawing);
+    assert!(!app.tab.busy);
+}
+
+#[test]
 fn completion_is_classified_and_keeps_its_background_tab() {
     use super::super::{results, tabs};
     let mut app = ready();
