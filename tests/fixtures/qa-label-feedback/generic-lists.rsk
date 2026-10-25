@@ -1,0 +1,210 @@
+{
+  "generic": {
+    "alternatives": [
+      {
+        "atom": 1,
+        "choices": [
+          {
+            "kind": "element",
+            "symbol": "Cl",
+            "isotope": 0
+          },
+          {
+            "kind": "element",
+            "symbol": "Br",
+            "isotope": 0
+          },
+          {
+            "kind": "element",
+            "symbol": "I",
+            "isotope": 0
+          }
+        ],
+        "excluded": false
+      },
+      {
+        "atom": 4,
+        "choices": [
+          {
+            "kind": "element",
+            "symbol": "Cl",
+            "isotope": 0
+          },
+          {
+            "kind": "element",
+            "symbol": "Br",
+            "isotope": 0
+          },
+          {
+            "kind": "element",
+            "symbol": "I",
+            "isotope": 0
+          }
+        ],
+        "excluded": false
+      }
+    ]
+  },
+  "atom_labels": {
+    "carbons": "skeletal",
+    "hydrogens": true,
+    "stereo": false
+  },
+  "version": 15,
+  "atoms": [
+    {
+      "display": {
+        "variable": "[Cl,Br,I]",
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 1,
+      "element": "*",
+      "position": {
+        "x": -42.0,
+        "y": -48.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 2,
+      "element": "C",
+      "position": {
+        "x": 0.0,
+        "y": -48.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 3,
+      "element": "C",
+      "position": {
+        "x": -42.0,
+        "y": 48.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "display": {
+        "variable": "[Cl,Br,I]",
+        "carbons": null,
+        "hydrogens": null,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": null,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 4,
+      "element": "*",
+      "position": {
+        "x": 0.0,
+        "y": 48.0
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    }
+  ],
+  "bonds": [
+    {
+      "z_order": 0,
+      "a": 1,
+      "b": 2,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 3,
+      "b": 4,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "annotations": [],
+  "arrows": [],
+  "graphics": [],
+  "groups": []
+}

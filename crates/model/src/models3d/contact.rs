@@ -247,6 +247,9 @@ fn sample(t0: f32, t1: f32, steps: f32) -> impl Iterator<Item = f32> {
 enum Cover {
     None,
     Hidden,
+    /// The disc outside a wholly facing meeting circle: the visible cap
+    /// stays inside the circle when the covered cap holds the ball's rim.
+    Outside(Ring),
     /// The meeting circle's arc facing the eye, between two angles, then the
     /// rim's angles back round to its start.
     Part(Ring, (f32, f32), Option<(f32, f32)>),
@@ -269,7 +272,15 @@ fn cover(a: Ball, facing: &Facing, b: Ball) -> Cover {
     let amp = za.hypot(zb);
     if amp <= c0.abs() {
         if c0 >= 0. {
-            return Cover::Part(ring, (0., TAU), None);
+            // A cap pointing toward the eye covers the projected ring's
+            // inside; one pointing away covers its outside, including the
+            // rim. The front point alone cannot distinguish them: a small,
+            // off-axis cap need not contain it either.
+            return if dot(m.u, facing.v) >= 0. {
+                Cover::Part(ring, (0., TAU), None)
+            } else {
+                Cover::Outside(ring)
+            };
         }
         return if in_cap(add(a.p, mul(facing.v, a.r))) {
             Cover::Hidden
@@ -430,10 +441,25 @@ impl<P: Fn(V) -> Point> Disc<'_, P> {
 
     /// What `other` covers, reaching past the rim where it meets it. `Err`
     /// when it covers all of the disc.
-    fn cover(&self, other: Ball) -> Result<Option<Vec<[f64; 2]>>, ()> {
+    fn cover(&self, other: Ball) -> Result<Vec<Vec<[f64; 2]>>, ()> {
         match cover(self.ball, self.facing, other) {
-            Cover::None => Ok(None),
+            Cover::None => Ok(vec![]),
             Cover::Hidden => Err(()),
+            Cover::Outside(ring) => {
+                let outer = Self::counterclockwise(
+                    sample(0., TAU, PAST_STEPS).map(|s| self.past(s)).collect(),
+                );
+                let mut hole = Self::counterclockwise(
+                    sample(0., TAU, STEPS)
+                        .map(|t| flat((self.project)(ring.at(t))))
+                        .collect(),
+                );
+                // Opposite winding leaves the cap out of this cut. Keeping
+                // both contours lets NonZero union it with other neighbours'
+                // cuts without filling the cap or cancelling their coverage.
+                hole.reverse();
+                Ok(vec![outer, hole])
+            }
             Cover::Part(ring, (t0, t1), closing) => {
                 let mut polygon: Vec<[f64; 2]> = sample(t0, t1, STEPS)
                     .map(|t| flat((self.project)(ring.at(t))))
@@ -441,7 +467,7 @@ impl<P: Fn(V) -> Point> Disc<'_, P> {
                 if let Some((s0, s1)) = closing {
                     polygon.extend(sample(s0, s1, PAST_STEPS).map(|s| self.past(s)));
                 }
-                Ok(Some(Self::counterclockwise(polygon)))
+                Ok(vec![Self::counterclockwise(polygon)])
             }
         }
     }
@@ -463,8 +489,7 @@ fn seen(
     let mut cuts = vec![];
     for &b in &near {
         match disc.cover(b) {
-            Ok(None) => {}
-            Ok(Some(polygon)) => cuts.push(polygon),
+            Ok(polygons) => cuts.extend(polygons),
             Err(()) => return Seen::Hidden,
         }
     }

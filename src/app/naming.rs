@@ -55,6 +55,9 @@ impl Pending {
 
 #[derive(Debug, Clone)]
 pub enum Action {
+    /// Repaint browser worker readiness while a local naming request runs.
+    #[cfg(target_arch = "wasm32")]
+    Refresh,
     Name(String),
     Cancel,
     Resolve,
@@ -283,6 +286,24 @@ async fn generate_for_atoms(
 }
 
 impl App {
+    #[cfg(target_arch = "wasm32")]
+    pub(super) fn naming_subscription(&self) -> iced::Subscription<Message> {
+        if self.strip().any(|tab| tab.naming.local_cancel.is_some()) {
+            iced::time::every(std::time::Duration::from_millis(100))
+                .map(|_| Message::Naming(Action::Refresh))
+        } else {
+            iced::Subscription::none()
+        }
+    }
+
+    fn naming_working_label(&self) -> &'static str {
+        if self.tab.naming.local_cancel.is_some() && naming::worker_loading() {
+            "Loading the naming engine…"
+        } else {
+            "Working…"
+        }
+    }
+
     fn name_preview_styles(&self) -> PreviewStyles<'_> {
         PreviewStyles {
             bond_drawing: self.tab.bond_drawing,
@@ -388,6 +409,8 @@ impl App {
 
     pub(super) fn naming_action(&mut self, action: Action) -> Task<Message> {
         match action {
+            #[cfg(target_arch = "wasm32")]
+            Action::Refresh => {}
             Action::Name(name) => {
                 self.tab.naming.invalidate_name();
                 self.tab.naming.name = name;
@@ -691,7 +714,7 @@ impl App {
             );
         }
         if !idle {
-            let mut working = row![text("Working…").size(12)]
+            let mut working = row![text(self.naming_working_label()).size(12)]
                 .spacing(10)
                 .align_y(iced::Alignment::Center);
             if state.local_cancel.is_some() {

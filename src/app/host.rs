@@ -45,6 +45,11 @@ impl App {
     /// Read a file in browser storage again after it changed under the app,
     /// so the next save starts from it, and say why a change was not kept.
     fn stored(&mut self, key: &str, failure: Option<String>) -> Task<Message> {
+        if key.starts_with("recovery/") {
+            self.prune_recovery_owners();
+            self.recovered
+                .retain(|candidate| reshiki::storage::read(&candidate.path).is_ok());
+        }
         if let Some(failure) = failure {
             self.status = failure;
             self.error = true;

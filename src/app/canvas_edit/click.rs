@@ -11,11 +11,17 @@ impl App {
             Tool::Atom => {
                 if let Some(id) = self.tab.doc.nearest(p, 10.0 / self.tab.camera.zoom) {
                     self.tab.doc.invalidate_chemistry(&[id]);
+                    let crystal = self
+                        .tab
+                        .doc
+                        .models
+                        .iter()
+                        .any(|m| m.cell.is_some() && m.contains(id));
                     if let Some(a) = self.tab.doc.atom_mut(id) {
                         a.element = self.element.clone();
                         a.display.set_variable(None);
                         a.explicit_h = 0;
-                        a.no_implicit = false;
+                        a.no_implicit = crystal;
                         a.charge = 0;
                         a.isotope = 0;
                     }

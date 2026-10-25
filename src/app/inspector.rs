@@ -137,6 +137,7 @@ impl std::fmt::Display for ChemicalFormat {
 #[derive(Debug, Clone)]
 pub enum Action {
     Section(Section, bool),
+    ModelControls(bool),
     Figure(FigureFormat),
     /// Open or close the figure format menu.
     FigureMenu(bool),
@@ -160,6 +161,7 @@ pub struct PropertyKey {
 pub(super) struct State {
     expected_viewport: Option<iced::Size>,
     expanded: HashMap<Section, bool>,
+    model_controls: bool,
     figure: FigureFormat,
     figure_menu: bool,
     chemical: ChemicalFormat,
@@ -201,6 +203,12 @@ impl State {
             Action::Section(section, expanded) => {
                 self.expanded.insert(section, expanded);
             }
+            Action::ModelControls(open) => {
+                self.model_controls = open;
+                if open {
+                    self.expanded.insert(Section::Model3d, true);
+                }
+            }
             Action::Figure(format) => {
                 self.figure = format;
                 self.figure_menu = false;
@@ -227,6 +235,16 @@ impl State {
         }
     }
 }
+const GENERIC_PROPERTIES: &str =
+    "Generic structure · molecular properties are calculated after expansion.";
+
+/// This is the engine's specific deferred-analysis result, not a generic
+/// presence check: unrelated errors must retain their warning presentation.
+fn deferred_generic_properties(error: &str) -> Option<&'static str> {
+    (error.strip_prefix("Invalid drawing: ") == Some(reshiki::generic::NOTICE))
+        .then_some(GENERIC_PROPERTIES)
+}
+
 fn card<'a>(body: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
     container(body)
         .width(Length::Fill)
@@ -339,6 +357,16 @@ impl App {
 
     pub(super) fn inspector_action(&mut self, action: Action) -> Task<Message> {
         match action {
+            Action::ModelControls(open) => {
+                if open && !self.selected_visible_model() {
+                    return Task::none();
+                }
+                self.tab.inspector_ui.update(Action::ModelControls(open));
+                iced::widget::operation::snap_to(
+                    "inspector-content",
+                    iced::widget::operation::RelativeOffset { x: 0., y: 0. },
+                )
+            }
             Action::RingArc => {
                 let before = self.tab.doc.clone();
                 match reshiki::ring_arcs::toggle(&mut self.tab.doc, &self.tab.selected) {
@@ -572,7 +600,30 @@ impl App {
             .spacing(10)
             .into();
         }
+        if self.tab.inspector_ui.model_controls && self.selected_visible_model() {
+            let mut body = column![
+                command(
+                    "‹ All properties",
+                    Message::InspectorAction(Action::ModelControls(false)),
+                ),
+                text("3D model controls").size(14),
+            ]
+            .spacing(10);
+            if let Some(section) = self.model_section() {
+                body = body.push(section);
+            }
+            if let Some(section) = self.structure_section() {
+                body = body.push(section);
+            }
+            return body.into();
+        }
         self.ordinary_properties_panel()
+    }
+
+    fn selected_visible_model(&self) -> bool {
+        self.selected_model()
+            .and_then(|(_, index)| self.tab.doc.models.get(index?))
+            .is_some_and(|model| model.display != reshiki::models3d::Display::TwoD)
     }
 
     fn ordinary_properties_panel(&self) -> Element<'_, Message> {
@@ -592,6 +643,21 @@ impl App {
             .style(muted_text)
         ]
         .spacing(10);
+        if self
+            .selected_model()
+            .and_then(|(_, index)| self.tab.doc.models.get(index?))
+            .is_some_and(|model| model.display == reshiki::models3d::Display::ThreeD)
+        {
+            body = body.push(
+                super::workspace::accessible_command(
+                    "model-controls-open",
+                    "Open the selected 3D model's controls",
+                    "3D model controls…",
+                )
+                .width(Length::Fill)
+                .on_press(Message::InspectorAction(Action::ModelControls(true))),
+            );
+        }
         let color_issues = reshiki::canvas_theme::label_contrast_issues(&self.tab.doc);
         if !color_issues.is_empty() {
             body = body.push(text(format!(
@@ -696,11 +762,13 @@ impl App {
             .as_deref()
             .filter(|notice| *notice != reshiki::atom_labels::refresh::GENERIC_NOTICE)
         {
-            body = body.push(
+            body = body.push(if let Some(notice) = deferred_generic_properties(error) {
+                text(notice).size(12).style(muted_text)
+            } else {
                 text(error)
                     .size(12)
-                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61))),
-            );
+                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61)))
+            });
         }
         if !molecular_first {
             body = body.push(self.molecular_section());
@@ -791,11 +859,14 @@ impl App {
         // Ordinary molecules beside a crystal keep their chemistry analysis.
         if reshiki::models3d::crystal::touches(&self.tab.doc, &ids) {
             let mut body = column![
-                text(reshiki::models3d::crystal::ANALYSIS_NOTICE)
+                text(reshiki::models3d::crystal::analysis_notice(&self.tab.doc))
                     .size(11)
                     .style(muted_text)
             ]
             .spacing(8);
+            for note in reshiki::models3d::crystal::import_notes(&self.tab.doc, &ids) {
+                body = body.push(text(note).size(11).style(muted_text));
+            }
             if let Ok(composition) = reshiki::models3d::crystal::composition(&self.tab.doc, &ids) {
                 body = body.push(
                     text(format!(
@@ -861,6 +932,10 @@ impl App {
                 .style(muted_text)
         ]
         .spacing(8);
+        let selected: Vec<_> = ids.iter().copied().collect();
+        for note in reshiki::models3d::crystal::import_notes(&self.tab.doc, &selected) {
+            body = body.push(text(note).size(11).style(muted_text));
+        }
         if key.is_some()
             && self
                 .tab
@@ -912,11 +987,13 @@ impl App {
         } else if atoms == 0 {
             return body.push(text(if key.is_some() { "Select atoms or bonds to calculate their properties. Clear the selection to use the whole drawing." } else { "Draw or import a molecule to calculate its properties." }).size(12).style(muted_text)).into();
         } else if let Some(Err(error)) = self.property_result(&self.property_request_key()) {
-            body = body.push(
+            body = body.push(if let Some(notice) = deferred_generic_properties(error) {
+                text(notice).size(12).style(muted_text)
+            } else {
                 text(error)
                     .size(12)
-                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61))),
-            );
+                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61)))
+            });
         } else {
             body = body.push(
                 text(if key.is_some() {
@@ -1677,3 +1754,9 @@ impl App {
 mod continuity_tests;
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod feedback_tests;
+
+#[cfg(test)]
+mod feedback_visual_tests;
