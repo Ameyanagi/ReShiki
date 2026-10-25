@@ -1,0 +1,146 @@
+{
+  "baseline_source": "3d80590a41b9d9e8efd818d23395ac51bd264ca8",
+  "head_source": "0ecd81ee8c4d5d7d43569102d9120fb93b969eac",
+  "renderer_capture_commit": "324f0df53547e4e3c3f9895c90c936e5fdd90023",
+  "host": {
+    "cpu": "Apple M1",
+    "arch": "arm64",
+    "os": "macOS27.0.1 (26A434)",
+    "rust": "1.99.0"
+  },
+  "fixture": {
+    "url": "https://gist.githubusercontent.com/Ameyanagi/0f2d480dd9a4e8cb1843ecd12660f93f/raw/tiled16-v26.rsk",
+    "sha256": "71229e202a3a0ba5765af5ac4bd94f4396613237f421cb4c828925c589b553da",
+    "bytes": 5796846,
+    "atoms": 7728,
+    "bonds": 6864,
+    "abbreviations": 256,
+    "annotations": 2112,
+    "arrows": 16
+  },
+  "benchmark": {
+    "profile": "release; default optimization; CARGO_BUILD_JOBS=2",
+    "warmups": 3,
+    "samples": 30,
+    "renderer": "wgpu",
+    "client_size": [1600, 968],
+    "zoom": 1.04,
+    "inspector": "closed",
+    "keyboard_drawing": "on;Select",
+    "ordering": "saved baseline executable immediately followed by saved final head executable; compiler/GPU/native input holds coordinated with root/models/qa_review",
+    "scope": "Synchronous App::update; separate widget view/tree/layout/drawing-command/mouse-interaction time. Excludes OS delivery, frame presentation and returned Task execution. No event-to-paint claim.",
+    "executable_sha256": {
+      "reshiki-profile-before": "e6e40a8f45ab8bdcdf8a8c624dbd341ab37b55356dcfb962519bc8d6662df93f",
+      "reshiki-profile-after": "f3457d741f18087edb176fa9ec296fe1ae8b7881300996dd6d392663345b60b5"
+    },
+    "process_state_before": {
+      "utc": "2026-10-25T16:45:35.025330+00:00",
+      "processes": [
+        "  612  49.6 18-18:51:38 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer",
+        "27080   0.0       08:15 /Users/shiranui/dev/reshiki-qa-work/evidence/qa-572-573/apps/ReShiki Pointer Hover Before.app/Contents/MacOS/reshiki",
+        "45004   0.0    05:54:21 /Users/shiranui/dev/reshiki-qa-work/target/aarch64-apple-darwin/debug/reshiki",
+        "48732   0.0    05:48:55 /private/tmp/reshiki-qa-514-apps/ReShiki QA Fixed.app/Contents/MacOS/reshiki",
+        "60576   0.0    05:30:13 /tmp/reshiki-crystal-notes-capture/reshiki",
+        "61400   0.0    05:28:02 /Users/shiranui/dev/reshiki-qa-work/target/aarch64-apple-darwin/debug/reshiki",
+        "65957   0.0    05:19:48 /Users/shiranui/dev/reshiki-qa-work/evidence/qa-508/apps/ReShiki QA508 Fixed.app/Contents/MacOS/reshiki",
+        "70539   0.0    05:13:01 /Users/shiranui/dev/reshiki-qa-work/evidence/qa-515/ReShiki QA515 Fixed.app/Contents/MacOS/reshiki",
+        "73979   0.0    05:08:43 /Users/shiranui/dev/reshiki-qa-work/evidence/drawing-panel-state/ReShiki Drawing Panel QA.app/Contents/MacOS/reshiki",
+        "82228   0.0    04:53:03 /tmp/reshiki-crystal-substitution-capture/reshiki-base",
+        "85680   0.0    04:41:39 /Users/shiranui/dev/reshiki-qa-work/evidence/qa-browser-polish/Browser Polish QA.app/Contents/MacOS/BrowserPolishQA",
+        "94620   0.0    03:52:35 /private/tmp/reshiki-qa-model-controls-apps/ReShiki QA Models Base.app/Contents/MacOS/reshiki",
+        "94771   0.0    03:52:21 /private/tmp/reshiki-qa-model-controls-apps/ReShiki QA Models Fixed.app/Contents/MacOS/reshiki",
+        "96232   0.0    03:49:03 /Users/shiranui/dev/reshiki-qa-work/evidence/qa-499/ReShiki QA499 Fixed.app/Contents/MacOS/reshiki"
+      ],
+      "coordination": "root,models_export_plan,qa_review hold compiler/GPU/native input for paired saved executable run"
+    },
+    "process_state_after": {
+      "utc": "2026-10-25T16:45:42.841660+00:00",
+      "processes": [
+        "  612  44.9 18-18:51:45 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer",
+        "27080   0.0       08:22 /Users/shiranui/dev/reshiki-qa-work/evidence/qa-572-573/apps/ReShiki Pointer Hover Before.app/Contents/MacOS/reshiki",
+        "45004   0.0    05:54:28 /Users/shiranui/dev/reshiki-qa-work/target/aarch64-apple-darwin/debug/reshiki",
+        "48732   0.0    05:49:02 /private/tmp/reshiki-qa-514-apps/ReShiki QA Fixed.app/Contents/MacOS/reshiki",
+        "60576   0.0    05:30:20 /tmp/reshiki-crystal-notes-capture/reshiki",
+        "61400   0.0    05:28:09 /Users/shiranui/dev/reshiki-qa-work/target/aarch64-apple-darwin/debug/reshiki",
+        "65957   0.0    05:19:55 /Users/shiranui/dev/reshiki-qa-work/evidence/qa-508/apps/ReShiki QA508 Fixed.app/Contents/MacOS/reshiki",
+        "70539   0.0    05:13:08 /Users/shiranui/dev/reshiki-qa-work/evidence/qa-515/ReShiki QA515 Fixed.app/Contents/MacOS/reshiki",
+        "73979   0.0    05:08:50 /Users/shiranui/dev/reshiki-qa-work/evidence/drawing-panel-state/ReShiki Drawing Panel QA.app/Contents/MacOS/reshiki",
+        "82228   0.0    04:53:10 /tmp/reshiki-crystal-substitution-capture/reshiki-base",
+        "85680   0.0    04:41:46 /Users/shiranui/dev/reshiki-qa-work/evidence/qa-browser-polish/Browser Polish QA.app/Contents/MacOS/BrowserPolishQA",
+        "94620   0.0    03:52:42 /private/tmp/reshiki-qa-model-controls-apps/ReShiki QA Models Base.app/Contents/MacOS/reshiki",
+        "94771   0.0    03:52:28 /private/tmp/reshiki-qa-model-controls-apps/ReShiki QA Models Fixed.app/Contents/MacOS/reshiki",
+        "96232   0.0    03:49:10 /Users/shiranui/dev/reshiki-qa-work/evidence/qa-499/ReShiki QA499 Fixed.app/Contents/MacOS/reshiki"
+      ],
+      "executables": {
+        "reshiki-profile-before": "e6e40a8f45ab8bdcdf8a8c624dbd341ab37b55356dcfb962519bc8d6662df93f",
+        "reshiki-profile-after": "f3457d741f18087edb176fa9ec296fe1ae8b7881300996dd6d392663345b60b5"
+      }
+    }
+  },
+  "before": {
+    "gallery_16x_atom_label_hit": {
+      "median_ms": 0.2722,
+      "p95_ms": 0.3925
+    },
+    "gallery_16x_nearest_atom": {
+      "median_ms": 11.0962,
+      "p95_ms": 11.2651
+    },
+    "gallery_16x_nearest_bond": {
+      "median_ms": 34.8236,
+      "p95_ms": 36.759
+    },
+    "gallery_16x_hover_complete_app_update": {
+      "median_ms": 45.9016,
+      "p95_ms": 46.4766
+    },
+    "gallery_16x_view_layout_draw_interaction": {
+      "median_ms": 11.9075,
+      "p95_ms": 12.0403
+    },
+    "gallery_16x_hover_update_through_draw": {
+      "median_ms": 58.2681,
+      "p95_ms": 59.0997
+    }
+  },
+  "after": {
+    "gallery_16x_atom_label_hit": {
+      "median_ms": 0.2705,
+      "p95_ms": 0.3987
+    },
+    "gallery_16x_nearest_atom": {
+      "median_ms": 0.1283,
+      "p95_ms": 0.2746
+    },
+    "gallery_16x_nearest_bond": {
+      "median_ms": 0.3823,
+      "p95_ms": 0.4073
+    },
+    "gallery_16x_hover_complete_app_update": {
+      "median_ms": 0.7738,
+      "p95_ms": 0.9933
+    },
+    "gallery_16x_view_layout_draw_interaction": {
+      "median_ms": 11.6901,
+      "p95_ms": 11.8148
+    },
+    "gallery_16x_hover_update_through_draw": {
+      "median_ms": 12.5917,
+      "p95_ms": 13.1972
+    }
+  },
+  "measured_target_trace": [
+    "target,Point { x: -9437.57, y: -6061.571 },Atom(3)",
+    "target,Point { x: -9364.824, y: -6061.571 },Atom(5)",
+    "target,Point { x: -9419.384, y: -6072.071 },Bond(3, 4)",
+    "target,Point { x: -8987.598, y: -5847.925 },Atom(28)",
+    "target,Point { x: -9137.57, y: -5961.571 },Blank(Point { x: -9137.57, y: -5961.571 })",
+    "target,Point { x: 12069.508, y: 10939.001 },Blank(Point { x: 12069.508, y: 10939.001 })"
+  ],
+  "renderer_parity": {
+    "positions": 151,
+    "same_target_trace": true,
+    "byte_identical_png_frames": [0, 38, 75, 113, 150]
+  },
+  "native_comparison": "Pending explicit method authorization and execution; not inferred from the synchronous renderer trace."
+}
