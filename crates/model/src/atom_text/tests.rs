@@ -1,6 +1,214 @@
 use super::*;
 use crate::document::Point;
 
+fn alpha_glucose() -> Result<Document, String> {
+    let mut doc = crate::haworth::sugar_document(
+        crate::haworth::Sugar::Glucose,
+        crate::haworth::Anomer::Alpha,
+        42.,
+    )?;
+    let ids = doc.atoms.iter().map(|atom| atom.id).collect::<Vec<_>>();
+    doc.expand_abbreviations(&ids);
+    Ok(doc)
+}
+
+fn restore_reference_windings(template: &Document, product: &Document) -> Document {
+    let mut expected = product.clone();
+    for source in template.atoms.iter().filter(|atom| atom.stereo.is_some()) {
+        expected.atom_mut(source.id).unwrap().stereo = source.stereo.clone();
+    }
+    expected
+}
+
+fn stereo_layers(state: &crate::chemistry::stereo::perception::State) -> anyhow::Result<String> {
+    use crate::chemistry::inchi::kernel;
+    let input = kernel::Molecule::prepare(state, None)?;
+    // The pure InChI kernel owns a deeper recursion stack than a test thread.
+    let generated = std::thread::Builder::new()
+        .name("label-stereo-inchi-test".into())
+        .stack_size(32 * 1024 * 1024)
+        .spawn(move || kernel::generate(&input))?
+        .join()
+        .map_err(|_| anyhow::anyhow!("InChI test worker panicked"))?
+        .map_err(anyhow::Error::msg)?;
+    anyhow::ensure!(!generated.inchi.is_empty(), "{}", generated.message);
+    Ok(generated
+        .inchi
+        .split('/')
+        .filter(|layer| matches!(layer.as_bytes().first(), Some(b't' | b'm' | b's')))
+        .collect::<Vec<_>>()
+        .join("/"))
+}
+
+fn assert_glucose_configuration(product: &Document, expected: &Document) -> anyhow::Result<()> {
+    use crate::chemistry::{document, smiles};
+    assert_eq!(
+        product
+            .atoms
+            .iter()
+            .filter(|atom| atom.stereo.is_some())
+            .count(),
+        5
+    );
+    let actual = document::prepare(product)?;
+    let expected = document::prepare(expected)?;
+    let expected_layers = stereo_layers(&expected.state)?;
+    let actual_layers = stereo_layers(&actual.state)?;
+    assert!(!expected_layers.contains('?'), "{expected_layers}");
+    assert_eq!(actual_layers, expected_layers);
+    let text = smiles::write::write(&actual.state, Default::default())?.text;
+    assert_eq!(
+        text.matches('@').count() - text.matches("@@").count(),
+        5,
+        "{text}"
+    );
+    let imported = smiles::prepare(&text)?;
+    assert_eq!(stereo_layers(&imported.state)?, expected_layers, "{text}");
+    let reopened = Document::from_json(&product.file_json().map_err(anyhow::Error::msg)?)
+        .map_err(anyhow::Error::msg)?;
+    let reopened = document::prepare(&reopened)?;
+    assert_eq!(stereo_layers(&reopened.state)?, expected_layers);
+    Ok(())
+}
+
+#[test]
+fn terminal_glucose_protection_keeps_all_five_physical_configurations() -> anyhow::Result<()> {
+    let template = alpha_glucose().map_err(anyhow::Error::msg)?;
+    // Ring C1–C4 retain their OH oxygen IDs 7–10 when a group replaces them.
+    for oxygen in 7..=10 {
+        for label in ["OAc", "OBn", "MeO", "F", "SH"] {
+            let product =
+                apply(&template, oxygen, label, Mode::Auto).map_err(anyhow::Error::msg)?;
+            let expected = restore_reference_windings(&template, &product);
+            assert_glucose_configuration(&product, &expected)?;
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn full_glucose_protection_and_retyping_keep_all_configurations() -> anyhow::Result<()> {
+    let template = alpha_glucose().map_err(anyhow::Error::msg)?;
+    let mut product = template.clone();
+    // The release example protects C6, C3, C2, C4, then the anomeric C1 oxygen.
+    for (oxygen, label) in [(12, "OBn"), (9, "OBn"), (8, "OBn"), (10, "OBn"), (7, "MeO")] {
+        product = apply(&product, oxygen, label, Mode::Auto).map_err(anyhow::Error::msg)?;
+    }
+    assert_glucose_configuration(&product, &restore_reference_windings(&template, &product))?;
+    let acetyl = apply(&template, 10, "OAc", Mode::Auto).map_err(anyhow::Error::msg)?;
+    let benzyl = apply(&acetyl, 10, "OBn", Mode::Auto).map_err(anyhow::Error::msg)?;
+    assert_glucose_configuration(&benzyl, &restore_reference_windings(&template, &benzyl))?;
+    Ok(())
+}
+
+fn chiral_alcohol() -> (Document, u64, u64) {
+    let mut doc = Document::default();
+    let center = doc.add_atom("C", Point::default());
+    let fluorine = doc.add_atom("F", Point::new(-42., 0.));
+    let chlorine = doc.add_atom("Cl", Point::new(21., -36.));
+    let oxygen = doc.add_atom("O", Point::new(21., 36.));
+    for neighbor in [fluorine, chlorine, oxygen] {
+        doc.add_bond(center, neighbor, 1, "plain");
+    }
+    doc.atom_mut(center).unwrap().stereo = Some(crate::document::AtomStereo {
+        winding: "cw".into(),
+        neighbors: vec![fluorine, chlorine, oxygen],
+    });
+    (doc, center, oxygen)
+}
+
+#[test]
+fn label_edits_clear_nonstereogenic_centers_and_computed_priorities() -> Result<(), String> {
+    let (mut source, center, oxygen) = chiral_alcohol();
+    source.atom_mut(center).unwrap().cip_label = Some("old priority".into());
+    let retained = apply(&source, oxygen, "Br", Mode::Auto)?;
+    assert_eq!(
+        retained.atom(center).unwrap().stereo,
+        source.atom(center).unwrap().stereo
+    );
+    assert_eq!(retained.atom(center).unwrap().cip_label, None);
+    let duplicate = apply(&source, oxygen, "F", Mode::Auto)?;
+    assert!(
+        duplicate.atom(center).unwrap().stereo.is_none(),
+        "Two identical fluorine ligands remove the center"
+    );
+    let edited_center = apply(&source, center, "N", Mode::Auto)?;
+    assert!(edited_center.atom(center).unwrap().stereo.is_none());
+    let mut changed_order = source.clone();
+    changed_order.add_bond(center, oxygen, 2, "plain");
+    assert!(changed_order.atom(center).unwrap().stereo.is_none());
+    let mut removed = source.clone();
+    removed.delete(&[oxygen]);
+    assert!(removed.atom(center).unwrap().stereo.is_none());
+    Ok(())
+}
+
+#[test]
+fn a_remote_ligand_edit_clears_a_center_that_loses_its_distinct_branches() -> Result<(), String> {
+    let mut source = Document::default();
+    let center = source.add_atom("C", Point::default());
+    let left = source.add_atom("C", Point::new(-42., 0.));
+    let right = source.add_atom("C", Point::new(42., 0.));
+    let fluorine = source.add_atom("F", Point::new(0., -42.));
+    let oxygen = source.add_atom("O", Point::new(-84., 0.));
+    let other_f = source.add_atom("F", Point::new(84., 0.));
+    for (a, b) in [
+        (center, left),
+        (center, right),
+        (center, fluorine),
+        (left, oxygen),
+        (right, other_f),
+    ] {
+        source.add_bond(a, b, 1, "plain");
+    }
+    source.atom_mut(center).unwrap().stereo = Some(crate::document::AtomStereo {
+        winding: "cw".into(),
+        neighbors: vec![left, right, fluorine],
+    });
+    let product = apply(&source, oxygen, "F", Mode::Auto)?;
+    assert!(
+        product.atom(center).unwrap().stereo.is_none(),
+        "CH2OH becomes a second CH2F branch"
+    );
+    Ok(())
+}
+
+#[test]
+fn stereo_validation_is_scoped_and_failure_keeps_the_original_configuration() -> Result<(), String>
+{
+    let (mut source, center, oxygen) = chiral_alcohol();
+    let bad = source.add_atom("C", Point::new(400., 0.));
+    for index in 0..5 {
+        let fluorine = source.add_atom("F", Point::new(440., index as f32 * 20.));
+        source.add_bond(bad, fluorine, 1, "plain");
+    }
+    let generic = source.add_atom("C", Point::new(500., 0.));
+    source = apply(&source, generic, "Cl,Br", Mode::Auto)?;
+    let product = apply(&source, oxygen, "OAc", Mode::Auto)?;
+    assert_eq!(
+        product.atom(center).unwrap().stereo,
+        source.atom(center).unwrap().stereo
+    );
+    assert_eq!(product.generic, source.generic);
+    assert_eq!(product.atom(bad), source.atom(bad));
+
+    // Make the invalid fragment part of the affected molecule. Failure must
+    // reject this edit, rather than accepting it with silently missing stereo.
+    let mut invalid = source.clone();
+    invalid
+        .bonds
+        .push(crate::document::Bond::plain(2, bad, 1, "plain"));
+    let original = invalid.clone();
+    let failure = apply(&invalid, oxygen, "OBn", Mode::Auto).unwrap_err();
+    assert!(
+        failure.starts_with("Could not verify stereochemistry after this label edit:"),
+        "{failure}"
+    );
+    assert_eq!(invalid, original);
+    assert!(invalid.atom(center).unwrap().stereo.is_some());
+    Ok(())
+}
+
 #[test]
 fn formatted_labels_are_trimmed_with_their_runs() -> Result<(), String> {
     let mut source = Document::default();

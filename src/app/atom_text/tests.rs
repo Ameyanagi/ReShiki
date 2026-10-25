@@ -7,6 +7,75 @@ use iced::keyboard::{
 use iced::widget::text_editor::{Action as Input, Edit as TextEdit, Motion};
 use reshiki::document::Point;
 
+#[test]
+fn repeated_glucose_protection_retains_configuration_and_one_step_undo() -> anyhow::Result<()> {
+    let mut template = reshiki::haworth::sugar_document(
+        reshiki::haworth::Sugar::Glucose,
+        reshiki::haworth::Anomer::Alpha,
+        42.,
+    )
+    .map_err(anyhow::Error::msg)?;
+    let ids = template
+        .atoms
+        .iter()
+        .map(|atom| atom.id)
+        .collect::<Vec<_>>();
+    template.expand_abbreviations(&ids);
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = template.clone();
+    let _ = app.update(Message::Tool(Tool::Text));
+    let _ = app.update(Message::AtomText(Action::Begin(Some(12))));
+    let _ = app.update(Message::AtomText(Action::Input("OBn".into())));
+    let _ = app.update(Message::AtomText(Action::Apply));
+    for oxygen in [9, 8, 10] {
+        let before = app.tab.doc.clone();
+        let _ = app.update(Message::AtomText(Action::Repeat(oxygen)));
+        assert!(app.tab.atom_text.is_none());
+        assert_eq!(app.tab.doc.abbreviation(oxygen).unwrap().label, "OBn");
+        let after = app.tab.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, after);
+        for atom in template.atoms.iter().filter(|atom| atom.stereo.is_some()) {
+            assert_eq!(app.tab.doc.atom(atom.id).unwrap().stereo, atom.stereo);
+        }
+    }
+    let _ = app.update(Message::AtomText(Action::Begin(Some(7))));
+    let _ = app.update(Message::AtomText(Action::Input("MeO".into())));
+    let _ = app.update(Message::AtomText(Action::Apply));
+    assert!(app.tab.atom_text.is_none());
+    let mut expected = app.tab.doc.clone();
+    for atom in template.atoms.iter().filter(|atom| atom.stereo.is_some()) {
+        expected.atom_mut(atom.id).unwrap().stereo = atom.stereo.clone();
+    }
+    let inchi = |doc: &reshiki::document::Document| -> anyhow::Result<String> {
+        use reshiki::chemistry::{document, inchi::kernel};
+        let prepared = document::prepare(doc)?;
+        let input = kernel::Molecule::prepare(&prepared.state, None)?;
+        let generated = std::thread::Builder::new()
+            .stack_size(32 * 1024 * 1024)
+            .spawn(move || kernel::generate(&input))?
+            .join()
+            .map_err(|_| anyhow::anyhow!("InChI test worker panicked"))?
+            .map_err(anyhow::Error::msg)?;
+        anyhow::ensure!(!generated.inchi.is_empty(), "{}", generated.message);
+        Ok(generated.inchi)
+    };
+    assert_eq!(inchi(&app.tab.doc)?, inchi(&expected)?);
+    assert_eq!(
+        app.tab
+            .doc
+            .atoms
+            .iter()
+            .filter(|atom| atom.stereo.is_some())
+            .count(),
+        5
+    );
+    Ok(())
+}
+
 fn rich_label(text: &str) -> (App, u64) {
     let (mut app, _) = App::new();
     app.tab.busy = false;
