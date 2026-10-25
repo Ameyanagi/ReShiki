@@ -312,6 +312,8 @@ impl App {
             } else if self.tab.engine_job.is_some() {
                 self.cancel_engine_job();
                 Task::none()
+            } else if self.cancel_model_generation() {
+                Task::none()
             } else {
                 self.update(Message::Tool(Tool::Select))
             });

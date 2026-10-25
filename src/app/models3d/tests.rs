@@ -57,6 +57,134 @@ fn displays(doc: &Document) -> Vec<Display> {
     doc.models.iter().map(|m| m.display).collect()
 }
 
+fn assert_model_visible(app: &App, atoms: &[u64]) {
+    let (lo, hi) = reshiki::scene::selection_bounds(&app.tab.doc, atoms).unwrap();
+    let paper = app.guides.paper(iced::Rectangle::with_size(app.viewport));
+    let visible = iced::Rectangle::with_size(paper.size());
+    for point in [lo, hi] {
+        assert!(
+            visible.contains(app.tab.camera.screen(point, paper)),
+            "{point:?}"
+        );
+    }
+}
+
+#[test]
+fn showing_a_stored_model_reveals_clipped_bounds_and_preserves_fitting_camera() {
+    for rulers in [false, true] {
+        let (mut app, atoms) = with_model(Display::ThreeD);
+        show(&mut app, Display::TwoD);
+        app.guides.rulers = rulers;
+        app.viewport = iced::Size::new(900., 600.);
+        app.tab.camera.zoom = 2.5;
+        app.tab.camera.center = Point::new(-200., 0.);
+        let before = app.tab.doc.clone();
+        let zoom = app.tab.camera.zoom;
+        show(&mut app, Display::Both);
+        assert_model_visible(&app, &atoms);
+        assert!(app.tab.camera.zoom <= zoom);
+        assert!(!app.tab.fit_to_view);
+        let both = app.tab.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, both);
+
+        // When the entire result fits, a new display switch causes no pan or
+        // zoom. A large paper also checks the pure-pan case at high zoom.
+        show(&mut app, Display::TwoD);
+        let mut preview = app.tab.doc.clone();
+        models3d::set_display(&mut preview, 0, Display::Both);
+        let (lo, hi) = reshiki::scene::selection_bounds(&preview, &atoms).unwrap();
+        app.viewport = iced::Size::new(2000., 1400.);
+        app.tab.camera.zoom = 1.;
+        app.tab.camera.center = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+        let camera = app.tab.camera;
+        show(&mut app, Display::Both);
+        assert_eq!(app.tab.camera.center, camera.center);
+        assert_eq!(app.tab.camera.zoom, camera.zoom);
+        show(&mut app, Display::TwoD);
+        app.tab.camera.zoom = 2.5;
+        app.tab.camera.center = Point::new(-1000., 0.);
+        show(&mut app, Display::ThreeD);
+        assert_model_visible(&app, &atoms);
+        assert_eq!(app.tab.camera.zoom, 2.5, "Pan without unnecessary zoom-out");
+    }
+}
+
+#[test]
+fn generated_model_reveals_its_target_after_selection_changed() {
+    let (mut app, atoms, water) = drawing();
+    app.viewport = iced::Size::new(900., 600.);
+    app.tab.camera.zoom = 2.5;
+    show(&mut app, Display::Both);
+    let (key, result) = generated(&app);
+    app.tab.selected = vec![water];
+    app.tab.camera.center = Point::new(5000., 4000.);
+    let _ = app.update(Message::Models3d(Action::Generated(key, Ok(result))));
+    assert_eq!(app.tab.selected, [water]);
+    assert_model_visible(&app, &atoms);
+    assert!(app.tab.camera.zoom <= 2.5);
+}
+
+#[test]
+fn delayed_generation_feedback_tracks_its_job_and_escape_really_cancels() {
+    let (mut app, atoms, water) = drawing();
+    let before = app.tab.doc.clone();
+    show(&mut app, Display::ThreeD);
+    let (key, result) = generated(&app);
+    let start = app.tab.model_job.as_ref().unwrap().started;
+    app.tab.selected = vec![water];
+    let generation = app.model_generation().unwrap();
+    assert_eq!(generation.atoms, atoms);
+    assert!(
+        generation
+            .elapsed(start + std::time::Duration::from_millis(999))
+            .is_none()
+    );
+    assert_eq!(
+        generation
+            .elapsed(start + std::time::Duration::from_secs(4))
+            .unwrap()
+            .as_secs(),
+        4
+    );
+
+    // Palette Escape closes its own modal first; the following Escape owns the
+    // generation, even when another molecule is now selected.
+    let _ = app.update(Message::Commands(
+        super::super::command_palette::Action::Open,
+    ));
+    let _ = app.update(Message::Escape);
+    assert!(!app.commands.open && app.tab.model_job.is_some());
+    let _ = app.update(Message::Escape);
+    assert!(app.tab.model_job.is_none());
+    assert!(app.model_generation().is_none());
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(frames(&app), 0);
+    assert_eq!(app.status, "3D model cancelled · Drawing unchanged");
+    let _ = app.update(Message::Models3d(Action::Generated(key, Ok(result))));
+    assert_eq!(
+        app.tab.doc, before,
+        "Late results cannot apply after cancellation"
+    );
+    assert_eq!(frames(&app), 0);
+}
+
+#[test]
+fn stale_generation_has_no_canvas_feedback_and_escape_preserves_the_edit() {
+    let (mut app, _, _) = drawing();
+    show(&mut app, Display::Both);
+    let before = app.tab.doc.clone();
+    app.tab.doc.atoms[0].position.x += 10.;
+    app.changed(before);
+    let edited = app.tab.doc.clone();
+    assert!(app.model_generation().is_none());
+    let _ = app.update(Message::Escape);
+    assert_eq!(app.tab.doc, edited);
+    assert!(app.tab.model_job.is_none());
+}
+
 #[test]
 fn dragging_the_visible_model_outline_is_one_undo_step() {
     let (mut app, _) = App::new();

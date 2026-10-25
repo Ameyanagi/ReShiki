@@ -24,6 +24,8 @@ Under review: @Ameyanagi — Large peptide imports avoid repeated ring searches 
 [PR #559](https://github.com/Ameyanagi/ReShiki/pull/559) · [QA report](changes/qa-508-import-performance.md).
 Under review: @Ameyanagi — See the label the Text tool will repeat, keep its chemical meaning, and read clear feedback for generic and refreshed drawings.
 [PR #560](https://github.com/Ameyanagi/ReShiki/pull/560) · [QA report](changes/qa-label-feedback.md).
+Under review: @Ameyanagi — Reach 3D controls in one click, bring clipped models into view, recover directly from blocked scale commands, and cancel long native model generation with Escape.
+[PR #561](https://github.com/Ameyanagi/ReShiki/pull/561) · [QA report](changes/qa-model-controls.md).
 
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).
