@@ -6,6 +6,7 @@ fn plain_bond_matches_the_fresh_bond_literals() {
     for (order, display) in [(1, "plain"), (DATIVE, "plain")] {
         // The three former literals have these same sixteen fields and values.
         let expected = Bond {
+            distance_derived: false,
             highlight: None,
             ring_arc: false,
             projection: false,

@@ -116,6 +116,135 @@ fn a_ball_covered_from_the_front_is_hidden() {
 }
 
 #[test]
+fn a_front_hydrogens_cap_fills_the_hole_in_its_carbon() {
+    let balls = [ball([0., 0., 0.], 1.7), ball([0., 0., 1.09], 1.1)];
+    let found = contacts(&balls, flat);
+    assert!(inside(region(&found.seen[1]), Point::default()));
+    assert!(!inside(region(&found.seen[0]), Point::default()));
+    // The seam is a full circle, and the hydrogen shows its inside rather
+    // than the thin belt outside it.
+    let Meeting::Circle(meeting) = meeting(balls[1], balls[0]) else {
+        panic!("the C-H spheres intersect");
+    };
+    for angle in sample(0., TAU, 16.) {
+        let p = Point::new(
+            0.9 * meeting.ring.r * angle.cos(),
+            0.9 * meeting.ring.r * angle.sin(),
+        );
+        assert!(inside(region(&found.seen[1]), p), "missing H cap at {p:?}");
+        assert!(!inside(region(&found.seen[0]), p), "C covers H at {p:?}");
+    }
+    assert!(matches!(found.seen[1], Some(Seen::Shown { ref rim, .. }) if rim.is_empty()));
+    assert_eq!(found.seams.len(), 1);
+}
+
+#[test]
+fn a_meeting_circle_on_the_rim_keeps_the_front_hemisphere() {
+    // The 3-4-5 geometry puts the meeting plane exactly through the small
+    // ball's centre (h=0). Its front is outside the big ball, its back inside.
+    let balls = [ball([0., 0., 0.], 3.), ball([0., 0., -4.], 5.)];
+    let found = contacts(&balls, flat);
+    assert!(inside(region(&found.seen[0]), Point::default()));
+    for angle in sample(0., TAU, 16.) {
+        assert!(inside(
+            region(&found.seen[0]),
+            Point::new(2.9 * angle.cos(), 2.9 * angle.sin())
+        ));
+    }
+    assert!(!inside(region(&found.seen[1]), Point::default()));
+}
+
+/// A sight ray's first intersection with a sphere, independent of the
+/// meeting-circle clipping code. `p` lies in the z=0 image plane.
+fn front_surface(a: Ball, p: Point, eye: Option<f32>) -> Option<V> {
+    let x = p.x;
+    let y = -p.y;
+    if let Some(z) = eye {
+        let origin = [0., 0., z];
+        let direction = unit([x, y, -z]);
+        let offset = sub(origin, a.p);
+        let b = dot(offset, direction);
+        let discriminant = b * b - dot(offset, offset) + a.r * a.r;
+        (discriminant > 0.).then(|| add(origin, mul(direction, -b - discriminant.sqrt())))
+    } else {
+        let discriminant = a.r * a.r - (x - a.p[0]).powi(2) - (y - a.p[1]).powi(2);
+        (discriminant > 0.).then(|| [x, y, a.p[2] + discriminant.sqrt()])
+    }
+}
+
+fn assert_visible_surfaces(balls: &[Ball], eye: Option<f32>) {
+    let project = |q: V| {
+        let scale = eye.map_or(1., |z| z / (z - q[2]));
+        Point::new(q[0] * scale, -q[1] * scale)
+    };
+    let found = super::contacts(balls, eye, project);
+    let mut visible = 0;
+    for (i, &a) in balls.iter().enumerate() {
+        let facing = Facing::new(a, eye);
+        for gx in -48..=48 {
+            for gy in -48..=48 {
+                let p = Point::new(gx as f32 * 0.05, gy as f32 * 0.05);
+                let Some(surface) = front_surface(a, p, eye) else {
+                    continue;
+                };
+                // Polygonal circles approximate their analytic boundaries;
+                // compare interior samples, clear of rims and seams.
+                if dot(sub(surface, a.p), facing.v) - facing.s < 0.15 {
+                    continue;
+                }
+                let clearance = balls
+                    .iter()
+                    .enumerate()
+                    .filter(|(j, _)| *j != i)
+                    .map(|(_, b)| len(sub(surface, b.p)) - b.r)
+                    .fold(f32::INFINITY, f32::min);
+                if clearance.abs() < 0.02 {
+                    continue;
+                }
+                let expected = clearance > 0.;
+                let shown = match &found.seen[i] {
+                    None => true,
+                    Some(Seen::Hidden) => false,
+                    Some(Seen::Shown { region, .. }) => inside(region, p),
+                };
+                assert_eq!(
+                    shown, expected,
+                    "ball {i}, image {p:?}, surface {surface:?}, eye {eye:?}, clearance {clearance}, balls {balls:?}"
+                );
+                visible += usize::from(shown);
+            }
+        }
+    }
+    assert!(visible > 1_000, "check a substantial visible region");
+}
+
+#[test]
+fn near_axis_hydrogen_caps_keep_every_visible_surface_in_both_projections() {
+    for eye in [None, Some(8.)] {
+        for degrees in [0_f32, 5., 11., 11.7, 11.9, 15., 30., 90., 180.] {
+            for azimuth in [0_f32, 45., 140.] {
+                let angle = degrees.to_radians();
+                let phi = azimuth.to_radians();
+                let centre = [-0.4, 0.3, 0.1];
+                let h = add(
+                    centre,
+                    [
+                        1.09 * angle.sin() * phi.cos(),
+                        1.09 * angle.sin() * phi.sin(),
+                        1.09 * angle.cos(),
+                    ],
+                );
+                let pair = [ball(centre, 1.7), ball(h, 1.1)];
+                assert_visible_surfaces(&pair, eye);
+                // A third intersecting sphere also cuts the cap, so the
+                // complement's hole must compose correctly with other cuts.
+                assert_visible_surfaces(&[pair[0], pair[1], ball([0.6, 0.6, 1.4], 0.85)], eye);
+            }
+        }
+    }
+}
+
+#[test]
 fn a_ball_touching_nothing_has_no_contact() {
     let found = contacts(&[ball([0., 0., 0.], 1.7), ball([4., 0., 0.], 1.2)], flat);
     assert_eq!(found.seen, [None, None]);

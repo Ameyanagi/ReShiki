@@ -69,8 +69,8 @@ pub(super) struct State {
 }
 
 impl State {
-    pub(super) fn results(&self) -> Vec<usize> {
-        search::rank(entries(), &self.query)
+    pub(super) fn results(&self, contextual: bool) -> Vec<usize> {
+        search::rank(entries(), &self.query, contextual)
     }
     /// The selected row's position among `results`.
     pub(super) fn position(&self, results: &[usize]) -> Option<usize> {
@@ -83,12 +83,18 @@ impl State {
         self.position(results).and_then(|p| results.get(p).copied())
     }
     #[cfg(test)]
-    pub(super) fn selected(&self) -> Option<&'static Entry> {
-        self.current(&self.results()).and_then(|i| entries().get(i))
+    pub(super) fn selected(&self, contextual: bool) -> Option<&'static Entry> {
+        self.current(&self.results(contextual))
+            .and_then(|i| entries().get(i))
     }
 }
 
 impl App {
+    /// Help blocks drawing input, but its ranking uses the tab's stored mode.
+    fn help_contextual(&self) -> bool {
+        self.tab.keyboard_drawing.enabled() && self.tool.selects()
+    }
+
     pub(super) fn toggle_help(&mut self) -> Task<Message> {
         self.help_open = !self.help_open;
         if !self.help_open {
@@ -120,7 +126,7 @@ impl App {
                 Task::none()
             }
             Action::Move(step) => {
-                let results = self.help.results();
+                let results = self.help.results(self.help_contextual());
                 let Some(position) = self.help.position(&results) else {
                     return Task::none();
                 };
@@ -144,7 +150,7 @@ impl App {
             // and closes, so its inert focus and text selection survive.
             return stack![base].into();
         }
-        let results = self.help.results();
+        let results = self.help.results(self.help_contextual());
         let current = self.help.current(&results);
         let selected = current.and_then(|i| entries().get(i));
         let name = match selected {
@@ -161,7 +167,7 @@ impl App {
         let search = reshiki::accessibility::text_input(
             SEARCH,
             name,
-            "Search by action, key or description (e.g. wedge, ⇧R, ring)",
+            "Search by action, key or description (e.g. wedge, shift r, ring)",
             &self.help.query,
         )
         .style(crate::appearance::input_style)
@@ -172,7 +178,12 @@ impl App {
         let mut list = column![].spacing(2);
         for &index in &results {
             if let Some(entry) = entries().get(index) {
-                list = list.push(result_row(index, entry, Some(index) == current));
+                list = list.push(result_row(
+                    index,
+                    entry,
+                    Some(index) == current,
+                    self.help_contextual(),
+                ));
             }
         }
         if results.is_empty() {
@@ -324,11 +335,21 @@ pub(super) fn chord(keys: &str, size: u32) -> Element<'static, Message> {
         .into()
 }
 
-fn result_row(index: usize, entry: &'static Entry, selected: bool) -> Element<'static, Message> {
+fn result_row(
+    index: usize,
+    entry: &'static Entry,
+    selected: bool,
+    contextual: bool,
+) -> Element<'static, Message> {
+    let name = if contextual && !entry.classic_keys.is_empty() {
+        format!("{} · {}: F8 off", entry.name, entry.classic_keys.join("/"))
+    } else {
+        entry.name.into()
+    };
     list_row(
         format!("help-row-{index}"),
         &entry.keys,
-        entry.name.into(),
+        name,
         entry.description.into(),
         entry.scope.label(),
         selected,
@@ -440,13 +461,13 @@ fn preview(entry: Option<&'static Entry>) -> Element<'static, Message> {
                         Example::Bond(key) => ("highlighted bond", key),
                     };
                     column![
-                        drawing("Before", before),
+                        drawing("Example: before", before),
                         text(format!(
                             "Point at the {target} (or move the keyboard hotspot there) and press {key}"
                         ))
                         .size(11)
                         .style(muted_text),
-                        drawing("After", after),
+                        drawing("Example: after", after),
                     ]
                     .spacing(6)
                     .into()

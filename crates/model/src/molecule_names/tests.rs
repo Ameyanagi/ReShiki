@@ -25,6 +25,30 @@ fn show_ethanol(doc: &mut Document) -> u64 {
 }
 
 #[test]
+fn preview_caption_layout_does_not_check_chemical_identity_or_change_associations() {
+    let mut doc = ethanol();
+    let caption = show_ethanol(&mut doc);
+    let ids = atoms(&doc);
+    let names = doc.molecule_names.clone();
+    let before = doc.annotations.clone();
+    for atom in &mut doc.atoms {
+        atom.position = atom.position.offset(30., 60.);
+    }
+    IDENTITY_ENTRIES.with(|entries| entries.set(0));
+    preview_layout(&mut doc, &ids[..1]);
+    assert_eq!(
+        doc.annotations, before,
+        "A partial molecule cannot move its caption"
+    );
+    preview_layout(&mut doc, &ids);
+    IDENTITY_ENTRIES.with(|entries| assert_eq!(entries.get(), 0));
+    assert_eq!(doc.molecule_names, names);
+    let actual = doc.annotations.iter().find(|a| a.id == caption).unwrap();
+    let expected = before.iter().find(|a| a.id == caption).unwrap();
+    assert!(actual.position.distance(expected.position.offset(30., 60.)) < 1e-3);
+}
+
+#[test]
 fn caption_is_centered_below_visual_ink_and_keeps_names_as_plain_text() {
     let mut doc = ethanol();
     let original_atoms = doc.atoms.clone();

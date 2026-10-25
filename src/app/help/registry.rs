@@ -40,8 +40,8 @@ impl Scope {
 pub(crate) enum Example {
     /// The key at the end atom of butane.
     Atom(&'static str),
-    /// The key at the middle bond of butane, or of but-2-ene for keys that
-    /// act on a double bond.
+    /// Ring-fusion keys act on a benzene bond. Other keys use the middle
+    /// bond of butane, or of but-2-ene when they act on a double bond.
     Bond(&'static str),
 }
 
@@ -54,6 +54,15 @@ pub(crate) struct Entry {
     pub scope: Scope,
     pub synonyms: &'static [&'static str],
     pub example: Option<Example>,
+    /// Physical keys in this row that need the classic empty-canvas mapping.
+    pub classic_keys: &'static [&'static str],
+}
+
+impl Entry {
+    fn classic(mut self, keys: &'static [&'static str]) -> Self {
+        self.classic_keys = keys;
+        self
+    }
 }
 
 fn entry(
@@ -70,6 +79,7 @@ fn entry(
         scope,
         synonyms,
         example: None,
+        classic_keys: &[],
     }
 }
 
@@ -121,28 +131,28 @@ pub(crate) fn entries() -> Vec<Entry> {
             "Choose the selection tool; Space with Select active selects the last edited molecule; v needs keyboard drawing off (F8)",
             Canvas,
             &["pointer", "arrow cursor", "pick"],
-        ),
+        ).classic(&["v"]),
         entry(
             "l",
             "Lasso tool",
             "Freehand selection; needs keyboard drawing off (F8)",
             Canvas,
             &["freehand select", "marquee"],
-        ),
+        ).classic(&["l"]),
         entry(
             "x / 1 / b",
             "Single bond tool",
             "Draw single bonds; needs keyboard drawing off (F8)",
             Canvas,
             &["line", "draw bond", "pen"],
-        ),
+        ).classic(&["x", "1", "b"]),
         entry(
             "2 / 3 / 4",
             "Double / triple / quadruple bond tools",
             "Draw multiple bonds; needs keyboard drawing off (F8)",
             Canvas,
             &["alkene", "alkyne", "multiple bond"],
-        ),
+        ).classic(&["2", "3", "4"]),
         entry(
             keys(shift, "X"),
             "Straight chain tool",
@@ -170,7 +180,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             "Choose the ring tool, keeping its last size; needs keyboard drawing off (F8)",
             Canvas,
             &["cycle", "polygon"],
-        ),
+        ).classic(&["r"]),
         entry(
             label(Message::ToggleSelectedRing),
             "Toggle saturated / aromatic ring",
@@ -184,14 +194,14 @@ pub(crate) fn entries() -> Vec<Entry> {
             "Choose the benzene or cyclopentadiene template; needs keyboard drawing off (F8)",
             Canvas,
             &["phenyl", "aromatic", "template", "cp"],
-        ),
+        ).classic(&["j", "J"]),
         entry(
             "e / a",
             "Reaction arrow tool",
             "Draw reaction arrows; needs keyboard drawing off (F8)",
             Canvas,
             &["arrow", "scheme", "reaction"],
-        ),
+        ).classic(&["e", "a"]),
         entry(
             "t",
             "Text tool",
@@ -212,7 +222,7 @@ pub(crate) fn entries() -> Vec<Entry> {
             "Draw a circled-plus symbol or a p orbital; E needs keyboard drawing off (F8)",
             Canvas,
             &["charge symbol", "orbital", "graphic"],
-        ),
+        ).classic(&["E"]),
         entry(
             format!("{} drag", keys(alt, "")),
             "Free drawing",

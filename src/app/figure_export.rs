@@ -16,10 +16,7 @@ impl App {
         }
         self.figure_exporting = true;
         self.error = false;
-        let label = match format {
-            "svg-office" => super::inspector::FigureFormat::SvgOffice.to_string(),
-            _ => format.to_uppercase(),
-        };
+        let label = super::export_format_label(format);
         self.status = format!("Preparing {label} export…");
         let doc = self.tab.doc.clone();
         let engine = self.engine.clone();
@@ -49,14 +46,11 @@ impl App {
         self.figure_exporting = false;
         match result {
             Ok(Some(saved)) => {
-                self.status = format!(
-                    "Exported {}",
-                    saved.path.file_name().unwrap_or_default().to_string_lossy()
+                self.status = super::files::export_status(
+                    &saved.path,
+                    &saved.details,
+                    cfg!(target_arch = "wasm32"),
                 );
-                for detail in saved.details {
-                    self.status.push_str(" · ");
-                    self.status.push_str(&detail);
-                }
                 self.error = false;
             }
             Ok(None) => {

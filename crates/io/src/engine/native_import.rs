@@ -16,6 +16,7 @@ use crate::{
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use std::sync::Arc;
+mod chain_layout;
 mod template_retry;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -185,8 +186,10 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
         "smiles" => {
             let imported = smiles::read(&text)?;
             let mut molecule = molecule(imported.prepared.state)?;
-            layout(&mut molecule, &imported.reaction_properties)?;
-            finish_molecule(molecule, &imported.prepared.dummy_labels)?
+            let warnings = layout(&mut molecule, &imported.reaction_properties)?;
+            let mut prepared = finish_molecule(molecule, &imported.prepared.dummy_labels)?;
+            prepared.warnings.extend(warnings);
+            prepared
         }
         "mol" => {
             let (document, molecule) = molfile::read(&text)?.display_document()?;
@@ -243,7 +246,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             }
             let mut scene = cdxml::assemble_cdxml(&prepared)?;
             if scene.conformer_3d.is_none() {
-                layout(&mut scene.molecule, &[])?;
+                warnings.extend(layout(&mut scene.molecule, &[])?);
                 scene.conformer_3d = Some(false);
             }
             let imported = scene.into_document()?;
@@ -256,14 +259,20 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
         "rxn" => finish_reaction(reaction::read_rxn(&text)?.drawing()?)?,
         "rsmi" => {
             let layout = reaction::read_smiles(&text)?.layout()?;
-            let positions = layout
+            let layouts = layout
                 .requests()
                 .map(|request| {
                     molecular::validate_molecule(request.molecule())?;
                     coordinates(&request.molecule().state, request.atom_properties())
                 })
                 .collect::<Result<Vec<_>, Error>>()?;
-            finish_reaction(layout.finish(positions)?)?
+            let (positions, warnings): (Vec<_>, Vec<_>) = layouts
+                .into_iter()
+                .map(|layout| (layout.positions, layout.warnings))
+                .unzip();
+            let mut prepared = finish_reaction(layout.finish(positions)?)?;
+            prepared.warnings.extend(warnings.into_iter().flatten());
+            prepared
         }
         _ => return Err(Error::Format),
     };
@@ -321,7 +330,7 @@ fn molecule(state: State) -> Result<molecular::Molecule, Error> {
 fn coordinates(
     state: &State,
     properties: &[Vec<(Vec<u8>, Vec<u8>)>],
-) -> Result<Vec<Point3>, Error> {
+) -> Result<chain_layout::Layout, Error> {
     let ranks = if properties.is_empty() {
         vec![depict::ranks::AtomProperties::default(); state.graph.atoms.len()]
     } else {
@@ -341,16 +350,18 @@ fn coordinates(
             ..depict::Options::default()
         },
     )?;
-    Ok(template_retry::improve(state, &ranks, conformer.positions))
+    let positions = template_retry::improve(state, &ranks, conformer.positions);
+    Ok(chain_layout::improve(state, &ranks, positions))
 }
 
 fn layout(
     molecule: &mut molecular::Molecule,
     properties: &[Vec<(Vec<u8>, Vec<u8>)>],
-) -> Result<(), Error> {
+) -> Result<Vec<String>, Error> {
     molecular::validate_molecule(molecule)?;
-    molecule.positions = coordinates(&molecule.state, properties)?;
-    Ok(())
+    let layout = coordinates(&molecule.state, properties)?;
+    molecule.positions = layout.positions;
+    Ok(layout.warnings)
 }
 
 fn finish_molecule(
@@ -374,7 +385,9 @@ fn prepare_inchi(imported: crate::chemistry::inchi::kernel::Imported) -> Result<
         return Err(Error::BondType);
     }
     let mut molecule = molecule(state)?;
-    layout(&mut molecule, &[])?;
+    let warnings = layout(&mut molecule, &[])?;
     let labels = vec![None; molecule.ids.len()];
-    finish_molecule(molecule, &labels)
+    let mut prepared = finish_molecule(molecule, &labels)?;
+    prepared.warnings.extend(warnings);
+    Ok(prepared)
 }

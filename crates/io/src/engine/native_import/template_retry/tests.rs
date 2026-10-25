@@ -7,7 +7,7 @@ fn imported(text: &str, improved: bool) -> anyhow::Result<crate::document::Docum
     let input = smiles::read(text)?;
     let mut molecule = super::super::molecule(input.prepared.state)?;
     molecule.positions = if improved {
-        super::super::coordinates(&molecule.state, &input.reaction_properties)?
+        super::super::coordinates(&molecule.state, &input.reaction_properties)?.positions
     } else {
         depict::compute(
             &molecule.state,
@@ -70,11 +70,11 @@ fn bridged_template_retry_separates_artemisinin_and_preserves_cleanup_identity()
     )?;
     assert!(bridged(state));
     assert_eq!(collisions(state, &native.positions, 4096), 2);
-    let positions = super::super::coordinates(state, &input.reaction_properties)?;
+    let positions = super::super::coordinates(state, &input.reaction_properties)?.positions;
     assert_eq!(collisions(state, &positions, 4096), 0);
     assert_eq!(
         positions,
-        super::super::coordinates(state, &input.reaction_properties)?
+        super::super::coordinates(state, &input.reaction_properties)?.positions
     );
     let document = imported(ARTEMISININ, true)?;
     let ink = document
@@ -150,7 +150,7 @@ fn clear_bridged_and_disjoint_ring_imports_keep_native_coordinates() -> anyhow::
         )?
         .positions;
         assert_eq!(
-            super::super::coordinates(state, &input.reaction_properties)?,
+            super::super::coordinates(state, &input.reaction_properties)?.positions,
             original
         );
     }
@@ -177,7 +177,7 @@ fn a_template_that_increases_collisions_is_not_published() -> anyhow::Result<()>
     assert_eq!(collisions(state, &original, 4096), 2);
     assert_eq!(collisions(state, &candidate, 4096), 4);
     assert_eq!(
-        super::super::coordinates(state, &input.reaction_properties)?,
+        super::super::coordinates(state, &input.reaction_properties)?.positions,
         original
     );
     Ok(())

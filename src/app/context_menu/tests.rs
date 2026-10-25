@@ -55,6 +55,50 @@ fn enabled(app: &App, page: Page, label: &str) -> Option<bool> {
 }
 
 #[test]
+fn marked_atom_menu_starts_positioning_without_changing_the_drawing() -> Result<(), String> {
+    use reshiki::scientific::{AtomMark, MarkKind};
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let atom = app.tab.doc.add_atom("O", World::default());
+    let other = app.tab.doc.add_atom("C", World::new(42., 0.));
+    app.tab
+        .doc
+        .atom_mut(atom)
+        .ok_or("Oxygen")?
+        .marks
+        .push(AtomMark {
+            id: None,
+            kind: MarkKind::LonePair,
+            offset: World::new(0., -20.),
+            angle: 0.,
+            size_pt: None,
+        });
+    let before = app.tab.doc.clone();
+    for target in [other, atom] {
+        app.edit(Edit::ContextMenu {
+            position: Point::new(30., 40.),
+            selected: vec![target],
+            hit: vec![target],
+        });
+        assert_eq!(
+            labels(&app, Page::Main).contains(&"Position atom marks"),
+            target == atom
+        );
+    }
+    app.inspector_open = false;
+    app.inspector_tab = InspectorTab::Abbreviations;
+    run_item(&mut app, Page::Main, "Position atom marks")?;
+    assert!(app.context_menu.is_none());
+    assert_eq!(app.tool, Tool::EditPoints);
+    assert!(app.inspector_open);
+    assert_eq!(app.inspector_tab, InspectorTab::Properties);
+    assert_eq!(app.tab.selected, vec![atom]);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    Ok(())
+}
+
+#[test]
 fn atom_menu_groups_editing_naming_connecting_and_clipboard_commands() -> Result<(), String> {
     let (mut app, _) = App::new();
     app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);

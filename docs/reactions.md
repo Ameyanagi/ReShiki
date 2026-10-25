@@ -95,7 +95,9 @@ Open `.rxn` or `.rsmi` files, or paste RXN text or reaction SMILES into Import. 
 CC(=O)O.CCO>OS(=O)(=O)O>CCOC(C)=O.O
 ```
 
-The importer lays out editable molecules, separators and an arrow, with chemical agents above the arrow. Existing molecular coordinates within each RXN participant are retained; page and arrow layout are recreated.
+The importer lays out editable molecules, separators and an arrow, with chemical agents above the arrow. Participant spacing and plus signs use
+visible label widths, including hydrogens, subscripts, charges and atom maps;
+the arrow widens to fit its agent row. Existing molecular coordinates within each RXN participant are retained; page and arrow layout are recreated.
 
 Choose one arrow in the reaction inspector to export it. Export controls remain visible while the participant list scrolls. Both sides must contain a participant.
 

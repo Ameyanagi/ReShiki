@@ -127,6 +127,17 @@ impl App {
             Ok(copy) => copy,
             Err(error) => {
                 self.finish_copy_as();
+                // Engine errors carry generic Copy advice. Name the platform's
+                // shortcut here, after the original snapshot checks have passed.
+                let error = error
+                    .strip_suffix(reshiki::exchange::drawing::TEXT_LABEL_COPY_ADVICE)
+                    .map(|reason| {
+                        format!(
+                            "{reason}Try {} for an editable copy · Save as .rsk keeps everything",
+                            super::shortcuts::keys(iced::keyboard::Modifiers::COMMAND, "C")
+                        )
+                    })
+                    .unwrap_or(error);
                 self.status = format!(
                     "Could not copy {}: {error} · Clipboard unchanged",
                     key.format.label()
