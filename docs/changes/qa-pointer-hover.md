@@ -14,8 +14,11 @@ not native event-to-paint latency or the final moving-pointer acceptance result.
 
 - Baseline production source: `3d80590a41b9d9e8efd818d23395ac51bd264ca8`.
 - Fixed production source, regression tests and renderer driver:
-  `0ecd81ee8c4d5d7d43569102d9120fb93b969eac`.
+  `2a6d007415ccd1376aae1920187841ddebfb05e2`.
 - Matched PNG capture commit: `324f0df53547e4e3c3f9895c90c936e5fdd90023`.
+  Repeating the renderer on the final production source above produces the same
+  four published fixed images byte for byte; its 151 targets and five sampled
+  hover frames also retain exact baseline parity.
 - Exact issue-linked [tiled16-v26.rsk](https://gist.githubusercontent.com/Ameyanagi/0f2d480dd9a4e8cb1843ecd12660f93f/raw/tiled16-v26.rsk):
   5,796,846 bytes, SHA-256
   `71229e202a3a0ba5765af5ac4bd94f4396613237f421cb4c828925c589b553da`.
@@ -34,7 +37,11 @@ pointer, using the current zoom's picking radius. Arrow navigation, accepted
 edits and history restoration own their target until actual pointer motion or
 a click transfers it back. Scrolling still updates the cached pointer's world
 coordinate while retaining a keyboard-owned target, so moving back over the
-pointer's former world position is recognized as real motion.
+pointer's former world position is recognized as real motion. Wheel and native
+pointer-motion packets carry canvas-relative screen positions until the app
+consumes them. Mixed pan/zoom events and subsequent pointer motion in one
+Iced event batch therefore resolve through the current camera. Programmatic
+world-coordinate edits and gesture hints retain their existing behavior.
 
 Pan and zoom preserve the document, selection, revision and Undo/Redo history.
 The existing [stationary-pointer rule](../3d-keyboard-drawing.md) and the new
@@ -86,7 +93,10 @@ Cargo or rustc process at that boundary.
 
 Six query points cover an atom, a collapsed group label, a bond, the reported
 atom 28, nearby empty space and off-drawing empty space. The complete update
-uses `App::update(Message::Canvas(Edit::Hover(...)))`. The rendering workload
+uses the baseline's world-coordinate `Edit::Hover` and the fixed native
+`Edit::PointerHover`, including its current-camera conversion, through
+`App::update`. Both drivers normalize the same screen-derived physical query
+positions and compare hit identities. The rendering workload
 also rebuilds the real widget view, reconciles its tree, lays it out, records
 drawing commands and resolves mouse interaction. It does not present a native
 frame or run the returned tasks. Independently measured phase medians should
@@ -94,12 +104,12 @@ not be summed.
 
 | Workload                                         | Before median / p95 (ms) | Fixed median / p95 (ms) |
 | ------------------------------------------------ | -----------------------: | ----------------------: |
-| Atom label ink hit                               |          0.2722 / 0.3925 |         0.2705 / 0.3987 |
-| Nearest atom, including collapsed-label fallback |        11.0962 / 11.2651 |         0.1283 / 0.2746 |
-| Nearest bond                                     |        34.8236 / 36.7590 |         0.3823 / 0.4073 |
-| Complete app hover update                        |        45.9016 / 46.4766 |         0.7738 / 0.9933 |
-| View, layout, drawing commands and interaction   |        11.9075 / 12.0403 |       11.6901 / 11.8148 |
-| Hover update through drawing commands            |        58.2681 / 59.0997 |       12.5917 / 13.1972 |
+| Atom label ink hit                               |          0.2625 / 0.3905 |         0.2715 / 0.3948 |
+| Nearest atom, including collapsed-label fallback |        11.1809 / 11.2188 |         0.2043 / 0.2797 |
+| Nearest bond                                     |        34.7414 / 35.1962 |         0.3784 / 0.3826 |
+| Complete app hover update                        |        46.0600 / 46.4589 |         0.7715 / 0.9936 |
+| View, layout, drawing commands and interaction   |        11.8475 / 12.2127 |       11.6824 / 11.8790 |
+| Hover update through drawing commands            |        58.2897 / 58.9928 |       12.6085 / 12.9743 |
 
 The last row is about 4.6× faster on this host. It does not establish a native
 frame rate. [Machine-readable timings and executable hashes](qa-pointer-hover-timings.json)
@@ -121,7 +131,7 @@ Both isolated QA bundles contain optimized executables and use separate
 application-data directories. The baseline executable SHA-256 is
 `a51637f61cec1113c885d9c1f431b8f5c662d3f61b6de8204c47139fa0fc3f1d`;
 the fixed executable SHA-256 is
-`cba3c340b4ee905ef4cc469595e802ee8cac57985d38f4565992818461e84638`.
+`9f7356cd82cdefea0adc0b8f7cfe36ed67acb8fcb44cf8e106819ece6f71e315`.
 
 The supported native AX Zoom action yields an observed 1680 × 1020 pt outer
 window, with 3360 × 2040 pixel screenshots at 2×. The exposed CUA edge/corner
@@ -143,10 +153,12 @@ method exception; no native moving-pointer result is claimed here yet.
 ## Verification
 
 - Model suite: 803 passed, 10 existing opt-in tests ignored.
-- App suite: 1,113 passed, 123 opt-in tests ignored, using the freshly built
+- App suite: 1,119 passed, 123 opt-in tests ignored, using the freshly built
   native naming helper.
-- Keyboard suite: 24 passed, one existing renderer test ignored; this includes
-  five camera/ownership regressions and the stationary-pointer case.
+- Keyboard suite: 27 passed, one existing renderer test ignored; this includes
+  eight camera/ownership regressions and the stationary-pointer case.
+  Two immutable-view input tests cover mixed wheel packets and wheel-to-motion
+  packets before any app message is consumed, at nonzero offsets and 0.5×/2×.
 - Independent old atom, bond and collapsed-label queries agree with the
   optimized queries across gallery labels, strict radii, ties, duplicate IDs,
   missing endpoints and hidden 3D models.
