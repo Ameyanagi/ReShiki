@@ -537,6 +537,94 @@ fn input_files_pick_the_format_the_app_picks() {
     }
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn crystal_inputs_are_usage_errors_before_io() {
+    let folder = tempfile::tempdir().unwrap();
+    let output = folder.path().join("never-written.svg");
+    // These paths deliberately do not exist: rejection must precede reading.
+    for name in [
+        "nacl.cif",
+        "urea.CIF",
+        "urea.pdb",
+        "urea.ent",
+        "rutile.vasp",
+        "cell.poscar",
+        "cell.contcar",
+        "water.xyz",
+        "cell.extxyz",
+        "POSCAR",
+        "CONTCAR",
+        "poscar",
+        "contcar",
+        "POSCAR.relaxed",
+        "CONTCAR.1",
+    ] {
+        for command in ["convert", "render", "analyze"] {
+            for automatic in [false, true] {
+                let mut args = vec![OsString::from(command), folder.path().join(name).into()];
+                if automatic {
+                    args.extend([OsString::from("--from"), OsString::from("auto")]);
+                }
+                if command != "analyze" {
+                    args.extend([OsString::from("-o"), output.clone().into()]);
+                }
+                let (code, out, err) = call_os(args).await;
+                assert_eq!(code, USAGE, "{command} {name}: {err}");
+                assert!(out.is_empty(), "{out}");
+                assert!(
+                    err.contains(&format!("{command} does not support crystal input")),
+                    "{err}"
+                );
+                assert!(err.contains(&input_formats().join(", ")), "{err}");
+                assert!(!output.exists());
+            }
+        }
+    }
+}
+
+#[test]
+fn explicit_crystal_formats_are_rejected_and_molecular_overrides_are_retained() {
+    for format in [
+        "cif", "pdb", "ent", "vasp", "poscar", "contcar", "xyz", "extxyz",
+    ] {
+        let error = parsed(&["analyze", "-", "--from", format]).unwrap_err();
+        assert!(error.contains("does not support crystal input"), "{error}");
+    }
+    for name in [
+        "molecule.smi",
+        "molecule.smiles",
+        "molecule.txt",
+        "molecule.unknown",
+        "molecule",
+    ] {
+        assert_eq!(
+            parsed(&["analyze", name]),
+            Ok(Command::Analyze(Input {
+                source: Source::File(name.into()),
+                format: "smiles".into()
+            }))
+        );
+    }
+    for name in ["misnamed.cif", "POSCAR"] {
+        assert_eq!(
+            parsed(&["analyze", name, "--from", "smiles"]),
+            Ok(Command::Analyze(Input {
+                source: Source::File(name.into()),
+                format: "smiles".into()
+            }))
+        );
+    }
+    for (name, format) in [("POSCAR.mol", "mol"), ("CONTCAR.rsk", "reshiki")] {
+        assert_eq!(
+            parsed(&["analyze", name]),
+            Ok(Command::Analyze(Input {
+                source: Source::File(name.into()),
+                format: format.into()
+            }))
+        );
+    }
+}
+
 #[test]
 fn convert_command_lines_parse() {
     let file = |path: &str| Source::File(PathBuf::from(path));
@@ -730,7 +818,7 @@ async fn usage_errors_exit_2_before_any_work() {
     let unsupported_render =
         |format: &str| format!("unsupported output format `{format}`; supported: png, svg");
     let unknown_from = format!(
-        "unknown input format `xyz`; supported: {}",
+        "unknown input format `unknown`; supported: {}",
         IMPORT_FORMATS.join(", ")
     );
     let cases: Vec<(&[&str], String)> = vec![
@@ -805,7 +893,7 @@ async fn usage_errors_exit_2_before_any_work() {
             "--smiles cannot be combined with --from".into(),
         ),
         (
-            &["convert", "a.mol", "--from", "xyz", "--to", "svg"],
+            &["convert", "a.mol", "--from", "unknown", "--to", "svg"],
             unknown_from,
         ),
         (

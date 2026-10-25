@@ -343,6 +343,17 @@ impl App {
         let query = self.commands.query().to_owned();
         let query = query.as_str();
         let extra = catalog::parameterised(self, query);
+        // A blocked scale keeps its explanation first, followed by the existing
+        // explicit display switch. Only one whole model can use that switch.
+        let resize_recovery = extra
+            .as_ref()
+            .filter(|command| {
+                command.need == Need::Resizable
+                    && self.need_unavailable(command.need, &target)
+                        == Some(super::numeric_transforms::RESIZE_SHOWN_IN_3D)
+                    && self.selected_model().is_some()
+            })
+            .map(|command| command.name.clone());
         // Commands that cannot run now go below those that can.
         let blocked: Vec<bool> = (self.commands.catalog().iter())
             .map(|c| self.need_unavailable(c.need, &target).is_some())
@@ -459,6 +470,22 @@ impl App {
             };
             split += usize::from(!blocked);
             state.hits.insert(at, index);
+        }
+        if let Some(blocked) = resize_recovery
+            && let Some(recovery) = state
+                .catalog()
+                .iter()
+                .position(|command| command.name == "Show as 2D drawing")
+        {
+            state.hits.retain(|index| *index != recovery);
+            if let Some(at) = state.hits.iter().position(|index| {
+                state
+                    .items
+                    .get(*index)
+                    .is_some_and(|command| command.name == blocked)
+            }) {
+                state.hits.insert(at + 1, recovery);
+            }
         }
         let filter = state.filter;
         state.set_filter(filter);

@@ -558,13 +558,7 @@ impl App {
         else {
             return;
         };
-        let canvas = Rectangle::with_size(self.viewport);
-        let paper = self.guides.paper(canvas);
-        if !(paper.contains(self.tab.camera.screen(lo, canvas))
-            && paper.contains(self.tab.camera.screen(hi, canvas)))
-        {
-            self.reveal_bounds(lo, hi);
-        }
+        self.reveal_if_clipped(lo, hi);
     }
 
     pub(super) fn import_panel(&self) -> Element<'_, Message> {

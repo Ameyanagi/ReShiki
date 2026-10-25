@@ -1,0 +1,678 @@
+{
+  "atom_labels": {
+    "carbons": "skeletal",
+    "hydrogens": true,
+    "stereo": false
+  },
+  "version": 29,
+  "atoms": [
+    {
+      "id": 1,
+      "element": "C",
+      "position": {
+        "x": -106.7439,
+        "y": 36.03041
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 3
+    },
+    {
+      "id": 2,
+      "element": "C",
+      "position": {
+        "x": -75.563644,
+        "y": 7.8916125
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 3,
+      "element": "O",
+      "position": {
+        "x": -84.34244,
+        "y": -33.180676
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 4,
+      "element": "O",
+      "position": {
+        "x": -35.604607,
+        "y": 20.825102
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 5,
+      "element": "C",
+      "position": {
+        "x": -4.4243555,
+        "y": -7.3136973
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 6,
+      "element": "C",
+      "position": {
+        "x": -13.203145,
+        "y": -48.385986
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 1
+    },
+    {
+      "id": 7,
+      "element": "C",
+      "position": {
+        "x": 17.977104,
+        "y": -76.52479
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 1
+    },
+    {
+      "id": 8,
+      "element": "C",
+      "position": {
+        "x": 57.936146,
+        "y": -63.591297
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 1
+    },
+    {
+      "id": 9,
+      "element": "C",
+      "position": {
+        "x": 66.714935,
+        "y": -22.519007
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 1
+    },
+    {
+      "id": 10,
+      "element": "C",
+      "position": {
+        "x": 35.534683,
+        "y": 5.619792
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 11,
+      "element": "C",
+      "position": {
+        "x": 44.313473,
+        "y": 46.69208
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 12,
+      "element": "O",
+      "position": {
+        "x": 84.272514,
+        "y": 59.62557
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 0
+    },
+    {
+      "id": 13,
+      "element": "O",
+      "position": {
+        "x": 13.1332245,
+        "y": 74.83088
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 1
+    }
+  ],
+  "bonds": [
+    {
+      "z_order": 0,
+      "a": 1,
+      "b": 2,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 2,
+      "b": 3,
+      "order": 2,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 2,
+      "b": 4,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 4,
+      "b": 5,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 5,
+      "b": 6,
+      "order": 2,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 6,
+      "b": 7,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 7,
+      "b": 8,
+      "order": 2,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 8,
+      "b": 9,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 9,
+      "b": 10,
+      "order": 2,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 10,
+      "b": 11,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 11,
+      "b": 12,
+      "order": 2,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 11,
+      "b": 13,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 0,
+      "a": 10,
+      "b": 5,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "annotations": [
+    {
+      "id": 14,
+      "position": {
+        "x": -106.7439,
+        "y": 102.62324
+      },
+      "text": "aspirin",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "center",
+        "line_spacing": 1.2,
+        "width_pt": 69.3805
+      }
+    }
+  ],
+  "molecule_names": [
+    {
+      "annotation": 14,
+      "atoms": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13
+      ],
+      "smiles": "CC(=O)Oc1ccccc1C(=O)O",
+      "text": "aspirin"
+    }
+  ],
+  "arrows": [],
+  "graphics": [],
+  "groups": [],
+  "models": [
+    {
+      "display": "three_d",
+      "atoms": [
+        {
+          "id": 1,
+          "xyz": [
+            3.411799,
+            0.4543784,
+            0.21843699
+          ]
+        },
+        {
+          "id": 2,
+          "xyz": [
+            2.04875,
+            -0.13961622,
+            0.412007
+          ]
+        },
+        {
+          "id": 3,
+          "xyz": [
+            1.7021884,
+            -0.7686164,
+            1.4036497
+          ]
+        },
+        {
+          "id": 4,
+          "xyz": [
+            1.279521,
+            0.122421615,
+            -0.7163024
+          ]
+        },
+        {
+          "id": 5,
+          "xyz": [
+            -0.03983898,
+            -0.3196117,
+            -0.5813458
+          ]
+        },
+        {
+          "id": 6,
+          "xyz": [
+            -0.36016965,
+            -1.5389283,
+            -1.1871619
+          ]
+        },
+        {
+          "id": 7,
+          "xyz": [
+            -1.6647514,
+            -2.0232584,
+            -1.1146939
+          ]
+        },
+        {
+          "id": 8,
+          "xyz": [
+            -2.645243,
+            -1.2865788,
+            -0.4509434
+          ]
+        },
+        {
+          "id": 9,
+          "xyz": [
+            -2.3256679,
+            -0.058415722,
+            0.13746588
+          ]
+        },
+        {
+          "id": 10,
+          "xyz": [
+            -1.0168332,
+            0.4446757,
+            0.072932966
+          ]
+        },
+        {
+          "id": 11,
+          "xyz": [
+            -0.67663276,
+            1.7626456,
+            0.6708105
+          ]
+        },
+        {
+          "id": 12,
+          "xyz": [
+            0.3924103,
+            2.3417647,
+            0.61307305
+          ]
+        },
+        {
+          "id": 13,
+          "xyz": [
+            -1.7151661,
+            2.3153315,
+            1.327192
+          ]
+        }
+      ],
+      "hydrogens": [
+        {
+          "parent": 1,
+          "xyz": [
+            3.915324,
+            -0.039283648,
+            -0.6162759
+          ]
+        },
+        {
+          "parent": 1,
+          "xyz": [
+            3.3267124,
+            1.5287132,
+            0.036575552
+          ]
+        },
+        {
+          "parent": 1,
+          "xyz": [
+            4.0039573,
+            0.30387026,
+            1.1256107
+          ]
+        },
+        {
+          "parent": 6,
+          "xyz": [
+            0.40421394,
+            -2.1116583,
+            -1.7047948
+          ]
+        },
+        {
+          "parent": 7,
+          "xyz": [
+            -1.9175425,
+            -2.9759753,
+            -1.5737729
+          ]
+        },
+        {
+          "parent": 8,
+          "xyz": [
+            -3.6628523,
+            -1.666205,
+            -0.39217976
+          ]
+        },
+        {
+          "parent": 9,
+          "xyz": [
+            -3.1108322,
+            0.49972823,
+            0.6425558
+          ]
+        },
+        {
+          "parent": 13,
+          "xyz": [
+            -1.3493459,
+            3.1546185,
+            1.6771606
+          ]
+        }
+      ],
+      "rotation": [
+        0.35408723,
+        0.91545707,
+        0.1547792,
+        -0.11226765
+      ],
+      "offset": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "size": 286.20273,
+      "style": "ball_stick",
+      "look": "flat",
+      "depth_fade": 0.35,
+      "perspective": 0.2,
+      "show_hydrogens": "all",
+      "background": "none",
+      "force_field": "mmff94s"
+    }
+  ]
+}

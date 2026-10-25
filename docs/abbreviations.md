@@ -9,14 +9,17 @@ above** force a placement; choosing Automatic again restores it. On an element
 label, Left reads OH and Right HO. Multiple labels can change in one Undo step;
 with captions in the selection the menu shows Left / Center / Right / Justify.
 Press **Enter** to edit the label or its chemical/text meaning; the dialog's
-**Alignment** list sets the same choice while you type.
+**Alignment** list sets the same choice while you type. The editor opens beside
+the atom where space allows. Persistent captions distinguish the normal label
+from its optional spelling when facing left; Text label mode hides the unused
+reverse spelling.
 Above places a single nickname above the attachment. Automatic internal labels
 such as CCl₂ or NMe keep the attachment element at the bond junction and place
 the remaining part according to the bond angles. General multiline formula-token
 stacking is not implemented. Native/CDXML/CDX preserve the
 override, and Undo/Redo restores it. See the [illustrated PR review](changes-pr17.md).
 
-Properties → Chemical abbreviations provides compact labels while retaining the complete atom/bond graph. Formula, mass, SMILES and molecular identity use the full structure.
+Properties → Labels & chemistry → Chemical abbreviations provides compact labels while retaining the complete atom/bond graph. Formula, mass, SMILES and molecular identity use the full structure.
 
 - Select one terminal atom and choose a common group such as OMe, Boc, Ph, TBS, TBDPS or OTBDPS, then **Replace selected endpoint**. This changes the chemistry and preserves the outside connecting bond.
 - **Contract common groups** finds supported groups in the selected atoms, or the whole drawing when nothing is selected. A group only claims atoms whose charge, unpaired electrons, isotope and hydrogen count match its definition, so a charged or labelled atom stays visible. When a larger group cannot apply because a smaller group takes its outside atom, the smaller candidates are used instead (MeNHBoc contracts to Boc and Me).
@@ -38,8 +41,10 @@ of a sugar template reads BnO, and a group retyped over another group keeps
 its alignment. A user group
 whose label is spelled like a bundled reverse spelling takes precedence.
 Labels are case-sensitive, so MOrph is text and not Morph. Full names, such
-as morpholino, 2-thienyl or acetyl, stay text; the label editor suggests
-the label to type instead ("Did you mean Morph?").
+as morpholino, 2-thienyl or acetyl, stay text until a suggestion is accepted.
+Click **Use Morph**, or another suggested label, to replace the draft and choose
+Chemical abbreviation, then **Apply**. Acetyl offers separate **Use Ac** and
+**Use COMe** choices; both select the group explicitly rather than an element.
 
 | Category         | Groups | Examples                                                                    |
 | ---------------- | -----: | --------------------------------------------------------------------------- |

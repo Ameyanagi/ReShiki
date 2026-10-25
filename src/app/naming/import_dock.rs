@@ -212,7 +212,7 @@ impl App {
         if !idle {
             content = content.push(
                 row![
-                    text("Working…").size(12),
+                    text(self.naming_working_label()).size(12),
                     accessible_command("import-name-cancel", "Cancel name import", "Cancel")
                         .on_press(Message::Naming(Action::Cancel)),
                 ]
@@ -301,10 +301,9 @@ impl App {
         let idle = state.pending.is_none();
         let mut content = column![
             self.name_preview_canvas(preview, 160.),
-            text(format!(
-                "{} atoms · {} bonds",
+            text(crate::app::workspace::atom_bond_counts(
                 preview.document.atoms.len(),
-                preview.document.bonds.len()
+                preview.document.bonds.len(),
             ))
             .size(11)
             .style(muted_text),

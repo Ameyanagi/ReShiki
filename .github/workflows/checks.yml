@@ -203,6 +203,21 @@ jobs:
         # The Windows renderer includes Tiny Skia when WGPU is unavailable.
         # This checks widget layout/input; it is not native desktop acceptance.
         run: cargo test --locked --no-default-features --bin reshiki app::numeric_transforms::focus::tests::handle_shortcut_focuses_selects_and_reveals_the_field_in_both_window_sizes -- --exact --ignored
+      - name: Capture rendered Help QA on Windows
+        if: runner.os == 'Windows'
+        # Real Windows font/key rendering, including the TinySkia fallback.
+        # Native desktop input acceptance is recorded separately.
+        env:
+          RESHIKI_HELP_QA_DIR: artifacts/qa-help-polish
+          RESHIKI_DATA_DIR: ${{ runner.temp }}/reshiki-help-polish
+        run: cargo test --locked --no-default-features --bin reshiki app::help::tests::help_renderer_evidence -- --exact --ignored
+      - name: Retain Windows Help renderer evidence
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: qa-help-polish-${{ matrix.target }}
+          path: artifacts/qa-help-polish
+          if-no-files-found: error
       - name: Test rendered cascading menus on Windows
         if: runner.os == 'Windows'
         # The headless renderer falls back to TinySkia on Windows. These

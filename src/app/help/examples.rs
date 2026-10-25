@@ -55,8 +55,25 @@ pub(crate) fn render(example: Example) -> Result<(Document, Document), String> {
                 "r" => Some(DoublePosition::Right),
                 _ => None,
             };
-            let (doc, ids) = chain(key == "1" || position.is_some());
-            let (a, b) = (ids[1], ids[2]);
+            let (doc, a, b) = if matches!(
+                key,
+                "v" | "4" | "5" | "6" | "7" | "8" | "a" | "z" | "9" | "0"
+            ) {
+                let mut doc = reshiki::rings::Preset::Benzene.document(length, false);
+                // Keep an eligible double edge vertical so the product fuses
+                // horizontally and remains readable in the short preview pane.
+                let (sin, cos) = std::f32::consts::FRAC_PI_3.sin_cos();
+                for atom in &mut doc.atoms {
+                    let p = atom.position;
+                    atom.position = Point::new(p.x * cos - p.y * sin, p.x * sin + p.y * cos);
+                }
+                let bond = doc.bonds.first().ok_or("Benzene fixture has no bond")?;
+                let (a, b) = (bond.a, bond.b);
+                (doc, a, b)
+            } else {
+                let (doc, ids) = chain(key == "1" || position.is_some());
+                (doc, ids[1], ids[2])
+            };
             let after = if let Some(position) = position {
                 let mut after = doc.clone();
                 for bond in &mut after.bonds {

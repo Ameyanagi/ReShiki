@@ -122,8 +122,8 @@ pub fn add_font(bytes: Vec<u8>) -> Result<usize, JsError> {
     reshiki_model::style::add_font(bytes).map_err(js)
 }
 
-/// This library's version.
+/// The ReShiki release version, shared with the application and npm package.
 #[wasm_bindgen]
 pub fn version() -> String {
-    env!("CARGO_PKG_VERSION").into()
+    env!("RESHIKI_VERSION").into()
 }

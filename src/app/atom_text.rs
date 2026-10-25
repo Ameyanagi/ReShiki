@@ -4,9 +4,7 @@ use super::{
     workspace::{control, hover_keys, muted_text},
 };
 use crate::canvas::layered::canvas;
-use iced::widget::{
-    Space, column, container, mouse_area, opaque, row, stack, text, text_editor, tooltip,
-};
+use iced::widget::{Space, column, container, opaque, row, scrollable, text, text_editor, tooltip};
 use iced::{Element, Length, Task};
 use reshiki::abbreviations::LabelAlignment;
 use reshiki::atom_text::{self, Mode};
@@ -18,6 +16,7 @@ pub enum Action {
     /// Put the last committed label on the atom without opening the editor.
     Repeat(u64),
     Input(String),
+    Suggest(String),
     Editor(text_editor::Action),
     Script(Script),
     Mode(Mode),
@@ -27,7 +26,40 @@ pub enum Action {
     Apply,
     Cancel,
 }
+
+/// The label that was actually committed, including its chemical/text meaning.
+/// Formatting and alignment belong to each target, rather than to this memory.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct RememberedLabel {
+    pub(super) text: String,
+    mode: Mode,
+    reverse: Option<String>,
+}
+
+impl RememberedLabel {
+    fn committed(doc: &reshiki::document::Document, id: u64) -> Option<Self> {
+        if let Some(group) = doc.abbreviation(id) {
+            return Some(Self {
+                text: group.label.clone(),
+                mode: Mode::Group,
+                reverse: Some(group.reverse_label.clone()),
+            });
+        }
+        let atom = doc.atom(id)?;
+        Some(Self {
+            text: atom_text::entry(atom),
+            mode: if atom.display.variable.is_some() && !doc.generic.owns_label(id) {
+                Mode::Text
+            } else {
+                Mode::Auto
+            },
+            reverse: None,
+        })
+    }
+}
+
 pub struct State {
+    session: iced::widget::Id,
     id: u64,
     epoch: u64,
     input: String,
@@ -39,6 +71,7 @@ pub struct State {
     manual_scripts: bool,
     alignment: LabelAlignment,
     aligned: bool,
+    context: Option<(reshiki::document::Point, reshiki::document::Point)>,
     members: Option<Vec<u64>>,
     reverse: String,
     reverse_edited: bool,
@@ -150,6 +183,18 @@ impl State {
 
 /// Smallest text size in the Appearance preview of a formatted label.
 const PREVIEW_SIZE_PT: f32 = 16.;
+
+/// Context is an opening-time aid. Large drawings use the target-only fallback
+/// without asking the scene to measure their complete molecular ink.
+fn context_bounds(
+    doc: &reshiki::document::Document,
+    id: u64,
+) -> Option<(reshiki::document::Point, reshiki::document::Point)> {
+    if doc.atoms.len() > 64 {
+        return None;
+    }
+    reshiki::scene::selection_bounds(doc, &reshiki::molecule_names::component(doc, id))
+}
 
 fn single_line(value: &str) -> String {
     value
@@ -301,6 +346,7 @@ impl App {
                     runs,
                 );
                 self.tab.atom_text = Some(State {
+                    session: iced::widget::Id::unique(),
                     id,
                     epoch: self.tab.file_epoch,
                     input,
@@ -320,6 +366,7 @@ impl App {
                     alignment: reshiki::atom_labels::alignment(&self.tab.doc, id)
                         .unwrap_or_default(),
                     aligned: false,
+                    context: context_bounds(&self.tab.doc, id),
                     members: None,
                     reverse: group.map(|g| g.reverse_label.clone()).unwrap_or_default(),
                     reverse_edited: false,
@@ -335,10 +382,18 @@ impl App {
                     && let Some(state) = &mut self.tab.atom_text
                     && state.id == id
                     && state.members.is_none()
-                    && state.input != label
+                    && RememberedLabel::committed(&self.tab.doc, id).as_ref() != Some(&label)
                 {
                     state.manual_scripts = false;
-                    state.replace_input(label);
+                    state.replace_input(label.text);
+                    state.mode = label.mode;
+                    // Identical characters can still have a different meaning,
+                    // such as literal Ac, the acetyl group and actinium.
+                    state.label_edited = true;
+                    if let Some(reverse) = label.reverse {
+                        state.reverse = reverse;
+                        state.reverse_edited = true;
+                    }
                     let _ = self.atom_text_action(Action::Apply);
                 }
                 if self.tab.atom_text.is_none() {
@@ -350,6 +405,19 @@ impl App {
                 if let Some(state) = &mut self.tab.atom_text {
                     state.replace_input(input);
                 }
+            }
+            Action::Suggest(label) => {
+                if let Some(state) = &mut self.tab.atom_text
+                    && state.members.is_none()
+                    && atom_text::suggestions(&state.input, state.mode).contains(&label)
+                {
+                    state.manual_scripts = false;
+                    state.scripts_edited = false;
+                    state.replace_input(label);
+                    state.label_edited = true;
+                    state.mode = Mode::Group;
+                }
+                return iced::widget::operation::focus("atom-text");
             }
             Action::Editor(action) => {
                 if let Some(state) = &mut self.tab.atom_text {
@@ -371,6 +439,7 @@ impl App {
                     Ok(()) => {
                         if let Some(group) = candidate.abbreviations.last() {
                             self.tab.atom_text = Some(State {
+                                session: iced::widget::Id::unique(),
                                 id: group.anchor,
                                 epoch: self.tab.file_epoch,
                                 input: String::new(),
@@ -382,6 +451,7 @@ impl App {
                                 manual_scripts: false,
                                 alignment: LabelAlignment::Auto,
                                 aligned: false,
+                                context: context_bounds(&self.tab.doc, group.anchor),
                                 members: Some(group.members.clone()),
                                 reverse: String::new(),
                                 reverse_edited: false,
@@ -480,8 +550,8 @@ impl App {
                             }
                             return Task::none();
                         }
-                        if state.members.is_none() && state.label_edited {
-                            self.last_label = Some(state.input.trim().into());
+                        if state.members.is_none() && (state.label_edited || state.reverse_edited) {
+                            self.last_label = RememberedLabel::committed(&doc, state.id);
                         }
                         let before = std::mem::replace(&mut self.tab.doc, doc);
                         self.tab.atom_text = None;
@@ -501,13 +571,8 @@ impl App {
         let Some(state) = &self.tab.atom_text else {
             return base;
         };
-        // The workspace makes the rest inert, so a click elsewhere commits.
+        // The Text tool keeps the canvas clickable; Select remains modal.
         let click_through = self.label_click_through();
-        let base = if click_through {
-            base
-        } else {
-            reshiki::accessibility::inert(base)
-        };
         let editor = text_editor(&state.editor)
             .id("atom-text")
             .font(iced::Font::with_name(reshiki::style::font_name(
@@ -580,7 +645,17 @@ impl App {
                 "Edit atom label"
             })
             .size(20),
-            editor,
+            column![
+                text(if state.mode == Mode::Group {
+                    "Label (facing right)"
+                } else {
+                    "Label"
+                })
+                .size(10)
+                .style(muted_text),
+                editor,
+            ]
+            .spacing(3),
             row![
                 script_control(
                     "atom-text-subscript",
@@ -633,9 +708,9 @@ impl App {
                 .spacing(3),
             );
         }
-        let choice = |name, list: Element<'a, Message>| {
-            column![text(name).size(10).style(muted_text), list]
-                .spacing(3)
+        let choice = |name, id, list: Element<'a, Message>| {
+            container(column![text(name).size(10).style(muted_text), list].spacing(3))
+                .id(id)
                 .width(Length::Fill)
                 .into()
         };
@@ -643,6 +718,7 @@ impl App {
         if state.members.is_none() {
             choices.push(choice(
                 "Label type",
+                "atom-text-mode",
                 crate::appearance::pick_list(
                     [Mode::Auto, Mode::Text, Mode::Group],
                     Some(state.mode),
@@ -654,13 +730,14 @@ impl App {
         }
         choices.push(choice(
             "Alignment",
+            "atom-text-alignment",
             crate::appearance::pick_list(LabelAlignment::ALL, Some(state.alignment), |value| {
                 Message::AtomText(Action::Align(value))
             })
             .width(Length::Fill)
             .into(),
         ));
-        content = content.push(iced::widget::Row::with_children(choices).spacing(10));
+        content = content.push(iced::widget::Column::with_children(choices).spacing(10));
         content = content.push(text(if state.members.is_some() {
                 "The selected atoms define this group. Its formula and bonds are retained; expand it to edit the structure."
             } else if state.mode != Mode::Text
@@ -670,23 +747,52 @@ impl App {
             } else { atom_text::description(&state.input, &state.scripts(), state.mode) })
                 .size(12)
                 .style(muted_text));
-        if state.members.is_none()
-            && let Some(suggestion) = atom_text::suggestion(&state.input, state.mode)
-        {
-            content = content.push(text(suggestion).size(12));
+        if state.members.is_none() {
+            let suggestions = atom_text::suggestions(&state.input, state.mode);
+            if !suggestions.is_empty() {
+                let buttons = suggestions.into_iter().map(|label| {
+                    reshiki::accessibility::button(
+                        format!("atom-text-suggest-{label}"),
+                        format!("Use {label} as a chemical abbreviation"),
+                        text(format!("Use {label}")).size(12),
+                    )
+                    .on_press(Message::AtomText(Action::Suggest(label)))
+                    .style(control(false))
+                    .padding([5, 9])
+                    .into()
+                });
+                content = content.push(
+                    column![
+                        text("Did you mean…").size(12),
+                        iced::widget::Column::with_children(buttons).spacing(4)
+                    ]
+                    .spacing(4),
+                );
+            }
         }
-        if state.members.is_some() || self.tab.doc.abbreviation(state.id).is_some() {
+        if state.mode != Mode::Text
+            && (state.members.is_some() || self.tab.doc.abbreviation(state.id).is_some())
+        {
             content = content.push(
-                reshiki::accessibility::text_input(
-                    "atom-text-reverse",
-                    "Label when facing left (optional)",
-                    "Label when facing left (optional)",
-                    &state.reverse,
-                )
-                .style(crate::appearance::input_style)
-                .on_input(|s| Message::AtomText(Action::ReverseInput(s)))
-                .on_submit(Message::AtomText(Action::Apply))
-                .padding(8),
+                column![
+                    text("Label when facing left (optional)")
+                        .size(10)
+                        .style(muted_text),
+                    reshiki::accessibility::text_input(
+                        "atom-text-reverse",
+                        "Label when facing left (optional)",
+                        "Label when facing left (optional)",
+                        &state.reverse,
+                    )
+                    .style(crate::appearance::input_style)
+                    .on_input(|s| Message::AtomText(Action::ReverseInput(s)))
+                    .on_submit(Message::AtomText(Action::Apply))
+                    .padding(8),
+                    text("The drawing uses the spelling that suits the bond’s side.")
+                        .size(12)
+                        .style(muted_text),
+                ]
+                .spacing(3),
             );
         }
         if let Some(error) = &state.error {
@@ -694,7 +800,7 @@ impl App {
                 iced::Color::from_rgb8(175, 54, 54),
             )));
         }
-        let popup = container(
+        let popup = container(scrollable(
             content.push(
                 row![
                     Space::new().width(Length::Fill),
@@ -715,7 +821,8 @@ impl App {
                 ]
                 .spacing(8),
             ),
-        )
+        ))
+        .id("atom-text-dialog")
         .padding(22)
         .width(430)
         .style(|theme| {
@@ -732,29 +839,46 @@ impl App {
                 },
             )
         });
-        if click_through {
-            return stack![base, container(opaque(popup)).center(Length::Fill)].into();
-        }
-        stack![
+        let target = self.tab.doc.atom(state.id).map(|atom| atom.position);
+        let away = target
+            .map(|target| {
+                let group = self.tab.doc.abbreviation(state.id);
+                self.tab
+                    .doc
+                    .bonds
+                    .iter()
+                    .filter_map(|bond| {
+                        let other = if bond.a == state.id {
+                            bond.b
+                        } else if bond.b == state.id {
+                            bond.a
+                        } else {
+                            return None;
+                        };
+                        if group.is_some_and(|group| group.members.contains(&other)) {
+                            return None;
+                        }
+                        self.tab.doc.atom(other).map(|atom| {
+                            iced::Vector::new(
+                                target.x - atom.position.x,
+                                target.y - atom.position.y,
+                            )
+                        })
+                    })
+                    .fold(iced::Vector::ZERO, |sum, direction| sum + direction)
+            })
+            .unwrap_or(iced::Vector::ZERO);
+        Element::new(placement::Anchored::new(
             base,
-            opaque(
-                mouse_area(
-                    container(Space::new())
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .style(|theme| crate::appearance::container(
-                            theme,
-                            container::Style {
-                                background: Some(iced::Color::from_rgba8(20, 30, 30, 0.3).into()),
-                                ..Default::default()
-                            }
-                        ))
-                )
-                .on_press(Message::AtomText(Action::Cancel))
-            ),
-            container(opaque(popup)).center(Length::Fill)
-        ]
-        .into()
+            opaque(popup),
+            state.session.clone(),
+            target,
+            away,
+            self.tab.camera,
+            self.guides,
+            state.context,
+            click_through,
+        ))
     }
 }
 
@@ -773,5 +897,19 @@ pub(super) fn background(message: &Message) -> bool {
     ) || super::results::admitted(super::results::Modal::AtomText, message)
 }
 
+mod placement;
+
+/// Marks the actual drawing bounds for the label popup’s layout pass.
+pub(super) fn canvas_anchor(base: Element<'_, Message>) -> Element<'_, Message> {
+    container(base)
+        .id("atom-text-canvas")
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
+}
+
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod visual_tests;
