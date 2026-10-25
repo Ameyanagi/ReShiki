@@ -109,7 +109,7 @@ pub(super) fn read(text: &str) -> Result<Structure, Error> {
     }
     if alternatives > 0 {
         warnings.push(format!(
-            "Alternate locations: kept the first of each residue, left out {alternatives} atom{}",
+            "Alternate locations: kept the first of each residue, left out {alternatives} atom record{}",
             if alternatives == 1 { "" } else { "s" }
         ));
     }

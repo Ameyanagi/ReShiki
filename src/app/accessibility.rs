@@ -62,6 +62,7 @@ struct Context {
     selected: Vec<u64>,
     keyboard_target: Option<String>,
     optimization: Option<super::optimization::AccessibilityContext>,
+    recovery: super::recovery_manager::AccessibilityContext,
     inline_session: Option<iced::widget::Id>,
     surface: (
         super::InspectorTab,
@@ -217,12 +218,14 @@ impl App {
             .optimization
             .as_ref()
             .map(super::optimization::Session::accessibility_context);
+        let recovery = self.recovery_accessibility_context();
         let state = &mut self.accessibility;
         let identity_changed = state.context.as_ref().is_none_or(|context| {
             (context.document.0, context.document.1) != (document.0, document.1)
                 || context.selected != self.tab.selected
                 || context.keyboard_target != keyboard_target
                 || context.optimization != optimization
+                || context.recovery != recovery
                 || context.inline_session != inline_session
                 || context.surface != surface
         });
@@ -232,6 +235,7 @@ impl App {
                 selected: self.tab.selected.clone(),
                 keyboard_target,
                 optimization,
+                recovery,
                 inline_session,
                 surface,
             });

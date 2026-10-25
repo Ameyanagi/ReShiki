@@ -112,3 +112,109 @@ fn exported_theme_bytes_are_the_saved_file() {
     theme_files::save(&path, &theme).unwrap();
     assert_eq!(std::fs::read(&path).unwrap(), bytes);
 }
+
+#[test]
+fn canvas_preference_follows_explicit_choices_not_document_history_or_opening() {
+    use reshiki::canvas_theme::CanvasTheme::{Dark, Light};
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let original = app.tab.doc.clone();
+    let _ = app.update(Message::CanvasTheme(Dark));
+    assert_eq!(app.tab.doc.canvas_theme, Dark);
+    assert_eq!(app.appearance.canvas_theme, Dark);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, original);
+    assert_eq!(app.appearance.canvas_theme, Dark);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc.canvas_theme, Dark);
+    let _ = app.update(Message::Undo);
+
+    // New preserves the old tab's Undo/Redo and seeds a clean new one.
+    let original_tab = app.tab.id;
+    let _ = app.update(Message::New);
+    assert_eq!(app.tab.doc.canvas_theme, Dark);
+    assert!(!app.dirty());
+    let fresh = app.tab.id;
+    let _ = app.update(Message::New);
+    assert_eq!(app.tab.id, fresh, "An unchanged new drawing is reused");
+    let _ = app.update(Message::Tabs(super::super::tabs::Action::Close(Some(
+        original_tab,
+    ))));
+    // Closing the last tab also starts with the remembered brightness.
+    let _ = app.update(Message::Tabs(super::super::tabs::Action::Close(None)));
+    assert_eq!(app.tab.doc.canvas_theme, Dark);
+    assert!(!app.dirty());
+
+    // Opening a light drawing keeps its canvas and does not replace the default.
+    app.show_opened(original.clone(), Some("light.rsk".into()));
+    assert_eq!(app.tab.doc, original);
+    assert_eq!(app.appearance.canvas_theme, Dark);
+    let before = app.tab.doc.clone();
+    app.tab
+        .doc
+        .add_atom("O", reshiki::document::Point::default());
+    app.changed(before);
+    let source = app.tab.id;
+    let _ = app.update(Message::New);
+    assert_ne!(app.tab.id, source);
+    assert_eq!(app.tab.doc.canvas_theme, Dark);
+    assert!(!app.dirty());
+    let _ = app.update(Message::Tabs(super::super::tabs::Action::Select(source)));
+    assert_eq!(app.tab.doc.canvas_theme, Light);
+    assert_eq!(app.appearance.canvas_theme, Dark);
+
+    let _ = app.update(Message::CanvasTheme(Light));
+    assert_eq!(
+        app.appearance.canvas_theme, Light,
+        "An explicit choice on an already-light file is remembered too"
+    );
+}
+
+#[test]
+fn interface_preference_remains_independent_of_remembered_canvas() {
+    use crate::appearance::Mode;
+    use reshiki::canvas_theme::CanvasTheme::{Dark, Light};
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Appearance(Mode::Light));
+    let _ = app.update(Message::CanvasTheme(Dark));
+    assert_eq!(app.appearance.mode, Mode::Light);
+    assert!(!crate::appearance::is_dark(&app.theme()));
+    let _ = app.update(Message::New);
+    assert_eq!(app.tab.doc.canvas_theme, Dark);
+    assert!(!crate::appearance::is_dark(&app.theme()));
+    let _ = app.update(Message::Appearance(Mode::Dark));
+    let _ = app.update(Message::CanvasTheme(Light));
+    assert!(crate::appearance::is_dark(&app.theme()));
+    let _ = app.update(Message::Appearance(Mode::MatchCanvas));
+    assert!(!crate::appearance::is_dark(&app.theme()));
+    let _ = app.update(Message::CanvasTheme(Dark));
+    assert!(crate::appearance::is_dark(&app.theme()));
+}
+
+#[test]
+fn recovering_a_light_draft_preserves_it_without_replacing_dark_preference() {
+    use reshiki::canvas_theme::CanvasTheme::{Dark, Light};
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::CanvasTheme(Dark));
+    let _ = app.update(Message::Undo);
+    let mut recovered = reshiki::document::Document::default();
+    recovered.add_atom("O", reshiki::document::Point::default());
+    let dir = tempfile::tempdir().unwrap();
+    app.recovered.push(reshiki::recovery::Candidate {
+        path: dir.path().join("closed-draft.json"),
+        snapshot: reshiki::recovery::Snapshot {
+            document: recovered.clone(),
+            source: None,
+            saved_at: 1,
+        },
+    });
+    app.restore_recovered();
+    assert_eq!(app.tab.doc.canvas_theme, Light);
+    assert_eq!(app.tab.doc.atoms, recovered.atoms);
+    assert_eq!(app.appearance.canvas_theme, Dark);
+    let _ = app.update(Message::New);
+    assert_eq!(app.tab.doc.canvas_theme, Dark);
+    assert!(!app.dirty());
+}

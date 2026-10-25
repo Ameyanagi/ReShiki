@@ -5,8 +5,9 @@
 //! A model links to its molecule by atom IDs and never changes chemistry,
 //! identities or the 2D layout, which stays for switching back. Its frame is
 //! placed relative to the molecule's 2D centre, so moving, aligning and copying
-//! the atoms carries it along. A chemical edit to the molecule drops the model
+//! the atoms carries it along. A chemical edit to a molecule drops its conformer
 //! instead of repairing it; a molecule shown in 3D then shows its 2D drawing.
+//! Crystal models retain their cell for element- or charge-only substitutions.
 //! Chemical formats (MOL, CDX/CDXML, SMILES) keep the 2D atoms and omit models.
 //!
 //! A model read from a crystal file (#417) may hold several molecules, or an
@@ -147,6 +148,9 @@ pub struct Model3d {
     /// Labels and displacement parameters of atoms read from a file.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sites: Vec<Site>,
+    /// Import decisions that affect the atoms shown, retained as provenance.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<String>,
     /// View rotation as a unit quaternion `[w, x, y, z]`.
     pub rotation: [f32; 4],
     /// Frame centre minus the molecule's 2D centre, in drawing units.
@@ -417,6 +421,7 @@ impl Model3d {
             hydrogens,
             cell: None,
             sites: vec![],
+            notes: vec![],
             rotation: [1., 0., 0., 0.],
             offset: Point::default(),
             size: 1.,
@@ -495,9 +500,9 @@ impl Model3d {
         })
     }
 
-    /// The opening view, facing the broadest side, or for a crystal the
-    /// cell with b to the right, c up and a toward the viewer; double-click
-    /// restores it.
+    /// The opening view, facing the broadest side in the drawing's direction,
+    /// or for a crystal the cell with b to the right, c up and a toward the
+    /// viewer. Double-click restores it.
     pub fn initial_view(&self, doc: &Document) -> [f32; 4] {
         if let Some(cell) = &self.cell {
             // Measured in label heights, as the 2D drawing will show it.
@@ -555,7 +560,14 @@ impl Model3d {
             .filter(|(symbol, _)| *symbol != "H")
             .map(|(_, p)| sub(*p, center))
             .collect();
-        initial_rotation(&heavy)
+        let drawn: Vec<_> = self
+            .atoms
+            .iter()
+            .filter_map(|placed| doc.atom(placed.id))
+            .filter(|atom| atom.element != "H")
+            .map(|atom| atom.position)
+            .collect();
+        drawing_rotation(&heavy, &drawn)
     }
 
     /// The atoms a crystal's 2D drawing labels, with their positions and
@@ -1263,6 +1275,10 @@ pub fn validate(doc: &Document) -> Result<(), String> {
             || !(0. ..=1.).contains(&m.depth_fade)
             || !(0. ..=1.).contains(&m.perspective)
             || !crystal::valid(m.cell.as_ref(), &m.sites, &ids)
+            || m.notes.len() > 16
+            || m.notes.iter().any(|note| {
+                note.trim().is_empty() || note.len() > 512 || note.chars().any(char::is_control)
+            })
             || !m.repeat.iter().all(|n| (1..=MAX_REPEAT).contains(n))
             || (m.cell.is_none() && !is_one_cell(&m.repeat))
             || m.drawn.as_ref().is_some_and(|d| {
@@ -1282,6 +1298,7 @@ pub fn validate(doc: &Document) -> Result<(), String> {
 /// Drop models that lost an atom. Validation tolerates them, so edits that
 /// remove atoms before reconciling stay valid; [`reconcile`] drops them too.
 pub fn prune(doc: &mut Document) {
+    crystal::mark_distance_bonds(doc);
     let present: HashSet<_> = doc.atoms.iter().map(|a| a.id).collect();
     doc.models
         .retain(|m| m.atoms.iter().all(|a| present.contains(&a.id)));
@@ -1302,6 +1319,7 @@ fn whole(doc: &Document, model: &Model3d) -> bool {
 /// Drop a loaded file's models that are not one whole molecule. Unlike
 /// [`prune`], nothing is mid-edit here.
 pub fn retain_whole(doc: &mut Document) {
+    crystal::mark_distance_bonds(doc);
     let models = std::mem::take(&mut doc.models);
     doc.models = models.into_iter().filter(|m| whole(doc, m)).collect();
 }
@@ -1309,9 +1327,12 @@ pub fn retain_whole(doc: &mut Document) {
 /// Called in the same transaction as the edit. A model whose atoms are no
 /// longer exactly one molecule, or whose molecule changed chemically since
 /// `before` (element, charge, bonds, stereo, …; not its 2D layout), is dropped.
+/// A crystal keeps its imported geometry and provenance for element- or
+/// charge-only substitutions; bonds and boundary crossings are not recomputed.
 /// Atom IDs can be reused and equivalent atoms swapped without changing a
 /// canonical SMILES, so the check compares atoms and bonds by ID.
 pub fn reconcile(doc: &mut Document, before: &Document) {
+    crystal::inherit_distance_bonds(doc, before);
     if doc.models.is_empty() {
         return;
     }
@@ -1323,10 +1344,64 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
             let kept = before.models.iter().any(|old| old.ids() == ids);
             whole(doc, m)
                 && (!kept
-                    || chemistry(before, &ids) == chemistry(doc, &ids)
-                        && stereo(before, &ids) == stereo(doc, &ids))
+                    || if m.cell.is_some() {
+                        crystal_substitution(before, doc, &ids)
+                    } else {
+                        chemistry(before, &ids) == chemistry(doc, &ids)
+                            && stereo(before, &ids) == stereo(doc, &ids)
+                    })
         })
         .collect();
+}
+
+/// Crystal bonds describe imported geometry, so changing the elements must
+/// not depend on molecular valence or newly perceived R/S and E/Z. Compare the
+/// editable stereo sources directly instead, allowing only element and charge
+/// differences in the chemical fields. A wildcard or free text is not an
+/// element substitution, and changing a bond's stereo source is not exempt.
+fn crystal_substitution(before: &Document, doc: &Document, ids: &HashSet<u64>) -> bool {
+    if doc
+        .atoms
+        .iter()
+        .filter(|a| ids.contains(&a.id))
+        .any(|a| !crate::editing::ELEMENTS.contains(&a.element.as_str()))
+    {
+        return false;
+    }
+    let normalized = |doc: &Document| {
+        let (mut atoms, mut bonds) = chemistry(doc, ids);
+        for (atom, source) in atoms
+            .iter_mut()
+            .zip(doc.atoms.iter().filter(|a| ids.contains(&a.id)))
+        {
+            atom.element.clear();
+            atom.charge = 0;
+            atom.stereo = source.stereo.clone();
+        }
+        for (bond, source) in bonds.iter_mut().zip(
+            doc.bonds
+                .iter()
+                .filter(|b| ids.contains(&b.a) || ids.contains(&b.b)),
+        ) {
+            // Match the direction inputs used by chemistry::document: a
+            // nonprojected single bold/wedge/hash can specify stereo, as can
+            // a wavy double bond. Plain/dashed and bold double appearance do
+            // not specify chemistry and keep the cell.
+            bond.display = if !source.projection
+                && (source.order == 1 || source.order == 2 && source.display == "wavy")
+                && crate::bonds::is_stereo_marker(&source.display)
+            {
+                source.display.clone()
+            } else {
+                String::new()
+            };
+            bond.stereo = source.stereo.clone();
+            bond.stereo_atoms = source.stereo_atoms.clone();
+            bond.stereo_authoritative = source.stereo_authoritative;
+        }
+        (atoms, bonds)
+    };
+    normalized(before) == normalized(doc)
 }
 
 /// Atom chiral tags, then each bond's stereo, stereo atoms and unknown flag.
@@ -1383,6 +1458,7 @@ fn chemistry(doc: &Document, ids: &HashSet<u64>) -> (Vec<Atom>, Vec<Bond>) {
         .iter()
         .filter(|b| ids.contains(&b.a) || ids.contains(&b.b))
         .map(|b| Bond {
+            distance_derived: false,
             highlight: None,
             ring_arc: false,
             z_order: 0,
@@ -1454,6 +1530,59 @@ fn rotate(q: [f32; 4], v: [f32; 3]) -> [f32; 3] {
 /// now x × y, a proper rotation showing the same face. A linear or one-atom
 /// molecule falls back to fixed axes.
 pub fn initial_rotation(points: &[[f32; 3]]) -> [f32; 4] {
+    tilted(initial_basis(points), -0.35, 0.3)
+}
+
+/// The four sign choices of the principal axes are proper rotations when
+/// the third axis stays their cross product. Choose the face whose projection
+/// best follows the existing drawing, without changing the conformer or its
+/// stereochemistry. Crystals keep their separate cell orientation.
+fn drawing_rotation(points: &[[f32; 3]], drawn: &[Point]) -> [f32; 4] {
+    let basis = initial_basis(points);
+    let original = tilted(basis, -0.35, 0.3);
+    if points.len() != drawn.len() || drawn.is_empty() {
+        return original;
+    }
+    let count = drawn.len() as f64;
+    let center = drawn.iter().fold([0.; 2], |[x, y], point| {
+        [
+            x + f64::from(point.x) / count,
+            y + f64::from(point.y) / count,
+        ]
+    });
+    let score = |rotation| {
+        points
+            .iter()
+            .zip(drawn)
+            .map(|(point, drawing)| {
+                let projected = rotate(rotation, *point);
+                (f64::from(drawing.x) - center[0]) * f64::from(projected[0])
+                    - (f64::from(drawing.y) - center[1]) * f64::from(projected[1])
+            })
+            .sum::<f64>()
+    };
+    let mut best = (original, score(original));
+    for [x, y] in [[-1., 1.], [1., -1.], [-1., -1.]] {
+        let candidate = tilted(
+            [
+                basis[0].map(|v| v * x),
+                basis[1].map(|v| v * y),
+                basis[2].map(|v| v * x * y),
+            ],
+            -0.35,
+            0.3,
+        );
+        let value = score(candidate);
+        // Keep the prototype's choice on ties, including floating point noise
+        // in symmetric or degenerate layouts.
+        if value > best.1 + 1e-6 * best.1.abs().max(value.abs()).max(1e-12) {
+            best = (candidate, value);
+        }
+    }
+    best.0
+}
+
+fn initial_basis(points: &[[f32; 3]]) -> [[f64; 3]; 3] {
     type V = [f64; 3];
     let dot = |a: V, b: V| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     let cross = |a: V, b: V| {
@@ -1507,7 +1636,7 @@ pub fn initial_rotation(points: &[[f32; 3]]) -> [f32; 4] {
     };
     let x = principal([1., 0.3, 0.2], None);
     let y = principal([0.2, 1., 0.3], Some(x)).map(|v| -v);
-    tilted([x, y, cross(x, y)], -0.35, 0.3)
+    [x, y, cross(x, y)]
 }
 
 /// Drawing units per ångström of a crystal's 2D drawing: the drawing's own
@@ -3607,5 +3736,7 @@ fn solve3(a: [[f64; 3]; 3], b: [f64; 3]) -> Option<[f64; 3]> {
     x.iter().all(|v| v.is_finite()).then_some(x)
 }
 
+#[cfg(test)]
+mod opening_tests;
 #[cfg(test)]
 mod tests;

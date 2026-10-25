@@ -24,11 +24,20 @@ fn planar_coordination_scheme_is_readable_and_ownership_is_not_an_overlap() {
     );
     assert_eq!(crate::ring_arcs::render(&doc).primitives.len(), 4);
     assert_eq!(doc.abbreviations.len(), 4);
+    let error = crate::exchange::drawing::write(&doc, Default::default()).unwrap_err();
+    assert!(matches!(
+        error,
+        crate::exchange::drawing::Error::Unsupported(_)
+    ));
+    let message = error.to_string();
     assert!(
-        crate::exchange::drawing::write(&doc, Default::default())
-            .unwrap_err()
-            .to_string()
-            .contains("CDXML cannot yet preserve")
+        message.contains("CDXML/CDX cannot keep inner ring curves yet"),
+        "{message}"
+    );
+    assert!(message.contains("Save as .rsk"), "{message}");
+    assert!(
+        !message.contains("Invalid") && !message.contains("text label"),
+        "{message}"
     );
 }
 

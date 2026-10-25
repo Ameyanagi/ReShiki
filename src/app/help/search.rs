@@ -8,7 +8,7 @@
 use super::registry::Entry;
 
 /// What the matcher reads from a row: Help's shortcuts and the palette's
-/// commands share one ranking.
+/// commands share the same text scoring.
 pub(crate) trait Searchable {
     fn keys(&self) -> &str;
     fn name(&self) -> &str;
@@ -323,13 +323,43 @@ pub(crate) fn in_name_or_keys(entry: &impl Searchable, query: &str) -> bool {
     })
 }
 
-/// Registry indexes in ranked order; an empty query keeps registry order.
-pub(crate) fn rank(entries: &[impl Searchable], query: &str) -> Vec<usize> {
+/// Whether the query's best match in this row requires the classic mapping.
+/// Mixed rows remain available when an unrestricted key matches just as well.
+pub(super) fn requires_classic(entry: &Entry, query: &str) -> bool {
+    if entry.classic_keys.is_empty() {
+        return false;
+    }
+    let available: Vec<_> = entry
+        .keys
+        .split(" / ")
+        .filter(|alternative| {
+            !key_tokens(alternative)
+                .last()
+                .is_some_and(|key| entry.classic_keys.contains(&key.as_str()))
+        })
+        .collect();
+    if available.is_empty() {
+        return true;
+    }
+    let active = Entry {
+        keys: available.join(" / "),
+        ..entry.clone()
+    };
+    score(entry, query) > score(&active, query)
+}
+
+/// Registry indexes in ranked order. Help alone breaks equal-score ties by
+/// canvas mode; an empty query always keeps registry order.
+pub(crate) fn rank(entries: &[Entry], query: &str, contextual: bool) -> Vec<usize> {
+    let contextual = contextual && !query.trim().is_empty();
     let mut scored: Vec<_> = entries
         .iter()
         .enumerate()
-        .filter_map(|(index, entry)| score(entry, query).map(|score| (score, index)))
+        .filter_map(|(index, entry)| {
+            score(entry, query)
+                .map(|score| (score, contextual && requires_classic(entry, query), index))
+        })
         .collect();
-    scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
-    scored.into_iter().map(|(_, index)| index).collect()
+    scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
+    scored.into_iter().map(|(_, _, index)| index).collect()
 }

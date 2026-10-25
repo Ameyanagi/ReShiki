@@ -9,11 +9,11 @@ impl App {
             message,
             Message::Inspector(_)
                 | Message::InsertTemplate(_)
-                | Message::Tool(
-                    Tool::Arrow | Tool::Graphic(_) | Tool::EditPoints | Tool::RingPreset(_)
-                )
-        ) || (self.inspector_tab != InspectorTab::Templates
-            && matches!(message, Message::Canvas(Edit::Select(ids)) if ids.iter().any(|id| self.tab.doc.annotations.iter().any(|a| a.id == *id) || self.tab.doc.graphics.iter().any(|g|g.id==*id))))
+                | Message::Tool(Tool::Arrow | Tool::Graphic(_) | Tool::RingPreset(_))
+        ) || (matches!(message, Message::Tool(Tool::EditPoints))
+            && !(self.inspector_open && self.inspector_tab == InspectorTab::Properties))
+            || (self.inspector_tab != InspectorTab::Templates
+                && matches!(message, Message::Canvas(Edit::Select(ids)) if ids.iter().any(|id| self.tab.doc.annotations.iter().any(|a| a.id == *id) || self.tab.doc.graphics.iter().any(|g|g.id==*id))))
     }
 
     pub(super) fn dispatch_message(&mut self, message: Message) -> Option<Task<Message>> {
@@ -55,6 +55,7 @@ impl App {
             Message::StyleMenu(action) => return Some(self.style_menu_action(action)),
             Message::Shortcut(action) => return Some(self.shortcut_action(action)),
             Message::AromaticDisplay => return Some(self.request_aromatic_display()),
+            Message::CancelEngine(key) => self.cancel_engine_request(key),
             Message::Abbreviations(action) => return Some(self.abbreviation_action(action)),
             Message::Generic(action) => return Some(self.generic_action(action)),
             Message::Labels(action) => self.label_action(action),
@@ -143,6 +144,7 @@ impl App {
             Message::Restore if self.pending.is_some() => {}
             Message::Restore => self.restore_recovered(),
             Message::DismissRecovery => self.dismiss_recovery(),
+            Message::Recovery(action) => return Some(self.recovery_action(action)),
             Message::Canvas(Edit::BeginTransform(field)) => {
                 return Some(self.begin_numeric_transform(field));
             }
@@ -204,6 +206,7 @@ impl App {
             Message::Export(format) => return Some(self.export_drawing(format)),
             Message::FigureExported(result) => self.figure_exported(result),
             message @ (Message::EngineDone { .. }
+            | Message::EngineFinished { .. }
             | Message::ClipboardWritten { .. }
             | Message::CopyAsPrepared(..)
             | Message::CopyAsWritten(..)
@@ -251,6 +254,7 @@ impl App {
                 kind,
                 result,
             } => return self.engine_done(revision, kind, *result),
+            Message::EngineFinished { key, result } => return self.engine_finished(key, *result),
             Message::Exported(result) => self.structure_exported(result),
             _ => {}
         }

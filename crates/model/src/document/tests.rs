@@ -395,6 +395,7 @@ fn rejects_dangling_bond_and_duplicate_ids() {
     let mut doc = Document::default();
     let a = doc.add_atom("C", Point::default());
     doc.bonds.push(Bond {
+        distance_derived: false,
         highlight: None,
         ring_arc: false,
         projection: false,

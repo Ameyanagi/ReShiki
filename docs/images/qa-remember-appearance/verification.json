@@ -1,0 +1,98 @@
+{
+  "base": "3d80590a41b9d9e8efd818d23395ac51bd264ca8",
+  "head": "e59b1faaca5f04a169653c08687ec99777013b45",
+  "platform": "macOS-27.0.1-arm64-arm-64bit",
+  "baseline_profile": "optimized verified production source",
+  "head_profile": "dev without debug/incremental",
+  "preferences": "Separate disposable native data folders; no personal application preferences changed",
+  "binaries": {
+    "before": {
+      "sha256": "a51637f61cec1113c885d9c1f431b8f5c662d3f61b6de8204c47139fa0fc3f1d"
+    },
+    "after": {
+      "sha256": "7fc07da2504cd6e3e3583f6b125544ad17a805da9e1e0f536598b6d7748bccf8"
+    }
+  },
+  "window_points": [1280, 852],
+  "capture_pixels": [2560, 1704],
+  "published_pixels": [1280, 852],
+  "zoom": 1,
+  "style": "JACS / ACS",
+  "color_theme": "Publication",
+  "native_actions": [
+    "Launch empty profile; F8 turns off keyboard-drawing marker; click sun/moon to choose Dark; CmdQ; relaunch; F8 turns marker off",
+    "Baseline restart shows clean Light canvas; fixed restart shows clean Dark canvas with Match canvas interface",
+    "Fixed View → Interface → Light; CmdQ; relaunch; F8; View shows Light while new canvas remains Dark",
+    "Both QA apps quit and confirmed isRunning:false"
+  ],
+  "after_restart_preferences": {
+    "mode": "match_canvas",
+    "canvas_theme": "dark",
+    "arrange_controls": true,
+    "smart_guides": true,
+    "drawing_style_unit": "pt"
+  },
+  "after_independent_interface_preferences": {
+    "mode": "light",
+    "canvas_theme": "dark",
+    "arrange_controls": true,
+    "smart_guides": true,
+    "drawing_style_unit": "pt"
+  },
+  "captures": {
+    "before-restart": {
+      "original_sha256": "1bc566c35314530fc5a2b67e586e44ed7d65251b4c5378343082e87c38d76dd2",
+      "published_sha256": "c2170393d2d7c72c1659f2b41d4dc0ca859d1ee46fed088ed5a8adb89759a53d"
+    },
+    "after-restart": {
+      "original_sha256": "6db486f3ef48abe6c1cf111ed9f2b8249dde6a71d7c26667b5354c5e2f754bd3",
+      "published_sha256": "2af5fb588ec9f26a0f21a1038a3b5018a29579113936bcbe4beb5620fc645ba7"
+    },
+    "after-light-interface": {
+      "original_sha256": "03ee5b09a15e14903fb1e78cb243f4abe10a83ead0c22e3516c7225d46fdb19a",
+      "published_sha256": "fdf60da79409076f9eaaed71f050e91d06cf0f45f9e155fdd38b3db351e0cbd4"
+    }
+  },
+  "browser": [
+    {
+      "browser": "chromium",
+      "version": "156.0.8078.4",
+      "checks": [
+        "dark command → immediate reload → clean dark drawing",
+        "Light, Dark and Match canvas interface choices survive reload independently",
+        "existing light drawing retains its canvas without replacing dark default",
+        "New uses remembered dark brightness",
+        "light command → immediate reload → clean light drawing",
+        "aborted IDB preference write retains old value; same-value retry survives reload"
+      ],
+      "saved": {
+        "mode": "match_canvas",
+        "canvas_theme": "dark",
+        "arrange_controls": true,
+        "smart_guides": true,
+        "drawing_style_unit": "pt"
+      },
+      "errors": []
+    },
+    {
+      "browser": "webkit",
+      "version": "27.2",
+      "checks": [
+        "dark command → immediate reload → clean dark drawing",
+        "Light, Dark and Match canvas interface choices survive reload independently",
+        "existing light drawing retains its canvas without replacing dark default",
+        "New uses remembered dark brightness",
+        "light command → immediate reload → clean light drawing",
+        "aborted IDB preference write retains old value; same-value retry survives reload"
+      ],
+      "saved": {
+        "mode": "match_canvas",
+        "canvas_theme": "dark",
+        "arrange_controls": true,
+        "smart_guides": true,
+        "drawing_style_unit": "pt"
+      },
+      "errors": []
+    }
+  ]
+}

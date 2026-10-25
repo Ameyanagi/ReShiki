@@ -25,6 +25,8 @@
 
 mod cache;
 mod dashes;
+#[cfg(test)]
+mod drawing_polish_qa;
 mod grid;
 pub mod guides;
 mod hit;
@@ -503,6 +505,7 @@ pub struct MoleculeCanvas<'a> {
     pub(crate) keyboard_target: Option<World>,
     /// The model (by an atom) that started its 2D → 3D morph, and when.
     pub(crate) morph: Option<(u64, iced::time::Instant)>,
+    pub(crate) model_generation: Option<ModelGeneration<'a>>,
     pub joining: Option<(&'a reshiki::joining::Prepared, reshiki::templates::Anchor)>,
     pub hidden_annotation: Option<u64>,
     pub bond_drawing: BondDrawing,
@@ -547,6 +550,7 @@ impl<'a> MoleculeCanvas<'a> {
             optimizer: None,
             keyboard_target: None,
             morph: None,
+            model_generation: None,
             joining: None,
             hidden_annotation: None,
             bond_drawing: styles.bond_drawing,
@@ -575,6 +579,29 @@ impl<'a> MoleculeCanvas<'a> {
                 ..Default::default()
             },
         }
+    }
+}
+
+/// An editing aid for a current, abortable 3D-generation job. It never changes
+/// the drawing and is absent from previews and exported scenes.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ModelGeneration<'a> {
+    pub atoms: &'a [u64],
+    pub started: iced::time::Instant,
+}
+
+impl ModelGeneration<'_> {
+    pub(crate) fn elapsed(self, now: iced::time::Instant) -> Option<std::time::Duration> {
+        now.checked_duration_since(self.started)
+            .filter(|elapsed| *elapsed >= std::time::Duration::from_secs(1))
+    }
+
+    fn next_tick(self, now: iced::time::Instant) -> iced::time::Instant {
+        let seconds = now
+            .checked_duration_since(self.started)
+            .unwrap_or_default()
+            .as_secs();
+        self.started + std::time::Duration::from_secs(seconds.saturating_add(1))
     }
 }
 fn rgb(c: [u8; 3]) -> Color {

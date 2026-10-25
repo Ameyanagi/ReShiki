@@ -71,6 +71,8 @@ pub(super) struct DocumentTab {
     // Derived chemistry and in-flight work.
     pub(super) analysis: Option<Analysis>,
     pub(super) busy: bool,
+    pub(super) engine_job: Option<super::engine_jobs::Pending>,
+    pub(super) engine_serial: u64,
     pub(super) clipboard_busy: bool,
     pub(super) labels_dirty: bool,
     pub(super) label_refresh: label_refresh::State,
@@ -138,14 +140,21 @@ impl DocumentTab {
             || self.atom_text.is_some()
     }
 
-    pub(super) fn new(recovery: Option<Recovery>) -> Self {
+    pub(super) fn new(
+        recovery: Option<Recovery>,
+        canvas_theme: reshiki::canvas_theme::CanvasTheme,
+    ) -> Self {
+        let doc = Document {
+            canvas_theme,
+            ..Default::default()
+        };
         Self {
             id: TabId(0),
             edited: false,
             status: super::READY.into(),
             error: false,
-            doc: Document::default(),
-            saved: Document::default(),
+            saved: doc.clone(),
+            doc,
             unsaved: Default::default(),
             history: History::default(),
             revision: 0,
@@ -175,6 +184,8 @@ impl DocumentTab {
             model_morph: None,
             analysis: None,
             busy: false,
+            engine_job: None,
+            engine_serial: 0,
             clipboard_busy: false,
             labels_dirty: false,
             label_refresh: Default::default(),

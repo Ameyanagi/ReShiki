@@ -728,7 +728,7 @@ impl App {
             .into();
         }
         if self.tool == Tool::Text {
-            return column![
+            let mut body = column![
                 section("TEXT LABELS"),
                 text(
                     "Click the canvas to type a new label, or click an existing label to edit it."
@@ -739,8 +739,29 @@ impl App {
                     .size(11)
                     .style(muted_text),
             ]
-            .spacing(9)
-            .into();
+            .spacing(9);
+            let modifier = if crate::platform::mac() {
+                "Option"
+            } else {
+                "Alt"
+            };
+            if let Some(label) = &self.last_label {
+                body = body
+                    .push(text(format!("Repeat: {}", label.text)).size(12))
+                    .push(
+                        text(format!(
+                            "Double-click or {modifier}-click another atom · Esc clears"
+                        ))
+                        .size(11)
+                        .style(muted_text),
+                    );
+            } else {
+                body = body.push(
+                    text(format!("After naming an atom, double-click or {modifier}-click another atom to repeat its label."))
+                        .size(11).style(muted_text),
+                );
+            }
+            return body.into();
         }
         let selected = self
             .tab

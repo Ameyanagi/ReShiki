@@ -78,7 +78,9 @@ share them with ReShiki 0.11.0 users.
   concrete choices. `[NOT …]` lists, `n` counts and the **Head to head** and
   **Mixed / unknown** patterns are kept but not expanded.
 - Identifiers, properties, chemical labels, NMR prediction and joining wait
-  until you expand. Ordinary molecules in the same drawing still work.
+  until you expand. Molecular properties explains this with a neutral note;
+  generic choices are valid drawing data. Ordinary molecules in the same
+  drawing still work, and real errors such as invalid valence still show warnings.
 - Expansion keeps the ring in place and moves the substituent outward. A
   crowded or ambiguous placement rejects the whole expansion and keeps the
   source.

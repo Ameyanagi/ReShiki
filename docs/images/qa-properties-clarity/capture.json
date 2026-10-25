@@ -1,0 +1,52 @@
+{
+  "base_sha": "3d80590a41b9d9e8efd818d23395ac51bd264ca8",
+  "implementation_sha": "c19c7e648f74cb85e8431dd2edb1b522b91bbc10",
+  "os": "macOS27.0.1",
+  "architecture": "arm64",
+  "window_points": [1280, 852],
+  "capture_pixels": [2560, 1704],
+  "scale": 2,
+  "drawing_zoom_percent": 100,
+  "style": "JACS / ACS",
+  "theme": "Publication",
+  "fixture_sha256": "71229e202a3a0ba5765af5ac4bd94f4396613237f421cb4c828925c589b553da",
+  "capture_method": "Native app via CUA, lossless WebP crops without scaling or repainting",
+  "images": [
+    {
+      "file": "after-arrow-tool.webp",
+      "crop_xyxy": [1960, 272, 2560, 1620],
+      "sha256": "a9da130ceb5d1eb1a8da238f8c05dbcb8497d769cd3db23d08f48468d5b6eb75",
+      "original_png_sha256": "13e924a7cd938b499406bd65e88c584426fe857a7dde1d442570531b542154b4"
+    },
+    {
+      "file": "after-arrows.webp",
+      "crop_xyxy": [1960, 272, 2560, 1620],
+      "sha256": "552eb78dd8fb07dbfa4a89d9ffde79262017dbf015890d86e7186ece33e4b246",
+      "original_png_sha256": "af6586b9e0458095aa6b4706611eab4937e3d00990fb2e8581ea1b8cf641ee5f"
+    },
+    {
+      "file": "after-labels.webp",
+      "crop_xyxy": [2048, 272, 2560, 1620],
+      "sha256": "77bf507a77b0513fdee9b0aaeb4aae8547e3baee15dcb4c17494fa518e1685e6",
+      "original_png_sha256": "47d92813ae78474849c6113661c3cb67ed4b05a224b5642356fffab452a05d74"
+    },
+    {
+      "file": "after-single-arrow.webp",
+      "crop_xyxy": [1960, 272, 2560, 1620],
+      "sha256": "7751b36aa8a72db488cfbd9098b7a3250d4a59fe54aa1e0511ff35621133a431",
+      "original_png_sha256": "c1fac4b25074044d049ba5c808ec7f9f62c80e34919f9dda717c76b87db827be"
+    },
+    {
+      "file": "before-arrows.webp",
+      "crop_xyxy": [1960, 272, 2560, 1620],
+      "sha256": "d9dd138cc15213288acacc1b5ed1466950247fab0aabce413748d17b7b2ec85d",
+      "original_png_sha256": "7bc3cd7b23f0aa6488307443a9cdaa535599a4a4a28f0e31cc44786ee9a543c4"
+    },
+    {
+      "file": "before-labels.webp",
+      "crop_xyxy": [2048, 272, 2560, 1620],
+      "sha256": "48d6a129ba84a0ffb01053706bb3950624b3206c98dd60213a1ab378c51ba7d4",
+      "original_png_sha256": "7c5a8e8f8ac86d4bea54990d1bff850dc1ef98b88e930717d557981fbe7d1460"
+    }
+  ]
+}

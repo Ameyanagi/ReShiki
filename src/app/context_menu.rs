@@ -417,6 +417,19 @@ impl App {
         if self.selected_model().is_some() {
             entries.push(submenu("Show as", Page::Model));
         }
+        if self
+            .tab
+            .doc
+            .atoms
+            .iter()
+            .any(|atom| self.tab.selected.contains(&atom.id) && !atom.marks.is_empty())
+        {
+            entries.push(command(
+                "Position atom marks",
+                Message::Tool(Tool::EditPoints),
+                true,
+            ));
+        }
         if self.tab.doc.atoms.iter().any(|a| {
             self.tab.selected.contains(&a.id)
                 && a.attachment.is_some()

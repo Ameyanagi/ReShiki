@@ -384,8 +384,8 @@ fn cached_property_errors_stop_polling_until_the_request_key_changes() {
     app.tab.selected = vec![u64::MAX];
     assert_eq!(
         subscriptions(&app),
-        0,
-        "Artwork is not a molecular fragment"
+        1,
+        "Artwork has no fragment, but the revised whole drawing still calculates"
     );
 }
 
@@ -592,6 +592,38 @@ fn a_selection_opens_at_most_one_section() {
     assert_eq!(app.opened_section(), None);
     app.tab.selected = vec![arrow];
     assert_eq!(app.opened_section(), None);
+}
+
+#[test]
+fn focused_model_controls_override_only_the_explicit_model_section_preference() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let (doc, ids, _) = crate::canvas::tilt::shown(reshiki::models3d::Display::ThreeD);
+    app.tab.doc = doc;
+    app.tab.selected = ids.to_vec();
+    app.tab
+        .inspector_ui
+        .update(Action::Section(Section::Bonds, true));
+    app.tab
+        .inspector_ui
+        .update(Action::Section(Section::Model3d, false));
+    let before = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    assert!(app.selected_visible_model());
+    let _ = app.update(Message::InspectorAction(Action::ModelControls(true)));
+    assert!(app.tab.inspector_ui.model_controls);
+    assert_eq!(app.tab.inspector_ui.expanded(Section::Model3d), Some(true));
+    assert_eq!(app.tab.inspector_ui.expanded(Section::Bonds), Some(true));
+    let _ = app.properties_panel();
+    let _ = app.update(Message::InspectorAction(Action::ModelControls(false)));
+    assert!(!app.tab.inspector_ui.model_controls);
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.revision, revision);
+    assert!(!app.tab.history.can_undo());
+    app.tab.doc.models[0].display = reshiki::models3d::Display::TwoD;
+    let _ = app.update(Message::InspectorAction(Action::ModelControls(true)));
+    assert!(!app.tab.inspector_ui.model_controls);
+    assert!(!app.selected_visible_model());
 }
 
 #[test]
