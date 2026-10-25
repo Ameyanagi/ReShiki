@@ -62,6 +62,9 @@ navigation in [PR #577](https://github.com/Ameyanagi/ReShiki/pull/577), with
 Under review: @Ameyanagi — drawing-aligned proper 3D opening views, captioned
 model frame handles and preview placement, resting rotation hints, and native/
 browser regression evidence in [PR #579](https://github.com/Ameyanagi/ReShiki/pull/579).
+Under review: @Ameyanagi — remembered canvas brightness for new drawings and
+restart/reload persistence coverage in
+[PR #581](https://github.com/Ameyanagi/ReShiki/pull/581).
 
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).

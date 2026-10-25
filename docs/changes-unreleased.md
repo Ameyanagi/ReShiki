@@ -210,4 +210,12 @@ and crystal cell orientation retain their existing behavior.
 [Matched comparisons, inputs and native/browser checks](changes/qa-model-face-handles.md)
 cover the visible changes and the chemical/native round trips.
 
+Under review: @Ameyanagi — ReShiki remembers the chosen canvas brightness for new
+drawings and the next launch, while keeping each saved drawing's own appearance
+([PR #581](https://github.com/Ameyanagi/ReShiki/pull/581),
+[restart and browser reload evidence](changes/qa-remember-appearance.md)). The
+independent **View → Interface** preference remains available.
+
+![A new blank drawing starts clean with the remembered dark canvas and matching interface](images/qa-remember-appearance/after-restart.png)
+
 See [ReShiki 0.13.0](changes-0.13.md) for the latest release notes.

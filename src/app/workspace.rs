@@ -2505,9 +2505,9 @@ impl App {
                 .style(control(false))
                 .on_press(Message::CanvasTheme(self.tab.doc.canvas_theme.toggled())),
                 if dark {
-                    "Dark canvas · Switch to light"
+                    "Dark canvas · Switch to light · Remembered for new drawings"
                 } else {
-                    "Light canvas · Switch to dark"
+                    "Light canvas · Switch to dark · Remembered for new drawings"
                 },
                 tooltip::Position::Top,
             )

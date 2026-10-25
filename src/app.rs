@@ -485,9 +485,10 @@ impl App {
         let recovery_root = recovery
             .as_ref()
             .and_then(|r| r.session.parent().map(PathBuf::from));
+        let appearance = crate::appearance::Settings::load();
         let mut app = Self {
             accessibility: accessibility::State::default(),
-            tab: DocumentTab::new(recovery),
+            tab: DocumentTab::new(recovery, appearance.canvas_theme),
             tabs: tabs::State::new(recovery_root),
             updates: updates::State::new(),
             theme_library: theme_files::State::load(),
@@ -511,7 +512,7 @@ impl App {
             grid: false,
             guides: Default::default(),
             view_open: false,
-            appearance: crate::appearance::Settings::load(),
+            appearance,
             engine: LocalEngine::default(),
             figure_exporting: false,
             copy_as_busy: false,
