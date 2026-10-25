@@ -4,6 +4,12 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
+Under review: @Ameyanagi — whole-drawing and selected-fragment Properties
+continuity, singular atom/bond counts, remembered Molecular header choices in new
+tabs, and drawing-tool visibility in
+[PR #564](https://github.com/Ameyanagi/ReShiki/pull/564).
+[Matched renderer and native evidence](changes/qa-property-continuity.md).
+
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).
 
