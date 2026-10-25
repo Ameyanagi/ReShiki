@@ -4,6 +4,9 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
+Under review: @Ameyanagi — Export dialogs name their format, browser progress and download receipts describe what happened, and the npm package has a complete HTML recipe with the correct release version.
+[PR #557](https://github.com/Ameyanagi/ReShiki/pull/557) · [QA report](changes/qa-browser-polish.md).
+
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).
 
