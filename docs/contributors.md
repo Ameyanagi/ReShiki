@@ -4,6 +4,8 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
+Under review: @Ameyanagi — readable long-chain imports with retained molecular
+identity and stereochemistry in [PR #539](https://github.com/Ameyanagi/ReShiki/pull/539).
 Under review: @Ameyanagi — moving 3D models from their visible frame edges in
 [PR #540](https://github.com/Ameyanagi/ReShiki/pull/540).
 
@@ -173,3 +175,9 @@ Nix flake for Linux and Apple Silicon Macs (released in 0.13.0): @Stefanomarton 
 Release preparation and documentation for 0.13.0: @Ameyanagi.
 
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.13.md) credit contributors alongside their changes.
+
+Space-filling hydrogen visibility: @Ameyanagi in [PR #535](https://github.com/Ameyanagi/ReShiki/pull/535) (merged); [validation and reusable evidence](changes/qa-513.md).
+
+PDF gradient alignment for molecular and crystal models: @Ameyanagi in [PR #536](https://github.com/Ameyanagi/ReShiki/pull/536) (under review); [validation and reusable evidence](changes/qa-522.md).
+
+Clear CLI errors for unsupported crystal input: @Ameyanagi in [PR #537](https://github.com/Ameyanagi/ReShiki/pull/537) (under review); [validation](changes/qa-490.md).
