@@ -33,6 +33,11 @@ Under review: @Ameyanagi — recovery draft review, selective restore and safe
 discard of abandoned copies for [issue #491](https://github.com/Ameyanagi/ReShiki/issues/491)
 in [PR #563](https://github.com/Ameyanagi/ReShiki/pull/563).
 [QA report and reusable images](changes/recovery-manager.md).
+Under review: @Ameyanagi — whole-drawing and selected-fragment Properties
+continuity, singular atom/bond counts, remembered Molecular header choices in new
+tabs, and drawing-tool visibility in
+[PR #564](https://github.com/Ameyanagi/ReShiki/pull/564).
+[Matched renderer and native evidence](changes/qa-property-continuity.md).
 
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).

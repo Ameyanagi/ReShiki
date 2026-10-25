@@ -30,6 +30,8 @@ pub(super) struct State {
     next: u64,
     epochs: u64,
     pub(super) menu: bool,
+    /// Last explicit Molecular header choice, used only to seed fresh drawings.
+    pub(super) molecular_expanded: Option<bool>,
     /// Where new tabs keep their recovery drafts.
     pub(super) recovery_root: Option<PathBuf>,
     /// Closed tabs whose draft is removed once its last write finishes.
@@ -180,6 +182,8 @@ impl App {
         self.tabs.next += 1;
         tab.id = TabId(self.tabs.next);
         tab.file_epoch = self.next_epoch();
+        tab.inspector_ui
+            .seed_molecular(self.tabs.molecular_expanded);
         tab
     }
 
@@ -217,6 +221,9 @@ impl App {
         self.tab.revision = old.revision.wrapping_add(1);
         self.tab.file_epoch = self.next_epoch();
         self.sync_drawing_panel_context();
+        self.tab
+            .inspector_ui
+            .seed_molecular(self.tabs.molecular_expanded);
         self.clear_recovery();
     }
 

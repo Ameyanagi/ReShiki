@@ -270,8 +270,8 @@ fn cached_property_errors_stop_polling_until_the_request_key_changes() {
     app.tab.selected = vec![u64::MAX];
     assert_eq!(
         subscriptions(&app),
-        0,
-        "Artwork is not a molecular fragment"
+        1,
+        "Artwork has no fragment, but the revised whole drawing still calculates"
     );
 }
 

@@ -785,10 +785,9 @@ impl App {
             );
         }
         content = content.push(
-            text(format!(
-                "{} atoms · {} bonds",
+            text(crate::app::workspace::atom_bond_counts(
                 preview.document.atoms.len(),
-                preview.document.bonds.len()
+                preview.document.bonds.len(),
             ))
             .size(11)
             .style(muted_text),

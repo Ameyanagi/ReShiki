@@ -144,6 +144,7 @@ pub enum Action {
     Chemical(ChemicalFormat),
     ChemicalMenu(bool),
     RefreshProperties,
+    RefreshPropertiesFor(PropertyKey),
     Centroid,
     Attachment(reshiki::attachments::Kind),
     DepthBonds,
@@ -167,8 +168,15 @@ pub(super) struct State {
     chemical_menu: bool,
     pending: Option<PropertyKey>,
     properties: Option<(PropertyKey, Result<Analysis, String>)>,
+    whole_properties: Option<(PropertyKey, Result<Analysis, String>)>,
 }
 impl State {
+    pub(super) fn seed_molecular(&mut self, expanded: Option<bool>) {
+        if let Some(expanded) = expanded {
+            self.expanded.insert(Section::Molecule, expanded);
+        }
+    }
+
     pub(super) fn expect_viewport(&mut self, size: iced::Size) {
         self.expected_viewport = Some(size);
     }
@@ -218,6 +226,7 @@ impl State {
                 self.figure_menu = false;
             }
             Action::RefreshProperties
+            | Action::RefreshPropertiesFor(..)
             | Action::PropertiesCalculated(..)
             | Action::Centroid
             | Action::Attachment(_)
@@ -272,24 +281,57 @@ impl App {
     }
 
     pub(super) fn property_request_key(&self) -> PropertyKey {
-        self.property_key().unwrap_or_else(|| PropertyKey {
+        self.property_key()
+            .unwrap_or_else(|| self.whole_property_key())
+    }
+
+    fn whole_property_key(&self) -> PropertyKey {
+        PropertyKey {
             revision: self.tab.revision,
             epoch: self.tab.file_epoch,
             atoms: self.tab.doc.atoms.iter().map(|a| a.id).collect(),
+        }
+    }
+
+    fn property_result(&self, key: &PropertyKey) -> Option<&Result<Analysis, String>> {
+        [
+            &self.tab.inspector_ui.whole_properties,
+            &self.tab.inspector_ui.properties,
+        ]
+        .into_iter()
+        .flatten()
+        .find(|(saved, _)| saved == key)
+        .map(|(_, result)| result)
+    }
+
+    fn whole_property_analysis(&self) -> Option<&Analysis> {
+        self.tab.analysis.as_ref().or_else(|| {
+            self.property_result(&self.whole_property_key())
+                .and_then(|result| result.as_ref().ok())
         })
     }
 
     pub(super) fn property_analysis(&self) -> Option<&Analysis> {
-        if self.tab.selected.is_empty() && self.tab.analysis.is_some() {
-            return self.tab.analysis.as_ref();
-        }
         let key = self.property_request_key();
-        self.tab
-            .inspector_ui
-            .properties
-            .as_ref()
-            .filter(|(saved, _)| *saved == key)
-            .and_then(|(_, result)| result.as_ref().ok())
+        if key == self.whole_property_key() {
+            return self.whole_property_analysis();
+        }
+        self.property_result(&key)
+            .and_then(|result| result.as_ref().ok())
+    }
+
+    /// Whole drawing work keeps its debounce identity when only the selection changes.
+    /// One pending job bounds the work; cached failures are settled until the drawing changes.
+    fn next_property_request(&self) -> Option<PropertyKey> {
+        let whole = self.whole_property_key();
+        [whole.clone(), self.property_request_key()]
+            .into_iter()
+            .find(|key| {
+                !key.atoms.is_empty()
+                    && !reshiki::models3d::crystal::touches(&self.tab.doc, &key.atoms)
+                    && !(key == &whole && self.tab.analysis.is_some())
+                    && self.property_result(key).is_none()
+            })
     }
 
     pub(super) fn properties_subscription(&self) -> Subscription<Message> {
@@ -301,26 +343,16 @@ impl App {
             || self.tab.cleanup.is_some()
             || self.tab.optimization.is_some()
             || self.tab.inspector_ui.pending.is_some()
-            || (self.tab.selected.is_empty() && self.tab.analysis.is_some())
         {
             return Subscription::none();
         }
-        let key = self.property_request_key();
-        if key.atoms.is_empty()
-            || reshiki::models3d::crystal::touches(&self.tab.doc, &key.atoms)
-            || self
-                .tab
-                .inspector_ui
-                .properties
-                .as_ref()
-                .is_some_and(|(saved, _)| *saved == key)
-        {
+        let Some(key) = self.next_property_request() else {
             return Subscription::none();
-        }
-        // Changing the selection restarts the delay, so dragging does not queue chemistry jobs.
+        };
+        // Changing a fragment restarts its delay, so dragging does not queue chemistry jobs.
         iced::time::every(std::time::Duration::from_millis(350))
             .with(key)
-            .map(|_| Message::InspectorAction(Action::RefreshProperties))
+            .map(|(key, _)| Message::InspectorAction(Action::RefreshPropertiesFor(key)))
     }
 
     pub(super) fn inspector_action(&mut self, action: Action) -> Task<Message> {
@@ -393,14 +425,31 @@ impl App {
                 self.changed(before);
                 Task::none()
             }
-            Action::RefreshProperties => {
-                let key = self.property_request_key();
+            Action::RefreshProperties | Action::RefreshPropertiesFor(_) => {
+                let key = match &action {
+                    Action::RefreshPropertiesFor(key) => key.clone(),
+                    _ => self.property_request_key(),
+                };
+                if key != self.whole_property_key() && key != self.property_request_key() {
+                    return Task::none();
+                }
                 if key.atoms.is_empty() || self.tab.inspector_ui.pending.is_some() {
+                    return Task::none();
+                }
+                if matches!(action, Action::RefreshPropertiesFor(_))
+                    && ((key == self.whole_property_key() && self.tab.analysis.is_some())
+                        || self.property_result(&key).is_some())
+                {
                     return Task::none();
                 }
                 let request = Request::molecule("analyze", self.property_document(&key));
                 self.tab.inspector_ui.pending = Some(key.clone());
-                self.tab.inspector_ui.properties = None;
+                if key == self.whole_property_key() {
+                    self.tab.inspector_ui.whole_properties = None;
+                }
+                if key == self.property_request_key() {
+                    self.tab.inspector_ui.properties = None;
+                }
                 let engine = self.engine.clone();
                 Task::perform(
                     async move {
@@ -421,14 +470,23 @@ impl App {
             Action::PropertiesCalculated(key, result) => {
                 if self.tab.inspector_ui.pending.as_ref() == Some(&key) {
                     self.tab.inspector_ui.pending = None;
+                    // Never apply fragment labels or hydrogen counts to the original drawing.
+                    // A selection change may keep a whole-drawing receipt useful, but a new
+                    // revision or file epoch makes both kinds of receipt stale.
+                    if self.whole_property_key() == key {
+                        self.tab.inspector_ui.whole_properties =
+                            Some((key.clone(), (*result).clone()));
+                    }
                     if self.property_request_key() == key {
-                        // Never apply fragment labels or hydrogen counts to the original drawing.
                         self.tab.inspector_ui.properties = Some((key, *result));
                     }
                 }
                 Task::none()
             }
             other => {
+                if let Action::Section(Section::Molecule, expanded) = &other {
+                    self.tabs.molecular_expanded = Some(*expanded);
+                }
                 self.tab.inspector_ui.update(other);
                 Task::none()
             }
@@ -436,17 +494,30 @@ impl App {
     }
 
     fn property_summary(&self) -> String {
-        let scope = if self.tab.selected.is_empty() {
-            "Whole drawing"
-        } else {
-            "Selection"
+        let summary = |scope: &str, analysis: Option<&Analysis>| {
+            analysis.map_or_else(
+                || scope.into(),
+                |a| format!("{scope} · {} · {:.3} g/mol", a.formula, a.mass),
+            )
         };
-        if let Some(a) = self.property_analysis() {
-            format!("{scope} · {}", a.formula)
-        } else if self.property_key().is_some_and(|key| key.atoms.is_empty()) {
-            "No atoms selected".into()
+        let whole = if self.whole_property_analysis().is_none()
+            && self
+                .property_result(&self.whole_property_key())
+                .is_some_and(Result::is_err)
+        {
+            "Whole drawing · Unavailable".into()
         } else {
-            scope.into()
+            summary("Whole drawing", self.whole_property_analysis())
+        };
+        if self.tab.selected.is_empty() {
+            whole
+        } else {
+            let selection = if self.property_key().is_some_and(|key| key.atoms.is_empty()) {
+                "No atoms selected".into()
+            } else {
+                summary("Selection", self.property_analysis())
+            };
+            format!("{whole}\n{selection}")
         }
     }
 
@@ -595,7 +666,9 @@ impl App {
         }
         let molecular_first = self.tab.selected.is_empty()
             || self.property_key().is_some_and(|key| !key.atoms.is_empty());
-        if molecular_first {
+        // Keep the active ring tool's placement card visible above the expanded values.
+        let ring_tool = matches!(self.tool, Tool::RingPreset(_));
+        if molecular_first && !ring_tool {
             body = body.push(self.molecular_section());
         }
         if let Tool::RingPreset(preset) = self.tool {
@@ -637,6 +710,9 @@ impl App {
                 )
                 .padding(12),
             ));
+        }
+        if molecular_first && ring_tool {
+            body = body.push(self.molecular_section());
         }
         if matches!(self.tool, Tool::Graphic(_))
             || self
@@ -851,7 +927,7 @@ impl App {
             (self.tab.doc.atoms.len(), self.tab.doc.bonds.len())
         };
         let mut body = column![
-            text(format!("{} atoms · {} bonds", atoms, bonds))
+            text(super::workspace::atom_bond_counts(atoms, bonds))
                 .size(11)
                 .style(muted_text)
         ]
@@ -910,13 +986,7 @@ impl App {
                 );
         } else if atoms == 0 {
             return body.push(text(if key.is_some() { "Select atoms or bonds to calculate their properties. Clear the selection to use the whole drawing." } else { "Draw or import a molecule to calculate its properties." }).size(12).style(muted_text)).into();
-        } else if let Some((_, Err(error))) = self
-            .tab
-            .inspector_ui
-            .properties
-            .as_ref()
-            .filter(|(saved, _)| *saved == self.property_request_key())
-        {
+        } else if let Some(Err(error)) = self.property_result(&self.property_request_key()) {
             body = body.push(if let Some(notice) = deferred_generic_properties(error) {
                 text(notice).size(12).style(muted_text)
             } else {
@@ -993,8 +1063,7 @@ impl App {
     /// closed keep that state.
     fn opened_section(&self) -> Option<Section> {
         if self.tab.selected.is_empty() {
-            return (self.tool == Tool::Select && !self.tab.doc.atoms.is_empty())
-                .then_some(Section::Molecule);
+            return (!self.tab.doc.atoms.is_empty()).then_some(Section::Molecule);
         }
         let selected: HashSet<_> = self.tab.selected.iter().copied().collect();
         if self
@@ -1681,6 +1750,8 @@ impl App {
     }
 }
 
+#[cfg(test)]
+mod continuity_tests;
 #[cfg(test)]
 mod tests;
 

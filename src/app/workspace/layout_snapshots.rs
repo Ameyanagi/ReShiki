@@ -9,6 +9,7 @@ use reshiki::graphics::{Graphic, GraphicKind};
 use std::path::Path;
 
 pub(super) mod features;
+mod property_continuity;
 
 /// Lays out and updates the view once, optionally saving a screenshot; returns published messages.
 pub(in crate::app) fn pass(
