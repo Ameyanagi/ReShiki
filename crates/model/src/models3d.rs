@@ -500,9 +500,9 @@ impl Model3d {
         })
     }
 
-    /// The opening view, facing the broadest side, or for a crystal the
-    /// cell with b to the right, c up and a toward the viewer; double-click
-    /// restores it.
+    /// The opening view, facing the broadest side in the drawing's direction,
+    /// or for a crystal the cell with b to the right, c up and a toward the
+    /// viewer. Double-click restores it.
     pub fn initial_view(&self, doc: &Document) -> [f32; 4] {
         if let Some(cell) = &self.cell {
             // Measured in label heights, as the 2D drawing will show it.
@@ -560,7 +560,14 @@ impl Model3d {
             .filter(|(symbol, _)| *symbol != "H")
             .map(|(_, p)| sub(*p, center))
             .collect();
-        initial_rotation(&heavy)
+        let drawn: Vec<_> = self
+            .atoms
+            .iter()
+            .filter_map(|placed| doc.atom(placed.id))
+            .filter(|atom| atom.element != "H")
+            .map(|atom| atom.position)
+            .collect();
+        drawing_rotation(&heavy, &drawn)
     }
 
     /// The atoms a crystal's 2D drawing labels, with their positions and
@@ -1522,6 +1529,59 @@ fn rotate(q: [f32; 4], v: [f32; 3]) -> [f32; 3] {
 /// now x × y, a proper rotation showing the same face. A linear or one-atom
 /// molecule falls back to fixed axes.
 pub fn initial_rotation(points: &[[f32; 3]]) -> [f32; 4] {
+    tilted(initial_basis(points), -0.35, 0.3)
+}
+
+/// The four sign choices of the principal axes are proper rotations when
+/// the third axis stays their cross product. Choose the face whose projection
+/// best follows the existing drawing, without changing the conformer or its
+/// stereochemistry. Crystals keep their separate cell orientation.
+fn drawing_rotation(points: &[[f32; 3]], drawn: &[Point]) -> [f32; 4] {
+    let basis = initial_basis(points);
+    let original = tilted(basis, -0.35, 0.3);
+    if points.len() != drawn.len() || drawn.is_empty() {
+        return original;
+    }
+    let count = drawn.len() as f64;
+    let center = drawn.iter().fold([0.; 2], |[x, y], point| {
+        [
+            x + f64::from(point.x) / count,
+            y + f64::from(point.y) / count,
+        ]
+    });
+    let score = |rotation| {
+        points
+            .iter()
+            .zip(drawn)
+            .map(|(point, drawing)| {
+                let projected = rotate(rotation, *point);
+                (f64::from(drawing.x) - center[0]) * f64::from(projected[0])
+                    - (f64::from(drawing.y) - center[1]) * f64::from(projected[1])
+            })
+            .sum::<f64>()
+    };
+    let mut best = (original, score(original));
+    for [x, y] in [[-1., 1.], [1., -1.], [-1., -1.]] {
+        let candidate = tilted(
+            [
+                basis[0].map(|v| v * x),
+                basis[1].map(|v| v * y),
+                basis[2].map(|v| v * x * y),
+            ],
+            -0.35,
+            0.3,
+        );
+        let value = score(candidate);
+        // Keep the prototype's choice on ties, including floating point noise
+        // in symmetric or degenerate layouts.
+        if value > best.1 + 1e-6 * best.1.abs().max(value.abs()).max(1e-12) {
+            best = (candidate, value);
+        }
+    }
+    best.0
+}
+
+fn initial_basis(points: &[[f32; 3]]) -> [[f64; 3]; 3] {
     type V = [f64; 3];
     let dot = |a: V, b: V| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     let cross = |a: V, b: V| {
@@ -1575,7 +1635,7 @@ pub fn initial_rotation(points: &[[f32; 3]]) -> [f32; 4] {
     };
     let x = principal([1., 0.3, 0.2], None);
     let y = principal([0.2, 1., 0.3], Some(x)).map(|v| -v);
-    tilted([x, y, cross(x, y)], -0.35, 0.3)
+    [x, y, cross(x, y)]
 }
 
 /// Drawing units per ångström of a crystal's 2D drawing: the drawing's own
@@ -3675,5 +3735,7 @@ fn solve3(a: [[f64; 3]; 3], b: [f64; 3]) -> Option<[f64; 3]> {
     x.iter().all(|v| v.is_finite()).then_some(x)
 }
 
+#[cfg(test)]
+mod opening_tests;
 #[cfg(test)]
 mod tests;

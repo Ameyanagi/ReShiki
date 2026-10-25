@@ -3,6 +3,8 @@
 mod bond_text;
 mod draft;
 #[cfg(test)]
+mod model_tests;
+#[cfg(test)]
 mod orbital_tests;
 mod overlays;
 pub(super) use overlays::OrbitGuideCache;

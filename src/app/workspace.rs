@@ -18,6 +18,8 @@ pub(super) mod layout_snapshots;
 #[cfg(test)]
 mod model_controls_qa;
 #[cfg(test)]
+mod model_face_qa;
+#[cfg(test)]
 mod selection_canvas_qa;
 #[cfg(test)]
 mod status_tests;
