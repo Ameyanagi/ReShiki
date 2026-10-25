@@ -91,6 +91,11 @@ Base: `3d80590a`; implementation: `7979a5c4`.
   unavailable; the test checks that existing refusal and a zero-task result,
   while CDXML still exercises asynchronous conversion. Both paths preserve the
   drawing, selection and Undo history without publishing clipboard data.
+- The full agent library suite passes: 281 tests, with two opt-in tests ignored.
+  Its planar coordination fixture retains the ownership/overlap checks and
+  verifies the specific Unsupported ring-curve refusal with `.rsk` save advice.
+  A tracked-file audit found no further old combined-cause expectation. The
+  separate hidden-charge, front-bond and rear-opacity refusals are unchanged.
 - The application renderer measures the cue at 1040, 1280 and 1600 pixels wide.
   It remains outside the message's clipped bounds and inside the status bar.
   Short messages omit the cue; multiline notices retain it.
@@ -104,6 +109,7 @@ Base: `3d80590a`; implementation: `7979a5c4`.
 export CARGO_BUILD_JOBS=2
 cargo test --locked -p reshiki-io --lib exchange::drawing::tests
 cargo test --locked -p reshiki --bin reshiki app::clipboard::tests -- --test-threads=1
+cargo test --locked -p reshiki-agent --lib -- --test-threads=1
 cargo test --locked -p reshiki --bin reshiki long_status_keeps_its_full_message_cue_outside_the_clipped_text -- --ignored
 ```
 
