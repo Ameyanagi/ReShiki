@@ -888,7 +888,8 @@ impl App {
     fn update_untagged(&mut self, message: Message) -> ControlFlow<Task<Message>, Message> {
         let message = match message {
             Message::Recovery(action) if recovery_manager::completion(&action) => {
-                return ControlFlow::Break(self.recovery_action(action));
+                let task = self.recovery_action(action);
+                return ControlFlow::Break(Task::batch([task, self.accessibility_refresh()]));
             }
             message => message,
         };

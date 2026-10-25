@@ -45,6 +45,14 @@ enum Dialog {
     Discard,
 }
 
+#[derive(PartialEq, Eq)]
+pub(super) struct AccessibilityContext {
+    dialog: Option<Dialog>,
+    pending: bool,
+    offered: Vec<PathBuf>,
+    selected: BTreeSet<PathBuf>,
+}
+
 #[derive(Default)]
 pub(super) struct State {
     dialog: Option<Dialog>,
@@ -74,6 +82,19 @@ pub(super) fn modal_key(key: &Key, modifiers: Modifiers) -> Option<Message> {
 }
 
 impl App {
+    pub(super) fn recovery_accessibility_context(&self) -> AccessibilityContext {
+        AccessibilityContext {
+            dialog: self.recovery_manager.dialog,
+            pending: self.recovery_manager.pending.is_some(),
+            offered: self
+                .recovered
+                .iter()
+                .map(|draft| draft.path.clone())
+                .collect(),
+            selected: self.recovery_manager.selected.clone(),
+        }
+    }
+
     pub(super) fn prune_recovery_owners(&mut self) {
         #[cfg(target_arch = "wasm32")]
         if !reshiki::storage::browser::owners_verified() {
