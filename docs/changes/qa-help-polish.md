@@ -58,7 +58,7 @@ with headings outside the screenshots. Both versions use a fresh isolated data
 profile, blank tab, Select, keyboard drawing initially on, Arial 10 pt, JACS / ACS,
 Publication, light canvas, 100% drawing zoom, and a 1280 × 852 pt window
 (2560 × 1704 captured pixels). The Help panel itself uses its normal fixed text
-sizes. Host: macOS 27.0.1 on Apple M4. The same crop and resize are used for each
+sizes. Host: macOS 27.0.1 on Apple M1. The same crop and resize are used for each
 before/after pair. All published boards were inspected for clipping and legibility.
 
 Native checks on the candidate:
@@ -104,6 +104,9 @@ The current published boards are the macOS captures.
 - Help behavior suite: **12 passed**, with the opt-in renderer test run separately.
 - Renderer harness: **one passed**, producing ten local images per version.
 - Existing command-palette suite: **30 passed**.
+- The new benzene-fusion chemistry regression fails on the production baseline
+  (four atoms/three bonds instead of the required benzene six/six) and passes
+  on this branch.
 - `cargo clippy --workspace --lib --bins --all-features --locked -- -D warnings`: passed.
 - Native application build, Rust formatting and ordinary commit hooks: passed.
 
