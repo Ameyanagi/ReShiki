@@ -1,8 +1,9 @@
 //! 3D models on the paper (#386): turning a selected model and the 2D → 3D
 //! morph.
 //! [`tiles`] draws the models themselves as resvg image tiles.
-use super::hit::hit_selection;
+use super::hit::{above_models, hit_selection};
 use super::pick::{DRAG_SLOP_PX, PICK_RADIUS_PX};
+use super::selection::FRAME_PADDING_PX;
 use super::{Edit, MoleculeCanvas, State, World, command_held};
 use iced::time::Instant;
 use iced::widget::canvas::Action;
@@ -14,7 +15,7 @@ use std::time::Duration;
 mod tiles;
 pub(super) use tiles::{begin, draw, end, is_model};
 
-/// Screen pixels inside a frame's edge that still move the model.
+/// Screen pixels on either side of the drawn selection outline that move it.
 const EDGE_PX: f32 = 8.;
 /// The prototype's morph length.
 pub(crate) const MORPH: Duration = Duration::from_millis(750);
@@ -59,6 +60,39 @@ impl Turn {
 }
 
 impl MoleculeCanvas<'_> {
+    /// Moving a selected model's outline uses its drawn screen geometry,
+    /// including the padding outside its actual model frame. Ordinary hits
+    /// and objects painted above the model retain their existing precedence.
+    pub(super) fn model_frame_hit(
+        &self,
+        state: &State,
+        p: World,
+        bounds: Rectangle,
+    ) -> Option<Vec<u64>> {
+        if !self.tool.selects() || !models3d::shows_3d(self.doc, self.selected) {
+            return None;
+        }
+        let selection =
+            state
+                .scene
+                .borrow_mut()
+                .selection(self.doc, self.selected, self.camera, bounds)?;
+        if !selection.edge_hit(self.camera.screen(p, bounds), EDGE_PX) {
+            return None;
+        }
+        let atoms = models3d::whole_molecule(self.doc, self.selected)?;
+        let hit = hit_selection(self.doc, p, self.camera.world_len(PICK_RADIUS_PX));
+        if hit.iter().any(|id| {
+            (above_models(self.doc, *id) && !self.selected.contains(id))
+                || (!atoms.contains(id)
+                    && models3d::model_of(self.doc, *id)
+                        .is_some_and(|model| model.display != models3d::Display::TwoD))
+        }) {
+            return None;
+        }
+        Some(atoms)
+    }
+
     /// The selected model that a drag at `p` turns: inside its frame, not at
     /// its edge, with its molecule the selection, and no Alt or copy key.
     /// Also returns what a click there selects.
@@ -66,14 +100,29 @@ impl MoleculeCanvas<'_> {
         if !self.tool.selects() || state.modifiers.alt() || command_held(state.modifiers) {
             return None;
         }
-        let model = models3d::model_at(self.doc, p, self.camera.world_len(EDGE_PX))?;
         let selected = models3d::whole_molecule(self.doc, self.selected)?;
+        let model = models3d::model_of(self.doc, *selected.first()?)?;
+        if model.display == models3d::Display::TwoD {
+            return None;
+        }
+        // The padded interior is part of the visible selection frame too;
+        // its edge has already been reserved for moving before this runs.
+        let (lo, hi) = models3d::frame(self.doc, model)?;
+        let pad = self.camera.world_len(FRAME_PADDING_PX);
+        if p.x < lo.x - pad || p.x > hi.x + pad || p.y < lo.y - pad || p.y > hi.y + pad {
+            return None;
+        }
         let atoms: Vec<_> = model.atoms.iter().map(|a| a.id).collect();
         let hit = hit_selection(self.doc, p, self.camera.world_len(PICK_RADIUS_PX));
+        let clicked = if hit.is_empty() {
+            atoms.clone()
+        } else {
+            self.doc.expand_groups(&hit)
+        };
         (selected.len() == atoms.len()
             && atoms.iter().all(|id| selected.contains(id))
-            && hit.first().is_some_and(|id| model.contains(*id)))
-        .then(|| (atoms, self.doc.expand_groups(&hit)))
+            && (hit.is_empty() || hit.first().is_some_and(|id| model.contains(*id))))
+        .then_some((atoms, clicked))
     }
 
     pub(super) fn press_turn(
