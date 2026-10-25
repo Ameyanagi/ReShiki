@@ -36,6 +36,8 @@ pub(super) struct State {
     pub(super) retiring: Vec<super::autosave::Retired>,
     /// Results held while an exit can still fail; replayed if it is cancelled.
     pub(super) deferred_results: Vec<(TabId, Message)>,
+    /// Temporary background routing never changes the visible drawing context.
+    pub(super) temporary_depth: usize,
 }
 
 impl State {
@@ -199,6 +201,7 @@ impl App {
     /// Starts the front tab over as a new drawing. Late results for its old
     /// drawing meet a new epoch and revision.
     pub(super) fn reset_tab(&mut self) {
+        self.sync_drawing_panel_context();
         // An Office tab still owns its host session and any pending writes.
         // Replacing its drawing must instead use a separate ordinary tab.
         if self.tab.office.is_some() {
@@ -213,6 +216,7 @@ impl App {
         self.tab.autosave = old.autosave;
         self.tab.revision = old.revision.wrapping_add(1);
         self.tab.file_epoch = self.next_epoch();
+        self.sync_drawing_panel_context();
         self.clear_recovery();
     }
 
@@ -223,6 +227,7 @@ impl App {
         if index == active || index > self.tabs.background.len() {
             return;
         }
+        self.sync_drawing_panel_context();
         self.leave_tab();
         let next = self
             .tabs
@@ -257,6 +262,7 @@ impl App {
     }
 
     fn enter_tab(&mut self) {
+        self.sync_drawing_panel_context();
         self.sync_drawing_style_unit();
         if self.nmr_enter_tab() {
             return;
@@ -271,6 +277,7 @@ impl App {
     /// Takes the front tab out of the strip and brings its right neighbor, or
     /// else its left one, to the front. The last tab gives way to an empty one.
     fn remove_active(&mut self) -> DocumentTab {
+        self.sync_drawing_panel_context();
         self.leave_tab();
         let active = self.tabs.active;
         let next = if active < self.tabs.background.len() {
@@ -314,10 +321,13 @@ impl App {
                 std::mem::swap(&mut app.error, &mut app.tab.error);
             }
         };
+        let previous_depth = self.tabs.temporary_depth;
+        self.tabs.temporary_depth = previous_depth.saturating_add(1);
         swap(self);
         let result = f(self);
         self.tab.edited = self.tab.dirty();
         swap(self);
+        self.tabs.temporary_depth = previous_depth;
         Some(result)
     }
 

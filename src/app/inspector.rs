@@ -226,6 +226,16 @@ impl State {
         }
     }
 }
+const GENERIC_PROPERTIES: &str =
+    "Generic structure · molecular properties are calculated after expansion.";
+
+/// This is the engine's specific deferred-analysis result, not a generic
+/// presence check: unrelated errors must retain their warning presentation.
+fn deferred_generic_properties(error: &str) -> Option<&'static str> {
+    (error.strip_prefix("Invalid drawing: ") == Some(reshiki::generic::NOTICE))
+        .then_some(GENERIC_PROPERTIES)
+}
+
 fn card<'a>(body: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
     container(body)
         .width(Length::Fill)
@@ -676,11 +686,13 @@ impl App {
             .as_deref()
             .filter(|notice| *notice != reshiki::atom_labels::refresh::GENERIC_NOTICE)
         {
-            body = body.push(
+            body = body.push(if let Some(notice) = deferred_generic_properties(error) {
+                text(notice).size(12).style(muted_text)
+            } else {
                 text(error)
                     .size(12)
-                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61))),
-            );
+                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61)))
+            });
         }
         if !molecular_first {
             body = body.push(self.molecular_section());
@@ -771,11 +783,14 @@ impl App {
         // Ordinary molecules beside a crystal keep their chemistry analysis.
         if reshiki::models3d::crystal::touches(&self.tab.doc, &ids) {
             let mut body = column![
-                text(reshiki::models3d::crystal::ANALYSIS_NOTICE)
+                text(reshiki::models3d::crystal::analysis_notice(&self.tab.doc))
                     .size(11)
                     .style(muted_text)
             ]
             .spacing(8);
+            for note in reshiki::models3d::crystal::import_notes(&self.tab.doc, &ids) {
+                body = body.push(text(note).size(11).style(muted_text));
+            }
             if let Ok(composition) = reshiki::models3d::crystal::composition(&self.tab.doc, &ids) {
                 body = body.push(
                     text(format!(
@@ -841,6 +856,10 @@ impl App {
                 .style(muted_text)
         ]
         .spacing(8);
+        let selected: Vec<_> = ids.iter().copied().collect();
+        for note in reshiki::models3d::crystal::import_notes(&self.tab.doc, &selected) {
+            body = body.push(text(note).size(11).style(muted_text));
+        }
         if key.is_some()
             && self
                 .tab
@@ -898,11 +917,13 @@ impl App {
             .as_ref()
             .filter(|(saved, _)| *saved == self.property_request_key())
         {
-            body = body.push(
+            body = body.push(if let Some(notice) = deferred_generic_properties(error) {
+                text(notice).size(12).style(muted_text)
+            } else {
                 text(error)
                     .size(12)
-                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61))),
-            );
+                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61)))
+            });
         } else {
             body = body.push(
                 text(if key.is_some() {
@@ -1662,3 +1683,9 @@ impl App {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod feedback_tests;
+
+#[cfg(test)]
+mod feedback_visual_tests;

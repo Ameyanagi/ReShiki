@@ -194,7 +194,10 @@ fn write_impl(
     let interchange = crate::attachments::interchange_graph(document).map_err(invalid)?;
     let (graph, rings) = match crate::chemistry::document::prepare(&interchange) {
         Ok(molecule) => (molecule.state.graph, molecule.state.rings.atoms),
-        Err(crate::chemistry::document::Error::Sanitization(_)) if preserve_drawing => {
+        Err(
+            crate::chemistry::document::Error::Sanitization(_)
+            | crate::chemistry::document::Error::DistanceBonds,
+        ) if preserve_drawing => {
             let graph = crate::chemistry::document::drawing_graph(&interchange)?;
             let rings = crate::chemistry::rings::perceive(&graph, Default::default())
                 .map_err(|e| invalid(e.to_string()))?

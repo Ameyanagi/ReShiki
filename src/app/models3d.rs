@@ -401,29 +401,41 @@ impl App {
             .drawn
             .clone()
             .unwrap_or_else(|| models3d::Drawn::of(&self.tab.doc, model));
-        let flat = Prepared::new(&self.tab.doc, &atoms)
-            .and_then(|prepared| prepared.flattened(model))
-            .map_err(|error| error.to_string())
-            .and_then(|mut doc| {
-                // The model keeps its place for showing it in 3D again.
-                if let Some(origin) = origin {
-                    models3d::keep_place(&mut doc, index, origin);
-                }
-                models3d::set_display(&mut doc, index, Display::TwoD);
-                // Kept where the flattened drawing is, to come back wherever
-                // the molecule goes.
-                let drawn = doc.models.get(index).map(|m| drawn.kept(&doc, m));
-                if let Some(model) = doc.models.get_mut(index) {
-                    model.layout = Layout::View;
-                    model.drawn = drawn;
-                }
-                reshiki::depth_appearance::enable(
-                    &mut doc,
-                    &atoms,
-                    reshiki::depth_appearance::DEFAULT_STRENGTH,
-                )?;
-                Ok(doc)
-            });
+        let flat = if model.cell.is_some() {
+            // A crystal's distances are drawing data, not chemical stereo.
+            // Flatten its retained coordinates directly, keeping the drawing
+            // centre instead of preparing a molecular identity.
+            let mut doc = self.tab.doc.clone();
+            let centre = reshiki::editing::center(&doc, &atoms);
+            models3d::lay_out_flat(&mut doc, model);
+            let projected = reshiki::editing::center(&doc, &atoms);
+            doc.translate(&atoms, centre.x - projected.x, centre.y - projected.y);
+            Ok(doc)
+        } else {
+            Prepared::new(&self.tab.doc, &atoms)
+                .and_then(|prepared| prepared.flattened(model))
+                .map_err(|error| error.to_string())
+        }
+        .and_then(|mut doc| {
+            // The model keeps its place for showing it in 3D again.
+            if let Some(origin) = origin {
+                models3d::keep_place(&mut doc, index, origin);
+            }
+            models3d::set_display(&mut doc, index, Display::TwoD);
+            // Kept where the flattened drawing is, to come back wherever
+            // the molecule goes.
+            let drawn = doc.models.get(index).map(|m| drawn.kept(&doc, m));
+            if let Some(model) = doc.models.get_mut(index) {
+                model.layout = Layout::View;
+                model.drawn = drawn;
+            }
+            reshiki::depth_appearance::enable(
+                &mut doc,
+                &atoms,
+                reshiki::depth_appearance::DEFAULT_STRENGTH,
+            )?;
+            Ok(doc)
+        });
         match flat {
             Ok(doc) => {
                 let before = std::mem::replace(&mut self.tab.doc, doc);
@@ -889,3 +901,6 @@ fn restored(previous: Display) -> &'static str {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod crystal_tests;

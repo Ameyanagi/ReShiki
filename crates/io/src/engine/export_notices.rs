@@ -7,10 +7,13 @@ pub(crate) const DATIVE_CDX_NOTICE: &str = "CDXML/CDX retains directed coordinat
 pub(crate) const REACTION_ROLES_NOTICE: &str = "This drawing or molecule format does not retain reaction roles. Use RXN/reaction SMILES for reaction data, or .reshiki for the complete scheme.";
 pub(crate) const UNVALIDATED_NOTICE: &str =
     "Drawing exported; chemical assignments remain unvalidated.";
+pub(crate) const CRYSTAL_DRAWING_NOTICE: &str = "CDXML/CDX exports the 2D atoms and bonds as an unvalidated drawing, without the unit cell, periodic copies or distance-derived bond provenance. Reimported bonds may be interpreted as chemical bonds. Use native ReShiki to retain that information.";
+pub(crate) const DISTANCE_DRAWING_NOTICE: &str = "CDXML/CDX exports the atoms and bonds as an unvalidated drawing, without distance-derived bond provenance. Reimported bonds may be interpreted as chemical bonds. Use native ReShiki to retain that information.";
 
 pub(crate) enum Route<'a> {
     AttachmentEarlyExport,
     UnpreparedFallback,
+    DistanceDrawing,
     Prepared {
         source: &'a Document,
         figure_only: bool,
@@ -29,6 +32,11 @@ pub(crate) fn notices(document: &Document, format: &str, route: Route<'_>) -> Ve
         }
         Route::UnpreparedFallback => {
             let mut notices = vec![UNVALIDATED_NOTICE.into()];
+            notices.extend(drawing_losses(document, document, format, true));
+            notices
+        }
+        Route::DistanceDrawing => {
+            let mut notices = vec![crate::models3d::crystal::analysis_notice(document).into()];
             notices.extend(drawing_losses(document, document, format, true));
             notices
         }
@@ -54,6 +62,16 @@ fn drawing_losses(
     roles: bool,
 ) -> Vec<String> {
     let mut notices = Vec::new();
+    if matches!(format, "cdxml" | "cdx") && crate::models3d::crystal::touches(appearance, &[]) {
+        notices.push(
+            if crate::models3d::crystal::present(appearance) {
+                CRYSTAL_DRAWING_NOTICE
+            } else {
+                DISTANCE_DRAWING_NOTICE
+            }
+            .into(),
+        );
+    }
     if roles && !document.reactions.is_empty() {
         notices.push(REACTION_ROLES_NOTICE.into());
     }

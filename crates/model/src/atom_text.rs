@@ -107,7 +107,7 @@ pub fn description(text: &str, runs: &[ScriptRun], mode: Mode) -> &'static str {
     } else if crate::ligands::LABELS.contains(&text.trim()) {
         "A real Cp (C5H5−) or Cp* (C10H15−) ligand with a five-center attachment. Metal charge stays as entered."
     } else if mode == Mode::Group || group_label(text.trim()) {
-        "A real chemical group. Expand it later from Abbreviations. Requires a single-bond endpoint."
+        "A real chemical group. Expand in Labels & chemistry → Chemical abbreviations. Requires a single-bond endpoint."
     } else if let Ok(Some(explicit)) = hydride::parse(text.trim()) {
         if explicit.charged_element {
             "An element with the typed charge. Hydrogens are not added; type the element alone to restore automatic hydrogens."
@@ -123,11 +123,16 @@ pub fn description(text: &str, runs: &[ScriptRun], mode: Mode) -> &'static str {
 
 /// Suggests the labels of the catalog groups that the text names, such as
 /// "Did you mean Morph?" for morpholino. Names never type as groups.
-pub fn suggestion(text: &str, mode: Mode) -> Option<String> {
+pub fn suggestions(text: &str, mode: Mode) -> Vec<String> {
     if mode == Mode::Text || known_group(text.trim()) {
-        return None;
+        return vec![];
     }
-    let labels = crate::abbreviations::named(text);
+    crate::abbreviations::named(text)
+}
+
+/// A readable hint for the separately selectable catalog labels.
+pub fn suggestion(text: &str, mode: Mode) -> Option<String> {
+    let labels = suggestions(text, mode);
     let (last, rest) = labels.split_last()?;
     Some(if rest.is_empty() {
         format!("Did you mean {last}?")
@@ -323,6 +328,10 @@ fn apply_entry(
     };
     let variable =
         (new_element == "*" && (text != "*" || mode == Mode::Text)).then(|| text.to_owned());
+    let crystal = doc
+        .models
+        .iter()
+        .any(|m| m.cell.is_some() && m.contains(id));
     let mut result = doc.clone();
     result.generic.alternatives.retain(|s| s.atom != id);
     result.generic.links.retain(|s| s.atom != id);
@@ -356,6 +365,15 @@ fn apply_entry(
         a.no_implicit = true;
         a.explicit_h = 0;
         a.label_h = 0;
+    }
+    // Crystal sites remain explicit when their element or charge is edited.
+    // The import never inferred missing hydrogens, and a substitution must not
+    // silently change that policy.
+    if crystal {
+        a.no_implicit = true;
+        if explicit.is_none() && mode != Mode::Text && element && new_element != "*" {
+            a.charge = 0;
+        }
     }
     if new_element == "C" {
         a.display.carbons = Some(crate::atom_labels::Carbons::All);

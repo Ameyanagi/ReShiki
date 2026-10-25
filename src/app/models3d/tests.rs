@@ -186,6 +186,51 @@ fn stale_generation_has_no_canvas_feedback_and_escape_preserves_the_edit() {
 }
 
 #[test]
+fn dragging_the_visible_model_outline_is_one_undo_step() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = Document::from_native_file(include_bytes!(
+        "../../../tests/fixtures/models3d/model-frame-methanol.rsk"
+    ))
+    .unwrap();
+    let atoms: Vec<_> = app.tab.doc.atoms.iter().map(|atom| atom.id).collect();
+    app.tab.selected = atoms.clone();
+    let before = app.tab.doc.clone();
+    let count = frames(&app);
+    let (lo, hi) = models3d::frame(&before, &before.models[0]).unwrap();
+    // Four screen pixels inside the visible outline, which is twelve pixels
+    // outside the model frame, at the helper's fixed zoom of one.
+    let from = Point::new(lo.x - 8., (lo.y + hi.y) / 2.);
+    let edits = crate::canvas::select_drag(
+        &before,
+        &atoms,
+        from,
+        from.offset(60., 25.),
+        Default::default(),
+    );
+    assert!(
+        edits
+            .iter()
+            .any(|edit| matches!(edit, Edit::Move(ids, ..) if *ids == atoms))
+    );
+    for edit in edits {
+        app.edit(edit);
+    }
+    assert_eq!(frames(&app), count + 1);
+    assert_eq!(app.tab.selected, atoms);
+    assert_ne!(app.tab.doc.atoms, before.atoms);
+    assert_eq!(app.tab.doc.bonds, before.bonds);
+    assert_eq!(app.tab.doc.models[0].rotation, before.models[0].rotation);
+    let after = app.tab.doc.clone();
+    let reopened = Document::from_native_file(&after.file_json().unwrap()).unwrap();
+    assert_eq!(reopened.models, after.models);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, after);
+}
+
+#[test]
 fn each_switch_is_one_undo_step_and_keeps_chemistry() {
     let (mut app, atoms, _) = drawing();
     let original = app.tab.doc.clone();

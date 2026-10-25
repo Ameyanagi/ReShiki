@@ -80,6 +80,22 @@ hashed dist/editor/reshiki.js
 hashed src/fonts.js
 hashed src/editor.js
 
+# The first load is these four files; the worker and CJK fonts load on demand.
+# Estimate transfer with deterministic gzip -9, after hashing rewrites imports.
+# The host may choose another encoding, so the page labels this an estimate.
+estimate=0
+for file in "$demo"/src/editor.*.js "$demo"/src/fonts.*.js \
+  "$demo"/dist/editor/reshiki.*.js "$demo"/dist/editor/reshiki_bg.*.wasm; do
+  compressed=$(gzip -9nc "$file" | wc -c | tr -d ' ')
+  estimate=$((estimate + compressed))
+done
+ESTIMATE=$estimate perl -pi -e 's/data-gzip-bytes="0"/data-gzip-bytes="$ENV{ESTIMATE}"/' "$demo/index.html"
+if ! grep -q "data-gzip-bytes=\"$estimate\"" "$demo/index.html"; then
+  echo "The demo page no longer accepts the first-load gzip estimate" >&2
+  exit 1
+fi
+echo "Editor first load: $estimate bytes (gzip -9 estimate; excludes naming and CJK fonts)"
+
 # index.html can stay cached for 10 minutes after a deploy, and that page asks
 # for the previous release's names. Keep the files it loads, following its
 # imports, so files older than one release drop out.

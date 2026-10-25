@@ -179,7 +179,9 @@ impl App {
                 );
                 self.tab.selected = vec![id];
             }
-            self.tool = Tool::Select;
+            if !matches!(kind, reshiki::graphics::GraphicKind::Symbol(_)) {
+                self.tool = Tool::Select;
+            }
         }
         self.changed(before);
     }

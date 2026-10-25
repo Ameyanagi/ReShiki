@@ -212,7 +212,7 @@ impl App {
         if !idle {
             content = content.push(
                 row![
-                    text("Working…").size(12),
+                    text(self.naming_working_label()).size(12),
                     accessible_command("import-name-cancel", "Cancel name import", "Cancel")
                         .on_press(Message::Naming(Action::Cancel)),
                 ]
