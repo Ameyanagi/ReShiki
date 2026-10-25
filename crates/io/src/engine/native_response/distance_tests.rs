@@ -219,17 +219,35 @@ async fn drawing_fallback_keeps_strict_appearance_refusals() {
     let mut variable = distance_pair();
     variable.atoms[0].element = "*".into();
     variable.atoms[0].display.variable = Some("R".into());
-    for doc in [ring_arc, variable] {
+    for (doc, ring_arc) in [(ring_arc, true), (variable, false)] {
         doc.validate().unwrap();
         for format in ["cdxml", "cdx"] {
             let error = execute(export_request(doc.clone(), format))
                 .await
                 .unwrap_err();
+            let Error::DrawingExport(ref drawing_error) = error else {
+                panic!("{format}: expected a drawing appearance refusal, got {error}");
+            };
+            // The appearance blocker remains a drawing-export refusal when
+            // its inner classification changes from Invalid to Unsupported.
             assert!(
-                error
-                    .to_string()
-                    .contains("inner ring curves or variable atom labels"),
-                "{format}: {error}"
+                !matches!(
+                    drawing_error,
+                    exchange::drawing::Error::Chemistry(_) | exchange::drawing::Error::Limit
+                ),
+                "{format}: expected a strict appearance refusal, got {error}"
+            );
+            let message = drawing_error.to_string();
+            let identifies_appearance = if ring_arc {
+                message.contains("inner ring curves")
+            } else {
+                message.contains("variable atom labels")
+                    || message.contains("text label") && message.contains('R')
+            };
+            assert!(identifies_appearance, "{format}: {error}");
+            assert!(
+                message.contains("Save as") && message.contains(".rsk"),
+                "{format}: native-save guidance must be retained: {error}"
             );
         }
     }
