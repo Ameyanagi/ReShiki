@@ -4,6 +4,10 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
+Under review: @Ameyanagi — remembered canvas brightness for new drawings and
+restart/reload persistence coverage in
+[PR #581](https://github.com/Ameyanagi/ReShiki/pull/581).
+
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).
 
