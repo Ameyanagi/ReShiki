@@ -20,6 +20,15 @@ mod selection_canvas_qa;
 #[cfg(test)]
 mod view_parity_tests;
 
+/// Counts used by molecular properties and both naming preview layouts.
+pub(super) fn atom_bond_counts(atoms: usize, bonds: usize) -> String {
+    format!(
+        "{atoms} atom{} · {bonds} bond{}",
+        if atoms == 1 { "" } else { "s" },
+        if bonds == 1 { "" } else { "s" }
+    )
+}
+
 impl App {
     fn keyboard_context_summary(&self) -> String {
         use reshiki::keyboard_drawing::Target;

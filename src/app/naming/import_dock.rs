@@ -301,10 +301,9 @@ impl App {
         let idle = state.pending.is_none();
         let mut content = column![
             self.name_preview_canvas(preview, 160.),
-            text(format!(
-                "{} atoms · {} bonds",
+            text(crate::app::workspace::atom_bond_counts(
                 preview.document.atoms.len(),
-                preview.document.bonds.len()
+                preview.document.bonds.len(),
             ))
             .size(11)
             .style(muted_text),

@@ -278,6 +278,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Chemical(..)
                 | Action::ChemicalMenu(..)
                 | Action::RefreshProperties
+                | Action::RefreshPropertiesFor(..)
                 | Action::Centroid
                 | Action::Attachment(..)
                 | Action::DepthBonds
