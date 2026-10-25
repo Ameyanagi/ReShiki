@@ -7,7 +7,7 @@ This list credits authors of contributions to ReShiki.
 Under review: @Ameyanagi — keyboard hotspot ownership during wheel navigation
 and large-gallery hover performance in
 [PR #578](https://github.com/Ameyanagi/ReShiki/pull/578), with
-[matched renderer evidence and quiet CPU measurements](changes/qa-pointer-hover.md).
+[matched renderer/native evidence and quiet CPU measurements](changes/qa-pointer-hover.md).
 
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).

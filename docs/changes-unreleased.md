@@ -10,9 +10,10 @@
   pointer motion or a click takes over.
 - Speed up hover queries on large drawings while preserving label, atom and
   bond hit results. On the exact 7,728-atom gallery, optimized M1 CPU work from
-  hover update through widget drawing commands falls from 58.3 ms to 12.6 ms.
-  Native presentation latency is a separate check; the continuous-hover native
-  comparison is still pending its reviewed input-method authorization.
+  real widget pointer input through app update and retained hover drawing falls
+  from 213.3 ms to 20.0 ms. Three matched native phases keep the hotspot within
+  one bond of the physical pointer; the QA note records host, camera and
+  viewport limits.
 
 | After wheel zoom                                                                                                | During wheel pan                                                                                          |
 | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
