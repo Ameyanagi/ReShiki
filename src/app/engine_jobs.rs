@@ -316,6 +316,20 @@ impl App {
         }
     }
     fn analysis_ready(&mut self, response: Response) {
+        if response.analysis.is_none() {
+            // A valid drawing can have no molecular interpretation, notably
+            // when a crystal's remaining edges still carry distance provenance.
+            // A skipped check must not refresh labels or move the drawing.
+            self.tab.analysis = None;
+            self.tab.chemistry_notice = None;
+            self.status = if response.warnings.is_empty() {
+                "Chemical analysis unavailable".into()
+            } else {
+                response.warnings.join(" · ")
+            };
+            self.error = false;
+            return;
+        }
         // Checking is a read-only chemistry operation. Refresh
         // computed H labels without rewriting the user's bond
         // orders/stereo or inserting a step into Undo/Redo.
@@ -327,7 +341,11 @@ impl App {
         }
         self.tab.analysis = response.analysis;
         self.tab.chemistry_notice = None;
-        self.status = "No chemistry errors found".into();
+        self.status = if response.warnings.is_empty() {
+            "No chemistry errors found".into()
+        } else {
+            format!("Structure checked · {}", response.warnings.join(" · "))
+        };
         self.error = false;
     }
     fn structure_replaced(&mut self, kind: Job, response: Response) {
@@ -373,3 +391,6 @@ mod tests;
 
 #[cfg(test)]
 mod cancel_tests;
+
+#[cfg(test)]
+mod crystal_tests;

@@ -523,6 +523,8 @@ fn completion(message: &Message) -> Option<Completion> {
         Message::Naming(action) => {
             use super::naming::Action;
             match action {
+                #[cfg(target_arch = "wasm32")]
+                Action::Refresh => None,
                 Action::Finished(..) => Some(Completion::Naming),
                 Action::Name(..)
                 | Action::Cancel

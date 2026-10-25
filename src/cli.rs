@@ -192,11 +192,9 @@ async fn info(out: &mut dyn Write, err: &mut dyn Write) -> Result<(), CliError> 
     writeln!(out, "{}", labelled(value)).map_err(CliError::Stdout)
 }
 
-/// The import format the app picks for a file with `extension`
-/// ([`crate::compatibility::structure_format`], as `prepare` in
-/// src/app/files.rs uses it): a native extension is `reshiki`; mol, rxn,
-/// rsmi, cdxml, cdx and inchi are themselves; anything else, including smi,
-/// smiles and no extension, is `smiles`. Case is ignored.
+/// The CLI's molecular input format for an extension, ignoring ASCII case.
+/// The argument parser first rejects known crystal paths using the app's
+/// complete file-format mapping. Other unrecognized extensions use SMILES.
 pub fn input_format(extension: &str) -> &'static str {
     crate::compatibility::structure_format(extension).unwrap_or("smiles")
 }

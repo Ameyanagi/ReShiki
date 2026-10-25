@@ -1,5 +1,84 @@
 # Unreleased changes
 
+## Fixes
+
+Space-filling models keep hydrogens facing the viewer visible where overlapping
+atoms meet. The front cap no longer leaves a hole through its carbon.
+@Ameyanagi, [PR #535](https://github.com/Ameyanagi/ReShiki/pull/535), merged.
+[Matched renderer review](changes/qa-513.md).
+
+| Before                                                                                 | After                                                                             |
+| -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| ![A front-facing hydrogen leaves a hole through carbon](images/qa-513/before-dark.png) | ![The visible hydrogen cap fills the carbon cutout](images/qa-513/after-dark.png) |
+
+PDF export keeps 3D model and crystal shading aligned at publication size.
+@Ameyanagi, [PR #536](https://github.com/Ameyanagi/ReShiki/pull/536), under review.
+[Matched export review and reproduction](changes/qa-522.md).
+
+![Matched PDF exports before and after the fix: Flat and Glossy molecular models and a sodium chloride unit cell retain their shading](images/qa-522/pdf-gradient-before-after.png)
+
+Crystal files passed to the CLI now produce a clear unsupported-format message
+instead of a SMILES parse error. Rejection happens before input is read or output
+is created. @Ameyanagi, [PR #537](https://github.com/Ameyanagi/ReShiki/pull/537),
+under review. [Command examples and validation](changes/qa-490.md).
+
+Under review: @Ameyanagi — long polystyrene and alanine chains import with
+separated rings and chemical labels while retaining molecular identity and
+stereochemistry in [PR #539](https://github.com/Ameyanagi/ReShiki/pull/539).
+[Matched renderer comparisons, inputs, and bounded fallback behavior](changes/long-chain-layout.md).
+Import latency is tracked separately in [#508](https://github.com/Ameyanagi/ReShiki/issues/508).
+
+![Poly-L-alanine with separated labels and retained stereochemical wedges](images/long-chain-layout/stereo-alanine200-after-detail.png)
+
+Under review: @Ameyanagi — drag the visible frame edge to move a selected 3D
+model while keeping its view and selection in
+[PR #540](https://github.com/Ameyanagi/ReShiki/pull/540).
+[Matched native desktop evidence and editable fixture](changes/qa-514.md).
+
+![Methanol moves while retaining its selected frame and view](images/qa-514/after-card.png)
+
+Under review: @Ameyanagi in [PR #541](https://github.com/Ameyanagi/ReShiki/pull/541).
+
+Safari pastes clipboard text into captions and Import fields without turning Command-V into a typed v.
+
+[Evidence, comparisons, and reusable release material](changes/qa-521.md).
+
+Under review: @Ameyanagi in [PR #542](https://github.com/Ameyanagi/ReShiki/pull/542).
+
+Crystal import notes stay with the drawing and survive native save/reopen; the guide now explains the opening view correctly.
+
+[Evidence, comparisons, and reusable release material](changes/qa-crystal-metadata.md).
+
+Under review: @Ameyanagi in [PR #543](https://github.com/Ameyanagi/ReShiki/pull/543).
+
+Edit atom labels beside their structure, read every label type in full, and accept catalog suggestions with one click.
+
+[Matched examples and release material](changes/qa-atom-label-editor.md).
+
+Under review: @Ameyanagi in [PR #544](https://github.com/Ameyanagi/ReShiki/pull/544).
+
+Fragment-name fields start fresh with a new selection or drawing, saved abbreviations show a short confirmation, and content-specific panels return to Properties when the drawing changes.
+
+[Matched examples and release material](changes/drawing-panel-state.md).
+
+Under review: @Ameyanagi in [PR #545](https://github.com/Ameyanagi/ReShiki/pull/545).
+
+Chemical marks and aimed arrowheads stay clear of drawing ink, reaction separators follow visible labels, long terminal text keeps its bond visible, and chemical symbol tools support repeated placement.
+
+[Matched examples and release material](changes/qa-drawing-geometry-2026-10-25.md).
+
+Under review in [PR #557](https://github.com/Ameyanagi/ReShiki/pull/557):
+Export dialogs name their format, browser progress and download receipts describe what happened, and the npm package has a complete HTML recipe with the correct release version.
+See the [QA report](changes/qa-browser-polish.md) for validation and screenshots.
+
+Contributor: @Ameyanagi.
+
+Under review in [PR #558](https://github.com/Ameyanagi/ReShiki/pull/558):
+Crystal substitutions keep their cell and copies, update the drawn formula, and preserve unvalidated bond context after unsupported edits.
+See the [QA report](changes/qa-crystal-substitution.md) for validation and screenshots.
+
+Contributor: @Ameyanagi.
+
 Under review in [PR #559](https://github.com/Ameyanagi/ReShiki/pull/559):
 Large peptide imports avoid repeated ring searches during label placement. Long-running Structure-input operations show elapsed time and can be cancelled without changing the drawing.
 See the [QA report](changes/qa-508-import-performance.md) for measurements and screenshots.

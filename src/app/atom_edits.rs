@@ -14,6 +14,12 @@ impl App {
     }
     pub(super) fn remove_mark(&mut self, id: u64, index: usize) {
         let before = self.tab.doc.clone();
+        let crystal = self
+            .tab
+            .doc
+            .models
+            .iter()
+            .any(|m| m.cell.is_some() && m.contains(id));
         if let Some(a) = self.tab.doc.atom_mut(id)
             && index < a.marks.len()
         {
@@ -26,7 +32,7 @@ impl App {
             }
             if mark.kind.charge() || mark.kind.radical() {
                 a.explicit_h = 0;
-                a.no_implicit = false;
+                a.no_implicit = crystal;
                 self.tab.doc.invalidate_chemistry(&[id]);
             }
         }
@@ -68,11 +74,17 @@ impl App {
         let before = self.tab.doc.clone();
         self.tab.doc.invalidate_chemistry(&self.tab.selected);
         for id in &self.tab.selected {
+            let crystal = self
+                .tab
+                .doc
+                .models
+                .iter()
+                .any(|m| m.cell.is_some() && m.contains(*id));
             if let Some(a) = self.tab.doc.atom_mut(*id) {
                 a.charge = a.charge.saturating_add(delta).clamp(-8, 8);
                 a.display.hide_charge = false;
                 a.explicit_h = 0;
-                a.no_implicit = false;
+                a.no_implicit = crystal;
             }
         }
         self.changed(before);

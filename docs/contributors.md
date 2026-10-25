@@ -4,6 +4,22 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
+Under review: @Ameyanagi — readable long-chain imports with retained molecular
+identity and stereochemistry in [PR #539](https://github.com/Ameyanagi/ReShiki/pull/539).
+Under review: @Ameyanagi — moving 3D models from their visible frame edges in
+[PR #540](https://github.com/Ameyanagi/ReShiki/pull/540).
+Under review: @Ameyanagi — Safari pastes clipboard text into captions and Import fields without turning Command-V into a typed v.
+[PR #541](https://github.com/Ameyanagi/ReShiki/pull/541).
+Under review: @Ameyanagi — Crystal import notes stay with the drawing and survive native save/reopen; the guide now explains the opening view correctly.
+[PR #542](https://github.com/Ameyanagi/ReShiki/pull/542).
+Under review: @Ameyanagi — atom-label placement, readable controls and chemical
+suggestions in [PR #543](https://github.com/Ameyanagi/ReShiki/pull/543).
+Under review: @Ameyanagi — drawing-specific inspector state, fresh fragment-name drafts, and concise abbreviation confirmation in [PR #544](https://github.com/Ameyanagi/ReShiki/pull/544).
+Under review: @Ameyanagi — chemical mark placement, reaction label spacing, visible terminal bonds, repeated chemical symbols and attached-arrow clearance in [PR #545](https://github.com/Ameyanagi/ReShiki/pull/545).
+Under review: @Ameyanagi — Export dialogs name their format, browser progress and download receipts describe what happened, and the npm package has a complete HTML recipe with the correct release version.
+[PR #557](https://github.com/Ameyanagi/ReShiki/pull/557) · [QA report](changes/qa-browser-polish.md).
+Under review: @Ameyanagi — Crystal substitutions keep their cell and copies, update the drawn formula, and preserve unvalidated bond context after unsupported edits.
+[PR #558](https://github.com/Ameyanagi/ReShiki/pull/558) · [QA report](changes/qa-crystal-substitution.md).
 Under review: @Ameyanagi — Large peptide imports avoid repeated ring searches during label placement. Long-running Structure-input operations show elapsed time and can be cancelled without changing the drawing.
 [PR #559](https://github.com/Ameyanagi/ReShiki/pull/559) · [QA report](changes/qa-508-import-performance.md).
 
@@ -173,3 +189,9 @@ Nix flake for Linux and Apple Silicon Macs (released in 0.13.0): @Stefanomarton 
 Release preparation and documentation for 0.13.0: @Ameyanagi.
 
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.13.md) credit contributors alongside their changes.
+
+Space-filling hydrogen visibility: @Ameyanagi in [PR #535](https://github.com/Ameyanagi/ReShiki/pull/535) (merged); [validation and reusable evidence](changes/qa-513.md).
+
+PDF gradient alignment for molecular and crystal models: @Ameyanagi in [PR #536](https://github.com/Ameyanagi/ReShiki/pull/536) (under review); [validation and reusable evidence](changes/qa-522.md).
+
+Clear CLI errors for unsupported crystal input: @Ameyanagi in [PR #537](https://github.com/Ameyanagi/ReShiki/pull/537) (under review); [validation](changes/qa-490.md).

@@ -28,9 +28,10 @@ pub(super) struct InputMethod {
 }
 
 /// The textarea's events that `start` handles.
-const TEXTAREA_EVENTS: [&str; 8] = [
+const TEXTAREA_EVENTS: [&str; 9] = [
     "keydown",
     "keyup",
+    "paste",
     "compositionstart",
     "compositionupdate",
     "compositionend",
@@ -187,8 +188,33 @@ fn textarea_event(
             if key.is_composing() || key.key_code() == 229 || key.key() == "Dead" {
                 return;
             }
+            // The window's Command/Control swap already ran. Leave the
+            // browser's paste shortcut on its editable target: its trusted
+            // paste event carries the text without an asynchronous read or a
+            // replayed key whose modifier state may have changed meanwhile.
+            if key.ctrl_key() && !key.alt_key() && !key.shift_key() && super::is_v(key) {
+                return;
+            }
             key.prevent_default();
             forward(key, canvas, mac);
+        }
+        "paste" => {
+            let Some(paste) = event.dyn_ref::<web_sys::ClipboardEvent>() else {
+                return;
+            };
+            // Commit exactly once through the same text-widget path as IME
+            // input. Cancelling native insertion also prevents a second
+            // insertFromPaste beforeinput/input from committing it again.
+            paste.prevent_default();
+            if let Some(text) = paste
+                .clipboard_data()
+                .and_then(|data| data.get_data("text/plain").ok())
+                .filter(|text| !text.is_empty())
+            {
+                super::text_drawn(&text);
+                web_ime::send(Ime::Commit(text));
+            }
+            listening.set_value("");
         }
         "compositionstart" => web_ime::send(Ime::Enabled),
         "compositionupdate" => {
