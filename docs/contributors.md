@@ -4,6 +4,8 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
+Under review: @Ameyanagi — drawing-specific inspector state, fresh fragment-name drafts, and concise abbreviation confirmation in [PR #544](https://github.com/Ameyanagi/ReShiki/pull/544).
+
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).
 
