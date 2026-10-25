@@ -92,17 +92,36 @@ cargo test --locked --bin reshiki \
 ```
 
 The native Windows job in `checks.yml` runs the same scoped test with
-`--no-default-features`, using its normal renderer/TinySkia fallback. It uploads
-`qa-help-polish-x86_64-pc-windows-msvc`, containing ten PNGs and `metadata.json`.
-These are Windows renderer captures; native operating-system interaction is
-covered separately on macOS above. The Windows output must first be produced
-by PR CI, then reviewed and added to this record before final completion.
-The current published boards are the macOS captures.
+`--no-default-features`, using the normal application renderer and its available
+backend. [Checks run 40197759034](https://github.com/Ameyanagi/ReShiki/actions/runs/40197759034)
+on `3a6f219f66298fdf58d225b4b4e6d025bf8174ec` produced the actual Windows
+artifact `qa-help-polish-x86_64-pc-windows-msvc` (artifact ID `12601920085`).
+The Windows capture and upload steps passed. The artifact contains ten PNGs
+and the [renderer metadata](../images/qa-help-polish/windows-renderer-metadata.json):
+**Windows, Yu Gothic, WGPU**, on `windows-2022`, target
+`x86_64-pc-windows-msvc`.
+
+All ten Windows images were reviewed at the two test sizes. The plain `shift r`
+hint fits in the search field and the key chips use the Windows `Ctrl+Shift+/`
+spelling. The `2` and `double` captures select the contextual mappings, F8-off
+`2` keeps the classic tools first, and naphthalene shows the labelled fused-ring
+example. The complete empty-state capture below preserves the original
+1280 × 820 renderer pixels; it is not resized or retouched.
+
+![Actual Windows Help renderer: readable shift r hint and Windows Ctrl+Shift key chips.](../images/qa-help-polish/help-windows-empty-1280.png)
+
+Release caption: Help uses the readable spelling shift r alongside Windows
+word-based modifier chips.
+
+These are Windows application-renderer captures, with no native Windows
+operating-system input claim. Native desktop input is covered separately on
+macOS above; the three matched before/after boards remain the macOS captures.
 
 ## Validation
 
 - Help behavior suite: **12 passed**, with the opt-in renderer test run separately.
-- Renderer harness: **one passed**, producing ten local images per version.
+- Renderer harness: **one passed** locally per version and on Windows CI,
+  producing ten images in each capture set.
 - Existing command-palette suite: **30 passed**.
 - The new benzene-fusion chemistry regression fails on the production baseline
   (four atoms/three bonds instead of the required benzene six/six) and passes
