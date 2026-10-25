@@ -227,7 +227,7 @@ pub fn to_pdf(
     let mut content = Content::new();
     content.save_state_checked()?;
     content.transform(dpi_transform.to_pdf_transform());
-    tree_to_stream(tree, &mut pdf, &mut content, &mut ctx, &mut rc)?;
+    tree_to_stream(tree, &mut pdf, &mut content, &mut ctx, &mut rc, dpi_transform)?;
     content.restore_state();
     let content_stream = ctx.finish_content(content);
     let mut stream = pdf.stream(content_ref, &content_stream);
