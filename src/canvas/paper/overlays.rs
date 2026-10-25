@@ -646,7 +646,11 @@ impl MoleculeCanvas<'_> {
                         state.scene.borrow_mut().foreground_orbital(self.doc),
                     );
                     if self.tool.selects() && hit.is_empty() {
-                        hit = reshiki::editing::ring_at(self.doc, point).unwrap_or_default();
+                        hit = state
+                            .scene
+                            .borrow_mut()
+                            .ring_at(self.doc, point)
+                            .unwrap_or_default();
                     }
                     if self.tool.selects() && !state.modifiers.alt() {
                         hit = self.doc.expand_groups(&hit);

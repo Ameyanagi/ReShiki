@@ -36,6 +36,31 @@ struct Ui {
 }
 
 impl Ui {
+    /// Feed a real widget event so the retained canvas cursor and its hover
+    /// overlay participate. Passing only draw's Cursor does not set that state.
+    fn pointer(&mut self, app: &App, cursor: iced::Point) -> Vec<Message> {
+        let viewport = Rectangle::with_size(self.size);
+        let mut view = app.view();
+        self.tree.diff(view.as_widget());
+        let node = view.as_widget_mut().layout(
+            &mut self.tree,
+            &self.renderer,
+            &layout::Limits::new(self.size, self.size),
+        );
+        let mut messages = Vec::new();
+        view.as_widget_mut().update(
+            &mut self.tree,
+            &iced::Event::Mouse(mouse::Event::CursorMoved { position: cursor }),
+            Layout::new(&node),
+            mouse::Cursor::Available(cursor),
+            &self.renderer,
+            &mut iced::advanced::clipboard::Null,
+            &mut iced::advanced::Shell::new(&mut messages),
+            &viewport,
+        );
+        messages
+    }
+
     fn draw(&mut self, app: &App, cursor: iced::Point) {
         use iced::advanced::Renderer as _;
         let viewport = Rectangle::with_size(self.size);
@@ -171,5 +196,56 @@ async fn hover_workloads() {
         ))));
         step += 1;
         ui.draw(&app, cursor);
+    });
+}
+
+/// This driver includes the retained native cursor and idle Select overlay that
+/// the earlier command-generation driver did not exercise. It uses the matched
+/// native camera and path, but still excludes returned tasks and GPU presentation.
+#[tokio::test]
+#[ignore = "Release-mode native-pointer widget/app/overlay profiling"]
+async fn native_pointer_hover_workloads() {
+    let (mut app, _) = App::new();
+    app.recovered.clear();
+    app.tab.doc = drawing();
+    app.tab.saved = app.tab.doc.clone();
+    app.tab.busy = false;
+    app.tab.labels_dirty = false;
+    app.inspector_open = false;
+    app.guides.crosshair = true;
+    app.appearance.mode = crate::appearance::Mode::Light;
+    app.tab.camera = crate::canvas::Camera {
+        center: Point::new(-8631.204, -5557.835),
+        zoom: 1.04,
+    };
+    app.sync_keyboard_drawing();
+    let mut ui = Ui {
+        renderer: <iced::Renderer as Headless>::new(
+            iced::Font::with_name(reshiki::style::ui_font_family()),
+            iced::Pixels(16.),
+            std::env::var("RESHIKI_PERF_RENDERER").ok().as_deref(),
+        )
+        .await
+        .unwrap(),
+        tree: Tree::empty(),
+        size: Size::new(1680., 988.),
+    };
+    println!("native_pointer_renderer,{}", ui.renderer.name());
+    println!("workload,median_ms,p95_ms");
+    let mut step = 0;
+    measure("gallery_16x_native_pointer_widget_app_overlay_draw", || {
+        let index = (step * 5) % 151;
+        let angle = std::f64::consts::TAU * index as f64 / 150.;
+        // Native replay is in outer-window points; the client begins 32pt below.
+        let cursor = iced::Point::new(
+            (700. - 400. * angle.cos()) as f32,
+            (368. + 160. * angle.sin()) as f32,
+        );
+        let messages = ui.pointer(&app, cursor);
+        for message in messages {
+            let _ = black_box(app.update(message));
+        }
+        ui.draw(&app, cursor);
+        step += 1;
     });
 }

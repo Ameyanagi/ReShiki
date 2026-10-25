@@ -3272,3 +3272,43 @@ fn readable_foreground_orbital_labels_select_the_atom_and_other_filled_graphics_
         assert_eq!(hit::hit_object(&doc, probe, 1.), Some(circle));
     }
 }
+
+mod hover_performance;
+
+#[test]
+fn unmarked_atoms_do_not_change_mark_hit_order_and_hidden_marks_stay_hidden() {
+    use reshiki::scientific::{SymbolKind, attach, styled_mark_parts};
+    let mut doc = Document::default();
+    let a = doc.add_atom("N", World::default());
+    let b = doc.add_atom("N", World::default());
+    for id in [a, b] {
+        attach(
+            doc.atom_mut(id).unwrap(),
+            SymbolKind::LonePair,
+            World::new(0., -18.),
+        )
+        .unwrap();
+    }
+    let probe = reshiki::graphics::flattened(
+        &styled_mark_parts(doc.atom(b).unwrap(), &doc.drawing_style)[0].commands,
+    )[0][0];
+    let c = doc.add_atom("C", probe);
+    assert_eq!(hit::hit_object(&doc, probe, 1.), Some(b));
+    doc.abbreviations
+        .push(reshiki::abbreviations::Abbreviation {
+            label: "hidden".into(),
+            reverse_label: String::new(),
+            anchor: c,
+            members: vec![c, b],
+            alignment: Default::default(),
+            label_style: None,
+            label_color_override: false,
+            highlight: None,
+        });
+    assert_eq!(hit::hit_object(&doc, probe, 1.), Some(a));
+    doc.abbreviations.clear();
+    doc.atom_mut(b).unwrap().marks.clear();
+    assert_eq!(hit::hit_object(&doc, probe, 1.), Some(a));
+    doc.atom_mut(a).unwrap().marks.clear();
+    assert_eq!(hit::hit_object(&doc, probe, 1.), Some(c));
+}

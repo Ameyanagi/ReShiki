@@ -311,3 +311,85 @@ fn cached_foreground_orbitals_follow_edits_and_preserve_hit_selection() {
     doc.graphics.clear();
     assert!(!cache.foreground_orbital(&doc));
 }
+
+#[test]
+fn retained_ring_hits_reuse_geometry_and_invalidate_on_real_document_changes() {
+    let mut doc = Document::default();
+    let ids = reshiki::editing::ring(&mut doc, Point::default(), 6, false, 42.);
+    assert_eq!(ids.len(), 6);
+    let mut cache = SceneCache::default();
+    let center = reshiki::editing::center(&doc, &ids);
+    assert_eq!(
+        cache.ring_at(&doc, center),
+        reshiki::editing::ring_at(&doc, center)
+    );
+    let first = cache.ring_interiors.as_ref().unwrap().clone();
+    assert_eq!(
+        cache.ring_at(&doc.clone(), center.offset(1., 2.)),
+        reshiki::editing::ring_at(&doc, center.offset(1., 2.))
+    );
+    assert!(Rc::ptr_eq(&first, cache.ring_interiors.as_ref().unwrap()));
+
+    let mut history = History::default();
+    let before = doc.clone();
+    doc.translate(&ids, 200., 100.);
+    assert!(history.commit(before, &doc));
+    assert_eq!(cache.ring_at(&doc, center), None);
+    assert!(!Rc::ptr_eq(&first, cache.ring_interiors.as_ref().unwrap()));
+    let moved = center.offset(200., 100.);
+    assert_eq!(
+        cache.ring_at(&doc, moved),
+        reshiki::editing::ring_at(&doc, moved)
+    );
+    assert!(history.undo(&mut doc));
+    assert_eq!(
+        cache.ring_at(&doc, center),
+        reshiki::editing::ring_at(&doc, center)
+    );
+    assert!(history.redo(&mut doc));
+    assert_eq!(
+        cache.ring_at(&doc, moved),
+        reshiki::editing::ring_at(&doc, moved)
+    );
+
+    let before = doc.clone();
+    doc.bonds.remove(0);
+    assert_eq!(cache.ring_at(&doc, moved), None);
+    doc = before;
+    assert!(cache.ring_at(&doc, moved).is_some());
+    doc.abbreviations
+        .push(reshiki::abbreviations::Abbreviation {
+            label: "Cy".into(),
+            reverse_label: String::new(),
+            anchor: ids[0],
+            members: ids.clone(),
+            alignment: Default::default(),
+            label_style: None,
+            label_color_override: false,
+            highlight: None,
+        });
+    assert_eq!(cache.ring_at(&doc, moved), None);
+    doc.abbreviations.clear();
+    assert!(cache.ring_at(&doc, moved).is_some());
+    let atoms = ids
+        .iter()
+        .map(|id| {
+            let p = doc.atom(*id).unwrap().position;
+            reshiki::models3d::Placed {
+                id: *id,
+                xyz: [p.x, p.y, 0.],
+            }
+        })
+        .collect();
+    let mut model = reshiki::models3d::Model3d::new(
+        &doc,
+        atoms,
+        vec![],
+        reshiki::models3d::ForceField::Mmff94s,
+    );
+    model.display = reshiki::models3d::Display::ThreeD;
+    doc.models.push(model);
+    assert_eq!(cache.ring_at(&doc, moved), None);
+    doc.models[0].display = reshiki::models3d::Display::TwoD;
+    assert!(cache.ring_at(&doc, moved).is_some());
+}

@@ -204,7 +204,8 @@ fn hit_object_with_orbital(
             .iter()
             .rev()
             .find(|a| {
-                doc.atom_drawn(a.id)
+                !a.marks.is_empty()
+                    && doc.atom_drawn(a.id)
                     && reshiki::scientific::styled_mark_parts(a, &doc.drawing_style)
                         .iter()
                         .any(|part| {
