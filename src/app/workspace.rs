@@ -16,6 +16,8 @@ use reshiki::typography::{Script, StyleChange};
 #[cfg(test)]
 mod layout_snapshots;
 #[cfg(test)]
+mod model_face_qa;
+#[cfg(test)]
 mod selection_canvas_qa;
 #[cfg(test)]
 mod view_parity_tests;

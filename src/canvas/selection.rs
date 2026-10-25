@@ -51,15 +51,25 @@ impl SelectionBox {
         if ids.is_empty() {
             return None;
         }
-        let models = reshiki::models3d::only_shown(doc, ids);
+        // A click on a whole model also selects its attached name. Keep the
+        // caption selected for move/copy, while its model's own frame supplies
+        // the resize handles and pivot. Other selected objects still disable
+        // model resizing.
+        let only_models = reshiki::models3d::only_shown(doc, ids);
+        let molecule = (!only_models && reshiki::models3d::shows_3d(doc, ids))
+            .then(|| reshiki::models3d::whole_molecule(doc, ids))
+            .flatten()
+            .filter(|atoms| reshiki::models3d::only_shown(doc, atoms));
+        let framed = molecule.as_deref().unwrap_or(ids);
+        let models = only_models || molecule.is_some();
         if !models && matches!(ids, [id] if doc.atom(*id).is_some()) {
             return None;
         }
-        let (lo, hi) = scene::selection_bounds(doc, ids)?;
+        let (lo, hi) = scene::selection_bounds(doc, framed)?;
         // Rotation turns what is drawn about its own centre, and rolls the
         // models of molecules shown only in 3D in place.
-        let drawn = reshiki::models3d::without_hidden(doc, ids);
-        let turning = if drawn.is_empty() { ids } else { &drawn };
+        let drawn = reshiki::models3d::without_hidden(doc, framed);
+        let turning = if drawn.is_empty() { framed } else { &drawn };
         Some(Self {
             corners: [lo, World::new(hi.x, lo.y), hi, World::new(lo.x, hi.y)],
             // Derived centroid markers still have a box even without a rotation site.

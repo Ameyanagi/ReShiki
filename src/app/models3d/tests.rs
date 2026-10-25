@@ -746,6 +746,73 @@ fn showing_the_current_display_again_changes_nothing() {
 }
 
 #[test]
+fn resizing_a_captioned_model_keeps_its_name_attached_and_is_one_undo_step() {
+    let (mut app, atoms) = with_model(Display::ThreeD);
+    let caption = reshiki::molecule_names::show(
+        &mut app.tab.doc,
+        &atoms,
+        "ethanol".into(),
+        "CCO".into(),
+        Default::default(),
+    )
+    .unwrap();
+    app.tab.selected = app.tab.doc.expand_groups(&atoms);
+    assert!(app.tab.selected.contains(&caption));
+    let before = app.tab.doc.clone();
+    let previous_frames = frames(&app);
+    let (lo, _) = reshiki::models3d::frame(&before, &before.models[0]).unwrap();
+    let _ = app.update(Message::Canvas(Edit::ResizeModels {
+        ids: app.tab.selected.clone(),
+        pivot: lo,
+        scale: 1.4,
+    }));
+    assert_eq!(frames(&app), previous_frames + 1);
+    assert!(!app.error, "{}", app.status);
+    let resized = app.tab.doc.clone();
+    assert_eq!(resized.atoms, before.atoms);
+    assert_eq!(resized.bonds, before.bonds);
+    assert_eq!(resized.models[0].atoms, before.models[0].atoms);
+    assert_eq!(resized.models[0].rotation, before.models[0].rotation);
+    assert_eq!(resized.molecule_names, before.molecule_names);
+    let name = resized
+        .annotations
+        .iter()
+        .find(|a| a.id == caption)
+        .unwrap();
+    let (lo, hi) = reshiki::scene::selection_bounds(&resized, &atoms).unwrap();
+    assert!((name.position.x + name.size().0 / 2. - (lo.x + hi.x) / 2.).abs() < 1e-3);
+    assert!(name.position.y > hi.y);
+    let at = name.position;
+    let _ = app.update(Message::Canvas(Edit::Move(
+        app.tab.selected.clone(),
+        60.,
+        25.,
+    )));
+    assert_eq!(app.tab.doc.molecule_names, resized.molecule_names);
+    let moved = app
+        .tab
+        .doc
+        .annotations
+        .iter()
+        .find(|a| a.id == caption)
+        .unwrap();
+    assert!(
+        moved.position.distance(at.offset(60., 25.)) < 1e-3,
+        "The caption still follows a later move: {:?}",
+        moved.position
+    );
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, resized);
+    let _ = app.update(Message::Undo);
+    assert_eq!(
+        app.tab.doc, before,
+        "One Undo restores the resized frame and caption together"
+    );
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, resized);
+}
+
+#[test]
 fn the_model_section_shows_only_while_the_model_does() {
     let (mut app, _) = with_model(Display::Both);
     assert!(app.model_section().is_some());

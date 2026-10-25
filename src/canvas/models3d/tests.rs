@@ -290,6 +290,70 @@ fn corner_handles_resize_the_frame_and_edges_are_hidden() {
 }
 
 #[test]
+fn clicking_a_captioned_model_selects_its_name_and_keeps_all_four_frame_handles() {
+    let (mut doc, atoms) = drawing();
+    let caption = reshiki::molecule_names::show(
+        &mut doc,
+        &atoms,
+        "ethanol".into(),
+        "CCO".into(),
+        Default::default(),
+    )
+    .unwrap();
+    let unselected = canvas(&doc, &[]);
+    let at = frame_center(&unselected);
+    let mut state = State::default();
+    send(&unselected, &mut state, moved(at));
+    send(&unselected, &mut state, PRESS);
+    let clicked = send(&unselected, &mut state, RELEASE).unwrap();
+    let selected = match clicked {
+        Edit::Select(ids) | Edit::SelectAt(ids, _) => ids,
+        other => panic!("A plain click must select the model: {other:?}"),
+    };
+    assert_eq!(
+        selected,
+        reshiki::molecule_names::include_annotations(&doc, &atoms)
+    );
+    assert!(selected.contains(&caption));
+    for display in [Display::ThreeD, Display::Both] {
+        models3d::set_display(&mut doc, 0, display);
+        for zoom in [0.5, 1., 2.] {
+            let mut canvas = canvas(&doc, &selected);
+            canvas.camera.zoom = zoom;
+            let selection = SelectionBox::new(&doc, &selected, canvas.camera, BOUNDS).unwrap();
+            let (lo, hi) = reshiki::scene::selection_bounds(&doc, &atoms).unwrap();
+            for (i, (point, offset)) in [
+                (lo, Vector::new(-12., -12.)),
+                (World::new(hi.x, lo.y), Vector::new(12., -12.)),
+                (hi, Vector::new(12., 12.)),
+                (World::new(lo.x, hi.y), Vector::new(-12., 12.)),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let grip = canvas.camera.screen(point, BOUNDS) + offset;
+                assert_eq!(selection.hit(grip), Some(Handle::Resize(i)));
+            }
+            let corner = canvas.camera.screen(hi, BOUNDS) + Vector::new(12., 12.);
+            let mut state = State::default();
+            send(&canvas, &mut state, moved(corner));
+            send(&canvas, &mut state, PRESS);
+            let end = corner + Vector::new(40., 40.);
+            send(&canvas, &mut state, moved(end));
+            let Some(Edit::ResizeModels { ids, scale, .. }) = send(&canvas, &mut state, RELEASE)
+            else {
+                panic!("The captioned model's corner must resize its frame");
+            };
+            assert_eq!(ids, selected);
+            assert!(scale > 1.);
+            let mixed = [selected.clone(), vec![doc.atoms[3].id]].concat();
+            let mixed_box = SelectionBox::new(&doc, &mixed, canvas.camera, BOUNDS).unwrap();
+            assert!(!matches!(mixed_box.hit(corner), Some(Handle::Resize(_))));
+        }
+    }
+}
+
+#[test]
 fn a_press_above_a_selected_molecule_selects_on_the_paper() {
     // No Show as bar floats there (#422): the press starts a marquee.
     let (doc, atoms) = drawing();
