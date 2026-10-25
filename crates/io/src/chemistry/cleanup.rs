@@ -34,8 +34,12 @@ pub enum Error {
     Fixed,
     #[error("Cleanup could not preserve stereochemistry; try including the whole molecule")]
     ChemistryChanged,
+    #[error("Cleanup could not preserve stereochemistry; drawing unchanged")]
+    ChemistryChangedWhole,
     #[error("Cleanup could not preserve visible stereochemistry; include the whole molecule")]
     VisibleChanged,
+    #[error("Cleanup could not preserve visible stereochemistry; drawing unchanged")]
+    VisibleChangedWhole,
     #[error("Cleanup layout dimensions, identities, or coordinates changed")]
     Layout,
     #[error("Cleanup exceeds its atom, bond, selection, or work limit")]
@@ -370,6 +374,11 @@ impl Prepared {
             {
                 return Err(Error::Layout.into());
             }
+            super::layout_refinement::exterior_terminals(
+                &part.molecule.state,
+                &mut layout,
+                &part.fixed,
+            );
             numeric::orient(
                 &part.molecule.positions,
                 &mut layout,
@@ -443,7 +452,12 @@ impl Prepared {
             if identity(&molecular::prepare_at(&merged, &raw).map_err(Error::from)?)?
                 != part.identity
             {
-                return Err(Error::ChemistryChanged.into());
+                return Err(if part.fixed.is_empty() {
+                    Error::ChemistryChangedWhole
+                } else {
+                    Error::ChemistryChanged
+                }
+                .into());
             }
             let mut before = part.base;
             let mut after = merged.clone();
@@ -459,7 +473,12 @@ impl Prepared {
             if identity(&molecular::prepare(&before).map_err(Error::from)?)?
                 != identity(&molecular::prepare_at(&after, &raw).map_err(Error::from)?)?
             {
-                return Err(Error::VisibleChanged.into());
+                return Err(if part.fixed.is_empty() {
+                    Error::VisibleChangedWhole
+                } else {
+                    Error::VisibleChanged
+                }
+                .into());
             }
             for (atom, point) in merged.atoms.into_iter().zip(raw) {
                 if part.moving.contains(&atom.id) {

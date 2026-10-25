@@ -243,3 +243,5 @@ Space-filling hydrogen visibility: @Ameyanagi in [PR #535](https://github.com/Am
 PDF gradient alignment for molecular and crystal models: @Ameyanagi in [PR #536](https://github.com/Ameyanagi/ReShiki/pull/536) (under review); [validation and reusable evidence](changes/qa-522.md).
 
 Clear CLI errors for unsupported crystal input: @Ameyanagi in [PR #537](https://github.com/Ameyanagi/ReShiki/pull/537) (under review); [validation](changes/qa-490.md).
+
+Artemisinin depiction and whole-molecule cleanup diagnostics: @Ameyanagi in [PR #538](https://github.com/Ameyanagi/ReShiki/pull/538) (under review); [validation and matched renderer evidence](changes/artemisinin-depiction.md).
