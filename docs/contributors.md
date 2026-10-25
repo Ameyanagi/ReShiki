@@ -26,6 +26,9 @@ Under review: @Ameyanagi — See the label the Text tool will repeat, keep its c
 [PR #560](https://github.com/Ameyanagi/ReShiki/pull/560) · [QA report](changes/qa-label-feedback.md).
 Under review: @Ameyanagi — Reach 3D controls in one click, bring clipped models into view, recover directly from blocked scale commands, and cancel long native model generation with Escape.
 [PR #561](https://github.com/Ameyanagi/ReShiki/pull/561) · [QA report](changes/qa-model-controls.md).
+Under review: @Ameyanagi — mode-aware Help ranking, labelled ring-fusion examples
+and a readable Shift search hint.
+[PR #562](https://github.com/Ameyanagi/ReShiki/pull/562) · [QA report](changes/qa-help-polish.md).
 
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).
