@@ -4,6 +4,11 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
+Under review: @Ameyanagi — recovery draft review, selective restore and safe
+discard of abandoned copies for [issue #491](https://github.com/Ameyanagi/ReShiki/issues/491)
+in [PR #563](https://github.com/Ameyanagi/ReShiki/pull/563).
+[QA report and reusable images](changes/recovery-manager.md).
+
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).
 
