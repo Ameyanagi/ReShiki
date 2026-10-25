@@ -10,6 +10,8 @@ Under review: @Ameyanagi — moving 3D models from their visible frame edges in
 [PR #540](https://github.com/Ameyanagi/ReShiki/pull/540).
 Under review: @Ameyanagi — Safari pastes clipboard text into captions and Import fields without turning Command-V into a typed v.
 [PR #541](https://github.com/Ameyanagi/ReShiki/pull/541).
+Under review: @Ameyanagi — Crystal import notes stay with the drawing and survive native save/reopen; the guide now explains the opening view correctly.
+[PR #542](https://github.com/Ameyanagi/ReShiki/pull/542).
 
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).
