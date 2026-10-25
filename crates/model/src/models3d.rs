@@ -5,8 +5,9 @@
 //! A model links to its molecule by atom IDs and never changes chemistry,
 //! identities or the 2D layout, which stays for switching back. Its frame is
 //! placed relative to the molecule's 2D centre, so moving, aligning and copying
-//! the atoms carries it along. A chemical edit to the molecule drops the model
+//! the atoms carries it along. A chemical edit to a molecule drops its conformer
 //! instead of repairing it; a molecule shown in 3D then shows its 2D drawing.
+//! Crystal models retain their cell for element- or charge-only substitutions.
 //! Chemical formats (MOL, CDX/CDXML, SMILES) keep the 2D atoms and omit models.
 //!
 //! A model read from a crystal file (#417) may hold several molecules, or an
@@ -1281,6 +1282,7 @@ pub fn validate(doc: &Document) -> Result<(), String> {
 /// Drop models that lost an atom. Validation tolerates them, so edits that
 /// remove atoms before reconciling stay valid; [`reconcile`] drops them too.
 pub fn prune(doc: &mut Document) {
+    crystal::mark_distance_bonds(doc);
     let present: HashSet<_> = doc.atoms.iter().map(|a| a.id).collect();
     doc.models
         .retain(|m| m.atoms.iter().all(|a| present.contains(&a.id)));
@@ -1301,6 +1303,7 @@ fn whole(doc: &Document, model: &Model3d) -> bool {
 /// Drop a loaded file's models that are not one whole molecule. Unlike
 /// [`prune`], nothing is mid-edit here.
 pub fn retain_whole(doc: &mut Document) {
+    crystal::mark_distance_bonds(doc);
     let models = std::mem::take(&mut doc.models);
     doc.models = models.into_iter().filter(|m| whole(doc, m)).collect();
 }
@@ -1308,9 +1311,12 @@ pub fn retain_whole(doc: &mut Document) {
 /// Called in the same transaction as the edit. A model whose atoms are no
 /// longer exactly one molecule, or whose molecule changed chemically since
 /// `before` (element, charge, bonds, stereo, …; not its 2D layout), is dropped.
+/// A crystal keeps its imported geometry and provenance for element- or
+/// charge-only substitutions; bonds and boundary crossings are not recomputed.
 /// Atom IDs can be reused and equivalent atoms swapped without changing a
 /// canonical SMILES, so the check compares atoms and bonds by ID.
 pub fn reconcile(doc: &mut Document, before: &Document) {
+    crystal::inherit_distance_bonds(doc, before);
     if doc.models.is_empty() {
         return;
     }
@@ -1322,10 +1328,64 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
             let kept = before.models.iter().any(|old| old.ids() == ids);
             whole(doc, m)
                 && (!kept
-                    || chemistry(before, &ids) == chemistry(doc, &ids)
-                        && stereo(before, &ids) == stereo(doc, &ids))
+                    || if m.cell.is_some() {
+                        crystal_substitution(before, doc, &ids)
+                    } else {
+                        chemistry(before, &ids) == chemistry(doc, &ids)
+                            && stereo(before, &ids) == stereo(doc, &ids)
+                    })
         })
         .collect();
+}
+
+/// Crystal bonds describe imported geometry, so changing the elements must
+/// not depend on molecular valence or newly perceived R/S and E/Z. Compare the
+/// editable stereo sources directly instead, allowing only element and charge
+/// differences in the chemical fields. A wildcard or free text is not an
+/// element substitution, and changing a bond's stereo source is not exempt.
+fn crystal_substitution(before: &Document, doc: &Document, ids: &HashSet<u64>) -> bool {
+    if doc
+        .atoms
+        .iter()
+        .filter(|a| ids.contains(&a.id))
+        .any(|a| !crate::editing::ELEMENTS.contains(&a.element.as_str()))
+    {
+        return false;
+    }
+    let normalized = |doc: &Document| {
+        let (mut atoms, mut bonds) = chemistry(doc, ids);
+        for (atom, source) in atoms
+            .iter_mut()
+            .zip(doc.atoms.iter().filter(|a| ids.contains(&a.id)))
+        {
+            atom.element.clear();
+            atom.charge = 0;
+            atom.stereo = source.stereo.clone();
+        }
+        for (bond, source) in bonds.iter_mut().zip(
+            doc.bonds
+                .iter()
+                .filter(|b| ids.contains(&b.a) || ids.contains(&b.b)),
+        ) {
+            // Match the direction inputs used by chemistry::document: a
+            // nonprojected single bold/wedge/hash can specify stereo, as can
+            // a wavy double bond. Plain/dashed and bold double appearance do
+            // not specify chemistry and keep the cell.
+            bond.display = if !source.projection
+                && (source.order == 1 || source.order == 2 && source.display == "wavy")
+                && crate::bonds::is_stereo_marker(&source.display)
+            {
+                source.display.clone()
+            } else {
+                String::new()
+            };
+            bond.stereo = source.stereo.clone();
+            bond.stereo_atoms = source.stereo_atoms.clone();
+            bond.stereo_authoritative = source.stereo_authoritative;
+        }
+        (atoms, bonds)
+    };
+    normalized(before) == normalized(doc)
 }
 
 /// Atom chiral tags, then each bond's stereo, stereo atoms and unknown flag.
@@ -1382,6 +1442,7 @@ fn chemistry(doc: &Document, ids: &HashSet<u64>) -> (Vec<Atom>, Vec<Bond>) {
         .iter()
         .filter(|b| ids.contains(&b.a) || ids.contains(&b.b))
         .map(|b| Bond {
+            distance_derived: false,
             highlight: None,
             ring_arc: false,
             z_order: 0,

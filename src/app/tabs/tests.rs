@@ -365,7 +365,7 @@ fn background_engine_results_apply_in_their_own_history() {
 }
 
 #[test]
-fn background_checks_and_cleanup_previews_stay_with_their_drawing() {
+fn background_skipped_checks_and_cleanup_previews_stay_with_their_drawing() {
     for cleanup in [false, true] {
         let mut app = ready();
         let atom = app.tab.doc.add_atom("N", Point::default());
@@ -418,8 +418,8 @@ fn background_checks_and_cleanup_previews_stay_with_their_drawing() {
             assert_eq!(app.tab.doc, before);
             assert!(!app.tab.history.can_undo());
         } else {
-            assert_eq!(tab.doc, computed);
-            assert_eq!(tab.status, "No chemistry errors found");
+            assert_eq!(tab.doc, before);
+            assert_eq!(tab.status, "Chemical analysis unavailable");
         }
     }
 }

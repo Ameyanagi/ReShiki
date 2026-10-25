@@ -715,7 +715,7 @@ impl App {
         // Ordinary molecules beside a crystal keep their chemistry analysis.
         if reshiki::models3d::crystal::touches(&self.tab.doc, &ids) {
             let mut body = column![
-                text(reshiki::models3d::crystal::ANALYSIS_NOTICE)
+                text(reshiki::models3d::crystal::analysis_notice(&self.tab.doc))
                     .size(11)
                     .style(muted_text)
             ]

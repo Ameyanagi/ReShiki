@@ -30,8 +30,10 @@ The model links to the molecule by atom ID. It never changes chemistry, atom IDs
 or the 2D layout, which is kept for switching back. Clicking or lassoing the
 model selects the molecule, so moving, aligning, copying and Duplicate carry it
 along; while the molecule is shown in 3D, its hidden 2D atoms cannot be picked.
-A chemical edit to the molecule (element, charge, bonds or stereo) removes the
-model.
+A chemical edit to an ordinary molecule (element, charge, bonds or stereo)
+removes its conformer. A crystal keeps its imported unit cell and copies when
+only an atom’s element or charge changes; see
+[Editing a crystal](crystal-structures.md#editing-a-crystal).
 
 The model sits in a square frame that holds it in any rotation, so the frame and
 its handles stay put while the model turns. On the canvas, a model

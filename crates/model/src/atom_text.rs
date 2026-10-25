@@ -323,6 +323,10 @@ fn apply_entry(
     };
     let variable =
         (new_element == "*" && (text != "*" || mode == Mode::Text)).then(|| text.to_owned());
+    let crystal = doc
+        .models
+        .iter()
+        .any(|m| m.cell.is_some() && m.contains(id));
     let mut result = doc.clone();
     result.generic.alternatives.retain(|s| s.atom != id);
     result.generic.links.retain(|s| s.atom != id);
@@ -356,6 +360,15 @@ fn apply_entry(
         a.no_implicit = true;
         a.explicit_h = 0;
         a.label_h = 0;
+    }
+    // Crystal sites remain explicit when their element or charge is edited.
+    // The import never inferred missing hydrogens, and a substitution must not
+    // silently change that policy.
+    if crystal {
+        a.no_implicit = true;
+        if explicit.is_none() && mode != Mode::Text && element && new_element != "*" {
+            a.charge = 0;
+        }
     }
     if new_element == "C" {
         a.display.carbons = Some(crate::atom_labels::Carbons::All);

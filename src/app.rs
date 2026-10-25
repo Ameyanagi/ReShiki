@@ -724,6 +724,14 @@ impl App {
         self.tab
             .nmr
             .invalidate_if_changed(&self.tab.doc, self.tab.file_epoch);
+        let unit_cell_removed = reconciled.before().models.iter().any(|old| {
+            old.cell.is_some()
+                && !self.tab.doc.models.iter().any(|m| {
+                    m.cell.is_some()
+                        && m.atoms.len() == old.atoms.len()
+                        && old.atoms.iter().all(|atom| m.contains(atom.id))
+                })
+        });
         let committed = reconciled.commit(&mut self.tab.doc, &mut self.tab.history, continuing);
         self.label_layout_settled();
         if committed.chemistry_changed {
@@ -736,7 +744,9 @@ impl App {
                 self.tab.analysis = None;
             }
             self.error = false;
-            self.status = if committed.chemistry_changed {
+            self.status = if unit_cell_removed {
+                "Unit cell removed by the edit · Undo restores it"
+            } else if committed.chemistry_changed {
                 "Drawing changed · Check structure to refresh properties"
             } else {
                 "Drawing updated"
@@ -1128,6 +1138,7 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
 /// new one a compile error here instead of an edit the unsaved check misses.
 fn same_bond(a: &reshiki::document::Bond, b: &reshiki::document::Bond) -> bool {
     let reshiki::document::Bond {
+        distance_derived,
         highlight,
         ring_arc,
         projection,
@@ -1145,7 +1156,8 @@ fn same_bond(a: &reshiki::document::Bond, b: &reshiki::document::Bond) -> bool {
         secondary_display,
         color,
     } = a;
-    *highlight == b.highlight
+    *distance_derived == b.distance_derived
+        && *highlight == b.highlight
         && *ring_arc == b.ring_arc
         && *projection == b.projection
         && *stereo_authoritative == b.stereo_authoritative

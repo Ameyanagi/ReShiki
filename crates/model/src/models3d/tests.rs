@@ -2066,7 +2066,7 @@ fn a_model_of_several_molecules_is_selected_and_kept_whole() {
 }
 
 #[test]
-fn inserting_or_rebuilding_a_crystal_keeps_its_version() {
+fn inserting_a_crystal_keeps_its_version_and_requires_drawing_only_chemistry() {
     let (crystal, _) = crystal();
     let mut doc = Document {
         version: MODELS_3D,
@@ -2077,12 +2077,11 @@ fn inserting_or_rebuilding_a_crystal_keeps_its_version() {
     assert_eq!(doc.version, crate::document::CRYSTALS);
     assert!(validate(&doc).is_ok());
 
-    let molecule = crate::chemistry::document::prepare(&crystal).unwrap();
-    let drawing = crate::chemistry::document::for_drawing(&molecule, &crystal).unwrap();
-    let labels = drawing.labels().unwrap();
-    let rebuilt = drawing.finish(labels).unwrap();
-    assert_eq!(rebuilt.version, crate::document::CRYSTALS);
-    assert_eq!(rebuilt.models, crystal.models);
+    assert!(matches!(
+        crate::chemistry::document::prepare(&crystal),
+        Err(crate::chemistry::document::Error::DistanceBonds)
+    ));
+    assert!(crate::chemistry::document::drawing_graph(&crystal).is_ok());
 }
 
 #[test]
@@ -2117,4 +2116,74 @@ fn the_frame_holds_half_bonds_leaving_the_cell() {
     let mut odd = doc.clone();
     odd.models[0].cell.as_mut().unwrap().crossing[0].image = [-128, 0, 0];
     assert!(validate(&odd).is_err());
+}
+
+#[test]
+fn crystal_element_and_charge_edits_keep_all_imported_context() {
+    let (mut before, [na, _]) = crystal();
+    before.models[0].repeat = [2, 3, 1];
+    before.models[0].charges = true;
+    for edit in [0, 1, 2] {
+        let mut doc = before.clone();
+        let atom = doc.atom_mut(na).unwrap();
+        if edit != 1 {
+            atom.element = "K".into();
+        }
+        if edit != 0 {
+            atom.charge = 1;
+        }
+        commit(&mut doc, before.clone());
+        assert_eq!(doc.models, before.models);
+    }
+}
+
+#[test]
+fn crystal_substitution_exemption_rejects_other_chemical_and_stereo_edits() {
+    let (mut before, [na, cl]) = crystal();
+    before.add_bond(na, cl, 1, "plain");
+    for edit in 0..13 {
+        let mut doc = before.clone();
+        doc.atom_mut(na).unwrap().element = "K".into();
+        match edit {
+            0 => doc.atom_mut(na).unwrap().isotope = 41,
+            1 => doc.atom_mut(na).unwrap().radical_electrons = 1,
+            2 => doc.atom_mut(na).unwrap().explicit_h = 1,
+            3 => doc.atom_mut(na).unwrap().no_implicit = true,
+            4 => {
+                doc.atom_mut(na).unwrap().stereo = Some(AtomStereo {
+                    winding: "CW".into(),
+                    neighbors: vec![cl],
+                })
+            }
+            5 => doc.bonds[0].order = 2,
+            6 => doc.bonds[0].stereo_authoritative = true,
+            7 => doc.bonds[0].display = "wedge".into(),
+            8 => doc.atom_mut(na).unwrap().element = "*".into(),
+            9 => doc.atom_mut(na).unwrap().element = "Xx".into(),
+            10 => doc.bonds[0].display = "bold".into(),
+            11 => doc.bonds[0].display = "hashed".into(),
+            12 => doc.bonds[0].display = "wavy".into(),
+            _ => unreachable!(),
+        }
+        reconcile(&mut doc, &before);
+        assert!(
+            doc.models.is_empty(),
+            "edit {edit} must invalidate the crystal"
+        );
+    }
+}
+
+#[test]
+fn crystal_presentation_edits_keep_the_cell_without_relaxing_stereo_sources() {
+    for (order, display) in [(1, "plain"), (2, "dashed"), (2, "bold")] {
+        let (mut before, [na, cl]) = crystal();
+        before.add_bond(na, cl, order, "plain");
+        let mut doc = before.clone();
+        doc.bonds[0].display = display.into();
+        doc.bonds[0].color = crate::palette::Color::Custom([30, 80, 140]);
+        doc.atom_mut(na).unwrap().depth += 5.;
+        doc.atom_mut(na).unwrap().position.x += 5.;
+        commit(&mut doc, before.clone());
+        assert_eq!(doc.models, before.models, "{order}/{display}");
+    }
 }

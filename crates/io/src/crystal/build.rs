@@ -410,6 +410,14 @@ pub(super) fn document(structure: Structure) -> Result<Document, Error> {
     lay_out(&mut doc, &model);
     doc.models.push(model);
     models3d::require_version(&mut doc);
+    if doc.models.iter().any(|m| m.cell.is_some()) {
+        for bond in &mut doc.bonds {
+            bond.distance_derived = true;
+        }
+        if !doc.bonds.is_empty() {
+            doc.require_version(crate::document::DISTANCE_BONDS);
+        }
+    }
     // A crystal opens as a 2D drawing in its cell; a plain XYZ molecule as
     // a 3D model.
     if doc.models.iter().all(|m| m.cell.is_none()) {

@@ -100,6 +100,41 @@ drawing.
   atoms shown (of the selected atoms, if any) and says that chemical analysis
   is unavailable, since the bonds come from distances, not chemistry.
 
+## Editing a crystal
+
+Changing an in-cell atom’s element or formal charge keeps the unit cell,
+repeat, ion-charge visibility and imported model. The lighter copies show the
+new element and the formula updates: replacing one Na⁺ with K⁺ in rock salt
+gives `Cl4KNa3`. The edit is one Undo step and saving retains the lattice.
+The atom remains explicit; no missing hydrogens are inferred.
+
+The file’s site labels and displacement parameters remain import provenance.
+A substituted K may therefore still have the source label `Na1`; this is not a
+new crystallographic refinement. Imported bonds and boundary crossings remain
+as read, without recomputing distances or covalent radii for the new element.
+
+Presentation edits, such as colour, depth and dashed lines, keep the cell.
+Other chemical or stereo edits, including adding or removing connected atoms
+or changing bond orders or stereochemical wedge/hash sources, remove the
+imported model and its cell. The status line
+says **Unit cell removed by the edit · Undo restores it**. Surviving bonds
+retain their distance-derived origin, so Properties continues to count the
+atoms shown and explains that chemical analysis is unavailable. A connected
+extension belongs to the same unvalidated component; separate ordinary
+molecules retain their usual analysis. The provenance survives native
+save/reopen and copying a fragment with those bonds. Editing an existing
+bond does not establish a chemical assignment. Deleting the inferred bonds
+and drawing fresh ones removes their individual source markers. A compound
+edit made while the live cell is still present can conservatively retain
+unvalidated crystal context on new in-cell bonds too; redraw them in a
+separate edit after the cell is removed to use ordinary chemical bonds.
+
+**Check structure** reports that analysis was skipped instead of claiming the
+graph passed valence checks. Molecular identifiers and MOL export require a
+chemically assigned graph. CDXML/CDX can export the unvalidated drawing with
+a notice that the lattice and distance-bond provenance are omitted; use native
+ReShiki or PNG/SVG/PDF figure export to retain the crystal drawing.
+
 ## What is kept
 
 A saved `.rsk` file keeps only what the structure needs: the lattice vectors,
@@ -110,8 +145,12 @@ them, for thermal ellipsoids in a later version. Everything else in the file —
 bibliography, reflections, other data blocks, other XYZ properties or PDB
 records — is read past and not kept, so a saved drawing stays small.
 
-Saving a crystal needs document version 29. ReShiki 0.13.0 saves every file as
-version 29, so ReShiki 0.12.x and earlier cannot open it.
+Saved drawings now use document version 30, which retains distance-derived
+bond provenance even after the cell is removed. ReShiki 0.13.0 and earlier
+cannot open these files; their newer-version message asks for an update.
+Version 29 crystals still open and acquire provenance from their live cells.
+A version 29 drawing whose cell was already removed has no source marker to
+recover; reopen the original crystal file to restore its context.
 
 ## Limits
 
