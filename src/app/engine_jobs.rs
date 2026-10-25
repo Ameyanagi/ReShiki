@@ -270,3 +270,6 @@ impl App {
         self.error = false;
     }
 }
+
+#[cfg(test)]
+mod tests;
