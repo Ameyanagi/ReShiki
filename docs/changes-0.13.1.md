@@ -325,4 +325,7 @@ vary even between baseline copies. [Full conditions and copied-output checks](ch
   requires signed, notarized and stapled packages; release validation is
   recorded separately and is not implied by the individual fix reviews.
 
+Version, release notes and compatibility guidance: @Ameyanagi in
+[PR #583](https://github.com/Ameyanagi/ReShiki/pull/583).
+
 Thank you to all the [contributors](contributors.md) who helped improve ReShiki.

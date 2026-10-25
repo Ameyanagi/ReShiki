@@ -24,8 +24,8 @@ measurement uncertainty. This source-pinned result is not an all-frame maximum,
 event-to-paint latency, FPS or package-runtime claim. Its original host,
 framing, sources and limits remain in the [QA record](changes/qa-pointer-hover.md).
 
-- Release preparation pull request: pending.
-- Tested preparation head and merge commit: pending.
+- Release preparation pull request: [#583](https://github.com/Ameyanagi/ReShiki/pull/583).
+- Exact preparation head, check results and subsequent merge: tracked in [PR #583](https://github.com/Ameyanagi/ReShiki/pull/583).
 - Manual six-platform package run and exact source head: pending.
 
 These identities and results will be linked once observed. Keep the source and
