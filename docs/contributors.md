@@ -43,6 +43,10 @@ platform Copy advice, a visible full-message cue and narrow-window footer
 controls in [PR #565](https://github.com/Ameyanagi/ReShiki/pull/565), addressing
 [#499](https://github.com/Ameyanagi/ReShiki/issues/499).
 [Native interaction and combined renderer evidence](changes/qa-export-feedback.md).
+Under review: @Ameyanagi — stable drawing position across inspector pages,
+retained atom-mark positioning controls, and marked-atom context entry in
+[PR #566](https://github.com/Ameyanagi/ReShiki/pull/566), with
+[matched renderer and native QA](changes/qa-inspector-motion.md).
 
 Released in 0.13.0: @Ameyanagi — searchable shortcut finder with live before/after
 examples replacing Help in [PR #357](https://github.com/Ameyanagi/ReShiki/pull/357).

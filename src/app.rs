@@ -998,6 +998,13 @@ impl App {
             ControlFlow::Continue(message) => message,
         };
         let previous = self.inspector_tab;
+        let inspector_before = (
+            self.tab.id,
+            self.tab.file_epoch,
+            self.inspector_open,
+            self.inspector_width(),
+            self.viewport,
+        );
         let pointer_selection = match &message {
             Message::Canvas(Edit::Select(_)) => Some(
                 self.tab
@@ -1050,6 +1057,15 @@ impl App {
             self.refresh_numeric_dimensions();
         }
         self.sync_mapping_preview();
+        if !background
+            && inspector_before.0 == self.tab.id
+            && inspector_before.1 == self.tab.file_epoch
+            && inspector_before.2
+            && self.inspector_open
+            && previous != self.inspector_tab
+        {
+            self.preserve_inspector_page_position(inspector_before.3, inspector_before.4);
+        }
         // Include inspector changes made by tool-specific handlers, which can
         // return early. Ordinary updates within a panel retain its scroll state.
         if !background
