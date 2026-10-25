@@ -30,7 +30,7 @@ pub use stdio::{
 };
 
 /// Recycle a recovery copy, or fail without a permanent-deletion fallback.
-pub fn trash_recovery_draft(path: &std::path::Path) -> Result<(), String> {
+pub fn trash_recovery_draft(path: &std::path::Path) -> std::result::Result<(), String> {
     recovery::discard(path)
 }
 
