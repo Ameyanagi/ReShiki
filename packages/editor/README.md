@@ -13,7 +13,7 @@ pnpm add @ameyanagi/reshiki
 ```
 
 Each ReShiki release publishes the package with the app's version, so
-`@ameyanagi/reshiki@0.13.0` is the editor of ReShiki 0.13.0. Prereleases are
+`@ameyanagi/reshiki@0.13.1` is the editor of ReShiki 0.13.1. Prereleases are
 under the `next` tag (`bun add @ameyanagi/reshiki@next`). The package carries
 the license texts and third-party notices in `dist/licenses`.
 
@@ -346,7 +346,7 @@ await init(new URL("/assets/reshiki_web_bg.wasm", location.href));
 | `smiles(data, format)`                             | The canonical SMILES.                                                         |
 | `inchi(data, format)`                              | The standard InChI.                                                           |
 | `addFont(font)`                                    | Adds a font (a URL or bytes) that figures fall back to, such as for Japanese. |
-| `version()`                                        | The ReShiki release version, e.g. `0.13.0` (including any prerelease suffix). |
+| `version()`                                        | The ReShiki release version, e.g. `0.13.1` (including any prerelease suffix). |
 
 `data` is a string or a `Uint8Array`; `cdx` input must be bytes.
 

@@ -3,7 +3,7 @@
 This inventory retains earlier workflow checks. For current packages and setup, see [installation](getting-started.md) and [release signing](releasing.md).
 
 Workflow checks began on 2026-09-20 for version 0.2.0. This page describes
-ReShiki 0.13.0. Dated validation records describe their original milestones.
+ReShiki 0.13.1. Dated validation records describe their original milestones.
 This inventory records supported workflows, explicit limitations and planned work. A supported subset is not a claim of
 complete coverage for every chemical structure or document.
 
@@ -16,7 +16,7 @@ Evidence comes from ReShiki source, regression tests, saved interchange fixtures
 and desktop editing checks. Detailed feature documents record the tests and
 applicable boundaries.
 
-ReShiki 0.13.0 saves drawings that ReShiki 0.12.x and earlier cannot open. See [file compatibility](changes-0.13.md#file-compatibility).
+Every drawing saved by ReShiki 0.13.1 uses document version 30, which ReShiki 0.13.0 and earlier cannot open. Older drawings still open in 0.13.1. See [file compatibility](changes-0.13.1.md#file-compatibility).
 
 ## Agent API — experimental
 

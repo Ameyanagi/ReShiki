@@ -262,7 +262,7 @@ Nix flake for Linux and Apple Silicon Macs (released in 0.13.0): @Stefanomarton 
 
 Release preparation and documentation for 0.13.0: @Ameyanagi.
 
-The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.13.md) credit contributors alongside their changes.
+The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-0.13.1.md) credit contributors alongside their changes.
 
 Space-filling hydrogen visibility: @Ameyanagi in [PR #535](https://github.com/Ameyanagi/ReShiki/pull/535); [validation and reusable evidence](changes/qa-513.md).
 
@@ -271,3 +271,5 @@ PDF gradient alignment for molecular and crystal models: @Ameyanagi in [PR #536]
 Clear CLI errors for unsupported crystal input: @Ameyanagi in [PR #537](https://github.com/Ameyanagi/ReShiki/pull/537); [validation](changes/qa-490.md).
 
 Artemisinin depiction and whole-molecule cleanup diagnostics: @Ameyanagi in [PR #538](https://github.com/Ameyanagi/ReShiki/pull/538); [validation and matched renderer evidence](changes/artemisinin-depiction.md).
+
+Release preparation and documentation for 0.13.1: @Ameyanagi in [PR #583](https://github.com/Ameyanagi/ReShiki/pull/583).
