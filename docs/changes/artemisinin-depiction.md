@@ -168,3 +168,84 @@ Follow-up source validation:
   fused components, visible-only stereo perception, repeated cleanup, unknown
   rectangular glyph metrics, underline bands, thick strokes and conservative
   refusal of an unpickable rounded-corner span.
+
+### Matched follow-up comparison
+
+These images compare the earlier **PR implementation** at `d17156fa` with the
+functional follow-up at `6b7373c5`. The earlier implementation is not the main
+branch baseline; the original `3d80590a` comparison remains above.
+
+| Earlier PR implementation                                                                                                                            | Follow-up                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![Earlier artemisinin template projection with an inward methyl and missing peroxide connector](../images/artemisinin-depiction/followup-before.png) | ![Refined artemisinin projection with an outward methyl and visible peroxide connector](../images/artemisinin-depiction/followup-after.png) |
+
+Both are application-rendered SVG paint rasterized through the normal export
+font database and resvg, on white, at 3× scale. They use the same union viewport
+and are **750 × 717 pixels**. Registration changes only the outer SVG viewport
+and dimensions; each original SVG paint body is retained byte for byte. The
+same before/import/cleanup outputs were inspected at half and double that
+raster scale. The recovered peroxide connector remains visible at each scale;
+the cleanup rendering retains the corrected import appearance.
+
+### Native follow-up and persistence
+
+The native follow-up was checked on **2026-10-26**, macOS **27.0.1 (26A434),
+arm64**, in separate Before/After bundles with isolated data directories.
+The earlier executable is the recorded `e2c479d8` build, whose production source
+is unchanged at `d17156fa`. The After executable was built from `6b7373c5`.
+Both used a **1280 × 852 logical-pixel window on a 2× display**, Arial 10 pt,
+JACS / ACS, Publication colors and a white canvas. These JPEGs are original
+**2560 × 1704** application captures, without cropping, resizing or retouching.
+
+The exact SMILES above was entered through **Import → Structure → Insert** in
+both applications. Keyboard drawing was turned off and the selection cleared.
+The command palette set both views to **200%**. The After camera was panned
+vertically through normal canvas scrolling to align the ring framework with
+Before; the drawing coordinates were not edited for the comparison.
+
+| Earlier native import, 200%                                                                                                                                  | Corrected native import, 200%                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![Earlier native import at 200 percent showing the inward methyl and missing peroxide connector](../images/artemisinin-depiction/followup-native-before.jpg) | ![Corrected native import at the same scale and framing with the outward methyl, visible peroxide bond and unchanged molecular properties](../images/artemisinin-depiction/followup-native-after.jpg) |
+
+The fresh import was saved and whole-molecule cleanup was applied successfully.
+A separate check opened the earlier inward-template native drawing, selected
+all **20 atoms and 23 bonds**, and ran **Clean up** with **Selected atoms** and
+**Keep orientation**. Its preview moved the methyl outside the cage; **Apply**
+succeeded. The preview fitted at 204%, and the applied view fitted at 211%.
+The selection overlay in this diagnostic capture establishes the complete
+selection; the status line records the successful application:
+
+![Native cleanup moves the older inward methyl outside the cage while preserving all 20 atoms, 23 bonds and molecular properties](../images/artemisinin-depiction/followup-native-cleanup.jpg)
+
+One **⌘Z** restored the earlier inward methyl, and one **⇧⌘Z** restored the
+corrected result. Each state was saved separately. The cleanup tab was closed
+and its saved file reopened from disk, then saved to a separate file. A field
+comparison confirms that Undo restores every original atom and bond field;
+the cleanup, Redo and reopened documents are exactly equal. The original
+earlier drawing was not overwritten. The
+[actual native cleanup result](../../tests/fixtures/qa-artemisinin-after.rsk)
+is included as a reusable drawing, saved in the native format used by the
+functional capture build.
+
+Independent RDKit 2026.03.6 reconstruction of all six UI-saved states—fresh
+import, fresh-import cleanup, older-template cleanup, Undo, Redo and
+reopened cleanup—reads only chemical atom fields, connectivity, 2D coordinates
+and visible wedge/hash directions. It never reads stored stereo or CIP tags.
+Every state retains the reference canonical isomeric SMILES, InChIKey,
+**C15H22O5**, and all seven mapped R/S centres recorded above. The application
+continues to display **282.336 g/mol**. These are qualitative geometry,
+interaction and persistence checks; no latency claim is made.
+
+Follow-up capture receipt (SHA-256):
+
+- After debug executable: `ff3003cb8a72a9d8a21188a70ddca0561cd75b9fb9649778ed638ee0fd757b11`.
+- Matched renderer Before: `edf6d679cf82d81ba69ad108ac3f85c6f94879775239019e3d8bfe1b211384a4`.
+- Matched renderer After: `187aef2751ed013f4819a49bc92c3b4fba868ae9149c2f6adf6af16e21269264`.
+- Native Before: `097444352455f41ad9cbdc75aee44a42a480d5411d5382c3c974e52458067220`.
+- Native After: `cb0efb2a0550763990db676dfba8b99794c40d99dda7ca260ce244c5733096c0`.
+- Native cleanup: `cb62909c4f5cef5d73547132c3a4a04df6934748ea71332752021598b6569888`.
+- Reusable native cleanup drawing: `89ad8dc3f12a7eb7150cd69b286b9e9b4b0094d6aae28cbbd16025a495237b83`.
+
+Updated release caption: “Artemisinin import and cleanup place the
+peroxide-adjacent methyl outside the cage and keep the peroxide bond visible,
+while preserving all seven stereocentres.”
