@@ -43,6 +43,8 @@ thread_local! {
     static IDLE: RefCell<Option<web_sys::Worker>> = const { RefCell::new(None) };
     /// One request at a time, as the desktop runs one worker per kind.
     static BUSY: Cell<bool> = const { Cell::new(false) };
+    /// A newly spawned worker has not yet announced that its module is ready.
+    static LOADING: Cell<bool> = const { Cell::new(false) };
 }
 
 /// Start workers with `factory`, which returns a new module `Worker`
@@ -52,6 +54,11 @@ pub fn set_worker(factory: js_sys::Function) {
     if let Some(worker) = IDLE.take() {
         worker.terminate();
     }
+}
+
+/// Whether the active worker is downloading or compiling its module.
+pub fn worker_loading() -> bool {
+    LOADING.get()
 }
 
 pub async fn resolve_name(name: &str, cancel: Cancel) -> Result<Record, Error> {
@@ -98,6 +105,7 @@ impl Drop for Request {
             worker.set_onerror(None);
             worker.terminate();
         }
+        LOADING.set(false);
         BUSY.set(false);
     }
 }
@@ -119,6 +127,7 @@ async fn exchange(request: &[u8], cancel: &Cancel, cancelled: &str) -> Result<Ve
         for event in request.events.take() {
             match event {
                 Event::Loaded => {
+                    LOADING.set(false);
                     loaded = true;
                     started = Instant::now();
                 }
@@ -158,6 +167,7 @@ fn start(request: &[u8]) -> Result<(Request, bool), Error> {
         Some(worker) => (worker, true),
         None => (spawn()?, false),
     };
+    LOADING.set(!loaded);
     let events = Rc::new(RefCell::new(Vec::new()));
     let replies = events.clone();
     let message = Closure::<dyn FnMut(_)>::new(move |event: web_sys::MessageEvent| {

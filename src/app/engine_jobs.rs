@@ -1,7 +1,7 @@
 //! Chemistry engine jobs: launching requests and applying their results.
 use super::{App, CleanupPreview, Job, Message, cleanup::CleanupJob, export_file, input_request};
 use crate::canvas::Tool;
-use iced::Task;
+use iced::{Subscription, Task};
 use reshiki::{
     document::{Document, Point},
     editing,
@@ -9,32 +9,129 @@ use reshiki::{
 };
 
 const INSERT_STRUCTURE_FAILED: &str = "Could not insert structure";
+const PROGRESS_DELAY: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// A receipt belongs to one request, drawing and tab, even after cancellation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Key {
+    tab: super::document_tab::TabId,
+    epoch: u64,
+    revision: u64,
+    serial: u64,
+}
+
+/// Dropping the task handle aborts its future, including an active native helper.
+/// A blocking calculation already running may finish, but cannot publish a result.
+pub(super) struct Pending {
+    key: Key,
+    kind: Job,
+    started: iced::time::Instant,
+    _handle: iced::task::Handle,
+}
 
 impl App {
     pub(super) fn run(&mut self, request: Request, kind: Job) -> Task<Message> {
         if self.tab.busy {
             return Task::none();
         }
+        let engine = self.engine.clone();
+        let aromatic_selection = matches!(kind, Job::AromaticDisplay);
+        self.start_engine_job(kind, async move {
+            if aromatic_selection {
+                super::shortcuts::aromatic_selection(engine, request).await
+            } else {
+                engine.execute(request).await
+            }
+        })
+    }
+
+    fn start_engine_job(
+        &mut self,
+        kind: Job,
+        future: impl Future<Output = Result<Response, String>> + Send + 'static,
+    ) -> Task<Message> {
+        if self.tab.busy {
+            return Task::none();
+        }
         self.tab.busy = true;
         self.error = false;
         self.status = "Working…".into();
-        let engine = self.engine.clone();
-        let revision = self.tab.revision;
-        let aromatic_selection = matches!(kind, Job::AromaticDisplay);
-        Task::perform(
-            async move {
-                if aromatic_selection {
-                    super::shortcuts::aromatic_selection(engine, request).await
-                } else {
-                    engine.execute(request).await
-                }
-            },
-            move |result| Message::EngineDone {
-                revision,
-                kind: kind.clone(),
-                result: Box::new(result),
-            },
-        )
+        self.tab.engine_serial = self.tab.engine_serial.wrapping_add(1);
+        let key = Key {
+            tab: self.tab.id,
+            epoch: self.tab.file_epoch,
+            revision: self.tab.revision,
+            serial: self.tab.engine_serial,
+        };
+        let (task, handle) = Task::perform(future, move |result| Message::EngineFinished {
+            key,
+            result: Box::new(result),
+        })
+        .abortable();
+        self.tab.engine_job = Some(Pending {
+            key,
+            kind,
+            started: iced::time::Instant::now(),
+            _handle: handle.abort_on_drop(),
+        });
+        task
+    }
+
+    pub(super) fn engine_subscription(&self) -> Subscription<Message> {
+        if self.strip().any(|tab| tab.engine_job.is_some()) {
+            iced::time::every(std::time::Duration::from_millis(250)).map(|_| Message::Tick)
+        } else {
+            Subscription::none()
+        }
+    }
+
+    pub(super) fn engine_progress(&self) -> Option<(Key, String)> {
+        let job = self.tab.engine_job.as_ref()?;
+        let elapsed = job.started.elapsed();
+        (elapsed >= PROGRESS_DELAY).then(|| (job.key, format!("Working · {} s", elapsed.as_secs())))
+    }
+
+    /// An activation queued on a previous job must never cancel a newer one.
+    pub(super) fn cancel_engine_request(&mut self, key: Key) {
+        if key.tab == self.tab.id
+            && key.epoch == self.tab.file_epoch
+            && self
+                .tab
+                .engine_job
+                .as_ref()
+                .is_some_and(|job| job.key == key)
+        {
+            self.cancel_engine_job();
+        }
+    }
+
+    /// Cancel affects only transient work. Drawing, history, selection and camera stay put.
+    pub(super) fn cancel_engine_job(&mut self) {
+        let Some(job) = self.tab.engine_job.take() else {
+            return;
+        };
+        self.tab.busy = false;
+        #[cfg(any(windows, target_os = "linux"))]
+        if matches!(job.kind, Job::ImportFile) {
+            self.desktop_import_finished();
+        }
+        drop(job);
+        self.status = "Operation cancelled".into();
+        self.error = false;
+    }
+
+    pub(super) fn engine_finished(
+        &mut self,
+        key: Key,
+        result: Result<Response, String>,
+    ) -> Task<Message> {
+        if key.tab != self.tab.id || key.epoch != self.tab.file_epoch {
+            return Task::none();
+        }
+        let Some(job) = self.tab.engine_job.take_if(|job| job.key == key) else {
+            return Task::none();
+        };
+        self.engine_done(key.revision, job.kind, result)
     }
     pub(super) fn request_aromatic_display(&mut self) -> Task<Message> {
         if self.tab.selected.is_empty() {
@@ -219,6 +316,20 @@ impl App {
         }
     }
     fn analysis_ready(&mut self, response: Response) {
+        if response.analysis.is_none() {
+            // A valid drawing can have no molecular interpretation, notably
+            // when a crystal's remaining edges still carry distance provenance.
+            // A skipped check must not refresh labels or move the drawing.
+            self.tab.analysis = None;
+            self.tab.chemistry_notice = None;
+            self.status = if response.warnings.is_empty() {
+                "Chemical analysis unavailable".into()
+            } else {
+                response.warnings.join(" · ")
+            };
+            self.error = false;
+            return;
+        }
         // Checking is a read-only chemistry operation. Refresh
         // computed H labels without rewriting the user's bond
         // orders/stereo or inserting a step into Undo/Redo.
@@ -230,7 +341,11 @@ impl App {
         }
         self.tab.analysis = response.analysis;
         self.tab.chemistry_notice = None;
-        self.status = "No chemistry errors found".into();
+        self.status = if response.warnings.is_empty() {
+            "No chemistry errors found".into()
+        } else {
+            format!("Structure checked · {}", response.warnings.join(" · "))
+        };
         self.error = false;
     }
     fn structure_replaced(&mut self, kind: Job, response: Response) {
@@ -270,3 +385,12 @@ impl App {
         self.error = false;
     }
 }
+
+#[cfg(test)]
+mod tests;
+
+#[cfg(test)]
+mod cancel_tests;
+
+#[cfg(test)]
+mod crystal_tests;

@@ -101,8 +101,52 @@ struct Draft {
     figure_only: bool,
 }
 
+/// A retained distance graph cannot acquire molecular meaning through an
+/// alternate export route or a caller-supplied prepared molecule.
+fn distance_route(request: &Request) -> bool {
+    matches!(request.operation.as_str(), "analyze" | "export")
+        && request
+            .document
+            .as_ref()
+            .is_some_and(|doc| crate::models3d::crystal::touches(doc, &[]))
+}
+
+fn distance_response(request: &Request) -> Result<Response, Error> {
+    if request.protocol != crate::engine::PROTOCOL {
+        return Err(Error::Protocol);
+    }
+    let document = request.document.as_ref().ok_or(Error::MissingDocument)?;
+    document.validate().map_err(Error::Chemistry)?;
+    let (output, warnings) = match request.operation.as_str() {
+        "analyze" => (
+            None,
+            vec![crate::models3d::crystal::analysis_notice(document).into()],
+        ),
+        "export" => {
+            let format = request.format.as_deref().ok_or(Error::MissingFormat)?;
+            match format {
+                "cdxml" | "cdx" => (
+                    Some(encode_drawing(document, request, true)?),
+                    export_notices::notices(document, format, Route::DistanceDrawing),
+                ),
+                "mol" | "smiles" | "inchi" => return Err(molecular::Error::DistanceBonds.into()),
+                _ => return Err(Error::Export),
+            }
+        }
+        _ => return Err(Error::Operation),
+    };
+    Ok(Response {
+        document: Some(document.clone()),
+        analysis: None,
+        output,
+        engine_version: chemistry::RDKIT_VERSION.into(),
+        warnings,
+    })
+}
+
 /// Build an atomic response without changing either snapshot. `prepared` may
-/// be absent only for an atom-empty CDXML/CDX export. Empty abbreviation results
+/// be absent for an atom-empty CDXML/CDX export or a distance-derived drawing.
+/// Empty abbreviation results
 /// still require preparation and receive the native empty-molecule analysis.
 ///
 /// Dropping this future kills an active helper. An already running blocking
@@ -139,6 +183,12 @@ pub async fn analyze_prepared(
 /// non-abbreviation requests omit preparation. Discovery remains lazy so a
 /// figure, exotic bond analysis or native early-empty result needs no helper.
 pub(crate) async fn execute(request: Request) -> Result<Response, Error> {
+    if distance_route(&request) {
+        // This precedes the attachment-only MOL route, which otherwise does
+        // not need ordinary molecular preparation. Validation stays first
+        // inside the blocking route, including the document's format version.
+        return crate::task::spawn_blocking(move || distance_response(&request)).await?;
+    }
     if request.protocol == crate::engine::PROTOCOL
         && request.operation == "export"
         && matches!(request.format.as_deref(), Some("cdxml" | "cdx" | "mol"))
@@ -232,6 +282,9 @@ async fn build_with_config(
     prepared: Option<Arc<Prepared>>,
     config: Option<Config>,
 ) -> Result<Response, Error> {
+    if distance_route(&request) {
+        return crate::task::spawn_blocking(move || distance_response(&request)).await?;
+    }
     let source = Arc::clone(&request);
     let state = prepared.clone();
     let draft = crate::task::spawn_blocking(move || begin(&source, state.as_deref())).await??;
@@ -491,5 +544,7 @@ fn encode_drawing(
     }
 }
 
+#[cfg(test)]
+mod distance_tests;
 #[cfg(test)]
 mod tests;

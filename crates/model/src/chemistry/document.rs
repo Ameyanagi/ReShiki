@@ -25,6 +25,10 @@ mod tests;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error(
+        "Bonds inferred from crystal atom distances are not validated chemical bonds. Chemical analysis and molecular identifiers are unavailable; use native ReShiki or figure export to retain the drawing."
+    )]
+    DistanceBonds,
     #[error("Invalid drawing: {0}")]
     Drawing(String),
     #[error(transparent)]
@@ -281,6 +285,9 @@ pub fn prepare_at(document: &Document, positions: &[Point3]) -> Result<Molecule,
 }
 
 fn prepare_input(document: &Document, input: Input) -> Result<Molecule, Error> {
+    if crate::models3d::crystal::touches(document, &[]) {
+        return Err(Error::DistanceBonds);
+    }
     let sanitized = sanitize::sanitize(&input.graph, &input.metadata, &input.directions)?;
     for (requested, actual) in document.atoms.iter().zip(&sanitized.graph.atoms) {
         if requested.radical_electrons != 0
