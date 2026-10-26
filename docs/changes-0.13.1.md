@@ -41,8 +41,9 @@ crystal file to recover the missing context.
 ## Fixes and comparisons
 
 @Ameyanagi — Updated application dependencies and build runtimes for the
-October security advisories, including CVE-2026-111497. GitHub Actions checks
-its own runtime before running JavaScript actions. The
+October security advisories, including CVE-2026-111497, in
+[PR #586](https://github.com/Ameyanagi/ReShiki/pull/586). GitHub Actions prepares
+and verifies a patched runtime before running JavaScript actions. The
 [security review](changes/security-dependency-audit.md) records the updates,
 remaining scoped findings and verification limits tracked in
 [issue #585](https://github.com/Ameyanagi/ReShiki/issues/585).

@@ -17,7 +17,9 @@ function Must-Reject {
     if (-not $rejected) { throw 'Accepted an unsafe or ambiguous runtime.' }
 }
 
-$temporary = Join-Path ([IO.Path]::GetTempPath()) ('reshiki-actions-test-' + [Guid]::NewGuid().ToString('N'))
+# Keep the fixture under the checkout: macOS /var temporary paths are symlinks,
+# intentionally rejected by the production destination-path policy.
+$temporary = Join-Path $PSScriptRoot ('reshiki-actions-test-' + [Guid]::NewGuid().ToString('N'))
 try {
     $bin = Join-Path $temporary 'bin'
     $external = Join-Path $temporary 'externals/node24/bin'

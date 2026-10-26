@@ -67,6 +67,10 @@ class CIRuntimePolicyTests(unittest.TestCase):
                 r"        name: Require a patched GitHub Actions Node runtime\n"
                 r"        id: actions_runtime_guard\n"
                 r"        shell: pwsh\n"
+                r"        env:\n"
+                r"          RESHIKI_RUNNER_ENVIRONMENT: \$\{\{ runner.environment \}\}\n"
+                r"          RESHIKI_RUNNER_OS: \$\{\{ runner.os \}\}\n"
+                r"          RESHIKI_RUNNER_ARCH: \$\{\{ runner.arch \}\}\n"
                 r"        run: \|\n((?:          [^\n]*\n|\n)+)",
                 text,
             )
@@ -76,6 +80,7 @@ class CIRuntimePolicyTests(unittest.TestCase):
             for job in jobs:
                 if "    steps:\n" not in job:
                     continue  # Reusable workflows guard their actual execution jobs.
+                self.assertNotIn("hashFiles(", job.split("    steps:\n", 1)[0], path.name)
                 first = job.split("    steps:\n", 1)[1].splitlines()[0]
                 self.assertIn(
                     first,
@@ -84,6 +89,29 @@ class CIRuntimePolicyTests(unittest.TestCase):
                 )
                 checked += 1
         self.assertGreaterEqual(checked, 20, "Lost workflow/job coverage")
+
+    def test_bootstrap_pins_and_pre_step_runtime_boundaries(self):
+        policy = json.loads((ROOT / "scripts/actions_node_bootstrap.json").read_text())
+        self.assertEqual(policy["node"], "24.22.1")
+        self.assertEqual(
+            policy["primary_signer_fingerprint"],
+            "5BE8A3F6C8A5C01D106C0AD820B1A390B168D356",
+        )
+        self.assertEqual(len(policy["assets"]), 6)
+        canonical = GUARD.read_text()
+        for name, sha256 in policy["assets"].items():
+            self.assertIn(f"@('{name}', '{sha256}')", canonical)
+        for path in (ROOT / ".github/workflows").glob("*.yml"):
+            text = path.read_text()
+            self.assertNotRegex(text, r"ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION\s*:")
+            self.assertNotRegex(
+                text, r"ACTIONS_RUNNER_(?:FORCED_INTERNAL|FORCE_ACTIONS)_NODE_VERSION\s*:"
+            )
+            # Step expressions before the canonical first step may execute the
+            # old runner's internal Node, even without a JavaScript action.
+            before = text.split("      - &actions_runtime", 1)[0]
+            self.assertNotIn("hashFiles(", before, path.name)
+            self.assertNotRegex(text, r"(?m)^    container:", path.name)
 
     def test_status_steps_reject_guard_failure_but_retain_later_failure_artifacts(self):
         checked = 0
@@ -221,6 +249,28 @@ class CIRuntimePolicyTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("PASS: real guard path/version functions", result.stdout)
+
+    def test_actual_powershell_bootstrap_in_owned_sandbox(self):
+        pwsh = shutil.which("pwsh")
+        node = os.environ.get("RESHIKI_TEST_NODE") or shutil.which("node")
+        if not pwsh or (not node and not os.environ.get("CI")):
+            if os.environ.get("CI"):
+                self.fail("CI must execute the bootstrap sandbox tests")
+            self.skipTest("PowerShell and patched Node are required for the sandbox test")
+        command = [
+            pwsh,
+            "-NoLogo",
+            "-NoProfile",
+            "-File",
+            str(ROOT / "tests/actions_runtime_bootstrap.ps1"),
+        ]
+        if not os.environ.get("CI"):
+            command.extend(["-NodeExecutable", str(Path(node).resolve())])
+        if archive := os.environ.get("RESHIKI_TEST_NODE_ARCHIVE"):
+            command.extend(["-OfficialArchive", archive])
+        result = subprocess.run(command, capture_output=True, text=True, timeout=180, check=False)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("PASS: real bootstrap functions", result.stdout)
 
 
 if __name__ == "__main__":

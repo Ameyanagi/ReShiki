@@ -134,26 +134,52 @@ or 24.22.1 explicitly. Bun is pinned to 1.4.4, the
 The app does not ship either runtime.
 
 JavaScript actions run with the runner's bundled Node, independently of
-`setup-node`. Every repository-owned job therefore starts with the same
-PowerShell guard before checkout or another JavaScript action. It finds the
-live `Runner.Worker`, verifies its sibling Node executable and requires stable
-Node 24.22.1 or newer within Node 24. Missing, ambiguous or older installations
-fail the job. It never substitutes a `PATH` executable or changes the runner's
-installation. The canonical script and embedded workflow copies are checked
-for equality. Node 24.22.1 backports the decoder fix while still reporting
-Brotli 1.2.0, so the guard checks the patched Node release rather than rejecting
-that version label.
+`setup-node`. Jobs that use JavaScript actions start with the same PowerShell
+bootstrap and guard before checkout or another JavaScript action. It finds
+the live `Runner.Worker` and its absolute private Node path. A supported Node
+24 runtime at or above 24.22.1 passes without a download or file change.
+Node 24.22.1 backports the decoder fix while still reporting Brotli 1.2.0;
+the guard therefore checks the patched Node release rather than that label.
+
+For the observed Node 24.21.0 installation on an ephemeral GitHub-hosted VM,
+the bootstrap installs the official 24.22.1 executable before action execution.
+It cross-checks the original binary's platform and architecture against the
+runner context, rejects runtime/module-injection overrides and authenticates
+the download with a fixed SHA-256 before parsing or execution. Those six
+artifact hashes were verified against Node's signed checksum manifest;
+`scripts/actions_node_bootstrap.json` records the signer and provenance.
+Downloads retain TLS verification, disable automatic decompression and
+redirects, and have time and size limits. Unix extraction selects only the
+expected regular `bin/node` member; Windows uses the official raw executable.
+
+The verified executable is copied to a unique sibling of the private Node
+path, checked again, and atomically replaces that one file after the worker,
+path and original hash are rechecked. The installed binary must pass the
+version, platform, architecture, path and hash checks. It remains installed
+for post-job actions until the VM is discarded. Unknown layouts, unexpected
+versions, links, permission failures or failed verification stop the job.
+There is no `PATH` fallback or relaxation of the security floor. The canonical
+script and embedded workflow copies are checked for equality.
+
+This is a temporary repository mitigation using runner internals, not a
+GitHub-supported runtime-selection setting. It assumes a trusted hosted image
+and reviewed workflow. The [runner action handler](https://github.com/actions/runner/blob/v2.338.0/src/Runner.Worker/Handlers/NodeScriptActionHandler.cs)
+resolves the private executable for each main and post action launch. Hosted
+execution on every release architecture remains required before publication.
 
 The reviewed direct and transitive action manifests are recorded in
 `.github/actions/runtime-manifests.json`. Remote actions are pinned to full
 commit hashes and JavaScript actions use Node 24. Policy tests reject unknown
 action pins and action pre-hooks that would precede the guard. Pages actions
 and setup-uv were upgraded to the reviewed versions. Runner-internal work
-before the first step remains GitHub's responsibility. The sampled earlier
-jobs used runner 2.338.0 with Node 24.21.0; they would fail this new check.
+before the first step remains GitHub's responsibility. The first PR attempt
+at `48eaa508` stopped before checkout in ten jobs because GitHub supplied
+runner 2.338.0 with Node 24.21.0. The temporary bootstrap addresses this
+observed runtime without weakening the guard.
 [Runner 2.338.1](https://github.com/actions/runner/releases/tag/v2.338.1)
-contains the patched runtime. A successful guarded job, not the existence of
-that upstream release, is the evidence required for the release gate.
+contains the patched runtime, but GitHub deploys runner releases progressively.
+Actual successful bootstrap/guard, action and post-job execution is required;
+the upstream release's existence is not sufficient evidence.
 
 Some current upstream action bundles still include affected Undici versions.
 Updating runner Node does not replace those bundles. The reviewed HTTP client
