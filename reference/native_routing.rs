@@ -14,6 +14,8 @@ use std::{
     time::Duration,
 };
 
+#[path = "support/reaction_presentation.rs"]
+mod reaction_presentation;
 #[path = "support/reference_cdx.rs"]
 mod reference_cdx;
 #[path = "support/reference_presentation.rs"]
@@ -344,10 +346,17 @@ fn equal(
     actual: Response,
     expected: Response,
     source_document: Option<&serde_json::Value>,
+    operation: &str,
+    format: Option<&str>,
 ) -> anyhow::Result<()> {
     let mut actual = serde_json::to_value(actual)?;
     let mut expected = serde_json::to_value(expected)?;
     let mut failures = Vec::new();
+    if let Err(error) =
+        reaction_presentation::adapt_import(operation, format, &actual, &mut expected)
+    {
+        failures.push(format!("[reaction-ink] {error:#}"));
+    }
     if let Err(error) =
         reference_presentation::compare_export_with_source(&actual, &mut expected, source_document)
     {
@@ -375,9 +384,11 @@ fn outcome(
     actual: Result<Response, String>,
     expected: Result<Response, String>,
     source_document: Option<&serde_json::Value>,
+    operation: &str,
+    format: Option<&str>,
 ) -> anyhow::Result<()> {
     match (actual, expected) {
-        (Ok(a), Ok(e)) => equal(a, e, source_document),
+        (Ok(a), Ok(e)) => equal(a, e, source_document, operation, format),
         (Err(a), Err(e)) => {
             anyhow::ensure!(a == e, "[error] Error changed: {a} != {e}");
             Ok(())
@@ -460,7 +471,13 @@ async fn child(mode: &str, helper: &Path, cases: &[Case]) -> anyhow::Result<()> 
         for (index, response) in actual {
             let case = cases.get(index).context("Invalid routing response index")?;
             let source = serde_json::to_value(&case.document)?;
-            if let Err(error) = outcome(response, case.expected.clone(), Some(&source)) {
+            if let Err(error) = outcome(
+                response,
+                case.expected.clone(),
+                Some(&source),
+                &case.operation,
+                case.format.as_deref(),
+            ) {
                 failures.push(format!(
                     "{mode}/{}/{}/{:?}: {error:#}",
                     case.name, case.operation, case.format

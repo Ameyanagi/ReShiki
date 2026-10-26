@@ -20,6 +20,9 @@ use std::{
     time::Duration,
 };
 
+#[path = "cleanup_errors.rs"]
+mod cleanup_errors;
+
 #[derive(Clone, Deserialize, Serialize)]
 struct Case {
     name: String,
@@ -331,6 +334,12 @@ async fn cleanup_child() -> anyhow::Result<()> {
                         .error
                         .as_deref()
                         .context("Missing original rejection")?;
+                    let expected = match &actual {
+                        native_cleanup::Error::Cleanup(error) => {
+                            cleanup_errors::expected_refusal(error, expected)
+                        }
+                        _ => expected,
+                    };
                     if case.name.starts_with("whole-error/element/") {
                         anyhow::ensure!(
                             expected.contains("Post-condition Violation\n\tElement 'Xx' not found")

@@ -8,6 +8,10 @@ type TestResult = anyhow::Result<()>;
 
 #[path = "support/molfile_restrictions.rs"]
 mod molfile_restrictions;
+#[path = "support/nci_2808_template_layout.rs"]
+mod nci_2808_template_layout;
+#[path = "support/reaction_presentation.rs"]
+mod reaction_presentation;
 #[path = "support/reference_mol.rs"]
 mod reference_mol;
 #[path = "support/reference_presentation.rs"]
@@ -34,6 +38,33 @@ async fn rust_reaction_smiles_import_preserves_complete_reference_responses() ->
 }
 
 #[tokio::test]
+async fn qualified_bridged_imports_match_independent_template_responses() -> TestResult {
+    // Exercise both deliberate #538 differences on every platform, regardless
+    // of the larger corpus's sampling offset or optional source fixtures.
+    let local = LocalEngine::default();
+    let reference = PythonEngine::default();
+    for (format, name, text) in [
+        ("smiles", "NCI/2808", "CC1(C)[CH]2CC[CH](CC(O)=O)[CH]1C2"),
+        (
+            "rsmi",
+            "molecule/NCI/2808/1",
+            "O>CC1(C)[CH]2CC[CH](CC(O)=O)[CH]1C2>O",
+        ),
+    ] {
+        let request = Request::import(format, text);
+        let expected = reference
+            .execute(request.clone())
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let expected = nci_2808_template_layout::adapt_expected(format, name, text, expected)?;
+        let actual = local.execute(request).await.map_err(anyhow::Error::msg)?;
+        assert_import_response_matches(actual, expected, format)
+            .with_context(|| format!("Qualified bridged import {name}"))?;
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn reaction_cx_cached_properties_preserve_aromatic_stereo_drawings() -> TestResult {
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
@@ -48,7 +79,8 @@ async fn reaction_cx_cached_properties_preserve_aromatic_stereo_drawings() -> Te
                         reference.execute(request).await,
                     ) {
                         (Ok(actual), Ok(expected)) => {
-                            assert_response_matches(actual, expected).with_context(|| text)?
+                            assert_import_response_matches(actual, expected, "rsmi")
+                                .with_context(|| text)?
                         }
                         (Err(_), Err(_)) => (),
                         (actual, expected) => anyhow::bail!("{text}: {actual:?} != {expected:?}"),
@@ -75,7 +107,7 @@ async fn overlapping_reaction_imports_keep_labels_and_analysis_with_their_drawin
             let request = Request::import("rsmi", text);
             let expected = reference.execute(request.clone()).await;
             let engine = local.clone();
-            tasks.spawn(async move { (engine.execute(request).await, expected) });
+            tasks.spawn(async move { (engine.execute(request).await, expected, "rsmi") });
         }
         let doc = reference
             .execute(Request::import("rsmi", text))
@@ -101,14 +133,16 @@ async fn overlapping_reaction_imports_keep_labels_and_analysis_with_their_drawin
             let request = Request::import("rxn", text);
             let expected = reference.execute(request.clone()).await;
             let engine = local.clone();
-            tasks.spawn(async move { (engine.execute(request).await, expected) });
+            tasks.spawn(async move { (engine.execute(request).await, expected, "rxn") });
         }
     }
     while let Some(result) = tasks.join_next().await {
         match result? {
-            (Ok(actual), Ok(expected)) => assert_response_matches(actual, expected)?,
-            (Err(_), Err(_)) => (),
-            (actual, expected) => {
+            (Ok(actual), Ok(expected), format) => {
+                assert_import_response_matches(actual, expected, format)?
+            }
+            (Err(_), Err(_), _) => (),
+            (actual, expected, _) => {
                 anyhow::bail!("Reaction import changed: {actual:?} != {expected:?}")
             }
         }
@@ -317,7 +351,12 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
                 folded += usize::from(case.display.is_some());
                 generic += usize::from(case.generic.is_some());
                 expected
-                    .and_then(|expected| assert_response_matches(actual, expected))
+                    .and_then(|expected| {
+                        nci_2808_template_layout::adapt_expected(
+                            format, &case.name, &case.text, expected,
+                        )
+                    })
+                    .and_then(|expected| assert_import_response_matches(actual, expected, format))
                     .err()
                     .map(|e| e.to_string())
             }
@@ -369,15 +408,38 @@ fn assert_response_matches(actual: Response, expected: Response) -> TestResult {
     assert_response_matches_with_source(actual, expected, None)
 }
 
+fn assert_import_response_matches(
+    actual: Response,
+    expected: Response,
+    format: &str,
+) -> TestResult {
+    assert_response_matches_contract(actual, expected, None, "import", Some(format))
+}
+
 fn assert_response_matches_with_source(
     actual: Response,
     expected: Response,
     source: Option<&reshiki::document::Document>,
 ) -> TestResult {
+    assert_response_matches_contract(actual, expected, source, "", None)
+}
+
+fn assert_response_matches_contract(
+    actual: Response,
+    expected: Response,
+    source: Option<&reshiki::document::Document>,
+    operation: &str,
+    format: Option<&str>,
+) -> TestResult {
     let source = source.map(serde_json::to_value).transpose()?;
     let mut actual = serde_json::to_value(actual)?;
     let mut expected = serde_json::to_value(expected)?;
     let mut failures = Vec::new();
+    if let Err(error) =
+        reaction_presentation::adapt_import(operation, format, &actual, &mut expected)
+    {
+        failures.push(format!("[reaction-ink] {error:#}"));
+    }
     if let Err(error) =
         reference_presentation::compare_export_with_source(&actual, &mut expected, source.as_ref())
     {
@@ -492,7 +554,7 @@ async fn rust_properties_match_reference_across_editor_operations() -> TestResul
         )?;
     }
     let request = Request::import("rsmi", "[CH3:1][OH:2]>>[CH2:1]=[O:2]");
-    assert_response_matches(
+    assert_import_response_matches(
         local
             .execute(request.clone())
             .await
@@ -501,6 +563,7 @@ async fn rust_properties_match_reference_across_editor_operations() -> TestResul
             .execute(request)
             .await
             .map_err(anyhow::Error::msg)?,
+        "rsmi",
     )?;
     // Cached labels must not affect properties following a topology edit.
     let mut document = reference
@@ -824,7 +887,7 @@ async fn dense_ring_pruning_matches_complete_reference_responses() -> TestResult
         .context("Missing dense-ring reaction")?;
     reshiki::chemistry::reaction::read_rxn(&block)?.drawing()?;
     let request = Request::import("rxn", &block);
-    assert_response_matches(
+    assert_import_response_matches(
         local
             .execute(request.clone())
             .await
@@ -833,6 +896,7 @@ async fn dense_ring_pruning_matches_complete_reference_responses() -> TestResult
             .execute(request)
             .await
             .map_err(anyhow::Error::msg)?,
+        "rxn",
     )?;
     Ok(())
 }

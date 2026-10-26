@@ -5,6 +5,8 @@ use anyhow::Context;
 
 mod protocol;
 
+#[path = "../../../../../reference/support/reaction_presentation.rs"]
+mod reaction_presentation;
 #[path = "../../../../../reference/support/reference_presentation.rs"]
 mod reference_presentation;
 
@@ -68,8 +70,18 @@ async fn guarded_script(
 }
 
 fn matches(actual: &Response, expected: &Response) -> anyhow::Result<()> {
+    matches_request(actual, expected, "", None)
+}
+
+fn matches_request(
+    actual: &Response,
+    expected: &Response,
+    operation: &str,
+    format: Option<&str>,
+) -> anyhow::Result<()> {
     let mut actual = serde_json::to_value(actual)?;
     let mut expected = serde_json::to_value(expected)?;
+    reaction_presentation::adapt_import(operation, format, &actual, &mut expected)?;
     reference_presentation::compare_export(&actual, &mut expected)?;
     for field in ["mass", "exact_mass", "logp", "tpsa"] {
         if let (Some(a), Some(e)) = (
@@ -97,13 +109,15 @@ async fn compare(
     request: Request,
 ) -> anyhow::Result<Response> {
     let before = request.document.clone();
+    let operation = request.operation.clone();
+    let format = request.format.clone();
     let context = format!("Operation {} ({:?})", request.operation, request.format);
     let expected = reference
         .execute(request.clone())
         .await
         .map_err(anyhow::Error::msg)?;
     let actual = local.execute(request).await.map_err(anyhow::Error::msg)?;
-    matches(&actual, &expected).context(context)?;
+    matches_request(&actual, &expected, &operation, format.as_deref()).context(context)?;
     if let (Some(before), Some(after)) = (before, &actual.document) {
         let mut history = History::default();
         let mut doc = after.clone();

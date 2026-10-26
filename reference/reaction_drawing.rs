@@ -12,6 +12,8 @@ use std::{
     process::{Command, Stdio},
 };
 
+#[path = "support/reaction_presentation.rs"]
+mod reaction_presentation;
 #[path = "support/molfile_restrictions.rs"]
 mod restrictions;
 
@@ -204,11 +206,15 @@ fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
                                     separators += doc.annotations.len();
                                     agents +=
                                         doc.reactions.iter().map(|r| r.agents.len()).sum::<usize>();
-                                    failures.extend(differences(
-                                        &serde_json::to_value(doc)?,
-                                        &serde_json::to_value(document)?,
-                                        "drawing",
-                                    ));
+                                    let actual = serde_json::to_value(doc)?;
+                                    let mut expected = serde_json::to_value(document)?;
+                                    if let Err(error) = reaction_presentation::adapt_document(
+                                        &actual,
+                                        &mut expected,
+                                    ) {
+                                        failures.push(format!("[reaction-ink] {error:#}"));
+                                    }
+                                    failures.extend(differences(&actual, &expected, "drawing"));
                                 }
                                 Err(error) => {
                                     failures.push(format!("Could not finish drawing: {error}"));
