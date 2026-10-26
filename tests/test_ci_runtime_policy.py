@@ -54,6 +54,31 @@ def status_condition(condition, guard_passed, later_failure):
 
 
 class CIRuntimePolicyTests(unittest.TestCase):
+    def test_nix_runtime_gate_precedes_full_flake_checks_and_security_paths_trigger_it(self):
+        text = (ROOT / ".github/workflows/nix.yml").read_text()
+        for path in [
+            "scripts/nix_ci_runtime.mjs",
+            "scripts/nix_ci_runtime.json",
+            "tests/nix_ci_runtime.test.mjs",
+            "scripts/check_actions_runtime.ps1",
+            "tests/actions_runtime_guard.ps1",
+            "tests/actions_runtime_bootstrap.ps1",
+            "tests/test_ci_runtime_policy.py",
+            ".github/actions/runtime-manifests.json",
+        ]:
+            self.assertEqual(text.count(f"      - {path}\n"), 2, path)
+        self.assertNotIn("install-nix-action@", text)
+        self.assertNotIn("DeterminateSystems/", text)
+        self.assertIn(". ./scripts/check_actions_runtime.ps1", text)
+        self.assertIn("& $node --test tests/nix_ci_runtime.test.mjs", text)
+        self.assertIn("& $node scripts/nix_ci_runtime.mjs", text)
+        self.assertLess(
+            text.index("uses: actions/checkout@"), text.index("& $node scripts/nix_ci_runtime.mjs")
+        )
+        self.assertLess(
+            text.index("& $node scripts/nix_ci_runtime.mjs"), text.index("nix flake check -L")
+        )
+
     def test_every_action_job_starts_with_the_exact_pre_checkout_guard(self):
         canonical = GUARD.read_text(encoding="utf-8").rstrip("\n")
         workflows = ROOT / ".github/workflows"

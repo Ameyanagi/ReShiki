@@ -223,6 +223,57 @@ Source hashes and patch hashes are fixed in `flake.nix`. All three supported
 Nix systems evaluate with the overlay; actual build and installed closure
 validation remains the Nix CI job's responsibility.
 
+The installed Nix client and daemon require a separate check. The former
+`install-nix-action` pin deployed Nix 2.35.3, whose official signed runtime closures
+contain curl 8.20.0 and Brotli 1.2.0 on all three CI systems. Its pinned source
+recipes contain neither relevant security fix. The application overlay above
+does not replace this installed runtime. Nix's
+[HTTP transfer implementation](https://github.com/NixOS/nix/blob/2.35.3/src/libstore/filetransfer.cc#L598)
+enables transparent decompression; a Brotli response is decoded before later
+content hashes or signatures are checked. The same concern applies to a binary
+cache NAR that selects Brotli compression. The affected curl HTTP/2 upload code
+is present, although the observed download operations do not establish that
+the upload advisory's trigger occurred. No exploitation is claimed.
+
+The 26 October Nix run at `7bf350d4` was intentionally cancelled after this
+finding; its cancellation is separate from the earlier Linux build timeouts.
+Canonical Nix 2.35.4 also selects affected sources without the relevant backports.
+
+The replacement uses the embedded Nix bundle from the three exact
+[Determinate Nix Installer 3.24.1 release assets](https://github.com/DeterminateSystems/nix-installer/releases/tag/v3.24.1).
+The [core release](https://github.com/DeterminateSystems/nix-src/releases/tag/v3.24.1)
+explicitly fixes the Brotli issue. Inspection of all three actual bundles found
+curl 8.23.0, Brotli 1.2.1 and OpenSSL 3.6.5, with the expected library linkage.
+The nine critical library registration records also match independently verified
+official Nix cache signatures. The custom Nix executable is authenticated by the
+publisher's release-asset digest; this does not imply a signed Nix cache entry,
+signed tag or Sigstore attestation for that executable. The embedded `.reginfo`
+is unsigned and covered by the authenticated containing archive.
+
+`scripts/nix_ci_runtime.json` pins each whole asset and embedded archive's hash,
+size and byte range, together with the installed executable and library identities.
+`scripts/nix_ci_runtime.mjs` verifies those bytes before extraction or execution.
+It invokes the bundle's shipped classic multi-user installer with channel updates
+disabled, then checks the resolved client, root-owned live daemon, service definition
+and loaded critical libraries before `nix flake check`. It uses the ordinary
+`nix-daemon` entry point. The outer Rust installer, separate Determinate Nixd
+supervisor and additional installer Actions are not executed. The first-step
+Actions Node bootstrap and the complete flake/package/install checks remain required.
+
+The bundled NSS 3.131.1 certificate file is also hash-pinned for the client and
+daemon. Its parsed certificate inventory omits the compromised
+`emSign ECC Root CA - G3`; the distinct G1 root remains, as in the patched certifi
+bundle. Nix transfers use this reviewed file without falling back to the host CA
+file. Installer substitution and channel fetches are disabled during local setup;
+crash-reporting and telemetry opt-outs cover the initial root invocations.
+
+Passive artifact inspection proves the selected bytes and dependency identities.
+Hosted installation, client/daemon attestation and full flake checks on Linux x64,
+Linux ARM64 and macOS ARM64 provide the separate execution evidence. This is a
+CI tool change; these Nix binaries are not included in ReShiki release packages.
+The review covers the identified HTTP-library vulnerabilities and certificate
+incident, not every optional feature or native dependency in the Nix fork.
+
 This review does not clear every package in the nixpkgs catalog, every host OS
 library, or libraries dynamically loaded by the host graphics stack. Portable
 package import inspection found only the expected platform libraries, but

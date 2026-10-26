@@ -10,6 +10,14 @@ on:
       - scripts/build_release.py
       - scripts/license_notices.py
       - .github/workflows/nix.yml
+      - scripts/nix_ci_runtime.mjs
+      - scripts/nix_ci_runtime.json
+      - tests/nix_ci_runtime.test.mjs
+      - scripts/check_actions_runtime.ps1
+      - tests/actions_runtime_guard.ps1
+      - tests/actions_runtime_bootstrap.ps1
+      - tests/test_ci_runtime_policy.py
+      - .github/actions/runtime-manifests.json
   pull_request:
     paths:
       - flake.nix
@@ -19,6 +27,14 @@ on:
       - scripts/build_release.py
       - scripts/license_notices.py
       - .github/workflows/nix.yml
+      - scripts/nix_ci_runtime.mjs
+      - scripts/nix_ci_runtime.json
+      - tests/nix_ci_runtime.test.mjs
+      - scripts/check_actions_runtime.ps1
+      - tests/actions_runtime_guard.ps1
+      - tests/actions_runtime_bootstrap.ps1
+      - tests/test_ci_runtime_policy.py
+      - .github/actions/runtime-manifests.json
   workflow_dispatch:
 permissions:
   contents: read
@@ -357,6 +373,18 @@ jobs:
           # Provider initialization/pre-job internals precede this step and remain outside
           # repository coverage. Audited actions must have no runs.pre, even transitively.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: cachix/install-nix-action@448cde739abec1eaf0646249e3d25bb8d9bc7702 # v31.11.2
+      - name: Install and attest the patched classic Nix runtime
+        shell: pwsh
+        env:
+          RESHIKI_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+          RESHIKI_RUNNER_OS: ${{ runner.os }}
+          RESHIKI_RUNNER_ARCH: ${{ runner.arch }}
+        run: |
+          . ./scripts/check_actions_runtime.ps1
+          $env:RESHIKI_PWSH = [Environment]::ProcessPath
+          & $node --test tests/nix_ci_runtime.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Nix runtime policy tests failed.' }
+          & $node scripts/nix_ci_runtime.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Nix runtime installation/attestation failed.' }
       # Builds the package for this runner, including its install check.
       - run: nix flake check -L

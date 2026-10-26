@@ -71,13 +71,6 @@
       "pre": null,
       "nested_uses": []
     },
-    "cachix/install-nix-action@448cde739abec1eaf0646249e3d25bb8d9bc7702": {
-      "metadata_url": "https://github.com/cachix/install-nix-action/blob/448cde739abec1eaf0646249e3d25bb8d9bc7702/action.yml",
-      "metadata_sha256": "46d90d7cd0453aefd350f837a57f669199227668564b10ad58a05bbf862a3bf0",
-      "using": "composite",
-      "pre": null,
-      "nested_uses": []
-    },
     "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": {
       "metadata_url": "https://github.com/oven-sh/setup-bun/blob/0c5077e51419868618aeaa5fe8019c62421857d6/action.yml",
       "metadata_sha256": "c8501315148e6a0c33fa44da6f119753ec683bafb8889bb917cf36029b6cb00b",
