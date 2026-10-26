@@ -46,6 +46,230 @@ fn top(app: &App) -> &Command {
     app.commands.current().expect("a result")
 }
 
+/// The pre-#587 query, kept independent of the indexed membership path.
+fn original_command_target(app: &App) -> Target {
+    let doc = &app.tab.doc;
+    let selected = &app.tab.selected;
+    let target = Target {
+        atoms: selected
+            .iter()
+            .copied()
+            .filter(|id| doc.atom(*id).is_some())
+            .collect(),
+        bonds: doc
+            .bonds
+            .iter()
+            .filter(|bond| selected.contains(&bond.a) && selected.contains(&bond.b))
+            .map(|bond| (bond.a, bond.b))
+            .collect(),
+        pointed: false,
+    };
+    if !selected.is_empty() {
+        return target;
+    }
+    let pointed = if app.keyboard_target() {
+        match app.tab.keyboard_drawing.target() {
+            Hotspot::Atom(id) => (Some(id), None),
+            Hotspot::Bond(a, b) => (None, Some((a, b))),
+            Hotspot::Blank(_) => (None, None),
+        }
+    } else {
+        app.hovered_target()
+    };
+    match pointed {
+        (Some(id), _) => Target {
+            atoms: vec![id],
+            pointed: true,
+            ..Target::default()
+        },
+        (_, Some((a, b))) => Target {
+            atoms: vec![a, b],
+            bonds: vec![(a, b)],
+            pointed: true,
+        },
+        _ => Target::default(),
+    }
+}
+
+fn assert_original_target(app: &App) {
+    let actual = app.command_target();
+    let expected = original_command_target(app);
+    assert_eq!(actual.atoms, expected.atoms, "atom order and duplicates");
+    assert_eq!(actual.bonds, expected.bonds, "bond order and endpoints");
+    assert_eq!(actual.pointed, expected.pointed, "selection precedence");
+    assert_eq!(actual.atom(), expected.atom());
+    assert_eq!(actual.bond(), expected.bond());
+}
+
+#[test]
+fn indexed_command_targets_match_the_original_selection_and_pointing_query() {
+    use reshiki::{
+        document::Annotation,
+        graphics::{Graphic, GraphicKind},
+    };
+    let mut app = app();
+    let (a, b) = ethane(&mut app);
+    let caption = app.tab.doc.next_id();
+    app.tab.doc.annotations.push(Annotation {
+        id: caption,
+        position: Point::new(100., 100.),
+        text: "Caption".into(),
+        format: Default::default(),
+    });
+    let graphic = app.tab.doc.next_id();
+    app.tab.doc.graphics.push(Graphic::dragged(
+        graphic,
+        GraphicKind::Rectangle,
+        Point::new(150., 100.),
+        Point::new(200., 150.),
+        Default::default(),
+        Default::default(),
+        false,
+    ));
+    let ordinary = app.tab.doc.clone();
+    let mut malformed = ordinary.clone();
+    malformed.atoms.push(malformed.atoms[0].clone());
+    let mut reversed = malformed.bonds[0].clone();
+    std::mem::swap(&mut reversed.a, &mut reversed.b);
+    malformed.bonds.push(reversed);
+    malformed.bonds.push(malformed.bonds[0].clone());
+    let mut missing = malformed.bonds[0].clone();
+    missing.a = u64::MAX;
+    malformed.bonds.push(missing);
+    let collapsed = reshiki::atom_text::apply(&ordinary, b, "OMe", Mode::Group).unwrap();
+    let (model, _, _) = crate::canvas::tilt::shown(reshiki::models3d::Display::ThreeD);
+
+    for doc in [ordinary.clone(), malformed, collapsed, model] {
+        app.tab.doc = doc;
+        app.tab.hover = Some((Point::default(), app.tab.file_epoch));
+        app.tab
+            .keyboard_drawing
+            .enter(&app.tab.doc, &[], Point::default(), app.tab.file_epoch);
+        app.tab
+            .keyboard_drawing
+            .set_target(Hotspot::Atom(a), &app.tab.doc);
+        for selected in [
+            app.tab.doc.all_ids(),
+            vec![a],
+            vec![b, a],
+            vec![b, a, b],
+            vec![caption],
+            vec![graphic],
+            vec![caption, graphic],
+            vec![u64::MAX],
+            vec![caption, u64::MAX, b, a, b],
+        ] {
+            app.tab.selected = selected;
+            assert_original_target(&app);
+        }
+    }
+
+    // No selection: retain hover precedence and the tool/keyboard-mode gate,
+    // including a keyboard-owned blank over an otherwise hoverable bond.
+    app.tab.doc = ordinary;
+    app.tab.selected.clear();
+    for tool in [Tool::Select, Tool::Lasso, Tool::Bond(1)] {
+        app.tool = tool;
+        for keyboard in [false, true] {
+            app.tab
+                .keyboard_drawing
+                .enter(&app.tab.doc, &[], Point::default(), app.tab.file_epoch);
+            if !keyboard {
+                app.tab.keyboard_drawing.leave();
+            }
+            for hotspot in [
+                Hotspot::Atom(a),
+                Hotspot::Bond(b, a),
+                Hotspot::Blank(Point::new(400., 400.)),
+            ] {
+                app.tab.keyboard_drawing.set_target(hotspot, &app.tab.doc);
+                for hover in [None, Some(Point::default()), Some(Point::new(21., 0.))] {
+                    app.tab.hover = hover.map(|point| (point, app.tab.file_epoch));
+                    assert_original_target(&app);
+                }
+                app.tab.hover = Some((Point::default(), app.tab.file_epoch.saturating_add(1)));
+                assert_original_target(&app);
+            }
+        }
+    }
+}
+
+fn view_target_queries(app: &App) -> usize {
+    TARGET_QUERIES.with(|count| count.set(0));
+    drop(app.view());
+    TARGET_QUERIES.with(std::cell::Cell::get)
+}
+
+#[test]
+fn actual_palette_views_share_one_fresh_target_across_rows_and_detail() {
+    let mut app = app();
+    let (a, b) = ethane(&mut app);
+    app.tab.selected = vec![b, a];
+    let document = app.tab.doc.clone();
+    let selected = app.tab.selected.clone();
+    let camera = (app.tab.camera.center, app.tab.camera.zoom);
+    let revision = app.tab.revision;
+    assert_eq!(view_target_queries(&app), 0, "closed palette");
+
+    open(&mut app);
+    assert!(app.commands.results.len() > 20, "many actual catalog rows");
+    assert_eq!(view_target_queries(&app), 1, "all rows and current detail");
+    for query in ["bond", "copy", "scale 150"] {
+        let _ = app.update(Message::Commands(Action::Query(query.into())));
+        assert_eq!(view_target_queries(&app), 1, "{query}");
+        let _ = app.update(Message::Commands(Action::Move(1)));
+        assert_eq!(view_target_queries(&app), 1, "moving in {query}");
+    }
+    let _ = app.update(Message::Commands(Action::Filter(Some(Category::Bond))));
+    assert_eq!(view_target_queries(&app), 1, "filtered rows");
+    let _ = app.update(Message::Commands(Action::Close));
+    assert_eq!(view_target_queries(&app), 0, "closed again");
+    assert_eq!(app.tab.doc, document);
+    assert_eq!(app.tab.selected, selected);
+    assert_eq!((app.tab.camera.center, app.tab.camera.zoom), camera);
+    assert_eq!(app.tab.revision, revision);
+    assert!(!app.tab.history.can_undo());
+    assert!(!app.tab.history.can_redo());
+}
+
+#[test]
+fn palette_execution_rechecks_the_current_selection_after_the_view_was_built() {
+    for replaced in [false, true] {
+        let mut app = app();
+        let (a, b) = ethane(&mut app);
+        app.tab.selected = vec![a];
+        search(&mut app, "increase charge");
+        let index = row(&app, "Increase charge");
+        assert_eq!(view_target_queries(&app), 1);
+        let target = if replaced {
+            app.tab.file_epoch = app.tab.file_epoch.saturating_add(1);
+            app.tab.doc.add_atom("O", Point::new(200., 0.))
+        } else {
+            b
+        };
+        app.tab.selected = vec![target];
+        let before = app.tab.doc.clone();
+        let _ = app.update(Message::Commands(Action::Run(index)));
+        assert_eq!(app.tab.doc.atom(a).unwrap().charge, 0);
+        assert_eq!(app.tab.doc.atom(target).unwrap().charge, 1);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before, "one current-target edit");
+    }
+
+    let mut app = app();
+    let (a, _) = ethane(&mut app);
+    app.tab.selected = vec![a];
+    search(&mut app, "increase charge");
+    let index = row(&app, "Increase charge");
+    assert_eq!(view_target_queries(&app), 1);
+    app.tab.selected = vec![u64::MAX];
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::Commands(Action::Run(index)));
+    assert!(app.error, "a stale available row is refused");
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+}
+
 #[test]
 fn blocked_3d_scale_offers_an_explicit_2d_recovery_and_two_undo_steps() {
     let mut app = app();
