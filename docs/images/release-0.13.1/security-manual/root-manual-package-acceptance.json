@@ -1,0 +1,113 @@
+{
+  "verified_utc": "2026-10-26T04:38:58.160026+00:00",
+  "source": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3",
+  "run": 40264759989,
+  "status": "MANUAL_PACKAGE_GATE_ACCEPTED",
+  "package_hashes_and_sidecars": [
+    {
+      "name": "reshiki-0.13.1-linux-arm64.tar.gz",
+      "sha256": "d6b29af707717c281ceec3d8aa6ad7e73170055dc44c0db094bfac812a8653ac",
+      "bytes": 33174605
+    },
+    {
+      "name": "reshiki-0.13.1-linux-x64.tar.gz",
+      "sha256": "7acd4bfc16462866e834310b48fd9b4091c0a8938b30d61e63fcdbba01887d32",
+      "bytes": 32872462
+    },
+    {
+      "name": "reshiki-0.13.1-macos-arm64.dmg",
+      "sha256": "0338d52a8317a415f419b25a6954de795a4c96d92065a68c318ae8710a9b5339",
+      "bytes": 33841515
+    },
+    {
+      "name": "reshiki-0.13.1-macos-arm64.zip",
+      "sha256": "a735c9b054adafe0a1b273e7b8e94a7c189b6f08afd0be7c0102a30b6e8802e2",
+      "bytes": 29324128
+    },
+    {
+      "name": "reshiki-0.13.1-macos-x64.dmg",
+      "sha256": "f618d29c76d62ddad5ec73bb8757b5df673818833d7a91865a12b595d278358f",
+      "bytes": 36225202
+    },
+    {
+      "name": "reshiki-0.13.1-macos-x64.zip",
+      "sha256": "4dd634fcc284f85739e8f35159acae62d6fa9e13d8253a9e9bd3a934f691ead0",
+      "bytes": 31233007
+    },
+    {
+      "name": "reshiki-0.13.1-windows-arm64-setup.exe",
+      "sha256": "aea1ddfb2d53dcd57f6517e7f3b316091ed4d46d7e6595d0faf1d007f55a6b72",
+      "bytes": 18864281
+    },
+    {
+      "name": "reshiki-0.13.1-windows-arm64.zip",
+      "sha256": "ed825859bd4a21a9452f08f8accdac69b0a55e6f0e6e8915c27757be74495259",
+      "bytes": 26733781
+    },
+    {
+      "name": "reshiki-0.13.1-windows-x64-setup.exe",
+      "sha256": "cc28e88d411bf117c5c2ec35200f0a3876e0054f9a9987b8958bc6f9352bf3d7",
+      "bytes": 20717683
+    },
+    {
+      "name": "reshiki-0.13.1-windows-x64.zip",
+      "sha256": "9f269767ef46e38836f4614b19748adab8988b6b56676ba21ebc10295722c54b",
+      "bytes": 28546045
+    }
+  ],
+  "portable_manifests": [
+    {
+      "package": "reshiki-0.13.1-linux-arm64.tar.gz",
+      "platform": "linux",
+      "architecture": "arm64",
+      "rust_target": "aarch64-unknown-linux-gnu",
+      "commit": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3"
+    },
+    {
+      "package": "reshiki-0.13.1-linux-x64.tar.gz",
+      "platform": "linux",
+      "architecture": "x64",
+      "rust_target": "x86_64-unknown-linux-gnu",
+      "commit": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3"
+    },
+    {
+      "package": "reshiki-0.13.1-macos-arm64.zip",
+      "platform": "macos",
+      "architecture": "arm64",
+      "rust_target": "aarch64-apple-darwin",
+      "commit": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3"
+    },
+    {
+      "package": "reshiki-0.13.1-macos-x64.zip",
+      "platform": "macos",
+      "architecture": "x64",
+      "rust_target": "x86_64-apple-darwin",
+      "commit": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3"
+    },
+    {
+      "package": "reshiki-0.13.1-windows-arm64.zip",
+      "platform": "windows",
+      "architecture": "arm64",
+      "rust_target": "aarch64-pc-windows-msvc",
+      "commit": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3"
+    },
+    {
+      "package": "reshiki-0.13.1-windows-x64.zip",
+      "platform": "windows",
+      "architecture": "x64",
+      "rust_target": "x86_64-pc-windows-msvc",
+      "commit": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3"
+    }
+  ],
+  "receipt_hashes_verified": {
+    "manual-static-receipt.json": "c3f8424f779fbbd90987dd558c0bbecc6f039fa12d8c54b776e6e7120a60aa57",
+    "manual-outer-digests.json": "56901c8209730c3896d7a4282960b062e8f805080a52cffe31606b1f0e999bec",
+    "security-license-receipt.json": "ebc4b9c320e5674eeef15b1d7d00a429e1078feee228b151f87504a700e10a75",
+    "manual-workflow-success.json": "72032815f78654c83fd651c0aea7949a631651c2d141bb7e14c175b5b9d597fc",
+    "package-smoke/smoke-receipt.json": "8b8d2c6d4ff56a010da0821269781704c52dea71ccbd17f8f958e60b39e1af32"
+  },
+  "static_license_review": "24 checks and full CDLA retained across6archives, validated in hashed receipt",
+  "native_smoke": "package-smoke/root-smoke-verification.json",
+  "workflow": "root-manual-workflow-success.json",
+  "remaining": ["Nix CI", "final merge/tag/release pipeline", "signed/public artifact acceptance"]
+}

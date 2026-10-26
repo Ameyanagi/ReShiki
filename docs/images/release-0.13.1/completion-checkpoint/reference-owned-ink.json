@@ -1,0 +1,44 @@
+{
+  "commit": "34a21da80846371927175ab43b83e2abf02ff95a",
+  "parent": "b956e46347f644372e3c01128b99ca64ac208e2d",
+  "author": "Ameyanagi <77273474+Ameyanagi@users.noreply.github.com>",
+  "branch": "fix/qa-reference-owned-ink",
+  "tests": {
+    "sharedProjectionUnits": {
+      "passed": 7,
+      "failed": 0,
+      "log": "focused-units.log"
+    },
+    "realProductionImport": {
+      "passed": 1,
+      "failed": 0,
+      "log": "production-import-neutral.log",
+      "cases": "Two neutralmappedRSMI imports and two productionV3000RXN roundtrips, all direct strictspacing assertions unchanged",
+      "settings": {
+        "maps": true,
+        "stereo": false,
+        "offsets": "automatic"
+      },
+      "cip": "validmappedchiralinputhascomputedCIP"
+    }
+  },
+  "normal_hooks": {
+    "passed": true,
+    "log": "commit-hooks.log",
+    "checks": [
+      "cargo clippy --workspace --lib --bins --all-features --locked -- -D warnings",
+      "cargo fmt --all --check",
+      "oxfmt --check stagedMarkdown"
+    ],
+    "skips": "Only file-type commands with no matching staged files were skipped bynormalLefthook configuration; no bypass variablesorflags"
+  },
+  "source_receipt_sha256": "e650396ce768be3f5a30a5b248fd56481d4fc9b96b5e17601b26c5709041ad66",
+  "pushed": true,
+  "hosted_checks": {
+    "run": 40308091132,
+    "type": "Checks",
+    "conclusion": "pending"
+  },
+  "pr_number": null,
+  "scope": "Deterministic owned-ink test fixture and real-import regression; no completed hosted Linux reference result claimed."
+}

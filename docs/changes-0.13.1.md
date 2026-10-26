@@ -48,20 +48,20 @@ and verifies a patched runtime before running JavaScript actions. The
 remaining scoped findings and verification limits tracked in
 [issue #585](https://github.com/Ameyanagi/ReShiki/issues/585).
 
-Under review: @Ameyanagi — deterministic owned indicators and mapped RSMI/RXN
+@Ameyanagi — deterministic owned indicators and mapped RSMI/RXN
 reference coverage in [PR #589](https://github.com/Ameyanagi/ReShiki/pull/589).
 [Validation and limits](https://github.com/Ameyanagi/ReShiki/blob/34a21da80846371927175ab43b83e2abf02ff95a/docs/changes/qa-reference-owned-ink.md).
 
-Under review: @Ameyanagi — keep Commands responsive on large selections while
+@Ameyanagi — keep Commands responsive on large selections while
 preserving selection and keyboard-target behavior, in
 [PR #590](https://github.com/Ameyanagi/ReShiki/pull/590).
 [Bounded native QA and regressions](https://github.com/Ameyanagi/ReShiki/blob/6e7722bba434e5c30688774ff27d5d11285c7138/docs/changes/qa-palette-targets.md).
 
-Under review: @Ameyanagi — preserve synthetic paste payloads across Firefox,
+@Ameyanagi — preserve synthetic paste payloads across Firefox,
 Chromium and WebKit in [PR #591](https://github.com/Ameyanagi/ReShiki/pull/591).
 [Synthetic-event scope](https://github.com/Ameyanagi/ReShiki/blob/f1174fec418e61529cc7da32e83aae858c8cec87/docs/changes/qa-521.md).
 
-Under review: @Ameyanagi — present large-selection PDF progress sooner in
+@Ameyanagi — present large-selection PDF progress sooner in
 [PR #592](https://github.com/Ameyanagi/ReShiki/pull/592).
 [Controlled M1 median of 30.036 ms and equivalent PDF output](https://github.com/Ameyanagi/ReShiki/blob/b5b22c98901a7341928454799a0b8cdc5c085e86/docs/changes/large-selection-copy-feedback-current-source.md).
 Original M4, window/target, physical-click and scanout conditions remain qualified.

@@ -1,0 +1,96 @@
+{
+  "source": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3",
+  "manual_run": 40264759989,
+  "manual_run_url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40264759989",
+  "archive_sha256": "a735c9b054adafe0a1b273e7b8e94a7c189b6f08afd0be7c0102a30b6e8802e2",
+  "package_binary_sha256": "1bd5e0c40a5a005373493226ec4f78a31fdf615254437901c845abc12a9a1b23",
+  "app_unmodified": true,
+  "app_file_count": 9,
+  "signature_verification": {
+    "strict_deep_exit": 0,
+    "developer_id_or_notarization_claimed": false
+  },
+  "host": {
+    "os": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434\n",
+    "machine": "arm64",
+    "cpu": "Apple M1"
+  },
+  "native_capture_pixels": [2560, 1696],
+  "image_reader": "macOS sips (actual format and decoded pixel dimensions)",
+  "checks": {
+    "version_and_offline_cli": "Passed; native arm64 0.13.1, network-denied ethanol C2H6O and expected InChI; empty PATH and unavailable Python/uv/checkout overrides; HOME unchanged.",
+    "older_format29_load": "Passed in CLI and GUI; caffeine C8H10N4O2 /194.194 g/mol.",
+    "drawing_and_label": "Native blank-canvas keyboard bond then Return atom editor; OMe applied as chemical group; whole and selected Properties C2H6O/COC,46.069 g/mol,3 atoms/2 bonds.",
+    "save_and_gui_reopen": "Actual Save dialog wrote edited-ether.rsk as format30; closed tab and actual Open dialog reloaded it; clean title and Undo disabled.",
+    "old_reader_refusal": "Official unmodified0.13.0 MacARM CLI refused the actual new format30 save with Update ReShiki guidance.",
+    "native_copy": "Actual CmdA/CmdC; Editable drawing and images copied receipt observed.",
+    "pdf_export": "Packaged CLI wrote 9615 byte one-page PDF; Poppler render visually inspected, OMe and bond clear/unclipped.",
+    "model_and_properties": "Unmodified format29 saved caffeine-model fixture opened; Both2D+3D shown beside whole Properties.",
+    "crystal_and_properties": "Actual Open imported nacl.cif; projected cell, Cl4Na4/233.772 g/mol and explicit distance-derived-bond analysis unavailable notice displayed."
+  },
+  "images": {
+    "about-version.jpg": {
+      "sha256": "ee532bd79bcbf79c054d4cde273601d90305743c4a4349a2a63f077652641cfc",
+      "bytes": 381286,
+      "encoded_format": "jpeg",
+      "pixels": [2560, 1696]
+    },
+    "crystal-properties.jpg": {
+      "sha256": "7e5dd6bc733ae1c19301db9e4d044cc24c6c2d6cc97c8a5ec54ff9e5d4ec31a6",
+      "bytes": 371566,
+      "encoded_format": "jpeg",
+      "pixels": [2560, 1696]
+    },
+    "edited-copy.jpg": {
+      "sha256": "aecc719d66e7b1abad27ae865872e2f682c5a2a7963fad7de2bd8b92895b007e",
+      "bytes": 308999,
+      "encoded_format": "jpeg",
+      "pixels": [2560, 1696]
+    },
+    "ether-pdf.png": {
+      "sha256": "cd660b05f5ed55f27e88148b0108cafd2fcf14fc23baa326101cf662e5396193",
+      "bytes": 20719,
+      "encoded_format": "png",
+      "pixels": [1000, 541]
+    },
+    "label-properties.jpg": {
+      "sha256": "26c3b41e54bb070b9aeae8093cd520e0f1063c64ac7a6e69f8afad298cb5df21",
+      "bytes": 290928,
+      "encoded_format": "jpeg",
+      "pixels": [2560, 1696]
+    },
+    "model-properties.jpg": {
+      "sha256": "033bf82b2471f917ad8f938c10e05808a8f51dd30e139eb3bebf33d30accd7a3",
+      "bytes": 367253,
+      "encoded_format": "jpeg",
+      "pixels": [2560, 1696]
+    },
+    "reopened-format30.jpg": {
+      "sha256": "ea47073aece73f9b67cfc97318508133f438290427d00e09f9bf8cfa658f36f3",
+      "bytes": 301546,
+      "encoded_format": "jpeg",
+      "pixels": [2560, 1696]
+    }
+  },
+  "cleanup": {
+    "owned_pid": 271,
+    "owned_process_exited": true,
+    "final_cua_inventory": "dev.reshiki.editor isRunning=false",
+    "recovery_actions": "No offered recovery draft restored or discarded.",
+    "files": "All extracted package, fixtures, outputs and receipts preserved outside manual-downloads."
+  },
+  "limits": [
+    "Apple M1/macOS27.0.1 arm64 only; no Intel/Windows/Linux graphical runtime claim.",
+    "Unsigned manual package with ad-hoc signature; this does not establish Developer ID/notarization of eventual stable assets.",
+    "No new performance benchmark, timing guarantee or broad repeat of64finding QA.",
+    "Saved3D model only; no new conformer-generation timing claim.",
+    "Native Copy receipt only; no paste into external Office/ChemDraw.",
+    "Full six-platform static/package gate remains separate and pending at smoke completion."
+  ],
+  "setup_notes": [
+    "Existing fixture filenames were read and copied to the new run workspace; no fixture regeneration.",
+    "Initial CLI --file and subcommand --help usages were rejected; corrected to documented positional INPUT. No GUI launch or data mutation from those usage errors.",
+    "Save dialog initially remembered the prior workspace; exact new run directory was selected via its native PathTextField before saving.",
+    "Imported/reopened fixtures re-enable keyboard mode; F8 was turned off for clean original captures. No screenshot retouching, QA seed, instrumentation, bundle changes or arbitrary input helper."
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "source_receipt": "evidence/release-0.13.1/completion-audit/amearch-nix-prebuilt-1.99.1/remote/final-receipt.json",
+  "source_receipt_sha256": "2cd43ce9ad07ca8045d7db7149a5235c0dfad2e391ac37698b48c80cc3a78c7b",
+  "status": "passed",
+  "base": "b956e46347f644372e3c01128b99ca64ac208e2d",
+  "patch_sha256": "0bbca15806d5460d3908ad1539f6f4186088ddac6547ae53353d2314fd538307",
+  "app_drv": "/nix/store/w2mkscd1xpls00qlys6zmk5iy25c4d37-reshiki-0.13.1.drv",
+  "app_src": "/nix/store/z2s56s4a52zyw0dasz4wnck3pssmcmkk-source",
+  "full_flake_check": {
+    "command": [
+      "/nix/store/kvigmbcd96dzzgv02w6rkpp1ac9jwam6-determinate-nix-3.24.1/bin/nix",
+      "flake",
+      "check",
+      "-L",
+      "--no-write-lock-file",
+      "--no-update-lock-file",
+      "--option",
+      "fallback",
+      "false"
+    ],
+    "cwd": "/qa/nix-prebuilt-1.99.1",
+    "started_utc": "2026-10-26T13:29:49.506349+00:00",
+    "finished_utc": "2026-10-26T13:36:22.961087+00:00",
+    "elapsed_seconds": 393.4547393741086,
+    "exit": 0
+  },
+  "cache_policy": "retained authenticated runtime and outputs from user-superseded build; not pristine cold",
+  "not_pristine_cold": true,
+  "local_sandbox_false": true,
+  "all_three_online_guards": {
+    "x86_64-linux": {
+      "system": "x86_64-linux",
+      "application": "/nix/store/w2mkscd1xpls00qlys6zmk5iy25c4d37-reshiki-0.13.1.drv",
+      "scheduledBuilds": 23,
+      "sourceToolchainBuilds": 0
+    },
+    "aarch64-linux": {
+      "system": "aarch64-linux",
+      "application": "/nix/store/3gz6mbg23hkb88a7klm3kmvp74yxw50y-reshiki-0.13.1.drv",
+      "scheduledBuilds": 283,
+      "sourceToolchainBuilds": 0
+    },
+    "aarch64-darwin": {
+      "system": "aarch64-darwin",
+      "application": "/nix/store/dy5qxkzzk3arjrnk37wgai19cv7lmkhw-reshiki-0.13.1.drv",
+      "scheduledBuilds": 299,
+      "sourceToolchainBuilds": 0
+    }
+  },
+  "actual_build_guard": {
+    "actualStartedDerivations": 23,
+    "actualSourceToolchainBuilds": 0
+  },
+  "install_checks_enabled_and_observed": true,
+  "postbuild_cli_and_std_checks_passed": true,
+  "rustc_release": "1.99.1",
+  "rustc_llvm_version": "23.1.1",
+  "cargo_release": "1.99.1",
+  "cargo_reported_bundled_libraries": {
+    "curl": "8.21.0-DEV",
+    "openssl": "3.6.3"
+  },
+  "app_closure_objects": 22,
+  "relevant_app_store_closure_entries": [],
+  "absence_scope": "actual recursive Nix store closure paths and direct ELF dependencies; not a universal static-code/host-dlopen inventory",
+  "runtime_still_authenticated": true,
+  "source_qualification": "Frozen candidate based on b956e463 plus the recorded patch. Later CI-script formatting and runner-metadata/policy-test corrections preserve production application/build configuration but change the complete Nix source tree. Final-head hosted checks remain separate. ARM/macOS evidence is online dry-run metadata, not full native builds.",
+  "github_hosted_attestation_claim": false
+}

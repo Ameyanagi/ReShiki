@@ -1,0 +1,221 @@
+{
+  "schema_version": 1,
+  "repository": "Ameyanagi/ReShiki",
+  "checked_at": "2026-10-26T04:19:51.595Z",
+  "request_window": {
+    "started_at": "2026-10-26T04:18:34.933Z",
+    "completed_at": "2026-10-26T04:18:52.390Z",
+    "note": "PR535 sampled immediately before this window; all others fetched within it."
+  },
+  "scope": {
+    "pull_requests": [
+      535, 536, 537, 538, 539, 540, 541, 542, 543, 544, 545, 557, 558, 559, 560, 561, 562, 563, 564,
+      565, 566, 567, 568, 577, 578, 579, 581, 582, 583, 584
+    ],
+    "excluded": [586],
+    "exclusion_note": "PR586 monitored separately by root."
+  },
+  "method": {
+    "source": "Authenticated GitHub connector API",
+    "endpoints": [
+      "github_get_pr_info",
+      "github_fetch_pr_comments (issue comments, inline review comments, review submissions)",
+      "github_list_pull_request_review_threads"
+    ],
+    "maximum_parallel_requests": 6,
+    "remote_mutations": false
+  },
+  "summary": {
+    "pr_count": 30,
+    "merged_count": 30,
+    "timeline_entries": 30,
+    "quota_notices": 30,
+    "inline_review_threads": 0,
+    "unresolved_review_threads": 0,
+    "actionable_items": 0
+  },
+  "qualification": "All observed discussion entries are non-actionable Copilot insufficient-quota notices. No substantive review changes were requested and no inline threads exist; this does not claim Copilot completed a code review. Results are an API snapshot and do not cover future comments.",
+  "source_receipt_sha256": "e3149d79b26877ebe9a8bd77203a0a6dc07452d26fb44668c76d1adb81a7e5df",
+  "pull_requests": [
+    {
+      "number": 535,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/535",
+      "merged": true,
+      "merge_commit_sha": "f6d2698e42ed71fd45471f74570537c4db17618b"
+    },
+    {
+      "number": 536,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/536",
+      "merged": true,
+      "merge_commit_sha": "f9c223f5bd435945a4eaae709dfd9e33ac3e0aa2"
+    },
+    {
+      "number": 537,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/537",
+      "merged": true,
+      "merge_commit_sha": "291f4e825d4530a2797bf70b3a39d7244c1e3392"
+    },
+    {
+      "number": 538,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/538",
+      "merged": true,
+      "merge_commit_sha": "95e30d6c1ff7a6d979eaa85b01e3fe1196561072"
+    },
+    {
+      "number": 539,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/539",
+      "merged": true,
+      "merge_commit_sha": "dfeef6ecb8b971f26bce556660ab0bace86bd533"
+    },
+    {
+      "number": 540,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/540",
+      "merged": true,
+      "merge_commit_sha": "a4aa2e91b01d3edf32b5bda5ac11cd0dd9d38af3"
+    },
+    {
+      "number": 541,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/541",
+      "merged": true,
+      "merge_commit_sha": "9e926194dc3d479300eb36a80ba34165b7244aa6"
+    },
+    {
+      "number": 542,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/542",
+      "merged": true,
+      "merge_commit_sha": "f06228addda92c2d7d6dd63ac7c3208957df3f84"
+    },
+    {
+      "number": 543,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/543",
+      "merged": true,
+      "merge_commit_sha": "83cf56f098613a745d802fb1231044188e1fc6df"
+    },
+    {
+      "number": 544,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/544",
+      "merged": true,
+      "merge_commit_sha": "0ef80bbced7f5e2b5fad94ae3977a1d2e5b1186d"
+    },
+    {
+      "number": 545,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/545",
+      "merged": true,
+      "merge_commit_sha": "3bd1436a4b0eaf0337fd45b2dd6e5544f781faa8"
+    },
+    {
+      "number": 557,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/557",
+      "merged": true,
+      "merge_commit_sha": "50453071d160cf8cdd39f4fcddcc66cb62617058"
+    },
+    {
+      "number": 558,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/558",
+      "merged": true,
+      "merge_commit_sha": "b0f301304a6783f5a14501e3c03b1ae6146e8021"
+    },
+    {
+      "number": 559,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/559",
+      "merged": true,
+      "merge_commit_sha": "f3b1cfb7156cc4b468d75928584cc7b30e46fba3"
+    },
+    {
+      "number": 560,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/560",
+      "merged": true,
+      "merge_commit_sha": "c29e2bbb32410049a72305886d633c641a2bcc40"
+    },
+    {
+      "number": 561,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/561",
+      "merged": true,
+      "merge_commit_sha": "08b6fe779f4b81a22997e78a5291982b57a07910"
+    },
+    {
+      "number": 562,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/562",
+      "merged": true,
+      "merge_commit_sha": "63e0d2fac2bdd165083749fdc4f128fbdac143a6"
+    },
+    {
+      "number": 563,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/563",
+      "merged": true,
+      "merge_commit_sha": "32af2b0dbb9fee524eb96b4d3e8a35865f4ace52"
+    },
+    {
+      "number": 564,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/564",
+      "merged": true,
+      "merge_commit_sha": "3bb378294e8b5600605cdb30ef68ffabec553ad3"
+    },
+    {
+      "number": 565,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/565",
+      "merged": true,
+      "merge_commit_sha": "6edc0f9e12971a0388e494cc643fc7d3c54faa67"
+    },
+    {
+      "number": 566,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/566",
+      "merged": true,
+      "merge_commit_sha": "bb962053b52ac69657b8c5f08cadb9a16d72b065"
+    },
+    {
+      "number": 567,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/567",
+      "merged": true,
+      "merge_commit_sha": "4797f3efb79d9aa284a38609206ebacb84992f66"
+    },
+    {
+      "number": 568,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/568",
+      "merged": true,
+      "merge_commit_sha": "807ea44fe5ddcb0661248789e7f0ab6089f90857"
+    },
+    {
+      "number": 577,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/577",
+      "merged": true,
+      "merge_commit_sha": "79d755b7af0287d2056513292ab8b020bf803fda"
+    },
+    {
+      "number": 578,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/578",
+      "merged": true,
+      "merge_commit_sha": "8584078804a0014ad662547dddaa4592ca23d44e"
+    },
+    {
+      "number": 579,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/579",
+      "merged": true,
+      "merge_commit_sha": "c28651fbff32c50d3835e79ba0b20812d654cd8e"
+    },
+    {
+      "number": 581,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/581",
+      "merged": true,
+      "merge_commit_sha": "2133dfd30cd0b65e16d57fbca41041e1c13457dd"
+    },
+    {
+      "number": 582,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/582",
+      "merged": true,
+      "merge_commit_sha": "a3d2d280331ff5a7aee6eb40da738c8a4801294d"
+    },
+    {
+      "number": 583,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/583",
+      "merged": true,
+      "merge_commit_sha": "8d3493d92582d57b6ad2ee07506f331db3b5535c"
+    },
+    {
+      "number": 584,
+      "url": "https://github.com/Ameyanagi/ReShiki/pull/584",
+      "merged": true,
+      "merge_commit_sha": "bceea7a5be914bdf40521b153533df2db237b852"
+    }
+  ]
+}

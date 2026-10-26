@@ -1,0 +1,28 @@
+{
+  "verified_utc": "2026-10-26T07:33:20.486719+00:00",
+  "source": "b956e46347f644372e3c01128b99ca64ac208e2d",
+  "run_id": 40284849373,
+  "job_id": 121445985826,
+  "system": "aarch64-darwin",
+  "log_file": "head-b956e463-job-121445985826-snapshot-073053.log",
+  "log_sha256": "6573c05210766279e049985f47e7befac2c23e2e9a65fe243fe802dacf016310",
+  "log_is_partial": true,
+  "manifest_sha256": "2bf81f5248d897d1098c4fb00801fa90200a59498021afa1f19abb4b96595af8",
+  "attestation_matches_raw_log": true,
+  "asset_and_embedded_hashes_match": true,
+  "client_and_live_root_daemon_match": true,
+  "root_daemon_pid": 3419,
+  "socket_owned": true,
+  "critical_file_hashes_match": 19,
+  "required_libraries_observed_loaded": [
+    "/nix/store/06ldvsd3sbkmxr2j2c0ac024cjan5f5w-brotli-1.2.1-lib/lib/libbrotlicommon.1.2.1.dylib",
+    "/nix/store/06ldvsd3sbkmxr2j2c0ac024cjan5f5w-brotli-1.2.1-lib/lib/libbrotlidec.1.2.1.dylib",
+    "/nix/store/06ldvsd3sbkmxr2j2c0ac024cjan5f5w-brotli-1.2.1-lib/lib/libbrotlienc.1.2.1.dylib",
+    "/nix/store/kh17afghnqxlky3hgp1xqsykkhsyqwf5-openssl-3.6.5/lib/libcrypto.3.dylib",
+    "/nix/store/kh17afghnqxlky3hgp1xqsykkhsyqwf5-openssl-3.6.5/lib/libssl.3.dylib",
+    "/nix/store/xbrf1izjf1ml3xhghdcgbmmzw7nkq6x9-curl-8.23.0/lib/libcurl.4.dylib"
+  ],
+  "all_mapped_store_roots_in_manifest": true,
+  "approved_ca_bundle_hash_match": true,
+  "scope": "Hosted installation/live-runtime gate only. The authenticated source requires installed-file rehashes, exact service/config checks and stable double process observation before emitting this JSON. Full flake build/install checks remain active and are not established by this partial log."
+}

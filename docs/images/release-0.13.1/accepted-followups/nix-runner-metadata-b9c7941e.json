@@ -1,0 +1,34 @@
+{
+  "head": "b9c7941e53d9550cced16a18f091b54e1564a043",
+  "base": "887e1ed53ef527dc93940fc4a107be86ddd87395",
+  "source_receipt": "evidence/security-2026-10-26/ci-nix-runner-metadata/validation-receipt.json",
+  "source_receipt_sha256": "89b65ba76633a43117eaabab93f1475d8d68ab37211332b3a998cc37223d00ff",
+  "negative_control_receipt_sha256": "f63acd2ff460530b3de614b772af97cb715d09e07ea68bef6159fae71d9c3c96",
+  "status": "passed",
+  "source_hashes_match_committed_head": {
+    ".github/workflows/nix.yml": "c1c0aa41310e16f902e5ccd7cc1fcfa269ee3dc48df8ff4db19c2ecd96b8e6b0",
+    "tests/test_ci_runtime_policy.py": "373c61206ce8546e70e96d500bf23e6b6fff489bcd8f55ff39ef5d05e21e8982"
+  },
+  "fix": "Pass explicit runner.environment/runner.os/runner.arch to the no-source-toolchain guard step, matching the preceding runtime installer step.",
+  "required_step_environment": [
+    "RESHIKI_RUNNER_ENVIRONMENT",
+    "RESHIKI_RUNNER_OS",
+    "RESHIKI_RUNNER_ARCH"
+  ],
+  "runtime_policy_suite": {
+    "exit": 0,
+    "tests": 11,
+    "skips": 0,
+    "source_note": "Full suite passed before Ruff wrapped one long subTest line. Final formatted source passed the targeted regression and negative control again."
+  },
+  "negative_control": {
+    "old_workflow_loaded_in_memory_only": true,
+    "actual_new_unittest_old_metadata_failures": 3,
+    "fixed_workflow_passed": true
+  },
+  "negative_control_method": "Run the new actual unittest with Path.read_text overridden only for nix.yml; no source mutation or live-worker emulation.",
+  "final_hooks": "All applicable normal hooks passed; Rust1.99.1 WASM/native Clippy validation passed, as recorded by the integrating maintainer.",
+  "source_qualification": "Workflow inputs and a Python policy regression changed. Production application/build configuration is unchanged, but tests are included in the Nix source fileset. No full build of the corrected final tree is established by the earlier local393.45s result.",
+  "hosted_final_head_status": "pending; no merge or release clearance in this receipt",
+  "limits": "No Nix build rerun or live GitHub Runner.Worker attestation performed; PowerShell function/sandbox tests retain their explicit unit-test scope."
+}

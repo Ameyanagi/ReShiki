@@ -1,0 +1,126 @@
+{
+  "utc": "2026-10-26T15:51:01.366189+00:00",
+  "issue": 507,
+  "requested_max_pixels": [3200, 2000],
+  "dimension_semantics": "CLI forwards width/height as max_width/max_height; preserves content aspect rather than producing a fixed3200x2000canvas.",
+  "network_denied": true,
+  "isolated_profiles": true,
+  "builds_or_benchmarks_run": false,
+  "source_scope": "Official0.13.0 versus identified3d3eed65 manual package; not final published0.13.1 acceptance.",
+  "setup_correction": "Initial successful baseline PNG was retained as initial-polystyrene30-before.png; the first wrapper wrongly required exact dimensions. Corrected to the documented maxima and reran the full matrix.",
+  "outputs": [
+    {
+      "input": "polystyrene30",
+      "variant": "before",
+      "source": "3d80590a41b9d9e8efd818d23395ac51bd264ca8",
+      "binary_sha256": "4f54b01861a4e399e5f17adeb05372d39241a4b3227eba55d889b3d2d7d88739",
+      "input_sha256": "84d804193169bf21a08cfdc2a2c5f695da8cd832923903136730ab09efec2e49",
+      "image": "polystyrene30-before.png",
+      "image_sha256": "ee63896b8ef43e5cf125e5999cbcfdb877899801aca59a52cfbe206e2c1ebab9",
+      "dimensions": [2901, 765],
+      "exit_code": 0
+    },
+    {
+      "input": "polystyrene75",
+      "variant": "before",
+      "source": "3d80590a41b9d9e8efd818d23395ac51bd264ca8",
+      "binary_sha256": "4f54b01861a4e399e5f17adeb05372d39241a4b3227eba55d889b3d2d7d88739",
+      "input_sha256": "158b0d52d64ff060517e30e9133554ed2a97f0bb35aafdc80a92fc93a0374bc6",
+      "image": "polystyrene75-before.png",
+      "image_sha256": "3d1bc57d345039ed4f62022c23fd8edaa2e688aafb27ae9f491b726090807efc",
+      "dimensions": [3200, 446],
+      "exit_code": 0
+    },
+    {
+      "input": "polystyrene100",
+      "variant": "before",
+      "source": "3d80590a41b9d9e8efd818d23395ac51bd264ca8",
+      "binary_sha256": "4f54b01861a4e399e5f17adeb05372d39241a4b3227eba55d889b3d2d7d88739",
+      "input_sha256": "08fd753a6b7ddc0cec3e3de9fc2c1fba3c4f721433c66a733988cd40c4432253",
+      "image": "polystyrene100-before.png",
+      "image_sha256": "164ad4163faac1f029bec628acc63cc965b8fa853a739d6b7343f6d15b4c55c1",
+      "dimensions": [3200, 344],
+      "exit_code": 0
+    },
+    {
+      "input": "alanine200",
+      "variant": "before",
+      "source": "3d80590a41b9d9e8efd818d23395ac51bd264ca8",
+      "binary_sha256": "4f54b01861a4e399e5f17adeb05372d39241a4b3227eba55d889b3d2d7d88739",
+      "input_sha256": "742d076d2739eabd4cb6e7ce21ac5fcd5b5e2d2d16cf734574897e5d0d575ac0",
+      "image": "alanine200-before.png",
+      "image_sha256": "5286227ade583c0540b952fa6347dbb056f37e17b264e56440a3b5bc0760f212",
+      "dimensions": [1132, 921],
+      "exit_code": 0
+    },
+    {
+      "input": "stereo-alanine200",
+      "variant": "before",
+      "source": "3d80590a41b9d9e8efd818d23395ac51bd264ca8",
+      "binary_sha256": "4f54b01861a4e399e5f17adeb05372d39241a4b3227eba55d889b3d2d7d88739",
+      "input_sha256": "88275f4335d8442b42b1bac83379ed8c0dc5fd46b39a88f73d5c625a57ceeebf",
+      "image": "stereo-alanine200-before.png",
+      "image_sha256": "ab7dadbe78d6a672dad7cb4f6b32b37cf73ddb002d7dd07923f354810d1aee37",
+      "dimensions": [1128, 909],
+      "exit_code": 0
+    },
+    {
+      "input": "polystyrene30",
+      "variant": "after",
+      "source": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3",
+      "binary_sha256": "1bd5e0c40a5a005373493226ec4f78a31fdf615254437901c845abc12a9a1b23",
+      "input_sha256": "84d804193169bf21a08cfdc2a2c5f695da8cd832923903136730ab09efec2e49",
+      "image": "polystyrene30-after.png",
+      "image_sha256": "134c8eb77a7a74f7c65503747a15c5f4670038c0017b45ed9b9a73ff54593851",
+      "dimensions": [2656, 384],
+      "exit_code": 0
+    },
+    {
+      "input": "polystyrene75",
+      "variant": "after",
+      "source": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3",
+      "binary_sha256": "1bd5e0c40a5a005373493226ec4f78a31fdf615254437901c845abc12a9a1b23",
+      "input_sha256": "158b0d52d64ff060517e30e9133554ed2a97f0bb35aafdc80a92fc93a0374bc6",
+      "image": "polystyrene75-after.png",
+      "image_sha256": "d1b0738fb7d55d850b911ea9b16c4bb38b40c37abd4a8b317b5f5fd900b67a35",
+      "dimensions": [3200, 183],
+      "exit_code": 0
+    },
+    {
+      "input": "polystyrene100",
+      "variant": "after",
+      "source": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3",
+      "binary_sha256": "1bd5e0c40a5a005373493226ec4f78a31fdf615254437901c845abc12a9a1b23",
+      "input_sha256": "08fd753a6b7ddc0cec3e3de9fc2c1fba3c4f721433c66a733988cd40c4432253",
+      "image": "polystyrene100-after.png",
+      "image_sha256": "c2736e56ae0f4b7e42a7eaaa331610304f9a97d607fbe23ef9ae81f86f0b11b4",
+      "dimensions": [3200, 142],
+      "exit_code": 0
+    },
+    {
+      "input": "alanine200",
+      "variant": "after",
+      "source": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3",
+      "binary_sha256": "1bd5e0c40a5a005373493226ec4f78a31fdf615254437901c845abc12a9a1b23",
+      "input_sha256": "742d076d2739eabd4cb6e7ce21ac5fcd5b5e2d2d16cf734574897e5d0d575ac0",
+      "image": "alanine200-after.png",
+      "image_sha256": "b85906bcb0727dd7f3eb69b7f7992777431773c30e7f930f54138c0597b540a4",
+      "dimensions": [3200, 24],
+      "exit_code": 0
+    },
+    {
+      "input": "stereo-alanine200",
+      "variant": "after",
+      "source": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3",
+      "binary_sha256": "1bd5e0c40a5a005373493226ec4f78a31fdf615254437901c845abc12a9a1b23",
+      "input_sha256": "88275f4335d8442b42b1bac83379ed8c0dc5fd46b39a88f73d5c625a57ceeebf",
+      "image": "stereo-alanine200-after.png",
+      "image_sha256": "8199b0edfe326ad472e3e3076bcfe1a0fde8f88e377790a5032a687d8ee20868",
+      "dimensions": [3200, 24],
+      "exit_code": 0
+    }
+  ],
+  "all_ten_commands_exit_zero": true,
+  "all_stderr_empty": true,
+  "visual_review": "All ten full PNGs inspected: baseline polystyrene ladder/peptide cluster; fixed open chains. Fixed peptide full-chain PNGs are3200x24 and cannot establish individual stereo details at this scale."
+}

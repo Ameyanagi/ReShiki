@@ -1,0 +1,42 @@
+{
+  "independent_root_graph_walk": {
+    "aarch64-darwin": {
+      "source_equal": true,
+      "install_checks_unchanged_enabled": true,
+      "baseline_nodes": 2138,
+      "candidate_nodes": 2135,
+      "source_rust_builds": 0,
+      "llvm_nodes": 4,
+      "freetype_exact_identities": [],
+      "patched_cargo_source_preserved": true,
+      "compiler_cargo_removed_by_install_recipe": true
+    },
+    "aarch64-linux": {
+      "source_equal": true,
+      "install_checks_unchanged_enabled": true,
+      "baseline_nodes": 2490,
+      "candidate_nodes": 2479,
+      "source_rust_builds": 0,
+      "llvm_nodes": 0,
+      "freetype_exact_identities": ["yfxaqa3i2l7yhicnm8ncjaf9d4jz0n3v-freetype-2.14.3.drv"],
+      "patched_cargo_source_preserved": true,
+      "compiler_cargo_removed_by_install_recipe": true
+    },
+    "x86_64-linux": {
+      "source_equal": true,
+      "install_checks_unchanged_enabled": true,
+      "baseline_nodes": 2883,
+      "candidate_nodes": 2870,
+      "source_rust_builds": 0,
+      "llvm_nodes": 0,
+      "freetype_exact_identities": ["j36kfgny08y72hakxv0gm74mjkparsas-freetype-2.14.3.drv"],
+      "patched_cargo_source_preserved": true,
+      "compiler_cargo_removed_by_install_recipe": true
+    }
+  },
+  "graph_file_sha256": "ce5d6e431c5ae627d3138741c68286e54a3da74c57bc781d4632b2861e120797",
+  "scope": "Local compiler-only graph validation on three systems. Existing application dependencies/security and install checks preserved; actual Linux build/linkage proof pending. No published PR or integrated production claim.",
+  "source_receipt_sha256": "dfafb430905024c78837522ce4423a834d1aaf4b68643e52ea21f7afd87b3d3e",
+  "issue": 588,
+  "published_pr": null
+}

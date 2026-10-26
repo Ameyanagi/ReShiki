@@ -1,0 +1,889 @@
+{
+  "status": "static_checks_passed",
+  "time_utc": "2026-10-26T04:35:49.572364+00:00",
+  "version": "0.13.1",
+  "source_commit": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3",
+  "channel": "manual",
+  "directory": "/Users/shiranui/dev/reshiki-qa-work/evidence/security-2026-10-26/package-acceptance/run-40264759989/manual-downloads",
+  "packages": [
+    {
+      "name": "reshiki-0.13.1-linux-arm64.tar.gz",
+      "bytes": 33174605,
+      "sha256": "d6b29af707717c281ceec3d8aa6ad7e73170055dc44c0db094bfac812a8653ac",
+      "coverage": "portable contents inspected"
+    },
+    {
+      "name": "reshiki-0.13.1-linux-x64.tar.gz",
+      "bytes": 32872462,
+      "sha256": "7acd4bfc16462866e834310b48fd9b4091c0a8938b30d61e63fcdbba01887d32",
+      "coverage": "portable contents inspected"
+    },
+    {
+      "name": "reshiki-0.13.1-macos-arm64.dmg",
+      "bytes": 33841515,
+      "sha256": "0338d52a8317a415f419b25a6954de795a4c96d92065a68c318ae8710a9b5339",
+      "coverage": "filename, regular file, byte count and checksum only"
+    },
+    {
+      "name": "reshiki-0.13.1-macos-arm64.zip",
+      "bytes": 29324128,
+      "sha256": "a735c9b054adafe0a1b273e7b8e94a7c189b6f08afd0be7c0102a30b6e8802e2",
+      "coverage": "portable contents inspected"
+    },
+    {
+      "name": "reshiki-0.13.1-macos-x64.dmg",
+      "bytes": 36225202,
+      "sha256": "f618d29c76d62ddad5ec73bb8757b5df673818833d7a91865a12b595d278358f",
+      "coverage": "filename, regular file, byte count and checksum only"
+    },
+    {
+      "name": "reshiki-0.13.1-macos-x64.zip",
+      "bytes": 31233007,
+      "sha256": "4dd634fcc284f85739e8f35159acae62d6fa9e13d8253a9e9bd3a934f691ead0",
+      "coverage": "portable contents inspected"
+    },
+    {
+      "name": "reshiki-0.13.1-windows-arm64-setup.exe",
+      "bytes": 18864281,
+      "sha256": "aea1ddfb2d53dcd57f6517e7f3b316091ed4d46d7e6595d0faf1d007f55a6b72",
+      "coverage": "filename, regular file, byte count and checksum only"
+    },
+    {
+      "name": "reshiki-0.13.1-windows-arm64.zip",
+      "bytes": 26733781,
+      "sha256": "ed825859bd4a21a9452f08f8accdac69b0a55e6f0e6e8915c27757be74495259",
+      "coverage": "portable contents inspected"
+    },
+    {
+      "name": "reshiki-0.13.1-windows-x64-setup.exe",
+      "bytes": 20717683,
+      "sha256": "cc28e88d411bf117c5c2ec35200f0a3876e0054f9a9987b8958bc6f9352bf3d7",
+      "coverage": "filename, regular file, byte count and checksum only"
+    },
+    {
+      "name": "reshiki-0.13.1-windows-x64.zip",
+      "bytes": 28546045,
+      "sha256": "9f269767ef46e38836f4614b19748adab8988b6b56676ba21ebc10295722c54b",
+      "coverage": "portable contents inspected"
+    }
+  ],
+  "portables": [
+    {
+      "package": "reshiki-0.13.1-linux-arm64.tar.gz",
+      "metadata": {
+        "version": "0.13.1",
+        "platform": "linux",
+        "architecture": "arm64",
+        "rust_target": "aarch64-unknown-linux-gnu",
+        "inchi": {
+          "version": "1.07.5",
+          "dependency": {
+            "name": "cosmolkit-inchi",
+            "version": "0.5.0",
+            "source": "git+https://github.com/Ameyanagi/COSMolKit.git?rev=501f7b234031ba4d87461e14d0947c77a7d1a631#501f7b234031ba4d87461e14d0947c77a7d1a631",
+            "revision": "501f7b234031ba4d87461e14d0947c77a7d1a631"
+          },
+          "runtime": "self-process"
+        },
+        "geometry": {
+          "version": "2026.03.6",
+          "revision": "501f7b234031ba4d87461e14d0947c77a7d1a631",
+          "backend": {
+            "name": "cosmolkit",
+            "version": "0.5.0",
+            "repository": "https://github.com/Ameyanagi/COSMolKit.git",
+            "revision": "501f7b234031ba4d87461e14d0947c77a7d1a631",
+            "source": "git+https://github.com/Ameyanagi/COSMolKit.git?rev=501f7b234031ba4d87461e14d0947c77a7d1a631#501f7b234031ba4d87461e14d0947c77a7d1a631"
+          },
+          "implementation": "Rust",
+          "parameter_reference": {
+            "name": "RDKit",
+            "version": "2026.03.1",
+            "revision": "351f8f378f8ad6bbd517980c38896e66bf907af8",
+            "repository": "https://github.com/rdkit/rdkit"
+          },
+          "comparison_reference": {
+            "name": "RDKit",
+            "version": "2026.03.6",
+            "revision": "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+            "repository": "https://github.com/rdkit/rdkit"
+          },
+          "parameter_data": {
+            "repository_path": "crates",
+            "files_sha256": {
+              "cosmolkit-core/src/periodic_table.rs": "951d98267f4d9974499aec41b9499d8db2eaec12878b274863bf33feb9a02106",
+              "cosmolkit-core/src/periodic_table_isotopes.tsv": "18bb0cfa9c75a7e451f98aa62a6ab584e65dccb004ae167afb8f175bbddfd410",
+              "cosmolkit-forcefields/src/crystalff/params/macrocycles.txt": "2068befd9d50344cfdc4924304ea4eb83ccae00c97915d93c13e0e20fe34b5b5",
+              "cosmolkit-forcefields/src/crystalff/params/smallrings.txt": "73f833deacf5bad450cc2df2e847a8f731462eaeba2f21fd2c45a55e6cd33b61",
+              "cosmolkit-forcefields/src/crystalff/params/v1.txt": "368e03e7702fd51bea155213766292a14d258b4bab058999a5741b79fe176cdc",
+              "cosmolkit-forcefields/src/crystalff/params/v2.txt": "f908fe1ae0d8d228c6729173dfec289dfab68e43e0468968c3f9986f08c5790d",
+              "cosmolkit-forcefields/src/mmff/default_angle.tsv": "53e6e385eba67d020e7fe00f9c9520181f6c964d1f72827a638d66825f483b70",
+              "cosmolkit-forcefields/src/mmff/default_bndk.tsv": "b8767ef084b90c0c99c670ff2b2100765713522951fcd82f61c42b57d7bc5955",
+              "cosmolkit-forcefields/src/mmff/default_bond.tsv": "2d6aaa670c425f98ec9a8b18a3cd6e5aef50f14a312ae8d92e0ad7fa79caa2bb",
+              "cosmolkit-forcefields/src/mmff/default_chg.tsv": "914c03dbbaf053c0adb00340da4812f9212dd79c1c98bfc67bd5f9391be70e6b",
+              "cosmolkit-forcefields/src/mmff/default_cov_rad_pau_ele.tsv": "ad2f757dd038bb1b5161db003deb2edc6fa1a5055991d4d89f35e3fdcea6fd48",
+              "cosmolkit-forcefields/src/mmff/default_def.tsv": "9febef6c21516bc67b6176176eb3131809345baa425b9ca1e25e4398a51be24e",
+              "cosmolkit-forcefields/src/mmff/default_dfsb.tsv": "e4150c4719c15b569e779306c7d4647f9f14f949c4712af39ea67a1e458ddf55",
+              "cosmolkit-forcefields/src/mmff/default_herschbach_laurie.tsv": "41dcb5b0d58e14e9aa1cf8d04340a0a4006273bd273c7fc6ed7d674d07b457d3",
+              "cosmolkit-forcefields/src/mmff/default_oop.tsv": "97501718884333a9fe35460d025376f5ebd7f0644cf29207a7db6a078e372bf9",
+              "cosmolkit-forcefields/src/mmff/default_oop_s.tsv": "848807b023cc31a21ababb779b934abff0af8547e5ce8a6d2f85bc094b843e32",
+              "cosmolkit-forcefields/src/mmff/default_pbci.tsv": "65b1aa8df49edec87ca37f7a1474d61e6933ac7b66e5384e44162377b24859f9",
+              "cosmolkit-forcefields/src/mmff/default_prop.tsv": "7ddda181552effed6fbd78e9ee9a70c4d54fe0e8850b29de5d8ffb8d4cda9b2f",
+              "cosmolkit-forcefields/src/mmff/default_stbn.tsv": "3d54fe7c56108ccbbe7c06dc93adb6b911acb4495416f7ff4faa4bc4a73fc5b4",
+              "cosmolkit-forcefields/src/mmff/default_tor.tsv": "fec53b928fee6cf489ec6dd3e73697f626b944ef4c9d76d8841397ec8c0917a6",
+              "cosmolkit-forcefields/src/mmff/default_tor_s.tsv": "b5f2d7588930ee193712c35012e54cfd83b5d327b3a3f52604cc26556a37576a",
+              "cosmolkit-forcefields/src/mmff/default_vdw.tsv": "c9d60e3dbb91587a02314055f64b03169667d042eabce9d6e033a4f0b87aa7ca",
+              "cosmolkit-forcefields/src/uff/default_params.tsv": "4f2e2d5a29fd53de05e3b13ce84e5d0313037a30d5dba69bff663de450fcbd73"
+            },
+            "capture": "COSMolKit embedded tables captured from the RDKit parameter sources"
+          },
+          "cargo_manifest_sha256": "cca4dfc43a8d275c64f70fe8173e6a377f940d9a525e1fe8f906829ba96b60f1",
+          "cargo_lock_sha256": "16672b17e19b1887c1ad4b4343e4f7bdd6988738de6850e140fdf69946b57bf2",
+          "runtime": "self-process-rust-core",
+          "runtime_python": false,
+          "runtime_downloads": false,
+          "linkage": "static"
+        },
+        "signed": false,
+        "notarized": false,
+        "commit": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3"
+      },
+      "member_count": 10,
+      "uncompressed_bytes": 97782709,
+      "application": "reshiki-0.13.1-linux-arm64/reshiki",
+      "notice_text_blocks": 1066,
+      "project_notice_reference": "/Users/shiranui/dev/reshiki-qa-work/security-release-0.13.1",
+      "inventory": {
+        "reshiki-0.13.1-linux-arm64": {
+          "directory": true
+        },
+        "reshiki-0.13.1-linux-arm64/Licenses": {
+          "directory": true
+        },
+        "reshiki-0.13.1-linux-arm64/Licenses/LICENSE": {
+          "size": 963,
+          "sha256": "a9125046aff482312881d0a6750660c0b99d679bbb5712758d010983bfc491ab"
+        },
+        "reshiki-0.13.1-linux-arm64/Licenses/LICENSE-APACHE": {
+          "size": 11358,
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        },
+        "reshiki-0.13.1-linux-arm64/Licenses/LICENSE-MIT": {
+          "size": 1091,
+          "sha256": "bae49402c0915b6d843f1d27eec3220ce4cb515019e46d35602d1b965325b891"
+        },
+        "reshiki-0.13.1-linux-arm64/Licenses/NOTICE": {
+          "size": 2525,
+          "sha256": "57363eeb92bf78b9120642f0adee37937c43bc481f3942ad94f4f26c91298c97"
+        },
+        "reshiki-0.13.1-linux-arm64/Licenses/THIRD-PARTY-NOTICES.txt": {
+          "size": 3890337,
+          "sha256": "75607da6aae14efa7855c2059ca4b296613a5dfb916220c7abaaa02e29f6e233"
+        },
+        "reshiki-0.13.1-linux-arm64/README.txt": {
+          "size": 218,
+          "sha256": "255b0b90bfadaf3e5a04b114038ed702ff59dbf9f8ddd00cfd3500900b7b5a76"
+        },
+        "reshiki-0.13.1-linux-arm64/build.json": {
+          "size": 4953,
+          "sha256": "93f248b7b04a21432bcf61750bddb8412d2afc2abd748be816a50cac7af3eee5"
+        },
+        "reshiki-0.13.1-linux-arm64/reshiki": {
+          "size": 93871264,
+          "sha256": "01b6a5a4c854bfdc8e17d7c8b5981bd9932bababc42c7b9074b29ff2765db25d"
+        }
+      }
+    },
+    {
+      "package": "reshiki-0.13.1-linux-x64.tar.gz",
+      "metadata": {
+        "version": "0.13.1",
+        "platform": "linux",
+        "architecture": "x64",
+        "rust_target": "x86_64-unknown-linux-gnu",
+        "inchi": {
+          "version": "1.07.5",
+          "dependency": {
+            "name": "cosmolkit-inchi",
+            "version": "0.5.0",
+            "source": "git+https://github.com/Ameyanagi/COSMolKit.git?rev=501f7b234031ba4d87461e14d0947c77a7d1a631#501f7b234031ba4d87461e14d0947c77a7d1a631",
+            "revision": "501f7b234031ba4d87461e14d0947c77a7d1a631"
+          },
+          "runtime": "self-process"
+        },
+        "geometry": {
+          "version": "2026.03.6",
+          "revision": "501f7b234031ba4d87461e14d0947c77a7d1a631",
+          "backend": {
+            "name": "cosmolkit",
+            "version": "0.5.0",
+            "repository": "https://github.com/Ameyanagi/COSMolKit.git",
+            "revision": "501f7b234031ba4d87461e14d0947c77a7d1a631",
+            "source": "git+https://github.com/Ameyanagi/COSMolKit.git?rev=501f7b234031ba4d87461e14d0947c77a7d1a631#501f7b234031ba4d87461e14d0947c77a7d1a631"
+          },
+          "implementation": "Rust",
+          "parameter_reference": {
+            "name": "RDKit",
+            "version": "2026.03.1",
+            "revision": "351f8f378f8ad6bbd517980c38896e66bf907af8",
+            "repository": "https://github.com/rdkit/rdkit"
+          },
+          "comparison_reference": {
+            "name": "RDKit",
+            "version": "2026.03.6",
+            "revision": "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+            "repository": "https://github.com/rdkit/rdkit"
+          },
+          "parameter_data": {
+            "repository_path": "crates",
+            "files_sha256": {
+              "cosmolkit-core/src/periodic_table.rs": "951d98267f4d9974499aec41b9499d8db2eaec12878b274863bf33feb9a02106",
+              "cosmolkit-core/src/periodic_table_isotopes.tsv": "18bb0cfa9c75a7e451f98aa62a6ab584e65dccb004ae167afb8f175bbddfd410",
+              "cosmolkit-forcefields/src/crystalff/params/macrocycles.txt": "2068befd9d50344cfdc4924304ea4eb83ccae00c97915d93c13e0e20fe34b5b5",
+              "cosmolkit-forcefields/src/crystalff/params/smallrings.txt": "73f833deacf5bad450cc2df2e847a8f731462eaeba2f21fd2c45a55e6cd33b61",
+              "cosmolkit-forcefields/src/crystalff/params/v1.txt": "368e03e7702fd51bea155213766292a14d258b4bab058999a5741b79fe176cdc",
+              "cosmolkit-forcefields/src/crystalff/params/v2.txt": "f908fe1ae0d8d228c6729173dfec289dfab68e43e0468968c3f9986f08c5790d",
+              "cosmolkit-forcefields/src/mmff/default_angle.tsv": "53e6e385eba67d020e7fe00f9c9520181f6c964d1f72827a638d66825f483b70",
+              "cosmolkit-forcefields/src/mmff/default_bndk.tsv": "b8767ef084b90c0c99c670ff2b2100765713522951fcd82f61c42b57d7bc5955",
+              "cosmolkit-forcefields/src/mmff/default_bond.tsv": "2d6aaa670c425f98ec9a8b18a3cd6e5aef50f14a312ae8d92e0ad7fa79caa2bb",
+              "cosmolkit-forcefields/src/mmff/default_chg.tsv": "914c03dbbaf053c0adb00340da4812f9212dd79c1c98bfc67bd5f9391be70e6b",
+              "cosmolkit-forcefields/src/mmff/default_cov_rad_pau_ele.tsv": "ad2f757dd038bb1b5161db003deb2edc6fa1a5055991d4d89f35e3fdcea6fd48",
+              "cosmolkit-forcefields/src/mmff/default_def.tsv": "9febef6c21516bc67b6176176eb3131809345baa425b9ca1e25e4398a51be24e",
+              "cosmolkit-forcefields/src/mmff/default_dfsb.tsv": "e4150c4719c15b569e779306c7d4647f9f14f949c4712af39ea67a1e458ddf55",
+              "cosmolkit-forcefields/src/mmff/default_herschbach_laurie.tsv": "41dcb5b0d58e14e9aa1cf8d04340a0a4006273bd273c7fc6ed7d674d07b457d3",
+              "cosmolkit-forcefields/src/mmff/default_oop.tsv": "97501718884333a9fe35460d025376f5ebd7f0644cf29207a7db6a078e372bf9",
+              "cosmolkit-forcefields/src/mmff/default_oop_s.tsv": "848807b023cc31a21ababb779b934abff0af8547e5ce8a6d2f85bc094b843e32",
+              "cosmolkit-forcefields/src/mmff/default_pbci.tsv": "65b1aa8df49edec87ca37f7a1474d61e6933ac7b66e5384e44162377b24859f9",
+              "cosmolkit-forcefields/src/mmff/default_prop.tsv": "7ddda181552effed6fbd78e9ee9a70c4d54fe0e8850b29de5d8ffb8d4cda9b2f",
+              "cosmolkit-forcefields/src/mmff/default_stbn.tsv": "3d54fe7c56108ccbbe7c06dc93adb6b911acb4495416f7ff4faa4bc4a73fc5b4",
+              "cosmolkit-forcefields/src/mmff/default_tor.tsv": "fec53b928fee6cf489ec6dd3e73697f626b944ef4c9d76d8841397ec8c0917a6",
+              "cosmolkit-forcefields/src/mmff/default_tor_s.tsv": "b5f2d7588930ee193712c35012e54cfd83b5d327b3a3f52604cc26556a37576a",
+              "cosmolkit-forcefields/src/mmff/default_vdw.tsv": "c9d60e3dbb91587a02314055f64b03169667d042eabce9d6e033a4f0b87aa7ca",
+              "cosmolkit-forcefields/src/uff/default_params.tsv": "4f2e2d5a29fd53de05e3b13ce84e5d0313037a30d5dba69bff663de450fcbd73"
+            },
+            "capture": "COSMolKit embedded tables captured from the RDKit parameter sources"
+          },
+          "cargo_manifest_sha256": "cca4dfc43a8d275c64f70fe8173e6a377f940d9a525e1fe8f906829ba96b60f1",
+          "cargo_lock_sha256": "16672b17e19b1887c1ad4b4343e4f7bdd6988738de6850e140fdf69946b57bf2",
+          "runtime": "self-process-rust-core",
+          "runtime_python": false,
+          "runtime_downloads": false,
+          "linkage": "static"
+        },
+        "signed": false,
+        "notarized": false,
+        "commit": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3"
+      },
+      "member_count": 10,
+      "uncompressed_bytes": 103498394,
+      "application": "reshiki-0.13.1-linux-x64/reshiki",
+      "notice_text_blocks": 1066,
+      "project_notice_reference": "/Users/shiranui/dev/reshiki-qa-work/security-release-0.13.1",
+      "inventory": {
+        "reshiki-0.13.1-linux-x64": {
+          "directory": true
+        },
+        "reshiki-0.13.1-linux-x64/Licenses": {
+          "directory": true
+        },
+        "reshiki-0.13.1-linux-x64/Licenses/LICENSE": {
+          "size": 963,
+          "sha256": "a9125046aff482312881d0a6750660c0b99d679bbb5712758d010983bfc491ab"
+        },
+        "reshiki-0.13.1-linux-x64/Licenses/LICENSE-APACHE": {
+          "size": 11358,
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        },
+        "reshiki-0.13.1-linux-x64/Licenses/LICENSE-MIT": {
+          "size": 1091,
+          "sha256": "bae49402c0915b6d843f1d27eec3220ce4cb515019e46d35602d1b965325b891"
+        },
+        "reshiki-0.13.1-linux-x64/Licenses/NOTICE": {
+          "size": 2525,
+          "sha256": "57363eeb92bf78b9120642f0adee37937c43bc481f3942ad94f4f26c91298c97"
+        },
+        "reshiki-0.13.1-linux-x64/Licenses/THIRD-PARTY-NOTICES.txt": {
+          "size": 3890337,
+          "sha256": "75607da6aae14efa7855c2059ca4b296613a5dfb916220c7abaaa02e29f6e233"
+        },
+        "reshiki-0.13.1-linux-x64/README.txt": {
+          "size": 218,
+          "sha256": "255b0b90bfadaf3e5a04b114038ed702ff59dbf9f8ddd00cfd3500900b7b5a76"
+        },
+        "reshiki-0.13.1-linux-x64/build.json": {
+          "size": 4950,
+          "sha256": "567d904ac212e73a69ac92a24d19852405bf6f345a78d0012d159e5cd3f36cb3"
+        },
+        "reshiki-0.13.1-linux-x64/reshiki": {
+          "size": 99586952,
+          "sha256": "d23397bdcbbe0a1054c4a71a4569a8b79d6def5829dcb81ecf4a12b169ac50cc"
+        }
+      }
+    },
+    {
+      "package": "reshiki-0.13.1-macos-arm64.zip",
+      "metadata": {
+        "version": "0.13.1",
+        "platform": "macos",
+        "architecture": "arm64",
+        "rust_target": "aarch64-apple-darwin",
+        "inchi": {
+          "version": "1.07.5",
+          "dependency": {
+            "name": "cosmolkit-inchi",
+            "version": "0.5.0",
+            "source": "git+https://github.com/Ameyanagi/COSMolKit.git?rev=501f7b234031ba4d87461e14d0947c77a7d1a631#501f7b234031ba4d87461e14d0947c77a7d1a631",
+            "revision": "501f7b234031ba4d87461e14d0947c77a7d1a631"
+          },
+          "runtime": "self-process"
+        },
+        "geometry": {
+          "version": "2026.03.6",
+          "revision": "501f7b234031ba4d87461e14d0947c77a7d1a631",
+          "backend": {
+            "name": "cosmolkit",
+            "version": "0.5.0",
+            "repository": "https://github.com/Ameyanagi/COSMolKit.git",
+            "revision": "501f7b234031ba4d87461e14d0947c77a7d1a631",
+            "source": "git+https://github.com/Ameyanagi/COSMolKit.git?rev=501f7b234031ba4d87461e14d0947c77a7d1a631#501f7b234031ba4d87461e14d0947c77a7d1a631"
+          },
+          "implementation": "Rust",
+          "parameter_reference": {
+            "name": "RDKit",
+            "version": "2026.03.1",
+            "revision": "351f8f378f8ad6bbd517980c38896e66bf907af8",
+            "repository": "https://github.com/rdkit/rdkit"
+          },
+          "comparison_reference": {
+            "name": "RDKit",
+            "version": "2026.03.6",
+            "revision": "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+            "repository": "https://github.com/rdkit/rdkit"
+          },
+          "parameter_data": {
+            "repository_path": "crates",
+            "files_sha256": {
+              "cosmolkit-core/src/periodic_table.rs": "951d98267f4d9974499aec41b9499d8db2eaec12878b274863bf33feb9a02106",
+              "cosmolkit-core/src/periodic_table_isotopes.tsv": "18bb0cfa9c75a7e451f98aa62a6ab584e65dccb004ae167afb8f175bbddfd410",
+              "cosmolkit-forcefields/src/crystalff/params/macrocycles.txt": "2068befd9d50344cfdc4924304ea4eb83ccae00c97915d93c13e0e20fe34b5b5",
+              "cosmolkit-forcefields/src/crystalff/params/smallrings.txt": "73f833deacf5bad450cc2df2e847a8f731462eaeba2f21fd2c45a55e6cd33b61",
+              "cosmolkit-forcefields/src/crystalff/params/v1.txt": "368e03e7702fd51bea155213766292a14d258b4bab058999a5741b79fe176cdc",
+              "cosmolkit-forcefields/src/crystalff/params/v2.txt": "f908fe1ae0d8d228c6729173dfec289dfab68e43e0468968c3f9986f08c5790d",
+              "cosmolkit-forcefields/src/mmff/default_angle.tsv": "53e6e385eba67d020e7fe00f9c9520181f6c964d1f72827a638d66825f483b70",
+              "cosmolkit-forcefields/src/mmff/default_bndk.tsv": "b8767ef084b90c0c99c670ff2b2100765713522951fcd82f61c42b57d7bc5955",
+              "cosmolkit-forcefields/src/mmff/default_bond.tsv": "2d6aaa670c425f98ec9a8b18a3cd6e5aef50f14a312ae8d92e0ad7fa79caa2bb",
+              "cosmolkit-forcefields/src/mmff/default_chg.tsv": "914c03dbbaf053c0adb00340da4812f9212dd79c1c98bfc67bd5f9391be70e6b",
+              "cosmolkit-forcefields/src/mmff/default_cov_rad_pau_ele.tsv": "ad2f757dd038bb1b5161db003deb2edc6fa1a5055991d4d89f35e3fdcea6fd48",
+              "cosmolkit-forcefields/src/mmff/default_def.tsv": "9febef6c21516bc67b6176176eb3131809345baa425b9ca1e25e4398a51be24e",
+              "cosmolkit-forcefields/src/mmff/default_dfsb.tsv": "e4150c4719c15b569e779306c7d4647f9f14f949c4712af39ea67a1e458ddf55",
+              "cosmolkit-forcefields/src/mmff/default_herschbach_laurie.tsv": "41dcb5b0d58e14e9aa1cf8d04340a0a4006273bd273c7fc6ed7d674d07b457d3",
+              "cosmolkit-forcefields/src/mmff/default_oop.tsv": "97501718884333a9fe35460d025376f5ebd7f0644cf29207a7db6a078e372bf9",
+              "cosmolkit-forcefields/src/mmff/default_oop_s.tsv": "848807b023cc31a21ababb779b934abff0af8547e5ce8a6d2f85bc094b843e32",
+              "cosmolkit-forcefields/src/mmff/default_pbci.tsv": "65b1aa8df49edec87ca37f7a1474d61e6933ac7b66e5384e44162377b24859f9",
+              "cosmolkit-forcefields/src/mmff/default_prop.tsv": "7ddda181552effed6fbd78e9ee9a70c4d54fe0e8850b29de5d8ffb8d4cda9b2f",
+              "cosmolkit-forcefields/src/mmff/default_stbn.tsv": "3d54fe7c56108ccbbe7c06dc93adb6b911acb4495416f7ff4faa4bc4a73fc5b4",
+              "cosmolkit-forcefields/src/mmff/default_tor.tsv": "fec53b928fee6cf489ec6dd3e73697f626b944ef4c9d76d8841397ec8c0917a6",
+              "cosmolkit-forcefields/src/mmff/default_tor_s.tsv": "b5f2d7588930ee193712c35012e54cfd83b5d327b3a3f52604cc26556a37576a",
+              "cosmolkit-forcefields/src/mmff/default_vdw.tsv": "c9d60e3dbb91587a02314055f64b03169667d042eabce9d6e033a4f0b87aa7ca",
+              "cosmolkit-forcefields/src/uff/default_params.tsv": "4f2e2d5a29fd53de05e3b13ce84e5d0313037a30d5dba69bff663de450fcbd73"
+            },
+            "capture": "COSMolKit embedded tables captured from the RDKit parameter sources"
+          },
+          "cargo_manifest_sha256": "cca4dfc43a8d275c64f70fe8173e6a377f940d9a525e1fe8f906829ba96b60f1",
+          "cargo_lock_sha256": "16672b17e19b1887c1ad4b4343e4f7bdd6988738de6850e140fdf69946b57bf2",
+          "runtime": "self-process-rust-core",
+          "runtime_python": false,
+          "runtime_downloads": false,
+          "linkage": "static"
+        },
+        "signed": false,
+        "notarized": false,
+        "commit": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3"
+      },
+      "member_count": 18,
+      "uncompressed_bytes": 82092796,
+      "application": "reshiki-0.13.1-macos-arm64/ReShiki.app/Contents/MacOS/reshiki",
+      "notice_text_blocks": 1066,
+      "project_notice_reference": "/Users/shiranui/dev/reshiki-qa-work/security-release-0.13.1",
+      "inventory": {
+        "reshiki-0.13.1-macos-arm64": {
+          "directory": true
+        },
+        "reshiki-0.13.1-macos-arm64/ReShiki.app": {
+          "directory": true
+        },
+        "reshiki-0.13.1-macos-arm64/ReShiki.app/Contents": {
+          "directory": true
+        },
+        "reshiki-0.13.1-macos-arm64/ReShiki.app/Contents/_CodeSignature": {
+          "directory": true
+        },
+        "reshiki-0.13.1-macos-arm64/ReShiki.app/Contents/_CodeSignature/CodeResources": {
+          "size": 3688,
+          "sha256": "494378663d7fb7fd42ec52eb4028f22c612175acdb307bf0ae36b2c9b7ed4015"
+        },
+        "reshiki-0.13.1-macos-arm64/ReShiki.app/Contents/MacOS": {
+          "directory": true
+        },
+        "reshiki-0.13.1-macos-arm64/ReShiki.app/Contents/MacOS/reshiki": {
+          "size": 76849808,
+          "sha256": "1bd5e0c40a5a005373493226ec4f78a31fdf615254437901c845abc12a9a1b23"
+        },
+        "reshiki-0.13.1-macos-arm64/ReShiki.app/Contents/Resources": {
+          "directory": true
+        },
+        "reshiki-0.13.1-macos-arm64/ReShiki.app/Contents/Resources/Licenses": {
+          "directory": true
+        },
+        "reshiki-0.13.1-macos-arm64/ReShiki.app/Contents/Resources/Licenses/LICENSE-APACHE": {
+          "size": 11358,
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        },
+        "reshiki-0.13.1-macos-arm64/ReShiki.app/Contents/Resources/Licenses/LICENSE": {
+          "size": 963,
+          "sha256": "a9125046aff482312881d0a6750660c0b99d679bbb5712758d010983bfc491ab"
+        },
+        "reshiki-0.13.1-macos-arm64/ReShiki.app/Contents/Resources/Licenses/NOTICE": {
+          "size": 2525,
+          "sha256": "57363eeb92bf78b9120642f0adee37937c43bc481f3942ad94f4f26c91298c97"
+        },
+        "reshiki-0.13.1-macos-arm64/ReShiki.app/Contents/Resources/Licenses/THIRD-PARTY-NOTICES.txt": {
+          "size": 3890337,
+          "sha256": "75607da6aae14efa7855c2059ca4b296613a5dfb916220c7abaaa02e29f6e233"
+        },
+        "reshiki-0.13.1-macos-arm64/ReShiki.app/Contents/Resources/Licenses/LICENSE-MIT": {
+          "size": 1091,
+          "sha256": "bae49402c0915b6d843f1d27eec3220ce4cb515019e46d35602d1b965325b891"
+        },
+        "reshiki-0.13.1-macos-arm64/ReShiki.app/Contents/Resources/ReShiki.icns": {
+          "size": 1325974,
+          "sha256": "03486b367dc7e01e1a40bb8ef61b5c99dcf8cc94458cf12b851992f8bd813766"
+        },
+        "reshiki-0.13.1-macos-arm64/ReShiki.app/Contents/Info.plist": {
+          "size": 1886,
+          "sha256": "aeb64bcb9a6a08ccdaa6074f9ee8eab9443ac6f1f2ea54c1f0b30f9e1d267681"
+        },
+        "reshiki-0.13.1-macos-arm64/README.txt": {
+          "size": 218,
+          "sha256": "255b0b90bfadaf3e5a04b114038ed702ff59dbf9f8ddd00cfd3500900b7b5a76"
+        },
+        "reshiki-0.13.1-macos-arm64/build.json": {
+          "size": 4948,
+          "sha256": "55e4f908b1f9c57cecb6708a4043baf172ff419318eb7ac42316ebfd2c41e820"
+        }
+      }
+    },
+    {
+      "package": "reshiki-0.13.1-macos-x64.zip",
+      "metadata": {
+        "version": "0.13.1",
+        "platform": "macos",
+        "architecture": "x64",
+        "rust_target": "x86_64-apple-darwin",
+        "inchi": {
+          "version": "1.07.5",
+          "dependency": {
+            "name": "cosmolkit-inchi",
+            "version": "0.5.0",
+            "source": "git+https://github.com/Ameyanagi/COSMolKit.git?rev=501f7b234031ba4d87461e14d0947c77a7d1a631#501f7b234031ba4d87461e14d0947c77a7d1a631",
+            "revision": "501f7b234031ba4d87461e14d0947c77a7d1a631"
+          },
+          "runtime": "self-process"
+        },
+        "geometry": {
+          "version": "2026.03.6",
+          "revision": "501f7b234031ba4d87461e14d0947c77a7d1a631",
+          "backend": {
+            "name": "cosmolkit",
+            "version": "0.5.0",
+            "repository": "https://github.com/Ameyanagi/COSMolKit.git",
+            "revision": "501f7b234031ba4d87461e14d0947c77a7d1a631",
+            "source": "git+https://github.com/Ameyanagi/COSMolKit.git?rev=501f7b234031ba4d87461e14d0947c77a7d1a631#501f7b234031ba4d87461e14d0947c77a7d1a631"
+          },
+          "implementation": "Rust",
+          "parameter_reference": {
+            "name": "RDKit",
+            "version": "2026.03.1",
+            "revision": "351f8f378f8ad6bbd517980c38896e66bf907af8",
+            "repository": "https://github.com/rdkit/rdkit"
+          },
+          "comparison_reference": {
+            "name": "RDKit",
+            "version": "2026.03.6",
+            "revision": "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+            "repository": "https://github.com/rdkit/rdkit"
+          },
+          "parameter_data": {
+            "repository_path": "crates",
+            "files_sha256": {
+              "cosmolkit-core/src/periodic_table.rs": "951d98267f4d9974499aec41b9499d8db2eaec12878b274863bf33feb9a02106",
+              "cosmolkit-core/src/periodic_table_isotopes.tsv": "18bb0cfa9c75a7e451f98aa62a6ab584e65dccb004ae167afb8f175bbddfd410",
+              "cosmolkit-forcefields/src/crystalff/params/macrocycles.txt": "2068befd9d50344cfdc4924304ea4eb83ccae00c97915d93c13e0e20fe34b5b5",
+              "cosmolkit-forcefields/src/crystalff/params/smallrings.txt": "73f833deacf5bad450cc2df2e847a8f731462eaeba2f21fd2c45a55e6cd33b61",
+              "cosmolkit-forcefields/src/crystalff/params/v1.txt": "368e03e7702fd51bea155213766292a14d258b4bab058999a5741b79fe176cdc",
+              "cosmolkit-forcefields/src/crystalff/params/v2.txt": "f908fe1ae0d8d228c6729173dfec289dfab68e43e0468968c3f9986f08c5790d",
+              "cosmolkit-forcefields/src/mmff/default_angle.tsv": "53e6e385eba67d020e7fe00f9c9520181f6c964d1f72827a638d66825f483b70",
+              "cosmolkit-forcefields/src/mmff/default_bndk.tsv": "b8767ef084b90c0c99c670ff2b2100765713522951fcd82f61c42b57d7bc5955",
+              "cosmolkit-forcefields/src/mmff/default_bond.tsv": "2d6aaa670c425f98ec9a8b18a3cd6e5aef50f14a312ae8d92e0ad7fa79caa2bb",
+              "cosmolkit-forcefields/src/mmff/default_chg.tsv": "914c03dbbaf053c0adb00340da4812f9212dd79c1c98bfc67bd5f9391be70e6b",
+              "cosmolkit-forcefields/src/mmff/default_cov_rad_pau_ele.tsv": "ad2f757dd038bb1b5161db003deb2edc6fa1a5055991d4d89f35e3fdcea6fd48",
+              "cosmolkit-forcefields/src/mmff/default_def.tsv": "9febef6c21516bc67b6176176eb3131809345baa425b9ca1e25e4398a51be24e",
+              "cosmolkit-forcefields/src/mmff/default_dfsb.tsv": "e4150c4719c15b569e779306c7d4647f9f14f949c4712af39ea67a1e458ddf55",
+              "cosmolkit-forcefields/src/mmff/default_herschbach_laurie.tsv": "41dcb5b0d58e14e9aa1cf8d04340a0a4006273bd273c7fc6ed7d674d07b457d3",
+              "cosmolkit-forcefields/src/mmff/default_oop.tsv": "97501718884333a9fe35460d025376f5ebd7f0644cf29207a7db6a078e372bf9",
+              "cosmolkit-forcefields/src/mmff/default_oop_s.tsv": "848807b023cc31a21ababb779b934abff0af8547e5ce8a6d2f85bc094b843e32",
+              "cosmolkit-forcefields/src/mmff/default_pbci.tsv": "65b1aa8df49edec87ca37f7a1474d61e6933ac7b66e5384e44162377b24859f9",
+              "cosmolkit-forcefields/src/mmff/default_prop.tsv": "7ddda181552effed6fbd78e9ee9a70c4d54fe0e8850b29de5d8ffb8d4cda9b2f",
+              "cosmolkit-forcefields/src/mmff/default_stbn.tsv": "3d54fe7c56108ccbbe7c06dc93adb6b911acb4495416f7ff4faa4bc4a73fc5b4",
+              "cosmolkit-forcefields/src/mmff/default_tor.tsv": "fec53b928fee6cf489ec6dd3e73697f626b944ef4c9d76d8841397ec8c0917a6",
+              "cosmolkit-forcefields/src/mmff/default_tor_s.tsv": "b5f2d7588930ee193712c35012e54cfd83b5d327b3a3f52604cc26556a37576a",
+              "cosmolkit-forcefields/src/mmff/default_vdw.tsv": "c9d60e3dbb91587a02314055f64b03169667d042eabce9d6e033a4f0b87aa7ca",
+              "cosmolkit-forcefields/src/uff/default_params.tsv": "4f2e2d5a29fd53de05e3b13ce84e5d0313037a30d5dba69bff663de450fcbd73"
+            },
+            "capture": "COSMolKit embedded tables captured from the RDKit parameter sources"
+          },
+          "cargo_manifest_sha256": "cca4dfc43a8d275c64f70fe8173e6a377f940d9a525e1fe8f906829ba96b60f1",
+          "cargo_lock_sha256": "16672b17e19b1887c1ad4b4343e4f7bdd6988738de6850e140fdf69946b57bf2",
+          "runtime": "self-process-rust-core",
+          "runtime_python": false,
+          "runtime_downloads": false,
+          "linkage": "static"
+        },
+        "signed": false,
+        "notarized": false,
+        "commit": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3"
+      },
+      "member_count": 18,
+      "uncompressed_bytes": 86459833,
+      "application": "reshiki-0.13.1-macos-x64/ReShiki.app/Contents/MacOS/reshiki",
+      "notice_text_blocks": 1066,
+      "project_notice_reference": "/Users/shiranui/dev/reshiki-qa-work/security-release-0.13.1",
+      "inventory": {
+        "reshiki-0.13.1-macos-x64": {
+          "directory": true
+        },
+        "reshiki-0.13.1-macos-x64/ReShiki.app": {
+          "directory": true
+        },
+        "reshiki-0.13.1-macos-x64/ReShiki.app/Contents": {
+          "directory": true
+        },
+        "reshiki-0.13.1-macos-x64/ReShiki.app/Contents/_CodeSignature": {
+          "directory": true
+        },
+        "reshiki-0.13.1-macos-x64/ReShiki.app/Contents/_CodeSignature/CodeResources": {
+          "size": 3688,
+          "sha256": "494378663d7fb7fd42ec52eb4028f22c612175acdb307bf0ae36b2c9b7ed4015"
+        },
+        "reshiki-0.13.1-macos-x64/ReShiki.app/Contents/MacOS": {
+          "directory": true
+        },
+        "reshiki-0.13.1-macos-x64/ReShiki.app/Contents/MacOS/reshiki": {
+          "size": 81216848,
+          "sha256": "109f8d9d56ce034d164f54ad44341a5f5b64a48eac4492695e9faba90f709868"
+        },
+        "reshiki-0.13.1-macos-x64/ReShiki.app/Contents/Resources": {
+          "directory": true
+        },
+        "reshiki-0.13.1-macos-x64/ReShiki.app/Contents/Resources/Licenses": {
+          "directory": true
+        },
+        "reshiki-0.13.1-macos-x64/ReShiki.app/Contents/Resources/Licenses/LICENSE-APACHE": {
+          "size": 11358,
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        },
+        "reshiki-0.13.1-macos-x64/ReShiki.app/Contents/Resources/Licenses/LICENSE": {
+          "size": 963,
+          "sha256": "a9125046aff482312881d0a6750660c0b99d679bbb5712758d010983bfc491ab"
+        },
+        "reshiki-0.13.1-macos-x64/ReShiki.app/Contents/Resources/Licenses/NOTICE": {
+          "size": 2525,
+          "sha256": "57363eeb92bf78b9120642f0adee37937c43bc481f3942ad94f4f26c91298c97"
+        },
+        "reshiki-0.13.1-macos-x64/ReShiki.app/Contents/Resources/Licenses/THIRD-PARTY-NOTICES.txt": {
+          "size": 3890337,
+          "sha256": "75607da6aae14efa7855c2059ca4b296613a5dfb916220c7abaaa02e29f6e233"
+        },
+        "reshiki-0.13.1-macos-x64/ReShiki.app/Contents/Resources/Licenses/LICENSE-MIT": {
+          "size": 1091,
+          "sha256": "bae49402c0915b6d843f1d27eec3220ce4cb515019e46d35602d1b965325b891"
+        },
+        "reshiki-0.13.1-macos-x64/ReShiki.app/Contents/Resources/ReShiki.icns": {
+          "size": 1325974,
+          "sha256": "03486b367dc7e01e1a40bb8ef61b5c99dcf8cc94458cf12b851992f8bd813766"
+        },
+        "reshiki-0.13.1-macos-x64/ReShiki.app/Contents/Info.plist": {
+          "size": 1886,
+          "sha256": "aeb64bcb9a6a08ccdaa6074f9ee8eab9443ac6f1f2ea54c1f0b30f9e1d267681"
+        },
+        "reshiki-0.13.1-macos-x64/README.txt": {
+          "size": 218,
+          "sha256": "255b0b90bfadaf3e5a04b114038ed702ff59dbf9f8ddd00cfd3500900b7b5a76"
+        },
+        "reshiki-0.13.1-macos-x64/build.json": {
+          "size": 4945,
+          "sha256": "ef9fc3d2abeb33235e634dcf0c1680663bcd293ec9d1710a141cc5d7219cd475"
+        }
+      }
+    },
+    {
+      "package": "reshiki-0.13.1-windows-arm64.zip",
+      "metadata": {
+        "version": "0.13.1",
+        "platform": "windows",
+        "architecture": "arm64",
+        "rust_target": "aarch64-pc-windows-msvc",
+        "inchi": {
+          "version": "1.07.5",
+          "dependency": {
+            "name": "cosmolkit-inchi",
+            "version": "0.5.0",
+            "source": "git+https://github.com/Ameyanagi/COSMolKit.git?rev=501f7b234031ba4d87461e14d0947c77a7d1a631#501f7b234031ba4d87461e14d0947c77a7d1a631",
+            "revision": "501f7b234031ba4d87461e14d0947c77a7d1a631"
+          },
+          "runtime": "self-process"
+        },
+        "geometry": {
+          "version": "2026.03.6",
+          "revision": "501f7b234031ba4d87461e14d0947c77a7d1a631",
+          "backend": {
+            "name": "cosmolkit",
+            "version": "0.5.0",
+            "repository": "https://github.com/Ameyanagi/COSMolKit.git",
+            "revision": "501f7b234031ba4d87461e14d0947c77a7d1a631",
+            "source": "git+https://github.com/Ameyanagi/COSMolKit.git?rev=501f7b234031ba4d87461e14d0947c77a7d1a631#501f7b234031ba4d87461e14d0947c77a7d1a631"
+          },
+          "implementation": "Rust",
+          "parameter_reference": {
+            "name": "RDKit",
+            "version": "2026.03.1",
+            "revision": "351f8f378f8ad6bbd517980c38896e66bf907af8",
+            "repository": "https://github.com/rdkit/rdkit"
+          },
+          "comparison_reference": {
+            "name": "RDKit",
+            "version": "2026.03.6",
+            "revision": "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+            "repository": "https://github.com/rdkit/rdkit"
+          },
+          "parameter_data": {
+            "repository_path": "crates",
+            "files_sha256": {
+              "cosmolkit-core/src/periodic_table.rs": "951d98267f4d9974499aec41b9499d8db2eaec12878b274863bf33feb9a02106",
+              "cosmolkit-core/src/periodic_table_isotopes.tsv": "18bb0cfa9c75a7e451f98aa62a6ab584e65dccb004ae167afb8f175bbddfd410",
+              "cosmolkit-forcefields/src/crystalff/params/macrocycles.txt": "2068befd9d50344cfdc4924304ea4eb83ccae00c97915d93c13e0e20fe34b5b5",
+              "cosmolkit-forcefields/src/crystalff/params/smallrings.txt": "73f833deacf5bad450cc2df2e847a8f731462eaeba2f21fd2c45a55e6cd33b61",
+              "cosmolkit-forcefields/src/crystalff/params/v1.txt": "368e03e7702fd51bea155213766292a14d258b4bab058999a5741b79fe176cdc",
+              "cosmolkit-forcefields/src/crystalff/params/v2.txt": "f908fe1ae0d8d228c6729173dfec289dfab68e43e0468968c3f9986f08c5790d",
+              "cosmolkit-forcefields/src/mmff/default_angle.tsv": "53e6e385eba67d020e7fe00f9c9520181f6c964d1f72827a638d66825f483b70",
+              "cosmolkit-forcefields/src/mmff/default_bndk.tsv": "b8767ef084b90c0c99c670ff2b2100765713522951fcd82f61c42b57d7bc5955",
+              "cosmolkit-forcefields/src/mmff/default_bond.tsv": "2d6aaa670c425f98ec9a8b18a3cd6e5aef50f14a312ae8d92e0ad7fa79caa2bb",
+              "cosmolkit-forcefields/src/mmff/default_chg.tsv": "914c03dbbaf053c0adb00340da4812f9212dd79c1c98bfc67bd5f9391be70e6b",
+              "cosmolkit-forcefields/src/mmff/default_cov_rad_pau_ele.tsv": "ad2f757dd038bb1b5161db003deb2edc6fa1a5055991d4d89f35e3fdcea6fd48",
+              "cosmolkit-forcefields/src/mmff/default_def.tsv": "9febef6c21516bc67b6176176eb3131809345baa425b9ca1e25e4398a51be24e",
+              "cosmolkit-forcefields/src/mmff/default_dfsb.tsv": "e4150c4719c15b569e779306c7d4647f9f14f949c4712af39ea67a1e458ddf55",
+              "cosmolkit-forcefields/src/mmff/default_herschbach_laurie.tsv": "41dcb5b0d58e14e9aa1cf8d04340a0a4006273bd273c7fc6ed7d674d07b457d3",
+              "cosmolkit-forcefields/src/mmff/default_oop.tsv": "97501718884333a9fe35460d025376f5ebd7f0644cf29207a7db6a078e372bf9",
+              "cosmolkit-forcefields/src/mmff/default_oop_s.tsv": "848807b023cc31a21ababb779b934abff0af8547e5ce8a6d2f85bc094b843e32",
+              "cosmolkit-forcefields/src/mmff/default_pbci.tsv": "65b1aa8df49edec87ca37f7a1474d61e6933ac7b66e5384e44162377b24859f9",
+              "cosmolkit-forcefields/src/mmff/default_prop.tsv": "7ddda181552effed6fbd78e9ee9a70c4d54fe0e8850b29de5d8ffb8d4cda9b2f",
+              "cosmolkit-forcefields/src/mmff/default_stbn.tsv": "3d54fe7c56108ccbbe7c06dc93adb6b911acb4495416f7ff4faa4bc4a73fc5b4",
+              "cosmolkit-forcefields/src/mmff/default_tor.tsv": "fec53b928fee6cf489ec6dd3e73697f626b944ef4c9d76d8841397ec8c0917a6",
+              "cosmolkit-forcefields/src/mmff/default_tor_s.tsv": "b5f2d7588930ee193712c35012e54cfd83b5d327b3a3f52604cc26556a37576a",
+              "cosmolkit-forcefields/src/mmff/default_vdw.tsv": "c9d60e3dbb91587a02314055f64b03169667d042eabce9d6e033a4f0b87aa7ca",
+              "cosmolkit-forcefields/src/uff/default_params.tsv": "4f2e2d5a29fd53de05e3b13ce84e5d0313037a30d5dba69bff663de450fcbd73"
+            },
+            "capture": "COSMolKit embedded tables captured from the RDKit parameter sources"
+          },
+          "cargo_manifest_sha256": "cca4dfc43a8d275c64f70fe8173e6a377f940d9a525e1fe8f906829ba96b60f1",
+          "cargo_lock_sha256": "16672b17e19b1887c1ad4b4343e4f7bdd6988738de6850e140fdf69946b57bf2",
+          "runtime": "self-process-rust-core",
+          "runtime_python": false,
+          "runtime_downloads": false,
+          "linkage": "static"
+        },
+        "signed": false,
+        "notarized": false,
+        "commit": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3"
+      },
+      "member_count": 8,
+      "uncompressed_bytes": 69473885,
+      "application": "reshiki-0.13.1-windows-arm64/reshiki.exe",
+      "notice_text_blocks": 1066,
+      "project_notice_reference": "/Users/shiranui/dev/reshiki-qa-work/security-release-0.13.1",
+      "inventory": {
+        "reshiki-0.13.1-windows-arm64/build.json": {
+          "size": 5031,
+          "sha256": "741865cd4f70364cb92162de0b6fdb4cb4ec9063123e58c8ee6b0ff81dad2ac8"
+        },
+        "reshiki-0.13.1-windows-arm64/Licenses/LICENSE": {
+          "size": 963,
+          "sha256": "a9125046aff482312881d0a6750660c0b99d679bbb5712758d010983bfc491ab"
+        },
+        "reshiki-0.13.1-windows-arm64/Licenses/LICENSE-APACHE": {
+          "size": 11358,
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        },
+        "reshiki-0.13.1-windows-arm64/Licenses/LICENSE-MIT": {
+          "size": 1091,
+          "sha256": "bae49402c0915b6d843f1d27eec3220ce4cb515019e46d35602d1b965325b891"
+        },
+        "reshiki-0.13.1-windows-arm64/Licenses/NOTICE": {
+          "size": 2525,
+          "sha256": "57363eeb92bf78b9120642f0adee37937c43bc481f3942ad94f4f26c91298c97"
+        },
+        "reshiki-0.13.1-windows-arm64/Licenses/THIRD-PARTY-NOTICES.txt": {
+          "size": 3890516,
+          "sha256": "ff2a3547bcc5713c8c6b356225066d476d83de2a2783b55f49dae0ec8b58ce49"
+        },
+        "reshiki-0.13.1-windows-arm64/README.txt": {
+          "size": 289,
+          "sha256": "5e44301d8eec918393d62dee35bf04cb3935f1281e5e3aaae5f75bd7b7f42c22"
+        },
+        "reshiki-0.13.1-windows-arm64/reshiki.exe": {
+          "size": 65562112,
+          "sha256": "de48146b27affeed5a58fbc6fae56472bdaf978562b1ff35beb362d000b626e4"
+        }
+      }
+    },
+    {
+      "package": "reshiki-0.13.1-windows-x64.zip",
+      "metadata": {
+        "version": "0.13.1",
+        "platform": "windows",
+        "architecture": "x64",
+        "rust_target": "x86_64-pc-windows-msvc",
+        "inchi": {
+          "version": "1.07.5",
+          "dependency": {
+            "name": "cosmolkit-inchi",
+            "version": "0.5.0",
+            "source": "git+https://github.com/Ameyanagi/COSMolKit.git?rev=501f7b234031ba4d87461e14d0947c77a7d1a631#501f7b234031ba4d87461e14d0947c77a7d1a631",
+            "revision": "501f7b234031ba4d87461e14d0947c77a7d1a631"
+          },
+          "runtime": "self-process"
+        },
+        "geometry": {
+          "version": "2026.03.6",
+          "revision": "501f7b234031ba4d87461e14d0947c77a7d1a631",
+          "backend": {
+            "name": "cosmolkit",
+            "version": "0.5.0",
+            "repository": "https://github.com/Ameyanagi/COSMolKit.git",
+            "revision": "501f7b234031ba4d87461e14d0947c77a7d1a631",
+            "source": "git+https://github.com/Ameyanagi/COSMolKit.git?rev=501f7b234031ba4d87461e14d0947c77a7d1a631#501f7b234031ba4d87461e14d0947c77a7d1a631"
+          },
+          "implementation": "Rust",
+          "parameter_reference": {
+            "name": "RDKit",
+            "version": "2026.03.1",
+            "revision": "351f8f378f8ad6bbd517980c38896e66bf907af8",
+            "repository": "https://github.com/rdkit/rdkit"
+          },
+          "comparison_reference": {
+            "name": "RDKit",
+            "version": "2026.03.6",
+            "revision": "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+            "repository": "https://github.com/rdkit/rdkit"
+          },
+          "parameter_data": {
+            "repository_path": "crates",
+            "files_sha256": {
+              "cosmolkit-core/src/periodic_table.rs": "951d98267f4d9974499aec41b9499d8db2eaec12878b274863bf33feb9a02106",
+              "cosmolkit-core/src/periodic_table_isotopes.tsv": "18bb0cfa9c75a7e451f98aa62a6ab584e65dccb004ae167afb8f175bbddfd410",
+              "cosmolkit-forcefields/src/crystalff/params/macrocycles.txt": "2068befd9d50344cfdc4924304ea4eb83ccae00c97915d93c13e0e20fe34b5b5",
+              "cosmolkit-forcefields/src/crystalff/params/smallrings.txt": "73f833deacf5bad450cc2df2e847a8f731462eaeba2f21fd2c45a55e6cd33b61",
+              "cosmolkit-forcefields/src/crystalff/params/v1.txt": "368e03e7702fd51bea155213766292a14d258b4bab058999a5741b79fe176cdc",
+              "cosmolkit-forcefields/src/crystalff/params/v2.txt": "f908fe1ae0d8d228c6729173dfec289dfab68e43e0468968c3f9986f08c5790d",
+              "cosmolkit-forcefields/src/mmff/default_angle.tsv": "53e6e385eba67d020e7fe00f9c9520181f6c964d1f72827a638d66825f483b70",
+              "cosmolkit-forcefields/src/mmff/default_bndk.tsv": "b8767ef084b90c0c99c670ff2b2100765713522951fcd82f61c42b57d7bc5955",
+              "cosmolkit-forcefields/src/mmff/default_bond.tsv": "2d6aaa670c425f98ec9a8b18a3cd6e5aef50f14a312ae8d92e0ad7fa79caa2bb",
+              "cosmolkit-forcefields/src/mmff/default_chg.tsv": "914c03dbbaf053c0adb00340da4812f9212dd79c1c98bfc67bd5f9391be70e6b",
+              "cosmolkit-forcefields/src/mmff/default_cov_rad_pau_ele.tsv": "ad2f757dd038bb1b5161db003deb2edc6fa1a5055991d4d89f35e3fdcea6fd48",
+              "cosmolkit-forcefields/src/mmff/default_def.tsv": "9febef6c21516bc67b6176176eb3131809345baa425b9ca1e25e4398a51be24e",
+              "cosmolkit-forcefields/src/mmff/default_dfsb.tsv": "e4150c4719c15b569e779306c7d4647f9f14f949c4712af39ea67a1e458ddf55",
+              "cosmolkit-forcefields/src/mmff/default_herschbach_laurie.tsv": "41dcb5b0d58e14e9aa1cf8d04340a0a4006273bd273c7fc6ed7d674d07b457d3",
+              "cosmolkit-forcefields/src/mmff/default_oop.tsv": "97501718884333a9fe35460d025376f5ebd7f0644cf29207a7db6a078e372bf9",
+              "cosmolkit-forcefields/src/mmff/default_oop_s.tsv": "848807b023cc31a21ababb779b934abff0af8547e5ce8a6d2f85bc094b843e32",
+              "cosmolkit-forcefields/src/mmff/default_pbci.tsv": "65b1aa8df49edec87ca37f7a1474d61e6933ac7b66e5384e44162377b24859f9",
+              "cosmolkit-forcefields/src/mmff/default_prop.tsv": "7ddda181552effed6fbd78e9ee9a70c4d54fe0e8850b29de5d8ffb8d4cda9b2f",
+              "cosmolkit-forcefields/src/mmff/default_stbn.tsv": "3d54fe7c56108ccbbe7c06dc93adb6b911acb4495416f7ff4faa4bc4a73fc5b4",
+              "cosmolkit-forcefields/src/mmff/default_tor.tsv": "fec53b928fee6cf489ec6dd3e73697f626b944ef4c9d76d8841397ec8c0917a6",
+              "cosmolkit-forcefields/src/mmff/default_tor_s.tsv": "b5f2d7588930ee193712c35012e54cfd83b5d327b3a3f52604cc26556a37576a",
+              "cosmolkit-forcefields/src/mmff/default_vdw.tsv": "c9d60e3dbb91587a02314055f64b03169667d042eabce9d6e033a4f0b87aa7ca",
+              "cosmolkit-forcefields/src/uff/default_params.tsv": "4f2e2d5a29fd53de05e3b13ce84e5d0313037a30d5dba69bff663de450fcbd73"
+            },
+            "capture": "COSMolKit embedded tables captured from the RDKit parameter sources"
+          },
+          "cargo_manifest_sha256": "cca4dfc43a8d275c64f70fe8173e6a377f940d9a525e1fe8f906829ba96b60f1",
+          "cargo_lock_sha256": "16672b17e19b1887c1ad4b4343e4f7bdd6988738de6850e140fdf69946b57bf2",
+          "runtime": "self-process-rust-core",
+          "runtime_python": false,
+          "runtime_downloads": false,
+          "linkage": "static"
+        },
+        "signed": false,
+        "notarized": false,
+        "commit": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3"
+      },
+      "member_count": 8,
+      "uncompressed_bytes": 80240665,
+      "application": "reshiki-0.13.1-windows-x64/reshiki.exe",
+      "notice_text_blocks": 1066,
+      "project_notice_reference": "/Users/shiranui/dev/reshiki-qa-work/security-release-0.13.1",
+      "inventory": {
+        "reshiki-0.13.1-windows-x64/build.json": {
+          "size": 5028,
+          "sha256": "6d59664fa6c6da9bf3f9a4191ae71893a07d73ab695b8c3e1ef78ed90161be0a"
+        },
+        "reshiki-0.13.1-windows-x64/Licenses/LICENSE": {
+          "size": 963,
+          "sha256": "a9125046aff482312881d0a6750660c0b99d679bbb5712758d010983bfc491ab"
+        },
+        "reshiki-0.13.1-windows-x64/Licenses/LICENSE-APACHE": {
+          "size": 11358,
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        },
+        "reshiki-0.13.1-windows-x64/Licenses/LICENSE-MIT": {
+          "size": 1091,
+          "sha256": "bae49402c0915b6d843f1d27eec3220ce4cb515019e46d35602d1b965325b891"
+        },
+        "reshiki-0.13.1-windows-x64/Licenses/NOTICE": {
+          "size": 2525,
+          "sha256": "57363eeb92bf78b9120642f0adee37937c43bc481f3942ad94f4f26c91298c97"
+        },
+        "reshiki-0.13.1-windows-x64/Licenses/THIRD-PARTY-NOTICES.txt": {
+          "size": 3890516,
+          "sha256": "ff2a3547bcc5713c8c6b356225066d476d83de2a2783b55f49dae0ec8b58ce49"
+        },
+        "reshiki-0.13.1-windows-x64/README.txt": {
+          "size": 224,
+          "sha256": "e61c48bc04321c60202b5c3db8e5e0600ab5500974957ac1b2143e677ca04dec"
+        },
+        "reshiki-0.13.1-windows-x64/reshiki.exe": {
+          "size": 76328960,
+          "sha256": "5ffb39376213cb559964f02216f268b3e444ae9f0689095cea03e72eceb8c757"
+        }
+      }
+    }
+  ],
+  "limits": [
+    "No downloaded code executed; no archives extracted or disk images mounted.",
+    "Signing fields are declarations, not OS signature/notarization verification.",
+    "Installer contents/install/upgrade/uninstall and runtime/GUI behavior are not verified.",
+    "No bundled Python payload found by static inventory; external runtime dependencies are not proven absent.",
+    "Checksum agreement detects corruption, not publisher authenticity; the expected commit is operator-supplied."
+  ],
+  "workflow_gate": "PASS: validate plus all6 native jobs, upload and post steps completed successfully; workflow conclusion success",
+  "workflow_run": {
+    "id": 40264759989,
+    "head_sha": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3",
+    "status": "completed",
+    "conclusion": "success",
+    "run_attempt": 1,
+    "html_url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40264759989"
+  },
+  "security_license_receipt": "security-license-receipt.json",
+  "outer_digest_receipt": "manual-outer-digests.json",
+  "qualified_at": "2026-10-26T04:37:14.913360+00:00"
+}

@@ -1,0 +1,98 @@
+{
+  "implementation": {
+    "issue": "https://github.com/Ameyanagi/ReShiki/issues/585",
+    "pr": "https://github.com/Ameyanagi/ReShiki/pull/586",
+    "head": "48eaa508a3a2273312da5ee1255a449b9aaccc74",
+    "base": "bceea7a5be914bdf40521b153533df2db237b852",
+    "merged": false
+  },
+  "locked_graph_scan": {
+    "distinct_versions": 1226,
+    "raw_matches": 8,
+    "maintenance_notices": 6,
+    "scoped_dispositions": 2,
+    "unreviewed_blocking_findings": 0,
+    "zero_vulnerability_claim": false
+  },
+  "local_validation": {
+    "rust_tests_passed": 3128,
+    "existing_ignored": 180,
+    "cargo_image_comparisons_passed": 5,
+    "python_picture_tests_passed": 9,
+    "javascript": {
+      "passed": 206,
+      "failed": 0,
+      "files": 10,
+      "desktop_comparisons": 30,
+      "headless_wasm_tests": 8,
+      "skipped": 0
+    },
+    "wasm_profile": "debug, fresh build from this integration; no wasm-opt or release bundle validation claimed",
+    "normal_hooks": "passed",
+    "documentation": "passed",
+    "official_license_notice_generation": "passed",
+    "nix_actual_builds": "pending"
+  },
+  "first_ci": {
+    "checked_at": "2026-10-26T02:50:39.418Z",
+    "status": "failed_closed_at_first_runtime_guard",
+    "guard_failures": 10,
+    "runner_version": "2.338.0",
+    "embedded_node": "24.21.0",
+    "required_node": ">=24.22.1 in 24.x",
+    "checkout_succeeded": false,
+    "observed_labels": ["ubuntu-24.04-arm", "ubuntu-24.04", "macos-14", "ubuntu-22.04"],
+    "unobserved": "Windows x64/ARM and IntelMac target jobs were skipped downstream of failed Checks scope; no claim about their embedded runtime versions.",
+    "runs": [
+      {
+        "name": "Contribution license",
+        "conclusion": "success",
+        "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40260160685"
+      },
+      {
+        "name": "Nix",
+        "conclusion": "failure",
+        "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40260160676"
+      },
+      {
+        "name": "Documentation",
+        "conclusion": "failure",
+        "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40260160665"
+      },
+      {
+        "name": "Checks",
+        "conclusion": "failure",
+        "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40260160706"
+      },
+      {
+        "name": "Wayland clipboard",
+        "conclusion": "failure",
+        "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40260160687"
+      }
+    ]
+  },
+  "publication_hold": true,
+  "tag_source_unchanged": "8d3493d92582d57b6ad2ee07506f331db3b5535c",
+  "source_receipt_sha256": {
+    "security-pr-586-receipt.json": "17399b93672d269fef18fb16da3af99a0d68d056fde5e6c6af2a64f324402fc3",
+    "ci/security-ci-monitor.json": "0152ecc09ce1bc3708138fb5cbf602981e6b2e1dbf6df236c59de68bafd2ef40",
+    "dependency-audit/wasm-validation-48eaa508.json": "bf5b4e9f0a86e2bba556d026e31cb9da69e045af9408c40c8eb2fbc038f60a81",
+    "dependency-audit/license-review-receipt.json": "f1b8d1e3bd44dfb0afeec5011231c14565728a0631db663f5533488a9e5ffab8"
+  },
+  "limits": [
+    "Local checks do not establish hosted CI success or patched runner availability.",
+    "Manual package review at55dd647d does not cover the changed security dependency graph.",
+    "No public assets downloaded or executed; the Mac verifier is held."
+  ],
+  "bootstrap_follow_up": {
+    "head": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3",
+    "merged": false,
+    "supported_provider_upgrade": "24.21.0 to authenticated official 24.22.1 before JavaScript actions",
+    "already_patched_supported_24x": "no download or file change",
+    "native_application_and_dependency_locks": "unchanged from48eaa508; original local test scopes retained",
+    "independent_source_review": "passed",
+    "focused_local_tests_passed": 9,
+    "hosted_ci": "Bootstrap/guard/checkout/post-job observed across six OS/architecture combinations; full job/package outcomes pending.",
+    "provenance": "https://github.com/Ameyanagi/ReShiki/blob/3d3eed6593d0b02eab6976f31a8cefac08a36fb3/scripts/actions_node_bootstrap.json"
+  }
+}

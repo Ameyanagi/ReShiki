@@ -1,0 +1,54 @@
+{
+  "root_verification": {
+    "verified_at": "2026-10-26T09:19:21.184642+00:00",
+    "receipt_sha256": "05edd2ae91bde4bec2288998a15dc57bb7b3c5bfe7dca640604abbf5d0b963a0",
+    "files_verified": 99,
+    "command_count": 96,
+    "median_calculations_verified": true,
+    "five_complete_analysis_objects_equal": true,
+    "binary_hashes_still_match": true,
+    "results": [
+      {
+        "input": "polystyrene30",
+        "before_seconds": 0.075748958,
+        "after_seconds": 0.091314125
+      },
+      {
+        "input": "polystyrene75",
+        "before_seconds": 0.226483459,
+        "after_seconds": 0.312410125
+      },
+      {
+        "input": "polystyrene100",
+        "before_seconds": 0.395260708,
+        "after_seconds": 0.558520459
+      },
+      {
+        "input": "alanine200",
+        "before_seconds": 0.207560458,
+        "after_seconds": 0.233770708
+      },
+      {
+        "input": "stereo-alanine200",
+        "before_seconds": 0.391627291,
+        "after_seconds": 0.422977417
+      }
+    ],
+    "scope": "Whole-command M1 release comparison; 8\u201341% overhead. Not engine-only, M4, or native first-paint evidence."
+  },
+  "audit_disposition": {
+    "issue": 507,
+    "prior_matrix": "../matrix.json",
+    "timing_evidence_gap": "closed by actual matched supported release-CLI comparison",
+    "classification": "qualified",
+    "qualitative_interpretation": "Same subsecond range as the 0.13 figures on the recorded M1 host, with 8\u201341% median whole-command overhead; no invented numerical threshold, engine-only or no-regression claim.",
+    "remaining_limit": "Fresh native Fit screenshots for all five were not taken; historical matched renderer evidence and all-five geometry/ink/stereo checks remain.",
+    "mandatory_timing_evidence_pending": false,
+    "full_request_unqualified_completion_claim": false,
+    "source_identity": "Candidate measured is the immutable 3d3eed65 manual package; b956 application/lock/release-packaging source equivalence is separately recorded."
+  },
+  "source_receipt_sha256": {
+    "root-verification.json": "8e7a5623fe25699817fa6c0699e1970ec68e21b2ab1ca2d14e4b31179417bc96",
+    "audit-disposition.json": "5f152c080082e64184bc2cf0618c2be9c7cd7724afd38419b420df0606ba7022"
+  }
+}

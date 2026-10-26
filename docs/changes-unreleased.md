@@ -5,7 +5,7 @@ security updates merged in [PR #586](https://github.com/Ameyanagi/ReShiki/pull/5
 tracked in [issue #585](https://github.com/Ameyanagi/ReShiki/issues/585).
 @Ameyanagi — [security review and remaining scoped findings](changes/security-dependency-audit.md).
 
-Under review for 0.13.1: @Ameyanagi —
+Merged for 0.13.1: @Ameyanagi —
 [reaction reference coverage](https://github.com/Ameyanagi/ReShiki/pull/589),
 [large-selection Commands](https://github.com/Ameyanagi/ReShiki/pull/590),
 [portable synthetic-paste checks](https://github.com/Ameyanagi/ReShiki/pull/591)

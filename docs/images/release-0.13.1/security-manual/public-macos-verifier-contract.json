@@ -1,0 +1,8 @@
+{
+  "script_sha256": "370e66dced1a8978c7b9dc7508dd735aaa113f7abfb407ec1afbacff07aaf81b",
+  "invocation": "verify_macos.py HANDOFF.json --source FINAL_40_HEX_SHA",
+  "source": "explicit validated argument; no fixed8d default",
+  "handoff": "exactly one arm64 and one x64 ZIP/DMG pair",
+  "checks_observed_by_root": ["syntax compile", "--help", "invalid-input refusal"],
+  "public_assets_processed": false
+}

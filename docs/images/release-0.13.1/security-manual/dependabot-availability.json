@@ -1,0 +1,7 @@
+{
+  "checked_utc": "2026-10-26T03:51:58.284047+00:00",
+  "endpoint": "GET /repos/Ameyanagi/ReShiki/dependabot/alerts?state=open&per_page=100",
+  "http_status": 403,
+  "message": "Dependabot alerts are disabled for this repository.",
+  "scope": "No alert inventory obtained; no repository settings or token permissions changed. The fresh hosted locked-dependency scanner is the recorded dependency advisory evidence."
+}

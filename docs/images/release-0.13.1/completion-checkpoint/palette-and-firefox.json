@@ -1,0 +1,108 @@
+{
+  "palette": {
+    "issue": 587,
+    "commit": "6e7722bba434e5c30688774ff27d5d11285c7138",
+    "parent": "b956e46347f644372e3c01128b99ca64ac208e2d",
+    "author": "Ameyanagi <77273474+Ameyanagi@users.noreply.github.com>",
+    "pushed": true,
+    "pr_number": null,
+    "pr_base_integration": "pending",
+    "validation": [
+      {
+        "name": "focused optimized palette tests",
+        "command": "cargo test --release --locked --offline -p reshiki --bin reshiki app::command_palette::tests:: -- --test-threads=1",
+        "result": "34 passed; 0 failed; 0 ignored",
+        "log": "focused-tests.log",
+        "log_sha256": "4d1733ef85ae6bc8a51070a1b6f39deaf064848cecc48b16b82f7a043a08ec54"
+      },
+      {
+        "name": "optimized native application",
+        "command": "cargo build --release --locked --offline -p reshiki --bin reshiki",
+        "result": "passed",
+        "log": "native-build.log",
+        "log_sha256": "bb15c2c5137cfcf6cba1e485d144dd98afd75923a170d4a5cdd3285028ab8a1a"
+      },
+      {
+        "name": "required three-package WASM Clippy",
+        "command": "cargo clippy --locked -p reshiki-web -p reshiki -p reshiki-web-worker --lib --bin reshiki --target wasm32-unknown-unknown -- -D warnings",
+        "result": "passed; dev profile 15.68 s",
+        "log": "wasm-clippy.log",
+        "log_sha256": "ebab7db4bda685b7a753fb669fd4e5d4722ec880eb6b31c95fe68bcb0effe489"
+      },
+      {
+        "name": "normal pre-commit hooks",
+        "command": "git commit -m \"fix: keep command palette targeting linear on large selections\"",
+        "result": "passed; Lefthook v2.1.14; cargo-clippy, cargo-fmt, oxfmt all passed; unmatched JS/Python checks skipped normally",
+        "log": "normal-commit-hooks.log",
+        "log_sha256": "56cd62f0ea800339f152130ccae925a80a9743c79857c6efede634a4c48337e5"
+      },
+      {
+        "name": "root native QA",
+        "result": "passed bounded usability check; not precise latency/isolated benchmark; no screenshot file saved",
+        "log": "root-native-qa.json",
+        "log_sha256": "bdfea9bb40eb97d8b82791597f1257ffba69aecc8ee44cca74e538f26f1443bb"
+      }
+    ],
+    "native_qa": {
+      "verifiedAt": "2026-10-26T10:22:20.422300+00:00",
+      "operator": "root through cua_repl native app API",
+      "binarySha256": "1ef60840950675600355cdc14e9df419472c787db001e1ed025c92ea4720110c",
+      "sourceBase": "b956e46347f644372e3c01128b99ca64ac208e2d",
+      "sourceStatus": "uncommitted frozen #587 patch; implementation-validation.json",
+      "fixtureSha256": "71229e202a3a0ba5765af5ac4bd94f4396613237f421cb4c828925c589b553da",
+      "setup": {
+        "zoom": "100% via Actual size before selecting",
+        "keyboardDrawing": "off",
+        "selection": "Cmd+A; visible7648atoms+80points+2128objects,6864bonds",
+        "inspector": "Properties visible",
+        "camera": "centered blank gallery gap; matched prior freeze setup",
+        "imageDimensions": "2560x1704 screenshot; exact logical window geometry not independently recorded"
+      },
+      "observations": [
+        "With full9856IDselection, colon opens852-result palette; AX returns without timeout",
+        "Typing rotate gives7results; Down selects Rotate15degrees counterclockwise",
+        "Edit category filters to4results",
+        "Escape dismisses without changing Undo or document title",
+        "Reopening restores852results with full selection retained",
+        "Executing Actual size closespalette; Undo/Redo staydisabled",
+        "Closed owned app usingCmdQ"
+      ],
+      "qualification": [
+        "Usability check, not a latency benchmark",
+        "Reference worker may compile concurrently; no isolated timing claim",
+        "Native screenshots and AX states observed in tool output; screenshot artifact not saved to disk",
+        "No document edit or save performed"
+      ],
+      "passed": true
+    },
+    "source_receipt_sha256": "6c202a36d5cafcd2cd290601e78d0b5993b333fa2bbfe66c1ab1a095f812419c"
+  },
+  "firefox_harness": {
+    "commit": "f1174fec418e61529cc7da32e83aae858c8cec87",
+    "author": "Ameyanagi <77273474+Ameyanagi@users.noreply.github.com>",
+    "pushed": true,
+    "root_verification": {
+      "verifiedAt": "2026-10-26T10:11:56.295692+00:00",
+      "repositoryHarnessEqualsTestedHarnessExcept": "local-only network route, browser version logging and explanatory comment wording",
+      "repositoryHarnessSha256": "49b357b240766d530bd642c5c423bffe994c42f5f79788cf40781d91f6e757b1",
+      "runs": [
+        {
+          "receipt": "current-result.json",
+          "sha256": "40ca960e351a7c7d4f5efaf5368bca5d0f593b5a95c0c758ad95c02cc5143e97",
+          "exitCode": 0,
+          "engines": ["firefox"],
+          "servedFileCount": 5
+        },
+        {
+          "receipt": "current-chromium-webkit-result.json",
+          "sha256": "1fe2b590621ab421642af0566eb5c1f0c06375efae2cf91fa5338348cd4ad91e",
+          "exitCode": 0,
+          "engines": ["chromium", "webkit"],
+          "servedFileCount": 5
+        }
+      ]
+    },
+    "source_receipt_sha256": "7f9c1c4764fdaf5ec947b1fbee151b02659d3d27792a41caef63acce24d3d93e",
+    "scope": "Current-source synthetic paste in Firefox/Chromium/WebKit; no OS clipboard or native Office paste guarantee."
+  }
+}
