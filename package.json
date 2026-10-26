@@ -22,8 +22,18 @@
     "oxfmt": "0.68.0",
     "oxlint": "1.83.0"
   },
-  "engines": {
-    "bun": ">=1.4.2"
+  "overrides": {
+    "fast-uri": "3.1.9",
+    "postcss-selector-parser": "7.1.6",
+    "sharp": "0.35.5",
+    "smol-toml": "1.9.0",
+    "source-map-js": "1.2.2",
+    "undici": "8.12.2",
+    "vite": "8.3.3",
+    "zod": "4.6.6"
   },
-  "packageManager": "bun@1.4.2"
+  "engines": {
+    "bun": ">=1.4.4"
+  },
+  "packageManager": "bun@1.4.4"
 }

@@ -21,6 +21,8 @@ import tempfile
 import urllib.request
 from pathlib import Path
 
+from download_tls import verified_context
+
 PIN = "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
 BOOST_SHA256 = "7009fe1faa1697476bdc7027703a2badb84e849b7b0baad5086b087b971f8617"
 BOOST_URL = "https://archives.boost.io/release/1.85.0/source/boost_1_85_0.tar.bz2"
@@ -101,7 +103,7 @@ def boost_archive(cache):
         download = Path(temporary) / "source.tar.bz2"
         size = 0
         with (
-            urllib.request.urlopen(BOOST_URL, timeout=60) as response,
+            urllib.request.urlopen(BOOST_URL, timeout=60, context=verified_context()) as response,
             download.open("wb") as output,
         ):
             while chunk := response.read(1024 * 1024):

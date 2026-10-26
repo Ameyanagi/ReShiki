@@ -51,6 +51,8 @@ permissions:
 concurrency:
   group: release-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || 'tag' }}
   cancel-in-progress: false
+env:
+  UV_PYTHON_PREFERENCE: only-managed
 jobs:
   reference:
     needs: validate
@@ -67,11 +69,65 @@ jobs:
       windows_signing_enabled: ${{ steps.windows-signing.outputs.enabled }}
       windows_signing_policy: ${{ steps.windows-signing.outputs.policy }}
     steps:
+      - &actions_runtime
+        name: Patch the Actions Node runtime when needed
+        id: actions_runtime_guard
+        shell: pwsh
+        run: |
+          # Embedded before checkout; setup-node does not change JavaScript actions' Node.
+          $ErrorActionPreference = 'Stop'
+          $workers = @(Get-Process -Name Runner.Worker -ErrorAction Stop)
+          if ($workers.Count -ne 1) { throw 'Expected exactly one live Runner.Worker.' }
+          $root = Split-Path (Split-Path $workers[0].Path -Parent) -Parent
+          $name = if ($IsWindows) { 'node.exe' } else { 'node' }
+          $node = Join-Path $root "externals/node24/bin/$name"
+          $version = & $node --version
+          if ($LASTEXITCODE -ne 0 -or $version -cnotmatch '^v24\.[0-9]+\.[0-9]+$') {
+              throw 'Could not read the active runner Node 24 version.'
+          }
+          Write-Host "Actions runtime before bootstrap: $version ($node)"
+          if ([version] $version.Substring(1) -lt [version] '24.22.1') {
+              # Official signed SHASUMS256.txt provenance is in actions_node_bootstrap.json.
+              $assets = @{
+                  'macOS-ARM64' = @('node-v24.22.1-darwin-arm64.tar.gz', '89c682593d76cd44233fa53b1563264e7de9cbb189cad169135c5b4fadfbc0a7')
+                  'macOS-X64' = @('node-v24.22.1-darwin-x64.tar.gz', 'd132557e7ee2b85af08b0c8c34338e65c6430f2238d01f727728ef42dc83b035')
+                  'Linux-ARM64' = @('node-v24.22.1-linux-arm64.tar.gz', '33c37be234ba8bee041961047b19160f4d7d0f164e8e246f78bdd10feff148b3')
+                  'Linux-X64' = @('node-v24.22.1-linux-x64.tar.gz', 'eb6728e77c576a35162c122c45ccadf224d89ff00abc8dae46cc2897c6002d7c')
+                  'Windows-ARM64' = @('win-arm64/node.exe', '8bea91dc437fe01e7d92ef0efc6c9eaf654369aaba9b2d3e9841552ea7b95a00')
+                  'Windows-X64' = @('win-x64/node.exe', 'd702daa815eabbff763c7d3808e235cf031cf2ca70211b56847bc72f51e240e5')
+              }
+              $asset = $assets["$env:RUNNER_OS-$env:RUNNER_ARCH"]
+              if ($null -eq $asset) { throw 'Unsupported runner OS/architecture.' }
+              $temporary = Join-Path $env:RUNNER_TEMP ('reshiki-node-' + [Guid]::NewGuid())
+              New-Item -ItemType Directory -Path $temporary | Out-Null
+              try {
+                  $download = Join-Path $temporary 'node-download'
+                  Invoke-WebRequest -Uri "https://nodejs.org/dist/v24.22.1/$($asset[0])" -OutFile $download
+                  if ((Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash -ine $asset[1]) {
+                      throw 'Official Node artifact SHA256 mismatch.'
+                  }
+                  if ($IsWindows) {
+                      $candidate = $download # The pinned Windows asset is the raw node.exe.
+                  } else {
+                      & tar -xzf $download -C $temporary
+                      if ($LASTEXITCODE -ne 0) { throw 'Official Node archive extraction failed.' }
+                      $candidate = Join-Path $temporary ($asset[0].Replace('.tar.gz', '') + '/bin/node')
+                  }
+                  Copy-Item -LiteralPath $candidate -Destination $node -Force
+              } finally {
+                  Remove-Item -LiteralPath $temporary -Recurse -Force
+              }
+              $version = & $node --version
+              if ($LASTEXITCODE -ne 0 -or $version -cne 'v24.22.1') {
+                  throw 'The installed Actions Node did not report v24.22.1.'
+              }
+          }
+          Write-Host "Verified Actions runtime: $version ($node)"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
-          version: "0.12.3"
-          python-version: "3.12"
+          version: "0.13.5"
+          python-version: "3.12.15"
           enable-cache: false
       - name: Select the Windows signing mode
         id: windows-signing
@@ -91,8 +147,8 @@ jobs:
         if: inputs.nightly
         id: nightly
         run: |
-          uv run --no-project --python 3.12 python -m unittest tests.test_prepare_nightly
-          version=$(uv run --no-project --python 3.12 python scripts/prepare_nightly.py --identifier "$(date -u +%Y%m%d).${{ github.run_id }}.${{ github.run_attempt }}")
+          uv run --no-project --python 3.12.15 python -m unittest tests.test_prepare_nightly
+          version=$(uv run --no-project --python 3.12.15 python scripts/prepare_nightly.py --identifier "$(date -u +%Y%m%d).${{ github.run_id }}.${{ github.run_attempt }}")
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Require production signing and stable release tags to belong to main
         if: github.event_name == 'push' || (steps.windows-signing.outputs.enabled == 'true' && steps.windows-signing.outputs.policy == 'release-signing')
@@ -107,7 +163,7 @@ jobs:
         if: github.event_name == 'push'
         env:
           RELEASE_TAG: ${{ github.ref_name }}
-        run: uv run --no-project --python 3.12 python scripts/build_release.py --tag "$RELEASE_TAG" --check-tag-only
+        run: uv run --no-project --python 3.12.15 python scripts/build_release.py --tag "$RELEASE_TAG" --check-tag-only
   build:
     needs: validate
     timeout-minutes: 100
@@ -118,50 +174,51 @@ jobs:
           - os: macos-14
             artifact: macos-arm64
             target: aarch64-apple-darwin
-            python: "3.12"
+            python: "3.12.15"
           - os: macos-15-intel
             artifact: macos-x64
             target: x86_64-apple-darwin
-            python: "3.12"
+            python: "3.12.15"
             # The pinned RDKit reference has no Intel macOS wheel. Runtime is native.
             native_only: true
           - os: windows-2022
             artifact: windows-x64
             target: x86_64-pc-windows-msvc
             msvc_arch: x64
-            python: cpython-3.12-windows-x86_64-none
+            python: cpython-3.12.15-windows-x86_64-none
           - os: windows-11-arm
             artifact: windows-arm64
             target: aarch64-pc-windows-msvc
             msvc_arch: arm64
             # RDKit reference tests use the x64 wheel through Windows 11 emulation.
-            python: cpython-3.12-windows-x86_64-none
+            python: cpython-3.12.15-windows-x86_64-none
           - os: ubuntu-22.04
             artifact: linux-x64
             target: x86_64-unknown-linux-gnu
-            python: "3.12"
+            python: "3.12.15"
           - os: ubuntu-24.04-arm
             artifact: linux-arm64
             target: aarch64-unknown-linux-gnu
-            python: "3.12"
+            python: "3.12.15"
     runs-on: ${{ matrix.os }}
     env:
       UV_PYTHON: ${{ matrix.python }}
       # Keep the Rust application independent of redistributable Windows CRT DLLs.
       RUSTFLAGS: ${{ endsWith(matrix.target, '-pc-windows-msvc') && '-C target-feature=+crt-static' || '' }}
     steps:
+      - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
-          version: "0.12.3"
+          version: "0.13.5"
           python-version: ${{ matrix.python }}
       - name: Stamp nightly package version
         if: inputs.nightly
         shell: bash
         env:
           NIGHTLY_VERSION: ${{ needs.validate.outputs.nightly_version }}
-        run: uv run --no-project --python 3.12 python scripts/prepare_nightly.py --version "$NIGHTLY_VERSION"
-      - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
+        run: uv run --no-project --python 3.12.15 python scripts/prepare_nightly.py --version "$NIGHTLY_VERSION"
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           # Previous release caches included packaged license sources in target/.
           prefix-key: v1-release-staging
@@ -169,8 +226,8 @@ jobs:
       - name: Install Linux libraries
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y binutils libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
-      - run: rustup toolchain install 1.99.0 --profile minimal --target ${{ matrix.target }}
-      - run: rustup default 1.99.0
+      - run: rustup toolchain install 1.99.1 --profile minimal --target ${{ matrix.target }}
+      - run: rustup default 1.99.1
       - name: Select the native Windows compiler
         if: runner.os == 'Windows'
         uses: ./.github/actions/setup-msvc
@@ -197,25 +254,25 @@ jobs:
         run: uv run --locked python -m unittest discover -s reference -p 'test_*.py'
       - name: Build Intel native helper boundary fixtures
         if: matrix.native_only == true
-        run: uv run --no-project --isolated --python 3.12 python scripts/build_inchi_helper.py --target ${{ matrix.target }}
+        run: uv run --no-project --isolated --python 3.12.15 python scripts/build_inchi_helper.py --target ${{ matrix.target }}
       - name: Test Intel Mac packaging without reference dependencies
         if: matrix.native_only == true
         env:
           RESHIKI_REQUIRE_INCHI_HELPER: "1"
-        run: uv run --no-project --isolated --python 3.12 python -m unittest tests.test_release tests.test_release_downloads tests.test_prepare_nightly tests.test_inchi_distribution tests.test_inchi_helper_builder tests.test_inchi_helper_protocol tests.test_native_packaging tests.test_agent_api_package tests.test_geometry_distribution tests.test_license_notices tests.test_native_clipboard tests.test_native_print
+        run: uv run --no-project --with certifi==2026.10.23 --isolated --python 3.12.15 python -m unittest tests.test_release tests.test_release_downloads tests.test_prepare_nightly tests.test_inchi_distribution tests.test_inchi_helper_builder tests.test_inchi_helper_protocol tests.test_native_packaging tests.test_agent_api_package tests.test_geometry_distribution tests.test_license_notices tests.test_native_clipboard tests.test_native_print
       - name: Verify reference dependencies
         if: matrix.native_only != true
         run: uv run --locked python scripts/check_reference_dependencies.py
       - name: Build and test extracted portable archive
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
-        run: uv run --no-project --isolated --python 3.12 python scripts/build_release.py --target ${{ matrix.target }} --installer
+        run: uv run --no-project --isolated --python 3.12.15 python scripts/build_release.py --target ${{ matrix.target }} --installer
       - name: Check the application worker protocols and heap boundaries
         env:
           RESHIKI_REQUIRE_INCHI_HELPER: "1"
           RESHIKI_REQUIRE_GEOMETRY_APP: "1"
           RESHIKI_TEST_PACKAGED_APP: ${{ github.workspace }}/target/${{ matrix.target }}/release/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
-        run: uv run --no-project --isolated --python 3.12 python -m unittest tests.test_inchi_helper_protocol tests.test_inchi_distribution.HelperTests.test_packaged_application_worker_executes_when_supplied_for_validation tests.test_geometry_distribution.GeometryWorkerTests.test_packaged_application_worker_executes_when_supplied_for_validation
+        run: uv run --no-project --with certifi==2026.10.23 --isolated --python 3.12.15 python -m unittest tests.test_inchi_helper_protocol tests.test_inchi_distribution.HelperTests.test_packaged_application_worker_executes_when_supplied_for_validation tests.test_geometry_distribution.GeometryWorkerTests.test_packaged_application_worker_executes_when_supplied_for_validation
       # The default shell, as for every other Windows cargo step: under bash,
       # Git's /usr/bin/link shadows the MSVC linker.
       - name: Test the Windows process helpers
@@ -275,16 +332,17 @@ jobs:
             artifact: macos-x64
     runs-on: ${{ matrix.os }}
     steps:
+      - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
-          version: "0.12.3"
-          python-version: "3.12"
+          version: "0.13.5"
+          python-version: "3.12.15"
       - name: Match the nightly version of the qualified archive
         if: inputs.nightly
         env:
           NIGHTLY_VERSION: ${{ needs.validate.outputs.nightly_version }}
-        run: uv run --no-project --python 3.12 python scripts/prepare_nightly.py --version "$NIGHTLY_VERSION"
+        run: uv run --no-project --python 3.12.15 python scripts/prepare_nightly.py --version "$NIGHTLY_VERSION"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: unsigned-${{ matrix.artifact }}
@@ -297,7 +355,7 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
           MACOS_SIGNING_IDENTITY: ${{ vars.MACOS_SIGNING_IDENTITY }}
-        run: uv run --no-project --isolated --python 3.12 python scripts/sign_release.py
+        run: uv run --no-project --isolated --python 3.12.15 python scripts/sign_release.py
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: signed-${{ matrix.artifact }}
@@ -327,11 +385,12 @@ jobs:
     env:
       WINDOWS_SIGNING_POLICY: ${{ needs.validate.outputs.windows_signing_policy }}
     steps:
+      - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
-          version: "0.12.3"
-          python-version: cpython-3.12-windows-x86_64-none
+          version: "0.13.5"
+          python-version: cpython-3.12.15-windows-x86_64-none
           enable-cache: false
       - name: Select the native Windows tools for package verification
         uses: ./.github/actions/setup-msvc
@@ -341,7 +400,7 @@ jobs:
         if: inputs.nightly
         env:
           NIGHTLY_VERSION: ${{ needs.validate.outputs.nightly_version }}
-        run: uv run --no-project --python 3.12 python scripts/prepare_nightly.py --version "$env:NIGHTLY_VERSION"
+        run: uv run --no-project --python 3.12.15 python scripts/prepare_nightly.py --version "$env:NIGHTLY_VERSION"
       - name: Select and require the signing certificate pin
         env:
           SIGNPATH_RELEASE_CERTIFICATE_SHA256: ${{ vars.SIGNPATH_RELEASE_CERTIFICATE_SHA256 }}
@@ -362,7 +421,7 @@ jobs:
           path: unsigned
       - name: Verify and stage the qualified application
         id: prepare
-        run: uv run --no-project --isolated --python 3.12 python scripts/sign_windows_release.py prepare --architecture ${{ matrix.architecture }} --policy "$env:WINDOWS_SIGNING_POLICY" --certificate-sha256 "$env:CERTIFICATE_SHA256"
+        run: uv run --no-project --isolated --python 3.12.15 python scripts/sign_windows_release.py prepare --architecture ${{ matrix.architecture }} --policy "$env:WINDOWS_SIGNING_POLICY" --certificate-sha256 "$env:CERTIFICATE_SHA256"
       # upload-artifact wraps only reshiki.exe in the ZIP expected by windows-app.
       - name: Upload the application signing input
         id: app-input
@@ -397,7 +456,7 @@ jobs:
           if ($installerProcess.ExitCode -ne 0) { throw 'Inno Setup installation failed' }
           "RESHIKI_ISCC=$compilerDir\ISCC.exe" >> $env:GITHUB_ENV
       - name: Verify the signed application and package it into the installer
-        run: uv run --no-project --isolated --python 3.12 python scripts/sign_windows_release.py package --architecture ${{ matrix.architecture }} --policy "$env:WINDOWS_SIGNING_POLICY" --certificate-sha256 "$env:CERTIFICATE_SHA256"
+        run: uv run --no-project --isolated --python 3.12.15 python scripts/sign_windows_release.py package --architecture ${{ matrix.architecture }} --policy "$env:WINDOWS_SIGNING_POLICY" --certificate-sha256 "$env:CERTIFICATE_SHA256"
       - name: Upload the installer signing input
         id: installer-input
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -423,7 +482,7 @@ jobs:
           wait-for-completion-timeout-in-seconds: 3600
           output-artifact-directory: signed-installer
       - name: Verify both signatures, smoke test the installer, and checksum final packages
-        run: uv run --no-project --isolated --python 3.12 python scripts/sign_windows_release.py verify --architecture ${{ matrix.architecture }} --policy "$env:WINDOWS_SIGNING_POLICY" --certificate-sha256 "$env:CERTIFICATE_SHA256"
+        run: uv run --no-project --isolated --python 3.12.15 python scripts/sign_windows_release.py verify --architecture ${{ matrix.architecture }} --policy "$env:WINDOWS_SIGNING_POLICY" --certificate-sha256 "$env:CERTIFICATE_SHA256"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           # Test certificates are never eligible for a release download.
@@ -444,11 +503,12 @@ jobs:
     permissions:
       contents: write
     steps:
+      - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
-          version: "0.12.3"
-          python-version: "3.12"
+          version: "0.13.5"
+          python-version: "3.12.15"
           enable-cache: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -488,7 +548,7 @@ jobs:
           WINDOWS_SIGNING: ${{ needs.validate.outputs.windows_signing_enabled == 'true' && 'required' || 'unsigned' }}
         run: |
           set -euo pipefail
-          uv run --no-project --python 3.12 python ../scripts/release_downloads.py --directory . --repository "$GH_REPO" --tag "$RELEASE_TAG" --notes notes.md --windows-signing "$WINDOWS_SIGNING"
+          uv run --no-project --python 3.12.15 python ../scripts/release_downloads.py --directory . --repository "$GH_REPO" --tag "$RELEASE_TAG" --notes notes.md --windows-signing "$WINDOWS_SIGNING"
           highlights="../.github/release-notes/$RELEASE_TAG.md"
           if [[ -f "$highlights" ]]; then
             cat "$highlights" notes.md > release-notes.md
@@ -513,17 +573,18 @@ jobs:
       contents: write
       actions: write
     steps:
+      - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
-          version: "0.12.3"
-          python-version: "3.12"
+          version: "0.13.5"
+          python-version: "3.12.15"
           enable-cache: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
-      - run: rustup toolchain install 1.99.0 --profile minimal --target wasm32-unknown-unknown
-      - run: rustup default 1.99.0
+      - run: rustup toolchain install 1.99.1 --profile minimal --target wasm32-unknown-unknown
+      - run: rustup default 1.99.1
       # build_wasm.sh pins wasm-bindgen to Cargo.lock and binaryen to a checked release.
       - run: scripts/build_wasm.sh --test
       # The npm job publishes this same tested build.
@@ -568,7 +629,7 @@ jobs:
             if [[ -f $RUNNER_TEMP/published/reshiki-web-demo.tar.gz ]]; then
               published=$(tar -xzOf "$RUNNER_TEMP/published/reshiki-web-demo.tar.gz" demo/VERSION 2> /dev/null || true)
               if [[ -n $published ]]; then
-                newest=$(uv run --no-project --python 3.12 python - "$published" "$version" << 'PY'
+                newest=$(uv run --no-project --python 3.12.15 python - "$published" "$version" << 'PY'
           import sys
 
           def key(version):
@@ -614,6 +675,7 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - *actions_runtime
       - name: Choose the npm credential
         id: auth
         env:
@@ -643,7 +705,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: steps.auth.outputs.mode != 'none'
         with:
-          node-version: "24"
+          node-version: "24.22.1"
           package-manager-cache: false
       - name: Check the npm token
         if: steps.auth.outputs.mode == 'token'
@@ -666,17 +728,17 @@ jobs:
         with:
           name: npm-package-dist
           path: packages/editor/dist
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         if: steps.auth.outputs.mode != 'none' && steps.token.outputs.valid != 'false' && github.event_name != 'push'
         with:
-          version: "0.12.3"
-          python-version: "3.12"
+          version: "0.13.5"
+          python-version: "3.12.15"
           enable-cache: false
       - name: Build the package
         if: steps.auth.outputs.mode != 'none' && steps.token.outputs.valid != 'false' && github.event_name != 'push'
         run: |
-          rustup toolchain install 1.99.0 --profile minimal --target wasm32-unknown-unknown
-          rustup default 1.99.0
+          rustup toolchain install 1.99.1 --profile minimal --target wasm32-unknown-unknown
+          rustup default 1.99.1
           scripts/build_wasm.sh
       - name: Test the package
         if: steps.auth.outputs.mode != 'none' && steps.token.outputs.valid != 'false'

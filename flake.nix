@@ -11,7 +11,16 @@
         "aarch64-linux"
         "aarch64-darwin"
       ];
-      forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
+      forAllSystems =
+        f:
+        nixpkgs.lib.genAttrs systems (
+          system:
+          f (
+            import nixpkgs {
+              inherit system;
+            }
+          )
+        );
     in
     {
       packages = forAllSystems (pkgs: {
@@ -19,6 +28,17 @@
         reshiki =
           let
             inherit (pkgs) lib stdenv;
+            # Pin the latest stable official compiler and Cargo binaries. Reuse
+            # nixpkgs' binary installer instead of rebuilding Rust and LLVM.
+            toolchain = pkgs.callPackage (nixpkgs + "/pkgs/development/compilers/rust/bootstrap.nix") {
+              version = "1.99.1";
+              hashes = {
+                x86_64-unknown-linux-gnu = "aded4e6c1d580415e7b594a3080d8e23e9cbe06f159f97e300aa6875211f71bf";
+                aarch64-unknown-linux-gnu = "703b190f0d723ae68985797f3bb5f62f01b1723f138464c6f30f32b766eb0abf";
+                aarch64-apple-darwin = "b73b6a78c4e7171a8fe1b4bee5342273605c5c9a9a4997554c15bb3ce2753b6a";
+              };
+            };
+            rustPlatform = pkgs.makeRustPlatform toolchain;
             # Libraries winit/wgpu open at runtime with dlopen.
             runtimeLibs = with pkgs; [
               wayland
@@ -31,7 +51,7 @@
               libxrandr
             ];
           in
-          pkgs.rustPlatform.buildRustPackage {
+          rustPlatform.buildRustPackage {
             pname = "reshiki";
             inherit ((lib.importTOML ./Cargo.toml).package) version;
             # Documentation and the website are not build inputs; leaving them

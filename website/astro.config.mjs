@@ -9,6 +9,7 @@ const archivedPages = [
 ];
 
 export default defineConfig({
+  output: "static",
   site: "https://reshiki.com",
   base: "/",
   redirects: {

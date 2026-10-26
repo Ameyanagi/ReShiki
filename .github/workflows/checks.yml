@@ -25,6 +25,8 @@ permissions:
 concurrency:
   group: checks-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+env:
+  UV_PYTHON_PREFERENCE: only-managed
 jobs:
   scope:
     runs-on: ubuntu-22.04
@@ -32,6 +34,60 @@ jobs:
       native: ${{ steps.scope.outputs.native }}
       live: ${{ steps.scope.outputs.live }}
     steps:
+      - &actions_runtime
+        name: Patch the Actions Node runtime when needed
+        id: actions_runtime_guard
+        shell: pwsh
+        run: |
+          # Embedded before checkout; setup-node does not change JavaScript actions' Node.
+          $ErrorActionPreference = 'Stop'
+          $workers = @(Get-Process -Name Runner.Worker -ErrorAction Stop)
+          if ($workers.Count -ne 1) { throw 'Expected exactly one live Runner.Worker.' }
+          $root = Split-Path (Split-Path $workers[0].Path -Parent) -Parent
+          $name = if ($IsWindows) { 'node.exe' } else { 'node' }
+          $node = Join-Path $root "externals/node24/bin/$name"
+          $version = & $node --version
+          if ($LASTEXITCODE -ne 0 -or $version -cnotmatch '^v24\.[0-9]+\.[0-9]+$') {
+              throw 'Could not read the active runner Node 24 version.'
+          }
+          Write-Host "Actions runtime before bootstrap: $version ($node)"
+          if ([version] $version.Substring(1) -lt [version] '24.22.1') {
+              # Official signed SHASUMS256.txt provenance is in actions_node_bootstrap.json.
+              $assets = @{
+                  'macOS-ARM64' = @('node-v24.22.1-darwin-arm64.tar.gz', '89c682593d76cd44233fa53b1563264e7de9cbb189cad169135c5b4fadfbc0a7')
+                  'macOS-X64' = @('node-v24.22.1-darwin-x64.tar.gz', 'd132557e7ee2b85af08b0c8c34338e65c6430f2238d01f727728ef42dc83b035')
+                  'Linux-ARM64' = @('node-v24.22.1-linux-arm64.tar.gz', '33c37be234ba8bee041961047b19160f4d7d0f164e8e246f78bdd10feff148b3')
+                  'Linux-X64' = @('node-v24.22.1-linux-x64.tar.gz', 'eb6728e77c576a35162c122c45ccadf224d89ff00abc8dae46cc2897c6002d7c')
+                  'Windows-ARM64' = @('win-arm64/node.exe', '8bea91dc437fe01e7d92ef0efc6c9eaf654369aaba9b2d3e9841552ea7b95a00')
+                  'Windows-X64' = @('win-x64/node.exe', 'd702daa815eabbff763c7d3808e235cf031cf2ca70211b56847bc72f51e240e5')
+              }
+              $asset = $assets["$env:RUNNER_OS-$env:RUNNER_ARCH"]
+              if ($null -eq $asset) { throw 'Unsupported runner OS/architecture.' }
+              $temporary = Join-Path $env:RUNNER_TEMP ('reshiki-node-' + [Guid]::NewGuid())
+              New-Item -ItemType Directory -Path $temporary | Out-Null
+              try {
+                  $download = Join-Path $temporary 'node-download'
+                  Invoke-WebRequest -Uri "https://nodejs.org/dist/v24.22.1/$($asset[0])" -OutFile $download
+                  if ((Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash -ine $asset[1]) {
+                      throw 'Official Node artifact SHA256 mismatch.'
+                  }
+                  if ($IsWindows) {
+                      $candidate = $download # The pinned Windows asset is the raw node.exe.
+                  } else {
+                      & tar -xzf $download -C $temporary
+                      if ($LASTEXITCODE -ne 0) { throw 'Official Node archive extraction failed.' }
+                      $candidate = Join-Path $temporary ($asset[0].Replace('.tar.gz', '') + '/bin/node')
+                  }
+                  Copy-Item -LiteralPath $candidate -Destination $node -Force
+              } finally {
+                  Remove-Item -LiteralPath $temporary -Recurse -Force
+              }
+              $version = & $node --version
+              if ($LASTEXITCODE -ne 0 -or $version -cne 'v24.22.1') {
+                  throw 'The installed Actions Node did not report v24.22.1.'
+              }
+          }
+          Write-Host "Verified Actions runtime: $version ($node)"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -42,6 +98,7 @@ jobs:
   web:
     runs-on: ubuntu-22.04
     steps:
+      - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
@@ -55,6 +112,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
@@ -62,7 +120,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "22"
+          node-version: "22.23.4"
           package-manager-cache: false
       - name: Require the Node and TLS test runtimes
         run: |
@@ -78,19 +136,20 @@ jobs:
       matrix:
         include:
           - os: macos-14
-            python: "3.12"
+            python: "3.12.15"
           - os: windows-2022
-            python: cpython-3.12-windows-x86_64-none
+            python: cpython-3.12.15-windows-x86_64-none
           - os: ubuntu-22.04
-            python: "3.12"
+            python: "3.12.15"
     runs-on: ${{ matrix.os }}
     env:
       UV_PYTHON: ${{ matrix.python }}
     steps:
+      - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
-          version: "0.12.3"
+          version: "0.13.5"
           python-version: ${{ matrix.python }}
       - run: uv sync --locked
       - run: uv run --locked ruff check reference scripts tests
@@ -98,7 +157,7 @@ jobs:
       - run: uv run --locked ty check
       - name: Install Rust for native macOS clipboard and printing checks
         if: runner.os == 'macOS'
-        run: rustup toolchain install 1.99.0 --profile minimal && rustup default 1.99.0
+        run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
       - run: uv run --locked python -m unittest discover -s tests -p 'test_*.py'
       - run: uv run --locked python -m unittest discover -s reference -p 'test_*.py'
       - run: uv run --locked python scripts/check_reference_dependencies.py
@@ -109,6 +168,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
+      - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install matching LibreOffice and Python UNO packages
         run: |
@@ -129,11 +189,12 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
+      - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install the isolated X11 test server and clipboard libraries
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb xauth libwayland-dev libxkbcommon-dev pkg-config
-      - run: rustup toolchain install 1.99.0 --profile minimal && rustup default 1.99.0
-      - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
+      - run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: linux-x11
       - name: Run native clipboard regressions serially on a private display
@@ -149,14 +210,14 @@ jobs:
         include:
           - os: macos-14
             target: aarch64-apple-darwin
-            python: "3.12"
+            python: "3.12.15"
           - os: windows-2022
             target: x86_64-pc-windows-msvc
             msvc_arch: x64
-            python: cpython-3.12-windows-x86_64-none
+            python: cpython-3.12.15-windows-x86_64-none
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-            python: "3.12"
+            python: "3.12.15"
     runs-on: ${{ matrix.os }}
     env:
       UV_PYTHON: ${{ matrix.python }}
@@ -166,16 +227,17 @@ jobs:
       # Windows symlink escape tests fail instead of skipping without the privilege.
       RESHIKI_REQUIRE_LINK_TESTS: "1"
     steps:
+      - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Linux libraries
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
-      - run: rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
-      - run: rustup default 1.99.0
-      - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
+      - run: rustup default 1.99.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
-          version: "0.12.3"
+          version: "0.13.5"
           python-version: ${{ matrix.python }}
       - name: Select the native Windows compiler
         if: runner.os == 'Windows'
@@ -187,7 +249,7 @@ jobs:
       - name: Select the helper for runtime integration tests
         run: uv run --no-project python -c "import os,pathlib; p=pathlib.Path('artifacts/inchi-helper/reshiki-inchi-helper'+('.exe' if os.name=='nt' else '')).resolve(); open(os.environ['GITHUB_ENV'],'a').write('RESHIKI_INCHI_HELPER='+str(p)+'\n')"
       - name: Check Rust heap and byte protocol boundaries
-        run: uv run --no-project python -m unittest tests.test_inchi_helper_protocol tests.test_inchi_helper_builder tests.test_inchi_distribution
+        run: uv run --no-project --with certifi==2026.10.23 python -m unittest tests.test_inchi_helper_protocol tests.test_inchi_helper_builder tests.test_inchi_distribution
       - run: cargo fmt --all --check
       - name: Check the native application without reference dependencies
         run: cargo clippy --workspace --all-targets --locked --no-default-features -- -D warnings
@@ -284,13 +346,14 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
+      - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
-      - run: rustup toolchain install 1.99.0 --profile minimal --component clippy --target wasm32-unknown-unknown
-      - run: rustup default 1.99.0
-      - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
+      - run: rustup toolchain install 1.99.1 --profile minimal --component clippy --target wasm32-unknown-unknown
+      - run: rustup default 1.99.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: wasm32
       - name: Check the browser editor, its worker and the headless library for wasm32
@@ -333,12 +396,13 @@ jobs:
       # Keep the packaged Windows executable independent of redistributable CRT DLLs.
       RUSTFLAGS: ${{ endsWith(matrix.target, '-pc-windows-msvc') && '-C target-feature=+crt-static' || '' }}
     steps:
+      - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Select the matching native Rust host
         run: rustup set default-host ${{ matrix.target }}
-      - run: rustup toolchain install 1.99.0 --profile minimal --target ${{ matrix.target }}
-      - run: rustup default 1.99.0
-      - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
+      - run: rustup toolchain install 1.99.1 --profile minimal --target ${{ matrix.target }}
+      - run: rustup default 1.99.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: geometry-${{ matrix.target }}
       - name: Select the native Windows compiler
@@ -370,14 +434,14 @@ jobs:
         platform:
           - os: macos-14
             target: aarch64-apple-darwin
-            python: "3.12"
+            python: "3.12.15"
           - os: windows-2022
             target: x86_64-pc-windows-msvc
             msvc_arch: x64
-            python: cpython-3.12-windows-x86_64-none
+            python: cpython-3.12.15-windows-x86_64-none
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-            python: "3.12"
+            python: "3.12.15"
     runs-on: ${{ matrix.platform.os }}
     env:
       UV_PYTHON: ${{ matrix.platform.python }}
@@ -386,19 +450,20 @@ jobs:
       # worker tests need this exact source's built executable.
       RESHIKI_NAMING_HELPER: ${{ github.workspace }}/target/debug/reshiki${{ endsWith(matrix.platform.target, '-pc-windows-msvc') && '.exe' || '' }}
     steps:
+      - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Linux libraries
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
-      - run: rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
-      - run: rustup default 1.99.0
-      - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
+      - run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
+      - run: rustup default 1.99.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: reference-${{ matrix.shard }}
           cache-on-failure: true
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
-          version: "0.12.3"
+          version: "0.13.5"
           python-version: ${{ matrix.platform.python }}
       - name: Select the native Windows compiler
         if: runner.os == 'Windows'
@@ -433,7 +498,7 @@ jobs:
       - name: Run every assigned reference target
         run: uv run --locked python scripts/run_reference_shard.py --index ${{ matrix.shard }} --count 4
       - name: Preserve shard results and failed comparisons
-        if: always()
+        if: ${{ always() && steps.actions_runtime_guard.outcome == 'success' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: reference-${{ matrix.platform.target }}-${{ matrix.shard }}
@@ -456,19 +521,20 @@ jobs:
         include:
           - os: macos-14
             fixture: macos
-            python: "3.12"
+            python: "3.12.15"
           - os: windows-2022
             fixture: windows
-            python: cpython-3.12-windows-x86_64-none
+            python: cpython-3.12.15-windows-x86_64-none
           - os: ubuntu-22.04
             fixture: linux
-            python: "3.12"
+            python: "3.12.15"
     runs-on: ${{ matrix.os }}
     steps:
+      - *actions_runtime
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
-          version: "0.12.3"
+          version: "0.13.5"
           python-version: ${{ matrix.python }}
       - run: uv sync --locked
       - name: Restore the historical template inputs used by the captured requests

@@ -6,6 +6,7 @@ import io
 import json
 import os
 import shutil
+import ssl
 import stat
 import struct
 import subprocess
@@ -113,7 +114,13 @@ class SourceTests(unittest.TestCase):
                         self.assertEqual(
                             repaired, inchi_source.prepare_source(root / "cache", fetch=True)
                         )
-                        request.assert_called_once_with(reference["archive_url"], timeout=60)
+                        context = request.call_args.kwargs["context"]
+                self.assertIsInstance(context, ssl.SSLContext)
+                self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+                self.assertTrue(context.check_hostname)
+                request.assert_called_once_with(
+                    reference["archive_url"], timeout=60, context=context
+                )
                 self.assertEqual([p.resolve() for p in (root / "cache").iterdir()], [source.parent])
 
     def test_missing_managed_file_can_be_restored_from_local_archive(self):
@@ -301,7 +308,13 @@ class SourceTests(unittest.TestCase):
             ):
                 source = inchi_source.prepare_source(root / "cache", fetch=True)
                 self.assertTrue(source.is_dir())
-                request.assert_called_once_with(reference["archive_url"], timeout=60)
+                context = request.call_args.kwargs["context"]
+                self.assertIsInstance(context, ssl.SSLContext)
+                self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+                self.assertTrue(context.check_hostname)
+                request.assert_called_once_with(
+                    reference["archive_url"], timeout=60, context=context
+                )
             with self.assertRaisesRegex(ValueError, "pinned official release"):
                 inchi_source.download_archive(
                     root / "bad", {**reference, "archive_url": "https://example.com/source.zip"}
