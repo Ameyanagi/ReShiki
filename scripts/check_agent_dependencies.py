@@ -7,8 +7,8 @@ ship, so the interop test's rmcp `client` feature is out of scope):
 - rmcp features stay within the reviewed server-only allowlist;
 - rmcp's subtree contains no HTTP, TLS or WebSocket stack.
 Every Cargo package added since the baseline commit must have a license
-expression built only from the permissive licenses below, or match the exact
-reviewed package-specific MIT choice below. `cargo tree` resolves
+expression built only from the permissive licenses below, or match an exact
+reviewed package-specific license decision below. `cargo tree` resolves
 foreign targets without installing them, so one host covers all release targets.
 """
 
@@ -64,6 +64,16 @@ AHO_CORASICK_MIT_CHOICE = {
     "license": "Unlicense OR MIT",
     "source": "registry+https://github.com/rust-lang/crates.io-index",
     "checksum": "c982642fa9e8606056828ee9a8505737230110bb1099153c79efe865c59d12ba",
+}
+# The certificate data may be redistributed with the complete agreement, which
+# license_notices retains. Review only this published archive, not every CDLA
+# package or version. Evidence: licenses/rust/webpki-root-certs-1.0.10-cdla-review.json.
+WEBPKI_ROOT_CERTS_CDLA_REVIEW = {
+    "name": "webpki-root-certs",
+    "version": "1.0.10",
+    "license": "CDLA-Permissive-2.0",
+    "source": "registry+https://github.com/rust-lang/crates.io-index",
+    "checksum": "58ec80e73fd8baf57bf0d9615554c75348bda990d6d5bbeab964dd068319fecb",
 }
 
 
@@ -168,6 +178,22 @@ def selected_mit_license(package, locked_packages):
     )
 
 
+def reviewed_certificate_data_license(package, locked_packages):
+    """Accept only the exact published certificate-data archive reviewed for CDLA."""
+    reviewed = WEBPKI_ROOT_CERTS_CDLA_REVIEW
+    if any(
+        package.get(field) != reviewed[field] for field in ("name", "version", "license", "source")
+    ):
+        return False
+    return any(
+        all(
+            locked.get(field) == reviewed[field]
+            for field in ("name", "version", "source", "checksum")
+        )
+        for locked in locked_packages
+    )
+
+
 def license_problems(metadata, known, locked_packages):
     problems = []
     for package in metadata["packages"]:
@@ -176,6 +202,7 @@ def license_problems(metadata, known, locked_packages):
             key not in known
             and not license_allowed(package.get("license"))
             and not selected_mit_license(package, locked_packages)
+            and not reviewed_certificate_data_license(package, locked_packages)
         ):
             problems.append(
                 f"{key} has a license outside the allowed list: {package.get('license')!r}"

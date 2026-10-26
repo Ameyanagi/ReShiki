@@ -11,9 +11,65 @@
         "aarch64-linux"
         "aarch64-darwin"
       ];
-      forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
+      # These fixes have not all reached nixos-unstable yet. Keep the upstream
+      # sources pinned for the entire package set, including transitive font
+      # and HTTP dependencies, rather than patching only ReShiki's direct inputs.
+      securityOverlay = _final: prev: {
+        brotli = prev.brotli.overrideAttrs (_: {
+          version = "1.2.1";
+          src = prev.fetchFromGitHub {
+            owner = "google";
+            repo = "brotli";
+            tag = "v1.2.1";
+            hash = "sha256-llY72cYffDv0ugsH0p89xIPEbElV4L8u7U/Fe8hT3gI=";
+          };
+          # The old architecture fix is already included in v1.2.1.
+          patches = [ ];
+        });
+
+        curlMinimal = prev.curlMinimal.overrideAttrs (_: {
+          version = "8.23.0";
+          # Preserve nixpkgs' bootstrap fetcher when it builds curl itself.
+          src = prev.stdenv.fetchurlBoot {
+            url = "https://curl.se/download/curl-8.23.0.tar.xz";
+            hash = "sha256-ja3X0lNqMU+YKtBaZRtxP0Jr99Aswsds/7l5byIY5sU=";
+          };
+        });
+
+        freetype = prev.freetype.overrideAttrs (old: {
+          patches = old.patches ++ [
+            # CVE-2026-50811: zero excess variation coordinates in both loaders.
+            (prev.fetchurl {
+              url = "https://github.com/freetype/freetype/commit/8fa928f1617aba65f45b00f0dcb109f077b7741e.patch";
+              hash = "sha256-eu0Yr6b99ak0YG2HMUWHTpJScNLcg+S9ZAsC2oGQ0ow=";
+            })
+            (prev.fetchurl {
+              url = "https://github.com/freetype/freetype/commit/5a280ecde6f324de0d226261036e736e0cb49a71.patch";
+              hash = "sha256-+uHJbNlLntWq/HQk9LiJTy4jW0hppys827aE3tzqnRo=";
+            })
+            # CVE-2026-95512: bound overlapping CID subroutine dictionaries.
+            (prev.fetchurl {
+              url = "https://github.com/freetype/freetype/commit/f3ca71c9900fe860849b3163a6e2c1e765b291d9.patch";
+              hash = "sha256-rmGaC+w+gLwnm1DotW1YCULZRGuGNqawE0LDsQiu4TQ=";
+            })
+          ];
+        });
+      };
+      forAllSystems =
+        f:
+        nixpkgs.lib.genAttrs systems (
+          system:
+          f (
+            import nixpkgs {
+              inherit system;
+              overlays = [ securityOverlay ];
+            }
+          )
+        );
     in
     {
+      overlays.default = securityOverlay;
+
       packages = forAllSystems (pkgs: {
         default = self.packages.${pkgs.stdenv.hostPlatform.system}.reshiki;
         reshiki =

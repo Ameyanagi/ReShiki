@@ -4,6 +4,10 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
+@Ameyanagi — October dependency and CI runtime security updates, under review
+in [issue #585](https://github.com/Ameyanagi/ReShiki/issues/585).
+[Security review and verification scope](changes/security-dependency-audit.md).
+
 @Ameyanagi — earlier PDF copy progress for large selections,
 retained canvas caches, measured native response and unchanged copied output in
 [PR #582](https://github.com/Ameyanagi/ReShiki/pull/582).

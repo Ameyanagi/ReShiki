@@ -1,0 +1,146 @@
+{
+  "schema": 1,
+  "reviewed_on": "2026-10-26",
+  "scope": "Exact canonical IDs/package versions and locked sources only. All raw matches remain visible. Not a global informational or alias exception.",
+  "exceptions": [
+    {
+      "package": {
+        "ecosystem": "crates.io",
+        "name": "lru"
+      },
+      "version": "0.16.4",
+      "id": "RUSTSEC-2026-0253",
+      "kind": "dated-scope",
+      "aliases": [],
+      "modified": "2026-08-11T11:15:06.101553049Z",
+      "locked_source": {
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "7f66e8d5d03f609abc3a39e6f08e4164ebf1447a732906d39eb9b99b7919ef39"
+      },
+      "reason": "Reviewed cryoglyph Copy glyph-cache keys do not meet pop()/panicking-Drop preconditions; dated source/consumer guard must pass."
+    },
+    {
+      "package": {
+        "ecosystem": "crates.io",
+        "name": "paste"
+      },
+      "version": "1.0.15",
+      "id": "RUSTSEC-2024-0436",
+      "kind": "maintenance",
+      "aliases": [],
+      "modified": "2026-01-27T22:03:15.694766Z",
+      "locked_source": {
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
+      },
+      "assessment_url": "https://github.com/dtolnay/paste",
+      "rustsec_sha256": "77802b32a0f9067db63c0e50fbd51ee5d36efe3bdbd53ba1b3a814826c80ab14",
+      "reason": "Reviewed maintenance-only notice; no repaired-version claim. Upstream classification and the exact locked source must remain unchanged."
+    },
+    {
+      "package": {
+        "ecosystem": "crates.io",
+        "name": "rustybuzz"
+      },
+      "version": "0.20.1",
+      "id": "RUSTSEC-2026-0206",
+      "kind": "maintenance",
+      "aliases": [],
+      "modified": "2026-07-12T07:15:04.317501614Z",
+      "locked_source": {
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "fd3c7c96f8a08ee34eff8857b11b49b07d71d1c3f4e88f8a88d4c9e9f90b1702"
+      },
+      "assessment_url": "https://github.com/harfbuzz/rustybuzz/issues/166",
+      "rustsec_sha256": "7725ccca9dd0a990bddb4becb5cbb806692809f9f9a7f53b1d892d7abd5fc38f",
+      "reason": "Reviewed maintenance-only notice; no repaired-version claim. Upstream classification and the exact locked source must remain unchanged."
+    },
+    {
+      "package": {
+        "ecosystem": "crates.io",
+        "name": "ttf-parser"
+      },
+      "version": "0.25.1",
+      "id": "RUSTSEC-2026-0192",
+      "kind": "maintenance",
+      "aliases": [],
+      "modified": "2026-06-29T21:15:04.384453633Z",
+      "locked_source": {
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
+      },
+      "assessment_url": "https://github.com/harfbuzz/ttf-parser/issues/217",
+      "rustsec_sha256": "37496b74020531fc9e29830bd5aafc65f3861a228d8052dc73e6a75a9576ea4d",
+      "reason": "Reviewed maintenance-only notice; no repaired-version claim. Upstream classification and the exact locked source must remain unchanged."
+    },
+    {
+      "package": {
+        "ecosystem": "crates.io",
+        "name": "zbus_names"
+      },
+      "version": "4.3.4",
+      "id": "RUSTSEC-2026-0371",
+      "kind": "maintenance",
+      "aliases": [],
+      "modified": "2026-10-17T15:30:02.407875527Z",
+      "locked_source": {
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "d8bf88b4a3ff53e883001e0e0115b297a9d53c31b9c1edd2bfdd853e3428624e"
+      },
+      "assessment_url": "https://github.com/z-galaxy/zbus/issues/2043",
+      "rustsec_sha256": "3e618914dab3ef0d6d2434f42ac8aa1947cb1738fd156b4f0092d6c7ad53b394",
+      "reason": "Reviewed maintenance-only notice; no repaired-version claim. Upstream classification and the exact locked source must remain unchanged."
+    },
+    {
+      "package": {
+        "ecosystem": "crates.io",
+        "name": "zvariant"
+      },
+      "version": "5.15.0",
+      "id": "RUSTSEC-2026-0370",
+      "kind": "maintenance",
+      "aliases": [],
+      "modified": "2026-10-17T15:30:02.390032532Z",
+      "locked_source": {
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "c1d34c27cc6cdd1f458427519dd6b8612f7b7e3f7b9a0b2355d041dda9869147"
+      },
+      "assessment_url": "https://github.com/z-galaxy/zbus/issues/2043",
+      "rustsec_sha256": "55991b6a4484c3541c8091cb16cf7446c8610de09ac642ab3ff88c332e394bf0",
+      "reason": "Reviewed maintenance-only notice; no repaired-version claim. Upstream classification and the exact locked source must remain unchanged."
+    },
+    {
+      "package": {
+        "ecosystem": "crates.io",
+        "name": "zvariant_derive"
+      },
+      "version": "5.15.0",
+      "id": "RUSTSEC-2026-0372",
+      "kind": "maintenance",
+      "aliases": [],
+      "modified": "2026-10-17T15:30:02.394812511Z",
+      "locked_source": {
+        "source": "registry+https://github.com/rust-lang/crates.io-index",
+        "checksum": "864155e69b4352db0c7f374917bf45d1e0c8d17659c8b3dbf9795f3673f8c497"
+      },
+      "assessment_url": "https://github.com/z-galaxy/zbus/issues/2043",
+      "rustsec_sha256": "e03677b3351db11984e2fd3bd839b6368cfc3a93aca08c4401980264b228635d",
+      "reason": "Reviewed maintenance-only notice; no repaired-version claim. Upstream classification and the exact locked source must remain unchanged."
+    },
+    {
+      "package": {
+        "ecosystem": "npm",
+        "name": "http-cache-semantics"
+      },
+      "version": "4.2.0",
+      "id": "GHSA-ch52-4w7c-c8xp",
+      "kind": "dated-scope",
+      "aliases": ["CVE-2026-93748"],
+      "modified": "2026-10-02T22:45:04.334960361Z",
+      "locked_source": {
+        "integrity": "sha512-dTxcvPXqPvXBQpq5dUr6mEMJX4oIEFv6bwom3FDwKRDsuIjjJGANqhBuoAn9c1RQJIdAKav33ED65E2ys+87QQ=="
+      },
+      "reason": "Reviewed sole Astro static image-build consumer uses TTL APIs, not authenticated max-stale shared-cache hits; dated source/consumer/static-output guard must pass."
+    }
+  ]
+}

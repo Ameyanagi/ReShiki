@@ -9,6 +9,8 @@ import urllib.request
 import zipfile
 from pathlib import Path, PurePosixPath
 
+from download_tls import verified_context
+
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "tools/inchi-helper/source-manifest.json"
 MAX_ARCHIVE_BYTES = 16 * 1024 * 1024
@@ -111,7 +113,7 @@ def download_archive(destination, reference):
     if url != expected:
         raise ValueError("InChI archive URL is not the pinned official release")
     with (
-        urllib.request.urlopen(url, timeout=60) as response,
+        urllib.request.urlopen(url, timeout=60, context=verified_context()) as response,
         Path(destination).open("xb") as output,
     ):
         if not response.url.startswith("https://"):

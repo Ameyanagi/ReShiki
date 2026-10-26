@@ -6,6 +6,8 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from download_tls import verified_context
+
 ROOT = Path(__file__).resolve().parents[1]
 BASE = "https://bobhanson.github.io/IUPAC-FAIRSpec/cdx_sdk/"
 CACHE = ROOT / "artifacts/clipboard-qa-20260920/spec"
@@ -15,7 +17,9 @@ CACHE.mkdir(parents=True, exist_ok=True)
 def read(path):
     cache = CACHE / Path(path).name
     if not cache.exists():
-        cache.write_bytes(urllib.request.urlopen(BASE + path, timeout=30).read())
+        cache.write_bytes(
+            urllib.request.urlopen(BASE + path, timeout=30, context=verified_context()).read()
+        )
     return cache.read_text(errors="replace")
 
 

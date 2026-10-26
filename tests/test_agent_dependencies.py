@@ -14,9 +14,11 @@ from check_agent_dependencies import (
     BASELINE,
     ROOT,
     SERDE_JSON_FORBIDDEN,
+    WEBPKI_ROOT_CERTS_CDLA_REVIEW,
     allowlist_problems,
     layout,
     license_allowed,
+    reviewed_certificate_data_license,
     selected_mit_license,
     verify,
 )
@@ -107,6 +109,45 @@ class AgentDependencyTests(unittest.TestCase):
     def test_new_mit_package_passes(self):
         self.audit(cargo(tree(SERVER)), [package("permissive", "1.0.0", "MIT")])
 
+    def test_certificate_data_review_matches_only_locked_provenance(self):
+        reviewed = dict(WEBPKI_ROOT_CERTS_CDLA_REVIEW)
+        self.assertFalse(license_allowed(reviewed["license"]))
+        self.assertTrue(reviewed_certificate_data_license(reviewed, [reviewed]))
+        self.assertFalse(reviewed_certificate_data_license(reviewed, []))
+        self.audit(cargo(tree(SERVER)), [reviewed], [reviewed])
+        with self.assertRaisesRegex(ValueError, "webpki-root-certs@1.0.10 has a license"):
+            self.audit(cargo(tree(SERVER)), [reviewed], [{**reviewed, "checksum": "0" * 64}])
+        for field, changed in (
+            ("name", "different"),
+            ("version", "1.0.11"),
+            ("license", "CDLA-Permissive-2.0 OR GPL-3.0-only"),
+            ("source", "git+https://example.test/webpki-root-certs"),
+        ):
+            with self.subTest(metadata_field=field):
+                self.assertFalse(
+                    reviewed_certificate_data_license({**reviewed, field: changed}, [reviewed])
+                )
+        for field, changed in (
+            ("name", "different"),
+            ("version", "1.0.11"),
+            ("source", "registry+https://example.test/index"),
+            ("checksum", "0" * 64),
+        ):
+            with self.subTest(lock_field=field):
+                self.assertFalse(
+                    reviewed_certificate_data_license(reviewed, [{**reviewed, field: changed}])
+                )
+
+    def test_certificate_data_review_record_matches_the_audit(self):
+        record = json.loads(
+            (ROOT / "licenses/rust/webpki-root-certs-1.0.10-cdla-review.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        for field, value in WEBPKI_ROOT_CERTS_CDLA_REVIEW.items():
+            self.assertEqual(record[field], value)
+        self.assertEqual(set(record["upstream_texts"]), {"LICENSE"})
+
     def test_exact_aho_corasick_mit_choice_matches_locked_provenance(self):
         choice = dict(AHO_CORASICK_MIT_CHOICE)
         self.assertFalse(license_allowed(choice["license"]))
@@ -162,6 +203,10 @@ class AgentDependencyTests(unittest.TestCase):
             "MIT OR GPL-3.0-only",
             "Apache-2.0 WITH Classpath-exception-2.0",
             "MIT OR",
+            "CDLA-Permissive-1.0",
+            "CDLA-Sharing-1.0",
+            "CDLA-Permissive-2.0",
+            "CDLA-Permissive-2.0 OR GPL-3.0-only",
         ):
             with self.subTest(expression=expression):
                 self.assertFalse(license_allowed(expression))

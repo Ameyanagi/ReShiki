@@ -1,0 +1,89 @@
+{
+  "scope": "Pinned action runtime and pre hooks; this is not a clean dependency-advisory claim.",
+  "actions": {
+    "SignPath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092": {
+      "metadata_url": "https://github.com/SignPath/github-action-submit-signing-request/blob/f6d04783b4569d051e0c80105fe66e82819d0092/action.yml",
+      "metadata_sha256": "9afe14756752bb0b43421bf94e7cebdc3fead29765be4f07fbc60d82421ebc23",
+      "using": "node24",
+      "pre": null,
+      "nested_uses": []
+    },
+    "Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6": {
+      "metadata_url": "https://github.com/Swatinem/rust-cache/blob/6323deb102c322ba6fcbdcafc7e3dddab59af2b6/action.yml",
+      "metadata_sha256": "0bf18e525796c2e43b4cccbc5c914e745de700a4e56735f53a8f1b0e6504aa2a",
+      "using": "node24",
+      "pre": null,
+      "nested_uses": []
+    },
+    "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": {
+      "metadata_url": "https://github.com/actions/checkout/blob/3d3c42e5aac5ba805825da76410c181273ba90b1/action.yml",
+      "metadata_sha256": "d59219cb79590abdb877deaa14e3b65a00c05318bf5a6f3b989b9162b5d08c35",
+      "using": "node24",
+      "pre": null,
+      "nested_uses": []
+    },
+    "actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346": {
+      "metadata_url": "https://github.com/actions/deploy-pages/blob/368f82528645a54fb793d4d04e342629a3f51346/action.yml",
+      "metadata_sha256": "64c44539fba53559a157b5de16c01d3ab91dbc999c1b98b5c0b2fc3528d5d059",
+      "using": "node24",
+      "pre": null,
+      "nested_uses": []
+    },
+    "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": {
+      "metadata_url": "https://github.com/actions/download-artifact/blob/3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c/action.yml",
+      "metadata_sha256": "e98559b7a31ba31be4709f20d22102dc2737fa630f69a339eb89981151e505fe",
+      "using": "node24",
+      "pre": null,
+      "nested_uses": []
+    },
+    "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020": {
+      "metadata_url": "https://github.com/actions/setup-node/blob/820762786026740c76f36085b0efc47a31fe5020/action.yml",
+      "metadata_sha256": "5d765941ab5d8bef27f08e81b0b041cdb2df2050ea0261dc925d157a2bafbd2b",
+      "using": "node24",
+      "pre": null,
+      "nested_uses": []
+    },
+    "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": {
+      "metadata_url": "https://github.com/actions/upload-artifact/blob/043fb46d1a93c77aae656e7c1c64a875d1fc6a0a/action.yml",
+      "metadata_sha256": "c5979822866a72362e609844b6ebe77d4b7e759af68cc1c2c425dcf51481fab4",
+      "using": "node24",
+      "pre": null,
+      "nested_uses": []
+    },
+    "actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f": {
+      "metadata_url": "https://github.com/actions/upload-artifact/blob/bbbca2ddaa5d8feaa63e36b76fdaad77386f024f/action.yml",
+      "metadata_sha256": "c5979822866a72362e609844b6ebe77d4b7e759af68cc1c2c425dcf51481fab4",
+      "using": "node24",
+      "pre": null,
+      "nested_uses": []
+    },
+    "actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9": {
+      "metadata_url": "https://github.com/actions/upload-pages-artifact/blob/fc324d3547104276b827a68afc52ff2a11cc49c9/action.yml",
+      "metadata_sha256": "f84e759011e0c497e696f5bce4ebb5fbe9bbdc5aea309b73795283fa139c1558",
+      "using": "composite",
+      "pre": null,
+      "nested_uses": ["actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f"]
+    },
+    "astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e": {
+      "metadata_url": "https://github.com/astral-sh/setup-uv/blob/07a047e608db84b3d8c06cd9a7c7dcc9c355c18e/action.yml",
+      "metadata_sha256": "d673bd5ea2cdb9af0c2c2e0d392afe966637bd49e4397313b9086ae582548b37",
+      "using": "node24",
+      "pre": null,
+      "nested_uses": []
+    },
+    "cachix/install-nix-action@448cde739abec1eaf0646249e3d25bb8d9bc7702": {
+      "metadata_url": "https://github.com/cachix/install-nix-action/blob/448cde739abec1eaf0646249e3d25bb8d9bc7702/action.yml",
+      "metadata_sha256": "46d90d7cd0453aefd350f837a57f669199227668564b10ad58a05bbf862a3bf0",
+      "using": "composite",
+      "pre": null,
+      "nested_uses": []
+    },
+    "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": {
+      "metadata_url": "https://github.com/oven-sh/setup-bun/blob/0c5077e51419868618aeaa5fe8019c62421857d6/action.yml",
+      "metadata_sha256": "c8501315148e6a0c33fa44da6f119753ec683bafb8889bb917cf36029b6cb00b",
+      "using": "node24",
+      "pre": null,
+      "nested_uses": []
+    }
+  }
+}

@@ -150,6 +150,13 @@ Package staging uses `build/release-bundles`, outside Cargo’s `target` directo
 Packaging and macOS signing use Python's standard library. Windows signing uses
 the SignPath GitHub action and a PowerShell verification helper. Intel macOS runs the native Rust chemistry tests, packaging/clipboard/print checks and extracted-application tests without installing RDKit: the pinned reference release has no Intel macOS wheel. Full live RDKit comparisons remain required on macOS ARM64, Windows x64 and Linux x64 before any package is published.
 
+Reference/source HTTPS download helpers require the updated certifi bundle in
+the locked development environment. Offline packaging and signing do not load
+that dependency. Workflow jobs verify the runner's bundled Node before any
+JavaScript action; selecting Node with `setup-node` cannot replace this check.
+See the [security review](changes/security-dependency-audit.md) for exact runtime
+baselines, remaining scoped findings and the release gate.
+
 Both Mac builds use the fixed abbreviation drawing coordinates recorded on Apple Silicon. Intel's native tests exercise every predefined group as an isolated and attached fragment; these are application checks, not an independent Intel RDKit geometry capture. The updater selects a separate DMG for each Mac architecture.
 
 ## Configure npm publishing

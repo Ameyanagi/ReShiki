@@ -1,0 +1,20 @@
+{
+  "name": "webpki-root-certs",
+  "version": "1.0.10",
+  "license": "CDLA-Permissive-2.0",
+  "source": "registry+https://github.com/rust-lang/crates.io-index",
+  "checksum": "58ec80e73fd8baf57bf0d9615554c75348bda990d6d5bbeab964dd068319fecb",
+  "published_archive": "https://static.crates.io/crates/webpki-root-certs/webpki-root-certs-1.0.10.crate",
+  "license_source": "https://cdla.dev/permissive-2-0/",
+  "reason": "This exact archive contains Mozilla root-certificate data under CDLA-Permissive-2.0. Section 2.1 permits sharing the data with the complete agreement; section 3.1 places no restrictions on Results. The review does not widen the global license allowlist or cover another package, version, source, or checksum.",
+  "upstream_texts": {
+    "LICENSE": "e271993808fec50ab29350b39539cdec611a9103f827e0aa26d61da70e2d33f8"
+  },
+  "previous_version": {
+    "version": "1.0.9",
+    "license": "CDLA-Permissive-2.0",
+    "LICENSE_sha256": "e271993808fec50ab29350b39539cdec611a9103f827e0aa26d61da70e2d33f8",
+    "policy": "Already present in the historical dependency baseline; left unchanged."
+  },
+  "packaging": "The consolidated third-party notices preserve the complete upstream LICENSE, original Cargo manifest, and this review record. No separate notice supplement or relabeling of upstream terms is used."
+}

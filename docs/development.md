@@ -80,7 +80,13 @@ On Windows, CI runs every ignored `app::naming::` test, the `app::nmr::` and `ca
 
 ## Optional RDKit reference tests
 
-Install [uv 0.12.3 or later](https://docs.astral.sh/uv/getting-started/installation/) and run `uv sync --locked --python 3.12`. On Windows, use `--python cpython-3.12-windows-x86_64-none`, including on ARM.
+Install [uv 0.13.5 or later](https://docs.astral.sh/uv/getting-started/installation/) and run `uv sync --locked --python 3.12.15`. On Windows, use `--python cpython-3.12.15-windows-x86_64-none`, including on ARM.
+
+Run Python helpers that download reference data through this locked environment.
+Their HTTPS connections require the locked, updated certifi CA bundle and fail
+if it is missing or too old. Native Cargo builds and offline packaging do not
+need certifi. See the [dated security review](changes/security-dependency-audit.md)
+for runtime requirements and the limits of the interpreter assessment.
 
 The pinned RDKit reference provides wheels for Apple Silicon macOS, Windows x64 and Linux x64/ARM64, but not Intel macOS. Intel Mac development and packaging use the native checks above; run optional reference comparisons on a supported platform. The distributed Intel app needs no Python or RDKit.
 
@@ -141,7 +147,7 @@ Windows ARM64 and Linux ARM64 remain release targets with package and installer 
 
 ## Pre-commit checks
 
-Install [Bun 1.4.2](https://bun.com/docs/installation), then run `bun install --frozen-lockfile` to install the web tools and Lefthook hooks. Use `bun run --bun lefthook install` to reinstall hooks. Python changes also need the uv development environment above.
+Install [Bun 1.4.4](https://bun.com/docs/installation), then run `bun install --frozen-lockfile` to install the web tools and Lefthook hooks. Use `bun run --bun lefthook install` to reinstall hooks. Python changes also need the uv development environment above.
 
 Hooks check staged file types: Oxlint/Oxfmt for web and configuration files, Ruff/ty for Python, and Cargo fmt and Clippy for Rust. Clippy type-checks libraries and binaries; CI lints tests and examples on every pull request. They do not rewrite or restage changes. Rust checks run sequentially. The repository uses LF line endings, including on Windows.
 

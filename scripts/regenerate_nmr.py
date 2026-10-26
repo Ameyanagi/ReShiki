@@ -7,6 +7,8 @@ import tempfile
 import urllib.request
 from pathlib import Path
 
+from download_tls import verified_context
+
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_URL = "https://downloads.sourceforge.net/project/nmrshiftdb2/data/nmrshiftdb2withsignals.sd"
 SOURCE_SHA256 = "0e86688360e23c88ccf0eb82a1251315fa57ec6f5b376dc8886f3311793a0afe"
@@ -48,7 +50,9 @@ def main():
             source = Path(temporary) / "nmrshiftdb2withsignals.sd"
             print(f"Downloading pinned NMR export from {SOURCE_URL}")
             with (
-                urllib.request.urlopen(SOURCE_URL, timeout=60) as response,
+                urllib.request.urlopen(
+                    SOURCE_URL, timeout=60, context=verified_context()
+                ) as response,
                 source.open("wb") as output,
             ):
                 while block := response.read(1024 * 1024):
