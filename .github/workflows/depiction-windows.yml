@@ -338,8 +338,8 @@ jobs:
           # Provider initialization/pre-job internals precede this step and remain outside
           # repository coverage. Audited actions must have no runs.pre, even transitively.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: rustup toolchain install 1.99.0 --profile minimal
-      - run: rustup default 1.99.0
+      - run: rustup toolchain install 1.99.1 --profile minimal
+      - run: rustup default 1.99.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: rust

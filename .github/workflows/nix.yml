@@ -13,6 +13,8 @@ on:
       - scripts/nix_ci_runtime.mjs
       - scripts/nix_ci_runtime.json
       - tests/nix_ci_runtime.test.mjs
+      - .github/scripts/check_nix_build_plan.mjs
+      - .github/scripts/check_nix_build_plan.test.mjs
       - scripts/check_actions_runtime.ps1
       - tests/actions_runtime_guard.ps1
       - tests/actions_runtime_bootstrap.ps1
@@ -30,6 +32,8 @@ on:
       - scripts/nix_ci_runtime.mjs
       - scripts/nix_ci_runtime.json
       - tests/nix_ci_runtime.test.mjs
+      - .github/scripts/check_nix_build_plan.mjs
+      - .github/scripts/check_nix_build_plan.test.mjs
       - scripts/check_actions_runtime.ps1
       - tests/actions_runtime_guard.ps1
       - tests/actions_runtime_bootstrap.ps1
@@ -49,7 +53,7 @@ jobs:
       matrix:
         runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-14]
     runs-on: ${{ matrix.runner }}
-    # Security overlays rebuild LLVM/Rust on Linux before the app and install checks.
+    # Check binary-cache availability before the app and full install checks.
     timeout-minutes: ${{ matrix.runner == 'macos-14' && 120 || 360 }}
     steps:
       - &actions_runtime
@@ -386,5 +390,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Nix runtime policy tests failed.' }
           & $node scripts/nix_ci_runtime.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Nix runtime installation/attestation failed.' }
+      - name: Reject source LLVM and Rust toolchain builds
+        shell: pwsh
+        run: |
+          . ./scripts/check_actions_runtime.ps1
+          & $node --test .github/scripts/check_nix_build_plan.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Nix build-plan policy tests failed.' }
+          & $node .github/scripts/check_nix_build_plan.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Nix plan requires a source toolchain build.' }
       # Builds the package for this runner, including its install check.
-      - run: nix flake check -L
+      - run: nix flake check -L --no-write-lock-file --no-update-lock-file --option fallback false

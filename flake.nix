@@ -11,50 +11,6 @@
         "aarch64-linux"
         "aarch64-darwin"
       ];
-      # These fixes have not all reached nixos-unstable yet. Keep the upstream
-      # sources pinned for the entire package set, including transitive font
-      # and HTTP dependencies, rather than patching only ReShiki's direct inputs.
-      securityOverlay = _final: prev: {
-        brotli = prev.brotli.overrideAttrs (_: {
-          version = "1.2.1";
-          src = prev.fetchFromGitHub {
-            owner = "google";
-            repo = "brotli";
-            tag = "v1.2.1";
-            hash = "sha256-llY72cYffDv0ugsH0p89xIPEbElV4L8u7U/Fe8hT3gI=";
-          };
-          # The old architecture fix is already included in v1.2.1.
-          patches = [ ];
-        });
-
-        curlMinimal = prev.curlMinimal.overrideAttrs (_: {
-          version = "8.23.0";
-          # Preserve nixpkgs' bootstrap fetcher when it builds curl itself.
-          src = prev.stdenv.fetchurlBoot {
-            url = "https://curl.se/download/curl-8.23.0.tar.xz";
-            hash = "sha256-ja3X0lNqMU+YKtBaZRtxP0Jr99Aswsds/7l5byIY5sU=";
-          };
-        });
-
-        freetype = prev.freetype.overrideAttrs (old: {
-          patches = old.patches ++ [
-            # CVE-2026-50811: zero excess variation coordinates in both loaders.
-            (prev.fetchurl {
-              url = "https://github.com/freetype/freetype/commit/8fa928f1617aba65f45b00f0dcb109f077b7741e.patch";
-              hash = "sha256-eu0Yr6b99ak0YG2HMUWHTpJScNLcg+S9ZAsC2oGQ0ow=";
-            })
-            (prev.fetchurl {
-              url = "https://github.com/freetype/freetype/commit/5a280ecde6f324de0d226261036e736e0cb49a71.patch";
-              hash = "sha256-+uHJbNlLntWq/HQk9LiJTy4jW0hppys827aE3tzqnRo=";
-            })
-            # CVE-2026-95512: bound overlapping CID subroutine dictionaries.
-            (prev.fetchurl {
-              url = "https://github.com/freetype/freetype/commit/f3ca71c9900fe860849b3163a6e2c1e765b291d9.patch";
-              hash = "sha256-rmGaC+w+gLwnm1DotW1YCULZRGuGNqawE0LDsQiu4TQ=";
-            })
-          ];
-        });
-      };
       forAllSystems =
         f:
         nixpkgs.lib.genAttrs systems (
@@ -62,19 +18,27 @@
           f (
             import nixpkgs {
               inherit system;
-              overlays = [ securityOverlay ];
             }
           )
         );
     in
     {
-      overlays.default = securityOverlay;
-
       packages = forAllSystems (pkgs: {
         default = self.packages.${pkgs.stdenv.hostPlatform.system}.reshiki;
         reshiki =
           let
             inherit (pkgs) lib stdenv;
+            # Pin the latest stable official compiler and Cargo binaries. Reuse
+            # nixpkgs' binary installer instead of rebuilding Rust and LLVM.
+            toolchain = pkgs.callPackage (nixpkgs + "/pkgs/development/compilers/rust/bootstrap.nix") {
+              version = "1.99.1";
+              hashes = {
+                x86_64-unknown-linux-gnu = "aded4e6c1d580415e7b594a3080d8e23e9cbe06f159f97e300aa6875211f71bf";
+                aarch64-unknown-linux-gnu = "703b190f0d723ae68985797f3bb5f62f01b1723f138464c6f30f32b766eb0abf";
+                aarch64-apple-darwin = "b73b6a78c4e7171a8fe1b4bee5342273605c5c9a9a4997554c15bb3ce2753b6a";
+              };
+            };
+            rustPlatform = pkgs.makeRustPlatform toolchain;
             # Libraries winit/wgpu open at runtime with dlopen.
             runtimeLibs = with pkgs; [
               wayland
@@ -87,7 +51,7 @@
               libxrandr
             ];
           in
-          pkgs.rustPlatform.buildRustPackage {
+          rustPlatform.buildRustPackage {
             pname = "reshiki";
             inherit ((lib.importTOML ./Cargo.toml).package) version;
             # Documentation and the website are not build inputs; leaving them

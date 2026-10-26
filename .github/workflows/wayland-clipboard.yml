@@ -376,7 +376,7 @@ jobs:
             libegl1-mesa-dev libwayland-dev libxkbcommon-dev libfontconfig1-dev \
             libxcb-shape0-dev libxcb-xfixes0-dev libx11-dev libx11-xcb-dev \
             libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libudev-dev pkg-config
-      - run: rustup toolchain install 1.99.0 --profile minimal && rustup default 1.99.0
+      - run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: wayland-qa

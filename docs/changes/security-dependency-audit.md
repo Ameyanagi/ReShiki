@@ -216,12 +216,26 @@ available or those input paths change.
 
 ## Nix and native library scope
 
-The Nix lock refresh selects OpenSSL 3.5.9. The flake's shared overlay pins
-Google Brotli 1.2.1 and curl 8.23.0, and applies three upstream FreeType fixes
-for CVE-2026-50811 and CVE-2026-95512 on top of the existing Nix patches.
-Source hashes and patch hashes are fixed in `flake.nix`. All three supported
-Nix systems evaluate with the overlay; actual build and installed closure
-validation remains the Nix CI job's responsibility.
+The Nix lock selects OpenSSL 3.5.9. An earlier candidate also overrode Google
+Brotli, curl and FreeType throughout nixpkgs. That changed the inputs of CMake,
+LLVM, Rust and many other packages, causing fresh runners to rebuild them; the
+Linux x64 check reached its six-hour limit before building ReShiki.
+
+At the maintainer's request, the package now uses the stock pinned nixpkgs
+libraries and accepts the remaining curl, Brotli and FreeType advisory exposure
+in that build environment. The earlier global fixes are no longer asserted for
+this package graph. A build-tool finding does not by itself establish exposure
+in the shipped ReShiki executable; installed output and runtime dependencies
+require their own inspection.
+
+ReShiki uses the official prebuilt Rust compiler and Cargo **1.99.1**, the latest
+stable release on 26 October, with all three archive hashes pinned in the flake.
+The repository and workflow toolchain pins select the same version. The
+[Rust release notes](https://blog.rust-lang.org/2026/10/15/Rust-1.99.1/) describe
+the patch release. A preflight check rejects scheduled source LLVM, Rust compiler
+or Cargo builds; cached dependencies are allowed. Lock updates and fallback to
+source after a failed cache download are disabled. Actual package builds and
+the full installed-binary checks remain required on all three Nix systems.
 
 The installed Nix client and daemon require a separate check. The former
 `install-nix-action` pin deployed Nix 2.35.3, whose official signed runtime closures
