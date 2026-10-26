@@ -161,7 +161,7 @@ fn project(mut doc: Document) -> anyhow::Result<Document> {
     Ok(doc)
 }
 
-fn check_spacing(doc: &Document) -> anyhow::Result<()> {
+pub(super) fn check_spacing(doc: &Document) -> anyhow::Result<()> {
     ensure!(
         doc.reactions.len() == 1,
         "[reaction-ink] Actual reaction count changed"
@@ -406,6 +406,26 @@ mod tests {
         source.atom_labels.stereo = true;
         source.atoms[0].map_num = 123456;
         source.atoms[0].cip_label = Some("R".into());
+        // This contract projects rigid participant ink. Automatic indicators
+        // can move around the fixture's fixed captions when an atom translates.
+        source.atoms[0].display.mapping.offset = Some(Point::new(-80., -80.));
+        source.atoms[0].display.stereo.offset = Some(Point::new(200., -80.));
+        let part = &source.reactions[0].reactants[0];
+        let mut visible = source.clone();
+        visible.atom_labels.maps = false;
+        visible.atom_labels.stereo = false;
+        let atom_labels = extent(&visible, part).unwrap();
+        visible.atom_labels.maps = true;
+        assert!(
+            extent(&visible, part).unwrap().0 < atom_labels.0,
+            "map ink must extend the participant's left edge"
+        );
+        visible.atom_labels.maps = false;
+        visible.atom_labels.stereo = true;
+        assert!(
+            extent(&visible, part).unwrap().1 > atom_labels.1,
+            "stereo ink must extend the participant's right edge"
+        );
         let projected = project(source).unwrap();
         check_spacing(&projected).unwrap();
         let reaction = &projected.reactions[0];

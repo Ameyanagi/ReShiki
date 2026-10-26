@@ -101,6 +101,65 @@ fn drawing_diagnostics_report_every_field_difference() {
     assert!(differences(&actual, &actual, "drawing").is_empty());
 }
 
+#[tokio::test]
+async fn mapped_reaction_imports_keep_visible_ink_spacing() -> anyhow::Result<()> {
+    use reshiki::engine::{LocalEngine, Request};
+
+    for input in [
+        "[CH3:123456][OH:2].[OH2:3]>>[CH3:123456][OH:2].[OH2:3]",
+        "[CH3:123456][C@@H:2]([OH:3])[Cl:4].[OH2:5]>[NH3:6]>[CH3:123456][C@H:2]([OH:3])[Cl:4].[OH2:5]",
+    ] {
+        // Use the application's real import path, without the reference
+        // projection or injected indicator offsets. These are import defaults.
+        let doc = LocalEngine::default()
+            .request(Request::import("rsmi", input))
+            .await
+            .map_err(anyhow::Error::msg)
+            .with_context(|| format!("RSMI production import: {input}"))?
+            .document
+            .context("Missing imported reaction document")?;
+        assert!(doc.atom_labels.maps);
+        assert!(!doc.atom_labels.stereo);
+        assert!(
+            reshiki::atom_labels::indicators(&doc)
+                .iter()
+                .any(|indicator| indicator.text == "123456")
+        );
+        reaction_presentation::check_spacing(&doc)
+            .with_context(|| format!("RSMI visible map spacing: {input}"))?;
+        if input.contains('@') {
+            assert!(doc.atoms.iter().any(|atom| atom.cip_label.is_some()));
+        }
+
+        // The production writer emits a real V3000 RXN, whose imported drawing
+        // is measured independently of the RSMI drawing's original positions.
+        let rxn = reaction::write_rxn(&doc, None)
+            .with_context(|| format!("RXN production export: {input}"))?;
+        let imported =
+            reaction::read_rxn(&rxn).with_context(|| format!("RXN production read: {input}"))?;
+        let drawing = imported
+            .drawing()
+            .with_context(|| format!("RXN production drawing: {input}"))?;
+        let labels = drawing
+            .labels()
+            .with_context(|| format!("RXN production labels: {input}"))?;
+        let round_trip = drawing
+            .finish(labels)
+            .with_context(|| format!("RXN production finish: {input}"))?;
+        assert!(round_trip.atom_labels.maps);
+        assert!(!round_trip.atom_labels.stereo);
+        reaction_presentation::check_spacing(&round_trip)
+            .with_context(|| format!("RXN visible map spacing: {input}"))?;
+        let maps = |doc: &Document| {
+            let mut maps: Vec<_> = doc.atoms.iter().map(|atom| atom.map_num).collect();
+            maps.sort_unstable();
+            maps
+        };
+        assert_eq!(maps(&round_trip), maps(&doc));
+    }
+    Ok(())
+}
+
 #[test]
 fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
