@@ -1,0 +1,204 @@
+{
+  "status": "public_release_packages_demo_and_npm_verified",
+  "recorded_at_utc": "2026-10-26T18:48:51.955791+00:00",
+  "source_commit": "25ace5153fb112c636b7505eb319e029a00e09d7",
+  "source_tree": "b143e06c8a54b0c3674ef69cdc6200a525150038",
+  "tag": {
+    "name": "v0.13.1",
+    "object": "fe38e874d2e1604ff801b3f350a02a5deb1412b1"
+  },
+  "preserved_initial_attempt": {
+    "tag": "release-attempt/0.13.1-1",
+    "object": "160d9b17934c1ac72afa3eb6d7bdd959669a17f8",
+    "source_commit": "8d3493d92582d57b6ad2ee07506f331db3b5535c"
+  },
+  "release": {
+    "id": 424605576,
+    "url": "https://github.com/Ameyanagi/ReShiki/releases/tag/v0.13.1",
+    "published_at": "2026-10-26T18:20:11Z",
+    "draft": false,
+    "prerelease": false,
+    "latest_verified_at": "2026-10-26T18:33:58.033830+00:00",
+    "latest_endpoint": "https://api.github.com/repos/Ameyanagi/ReShiki/releases/latest"
+  },
+  "release_ci": {
+    "run": 40364101896,
+    "attempt": 2,
+    "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40364101896/attempts/2",
+    "package_builds_passed": 6,
+    "macos_signing_jobs_passed": 2,
+    "live_reference_shards_passed": 12,
+    "full_native_and_geometry_checks": "passed",
+    "uno_retry": {
+      "cause": "Attempt 1 apt mirror downloads exceeded the 15-minute job timeout before UNO tests.",
+      "job": 121761064580,
+      "job_seconds": 55,
+      "apt_seconds": 35,
+      "tests": 171,
+      "test_seconds": 0.82,
+      "result": "passed",
+      "previous_successes_carried_forward_with_original_timestamps": 38,
+      "source_changes": false,
+      "package_rebuilds": false
+    },
+    "conclusion": "success",
+    "successful_jobs": 42,
+    "expected_skips": 2,
+    "full_checks": {
+      "successful_jobs": 30,
+      "optional_capture_skips": 1
+    },
+    "docs_deployment": {
+      "run": 40378705715,
+      "source_commit": "25ace5153fb112c636b7505eb319e029a00e09d7",
+      "conclusion": "success"
+    }
+  },
+  "static_audit": {
+    "status": "static_checks_passed",
+    "public_assets_verified_against_github_sizes_and_digests": 11,
+    "sha256sums_matches_ten_packages": true,
+    "portable_archives": 6,
+    "checks": [
+      "Exact final commit/version and executable architecture",
+      "Sole application executable and prohibited-runtime inventory",
+      "Source-matching project notices and license attributions",
+      "Complete consolidated notice texts and internal text hashes"
+    ],
+    "installer_static_scope": "DMG/setup filenames, sizes and hashes only",
+    "signing_metadata_scope": "Archive manifest declarations; independent OS checks are recorded separately."
+  },
+  "macos_os_verification": {
+    "host": {
+      "cpu": "Apple M1",
+      "machine": "arm64",
+      "platform": "macOS-27.0.1-arm64-arm-64bit"
+    },
+    "developer_id_team": "XXN44W8X56",
+    "architectures": [
+      {
+        "architecture": "arm64",
+        "code_signature": "passed",
+        "notarization_staple_and_gatekeeper": "passed",
+        "zip_and_dmg_app_identical": true,
+        "app_bytes_unchanged": true,
+        "local_runtime_checks_passed": 2,
+        "execution_limit": null
+      },
+      {
+        "architecture": "x64",
+        "code_signature": "passed",
+        "notarization_staple_and_gatekeeper": "passed",
+        "zip_and_dmg_app_identical": true,
+        "app_bytes_unchanged": true,
+        "local_runtime_checks_passed": 0,
+        "execution_limit": "Rosetta unavailable; Intel app not executed"
+      }
+    ],
+    "arm64_runtime_scope": "ZIP and DMG-copied apps: 0.13.1 version and offline ethanol identity; empty PATH, unavailable Python/uv overrides, network denied.",
+    "native_intel_ci_packaging_and_signing_runtime_checks": "passed"
+  },
+  "web_demo": {
+    "status": "public_demo_verified",
+    "url": "https://reshiki.com/demo/",
+    "verified_at_utc": "2026-10-26T18:35:25.243986+00:00",
+    "version": "0.13.1",
+    "archive_asset_id": 679082403,
+    "archive_bytes": 23898836,
+    "archive_sha256": "943aa1d91911f3d4ad357aab2781d036da37b683f3ba6180dc24260dd191e6aa",
+    "live_index_byte_identical_to_archive": true,
+    "current_hashed_assets": 7,
+    "retained_baseline_assets_byte_identical": 7,
+    "unique_live_assets_http200_byte_identical": 13,
+    "source_attribution": "Successful release and exact-head docs workflow context; the archive has no embedded commit marker.",
+    "scope": "Deployed file identities; no new interactive browser, IME or graphical acceptance."
+  },
+  "npm": {
+    "status": "passed",
+    "verified_at_utc": "2026-10-26T18:48:00.316Z",
+    "package": "@ameyanagi/reshiki",
+    "version": "0.13.1",
+    "latest": "0.13.1",
+    "gitHead": "25ace5153fb112c636b7505eb319e029a00e09d7",
+    "registry_published_at": "2026-10-26T18:46:21.519Z",
+    "install": {
+      "exit_code": 0,
+      "scripts": "disabled",
+      "dependency_count": 1,
+      "isolated": true
+    },
+    "signature_and_provenance": {
+      "status": "verified",
+      "command": "npm audit signatures --json --include-attestations",
+      "exit_code": 0,
+      "invalid": [],
+      "missing": [],
+      "workflow": {
+        "ref": "refs/tags/v0.13.1",
+        "repository": "https://github.com/Ameyanagi/ReShiki",
+        "path": ".github/workflows/release.yml"
+      },
+      "invocation": "https://github.com/Ameyanagi/ReShiki/actions/runs/40364101896/attempts/2",
+      "transparency_log_index": "3493589821"
+    },
+    "runtime": {
+      "status": "passed",
+      "platform": "darwin",
+      "arch": "arm64",
+      "exported_version": "0.13.1",
+      "input_smiles": "CCO",
+      "output_smiles": "CCO",
+      "svg_bytes": 849,
+      "wasm_sha256": "6f2b468fc0d353b0c89729fb72a9b37b9ef94e1f6bb6035660821530f40de630",
+      "network": "denied by macOS sandbox-exec",
+      "scope": "Downloaded public npm package: actual WASM version, ethanol SMILES and SVG API smoke. No browser UI coverage."
+    }
+  },
+  "limits": [
+    "Static audit did not execute downloaded code, extract archives or mount images; macOS system verification did so separately.",
+    "Intel application was not executed locally because Rosetta was unavailable.",
+    "Package verification is not all-platform graphical acceptance or a new performance measurement."
+  ],
+  "source_receipts": [
+    {
+      "file": "evidence/release-0.13.1/public-metadata/release-0.13.1-final.json",
+      "sha256": "82893f34015fe795fa4f39a0055c63e862258b13104f3251fcce6d2b5f63f4fa"
+    },
+    {
+      "file": "evidence/release-0.13.1/public-metadata/public-assets-verification.json",
+      "sha256": "6d911158bbc1b3853f5045db241f1e23c1e671a91d073f1b3396a4748e13ef89"
+    },
+    {
+      "file": "evidence/release-0.13.1/public-metadata/public-static-audit.json",
+      "sha256": "43eed65e9f2e4fbdaa91769415022b0eda593ade5fd81222ccaf4da71d539c73"
+    },
+    {
+      "file": "evidence/release-0.13.1/published-macos/verification.json",
+      "sha256": "fb774eb1808ba720019f979d7d6eac8cf3e23a20ef2bcce7f70c80f829315e08"
+    },
+    {
+      "file": "evidence/release-0.13.1/completion-audit/pr-preparation/final-release-preflight.json",
+      "sha256": "9c1d0cd64ccf245f9eb33c7b9d4706bfcb20265069edc64ebd68bee5f4a09401"
+    },
+    {
+      "file": "evidence/release-0.13.1/final-tag-25ace515/uno-attempt2-success.json",
+      "sha256": "9ce90a6f126c928286085c1d8ad0441f1e37660b9df346479bc8421c1c430752"
+    },
+    {
+      "file": "evidence/release-0.13.1/public-metadata/latest-release-verification.json",
+      "sha256": "c9d5e67139134364442739192fd070aae4426a9f9aa8272911d696bea11ba9f1"
+    },
+    {
+      "file": "evidence/release-0.13.1/final-tag-25ace515/terminal-receipt.json",
+      "sha256": "32f7ea71dff3a45f7d6dafd201ea2cdd97e478a908ad939887c17de8c79c459d"
+    },
+    {
+      "file": "evidence/release-0.13.1/demo-public/verification-summary.json",
+      "sha256": "12bc846f1c4ba34465d4da084b6a8776b17ddef0c9e9ee0609df7321b8a4eaf1"
+    },
+    {
+      "file": "evidence/release-0.13.1/npm-public/verification-summary.json",
+      "sha256": "de889a3a17d15eef04a7cacbf8fccfdfe5c637eb1a267d2fa48d994750c7189a"
+    }
+  ]
+}

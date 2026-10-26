@@ -1,7 +1,7 @@
 # ReShiki 0.13.1 release validation
 
 This record distinguishes the release preparation, unsigned manual packages,
-and eventual signed public downloads. The checks below retain the source and
+and final public downloads. The checks below retain the source and
 package identities they actually tested. [Release notes](changes-0.13.1.md) ·
 [Release procedure](releasing.md).
 
@@ -10,9 +10,11 @@ package identities they actually tested. [Release notes](changes-0.13.1.md) ·
 The initial preparation and package reviews below retain their historical
 sources. All four [completion follow-ups](#completion-follow-ups) are merged at
 main checkpoint [`91ea325d`](https://github.com/Ameyanagi/ReShiki/commit/91ea325d8d2c3f9300c47eaefebd60c2590f2239),
-with applicable PR checks and comment review passed. Main integration CI and
-final publication remain pending; the final release commit and replacement tag
-have not been selected.
+with applicable PR checks and comment review passed. Final main checks and
+documentation passed at released source
+[`25ace515`](https://github.com/Ameyanagi/ReShiki/commit/25ace5153fb112c636b7505eb319e029a00e09d7).
+The [publication record](#published-source-and-verification) below identifies
+the final tag and verified public packages.
 
 All 28 QA source pull requests merged before release preparation
 [PR #583](https://github.com/Ameyanagi/ReShiki/pull/583) was merged. Its frozen head was
@@ -328,7 +330,7 @@ checked all seven image hashes and the equal app inventories, and inspected
 the drawing, model, crystal and PDF previews. This Mac ARM package-review gate
 passed with its recorded limits.
 
-This is historical package smoke at `3d3eed65`, not evidence for future signed
+This is historical package smoke at `3d3eed65`, not evidence for the final signed
 public assets. It does not repeat the 64-finding QA, artemisinin depiction,
 performance measurements, fresh conformer generation or external Office/
 ChemDraw paste. No Intel, Windows or Linux graphical runtime is claimed.
@@ -445,26 +447,70 @@ The four source heads retain original author **@Ameyanagi** in
 credit landed first in [#593](https://github.com/Ameyanagi/ReShiki/pull/593), merged
 as `eed6f76f9d37115bacf7e7fa6b5c948bc14d2438` after its own CI/comment review.
 All four source PRs are merged. The original 64-finding/28-group table above
-remains the original inventory; final main CI and release acceptance are still pending.
+remains the original inventory; its QA retains the source and measurement limits
+recorded above.
 
-## Published source and verification (pending)
+## Published source and verification
 
-At the **2026-10-26 16:12 UTC** checkpoint, the `v0.13.1` release API returned **404**.
-No replacement stable source/run or public release has been selected. No
-additional Release workflow was dispatched for these follow-ups. The old,
-unpublished `v0.13.1` tag still points to first-attempt source `8d3493d9`; it has
-not been replaced. Public downloads, local macOS
-signature/notarization verification, Gatekeeper assessment and web/npm results
-remain pending. The [Mac verifier contract](images/release-0.13.1/security-manual/public-macos-verifier-contract.json)
-requires `verify_macos.py HANDOFF.json --source FINAL_40_HEX_SHA`, with exactly
-one ARM and one Intel ZIP/DMG pair. There is no fixed `8d3493d9` source default.
-Syntax, help and invalid-input checks passed; no actual public assets have been
-processed. Execution still awaits the final tagged source and checksum-verified
-public downloads.
+[ReShiki 0.13.1](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.13.1),
+release `424605576`, was published at **2026-10-26 18:20:11 UTC** and verified as
+GitHub's Latest stable release. Its source is
+`25ace5153fb112c636b7505eb319e029a00e09d7`, tree
+`b143e06c8a54b0c3674ef69cdc6200a525150038`, with annotated tag object
+`fe38e874d2e1604ff801b3f350a02a5deb1412b1`. The initial tag object
+`160d9b17934c1ac72afa3eb6d7bdd959669a17f8` remains preserved as
+`release-attempt/0.13.1-1`, pointing to first-attempt source `8d3493d9`.
+
+The tagged [Release run 40364101896](https://github.com/Ameyanagi/ReShiki/actions/runs/40364101896/attempts/2)
+completed successfully with **42 successful jobs and two expected skips**,
+including all six package builds, both macOS signing jobs, all twelve
+live-reference shards and the full native/geometry checks. Attempt 1's sole adverse job timed
+out downloading LibreOffice apt packages before its UNO tests. A targeted retry
+passed all **171 UNO tests in 0.820 s**; the 38 previously successful jobs retained
+their original timestamps. No source changes or package rebuilds were needed.
+No additional manual Release rehearsal was dispatched.
+
+The [compact public verification receipt](images/release-0.13.1/public-verification.json)
+records the retained metadata and proof-file identities. All **eleven public
+assets** match GitHub's reported sizes and SHA-256 digests; `SHA256SUMS` matches
+the ten packages. Static inspection of all six portable archives verified the
+final source/version, actual executable architectures, single application
+executable, payload inventory and source-matching notices. DMG/setup static
+coverage is limited to filenames, sizes and hashes. Manifest signing fields
+are declarations; the operating-system checks below verify macOS signatures.
+
+Independent verification on an Apple M1 followed the retained
+[Mac verifier contract](images/release-0.13.1/security-manual/public-macos-verifier-contract.json)
+for both ARM and Intel ZIP/DMG pairs:
+Developer ID team **XXN44W8X56**, notarization, stapled tickets and Gatekeeper
+assessment passed. For each architecture the ZIP and copied-out DMG app have
+identical inventories, unchanged after verification. The ARM ZIP and DMG apps
+also passed version and offline ethanol checks with an empty executable search
+path, unavailable Python/uv overrides and network denied. **Intel was not
+executed locally because Rosetta was unavailable**; native Intel CI packaging
+and signing runtime checks passed. These checks do not establish graphical
+acceptance on every platform.
+
+The [live browser demo](https://reshiki.com/demo/) served **0.13.1** at
+2026-10-26 18:35 UTC after [Documentation run 40378705715](https://github.com/Ameyanagi/ReShiki/actions/runs/40378705715)
+passed at the final source. Its index matches the published archive. All seven
+current hashed JS/WASM assets and seven retained baseline assets match byte for
+byte; their thirteen unique live files returned HTTP 200. The archive has no
+embedded commit marker, so source attribution comes from the release and docs
+workflow context. This verifies deployed bytes rather than new interactive
+browser behavior.
+
+The public [npm package](https://www.npmjs.com/package/@ameyanagi/reshiki/v/0.13.1)
+and its `latest` dist-tag both resolve to **0.13.1**, with `gitHead` matching final
+source `25ace515`. An isolated install with lifecycle scripts disabled passed.
+Standard npm signature/provenance verification passed with no invalid or missing
+entries, identifying the final source, `v0.13.1` tag and Release attempt 2.
+The downloaded package's actual WASM returned version `0.13.1`, ethanol SMILES
+`CCO` and a valid SVG on macOS ARM64 with network denied. This is API smoke
+coverage; it does not add browser UI or all-platform runtime acceptance.
 
 Windows production signing remains disabled; Windows and Linux downloads are
-unsigned. Both macOS architectures require Developer ID signing, notarization,
-stapled tickets and Gatekeeper verification before publication.
+unsigned.
 
 ## Measurement and hardware limits
 
@@ -480,5 +526,5 @@ unverified. These measurements are not final package benchmarks, application
 FPS or all-frame maxima.
 
 This release record preserves the original scopes of those checks. Published
-package verification will not imply broad graphical acceptance on unavailable
+package verification does not imply broad graphical acceptance on unavailable
 hardware or new performance guarantees.
