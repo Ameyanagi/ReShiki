@@ -50,12 +50,16 @@ for (const name of names.length ? names : ["webkit", "chromium", "firefox"]) {
       const prevented = await page.evaluate((value) => {
         const target = document.activeElement;
         const data = new DataTransfer();
-        data.setData("text/plain", value);
         const event = new ClipboardEvent("paste", {
           clipboardData: data,
           bubbles: true,
           cancelable: true,
         });
+        // Firefox constructs a different DataTransfer for this event.
+        event.clipboardData.setData("text/plain", value);
+        if (event.clipboardData.getData("text/plain") !== value) {
+          throw new Error("Synthetic paste fixture lost its clipboard data");
+        }
         target.dispatchEvent(event);
         // Even an extra insertFromPaste must never insert the text twice.
         target.dispatchEvent(
