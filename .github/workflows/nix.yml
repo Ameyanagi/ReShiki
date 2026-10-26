@@ -33,7 +33,8 @@ jobs:
       matrix:
         runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-14]
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
+    # Security overlays rebuild LLVM/Rust on Linux before the app and install checks.
+    timeout-minutes: ${{ matrix.runner == 'macos-14' && 120 || 360 }}
     steps:
       - &actions_runtime
         name: Require a patched GitHub Actions Node runtime
