@@ -4,7 +4,23 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
-@Ameyanagi — October dependency and CI runtime security updates, under review
+Under review: @Ameyanagi — deterministic reaction-reference indicators and
+mapped RSMI/RXN coverage in [PR #589](https://github.com/Ameyanagi/ReShiki/pull/589).
+[QA evidence](https://github.com/Ameyanagi/ReShiki/blob/34a21da80846371927175ab43b83e2abf02ff95a/docs/changes/qa-reference-owned-ink.md).
+
+Under review: @Ameyanagi — responsive Commands targeting for large selections
+in [PR #590](https://github.com/Ameyanagi/ReShiki/pull/590).
+[Bounded native QA](https://github.com/Ameyanagi/ReShiki/blob/6e7722bba434e5c30688774ff27d5d11285c7138/docs/changes/qa-palette-targets.md).
+
+Under review: @Ameyanagi — portable synthetic-paste checks for Firefox,
+Chromium and WebKit in [PR #591](https://github.com/Ameyanagi/ReShiki/pull/591).
+[Synthetic-event evidence](https://github.com/Ameyanagi/ReShiki/blob/f1174fec418e61529cc7da32e83aae858c8cec87/docs/changes/qa-521.md).
+
+Under review: @Ameyanagi — reduced first-frame work before large-selection PDF
+feedback in [PR #592](https://github.com/Ameyanagi/ReShiki/pull/592).
+[Controlled M1 evidence and limits](https://github.com/Ameyanagi/ReShiki/blob/b5b22c98901a7341928454799a0b8cdc5c085e86/docs/changes/large-selection-copy-feedback-current-source.md).
+
+@Ameyanagi — October dependency and CI runtime security updates, merged
 in [PR #586](https://github.com/Ameyanagi/ReShiki/pull/586).
 [Security review and verification scope](changes/security-dependency-audit.md).
 
