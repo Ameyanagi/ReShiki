@@ -12,7 +12,7 @@ use iced::widget::text::{Span, Wrapping};
 use iced::widget::{Space, column, container, rich_text, row, scrollable, stack, text};
 use iced::{Alignment, Element, Font, Length, Task};
 use reshiki::{atom_text::Mode, document::Point, keyboard_drawing::Target as Hotspot};
-use std::cmp::Reverse;
+use std::{cmp::Reverse, collections::HashSet};
 
 pub(super) mod catalog;
 use catalog::{Category, Command, Need, Ring, Run};
@@ -144,6 +144,11 @@ struct Target {
     pointed: bool,
 }
 
+#[cfg(test)]
+thread_local! {
+    static TARGET_QUERIES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 impl Target {
     fn atom(&self) -> Option<u64> {
         match (self.atoms.as_slice(), self.bonds.is_empty()) {
@@ -168,24 +173,30 @@ impl App {
     }
 
     fn command_target(&self) -> Target {
+        #[cfg(test)]
+        TARGET_QUERIES.with(|count| count.set(count.get() + 1));
+
         let doc = &self.tab.doc;
         let selected = &self.tab.selected;
-        let target = Target {
-            atoms: selected
-                .iter()
-                .copied()
-                .filter(|id| doc.atom(*id).is_some())
-                .collect(),
-            bonds: doc
-                .bonds
-                .iter()
-                .filter(|b| selected.contains(&b.a) && selected.contains(&b.b))
-                .map(|b| (b.a, b.b))
-                .collect(),
-            pointed: false,
-        };
         if !selected.is_empty() {
-            return target;
+            // Sets answer membership only. Keep the selection's atom order and
+            // duplicates, and the document's bond order, as the original query did.
+            let atoms: HashSet<_> = doc.atoms.iter().map(|atom| atom.id).collect();
+            let ids: HashSet<_> = selected.iter().copied().collect();
+            return Target {
+                atoms: selected
+                    .iter()
+                    .copied()
+                    .filter(|id| atoms.contains(id))
+                    .collect(),
+                bonds: doc
+                    .bonds
+                    .iter()
+                    .filter(|bond| ids.contains(&bond.a) && ids.contains(&bond.b))
+                    .map(|bond| (bond.a, bond.b))
+                    .collect(),
+                pointed: false,
+            };
         }
         let pointed = if self.keyboard_target() {
             match self.tab.keyboard_drawing.target() {
@@ -698,6 +709,7 @@ impl App {
             return stack![base].into();
         }
         let state = &self.commands;
+        let target = self.command_target();
         let current = state.current();
         let name = match current {
             Some(command) => format!(
@@ -742,7 +754,7 @@ impl App {
                 command,
                 query,
                 position == state.selected,
-                self.command_unavailable(command).is_none(),
+                self.need_unavailable(command.need, &target).is_none(),
                 Message::Commands(Action::Run(index)),
             ));
         }
@@ -778,7 +790,11 @@ impl App {
         }
         // The selected command's description, or why it cannot run.
         let detail = current
-            .map(|c| self.command_unavailable(c).unwrap_or(&c.detail).to_owned())
+            .map(|c| {
+                self.need_unavailable(c.need, &target)
+                    .unwrap_or(&c.detail)
+                    .to_owned()
+            })
             .unwrap_or_default();
         let content = column![
             row![
