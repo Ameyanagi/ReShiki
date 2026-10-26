@@ -110,6 +110,33 @@ fn frame_center(canvas: &MoleculeCanvas<'_>) -> Point {
         .screen(World::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.), BOUNDS)
 }
 
+#[test]
+fn turning_requires_a_shown_model_and_reads_display_changes_without_cached_hits() {
+    let (mut doc, atoms) = drawing();
+    let state = State::default();
+    let point = models3d::frame_origin(&doc, &doc.models[0]).unwrap();
+    for display in [Display::ThreeD, Display::TwoD, Display::Both, Display::TwoD] {
+        doc.models[0].display = display;
+        let canvas = canvas(&doc, &atoms);
+        assert_eq!(
+            canvas.turn_target(&state, point).is_some(),
+            display != Display::TwoD,
+            "{display:?}"
+        );
+    }
+    doc.models.clear();
+    assert!(canvas(&doc, &atoms).turn_target(&state, point).is_none());
+    assert_eq!(
+        canvas(&doc, &atoms).mouse_interaction(
+            &state,
+            BOUNDS,
+            mouse::Cursor::Available(canvas(&doc, &atoms).camera.screen(point, BOUNDS)),
+        ),
+        mouse::Interaction::default(),
+        "a 2D molecule still uses ordinary selection interaction"
+    );
+}
+
 /// Press at `from`, move through `path`, release at the last point.
 fn drag(
     canvas: &MoleculeCanvas<'_>,

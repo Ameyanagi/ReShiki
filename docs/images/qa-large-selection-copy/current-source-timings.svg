@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="632" viewBox="0 0 1080 632" role="img" aria-labelledby="title desc">
+<title id="title">Controlled M1 PDF copy feedback measurements</title>
+<desc id="desc">Three warm native trials per build. Preparing median 64.027 to 30.036 milliseconds; completion 815.803 to 661.366 milliseconds. Accepted command to compositor submission return. Original M4, NO2 framing, physical input and scanout are not verified.</desc>
+<rect width="1080" height="632" rx="12" fill="#f6f9f8"/>
+<g font-family="Arial, Helvetica, sans-serif" fill="#183530">
+<text x="32" y="42" font-size="23" font-weight="700" text-anchor="start" fill="#183530">PDF copy feedback: matched current-source M1 run</text>
+<text x="32" y="69" font-size="15" font-weight="400" text-anchor="start" fill="#183530">Same 7,728-atom-record drawing; all 9,856 IDs selected</text>
+<text x="32" y="92" font-size="14" font-weight="400" text-anchor="start" fill="#183530">Accepted in-app command to successful compositor submission return (milliseconds)</text>
+<text x="32" y="118" font-size="13" font-weight="400" text-anchor="start" fill="#47615c">Bars: median. Circles: individual warm trials (n = 3). Panel scales differ.</text>
+<rect x="20" y="143" width="1040" height="166" rx="8" fill="#fff" stroke="#dce7e2"/>
+<text x="32" y="171" font-size="18" font-weight="700" text-anchor="start" fill="#183530">Preparing status</text>
+<text x="32" y="209" font-size="14" font-weight="600" text-anchor="start" fill="#183530">Baseline b956e463</text>
+<rect x="260" y="192" width="504.2100" height="23" rx="3" fill="#718294"/>
+<circle cx="764.2100" cy="198.5" r="3.2" fill="#fff" stroke="#183530" stroke-width="1.25"/>
+<circle cx="764.8347" cy="203.5" r="3.2" fill="#fff" stroke="#183530" stroke-width="1.25"/>
+<circle cx="759.6911" cy="208.5" r="3.2" fill="#fff" stroke="#183530" stroke-width="1.25"/>
+<text x="1038" y="210" font-size="18" font-weight="700" text-anchor="end" fill="#183530">64.027 ms</text>
+<text x="32" y="251" font-size="14" font-weight="600" text-anchor="start" fill="#183530">Final candidate</text>
+<rect x="260" y="234" width="236.5335" height="23" rx="3" fill="#147b6b"/>
+<circle cx="496.5335" cy="240.5" r="3.2" fill="#fff" stroke="#183530" stroke-width="1.25"/>
+<circle cx="497.7604" cy="245.5" r="3.2" fill="#fff" stroke="#183530" stroke-width="1.25"/>
+<circle cx="495.0359" cy="250.5" r="3.2" fill="#fff" stroke="#183530" stroke-width="1.25"/>
+<text x="1038" y="252" font-size="18" font-weight="700" text-anchor="end" fill="#183530">30.036 ms</text>
+<path d="M260 282H890" stroke="#91a69f"/>
+<path d="M260.0 282v5" stroke="#91a69f"/>
+<text x="260.0" y="302" font-size="12" font-weight="400" text-anchor="middle" fill="#47615c">0</text>
+<path d="M417.5 282v5" stroke="#91a69f"/>
+<text x="417.5" y="302" font-size="12" font-weight="400" text-anchor="middle" fill="#47615c">20</text>
+<path d="M575.0 282v5" stroke="#91a69f"/>
+<text x="575.0" y="302" font-size="12" font-weight="400" text-anchor="middle" fill="#47615c">40</text>
+<path d="M732.5 282v5" stroke="#91a69f"/>
+<text x="732.5" y="302" font-size="12" font-weight="400" text-anchor="middle" fill="#47615c">60</text>
+<path d="M890.0 282v5" stroke="#91a69f"/>
+<text x="890.0" y="302" font-size="12" font-weight="400" text-anchor="middle" fill="#47615c">80</text>
+<path d="M522.5000 180V267" stroke="#a36b1c" stroke-dasharray="4 4"/>
+<text x="529.5" y="179" font-size="12" font-weight="400" text-anchor="start" fill="#855619">33.3 ms reference</text>
+<rect x="20" y="330" width="1040" height="166" rx="8" fill="#fff" stroke="#dce7e2"/>
+<text x="32" y="358" font-size="18" font-weight="700" text-anchor="start" fill="#183530">Copy-complete status</text>
+<text x="32" y="396" font-size="14" font-weight="600" text-anchor="start" fill="#183530">Baseline b956e463</text>
+<rect x="260" y="379" width="513.9559" height="23" rx="3" fill="#718294"/>
+<circle cx="775.0526" cy="385.5" r="3.2" fill="#fff" stroke="#183530" stroke-width="1.25"/>
+<circle cx="768.1886" cy="390.5" r="3.2" fill="#fff" stroke="#183530" stroke-width="1.25"/>
+<circle cx="773.9559" cy="395.5" r="3.2" fill="#fff" stroke="#183530" stroke-width="1.25"/>
+<text x="1038" y="397" font-size="18" font-weight="700" text-anchor="end" fill="#183530">815.803 ms</text>
+<text x="32" y="438" font-size="14" font-weight="600" text-anchor="start" fill="#183530">Final candidate</text>
+<rect x="260" y="421" width="416.6608" height="23" rx="3" fill="#147b6b"/>
+<circle cx="676.6608" cy="427.5" r="3.2" fill="#fff" stroke="#183530" stroke-width="1.25"/>
+<circle cx="681.4461" cy="432.5" r="3.2" fill="#fff" stroke="#183530" stroke-width="1.25"/>
+<circle cx="674.6555" cy="437.5" r="3.2" fill="#fff" stroke="#183530" stroke-width="1.25"/>
+<text x="1038" y="439" font-size="18" font-weight="700" text-anchor="end" fill="#183530">661.366 ms</text>
+<path d="M260 469H890" stroke="#91a69f"/>
+<path d="M260.0 469v5" stroke="#91a69f"/>
+<text x="260.0" y="489" font-size="12" font-weight="400" text-anchor="middle" fill="#47615c">0</text>
+<path d="M417.5 469v5" stroke="#91a69f"/>
+<text x="417.5" y="489" font-size="12" font-weight="400" text-anchor="middle" fill="#47615c">250</text>
+<path d="M575.0 469v5" stroke="#91a69f"/>
+<text x="575.0" y="489" font-size="12" font-weight="400" text-anchor="middle" fill="#47615c">500</text>
+<path d="M732.5 469v5" stroke="#91a69f"/>
+<text x="732.5" y="489" font-size="12" font-weight="400" text-anchor="middle" fill="#47615c">750</text>
+<path d="M890.0 469v5" stroke="#91a69f"/>
+<text x="890.0" y="489" font-size="12" font-weight="400" text-anchor="middle" fill="#47615c">1000</text>
+<text x="32" y="526" font-size="13" font-weight="400" text-anchor="start" fill="#183530">M1; default native window; 100% zoom; Properties open; camera in a gallery gap.</text>
+<text x="32" y="550" font-size="13" font-weight="700" text-anchor="start" fill="#183530">Does not verify M4, original NO2 framing, physical-click latency, or GPU scanout.</text>
+<text x="32" y="576" font-size="12" font-weight="400" text-anchor="start" fill="#47615c">Retained frame-only logs, 2026-10-26. Warmup kept in JSON. No logger overhead subtracted.</text>
+<text x="32" y="600" font-size="12" font-weight="400" text-anchor="start" fill="#47615c">Source: b956e463 + production patch 2475e264. Measurement chart, not an application screenshot.</text>
+</g>
+</svg>

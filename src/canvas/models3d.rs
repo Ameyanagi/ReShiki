@@ -97,7 +97,17 @@ impl MoleculeCanvas<'_> {
     /// its edge, with its molecule the selection, and no Alt or copy key.
     /// Also returns what a click there selects.
     pub(super) fn turn_target(&self, state: &State, p: World) -> Option<(Vec<u64>, Vec<u64>)> {
-        if !self.tool.selects() || state.modifiers.alt() || command_held(state.modifiers) {
+        // Cursor interaction is queried repeatedly for one frame. A drawing
+        // without a shown model cannot turn, regardless of its selection.
+        if !self.tool.selects()
+            || state.modifiers.alt()
+            || command_held(state.modifiers)
+            || !self
+                .doc
+                .models
+                .iter()
+                .any(|model| model.display != models3d::Display::TwoD)
+        {
             return None;
         }
         let selected = models3d::whole_molecule(self.doc, self.selected)?;

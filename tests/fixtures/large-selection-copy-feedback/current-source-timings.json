@@ -1,0 +1,460 @@
+{
+  "source_base": "b956e46347f644372e3c01128b99ca64ac208e2d",
+  "production_patch_sha256": "2475e264f814a5ca82f7122a9c39b83fa287793486e518ec2febfa5f5ab84dc5",
+  "instrumentation_patch_sha256": "7af802254fee97971dec19c9ff5d3b0df9728f77c35013441b1f6f8c5f81d6ae",
+  "binary_sha256": {
+    "baseline": "ee08760662ee05038216075489c4d7d1f772fe058aa6bd2b6db4907ca3285f4f",
+    "final": "ad16240164c1a34b20256e0064c16a23e8e9887f15e23b824ccb1fe10c5bd0fe"
+  },
+  "fixture_sha256": "71229e202a3a0ba5765af5ac4bd94f4396613237f421cb4c828925c589b553da",
+  "host": "Apple M1, macOS 27.0.1, optimized native ARM64 Rust 1.99.0",
+  "conditions": "100% zoom, Properties open, all 9856 IDs selected, default native window, camera in a gallery gap; separate quiet sessions on the same host",
+  "warm_sequences": [
+    2,
+    3,
+    4
+  ],
+  "sample_definition": "Four copies retained per build; root-designated copy 1 warmup, copies 2-4 plotted. No logging overhead subtracted. Stage 1 requires full Preparing status with closed menus; first successful compositor return is the endpoint.",
+  "limits": [
+    "Starts at accepted in-app CUA/AX context-menu command, not physical input",
+    "Ends at successful compositor submission return, not GPU completion/scanout",
+    "Original M4, 1600x1000pt outer window and NO2-chain framing not reproduced",
+    "Phase-only diagnostics are separate and are not plotted",
+    "Three warm trials per build do not establish a latency distribution"
+  ],
+  "captures": {
+    "baseline": {
+      "raw_log_file": "current-frame-20261026T101423Z-70748.jsonl",
+      "raw_log_sha256": "bdd0e88679e1c464641b48d21ecc80b15f6572d536cb62ba1f73a149bd4644e9",
+      "trials": [
+        {
+          "sequence": 1,
+          "warm": false,
+          "dispatch_ns": 64647654500,
+          "preparing_draw_ns": 64710621292,
+          "preparing_present_ns": 64711943750,
+          "complete_present_ns": 65472640917,
+          "preparing_draw_serial": 1,
+          "complete_draw_serial": 6,
+          "preparing_ms": 64.28925,
+          "complete_ms": 824.986417,
+          "prior_emitted_logger_ns": 494708,
+          "prior_emitted_records": 3
+        },
+        {
+          "sequence": 2,
+          "warm": true,
+          "dispatch_ns": 94814825667,
+          "preparing_draw_ns": 94877731292,
+          "preparing_present_ns": 94878852333,
+          "complete_present_ns": 95632369458,
+          "preparing_draw_serial": 1,
+          "complete_draw_serial": 6,
+          "preparing_ms": 64.026666,
+          "complete_ms": 817.543791,
+          "prior_emitted_logger_ns": 455042,
+          "prior_emitted_records": 3
+        },
+        {
+          "sequence": 3,
+          "warm": true,
+          "dispatch_ns": 102632871417,
+          "preparing_draw_ns": 102695822958,
+          "preparing_present_ns": 102696977417,
+          "complete_present_ns": 103439520000,
+          "preparing_draw_serial": 1,
+          "complete_draw_serial": 6,
+          "preparing_ms": 64.106,
+          "complete_ms": 806.648583,
+          "prior_emitted_logger_ns": 475959,
+          "prior_emitted_records": 3
+        },
+        {
+          "sequence": 4,
+          "warm": true,
+          "dispatch_ns": 110277417375,
+          "preparing_draw_ns": 110339672417,
+          "preparing_present_ns": 110340870208,
+          "complete_present_ns": 111093220417,
+          "preparing_draw_serial": 1,
+          "complete_draw_serial": 6,
+          "preparing_ms": 63.452833,
+          "complete_ms": 815.803042,
+          "prior_emitted_logger_ns": 463583,
+          "prior_emitted_records": 3
+        }
+      ],
+      "warm_preparing_ms": [
+        64.026666,
+        64.106,
+        63.452833
+      ],
+      "warm_complete_ms": [
+        817.543791,
+        806.648583,
+        815.803042
+      ],
+      "preparing_median_ms": 64.026666,
+      "complete_median_ms": 815.803042
+    },
+    "final": {
+      "raw_log_file": "depth-frame-20261026T120100Z-20625.jsonl",
+      "raw_log_sha256": "6b9cec60794916f169b7dcdb9fa50fd8f0d693ed1fee6bc22d76958ae300205c",
+      "trials": [
+        {
+          "sequence": 1,
+          "warm": false,
+          "dispatch_ns": 32573030458,
+          "preparing_draw_ns": 32601351583,
+          "preparing_present_ns": 32602641166,
+          "complete_present_ns": 33244203458,
+          "preparing_draw_serial": 1,
+          "complete_draw_serial": 6,
+          "preparing_ms": 29.610708,
+          "complete_ms": 671.173,
+          "prior_emitted_logger_ns": 489333,
+          "prior_emitted_records": 3
+        },
+        {
+          "sequence": 2,
+          "warm": true,
+          "dispatch_ns": 39570171750,
+          "preparing_draw_ns": 39599066166,
+          "preparing_present_ns": 39600207750,
+          "complete_present_ns": 40231538125,
+          "preparing_draw_serial": 1,
+          "complete_draw_serial": 6,
+          "preparing_ms": 30.036,
+          "complete_ms": 661.366375,
+          "prior_emitted_logger_ns": 447917,
+          "prior_emitted_records": 3
+        },
+        {
+          "sequence": 3,
+          "warm": true,
+          "dispatch_ns": 46315025541,
+          "preparing_draw_ns": 46344042791,
+          "preparing_present_ns": 46345217333,
+          "complete_present_ns": 46983987625,
+          "preparing_draw_serial": 1,
+          "complete_draw_serial": 6,
+          "preparing_ms": 30.191792,
+          "complete_ms": 668.962084,
+          "prior_emitted_logger_ns": 473334,
+          "prior_emitted_records": 3
+        },
+        {
+          "sequence": 4,
+          "warm": true,
+          "dispatch_ns": 53110403416,
+          "preparing_draw_ns": 53139072791,
+          "preparing_present_ns": 53140249250,
+          "complete_present_ns": 53768586708,
+          "preparing_draw_serial": 1,
+          "complete_draw_serial": 6,
+          "preparing_ms": 29.845834,
+          "complete_ms": 658.183292,
+          "prior_emitted_logger_ns": 494250,
+          "prior_emitted_records": 3
+        }
+      ],
+      "warm_preparing_ms": [
+        30.036,
+        30.191792,
+        29.845834
+      ],
+      "warm_complete_ms": [
+        661.366375,
+        668.962084,
+        658.183292
+      ],
+      "preparing_median_ms": 30.036,
+      "complete_median_ms": 661.366375
+    }
+  },
+  "pdf_equivalence": {
+    "method": "Every indirect object and full trailer; dictionary keys sorted; encoded/decoded stream bytes hashed. Compare resolved trailer graph plus a multiplicity-preserving sorted hash of every object-rooted resolved graph; cycles use ancestor depth. This ignores dictionary order, physical serialization order, object IDs and xref file offsets.",
+    "records": {
+      "before": {
+        "file_bytes": 776466,
+        "file_sha256": "97b1a4b3cbef662aa29db317dbac20f6d244a210fd082393a6f4021810c13c39",
+        "pages": 1,
+        "indirect_objects": 16,
+        "canonical_by_id_sha256": "3c13c6054a6ca53c17ca10925f18dccd297af63006de81175305fdbb9d14c43d",
+        "resolved_graph_sha256": "1c7d167d99c1417973f0f2d24cc9b7aa6dc44d5eff40a3d619c81fe5622a3eb2",
+        "render_png_sha256": "8408191eabcf3be7a01bc44c607d144352ae1aab95b4c458d67dbcfaaca9b0f0"
+      },
+      "after": {
+        "file_bytes": 776466,
+        "file_sha256": "9323937c63731a2e96a12da44f4aecb62e7b15a1dbae8eb30ef3b809a0329ed6",
+        "pages": 1,
+        "indirect_objects": 16,
+        "canonical_by_id_sha256": "f066f660463d7a07511a136ba9e3add57a4343c807b0a604e014644d79f0d02f",
+        "resolved_graph_sha256": "1c7d167d99c1417973f0f2d24cc9b7aa6dc44d5eff40a3d619c81fe5622a3eb2",
+        "render_png_sha256": "8408191eabcf3be7a01bc44c607d144352ae1aab95b4c458d67dbcfaaca9b0f0"
+      }
+    },
+    "raw_pdf_equal": false,
+    "raw_differing_byte_count": 51278,
+    "canonical_objects_by_id_equal": false,
+    "resolved_graphs_equal": true,
+    "visual_review": "Candidate overview and detail independently inspected by worker and maintainer; no changed or missing drawing content observed.",
+    "renders": {
+      "overview": {
+        "dimensions": [
+          1600,
+          1280
+        ],
+        "rgba_bytes_equal": true,
+        "rgba_sha256": "5fcca86aec230a6de7d7d0ec9cc45e762efaab49ec67029802bd437e8e208ad0",
+        "baseline_png_sha256": "8408191eabcf3be7a01bc44c607d144352ae1aab95b4c458d67dbcfaaca9b0f0",
+        "final_png_sha256": "8408191eabcf3be7a01bc44c607d144352ae1aab95b4c458d67dbcfaaca9b0f0",
+        "png_bytes_equal": true,
+        "pixel_diff_count": 0
+      },
+      "detail": {
+        "dimensions": [
+          1840,
+          1470
+        ],
+        "rgba_bytes_equal": true,
+        "rgba_sha256": "df6f9b1cba522d91cb559f5991510c649776e6137edcf2c4b7cd92845ee70b8a",
+        "baseline_png_sha256": "9e83217112962c7fce49fcbc6a2d72184f51bf8c12cfb802095083f6f53a33fc",
+        "final_png_sha256": "9e83217112962c7fce49fcbc6a2d72184f51bf8c12cfb802095083f6f53a33fc",
+        "png_bytes_equal": true,
+        "pixel_diff_count": 0
+      }
+    },
+    "identity_receipt_sha256": "a90a020b27ab484f6934f2cad7e8c78397d5105f583780e24995697c2a6e9935",
+    "pixel_receipt_sha256": "3f18ef48f229e8e04709f473d7e17914281ff1b68c043795984b1aa708b61cdf"
+  },
+  "linux_functional_validation": {
+    "receipt_file": "amearch-performance/remote/final-receipt.json",
+    "receipt_sha256": "bdb271fbc17504c0267aa0251181a8c1c40d4c879c11aa8b80a8f2acfe6ac80f",
+    "base": "b956e46347f644372e3c01128b99ca64ac208e2d",
+    "production_patch_sha256": "2475e264f814a5ca82f7122a9c39b83fa287793486e518ec2febfa5f5ab84dc5",
+    "target": "x86_64-unknown-linux-gnu",
+    "rustc": "1.99.0",
+    "profile": "release",
+    "offline": true,
+    "jobs": 8,
+    "test_threads": 2,
+    "passed": 77,
+    "ignored": 2,
+    "ignored_disposition": "Two existing opt-in real renderer tests in app::models3d; no additional skip or ignore flag.",
+    "scope": "Focused Linux functional checks; no GUI interaction or isolated performance claim.",
+    "steps": [
+      {
+        "name": "workspace-selection",
+        "command": [
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "--release",
+          "--bin",
+          "reshiki",
+          "app::workspace::selection_tests",
+          "--",
+          "--nocapture",
+          "--test-threads=2"
+        ],
+        "exit_code": 0,
+        "counts": {
+          "status": "ok",
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 1409
+        },
+        "log": "workspace-selection.log",
+        "log_sha256": "b569cd61e63546a403fb0873cd3c08d813da809bff420259198be4200c0e6d43"
+      },
+      {
+        "name": "canvas-models",
+        "command": [
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "--release",
+          "--bin",
+          "reshiki",
+          "canvas::models3d::tests",
+          "--",
+          "--nocapture",
+          "--test-threads=2"
+        ],
+        "exit_code": 0,
+        "counts": {
+          "status": "ok",
+          "passed": 17,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 1398
+        },
+        "log": "canvas-models.log",
+        "log_sha256": "0cc86b778308d7baa88cab348bfaac2192af50e271e362c123791f11266e802e"
+      },
+      {
+        "name": "app-models",
+        "command": [
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "--release",
+          "--bin",
+          "reshiki",
+          "app::models3d::tests",
+          "--",
+          "--nocapture",
+          "--test-threads=2"
+        ],
+        "exit_code": 0,
+        "counts": {
+          "status": "ok",
+          "passed": 36,
+          "failed": 0,
+          "ignored": 2,
+          "filtered": 1377
+        },
+        "log": "app-models.log",
+        "log_sha256": "572c8856f560f1cc5a203aad8dcb4c0bc9dbb61d55850687cfd663b837b1e6ee"
+      },
+      {
+        "name": "pdf-frame-ownership",
+        "command": [
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "--release",
+          "--bin",
+          "reshiki",
+          "app::clipboard::frame_tests",
+          "--",
+          "--nocapture",
+          "--test-threads=2"
+        ],
+        "exit_code": 0,
+        "counts": {
+          "status": "ok",
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 1407
+        },
+        "log": "pdf-frame-ownership.log",
+        "log_sha256": "c853dc2c6aa96dd199b939057c1c70f25d33a1fd22fb8d3e5fac37d606fe52a1"
+      },
+      {
+        "name": "model-contrast",
+        "command": [
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "--release",
+          "-p",
+          "reshiki-model",
+          "--lib",
+          "canvas_theme::contrast_tests",
+          "--",
+          "--nocapture",
+          "--test-threads=2"
+        ],
+        "exit_code": 0,
+        "counts": {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 865
+        },
+        "log": "model-contrast.log",
+        "log_sha256": "0ff60127bc6968647a511cc46e2383147e6b8bba37f34a1bdbe615112a02887e"
+      },
+      {
+        "name": "model-depth",
+        "command": [
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "--release",
+          "-p",
+          "reshiki-model",
+          "--lib",
+          "depth_appearance::tests",
+          "--",
+          "--nocapture",
+          "--test-threads=2"
+        ],
+        "exit_code": 0,
+        "counts": {
+          "status": "ok",
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 861
+        },
+        "log": "model-depth.log",
+        "log_sha256": "910725ef9841cbe3636da3dc6a7fb6b68327b49e7bff996fa4e4e4fe474515bc"
+      }
+    ]
+  },
+  "local_static_checks": {
+    "jobs": 2,
+    "target_cache": "Exclusive APFS clone; copied workspace and iced_winit artifacts invalidated before compilation",
+    "checks": [
+      {
+        "name": "Rust formatting",
+        "command": "cargo fmt --all --check",
+        "result": "pass",
+        "log_file": "final-cargo-fmt.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "Native Clippy",
+        "command": "cargo clippy --workspace --lib --bins --all-features --locked --offline -- -D warnings",
+        "result": "pass",
+        "log_file": "final-native-clippy.log",
+        "log_sha256": "4608da66e97b16ddf60a9ad85d608682354c193d4f1ef5d832dfe5411694cd2f"
+      },
+      {
+        "name": "WASM Clippy",
+        "command": "cargo clippy -p reshiki-web -p reshiki -p reshiki-web-worker --lib --bin reshiki --target wasm32-unknown-unknown --locked --offline -- -D warnings",
+        "result": "pass",
+        "log_file": "final-wasm-clippy.log",
+        "log_sha256": "45d0e1ff332dce271344b7dcd03deb58f2faf787224f0cf06f10d0f52d56b568"
+      },
+      {
+        "name": "JavaScript lint",
+        "command": "oxlint --deny-warnings website integrations/office packages/editor",
+        "result": "pass",
+        "log_file": "final-js-lint.log",
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "Documentation tree",
+        "command": "bun scripts/check_docs_tree.mjs",
+        "result": "pass",
+        "log_file": "final-docs-tree.log",
+        "log_sha256": "739b6a72ae45d08aeadafbe49ecc03752e5c0a988de5cce83ef00b82c5cd89a1"
+      },
+      {
+        "name": "Changed-document formatting",
+        "command": "oxfmt --check docs/changes/large-selection-copy-feedback-current-source.md tests/fixtures/large-selection-copy-feedback/current-source-timings.json",
+        "result": "pass",
+        "log_file": "final-docs-format.log",
+        "log_sha256": "22ea510c79cddb3db1c14512bdb497497e6df1387612b634eec111b17e19e645"
+      }
+    ],
+    "existing_dependency_notices": [
+      "iced_winit deprecated UnboundedReceiver::try_next",
+      "block 0.1.6 future-incompatibility notice"
+    ],
+    "formatting_scope": "Fixture JSON is excluded by the existing oxfmt policy and is separately parsed as JSON."
+  }
+}

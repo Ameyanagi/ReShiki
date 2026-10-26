@@ -190,6 +190,16 @@ impl App {
         Some((atoms, index))
     }
 
+    /// An existing model only. Unmodeled molecules still use `selected_model`
+    /// for the Structure section's generation controls.
+    pub(super) fn selected_existing_model(&self) -> Option<&models3d::Model3d> {
+        if self.tab.doc.models.is_empty() {
+            return None;
+        }
+        self.selected_model()
+            .and_then(|(_, index)| self.tab.doc.models.get(index?))
+    }
+
     fn idle(&self) -> bool {
         !self.tab.busy && self.tab.optimization.is_none() && !self.tab.drawing_edit_active()
     }
@@ -656,7 +666,7 @@ impl App {
 impl App {
     /// Style, look and view of the selected molecule's model while it is shown.
     pub(super) fn model_section(&self) -> Option<Element<'_, Message>> {
-        let model = self.tab.doc.models.get(self.selected_model()?.1?)?;
+        let model = self.selected_existing_model()?;
         if model.display == Display::TwoD {
             return None;
         }

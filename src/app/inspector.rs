@@ -621,8 +621,7 @@ impl App {
     }
 
     fn selected_visible_model(&self) -> bool {
-        self.selected_model()
-            .and_then(|(_, index)| self.tab.doc.models.get(index?))
+        self.selected_existing_model()
             .is_some_and(|model| model.display != reshiki::models3d::Display::TwoD)
     }
 
@@ -644,8 +643,7 @@ impl App {
         ]
         .spacing(10);
         if self
-            .selected_model()
-            .and_then(|(_, index)| self.tab.doc.models.get(index?))
+            .selected_existing_model()
             .is_some_and(|model| model.display == reshiki::models3d::Display::ThreeD)
         {
             body = body.push(

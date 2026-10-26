@@ -999,6 +999,58 @@ fn the_model_section_shows_only_while_the_model_does() {
     assert_eq!(app.tab.doc.models[0].style, Style::BallStick);
 }
 
+#[test]
+fn existing_model_queries_track_add_remove_and_keep_unmodeled_generation_controls() {
+    let (mut app, atoms) = with_model(Display::Both);
+    let water = app.tab.doc.atoms[3].id;
+    let stored = app.tab.doc.models.pop().unwrap();
+    let history = frames(&app);
+    for display in [
+        None,
+        Some(Display::Both),
+        Some(Display::TwoD),
+        Some(Display::ThreeD),
+        None,
+    ] {
+        app.tab.doc.models.clear();
+        if let Some(display) = display {
+            let mut model = stored.clone();
+            model.display = display;
+            app.tab.doc.models.push(model);
+        }
+        for selected in [
+            vec![],
+            atoms.clone(),
+            vec![atoms[1]],
+            vec![atoms[0], water],
+            vec![water],
+        ] {
+            app.tab.selected = selected;
+            let before = app.tab.doc.clone();
+            let expected = app
+                .selected_model()
+                .and_then(|(_, index)| app.tab.doc.models.get(index?));
+            assert_eq!(app.selected_existing_model(), expected);
+            assert_eq!(
+                app.model_section().is_some(),
+                expected.is_some_and(|model| model.display != Display::TwoD)
+            );
+            assert_eq!(app.tab.doc, before);
+            assert_eq!(frames(&app), history);
+        }
+        // Even with no stored model, the selected molecule must still offer
+        // Show as 3D/Both. It is not an existing-model query.
+        app.tab.selected = vec![water];
+        assert_eq!(app.selected_model(), Some((vec![water], None)));
+        assert!(app.structure_section().is_some());
+        if display.is_none() {
+            app.tab.selected = atoms.clone();
+            assert_eq!(app.selected_model(), Some((atoms.clone(), None)));
+            assert!(app.structure_section().is_some());
+        }
+    }
+}
+
 #[tokio::test]
 #[ignore = "Opt-in real renderer 3D model section controls"]
 async fn model_section_controls_change_the_model() -> Result<(), String> {
