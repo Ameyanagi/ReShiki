@@ -392,6 +392,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Nix runtime installation/attestation failed.' }
       - name: Reject source LLVM and Rust toolchain builds
         shell: pwsh
+        env:
+          RESHIKI_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+          RESHIKI_RUNNER_OS: ${{ runner.os }}
+          RESHIKI_RUNNER_ARCH: ${{ runner.arch }}
         run: |
           . ./scripts/check_actions_runtime.ps1
           & $node --test .github/scripts/check_nix_build_plan.test.mjs

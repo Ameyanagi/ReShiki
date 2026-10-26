@@ -115,6 +115,38 @@ class CIRuntimePolicyTests(unittest.TestCase):
                 checked += 1
         self.assertGreaterEqual(checked, 20, "Lost workflow/job coverage")
 
+    def test_dot_sourced_runtime_guards_receive_explicit_runner_metadata(self):
+        expected = {
+            "RESHIKI_RUNNER_ENVIRONMENT": "${{ runner.environment }}",
+            "RESHIKI_RUNNER_OS": "${{ runner.os }}",
+            "RESHIKI_RUNNER_ARCH": "${{ runner.arch }}",
+        }
+        checked = 0
+        for path in sorted((ROOT / ".github/workflows").glob("*.yml")):
+            text = path.read_text(encoding="utf-8")
+            for step in re.split(r"(?m)^      - ", text)[1:]:
+                attributes, _, body = step.partition("\n        run:")
+                if not re.search(
+                    r"(?m)^\s*\.\s+(?:\./)?scripts/check_actions_runtime\.ps1(?:\s|$)", body
+                ):
+                    continue
+                environment = re.search(
+                    r"(?m)^        env:\n((?:          [^\n]*(?:\n|$))*)", attributes
+                )
+                values = dict(
+                    re.findall(
+                        r"(?m)^          ([A-Z_]+): ([^\n]+)$",
+                        environment[1] if environment else "",
+                    )
+                )
+                for name, value in expected.items():
+                    with self.subTest(
+                        workflow=path.name, step=attributes.splitlines()[0], env=name
+                    ):
+                        self.assertEqual(values.get(name), value)
+                checked += 1
+        self.assertGreaterEqual(checked, 2, "Lost dot-sourced runtime guard coverage")
+
     def test_bootstrap_pins_and_pre_step_runtime_boundaries(self):
         policy = json.loads((ROOT / "scripts/actions_node_bootstrap.json").read_text())
         self.assertEqual(policy["node"], "24.22.1")
