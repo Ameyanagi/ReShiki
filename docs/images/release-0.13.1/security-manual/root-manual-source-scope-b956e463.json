@@ -1,0 +1,23 @@
+{
+  "verified_utc": "2026-10-26T07:33:20.486719+00:00",
+  "manual_package_source": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3",
+  "current_pr_source": "b956e46347f644372e3c01128b99ca64ac208e2d",
+  "manual_tree": "3458fc8e635f6cccb9d60bf9964d478c7c7db307",
+  "current_tree": "230ef043ec3eddf4b4e8f9ec2bc302adde2fda4b",
+  "all_changed_paths": [
+    ".github/actions/runtime-manifests.json",
+    ".github/workflows/nix.yml",
+    "docs/changes/security-dependency-audit.md",
+    "scripts/nix_ci_runtime.json",
+    "scripts/nix_ci_runtime.mjs",
+    "tests/nix_ci_runtime.test.mjs",
+    "tests/test_ci_runtime_policy.py"
+  ],
+  "application_source_locks_release_packaging_unchanged": true,
+  "manual_run": 40264759989,
+  "limits": [
+    "Manual artifacts remain stamped 3d3eed65; the current whole repository tree differs.",
+    "New scripts/tests are included by the Nix source fileset, so no identical derivation/output/package bytes are asserted.",
+    "Current Nix full builds and later public package/source/signature verification remain required."
+  ]
+}

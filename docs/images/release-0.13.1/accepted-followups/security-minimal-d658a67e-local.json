@@ -1,0 +1,77 @@
+{
+  "source_receipt": "evidence/release-0.13.1/completion-audit/amearch-security-minimal/remote/final-receipt.json",
+  "source_receipt_sha256": "8d1e0c26329f843822e2f2dd197904ae817f2e829bff3f2472f0e0c59d666021",
+  "status": "passed",
+  "source_commit": "d658a67e82735aaaaccab4173b8e8dbfc7269a48",
+  "git_tree": "2347a219d7ae453cf1dd312f2b520d44046501b4",
+  "source_archive_sha256": "686e76ce2d64a85ebb132a719344491962734d78c01c97cecefa05edd8a604cc",
+  "full_flake_check": {
+    "command": [
+      "bash",
+      "-e",
+      "-o",
+      "pipefail",
+      "-c",
+      "nix flake check -L --no-write-lock-file --no-update-lock-file --option fallback false"
+    ],
+    "cwd": "/qa/security-minimal",
+    "started_utc": "2026-10-26T14:28:54.821917+00:00",
+    "finished_utc": "2026-10-26T14:35:15.591344+00:00",
+    "elapsed_seconds": 380.76945724501275,
+    "exit": 0
+  },
+  "application": {
+    "doInstallCheck": true,
+    "drv": "/nix/store/wq925yqsijz19xbjbdvhdr2kg20svja6-reshiki-0.13.1.drv",
+    "src": "/nix/store/ramwvcb71x6gadn1bw2lmnbmbsfabgsn-source",
+    "out": "/nix/store/q1dr2bb064kc8p8lhlwd7blc63glw622-reshiki-0.13.1"
+  },
+  "application_binary_sha256": "9d358565e37ff007ceec71aba657604d7fd2628091cc283fa8a292509f741079",
+  "actual_started_derivations": ["/nix/store/wq925yqsijz19xbjbdvhdr2kg20svja6-reshiki-0.13.1.drv"],
+  "actual_source_toolchain_builds": 0,
+  "install_checks_observed_in_full_and_store_logs": true,
+  "all_three_plans": {
+    "x86_64-linux": {
+      "exit": 0,
+      "scheduled_builds_header": 1,
+      "cross_target_binding_only": false,
+      "plan_sha256": "c3a151c1e7bf311330c646c157f72d7044b8435afd841b45ab4746ce0eeb0a02"
+    },
+    "aarch64-linux": {
+      "exit": 0,
+      "scheduled_builds_header": 283,
+      "cross_target_binding_only": true,
+      "plan_sha256": "949930b90ff501a8d781b0c35ec17dbb6d2ea4d6ccf582a94c4d5ce24ed0fdf6"
+    },
+    "aarch64-darwin": {
+      "exit": 0,
+      "scheduled_builds_header": 299,
+      "cross_target_binding_only": true,
+      "plan_sha256": "7e18b19e49f0092bd86ec80875da35eb2c472a888ce85c3a8d856f320a36a145"
+    }
+  },
+  "guard_controls": {
+    "cases": 8,
+    "passed": 8
+  },
+  "cache_policy": "Reused existing authenticated Nix runtime and store cache; not cold",
+  "scope": "Task-owned x86_64 Linux Ubuntu container, existing classic daemon and sandbox=false. ARM Linux/macOS guarded real plans only. No GUI/host installation/hosted CI claim.",
+  "standard_vendor_action_execution_claim": false,
+  "python_validation": {
+    "source": "cbf9949d8d62b878f80b3086a0caec35f7894302",
+    "total": 218,
+    "passed": 213,
+    "skipped": 5,
+    "scope": "unit/regression suite; includes mocked package/Windows fixtures, not actual package acceptance"
+  },
+  "node_sandbox_cases_passed": 6,
+  "normal_hooks": "applicable normal hooks passed",
+  "hosted_checkpoint": {
+    "reported_by": "integrating maintainer",
+    "runtime_setup": "passed on all three Nix runners",
+    "passed": ["Documentation", "contribution-license", "Wayland"],
+    "pending": ["full Nix", "Checks"],
+    "merge_or_release_clearance": false
+  },
+  "historical_receipts": "Original receipts are retained unchanged; prior custom attestation/compiler-only/pre-minimal evidence does not describe the final minimal CI."
+}

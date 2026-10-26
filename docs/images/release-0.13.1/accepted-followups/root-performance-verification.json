@@ -1,0 +1,23 @@
+{
+  "verified_local_files": 23,
+  "remote_only_binaries": [
+    {
+      "file": "bin/app-tests",
+      "bytes": 88756192,
+      "sha256": "a30992effdbab7a609289fe2f1c29744a823e38c64eb5e7b10609795028df44b"
+    },
+    {
+      "file": "bin/model-tests",
+      "bytes": 31716384,
+      "sha256": "316411df412c96be595ab5d1dec90b4c5c8c6eb6ced9c85d796f0a5f07977414"
+    }
+  ],
+  "focused_passed": 77,
+  "focused_ignored": 2,
+  "source_files_verified": 14,
+  "base": "b956e46347f644372e3c01128b99ca64ac208e2d",
+  "patch_sha256": "2475e264f814a5ca82f7122a9c39b83fa287793486e518ec2febfa5f5ab84dc5",
+  "receipt_sha256": "bdb271fbc17504c0267aa0251181a8c1c40d4c879c11aa8b80a8f2acfe6ac80f",
+  "verification": "Root independently recomputed 23 local manifest hashes, parsed all six test log counts, compared all 14 final source hashes; separately rehashed both remote test ELFs over authenticated amearch SSH and confirmed exact manifest identity.",
+  "remote_binaries_verified": true
+}

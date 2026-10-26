@@ -1,0 +1,160 @@
+{
+  "source": "8d3493d92582d57b6ad2ee07506f331db3b5535c",
+  "tag_at_first_attempt": "v0.13.1",
+  "run": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829",
+  "run_id": 40246080829,
+  "conclusion": "failure",
+  "failed_reference_jobs": 9,
+  "failed_job_logs_retained": 9,
+  "failed_job_inventory_complete": true,
+  "distinct_top_level_failed_tests": 16,
+  "jobs": [
+    {
+      "id": 121327990735,
+      "name": "build (ubuntu-22.04, linux-x64, x86_64-unknown-linux-gnu, 3.12)",
+      "conclusion": "success",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121327990735"
+    },
+    {
+      "id": 121327990751,
+      "name": "build (macos-15-intel, macos-x64, x86_64-apple-darwin, 3.12, true)",
+      "conclusion": "success",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121327990751"
+    },
+    {
+      "id": 121327990753,
+      "name": "build (ubuntu-24.04-arm, linux-arm64, aarch64-unknown-linux-gnu, 3.12)",
+      "conclusion": "success",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121327990753"
+    },
+    {
+      "id": 121327990768,
+      "name": "build (windows-11-arm, windows-arm64, aarch64-pc-windows-msvc, arm64, cpython-3.12-windows-x86_64...",
+      "conclusion": "success",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121327990768"
+    },
+    {
+      "id": 121327990794,
+      "name": "build (macos-14, macos-arm64, aarch64-apple-darwin, 3.12)",
+      "conclusion": "success",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121327990794"
+    },
+    {
+      "id": 121327990843,
+      "name": "build (windows-2022, windows-x64, x86_64-pc-windows-msvc, x64, cpython-3.12-windows-x86_64-none)",
+      "conclusion": "success",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121327990843"
+    },
+    {
+      "id": 121328054141,
+      "name": "reference / reference (1, ubuntu-22.04, x86_64-unknown-linux-gnu, 3.12)",
+      "conclusion": "failure",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121328054141"
+    },
+    {
+      "id": 121328054156,
+      "name": "reference / reference (2, windows-2022, x86_64-pc-windows-msvc, x64, cpython-3.12-windows-x86_64-none)",
+      "conclusion": "failure",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121328054156"
+    },
+    {
+      "id": 121328054158,
+      "name": "reference / reference (1, macos-14, aarch64-apple-darwin, 3.12)",
+      "conclusion": "failure",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121328054158"
+    },
+    {
+      "id": 121328054160,
+      "name": "reference / reference (3, ubuntu-22.04, x86_64-unknown-linux-gnu, 3.12)",
+      "conclusion": "success",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121328054160"
+    },
+    {
+      "id": 121328054165,
+      "name": "reference / reference (0, ubuntu-22.04, x86_64-unknown-linux-gnu, 3.12)",
+      "conclusion": "failure",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121328054165"
+    },
+    {
+      "id": 121328054181,
+      "name": "reference / reference (3, windows-2022, x86_64-pc-windows-msvc, x64, cpython-3.12-windows-x86_64-none)",
+      "conclusion": "success",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121328054181"
+    },
+    {
+      "id": 121328054185,
+      "name": "reference / reference (3, macos-14, aarch64-apple-darwin, 3.12)",
+      "conclusion": "success",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121328054185"
+    },
+    {
+      "id": 121328054189,
+      "name": "reference / reference (2, macos-14, aarch64-apple-darwin, 3.12)",
+      "conclusion": "failure",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121328054189"
+    },
+    {
+      "id": 121328054190,
+      "name": "reference / reference (0, windows-2022, x86_64-pc-windows-msvc, x64, cpython-3.12-windows-x86_64-none)",
+      "conclusion": "failure",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121328054190"
+    },
+    {
+      "id": 121328054205,
+      "name": "reference / reference (0, macos-14, aarch64-apple-darwin, 3.12)",
+      "conclusion": "failure",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121328054205"
+    },
+    {
+      "id": 121328054211,
+      "name": "reference / reference (2, ubuntu-22.04, x86_64-unknown-linux-gnu, 3.12)",
+      "conclusion": "failure",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121328054211"
+    },
+    {
+      "id": 121328054226,
+      "name": "reference / reference (1, windows-2022, x86_64-pc-windows-msvc, x64, cpython-3.12-windows-x86_64-none)",
+      "conclusion": "failure",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121328054226"
+    },
+    {
+      "id": 121340650865,
+      "name": "sign (macos-15-intel, macos-x64)",
+      "conclusion": "success",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121340650865"
+    },
+    {
+      "id": 121340650898,
+      "name": "sign (macos-14, macos-arm64)",
+      "conclusion": "success",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121340650898"
+    },
+    {
+      "id": 121340652324,
+      "name": "sign_windows",
+      "conclusion": "skipped",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121340652324"
+    },
+    {
+      "id": 121342814399,
+      "name": "publish",
+      "conclusion": "skipped",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121342814399"
+    },
+    {
+      "id": 121342814946,
+      "name": "npm",
+      "conclusion": "skipped",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121342814946"
+    },
+    {
+      "id": 121342815320,
+      "name": "web_demo",
+      "conclusion": "skipped",
+      "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40246080829/job/121342815320"
+    }
+  ],
+  "public_release_created": false,
+  "monitor_receipt_sha256": "461a59945617e50a67eb33d636493147f83be82ec27818d7ef205d7772b6cf7c",
+  "interpretation": "Stale intentional cleanup/reaction/NCI presentation expectations; test-only repair PR584 was prepared, with ordinary CI and a replacement release pending."
+}

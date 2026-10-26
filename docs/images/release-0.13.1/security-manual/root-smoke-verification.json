@@ -1,0 +1,22 @@
+{
+  "checked_utc": "2026-10-26T04:01:35.947347+00:00",
+  "source": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3",
+  "before_after_manifest_equal": true,
+  "app_file_count": 9,
+  "image_hashes_verified": 7,
+  "visually_inspected": [
+    "label-properties.jpg",
+    "model-properties.jpg",
+    "crystal-properties.jpg",
+    "ether-pdf.png"
+  ],
+  "visual_result": "Clear drawing/labels and expected properties, saved model Both view, crystal analysis notice, unclipped PDF bond/OMe.",
+  "limits": [
+    "Apple M1/macOS27.0.1 arm64 only; no Intel/Windows/Linux graphical runtime claim.",
+    "Unsigned manual package with ad-hoc signature; this does not establish Developer ID/notarization of eventual stable assets.",
+    "No new performance benchmark, timing guarantee or broad repeat of64finding QA.",
+    "Saved3D model only; no new conformer-generation timing claim.",
+    "Native Copy receipt only; no paste into external Office/ChemDraw.",
+    "Full six-platform static/package gate remains separate and pending at smoke completion."
+  ]
+}

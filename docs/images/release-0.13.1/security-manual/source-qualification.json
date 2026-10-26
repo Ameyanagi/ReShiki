@@ -1,0 +1,17 @@
+{
+  "recorded_at": "2026-10-26T03:37:00.605753+00:00",
+  "run_id": 40264759989,
+  "source_head": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3",
+  "clean": true,
+  "version": "0.13.1",
+  "cargo_lock_sha256": "16672b17e19b1887c1ad4b4343e4f7bdd6988738de6850e140fdf69946b57bf2",
+  "security_cargo_versions": {
+    "rustls": "0.23.46",
+    "rustls-webpki": "0.103.16",
+    "tokio": "1.53.3",
+    "webpki-root-certs": "1.0.10"
+  },
+  "source_receipt_sha256": "b7220d311092ce7da0a8d2811566dea9a51125d722758375b79c40a55509871d",
+  "notice_file_count": 84,
+  "scope": "Source/lock/notice graph identity for this manual run; not a completed six-platform static or runtime gate."
+}

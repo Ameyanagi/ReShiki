@@ -1,0 +1,116 @@
+{
+  "source": "34a21da80846371927175ab43b83e2abf02ff95a",
+  "url": "https://github.com/Ameyanagi/ReShiki/actions/runs/40308091132",
+  "status": "completed",
+  "conclusion": "success",
+  "successful_jobs": 31,
+  "expected_skips": 1,
+  "reference_shards_successful": 12,
+  "reference_jobs": [
+    {
+      "databaseId": 121522344564,
+      "name": "reference (1, macos-14, aarch64-apple-darwin, 3.12.15)",
+      "conclusion": "success",
+      "completedAt": "2026-10-26T10:59:10Z"
+    },
+    {
+      "databaseId": 121522344570,
+      "name": "reference (2, macos-14, aarch64-apple-darwin, 3.12.15)",
+      "conclusion": "success",
+      "completedAt": "2026-10-26T11:06:26Z"
+    },
+    {
+      "databaseId": 121522344593,
+      "name": "reference (3, windows-2022, x86_64-pc-windows-msvc, x64, cpython-3.12.15-windows-x86_64-none)",
+      "conclusion": "success",
+      "completedAt": "2026-10-26T11:11:32Z"
+    },
+    {
+      "databaseId": 121522344621,
+      "name": "reference (1, ubuntu-22.04, x86_64-unknown-linux-gnu, 3.12.15)",
+      "conclusion": "success",
+      "completedAt": "2026-10-26T11:09:12Z"
+    },
+    {
+      "databaseId": 121522344629,
+      "name": "reference (2, ubuntu-22.04, x86_64-unknown-linux-gnu, 3.12.15)",
+      "conclusion": "success",
+      "completedAt": "2026-10-26T11:14:44Z"
+    },
+    {
+      "databaseId": 121522344652,
+      "name": "reference (1, windows-2022, x86_64-pc-windows-msvc, x64, cpython-3.12.15-windows-x86_64-none)",
+      "conclusion": "success",
+      "completedAt": "2026-10-26T11:08:25Z"
+    },
+    {
+      "databaseId": 121522344660,
+      "name": "reference (0, macos-14, aarch64-apple-darwin, 3.12.15)",
+      "conclusion": "success",
+      "completedAt": "2026-10-26T11:14:51Z"
+    },
+    {
+      "databaseId": 121522344691,
+      "name": "reference (0, windows-2022, x86_64-pc-windows-msvc, x64, cpython-3.12.15-windows-x86_64-none)",
+      "conclusion": "success",
+      "completedAt": "2026-10-26T11:14:21Z"
+    },
+    {
+      "databaseId": 121522344697,
+      "name": "reference (2, windows-2022, x86_64-pc-windows-msvc, x64, cpython-3.12.15-windows-x86_64-none)",
+      "conclusion": "success",
+      "completedAt": "2026-10-26T11:39:14Z"
+    },
+    {
+      "databaseId": 121522344732,
+      "name": "reference (3, macos-14, aarch64-apple-darwin, 3.12.15)",
+      "conclusion": "success",
+      "completedAt": "2026-10-26T11:17:28Z"
+    },
+    {
+      "databaseId": 121522344745,
+      "name": "reference (3, ubuntu-22.04, x86_64-unknown-linux-gnu, 3.12.15)",
+      "conclusion": "success",
+      "completedAt": "2026-10-26T11:00:00Z"
+    },
+    {
+      "databaseId": 121522344919,
+      "name": "reference (0, ubuntu-22.04, x86_64-unknown-linux-gnu, 3.12.15)",
+      "conclusion": "success",
+      "completedAt": "2026-10-26T10:57:56Z"
+    }
+  ],
+  "exact_linux_reproduction": {
+    "verified_at": "2026-10-26T11:42:50.060222+00:00",
+    "local_files_rehashed": 68,
+    "remote_binary_files": [
+      {
+        "file": "bin/baseline-owned-ink",
+        "bytes": 32000376,
+        "sha256": "7b865c679dc40e83f67e067d79040d4ba9ffb9c6b81fdd5c56d9fec6052a804b"
+      },
+      {
+        "file": "bin/candidate-projection",
+        "bytes": 59336472,
+        "sha256": "95fb98d303bc757de9b54aa9f05f035538fd0560bf14c4aecce97abd8c7eabb3"
+      }
+    ],
+    "summary_sha256": "951f5456789bdd53ce8103236be0dc0f3b7a7a8f37b76cbc86eaa3f7f3ff3e7f",
+    "accepted": "Exact original Linux assertion reproduced; separate rebuilt candidate passes focused7+1 and9relevant test commands with48passed invocations including overlap. Root independently inspected raw trace patch/log and all test summaries. No source changes/push needed.",
+    "limits": "Container matches Ubuntu/Rust/Python versions and actual observed failure, not every GitHub VM setting; no universal automatic-indicator claim."
+  },
+  "candidate_summary": {
+    "baseline_commit": "b956e46347f644372e3c01128b99ca64ac208e2d",
+    "candidate_commit": "34a21da80846371927175ab43b83e2abf02ff95a",
+    "baseline_expected_red": true,
+    "candidate_focused_projection_passes": 7,
+    "candidate_production_regression_passes": 1,
+    "relevant_rust_test_passes": 48,
+    "scope": "Exact original Linux assertion reproduced; same-container candidate projection/production checks and relevant existing reaction reference checks passed. This is not a complete GitHub VM reproduction or universal automatic-collision clearance."
+  },
+  "relevant_command_count": 9,
+  "source_receipt_sha256": {
+    "hosted_checks": "bfca054df8ebfc5b396eda96faf24c2d9845eb75b15741ad2b19fcd3592e8774",
+    "amearch_root": "1f99ea8ee02f5dfe31fca5594fce68cde0b1f3ffa80eb5762c08b3e8d82f8183"
+  }
+}

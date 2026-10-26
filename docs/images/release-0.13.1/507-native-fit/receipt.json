@@ -1,0 +1,278 @@
+{
+  "completed_utc": "2026-10-26T15:51:07.322055+00:00",
+  "status": "TEN_NATIVE_FIT_CAPTURES_COMPLETE_WITH_BASELINE_PEPTIDE_ROUTE_QUALIFICATION",
+  "issue": 507,
+  "capture_and_native_input": "All native application launch/selection, input, UI observation and screenshot capture used cua_repl only. Returned screenshot Uint8Array bytes were saved unchanged with fs.writeFile; no screenshot tool, AppleScript, CGEvent, shell UI or offscreen renderer substitute.",
+  "host": {
+    "os": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434",
+    "cpu": "Apple M1",
+    "architecture": "arm64"
+  },
+  "artifacts": [
+    {
+      "variant": "before",
+      "binary": "/Users/shiranui/dev/reshiki-qa-work/tools/releases/0.13.0/reshiki-0.13.0-macos-arm64/ReShiki.app/Contents/MacOS/reshiki",
+      "binary_sha256": "4f54b01861a4e399e5f17adeb05372d39241a4b3227eba55d889b3d2d7d88739",
+      "binary_bytes": 76419440,
+      "source_commit": "3d80590a41b9d9e8efd818d23395ac51bd264ca8",
+      "version": "0.13.0",
+      "target": "aarch64-apple-darwin",
+      "archive": "/Users/shiranui/dev/reshiki-qa-work/tools/releases/0.13.0/reshiki-0.13.0-macos-arm64.zip",
+      "archive_sha256": "5d215d80151d10f781b9d7344b7c16b52e77d29b565530f222039ae4e7c4ccd7"
+    },
+    {
+      "variant": "after",
+      "binary": "/Users/shiranui/dev/reshiki-qa-work/evidence/security-2026-10-26/package-acceptance/run-40264759989/package-smoke/extracted/reshiki-0.13.1-macos-arm64/ReShiki.app/Contents/MacOS/reshiki",
+      "binary_sha256": "1bd5e0c40a5a005373493226ec4f78a31fdf615254437901c845abc12a9a1b23",
+      "binary_bytes": 76849808,
+      "source_commit": "3d3eed6593d0b02eab6976f31a8cefac08a36fb3",
+      "version": "0.13.1",
+      "target": "aarch64-apple-darwin",
+      "archive": "/Users/shiranui/dev/reshiki-qa-work/evidence/security-2026-10-26/package-acceptance/run-40264759989/manual-downloads/reshiki-0.13.1-macos-arm64.zip",
+      "archive_sha256": "a735c9b054adafe0a1b273e7b8e94a7c189b6f08afd0be7c0102a30b6e8802e2"
+    }
+  ],
+  "binary_hashes_unchanged_after": true,
+  "matched_conditions": {
+    "window_pixels": [2560, 1696],
+    "theme": "Default light UI, white drawing canvas",
+    "style": "JACS / ACS",
+    "display_profile": "Publication",
+    "inspector": "Properties, expanded Whole drawing molecular properties; same native inspector width",
+    "selection": "No atom/bond selection or keyboard-drawing active markers in final captures",
+    "profiles": "Task-owned empty application-data dirs; HOME unchanged; no personal settings/files used for drawing inputs",
+    "zoom": "Native Fit for each drawing, so zoom percentages follow each geometry rather than a fixed magnification",
+    "version_ui_difference": "0.13.1 has accepted toolbar/status accessibility and Properties-summary changes; full native window dimensions match, with minor version UI layout differences retained."
+  },
+  "images": [
+    {
+      "input": "polystyrene30",
+      "variant": "before",
+      "file": "captures/polystyrene30-before-fit.jpg",
+      "sha256": "e38905378351bce4c86bd5afa1e422ba6abed75a0ad606e75cebc8b3df77e91d",
+      "bytes": 418812,
+      "encoded_format": "jpeg",
+      "pixels": [2560, 1696],
+      "fit_zoom_percent": 36,
+      "native_state": "states/polystyrene30-before.txt",
+      "route": "Fresh native Import Structure SMILES paste \u2192 Insert into drawing \u2192 Properties \u2192 deselect blank canvas \u2192 Fit button",
+      "visible_properties": {
+        "formula": "C240H242",
+        "atoms": 240,
+        "bonds": 269
+      },
+      "profile": "profiles/before"
+    },
+    {
+      "input": "polystyrene30",
+      "variant": "after",
+      "file": "captures/polystyrene30-after-fit.jpg",
+      "sha256": "0c2ec49381276caece1fc4c66850217255022c63e646473e658090592516b851",
+      "bytes": 421756,
+      "encoded_format": "jpeg",
+      "pixels": [2560, 1696],
+      "fit_zoom_percent": 39,
+      "native_state": "states/polystyrene30-after.txt",
+      "route": "Fresh native Import Structure SMILES paste \u2192 Insert into drawing \u2192 Properties \u2192 deselect blank canvas \u2192 Fit button",
+      "visible_properties": {
+        "formula": "C240H242",
+        "atoms": 240,
+        "bonds": 269
+      },
+      "profile": "profiles/after"
+    },
+    {
+      "input": "polystyrene75",
+      "variant": "before",
+      "file": "captures/polystyrene75-before-fit.jpg",
+      "sha256": "9a610104d055843ca2b6a039854d8f2253080ab2a348a7bc8cfa1563db25695c",
+      "bytes": 458209,
+      "encoded_format": "jpeg",
+      "pixels": [2560, 1696],
+      "fit_zoom_percent": 15,
+      "native_state": "states/polystyrene75-before.txt",
+      "route": "Fresh native Import Structure SMILES paste \u2192 Insert into drawing \u2192 Properties \u2192 deselect blank canvas \u2192 Fit button",
+      "visible_properties": {
+        "formula": "C600H602",
+        "atoms": 600,
+        "bonds": 674
+      },
+      "profile": "profiles/before"
+    },
+    {
+      "input": "polystyrene75",
+      "variant": "after",
+      "file": "captures/polystyrene75-after-fit.jpg",
+      "sha256": "bcc884ef333b00cd9ed4608d9e5bba7e4e697ed0d1dbe00690584f9724d5c67c",
+      "bytes": 460782,
+      "encoded_format": "jpeg",
+      "pixels": [2560, 1696],
+      "fit_zoom_percent": 16,
+      "native_state": "states/polystyrene75-after.txt",
+      "route": "Fresh native Import Structure SMILES paste \u2192 Insert into drawing \u2192 Properties \u2192 deselect blank canvas \u2192 Fit button",
+      "visible_properties": {
+        "formula": "C600H602",
+        "atoms": 600,
+        "bonds": 674
+      },
+      "profile": "profiles/after"
+    },
+    {
+      "input": "polystyrene100",
+      "variant": "before",
+      "file": "captures/polystyrene100-before-fit.jpg",
+      "sha256": "5ddaa95ed90b0eacabdb33e75c699e8ed44883f80251b26a3776256c3bb1d7b1",
+      "bytes": 458482,
+      "encoded_format": "jpeg",
+      "pixels": [2560, 1696],
+      "fit_zoom_percent": 11,
+      "native_state": "states/polystyrene100-before.txt",
+      "route": "Fresh native Import Structure SMILES paste \u2192 Insert into drawing \u2192 Properties \u2192 deselect blank canvas \u2192 Fit button",
+      "visible_properties": {
+        "formula": "C800H802",
+        "atoms": 800,
+        "bonds": 899
+      },
+      "profile": "profiles/before"
+    },
+    {
+      "input": "polystyrene100",
+      "variant": "after",
+      "file": "captures/polystyrene100-after-fit.jpg",
+      "sha256": "20a186db6548e176ce2fa73a798b0a48d65050d72ac11a976db45a872525caf7",
+      "bytes": 461311,
+      "encoded_format": "jpeg",
+      "pixels": [2560, 1696],
+      "fit_zoom_percent": 12,
+      "native_state": "states/polystyrene100-after.txt",
+      "route": "Fresh native Import Structure SMILES paste \u2192 Insert into drawing \u2192 Properties \u2192 deselect blank canvas \u2192 Fit button",
+      "visible_properties": {
+        "formula": "C800H802",
+        "atoms": 800,
+        "bonds": 899
+      },
+      "profile": "profiles/after"
+    },
+    {
+      "input": "alanine200",
+      "variant": "before",
+      "file": "captures/alanine200-before-fit.jpg",
+      "sha256": "d4c6c9541ff072cf3263a5707b6e5b8c06b858dd06e4c08806016698f0d6664f",
+      "bytes": 654693,
+      "encoded_format": "jpeg",
+      "pixels": [2560, 1696],
+      "fit_zoom_percent": 78,
+      "native_state": "states/alanine200-before.txt",
+      "route": "Native Open of preserved baseline RSK; keyboard drawing off; no atom selection; native Cmd+/ Fit",
+      "visible_properties": {
+        "formula": "C600H1002N200O201",
+        "atoms": 1001,
+        "bonds": 1000
+      },
+      "profile": "profiles/before-open"
+    },
+    {
+      "input": "alanine200",
+      "variant": "after",
+      "file": "captures/alanine200-after-fit.jpg",
+      "sha256": "d343d47e122f480ddd010f8812eb9bcca7a7b30988e52fbc7688733166d40144",
+      "bytes": 444466,
+      "encoded_format": "jpeg",
+      "pixels": [2560, 1696],
+      "fit_zoom_percent": 4,
+      "native_state": "states/alanine200-after.txt",
+      "route": "Fresh native Import Structure SMILES paste \u2192 Insert into drawing \u2192 Properties \u2192 deselect blank canvas \u2192 Fit button",
+      "visible_properties": {
+        "formula": "C600H1002N200O201",
+        "atoms": 1001,
+        "bonds": 1000
+      },
+      "profile": "profiles/after"
+    },
+    {
+      "input": "stereo-alanine200",
+      "variant": "before",
+      "file": "captures/stereo-alanine200-before-fit.jpg",
+      "sha256": "81e3740cd83a950a7998a7645fd6fd855ce66879919700fdc11610e415b852d0",
+      "bytes": 661504,
+      "encoded_format": "jpeg",
+      "pixels": [2560, 1696],
+      "fit_zoom_percent": 78,
+      "native_state": "states/stereo-alanine200-before.txt",
+      "route": "Native Open of preserved baseline RSK; keyboard drawing off; no atom selection; native Cmd+/ Fit",
+      "visible_properties": {
+        "formula": "C600H1002N200O201",
+        "atoms": 1001,
+        "bonds": 1000
+      },
+      "profile": "profiles/before-open"
+    },
+    {
+      "input": "stereo-alanine200",
+      "variant": "after",
+      "file": "captures/stereo-alanine200-after-fit.jpg",
+      "sha256": "4983e4e4cad61f90b5259d561bd279ca0677f34cc2c7a775442baff69b67dc15",
+      "bytes": 448216,
+      "encoded_format": "jpeg",
+      "pixels": [2560, 1696],
+      "fit_zoom_percent": 4,
+      "native_state": "states/stereo-alanine200-after.txt",
+      "route": "Fresh native Import Structure SMILES paste \u2192 Insert into drawing \u2192 Properties \u2192 deselect blank canvas \u2192 Fit button",
+      "visible_properties": {
+        "formula": "C600H1002N200O201",
+        "atoms": 1001,
+        "bonds": 1000
+      },
+      "profile": "profiles/after"
+    }
+  ],
+  "observations": {
+    "polystyrene30": "Baseline phenyl rings visibly crowd into a fused-looking ladder on part of the backbone. Fixed drawing shows separated phenyl rings on alternating sides of an open horizontal backbone.",
+    "polystyrene75": "At whole-drawing Fit the baseline has a long narrow ladder-like crowded region; fixed drawing has two separated alternating ring rows. Fine bond and ring details are small at15\u201316%.",
+    "polystyrene100": "Baseline has a long narrow ladder-like region; fixed drawing has separated alternating ring rows across a horizontal backbone. Fine details are small at11\u201312%.",
+    "alanine200": "Baseline native Fit shows a compact dense cluster with extensively superposed chemical labels. Fixed whole chain spans a long horizontal line at4%; individual labels are too small to judge from this capture.",
+    "stereo-alanine200": "Baseline native Fit shows the same dense cluster with visibly crowded labels and wedges. Fixed whole chain spans a long horizontal line at4%; individual wedges/labels and200-center retention cannot be established visually at this scale."
+  },
+  "baseline_peptide_route": {
+    "receipt": "baseline-rsk/receipt.json",
+    "source_files": "Retained /tmp/reshiki-qa-507/*-before.rsk from documented507 regression capture; byte-identical copies retained here",
+    "geometry_check": "All1001 atom IDs/elements and1000 bond endpoint/order triples match exact0.13.0 CLI timing MOL. All positions match after scale28/y inversion within0.000036 native units. Stereo RSK has200 centers/200 wedge-or-hash bonds, consistent with200 MOL CFG bonds.",
+    "qualification": "These two baseline captures establish native appearance of the verified baseline geometry; they do not establish successful fresh native Import Structure interaction."
+  },
+  "native_import_obstacle": {
+    "input": "alanine200",
+    "baseline_pid": 4890,
+    "observed": "Native Insert showed Checking then later selected imported peptide could not be observed: baseline-targeted AX/screenshot/rebind timed out. CmdN recovered a blank tab; returning to peptide led to noWindowsAvailable/connectionInvalid and process later exited. No successful fresh native baseline peptide capture claimed.",
+    "diagnostic": "baseline-peptide-timeout.sample.txt",
+    "sample_finding": "Main-thread sample includes refresh_numeric_dimensions \u2192 selection_bounds \u2192 atom_label/push_hydrogens/automatic_double_side; no InChI-wait diagnosis established.",
+    "cleanup": "Attempted SIGTERM of task-owned PID4890 found process already absent. Original before profile/recovery preserved. No personal app stopped."
+  },
+  "other_tool_limits": [
+    "Initial copied signed-binary wrapper exited without GUI; wrappers then exec original untouched application binaries with isolated RESHIKI_DATA_DIR.",
+    "One attempted exact baseline --cli convert --to rsk was rejected as unsupported and created no output. Retained baseline RSK files were used instead; no successful conversion, render, timing or benchmark rerun was performed by this worker.",
+    "Some baseline file-open coordinate-click calls returned noWindowsAvailable; native keyboard Cmd+/ successfully applied Fit. Fixed stereo Fit action returned a transient timeout; subsequent observation verified completed deselection and Fit."
+  ],
+  "limits": [
+    "This is visual native QA on one macOS arm64 Apple M1 host.",
+    "The candidate is the accepted unsigned/ad-hoc0.13.1 manual package at3d3eed65, not the final eventual stable signed asset.",
+    "Both builds include their full release change sets. No performance comparison, timing guarantee or attribution of a speed difference to507 is made.",
+    "At4% Fit the fixed peptide labels and wedges are too small for individual collision or stereochemical-retention claims. Use existing closeups and chemistry/geometry evidence for that detail."
+  ],
+  "cleanup": {
+    "final_native_inventory": "final-native-inventory.json",
+    "dev.reshiki.editor_isRunning": false,
+    "task_profiles_and_recovery": "Preserved",
+    "source_changes": false,
+    "builds": false,
+    "benchmarks": false,
+    "ci_dispatch": false,
+    "external_messages_or_tracker_updates": false
+  },
+  "verification": {
+    "ten_unique_expected_full_native_captures": true,
+    "actual_format_dimensions": "macOS sips decoded all 10 as JPEG 2560\u00d71696",
+    "draft_copies_byte_identical": true,
+    "baseline_rsk_bond_displays_match_existing_baseline_MOL_CFG": true,
+    "original_executable_sha256_values_unchanged": true
+  }
+}

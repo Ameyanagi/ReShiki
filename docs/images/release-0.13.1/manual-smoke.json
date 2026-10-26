@@ -1,0 +1,64 @@
+{
+  "manual_run": "https://github.com/Ameyanagi/ReShiki/actions/runs/40238703860",
+  "source": "55dd647d70dea1eb234fb1d7d5fab7d432e42aa8",
+  "archive": "reshiki-0.13.1-macos-arm64.zip",
+  "archive_sha256": "8de814c49a740cfd369c5a22e8be3b1d672db9834c42780037229cd5bf445a74",
+  "binary_sha256": "b982d6835ecb1cf4472f1a5b564efbfaa6791db5b951987b5697b4a755456c60",
+  "host": {
+    "cpu": "Apple M1",
+    "architecture": "arm64",
+    "os": "macOS 27.0.1",
+    "os_build": "26A434"
+  },
+  "app_unmodified": true,
+  "app_files_compared": 9,
+  "checks": {
+    "version_and_offline_cli": "passed; network-denied ethanol, missing PATH/Python/uv/checkout support",
+    "older_format29_load": "passed in CLI and GUI; caffeine C8H10N4O2,194.194g/mol",
+    "drawing_and_label": "Actual keyboard bond then Return atom editor; OMe applied as chemical group; C2H6O/COC,46.069g/mol,3atoms/2bonds",
+    "save_and_gui_reopen": "Actual Save dialog wrote edited-ether.rsk as format30; tab closed and actual Open dialog reloaded it, clean title/Undo disabled",
+    "old_reader_refusal": "Official0.13.0 CLI refused the actual format30 save with Update ReShiki guidance",
+    "native_copy": "Actual Cmd-A/Cmd-C; Editable drawing and images copied receipt observed",
+    "pdf_export": "Packaged CLI produced a9615-byte,one-page PDF; Poppler rendered it and the OMe figure was visually inspected.",
+    "model_and_properties": "Opened unmodified format29 caffeine-model fixture, Both 2D+3D shown beside whole-drawing Properties",
+    "crystal_and_properties": "Imported nacl.cif through actual Open dialog; projected cell, Cl4Na4/233.772g/mol and distance-derived-bond analysis notice displayed"
+  },
+  "images": {
+    "label-properties.jpg": {
+      "sha256": "5a22f5b5293acf3e7f968a72c2a525f501cd0038cd46e34b54a1c152ad41c65b",
+      "pixels": [2560, 1696],
+      "encoded_format": "JPEG",
+      "mode": "RGB"
+    },
+    "model-properties.jpg": {
+      "sha256": "e627832733f6aa924815b63bffb935fbbf8643a5d0d6bd246c3637b69cea0157",
+      "pixels": [2560, 1696],
+      "encoded_format": "JPEG",
+      "mode": "RGB"
+    },
+    "crystal-properties.jpg": {
+      "sha256": "d6486d3eb5ddcb8f381c161fe74dcfd3f59ac5e7ae27d1fd762c376f2f7419cb",
+      "pixels": [2560, 1696],
+      "encoded_format": "JPEG",
+      "mode": "RGB"
+    },
+    "ether-pdf.png": {
+      "sha256": "cd660b05f5ed55f27e88148b0108cafd2fcf14fc23baa326101cf662e5396193",
+      "pixels": [1000, 541],
+      "encoded_format": "PNG",
+      "mode": "RGB"
+    }
+  },
+  "image_note": "Original CUA JPEG bytes copied unchanged; original local .png suffix replaced with .jpg in these published copies.",
+  "cleanup": {
+    "owned_process_exited": true,
+    "recovery_restored_or_discarded": false
+  },
+  "limits": [
+    "Unsigned manual package; no Developer ID or notarization claim.",
+    "Native graphical smoke on Apple M1 only; no Intel, Windows or Linux GUI claim.",
+    "Saved 3D model only; no fresh conformer generation or timing claim.",
+    "Native Copy receipt only; no external Office or ChemDraw paste.",
+    "No broad repeat of all 64 fixes or source-specific artemisinin/performance measurements."
+  ]
+}

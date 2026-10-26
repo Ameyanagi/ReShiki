@@ -1,0 +1,130 @@
+{
+  "security_source": "b956e46347f644372e3c01128b99ca64ac208e2d",
+  "runtime_gate_snapshot": {
+    "verified_utc": "2026-10-26T08:16:41.605885+00:00",
+    "source": "b956e46347f644372e3c01128b99ca64ac208e2d",
+    "run_id": 40284849373,
+    "status": "ALL_THREE_HOSTED_RUNTIME_GATES_VERIFIED",
+    "platforms": [
+      {
+        "system": "aarch64-darwin",
+        "job_id": 121445985826,
+        "receipt": "root-nix-macos-runtime-b956e463.json",
+        "receipt_sha256": "232aae713d9a1b5caa5dbf2b8b915c5de24598ef92760c825d60b8d8d54d2251",
+        "root_daemon_pid": 3419,
+        "critical_file_hashes_match": 19,
+        "required_loaded_libraries": 6,
+        "runtime_step_conclusion": "success",
+        "full_job_status": "in_progress",
+        "full_job_conclusion": null
+      },
+      {
+        "system": "aarch64-linux",
+        "job_id": 121445986137,
+        "receipt": "root-nix-linux-arm-runtime-b956e463.json",
+        "receipt_sha256": "7485a7145e996c0a86759b2c25bdbee66451098bec13153cc8401dafc72d4457",
+        "root_daemon_pid": 3648,
+        "critical_file_hashes_match": 19,
+        "required_loaded_libraries": 6,
+        "runtime_step_conclusion": "success",
+        "full_job_status": "in_progress",
+        "full_job_conclusion": null
+      },
+      {
+        "system": "x86_64-linux",
+        "job_id": 121445985986,
+        "receipt": "root-nix-linux-x64-runtime-b956e463.json",
+        "receipt_sha256": "dd42e4eae9bd1e04211e4b198c33fd24928faf70316ce4e2a8982827571c083d",
+        "root_daemon_pid": 3808,
+        "critical_file_hashes_match": 20,
+        "required_loaded_libraries": 6,
+        "runtime_step_conclusion": "success",
+        "full_job_status": "in_progress",
+        "full_job_conclusion": null
+      }
+    ],
+    "scope": "Source-reviewed installation checks and independently parsed actual live-daemon log payloads for all3 supported Nix platforms. Every runtime gate passed before the full flake step. This is not a completed flake/package/install-check result or a universal Nix/host vulnerability inventory."
+  },
+  "mac_full_application_check": {
+    "verified_at": "2026-10-26T09:19:21.905765+00:00",
+    "job": "https://github.com/Ameyanagi/ReShiki/actions/runs/40284849373/job/121445985826",
+    "head": "b956e46347f644372e3c01128b99ca64ac208e2d",
+    "conclusion": "success",
+    "completed_at": "2026-10-26T08:51:46Z",
+    "log_sha256": "3eb23610417fc9ec9e6a426b556211b179ffaffb2a88006763289d557c9cd5ba",
+    "application_install_check": "Actual reshiki phase and phenol InChI/ethanol PNG output observed",
+    "mandatory_source_assertions": "b956 flake.nix requires nonempty PNG and Darwin bundle ID/executable. Passed full phase supports these silent checks.",
+    "limits": "macOS ARM Nix application check; Linux full builds remain pending; no publication or universal CVE claim."
+  },
+  "linux_pending_log_snapshot": {
+    "checkedAt": "2026-10-26T10:26:41.938827+00:00",
+    "run": 40284849373,
+    "head": "b956e46347f644372e3c01128b99ca64ac208e2d",
+    "status": "Mac success; both Linux in_progress, no conclusion",
+    "officialSource": "https://github.com/actions/runner/blob/v2.338.0/src/Runner.Common/Logging.cs",
+    "logs": [
+      {
+        "architecture": "x64",
+        "file": "nix-x64-1025-partial.log",
+        "sha256": "12401476458b917f844fea240dc4bcb4a09b27205dca465edb2454fe2f3e352c",
+        "bytes": 6345696,
+        "tail": "2026-10-26T09:07:04.0359148Z llvm> [2088/4810] Building CXX object lib/CodeGen/MIRParser/CMakeFiles/LLVMMIRParser.dir/MILexer.cpp.o",
+        "completeBlocks": 3,
+        "remainderBytes": 0,
+        "sameAs1012": true
+      },
+      {
+        "architecture": "arm",
+        "file": "nix-arm-1025-partial.log",
+        "sha256": "c7e8f8188016ba879afece02ea5dbf55a2c4ae85e0257e4fa74d08d9047dbf81",
+        "bytes": 14809431,
+        "tail": "2026-10-26T09:38:21.0450250Z libyuv> [ RUN      ] LibYUVConvertTest.U420AlphaToARGBToABGR_Any",
+        "completeBlocks": 7,
+        "remainderBytes": 0,
+        "sameAs1012": true
+      }
+    ],
+    "interpretation": "Logs end on completed 2MiB Results-log upload block boundaries. No assertion about current runner progress can be made from tail age alone. Existing jobs preserved."
+  },
+  "checks": {
+    "run": 40284849410,
+    "conclusion": "success",
+    "successful_jobs": 19,
+    "expected_skips": 2,
+    "uno_retry": {
+      "original_job_id": 121446130958,
+      "diagnosis": "Confirmed15-minute job timeout while downloading Ubuntu packages; runtime probe and tests not reached. Exact annotation/full log retained.",
+      "retry_job_id": 121458683332,
+      "observed_retry_conclusion": "success",
+      "scope": "Exactly one targeted job retry. Other success contexts were copied with original execution timestamps; conditional jobs remained skipped. No source edit, whole-workflow restart, Nix rerun, or Release dispatch."
+    }
+  },
+  "scheduled_main_reference": {
+    "run": 40295742094,
+    "failed_linux_shards": 3,
+    "cause": "same synthetic owned map/stereo ink fixture assertion",
+    "focused_fix": "34a21da80846371927175ab43b83e2abf02ff95a",
+    "required_reference_checks": 40308091132,
+    "dispatched_utc": "2026-10-26T10:31:00Z",
+    "workflow_type": "Checks, not Release",
+    "conclusion": "pending; in progress at the root completion checkpoint"
+  },
+  "release_api": {
+    "reported_by": "root",
+    "checkpoint_utc": "2026-10-26T10:25:00Z",
+    "tag": "v0.13.1",
+    "http_status": 404,
+    "public_assets_processed": false
+  },
+  "source_receipt_sha256": {
+    "root-three-platform-nix-runtime-b956e463.json": "31d397ab420c10098487e8131aa01a61bbf687d676ad3d8ba5e238e08ae6d082",
+    "root-nix-macos-application-b956e463.json": "049bf80c5a336333379183876aa3acfef0817e3218b95faec9afd712e6260a58",
+    "root-nix-log-boundaries-1025.json": "a2a0ee58365290cdb9a15069a07435023f165fed35bf40fe1fe008c1a7617988",
+    "root-uno-targeted-retry-b956e463.json": "b109d26518531f661030d08e8617dc170c23559c165f61f8f6272138396cc5bf"
+  },
+  "limits": [
+    "Mac full flake result is complete; both Linux full flake results remain pending.",
+    "Completed 2MiB Results-log blocks do not establish current runner progress or an affirmative stall.",
+    "No final merge, tag build or public package acceptance is established."
+  ]
+}

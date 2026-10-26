@@ -1,0 +1,21 @@
+{
+  "verified_utc": "2026-10-26T07:33:20.486719+00:00",
+  "source": "b956e46347f644372e3c01128b99ca64ac208e2d",
+  "artifact_id": 12633711494,
+  "run_id": 40284849410,
+  "artifact_sha256": "e91a5e0c31698c0f82491f12aad885518ce461a47017dcc256271d3b3ac702bb",
+  "artifact_bytes": 225113,
+  "fresh_github_metadata_matched": true,
+  "lock_sha256": {
+    "Cargo.lock": "16672b17e19b1887c1ad4b4343e4f7bdd6988738de6850e140fdf69946b57bf2",
+    "bun.lock": "88e280f365b2cc115caf6d5ff224b7c5d16b16caacf31be4eca2fd6e8bbb9a15",
+    "uv.lock": "feddfe731044e9b6ba6acd344860e2a44b818e05e61271fd59c8c1a74d7f4693",
+    "flake.lock": "187d63f65b46f5cfa3ac830a5d0c182693cd0ca7ab8e486c3876fcf4b4f6d4f4"
+  },
+  "captured_summary_counts": {
+    "reviewed-scoped-exposure": 2,
+    "reviewed-maintenance-notice": 6
+  },
+  "captured_at": "2026-10-26T07:17:49.181373+00:00",
+  "scope": "Independent archive digest/source/lock and captured summary verification. Full captured advisory/disposition reconstruction is in verification.json; no new advisory requests or universal native/host-CVE claim."
+}
