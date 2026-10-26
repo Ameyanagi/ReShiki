@@ -2,6 +2,68 @@ use super::*;
 use reshiki::document::{Annotation, Point};
 
 #[test]
+fn bonded_movement_membership_preserves_expanded_selection_and_tracks_edits() {
+    let (mut app, _) = App::new();
+    app.tool = Tool::Select;
+    app.tab.doc = Default::default();
+    let a = app.tab.doc.add_atom("C", Point::new(0., 0.));
+    let b = app.tab.doc.add_atom("C", Point::new(42., 0.));
+    let c = app.tab.doc.add_atom("O", Point::new(84., 0.));
+    let isolated = app.tab.doc.add_atom("N", Point::new(150., 0.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
+    app.tab.doc.add_bond(b, c, 1, "plain");
+    app.tab.doc.contract(&[b, c], "Et", "Et").unwrap();
+
+    // The visible abbreviation anchor selects both of its atoms. Selecting
+    // only the external atom leaves a constrained bond across the boundary;
+    // selecting it together with the anchor does not.
+    for (selected, expected) in [
+        (vec![], false),
+        (vec![isolated], false),
+        (vec![a], true),
+        (vec![b], true),
+        (vec![a, b], false),
+        (vec![a, b, b, isolated, u64::MAX], false),
+    ] {
+        app.tab.selected = selected;
+        assert_eq!(app.moving_bonded_selection(), expected);
+    }
+
+    // Compare every subset, including an object/nonexistent ID and duplicate
+    // membership, with the original ordered selection query.
+    for tool in [Tool::Select, Tool::Lasso, Tool::Atom] {
+        app.tool = tool;
+        for mask in 0..32 {
+            app.tab.selected = [a, b, c, isolated, u64::MAX]
+                .into_iter()
+                .enumerate()
+                .filter_map(|(i, id)| (mask & (1 << i) != 0).then_some(id))
+                .collect();
+            app.tab.selected.extend(app.tab.selected.clone());
+            let expanded = app.tab.doc.expand_abbreviation_selection(&app.tab.selected);
+            let expected = tool.selects()
+                && app
+                    .tab
+                    .doc
+                    .bonds
+                    .iter()
+                    .any(|bond| expanded.contains(&bond.a) != expanded.contains(&bond.b));
+            assert_eq!(app.moving_bonded_selection(), expected, "{tool:?}, {mask}");
+        }
+    }
+
+    // This is a per-query index: edits and abbreviation expansion are always
+    // read from the current document without a revision/cache dependency.
+    app.tool = Tool::Select;
+    app.tab.selected = vec![b];
+    assert!(app.moving_bonded_selection());
+    app.tab.doc.bonds.retain(|bond| bond.a != a && bond.b != a);
+    assert!(!app.moving_bonded_selection());
+    app.tab.doc.abbreviations.clear();
+    assert!(app.moving_bonded_selection());
+}
+
+#[test]
 fn the_atoms_palette_offers_h_first_and_each_button_picks_its_element() {
     assert_eq!(PALETTE_ELEMENTS[..2], ["H", "C"]);
     assert_eq!(super::super::palettes::element_hint("H"), "H · h");

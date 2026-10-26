@@ -211,6 +211,24 @@ fn covalent_groups(doc: &Document, ids: &[u64]) -> Vec<Vec<u64>> {
 /// Rear-opacity targets: whole covalent molecules of real, non-centroid atoms
 /// containing any seed ID, returned in globally sorted order.
 pub fn covalent_component_ids(doc: &Document, ids: &[u64]) -> Vec<u64> {
+    let real_ids = || {
+        doc.atoms
+            .iter()
+            .filter(|atom| atom.centroid.is_empty())
+            .map(|atom| atom.id)
+    };
+    let all_seeded = {
+        let seeds: HashSet<_> = ids.iter().copied().collect();
+        real_ids().all(|id| seeds.contains(&id))
+    };
+    // Every component is selected when all its possible atoms are seeded.
+    // Non-atom/centroid seeds do not alter this condition or the result.
+    if all_seeded {
+        let mut members: Vec<_> = real_ids().collect();
+        members.sort_unstable();
+        members.dedup();
+        return members;
+    }
     let mut members: Vec<_> = covalent_groups(doc, ids).into_iter().flatten().collect();
     members.sort_unstable();
     members

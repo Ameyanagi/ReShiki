@@ -798,10 +798,14 @@ impl App {
     /// A partial selection drags bonded atoms along, following Length / Angles.
     fn moving_bonded_selection(&self) -> bool {
         matches!(self.tool, Tool::Select | Tool::Lasso) && {
-            let selected = self
+            // The responsive row asks this more than once. Index the expanded
+            // IDs so a whole-drawing selection does not scan them per bond.
+            let selected: std::collections::HashSet<_> = self
                 .tab
                 .doc
-                .expand_abbreviation_selection(&self.tab.selected);
+                .expand_abbreviation_selection(&self.tab.selected)
+                .into_iter()
+                .collect();
             self.tab
                 .doc
                 .bonds

@@ -313,6 +313,18 @@ fn label_backgrounds_on(
 /// Arbitrary overlapping artwork and unknown paste destinations are not covered.
 pub fn label_contrast_issues(doc: &crate::document::Document) -> Vec<u64> {
     let palette = Palette::of(doc);
+    // Only its own group exempts an anchor; another group may still hide it.
+    let hidden: std::collections::HashSet<_> = doc
+        .abbreviations
+        .iter()
+        .flat_map(|group| {
+            group
+                .members
+                .iter()
+                .copied()
+                .filter(move |id| *id != group.anchor)
+        })
+        .collect();
     let mut degrees = std::collections::HashMap::<u64, usize>::new();
     for bond in &doc.bonds {
         *degrees.entry(bond.a).or_default() += 1;
@@ -323,7 +335,7 @@ pub fn label_contrast_issues(doc: &crate::document::Document) -> Vec<u64> {
     doc.atoms
         .iter()
         .filter(|atom| {
-            if !doc.atom_visible(atom.id) || crate::attachments::hidden(atom, doc) {
+            if hidden.contains(&atom.id) || crate::attachments::hidden(atom, doc) {
                 return false;
             }
             if doc.abbreviation(atom.id).is_none()

@@ -93,3 +93,113 @@ fn covalent_component_ids_returns_sorted_whole_molecules() {
     );
     assert_eq!(covalent_component_ids(&doc, &[d, c]), vec![a, b, c, d]);
 }
+
+fn general_component_ids(doc: &Document, seeds: &[u64]) -> Vec<u64> {
+    let mut ids: Vec<_> = covalent_groups(doc, seeds).into_iter().flatten().collect();
+    ids.sort_unstable();
+    ids
+}
+
+fn seed_drawing() -> (Document, [u64; 6], u64, u64) {
+    use crate::graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle};
+    let mut doc = Document::default();
+    let real = ["C", "O", "N", "Fe", "Ne", "*"]
+        .map(|element| doc.add_atom(element, Point::new(doc.atoms.len() as f32 * 42., 0.)));
+    let [a, b, c, metal, _, _] = real;
+    doc.add_bond(a, b, 1, "plain");
+    doc.add_bond(b, c, 5, "plain");
+    doc.add_bond(c, metal, 1, "plain");
+    let centroid = doc.add_atom("*", Point::new(21., 0.));
+    doc.atom_mut(centroid).unwrap().centroid = vec![a, b];
+    doc.add_bond(centroid, metal, 1, "plain");
+    let graphic = doc.next_id();
+    doc.graphics.push(Graphic::dragged(
+        graphic,
+        GraphicKind::Rectangle,
+        Point::default(),
+        Point::new(42., 42.),
+        GraphicStyle::default(),
+        BracketSides::Both,
+        false,
+    ));
+    doc.atoms.rotate_left(3);
+    (doc, real, centroid, graphic)
+}
+
+#[test]
+fn complete_and_partial_seeds_match_general_components_with_nonatom_extras() {
+    let empty = Document::default();
+    for seeds in [vec![], vec![u64::MAX, u64::MAX]] {
+        assert_eq!(covalent_component_ids(&empty, &seeds), Vec::<u64>::new());
+    }
+    let (mut doc, real, centroid, graphic) = seed_drawing();
+    for mask in 0..1 << real.len() {
+        let mut seeds: Vec<_> = real
+            .iter()
+            .enumerate()
+            .filter_map(|(i, id)| (mask & (1 << i) != 0).then_some(*id))
+            .collect();
+        // Length alone cannot establish completeness: extras and repeated
+        // seeds can outnumber the real atoms even for a partial selection.
+        seeds.extend([centroid, graphic, u64::MAX, graphic, centroid]);
+        if let Some(first) = seeds.first().copied() {
+            seeds.extend([first; 8]);
+        }
+        let actual = covalent_component_ids(&doc, &seeds);
+        assert_eq!(actual, general_component_ids(&doc, &seeds), "subset {mask}");
+        assert!(actual.windows(2).all(|ids| ids[0] < ids[1]));
+    }
+    let [a, b, c, metal, isolated, dummy] = real;
+    assert_eq!(covalent_component_ids(&doc, &[a]), [a, b]);
+    assert_eq!(covalent_component_ids(&doc, &[c]), [c, metal]);
+    assert!(covalent_component_ids(&doc, &[centroid, graphic]).is_empty());
+
+    doc.contract(&[a, b], "Et", "Et").unwrap();
+    let anchor = doc.abbreviations[0].anchor;
+    let seeds =
+        doc.expand_abbreviation_selection(&[anchor, c, metal, isolated, dummy, centroid, graphic]);
+    assert_eq!(covalent_component_ids(&doc, &seeds), real);
+    assert_eq!(
+        covalent_component_ids(&doc, &seeds),
+        general_component_ids(&doc, &seeds)
+    );
+    // The general path also deduplicates intermediate duplicate atom records.
+    doc.atoms.push(doc.atom(a).unwrap().clone());
+    assert_eq!(covalent_component_ids(&doc, &seeds), real);
+    assert_eq!(
+        covalent_component_ids(&doc, &seeds),
+        general_component_ids(&doc, &seeds)
+    );
+}
+
+#[test]
+fn complete_seed_detection_tracks_consecutive_atom_bond_and_centroid_edits() {
+    let (mut doc, real, centroid, graphic) = seed_drawing();
+    let mut seeds = real.to_vec();
+    seeds.extend([centroid, graphic, u64::MAX]);
+    let check = |doc: &Document, seeds: &[u64]| {
+        let actual = covalent_component_ids(doc, seeds);
+        assert_eq!(actual, general_component_ids(doc, seeds));
+        actual
+    };
+    assert_eq!(check(&doc, &seeds), real);
+    let added = doc.add_atom("S", Point::new(400., 0.));
+    assert_eq!(check(&doc, &seeds), real);
+    doc.add_bond(real[3], added, 1, "plain");
+    assert!(check(&doc, &seeds).contains(&added));
+    doc.bonds
+        .iter_mut()
+        .find(|bond| bond.connects(real[3], added))
+        .unwrap()
+        .order = 5;
+    assert_eq!(check(&doc, &seeds), real);
+    seeds.push(added);
+    assert!(check(&doc, &seeds).contains(&added));
+    doc.atom_mut(added).unwrap().centroid = vec![real[0], real[1]];
+    assert_eq!(check(&doc, &seeds), real);
+    doc.atom_mut(added).unwrap().centroid.clear();
+    assert!(check(&doc, &seeds).contains(&added));
+    doc.atoms.retain(|atom| atom.id != added);
+    doc.bonds.retain(|bond| bond.a != added && bond.b != added);
+    assert_eq!(check(&doc, &seeds), real);
+}
