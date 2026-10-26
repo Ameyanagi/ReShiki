@@ -93,7 +93,6 @@ class DownloadTLSTests(unittest.TestCase):
         self.assertEqual(
             found,
             {
-                "scripts/audit_locked_dependencies.py",
                 "scripts/inchi_source.py",
                 "scripts/regenerate_cdx_schema.py",
                 "scripts/regenerate_nmr.py",

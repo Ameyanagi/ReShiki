@@ -82,11 +82,10 @@ On Windows, CI runs every ignored `app::naming::` test, the `app::nmr::` and `ca
 
 Install [uv 0.13.5 or later](https://docs.astral.sh/uv/getting-started/installation/) and run `uv sync --locked --python 3.12.15`. On Windows, use `--python cpython-3.12.15-windows-x86_64-none`, including on ARM.
 
-Run Python helpers that download reference data through this locked environment.
-Their HTTPS connections require the locked, updated certifi CA bundle and fail
-if it is missing or too old. Native Cargo builds and offline packaging do not
-need certifi. See the [dated security review](changes/security-dependency-audit.md)
-for runtime requirements and the limits of the interpreter assessment.
+Run reference/source HTTPS downloads through the locked environment so they use
+the updated certifi CA bundle. Offline packaging does not need certifi. The
+[dated security review](changes/security-dependency-audit.md) records runtime
+requirements and accepted exceptions.
 
 The pinned RDKit reference provides wheels for Apple Silicon macOS, Windows x64 and Linux x64/ARM64, but not Intel macOS. Intel Mac development and packaging use the native checks above; run optional reference comparisons on a supported platform. The distributed Intel app needs no Python or RDKit.
 

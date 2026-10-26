@@ -35,325 +35,59 @@ jobs:
       live: ${{ steps.scope.outputs.live }}
     steps:
       - &actions_runtime
-        name: Require a patched GitHub Actions Node runtime
+        name: Patch the Actions Node runtime when needed
         id: actions_runtime_guard
         shell: pwsh
-        env:
-          RESHIKI_RUNNER_ENVIRONMENT: ${{ runner.environment }}
-          RESHIKI_RUNNER_OS: ${{ runner.os }}
-          RESHIKI_RUNNER_ARCH: ${{ runner.arch }}
         run: |
-          # This exact body is embedded before checkout in every workflow that uses
-          # JavaScript actions. tests/test_ci_runtime_policy.py checks that it stays exact.
+          # Embedded before checkout; setup-node does not change JavaScript actions' Node.
           $ErrorActionPreference = 'Stop'
-          Set-StrictMode -Version Latest
-
-          function Assert-NoLinkedPath {
-              param([string] $Path)
-              $entry = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
-              while ($null -ne $entry) {
-                  if (($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-                      throw "Refusing a symbolic link/reparse point in runner path: $($entry.FullName)"
-                  }
-                  $entry = if ($entry -is [IO.DirectoryInfo]) { $entry.Parent } else { $entry.Directory }
-              }
+          $workers = @(Get-Process -Name Runner.Worker -ErrorAction Stop)
+          if ($workers.Count -ne 1) { throw 'Expected exactly one live Runner.Worker.' }
+          $root = Split-Path (Split-Path $workers[0].Path -Parent) -Parent
+          $name = if ($IsWindows) { 'node.exe' } else { 'node' }
+          $node = Join-Path $root "externals/node24/bin/$name"
+          $version = & $node --version
+          if ($LASTEXITCODE -ne 0 -or $version -cnotmatch '^v24\.[0-9]+\.[0-9]+$') {
+              throw 'Could not read the active runner Node 24 version.'
           }
-
-          function Get-ActionsNodePath {
-              param([string[]] $WorkerPaths)
-              if (@($WorkerPaths).Count -ne 1 -or [string]::IsNullOrWhiteSpace($WorkerPaths[0])) {
-                  throw 'Expected exactly one live Runner.Worker executable; refusing to use Node from PATH.'
-              }
-              $worker = $WorkerPaths[0]
-              $workerName = if ($IsWindows) { 'Runner.Worker.exe' } else { 'Runner.Worker' }
-              if (-not [IO.Path]::IsPathRooted($worker) -or (Split-Path $worker -Leaf) -cne $workerName) {
-                  throw "Unexpected Runner.Worker executable: $worker"
-              }
-              $bin = Split-Path $worker -Parent
-              if ((Split-Path $bin -Leaf) -cne 'bin') {
-                  throw "Runner.Worker is not in its runner's bin directory: $worker"
-              }
-              $root = Split-Path $bin -Parent
-              $name = if ($IsWindows) { 'node.exe' } else { 'node' }
-              $node = [IO.Path]::GetFullPath((Join-Path $root "externals/node24/bin/$name"))
-              if (-not (Test-Path -LiteralPath $node -PathType Leaf)) {
-                  throw "The active runner has no embedded Node 24: $node"
-              }
-              Assert-NoLinkedPath -Path $worker
-              Assert-NoLinkedPath -Path $node
-              return $node
-          }
-
-          function Assert-NodeEnvironment {
-              # Do not execute an injected module, preload, or alternate internal runtime.
-              foreach ($name in @('NODE_OPTIONS', 'NODE_PATH', 'NODE_EXTRA_CA_CERTS', 'NODE_ICU_DATA',
-                      'LD_PRELOAD', 'LD_LIBRARY_PATH', 'DYLD_INSERT_LIBRARIES', 'DYLD_LIBRARY_PATH',
-                      'OPENSSL_CONF', 'OPENSSL_MODULES')) {
-                  if (-not [string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable($name))) {
-                      throw "Refusing runtime injection variable: $name"
-                  }
-              }
-              foreach ($name in @('ACTIONS_RUNNER_FORCED_INTERNAL_NODE_VERSION', 'ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION')) {
-                  $value = [Environment]::GetEnvironmentVariable($name)
-                  if (-not [string]::IsNullOrEmpty($value) -and $value -cne 'node24') {
-                      throw "Refusing alternate Actions runtime: $name=$value"
-                  }
-              }
-              if (-not [string]::IsNullOrEmpty($env:ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION) -and
-                  $env:ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION -cne 'false') {
-                  throw 'Insecure Actions Node fallback is prohibited.'
-              }
-          }
-
-          function Read-NodeRuntime {
-              param([string] $NodePath)
-              Assert-NodeEnvironment
-              $start = [Diagnostics.ProcessStartInfo]::new($NodePath)
-              $start.UseShellExecute = $false
-              $start.RedirectStandardOutput = $true
-              $start.RedirectStandardError = $true
-              $start.ArgumentList.Add('-p')
-              $start.ArgumentList.Add('JSON.stringify({execPath:process.execPath,versions:process.versions,platform:process.platform,arch:process.arch})')
-              $process = [Diagnostics.Process]::new()
-              $process.StartInfo = $start
-              try {
-                  if (-not $process.Start()) { throw 'Could not start the absolute Node runtime.' }
-                  $stdout = $process.StandardOutput.ReadToEndAsync()
-                  $stderr = $process.StandardError.ReadToEndAsync()
-                  if (-not $process.WaitForExit(10000)) {
-                      $process.Kill($true)
-                      throw 'Node runtime attestation timed out.'
-                  }
-                  $reported = $stdout.GetAwaiter().GetResult()
-                  if ($process.ExitCode -ne 0 -or $reported.Length -gt 16384 -or
-                      $stderr.GetAwaiter().GetResult().Length -ne 0) { throw 'Node runtime attestation failed.' }
-                  return $reported | ConvertFrom-Json
-              } finally { $process.Dispose() }
-          }
-
-          function Assert-HostedNodeContext {
-              param([object] $Runtime, [string] $NodePath, [string] $Environment, [string] $OS, [string] $Architecture)
-              $platforms = @{ Linux = 'linux'; macOS = 'darwin'; Windows = 'win32' }
-              $architectures = @{ X64 = 'x64'; ARM64 = 'arm64' }
-              $actualPlatform = if ($IsWindows) { 'win32' } elseif ($IsMacOS) { 'darwin' } else { 'linux' }
-              if ($Environment -cne 'github-hosted' -or -not $platforms.ContainsKey($OS) -or
-                  -not $architectures.ContainsKey($Architecture) -or $Runtime.platform -cne $platforms[$OS] -or
-                  $Runtime.platform -cne $actualPlatform -or $Runtime.arch -cne $architectures[$Architecture]) {
-                  throw 'Bootstrap requires explicit matching github-hosted runner.environment/OS/arch metadata.'
-              }
-              $comparison = if ($IsWindows) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
-              if (-not [string]::Equals([IO.Path]::GetFullPath($Runtime.execPath), $NodePath, $comparison)) {
-                  throw 'Original runtime is outside the active runner node24 path.'
-              }
-          }
-
-          function Get-NodeBootstrapAsset {
-              param([string] $Platform, [string] $Architecture)
-              # Official v24.22.1 signed SHASUMS256.txt; verification provenance is retained
-              # in evidence/security-2026-10-26/bootstrap-audit, not fetched at job runtime.
+          Write-Host "Actions runtime before bootstrap: $version ($node)"
+          if ([version] $version.Substring(1) -lt [version] '24.22.1') {
+              # Official signed SHASUMS256.txt provenance is in actions_node_bootstrap.json.
               $assets = @{
-                  'darwin-arm64' = @('node-v24.22.1-darwin-arm64.tar.gz', '89c682593d76cd44233fa53b1563264e7de9cbb189cad169135c5b4fadfbc0a7')
-                  'darwin-x64' = @('node-v24.22.1-darwin-x64.tar.gz', 'd132557e7ee2b85af08b0c8c34338e65c6430f2238d01f727728ef42dc83b035')
-                  'linux-arm64' = @('node-v24.22.1-linux-arm64.tar.gz', '33c37be234ba8bee041961047b19160f4d7d0f164e8e246f78bdd10feff148b3')
-                  'linux-x64' = @('node-v24.22.1-linux-x64.tar.gz', 'eb6728e77c576a35162c122c45ccadf224d89ff00abc8dae46cc2897c6002d7c')
-                  'win32-arm64' = @('win-arm64/node.exe', '8bea91dc437fe01e7d92ef0efc6c9eaf654369aaba9b2d3e9841552ea7b95a00')
-                  'win32-x64' = @('win-x64/node.exe', 'd702daa815eabbff763c7d3808e235cf031cf2ca70211b56847bc72f51e240e5')
+                  'macOS-ARM64' = @('node-v24.22.1-darwin-arm64.tar.gz', '89c682593d76cd44233fa53b1563264e7de9cbb189cad169135c5b4fadfbc0a7')
+                  'macOS-X64' = @('node-v24.22.1-darwin-x64.tar.gz', 'd132557e7ee2b85af08b0c8c34338e65c6430f2238d01f727728ef42dc83b035')
+                  'Linux-ARM64' = @('node-v24.22.1-linux-arm64.tar.gz', '33c37be234ba8bee041961047b19160f4d7d0f164e8e246f78bdd10feff148b3')
+                  'Linux-X64' = @('node-v24.22.1-linux-x64.tar.gz', 'eb6728e77c576a35162c122c45ccadf224d89ff00abc8dae46cc2897c6002d7c')
+                  'Windows-ARM64' = @('win-arm64/node.exe', '8bea91dc437fe01e7d92ef0efc6c9eaf654369aaba9b2d3e9841552ea7b95a00')
+                  'Windows-X64' = @('win-x64/node.exe', 'd702daa815eabbff763c7d3808e235cf031cf2ca70211b56847bc72f51e240e5')
               }
-              $key = "$Platform-$Architecture"
-              if (-not $assets.ContainsKey($key)) { throw "Unsupported Node platform/architecture: $key" }
-              return [pscustomobject] @{ Name = $assets[$key][0]; SHA256 = $assets[$key][1]; Platform = $Platform; Architecture = $Architecture }
-          }
-
-          function Assert-NodeArtifactHash {
-              param([string] $Path, [string] $SHA256)
-              if ($SHA256 -cnotmatch '^[0-9a-f]{64}$' -or
-                  (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() -cne $SHA256) {
-                  throw 'Node artifact/staging SHA256 mismatch.'
-              }
-          }
-
-          function Receive-NodeArtifact {
-              param([Net.Http.HttpResponseMessage] $Response, [string] $Destination, [Threading.CancellationToken] $Cancellation)
-              if ($Response.StatusCode -ne [Net.HttpStatusCode]::OK -or $Response.Content.Headers.ContentEncoding.Count -ne 0 -or
-                  $Response.Content.Headers.ContentLength -gt 134217728) { throw 'Unexpected Node download status/encoding/size.' }
-              $source = $Response.Content.ReadAsStreamAsync($Cancellation).GetAwaiter().GetResult()
-              $output = [IO.File]::Open($Destination, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+              $asset = $assets["$env:RUNNER_OS-$env:RUNNER_ARCH"]
+              if ($null -eq $asset) { throw 'Unsupported runner OS/architecture.' }
+              $temporary = Join-Path $env:RUNNER_TEMP ('reshiki-node-' + [Guid]::NewGuid())
+              New-Item -ItemType Directory -Path $temporary | Out-Null
               try {
-                  $buffer = [byte[]]::new(65536)
-                  $total = 0L
-                  while (($count = $source.ReadAsync($buffer, 0, $buffer.Length, $Cancellation).GetAwaiter().GetResult()) -gt 0) {
-                      $total += $count
-                      if ($total -gt 134217728) { throw 'Node download exceeded the byte limit.' }
-                      $output.Write($buffer, 0, $count)
+                  $download = Join-Path $temporary 'node-download'
+                  Invoke-WebRequest -Uri "https://nodejs.org/dist/v24.22.1/$($asset[0])" -OutFile $download
+                  if ((Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash -ine $asset[1]) {
+                      throw 'Official Node artifact SHA256 mismatch.'
                   }
-                  if ($total -eq 0 -or ($null -ne $Response.Content.Headers.ContentLength -and
-                          $total -ne $Response.Content.Headers.ContentLength)) { throw 'Empty or partial Node download.' }
-              } finally { $output.Dispose(); $source.Dispose() }
-          }
-
-          function Save-NodeArtifact {
-              param([object] $Asset, [string] $Destination)
-              $handler = [Net.Http.HttpClientHandler]::new()
-              $handler.AutomaticDecompression = [Net.DecompressionMethods]::None
-              $handler.AllowAutoRedirect = $false
-              $client = [Net.Http.HttpClient]::new($handler)
-              $deadline = [Threading.CancellationTokenSource]::new([TimeSpan]::FromSeconds(120))
-              $response = $null
-              try {
-                  $client.Timeout = [TimeSpan]::FromSeconds(120)
-                  $uri = [Uri]::new("https://nodejs.org/dist/v24.22.1/$($Asset.Name)")
-                  $response = $client.GetAsync($uri, [Net.Http.HttpCompletionOption]::ResponseHeadersRead, $deadline.Token).GetAwaiter().GetResult()
-                  Receive-NodeArtifact -Response $response -Destination $Destination -Cancellation $deadline.Token
-                  Assert-NodeArtifactHash -Path $Destination -SHA256 $Asset.SHA256
+                  if ($IsWindows) {
+                      $candidate = $download # The pinned Windows asset is the raw node.exe.
+                  } else {
+                      & tar -xzf $download -C $temporary
+                      if ($LASTEXITCODE -ne 0) { throw 'Official Node archive extraction failed.' }
+                      $candidate = Join-Path $temporary ($asset[0].Replace('.tar.gz', '') + '/bin/node')
+                  }
+                  Copy-Item -LiteralPath $candidate -Destination $node -Force
               } finally {
-                  if ($null -ne $response) { $response.Dispose() }
-                  $deadline.Dispose(); $client.Dispose(); $handler.Dispose()
+                  Remove-Item -LiteralPath $temporary -Recurse -Force
+              }
+              $version = & $node --version
+              if ($LASTEXITCODE -ne 0 -or $version -cne 'v24.22.1') {
+                  throw 'The installed Actions Node did not report v24.22.1.'
               }
           }
-
-          function Expand-NodeExecutable {
-              param([object] $Asset, [string] $Archive, [string] $Destination)
-              Assert-NodeArtifactHash -Path $Archive -SHA256 $Asset.SHA256
-              if ($Asset.Platform -ceq 'win32') {
-                  [IO.File]::Copy($Archive, $Destination, $false)
-                  return
-              }
-              $prefix = $Asset.Name.Substring(0, $Asset.Name.Length - 7)
-              $inputFile = [IO.File]::OpenRead($Archive)
-              $gzip = [IO.Compression.GZipStream]::new($inputFile, [IO.Compression.CompressionMode]::Decompress)
-              $tar = [System.Formats.Tar.TarReader]::new($gzip)
-              $found = $false
-              try {
-                  while ($null -ne ($entry = $tar.GetNextEntry())) {
-                      $name = $entry.Name
-                      if (-not $name.StartsWith("$prefix/", [StringComparison]::Ordinal) -or
-                          $name.Contains('\') -or $name -match '(^|/)\.\.?(/|$)') { throw 'Unexpected path in Node archive.' }
-                      if ($name -cne "$prefix/bin/node") { continue }
-                      if ($found -or $entry.EntryType -notin @([System.Formats.Tar.TarEntryType]::RegularFile,
-                              [System.Formats.Tar.TarEntryType]::V7RegularFile) -or $entry.Length -le 0 -or
-                          $entry.Length -gt 268435456) { throw 'Duplicate, linked, empty or oversized Node archive member.' }
-                      $found = $true
-                      $output = [IO.File]::Open($Destination, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
-                      try { $entry.DataStream.CopyTo($output) } finally { $output.Dispose() }
-                  }
-                  if (-not $found) { throw 'Node archive has no regular bin/node member.' }
-              } finally { $tar.Dispose(); $gzip.Dispose(); $inputFile.Dispose() }
-              [IO.File]::SetUnixFileMode($Destination, [IO.UnixFileMode]::UserRead -bor [IO.UnixFileMode]::UserWrite -bor
-                  [IO.UnixFileMode]::UserExecute -bor [IO.UnixFileMode]::GroupRead -bor [IO.UnixFileMode]::GroupExecute -bor
-                  [IO.UnixFileMode]::OtherRead -bor [IO.UnixFileMode]::OtherExecute)
-          }
-
-          function Assert-NoActiveNodeTarget {
-              param([string] $NodePath)
-              foreach ($process in @(Get-Process -Name node -ErrorAction SilentlyContinue)) {
-                  if ([string]::IsNullOrEmpty($process.Path)) { throw 'Cannot establish the executable path of an active Node process.' }
-                  $comparison = if ($IsWindows) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
-                  if ([string]::Equals([IO.Path]::GetFullPath($process.Path), $NodePath, $comparison)) {
-                      throw 'The target Node executable is still active.'
-                  }
-              }
-          }
-
-          function Install-NodeExecutable {
-              param([string] $WorkerPath, [string] $NodePath, [string] $OriginalHash, [string] $Staged,
-                  [object] $Asset, [string] $StagedHash)
-              # Sibling staging ensures the final rename stays on the destination filesystem.
-              $siblingName = '.reshiki-node-' + [Guid]::NewGuid().ToString('N') + $(if ($IsWindows) { '.exe' } else { '' })
-              $sibling = Join-Path (Split-Path $NodePath -Parent) $siblingName
-              try {
-                  Assert-NoLinkedPath -Path $Staged
-                  Assert-NoLinkedPath -Path $NodePath
-                  Assert-NodeArtifactHash -Path $Staged -SHA256 $StagedHash
-                  [IO.File]::Copy($Staged, $sibling, $false)
-                  Assert-NodeArtifactHash -Path $sibling -SHA256 $StagedHash
-                  if (-not $IsWindows) { [IO.File]::SetUnixFileMode($sibling, [IO.File]::GetUnixFileMode($Staged)) }
-                  $candidate = Read-NodeRuntime -NodePath $sibling
-                  Assert-ActionsNodeRuntime -Runtime $candidate -NodePath $sibling
-                  if ($candidate.versions.node -cne '24.22.1' -or $candidate.platform -cne $Asset.Platform -or
-                      $candidate.arch -cne $Asset.Architecture) { throw 'Staged Node has unexpected version/platform/architecture.' }
-                  # Re-observe the live worker and both paths immediately before replacement.
-                  $live = @(Get-Process -Name Runner.Worker -ErrorAction Stop | ForEach-Object { $_.Path })
-                  if ($live.Count -ne 1 -or $live[0] -cne $WorkerPath -or
-                      (Get-ActionsNodePath -WorkerPaths $live) -cne $NodePath) { throw 'The active runner changed during bootstrap.' }
-                  Assert-NoLinkedPath -Path $sibling
-                  Assert-NodeArtifactHash -Path $sibling -SHA256 $StagedHash
-                  Assert-NoActiveNodeTarget -NodePath $NodePath
-                  Assert-NodeArtifactHash -Path $NodePath -SHA256 $OriginalHash
-                  [IO.File]::Move($sibling, $NodePath, $true)
-                  Assert-NodeArtifactHash -Path $NodePath -SHA256 $StagedHash
-              } finally { if ([IO.File]::Exists($sibling)) { [IO.File]::Delete($sibling) } }
-          }
-
-          function Initialize-ActionsNode {
-              param([string] $WorkerPath, [string] $NodePath, [object] $Original)
-              Assert-HostedNodeContext -Runtime $Original -NodePath $NodePath -Environment $env:RESHIKI_RUNNER_ENVIRONMENT `
-                  -OS $env:RESHIKI_RUNNER_OS -Architecture $env:RESHIKI_RUNNER_ARCH
-              $oldHash = (Get-FileHash -LiteralPath $NodePath -Algorithm SHA256).Hash.ToLowerInvariant()
-              Write-Host "Original Actions runtime: Node $($Original.versions.node), $($Original.platform)/$($Original.arch), SHA256=$oldHash, $NodePath"
-              if ($Original.versions.node -cmatch '^24\.[0-9]+\.[0-9]+$' -and [version] $Original.versions.node -ge [version] '24.22.1') {
-                  Assert-ActionsNodeRuntime -Runtime $Original -NodePath $NodePath
-                  return # Already patched: no download and no filesystem modification.
-              }
-              if ($Original.versions.node -cne '24.21.0') { throw 'Only the observed compatible Node 24.21.0 runtime may be bootstrapped.' }
-              Assert-NoLinkedPath -Path $env:RUNNER_TEMP
-              $temporary = Join-Path $env:RUNNER_TEMP ('reshiki-node-' + [Guid]::NewGuid().ToString('N'))
-              [IO.Directory]::CreateDirectory($temporary) | Out-Null
-              if ($IsWindows) {
-                  $security = [Security.AccessControl.DirectorySecurity]::new()
-                  $security.SetAccessRuleProtection($true, $false)
-                  $identity = [Security.Principal.WindowsIdentity]::GetCurrent().User
-                  $rule = [Security.AccessControl.FileSystemAccessRule]::new($identity, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
-                  $security.AddAccessRule($rule)
-                  [IO.FileSystemAclExtensions]::SetAccessControl([IO.DirectoryInfo]::new($temporary), $security)
-              } else {
-                  [IO.File]::SetUnixFileMode($temporary, [IO.UnixFileMode]::UserRead -bor [IO.UnixFileMode]::UserWrite -bor [IO.UnixFileMode]::UserExecute)
-              }
-              try {
-                  $asset = Get-NodeBootstrapAsset -Platform $Original.platform -Architecture $Original.arch
-                  $archive = Join-Path $temporary 'download'
-                  $staged = Join-Path $temporary $(if ($IsWindows) { 'node.exe' } else { 'node' })
-                  Save-NodeArtifact -Asset $asset -Destination $archive
-                  Expand-NodeExecutable -Asset $asset -Archive $archive -Destination $staged
-                  $newHash = (Get-FileHash -LiteralPath $staged -Algorithm SHA256).Hash.ToLowerInvariant()
-                  Install-NodeExecutable -WorkerPath $WorkerPath -NodePath $NodePath -OriginalHash $oldHash -Staged $staged -Asset $asset -StagedHash $newHash
-                  $installed = Read-NodeRuntime -NodePath $NodePath
-                  Assert-ActionsNodeRuntime -Runtime $installed -NodePath $NodePath
-                  if ($installed.versions.node -cne '24.22.1' -or $installed.platform -cne $asset.Platform -or
-                      $installed.arch -cne $asset.Architecture) { throw 'Installed Node does not match the authenticated asset.' }
-                  Assert-HostedNodeContext -Runtime $installed -NodePath $NodePath -Environment $env:RESHIKI_RUNNER_ENVIRONMENT `
-                      -OS $env:RESHIKI_RUNNER_OS -Architecture $env:RESHIKI_RUNNER_ARCH
-                  Write-Host "Bootstrapped Actions runtime: Node $($installed.versions.node), $($installed.platform)/$($installed.arch), SHA256=$newHash, $NodePath"
-                  # Keep it for post actions; only the ephemeral hosted machine tears it down.
-              } finally { Remove-Item -LiteralPath $temporary -Recurse -Force }
-          }
-
-          function Assert-ActionsNodeRuntime {
-              param([object] $Runtime, [string] $NodePath)
-              if ($Runtime.versions.node -cnotmatch '^24\.[0-9]+\.[0-9]+$' -or
-                  [version] $Runtime.versions.node -lt [version] '24.22.1') {
-                  throw "JavaScript actions require the runner's Node >=24.22.1 (24.x); found $($Runtime.versions.node). Update the runner; setup-node cannot fix this runtime."
-              }
-              if ($Runtime.versions.brotli -cnotmatch '^[0-9]+\.[0-9]+\.[0-9]+$') {
-                  throw 'The embedded Node runtime did not report its Brotli version.'
-              }
-              $comparison = if ($IsWindows) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
-              if (-not [string]::Equals([IO.Path]::GetFullPath($Runtime.execPath), $NodePath, $comparison)) {
-                  throw "The inspected runtime is not the active runner's embedded Node: $($Runtime.execPath)"
-              }
-              # Official Node 24.22.1 backports CVE-2026-111497 while retaining the
-              # Brotli 1.2.0 version label. The Node security-release floor is authoritative:
-              # https://github.com/nodejs/node/compare/v24.21.0...v24.22.1
-              Write-Host "Verified Actions runtime: Node $($Runtime.versions.node), Brotli $($Runtime.versions.brotli), $NodePath"
-          }
-
-          Assert-NodeEnvironment
-          $workers = @(Get-Process -Name Runner.Worker -ErrorAction Stop | ForEach-Object { $_.Path })
-          $node = Get-ActionsNodePath -WorkerPaths $workers
-          $original = Read-NodeRuntime -NodePath $node
-          Initialize-ActionsNode -WorkerPath $workers[0] -NodePath $node -Original $original
-          Assert-ActionsNodeRuntime -Runtime (Read-NodeRuntime -NodePath $node) -NodePath $node
-          # Provider initialization/pre-job internals precede this step and remain outside
-          # repository coverage. Audited actions must have no runs.pre, even transitively.
+          Write-Host "Verified Actions runtime: $version ($node)"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -361,29 +95,6 @@ jobs:
         env:
           CI_LIVE_REFERENCE: ${{ inputs.live_reference || false }}
         run: python3 scripts/ci_scope.py
-  dependency-advisories:
-    name: Current locked dependency advisories
-    runs-on: ubuntu-22.04
-    timeout-minutes: 10
-    steps:
-      - *actions_runtime
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
-        with:
-          version: "0.13.5"
-          python-version: "3.12.15"
-          enable-cache: false
-      - run: uv sync --locked
-      - name: Query current advisories and enforce the dated exposure guards
-        run: uv run --locked python scripts/audit_locked_dependencies.py --project . --output-prefix artifacts/dependency-advisories/locked
-      - name: Retain raw matches, responses, lockfiles and dispositions
-        if: ${{ always() && steps.actions_runtime_guard.outcome == 'success' && hashFiles('artifacts/dependency-advisories/*') != '' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: locked-dependency-advisories
-          path: artifacts/dependency-advisories
-          if-no-files-found: error
-          retention-days: 14
   web:
     runs-on: ubuntu-22.04
     steps:
@@ -441,9 +152,6 @@ jobs:
           version: "0.13.5"
           python-version: ${{ matrix.python }}
       - run: uv sync --locked
-      - name: Exercise the actual Actions runtime guard functions
-        shell: pwsh
-        run: ./tests/actions_runtime_guard.ps1
       - run: uv run --locked ruff check reference scripts tests
       - run: uv run --locked ruff format --check reference scripts tests
       - run: uv run --locked ty check

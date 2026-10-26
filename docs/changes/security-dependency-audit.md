@@ -1,300 +1,108 @@
-# Dependency security review, 26 October 2026
+# Dependency security updates, 26 October 2026
 
-This review supports [the release security gate, #585](https://github.com/Ameyanagi/ReShiki/issues/585).
-It covers the locked Rust, JavaScript and Python graphs, selected Nix libraries,
-and CI runtimes. It is a dated advisory and
-reachability assessment, not a claim that every component is vulnerability-free.
+This dated assessment records the fixes and accepted exceptions for
+[PR #586](https://github.com/Ameyanagi/ReShiki/pull/586),
+[security #585](https://github.com/Ameyanagi/ReShiki/issues/585) and
+[Nix CI #588](https://github.com/Ameyanagi/ReShiki/issues/588).
+It covers reviewed locked dependencies and build runtimes, not every native,
+bundled or host library.
 
-The initial OSV query checked 1,225 distinct ecosystem/name/version records from
-620 Cargo packages, 602 Bun records and seven Python records. One Bun workspace
-alias has no registry version. The API returned 21 matching packages and 74
-advisory identifiers; six matched packages carry maintenance-only notices.
-Patched Bun's own audit independently identified the same nine affected npm
-packages. Raw query/response receipts and the reproducible standard-library
-scanner are retained in `evidence/security-2026-10-26/dependency-audit` in the
-release evidence workspace.
+## Dependency fixes
 
-## Updated dependencies
+| Dependency                | Before   | Selected   | Reviewed advisory scope                          |
+| ------------------------- | -------- | ---------- | ------------------------------------------------ |
+| rustls                    | 0.23.45  | 0.23.46    | RUSTSEC-2026-0346 through 0349                   |
+| rustls-webpki             | 0.103.15 | 0.103.16   | RUSTSEC-2026-0382, distrust emSign intermediates |
+| webpki-root-certs         | 1.0.9    | 1.0.10     | RUSTSEC-2026-0383, updated root data             |
+| tokio                     | 1.53.1   | 1.53.3     | RUSTSEC-2026-0386, AsyncFd I/O safety            |
+| fast-uri                  | 3.1.8    | 3.1.9      | URI normalization, host and scheme handling      |
+| postcss-selector-parser   | 6.1.4    | 7.1.6      | Selector parsing CPU exhaustion                  |
+| sharp                     | 0.35.4   | 0.35.5     | Bundled librsvg CVE-2026-96889                   |
+| smol-toml                 | 1.8.0    | 1.9.0      | Quadratic parsing                                |
+| source-map-js             | 1.2.1    | 1.2.2      | Indexed source-map denial of service             |
+| undici                    | 8.10.2   | 8.12.2     | EventSource, SRI and content-encoding fixes      |
+| vite                      | 8.3.0    | 8.3.3      | Dev-server, editor and file-access advisories    |
+| zod                       | 4.6.5    | 4.6.6      | Constrained collection allocation                |
+| Pillow, reference tools   | 12.3.0   | 13.0.0     | Package/image-codec advisories                   |
+| certifi, download helpers | absent   | 2026.10.23 | Updated CA bundle, minimum 2026.10.19            |
 
-| Dependency                         | Before   | Updated    | Advisory scope                                                                                                             |
-| ---------------------------------- | -------- | ---------- | -------------------------------------------------------------------------------------------------------------------------- |
-| rustls                             | 0.23.45  | 0.23.46    | RUSTSEC-2026-0346 through 0349: session Debug secrets, ECH handling, optional Brotli allocation and key-exchange downgrade |
-| rustls-webpki                      | 0.103.15 | 0.103.16   | [RUSTSEC-2026-0382](https://rustsec.org/advisories/RUSTSEC-2026-0382.html): reject distrusted emSign intermediates         |
-| webpki-root-certs                  | 1.0.9    | 1.0.10     | [RUSTSEC-2026-0383](https://rustsec.org/advisories/RUSTSEC-2026-0383.html): remove the emSign root                         |
-| tokio                              | 1.53.1   | 1.53.3     | [RUSTSEC-2026-0386](https://rustsec.org/advisories/RUSTSEC-2026-0386.html): AsyncFd I/O safety                             |
-| fast-uri                           | 3.1.8    | 3.1.9      | Four URI normalization/host/scheme advisories                                                                              |
-| postcss-selector-parser            | 6.1.4    | 7.1.6      | Selector parsing CPU exhaustion                                                                                            |
-| sharp                              | 0.35.4   | 0.35.5     | Bundled librsvg CVE-2026-96889                                                                                             |
-| smol-toml                          | 1.8.0    | 1.9.0      | Quadratic parsing                                                                                                          |
-| source-map-js                      | 1.2.1    | 1.2.2      | Indexed source-map denial of service                                                                                       |
-| undici                             | 8.10.2   | 8.12.2     | EventSource allocation, SRI and content-encoding errors                                                                    |
-| vite                               | 8.3.0    | 8.3.3      | Six dev-server/editor/file-access advisories                                                                               |
-| zod                                | 4.6.5    | 4.6.6      | Oversized constrained collection allocation                                                                                |
-| Pillow, development reference only | 12.3.0   | 13.0.0     | 41 image/reference package advisories                                                                                      |
-| certifi, development CI TLS helper | absent   | 2026.10.23 | Updated CA bundle; required minimum 2026.10.19                                                                             |
+The npm overrides and lockfiles select these exact versions. The selector-parser
+major update needs the website checks/build; Pillow needs the reference-image
+comparisons. Desktop reqwest uses rustls with default features disabled;
+Cargo.lock contains no Google C Brotli binding or Rust Brotli decoder.
 
-The npm security overrides are exact versions; unchanged direct framework
-versions remain locked. The selector parser upgrade crosses a major version and
-requires the website checks/build in addition to the lock audit. Python's
-Pillow constraint now permits 13.x; certifi is a development dependency.
+## Eight retained advisory matches
 
-Rust HTTPS is desktop-only and uses reqwest with default features disabled and
-`rustls` enabled. Neither reqwest Brotli decoding nor rustls's non-default
-Brotli certificate feature is in the locked graph. There is no Google C Brotli,
-`brotli-sys`, Rust `brotli` or `woff2` package in Cargo.lock. The Rustls optional
-Brotli allocation advisory is distinct from Google's C decoder CVE-2026-111497.
-The Linux verifier uses native OS roots with webpki validation; Apple and
-Windows use their platform verifiers. `webpki-root-certs` is a wasm-only
-dependency of rustls-platform-verifier 0.7.0, while this application's reqwest
-dependency is desktop-only. Its lock entry is nevertheless updated.
+The recorded post-update OSV scan queried 1,226 distinct Cargo/npm/PyPI versions
+and retained these eight matches. They remain visible findings, not repaired
+versions. This is a dated release assessment rather than a recurring custom
+scanner or source-policy gate.
 
-## Scoped dispositions, not package-level fixes
+| Locked package             | Advisory                             | Recorded disposition                                               |
+| -------------------------- | ------------------------------------ | ------------------------------------------------------------------ |
+| lru 0.16.4                 | RUSTSEC-2026-0253                    | Current glyph-cache use lacks the trigger described below          |
+| http-cache-semantics 4.2.0 | GHSA-ch52-4w7c-c8xp / CVE-2026-93748 | Current static image-build use lacks the vulnerable cache-hit path |
+| paste 1.0.15               | RUSTSEC-2024-0436                    | Maintenance notice                                                 |
+| rustybuzz 0.20.1           | RUSTSEC-2026-0206                    | Maintenance notice                                                 |
+| ttf-parser 0.25.1          | RUSTSEC-2026-0192                    | Maintenance notice                                                 |
+| zbus_names 4.3.4           | RUSTSEC-2026-0371                    | Maintenance notice                                                 |
+| zvariant 5.15.0            | RUSTSEC-2026-0370                    | Maintenance notice                                                 |
+| zvariant_derive 5.15.0     | RUSTSEC-2026-0372                    | Maintenance notice                                                 |
 
-**lru 0.16.4 / [RUSTSEC-2026-0253](https://rustsec.org/advisories/RUSTSEC-2026-0253.html).**
-The issue requires `LruCache::pop()`, a stored key whose destructor can panic,
-and recovery from that unwind before another cache operation. The sole locked
-consumer is cryoglyph 0.1.0's glyph atlas. Its key is cosmic-text 0.15.0's
-`CacheKey`, which derives `Copy` and cannot have a destructor. The reviewed
-atlas calls `get`, `get_or_insert`, `peek_lru` and `pop_lru`, not `pop`. These
-preconditions are absent in the current application. The component remains in
-the affected version range; no fixed-version claim is made. The guard pins the
-reviewed lru/cryoglyph/cosmic-text source checksums and rejects another consumer
-or a changed key implementation until reviewed.
+The lru issue requires `pop()`, a key destructor that panics, and recovery from
+that unwind. The sole reviewed consumer is cryoglyph's glyph atlas; its
+cosmic-text cache key is `Copy` and has no destructor. The reviewed calls do not
+use `pop()`. Astro's sole reviewed http-cache-semantics use is its static
+remote-image build path using TTL APIs, not authenticated shared-response
+`max-stale` cache hits. Other uses remain affected. Reassess these dispositions
+when the relevant dependency or consumer changes.
 
-**http-cache-semantics 4.2.0 / [CVE-2026-93748](https://github.com/advisories/GHSA-ch52-4w7c-c8xp).**
-No fixed version was published in the advisory at review time. Its only locked
-consumer is Astro 7.3.3. Astro's image-build `assets/build/remote.js` constructs
-its own unauthenticated image requests and uses `storable()` and `timeToLive()`;
-it never invokes the vulnerable client `max-stale` cache-hit path. Revalidation
-supplies only the image ETag/Last-Modified conditions. The site is static and
-has no authenticated shared-response cache. The dependency remains affected in
-other uses. The guard requires the reviewed Astro archive integrity and sole
-consumer, and explicit static output without a server adapter. Its reviewed
-remote-image module SHA-256 is
-`f373fa76e3112446db327c79b34e2bbb1ef1dcad41affb60788adf30edc9588e`.
+## Build runtimes and accepted native-library scope
 
-**Pillow 13.0.0's bundled native font libraries.**
-Verified macOS ARM64 and Linux x64 wheels still contain Google's unpatched
-Brotli 1.2.0 via FreeType. The Pillow package update does **not** remove or fix
-that embedded CVE-2026-111497 decoder. The affected route is WOFF2/font decoding,
-which the current Python reference tools do not invoke: they perform raster
-pixel operations, and the embedded-picture reference accepts only PNG, TIFF,
-JPEG, GIF and BMP. There are no project calls/imports of Pillow ImageFont,
-ImageDraw, `_imagingft`, RDKit Draw/Cairo or their direct dynamic-import forms.
-The AST guard rejects adding those entry points without reassessment. This is
-a current-use disposition for development/reference tools; these Python wheels
-are not shipped in the native application. Native system/Nix font libraries
-have a separate audit and cannot be cleared by this Python usage guard.
+The selected toolchain is official prebuilt rustc **and Cargo 1.99.1**, with three
+platform archive hashes pinned in the flake. Bun 1.4.4, uv 0.13.5 and explicit
+Node 22.23.4/24.22.1 pins address the reviewed runtime advisories. JavaScript
+actions use the runner's embedded Node, independently of `setup-node`; that
+runtime must be patched before actions execute.
 
-Maintenance-only notices for paste, rustybuzz, ttf-parser, zbus_names, zvariant
-and zvariant_derive remain visible. They are not treated as repaired CVEs or
-silently suppressed by version changes. Replacing the rendering/desktop stack
-requires its own compatibility review.
+Nix's executing client/daemon is separate from application build libraries.
+Its HTTP decompression occurs before downloaded content hashes are checked.
+The reviewed Determinate Nix 3.24.1 bundles contain curl 8.23.0, Brotli 1.2.1
+and OpenSSL 3.6.5; the release fixes the Brotli decoder issue. Runtime selection
+and actual package/install checks still require validation on the final source.
 
-## Regression and verification contract
+The maintainer explicitly accepts stock pinned nixpkgs curl/Brotli/FreeType
+build-library advisories. The global overlays are removed so cached dependency
+outputs remain reusable. This exception does not clear those libraries or
+justify an unpatched executing Node/Nix runtime. Original GTK inputs and full
+chemical/PNG install checks remain. The Nix preflight rejects source LLVM/Rust/
+Cargo builds while permitting cached outputs; locked inputs and disabled source
+fallback keep a failed cache download from starting a compiler build.
 
-`scripts/check_dependency_security_scope.py` checks the dated fixed-version
-baselines and the scoped conditions above. The standard Python test discovery
-includes its tests, which reject font API imports/aliases, a new LRU/cache
-consumer, changed reviewed sources and server rendering. The guard does not
-replace a fresh advisory scan or resist deliberately rewritten source code.
+Inspected Pillow 13 wheels retain Brotli 1.2.0 through font libraries. Current
+reference tools perform raster operations and do not decode fonts/WOFF2. That is
+a dated use assessment, not a fix to the bundled decoder or an AST-enforced
+policy. Python 3.12.15 selection also does not claim Python 3.12.16 fixes.
+HTTPS download helpers use the locked certifi CA bundle alone, excluding the
+compromised emSign G3 root; the distinct G1 root remains. Offline packaging
+continues to use only the standard library.
 
-Security dependency changes have no intended visible UI change. Validation
-must include the locked Cargo tests/checks, website check/build after the parser
-upgrade, JavaScript regressions, and Pillow-backed reference image comparisons.
-Record their exact results in the release evidence. Continue to report raw
-scanner matches together with these dispositions; do not label an eight-match
-postscan as “zero advisories.”
+## Evidence and license continuity
 
-The final local scan queried 1,226 distinct versions after adding certifi. It
-retained eight raw matches: the six maintenance notices and the two scoped
-exposure findings described above, with no new blocking finding or failed
-scope guard. The Checks workflow now repeats this scan once per run against
-the current OSV database. Exact advisory ID, package, version, source and
-metadata revision must match the reviewed policy; a known alias does not
-exempt a new advisory. Maintenance notices also require fresh RustSec source
-metadata. Network errors, partial responses and changed classifications fail
-the job. Raw reports and lock hashes remain available as workflow artifacts,
-including after a scan failure when the runner runtime check has passed.
+Original scan responses, lock identities and review receipts remain in the
+release workspace under `evidence/security-2026-10-26/dependency-audit` and its
+hosted-audit evidence. The full earlier assessment and removed scanner/policy
+sources are preserved externally under
+`evidence/security-2026-10-26/minimal-review/original-b9c7941e`.
 
-Local validation passed 3,128 workspace library/binary tests, five independent
-image-reference comparisons and nine Python picture tests. Website checking
-and the build passed after the selector parser upgrade. The scanner, runtime
-guard and TLS helper passed 22 focused regression tests, including their
-failure paths. Cross-platform CI, Nix builds and final release package checks
-must still pass on the final source before publication.
+Historical validation includes 3,128 native tests, 206 JavaScript/WASM/desktop
+comparisons and website/license checks. The earlier prebuilt-toolchain Linux
+candidate passed a full flake check in 393.45 seconds using retained caches;
+that is not a pristine-cold measurement or validation of subsequent source
+changes. Required final-source CI and package checks remain release gates.
 
-## CI runtimes and action dependencies
-
-[Node's 21 October security release](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases)
-fixes CVE-2026-111497, the Google C Brotli decoder memory corruption issue,
-alongside DNS, TLS and HTTP issues. Workflow commands now select Node 22.23.4
-or 24.22.1 explicitly. Bun is pinned to 1.4.4, the
-[patched Bun release](https://github.com/oven-sh/bun/security/advisories/GHSA-663w-cv8g-jj2p).
-The app does not ship either runtime.
-
-JavaScript actions run with the runner's bundled Node, independently of
-`setup-node`. Jobs that use JavaScript actions start with the same PowerShell
-bootstrap and guard before checkout or another JavaScript action. It finds
-the live `Runner.Worker` and its absolute private Node path. A supported Node
-24 runtime at or above 24.22.1 passes without a download or file change.
-Node 24.22.1 backports the decoder fix while still reporting Brotli 1.2.0;
-the guard therefore checks the patched Node release rather than that label.
-
-For the observed Node 24.21.0 installation on an ephemeral GitHub-hosted VM,
-the bootstrap installs the official 24.22.1 executable before action execution.
-It cross-checks the original binary's platform and architecture against the
-runner context, rejects runtime/module-injection overrides and authenticates
-the download with a fixed SHA-256 before parsing or execution. Those six
-artifact hashes were verified against Node's signed checksum manifest;
-`scripts/actions_node_bootstrap.json` records the signer and provenance.
-Downloads retain TLS verification, disable automatic decompression and
-redirects, and have time and size limits. Unix extraction selects only the
-expected regular `bin/node` member; Windows uses the official raw executable.
-
-The verified executable is copied to a unique sibling of the private Node
-path, checked again, and atomically replaces that one file after the worker,
-path and original hash are rechecked. The installed binary must pass the
-version, platform, architecture, path and hash checks. It remains installed
-for post-job actions until the VM is discarded. Unknown layouts, unexpected
-versions, links, permission failures or failed verification stop the job.
-There is no `PATH` fallback or relaxation of the security floor. The canonical
-script and embedded workflow copies are checked for equality.
-
-This is a temporary repository mitigation using runner internals, not a
-GitHub-supported runtime-selection setting. It assumes a trusted hosted image
-and reviewed workflow. The [runner action handler](https://github.com/actions/runner/blob/v2.338.0/src/Runner.Worker/Handlers/NodeScriptActionHandler.cs)
-resolves the private executable for each main and post action launch. Hosted
-execution on every release architecture remains required before publication.
-
-The reviewed direct and transitive action manifests are recorded in
-`.github/actions/runtime-manifests.json`. Remote actions are pinned to full
-commit hashes and JavaScript actions use Node 24. Policy tests reject unknown
-action pins and action pre-hooks that would precede the guard. Pages actions
-and setup-uv were upgraded to the reviewed versions. Runner-internal work
-before the first step remains GitHub's responsibility. The first PR attempt
-at `48eaa508` stopped before checkout in ten jobs because GitHub supplied
-runner 2.338.0 with Node 24.21.0. The temporary bootstrap addresses this
-observed runtime without weakening the guard.
-[Runner 2.338.1](https://github.com/actions/runner/releases/tag/v2.338.1)
-contains the patched runtime, but GitHub deploys runner releases progressively.
-Actual successful bootstrap/guard, action and post-job execution is required;
-the upstream release's existence is not sufficient evidence.
-
-Some current upstream action bundles still include affected Undici versions.
-Updating runner Node does not replace those bundles. The reviewed HTTP client
-uses Undici's proxy agent, while `@actions/github` also uses its fetch API for
-fixed GitHub endpoints. No EventSource use or attacker-controlled response
-endpoint was found in these workflow call paths. This bounds the current use
-of the [EventSource advisory](https://github.com/nodejs/undici/security/advisories/GHSA-4qv8-2p9j-2685)
-and [content-encoding advisory](https://github.com/nodejs/undici/security/advisories/GHSA-xjj6-f33q-929c);
-it does not declare the bundled dependencies patched. The repository's own
-Undici dependency is updated separately in the table above.
-
-## Python build tooling and certificate trust
-
-Workflows select managed CPython 3.12.15 and uv 0.13.5. The managed-only setting
-prevents a cached older Python from satisfying the selection. Python is used
-for build and reference checks and is absent from distributed app packages.
-All project Python HTTPS calls use `scripts/download_tls.py`, which requires
-certifi 2026.10.19 or newer and constructs a hostname-verifying TLS context
-from that bundle alone. It never adds operating-system roots or falls back to
-them. The lock selects certifi 2026.10.23. Existing download size and checksum
-checks remain in place; offline packaging imports still work without certifi.
-
-[Python 3.12.16](https://www.python.org/downloads/release/python-31216/)
-was released as source on 25 October. Its binaries were not yet available in
-the reviewed uv or actions/python-versions catalogs. This change does not
-claim to install its interpreter fixes. The explicit updated CA bundle and
-patched uv address this project's download trust path for the compromised
-eMudhra intermediates. Reviewed XML inputs are trusted reference/test data;
-the project does not directly import `mimetypes`; release extraction uses the
-`data` filter rather than `tar_filter`, and source archives are checksum-pinned.
-These are current-use limits for the remaining interpreter advisories, not
-equivalents of installing Python 3.12.16. Reassess when the managed build is
-available or those input paths change.
-
-## Nix and native library scope
-
-The Nix lock selects OpenSSL 3.5.9. An earlier candidate also overrode Google
-Brotli, curl and FreeType throughout nixpkgs. That changed the inputs of CMake,
-LLVM, Rust and many other packages, causing fresh runners to rebuild them; the
-Linux x64 check reached its six-hour limit before building ReShiki.
-
-At the maintainer's request, the package now uses the stock pinned nixpkgs
-libraries and accepts the remaining curl, Brotli and FreeType advisory exposure
-in that build environment. The earlier global fixes are no longer asserted for
-this package graph. A build-tool finding does not by itself establish exposure
-in the shipped ReShiki executable; installed output and runtime dependencies
-require their own inspection.
-
-ReShiki uses the official prebuilt Rust compiler and Cargo **1.99.1**, the latest
-stable release on 26 October, with all three archive hashes pinned in the flake.
-The repository and workflow toolchain pins select the same version. The
-[Rust release notes](https://blog.rust-lang.org/2026/10/15/Rust-1.99.1/) describe
-the patch release. A preflight check rejects scheduled source LLVM, Rust compiler
-or Cargo builds; cached dependencies are allowed. Lock updates and fallback to
-source after a failed cache download are disabled. Actual package builds and
-the full installed-binary checks remain required on all three Nix systems.
-
-The installed Nix client and daemon require a separate check. The former
-`install-nix-action` pin deployed Nix 2.35.3, whose official signed runtime closures
-contain curl 8.20.0 and Brotli 1.2.0 on all three CI systems. Its pinned source
-recipes contain neither relevant security fix. The application overlay above
-does not replace this installed runtime. Nix's
-[HTTP transfer implementation](https://github.com/NixOS/nix/blob/2.35.3/src/libstore/filetransfer.cc#L598)
-enables transparent decompression; a Brotli response is decoded before later
-content hashes or signatures are checked. The same concern applies to a binary
-cache NAR that selects Brotli compression. The affected curl HTTP/2 upload code
-is present, although the observed download operations do not establish that
-the upload advisory's trigger occurred. No exploitation is claimed.
-
-The 26 October Nix run at `7bf350d4` was intentionally cancelled after this
-finding; its cancellation is separate from the earlier Linux build timeouts.
-Canonical Nix 2.35.4 also selects affected sources without the relevant backports.
-
-The replacement uses the embedded Nix bundle from the three exact
-[Determinate Nix Installer 3.24.1 release assets](https://github.com/DeterminateSystems/nix-installer/releases/tag/v3.24.1).
-The [core release](https://github.com/DeterminateSystems/nix-src/releases/tag/v3.24.1)
-explicitly fixes the Brotli issue. Inspection of all three actual bundles found
-curl 8.23.0, Brotli 1.2.1 and OpenSSL 3.6.5, with the expected library linkage.
-The nine critical library registration records also match independently verified
-official Nix cache signatures. The custom Nix executable is authenticated by the
-publisher's release-asset digest; this does not imply a signed Nix cache entry,
-signed tag or Sigstore attestation for that executable. The embedded `.reginfo`
-is unsigned and covered by the authenticated containing archive.
-
-`scripts/nix_ci_runtime.json` pins each whole asset and embedded archive's hash,
-size and byte range, together with the installed executable and library identities.
-`scripts/nix_ci_runtime.mjs` verifies those bytes before extraction or execution.
-It invokes the bundle's shipped classic multi-user installer with channel updates
-disabled, then checks the resolved client, root-owned live daemon, service definition
-and loaded critical libraries before `nix flake check`. It uses the ordinary
-`nix-daemon` entry point. The outer Rust installer, separate Determinate Nixd
-supervisor and additional installer Actions are not executed. The first-step
-Actions Node bootstrap and the complete flake/package/install checks remain required.
-
-The bundled NSS 3.131.1 certificate file is also hash-pinned for the client and
-daemon. Its parsed certificate inventory omits the compromised
-`emSign ECC Root CA - G3`; the distinct G1 root remains, as in the patched certifi
-bundle. Nix transfers use this reviewed file without falling back to the host CA
-file. Installer substitution and channel fetches are disabled during local setup;
-crash-reporting and telemetry opt-outs cover the initial root invocations.
-
-Passive artifact inspection proves the selected bytes and dependency identities.
-Hosted installation, client/daemon attestation and full flake checks on Linux x64,
-Linux ARM64 and macOS ARM64 provide the separate execution evidence. This is a
-CI tool change; these Nix binaries are not included in ReShiki release packages.
-The review covers the identified HTTP-library vulnerabilities and certificate
-incident, not every optional feature or native dependency in the Nix fork.
-
-This review does not clear every package in the nixpkgs catalog, every host OS
-library, or libraries dynamically loaded by the host graphics stack. Portable
-package import inspection found only the expected platform libraries, but
-that is not a complete host OS vulnerability scan. Keep operating systems
-updated separately. Native font libraries also cannot be cleared by the
-Pillow reference-tool disposition above.
-
-## Certificate-data license continuity
-
-The `webpki-root-certs` update retains its existing CDLA-Permissive-2.0 terms. Versions 1.0.9 and 1.0.10 ship byte-identical agreement text (SHA-256 `e271993808fec50ab29350b39539cdec611a9103f827e0aa26d61da70e2d33f8`). The older version was already in the historical dependency baseline; the new version required an explicit review. The policy now accepts only the reviewed 1.0.10 crates.io archive, matched by name, version, license, source and checksum. The global license allowlist and historical baseline remain unchanged. [CDLA-Permissive-2.0](https://cdla.dev/permissive-2-0/) permits sharing the data with the full agreement supplied and imposes no restrictions on results. Release notice generation preserves the complete agreement, original manifest and review record in `Licenses/THIRD-PARTY-NOTICES.txt`; no separate supplement or relabeling of upstream terms is needed.
+The webpki-root-certs update retains CDLA-Permissive-2.0. Its existing exact-source
+license exception and review record remain; versions 1.0.9 and 1.0.10 contain the
+same agreement. Generated notices preserve the full upstream agreement and
+manifest. Maintenance notices, scoped exposures and accepted build libraries
+must not be reported as a universal CVE-free inventory.
