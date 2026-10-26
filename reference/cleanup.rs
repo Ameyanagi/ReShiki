@@ -15,6 +15,9 @@ use std::{
     sync::Arc,
 };
 
+#[path = "cleanup_errors.rs"]
+mod cleanup_errors;
+
 #[derive(Deserialize)]
 struct Case {
     name: String,
@@ -212,6 +215,7 @@ async fn complete_cleanup_matches_original_worker_and_captured_layouts() -> anyh
                     .as_deref()
                     .filter(|e| e.starts_with("Cleanup ") || e.starts_with("Select atoms "))
                 {
+                    let expected = cleanup_errors::expected_refusal(&error, expected);
                     anyhow::ensure!(
                         error.to_string() == expected,
                         "{}: {error} != {expected}",

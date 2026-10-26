@@ -39,6 +39,8 @@ fn helper(name: &str) -> anyhow::Result<Option<PathBuf>> {
 
 #[path = "support/molfile_restrictions.rs"]
 mod molfile_restrictions;
+#[path = "support/reaction_presentation.rs"]
+mod reaction_presentation;
 #[path = "support/reference_annotations.rs"]
 mod reference_annotations;
 #[path = "support/reference_cdx.rs"]
@@ -65,8 +67,17 @@ struct Case {
 }
 
 fn compare(actual: Response, expected: Response) -> anyhow::Result<()> {
+    compare_response(actual, expected, None)
+}
+
+fn compare_response(
+    actual: Response,
+    expected: Response,
+    import_format: Option<&str>,
+) -> anyhow::Result<()> {
     let mut a = serde_json::to_value(actual)?;
     let mut b = serde_json::to_value(expected)?;
+    reaction_presentation::adapt_import("import", import_format, &a, &mut b)?;
     for key in ["mass", "exact_mass", "logp", "tpsa"] {
         if let (Some(x), Some(y)) = (a["analysis"][key].as_f64(), b["analysis"][key].as_f64())
             && (x - y).abs() <= y.abs().max(1.) * 1e-12
@@ -358,7 +369,7 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
                     Ok(b)
                 };
                 expected
-                    .and_then(|b| compare(*a, b))
+                    .and_then(|b| compare_response(*a, b, Some(format)))
                     .err()
                     .map(|e| e.to_string())
             }
