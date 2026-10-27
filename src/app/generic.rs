@@ -219,7 +219,7 @@ impl App {
                         };
                         self.tab.cleanup = None;
                         self.tab.erase_stroke = false;
-                        self.tab.untitled_name = Some("Generic expansion");
+                        self.tab.untitled_name = Some("Generic expansion".into());
                         self.commit_changed(reconciled, false);
                         self.sync_drawing_defaults();
                         self.tool = Tool::Select;

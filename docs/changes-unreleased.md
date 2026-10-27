@@ -1,5 +1,9 @@
 # Unreleased changes
 
+Under review: @Ameyanagi — imported drawings show their source filename in tabs
+and the window title while Save still asks for a native drawing destination
+([issue #601](https://github.com/Ameyanagi/ReShiki/issues/601), [PR #606](https://github.com/Ameyanagi/ReShiki/pull/606)).
+
 Under review: @Ameyanagi — Linux desktop launchers can associate ReShiki windows
 with their launcher and icon in [PR #598](https://github.com/Ameyanagi/ReShiki/pull/598).
 Reported by @fusion809 in [issue #597](https://github.com/Ameyanagi/ReShiki/issues/597).
