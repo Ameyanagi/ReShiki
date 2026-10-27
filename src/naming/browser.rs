@@ -31,7 +31,7 @@ impl Cancel {
     pub fn stop(&self) {
         self.0.store(true, Ordering::Release);
     }
-    fn stopped(&self) -> bool {
+    pub(super) fn stopped(&self) -> bool {
         self.0.load(Ordering::Acquire)
     }
 }

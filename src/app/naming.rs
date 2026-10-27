@@ -6,6 +6,7 @@ use crate::canvas::{Camera, Edit, MoleculeCanvas, PreviewStyles, Tool};
 use iced::widget::{Space, column, container, row, scrollable, text};
 mod aliases;
 mod import_dock;
+mod online;
 pub use aliases::{AliasAction, AliasTarget};
 mod molecule_label;
 mod preview;
@@ -18,7 +19,7 @@ use reshiki::{
     naming::{self, Record},
 };
 
-const PANEL_INTRO: &str = "Read and generate names on this computer.";
+const PANEL_INTRO: &str = "Parse names locally, or confirm an online lookup.";
 const NAME_HINT: &str = "Ambiguous names and unsupported stereo are rejected.";
 const PREVIEW_HINT: &str = "Drag atoms to arrange the layout.";
 const STRUCTURE_HINT: &str = "Neutral C, N, O and halogen molecules, up to 64 heavy atoms.";
@@ -38,6 +39,7 @@ impl Ticket {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Pending {
     Request(Ticket),
+    Online(Ticket),
     Preview(Ticket),
     Caption(Ticket),
     Import { ticket: Ticket, add_caption: bool },
@@ -46,6 +48,7 @@ impl Pending {
     fn ticket(self) -> Ticket {
         match self {
             Self::Request(ticket)
+            | Self::Online(ticket)
             | Self::Preview(ticket)
             | Self::Caption(ticket)
             | Self::Import { ticket, .. } => ticket,
@@ -61,6 +64,10 @@ pub enum Action {
     Name(String),
     Cancel,
     Resolve,
+    AskOnline,
+    ConfirmOnline(u64),
+    DismissOnline,
+    OpenOnlineSource,
     Generate,
     ShowMoleculeName(Vec<u64>),
     HideMoleculeName(Vec<u64>),
@@ -146,7 +153,9 @@ impl Notice {
     fn summary(&self) -> &str {
         match self.kind {
             NoticeKind::Retry | NoticeKind::Info => &self.detail,
-            NoticeKind::Unsupported => "Unsupported or ambiguous name. Try a more specific name.",
+            NoticeKind::Unsupported => {
+                "Name not supported locally or ambiguous. Try a systematic name, or choose Look up online."
+            }
             NoticeKind::Disconnected => {
                 "Salts and mixtures aren't supported yet. Draw the ions, or paste SMILES under Import → Structure."
             }
@@ -181,6 +190,7 @@ pub(super) struct State {
     preview_open: bool,
     details_open: bool,
     import_alias: Option<usize>,
+    online_confirmation: Option<(u64, String)>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -200,6 +210,7 @@ impl Default for State {
             preview_open: false,
             details_open: false,
             import_alias: None,
+            online_confirmation: None,
         }
     }
 }
@@ -216,6 +227,7 @@ impl State {
     }
 
     fn stop_request(&mut self) {
+        self.online_confirmation = None;
         if let Some(cancel) = self.local_cancel.take() {
             cancel.stop();
         }
@@ -297,7 +309,9 @@ impl App {
     }
 
     fn naming_working_label(&self) -> &'static str {
-        if self.tab.naming.local_cancel.is_some() && naming::worker_loading() {
+        if matches!(self.tab.naming.pending, Some(Pending::Online(_))) {
+            "Looking up on PubChem…"
+        } else if self.tab.naming.local_cancel.is_some() && naming::worker_loading() {
             "Loading the naming engine…"
         } else {
             "Working…"
@@ -317,6 +331,7 @@ impl App {
     }
 
     fn naming_ticket(&mut self) -> Ticket {
+        self.tab.naming.online_confirmation = None;
         self.tab.naming.serial = self.tab.naming.serial.wrapping_add(1);
         let ticket = Ticket {
             epoch: self.tab.file_epoch,
@@ -352,6 +367,7 @@ impl App {
         {
             return;
         }
+        let online = matches!(self.tab.naming.pending, Some(Pending::Online(_)));
         let caption = matches!(self.tab.naming.pending, Some(Pending::Caption(_)));
         let import_caption = match self.tab.naming.pending {
             Some(Pending::Import { add_caption, .. }) => Some(add_caption),
@@ -373,7 +389,11 @@ impl App {
         }
         match result {
             Err(error) => {
-                let notice = Notice::from(error);
+                let notice = if online {
+                    Notice::new(NoticeKind::Retry, error.to_string())
+                } else {
+                    Notice::from(error)
+                };
                 if caption {
                     self.status = notice.detail.clone();
                     self.error = true;
@@ -416,12 +436,21 @@ impl App {
                 self.tab.naming.name = name;
             }
             Action::Cancel => {
+                let online = matches!(self.tab.naming.pending, Some(Pending::Online(_)));
                 self.tab.naming.stop_request();
                 self.tab.naming.notice = Some(Notice::new(
                     NoticeKind::Retry,
-                    "Local name parsing was cancelled",
+                    if online {
+                        "Online lookup was cancelled"
+                    } else {
+                        "Local name parsing was cancelled"
+                    },
                 ));
             }
+            Action::AskOnline => self.ask_online_name(),
+            Action::ConfirmOnline(serial) => return self.confirm_online_name(serial),
+            Action::DismissOnline => self.tab.naming.online_confirmation = None,
+            Action::OpenOnlineSource => self.open_online_name_source(),
             Action::Resolve => {
                 if self.tab.naming.name.trim().is_empty() || self.tab.naming.pending.is_some() {
                     return Task::none();
@@ -716,6 +745,7 @@ impl App {
                     .color(self.theme().palette().danger),
             );
         }
+        name = name.push(self.online_name_controls());
         if !idle {
             let mut working = row![text(self.naming_working_label()).size(12)]
                 .spacing(10)

@@ -244,6 +244,11 @@ On a page with a Content-Security-Policy, the editor needs:
 - `worker-src blob:` on browsers without `scheduler.postTask`, where the
   event loop's timer runs in a small worker made from a `blob:` URL.
 
+The optional, user-confirmed PubChem name lookup also needs
+`connect-src https://pubchem.ncbi.nlm.nih.gov`. Omitting it blocks online lookup
+without affecting local name parsing. The editor never sends a chemical name
+to PubChem until the user confirms that individual lookup.
+
 `style-src` can stay strict: `mount` and `<reshiki-editor>` style the editor
 through the CSSOM, which `style-src` does not restrict. `src/frame.html`, the
 page `embed()` loads, has an inline `<style>`, so serve it with
