@@ -28,8 +28,7 @@ fn perform(request: wire::Request) -> Result<wire::Reply, String> {
             .map(wire::Reply::Imported),
     }
 }
-/// Answer one framed request in-process, where no helper can run (the browser).
-#[cfg(target_arch = "wasm32")]
+/// Answer one framed request in-process, for browsers and library embeddings.
 pub(super) fn respond(bytes: &[u8]) -> Result<Vec<u8>, String> {
     let response = wire::Response {
         version: kernel::VERSION.into(),

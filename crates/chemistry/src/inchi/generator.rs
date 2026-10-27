@@ -177,6 +177,46 @@ pub async fn generate_with_limits(
     transport::decode(&exchange(helper, &request, limits.timeout, limits.heap_bytes).await?)
 }
 
+/// Generate an identifier in a library embedding without launching a helper.
+/// Input and output retain the helper protocol's byte and graph validation.
+/// The caller owns cancellation and process resource limits in this mode.
+pub fn generate_in_process(input: &Input) -> Result<Output, Error> {
+    let request = transport::encode(input, DEFAULT_HEAP_BYTES)?;
+    transport::decode(&exchange_in_process(&request)?)
+}
+
+/// Import an InChI in a library embedding, preserving explicit hydrogens.
+pub fn read_in_process(inchi: &str) -> Result<Imported, Error> {
+    let request = transport::encode_import(
+        inchi,
+        DEFAULT_HEAP_BYTES,
+        output::Options {
+            sanitize: true,
+            remove_hydrogens: false,
+        },
+    )?;
+    transport::decode_import(&exchange_in_process(&request)?)
+}
+
+fn exchange_in_process(request: &[u8]) -> Result<Vec<u8>, Error> {
+    // The recursive kernel uses the same explicit stack as the native worker.
+    // A scoped thread lets the embedding retain ownership of request bytes.
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::thread::scope(|scope| {
+            std::thread::Builder::new()
+                .name("reshiki-inchi".into())
+                .stack_size(32 * 1024 * 1024)
+                .spawn_scoped(scope, || super::worker::respond(request))?
+                .join()
+                .map_err(|_| Error::Rejected("InChI operation panicked".into()))?
+                .map_err(Error::Rejected)
+        })
+    }
+    #[cfg(target_arch = "wasm32")]
+    super::worker::respond(request).map_err(Error::Rejected)
+}
+
 /// Read a sanitized molecule, preserving explicit graph hydrogens.
 /// Chemical statuses and diagnostics are separate from process failures.
 /// The dependency does not expose raw native records or warning bitmasks.

@@ -24,6 +24,9 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 pub struct Config {
     pub helper: PathBuf,
     pub limits: generator::Limits,
+    /// Library embeddings may execute the Rust kernel without an application
+    /// process. Helper time and heap limits apply only to the isolated mode.
+    pub in_process: bool,
 }
 impl Config {
     pub fn new(helper: PathBuf) -> Self {
@@ -33,6 +36,27 @@ impl Config {
                 timeout: Duration::from_secs(30),
                 heap_bytes: generator::DEFAULT_HEAP_BYTES,
             },
+            in_process: false,
+        }
+    }
+
+    /// Explicit opt-in for headless library embeddings. Desktop callers keep
+    /// the isolated helper by default, including in shared workspace builds.
+    pub fn in_process() -> Self {
+        Self {
+            in_process: true,
+            ..Self::new(PathBuf::new())
+        }
+    }
+
+    pub(crate) async fn read(&self, text: &str) -> Result<kernel::Imported, generator::Error> {
+        if self.in_process {
+            let text = text.to_owned();
+            crate::task::spawn_blocking(move || generator::read_in_process(&text))
+                .await
+                .map_err(|error| generator::Error::Rejected(error.to_string()))?
+        } else {
+            generator::read_with_limits(&self.helper, text, self.limits).await
         }
     }
 }
@@ -149,9 +173,9 @@ fn distance_response(request: &Request) -> Result<Response, Error> {
 /// Empty abbreviation results
 /// still require preparation and receive the native empty-molecule analysis.
 ///
-/// Dropping this future kills an active helper. An already running blocking
-/// task may finish its bounded detached calculation, but cannot publish a
-/// response or mutate the caller's drawing after cancellation.
+/// Dropping this future kills an active isolated helper. In-process work may
+/// finish after cancellation and has no helper time or heap limit; it cannot
+/// publish a response or mutate the caller's drawing after cancellation.
 pub async fn build(
     request: Arc<Request>,
     prepared: Option<Arc<Prepared>>,
@@ -183,6 +207,13 @@ pub async fn analyze_prepared(
 /// non-abbreviation requests omit preparation. Discovery remains lazy so a
 /// figure, exotic bond analysis or native early-empty result needs no helper.
 pub(crate) async fn execute(request: Request) -> Result<Response, Error> {
+    execute_with_config(request, None).await
+}
+
+pub(crate) async fn execute_with_config(
+    request: Request,
+    config: Option<Config>,
+) -> Result<Response, Error> {
     if distance_route(&request) {
         // This precedes the attachment-only MOL route, which otherwise does
         // not need ordinary molecular preparation. Validation stays first
@@ -274,7 +305,7 @@ pub(crate) async fn execute(request: Request) -> Result<Response, Error> {
         })
         .await?;
     }
-    build_with_config(request, prepared, None).await
+    build_with_config(request, prepared, config).await
 }
 
 async fn build_with_config(
@@ -304,6 +335,13 @@ async fn generate_inchi(
         // Native warning/error statuses are not transport failures. Like the
         // original MolToInchi wrapper, retain the returned identifier (possibly
         // empty); neither native log nor message becomes an application warning.
+        if config.in_process {
+            let input = input.clone();
+            return Ok(crate::task::spawn_blocking(move || {
+                generator::generate_in_process(&input).map(|output| output.inchi)
+            })
+            .await??);
+        }
         Ok(
             generator::generate_with_limits(&config.helper, input, config.limits)
                 .await?

@@ -1,5 +1,12 @@
 # Unreleased changes
 
+**Python package — under review (PR TBD).** Draw, convert and analyze structures
+from scripts, Jupyter, pandas and Excel with the same headless Rust engine as the
+editor. Immutable objects support chained cleanup and styles; parallel batches
+report individual row errors. [Issue #608](https://github.com/Ameyanagi/ReShiki/issues/608),
+[Python guide](python.md). PyPI publishing, six-platform release wheels, EMF and
+editable Office pictures are follow-ups.
+
 Under review: @Ameyanagi — Linux desktop launchers can associate ReShiki windows
 with their launcher and icon in [PR #598](https://github.com/Ameyanagi/ReShiki/pull/598).
 Reported by @fusion809 in [issue #597](https://github.com/Ameyanagi/ReShiki/issues/597).

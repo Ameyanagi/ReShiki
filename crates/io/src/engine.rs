@@ -210,6 +210,7 @@ impl ChemistryEngine for NativeBackend {
 pub struct LocalEngine<B = NativeBackend> {
     chemistry: B,
     native_responses: bool,
+    inchi: Option<native_response::Config>,
 }
 
 impl Default for LocalEngine<NativeBackend> {
@@ -217,6 +218,18 @@ impl Default for LocalEngine<NativeBackend> {
         Self {
             native_responses: true,
             chemistry: NativeBackend,
+            inchi: None,
+        }
+    }
+}
+
+impl LocalEngine<NativeBackend> {
+    /// A headless library engine whose Rust InChI kernel runs in-process.
+    /// The default engine continues to use the isolated application helper.
+    pub fn in_process() -> Self {
+        Self {
+            inchi: Some(native_response::Config::in_process()),
+            ..Self::default()
         }
     }
 }
@@ -226,6 +239,7 @@ impl<B: ChemistryEngine> LocalEngine<B> {
         Self {
             chemistry,
             native_responses: false,
+            inchi: None,
         }
     }
 
@@ -241,12 +255,12 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
             return Err("Unsupported protocol version".into());
         }
         if self.native_responses && request.operation == "clean" {
-            return native_cleanup::execute(request, None)
+            return native_cleanup::execute(request, self.inchi.clone())
                 .await
                 .map_err(|error| error.to_string());
         }
         if self.native_responses && request.operation == "aromatic" {
-            return native_aromatic::execute(request, None)
+            return native_aromatic::execute(request, self.inchi.clone())
                 .await
                 .map_err(|error| error.to_string());
         }
@@ -302,7 +316,7 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
                     Some("smiles" | "mol" | "inchi" | "cdxml" | "cdx")
                 ))
         {
-            return native_response::execute(request)
+            return native_response::execute_with_config(request, self.inchi.clone())
                 .await
                 .map_err(|e| e.to_string());
         }
@@ -342,7 +356,7 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
             }
         }
         if self.native_responses && request.operation == "import" {
-            return match native_import::execute(request, None)
+            return match native_import::execute(request, self.inchi.clone())
                 .await
                 .map_err(|e| e.to_string())?
             {

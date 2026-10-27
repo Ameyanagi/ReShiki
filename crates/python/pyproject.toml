@@ -1,0 +1,56 @@
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[project]
+name = "reshiki"
+dynamic = ["version"]
+description = "Draw, convert and analyse chemical structures with the ReShiki engine"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT OR Apache-2.0"
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Rust",
+  "Typing :: Typed",
+  "Topic :: Scientific/Engineering :: Chemistry",
+]
+
+[project.urls]
+Homepage = "https://github.com/Ameyanagi/ReShiki"
+Issues = "https://github.com/Ameyanagi/ReShiki/issues"
+
+[project.optional-dependencies]
+excel = ["openpyxl>=3.1,<4", "pillow>=10"]
+pandas = ["pandas>=2.0,<4"]
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "ruff>=0.15", "ty>=0.0.24", "pillow>=10"]
+
+[tool.maturin]
+python-source = "python"
+module-name = "reshiki._native"
+features = ["pyo3/extension-module"]
+include = ["python/reshiki/py.typed", "python/reshiki/*.pyi"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.ty.environment]
+python-version = "3.10"
+
+[tool.ty.src]
+include = ["python/reshiki"]
