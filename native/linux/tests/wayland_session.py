@@ -658,11 +658,11 @@ class Session:
                 [
                     "dpkg-query",
                     "-W",
-                    "gnome-shell",
-                    "mutter-common",
-                    "libmutter-14-0",
-                    "sway",
-                    "libwlroots12t64",
+                    *(
+                        ["gnome-shell", "mutter-common", "libmutter-14-0"]
+                        if self.args.compositor == "gnome"
+                        else ["sway", "libwlroots12t64"]
+                    ),
                     "libgtk-4-1",
                     "libwayland-client0",
                     "mesa-vulkan-drivers",
