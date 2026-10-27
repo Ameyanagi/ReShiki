@@ -1,5 +1,9 @@
 # Unreleased changes
 
+Under review: @Ameyanagi — Inline reaction-condition editors open away from the
+arrow, keeping the shaft and neighbouring structure visible where space permits.
+[Issue #602](https://github.com/Ameyanagi/ReShiki/issues/602); PR TBD.
+
 Under review: @Ameyanagi — Linux desktop launchers can associate ReShiki windows
 with their launcher and icon in [PR #598](https://github.com/Ameyanagi/ReShiki/pull/598).
 Reported by @fusion809 in [issue #597](https://github.com/Ameyanagi/ReShiki/issues/597).
