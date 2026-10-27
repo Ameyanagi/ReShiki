@@ -5,7 +5,7 @@ an exact gap in the current ruler unit, or drag perpendicular to the arrow while
 keeping the label attached. Selecting several labels applies one shared gap in
 one Undo step. Visible gap dimensions help align labels and stay out of exports.
 Custom gaps persist in native `.rsk` version 31; Auto-only drawings keep version 30.
-@Ameyanagi — [issue #600](https://github.com/Ameyanagi/ReShiki/issues/600),
+@Ameyanagi — [PR #603](https://github.com/Ameyanagi/ReShiki/pull/603),
 [user guide](arrows.md#adjust-label-spacing) and
 [native QA evidence](changes/arrow-label-spacing.md).
 

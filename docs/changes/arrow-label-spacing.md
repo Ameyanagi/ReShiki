@@ -1,6 +1,7 @@
 # Attached reaction-label spacing
 
-Under review for [issue #600](https://github.com/Ameyanagi/ReShiki/issues/600).
+Under review in [PR #603](https://github.com/Ameyanagi/ReShiki/pull/603), addressing
+[issue #600](https://github.com/Ameyanagi/ReShiki/issues/600).
 Implementation: @Ameyanagi. The [user guide](../arrows.md#adjust-label-spacing)
 explains numeric entry, dragging, Auto and detachment.
 
