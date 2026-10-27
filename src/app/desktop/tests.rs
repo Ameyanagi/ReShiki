@@ -88,7 +88,7 @@ fn admitted_foreign_import_holds_the_close_barrier_until_engine_result() {
         };
         let _ = app.update(Message::EngineDone {
             revision,
-            kind: Job::ImportFile,
+            kind: Job::ImportFile("delayed.mol".into()),
             result: Box::new(result),
         });
         assert!(!app.desktop.opening);
