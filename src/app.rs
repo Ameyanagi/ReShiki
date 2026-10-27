@@ -13,6 +13,7 @@ use std::path::PathBuf;
 mod abbreviations;
 mod accessibility;
 mod arcs;
+mod arrow_labels;
 mod arrows;
 #[cfg_attr(target_arch = "wasm32", path = "app/assistant_browser.rs")]
 mod assistant;
@@ -297,6 +298,7 @@ pub enum Message {
     ToggleSelectedRing,
     ArrowStyle(reshiki::arrows::Preset),
     ArrowAction(arrows::Action),
+    ArrowLabelGap(arrow_labels::Action),
     CustomElement(String),
     ApplyElement,
     InsertTemplate(usize),
@@ -790,6 +792,7 @@ impl App {
         }
         let existing: std::collections::HashSet<_> = self.tab.doc.all_ids().into_iter().collect();
         self.tab.selected.retain(|id| existing.contains(id));
+        self.sync_arrow_label_gap_input();
     }
     fn fit(&mut self) {
         if self.display_document().all_ids().is_empty() {

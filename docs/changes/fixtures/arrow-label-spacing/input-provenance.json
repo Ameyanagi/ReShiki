@@ -1,0 +1,13 @@
+{
+  "kind": "authored QA fixture, not a GUI save",
+  "source": "simple reaction arrows and public textbook condition labels",
+  "units": "mm",
+  "world_mm_scale": 0.12095238095238094,
+  "intended_checks": [
+    "set both horizontal upper labels to the same gap",
+    "perpendicular dragging retains attachment",
+    "rotated-arrow clearance",
+    "Undo/Redo and native save/reopen"
+  ],
+  "normalization": "new app restores attached label placement from the declared custom gaps on load"
+}

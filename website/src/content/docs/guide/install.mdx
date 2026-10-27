@@ -53,6 +53,14 @@ nix profile install github:Ameyanagi/ReShiki
 
 Update with `nix profile upgrade`; the in-app updater only replaces downloaded releases. On Linux outside NixOS, ReShiki needs your system's GPU driver; if it reports that no graphics adapter was found, start it through [nixGL](https://github.com/nix-community/nixGL). On a Mac, the package contains **ReShiki.app** and the `reshiki` command: nix-darwin and home-manager add the app to your Applications folder; with `nix profile install`, find it in `~/.nix-profile/Applications`. The DMG remains the signed, notarized Mac app.
 
+### Linux desktop launchers
+
+ReShiki identifies its Wayland and X11 windows as `reshiki`. If you create a
+launcher for a self-built or portable app, name it `reshiki.desktop` and set
+`StartupWMClass=reshiki` so the desktop can group its windows with the launcher.
+Its `Icon` entry must name an installed icon. The Nix package installs a matching
+launcher and icon.
+
 ### File compatibility
 
 ReShiki 0.13.1 saves every drawing in document version 30, even when it uses no new feature. ReShiki 0.13.0 and earlier cannot open these files and ask you to update. Older drawings still open in 0.13.1. If you share files with someone using an earlier version, keep a copy saved by that version before saving in 0.13.1. See [file compatibility](/developer/changes-0.13.1/#file-compatibility).

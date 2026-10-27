@@ -1348,10 +1348,10 @@ fn native_current_version_preserves_generic_units_and_still_reads_version19() {
     let bytes = source.file_json().unwrap();
     assert_eq!(
         serde_json::from_slice::<serde_json::Value>(&bytes).unwrap()["version"],
-        crate::document::VERSION
+        crate::document::DISTANCE_BONDS
     );
     let reopened = Document::from_native_file(&bytes).unwrap();
-    assert_eq!(reopened.version, crate::document::VERSION);
+    assert_eq!(reopened.version, crate::document::DISTANCE_BONDS);
     assert_eq!(reopened.generic, source.generic);
     let older = Document::from_native_file(include_bytes!(
         "../../../../tests/fixtures/geometry/adamantane.rsk"
@@ -1362,10 +1362,10 @@ fn native_current_version_preserves_generic_units_and_still_reads_version19() {
     assert_eq!(older.atoms.len(), 10);
     assert_eq!(
         serde_json::from_slice::<serde_json::Value>(&older.file_json().unwrap()).unwrap()["version"],
-        crate::document::VERSION
+        crate::document::DISTANCE_BONDS
     );
     // Clipboard and recovery copies use the same established current gate.
-    assert_eq!(source.current().version, crate::document::VERSION);
+    assert_eq!(source.current().version, crate::document::DISTANCE_BONDS);
 }
 
 /// 4-Chlorophenol as Clean up lays it out (Cl left, O right) with an

@@ -1,5 +1,21 @@
 # Unreleased changes
 
+Under review: @Ameyanagi — Linux desktop launchers can associate ReShiki windows
+with their launcher and icon in [PR #598](https://github.com/Ameyanagi/ReShiki/pull/598).
+Reported by @fusion809 in [issue #597](https://github.com/Ameyanagi/ReShiki/issues/597).
+[Metadata checks and limits](changes/linux-window-identity.md).
+
+**Adjustable reaction-label spacing — under review.** Set attached conditions to
+an exact gap in the current ruler unit, or drag perpendicular to the arrow while
+keeping the label attached. Selecting several labels applies one shared gap in
+one Undo step. Visible gap dimensions help align labels and stay out of exports.
+Custom gaps persist in native `.rsk` version 31; Auto-only drawings keep version 30.
+@Ameyanagi — [PR #603](https://github.com/Ameyanagi/ReShiki/pull/603),
+[user guide](arrows.md#adjust-label-spacing) and
+[native QA evidence](changes/arrow-label-spacing.md).
+
+![Two attached reaction-condition labels share a 4.0 mm gap, with on-canvas dimensions and a matching Properties value.](images/arrow-label-spacing/equal-gaps.png)
+
 The [0.13.1 release](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.13.1)
 was published on 26 October 2026. It includes the October dependency and CI runtime
 security updates merged in [PR #586](https://github.com/Ameyanagi/ReShiki/pull/586),
@@ -15,3 +31,9 @@ The versioned notes retain immutable QA links and qualifications.
 
 See [ReShiki 0.13.1](changes-0.13.1.md) for the published release notes and
 [release validation](release-0.13.1-validation.md) for package and web verification.
+
+Under review: [PR #599](https://github.com/Ameyanagi/ReShiki/pull/599) adds a
+general PubChem name lookup with confirmation for each query. Review its source
+and editable preview before inserting; local naming remains offline. Implemented
+by @Ameyanagi for [issue #596](https://github.com/Ameyanagi/ReShiki/issues/596),
+reported by @fusion809. [Native and browser examples](changes/online-name-lookup.md).

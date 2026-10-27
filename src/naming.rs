@@ -16,6 +16,8 @@ pub use catalog::{Alias, AliasSource, aliases_for_smiles};
 #[cfg(not(target_arch = "wasm32"))]
 mod client;
 mod local;
+mod online;
+pub use online::resolve_name_online;
 mod reverse;
 mod rules;
 pub mod worker;
@@ -66,14 +68,24 @@ pub enum Provenance {
     OpsinRust,
     OpsinRustRetainedName { source: &'static str },
     LocalRules,
+    PubChem { cid: u64 },
 }
 impl Provenance {
+    pub fn source_url(&self) -> Option<String> {
+        match self {
+            Self::PubChem { cid } => {
+                Some(format!("https://pubchem.ncbi.nlm.nih.gov/compound/{cid}"))
+            }
+            _ => None,
+        }
+    }
     pub fn label(&self) -> String {
         match self {
             Self::OpsinRust => "OPSIN Rust port · local deterministic parser".into(),
             Self::OpsinRustRetainedName { source } => {
                 format!("{source} retained name · parsed locally by OPSIN Rust port")
             }
+            Self::PubChem { cid } => format!("PubChem database · CID {cid}"),
             Self::LocalRules => "ReShiki rules 1 · verified by OPSIN Rust port".into(),
         }
     }

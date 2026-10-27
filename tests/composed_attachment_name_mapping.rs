@@ -2,7 +2,7 @@
 use reshiki::{
     arrow_anchors::{self, Target},
     atom_labels::{self, Number, Owner},
-    document::{Document, History, Point, VERSION},
+    document::{DISTANCE_BONDS, Document, History, Point},
     editing, molecule_names,
     palette::Color,
     transaction,
@@ -104,7 +104,7 @@ fn composed_attached_methanol_caption_and_maps_remap_without_reassigning_local_m
     );
     assert_eq!(selected.annotations[0].id, caption);
     let clipboard = Document::from_native_file(&selected.file_json().unwrap()).unwrap();
-    assert_eq!(clipboard.version, VERSION);
+    assert_eq!(clipboard.version, DISTANCE_BONDS);
     let mut target = Document {
         drawing_style: clipboard.drawing_style.clone(),
         ..Default::default()
@@ -204,7 +204,7 @@ fn composed_attached_methanol_caption_and_maps_remap_without_reassigning_local_m
     let path = dir.path().join("attached-name-maps.rsk");
     std::fs::write(&path, target.file_json().unwrap()).unwrap();
     let reopened = Document::from_native_file(&std::fs::read(path).unwrap()).unwrap();
-    assert_eq!(reopened.version, VERSION);
+    assert_eq!(reopened.version, DISTANCE_BONDS);
     assert_eq!(reopened, target.current());
 
     // Arrow-only clipboard data retains its curve but cannot retain external owners.

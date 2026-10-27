@@ -23,7 +23,10 @@ impl App {
             Action::Toggle => self.view_open = !self.view_open,
             Action::Rulers(enabled) => self.set_rulers(enabled),
             Action::Crosshair(enabled) => self.guides.crosshair = enabled,
-            Action::RulerUnit(unit) => self.guides.unit = unit,
+            Action::RulerUnit(unit) => {
+                self.guides.unit = unit;
+                self.sync_arrow_label_gap_input();
+            }
         }
     }
     pub(super) fn set_viewport(&mut self, size: iced::Size) {

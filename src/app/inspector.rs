@@ -245,7 +245,7 @@ fn deferred_generic_properties(error: &str) -> Option<&'static str> {
         .then_some(GENERIC_PROPERTIES)
 }
 
-fn card<'a>(body: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
+pub(super) fn card<'a>(body: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
     container(body)
         .width(Length::Fill)
         .style(|theme| {
@@ -737,6 +737,9 @@ impl App {
         if self.tool == Tool::Arrow || self.tab.doc.arrows.iter().any(|a| selected.contains(&a.id))
         {
             body = body.push(card(container(self.arrow_panel()).padding(12)));
+        }
+        if let Some(panel) = self.arrow_label_gap_panel() {
+            body = body.push(panel);
         }
         if self.tool == Tool::Text
             || (self.tab.selected.len() == 1

@@ -123,6 +123,7 @@ impl App {
             Message::ToggleSelectedRing => self.toggle_selected_ring(),
             Message::ArrowStyle(style) => self.set_arrow_style(style),
             Message::ArrowAction(action) => self.arrow_action(action),
+            Message::ArrowLabelGap(action) => self.arrow_label_gap_action(action),
             Message::CustomElement(s) => self.custom_element = s,
             Message::ApplyElement => self.apply_custom_element(),
             Message::CopyImage => return Some(self.copy_native(false, true)),

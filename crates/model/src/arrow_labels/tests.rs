@@ -183,16 +183,23 @@ fn dragging_text_away_detaches_and_across_changes_side() {
     let mut doc = scheme();
     let id = type_text(&mut doc, "hν", Point::new(60., -12.));
     let position = text(&doc, id).position;
-    // A small nudge re-centres.
+    // Perpendicular movement changes the gap while keeping horizontal centring.
+    let gap_before = gap(&doc, id).unwrap();
     edit(&mut doc, |doc| doc.translate(&[id], 10., -3.));
     assert_eq!(side(&doc, id), Some(Side::Above));
-    assert_eq!(text(&doc, id).position, position);
+    assert_centred(&doc, id);
+    assert!((gap(&doc, id).unwrap() - gap_before - 3.).abs() < 1e-3);
+    assert!((text(&doc, id).position.y - position.y + 3.).abs() < 1e-3);
     // Across the arrow.
     edit(&mut doc, |doc| doc.translate(&[id], 0., 70.));
     assert_eq!(side(&doc, id), Some(Side::Below));
     assert_centred(&doc, id);
-    // Away from it.
+    // A large perpendicular movement still adjusts the attached gap.
     edit(&mut doc, |doc| doc.translate(&[id], 0., 300.));
+    assert_eq!(side(&doc, id), Some(Side::Below));
+    assert!(gap(&doc, id).unwrap() > 250.);
+    // Sideways escape detaches.
+    edit(&mut doc, |doc| doc.translate(&[id], 1000., 0.));
     assert_eq!(side(&doc, id), None);
     assert!(text(&doc, id).position.y > 250.);
     // The detached arrow can be shortened freely.
@@ -298,7 +305,7 @@ fn native_files_and_copies_keep_labels() {
     let below = type_text(&mut doc, "quant.", Point::new(60., 14.));
     let bytes = doc.file_json().unwrap();
     let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(json["version"], crate::document::VERSION);
+    assert_eq!(json["version"], crate::document::DISTANCE_BONDS);
     assert_eq!(json["arrow_labels"][0]["side"], "above");
     let reopened = Document::from_native_file(&bytes).unwrap();
     assert_eq!(reopened.arrow_labels, doc.arrow_labels);
@@ -333,11 +340,131 @@ fn invalid_links_are_rejected_on_open() {
         arrow: ARROW,
         annotation: id,
         side: Side::Below,
+        gap: None,
     });
     assert!(duplicate.validate().is_err());
     let mut dangling = doc.clone();
     dangling.arrow_labels[0].arrow = 99;
     assert!(Document::from_json(&serde_json::to_vec(&dangling).unwrap()).is_err());
+}
+
+#[test]
+fn custom_gap_survives_arrow_edits_and_multiline_format_changes() {
+    let mut doc = scheme();
+    let id = type_text(&mut doc, "H2, Pd/C\nEtOH, rt", Point::new(60., -20.));
+    let below = type_text(&mut doc, "92%", Point::new(60., 20.));
+    edit(&mut doc, |doc| set_gap(doc, &[id], Some(36.)).unwrap());
+    edit(&mut doc, |doc| set_gap(doc, &[below], Some(12.)).unwrap());
+    for degrees in [0_f32, 30., 45., 90., 135., 180., 225., 270., 315.] {
+        edit(&mut doc, |doc| {
+            let angle = degrees.to_radians();
+            doc.arrows[0].start = Point::new(30., 50.);
+            doc.arrows[0].end = Point::new(30. + angle.cos() * 180., 50. + angle.sin() * 180.);
+        });
+        let dimension = gap_geometry(&doc, id).unwrap();
+        assert!(
+            (dimension.from.distance(dimension.to) - 36.).abs() < 1e-3,
+            "{degrees}"
+        );
+        assert_eq!(side(&doc, id), Some(Side::Above));
+        let lower = gap_geometry(&doc, below).unwrap();
+        assert!((lower.from.distance(lower.to) - 12.).abs() < 1e-3);
+        assert_eq!(side(&doc, below), Some(Side::Below));
+    }
+    edit(&mut doc, |doc| {
+        let label = doc.annotations.iter_mut().find(|a| a.id == id).unwrap();
+        label.text = "H2 (1 atm), Pd/C\nEtOH, room temperature, 2 h".into();
+        label.format.style.size_pt = 18.;
+        label.format.width_pt = Some(120.);
+        doc.arrows[0].style.as_mut().unwrap().width_pt = 2.;
+    });
+    let dimension = gap_geometry(&doc, id).unwrap();
+    assert!((dimension.from.distance(dimension.to) - 36.).abs() < 1e-3);
+    assert_eq!(doc.arrow_labels[0].gap, Some(36.));
+    edit(&mut doc, |doc| doc.translate(&[ARROW], 100., -30.));
+    assert!(
+        (gap_geometry(&doc, id)
+            .unwrap()
+            .from
+            .distance(gap_geometry(&doc, id).unwrap().to)
+            - 36.)
+            .abs()
+            < 1e-3
+    );
+    edit(&mut doc, |doc| doc.arrows[0].end = doc.arrows[0].start);
+    assert!(
+        (gap_geometry(&doc, id)
+            .unwrap()
+            .from
+            .distance(gap_geometry(&doc, id).unwrap().to)
+            - 36.)
+            .abs()
+            < 1e-3
+    );
+    assert!(
+        (gap_geometry(&doc, below)
+            .unwrap()
+            .from
+            .distance(gap_geometry(&doc, below).unwrap().to)
+            - 12.)
+            .abs()
+            < 1e-3
+    );
+}
+
+#[test]
+fn custom_gap_copy_clipboard_and_old_destination_promote_only_when_needed() {
+    let mut doc = scheme();
+    let id = type_text(&mut doc, "NaBH4, MeOH", Point::new(60., -20.));
+    edit(&mut doc, |doc| set_gap(doc, &[id], Some(48.)).unwrap());
+    let part = crate::editing::selection(&doc, &[ARROW]);
+    assert_eq!(part.arrow_labels[0].gap, Some(48.));
+    part.validate().unwrap();
+    let transported = Document::from_native_file(&part.file_json().unwrap()).unwrap();
+    assert_eq!(transported.version, crate::document::ARROW_LABEL_GAPS);
+    let mut target = Document::default();
+    assert!(target.version < crate::document::ARROW_LABEL_GAPS);
+    let ids = crate::editing::append(&mut target, &transported, Point::new(400., 70.));
+    target.validate().unwrap();
+    assert_eq!(target.version, crate::document::ARROW_LABEL_GAPS);
+    let link = &target.arrow_labels[0];
+    assert!(ids.contains(&link.arrow) && ids.contains(&link.annotation));
+    assert_eq!(link.gap, Some(48.));
+    let reopened = Document::from_native_file(&target.file_json().unwrap()).unwrap();
+    assert_eq!(reopened.arrow_labels, target.arrow_labels);
+    assert_eq!(reopened.annotations, target.annotations);
+    // Copying text alone remains plain text and needs no gap-capable format.
+    let text_only = crate::editing::selection(&doc, &[id]);
+    assert!(text_only.arrow_labels.is_empty());
+    assert_eq!(text_only.current().version, crate::document::DISTANCE_BONDS);
+}
+
+#[test]
+fn custom_gap_native_version_auto_reset_and_authoritative_load() {
+    let mut doc = scheme();
+    let id = type_text(&mut doc, "heat", Point::new(60., -12.));
+    assert_eq!(doc.current().version, 30);
+    edit(&mut doc, |doc| set_gap(doc, &[id], Some(0.)).unwrap());
+    let bytes = doc.file_json().unwrap();
+    let mut json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(json["version"], 31);
+    assert_eq!(json["arrow_labels"][0]["gap"], 0.);
+    // The persisted property, rather than a stale saved position, owns layout.
+    json["arrow_labels"][0]["gap"] = 25.into();
+    let restored = Document::from_native_file(&serde_json::to_vec(&json).unwrap()).unwrap();
+    let dim = gap_geometry(&restored, id).unwrap();
+    assert!((dim.from.distance(dim.to) - 25.).abs() < 1e-3);
+    json["version"] = 30.into();
+    assert!(Document::from_native_file(&serde_json::to_vec(&json).unwrap()).is_err());
+    edit(&mut doc, |doc| set_gap(doc, &[id], None).unwrap());
+    let json: serde_json::Value = serde_json::from_slice(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(json["version"], 30);
+    assert!(json["arrow_labels"][0].get("gap").is_none());
+    let before = doc.clone();
+    for invalid in [-1., f32::NAN, f32::INFINITY] {
+        assert!(set_gap(&mut doc, &[id], Some(invalid)).is_err());
+        assert_eq!(doc, before);
+    }
 }
 
 #[test]

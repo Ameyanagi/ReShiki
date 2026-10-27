@@ -1,8 +1,9 @@
 # Chemical names
 
 Chemical names turns a name into an editable structure and gives a molecule its
-systematic name. Names are converted on your computer; no internet connection,
-Java or naming service is needed.
+systematic name. The default parser runs on your computer without an internet
+connection or Java. An optional PubChem lookup can resolve common names outside
+the local parser's vocabulary, after you confirm that the name may be sent.
 
 ## Use it
 
@@ -20,6 +21,24 @@ Java or naming service is needed.
 **Structure** cancels it too. If you change the chemistry in the preview, the
 typed name no longer matches, so ReShiki inserts the structure without it.
 Apply SMILES edits before you insert.
+
+### Look up a common name online
+
+1. Enter the complete name under **Import → Name**. If local parsing cannot
+   resolve it, choose **Look up online…**.
+2. Review the name and provider in **Send this name to PubChem?**. Choose
+   **Send name** to contact `pubchem.ncbi.nlm.nih.gov` (NCBI), or **Cancel** to
+   stay offline. This sends the entered name, not your drawing. Every lookup
+   requires a new confirmation; local parsing never starts an online request.
+3. Review the returned structure and PubChem CID in the preview, then choose
+   **Insert**. Lookup alone does not change the drawing or Undo history.
+
+Changing the name or choosing **Cancel** stops a pending lookup. Multiple
+compound matches are rejected rather than choosing one silently. Salt and
+mixture results retain their components and are rejected by the existing
+single-molecule import limit; they are not converted to a free base.
+If PubChem is unavailable, local parsing and SMILES import remain available.
+The same confirmation flow is available in the Chemical names inspector.
 
 ### Show a molecule's name
 

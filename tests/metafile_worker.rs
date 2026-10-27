@@ -46,7 +46,7 @@ fn main() -> anyhow::Result<()> {
     let stored = doc.file_json().map_err(anyhow::Error::msg)?;
     let reopened =
         reshiki::document::Document::from_native_file(&stored).map_err(anyhow::Error::msg)?;
-    assert_eq!(reopened.version, reshiki::document::VERSION);
+    assert_eq!(reopened.version, reshiki::document::DISTANCE_BONDS);
     assert_eq!(
         reopened.graphics[0].picture.as_ref().unwrap().emf(),
         Some(source.as_slice())

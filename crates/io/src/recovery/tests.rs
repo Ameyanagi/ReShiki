@@ -158,7 +158,7 @@ fn old_dark_drafts_convert_their_colors_once() {
     store.save(&restored, None).unwrap();
     std::fs::rename(&store.session, &draft).unwrap();
     let resaved = store.candidates().remove(0).snapshot.document;
-    assert_eq!(resaved.version, VERSION);
+    assert_eq!(resaved.version, crate::document::DISTANCE_BONDS);
     assert_eq!(resaved, restored.current());
 }
 #[test]
@@ -178,6 +178,76 @@ fn draft_is_durable_and_corrupt_files_are_ignored() {
     assert!(store.session.exists());
     store.clear().unwrap();
     assert!(!store.session.exists());
+}
+
+#[test]
+fn drafts_use_the_required_file_version_after_custom_arrow_gap_returns_to_auto() {
+    use crate::{
+        arrow_labels::{self, ArrowLabel, Side},
+        arrows::{ArrowStyle, Preset},
+        document::{ARROW_LABEL_GAPS, Annotation, Arrow, DISTANCE_BONDS, Point},
+        typography::TextFormat,
+    };
+
+    fn saved(store: &Recovery, doc: &Document, version: u32) -> serde_json::Value {
+        store.save(doc, None).unwrap();
+        let bytes = std::fs::read(&store.session).unwrap();
+        let raw: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(raw["document"]["version"], version);
+        let snapshot: Snapshot = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(snapshot.document, doc.current());
+        raw
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let store = Recovery::in_directory(dir.path()).unwrap();
+    let mut doc = Document::default();
+    doc.add_atom("O", Point::new(-100., 0.));
+    saved(&store, &doc, DISTANCE_BONDS);
+    let arrow = doc.next_id();
+    doc.arrows.push(Arrow::new(
+        arrow,
+        Point::default(),
+        Point::new(120., 0.),
+        Preset::Forward,
+        ArrowStyle::preset(Preset::Forward),
+    ));
+    let annotation = doc.next_id();
+    doc.annotations.push(Annotation {
+        id: annotation,
+        position: Point::new(40., -30.),
+        text: "heat".into(),
+        format: TextFormat::default(),
+    });
+    doc.arrow_labels.push(ArrowLabel {
+        arrow,
+        annotation,
+        side: Side::Above,
+        gap: None,
+    });
+    // Also exercise an already-current ordinary document's borrowed fast path.
+    doc = doc.current();
+    for gap in [None, Some(24.), None] {
+        let before = doc.clone();
+        arrow_labels::set_gap(&mut doc, &[annotation], gap).unwrap();
+        let _ = crate::transaction::reconcile(&mut doc, before).unwrap();
+        let expected = if gap.is_some() {
+            ARROW_LABEL_GAPS
+        } else {
+            DISTANCE_BONDS
+        };
+        let raw = saved(&store, &doc, expected);
+        if let Some(gap) = gap {
+            assert_eq!(raw["document"]["arrow_labels"][0]["gap"], gap);
+        } else {
+            assert!(raw["document"]["arrow_labels"][0].get("gap").is_none());
+        }
+        std::fs::rename(&store.session, dir.path().join("abandoned-gap.json")).unwrap();
+        let candidates = store.candidates();
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].snapshot.document, doc.current());
+    }
+    assert_eq!(doc.version, ARROW_LABEL_GAPS);
 }
 
 #[test]

@@ -537,6 +537,9 @@ pub(crate) fn extend_append_part(doc: &mut Document, part: Document) {
     doc.molecule_names.extend(part.molecule_names);
     doc.arrows.extend(part.arrows);
     doc.arrow_labels.extend(part.arrow_labels);
+    if doc.arrow_labels.iter().any(|label| label.gap.is_some()) {
+        doc.require_version(crate::document::ARROW_LABEL_GAPS);
+    }
     doc.graphics.extend(part.graphics);
     doc.groups.extend(part.groups);
     doc.abbreviations.extend(part.abbreviations);

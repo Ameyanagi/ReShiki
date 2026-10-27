@@ -65,7 +65,7 @@ fn one_frame_and_reopen(before: &Document, after: &Document) {
     assert_eq!(doc, *after);
     assert!(!history.can_redo());
     let mut saved = doc.clone();
-    saved.version = crate::document::VERSION;
+    saved.version = saved.file_version();
     assert_eq!(
         Document::from_json(&serde_json::to_vec(&saved).unwrap()).unwrap(),
         saved

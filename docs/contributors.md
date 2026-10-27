@@ -4,6 +4,11 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
+Under review: @Ameyanagi — stable Linux window identity and matching desktop
+launcher metadata in [PR #598](https://github.com/Ameyanagi/ReShiki/pull/598).
+Reported by @fusion809 in [issue #597](https://github.com/Ameyanagi/ReShiki/issues/597).
+[Window-metadata checks and limits](changes/linux-window-identity.md).
+
 @Ameyanagi — deterministic reaction-reference indicators and
 mapped RSMI/RXN coverage in [PR #589](https://github.com/Ameyanagi/ReShiki/pull/589).
 [QA evidence](https://github.com/Ameyanagi/ReShiki/blob/34a21da80846371927175ab43b83e2abf02ff95a/docs/changes/qa-reference-owned-ink.md).
@@ -293,3 +298,8 @@ Clear CLI errors for unsupported crystal input: @Ameyanagi in [PR #537](https://
 Artemisinin depiction and whole-molecule cleanup diagnostics: @Ameyanagi in [PR #538](https://github.com/Ameyanagi/ReShiki/pull/538); [validation and matched renderer evidence](changes/artemisinin-depiction.md).
 
 Release preparation and documentation for 0.13.1: @Ameyanagi in [PR #583](https://github.com/Ameyanagi/ReShiki/pull/583).
+
+Under review: @Ameyanagi — confirmed online chemical-name lookup in
+[PR #599](https://github.com/Ameyanagi/ReShiki/pull/599). @fusion809 reported
+the unsupported common names in [issue #596](https://github.com/Ameyanagi/ReShiki/issues/596).
+[Native and browser evidence](changes/online-name-lookup.md).

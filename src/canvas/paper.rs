@@ -202,6 +202,15 @@ impl MoleculeCanvas<'_> {
             self.guides.unit,
             self.doc.canvas_theme.is_dark(),
         );
+        smart_guides::draw_arrow_label_gaps(
+            frame,
+            &preview,
+            selected,
+            self.camera,
+            bounds,
+            self.guides.unit,
+            self.doc.canvas_theme.is_dark(),
+        );
     }
 
     fn draw_background(&self, frame: &mut layered::Frame<'_>, state: &State, bounds: Rectangle) {

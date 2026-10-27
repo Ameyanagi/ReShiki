@@ -353,7 +353,7 @@ fn popup_stays_in_view_at_document_edges_with_long_labels() {
 }
 
 #[test]
-fn text_tool_conditions_attach_to_an_arrow_and_drag_away_detaches() {
+fn text_tool_conditions_attach_to_an_arrow_and_sideways_drag_detaches() {
     use reshiki::{
         arrow_labels::Side,
         arrows::{ArrowStyle, Preset},
@@ -384,7 +384,7 @@ fn text_tool_conditions_attach_to_an_arrow_and_drag_away_detaches() {
     assert!((doc.annotations[0].position.x + width / 2. - mid.x).abs() < 1e-3);
     let attached = app.tab.doc.clone();
 
-    let _ = app.update(Message::Canvas(CanvasEdit::Move(vec![id], 0., -400.)));
+    let _ = app.update(Message::Canvas(CanvasEdit::Move(vec![id], 1000., 0.)));
     assert!(app.tab.doc.arrow_labels.is_empty());
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc, attached);

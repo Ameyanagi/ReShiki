@@ -507,7 +507,7 @@ fn view_visibility_freezing_rgb_keeps_settings_but_visibility_tracks_rotation() 
     let after = Paint::new(&doc);
     assert!(ids.iter().any(|id| before.atom(*id) != after.atom(*id)));
     let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
-    assert_eq!(reopened.version, crate::document::VERSION);
+    assert_eq!(reopened.version, crate::document::DISTANCE_BONDS);
     assert_eq!(reopened, doc.current());
 }
 
@@ -624,7 +624,7 @@ fn view_visibility_query_budget_tracks_nonopaque_owners_and_independent_cages() 
     assert!(first.iter().any(|id| paint.atom(*id) == 0.25));
     assert!(second.iter().any(|id| paint.atom(*id) == 0.5));
     let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
-    assert_eq!(reopened.version, crate::document::VERSION);
+    assert_eq!(reopened.version, crate::document::DISTANCE_BONDS);
     assert_eq!(reopened, doc.current());
     for id in &all {
         assert_eq!(depth::Paint::new(&doc).amount(*id), rgb.amount(*id));

@@ -563,7 +563,11 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::CopyName
                 | Action::Caption
                 | Action::Alias(..)
-                | Action::OpenPanel(..) => None,
+                | Action::OpenPanel(..)
+                | Action::AskOnline
+                | Action::ConfirmOnline(..)
+                | Action::DismissOnline
+                | Action::OpenOnlineSource => None,
             }
         }
         Message::ThemeFile(action) => {
@@ -712,6 +716,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::ToggleSelectedRing
         | Message::ArrowStyle(..)
         | Message::ArrowAction(..)
+        | Message::ArrowLabelGap(..)
         | Message::CustomElement(..)
         | Message::ApplyElement
         | Message::InsertTemplate(..)
