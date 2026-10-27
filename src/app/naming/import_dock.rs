@@ -4,14 +4,19 @@ use super::super::workspace::{accessible_checkbox, accessible_command, muted_tex
 use super::*;
 use iced::widget::{Space, column};
 
-const DETAILS: &str =
-    "Names are read on this computer. Ambiguous names and unsupported chemistry are rejected.";
+const DETAILS: &str = "Names are parsed locally by default. Online lookup sends a name to PubChem only after you confirm. Ambiguous results and unsupported chemistry are rejected.";
 
 impl App {
     pub(in crate::app) fn cancel_name_import(&mut self) {
+        self.tab.naming.online_confirmation = None;
         if matches!(
             self.tab.naming.pending,
-            Some(Pending::Import { .. } | Pending::Request(_) | Pending::Preview(_))
+            Some(
+                Pending::Import { .. }
+                    | Pending::Request(_)
+                    | Pending::Preview(_)
+                    | Pending::Online(_)
+            )
         ) {
             let _ = self.naming_action(Action::Cancel);
         }
@@ -209,6 +214,7 @@ impl App {
                     .color(self.theme().palette().danger),
             );
         }
+        content = content.push(self.online_name_controls());
         if !idle {
             content = content.push(
                 row![

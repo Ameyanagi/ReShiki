@@ -236,7 +236,8 @@ async fn changed_alias_choice_keeps_retry_detail_and_summary() -> Result<(), Str
 fn finished_errors_keep_details_and_choose_dock_summaries_from_their_kind() {
     const PARSER_REJECTION: &str = "The OPSIN Rust port could not interpret this name unambiguously: unsupported optical rotation";
     const DAEMONIZING_LAUNCHER: &str = "Local worker exited without closing its response pipes; daemonizing launchers are unsupported";
-    const UNSUPPORTED: &str = "Unsupported or ambiguous name. Try a more specific name.";
+    const UNSUPPORTED: &str =
+        "Name not supported locally or ambiguous. Try a systematic name, or choose Look up online.";
     const SALT_DETAIL: &str = "Local naming supports one connected molecule; disconnected salts and mixtures are unsupported";
     const FAILED: &str = "Could not import this name. See Details.";
     for (error, kind, detail, summary) in [
@@ -311,7 +312,7 @@ async fn actual_salt_names_explain_the_salt_limit_and_unknown_names_stay_ambiguo
         (
             "reshiki-no-such-chemical-name-50",
             NoticeKind::Unsupported,
-            "Unsupported or ambiguous name. Try a more specific name.",
+            "Name not supported locally or ambiguous. Try a systematic name, or choose Look up online.",
         ),
     ] {
         let mut app = ready();
@@ -444,7 +445,7 @@ fn busy_requests_and_unsupported_names_leave_drawing_and_history_untouched() {
     );
     assert_eq!(
         app.tab.naming.notice.as_ref().unwrap().summary(),
-        "Unsupported or ambiguous name. Try a more specific name."
+        "Name not supported locally or ambiguous. Try a systematic name, or choose Look up online."
     );
     assert_eq!(
         Notice::new(
@@ -564,6 +565,7 @@ async fn default_dock_exposes_one_insert_and_collapses_preview_and_details() -> 
         "import-name-preview",
         "import-name-insert",
         "import-name-details",
+        "naming.online-ask",
     ] {
         let node = snapshot
             .nodes
@@ -576,7 +578,8 @@ async fn default_dock_exposes_one_insert_and_collapses_preview_and_details() -> 
         snapshot
             .nodes
             .iter()
-            .all(|node| node.id != "import-name-smiles" && !node.id.starts_with("naming."))
+            .all(|node| node.id != "import-name-smiles"
+                && (!node.id.starts_with("naming.") || node.id == "naming.online-ask"))
     );
     assert_eq!(
         snapshot
