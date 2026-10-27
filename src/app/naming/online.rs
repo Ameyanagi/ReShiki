@@ -44,7 +44,9 @@ impl App {
         {
             return Task::none();
         }
-        let (_, name) = self.tab.naming.online_confirmation.take().unwrap();
+        let Some((_, name)) = self.tab.naming.online_confirmation.take() else {
+            return Task::none();
+        };
         if !self.naming_can_edit()
             || self.tab.naming.pending.is_some()
             || name != self.tab.naming.name.trim()
