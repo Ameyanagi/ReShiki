@@ -4,14 +4,19 @@ use iced::Task;
 use reshiki::engine::Request;
 use std::path::PathBuf;
 
+#[cfg(not(target_arch = "wasm32"))]
 const SAVE: &str = "Save";
+#[cfg(not(target_arch = "wasm32"))]
 const DONT_SAVE: &str = "Don’t Save";
+#[cfg(not(target_arch = "wasm32"))]
 const ADDIN_SAVE_STATUS: &str =
     "Saving recovery draft and waiting for Microsoft 365 to confirm the drawing update…";
+#[cfg(not(target_arch = "wasm32"))]
 const OFFICE_SESSION_ENDED: &str =
     "The Office edit session has ended; save this drawing to another file";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(not(target_arch = "wasm32"))]
 pub(super) enum SaveBackend {
     Addin,
     OfficeOle,
@@ -21,6 +26,7 @@ pub(super) enum SaveBackend {
 
 /// Native Office backends on Windows; other platforms use atomic writes
 /// for every host except the Microsoft 365 add-in.
+#[cfg(not(target_arch = "wasm32"))]
 pub(super) fn save_backend(host: Option<Host>) -> SaveBackend {
     match host {
         Some(Host::Microsoft365) => SaveBackend::Addin,
@@ -33,6 +39,7 @@ pub(super) fn save_backend(host: Option<Host>) -> SaveBackend {
 /// Asks with the system dialog whether to save `name` before continuing a
 /// pending action; the answer arrives as Save, Discard or Cancel. The browser
 /// asks in the app instead (prompt.rs).
+#[cfg(not(target_arch = "wasm32"))]
 pub(super) fn ask_to_save(name: String) -> Task<Message> {
     iced::window::latest().then(move |window| {
         let question = format!("Do you want to save the changes you made to “{name}”?");
@@ -57,8 +64,6 @@ pub(super) fn ask_to_save(name: String) -> Task<Message> {
                 "Cancel".into(),
             ));
         match window {
-            // Browser dialogs have no parent window to attach to.
-            #[cfg(not(target_arch = "wasm32"))]
             Some(id) => iced::window::run(id, move |window| dialog.set_parent(&window).show())
                 .then(|answer| Task::perform(answer, save_answer)),
             _ => Task::perform(dialog.show(), save_answer),
@@ -67,6 +72,7 @@ pub(super) fn ask_to_save(name: String) -> Task<Message> {
 }
 
 /// Platforms without custom buttons answer Yes/No/Cancel in the same order.
+#[cfg(not(target_arch = "wasm32"))]
 fn save_answer(result: rfd::MessageDialogResult) -> Message {
     use rfd::MessageDialogResult as Answer;
     match result {
@@ -134,6 +140,8 @@ pub(super) fn write(path: &std::path::Path, bytes: &[u8]) -> Result<(), String> 
 pub struct Picked {
     pub path: PathBuf,
     pub contents: Vec<u8>,
+    #[cfg(target_arch = "wasm32")]
+    pub handle: Option<wasm_bindgen::JsValue>,
 }
 
 impl std::fmt::Debug for Picked {
@@ -195,9 +203,7 @@ pub(super) async fn pick(
     limit: Limit,
 ) -> Result<Vec<Picked>, String> {
     let extensions = filter.map_or(&[][..], |(_, extensions)| extensions);
-    Ok(browser_files(
-        crate::web::pick(extensions, multiple, limit).await?,
-    ))
+    crate::web::pick(extensions, multiple, limit).await
 }
 
 /// Browser files, by name with their contents.
@@ -208,6 +214,7 @@ pub(super) fn browser_files(files: Vec<(String, Vec<u8>)>) -> Vec<Picked> {
         .map(|(name, contents)| Picked {
             path: name.into(),
             contents,
+            handle: None,
         })
         .collect()
 }
@@ -229,7 +236,12 @@ pub(super) async fn read_paths(paths: Vec<PathBuf>, limit: Limit) -> Result<Vec<
                         let name = path.file_name().unwrap_or(path.as_os_str());
                         format!("Could not read {}: {e}", name.to_string_lossy())
                     })?;
-                Ok(Picked { path, contents })
+                Ok(Picked {
+                    path,
+                    contents,
+                    #[cfg(target_arch = "wasm32")]
+                    handle: None,
+                })
             })
             .collect()
     })
@@ -265,6 +277,23 @@ pub enum Prepared {
         format: &'static str,
         contents: String,
     },
+    #[cfg(target_arch = "wasm32")]
+    Browser {
+        handle: wasm_bindgen::JsValue,
+        duplicate: Option<super::document_tab::TabId>,
+        prepared: Box<Prepared>,
+    },
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub type Saved = PathBuf;
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Debug, Clone)]
+pub struct Saved {
+    pub path: PathBuf,
+    /// None means a download handoff, which does not establish a saved file.
+    pub handle: Option<wasm_bindgen::JsValue>,
 }
 
 pub type Opened = Option<(PathBuf, Result<Prepared, String>)>;
@@ -303,7 +332,12 @@ pub(super) async fn read(path: PathBuf) -> Opened {
 }
 
 /// Opens the files the user chooses, each in a tab.
-pub(super) fn open_dialog() -> Task<Message> {
+pub(super) fn open_dialog(
+    #[cfg(target_arch = "wasm32")] handles: Vec<(
+        super::document_tab::TabId,
+        wasm_bindgen::JsValue,
+    )>,
+) -> Task<Message> {
     // Accept supported extensions without relying on macOS type
     // registration; the worker validates the content.
     Task::future(pick(
@@ -312,15 +346,50 @@ pub(super) fn open_dialog() -> Task<Message> {
         false,
         unlimited,
     ))
-    .then(open_picked)
+    .then(move |files| {
+        open_picked(
+            files,
+            #[cfg(target_arch = "wasm32")]
+            handles.clone(),
+        )
+    })
 }
 
 /// Opens read files as tabs in this order, or reports why they could not be read.
-pub(super) fn open_picked(files: Result<Vec<Picked>, String>) -> Task<Message> {
+pub(super) fn open_picked(
+    files: Result<Vec<Picked>, String>,
+    #[cfg(target_arch = "wasm32")] handles: Vec<(
+        super::document_tab::TabId,
+        wasm_bindgen::JsValue,
+    )>,
+) -> Task<Message> {
     match files {
         Ok(files) => files.into_iter().fold(Task::none(), |task, file| {
+            #[cfg(target_arch = "wasm32")]
+            let handles = handles.clone();
             task.chain(Task::perform(
-                prepare_contents(file.path, Ok(file.contents)),
+                async move {
+                    let (path, result) = prepare_contents(file.path, Ok(file.contents)).await?;
+                    #[cfg(target_arch = "wasm32")]
+                    let result = match (file.handle, result) {
+                        (Some(handle), Ok(prepared)) => {
+                            let mut duplicate = None;
+                            for (id, other) in handles {
+                                if crate::web::same_entry(&handle, &other).await {
+                                    duplicate = Some(id);
+                                    break;
+                                }
+                            }
+                            Ok(Prepared::Browser {
+                                handle,
+                                duplicate,
+                                prepared: Box::new(prepared),
+                            })
+                        }
+                        (_, result) => result,
+                    };
+                    Some((path, result))
+                },
                 Message::FilePrepared,
             ))
         }),
@@ -370,7 +439,7 @@ impl super::App {
         &mut self,
         epoch: u64,
         snapshot: Box<reshiki::document::Document>,
-        result: Result<Option<PathBuf>, String>,
+        result: Result<Option<Saved>, String>,
     ) -> iced::Task<super::Message> {
         self.file_io.saving = false;
         let snapshot = self.saved_snapshot(*snapshot);
@@ -386,7 +455,22 @@ impl super::App {
             self.cancel_close();
         }
         match result {
-            Ok(Some(path)) => {
+            Ok(Some(saved)) => {
+                #[cfg(target_arch = "wasm32")]
+                let path = {
+                    let Some(handle) = saved.handle else {
+                        self.pending = None;
+                        self.status = download_status(
+                            &saved.path.file_name().unwrap_or_default().to_string_lossy(),
+                        );
+                        self.error = false;
+                        return Task::none();
+                    };
+                    self.tab.file_handle = Some(handle);
+                    saved.path
+                };
+                #[cfg(not(target_arch = "wasm32"))]
+                let path = saved;
                 // Continue the save dialog's action only when nothing is left unsaved.
                 self.tab.mark_saved(snapshot);
                 if self
@@ -411,9 +495,6 @@ impl super::App {
                         "Drawing updated in Office. Save the Office document to keep it."
                     }
                     .into()
-                } else if cfg!(target_arch = "wasm32") {
-                    // The browser only starts a download, which can still be cancelled.
-                    download_status(&self.document_name())
                 } else {
                     "Document saved".into()
                 };
@@ -426,6 +507,11 @@ impl super::App {
                 } else if self.pending.is_some() {
                     // Edits made during the write need another answer before
                     // New, Open or Close can continue.
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        self.prompt = Some(super::prompt::Prompt::Save(self.document_name()));
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
                     return ask_to_save(self.document_name());
                 }
             }
@@ -451,6 +537,19 @@ impl super::App {
             return iced::Task::none();
         };
         match result {
+            #[cfg(target_arch = "wasm32")]
+            Ok(Prepared::Browser {
+                handle,
+                duplicate,
+                prepared,
+            }) => {
+                if self.open_browser_duplicate(duplicate) {
+                    return Task::none();
+                }
+                let task = self.file_prepared(Some((path, Ok(*prepared))));
+                self.tab.file_handle = Some(handle);
+                return task;
+            }
             Err(error) => {
                 self.status = error;
                 self.error = true;
@@ -484,6 +583,10 @@ impl super::App {
         self.theme_library.editor = None;
         self.tab.mark_saved(self.tab.doc.clone());
         self.tab.path = path;
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.tab.file_handle = None;
+        }
         self.tab.untitled_name = None;
         self.tab.history = super::History::default();
         self.tab.revision = self.tab.revision.wrapping_add(1);
@@ -501,10 +604,29 @@ impl super::App {
     }
 
     pub(super) fn save_drawing(&mut self, save_as: bool) -> Task<Message> {
+        self.save_drawing_to(
+            save_as,
+            #[cfg(target_arch = "wasm32")]
+            None,
+        )
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(super) fn save_download(&mut self, name: String) -> Task<Message> {
+        self.save_drawing_to(true, Some(name))
+    }
+
+    fn save_drawing_to(
+        &mut self,
+        save_as: bool,
+        #[cfg(target_arch = "wasm32")] download_name: Option<String>,
+    ) -> Task<Message> {
         if !save_as {
             self.front_pending();
         }
+        #[cfg(not(target_arch = "wasm32"))]
         let office = self.tab.office.clone();
+        #[cfg(not(target_arch = "wasm32"))]
         let office_host = office
             .as_ref()
             .filter(|_| self.office_document() && !save_as)
@@ -518,8 +640,14 @@ impl super::App {
             self.status = "A document save is already in progress".into();
             return Task::none();
         }
+        #[cfg(target_arch = "wasm32")]
+        if download_name.is_none() && !crate::web::can_save_file() && (save_as || path.is_none()) {
+            self.prompt = Some(super::prompt::Prompt::Download(suggested_name));
+            return iced::widget::operation::focus("download-name");
+        }
         self.file_io.saving = true;
         self.file_io.saving_tab = Some(self.tab.id);
+        #[cfg(not(target_arch = "wasm32"))]
         if office_host == Some(Host::Microsoft365) {
             self.status = ADDIN_SAVE_STATUS.into();
             self.error = false;
@@ -528,59 +656,104 @@ impl super::App {
         let save_snapshot = std::sync::Arc::clone(&snapshot);
         self.saving(&snapshot);
         let epoch = self.tab.file_epoch;
+        #[cfg(target_arch = "wasm32")]
+        let handle = if !save_as && path.is_some() {
+            self.tab.file_handle.clone()
+        } else {
+            None
+        };
         Task::perform(
             async move {
-                let path = if let Some(p) = path {
-                    p
-                } else {
-                    let extension = reshiki::compatibility::NATIVE_EXTENSION;
-                    let Some(path) = save_path("Save drawing", &suggested_name, extension).await
-                    else {
-                        return Ok(None);
-                    };
-                    path
-                };
-                // A Save As spelling that names the same host file still uses
-                // its original authorized path and acknowledgement protocol.
-                let path = office
-                    .as_ref()
-                    .filter(|binding| binding.same_path(&path))
-                    .map_or(path.clone(), |binding| binding.path.clone());
-                let save_path = path.clone();
-                reshiki::task::spawn_blocking(move || {
-                    let bytes = save_snapshot.file_json()?;
-                    #[cfg(any(windows, target_os = "linux"))]
-                    let _target_owner = if office.as_ref().is_some_and(|binding| {
-                        binding.lease.is_some() && binding.same_path(&save_path)
-                    }) {
-                        None // The GUI owns this lease's fence, including this clone.
-                    } else {
-                        Some(crate::desktop::write_target(&save_path)?)
-                    };
-                    let office_host = if let Some(binding) = office
-                        .as_ref()
-                        .filter(|binding| binding.same_path(&save_path))
-                    {
-                        if !binding.writable() {
-                            return Err(OFFICE_SESSION_ENDED.to_owned());
-                        }
-                        Some(binding.host)
+                #[cfg(target_arch = "wasm32")]
+                {
+                    let handle = if let Some(handle) = handle {
+                        Some(handle)
+                    } else if download_name.is_none() && crate::web::can_save_file() {
+                        let Some(handle) = crate::web::save_file_picker(&suggested_name).await?
+                        else {
+                            return Ok(None);
+                        };
+                        Some(handle)
                     } else {
                         None
                     };
-                    if save_backend(office_host) == SaveBackend::Addin {
-                        reshiki::office_addin::save(&save_path, &bytes)?;
+                    let path = if let Some(handle) = &handle {
+                        use wasm_bindgen::JsValue;
+                        js_sys::Reflect::get(handle, &JsValue::from_str("name"))
+                            .ok()
+                            .and_then(|name| name.as_string())
+                            .map(PathBuf::from)
+                            .ok_or("The save file has no name")?
                     } else {
-                        #[cfg(windows)]
-                        super::windows_libreoffice_save::save(&save_path, &bytes, office_host)?;
-                        #[cfg(not(windows))]
-                        write(&save_path, &bytes)?;
+                        reshiki::storage::with_default_extension(
+                            std::path::Path::new(
+                                download_name.as_deref().unwrap_or(&suggested_name),
+                            ),
+                            reshiki::compatibility::NATIVE_EXTENSION,
+                        )
+                    };
+                    if let Some(handle) = &handle {
+                        crate::web::write_file(handle, &save_snapshot).await?;
+                    } else {
+                        write(&path, &save_snapshot.file_json()?)?;
                     }
-                    Ok::<_, String>(())
-                })
-                .await
-                .map_err(|error| error.to_string())??;
-                Ok(Some(path))
+                    Ok(Some(Saved { path, handle }))
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    let path = if let Some(p) = path {
+                        p
+                    } else {
+                        let extension = reshiki::compatibility::NATIVE_EXTENSION;
+                        let Some(path) =
+                            save_path("Save drawing", &suggested_name, extension).await
+                        else {
+                            return Ok(None);
+                        };
+                        path
+                    };
+                    // A Save As spelling that names the same host file still uses
+                    // its original authorized path and acknowledgement protocol.
+                    let path = office
+                        .as_ref()
+                        .filter(|binding| binding.same_path(&path))
+                        .map_or(path.clone(), |binding| binding.path.clone());
+                    let save_path = path.clone();
+                    reshiki::task::spawn_blocking(move || {
+                        let bytes = save_snapshot.file_json()?;
+                        #[cfg(any(windows, target_os = "linux"))]
+                        let _target_owner = if office.as_ref().is_some_and(|binding| {
+                            binding.lease.is_some() && binding.same_path(&save_path)
+                        }) {
+                            None // The GUI owns this lease's fence, including this clone.
+                        } else {
+                            Some(crate::desktop::write_target(&save_path)?)
+                        };
+                        let office_host = if let Some(binding) = office
+                            .as_ref()
+                            .filter(|binding| binding.same_path(&save_path))
+                        {
+                            if !binding.writable() {
+                                return Err(OFFICE_SESSION_ENDED.to_owned());
+                            }
+                            Some(binding.host)
+                        } else {
+                            None
+                        };
+                        if save_backend(office_host) == SaveBackend::Addin {
+                            reshiki::office_addin::save(&save_path, &bytes)?;
+                        } else {
+                            #[cfg(windows)]
+                            super::windows_libreoffice_save::save(&save_path, &bytes, office_host)?;
+                            #[cfg(not(windows))]
+                            write(&save_path, &bytes)?;
+                        }
+                        Ok::<_, String>(())
+                    })
+                    .await
+                    .map_err(|error| error.to_string())??;
+                    Ok(Some(path))
+                }
             },
             move |result| {
                 Message::Saved(
@@ -660,7 +833,7 @@ mod performance;
 
 /// A browser download can still be blocked or cancelled after this handoff.
 fn download_status(filename: &str) -> String {
-    format!("{filename} sent to browser downloads")
+    format!("Downloaded {filename}")
 }
 
 pub(super) fn export_status(path: &std::path::Path, details: &[String], browser: bool) -> String {

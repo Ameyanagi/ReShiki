@@ -416,7 +416,13 @@ impl App {
                         self.error = true;
                         self.status = reason;
                     }
-                    Plan::Open(_) => return super::files::open_picked(Ok(files)),
+                    Plan::Open(_) => {
+                        return super::files::open_picked(
+                            Ok(files),
+                            #[cfg(target_arch = "wasm32")]
+                            self.browser_file_handles(),
+                        );
+                    }
                     Plan::Insert(_) => {
                         // A drawing opened in this tab meanwhile is not the
                         // one the files were meant for. Edits made while they

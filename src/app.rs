@@ -117,6 +117,8 @@ mod wayland_qa;
 mod windows_libreoffice_save;
 mod workspace;
 #[cfg(target_arch = "wasm32")]
+pub(crate) use files::Picked;
+#[cfg(target_arch = "wasm32")]
 pub(crate) use files::read_length;
 pub(crate) use workspace::text_width;
 
@@ -345,7 +347,11 @@ pub enum Message {
     Tabs(tabs::Action),
     /// A task result for the drawing in this tab, which may no longer be in front.
     Tab(document_tab::TabId, Box<Message>),
-    Saved(u64, Box<Document>, Result<Option<PathBuf>, String>),
+    Saved(u64, Box<Document>, Result<Option<files::Saved>, String>),
+    #[cfg(target_arch = "wasm32")]
+    SaveDownload(String),
+    #[cfg(target_arch = "wasm32")]
+    DownloadName(String),
     Exported(Result<Option<figure_export::Saved>, String>),
     FigureExported(Result<Option<figure_export::Saved>, String>),
     Close(iced::window::Id),
@@ -822,10 +828,12 @@ impl App {
             return Task::none();
         }
         self.pending = Some(action);
-        if prompt::IN_APP {
+        #[cfg(target_arch = "wasm32")]
+        {
             self.prompt = Some(prompt::Prompt::Save(self.document_name()));
-            return Task::none();
+            Task::none()
         }
+        #[cfg(not(target_arch = "wasm32"))]
         files::ask_to_save(self.document_name())
     }
     /// Save chosen in the save dialog passes the gates of transient editors,
@@ -968,6 +976,20 @@ impl App {
         }
         if let Message::CopyFrame(action) = message {
             return ControlFlow::Break(self.copy_frame(action));
+        }
+        #[cfg(target_arch = "wasm32")]
+        match message {
+            Message::DownloadName(name) => {
+                if let Some(prompt::Prompt::Download(current)) = &mut self.prompt {
+                    *current = name;
+                }
+                return ControlFlow::Break(Task::none());
+            }
+            Message::SaveDownload(name) => {
+                let task = self.save_download(name);
+                return ControlFlow::Break(tagged(task, self.tab.id));
+            }
+            _ => {}
         }
         // The answer goes on as the system dialog's would have.
         if let Message::Prompt(answer) = message {

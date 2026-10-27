@@ -1,5 +1,10 @@
 # Unreleased changes
 
+Under review: @Ameyanagi — Browser Save updates the opened file in Chromium,
+and Save As offers a file name and location. Download fallbacks keep the edited
+marker; opening the same file handle returns to its tab. Remaining browser file
+work for [issue #428](https://github.com/Ameyanagi/ReShiki/issues/428), PR TBD.
+
 Under review: @Ameyanagi — Linux desktop launchers can associate ReShiki windows
 with their launcher and icon in [PR #598](https://github.com/Ameyanagi/ReShiki/pull/598).
 Reported by @fusion809 in [issue #597](https://github.com/Ameyanagi/ReShiki/issues/597).
