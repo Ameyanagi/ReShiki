@@ -1,5 +1,10 @@
 # Unreleased changes
 
+Under review: @Ameyanagi — Linux desktop launchers can associate ReShiki windows
+with their launcher and icon in [PR #598](https://github.com/Ameyanagi/ReShiki/pull/598).
+Reported by @fusion809 in [issue #597](https://github.com/Ameyanagi/ReShiki/issues/597).
+[Metadata checks and limits](changes/linux-window-identity.md).
+
 The [0.13.1 release](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.13.1)
 was published on 26 October 2026. It includes the October dependency and CI runtime
 security updates merged in [PR #586](https://github.com/Ameyanagi/ReShiki/pull/586),
