@@ -15,3 +15,9 @@ The versioned notes retain immutable QA links and qualifications.
 
 See [ReShiki 0.13.1](changes-0.13.1.md) for the published release notes and
 [release validation](release-0.13.1-validation.md) for package and web verification.
+
+Under review: [PR #599](https://github.com/Ameyanagi/ReShiki/pull/599) adds a
+general PubChem name lookup with confirmation for each query. Review its source
+and editable preview before inserting; local naming remains offline. Implemented
+by @Ameyanagi for [issue #596](https://github.com/Ameyanagi/ReShiki/issues/596),
+reported by @fusion809. [Native and browser examples](changes/online-name-lookup.md).

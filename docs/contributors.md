@@ -293,3 +293,8 @@ Clear CLI errors for unsupported crystal input: @Ameyanagi in [PR #537](https://
 Artemisinin depiction and whole-molecule cleanup diagnostics: @Ameyanagi in [PR #538](https://github.com/Ameyanagi/ReShiki/pull/538); [validation and matched renderer evidence](changes/artemisinin-depiction.md).
 
 Release preparation and documentation for 0.13.1: @Ameyanagi in [PR #583](https://github.com/Ameyanagi/ReShiki/pull/583).
+
+Under review: @Ameyanagi — confirmed online chemical-name lookup in
+[PR #599](https://github.com/Ameyanagi/ReShiki/pull/599). @fusion809 reported
+the unsupported common names in [issue #596](https://github.com/Ameyanagi/ReShiki/issues/596).
+[Native and browser evidence](changes/online-name-lookup.md).
