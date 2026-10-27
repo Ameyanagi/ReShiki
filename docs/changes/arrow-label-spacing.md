@@ -82,6 +82,12 @@ shows the implemented behavior; it does not include a baseline screenshot.
 
 ## Automated checks and limits
 
+The full native workspace suite (`cargo test --workspace --locked
+--no-default-features`) passed **4,116 tests**, with **190 existing tests
+ignored**. The exact workspace/all-targets/no-default-features native Clippy
+command passed with warnings denied. Recovery coverage checks ordinary and
+custom-gap drafts, then restores format 30 after resetting the last gap to Auto.
+
 The model suite passed **860 tests**, with **11 existing opt-in tests ignored**.
 The numeric-control tests passed **3/3** and smart-guide tests passed **8/8**,
 including horizontal, diagonal, zero-gap and reconciled-preview geometry.

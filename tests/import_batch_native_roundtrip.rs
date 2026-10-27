@@ -1,7 +1,7 @@
 //! Combined import-batch persistence using original native captures and MOL input.
 use anyhow::Context;
 use reshiki::{
-    document::{Atom, Document, Point, VERSION},
+    document::{Atom, DISTANCE_BONDS, Document, Point},
     editing,
     engine::{LocalEngine, Request},
 };
@@ -170,7 +170,7 @@ async fn saved_mol_xyz_and_retained_emf_share_a_native_append_roundtrip() -> any
     std::fs::write(&file, combined.file_json().map_err(anyhow::Error::msg)?)?;
     let reopened =
         Document::from_native_file(&std::fs::read(&file)?).map_err(anyhow::Error::msg)?;
-    assert_eq!(reopened.version, VERSION);
+    assert_eq!(reopened.version, DISTANCE_BONDS);
     let mut expected = combined.current();
     reshiki::atom_labels::clear_computed(&mut expected);
     assert_eq!(reopened, expected);
