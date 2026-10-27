@@ -48,7 +48,7 @@ fn asymmetric_three_atoms_use_bounds_center_and_first_style_with_fixed_neighbors
     assert_eq!(doc, before);
     joined.validate().unwrap();
     let mut saved = joined.clone();
-    saved.version = crate::document::VERSION;
+    saved.version = saved.file_version();
     assert_eq!(
         Document::from_json(&serde_json::to_vec(&saved).unwrap()).unwrap(),
         saved

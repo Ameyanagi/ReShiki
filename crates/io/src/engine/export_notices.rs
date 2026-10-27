@@ -130,6 +130,7 @@ mod tests {
             arrow: 1,
             annotation: 2,
             side: Side::Above,
+            gap: None,
         });
         doc.validate().unwrap();
         let route = || Route::Prepared {

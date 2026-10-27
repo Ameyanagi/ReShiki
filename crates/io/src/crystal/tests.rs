@@ -1,5 +1,5 @@
 use super::*;
-use crate::document::{DISTANCE_BONDS, MODELS_3D, Point, VERSION};
+use crate::document::{DISTANCE_BONDS, MODELS_3D, Point};
 use crate::models3d::{Display, Model3d};
 
 const NACL: &str = include_str!("../../../../tests/fixtures/crystal/nacl.cif");
@@ -234,7 +234,7 @@ fn saved_drawings_keep_the_structure_and_drop_the_rest_of_the_file() {
             assert!(!saved.contains(dropped), "{format}: {dropped}");
         }
         let read = Document::from_json(&bytes).unwrap();
-        assert_eq!(read.version, VERSION);
+        assert_eq!(read.version, DISTANCE_BONDS);
         assert_eq!(read.models, doc.models);
         assert_eq!(read.atoms, doc.atoms);
     }

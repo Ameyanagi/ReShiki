@@ -630,6 +630,7 @@ fn links_outside_the_molecule_do_not_stop_a_model() {
             arrow,
             annotation,
             side: Side::Above,
+            gap: None,
         });
     };
     let faded: fn(&mut Document) = |doc| {

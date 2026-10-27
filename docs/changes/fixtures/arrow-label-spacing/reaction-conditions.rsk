@@ -1,0 +1,258 @@
+{
+  "atom_labels": {
+    "carbons": "skeletal",
+    "hydrogens": true,
+    "stereo": false
+  },
+  "version": 31,
+  "atoms": [],
+  "bonds": [],
+  "annotations": [
+    {
+      "id": 2,
+      "position": {
+        "x": 62.57914,
+        "y": -72.44587
+      },
+      "text": "Pd/C",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": null
+      }
+    },
+    {
+      "id": 3,
+      "position": {
+        "x": 34.848763,
+        "y": 25.04429
+      },
+      "text": "H₂, EtOH",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": null
+      }
+    },
+    {
+      "id": 5,
+      "position": {
+        "x": 362.57913,
+        "y": -72.44587
+      },
+      "text": "Pd/C",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": null
+      }
+    },
+    {
+      "id": 6,
+      "position": {
+        "x": 328.36887,
+        "y": 25.04429
+      },
+      "text": "H₂, MeOH",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": null
+      }
+    },
+    {
+      "id": 8,
+      "position": {
+        "x": 150.23926,
+        "y": 143.23134
+      },
+      "text": "NBS, hν",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": null
+      }
+    },
+    {
+      "id": 9,
+      "position": {
+        "x": 62.80771,
+        "y": 267.93066
+      },
+      "text": "CCl₄, 25 °C",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": null
+      }
+    }
+  ],
+  "arrows": [
+    {
+      "id": 1,
+      "start": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "end": {
+        "x": 190.0,
+        "y": 0.0
+      },
+      "kind": "forward"
+    },
+    {
+      "id": 4,
+      "start": {
+        "x": 300.0,
+        "y": 0.0
+      },
+      "end": {
+        "x": 490.0,
+        "y": 0.0
+      },
+      "kind": "forward"
+    },
+    {
+      "id": 7,
+      "start": {
+        "x": 90.0,
+        "y": 170.0
+      },
+      "end": {
+        "x": 260.0,
+        "y": 260.0
+      },
+      "kind": "forward"
+    }
+  ],
+  "arrow_labels": [
+    {
+      "arrow": 1,
+      "annotation": 2,
+      "side": "above",
+      "gap": 33.07087
+    },
+    {
+      "arrow": 1,
+      "annotation": 3,
+      "side": "below",
+      "gap": 20.66929
+    },
+    {
+      "arrow": 4,
+      "annotation": 6,
+      "side": "below",
+      "gap": 20.66929
+    },
+    {
+      "arrow": 7,
+      "annotation": 8,
+      "side": "above",
+      "gap": 16.535433
+    },
+    {
+      "arrow": 7,
+      "annotation": 9,
+      "side": "below",
+      "gap": 24.80315
+    },
+    {
+      "arrow": 4,
+      "annotation": 5,
+      "side": "above",
+      "gap": 33.07087
+    }
+  ],
+  "graphics": [],
+  "groups": []
+}

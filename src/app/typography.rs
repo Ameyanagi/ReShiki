@@ -398,6 +398,7 @@ impl App {
         self.sync_style_inputs();
     }
     pub(super) fn sync_style_inputs(&mut self) {
+        self.sync_arrow_label_gap_input();
         let style = self.current_text_style();
         let size = style.size_pt.to_string();
         self.tab.font_size_input = size;

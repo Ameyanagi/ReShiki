@@ -190,8 +190,8 @@ fn assemble_expansion(source: &Document, batch: DrawingBatch) -> Result<Prepared
     let count = tiles.len();
     work.charge(drawing_size(source).saturating_mul(32))?;
     let mut result = source.clone();
-    result.version = crate::document::VERSION;
     result.clear_content();
+    result.version = result.file_version();
     let columns = (count as f32).sqrt().ceil().min(MAX_GRID_COLUMNS as f32) as usize;
     let mut x = 0_f32;
     let mut y = 0_f32;

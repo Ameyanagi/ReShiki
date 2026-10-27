@@ -805,6 +805,11 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::BondDepth(_)
             | Message::Graphics(super::graphics::Action::Style(_))
             | Message::ArrowAction(_)
+            | Message::ArrowLabelGap(
+                super::arrow_labels::Action::Apply
+                    | super::arrow_labels::Action::Auto
+                    | super::arrow_labels::Action::Detach
+            )
             | Message::Assistant(super::assistant::Action::Send)
     ) || matches!(message, Message::Canvas(edit) if !edit.is_camera() && !edit.is_hover() && !matches!(edit, crate::canvas::Edit::BeginTransform(_)))
 }

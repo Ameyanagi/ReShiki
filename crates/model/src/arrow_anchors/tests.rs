@@ -348,7 +348,7 @@ fn mechanism_attachment_92_legacy_marks_native21_and_validation() {
     let bytes = d.file_json().unwrap();
     let saved = Document::from_native_file(&bytes).unwrap();
     assert_eq!(saved, d.current());
-    assert_eq!(saved.version, crate::document::VERSION);
+    assert_eq!(saved.version, crate::document::DISTANCE_BONDS);
     let mut duplicate = saved.clone();
     let mark = duplicate.atom(2).unwrap().marks[0].clone();
     duplicate.atom_mut(2).unwrap().marks.push(mark);

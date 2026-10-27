@@ -46,7 +46,7 @@ fn partial_highlights_survive_native_history_copy_and_geometry_without_changing_
     assert_eq!(doc, painted);
     let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
     assert_eq!(reopened, painted.current());
-    assert_eq!(reopened.version, reshiki::document::VERSION);
+    assert_eq!(reopened.version, reshiki::document::DISTANCE_BONDS);
     assert_eq!(
         reopened.atom(b).unwrap().text_style,
         original.atom(b).unwrap().text_style

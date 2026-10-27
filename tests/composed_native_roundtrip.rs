@@ -2,7 +2,7 @@
 use reshiki::{
     arrows::{ArrowStyle, Preset},
     atom_labels::{self, Number, Owner},
-    document::{Arrow, Document, Point, VERSION},
+    document::{Arrow, DISTANCE_BONDS, Document, Point},
     editing, molecule_names,
     palette::Color,
     rear_opacity,
@@ -17,7 +17,7 @@ const METAFILE: &[u8] =
 const EMF: &[u8] = include_bytes!("fixtures/emf-import/windows-native-20261010/source.emf");
 
 fn composed() -> Document {
-    // Authentic fixture versions are left intact; only new save output uses VERSION.
+    // Authentic fixture versions are left intact; ordinary saves use v30.
     let mut doc = Document::from_native_file(CAGE).unwrap();
     assert_eq!(doc.version, 22);
     assert_eq!((doc.atoms.len(), doc.bonds.len()), (60, 90));
@@ -139,7 +139,7 @@ fn composed_native_file_and_selected_append_preserve_independent_feature_data() 
     let reopened = Document::from_native_file(&std::fs::read(&file).unwrap()).unwrap();
     let mut expected = doc.current();
     atom_labels::clear_computed(&mut expected);
-    assert_eq!(reopened.version, VERSION);
+    assert_eq!(reopened.version, DISTANCE_BONDS);
     assert_eq!(reopened, expected);
     assert_dual_picture(&reopened);
     assert_independent_labels(&reopened, &reopened.molecule_names[0].atoms);
@@ -303,7 +303,7 @@ fn composed_recovery_discovery_preserves_the_same_native_fields() {
     assert_eq!(candidates.len(), 1);
     let snapshot = candidates.remove(0).snapshot;
     assert_eq!(snapshot.source, Some(source));
-    assert_eq!(snapshot.document.version, VERSION);
+    assert_eq!(snapshot.document.version, DISTANCE_BONDS);
     assert_eq!(snapshot.document, doc.current());
     assert_dual_picture(&snapshot.document);
     assert_independent_labels(

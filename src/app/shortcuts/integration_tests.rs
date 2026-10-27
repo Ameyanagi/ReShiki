@@ -89,7 +89,7 @@ fn primary_j_first_and_second_chelate_donors_preserve_links_atom_identity_charge
             "duplicate contact has no extra frame"
         );
         let mut saved = app.tab.doc.clone();
-        saved.version = reshiki::document::VERSION;
+        saved.version = saved.file_version();
         assert_eq!(
             Document::from_json(&serde_json::to_vec(&saved).unwrap()).unwrap(),
             saved

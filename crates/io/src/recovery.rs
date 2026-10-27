@@ -1,4 +1,4 @@
-use crate::document::{Document, VERSION};
+use crate::document::Document;
 use serde::{Deserialize, Serialize};
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -114,8 +114,9 @@ impl Recovery {
             source: Option<PathBuf>,
             saved_at: u64,
         }
-        // Drafts carry this build's document version, so restoring never migrates again.
-        let document = if document.version == VERSION {
+        // Drafts use the required file version and current presentation, so
+        // restoring never repeats a migration or requires an unused feature.
+        let document = if document.version == document.file_version() {
             Cow::Borrowed(document)
         } else {
             Cow::Owned(document.current())
