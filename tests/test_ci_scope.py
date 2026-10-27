@@ -4,7 +4,7 @@ import subprocess
 import unittest
 from unittest.mock import patch
 
-from scripts.ci_scope import changed_paths, needs_native
+from scripts.ci_scope import changed_paths, needs_geometry, needs_native
 
 
 class CheckScopeTests(unittest.TestCase):
@@ -25,6 +25,22 @@ class CheckScopeTests(unittest.TestCase):
                 self.assertTrue(needs_native(["docs/development.md", path]))
         self.assertTrue(needs_native(None))
         self.assertTrue(needs_native([]))
+
+    def test_app_only_changes_skip_geometry(self):
+        self.assertFalse(
+            needs_geometry(["src/app.rs", "packages/editor/index.ts", "docs/arrows.md"])
+        )
+        for path in (
+            "crates/model/src/lib.rs",
+            "native/geometry/src/lib.rs",
+            "assets/templates.json",
+            "tests/fixtures/coordination-layout.rsk",
+            "Cargo.lock",
+            ".github/workflows/checks.yml",
+        ):
+            with self.subTest(path=path):
+                self.assertTrue(needs_geometry(["src/app.rs", path]))
+        self.assertTrue(needs_geometry(None))
 
     def test_rename_retains_deleted_source_and_handles_unusual_names(self):
         event = {"pull_request": {"base": {"sha": "a" * 40}}}
