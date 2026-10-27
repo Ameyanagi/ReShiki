@@ -345,7 +345,8 @@ impl Transport {
             }
             let start = bytes.len();
             bytes.resize(start + length, 0);
-            chunk.copy_to(&mut bytes[start..]);
+            let destination = bytes.get_mut(start..).ok_or_else(invalid)?;
+            chunk.copy_to(destination);
         }
         checked_response(status, bytes)
     }
