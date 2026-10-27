@@ -4,6 +4,11 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 
 This list credits authors of contributions to ReShiki.
 
+Under review: @Ameyanagi — stable Linux window identity and matching desktop
+launcher metadata in [PR #598](https://github.com/Ameyanagi/ReShiki/pull/598).
+Reported by @fusion809 in [issue #597](https://github.com/Ameyanagi/ReShiki/issues/597).
+[Window-metadata checks and limits](changes/linux-window-identity.md).
+
 @Ameyanagi — deterministic reaction-reference indicators and
 mapped RSMI/RXN coverage in [PR #589](https://github.com/Ameyanagi/ReShiki/pull/589).
 [QA evidence](https://github.com/Ameyanagi/ReShiki/blob/34a21da80846371927175ab43b83e2abf02ff95a/docs/changes/qa-reference-owned-ink.md).

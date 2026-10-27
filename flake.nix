@@ -161,6 +161,7 @@
                 comment = "Chemical drawing";
                 exec = "reshiki --open %f";
                 icon = "reshiki";
+                startupWMClass = "reshiki";
                 categories = [
                   "Science"
                   "Chemistry"

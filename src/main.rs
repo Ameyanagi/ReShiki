@@ -162,6 +162,12 @@ fn main() -> iced::Result {
             // tree/showing it. A fixed logical minimum would defeat that fit.
             min_size: (!cfg!(windows)).then_some(iced::Size::new(1040.0, 680.0)),
             icon: branding::window_icon(),
+            #[cfg(target_os = "linux")]
+            platform_specific: iced::window::settings::PlatformSpecific {
+                // Match reshiki.desktop for Wayland and X11 launcher grouping.
+                application_id: "reshiki".into(),
+                ..Default::default()
+            },
             ..Default::default()
         },
         true,
