@@ -21,7 +21,7 @@ impl App {
 
     pub(super) fn load_shortcut_examples(&mut self) -> Result<(), String> {
         let existing = self.strip().position(|tab| {
-            tab.untitled_name == Some(NAME) && tab.path.is_none() && !self.edited(tab)
+            tab.untitled_name.as_deref() == Some(NAME) && tab.path.is_none() && !self.edited(tab)
         });
         if let Some(index) = existing {
             self.select_tab(index);
@@ -35,7 +35,7 @@ impl App {
         self.reset_tab();
         self.tab.doc = doc;
         self.tab.mark_saved(self.tab.doc.clone());
-        self.tab.untitled_name = Some(NAME);
+        self.tab.untitled_name = Some(NAME.into());
         self.sync_drawing_defaults();
         self.inspector_open = false;
         self.inspector_tab = InspectorTab::Properties;

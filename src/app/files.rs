@@ -357,11 +357,12 @@ impl super::App {
         let name = if self.tab.path.is_some() {
             self.document_name()
         } else {
-            format!(
-                "{}.{}",
-                self.document_name(),
-                reshiki::compatibility::NATIVE_EXTENSION
-            )
+            // An imported "co2.cif" suggests "co2.rsk".
+            let name = self.document_name();
+            let stem = std::path::Path::new(&name)
+                .file_stem()
+                .map_or(name.clone(), |s| s.to_string_lossy().into_owned());
+            format!("{stem}.{}", reshiki::compatibility::NATIVE_EXTENSION)
         };
         (path, name)
     }
@@ -457,9 +458,14 @@ impl super::App {
             }
             Ok(Prepared::Import { format, contents }) => {
                 self.open_target(None);
+                let name = path
+                    .file_name()
+                    .unwrap_or(path.as_os_str())
+                    .to_string_lossy()
+                    .into_owned();
                 let task = self.run(
                     super::Request::import(format, &contents),
-                    super::Job::ImportFile,
+                    super::Job::ImportFile(name),
                 );
                 #[cfg(any(windows, target_os = "linux"))]
                 self.desktop_import_started();

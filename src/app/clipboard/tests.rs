@@ -548,7 +548,11 @@ fn external_metadata_warnings_remain_visible_after_paste_and_file_import() {
     assert!(app.status.starts_with("Editable drawing pasted"));
     assert!(app.status.contains(warning));
     assert!(!app.error);
-    for kind in [Job::Import, Job::ImportFile, Job::Insert] {
+    for kind in [
+        Job::Import,
+        Job::ImportFile("oxygen.mol".into()),
+        Job::Insert,
+    ] {
         let _ = app.update(Message::EngineDone {
             revision: app.tab.revision,
             kind,
