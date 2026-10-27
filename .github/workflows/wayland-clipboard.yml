@@ -102,9 +102,12 @@ jobs:
           Write-Host "Verified Actions runtime: $version ($node)"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install private compositor, software renderer and independent receiver
+        # A stalled mirror or package trigger otherwise holds the runner until the job timeout.
+        timeout-minutes: 10
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          sudo rm -f /var/lib/man-db/auto-update
+          sudo apt-get update -o Acquire::Retries=3
+          sudo apt-get install -y --no-install-recommends -o Acquire::Retries=3 \
             gnome-shell sway wtype xdotool xvfb xauth dbus-x11 \
             python3-gi gir1.2-gtk-4.0 mesa-vulkan-drivers fonts-dejavu-core \
             libegl1-mesa-dev libwayland-dev libxkbcommon-dev libfontconfig1-dev \
