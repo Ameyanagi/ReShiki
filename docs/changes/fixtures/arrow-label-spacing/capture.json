@@ -1,0 +1,71 @@
+{
+  "captured_at_utc": "2026-10-27T06:56:19.835802+00:00",
+  "platform": "macOS aarch64, native ReShiki, Rust 1.99.1",
+  "base_commit": "1d0f720334f4ea7cdb246cc7e896f65e1a78591c",
+  "binary_sha256": "ecc5916baef200196a398b9896715ac21ba63b6898f6c61245655635aaeaa66b",
+  "capture_method": "All UI inputs and screenshots through cua_repl. Images unretouched. PNG and SVG exports through native Export panel with the two upper labels still selected.",
+  "results": [
+    "First Auto label: enter 4 mm, Undo restores Auto, Redo restores 4 mm.",
+    "Second upper label: perpendicular 40-pixel drag retains attachment and shows 2.866 mm; numeric entry sets 4 mm.",
+    "Select both upper labels: shared 3 mm edit; one Undo restores both to 4 mm.",
+    "Angled upper label: Auto then Undo restores 2 mm; Detach removes gap controls, Undo restores attachment and 2 mm.",
+    "Drag angled arrow by 100x50 screen pixels: both attached labels follow; Undo restores original arrow and label positions.",
+    "Save As reaction-conditions.rsk, close document, reopen from disk: both upper labels retain 4 mm; undo history is empty.",
+    "SVG and PNG exported while selected guides visible: all six labels and three arrows present, no selection handles or magenta gap guides in exports. PNG visually inspected."
+  ],
+  "image_conditions": {
+    "equal-gaps.png": "125% zoom after reopening reaction-conditions.rsk, Arial 10 pt, light theme, JACS/ACS, native screenshot 2560x1704",
+    "angled-gap.png": "130% zoom before Save As, same drawing content and theme, native screenshot 2560x1704",
+    "reaction-conditions.png": "Native whole-drawing PNG export, default export scale/background"
+  },
+  "limitations": [
+    "Sideways detachment, persistence edge cases, zero/reversed arrows, units, and invalid numeric input additionally covered by automated tests; not claimed as separate native interactions."
+  ],
+  "source_provenance": "producer.json",
+  "build": {
+    "toolchain": "Rust1.99.1",
+    "profile": "dev debug0",
+    "target": "aarch64-apple-darwin"
+  },
+  "files": {
+    "input-conditions.rsk": {
+      "bytes": 1952,
+      "sha256": "49e5972b11f322558715743343ba35d98b8d7a2d60e8b562452371fbc8682c89",
+      "path": "input-conditions.rsk",
+      "origin": "authored input; not a GUI save"
+    },
+    "reaction-conditions.rsk": {
+      "bytes": 4742,
+      "sha256": "a342a72581f7ec385f7a4b431314ee61eb9906348702598db1309a2760bc8da2",
+      "path": "reaction-conditions.rsk",
+      "origin": "native GUI save/export"
+    },
+    "equal-gaps.png": {
+      "bytes": 346834,
+      "sha256": "5e390fe63c3cc9a5d277e78c776197bfd779e01a17fb2f85daa488b4c8065fd2",
+      "path": "../../../images/arrow-label-spacing/equal-gaps.png",
+      "origin": "native screenshot"
+    },
+    "angled-gap.png": {
+      "bytes": 344764,
+      "sha256": "0314aa0fcd125305fcae004ffd0d81bf2da6b22a432cb9ec64f5373d97f00ad9",
+      "path": "../../../images/arrow-label-spacing/angled-gap.png",
+      "origin": "native screenshot"
+    },
+    "reaction-conditions.svg": {
+      "bytes": 3907,
+      "sha256": "4aa043097b5bddc73cca3168ec338087c49427046aab6d77a9e9867ff5f0cb62",
+      "path": "reaction-conditions.svg",
+      "origin": "native GUI save/export"
+    },
+    "reaction-conditions.png": {
+      "bytes": 288493,
+      "sha256": "0d1ebdc7df6a46d0aa1695ad845a7fefa13f3189831bc712b7a0beb46b538fdc",
+      "path": "../../../images/arrow-label-spacing/reaction-conditions.png",
+      "origin": "native GUI save/export"
+    }
+  },
+  "producer_sha256": "f2348e18cb2de0fa12dc37f4b348f887d3a4e2867b413d12250326c7e679247e",
+  "production_commit": "45b7c2b3ae683ce7684ec6dfb6e8fe492242be7a",
+  "committed_source_verification": "All 36 source-file SHA-256 values in producer.json match production_commit."
+}

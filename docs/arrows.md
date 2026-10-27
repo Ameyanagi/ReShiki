@@ -60,11 +60,34 @@ arrow freely; shortening it stops at the label width. Moving, rotating or
 reversing the arrow carries its labels.
 
 Each side holds one label; use line breaks for several lines of conditions.
-Drag the text across the arrow to move it to the other side, or away from the
-arrow to detach it. Vertical arrows take labels on their left and right.
+Drag the text across the arrow to move it to the other side. Dragging
+perpendicular to the shaft adjusts its gap; dragging sideways beyond the arrow
+span detaches it. Vertical arrows take labels on their left and right.
 Copy, Cut and **Delete** of an arrow include its condition text; copying or
 deleting the text alone leaves the arrow. The eraser removes only what it
 touches.
+
+### Adjust label spacing
+
+Select an attached condition label. In **Properties → ARROW LABEL SPACING**,
+enter a nonnegative **Arrow gap** and press Enter. The field uses the current
+ruler unit: mm, cm, in or pt. Zero is allowed. The gap is the clearance between
+the arrow ink and the text box, measured perpendicular to the shaft, including
+on diagonal arrows.
+
+Drag the label perpendicular to the shaft to adjust the gap while keeping it
+attached and centred. Drag sideways beyond the arrow span, or choose **Detach**,
+to make it ordinary text. **Auto** restores the default spacing. Select several
+attached labels to apply one gap to all of them in one Undo step; selecting only
+the arrow does not show these label controls.
+
+Magenta dimensions show the actual gap of selected labels, including the final
+position during a drag. They are editing guides and do not appear in SVG, PDF or
+PNG exports. See the [native examples and saved drawing](changes/arrow-label-spacing.md).
+
+Custom spacing is stored in native `.rsk` format version 31. Drawings using only
+**Auto** continue to save as version 30. Older builds that cannot read the file's
+version report that an update is required.
 
 ### Style an arrow
 
@@ -114,11 +137,13 @@ not add chemical electron-flow semantics. See the
 ### Condition labels
 
 A document lists each label as an arrow ID, a text ID and a side (`above` or
-`below`); document version 27 added the list. The text stays an ordinary
-caption. Every edit re-checks the labels in the same Undo step:
+`below`); document version 27 added the list. An optional gap, stored in world
+units, requires version 31. The text stays an ordinary caption. Every edit
+re-checks the labels in the same Undo step:
 
-1. Text dragged on its own re-centres in its slot, changes side, or detaches
-   once it leaves both slots.
+1. Text dragged on its own re-centres in its slot. Perpendicular movement
+   changes the saved gap or side; sideways movement beyond the arrow span
+   detaches it.
 2. New or moved text attaches when its centre lies within the arrow span (or
    the text spans the arrow midpoint) and it is no more than one bond length
    beyond the attached position. The nearest free side wins. Arrows that the
@@ -128,8 +153,9 @@ caption. Every edit re-checks the labels in the same Undo step:
    midpoint stays. An arrow fitted to its text follows text edits to
    `max(label width, 2.8 bond lengths) + 0.4 bond lengths`, the spacing that
    assistant schemes use.
-4. Labels sit 0.45 bond lengths beyond the arrow ink, including heads and
-   equilibrium shafts.
+4. **Auto** places labels 0.45 bond lengths beyond the arrow ink, including
+   heads and equilibrium shafts. A custom gap overrides that default and stays
+   with the label when the arrow or its style changes.
 
 Copying or duplicating an arrow copies its labels, and **Delete** or Cut
 removes them with it; copying the text alone gives ordinary text. Dragging one
