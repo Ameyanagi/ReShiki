@@ -372,10 +372,7 @@ async fn prepare_copy_for(
         }
     };
     // Marked like a saved file, so pasting it never migrates its colors again.
-    let doc = Document {
-        version: crate::document::VERSION,
-        ..doc
-    };
+    let doc = doc.current();
     let mut representations = Vec::new();
     if !image_only {
         representations.push(Representation::new(

@@ -21,7 +21,7 @@ fn manual_atom_label_scripts_round_trip_native_files_and_empty_runs_are_omitted(
         reopened.atom(id).ok_or("Reopened atom")?.display,
         doc.atom(id).ok_or("Atom")?.display
     );
-    assert_eq!(reopened.version, VERSION);
+    assert_eq!(reopened.version, DISTANCE_BONDS);
     doc.atom_mut(id)
         .ok_or("Atom")?
         .display
@@ -318,7 +318,7 @@ fn newer_drawings_are_reported_before_parsing_and_saves_use_the_current_version(
     doc.add_bond(a, b, 1, "plain");
     let saved = doc.file_json().unwrap();
     let reopened = Document::from_json(&saved).unwrap();
-    assert_eq!(reopened.version, VERSION);
+    assert_eq!(reopened.version, DISTANCE_BONDS);
     assert_eq!(
         doc.version, 15,
         "saving leaves the drawing in memory unchanged"

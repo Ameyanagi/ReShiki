@@ -712,6 +712,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::ToggleSelectedRing
         | Message::ArrowStyle(..)
         | Message::ArrowAction(..)
+        | Message::ArrowLabelGap(..)
         | Message::CustomElement(..)
         | Message::ApplyElement
         | Message::InsertTemplate(..)

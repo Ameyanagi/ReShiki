@@ -22,6 +22,9 @@ pub struct ArrowLabel {
     pub arrow: u64,
     pub annotation: u64,
     pub side: Side,
+    /// Explicit arrow-ink to text-box clearance in world units; absent is Auto.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gap: Option<f32>,
 }
 
 pub const EXPORT_NOTICE: &str = "Condition text and arrow lengths are preserved; the links that keep labels attached to their arrows are omitted from this external format. Use a native ReShiki file to retain them.";
@@ -44,6 +47,124 @@ fn spacing(doc: &Document) -> Spacing {
         pad: bond * 0.2,
         gap: bond * 0.45,
         floor: bond * 2.8,
+    }
+}
+
+/// The clearance an attached condition label uses, including the Auto default.
+pub fn gap(doc: &Document, annotation: u64) -> Option<f32> {
+    doc.arrow_labels
+        .iter()
+        .find(|l| l.annotation == annotation)
+        .map(|l| l.gap.unwrap_or_else(|| spacing(doc).gap))
+}
+
+/// Set the explicit clearance, or restore Auto, without moving unrelated text.
+pub fn set_gap(doc: &mut Document, annotations: &[u64], value: Option<f32>) -> Result<(), String> {
+    if value.is_some_and(|v| !v.is_finite() || v < 0.) {
+        return Err("Arrow gap must be a finite, nonnegative distance".into());
+    }
+    let mut changed = false;
+    for label in &mut doc.arrow_labels {
+        if annotations.contains(&label.annotation) && label.gap != value {
+            label.gap = value;
+            changed = true;
+        }
+    }
+    if changed && value.is_some() {
+        doc.require_version(crate::document::ARROW_LABEL_GAPS);
+    }
+    Ok(())
+}
+
+/// A dimension of the actual annotation box, in the arrow's local frame.
+#[derive(Debug, Clone, Copy)]
+pub struct GapGeometry {
+    pub from: Point,
+    pub to: Point,
+    pub tangent: Point,
+    pub half_span: f32,
+}
+
+pub fn gap_geometry(doc: &Document, annotation: u64) -> Option<GapGeometry> {
+    let label = doc
+        .arrow_labels
+        .iter()
+        .find(|l| l.annotation == annotation)?;
+    let arrow = doc.arrows.iter().find(|a| a.id == label.arrow)?;
+    let text = doc.annotations.iter().find(|a| a.id == annotation)?;
+    let f = frame(arrow)?;
+    let normal = match label.side {
+        Side::Above => f.up,
+        Side::Below => Point::new(-f.up.x, -f.up.y),
+    };
+    let across = dot(sub(centre(text), f.mid), normal);
+    Some(GapGeometry {
+        from: f.mid.offset(
+            normal.x * half_thickness(arrow, &f),
+            normal.y * half_thickness(arrow, &f),
+        ),
+        to: f.mid.offset(
+            normal.x * (across - extent(text.size(), normal) / 2.),
+            normal.y * (across - extent(text.size(), normal) / 2.),
+        ),
+        tangent: f.dir,
+        half_span: extent(text.size(), f.dir) / 2.,
+    })
+}
+
+/// Explicit movement of text changes its gap. Moving its arrow, formatting the
+/// text or transforming the scheme keeps the saved clearance instead.
+pub fn translated(doc: &mut Document, ids: &[u64]) {
+    if doc.arrow_labels.is_empty() {
+        return;
+    }
+    let labels = std::mem::take(&mut doc.arrow_labels);
+    let mut kept = Vec::with_capacity(labels.len());
+    let mut dragged = Vec::new();
+    for mut label in labels {
+        if !ids.contains(&label.annotation) || ids.contains(&label.arrow) {
+            kept.push(label);
+            continue;
+        }
+        let Some((arrow, text)) = doc
+            .arrows
+            .iter()
+            .find(|a| a.id == label.arrow)
+            .zip(doc.annotations.iter().find(|a| a.id == label.annotation))
+        else {
+            continue;
+        };
+        let Some(f) = frame(arrow) else {
+            continue;
+        };
+        let offset = sub(centre(text), f.mid);
+        let along = dot(offset, f.dir).abs();
+        // Sideways escape detaches; perpendicular movement adjusts any gap.
+        if along > f.len / 2. && along > extent(text.size(), f.dir) / 2. {
+            continue;
+        }
+        let across = dot(offset, f.up);
+        label.side = if across >= 0. {
+            Side::Above
+        } else {
+            Side::Below
+        };
+        let value =
+            (across.abs() - half_thickness(arrow, &f) - extent(text.size(), f.up) / 2.).max(0.);
+        if (value - label.gap.unwrap_or_else(|| spacing(doc).gap)).abs() > 1e-4 {
+            label.gap = Some(value);
+        }
+        dragged.push(label);
+    }
+    let mut sides: HashSet<_> = kept.iter().map(|l| (l.arrow, l.side)).collect();
+    kept.extend(
+        dragged
+            .into_iter()
+            .filter(|l| sides.insert((l.arrow, l.side))),
+    );
+    doc.arrow_labels = kept;
+    if doc.arrow_labels.iter().any(|l| l.gap.is_some()) {
+        doc.require_version(crate::document::ARROW_LABEL_GAPS);
     }
 }
 
@@ -224,32 +345,8 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
             .is_some_and(|a| old_arrows.get(&id) == Some(&(a.start, a.end)))
     };
     let moved = |a: &Annotation| old_texts.get(&a.id) != Some(&a.position);
-    // 1. Independently dragged labels.
-    let labels = std::mem::take(&mut doc.arrow_labels);
-    let mut kept: Vec<ArrowLabel> = Vec::with_capacity(labels.len());
-    let mut dragged: Vec<ArrowLabel> = Vec::new();
-    for mut label in labels {
-        let text = doc.annotations.iter().find(|a| a.id == label.annotation);
-        if text.is_some_and(moved) && arrow_unchanged(doc, label.arrow) {
-            let arrow = doc.arrows.iter().find(|a| a.id == label.arrow);
-            match arrow.zip(text).and_then(|(a, t)| slot(doc, a, t)) {
-                Some((side, _)) => label.side = side,
-                None => continue,
-            }
-            dragged.push(label);
-        } else {
-            kept.push(label);
-        }
-    }
-    // A side holds one label; a label dragged onto an occupied side detaches
-    // and the label already there stays.
-    let mut sides: HashSet<_> = kept.iter().map(|l| (l.arrow, l.side)).collect();
-    kept.extend(
-        dragged
-            .into_iter()
-            .filter(|l| sides.insert((l.arrow, l.side))),
-    );
-    doc.arrow_labels = kept;
+    // Explicit text moves are handled by `translated`, shared with the canvas
+    // preview. Other edits preserve the saved side and clearance.
     // 2. Newly dropped or typed text.
     let attached: HashSet<_> = doc.arrow_labels.iter().map(|l| l.annotation).collect();
     let captions: HashSet<_> = doc.molecule_names.iter().map(|n| n.annotation).collect();
@@ -293,6 +390,7 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
                 arrow,
                 annotation: id,
                 side,
+                gap: None,
             });
         }
     }
@@ -367,13 +465,17 @@ fn layout(doc: &mut Document, before: &Document, id: u64) {
             }
         }
     }
+    place_labels(doc, id, false);
+}
+
+fn place_labels(doc: &mut Document, id: u64, reopening: bool) {
     let Some(arrow) = doc.arrows.iter().find(|a| a.id == id) else {
         return;
     };
     let Some(f) = frame(arrow) else {
         return;
     };
-    let clearance = half_thickness(arrow, &f) + spacing(doc).gap;
+    let ink = half_thickness(arrow, &f);
     let placements: Vec<(u64, Point)> = of(doc, id)
         .filter_map(|l| {
             let text = doc.annotations.iter().find(|a| a.id == l.annotation)?;
@@ -382,15 +484,40 @@ fn layout(doc: &mut Document, before: &Document, id: u64) {
                 Side::Above => f.up,
                 Side::Below => Point::new(-f.up.x, -f.up.y),
             };
-            let distance = clearance + extent(size, normal) / 2.;
+            let distance =
+                ink + l.gap.unwrap_or_else(|| spacing(doc).gap) + extent(size, normal) / 2.;
             let centre = f.mid.offset(normal.x * distance, normal.y * distance);
             Some((l.annotation, centre.offset(-size.0 / 2., -size.1 / 2.)))
         })
         .collect();
     for (annotation, position) in placements {
         if let Some(text) = doc.annotations.iter_mut().find(|a| a.id == annotation) {
-            text.position = position;
+            // A translated native copy can differ from recomputed coordinates
+            // by one f32 rounding step. Keep exact saved coordinates when they
+            // already realize the declared gap, avoiding drift on reopen.
+            if !reopening
+                || !position.x.is_finite()
+                || !position.y.is_finite()
+                || (text.position.x - position.x).abs() > 1e-4
+                || (text.position.y - position.y).abs() > 1e-4
+            {
+                text.position = position;
+            }
         }
+    }
+}
+
+/// Custom clearances are authoritative on reopen; old Auto-only files keep
+/// their existing load behavior. No geometry has to be inferred from positions.
+pub fn restore_custom_gaps(doc: &mut Document) {
+    let arrows: HashSet<_> = doc
+        .arrow_labels
+        .iter()
+        .filter(|l| l.gap.is_some())
+        .map(|l| l.arrow)
+        .collect();
+    for id in arrows {
+        place_labels(doc, id, true);
     }
 }
 
@@ -398,6 +525,12 @@ pub fn validate(doc: &Document) -> Result<(), String> {
     let mut texts = HashSet::new();
     let mut sides = HashSet::new();
     for label in &doc.arrow_labels {
+        if label.gap.is_some_and(|gap| !gap.is_finite() || gap < 0.) {
+            return Err("Invalid arrow label gap".into());
+        }
+        if label.gap.is_some() && doc.version < crate::document::ARROW_LABEL_GAPS {
+            return Err("Custom arrow label gaps require document version 31".into());
+        }
         if !texts.insert(label.annotation)
             || !sides.insert((label.arrow, label.side))
             || !doc.annotations.iter().any(|a| a.id == label.annotation)

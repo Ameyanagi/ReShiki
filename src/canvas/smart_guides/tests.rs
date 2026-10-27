@@ -154,3 +154,174 @@ fn arrow_ends_snap_to_edges_and_centers_along_their_direction() {
         }]
     );
 }
+
+#[test]
+fn attached_gap_dimensions_keep_the_actual_distance_at_every_angle_and_zoom() {
+    use reshiki::arrow_labels::{GapGeometry, Side};
+    let bounds = Rectangle::with_size(Size::new(800., 600.));
+    for (tangent, above) in [
+        (World::new(1., 0.), World::new(0., -1.)),
+        (World::new(-1., 0.), World::new(0., -1.)),
+        (World::new(0., 1.), World::new(-1., 0.)),
+        (World::new(0.6, 0.8), World::new(0.8, -0.6)),
+    ] {
+        for side in [Side::Above, Side::Below] {
+            let normal = if side == Side::Above {
+                above
+            } else {
+                World::new(-above.x, -above.y)
+            };
+            for gap in [0., 18.] {
+                for zoom in [0.25, 1., 4.] {
+                    let from = World::new(27., -14.);
+                    let geometry = GapGeometry {
+                        from,
+                        to: from.offset(normal.x * gap, normal.y * gap),
+                        tangent,
+                        half_span: 35.,
+                    };
+                    let camera = Camera {
+                        center: World::new(-10., 50.),
+                        zoom,
+                    };
+                    let dimension = LabelGapDimension::new(geometry, side, camera, bounds);
+                    assert!((dimension.world - gap).abs() < 1e-4);
+                    assert!((dimension.from.distance(dimension.to) - gap * zoom).abs() < 1e-3);
+                    assert!((dimension.normal.x - normal.x).abs() < 1e-4);
+                    assert!((dimension.normal.y - normal.y).abs() < 1e-4);
+                    // The measure clears the projected label by 12 screen pixels,
+                    // while its numerical value stays in world units.
+                    let offset = dimension.from - camera.screen(from, bounds);
+                    let along = offset.x * dimension.tangent.x + offset.y * dimension.tangent.y;
+                    assert!((along - (35. * zoom + 12.)).abs() < 1e-3);
+                    let size = Size::new(62., 16.);
+                    let center = dimension.badge_corner(size) + Vector::new(31., 8.);
+                    let middle = Point::new(
+                        (dimension.from.x + dimension.to.x) / 2.,
+                        (dimension.from.y + dimension.to.y) / 2.,
+                    );
+                    let away = center - middle;
+                    let normal_extent =
+                        (normal.x.abs() * size.width + normal.y.abs() * size.height) / 2.;
+                    assert!(
+                        away.x * normal.x + away.y * normal.y >= normal_extent + 3.99,
+                        "even zero-gap opposite-side badges stay outside their support planes"
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn attached_gap_document() -> Document {
+    use reshiki::{
+        arrow_labels::{ArrowLabel, Side},
+        arrows::{ArrowStyle, Preset},
+        document::{Annotation, Arrow},
+    };
+    let mut doc = Document::default();
+    doc.arrows.push(Arrow::new(
+        1,
+        World::new(0., 0.),
+        World::new(120., 0.),
+        Preset::Forward,
+        ArrowStyle::preset(Preset::Forward),
+    ));
+    doc.annotations.push(Annotation {
+        id: 2,
+        position: World::new(40., -20.),
+        text: "heat, 2 h".into(),
+        format: Default::default(),
+    });
+    doc.arrow_labels.push(ArrowLabel {
+        arrow: 1,
+        annotation: 2,
+        side: Side::Above,
+        gap: None,
+    });
+    reshiki::arrow_labels::set_gap(&mut doc, &[2], Some(16.)).unwrap();
+    let before = doc.clone();
+    reshiki::arrow_labels::reconcile(&mut doc, &before);
+    doc
+}
+
+#[test]
+fn only_selected_visible_attached_text_gets_an_actual_geometry_measure() {
+    let mut doc = attached_gap_document();
+    let camera = Camera::default();
+    let bounds = Rectangle::with_size(Size::new(800., 600.));
+    assert_eq!(label_gap_dimensions(&doc, &[], camera, bounds).count(), 0);
+    assert_eq!(label_gap_dimensions(&doc, &[1], camera, bounds).count(), 0);
+    assert!(
+        (label_gap_dimensions(&doc, &[2], camera, bounds)
+            .next()
+            .unwrap()
+            .world
+            - 16.)
+            .abs()
+            < 1e-3
+    );
+    // Measuring the supplied preview must not just repeat the stored setting.
+    doc.annotations
+        .iter_mut()
+        .find(|a| a.id == 2)
+        .unwrap()
+        .position
+        .y -= 9.;
+    assert_eq!(reshiki::arrow_labels::gap(&doc, 2), Some(16.));
+    let before = doc.clone();
+    assert!(
+        (label_gap_dimensions(&doc, &[2], camera, bounds)
+            .next()
+            .unwrap()
+            .world
+            - 25.)
+            .abs()
+            < 1e-3
+    );
+    assert_eq!(doc, before, "the dimension adds no document/export ink");
+    // Inline text editing removes its annotation from the paper preview.
+    doc.annotations.clear();
+    assert_eq!(label_gap_dimensions(&doc, &[2], camera, bounds).count(), 0);
+    doc = before;
+    doc.arrow_labels.clear();
+    assert_eq!(label_gap_dimensions(&doc, &[2], camera, bounds).count(), 0);
+}
+
+#[test]
+fn attached_gap_measure_follows_the_reconciled_arrow_preview_not_the_raw_cursor() {
+    use crate::canvas::{Gesture, MoleculeCanvas, State, Tool, tests::chain_canvas};
+    let doc = attached_gap_document();
+    let bounds = Rectangle::new(Point::new(20., 30.), Size::new(800., 600.));
+    let canvas = MoleculeCanvas {
+        tool: Tool::Select,
+        selected: &[2],
+        ..chain_canvas(&doc, reshiki::chains::ChainMode::Straight)
+    };
+    let requested = World::new(8., 8.);
+    let state = State {
+        gesture: Some(Gesture::ArrowHandle {
+            id: 1,
+            index: reshiki::arrows::ArrowHandle::End.index(),
+        }),
+        cursor: Some(canvas.camera.screen(requested, bounds) + Vector::new(bounds.x, bounds.y)),
+        ..Default::default()
+    };
+    let preview = canvas.pointer_preview_document(&state, bounds);
+    let end = preview.arrows.iter().find(|a| a.id == 1).unwrap().end;
+    assert!(
+        end.distance(requested) > 1.,
+        "attached text clamps the short raw pointer target"
+    );
+    let dimension = label_gap_dimensions(&preview, &[2], canvas.camera, bounds)
+        .next()
+        .unwrap();
+    let base = label_gap_dimensions(&doc, &[2], canvas.camera, bounds)
+        .next()
+        .unwrap();
+    assert!((dimension.world - 16.).abs() < 1e-3);
+    assert!(
+        dimension.from.distance(base.from) > 5.,
+        "the guide moves with the reconciled preview"
+    );
+}

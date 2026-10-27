@@ -191,7 +191,7 @@ pub const REACTIONS: u32 = 15;
 /// Lowest version the editor's write paths give a drawing: new drawings, open,
 /// recovery, page setup, printing, cleanup, styles, abbreviation detection and
 /// chemistry output. Each stamped the then-current version when reactions
-/// landed; saved files are now marked with [`VERSION`].
+/// landed; saved files now use [`Document::file_version`], up to [`VERSION`].
 pub const EDITOR_BASELINE: u32 = REACTIONS;
 /// Embedded custom themes and palette hues.
 pub const CUSTOM_THEMES: u32 = 16;
@@ -205,8 +205,11 @@ pub const MODELS_3D: u32 = 28;
 pub const CRYSTALS: u32 = 29;
 /// Persistent provenance preventing distance bonds from becoming chemical input.
 pub const DISTANCE_BONDS: u32 = 30;
+/// Custom arrow-label clearances. Auto-only drawings still use version 30.
+pub const ARROW_LABEL_GAPS: u32 = 31;
 
-/// The newest document format this build reads. Saved files are marked with it.
+/// The newest document format this build reads. Native output uses version 30
+/// unless a custom reaction-label gap requires version 31.
 ///
 /// | Version | Added |
 /// | --- | --- |
@@ -233,7 +236,8 @@ pub const DISTANCE_BONDS: u32 = 30;
 /// | 28 | 3D models of structures (#386). |
 /// | 29 | Crystal unit cells and atom sites on 3D models (#417; 0.13.0). |
 /// | 30 | Persistent distance-derived bond provenance (#517). |
-pub const VERSION: u32 = 30;
+/// | 31 | Custom clearances for attached reaction labels (#600). |
+pub const VERSION: u32 = 31;
 
 fn newer_version(version: u64) -> String {
     format!(
@@ -353,6 +357,7 @@ impl Document {
         doc.migrate();
         crate::models3d::retain_whole(&mut doc);
         crate::arrow_anchors::reconcile(&mut doc);
+        crate::arrow_labels::restore_custom_gaps(&mut doc);
         doc.validate()?;
         Ok(doc)
     }
@@ -381,16 +386,24 @@ impl Document {
         crate::atom_labels::clear_computed(&mut doc);
         Ok(doc)
     }
-    /// Native file contents, marked with this build's document version.
+    /// Native file contents, marked with the version their fields require.
     pub fn file_json(&self) -> Result<Vec<u8>, String> {
         serde_json::to_vec_pretty(&self.current()).map_err(|e| e.to_string())
     }
-    /// A copy marked with this build's document version, for files, clipboard
+    /// A copy marked with its required native version, for files, clipboard
     /// data and recovery drafts, so reading them back never migrates again.
     pub fn current(&self) -> Self {
         Self {
-            version: VERSION,
+            version: self.file_version(),
             ..self.clone()
+        }
+    }
+    /// Preserve the existing output version for drawings without custom gaps.
+    pub fn file_version(&self) -> u32 {
+        if self.arrow_labels.iter().any(|label| label.gap.is_some()) {
+            ARROW_LABEL_GAPS
+        } else {
+            DISTANCE_BONDS
         }
     }
     /// The next free ID: the largest object or group ID plus one, saturating.
@@ -576,6 +589,7 @@ impl Document {
         }
         crate::projection::sync_centroids(self);
         crate::arrow_anchors::transformed(self, ids, |v| v);
+        crate::arrow_labels::translated(self, ids);
     }
     /// Every object ID, in [`Document::object_ids`] order.
     pub fn all_ids(&self) -> Vec<u64> {

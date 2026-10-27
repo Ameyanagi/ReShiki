@@ -1,6 +1,6 @@
 use super::*;
 use crate::canvas_theme::{CanvasTheme, ColorTheme};
-use crate::document::{History, MODELS_3D, VERSION};
+use crate::document::{History, MODELS_3D};
 use crate::{editing, scene, transaction};
 
 /// Ethanol (C–C–O) and a separate methane, with a fixed conformer for ethanol.
@@ -87,7 +87,7 @@ fn native_files_round_trip_models_and_omit_the_key_without_one() {
     let (doc, ..) = shown(Display::Both);
     let bytes = doc.file_json().unwrap();
     let read = Document::from_json(&bytes).unwrap();
-    assert_eq!(read.version, VERSION);
+    assert_eq!(read.version, crate::document::DISTANCE_BONDS);
     assert_eq!(read.models, doc.models);
     assert_eq!(read.file_json().unwrap(), bytes);
 
@@ -95,7 +95,7 @@ fn native_files_round_trip_models_and_omit_the_key_without_one() {
     plain.models.clear();
     let json: serde_json::Value = serde_json::from_slice(&plain.file_json().unwrap()).unwrap();
     assert!(json.get("models").is_none());
-    assert_eq!(json["version"], VERSION);
+    assert_eq!(json["version"], crate::document::DISTANCE_BONDS);
 }
 
 #[test]
@@ -1679,7 +1679,7 @@ fn styles_and_settings_round_trip() {
     assert_eq!(saved["look"], "glossy");
     assert_eq!(saved["show_hydrogens"], "polar");
     assert_eq!(saved["background"], "card");
-    assert_eq!(json["version"], VERSION);
+    assert_eq!(json["version"], crate::document::DISTANCE_BONDS);
     assert_eq!(Document::from_json(&bytes).unwrap().models, doc.models);
 
     // Earlier version 28 files without the settings read the defaults.

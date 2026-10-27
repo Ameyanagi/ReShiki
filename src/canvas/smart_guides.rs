@@ -354,12 +354,7 @@ pub(super) fn draw(
     unit: Unit,
     dark: bool,
 ) {
-    // The frame inverts lightness on the dark canvas; pre-invert its brighter pink.
-    let color = if dark {
-        crate::appearance::color(true, Color::from_rgb8(255, 111, 163))
-    } else {
-        Color::from_rgb8(210, 58, 116)
-    };
+    let color = guide_color(dark);
     let stroke = Stroke::default().with_width(1.).with_color(color);
     let screen =
         |axis: Axis, along: f32, across: f32| camera.screen(axis.point(along, across), bounds);
@@ -385,31 +380,155 @@ pub(super) fn draw(
                     Axis::X => Vector::new(0., 5.),
                     Axis::Y => Vector::new(5., 0.),
                 };
-                frame.stroke(&Path::line(a, b), stroke);
-                for end in [a, b] {
-                    frame.stroke(&Path::line(end - tick, end + tick), stroke);
-                }
+                draw_dimension(frame, a, b, tick, color);
                 let label = unit.format(to - from);
-                let size = Size::new(crate::app::text_width(&label, 11.) + 10., 16.);
+                let size = badge_size(&label);
                 let middle = Point::new((a.x + b.x) / 2., (a.y + b.y) / 2.);
                 let corner = match axis {
                     Axis::X => Point::new(middle.x - size.width / 2., middle.y - 22.),
                     Axis::Y => Point::new(middle.x + 8., middle.y - size.height / 2.),
                 };
-                frame.fill(&Path::rounded_rectangle(corner, size, 4.into()), color);
-                frame.fill_text(canvas::Text {
-                    content: label,
-                    position: corner + Vector::new(size.width / 2., size.height / 2.),
-                    color: Color::WHITE,
-                    size: 11.into(),
-                    font: iced::Font::with_name(reshiki::style::ui_font_family()),
-                    align_x: iced::alignment::Horizontal::Center.into(),
-                    align_y: iced::alignment::Vertical::Center,
-                    ..Default::default()
-                });
+                draw_badge(frame, label, corner, size, color);
             }
         }
     }
+}
+
+/// The selected label's actual clearance, drawn only as an editing overlay.
+/// `doc` is the final reconciled gesture preview, not the pointer's raw target.
+pub(super) fn draw_arrow_label_gaps(
+    frame: &mut Frame<'_>,
+    doc: &Document,
+    selected: &[u64],
+    camera: Camera,
+    bounds: Rectangle,
+    unit: Unit,
+    dark: bool,
+) {
+    let color = guide_color(dark);
+    let stroke = Stroke::default().with_width(1.).with_color(color);
+    for dimension in label_gap_dimensions(doc, selected, camera, bounds) {
+        draw_dimension(
+            frame,
+            dimension.from,
+            dimension.to,
+            dimension.tangent * 5.,
+            color,
+        );
+        // Short witness marks reach the projected label edge without crossing its ink.
+        for end in [dimension.from, dimension.to] {
+            frame.stroke(
+                &Path::line(end - dimension.tangent * 12., end - dimension.tangent * 5.),
+                stroke,
+            );
+        }
+        let label = unit.format(dimension.world);
+        let size = badge_size(&label);
+        draw_badge(frame, label, dimension.badge_corner(size), size, color);
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct LabelGapDimension {
+    from: Point,
+    to: Point,
+    tangent: Vector,
+    normal: Vector,
+    world: f32,
+}
+impl LabelGapDimension {
+    fn new(
+        gap: reshiki::arrow_labels::GapGeometry,
+        side: reshiki::arrow_labels::Side,
+        camera: Camera,
+        bounds: Rectangle,
+    ) -> Self {
+        // Put dimensions on the same screen side when an arrow reverses.
+        let mut tangent = Vector::new(gap.tangent.x, gap.tangent.y);
+        if tangent.x < -1e-6 || (tangent.x.abs() <= 1e-6 && tangent.y < 0.) {
+            tangent = -tangent;
+        }
+        // Above is visually up (left for vertical arrows), including a zero gap
+        // where the dimension endpoints cannot supply a direction themselves.
+        let mut normal = Vector::new(tangent.y, -tangent.x);
+        if normal.y > 1e-6 || (normal.y.abs() <= 1e-6 && normal.x > 0.) {
+            normal = -normal;
+        }
+        if side == reshiki::arrow_labels::Side::Below {
+            normal = -normal;
+        }
+        let offset = tangent * (gap.half_span * camera.zoom + 12.);
+        Self {
+            from: camera.screen(gap.from, bounds) + offset,
+            to: camera.screen(gap.to, bounds) + offset,
+            tangent,
+            normal,
+            world: gap.from.distance(gap.to),
+        }
+    }
+    fn badge_corner(self, size: Size) -> Point {
+        let extent = |axis: Vector| (axis.x.abs() * size.width + axis.y.abs() * size.height) / 2.;
+        let middle = Point::new(
+            (self.from.x + self.to.x) / 2.,
+            (self.from.y + self.to.y) / 2.,
+        );
+        let center = middle
+            + self.tangent * (extent(self.tangent) + 8.)
+            + self.normal * (extent(self.normal) + 4.);
+        center - Vector::new(size.width / 2., size.height / 2.)
+    }
+}
+
+fn label_gap_dimensions<'a>(
+    doc: &'a Document,
+    selected: &'a [u64],
+    camera: Camera,
+    bounds: Rectangle,
+) -> impl Iterator<Item = LabelGapDimension> + 'a {
+    // Only attachment metadata is visited; no document clone, scene generation
+    // or workspace bounds scan is needed for this selection-only decoration.
+    doc.arrow_labels
+        .iter()
+        .filter(move |label| selected.contains(&label.annotation))
+        .filter_map(move |label| {
+            reshiki::arrow_labels::gap_geometry(doc, label.annotation)
+                .map(|gap| LabelGapDimension::new(gap, label.side, camera, bounds))
+        })
+}
+
+fn guide_color(dark: bool) -> Color {
+    // The frame inverts lightness on the dark canvas; pre-invert its brighter pink.
+    if dark {
+        crate::appearance::color(true, Color::from_rgb8(255, 111, 163))
+    } else {
+        Color::from_rgb8(210, 58, 116)
+    }
+}
+
+fn draw_dimension(frame: &mut Frame<'_>, from: Point, to: Point, tick: Vector, color: Color) {
+    let stroke = Stroke::default().with_width(1.).with_color(color);
+    frame.stroke(&Path::line(from, to), stroke);
+    for end in [from, to] {
+        frame.stroke(&Path::line(end - tick, end + tick), stroke);
+    }
+}
+
+fn badge_size(label: &str) -> Size {
+    Size::new(crate::app::text_width(label, 11.) + 10., 16.)
+}
+
+fn draw_badge(frame: &mut Frame<'_>, label: String, corner: Point, size: Size, color: Color) {
+    frame.fill(&Path::rounded_rectangle(corner, size, 4.into()), color);
+    frame.fill_text(canvas::Text {
+        content: label,
+        position: corner + Vector::new(size.width / 2., size.height / 2.),
+        color: Color::WHITE,
+        size: 11.into(),
+        font: iced::Font::with_name(reshiki::style::ui_font_family()),
+        align_x: iced::alignment::Horizontal::Center.into(),
+        align_y: iced::alignment::Vertical::Center,
+        ..Default::default()
+    });
 }
 
 #[cfg(test)]
