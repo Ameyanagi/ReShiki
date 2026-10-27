@@ -3,6 +3,7 @@
 mod motion;
 mod press;
 mod release;
+pub(super) mod touch;
 
 use crate::canvas::pick::{HANDLE_PICK_PX, PICK_RADIUS_PX};
 use crate::canvas::{Edit, Gesture, Handle, MoleculeCanvas, Navigation, State, Tool, optimization};
@@ -17,6 +18,27 @@ impl MoleculeCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<Action<Edit>> {
+        if let Event::Touch(event) = event {
+            return self.touch_event(state, *event, bounds);
+        }
+        if matches!(
+            event,
+            Event::Window(iced::window::Event::Unfocused)
+                | Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                    key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
+                    ..
+                })
+        ) {
+            state.touch = Default::default();
+        }
+        if let Event::Window(iced::window::Event::RedrawRequested(now)) = event
+            && state
+                .touch
+                .deadline()
+                .is_some_and(|deadline| *now >= deadline)
+        {
+            return self.touch_long_press(state, bounds);
+        }
         let canvas_bounds = bounds;
         let bounds = self.guides.paper(bounds);
         // Iced may dispatch a batch with the final cursor position. Preserve the
@@ -40,7 +62,8 @@ impl MoleculeCanvas<'_> {
             .map(|p| Point::new(p.x - bounds.x, p.y - bounds.y));
         let inside = point.is_some_and(|p| Rectangle::with_size(bounds.size()).contains(p));
         if let Some(context) = self.optimizer {
-            return optimization::update(self, context, state, event, bounds, point, inside);
+            return optimization::update(self, context, state, event, bounds, point, inside)
+                .or_else(|| state.touch.deadline().map(Action::request_redraw_at));
         }
         state.relaxation = None;
         if matches!(
@@ -156,7 +179,11 @@ impl MoleculeCanvas<'_> {
             }
             Event::Window(iced::window::Event::RedrawRequested(now)) => self
                 .model_generation
-                .map(|generation| Action::request_redraw_at(generation.next_tick(*now))),
+                .map(|generation| generation.next_tick(*now))
+                .into_iter()
+                .chain(state.touch.deadline())
+                .min()
+                .map(Action::request_redraw_at),
             _ => None,
         }
     }

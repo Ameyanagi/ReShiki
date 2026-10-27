@@ -256,6 +256,7 @@ fn one_unchanged_canvas_view_emits_camera_independent_mixed_wheel_packets() {
                             assert!(!is_pan);
                             assert!((factor - 0.135f32.exp()).abs() < 0.00001);
                         }
+                        Navigation::Pinch { .. } => panic!("Wheel input cannot emit a touch pinch"),
                     }
                     packets.push((navigation, emitted_offset));
                 }

@@ -884,6 +884,24 @@ impl App {
             .unwrap_or(&self.tab.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        // A touch can confirm its mouse press and move/release together. Each
+        // edit still passes through the same focus and preview gates as a mouse.
+        let message =
+            match message {
+                Message::Canvas(canvas::Edit::Touch(edits)) => {
+                    return Task::batch(
+                        edits
+                            .into_iter()
+                            .map(|edit| self.update(Message::Canvas(edit))),
+                    );
+                }
+                Message::Naming(naming::Action::PreviewEdit(canvas::Edit::Touch(edits))) => {
+                    return Task::batch(edits.into_iter().map(|edit| {
+                        self.update(Message::Naming(naming::Action::PreviewEdit(edit)))
+                    }));
+                }
+                message => message,
+            };
         // Readiness polling only redraws; it must not commit drafts or dismiss menus.
         #[cfg(target_arch = "wasm32")]
         if matches!(message, Message::Naming(naming::Action::Refresh)) {

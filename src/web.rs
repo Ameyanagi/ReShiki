@@ -105,6 +105,10 @@ struct Host {
     drops: Option<(web_sys::Element, DragListener)>,
     /// The textarea that takes input method text, until `destroy`.
     input_method: Option<ime::InputMethod>,
+    /// The canvas once Iced has created it and its DOM semantics are set.
+    canvas: Option<web_sys::HtmlElement>,
+    /// The screen reader's copy of the editor status, until `destroy`.
+    live_status: Option<web_sys::HtmlElement>,
 }
 
 thread_local! {
@@ -202,9 +206,11 @@ pub async fn mount(
     }
     let drops = file_drops(&element);
     let input_method = ime::start(&element);
+    let live_status = live_status(&element);
     HOST.with_borrow_mut(|host| {
         host.drops = Some((element, drops));
         host.input_method = input_method;
+        host.live_status = live_status;
     });
     // iced's multisampling leaves most canvases blank on WebGL2, the fallback
     // when the browser offers no WebGPU adapter.
@@ -223,6 +229,27 @@ pub async fn mount(
         antialiasing,
     )
     .map_err(js)
+}
+
+/// Keep status text in the accessibility tree without taking canvas space.
+fn live_status(element: &web_sys::Element) -> Option<web_sys::HtmlElement> {
+    let status: web_sys::HtmlElement = element
+        .owner_document()?
+        .create_element("div")
+        .ok()?
+        .dyn_into()
+        .ok()?;
+    status.set_id("reshiki-editor-status");
+    let _ = status.set_attribute("aria-live", "polite");
+    let _ = status.set_attribute("aria-atomic", "true");
+    // CSSOM also works with the host page's strict Content-Security-Policy.
+    status.style().set_css_text(
+        "position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; \
+         overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; \
+         pointer-events: none",
+    );
+    element.append_child(&status).ok()?;
+    Some(status)
 }
 
 /// Ask before the page unloads with unsaved changes. The browser never sends
@@ -992,6 +1019,9 @@ pub fn destroy() -> Result<(), JsError> {
     if let Some(input_method) = HOST.with_borrow_mut(|host| host.input_method.take()) {
         ime::stop(input_method);
     }
+    if let Some(status) = HOST.with_borrow_mut(|host| host.live_status.take()) {
+        status.remove();
+    }
     let paste = HOST.with_borrow_mut(|host| host.canvas_paste.take());
     if let (Some(paste), Some(window)) = (paste, web_sys::window()) {
         for (name, listener) in &paste {
@@ -1015,6 +1045,7 @@ pub fn destroy() -> Result<(), JsError> {
         host.on_missing_font = None;
         host.on_dirty_change = None;
         host.on_title_change = None;
+        host.canvas = None;
         // The drawings are gone, so leaving the page loses nothing more.
         host.dirty = false;
     });
@@ -1023,7 +1054,13 @@ pub fn destroy() -> Result<(), JsError> {
 
 /// The app's subscriptions and the page's requests.
 pub(crate) fn subscription(app: &App) -> Subscription<Message> {
-    Subscription::batch([app.subscription(), Subscription::run(requests)])
+    Subscription::batch([
+        app.subscription(),
+        Subscription::run(requests),
+        // Iced creates and inserts its canvas after mount starts the app.
+        // Refresh once it exists, before the user needs to interact with it.
+        iced::window::open_events().map(|_| Message::Host(Request::Redraw)),
+    ])
 }
 
 fn requests() -> impl iced::futures::Stream<Item = Message> {
@@ -1041,7 +1078,28 @@ pub(crate) fn update(app: &mut App, message: Message) -> Task<Message> {
     }
     let revision = app.revision();
     let (dirty, title) = (app.unsaved(), app.title());
+    let status = app.accessible_status();
     let (changed, dirty_changed, title_changed, sync_title) = HOST.with_borrow_mut(|host| {
+        if host.canvas.is_none()
+            && let Some(canvas) = host
+                .drops
+                .as_ref()
+                .and_then(|(element, _)| element.query_selector("canvas").ok().flatten())
+                .and_then(|canvas| canvas.dyn_into::<web_sys::HtmlElement>().ok())
+        {
+            let _ = canvas.style().set_property("touch-action", "none");
+            let _ = canvas.set_attribute("role", "application");
+            let _ = canvas.set_attribute("aria-label", "ReShiki molecular drawing editor");
+            if let Some(status) = &host.live_status {
+                let _ = canvas.set_attribute("aria-describedby", &status.id());
+            }
+            host.canvas = Some(canvas);
+        }
+        if let Some(live) = &host.live_status
+            && live.text_content().as_deref() != Some(status.as_str())
+        {
+            live.set_text_content(Some(&status));
+        }
         let previous = host.revision.replace(revision);
         let changed = previous
             .is_some_and(|previous| previous != revision)

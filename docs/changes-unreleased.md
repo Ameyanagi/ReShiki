@@ -1,5 +1,10 @@
 # Unreleased changes
 
+Under review: @Ameyanagi — browser canvas touch drawing, pinch zoom, two-finger
+pan and long-press context menus, plus a canvas label and status announcements
+for screen readers. [Issue #435](https://github.com/Ameyanagi/ReShiki/issues/435),
+PR number TBD.
+
 Under review: @Ameyanagi — Linux desktop launchers can associate ReShiki windows
 with their launcher and icon in [PR #598](https://github.com/Ameyanagi/ReShiki/pull/598).
 Reported by @fusion809 in [issue #597](https://github.com/Ameyanagi/ReShiki/issues/597).
