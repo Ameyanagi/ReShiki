@@ -418,7 +418,11 @@ async fn background_labels_reconcile_deleted_targets_and_new_document_epochs() {
 
 #[test]
 fn background_engine_results_apply_in_their_own_history() {
-    for kind in [Job::Insert, Job::Import, Job::ImportFile] {
+    for kind in [
+        Job::Insert,
+        Job::Import,
+        Job::ImportFile("oxygen.mol".into()),
+    ] {
         let mut app = ready();
         let before = app.tab.doc.clone();
         let _ = app.update(Message::Analyze);
@@ -839,7 +843,7 @@ fn a_structure_file_opened_beside_a_drawing_is_imported_into_its_new_tab() {
         app.tab.id,
         Box::new(Message::EngineDone {
             revision: app.tab.revision,
-            kind: Job::ImportFile,
+            kind: Job::ImportFile("ethanol.mol".into()),
             result: imported("O"),
         }),
     ));

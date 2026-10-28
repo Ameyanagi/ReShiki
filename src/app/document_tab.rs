@@ -44,7 +44,8 @@ pub(super) struct DocumentTab {
     #[cfg(target_arch = "wasm32")]
     pub(super) file_handle: Option<wasm_bindgen::JsValue>,
     pub(super) office: Option<Binding>,
-    pub(super) untitled_name: Option<&'static str>,
+    /// Display name for an unsaved drawing, never a save destination.
+    pub(super) untitled_name: Option<String>,
     // Selection and view.
     pub(super) selected: Vec<u64>,
     pub(super) hover: Option<(Point, u64)>,
@@ -252,7 +253,7 @@ impl DocumentTab {
             .as_ref()
             .and_then(|p| p.file_name())
             .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| self.untitled_name.unwrap_or("Untitled").into())
+            .unwrap_or_else(|| self.untitled_name.as_deref().unwrap_or("Untitled").into())
     }
 
     pub(super) fn dirty(&self) -> bool {

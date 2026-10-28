@@ -27,12 +27,15 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 env:
   UV_PYTHON_PREFERENCE: only-managed
+  # Smaller test binaries and caches; panics keep file and line numbers.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 jobs:
   scope:
     runs-on: ubuntu-22.04
     outputs:
       native: ${{ steps.scope.outputs.native }}
       live: ${{ steps.scope.outputs.live }}
+      geometry: ${{ steps.scope.outputs.geometry }}
     steps:
       - &actions_runtime
         name: Patch the Actions Node runtime when needed
@@ -196,6 +199,7 @@ jobs:
       - run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           shared-key: linux-x11
       - name: Run native clipboard regressions serially on a private display
         run: |
@@ -235,6 +239,8 @@ jobs:
       - run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy
       - run: rustup default 1.99.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           version: "0.13.5"
@@ -253,7 +259,6 @@ jobs:
       - run: cargo fmt --all --check
       - name: Check the native application without reference dependencies
         run: cargo clippy --workspace --all-targets --locked --no-default-features -- -D warnings
-      - run: cargo check --workspace --all-targets --locked --no-default-features
       - name: Build the exact application for local naming worker tests
         run: cargo build --locked --no-default-features --bin reshiki
       - name: Audit agent API dependencies for every release target
@@ -355,6 +360,7 @@ jobs:
       - run: rustup default 1.99.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           shared-key: wasm32
       - name: Check the browser editor, its worker and the headless library for wasm32
         run: cargo clippy -p reshiki-web -p reshiki -p reshiki-web-worker --lib --bin reshiki --target wasm32-unknown-unknown --locked -- -D warnings
@@ -370,7 +376,7 @@ jobs:
   geometry:
     name: Rust geometry (${{ matrix.target }})
     needs: scope
-    if: needs.scope.outputs.native == 'true'
+    if: needs.scope.outputs.geometry == 'true'
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -404,6 +410,7 @@ jobs:
       - run: rustup default 1.99.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           shared-key: geometry-${{ matrix.target }}
       - name: Select the native Windows compiler
         if: runner.os == 'Windows'
@@ -459,6 +466,7 @@ jobs:
       - run: rustup default 1.99.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           shared-key: reference-${{ matrix.shard }}
           cache-on-failure: true
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2

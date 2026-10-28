@@ -116,7 +116,7 @@ impl App {
             self.tab.file_handle = None;
         }
         #[cfg(any(windows, target_os = "linux"))]
-        if matches!(job.kind, Job::ImportFile) {
+        if matches!(job.kind, Job::ImportFile(_)) {
             self.desktop_import_finished();
         }
         drop(job);
@@ -175,7 +175,7 @@ impl App {
     ) -> Task<Message> {
         self.tab.busy = false;
         #[cfg(any(windows, target_os = "linux"))]
-        if matches!(kind, Job::ImportFile) {
+        if matches!(kind, Job::ImportFile(_)) {
             self.desktop_import_finished();
         }
         if matches!(&kind, Job::Clean(job) if job.serial != self.tab.cleanup_serial || job.epoch != self.tab.file_epoch)
@@ -213,7 +213,7 @@ impl App {
             Job::AromaticDisplay => self.aromatic_display_ready(response),
             Job::Abbreviate => self.abbreviations_ready(response),
             Job::Analyze => self.analysis_ready(response),
-            kind @ (Job::Import | Job::ImportFile | Job::Export(_)) => {
+            kind @ (Job::Import | Job::ImportFile(_) | Job::Export(_)) => {
                 self.structure_replaced(kind, response)
             }
         }
@@ -369,12 +369,12 @@ impl App {
             self.tab.labels_dirty = false;
             self.tab.chemistry_notice = None;
             self.tab.selected.clear();
-            if matches!(kind, Job::Import | Job::ImportFile) {
+            if matches!(kind, Job::Import | Job::ImportFile(_)) {
                 self.fit();
             }
-            if matches!(kind, Job::ImportFile) {
+            if let Job::ImportFile(name) = &kind {
                 self.tab.path = None;
-                self.tab.untitled_name = None;
+                self.tab.untitled_name = Some(name.clone());
                 self.tab.mark_saved(Document::default());
                 self.begin_file_epoch();
             }
@@ -402,3 +402,6 @@ mod cancel_tests;
 
 #[cfg(test)]
 mod crystal_tests;
+
+#[cfg(test)]
+mod import_file_tests;

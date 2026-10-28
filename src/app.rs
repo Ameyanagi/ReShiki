@@ -365,7 +365,8 @@ pub enum Job {
     AromaticDisplay,
     Abbreviate,
     Import,
-    ImportFile,
+    /// The source basename becomes the unsaved drawing's display name.
+    ImportFile(String),
     Insert,
     Analyze,
     Clean(cleanup::CleanupJob),

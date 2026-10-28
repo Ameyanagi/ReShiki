@@ -247,7 +247,7 @@ fn update_installs_one_expansion_tab_and_keeps_later_gate_side_effects() {
     let _ = app.update(completion);
     assert_eq!(app.strip().count(), count + 1);
     assert_ne!(app.tab.id, source);
-    assert_eq!(app.tab.untitled_name, Some("Generic expansion"));
+    assert_eq!(app.tab.untitled_name.as_deref(), Some("Generic expansion"));
     assert_eq!(app.tab.doc.atoms.len(), 4);
     assert!(app.tab.doc.generic.is_empty());
     assert_eq!(app.tabs.background[0].doc, before);
