@@ -11,14 +11,20 @@ use iced::keyboard::{Key, Modifiers, key::Named};
 use iced::widget::{Space, column, row, stack, text};
 use iced::{Alignment, Element, Length};
 
-/// Whether this build asks in the app's own dialog.
-pub(super) const IN_APP: bool = cfg!(target_arch = "wasm32");
-
 #[derive(Debug, Clone)]
+#[cfg_attr(
+    not(any(target_arch = "wasm32", test)),
+    expect(
+        dead_code,
+        reason = "In-app prompts are constructed by the browser and desktop tests"
+    )
+)]
 pub(super) enum Prompt {
     /// Save, Don’t Save or Cancel for the drawing with this name, before the
     /// pending action goes on.
     Save(String),
+    #[cfg(target_arch = "wasm32")]
+    Download(String),
     /// A notice with one OK button, which sends `then`.
     Notice {
         title: String,
@@ -46,6 +52,11 @@ impl Prompt {
                 Answer::Cancel => Message::Cancel,
             },
             Self::Notice { then, .. } => *then,
+            #[cfg(target_arch = "wasm32")]
+            Self::Download(name) => match answer {
+                Answer::Save if !name.trim().is_empty() => Message::SaveDownload(name),
+                _ => Message::Cancel,
+            },
         }
     }
 }
@@ -76,6 +87,16 @@ impl App {
                 .style(control(primary))
         };
         let (title, description, buttons) = match prompt {
+            #[cfg(target_arch = "wasm32")]
+            Prompt::Download(_) => (
+                "Download drawing".into(),
+                "Choose a file name. Downloading keeps any edits marked as unsaved.".into(),
+                row![
+                    Space::new().width(Length::Fill),
+                    button("prompt-cancel", "Cancel", Answer::Cancel, false),
+                    button("prompt-download", "Download", Answer::Save, true),
+                ],
+            ),
             Prompt::Save(name) => (
                 format!("Do you want to save the changes you made to “{name}”?"),
                 "Your changes will be lost if you don’t save them.".to_owned(),
@@ -98,15 +119,34 @@ impl App {
         let content = column![
             text(title).size(15),
             text(description).size(13).style(muted_text),
-            Space::new().height(Length::Fill),
-            buttons.spacing(8).align_y(Alignment::Center),
         ]
         .spacing(10);
+        #[cfg(target_arch = "wasm32")]
+        let content = if let Prompt::Download(name) = prompt {
+            content.push(
+                iced::widget::text_input("Drawing.rsk", name)
+                    .id("download-name")
+                    .on_input(Message::DownloadName)
+                    .on_submit(Message::Prompt(Answer::Save)),
+            )
+        } else {
+            content
+        };
+        let content = content
+            .push(Space::new().height(Length::Fill))
+            .push(buttons.spacing(8).align_y(Alignment::Center));
+        let height = 180.;
+        #[cfg(target_arch = "wasm32")]
+        let height = if matches!(prompt, Prompt::Download(_)) {
+            225.
+        } else {
+            height
+        };
         modal(
             base,
             content.into(),
             440.,
-            180.,
+            height,
             Message::Prompt(Answer::Cancel),
         )
     }

@@ -105,6 +105,10 @@ struct Host {
     drops: Option<(web_sys::Element, DragListener)>,
     /// The textarea that takes input method text, until `destroy`.
     input_method: Option<ime::InputMethod>,
+    /// The canvas once Iced has created it and its DOM semantics are set.
+    canvas: Option<web_sys::HtmlElement>,
+    /// The screen reader's copy of the editor status, until `destroy`.
+    live_status: Option<web_sys::HtmlElement>,
 }
 
 thread_local! {
@@ -115,6 +119,24 @@ thread_local! {
 extern "C" {
     #[wasm_bindgen(js_namespace = console)]
     fn error(message: &str);
+
+    type FileHandle;
+    #[wasm_bindgen(method, structural, catch, js_name = queryPermission)]
+    async fn query_permission(this: &FileHandle, options: &JsValue) -> Result<JsValue, JsValue>;
+    #[wasm_bindgen(method, structural, catch, js_name = requestPermission)]
+    async fn request_permission(this: &FileHandle, options: &JsValue) -> Result<JsValue, JsValue>;
+    #[wasm_bindgen(method, structural, catch, js_name = createWritable)]
+    async fn create_writable(this: &FileHandle) -> Result<WritableFile, JsValue>;
+    #[wasm_bindgen(method, structural, catch, js_name = isSameEntry)]
+    async fn is_same_entry(this: &FileHandle, other: &JsValue) -> Result<JsValue, JsValue>;
+
+    type WritableFile;
+    #[wasm_bindgen(method, structural, catch)]
+    async fn write(this: &WritableFile, bytes: &js_sys::Uint8Array) -> Result<JsValue, JsValue>;
+    #[wasm_bindgen(method, structural, catch)]
+    async fn close(this: &WritableFile) -> Result<JsValue, JsValue>;
+    #[wasm_bindgen(method, structural, catch)]
+    async fn abort(this: &WritableFile) -> Result<JsValue, JsValue>;
 }
 
 /// Report panics on the console; the browser build aborts on them.
@@ -202,9 +224,11 @@ pub async fn mount(
     }
     let drops = file_drops(&element);
     let input_method = ime::start(&element);
+    let live_status = live_status(&element);
     HOST.with_borrow_mut(|host| {
         host.drops = Some((element, drops));
         host.input_method = input_method;
+        host.live_status = live_status;
     });
     // iced's multisampling leaves most canvases blank on WebGL2, the fallback
     // when the browser offers no WebGPU adapter.
@@ -223,6 +247,27 @@ pub async fn mount(
         antialiasing,
     )
     .map_err(js)
+}
+
+/// Keep status text in the accessibility tree without taking canvas space.
+fn live_status(element: &web_sys::Element) -> Option<web_sys::HtmlElement> {
+    let status: web_sys::HtmlElement = element
+        .owner_document()?
+        .create_element("div")
+        .ok()?
+        .dyn_into()
+        .ok()?;
+    status.set_id("reshiki-editor-status");
+    let _ = status.set_attribute("aria-live", "polite");
+    let _ = status.set_attribute("aria-atomic", "true");
+    // CSSOM also works with the host page's strict Content-Security-Policy.
+    status.style().set_css_text(
+        "position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; \
+         overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; \
+         pointer-events: none",
+    );
+    element.append_child(&status).ok()?;
+    Some(status)
 }
 
 /// Ask before the page unloads with unsaved changes. The browser never sends
@@ -605,22 +650,36 @@ pub(crate) async fn read_files(
 }
 
 /// Files the user chooses with the browser's file chooser, by name with their
-/// contents; none when they cancel, and an error when one cannot be read. `extensions`, without dots, limit the
-/// choice when given. The File System Access picker is used where the browser
-/// has it, and otherwise a hidden file input.
+/// contents and handles; none when they cancel, and an error when one cannot
+/// be read. `extensions`, without dots, limit the choice when given. The File
+/// System Access picker is used where available, otherwise a hidden file input.
 pub(crate) async fn pick(
     extensions: &[&str],
     multiple: bool,
     limit: fn(&Path) -> u64,
-) -> Result<Vec<(String, Vec<u8>)>, String> {
+) -> Result<Vec<crate::app::Picked>, String> {
     let Some(window) = web_sys::window() else {
         return Ok(vec![]);
     };
     let files = match open_file_picker(&window, extensions, multiple).await {
         Some(files) => files?,
-        None => file_input(&window, extensions, multiple).await,
+        None => file_input(&window, extensions, multiple)
+            .await
+            .into_iter()
+            .map(|file| (file, None))
+            .collect(),
     };
-    read_files(files, limit).await
+    let (files, handles): (Vec<_>, Vec<_>) = files.into_iter().unzip();
+    Ok(read_files(files, limit)
+        .await?
+        .into_iter()
+        .zip(handles)
+        .map(|((name, contents), handle)| crate::app::Picked {
+            path: name.into(),
+            contents,
+            handle,
+        })
+        .collect())
 }
 
 /// `showOpenFilePicker`, or None when the page cannot use it, as in Firefox,
@@ -629,7 +688,7 @@ async fn open_file_picker(
     window: &web_sys::Window,
     extensions: &[&str],
     multiple: bool,
-) -> Option<Result<Vec<web_sys::File>, String>> {
+) -> Option<Result<Vec<(web_sys::File, Option<JsValue>)>, String>> {
     use js_sys::{Array, Function, Object, Promise, Reflect};
     use wasm_bindgen_futures::JsFuture;
     let picker = Reflect::get(window, &"showOpenFilePicker".into())
@@ -690,11 +749,112 @@ async fn open_file_picker(
             None => None,
         };
         match file {
-            Some(file) => files.push(file),
+            Some(file) => files.push((file, Some(handle))),
             None => return Some(Err(format!("Could not read {name}"))),
         }
     }
     Some(Ok(files))
+}
+
+pub(crate) fn can_save_file() -> bool {
+    web_sys::window().is_some_and(|window| {
+        // Chromium exposes the method in cross-origin frames but forbids
+        // opening its picker there. Embedded editors use downloads instead.
+        let same_origin = window.top().ok().flatten().is_some_and(|top| {
+            js_sys::Reflect::get(&top, &"origin".into()).ok() == Some(window.origin().into())
+        });
+        same_origin
+            && js_sys::Reflect::get(&window, &"showSaveFilePicker".into())
+                .is_ok_and(|picker| picker.is_function())
+    })
+}
+
+/// Choose the destination before serializing the drawing, while the browser
+/// still has the Save command's user activation. Cancellation keeps the tab.
+pub(crate) async fn save_file_picker(name: &str) -> Result<Option<JsValue>, String> {
+    use js_sys::{Array, Function, Object, Promise, Reflect};
+    let window = web_sys::window().ok_or("The page has no window")?;
+    let options = Object::new();
+    let _ = Reflect::set(&options, &"suggestedName".into(), &name.into());
+    let accept = Object::new();
+    let extensions: Array = reshiki::compatibility::NATIVE_EXTENSIONS
+        .iter()
+        .map(|extension| JsValue::from(format!(".{extension}")))
+        .collect();
+    let _ = Reflect::set(&accept, &"application/octet-stream".into(), &extensions);
+    let kind = Object::new();
+    let _ = Reflect::set(&kind, &"description".into(), &"ReShiki drawing".into());
+    let _ = Reflect::set(&kind, &"accept".into(), &accept);
+    let _ = Reflect::set(&options, &"types".into(), &Array::of1(&kind));
+    let result = async {
+        let picker = Reflect::get(&window, &"showSaveFilePicker".into())?.dyn_into::<Function>()?;
+        let promise = picker.call1(&window, &options)?.dyn_into::<Promise>()?;
+        wasm_bindgen_futures::JsFuture::from(promise).await
+    }
+    .await;
+    match result {
+        Ok(handle) => Ok(Some(handle)),
+        Err(error) if js_error_name(&error).as_deref() == Some("AbortError") => Ok(None),
+        Err(error) => Err(format!("Could not choose a save file: {error:?}")),
+    }
+}
+
+fn js_error_name(error: &JsValue) -> Option<String> {
+    js_sys::Reflect::get(error, &"name".into())
+        .ok()?
+        .as_string()
+}
+
+/// Complete a save only after the writable stream closes successfully.
+pub(crate) async fn write_file(handle: &JsValue, document: &Document) -> Result<(), String> {
+    let handle: &FileHandle = handle.unchecked_ref();
+    let options = js_sys::Object::new();
+    let _ = js_sys::Reflect::set(&options, &"mode".into(), &"readwrite".into());
+    let write = async {
+        if handle
+            .query_permission(&options)
+            .await?
+            .as_string()
+            .as_deref()
+            != Some("granted")
+            && handle
+                .request_permission(&options)
+                .await?
+                .as_string()
+                .as_deref()
+                != Some("granted")
+        {
+            return Err(JsValue::from_str("Write permission was not granted"));
+        }
+        let bytes = document
+            .file_json()
+            .map_err(|error| JsValue::from_str(&error))?;
+        let writable = handle.create_writable().await?;
+        let result = async {
+            writable
+                .write(&js_sys::Uint8Array::from(bytes.as_slice()))
+                .await?;
+            writable.close().await?;
+            Ok(())
+        }
+        .await;
+        if result.is_err() {
+            let _ = writable.abort().await;
+        }
+        result
+    };
+    write
+        .await
+        .map_err(|error: JsValue| format!("Could not save the drawing: {error:?}"))
+}
+
+/// Bare browser file names cannot establish identity; only handles can.
+pub(crate) async fn same_entry(handle: &JsValue, other: &JsValue) -> bool {
+    handle
+        .unchecked_ref::<FileHandle>()
+        .is_same_entry(other)
+        .await
+        .is_ok_and(|same| same.as_bool() == Some(true))
 }
 
 /// A hidden `<input type=file>`, answered by its change or cancel event.
@@ -992,6 +1152,9 @@ pub fn destroy() -> Result<(), JsError> {
     if let Some(input_method) = HOST.with_borrow_mut(|host| host.input_method.take()) {
         ime::stop(input_method);
     }
+    if let Some(status) = HOST.with_borrow_mut(|host| host.live_status.take()) {
+        status.remove();
+    }
     let paste = HOST.with_borrow_mut(|host| host.canvas_paste.take());
     if let (Some(paste), Some(window)) = (paste, web_sys::window()) {
         for (name, listener) in &paste {
@@ -1015,6 +1178,7 @@ pub fn destroy() -> Result<(), JsError> {
         host.on_missing_font = None;
         host.on_dirty_change = None;
         host.on_title_change = None;
+        host.canvas = None;
         // The drawings are gone, so leaving the page loses nothing more.
         host.dirty = false;
     });
@@ -1023,7 +1187,13 @@ pub fn destroy() -> Result<(), JsError> {
 
 /// The app's subscriptions and the page's requests.
 pub(crate) fn subscription(app: &App) -> Subscription<Message> {
-    Subscription::batch([app.subscription(), Subscription::run(requests)])
+    Subscription::batch([
+        app.subscription(),
+        Subscription::run(requests),
+        // Iced creates and inserts its canvas after mount starts the app.
+        // Refresh once it exists, before the user needs to interact with it.
+        iced::window::open_events().map(|_| Message::Host(Request::Redraw)),
+    ])
 }
 
 fn requests() -> impl iced::futures::Stream<Item = Message> {
@@ -1041,7 +1211,28 @@ pub(crate) fn update(app: &mut App, message: Message) -> Task<Message> {
     }
     let revision = app.revision();
     let (dirty, title) = (app.unsaved(), app.title());
+    let status = app.accessible_status();
     let (changed, dirty_changed, title_changed, sync_title) = HOST.with_borrow_mut(|host| {
+        if host.canvas.is_none()
+            && let Some(canvas) = host
+                .drops
+                .as_ref()
+                .and_then(|(element, _)| element.query_selector("canvas").ok().flatten())
+                .and_then(|canvas| canvas.dyn_into::<web_sys::HtmlElement>().ok())
+        {
+            let _ = canvas.style().set_property("touch-action", "none");
+            let _ = canvas.set_attribute("role", "application");
+            let _ = canvas.set_attribute("aria-label", "ReShiki molecular drawing editor");
+            if let Some(status) = &host.live_status {
+                let _ = canvas.set_attribute("aria-describedby", &status.id());
+            }
+            host.canvas = Some(canvas);
+        }
+        if let Some(live) = &host.live_status
+            && live.text_content().as_deref() != Some(status.as_str())
+        {
+            live.set_text_content(Some(&status));
+        }
         let previous = host.revision.replace(revision);
         let changed = previous
             .is_some_and(|previous| previous != revision)
@@ -1123,12 +1314,12 @@ pub(crate) fn download(path: &Path, bytes: &[u8]) -> Result<(), String> {
             .unwrap_or("Drawing"),
     );
     link.click();
-    // Revoke once the click has started the download.
+    // Give the browser time to consume the URL, including a download prompt.
     let revoke = Closure::once_into_js(move || {
         let _ = web_sys::Url::revoke_object_url(&url);
     });
     window
-        .set_timeout_with_callback(revoke.unchecked_ref())
+        .set_timeout_with_callback_and_timeout_and_arguments_0(revoke.unchecked_ref(), 30_000)
         .map_err(|_| FAILED)?;
     Ok(())
 }

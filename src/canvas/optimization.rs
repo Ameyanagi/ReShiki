@@ -20,7 +20,7 @@ pub(super) enum Drag {
     Pan { last: Point },
 }
 
-fn cancelled(state: &mut State) -> Option<Edit> {
+pub(super) fn cancelled(state: &mut State) -> Option<Edit> {
     match state.relaxation.take()? {
         Drag::Atom { session, .. } | Drag::Rotate { session, .. } => {
             Some(Edit::RelaxDragCancel { session })

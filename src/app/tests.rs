@@ -2872,3 +2872,146 @@ fn text_click_on_an_existing_label_selects_it_without_a_history_step() {
     assert_eq!(app.tool, Tool::Text);
     assert!(!app.tab.history.can_undo());
 }
+
+#[test]
+fn touch_batch_erase_matches_mouse_and_ends_the_stroke() {
+    let fixture = || {
+        let (mut app, _) = App::new();
+        app.tool = Tool::Erase;
+        for (element, x) in [("C", 0.), ("O", 40.), ("N", 100.)] {
+            app.tab.doc.add_atom(element, Point::new(x, 0.));
+        }
+        app
+    };
+    let (mut touch, mut mouse) = (fixture(), fixture());
+    let original = touch.tab.doc.clone();
+    let edits = vec![
+        Edit::EraseStart(Point::default()),
+        Edit::EraseTo(Point::default(), Point::new(40., 0.)),
+        Edit::EraseEnd,
+    ];
+    let _ = touch.update(Message::Canvas(Edit::Touch(edits.clone())));
+    for edit in edits {
+        let _ = mouse.update(Message::Canvas(edit));
+    }
+    assert_eq!(touch.tab.doc, mouse.tab.doc);
+    assert_eq!(touch.tab.doc.atoms.len(), 1);
+    assert_eq!(touch.tab.doc.atoms[0].element, "N");
+    assert!(!touch.tab.erase_stroke, "the release ends live erasing");
+    assert_eq!(touch.tab.revision, mouse.tab.revision);
+    let _ = touch.update(Message::Undo);
+    assert_eq!(touch.tab.doc, original);
+    assert!(!touch.tab.history.can_undo(), "one stroke is one undo step");
+}
+
+#[test]
+fn touch_batch_bond_tap_matches_mouse_and_places_one_carbon_bond() {
+    let fixture = || {
+        let (mut app, _) = App::new();
+        app.tool = Tool::Bond(1);
+        app
+    };
+    let (mut touch, mut mouse) = (fixture(), fixture());
+    let original = touch.tab.doc.clone();
+    let edits = vec![
+        Edit::PointerHover(Some(iced::Vector::ZERO)),
+        Edit::Hover(None),
+        Edit::Click(Point::default()),
+    ];
+    let _ = touch.update(Message::Canvas(Edit::Touch(edits.clone())));
+    for edit in edits {
+        let _ = mouse.update(Message::Canvas(edit));
+    }
+    assert_eq!(touch.tab.doc, mouse.tab.doc);
+    assert_eq!(touch.tab.selected, mouse.tab.selected);
+    assert_eq!(touch.tab.doc.atoms.len(), 2);
+    assert!(touch.tab.doc.atoms.iter().all(|atom| atom.element == "C"));
+    assert_eq!(touch.tab.doc.bonds.len(), 1);
+    assert_eq!(touch.tab.doc.bonds[0].order, 1);
+    let _ = touch.update(Message::Undo);
+    assert_eq!(touch.tab.doc, original);
+    assert!(!touch.tab.history.can_undo(), "one tap is one undo step");
+}
+
+#[test]
+fn touch_batch_respects_the_atom_label_modal_gate_like_mouse() {
+    let fixture = || {
+        let (mut app, _) = App::new();
+        let atom = app.tab.doc.add_atom("C", Point::default());
+        app.tab.selected = vec![atom];
+        let _ = app.update(Message::AtomText(atom_text::Action::Begin(None)));
+        let _ = app.update(Message::AtomText(atom_text::Action::Input("O".into())));
+        app.tool = Tool::Bond(1);
+        app
+    };
+    let (mut touch, mut mouse) = (fixture(), fixture());
+    let original = touch.tab.doc.clone();
+    let edits = vec![Edit::Hover(None), Edit::Click(Point::new(180., 0.))];
+    let _ = touch.update(Message::Canvas(Edit::Touch(edits.clone())));
+    for edit in edits {
+        let _ = mouse.update(Message::Canvas(edit));
+    }
+    assert_eq!(touch.tab.doc, original);
+    assert_eq!(touch.tab.doc, mouse.tab.doc);
+    assert!(
+        touch.tab.atom_text.is_some(),
+        "the modal draft remains open"
+    );
+    assert!(!touch.tab.history.can_undo());
+    let _ = touch.update(Message::AtomText(atom_text::Action::Apply));
+    assert_eq!(touch.tab.doc.atoms.len(), 1);
+    assert_eq!(touch.tab.doc.atoms[0].element, "O");
+}
+
+#[test]
+fn touch_batch_caption_commit_and_later_bond_tap_match_mouse() {
+    let fixture = || {
+        let (mut app, _) = App::new();
+        app.tool = Tool::Bond(1);
+        let _ = app.update(Message::InlineText(inline_text::Action::Begin(
+            None,
+            Point::new(-180., 0.),
+        )));
+        let _ = app.update(Message::InlineText(inline_text::Action::ReplaceText(
+            "Caption draft".into(),
+        )));
+        app
+    };
+    let (mut touch, mut mouse) = (fixture(), fixture());
+    let original = touch.tab.doc.clone();
+    let edits = vec![
+        Edit::PointerHover(Some(iced::Vector::ZERO)),
+        Edit::Hover(None),
+        Edit::Click(Point::default()),
+    ];
+    let _ = touch.update(Message::Canvas(Edit::Touch(edits.clone())));
+    for edit in edits.iter().cloned() {
+        let _ = mouse.update(Message::Canvas(edit));
+    }
+    assert_eq!(touch.tab.doc, mouse.tab.doc);
+    assert!(touch.tab.inline_text.is_none());
+    assert_eq!(touch.tab.doc.annotations.len(), 1);
+    assert_eq!(touch.tab.doc.annotations[0].text, "Caption draft");
+    assert!(touch.tab.doc.atoms.is_empty());
+    assert!(touch.tab.doc.bonds.is_empty());
+    assert_eq!(touch.tool, Tool::Select);
+    assert_eq!(touch.tool, mouse.tool);
+    let caption_only = touch.tab.doc.clone();
+
+    // Finishing a caption returns to Select. Choosing the Bond tool again
+    // makes the next tap draw through the same path as a mouse click.
+    let _ = touch.update(Message::Tool(Tool::Bond(1)));
+    let _ = mouse.update(Message::Tool(Tool::Bond(1)));
+    let _ = touch.update(Message::Canvas(Edit::Touch(edits.clone())));
+    for edit in edits {
+        let _ = mouse.update(Message::Canvas(edit));
+    }
+    assert_eq!(touch.tab.doc, mouse.tab.doc);
+    assert_eq!(touch.tab.doc.atoms.len(), 2);
+    assert_eq!(touch.tab.doc.bonds.len(), 1);
+    let _ = touch.update(Message::Undo);
+    assert_eq!(touch.tab.doc, caption_only);
+    let _ = touch.update(Message::Undo);
+    assert_eq!(touch.tab.doc, original);
+    assert!(!touch.tab.history.can_undo());
+}

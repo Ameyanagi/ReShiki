@@ -88,6 +88,16 @@ impl App {
             .chain([self.status.clone()])
     }
 
+    /// The full status message and the selection summary shown by the tools.
+    pub(crate) fn accessible_status(&self) -> String {
+        let selection = self.selection_summary();
+        if self.status.is_empty() {
+            selection
+        } else {
+            format!("{} · {selection}", self.status)
+        }
+    }
+
     /// The drawing in front and its revision, which changes with every edit.
     pub(crate) fn revision(&self) -> (u64, u64) {
         (self.tab.id.0, self.tab.revision)

@@ -39,6 +39,10 @@ pub(super) struct DocumentTab {
     pub(super) file_epoch: u64,
     pub(super) recent_molecules: molecule_shortcuts::Recent,
     pub(super) path: Option<PathBuf>,
+    /// Browser file identity; imports keep it too, but only native drawings
+    /// with a path can save back through it.
+    #[cfg(target_arch = "wasm32")]
+    pub(super) file_handle: Option<wasm_bindgen::JsValue>,
     pub(super) office: Option<Binding>,
     /// Display name for an unsaved drawing, never a save destination.
     pub(super) untitled_name: Option<String>,
@@ -164,6 +168,8 @@ impl DocumentTab {
             file_epoch: 0,
             recent_molecules: Default::default(),
             path: None,
+            #[cfg(target_arch = "wasm32")]
+            file_handle: None,
             office: None,
             untitled_name: None,
             selected: vec![],

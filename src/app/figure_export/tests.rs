@@ -104,6 +104,6 @@ fn export_receipts_distinguish_browser_handoff_from_desktop_write() {
     );
     assert_eq!(
         super::super::files::export_status(path, &details, true),
-        "aspirin.pdf sent to browser downloads · PDF: 2 pages"
+        "Downloaded aspirin.pdf · PDF: 2 pages"
     );
 }

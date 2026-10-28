@@ -130,6 +130,8 @@ pub enum TransformField {
 
 #[derive(Debug, Clone)]
 pub enum Edit {
+    /// Mouse edits emitted together when a pending touch becomes a tap or drag.
+    Touch(Vec<Edit>),
     ContextMenu {
         position: Point,
         selected: Vec<u64>,
@@ -269,6 +271,7 @@ impl Edit {
 pub enum Navigation {
     Pan(Vector),
     Zoom(f32),
+    Pinch { factor: f32, pan: Vector },
 }
 #[derive(Debug, Clone, Copy)]
 pub struct Camera {
@@ -293,6 +296,10 @@ impl Camera {
         min_zoom: f32,
     ) -> World {
         match navigation {
+            Navigation::Pinch { factor, pan } => {
+                self.navigate(Navigation::Zoom(factor), offset, min_zoom);
+                self.navigate(Navigation::Pan(pan), offset + pan, min_zoom)
+            }
             Navigation::Pan(delta) => {
                 self.center = self
                     .center
@@ -349,6 +356,7 @@ pub struct State {
     gesture: Option<Gesture>,
     relaxation: Option<optimization::Drag>,
     cursor: Option<Point>,
+    touch: input::touch::Touch,
     /// Only caption transitions during a bond drag need an application hint.
     bond_text_hover: Option<u64>,
     last_click: Option<(iced::time::Instant, u64)>,
@@ -364,6 +372,7 @@ pub(crate) fn reset_menu_pointer(tree: &mut iced::advanced::widget::Tree) {
         && let Some(state) = state.downcast_mut::<State>()
     {
         state.end_gesture();
+        state.touch = Default::default();
         state.cursor = None;
         state.last_click = None;
         state.last_transform_click = None;
