@@ -1333,9 +1333,8 @@ fn selections_bounds_in_axes(
         .filter(|m| m.display != crate::models3d::Display::TwoD)
     {
         if let Some(id) = model
-            .atoms
-            .iter()
-            .map(|a| a.id)
+            .linked_ids(doc)
+            .into_iter()
             .find(|id| owners.contains_key(id))
             && let Some(corners) = crate::models3d::frame_corners(doc, model)
         {

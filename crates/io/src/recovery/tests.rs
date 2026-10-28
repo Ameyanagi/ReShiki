@@ -271,7 +271,7 @@ fn drafts_keep_3d_models() {
     ];
     doc.models
         .push(Model3d::new(&doc, placed, vec![], ForceField::Uff));
-    doc.require_version(crate::document::MODELS_3D);
+    crate::models3d::require_version(&mut doc);
     crate::models3d::set_display(&mut doc, 0, Display::ThreeD);
     store.save(&doc, None).unwrap();
     std::fs::rename(&store.session, dir.path().join("4294967294-test.json")).unwrap();

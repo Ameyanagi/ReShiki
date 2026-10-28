@@ -1,5 +1,5 @@
 use super::*;
-use crate::document::{DISTANCE_BONDS, MODELS_3D, Point};
+use crate::document::{DISTANCE_BONDS, MODEL_POLISH, Point};
 use crate::models3d::{Display, Model3d};
 
 const NACL: &str = include_str!("../../../../tests/fixtures/crystal/nacl.cif");
@@ -202,11 +202,27 @@ fn plain_xyz_is_a_molecule_without_a_cell() {
     let m = model(&doc);
     assert_eq!(doc.bonds.len(), 2);
     assert!(m.cell.is_none());
-    assert_eq!(doc.version, MODELS_3D);
+    assert!(m.sites.is_empty());
+    assert!(m.file_geometry);
+    assert!(m.is_file_derived());
+    assert!(m.fingerprint.is_none());
+    assert!(m.generated.is_none());
+    assert!(!m.is_stale(&doc));
+    assert_eq!(doc.version, MODEL_POLISH);
     assert_eq!(m.display, Display::ThreeD);
     // The 2D layout comes from the 3D view, with depth kept.
     assert!(doc.atoms.iter().all(|a| a.position.is_finite()));
     assert!(doc.atoms.iter().any(|a| a.depth != 0.));
+
+    // Imported geometry stays outside the generated-conformer lifecycle after
+    // native save/reopen, even without a cell, site labels or displacement data.
+    let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    let saved = model(&reopened);
+    assert_eq!(saved, m);
+    assert!(saved.file_geometry && saved.is_file_derived());
+    assert!(saved.fingerprint.is_none());
+    assert!(saved.generated.is_none());
+    assert!(!saved.is_stale(&reopened));
 }
 
 #[test]

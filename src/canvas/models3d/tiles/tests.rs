@@ -224,6 +224,70 @@ fn model_images_match_figure_export_and_are_smooth() {
     }
 }
 
+#[tokio::test]
+#[ignore = "Opt-in native renderer and export comparison for 3D atom labels"]
+async fn models3d_labels_keep_native_and_export_paint_order() {
+    use iced::advanced::Renderer as _;
+    use iced::advanced::graphics::geometry::Renderer as _;
+    use iced::advanced::renderer::Headless;
+    use reshiki::models3d::Labels;
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .expect("Headless renderer");
+    let bounds = Rectangle::with_size(Size::new(640., 400.));
+    for style in Style::ALL {
+        let mut doc = model(style);
+        let (lo, hi) = reshiki::models3d::frame(&doc, &doc.models[0]).unwrap();
+        let camera = Camera {
+            center: lo.lerp(hi, 0.5),
+            zoom: 2.,
+        };
+        let mut previous = None;
+        for labels in Labels::ALL {
+            doc.models[0].labels = labels;
+            let run = scene::primitives(&doc);
+            renderer.reset(bounds);
+            let mut frame = layered::Frame::new(&renderer, bounds.size());
+            frame.fill_rectangle(Point::ORIGIN, bounds.size(), iced::Color::WHITE);
+            crate::canvas::render::draw_primitives(&mut frame, &run, camera, bounds, 0.);
+            for geometry in frame.finish() {
+                renderer.draw_geometry(geometry);
+            }
+            let native =
+                Headless::screenshot(&mut renderer, Size::new(1280, 800), 2., iced::Color::WHITE);
+            if let Some(previous) = previous {
+                assert_ne!(native, previous, "{style:?} {labels:?}");
+            }
+            previous = Some(native.clone());
+            let lo = camera.world(Point::ORIGIN, bounds);
+            let hi = camera.world(Point::new(bounds.width, bounds.height), bounds);
+            let svg = scene::svg_part(&run, lo, hi);
+            let tree = reshiki::export::parse_svg(svg).unwrap();
+            let mut export = resvg::tiny_skia::Pixmap::new(1280, 800).unwrap();
+            export.fill(resvg::tiny_skia::Color::WHITE);
+            resvg::render(
+                &tree,
+                resvg::tiny_skia::Transform::from_scale(4., 4.),
+                &mut export.as_mut(),
+            );
+            let difference: u64 = native
+                .iter()
+                .zip(export.data())
+                .map(|(a, b)| u64::from(a.abs_diff(*b)))
+                .sum();
+            let mean = difference as f64 / native.len() as f64;
+            assert!(
+                mean < 1.5,
+                "{style:?} {labels:?}: average channel difference {mean}"
+            );
+        }
+    }
+}
+
 /// A model zoomed in far enough for a multi-megabyte image appears in the
 /// first frame, not after iced's background upload, and is drawn whole.
 #[tokio::test]

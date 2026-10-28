@@ -14,6 +14,13 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 pub use view::{Rotation, ViewFrame};
 
+/// Reproducible conformer sampling for ordinary generation. Regeneration may
+/// supply a different nonnegative seed through [`Client::generate_seeded`].
+pub const DEFAULT_SEED: i32 = 0x52534b;
+/// ETKDG adds 1–8 to the base seed while sampling. Reserve that headroom so
+/// every per-conformer seed remains a nonnegative signed integer.
+pub const GENERATION_SEED_MAX: i32 = i32::MAX - 8;
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("{0}")]
@@ -353,16 +360,22 @@ impl Prepared {
     /// optimize's projection: each atom at its projected place, keeping the
     /// drawing's scale and centre, with its depth retained.
     pub fn flattened(&self, model: &crate::models3d::Model3d) -> Result<Document, Error> {
+        if model.is_stale(&self.source) {
+            return Err(Error::Selection("Update the model first"));
+        }
+        let geometry: HashMap<_, _> = model
+            .geometry_sources()
+            .into_iter()
+            .zip(&model.atoms)
+            .filter_map(|(id, atom)| Some((id?, atom.xyz)))
+            .collect();
         let positions = self
             .ids
             .iter()
             .map(|id| {
-                let [x, y, z] = model
-                    .atoms
-                    .iter()
-                    .find(|a| a.id == *id)
+                let [x, y, z] = geometry
+                    .get(id)
                     .ok_or(Error::Coordinates("Missing model atom"))?
-                    .xyz
                     .map(f64::from);
                 Ok(Point3 { x, y, z })
             })
@@ -518,9 +531,26 @@ impl Prepared {
             coordinates,
             fixed_atoms,
             conformers: 8,
-            seed: 0x52534b,
+            seed: DEFAULT_SEED,
             max_iterations: iterations,
         };
+        request.validate().map_err(Error::Invalid)?;
+        Ok(request)
+    }
+
+    pub(crate) fn generation_request(
+        &self,
+        field: ForceField,
+        seed: i32,
+    ) -> Result<reshiki_geometry::Request, Error> {
+        if !(0..=GENERATION_SEED_MAX).contains(&seed) {
+            return Err(Error::Invalid(format!(
+                "Generation seed must be between 0 and {GENERATION_SEED_MAX}"
+            )));
+        }
+        let mut request =
+            self.native_request(field, reshiki_geometry::Operation::Generate, None, &[], 500)?;
+        request.seed = seed;
         request.validate().map_err(Error::Invalid)?;
         Ok(request)
     }

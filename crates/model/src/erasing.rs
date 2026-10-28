@@ -79,7 +79,7 @@ pub fn stroke(doc: &mut Document, from: Point, to: Point, radius: f32) {
                 .iter()
                 .any(|(a, b, half)| crossed(from, to, *a, *b, radius + half))
         {
-            ids.extend(model.atoms.iter().map(|a| a.id));
+            ids.extend(model.linked_ids(doc));
         }
     }
     ids.extend(

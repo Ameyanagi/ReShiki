@@ -11,8 +11,10 @@ use crate::canvas::Edit;
 use iced::widget::{Space, canvas, column, row, slider, text};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::document::Document;
-use reshiki::geometry::{Client, ForceField, Optimized, Prepared};
-use reshiki::models3d::{self, Background, Display, Hydrogens, Layout, Look, Style};
+use reshiki::geometry::{
+    Client, DEFAULT_SEED, ForceField, GENERATION_SEED_MAX, Optimized, Prepared,
+};
+use reshiki::models3d::{self, Background, Display, Hydrogens, Labels, Layout, Look, Style};
 use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,9 +25,21 @@ pub(crate) struct Key {
     serial: u64,
 }
 
+/// Chemistry preparation is too expensive to repeat while drawing the panels.
+/// A tab's epoch distinguishes file loads that reuse a revision number.
+#[derive(Default)]
+pub(super) struct StaleCache {
+    key: Option<(TabId, u64, u64)>,
+    values: Vec<Option<bool>>,
+    #[cfg(test)]
+    comparisons: usize,
+}
+
 #[derive(Clone, Debug)]
 pub(crate) enum Action {
     Show(Display),
+    Update,
+    Regenerate,
     /// Show as 2D, the drawing flattened from the model as it is turned now.
     Flatten,
     /// The 2D layout that the Structure section's 2D button uses.
@@ -45,6 +59,7 @@ pub(crate) enum Setting {
     Style(Style),
     Look(Look),
     Hydrogens(Hydrogens),
+    Labels(Labels),
     Background(Background),
     DepthFade(f32),
     Perspective(f32),
@@ -65,6 +80,10 @@ pub(crate) struct Job {
     /// another molecule's display moves it on.
     current: Key,
     display: Display,
+    /// An existing model to replace, keeping its view at completion.
+    target: Option<usize>,
+    seed: i32,
+    force_field: ForceField,
     prepared: Arc<Prepared>,
     started: iced::time::Instant,
     _handle: iced::task::Handle,
@@ -74,6 +93,8 @@ impl App {
     pub(super) fn models3d_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Show(display) => self.show_model(display),
+            Action::Update => self.regenerate_model(false),
+            Action::Regenerate => self.regenerate_model(true),
             Action::Set(setting) => {
                 self.set_model(setting);
                 Task::none()
@@ -89,6 +110,11 @@ impl App {
             }
             Action::Layout(layout) => {
                 if let Some((_, Some(index))) = self.selected_model() {
+                    if layout == Layout::View && self.model_stale(index) {
+                        self.status = "Update the model first".into();
+                        self.error = false;
+                        return Task::none();
+                    }
                     let before = self.tab.doc.clone();
                     if let Some(model) = self.tab.doc.models.get_mut(index) {
                         model.layout = layout;
@@ -128,7 +154,14 @@ impl App {
                         .map_err(|error| error.to_string())
                 });
                 match model {
-                    Ok(model) => self.add_model(model, job.display),
+                    Ok(mut model) => {
+                        model.seed = job.seed;
+                        if let Some(index) = job.target {
+                            self.replace_model(index, model);
+                        } else {
+                            self.add_model(model, job.display);
+                        }
+                    }
                     Err(error) => {
                         self.status = format!("3D model not generated: {error}");
                         self.error = true;
@@ -156,10 +189,15 @@ impl App {
             .filter(|job| {
                 let ids = job.prepared.ids();
                 job.current == self.model_key()
-                    && ids.len() == atoms.len()
+                    && (job.target.is_some() || ids.len() == atoms.len())
+                    && !atoms.is_empty()
                     && atoms.iter().all(|id| ids.contains(id))
             })
-            .map(|job| job.display)
+            .map(|job| {
+                job.target
+                    .and_then(|i| self.tab.doc.models.get(i))
+                    .map_or(job.display, |model| model.display)
+            })
     }
 
     /// The current generation's own target, independent of later selection.
@@ -183,9 +221,28 @@ impl App {
     /// The selected molecule and the index of its model, if it has one.
     pub(super) fn selected_model(&self) -> Option<(Vec<u64>, Option<usize>)> {
         let atoms = models3d::selected_molecule(&self.tab.doc, &self.tab.selected)?;
-        let index =
-            self.tab.doc.models.iter().position(|m| {
-                m.atoms.len() == atoms.len() && atoms.iter().all(|id| m.contains(*id))
+        let index = self
+            .tab
+            .doc
+            .models
+            .iter()
+            .position(|model| {
+                let linked = model.linked_ids(&self.tab.doc);
+                linked.len() == atoms.len() && atoms.iter().all(|id| linked.contains(id))
+            })
+            .or_else(|| {
+                // A newly attached atom can select its one existing model without
+                // becoming a source link until Update. Joined views need an
+                // explicit selection of one model's links.
+                let mut matching = self
+                    .tab
+                    .doc
+                    .models
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, model)| atoms.iter().any(|id| model.contains(*id)));
+                let (index, _) = matching.next()?;
+                matching.next().is_none().then_some(index)
             });
         Some((atoms, index))
     }
@@ -279,6 +336,74 @@ impl App {
             }
             return Task::none();
         }
+        self.generate_model(atoms, display, None, ForceField::Mmff94s, DEFAULT_SEED)
+    }
+
+    fn regenerate_model(&mut self, fresh: bool) -> Task<Message> {
+        if !self.idle() {
+            return Task::none();
+        }
+        let Some((_, Some(index))) = self.selected_model() else {
+            return Task::none();
+        };
+        let Some(model) = self.tab.doc.models.get(index) else {
+            return Task::none();
+        };
+        if model.is_file_derived() || !fresh && !model.is_stale(&self.tab.doc) {
+            return Task::none();
+        }
+        let force_field = match model.force_field {
+            models3d::ForceField::Mmff94 => ForceField::Mmff94,
+            models3d::ForceField::Mmff94s => ForceField::Mmff94s,
+            models3d::ForceField::Uff => ForceField::Uff,
+        };
+        let seed = if model.seed == 0 {
+            DEFAULT_SEED
+        } else {
+            model.seed
+        };
+        // ETKDG samples consecutive seeds; a wide stride avoids overlapping batches.
+        let seed = if fresh {
+            ((i64::from(seed) + 1_000_003) % i64::from(GENERATION_SEED_MAX)) as i32
+        } else {
+            seed
+        };
+        let atoms = model.chemistry_ids(&self.tab.doc);
+        if atoms.first().is_some_and(|id| {
+            reshiki::molecule_names::component(&self.tab.doc, *id).len() != atoms.len()
+        }) || self.tab.doc.models.iter().any(|other| {
+            other.linked_atoms.iter().any(|id| atoms.contains(id))
+                && other.linked_atoms.iter().any(|id| !atoms.contains(id))
+        }) {
+            self.status =
+                "3D model not generated: the source must be one connected structure".into();
+            self.error = true;
+            return Task::none();
+        }
+        self.generate_model(atoms, model.display, Some(index), force_field, seed)
+    }
+
+    fn generate_model(
+        &mut self,
+        atoms: Vec<u64>,
+        display: Display,
+        target: Option<usize>,
+        force_field: ForceField,
+        seed: i32,
+    ) -> Task<Message> {
+        if target.is_some()
+            && self
+                .tab
+                .doc
+                .models
+                .iter()
+                .any(|model| model.is_file_derived() && atoms.iter().any(|id| model.contains(*id)))
+        {
+            self.status =
+                "3D model not generated: the structure includes file-derived geometry".into();
+            self.error = true;
+            return Task::none();
+        }
         let prepared = match Prepared::new(&self.tab.doc, &atoms) {
             Ok(prepared) => Arc::new(prepared.without_retained_depth()),
             Err(error) => {
@@ -293,7 +418,7 @@ impl App {
         let (task, handle) = Task::perform(
             async move {
                 Client::default()
-                    .generate(&request, ForceField::Mmff94s)
+                    .generate_seeded(&request, force_field, seed)
                     .await
                     .map(Arc::new)
                     .map_err(|error| error.to_string())
@@ -305,11 +430,14 @@ impl App {
             key,
             current: key,
             display,
+            target,
+            seed,
+            force_field,
             prepared,
             started: iced::time::Instant::now(),
             _handle: handle.abort_on_drop(),
         });
-        self.status = "Generating 3D model · MMFF94s".into();
+        self.status = format!("Generating 3D model · {}", force_field.name());
         self.error = false;
         task
     }
@@ -321,6 +449,12 @@ impl App {
         let Some((_, Some(index))) = self.selected_model() else {
             return;
         };
+        if matches!(setting, Setting::Repeat(_) | Setting::LookAlong(_)) && self.model_stale(index)
+        {
+            self.status = "Update the model first".into();
+            self.error = false;
+            return;
+        }
         let before = self.tab.doc.clone();
         // The opening view is a search for a crystal; only Reset view needs it.
         let reset = matches!(setting, Setting::ResetView)
@@ -333,6 +467,7 @@ impl App {
             Setting::Style(style) => model.style = style,
             Setting::Look(look) => model.look = look,
             Setting::Hydrogens(shown) => model.show_hydrogens = shown,
+            Setting::Labels(labels) => model.labels = labels,
             Setting::Background(background) => model.background = background,
             Setting::DepthFade(value) => model.depth_fade = value.clamp(0., 1.),
             Setting::Perspective(value) => model.perspective = value.clamp(0., 1.),
@@ -404,6 +539,11 @@ impl App {
         let Some(model) = self.tab.doc.models.get(index) else {
             return;
         };
+        if self.model_stale(index) {
+            self.status = "Update the model first".into();
+            self.error = false;
+            return;
+        }
         let previous = model.display;
         let origin = models3d::frame_origin(&self.tab.doc, model);
         // The drawn layout stays on the model, for Original drawing.
@@ -482,18 +622,14 @@ impl App {
 
     fn add_model(&mut self, model: models3d::Model3d, display: Display) {
         let before = self.tab.doc.clone();
-        let atoms: Vec<_> = model.atoms.iter().map(|a| a.id).collect();
+        let atoms = model.linked_ids(&before);
         let previous = before
             .models
             .iter()
-            .find(|m| m.atoms.iter().any(|a| atoms.contains(&a.id)))
+            .find(|m| atoms.iter().any(|id| m.contains(*id)))
             .map_or(Display::TwoD, |m| m.display);
-        self.tab
-            .doc
-            .models
-            .retain(|m| !m.atoms.iter().any(|a| atoms.contains(&a.id)));
         self.tab.doc.models.push(model);
-        self.tab.doc.require_version(reshiki::document::MODELS_3D);
+        models3d::require_version(&mut self.tab.doc);
         let index = self.tab.doc.models.len() - 1;
         models3d::set_display(&mut self.tab.doc, index, display);
         self.changed(before);
@@ -502,6 +638,164 @@ impl App {
             self.start_morph(&atoms, previous, display);
             self.reveal_model(&atoms, display);
         }
+    }
+
+    fn replace_model(&mut self, index: usize, mut model: models3d::Model3d) {
+        let before = self.tab.doc.clone();
+        let Some(old) = before.models.get(index) else {
+            return;
+        };
+        let origin = models3d::frame_origin(&before, old);
+        align_conformer(&mut model, old, &old.linked_ids(&before));
+        model.display = old.display;
+        model.rotation = old.rotation;
+        model.offset = old.offset;
+        model.size = old.size;
+        model.style = old.style;
+        model.look = old.look;
+        model.show_hydrogens = old.show_hydrogens;
+        model.labels = old.labels;
+        model.depth_fade = old.depth_fade;
+        model.perspective = old.perspective;
+        model.background = old.background;
+        model.layout = old.layout;
+        let atoms = model.linked_ids(&before);
+        let overlaps = |other: &models3d::Model3d| atoms.iter().any(|id| other.contains(*id));
+        model.drawn = models3d::Drawn::combined(
+            &before,
+            &model,
+            std::iter::once(old).chain(
+                before
+                    .models
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, other)| *i != index && overlaps(other))
+                    .map(|(_, other)| other),
+            ),
+        );
+        // Joining sources makes one molecule: replace all its models, keeping
+        // the selected view's place among the unaffected models.
+        let index = before
+            .models
+            .iter()
+            .take(index)
+            .filter(|other| !overlaps(other))
+            .count();
+        self.tab.doc.models.retain(|other| !overlaps(other));
+        self.tab.doc.models.insert(index, model);
+        if old.linked_ids(&before) != atoms
+            && let Some(origin) = origin
+            && let Some(now) = self
+                .tab
+                .doc
+                .models
+                .get(index)
+                .and_then(|model| models3d::frame_origin(&self.tab.doc, model))
+            && let Some(model) = self.tab.doc.models.get_mut(index)
+        {
+            model.offset = model.offset.offset(origin.x - now.x, origin.y - now.y);
+        }
+        self.changed(before);
+        if !self.error {
+            self.status = "3D conformer regenerated · Undo restores the previous model".into();
+        }
+    }
+
+    fn stale_model(&self) -> Option<&models3d::Model3d> {
+        let (_, index) = self.selected_model()?;
+        let index = index?;
+        self.model_stale(index)
+            .then(|| self.tab.doc.models.get(index))
+            .flatten()
+    }
+
+    fn model_stale(&self, index: usize) -> bool {
+        let key = (self.tab.id, self.tab.file_epoch, self.tab.revision);
+        let mut cache = self.tab.model_stale.borrow_mut();
+        if cache.key != Some(key) || cache.values.len() != self.tab.doc.models.len() {
+            cache.key = Some(key);
+            cache.values = vec![None; self.tab.doc.models.len()];
+        }
+        let Some(value) = cache.values.get(index) else {
+            return false;
+        };
+        if let Some(value) = value {
+            return *value;
+        }
+        let stale = self
+            .tab
+            .doc
+            .models
+            .get(index)
+            .is_some_and(|model| model.is_stale(&self.tab.doc));
+        if let Some(value) = cache.values.get_mut(index) {
+            *value = Some(stale);
+        }
+        #[cfg(test)]
+        {
+            cache.comparisons += 1;
+        }
+        stale
+    }
+
+    fn update_model_button(&self, id: &'static str) -> Element<'_, Message> {
+        accessible_command(
+            id,
+            "Update the model from the current structure",
+            "Update model",
+        )
+        .on_press_maybe(
+            (self.idle() && self.tab.model_job.is_none())
+                .then_some(Message::Models3d(Action::Update)),
+        )
+        .into()
+    }
+
+    /// The old Show-as chooser is gone; only a stale model needs a floating action.
+    pub(super) fn with_model_notice<'a>(
+        &'a self,
+        base: Element<'a, Message>,
+    ) -> Element<'a, Message> {
+        use iced::widget::{container, pin, stack};
+        let notice: Option<Element<'_, Message>> = self.stale_model().and_then(|model| {
+            self.pending(&model.linked_ids(&self.tab.doc))
+                .is_none()
+                .then(|| {
+                    container(
+                        row![
+                            text("Structure changed ·").size(12),
+                            self.update_model_button("model-floating-update")
+                        ]
+                        .spacing(6)
+                        .align_y(Alignment::Center),
+                    )
+                    .padding([4, 8])
+                    .style(super::workspace::panel)
+                    .into()
+                })
+        });
+        let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
+        let at = self
+            .stale_model()
+            .and_then(|model| {
+                reshiki::scene::selection_bounds(&self.tab.doc, &model.linked_ids(&self.tab.doc))
+            })
+            .map(|(lo, hi)| {
+                self.tab.camera.screen(
+                    reshiki::document::Point::new((lo.x + hi.x) / 2., lo.y),
+                    paper,
+                )
+            })
+            .unwrap_or_default();
+        let x = (paper.x + at.x - 135.).clamp(
+            paper.x + 6.,
+            (paper.x + paper.width - 276.).max(paper.x + 6.),
+        );
+        let y = (paper.y + at.y - 48.).clamp(
+            paper.y + 6.,
+            (paper.y + paper.height - 40.).max(paper.y + 6.),
+        );
+        stack![base, pin(column(notice)).x(x).y(y)].into()
     }
 
     fn reveal_model(&mut self, atoms: &[u64], display: Display) {
@@ -525,6 +819,7 @@ impl App {
             .map_or(Display::TwoD, |m| m.display);
         let pending = self.pending(&atoms);
         let model = index.and_then(|i| self.tab.doc.models.get(i));
+        let stale = index.is_some_and(|i| self.model_stale(i));
         let enabled = !self.tab.busy && self.tab.optimization.is_none();
         let mut body = column![
             row([
@@ -542,19 +837,46 @@ impl App {
                     .checked(active)
                     .style(control(active))
                     .width(Length::Fill)
-                    .on_press_maybe(enabled.then(|| {
-                        Message::Models3d(if active {
-                            Action::Unchanged
-                        } else {
-                            self.show_as(display)
-                        })
-                    }))
+                    .on_press_maybe(
+                        (enabled
+                            && !(stale
+                                && display == Display::TwoD
+                                && model.is_some_and(|m| m.layout == Layout::View)))
+                        .then(|| {
+                            Message::Models3d(if active {
+                                Action::Unchanged
+                            } else {
+                                self.show_as(display)
+                            })
+                        }),
+                    )
                     .into()
             }),)
             .spacing(4),
-            text(subtitle(pending, model)).size(11).style(muted_text),
+            text(
+                if let Some(job) = self.tab.model_job.as_ref().filter(|_| pending.is_some()) {
+                    format!(
+                        "Generating the conformer · ETKDG, then {}",
+                        job.force_field.name()
+                    )
+                } else {
+                    subtitle(pending, model)
+                }
+            )
+            .size(11)
+            .style(muted_text),
         ]
         .spacing(6);
+        if self.stale_model().is_some() {
+            body = body.push(
+                row![
+                    text("Structure changed ·").size(11).style(muted_text),
+                    self.update_model_button("structure-update-model"),
+                ]
+                .spacing(4)
+                .align_y(Alignment::Center),
+            );
+        }
         // The 2D layout the drawing returns to, while the model is shown.
         if let Some(model) = model.filter(|m| m.display != Display::TwoD && pending.is_none()) {
             let layout = model.layout;
@@ -569,16 +891,23 @@ impl App {
                         .checked(active)
                         .style(control(active))
                         .width(Length::Fill)
-                        .on_press(Message::Models3d(Action::Layout(choice)))
+                        .on_press_maybe(
+                            (enabled && (choice != Layout::View || !stale))
+                                .then_some(Message::Models3d(Action::Layout(choice))),
+                        )
                         .into()
                 }))
                 .spacing(4),
             );
             body = body.push(
-                text(match layout {
-                    Layout::Original => "The layout you drew, unchanged.",
-                    Layout::View => {
-                        "Flatten the model as it is turned now, with far bonds lighter."
+                text(if stale {
+                    "Update the model first"
+                } else {
+                    match layout {
+                        Layout::Original => "The layout you drew, unchanged.",
+                        Layout::View => {
+                            "Flatten the model as it is turned now, with far bonds lighter."
+                        }
                     }
                 })
                 .size(11)
@@ -617,7 +946,9 @@ impl App {
         }
         // A crystal's repeat and view direction, while drawn in 2D.
         if let Some(model) = model.filter(|m| m.cell.is_some() && m.display == Display::TwoD) {
-            let set = move |setting| enabled.then_some(Message::Models3d(Action::Set(setting)));
+            let set = move |setting| {
+                (enabled && !stale).then_some(Message::Models3d(Action::Set(setting)))
+            };
             body = body.push(text("Repeat").size(12));
             for (k, axis) in ["a", "b", "c"].into_iter().enumerate() {
                 let counts = (1..=models3d::MAX_REPEAT).map(|n| {
@@ -755,64 +1086,281 @@ impl App {
                 Setting::Background(background),
             )
         };
-        Some(
-            self.inspector_section(
-                Section::Model3d,
-                "3D model",
-                name(model.style),
-                true,
-                column![
-                    field(
-                        "Style",
-                        column![row![ball, stick].spacing(4), row![wire, space].spacing(4)]
-                            .spacing(4)
-                            .into()
-                    ),
-                    field(
-                        "Look",
-                        segments(vec![
-                            look(
-                                Look::Flat,
-                                "flat",
-                                "Flat look, for journals",
-                                "Flat · journal"
-                            ),
-                            look(
-                                Look::Glossy,
-                                "glossy",
-                                "Glossy look, for slides",
-                                "Glossy · slides"
-                            ),
-                        ])
-                    ),
-                    field(
-                        "Hydrogens",
-                        segments(vec![
-                            hydrogens(Hydrogens::All, "All", "Show all hydrogens"),
-                            hydrogens(Hydrogens::Polar, "Polar", "Show hydrogens on N, O and S"),
-                            hydrogens(Hydrogens::None, "None", "Hide hydrogens"),
-                        ])
-                    ),
-                    slider_field("Depth fade", model.depth_fade, Setting::DepthFade),
-                    slider_field("Perspective", model.perspective, Setting::Perspective),
-                    field(
-                        "Background",
-                        segments(vec![
-                            background(Background::None, "none", "No background", "None"),
-                            background(
-                                Background::Card,
-                                "card",
-                                "Soft card background",
-                                "Soft card"
-                            ),
-                        ])
-                    ),
-                    accessible_command("model-reset-view", "Reset the 3D view", "Reset view")
-                        .on_press_maybe(set(Setting::ResetView)),
-                ]
-                .spacing(10),
+        let mut body = column![
+            field(
+                "Style",
+                column![row![ball, stick].spacing(4), row![wire, space].spacing(4)]
+                    .spacing(4)
+                    .into()
             ),
-        )
+            field(
+                "Look",
+                segments(vec![
+                    look(
+                        Look::Flat,
+                        "flat",
+                        "Flat look, for journals",
+                        "Flat · journal"
+                    ),
+                    look(
+                        Look::Glossy,
+                        "glossy",
+                        "Glossy look, for slides",
+                        "Glossy · slides"
+                    ),
+                ])
+            ),
+            field(
+                "Hydrogens",
+                segments(vec![
+                    hydrogens(Hydrogens::All, "All", "Show all hydrogens"),
+                    hydrogens(Hydrogens::Polar, "Polar", "Show hydrogens on N, O and S"),
+                    hydrogens(Hydrogens::None, "None", "Hide hydrogens"),
+                ])
+            ),
+            field(
+                "Atom labels",
+                row([
+                    (Labels::None, "none", "None", "Hide atom labels"),
+                    (
+                        Labels::Heteroatoms,
+                        "heteroatoms",
+                        "Heteroatoms",
+                        "Label atoms except C and H"
+                    ),
+                    (Labels::All, "all", "All", "Label all visible atoms"),
+                ]
+                .map(|(labels, id, label, name)| {
+                    choice(
+                        format!("labels-{id}"),
+                        name,
+                        label,
+                        model.labels == labels,
+                        Setting::Labels(labels),
+                    )
+                    .width(Length::FillPortion(if labels == Labels::Heteroatoms {
+                        2
+                    } else {
+                        1
+                    }))
+                    .into()
+                }))
+                .spacing(4)
+                .into()
+            ),
+            slider_field("Depth fade", model.depth_fade, Setting::DepthFade),
+            slider_field("Perspective", model.perspective, Setting::Perspective),
+            field(
+                "Background",
+                segments(vec![
+                    background(Background::None, "none", "No background", "None"),
+                    background(
+                        Background::Card,
+                        "card",
+                        "Soft card background",
+                        "Soft card"
+                    ),
+                ])
+            ),
+            accessible_command("model-reset-view", "Reset the 3D view", "Reset view")
+                .on_press_maybe(set(Setting::ResetView)),
+        ]
+        .spacing(10);
+        if self.stale_model().is_some() {
+            body = column![
+                row![
+                    text("Structure changed ·").size(11).style(muted_text),
+                    self.update_model_button("model-update")
+                ]
+                .spacing(4)
+                .align_y(Alignment::Center),
+                body,
+            ]
+            .spacing(10);
+        }
+        if !model.is_file_derived() {
+            body = body.push(
+                accessible_command(
+                    "model-regenerate",
+                    "Generate a fresh conformer, keeping the view",
+                    "Regenerate conformer",
+                )
+                .on_press_maybe(
+                    (self.idle() && self.tab.model_job.is_none())
+                        .then_some(Message::Models3d(Action::Regenerate)),
+                ),
+            );
+        }
+        Some(self.inspector_section(Section::Model3d, "3D model", name(model.style), true, body))
+    }
+}
+
+/// Least-squares proper rotation from the new conformer onto the old one.
+/// The 3×3 covariance SVD uses a Jacobi eigensolve of HᵀH; two independent
+/// axes determine a proper rotation, while a line gets its shortest turn.
+fn align_conformer(model: &mut models3d::Model3d, old: &models3d::Model3d, live: &[u64]) {
+    type V = [f64; 3];
+    let at = |v: V, i| v.get(i).copied().unwrap_or_default();
+    let entry = |matrix: [V; 3], i, j| matrix.get(i).map_or(0., |row| at(*row, j));
+    let dot = |a: V, b: V| a.into_iter().zip(b).map(|(x, y)| x * y).sum::<f64>();
+    let sub = |a: V, b: V| std::array::from_fn(|i| at(a, i) - at(b, i));
+    let cross = |a: V, b: V| {
+        [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ]
+    };
+    let unit = |a: V| {
+        let n = dot(a, a).sqrt();
+        a.map(|x| x / n)
+    };
+    let old_sources = old.geometry_sources();
+    let pairs: Vec<_> = model
+        .geometry_sources()
+        .into_iter()
+        .zip(&model.atoms)
+        .filter_map(|(id, atom)| {
+            let id = id.filter(|id| live.contains(id))?;
+            let previous = old_sources.iter().position(|source| *source == Some(id))?;
+            Some((
+                atom.xyz.map(f64::from),
+                old.atoms.get(previous)?.xyz.map(f64::from),
+            ))
+        })
+        .collect();
+    if pairs.is_empty() {
+        return;
+    }
+    let mean = |side: bool| -> V {
+        std::array::from_fn(|i| {
+            pairs
+                .iter()
+                .map(|(a, b)| at(if side { *b } else { *a }, i))
+                .sum::<f64>()
+                / pairs.len() as f64
+        })
+    };
+    let (from, to) = (mean(false), mean(true));
+    let mut h = [[0.; 3]; 3];
+    for (a, b) in &pairs {
+        let (a, b) = (sub(*a, from), sub(*b, to));
+        for (row, a) in h.iter_mut().zip(a) {
+            for (value, b) in row.iter_mut().zip(b) {
+                *value += a * b;
+            }
+        }
+    }
+    let mut eigen: [V; 3] = std::array::from_fn(|i| {
+        std::array::from_fn(|j| h.iter().map(|row| at(*row, i) * at(*row, j)).sum())
+    });
+    let mut axes = [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]];
+    for _ in 0..32 {
+        let Some((p, q)) = [(0, 1), (0, 2), (1, 2)]
+            .into_iter()
+            .max_by(|(p, q), (r, s)| {
+                entry(eigen, *p, *q)
+                    .abs()
+                    .total_cmp(&entry(eigen, *r, *s).abs())
+            })
+        else {
+            break;
+        };
+        if entry(eigen, p, q).abs() <= 1e-14 * (eigen[0][0] + eigen[1][1] + eigen[2][2]).max(1e-30)
+        {
+            break;
+        }
+        let angle = 0.5 * (2. * entry(eigen, p, q)).atan2(entry(eigen, q, q) - entry(eigen, p, p));
+        let (s, c) = angle.sin_cos();
+        let turn = |row: &mut V| {
+            let (a, b) = (at(*row, p), at(*row, q));
+            if let Some(value) = row.get_mut(p) {
+                *value = c * a - s * b;
+            }
+            if let Some(value) = row.get_mut(q) {
+                *value = s * a + c * b;
+            }
+        };
+        for row in &mut eigen {
+            turn(row);
+        }
+        let Some((a, b)) = eigen.get(p).copied().zip(eigen.get(q).copied()) else {
+            break;
+        };
+        if let Some(row) = eigen.get_mut(p) {
+            *row = std::array::from_fn(|j| c * at(a, j) - s * at(b, j));
+        }
+        if let Some(row) = eigen.get_mut(q) {
+            *row = std::array::from_fn(|j| s * at(a, j) + c * at(b, j));
+        }
+        for row in &mut axes {
+            turn(row);
+        }
+    }
+    let mut order = [0, 1, 2];
+    order.sort_by(|i, j| entry(eigen, *j, *j).total_cmp(&entry(eigen, *i, *i)));
+    let mut rotation = [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]];
+    if entry(eigen, order[0], order[0]) > 1e-20 {
+        let v0 = axes.map(|row| at(row, order[0]));
+        let u0 = unit(h.map(|row| dot(row, v0)));
+        if entry(eigen, order[1], order[1]) > 1e-12 * entry(eigen, order[0], order[0]) {
+            let v1 = axes.map(|row| at(row, order[1]));
+            let u1 = h.map(|row| dot(row, v1));
+            let u1 = unit(sub(u1, u0.map(|x| x * dot(u0, u1))));
+            let (u2, v2) = (cross(u0, u1), cross(v0, v1));
+            rotation = std::array::from_fn(|i| {
+                std::array::from_fn(|j| {
+                    at(v0, i) * at(u0, j) + at(v1, i) * at(u1, j) + at(v2, i) * at(u2, j)
+                })
+            });
+        } else {
+            // One point supplies translation only. A line has no unique roll;
+            // choose the shortest turn, with a stable axis for a half-turn.
+            let cosine = dot(u0, v0).clamp(-1., 1.);
+            let axis = cross(u0, v0);
+            if cosine < -1. + 1e-10 {
+                let i = (0..3)
+                    .min_by(|i, j| at(u0, *i).abs().total_cmp(&at(u0, *j).abs()))
+                    .unwrap_or_default();
+                let axis = unit(cross(
+                    u0,
+                    std::array::from_fn(|j| if i == j { 1. } else { 0. }),
+                ));
+                rotation = std::array::from_fn(|i| {
+                    std::array::from_fn(|j| {
+                        2. * at(axis, i) * at(axis, j) - if i == j { 1. } else { 0. }
+                    })
+                });
+            } else {
+                let skew = [
+                    [0., -axis[2], axis[1]],
+                    [axis[2], 0., -axis[0]],
+                    [-axis[1], axis[0], 0.],
+                ];
+                rotation = std::array::from_fn(|i| {
+                    std::array::from_fn(|j| {
+                        (if i == j { 1. } else { 0. })
+                            + entry(skew, i, j)
+                            + (0..3)
+                                .map(|k| entry(skew, i, k) * entry(skew, k, j))
+                                .sum::<f64>()
+                                / (1. + cosine)
+                    })
+                });
+            }
+        }
+    }
+    let place = |xyz: [f32; 3]| {
+        let xyz = sub(xyz.map(f64::from), from);
+        std::array::from_fn(|i| {
+            (rotation.get(i).map_or(0., |row| dot(*row, xyz)) + at(to, i)) as f32
+        })
+    };
+    for atom in &mut model.atoms {
+        atom.xyz = place(atom.xyz);
+    }
+    for hydrogen in &mut model.hydrogens {
+        hydrogen.xyz = place(hydrogen.xyz);
     }
 }
 
@@ -871,7 +1419,7 @@ impl App {
             gradient: None,
             converged: true,
             iterations: 1,
-            force_field: ForceField::Mmff94s,
+            force_field: job.force_field,
             diagnostics: vec![],
         };
         let key = job.key;

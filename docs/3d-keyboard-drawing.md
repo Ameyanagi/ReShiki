@@ -14,8 +14,8 @@ Commands that do not fit in the context row are in its **⋯** menu.
 Select one molecule, right-click it and choose **Show as → 2D drawing**,
 **3D model** or **2D and 3D**, or choose **2D**, **3D** or **Both** in
 **Properties → Structure**, below **Molecular properties** and **Labels &
-chemistry** (also **Show as 3D model** in the command palette). No bar appears
-over the selection. **3D** draws the molecule as a
+chemistry** (also **Show as 3D model** in the command palette). The **Show as**
+chooser stays in those controls. **3D** draws the molecule as a
 model (ball & stick unless **Properties → 3D model** picks another style) in
 place of its drawing, **Both** puts the model one bond length to its right, and
 **2D** shows the drawing again. The first switch generates the conformer in the
@@ -31,9 +31,24 @@ or the 2D layout, which is kept for switching back. Clicking or lassoing the
 model selects the molecule, so moving, aligning, copying and Duplicate carry it
 along; while the molecule is shown in 3D, its hidden 2D atoms cannot be picked.
 A chemical edit to an ordinary molecule (element, charge, bonds or stereo)
-removes its conformer. A crystal keeps its imported unit cell and copies when
-only an atom’s element or charge changes; see
-[Editing a crystal](crystal-structures.md#editing-a-crystal).
+keeps its arranged model and marks it **Structure changed · Update model**.
+The message appears above the selected model and in **Properties → Structure**;
+choose **Update model** to generate a conformer for the edited structure.
+Moving atoms in the 2D drawing or changing their appearance does not mark the
+model as changed. ReShiki never replaces its conformer automatically.
+
+**Update model** works in the background and keeps the model's view rotation,
+frame position and size, display choice and appearance settings. **Escape**
+cancels generation; cancellation, failure or a result overtaken by another
+edit keeps the previous model. A successful update is one Undo step, so Undo
+restores the preceding conformer and its changed-structure message.
+
+Splitting or joining structures keeps each arranged model and its surviving
+atom links. **Update model** replaces every model linked to the updated molecule
+with one model, keeping the selected model's view settings and combining their
+saved **Original drawing** layouts. Updating or regenerating requires one
+connected source structure. If a split leaves the source disconnected,
+generation reports that limit and keeps the previous model.
 
 The model sits in a square frame that holds it in any rotation, so the frame and
 its handles stay put while the model turns. On the canvas, a model
@@ -85,6 +100,9 @@ the command palette also offer **2D from the 3D view** directly. Each flatten is
 one Undo step that also switches the molecule to 2D; the model is kept, and
 shown in 3D again it is back in the same frame, at the same place and size.
 
+When the source chemistry has changed, **From the 3D view** is unavailable and
+shows **Update the model first**. **Original drawing** remains available.
+
 The choice belongs to each model and is saved with it. A flattened model also
 keeps the layout you drew (positions, depth, stored stereo and depth
 appearance), so **Original drawing**, or **Show as → 2D drawing**, brings it
@@ -105,12 +123,19 @@ While the model is shown, **Properties → 3D model** sets how it looks:
   (brighter highlights, no outlines).
 - **Hydrogens:** **All**, **Polar** (only those on N, O and S) or **None**.
   A molecule made only of hydrogens always shows them.
+- **Atom labels:** **None** (the default), **Heteroatoms** (elements other than
+  carbon and hydrogen) or **All**. Labels follow the visible atoms, so hidden
+  hydrogens do not acquire labels.
 - **Depth fade** mixes farther atoms toward the background, and
   **Perspective** sets how strongly nearer atoms are enlarged.
 - **Background:** **None** or **Soft card**, a rounded card behind the model:
   light grey on a light canvas, the background lightened a little on a dark
   one.
 - **Reset view** turns the model back to its opening view.
+- **Regenerate conformer** generates a fresh conformer without a chemistry
+  edit, keeping the view, frame and appearance settings. Like **Update model**,
+  it runs in the background, can be cancelled with **Escape**, and commits one
+  Undo step only when it succeeds.
 
 The model's colours follow the drawing's colour theme and canvas: each
 element uses the theme's element swatch (Publication, which has none, uses
@@ -129,6 +154,22 @@ extended XYZ) open as a 2D drawing in their unit cell; **Show as 3D** turns
 them into a model in the cell. A structure without a cell, such as a plain
 XYZ molecule, opens as a 3D model. See
 [Crystal structures](crystal-structures.md).
+
+Models newly read from crystal or XYZ files keep their file-derived geometry,
+including XYZ models without a cell or site labels. They do not show
+**Structure changed**, **Update model** or **Regenerate conformer**. Their labels
+and other appearance settings remain available. A crystal keeps its unit cell
+and copies when only an atom’s element or charge changes; other chemical edits
+can remove its cell and model. See
+[Editing a crystal](crystal-structures.md#editing-a-crystal).
+
+Older saved `.rsk` drawings can lack both a chemistry fingerprint and import
+provenance. ReShiki uses their current chemistry as a baseline and permits
+**Update model** and **Regenerate conformer**, unless a unit cell or file atom
+sites identify imported geometry. A plain XYZ model saved without those markers
+is indistinguishable from a generated model. Regeneration can replace its
+original coordinates, but happens only as an explicit action that can be undone.
+Reopen the original XYZ file to retain its import provenance.
 
 ## Preview an optimized molecule
 

@@ -109,6 +109,14 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
     if !removed.is_empty() {
         part.delete(&removed);
     }
+    // Keep models through deletion so it records crystal bond provenance.
+    // Check the original links, before pruning can shorten a partial selection.
+    part.models = doc
+        .models
+        .iter()
+        .filter(|model| model.linked_ids(doc).iter().all(|id| ids.contains(id)))
+        .cloned()
+        .collect();
     part.depth_appearance =
         crate::depth_appearance::selection(doc, &ids.iter().copied().collect::<Vec<_>>());
     part
@@ -210,7 +218,7 @@ pub(crate) fn preserved_expansion_selection(
     part.arrow_labels
         .retain(|l| ids.contains(&l.arrow) && ids.contains(&l.annotation));
     part.models
-        .retain(|m| m.atoms.iter().all(|a| ids.contains(&a.id)));
+        .retain(|m| m.linked_ids(doc).iter().all(|id| ids.contains(id)));
     part.generic.alternatives.retain(|a| ids.contains(&a.atom));
     part.generic.links.retain(|a| ids.contains(&a.atom));
     part.generic.repeats.retain(|r| {

@@ -393,7 +393,7 @@ fn space_filling_models_export_their_visible_parts_as_clipped_paths() {
     let mut model = Model3d::new(&doc, atoms, vec![], ForceField::Mmff94s);
     model.style = Style::SpaceFilling;
     doc.models.push(model);
-    doc.require_version(crate::document::MODELS_3D);
+    crate::models3d::require_version(&mut doc);
     assert!(set_display(&mut doc, 0, Display::ThreeD));
 
     let svg = String::from_utf8(figure(&doc, "svg").unwrap().bytes).unwrap();

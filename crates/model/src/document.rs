@@ -207,9 +207,11 @@ pub const CRYSTALS: u32 = 29;
 pub const DISTANCE_BONDS: u32 = 30;
 /// Custom arrow-label clearances. Auto-only drawings still use version 30.
 pub const ARROW_LABEL_GAPS: u32 = 31;
+/// Linked conformer snapshots, generation seeds and 3D atom labels.
+pub const MODEL_POLISH: u32 = 32;
 
-/// The newest document format this build reads. Native output uses version 30
-/// unless a custom reaction-label gap requires version 31.
+/// The newest document format this build reads. Native output uses version 30,
+/// version 31 for custom reaction-label gaps, or version 32 for model polish.
 ///
 /// | Version | Added |
 /// | --- | --- |
@@ -237,7 +239,8 @@ pub const ARROW_LABEL_GAPS: u32 = 31;
 /// | 29 | Crystal unit cells and atom sites on 3D models (#417; 0.13.0). |
 /// | 30 | Persistent distance-derived bond provenance (#517). |
 /// | 31 | Custom clearances for attached reaction labels (#600). |
-pub const VERSION: u32 = 31;
+/// | 32 | Linked conformer snapshots, generation seeds and 3D atom labels (#386 phase 4). |
+pub const VERSION: u32 = 32;
 
 fn newer_version(version: u64) -> String {
     format!(
@@ -299,7 +302,11 @@ pub struct Document {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub reactions: Vec<crate::reactions::Reaction>,
     /// 3D models linked to whole molecules by atom ID.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        deserialize_with = "crate::models3d::deserialize_models"
+    )]
     pub models: Vec<crate::models3d::Model3d>,
     /// Recent custom colors for the color picker, newest first.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -398,9 +405,11 @@ impl Document {
             ..self.clone()
         }
     }
-    /// Preserve the existing output version for drawings without custom gaps.
+    /// Use the newest feature floor needed by the drawing's saved fields.
     pub fn file_version(&self) -> u32 {
-        if self.arrow_labels.iter().any(|label| label.gap.is_some()) {
+        if self.models.iter().any(|model| model.needs_polish_version()) {
+            MODEL_POLISH
+        } else if self.arrow_labels.iter().any(|label| label.gap.is_some()) {
             ARROW_LABEL_GAPS
         } else {
             DISTANCE_BONDS
@@ -892,7 +901,19 @@ fn frame_bytes(doc: &Document) -> usize {
     let models: usize = doc
         .models
         .iter()
-        .map(|m| bytes(&m.atoms[..]) + bytes(&m.hydrogens[..]) + bytes(&m.sites[..]))
+        .map(|m| {
+            bytes(&m.atoms[..])
+                + bytes(&m.hydrogens[..])
+                + bytes(&m.sites[..])
+                + bytes(&m.linked_atoms[..])
+                + m.fingerprint.as_ref().map_or(0, String::len)
+                + m.generated.as_ref().map_or(0, |g| {
+                    bytes(&g.elements[..])
+                        + g.elements.iter().map(String::len).sum::<usize>()
+                        + bytes(&g.bonds[..])
+                        + bytes(&g.sources[..])
+                })
+        })
         .sum();
     size_of::<Document>()
         + bytes(&doc.atoms[..])

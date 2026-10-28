@@ -94,14 +94,22 @@ impl Client {
         prepared: &Prepared,
         field: ForceField,
     ) -> Result<Optimized, Error> {
+        self.generate_seeded(prepared, field, super::DEFAULT_SEED)
+            .await
+    }
+    /// Sample conformers with an explicit nonnegative random seed, using the
+    /// requested force field. The same molecule and seed remain reproducible.
+    /// Seeds must be at most [`super::GENERATION_SEED_MAX`].
+    /// Clear retained drawing depth with [`Prepared::without_retained_depth`]
+    /// when sampling should always start from a new embedding.
+    pub async fn generate_seeded(
+        &self,
+        prepared: &Prepared,
+        field: ForceField,
+        seed: i32,
+    ) -> Result<Optimized, Error> {
         self.execute(
-            prepared.native_request(
-                field,
-                reshiki_geometry::Operation::Generate,
-                None,
-                &[],
-                500,
-            )?,
+            prepared.generation_request(field, seed)?,
             prepared.ids().len(),
             None,
         )

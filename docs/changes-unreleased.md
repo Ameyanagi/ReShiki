@@ -1,5 +1,16 @@
 # Unreleased changes
 
+Under review: @Ameyanagi — linked 3D models keep their arranged conformer after
+a chemical edit and offer **Structure changed · Update model**. Explicit
+**Update model** and **Regenerate conformer** run in the background, can be
+cancelled, keep the view and appearance, and commit one Undo step. **Atom
+labels** offers **None**, **Heteroatoms** and **All**; new crystal and XYZ imports
+keep their geometry without update or regeneration. Older saved models without
+import provenance use the current chemistry as their baseline; see the guide's
+legacy XYZ limit.
+([issue #386, phase 4](https://github.com/Ameyanagi/ReShiki/issues/386), PR TBD);
+[3D model guide](3d-keyboard-drawing.md#show-a-molecule-as-a-3d-model).
+
 **Python package — under review in [PR #611](https://github.com/Ameyanagi/ReShiki/pull/611).** Draw, convert and analyze structures
 from scripts, Jupyter, pandas and Excel with the same headless Rust engine as the
 editor. Immutable objects support chained cleanup and styles; parallel batches

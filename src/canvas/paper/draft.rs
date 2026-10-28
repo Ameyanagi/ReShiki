@@ -275,7 +275,7 @@ impl MoleculeCanvas<'_> {
                         model.display != reshiki::models3d::Display::TwoD
                             && drag.ids.iter().any(|id| model.contains(*id))
                     })
-                    .flat_map(|model| model.atoms.iter().map(|atom| atom.id))
+                    .flat_map(|model| model.linked_ids(preview))
                     .collect();
                 reshiki::molecule_names::preview_layout(preview.to_mut(), &resized);
             }

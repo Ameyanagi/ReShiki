@@ -38,6 +38,12 @@ model** for **Ball & stick**, **Stick**, **Wireframe** or **Space-filling**.
 flattens the model as it is turned; **Both** puts the model beside the
 drawing.
 
+New imports keep their file geometry, including plain XYZ models without
+a cell or site labels. Models from these files do not show the
+linked-molecule **Structure changed** message, **Update model** or
+**Regenerate conformer**. **Atom labels → None / Heteroatoms / All** and the
+other appearance controls remain available in **Properties → 3D model**.
+
 ## What you see
 
 - **The unit cell** is a box in the canvas's ink: the three edges hidden behind
@@ -152,12 +158,22 @@ Everything else in the file —
 bibliography, reflections, other data blocks, other XYZ properties or PDB
 records — is read past and not kept, so a saved drawing stays small.
 
-Saved drawings now use document version 30, which retains distance-derived
-bond provenance even after the cell is removed. ReShiki 0.13.0 and earlier
+Saved drawings use document version 30 or later, retaining distance-derived
+bond provenance even after the cell is removed. Atom labels on a model, and
+plain XYZ models without a unit cell or site records, require version 32.
+ReShiki 0.13.0 and earlier
 cannot open these files; their newer-version message asks for an update.
 Version 29 crystals still open and acquire provenance from their live cells.
 A version 29 drawing whose cell was already removed has no source marker to
 recover; reopen the original crystal file to restore its context.
+
+Older saved models can also lack a chemistry fingerprint and import provenance.
+Unless they still have a unit cell or file atom sites, ReShiki uses their current
+chemistry as a baseline and permits **Update model** and **Regenerate conformer**.
+A plain XYZ model saved without these markers is indistinguishable from a
+generated model. Regeneration can replace its original coordinates, but requires
+an explicit action that can be undone. Reopen the original XYZ file to preserve
+its import provenance.
 
 ## Limits
 

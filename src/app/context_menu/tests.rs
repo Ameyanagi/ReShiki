@@ -1196,7 +1196,7 @@ fn show_as_is_offered_for_a_molecule_shown_in_3d() {
         ForceField::Mmff94s,
     );
     doc.models.push(model);
-    doc.require_version(reshiki::document::MODELS_3D);
+    reshiki::models3d::require_version(doc);
     assert!(models3d::set_display(doc, 0, Display::ThreeD));
     app.tab.selected = vec![c, o];
     assert!(outline(&app, Page::Main).contains(&"Show as"));

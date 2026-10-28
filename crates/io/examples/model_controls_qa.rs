@@ -57,7 +57,7 @@ async fn main() -> anyhow::Result<()> {
             let prepared = Prepared::new(&doc, &atoms)?.without_retained_depth();
             let optimized = client.generate(&prepared, ForceField::Mmff94s).await?;
             doc.models.push(prepared.model(&optimized)?);
-            doc.require_version(reshiki_model::document::MODELS_3D);
+            reshiki_model::models3d::require_version(&mut doc);
             reshiki_model::models3d::set_display(&mut doc, 0, Display::ThreeD);
         }
         let path = output.join(format!("{name}.rsk"));

@@ -674,6 +674,36 @@ fn structure_both(app: &mut App, _: &Driver<'_>) {
     let _ = app.finish_model(positions, vec![]);
 }
 
+fn model_polish(app: &mut App, driver: &Driver<'_>) {
+    structure_both(app, driver);
+    let _ = app.update(Message::Models3d(models3d::Action::Set(
+        models3d::Setting::Labels(reshiki::models3d::Labels::All),
+    )));
+    let _ = app.update(Message::InspectorAction(inspector::Action::Section(
+        inspector::Section::Structure,
+        false,
+    )));
+    let _ = app.update(Message::InspectorAction(inspector::Action::Section(
+        inspector::Section::Model3d,
+        true,
+    )));
+    let _ = app.update(Message::InspectorAction(inspector::Action::ModelControls(
+        true,
+    )));
+}
+
+fn model_stale(app: &mut App, driver: &Driver<'_>) {
+    model_polish(app, driver);
+    let before = app.tab.doc.clone();
+    app.tab.doc.atoms[0].isotope = 13;
+    app.changed(before);
+}
+
+fn model_polish_lower(app: &mut App, driver: &Driver<'_>) {
+    model_polish(app, driver);
+    driver.scroll_inspector(-6.);
+}
+
 /// Free-base porphine placed, and found by searching the template library.
 fn porphine(app: &mut App, _: &Driver<'_>) {
     let template = reshiki::templates::LIBRARY
@@ -860,7 +890,7 @@ fn bond_from_text(app: &mut App, _: &Driver<'_>) {
     }));
 }
 
-pub(in crate::app::workspace) const STATES: [(&str, Scene); 41] = [
+pub(in crate::app::workspace) const STATES: [(&str, Scene); 43] = [
     ("nmr-proton", nmr_proton),
     ("nmr-carbon-labels", nmr_carbon_labels),
     ("nmr-label-menu", nmr_label_menu),
@@ -893,6 +923,8 @@ pub(in crate::app::workspace) const STATES: [(&str, Scene); 41] = [
     ("orbital-snap", orbital_snap),
     ("rear-opacity", rear_opacity),
     ("structure-both", structure_both),
+    ("model-polish", model_polish),
+    ("model-stale", model_stale),
     ("porphine", porphine),
     ("export-office-svg", export_office_svg),
     ("assistant-install", assistant_install),
@@ -906,6 +938,38 @@ pub(in crate::app::workspace) const STATES: [(&str, Scene); 41] = [
 
 pub(in crate::app::workspace) fn needs_naming(name: &str) -> bool {
     name.starts_with("name-import-") || name.starts_with("names-") || name == "molecule-caption"
+}
+
+#[tokio::test]
+#[ignore = "Opt-in phase-4 model panel captures; set RESHIKI_MODEL_POLISH_QA_DIR"]
+async fn models3d_polish_layout_snapshots() {
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .expect("Headless renderer");
+    let directory =
+        std::path::PathBuf::from(std::env::var_os("RESHIKI_MODEL_POLISH_QA_DIR").unwrap());
+    std::fs::create_dir_all(&directory).unwrap();
+    for (width, height) in [(1280, 820), (900, 640)] {
+        for (name, scene) in [
+            ("model-polish", model_polish as Scene),
+            ("model-stale", model_stale as Scene),
+            ("model-polish-lower", model_polish_lower as Scene),
+        ] {
+            let (mut app, _) = App::new();
+            app.appearance.mode = crate::appearance::Mode::Light;
+            capture(
+                &mut app,
+                &mut renderer,
+                Size::new(width as f32, height as f32),
+                scene,
+                &directory.join(format!("{name}-{width}.png")),
+            );
+        }
+    }
 }
 
 /// Settles the view as the window first shows, plays the scene, lets the

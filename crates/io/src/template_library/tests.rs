@@ -216,7 +216,7 @@ fn templates_keep_3d_models() {
     ];
     doc.models
         .push(Model3d::new(&doc, placed, vec![], ForceField::Mmff94s));
-    doc.require_version(crate::document::MODELS_3D);
+    crate::models3d::require_version(&mut doc);
     let mut library = super::Library::default();
     library
         .add("Nitrile", "Mine", doc.clone(), Anchor::Atom(a))
