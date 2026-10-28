@@ -8,7 +8,7 @@ labels** offers **None**, **Heteroatoms** and **All**; new crystal and XYZ impor
 keep their geometry without update or regeneration. Older saved models without
 import provenance use the current chemistry as their baseline; see the guide's
 legacy XYZ limit.
-([issue #386, phase 4](https://github.com/Ameyanagi/ReShiki/issues/386), PR TBD);
+([issue #386, phase 4](https://github.com/Ameyanagi/ReShiki/issues/386), [PR #659](https://github.com/Ameyanagi/ReShiki/pull/659));
 [3D model guide](3d-keyboard-drawing.md#show-a-molecule-as-a-3d-model).
 
 **Python package — under review in [PR #611](https://github.com/Ameyanagi/ReShiki/pull/611).** Draw, convert and analyze structures
