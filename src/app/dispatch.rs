@@ -40,7 +40,7 @@ impl App {
             #[cfg(any(windows, target_os = "linux"))]
             Message::Desktop(_) => {}
             #[cfg(target_arch = "wasm32")]
-            Message::Host(_) => {}
+            Message::Host(_) | Message::DownloadName(_) | Message::SaveDownload(_) => {}
             Message::KeyboardDrawing(action) => return Some(self.keyboard_drawing_action(action)),
             Message::Optimization(action) => return Some(self.optimization_action(action)),
             Message::Models3d(action) => return Some(self.models3d_action(action)),
@@ -179,7 +179,12 @@ impl App {
             // Tabs wait while the save dialog asks about the tab in front.
             Message::New | Message::Open if self.pending.is_some() => {}
             Message::New => return Some(self.new_document()),
-            Message::Open => return Some(super::files::open_dialog()),
+            Message::Open => {
+                return Some(super::files::open_dialog(
+                    #[cfg(target_arch = "wasm32")]
+                    self.browser_file_handles(),
+                ));
+            }
             Message::Tabs(action) => return Some(self.tab_action(action)),
             Message::Close(window) => {
                 if self.pending.is_none() {

@@ -1,5 +1,15 @@
 # Unreleased changes
 
+Under review: @Ameyanagi — browser canvas touch drawing, pinch zoom, two-finger
+pan and long-press context menus, plus a canvas label and status announcements
+for screen readers. [Issue #435](https://github.com/Ameyanagi/ReShiki/issues/435),
+[PR #610](https://github.com/Ameyanagi/ReShiki/pull/610).
+
+Under review: @Ameyanagi — Browser Save updates the opened file in Chromium,
+and Save As offers a file name and location. Download fallbacks keep the edited
+marker; opening the same file handle returns to its tab. Remaining browser file
+work for [issue #428](https://github.com/Ameyanagi/ReShiki/issues/428), [PR #612](https://github.com/Ameyanagi/ReShiki/pull/612).
+
 Under review: @Ameyanagi — imported drawings show their source filename in tabs
 and the window title while Save still asks for a native drawing destination
 ([issue #601](https://github.com/Ameyanagi/ReShiki/issues/601), [PR #606](https://github.com/Ameyanagi/ReShiki/pull/606)).

@@ -143,7 +143,8 @@ impl App {
         match edit {
             // These edits are handled by the leading match, before preview gates.
             Edit::ContextMenu { .. } | Edit::ArrowTarget(..) | Edit::CancelArrowSource => return,
-            Edit::Hover(_)
+            Edit::Touch(_)
+            | Edit::Hover(_)
             | Edit::PointerHover(_)
             | Edit::RelaxDragStart { .. }
             | Edit::RelaxDragTarget { .. }
