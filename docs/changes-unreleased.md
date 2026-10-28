@@ -1,5 +1,12 @@
 # Unreleased changes
 
+**Python package — under review in [PR #611](https://github.com/Ameyanagi/ReShiki/pull/611).** Draw, convert and analyze structures
+from scripts, Jupyter, pandas and Excel with the same headless Rust engine as the
+editor. Immutable objects support chained cleanup and styles; parallel batches
+report individual row errors. [Issue #608](https://github.com/Ameyanagi/ReShiki/issues/608),
+[Python guide](python.md). PyPI publishing, six-platform release wheels, EMF and
+editable Office pictures are follow-ups.
+
 Under review: @Ameyanagi — browser canvas touch drawing, pinch zoom, two-finger
 pan and long-press context menus, plus a canvas label and status announcements
 for screen readers. [Issue #435](https://github.com/Ameyanagi/ReShiki/issues/435),

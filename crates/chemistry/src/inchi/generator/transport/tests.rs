@@ -8,6 +8,36 @@ fn molecule() -> Molecule {
     }
 }
 
+#[test]
+fn embedded_generation_and_import_retain_protocol_validation() {
+    use super::super::{generate_in_process, read_in_process};
+
+    for (text, expected) in [
+        ("C", "InChI=1S/CH4/h1H4"),
+        ("CCO", "InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3"),
+        ("F/C=C/F", "InChI=1S/C2H2F2/c3-1-2-4/h1-2H/b2-1+"),
+    ] {
+        let input = Molecule::prepare(&smiles::prepare(text).unwrap().state, None).unwrap();
+        let generated = generate_in_process(&input).unwrap();
+        assert!(generated.status.is_success(), "{text}");
+        assert_eq!(generated.inchi, expected, "{text}");
+        let imported = read_in_process(expected).unwrap();
+        let molecule = Molecule::prepare(imported.state.as_ref().unwrap(), None).unwrap();
+        assert_eq!(generate_in_process(&molecule).unwrap().inchi, expected);
+    }
+
+    let mut invalid = molecule();
+    invalid.positions.as_mut().unwrap().pop();
+    assert!(matches!(
+        generate_in_process(&invalid),
+        Err(Error::Input(_))
+    ));
+    assert!(matches!(
+        read_in_process(&"x".repeat(super::super::MAX_INCHI_BYTES + 1)),
+        Err(Error::Limit("InChI text"))
+    ));
+}
+
 fn owned_encode(input: &Molecule, heap_bytes: usize) -> Result<Vec<u8>, Error> {
     input
         .validate()

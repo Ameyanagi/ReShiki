@@ -164,6 +164,33 @@ jobs:
       - run: uv run --locked python -m unittest discover -s tests -p 'test_*.py'
       - run: uv run --locked python -m unittest discover -s reference -p 'test_*.py'
       - run: uv run --locked python scripts/check_reference_dependencies.py
+  python-package:
+    name: Python package (headless wheel)
+    needs: scope
+    if: needs.scope.outputs.native == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - *actions_runtime
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install 1.99.1 --profile minimal && rustup default 1.99.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: python-package
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.13.5"
+          python-version: "3.12.15"
+      - name: Build the abi3 wheel
+        run: uvx maturin build --manifest-path crates/python/Cargo.toml --locked --out artifacts/python
+      - name: Install test and integration dependencies
+        run: uv sync --project crates/python --all-extras --no-install-project
+      - name: Test the built wheel
+        run: uv run --project crates/python --no-sync --with ./artifacts/python/*.whl --with rdkit pytest crates/python/tests
+      - run: uv run --project crates/python --no-sync ruff check crates/python/python crates/python/tests
+      - run: uv run --project crates/python --no-sync ruff format --check crates/python/python crates/python/tests
+      - run: uv run --project crates/python --no-sync ty check --project crates/python
   libreoffice-uno:
     name: LibreOffice UNO regressions
     needs: scope

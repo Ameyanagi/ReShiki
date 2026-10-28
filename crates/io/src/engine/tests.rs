@@ -4,6 +4,75 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 #[tokio::test]
+async fn embedded_engine_preserves_identifiers_across_formats_and_cleanup() {
+    let engine = LocalEngine::in_process();
+    let expected = "InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3";
+    let imported = engine.request(Request::import_smiles("CCO")).await.unwrap();
+    let analysis = imported.analysis.as_ref().unwrap();
+    assert_eq!(analysis.inchi, expected);
+    assert_eq!(analysis.formula, "C2H6O");
+
+    // When the real helper is configured, compare the complete existing
+    // response boundary rather than only the identifier string.
+    if std::env::var_os("RESHIKI_INCHI_HELPER").is_some() {
+        let isolated = LocalEngine::default()
+            .request(Request::import_smiles("CCO"))
+            .await
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(&imported).unwrap(),
+            serde_json::to_value(isolated).unwrap()
+        );
+    }
+
+    let document = imported.document.unwrap();
+    for format in ["rsk", "mol", "smiles", "inchi", "cdxml", "cdx"] {
+        let bytes = crate::formats::write_with_engine(document.clone(), format, &engine)
+            .await
+            .unwrap();
+        let reopened = crate::formats::read_with_engine(bytes, format, &engine)
+            .await
+            .unwrap();
+        let analyzed = engine
+            .request(Request::molecule("analyze", reopened))
+            .await
+            .unwrap();
+        assert_eq!(analyzed.analysis.unwrap().inchi, expected, "{format}");
+    }
+
+    let cleaned = engine
+        .request(Request::molecule("clean", document))
+        .await
+        .unwrap();
+    assert_eq!(cleaned.analysis.unwrap().inchi, expected);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[tokio::test]
+async fn existing_explicit_helper_configuration_remains_isolated() {
+    let document = LocalEngine::in_process()
+        .request(Request::import_smiles("C"))
+        .await
+        .unwrap()
+        .document
+        .unwrap();
+    let molecule = crate::chemistry::document::prepare(&document).unwrap();
+    // An empty executable path always fails to launch. Config::new must retain
+    // that helper failure, including when the embedded engine is linked in.
+    let result = native_response::analyze_prepared(
+        Arc::new(molecule),
+        Some(native_response::Config::new(std::path::PathBuf::new())),
+    )
+    .await;
+    assert!(matches!(
+        result,
+        Err(native_response::Error::Helper(
+            crate::chemistry::inchi::generator::Error::Io(_)
+        ))
+    ));
+}
+
+#[tokio::test]
 async fn owned_and_shared_native_imports_preserve_snapshots_and_errors() {
     for text in ["<CDXML><page id=\"1\"/></CDXML>", "<invalid"] {
         let request = Request::import("cdxml", text);

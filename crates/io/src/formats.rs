@@ -21,6 +21,15 @@ pub const EXPORT_PNG_PIXELS: u64 = 16_000_000;
 /// `cdxml`, `cdx` (the binary file), `rxn`, `rsmi` or `auto`, which tells the
 /// text formats apart.
 pub async fn read(data: Vec<u8>, format: &str) -> Result<Document, String> {
+    read_with_engine(data, format, &LocalEngine::default()).await
+}
+
+/// [`read`] with an explicitly configured headless chemistry engine.
+pub async fn read_with_engine(
+    data: Vec<u8>,
+    format: &str,
+    engine: &LocalEngine,
+) -> Result<Document, String> {
     if matches!(format, "rsk" | "reshiki") {
         return Document::from_native_file(&data);
     }
@@ -31,7 +40,7 @@ pub async fn read(data: Vec<u8>, format: &str) -> Result<Document, String> {
     };
     let mut request = Request::import(format, "");
     request.text = Some(text);
-    let response = LocalEngine::default().request(request).await?;
+    let response = engine.request(request).await?;
     let document = response.document.ok_or("Import returned no drawing")?;
     finalize(&document)
 }
@@ -50,9 +59,17 @@ fn finalize(response: &Document) -> Result<Document, String> {
 /// app's Export makes it) or a chemistry format (`mol`, `smiles`, `inchi`,
 /// `cdxml`, `cdx`, `rxn` or `rsmi`).
 pub async fn write(doc: Document, format: &str) -> Result<Vec<u8>, String> {
-    let engine = LocalEngine::default();
+    write_with_engine(doc, format, &LocalEngine::default()).await
+}
+
+/// [`write`] with an explicitly configured headless chemistry engine.
+pub async fn write_with_engine(
+    doc: Document,
+    format: &str,
+    engine: &LocalEngine,
+) -> Result<Vec<u8>, String> {
     if let Some(figure) = ["svg", "png", "pdf"].into_iter().find(|f| *f == format) {
-        return export::publication(&engine, doc, figure, false, EXPORT_PNG_PIXELS)
+        return export::publication(engine, doc, figure, false, EXPORT_PNG_PIXELS)
             .await
             .map(|Publication { bytes, .. }| bytes);
     }

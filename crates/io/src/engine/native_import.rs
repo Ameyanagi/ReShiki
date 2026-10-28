@@ -8,7 +8,7 @@ use super::{Request, Response, native_response};
 use crate::{
     chemistry::{
         self, cdxml, depict, document as molecular,
-        inchi::{generator, helper, output},
+        inchi::{helper, output},
         molfile, reaction, smiles,
         stereo::{Point3, perception::State},
     },
@@ -127,7 +127,8 @@ pub async fn execute(
                         .map_err(native_response::Error::Discovery)?,
                 ),
             };
-            let output = generator::read_with_limits(&reader.helper, &text, reader.limits)
+            let output = reader
+                .read(&text)
                 .await
                 .map_err(native_response::Error::Helper)?;
             config = Some(reader);
