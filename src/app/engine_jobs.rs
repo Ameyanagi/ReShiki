@@ -112,7 +112,7 @@ impl App {
         };
         self.tab.busy = false;
         #[cfg(target_arch = "wasm32")]
-        if matches!(job.kind, Job::ImportFile) {
+        if matches!(job.kind, Job::ImportFile(_)) {
             self.tab.file_handle = None;
         }
         #[cfg(any(windows, target_os = "linux"))]
@@ -185,7 +185,7 @@ impl App {
         let response = match result {
             Err(e) => {
                 #[cfg(target_arch = "wasm32")]
-                if matches!(kind, Job::ImportFile) {
+                if matches!(kind, Job::ImportFile(_)) {
                     self.tab.file_handle = None;
                 }
                 self.error = true;
