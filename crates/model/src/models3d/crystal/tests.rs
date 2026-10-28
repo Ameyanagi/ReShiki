@@ -255,3 +255,146 @@ fn compound_live_cell_edits_keep_unvalidated_context_scoped_to_the_cell() {
     assert!(!touches(&doc, &ordinary));
     assert!(molecular::prepare(&editing::analysis_document(&doc, &ordinary)).is_ok());
 }
+
+#[test]
+fn asymmetric_site_provenance_defaults_and_serializes_only_when_present() {
+    let old = serde_json::json!({ "id": 7, "label": "C1" });
+    let mut site: Site = serde_json::from_value(old.clone()).unwrap();
+    assert!(!site.asymmetric);
+    assert_eq!(serde_json::to_value(&site).unwrap(), old);
+    site.asymmetric = true;
+    let saved = serde_json::to_value(&site).unwrap();
+    assert_eq!(saved["asymmetric"], true);
+    assert_eq!(serde_json::from_value::<Site>(saved).unwrap(), site);
+}
+
+/// Add a separate connected component, using explicit atoms so that hydrogen
+/// counts and the solvent size rule are independent of perceived chemistry.
+fn add_component(doc: &mut Document, elements: &[&str]) -> Vec<u64> {
+    let ids: Vec<_> = elements
+        .iter()
+        .map(|element| doc.add_atom(element, Point::default()))
+        .collect();
+    for pair in ids.windows(2) {
+        doc.add_bond(pair[0], pair[1], 1, "plain");
+    }
+    ids
+}
+
+fn molecule_model(doc: &Document, ids: &[u64], inputs: &[u64], crossing: Vec<Crossing>) -> Model3d {
+    let placed = ids
+        .iter()
+        .enumerate()
+        .map(|(i, id)| Placed {
+            id: *id,
+            xyz: [i as f32, 0., 0.],
+        })
+        .collect();
+    let sites = inputs
+        .iter()
+        .map(|id| Site {
+            id: *id,
+            label: String::new(),
+            adp: None,
+            asymmetric: true,
+        })
+        .collect();
+    Model3d::new(doc, placed, vec![], ForceField::default()).with_cell(
+        doc,
+        Some(Cell {
+            vectors: [[100., 0., 0.], [0., 100., 0.], [0., 0., 100.]],
+            crossing,
+        }),
+        sites,
+    )
+}
+
+#[test]
+fn molecule_view_keeps_whole_input_components_and_unit_cell_networks() {
+    let mut doc = Document::default();
+    let molecule = add_component(&mut doc, &["C", "O", "H"]);
+    let packing = add_component(&mut doc, &["C", "O", "H"]);
+    let network = add_component(&mut doc, &["Si", "O"]);
+    let network_tail = add_component(&mut doc, &["O", "Si"]);
+    let outside = add_component(&mut doc, &["C"]);
+    doc.add_bond(molecule[0], outside[0], 1, "plain");
+    let all: Vec<_> = [&molecule, &packing, &network, &network_tail]
+        .into_iter()
+        .flatten()
+        .copied()
+        .collect();
+    let model = molecule_model(
+        &doc,
+        &all,
+        &[molecule[0]],
+        vec![Crossing {
+            a: network[1],
+            b: network_tail[0],
+            image: [1, 0, 0],
+        }],
+    );
+    let before = doc.clone();
+    let expected = molecule
+        .iter()
+        .chain(&network)
+        .chain(&network_tail)
+        .copied()
+        .collect();
+    assert_eq!(molecule_atoms(&doc, &model, true), expected);
+    assert_eq!(
+        doc, before,
+        "A display filter must leave the document intact"
+    );
+    // The asymmetric sites cannot be recovered from a legacy cell, so it
+    // retains every component instead of arbitrarily choosing a molecule.
+    let mut legacy = model;
+    legacy.sites.clear();
+    assert_eq!(
+        molecule_atoms(&doc, &legacy, true),
+        all.into_iter().collect()
+    );
+}
+
+#[test]
+fn solvent_toggle_uses_heavy_component_size_and_preserves_equal_hosts() {
+    let mut doc = Document::default();
+    let host = add_component(&mut doc, &["C"; 10]);
+    let second_host = add_component(&mut doc, &["C"; 10]);
+    let large_guest = add_component(&mut doc, &["C"; 9]);
+    let small_guest = add_component(&mut doc, &["C"; 8]);
+    // Many explicit hydrogens must not promote a small solvent to a host.
+    let mut water_elements = vec!["H"; 12];
+    water_elements.push("O");
+    let solvent = add_component(&mut doc, &water_elements);
+    let packing = add_component(&mut doc, &["C"; 10]);
+    let components = [&host, &second_host, &large_guest, &small_guest, &solvent];
+    let inputs: Vec<_> = components.iter().map(|ids| ids[0]).collect();
+    let mut ids: Vec<_> = components.into_iter().flatten().copied().collect();
+    ids.extend(&packing);
+    let model = molecule_model(&doc, &ids, &inputs, vec![]);
+    let all_inputs = [&host, &second_host, &large_guest, &small_guest, &solvent]
+        .into_iter()
+        .flatten()
+        .copied()
+        .collect();
+    assert_eq!(molecule_atoms(&doc, &model, true), all_inputs);
+    let without_solvent = [&host, &second_host, &large_guest]
+        .into_iter()
+        .flatten()
+        .copied()
+        .collect();
+    assert_eq!(molecule_atoms(&doc, &model, false), without_solvent);
+}
+
+#[test]
+fn equally_small_molecules_are_not_all_hidden_as_solvent() {
+    let mut doc = Document::default();
+    let first = add_component(&mut doc, &["O", "H", "H"]);
+    let second = add_component(&mut doc, &["O", "H", "H"]);
+    let ids: Vec<_> = first.iter().chain(&second).copied().collect();
+    let model = molecule_model(&doc, &ids, &[first[0], second[0]], vec![]);
+    assert_eq!(
+        molecule_atoms(&doc, &model, false),
+        ids.into_iter().collect()
+    );
+}

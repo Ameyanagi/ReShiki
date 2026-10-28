@@ -97,6 +97,7 @@ pub(super) fn read(text: &str) -> Result<Structure, Error> {
                     label: name.to_owned(),
                     xyz,
                     adp,
+                    asymmetric: false,
                 });
             }
             // The first model only.

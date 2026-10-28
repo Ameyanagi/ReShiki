@@ -183,5 +183,23 @@ pub(super) fn model_style(f: &mut Frame<'_>, ink: Color, style: reshiki::models3
             f.fill(&Path::circle(at(11., 12.), 5.6), Color { a: 0.55, ..ink });
             f.fill(&Path::circle(at(19., 10.), 5.6), ink);
         }
+        Style::Ellipsoids => {
+            let ellipse = |x, y| {
+                Path::new(|p| {
+                    p.ellipse(iced::widget::canvas::path::arc::Elliptical {
+                        center: at(15., 11.),
+                        radii: iced::Vector::new(x, y),
+                        rotation: iced::Radians(-0.45),
+                        start_angle: iced::Radians(0.),
+                        end_angle: iced::Radians(std::f32::consts::TAU),
+                    });
+                })
+            };
+            let outline = ellipse(8., 5.);
+            f.fill(&outline, Color { a: 0.14, ..ink });
+            f.stroke(&outline, round(1.2));
+            f.stroke(&ellipse(8., 1.8), round(0.8));
+            f.stroke(&ellipse(2.2, 5.), round(0.8));
+        }
     }
 }

@@ -58,6 +58,16 @@ pub enum Primitive {
         outline: Option<Outline>,
         contact: Option<Box<Contact>>,
     },
+    /// An exact projected displacement ellipsoid. `axes` are orthogonal
+    /// semiaxis vectors; `focal` is in its unit-disc coordinates.
+    Ellipsoid {
+        center: Point,
+        axes: [Point; 2],
+        focal: Point,
+        stops: Vec<(f32, [u8; 3])>,
+        outline: Option<Outline>,
+        section: Option<EllipsoidSection>,
+    },
     /// A shaded 3D-model bond half: `corners` filled with a linear gradient
     /// from `from` to `to`, in exact colors. The outline strokes the two long
     /// sides, corners 0–1 and 3–2.
@@ -101,6 +111,15 @@ pub enum Primitive {
         fill: [u8; 3],
         outline: Outline,
     },
+}
+/// An anisotropic ellipsoid's visible principal sections and darker octant.
+#[derive(Debug, Clone)]
+pub struct EllipsoidSection {
+    pub octant: Vec<Point>,
+    pub arcs: Vec<Vec<Point>>,
+    pub fill: [u8; 3],
+    pub color: [u8; 3],
+    pub width: f32,
 }
 /// Where a 3D-model ball meets the balls it overlaps.
 #[derive(Debug, Clone, PartialEq)]
@@ -2900,6 +2919,20 @@ pub fn bounds(drawing: &[Primitive]) -> (Point, Point) {
                 }
             }
             Primitive::ShadedQuad { corners, .. } => points.extend(corners),
+            Primitive::Ellipsoid {
+                center,
+                axes,
+                outline,
+                section,
+                ..
+            } => {
+                let pad = outline
+                    .map_or(0., |o| o.width / 2.)
+                    .max(section.as_ref().map_or(0., |s| s.width / 2.));
+                let x = axes[0].x.hypot(axes[1].x) + pad;
+                let y = axes[0].y.hypot(axes[1].y) + pad;
+                points.extend([center.offset(-x, -y), center.offset(x, y)]);
+            }
             Primitive::ShadedPolygon { points: p, .. } => points.extend(p),
             Primitive::Contour { polygons, outline } => {
                 let r = outline.width / 2.;

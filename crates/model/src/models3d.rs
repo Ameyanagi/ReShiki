@@ -14,6 +14,7 @@
 //! extended network, with its unit cell: see [`crystal`].
 mod contact;
 pub mod crystal;
+mod ellipsoids;
 use crate::scene::Contact;
 use crate::{
     depth_appearance::Scope,
@@ -21,6 +22,8 @@ use crate::{
     scene::{Outline, Primitive},
 };
 pub use crystal::{Adp, Cell, Crossing, Site};
+use ellipsoids::Ellipsoid;
+pub use ellipsoids::Probability;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -59,13 +62,16 @@ pub enum Style {
     Wireframe,
     /// Balls at van der Waals radii; no bonds.
     SpaceFilling,
+    /// Thermal displacement ellipsoids, with plain bonds.
+    Ellipsoids,
 }
 impl Style {
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::BallStick,
         Self::Stick,
         Self::Wireframe,
         Self::SpaceFilling,
+        Self::Ellipsoids,
     ];
     /// Ball radius (Å) of an atom drawn in this style.
     fn atom_radius(self, symbol: &str) -> f32 {
@@ -74,6 +80,7 @@ impl Style {
             Self::Stick => STICK_RADIUS,
             Self::Wireframe => WIRE_RADIUS,
             Self::SpaceFilling => van_der_waals(symbol),
+            Self::Ellipsoids => 0.18,
         }
     }
 }
@@ -160,6 +167,15 @@ pub struct Model3d {
     pub size: f32,
     #[serde(default)]
     pub style: Style,
+    /// Probability enclosed by the thermal ellipsoids.
+    #[serde(default, skip_serializing_if = "is_fifty")]
+    pub probability: Probability,
+    /// Show only whole molecules containing asymmetric-unit atoms.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub molecule_only: bool,
+    /// Include the small discrete components classified as solvent.
+    #[serde(default = "include_solvent", skip_serializing_if = "is_included")]
+    pub include_solvent: bool,
     #[serde(default)]
     pub look: Look,
     #[serde(default = "depth_fade")]
@@ -197,6 +213,15 @@ pub struct Model3d {
 }
 fn one_cell() -> [u8; 3] {
     [1; 3]
+}
+fn is_fifty(probability: &Probability) -> bool {
+    *probability == Probability::default()
+}
+fn include_solvent() -> bool {
+    true
+}
+fn is_included(included: &bool) -> bool {
+    *included
 }
 fn is_one_cell(repeat: &[u8; 3]) -> bool {
     *repeat == one_cell()
@@ -407,6 +432,13 @@ fn van_der_waals(symbol: &str) -> f32 {
 }
 
 impl Model3d {
+    pub(crate) fn needs_ortep(&self) -> bool {
+        self.style == Style::Ellipsoids
+            || self.molecule_only
+            || self.probability != Probability::default()
+            || !self.include_solvent
+    }
+
     /// A model of `atoms` (one whole molecule of `doc`) shown in 2D, facing
     /// its broadest side and drawn at the drawing's bond-length scale.
     pub fn new(
@@ -426,6 +458,9 @@ impl Model3d {
             offset: Point::default(),
             size: 1.,
             style: Style::default(),
+            probability: Probability::default(),
+            molecule_only: false,
+            include_solvent: true,
             look: Look::default(),
             depth_fade: depth_fade(),
             perspective: perspective(),
@@ -756,6 +791,8 @@ struct View<'a> {
     /// Whether each point is drawn, see [`Model3d::shown`].
     shown: Vec<bool>,
     style: Style,
+    /// Thermal semiaxes in the rotated frame; absent for fixed small balls.
+    ellipsoids: Vec<Option<Ellipsoid>>,
     reach: f32,
     origin: Point,
     scale: f32,
@@ -768,16 +805,64 @@ impl View<'_> {
     fn new<'a>(doc: &'a Document, model: &Model3d) -> Option<View<'a>> {
         let center = layout_center(doc, model)?;
         let points = model.points(doc)?;
-        let shown = model.shown(doc);
-        let c = model.center(&points);
+        let mut shown = model.shown(doc);
+        let molecule_only = model.molecule_only && model.cell.is_some();
+        if molecule_only {
+            let selected = crystal::molecule_atoms(doc, model, model.include_solvent);
+            for (show, id) in shown.iter_mut().zip(
+                model
+                    .atoms
+                    .iter()
+                    .map(|a| a.id)
+                    .chain(model.hydrogens.iter().map(|h| h.parent)),
+            ) {
+                *show &= selected.contains(&id);
+            }
+        }
         let drawn: Vec<_> = points
             .iter()
             .zip(&shown)
             .filter(|(_, shown)| **shown)
             .map(|(p, _)| *p)
             .collect();
+        let c = if molecule_only {
+            heavy_center(&drawn)
+        } else {
+            model.center(&points)
+        };
+        let sites: HashMap<_, _> = model.sites.iter().map(|s| (s.id, s.adp)).collect();
+        let ellipsoids: Vec<_> = points
+            .iter()
+            .enumerate()
+            .map(|(i, (symbol, _))| {
+                if model.style != Style::Ellipsoids || *symbol == "H" {
+                    return None;
+                }
+                let id = model.atoms.get(i)?.id;
+                Ellipsoid::of((*sites.get(&id)?)?, model.cell.as_ref(), model.probability)
+            })
+            .collect();
         // The bounding sphere holds the cell and its labels too.
-        let reach = reach(&drawn, c, model.style).max(model.cell_reach(c));
+        let reach = if model.style == Style::Ellipsoids {
+            points
+                .iter()
+                .zip(&shown)
+                .zip(&ellipsoids)
+                .filter(|((_, shown), _)| **shown)
+                .map(|(((symbol, p), _), e)| {
+                    length(sub(*p, c))
+                        + e.as_ref()
+                            .map_or_else(|| model.style.atom_radius(symbol), Ellipsoid::radius)
+                })
+                .fold(0.01, f32::max)
+        } else {
+            reach(&drawn, c, model.style)
+        }
+        .max(if molecule_only {
+            0.
+        } else {
+            model.cell_reach(c)
+        });
         Some(View {
             center: c,
             rotated: points
@@ -787,6 +872,10 @@ impl View<'_> {
             symbols: points.into_iter().map(|(s, _)| s).collect(),
             shown,
             style: model.style,
+            ellipsoids: ellipsoids
+                .into_iter()
+                .map(|e| e.map(|e| e.rotated(model.rotation)))
+                .collect(),
             reach,
             origin: center.offset(model.offset.x, model.offset.y),
             scale: 0.44 * model.size / reach,
@@ -819,7 +908,12 @@ impl View<'_> {
             .filter(|(i, _)| self.shown.get(*i) == Some(&true))
             .map(|(i, (s, p))| {
                 let (q, f) = self.project(*p);
-                (i, q, self.style.atom_radius(s) * self.scale * f)
+                let radius = self
+                    .ellipsoids
+                    .get(i)
+                    .and_then(Option::as_ref)
+                    .map_or_else(|| self.style.atom_radius(s), Ellipsoid::radius);
+                (i, q, radius * self.scale * f)
             })
     }
     /// Move each point a fraction `e` of the way from its flat start: a drawing
@@ -971,6 +1065,9 @@ pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
 /// [`crate::document::CRYSTALS`] for a crystal's cell or atom sites, else
 /// [`crate::document::MODELS_3D`].
 pub fn required_version(models: &[Model3d]) -> Option<u32> {
+    if models.iter().any(Model3d::needs_ortep) {
+        return Some(crate::document::ORTEP);
+    }
     let crystal = models
         .iter()
         .any(|m| m.cell.is_some() || !m.sites.is_empty());
@@ -1249,6 +1346,12 @@ pub fn validate(doc: &Document) -> Result<(), String> {
         return Err(format!(
             "Crystal structures need document version {} or later",
             crate::document::CRYSTALS
+        ));
+    }
+    if doc.version < crate::document::ORTEP && doc.models.iter().any(Model3d::needs_ortep) {
+        return Err(format!(
+            "Thermal ellipsoid settings need document version {} or later",
+            crate::document::ORTEP
         ));
     }
     let finite = |p: &[f32; 3]| p.iter().all(|v| v.is_finite() && v.abs() <= MAX_COORDINATE);
@@ -2147,10 +2250,34 @@ impl View<'_> {
     /// they meet at the colour seam and a stick never outgrows its joint.
     fn half_bond(&self, s: usize, o: usize) -> Option<(Point, Point, f32, f32)> {
         let (ps, po) = (*self.rotated.get(s)?, *self.rotated.get(o)?);
+        let (ps, po) = if self.style == Style::Ellipsoids {
+            let d = sub(po, ps);
+            let distance = length(d);
+            if distance == 0. {
+                return None;
+            }
+            let direction = d.map(|v| v / distance);
+            let radius = |i: usize| {
+                self.ellipsoids
+                    .get(i)
+                    .and_then(Option::as_ref)
+                    .map_or(0.18, |e| e.radius_along(direction))
+            };
+            let (rs, ro) = (radius(s), radius(o));
+            if rs + ro >= distance {
+                return None;
+            }
+            (
+                zip3(ps, direction, |p, d| p + d * rs),
+                zip3(po, direction, |p, d| p - d * ro),
+            )
+        } else {
+            (ps, po)
+        };
         let (start, fs) = self.project(ps);
         let (middle, fm) = self.project(zip3(ps, po, |a, b| (a + b) / 2.));
         let radius = match self.style {
-            Style::BallStick => BOND_RADIUS * self.scale,
+            Style::BallStick | Style::Ellipsoids => BOND_RADIUS * self.scale,
             Style::Stick => STICK_RADIUS * self.scale,
             Style::Wireframe => return Some((start, middle, self.wire / 2., self.wire / 2.)),
             Style::SpaceFilling => 0.,
@@ -2376,7 +2503,10 @@ pub fn balls_and_sticks(
     model: &Model3d,
 ) -> Option<(Vec<(Point, f32)>, Vec<(Point, Point, f32)>)> {
     let view = View::new(doc, model)?;
-    let bonds = sticks(doc, model, &view.shown)?;
+    let mut bonds = sticks(doc, model, &view.shown)?;
+    if model.style == Style::Ellipsoids {
+        bonds.retain(|&(a, b)| view.half_bond(a, b).is_some());
+    }
     // Wireframe draws only the atoms without shown bonds, as dots.
     let bonded: HashSet<usize> = bonds.iter().flat_map(|&(a, b)| [a, b]).collect();
     let balls = view
@@ -2410,7 +2540,10 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         view.morph(doc, model, e);
         e
     });
-    let bonds = sticks(doc, model, &view.shown)?;
+    let mut bonds = sticks(doc, model, &view.shown)?;
+    if model.style == Style::Ellipsoids {
+        bonds.retain(|&(a, b)| view.half_bond(a, b).is_some());
+    }
     let (rotated, reach, style) = (&view.rotated, view.reach, model.style);
     let paper = doc.canvas_theme.background();
     let dark = doc.canvas_theme.is_dark();
@@ -2594,6 +2727,13 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                 }
             }
             Item::Atom(i) => {
+                if let Some(ellipsoid) = view.ellipsoids.get(i).and_then(Option::as_ref) {
+                    drawn.push((
+                        fading,
+                        ellipsoid.draw(&view, *rotated.get(i)?, base, glossy, outline(line))?,
+                    ));
+                    continue;
+                }
                 let contact = match contacts.remove(&i) {
                     Some(None) => continue,
                     Some(Some(contact)) => Some(Box::new(contact)),
@@ -2757,6 +2897,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     let (behind, front) = model
         .cell
         .as_ref()
+        .filter(|_| !model.molecule_only)
         .map(|cell| {
             let (hidden, edges, marks) = cell_ink(&frame, cell, ink, float(backdrop));
             (hidden, [edges, marks].concat())
@@ -2783,7 +2924,7 @@ fn crossing_halves(view: &View, model: &Model3d) -> Vec<(usize, [f32; 3])> {
     let Some(cell) = model
         .cell
         .as_ref()
-        .filter(|_| model.style != Style::SpaceFilling)
+        .filter(|_| model.style != Style::SpaceFilling && !model.molecule_only)
     else {
         return vec![];
     };
@@ -3738,5 +3879,7 @@ fn solve3(a: [[f64; 3]; 3], b: [f64; 3]) -> Option<[f64; 3]> {
 
 #[cfg(test)]
 mod opening_tests;
+#[cfg(test)]
+mod ortep_tests;
 #[cfg(test)]
 mod tests;

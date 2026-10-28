@@ -12,7 +12,7 @@ use iced::widget::{Space, canvas, column, row, slider, text};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::document::Document;
 use reshiki::geometry::{Client, ForceField, Optimized, Prepared};
-use reshiki::models3d::{self, Background, Display, Hydrogens, Layout, Look, Style};
+use reshiki::models3d::{self, Background, Display, Hydrogens, Layout, Look, Probability, Style};
 use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,6 +43,9 @@ pub(crate) enum Action {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum Setting {
     Style(Style),
+    Probability(Probability),
+    MoleculeOnly(bool),
+    IncludeSolvent(bool),
     Look(Look),
     Hydrogens(Hydrogens),
     Background(Background),
@@ -331,6 +334,9 @@ impl App {
         };
         match setting {
             Setting::Style(style) => model.style = style,
+            Setting::Probability(probability) => model.probability = probability,
+            Setting::MoleculeOnly(only) => model.molecule_only = only,
+            Setting::IncludeSolvent(include) => model.include_solvent = include,
             Setting::Look(look) => model.look = look,
             Setting::Hydrogens(shown) => model.show_hydrogens = shown,
             Setting::Background(background) => model.background = background,
@@ -362,6 +368,7 @@ impl App {
         if self.tab.doc == before {
             return;
         }
+        models3d::require_version(&mut self.tab.doc);
         // A drag continues only on the same slider while nothing else has
         // been committed.
         let sliding = matches!(setting, Setting::DepthFade(_) | Setting::Perspective(_))
@@ -682,7 +689,7 @@ impl App {
         let field = |label: &'static str, content: Element<'static, Message>| {
             column![text(label).size(12), content].spacing(4)
         };
-        let [ball, stick, wire, space] = Style::ALL.map(|style| {
+        let style_button = |style| {
             let active = model.style == style;
             reshiki::accessibility::button(
                 format!("model-style-{}", slug(style)),
@@ -701,7 +708,19 @@ impl App {
             .padding([3, 6])
             .width(Length::Fill)
             .on_press_maybe(set(Setting::Style(style)))
-        });
+        };
+        let [ball, stick, wire, space] = [
+            Style::BallStick,
+            Style::Stick,
+            Style::Wireframe,
+            Style::SpaceFilling,
+        ]
+        .map(style_button);
+        let mut styles =
+            column![row![ball, stick].spacing(4), row![wire, space].spacing(4)].spacing(4);
+        if model.sites.iter().any(|site| site.adp.is_some()) {
+            styles = styles.push(style_button(Style::Ellipsoids));
+        }
         let segments = |options: Vec<(String, &'static str, &'static str, bool, Setting)>| {
             row(options
                 .into_iter()
@@ -755,19 +774,73 @@ impl App {
                 Setting::Background(background),
             )
         };
+        let toggle = |id: &str, name: &str, active: bool, setting: fn(bool) -> Setting| {
+            row(
+                [(false, "Off", "off"), (true, "On", "on")].map(|(enabled, label, suffix)| {
+                    choice(
+                        format!("{id}-{suffix}"),
+                        &format!("{name} {label}"),
+                        label,
+                        active == enabled,
+                        setting(enabled),
+                    )
+                    .into()
+                }),
+            )
+            .spacing(4)
+            .into()
+        };
+        let mut body = column![field("Style", styles.into())].spacing(10);
+        if model.style == Style::Ellipsoids {
+            body = body.push(field(
+                "Probability",
+                row(Probability::ALL.map(|probability| {
+                    let percent = probability.percent();
+                    let active = model.probability == probability;
+                    accessible_command(
+                        format!("model-probability-{percent}"),
+                        format!("{percent}% ellipsoid probability"),
+                        format!("{percent}%"),
+                    )
+                    .checked(active)
+                    .style(control(active))
+                    .width(Length::Fill)
+                    .on_press_maybe(set(Setting::Probability(probability)))
+                    .into()
+                }))
+                .spacing(4)
+                .into(),
+            ));
+        }
+        if model.cell.is_some() {
+            body = body.push(field(
+                "Molecule only",
+                toggle(
+                    "molecule-only",
+                    "Molecule only",
+                    model.molecule_only,
+                    Setting::MoleculeOnly,
+                ),
+            ));
+            if model.molecule_only {
+                body = body.push(field(
+                    "Include solvent",
+                    toggle(
+                        "include-solvent",
+                        "Include solvent",
+                        model.include_solvent,
+                        Setting::IncludeSolvent,
+                    ),
+                ));
+            }
+        }
         Some(
             self.inspector_section(
                 Section::Model3d,
                 "3D model",
                 name(model.style),
                 true,
-                column![
-                    field(
-                        "Style",
-                        column![row![ball, stick].spacing(4), row![wire, space].spacing(4)]
-                            .spacing(4)
-                            .into()
-                    ),
+                body.extend([
                     field(
                         "Look",
                         segments(vec![
@@ -775,26 +848,28 @@ impl App {
                                 Look::Flat,
                                 "flat",
                                 "Flat look, for journals",
-                                "Flat · journal"
+                                "Flat · journal",
                             ),
                             look(
                                 Look::Glossy,
                                 "glossy",
                                 "Glossy look, for slides",
-                                "Glossy · slides"
+                                "Glossy · slides",
                             ),
-                        ])
-                    ),
+                        ]),
+                    )
+                    .into(),
                     field(
                         "Hydrogens",
                         segments(vec![
                             hydrogens(Hydrogens::All, "All", "Show all hydrogens"),
                             hydrogens(Hydrogens::Polar, "Polar", "Show hydrogens on N, O and S"),
                             hydrogens(Hydrogens::None, "None", "Hide hydrogens"),
-                        ])
-                    ),
-                    slider_field("Depth fade", model.depth_fade, Setting::DepthFade),
-                    slider_field("Perspective", model.perspective, Setting::Perspective),
+                        ]),
+                    )
+                    .into(),
+                    slider_field("Depth fade", model.depth_fade, Setting::DepthFade).into(),
+                    slider_field("Perspective", model.perspective, Setting::Perspective).into(),
                     field(
                         "Background",
                         segments(vec![
@@ -803,14 +878,15 @@ impl App {
                                 Background::Card,
                                 "card",
                                 "Soft card background",
-                                "Soft card"
+                                "Soft card",
                             ),
-                        ])
-                    ),
+                        ]),
+                    )
+                    .into(),
                     accessible_command("model-reset-view", "Reset the 3D view", "Reset view")
-                        .on_press_maybe(set(Setting::ResetView)),
-                ]
-                .spacing(10),
+                        .on_press_maybe(set(Setting::ResetView))
+                        .into(),
+                ]),
             ),
         )
     }
@@ -836,6 +912,7 @@ fn name(style: Style) -> &'static str {
         Style::Stick => "Stick",
         Style::Wireframe => "Wireframe",
         Style::SpaceFilling => "Space-filling",
+        Style::Ellipsoids => "Ellipsoids",
     }
 }
 
@@ -845,6 +922,7 @@ fn slug(style: Style) -> &'static str {
         Style::Stick => "stick",
         Style::Wireframe => "wireframe",
         Style::SpaceFilling => "space-filling",
+        Style::Ellipsoids => "ellipsoids",
     }
 }
 
@@ -914,3 +992,6 @@ mod tests;
 
 #[cfg(test)]
 mod crystal_tests;
+
+#[cfg(test)]
+mod ortep_tests;

@@ -1,5 +1,11 @@
 # Unreleased changes
 
+Under review: @Ameyanagi — CIF ORTEP thermal ellipsoids at 30/50/70/90%
+probability, principal-plane outlines and a shaded octant, plus Molecule only
+and optional solvent hiding. The same drawing exports to SVG, PNG and PDF;
+settings persist in native files (version 32 when used).
+[Issue #417, phase 4](https://github.com/Ameyanagi/ReShiki/issues/417), PR TBD.
+
 **Python package — under review in [PR #611](https://github.com/Ameyanagi/ReShiki/pull/611).** Draw, convert and analyze structures
 from scripts, Jupyter, pandas and Excel with the same headless Rust engine as the
 editor. Immutable objects support chained cleanup and styles; parallel batches

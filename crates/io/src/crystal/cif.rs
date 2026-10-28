@@ -555,6 +555,7 @@ pub(super) fn read(text: &str) -> Result<Structure, Error> {
     let reciprocal = lattice.reciprocal_lengths();
     let mut atoms: Vec<Atom> = vec![];
     for (f, element, charge, name, adp) in asymmetric {
+        let input = lattice.cartesian(f.map(wrap));
         for (r, t) in &operators {
             let moved: V3 = std::array::from_fn(|k| {
                 wrap(
@@ -563,7 +564,13 @@ pub(super) fn read(text: &str) -> Result<Structure, Error> {
                 )
             });
             let xyz = lattice.cartesian(moved);
-            if atoms.iter().any(|a| same_site(&lattice, a.xyz, xyz)) {
+            // A source position can be reached by identity (including whole
+            // cell translations) or a special-position symmetry operation.
+            // Keep the file's operator order and original deduplication
+            // winner; a later source record can promote a previous copy.
+            let asymmetric = same_site(&lattice, input, xyz);
+            if let Some(earlier) = atoms.iter_mut().find(|a| same_site(&lattice, a.xyz, xyz)) {
+                earlier.asymmetric |= asymmetric;
                 continue;
             }
             if atoms.len() >= MAX_ATOMS {
@@ -580,6 +587,7 @@ pub(super) fn read(text: &str) -> Result<Structure, Error> {
                     Adp::Aniso(u) => Adp::Aniso(rotate_adp(u, r, reciprocal)),
                     iso => iso,
                 }),
+                asymmetric,
             });
         }
     }

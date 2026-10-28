@@ -31,7 +31,7 @@ pub struct Crossing {
 }
 
 /// What an atom's site keeps from a crystal file besides its element and
-/// place: its label and its displacement parameters, for ORTEP ellipsoids.
+/// place: its label, displacement parameters and asymmetric-unit provenance.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Site {
     pub id: u64,
@@ -39,6 +39,11 @@ pub struct Site {
     pub label: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub adp: Option<Adp>,
+    /// A listed CIF input site, rather than a symmetry-generated packing
+    /// copy. Completing its connected molecule can require generated atoms.
+    /// Older files omit this flag and conservatively retain every molecule.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub asymmetric: bool,
 }
 
 /// Atomic displacement parameters in Å², as U (B values are converted).
@@ -157,6 +162,89 @@ pub(super) fn valid(cell: Option<&Cell>, sites: &[Site], ids: &HashSet<u64>) -> 
 /// Whether `doc` holds a crystal: a model with a unit cell.
 pub fn present(doc: &crate::document::Document) -> bool {
     doc.models.iter().any(|m| m.cell.is_some())
+}
+
+/// Atoms shown by a crystal's molecule-only view, without changing the
+/// document. Every finite connected molecule containing a listed CIF input
+/// site is kept whole; symmetry-related packing molecules are hidden.
+/// Extended networks keep their atoms in the unit cell. A model without
+/// asymmetric-unit provenance (including legacy native files) keeps all its
+/// molecules, since its input sites cannot be recovered reliably.
+///
+/// When `include_solvent` is false, a selected discrete component is hidden
+/// if it has fewer heavy atoms than the largest selected discrete component
+/// and at most eight heavy atoms. This size rule is a display convenience,
+/// not chemical solvent identification; equal-sized molecules remain shown.
+pub fn molecule_atoms(
+    doc: &crate::document::Document,
+    model: &super::Model3d,
+    include_solvent: bool,
+) -> HashSet<u64> {
+    let ids = model.ids();
+    let asymmetric: HashSet<_> = model
+        .sites
+        .iter()
+        .filter(|site| site.asymmetric && ids.contains(&site.id))
+        .map(|site| site.id)
+        .collect();
+    let mut neighbors: std::collections::HashMap<u64, Vec<u64>> = std::collections::HashMap::new();
+    let mut connect = |a, b| {
+        if ids.contains(&a) && ids.contains(&b) {
+            neighbors.entry(a).or_default().push(b);
+            neighbors.entry(b).or_default().push(a);
+        }
+    };
+    for bond in &doc.bonds {
+        connect(bond.a, bond.b);
+    }
+    let mut network = HashSet::new();
+    if let Some(cell) = &model.cell {
+        for crossing in &cell.crossing {
+            connect(crossing.a, crossing.b);
+            network.extend([crossing.a, crossing.b]);
+        }
+    }
+    let heavy: HashSet<_> = doc
+        .atoms
+        .iter()
+        .filter(|atom| ids.contains(&atom.id) && atom.element != "H")
+        .map(|atom| atom.id)
+        .collect();
+    let mut visited = HashSet::new();
+    let mut components = vec![];
+    for atom in &model.atoms {
+        if !visited.insert(atom.id) {
+            continue;
+        }
+        let mut members = vec![];
+        let mut pending = vec![atom.id];
+        while let Some(id) = pending.pop() {
+            members.push(id);
+            for &other in neighbors.get(&id).into_iter().flatten() {
+                if visited.insert(other) {
+                    pending.push(other);
+                }
+            }
+        }
+        let extended = members.iter().any(|id| network.contains(id));
+        if extended || asymmetric.is_empty() || members.iter().any(|id| asymmetric.contains(id)) {
+            let heavy_count = members.iter().filter(|id| heavy.contains(id)).count();
+            components.push((members, extended, heavy_count));
+        }
+    }
+    let largest = components
+        .iter()
+        .filter(|(_, extended, _)| !extended)
+        .map(|(_, _, heavy_count)| *heavy_count)
+        .max()
+        .unwrap_or(0);
+    components
+        .into_iter()
+        .filter(|(_, extended, heavy_count)| {
+            include_solvent || *extended || *heavy_count == largest || *heavy_count > 8
+        })
+        .flat_map(|(members, _, _)| members)
+        .collect()
 }
 
 /// Preserve source provenance before a live crystal model can be discarded.
