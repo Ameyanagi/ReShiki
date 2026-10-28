@@ -111,6 +111,10 @@ impl App {
             return;
         };
         self.tab.busy = false;
+        #[cfg(target_arch = "wasm32")]
+        if matches!(job.kind, Job::ImportFile) {
+            self.tab.file_handle = None;
+        }
         #[cfg(any(windows, target_os = "linux"))]
         if matches!(job.kind, Job::ImportFile) {
             self.desktop_import_finished();
@@ -180,6 +184,10 @@ impl App {
         }
         let response = match result {
             Err(e) => {
+                #[cfg(target_arch = "wasm32")]
+                if matches!(kind, Job::ImportFile) {
+                    self.tab.file_handle = None;
+                }
                 self.error = true;
                 self.status = e;
                 return Task::none();

@@ -3,7 +3,12 @@
 Under review: @Ameyanagi — browser canvas touch drawing, pinch zoom, two-finger
 pan and long-press context menus, plus a canvas label and status announcements
 for screen readers. [Issue #435](https://github.com/Ameyanagi/ReShiki/issues/435),
-PR number TBD.
+[PR #610](https://github.com/Ameyanagi/ReShiki/pull/610).
+
+Under review: @Ameyanagi — Browser Save updates the opened file in Chromium,
+and Save As offers a file name and location. Download fallbacks keep the edited
+marker; opening the same file handle returns to its tab. Remaining browser file
+work for [issue #428](https://github.com/Ameyanagi/ReShiki/issues/428), [PR #612](https://github.com/Ameyanagi/ReShiki/pull/612).
 
 Under review: @Ameyanagi — Linux desktop launchers can associate ReShiki windows
 with their launcher and icon in [PR #598](https://github.com/Ameyanagi/ReShiki/pull/598).

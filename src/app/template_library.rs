@@ -683,14 +683,16 @@ impl App {
         // Recovery completion and update_front can both try to finish exit.
         // Keep their gate held until this one native warning is dismissed.
         self.templates.pending_warning = Some(serial);
-        if super::prompt::IN_APP {
+        #[cfg(target_arch = "wasm32")]
+        {
             self.prompt = Some(super::prompt::Prompt::Notice {
                 title: WARNING_TITLE.into(),
                 text: warning,
                 then: Box::new(Message::Templates(Action::WarningAcknowledged(serial))),
             });
-            return Some(Task::none());
+            Some(Task::none())
         }
+        #[cfg(not(target_arch = "wasm32"))]
         Some(acknowledge_close_warning(serial, warning))
     }
     pub(super) fn template_warning_acknowledged(&mut self, serial: u64) -> Task<Message> {
@@ -980,6 +982,7 @@ const WARNING_TITLE: &str = "Templates saved with a warning";
 
 /// The inspector notice would disappear on close; retain the successful save
 /// and let its existing close/restart intent continue after a native warning.
+#[cfg(not(target_arch = "wasm32"))]
 fn acknowledge_close_warning(serial: u64, warning: String) -> Task<Message> {
     iced::window::latest().then(move |window| {
         let dialog = rfd::AsyncMessageDialog::new()
@@ -989,8 +992,6 @@ fn acknowledge_close_warning(serial: u64, warning: String) -> Task<Message> {
             .set_buttons(rfd::MessageButtons::Ok);
         let acknowledged = move |_| Message::Templates(Action::WarningAcknowledged(serial));
         match window {
-            // Browser dialogs have no parent window to attach to.
-            #[cfg(not(target_arch = "wasm32"))]
             Some(id) => iced::window::run(id, move |window| dialog.set_parent(&window).show())
                 .then(move |answer| Task::perform(answer, acknowledged)),
             _ => Task::perform(dialog.show(), acknowledged),

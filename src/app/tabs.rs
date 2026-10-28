@@ -127,6 +127,23 @@ fn elide(name: &str, width: f32) -> String {
 }
 
 impl App {
+    #[cfg(target_arch = "wasm32")]
+    pub(super) fn browser_file_handles(&self) -> Vec<(TabId, wasm_bindgen::JsValue)> {
+        self.strip()
+            .filter_map(|tab| tab.file_handle.clone().map(|handle| (tab.id, handle)))
+            .collect()
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(super) fn open_browser_duplicate(&mut self, duplicate: Option<TabId>) -> bool {
+        let Some(index) = duplicate.and_then(|id| self.tab_index(id)) else {
+            return false;
+        };
+        self.select_tab(index);
+        self.status = format!("{} is already open", self.document_name());
+        true
+    }
+
     /// Every tab in strip order.
     pub(super) fn strip(&self) -> impl Iterator<Item = &DocumentTab> {
         let (before, after) = self
@@ -527,8 +544,8 @@ impl App {
     /// Makes room in front for an opened file, or brings the tab that already
     /// shows it to the front. Returns whether to go on opening it.
     pub(super) fn open_target(&mut self, path: Option<&Path>) -> bool {
-        // The browser hands over bare file names, which do not identify a
-        // file: two different Drawing.rsk files must both open.
+        // Browser duplicates are checked by handle before FilePrepared.
+        // Bare names cannot identify two different Drawing.rsk files.
         let open = path
             .filter(|_| !cfg!(target_arch = "wasm32"))
             .and_then(|path| {
