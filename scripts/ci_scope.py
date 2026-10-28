@@ -23,6 +23,16 @@ def needs_native(paths):
     )
 
 
+# The geometry matrix tests crates/ and native/, which never build the app or JS packages.
+APP_ONLY_PREFIXES = ("src/", "packages/", "integrations/", "docs/", "website/")
+
+
+def needs_geometry(paths):
+    return not paths or any(
+        path not in WEB_FILES and not path.startswith(APP_ONLY_PREFIXES) for path in paths
+    )
+
+
 def changed_paths(event_name, event):
     if event_name == "pull_request":
         base = event.get("pull_request", {}).get("base", {}).get("sha", "")
@@ -46,10 +56,16 @@ def main():
     event_name = os.environ.get("GITHUB_EVENT_NAME", "")
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
     live = event_name == "schedule" or os.environ.get("CI_LIVE_REFERENCE") == "true"
-    native = live or needs_native(changed_paths(event_name, event))
-    print(f"Native and golden checks: {native}; live RDKit comparisons: {live}")
+    paths = changed_paths(event_name, event)
+    native = live or needs_native(paths)
+    geometry = live or needs_geometry(paths)
+    print(
+        f"Native and golden checks: {native}; geometry: {geometry}; live RDKit comparisons: {live}"
+    )
     with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
-        output.write(f"native={str(native).lower()}\nlive={str(live).lower()}\n")
+        output.write(
+            f"native={str(native).lower()}\ngeometry={str(geometry).lower()}\nlive={str(live).lower()}\n"
+        )
 
 
 if __name__ == "__main__":
