@@ -305,15 +305,51 @@ impl App {
         let position = self.tab.camera.screen(state.position, paper);
         let size = (self.tab.caption_format.style.size() * self.tab.camera.zoom).clamp(12., 56.);
         let natural = reshiki::typography::layout(&self.tab.caption, &self.tab.caption_format);
-        let old = state.original.as_ref().map(|a| a.size().0).unwrap_or(0.);
+        let old = state
+            .original
+            .as_ref()
+            .map(Annotation::size)
+            .unwrap_or_default();
+        let condition_arrow = state
+            .original
+            .as_ref()
+            .and_then(|original| {
+                let label = self
+                    .tab
+                    .doc
+                    .arrow_labels
+                    .iter()
+                    .find(|label| label.annotation == original.id)?;
+                self.tab
+                    .doc
+                    .arrows
+                    .iter()
+                    .find(|arrow| arrow.id == label.arrow)
+            })
+            .map(|arrow| {
+                let mid = self
+                    .tab
+                    .camera
+                    .screen(arrow.start.lerp(arrow.end, 0.5), paper);
+                iced::Point::new(paper.x + mid.x, paper.y + mid.y)
+            });
         let complex = complex_format(&self.tab.caption_format) && self.viewport.height >= 240.;
-        let extra = if complex { 120. } else { 40. };
+        let extra = match (complex, condition_arrow.is_some()) {
+            (false, _) => 40.,
+            (true, false) => 120.,
+            // Include the preview, footer and outer padding in the fixed popup.
+            (true, true) => 124.,
+        };
         let bounds = editor_bounds(
             self.viewport,
-            iced::Point::new(paper.x + position.x - 8., paper.y + position.y - 8.),
-            natural.width.max(old) * self.tab.camera.zoom + 36.,
+            iced::Rectangle::new(
+                iced::Point::new(paper.x + position.x, paper.y + position.y),
+                iced::Size::new(old.0 * self.tab.camera.zoom, old.1 * self.tab.camera.zoom),
+            ),
+            natural.width.max(old.0) * self.tab.camera.zoom + 36.,
             (natural.height * self.tab.camera.zoom + 20.).max(size * 1.5 + 16.),
             extra,
+            condition_arrow,
         );
         let x = bounds.x;
         let y = bounds.y;
@@ -512,6 +548,12 @@ impl App {
                 },
             )
         });
+        let popup = if condition_arrow.is_some() {
+            // Placement uses the full surface, including the formatting preview.
+            popup.height(bounds.height)
+        } else {
+            popup
+        };
         stack![
             base,
             mouse_area(
@@ -692,13 +734,28 @@ fn reveal_label(camera: crate::canvas::Camera, viewport: iced::Size, label: &Ann
 }
 fn editor_bounds(
     viewport: iced::Size,
-    anchor: iced::Point,
+    label: iced::Rectangle,
     width: f32,
     height: f32,
     extra: f32,
+    condition_arrow: Option<iced::Point>,
 ) -> iced::Rectangle {
     let width = width.max(240.).min((viewport.width - 16.).max(24.));
     let height = (height.max(60.) + extra).min((viewport.height - 16.).max(24.));
+    let anchor = if let Some(arrow) = condition_arrow {
+        let away = label.center() - arrow;
+        let normal = away / away.x.hypot(away.y);
+        // Separate the entire popup from the label along the arrow's normal.
+        // This also puts vertical-arrow editors to the left or right.
+        let clearance = ((label.width + width) * normal.x.abs()
+            + (label.height + height) * normal.y.abs())
+            / 2.
+            + 8.;
+        let center = label.center() + normal * clearance;
+        iced::Point::new(center.x - width / 2., center.y - height / 2.)
+    } else {
+        iced::Point::new(label.x - 8., label.y - 8.)
+    };
     iced::Rectangle::new(
         iced::Point::new(
             anchor.x.clamp(8., (viewport.width - width - 8.).max(8.)),

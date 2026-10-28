@@ -1,11 +1,19 @@
 # Unreleased changes
 
-**Python package — under review (PR TBD).** Draw, convert and analyze structures
+**Python package — under review in [PR #611](https://github.com/Ameyanagi/ReShiki/pull/611).** Draw, convert and analyze structures
 from scripts, Jupyter, pandas and Excel with the same headless Rust engine as the
 editor. Immutable objects support chained cleanup and styles; parallel batches
 report individual row errors. [Issue #608](https://github.com/Ameyanagi/ReShiki/issues/608),
 [Python guide](python.md). PyPI publishing, six-platform release wheels, EMF and
 editable Office pictures are follow-ups.
+
+Under review: @Ameyanagi — imported drawings show their source filename in tabs
+and the window title while Save still asks for a native drawing destination
+([issue #601](https://github.com/Ameyanagi/ReShiki/issues/601), [PR #606](https://github.com/Ameyanagi/ReShiki/pull/606)).
+
+Under review: @Ameyanagi — Inline reaction-condition editors open away from the
+arrow, keeping the shaft and neighbouring structure visible where space permits.
+[Issue #602](https://github.com/Ameyanagi/ReShiki/issues/602); [PR #607](https://github.com/Ameyanagi/ReShiki/pull/607).
 
 Under review: @Ameyanagi — Linux desktop launchers can associate ReShiki windows
 with their launcher and icon in [PR #598](https://github.com/Ameyanagi/ReShiki/pull/598).

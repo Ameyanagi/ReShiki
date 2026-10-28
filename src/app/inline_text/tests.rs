@@ -343,11 +343,60 @@ fn popup_stays_in_view_at_document_edges_with_long_labels() {
         iced::Point::new(900., 800.),
     ] {
         for extra in [40., 120.] {
-            let bounds = editor_bounds(viewport, anchor, 4000., 1800., extra);
-            assert!(bounds.x >= 0. && bounds.y >= 0.);
-            assert!(bounds.x + bounds.width <= viewport.width);
-            assert!(bounds.y + bounds.height <= viewport.height);
-            assert!(bounds.height > extra);
+            for arrow in [None, Some(iced::Point::new(210., 180.))] {
+                let label = iced::Rectangle::new(anchor, iced::Size::new(80., 35.));
+                let bounds = editor_bounds(viewport, label, 4000., 1800., extra, arrow);
+                assert!(bounds.x >= 0. && bounds.y >= 0.);
+                assert!(bounds.x + bounds.width <= viewport.width);
+                assert!(bounds.y + bounds.height <= viewport.height);
+                assert!(bounds.height > extra);
+            }
+        }
+    }
+}
+
+#[test]
+fn condition_popups_stay_outside_the_label_and_arrow_when_space_permits() {
+    let viewport = iced::Size::new(1200., 900.);
+    let arrow = iced::Point::new(600., 450.);
+    let corners = |r: iced::Rectangle| {
+        [
+            r.position(),
+            iced::Point::new(r.x + r.width, r.y),
+            iced::Point::new(r.x, r.y + r.height),
+            iced::Point::new(r.x + r.width, r.y + r.height),
+        ]
+    };
+    // Both sides of horizontal, vertical and diagonal arrows at the repro zoom.
+    for (x, y) in [(0., 1.), (1., 0.), (0.6, 0.8), (0.8, -0.6)] {
+        for side in [-1., 1.] {
+            let normal = iced::Vector::new(x * side, y * side);
+            let center = arrow + normal * 100.;
+            let label = iced::Rectangle::new(
+                center - iced::Vector::new(30., 17.5) * 1.09,
+                iced::Size::new(60. * 1.09, 35. * 1.09),
+            );
+            for extra in [40., 124.] {
+                let bounds = editor_bounds(viewport, label, 100., 60., extra, Some(arrow));
+                let projection = |p: iced::Point| {
+                    let offset = p - arrow;
+                    offset.x * normal.x + offset.y * normal.y
+                };
+                let label_edge = corners(label)
+                    .map(projection)
+                    .into_iter()
+                    .reduce(f32::max)
+                    .unwrap();
+                for corner in corners(bounds) {
+                    assert!(projection(corner) >= label_edge + 7.99, "{bounds:?}");
+                }
+            }
+            let ordinary = editor_bounds(viewport, label, 100., 60., 40., None);
+            assert_eq!(
+                ordinary.position(),
+                label.position() - iced::Vector::new(8., 8.)
+            );
+            assert_eq!(ordinary.size(), iced::Size::new(240., 100.));
         }
     }
 }
@@ -383,6 +432,31 @@ fn text_tool_conditions_attach_to_an_arrow_and_sideways_drag_detaches() {
     let mid = arrow.start.lerp(arrow.end, 0.5);
     assert!((doc.annotations[0].position.x + width / 2. - mid.x).abs() < 1e-3);
     let attached = app.tab.doc.clone();
+
+    app.viewport = iced::Size::new(1000., 700.);
+    app.tab.camera.zoom = 1.09;
+    let camera = app.tab.camera;
+    begin(&mut app, Some(id));
+    type_text(&mut app, ", overnight");
+    let _ = app.update(Message::TextStyle(StyleChange::Underline(true)));
+    let _ = app.with_inline_text(Space::new().into());
+    assert_eq!(app.tab.doc, attached, "editing does not move the drawing");
+    assert_eq!(app.tab.camera.center, camera.center);
+    assert_eq!(app.tab.camera.zoom, camera.zoom);
+    let _ = app.update(Message::Escape);
+    assert_eq!(app.tab.doc, attached);
+    begin(&mut app, Some(id));
+    type_text(&mut app, ", overnight");
+    assert!(app.finish_inline(true));
+    assert_eq!(app.tab.doc.arrow_labels, attached.arrow_labels);
+    assert!(
+        app.tab.doc.arrows[0]
+            .start
+            .distance(app.tab.doc.arrows[0].end)
+            > attached.arrows[0].start.distance(attached.arrows[0].end)
+    );
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, attached);
 
     let _ = app.update(Message::Canvas(CanvasEdit::Move(vec![id], 1000., 0.)));
     assert!(app.tab.doc.arrow_labels.is_empty());

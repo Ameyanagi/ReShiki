@@ -102,10 +102,15 @@ jobs:
           Write-Host "Verified Actions runtime: $version ($node)"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install private compositor, software renderer and independent receiver
+        # A stalled mirror or package trigger otherwise holds the runner until the job timeout.
+        timeout-minutes: 10
+        env:
+          COMPOSITOR_PACKAGE: ${{ matrix.compositor == 'gnome' && 'gnome-shell' || 'sway' }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            gnome-shell sway wtype xdotool xvfb xauth dbus-x11 \
+          sudo rm -f /var/lib/man-db/auto-update
+          sudo apt-get update -o Acquire::Retries=3
+          sudo apt-get install -y --no-install-recommends -o Acquire::Retries=3 \
+            "$COMPOSITOR_PACKAGE" wtype xdotool xvfb xauth dbus-x11 \
             python3-gi gir1.2-gtk-4.0 mesa-vulkan-drivers fonts-dejavu-core \
             libegl1-mesa-dev libwayland-dev libxkbcommon-dev libfontconfig1-dev \
             libxcb-shape0-dev libxcb-xfixes0-dev libx11-dev libx11-xcb-dev \
@@ -114,6 +119,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: wayland-qa
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
           version: "0.13.5"
