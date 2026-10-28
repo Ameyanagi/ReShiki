@@ -50,7 +50,7 @@ async fn lazy_crystal_properties_keep_scope_and_ordinary_analysis() {
         .doc
         .add_atom("O", reshiki::document::Point::new(42., 0.));
     app.tab.doc.add_bond(carbon, oxygen, 1, "plain");
-    let mut model = Model3d::new(
+    let model = Model3d::new(
         &app.tab.doc,
         vec![
             Placed {
@@ -64,11 +64,15 @@ async fn lazy_crystal_properties_keep_scope_and_ordinary_analysis() {
         ],
         vec![],
         ForceField::Mmff94s,
+    )
+    .with_cell(
+        &app.tab.doc,
+        Some(Cell {
+            vectors: [[5., 0., 0.], [0., 5., 0.], [0., 0., 5.]],
+            crossing: vec![],
+        }),
+        vec![],
     );
-    model.cell = Some(Cell {
-        vectors: [[5., 0., 0.], [0., 5., 0.], [0., 0., 5.]],
-        crossing: vec![],
-    });
     app.tab.doc.models.push(model);
     for selected in [vec![], vec![carbon, oxygen]] {
         app.tab.selected = selected;
