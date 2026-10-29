@@ -5,8 +5,8 @@
 //! A model links to its molecule by atom IDs and never changes chemistry,
 //! identities or the 2D layout, which stays for switching back. Its frame is
 //! placed relative to the molecule's 2D centre, so moving, aligning and copying
-//! the atoms carries it along. A chemical edit to a molecule drops its conformer
-//! instead of repairing it; a molecule shown in 3D then shows its 2D drawing.
+//! the atoms carries it along. Chemical edits leave generated geometry intact
+//! and mark it stale until the user updates the conformer.
 //! Crystal models retain their cell for element- or charge-only substitutions.
 //! Chemical formats (MOL, CDX/CDXML, SMILES) keep the 2D atoms and omit models.
 //!
@@ -15,6 +15,7 @@
 mod contact;
 pub mod crystal;
 mod ellipsoids;
+mod polish;
 use crate::scene::Contact;
 use crate::{
     depth_appearance::Scope,
@@ -24,6 +25,8 @@ use crate::{
 pub use crystal::{Adp, Cell, Crossing, Site};
 use ellipsoids::Ellipsoid;
 pub use ellipsoids::Probability;
+pub(crate) use polish::deserialize_models;
+pub use polish::{Generated, Labels};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -127,7 +130,8 @@ pub enum ForceField {
     Uff,
 }
 
-/// A drawing atom's conformer position in ångström.
+/// A conformer position in ångström. Input uses drawing IDs; stored generated
+/// geometry uses local indices, with live identity in `Generated::sources`.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Placed {
     pub id: u64,
@@ -144,11 +148,27 @@ pub struct Hydrogen {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Model3d {
     pub display: Display,
-    /// Every atom of one connected molecule, or of several whole molecules
-    /// in a model read from a crystal or XYZ file.
+    /// Frozen conformer positions in geometry order. Generated atom IDs and
+    /// hydrogen parents are local geometry indices; imported models use live
+    /// drawing IDs. `geometry_sources` supplies the corresponding live atoms.
     pub atoms: Vec<Placed>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hydrogens: Vec<Hydrogen>,
+    /// Chemistry when this conformer was generated, as a stable 64-bit digest.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fingerprint: Option<String>,
+    /// The elements and bonds drawn by the stored geometry, including atoms
+    /// subsequently removed from the linked drawing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub generated: Option<Generated>,
+    /// Explicit live source membership, independent of the frozen geometry.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub linked_atoms: Vec<u64>,
+    /// Explicit import provenance for files without a cell or site metadata.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub file_geometry: bool,
+    #[serde(default, skip_serializing_if = "polish::is_zero")]
+    pub seed: i32,
     /// The unit cell of a crystal or periodic structure.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cell: Option<Cell>,
@@ -178,6 +198,8 @@ pub struct Model3d {
     pub include_solvent: bool,
     #[serde(default)]
     pub look: Look,
+    #[serde(default, skip_serializing_if = "Labels::is_none")]
+    pub labels: Labels,
     #[serde(default = "depth_fade")]
     pub depth_fade: f32,
     #[serde(default = "perspective")]
@@ -271,7 +293,7 @@ impl Drawn {
             bonds: doc
                 .bonds
                 .iter()
-                .filter(|b| ids.contains(&b.a))
+                .filter(|b| ids.contains(&b.a) && ids.contains(&b.b))
                 .map(|b| {
                     let stereo = b.stereo.clone();
                     (
@@ -296,28 +318,138 @@ impl Drawn {
         }
     }
 
+    /// Combine replaced models' saved layouts in the current drawing frame.
+    pub fn combined<'a>(
+        doc: &Document,
+        model: &Model3d,
+        sources: impl IntoIterator<Item = &'a Model3d>,
+    ) -> Option<Self> {
+        let mut combined = Self {
+            atoms: vec![],
+            bonds: vec![],
+            depth_appearance: vec![],
+            at: layout_center(doc, model),
+        };
+        let mut atoms = HashSet::new();
+        let mut bonds = HashSet::new();
+        for source in sources {
+            let Some(drawn) = &source.drawn else {
+                continue;
+            };
+            let (dx, dy) = drawn
+                .at
+                .zip(layout_center(doc, source))
+                .map_or((0., 0.), |(at, now)| (now.x - at.x, now.y - at.y));
+            combined
+                .atoms
+                .extend(drawn.atoms.iter().filter(|a| atoms.insert(a.0)).map(
+                    |(id, position, depth, stereo)| {
+                        (*id, position.offset(dx, dy), *depth, stereo.clone())
+                    },
+                ));
+            combined.bonds.extend(
+                drawn
+                    .bonds
+                    .iter()
+                    .filter(|b| bonds.insert((b.0.min(b.1), b.0.max(b.1))))
+                    .cloned(),
+            );
+            combined
+                .depth_appearance
+                .extend(drawn.depth_appearance.iter().cloned());
+        }
+        if combined.atoms.is_empty() {
+            return None;
+        }
+        // Unflattened models and newly linked atoms have no saved layout.
+        // Keep their current drawing too, before a later flatten reuses it.
+        let current = Self::of(doc, model);
+        let missing: HashMap<_, _> = current
+            .atoms
+            .iter()
+            .filter(|a| !atoms.contains(&a.0))
+            .map(|a| (a.0, a.0))
+            .collect();
+        combined.atoms.extend(
+            current
+                .atoms
+                .into_iter()
+                .filter(|a| missing.contains_key(&a.0)),
+        );
+        combined.bonds.extend(
+            current
+                .bonds
+                .into_iter()
+                .filter(|b| bonds.insert((b.0.min(b.1), b.0.max(b.1)))),
+        );
+        combined
+            .depth_appearance
+            .extend(crate::depth_appearance::remap(
+                &current.depth_appearance,
+                &missing,
+            ));
+        Some(combined)
+    }
+
     /// Put this layout back on the drawing, moved as far as the molecule
     /// moved since it was kept.
-    fn restore(self, doc: &mut Document, model: &Model3d) {
+    fn restore(mut self, doc: &mut Document, model: &Model3d) {
+        let linked = model.ids();
+        // Restore coordinates without reverting chemistry edited before an
+        // Update, which can make the model current while keeping this layout.
+        let current = polish::current_stereo(doc, model);
+        let atoms: HashMap<_, _> = current
+            .atoms
+            .into_iter()
+            .map(|(id, _, _, stereo)| (id, stereo))
+            .collect();
+        let bonds: HashMap<_, _> = current
+            .bonds
+            .into_iter()
+            .map(|bond| ((bond.0, bond.1), bond))
+            .collect();
+        for (id, _, _, stereo) in &mut self.atoms {
+            if let Some(current) = atoms.get(id) {
+                *stereo = current.clone();
+            }
+        }
+        for bond in &mut self.bonds {
+            if let Some(current) = bonds.get(&(bond.0, bond.1)) {
+                (bond.2, bond.3, bond.4) = (current.2.clone(), current.3.clone(), current.4);
+            }
+        }
         let (dx, dy) = match (self.at, layout_center(doc, model)) {
             (Some(at), Some(now)) => (now.x - at.x, now.y - at.y),
             _ => (0., 0.),
         };
-        let ids: Vec<_> = self.atoms.iter().map(|a| a.0).collect();
-        for (id, position, depth, stereo) in self.atoms {
+        let ids: Vec<_> = self
+            .atoms
+            .iter()
+            .map(|a| a.0)
+            .filter(|id| linked.contains(id))
+            .collect();
+        for (id, position, depth, stereo) in
+            self.atoms.into_iter().filter(|a| linked.contains(&a.0))
+        {
             if let Some(atom) = doc.atom_mut(id) {
                 let position = position.offset(dx, dy);
                 (atom.position, atom.depth, atom.stereo) = (position, depth, stereo);
             }
         }
-        for (a, b, stereo, atoms, authoritative) in self.bonds {
+        for (a, b, stereo, atoms, authoritative) in self
+            .bonds
+            .into_iter()
+            .filter(|b| linked.contains(&b.0) && linked.contains(&b.1))
+        {
             if let Some(bond) = doc.bonds.iter_mut().find(|x| x.a == a && x.b == b) {
                 (bond.stereo, bond.stereo_atoms) = (stereo, atoms);
                 bond.stereo_authoritative = authoritative;
             }
         }
         crate::depth_appearance::clear(doc, &ids);
-        doc.depth_appearance.extend(self.depth_appearance);
+        let own: HashMap<_, _> = linked.into_iter().map(|id| (id, id)).collect();
+        doc.depth_appearance
+            .extend(crate::depth_appearance::remap(&self.depth_appearance, &own));
     }
 
     fn remap(&mut self, mapping: &HashMap<u64, u64>) -> Option<()> {
@@ -447,10 +579,16 @@ impl Model3d {
         hydrogens: Vec<Hydrogen>,
         force_field: ForceField,
     ) -> Self {
+        let linked_atoms = atoms.iter().map(|a| a.id).collect();
         let mut model = Self {
             display: Display::TwoD,
             atoms,
             hydrogens,
+            fingerprint: None,
+            generated: None,
+            linked_atoms,
+            file_geometry: false,
+            seed: 0,
             cell: None,
             sites: vec![],
             notes: vec![],
@@ -462,6 +600,7 @@ impl Model3d {
             molecule_only: false,
             include_solvent: true,
             look: Look::default(),
+            labels: Labels::default(),
             depth_fade: depth_fade(),
             perspective: perspective(),
             show_hydrogens: Hydrogens::default(),
@@ -474,6 +613,7 @@ impl Model3d {
             morph: None,
             turning: false,
         };
+        model.capture_generated(doc);
         model.fit(doc);
         model
     }
@@ -483,6 +623,23 @@ impl Model3d {
     pub fn with_cell(mut self, doc: &Document, cell: Option<Cell>, sites: Vec<Site>) -> Self {
         self.cell = cell;
         self.sites = sites;
+        self.file_geometry = self.cell.is_none() && self.sites.is_empty();
+        self.fingerprint = None;
+        if let Some(generated) = self.generated.take() {
+            for hydrogen in &mut self.hydrogens {
+                if let Some(source) = generated
+                    .sources
+                    .get(hydrogen.parent as usize)
+                    .copied()
+                    .flatten()
+                {
+                    hydrogen.parent = source;
+                }
+            }
+            for (atom, source) in self.atoms.iter_mut().zip(self.linked_atoms.iter()) {
+                atom.id = *source;
+            }
+        }
         self.fit(doc);
         self
     }
@@ -580,7 +737,7 @@ impl Model3d {
                 .iter()
                 .filter_map(|b| Some((scaled(at(b.a)?), scaled(at(b.b)?))))
                 .collect();
-            let labels = Labels {
+            let labels = CrystalLabels {
                 atoms: &atoms,
                 bonds,
                 stubs: &stubs,
@@ -596,9 +753,10 @@ impl Model3d {
             .map(|(_, p)| sub(*p, center))
             .collect();
         let drawn: Vec<_> = self
-            .atoms
-            .iter()
-            .filter_map(|placed| doc.atom(placed.id))
+            .geometry_sources()
+            .into_iter()
+            .flatten()
+            .filter_map(|id| doc.atom(id))
             .filter(|atom| atom.element != "H")
             .map(|atom| atom.position)
             .collect();
@@ -625,19 +783,20 @@ impl Model3d {
     }
 
     pub fn contains(&self, id: u64) -> bool {
-        self.atoms.iter().any(|a| a.id == id)
+        self.linked_atoms.contains(&id)
     }
 
     fn ids(&self) -> HashSet<u64> {
-        self.atoms.iter().map(|a| a.id).collect()
+        self.source_ids().into_iter().collect()
     }
 
     /// Element and position of each atom, then each force-field hydrogen.
-    fn points<'a>(&self, doc: &'a Document) -> Option<Vec<(&'a str, [f32; 3])>> {
+    fn points<'a>(&'a self, doc: &'a Document) -> Option<Vec<(&'a str, [f32; 3])>> {
         let mut points = self
             .atoms
             .iter()
-            .map(|p| Some((doc.atom(p.id)?.element.as_str(), p.xyz)))
+            .enumerate()
+            .map(|(i, p)| Some((self.symbol(doc, i)?, p.xyz)))
             .collect::<Option<Vec<_>>>()?;
         points.extend(self.hydrogens.iter().map(|h| ("H", h.xyz)));
         Some(points)
@@ -646,8 +805,11 @@ impl Model3d {
     /// Whether each of [`Self::points`] is drawn with these hydrogens shown.
     fn shown(&self, doc: &Document) -> Vec<bool> {
         let polar = |id: u64| {
-            doc.atom(id)
-                .is_some_and(|a| matches!(a.element.as_str(), "N" | "O" | "S"))
+            self.atoms
+                .iter()
+                .position(|a| a.id == id)
+                .and_then(|i| self.symbol(doc, i))
+                .is_some_and(|s| matches!(s, "N" | "O" | "S"))
         };
         let keep = |hydrogen: bool, on_polar: &dyn Fn() -> bool| {
             !hydrogen
@@ -658,12 +820,17 @@ impl Model3d {
                 }
         };
         let crossing = self.cell.iter().flat_map(|c| &c.crossing);
-        let atoms = self.atoms.iter().map(|p| {
-            let hydrogen = doc.atom(p.id).is_some_and(|a| a.element == "H");
+        let bonds = self.geometry_bonds(doc);
+        let atoms = self.atoms.iter().enumerate().map(|(i, p)| {
+            let hydrogen = self.symbol(doc, i) == Some("H");
             keep(hydrogen, &|| {
                 let bonded = |a: u64, b: u64| (a == p.id && polar(b)) || (b == p.id && polar(a));
-                doc.bonds.iter().any(|b| bonded(b.a, b.b))
-                    || crossing.clone().any(|c| bonded(c.a, c.b))
+                bonds.iter().any(|[a, b]| {
+                    self.atoms
+                        .get(*a)
+                        .zip(self.atoms.get(*b))
+                        .is_some_and(|(a, b)| bonded(a.id, b.id))
+                }) || crossing.clone().any(|c| bonded(c.a, c.b))
             })
         });
         let hydrogens = self
@@ -681,11 +848,20 @@ impl Model3d {
 
     /// Map every ID; `None` when one is missing.
     pub fn remap(&mut self, mapping: &HashMap<u64, u64>) -> Option<()> {
-        for atom in &mut self.atoms {
-            atom.id = *mapping.get(&atom.id)?;
+        for id in &mut self.linked_atoms {
+            *id = *mapping.get(id)?;
         }
-        for h in &mut self.hydrogens {
-            h.parent = *mapping.get(&h.parent)?;
+        if let Some(generated) = &mut self.generated {
+            for id in generated.sources.iter_mut().flatten() {
+                *id = *mapping.get(id)?;
+            }
+        } else {
+            for atom in &mut self.atoms {
+                atom.id = *mapping.get(&atom.id)?;
+            }
+            for hydrogen in &mut self.hydrogens {
+                hydrogen.parent = *mapping.get(&hydrogen.parent)?;
+            }
         }
         for c in self.cell.iter_mut().flat_map(|c| &mut c.crossing) {
             c.a = *mapping.get(&c.a)?;
@@ -703,7 +879,7 @@ impl Model3d {
 
 /// The model showing this atom's molecule, in any display.
 pub fn model_of(doc: &Document, id: u64) -> Option<&Model3d> {
-    doc.models.iter().find(|m| m.contains(id))
+    doc.models.iter().find(|model| model.contains(id))
 }
 
 /// Whether this atom is drawn as part of a 3D model instead of in 2D.
@@ -802,7 +978,7 @@ struct View<'a> {
     wire: f32,
 }
 impl View<'_> {
-    fn new<'a>(doc: &'a Document, model: &Model3d) -> Option<View<'a>> {
+    fn new<'a>(doc: &'a Document, model: &'a Model3d) -> Option<View<'a>> {
         let center = layout_center(doc, model)?;
         let points = model.points(doc)?;
         let mut shown = model.shown(doc);
@@ -930,12 +1106,19 @@ impl View<'_> {
                 ]
             })
         };
-        let starts = model
-            .atoms
+        let sources = model.geometry_sources();
+        let parents = model.hydrogens.iter().map(|h| {
+            if model.generated.is_some() {
+                sources.get(h.parent as usize).copied().flatten()
+            } else {
+                Some(h.parent)
+            }
+        });
+        let starts = sources
             .iter()
-            .map(|a| a.id)
-            .chain(model.hydrogens.iter().map(|h| h.parent))
-            .map(flat);
+            .copied()
+            .chain(parents)
+            .map(|source| source.map_or([0.; 3], flat));
         for (p, start) in self.rotated.iter_mut().zip(starts) {
             *p = mix(start, *p, e);
         }
@@ -974,12 +1157,13 @@ pub fn viewed(doc: &Document, model: &Model3d) -> Vec<(u64, [f32; 3])> {
     model
         .atoms
         .iter()
-        .map(|a| (a.id, rotate(model.rotation, sub(a.xyz, center))))
+        .zip(model.geometry_sources())
+        .filter_map(|(a, source)| Some((source?, rotate(model.rotation, sub(a.xyz, center)))))
         .collect()
 }
 
 /// The frame's top-left and bottom-right corners in drawing units: a square
-/// that holds the model in every rotation, or `None` while an atom is missing.
+/// that holds the model in every rotation, or `None` without a linked source.
 pub fn frame(doc: &Document, model: &Model3d) -> Option<(Point, Point)> {
     Some(View::new(doc, model)?.bounds())
 }
@@ -998,17 +1182,16 @@ fn layout_center(doc: &Document, model: &Model3d) -> Option<Point> {
 
 fn layout_bounds(doc: &Document, model: &Model3d) -> Option<(Point, Point)> {
     let mut points = model
-        .atoms
-        .iter()
-        .map(|p| doc.atom(p.id).map(|a| a.position));
-    let first = points.next()??;
-    points.try_fold((first, first), |(lo, hi), p| {
-        let p = p?;
-        Some((
+        .source_ids()
+        .into_iter()
+        .filter_map(|id| doc.atom(id).map(|a| a.position));
+    let first = points.next()?;
+    Some(points.fold((first, first), |(lo, hi), p| {
+        (
             Point::new(lo.x.min(p.x), lo.y.min(p.y)),
             Point::new(hi.x.max(p.x), hi.y.max(p.y)),
-        ))
-    })
+        )
+    }))
 }
 
 /// Show the molecule of model `index` as `display`; returns whether it changed.
@@ -1062,9 +1245,14 @@ pub fn set_display(doc: &mut Document, index: usize, display: Display) -> bool {
 }
 
 /// The document version a drawing's models need: none without models,
-/// [`crate::document::CRYSTALS`] for a crystal's cell or atom sites, else
+/// [`crate::document::MODEL_POLISH`] for generated chemistry or label settings,
+/// [`crate::document::ORTEP`] for thermal ellipsoid settings,
+/// [`crate::document::CRYSTALS`] for imported cells or sites, else
 /// [`crate::document::MODELS_3D`].
 pub fn required_version(models: &[Model3d]) -> Option<u32> {
+    if models.iter().any(Model3d::needs_polish_version) {
+        return Some(crate::document::MODEL_POLISH);
+    }
     if models.iter().any(Model3d::needs_ortep) {
         return Some(crate::document::ORTEP);
     }
@@ -1131,26 +1319,25 @@ pub fn keep_place(doc: &mut Document, index: usize, origin: Point) {
 /// The selected molecule: the whole connected component of the selected atoms
 /// when they all belong to one, in document order.
 pub fn selected_molecule(doc: &Document, selected: &[u64]) -> Option<Vec<u64>> {
-    let mut atoms = doc
+    let atoms: Vec<_> = doc
         .expand_abbreviation_selection(selected)
         .into_iter()
-        .filter(|id| doc.atom(*id).is_some());
-    let first = atoms.next()?;
-    // A model of several molecules, read from a crystal file, is one.
-    let component = match model_of(doc, first) {
-        Some(model) if model.atoms.len() > 1 => doc
-            .atoms
-            .iter()
-            .map(|a| a.id)
-            .filter(|id| model.contains(*id))
-            .collect(),
-        _ => crate::molecule_names::component(doc, first),
-    };
-    // A selection spanning molecules is common in large drawings. Stop at
-    // its first atom outside the component instead of resolving every ID.
-    std::iter::once(first)
-        .chain(atoms)
-        .all(|id| component.contains(&id))
+        .filter(|id| doc.atom(*id).is_some())
+        .collect();
+    let first = *atoms.first()?;
+    // A model retains its own source links until Update, including after a
+    // split or join, so its frame still selects that model's atoms.
+    let component = doc
+        .models
+        .iter()
+        .find(|model| atoms.iter().all(|id| model.contains(*id)))
+        .map_or_else(
+            || crate::molecule_names::component(doc, first),
+            |model| model.linked_ids(doc),
+        );
+    atoms
+        .iter()
+        .all(|id| component.contains(id))
         .then_some(component)
 }
 
@@ -1166,7 +1353,7 @@ pub fn whole_molecule(doc: &Document, selected: &[u64]) -> Option<Vec<u64>> {
 
 /// The atoms of the models whose frame contains `p`, topmost first.
 pub fn frame_hit(doc: &Document, p: Point) -> Option<Vec<u64>> {
-    model_at(doc, p, 0.).map(|m| m.atoms.iter().map(|a| a.id).collect())
+    model_at(doc, p, 0.).map(|m| m.linked_ids(doc))
 }
 
 /// The topmost shown model whose frame, shrunk by `inset` on every side,
@@ -1354,18 +1541,47 @@ pub fn validate(doc: &Document) -> Result<(), String> {
             crate::document::ORTEP
         ));
     }
+    if doc.version < crate::document::MODEL_POLISH
+        && doc.models.iter().any(Model3d::needs_polish_version)
+    {
+        return Err(format!(
+            "3D model polish needs document version {} or later",
+            crate::document::MODEL_POLISH
+        ));
+    }
     let finite = |p: &[f32; 3]| p.iter().all(|v| v.is_finite() && v.abs() <= MAX_COORDINATE);
-    let mut owned = HashSet::new();
     for m in &doc.models {
-        let ids = m.ids();
+        let ids: HashSet<_> = m.atoms.iter().map(|a| a.id).collect();
+        let linked = m.source_ids();
         let norm = m.rotation.iter().map(|v| v * v).sum::<f32>();
         if m.atoms.is_empty()
             || m.atoms.len() > MAX_ATOMS
             || m.hydrogens.len() > m.atoms.len().saturating_mul(4)
             || ids.len() != m.atoms.len()
-            || m.atoms
-                .iter()
-                .any(|a| !owned.insert(a.id) || !finite(&a.xyz))
+            || m.atoms.iter().any(|a| !finite(&a.xyz))
+            || linked.is_empty()
+            || linked.len() > MAX_ATOMS
+            || linked.iter().collect::<HashSet<_>>().len() != linked.len()
+            || m.seed < 0
+            || m.fingerprint
+                .as_ref()
+                .is_some_and(|s| s.len() != 16 || !s.bytes().all(|b| b.is_ascii_hexdigit()))
+            || m.generated.as_ref().is_some_and(|g| {
+                g.sources.len() != m.atoms.len()
+                    || g.sources.iter().flatten().any(|id| !linked.contains(id))
+                    || m.atoms
+                        .iter()
+                        .enumerate()
+                        .any(|(index, a)| a.id != index as u64)
+                    || g.elements.len() != m.atoms.len()
+                    || g.elements
+                        .iter()
+                        .any(|s| s.is_empty() || s.len() > 64 || s.chars().any(char::is_control))
+                    || g.bonds.len() > MAX_ATOMS * 8
+                    || g.bonds
+                        .iter()
+                        .any(|[a, b]| a == b || *a >= m.atoms.len() || *b >= m.atoms.len())
+            })
             || m.hydrogens
                 .iter()
                 .any(|h| !ids.contains(&h.parent) || !finite(&h.xyz))
@@ -1385,11 +1601,12 @@ pub fn validate(doc: &Document) -> Result<(), String> {
             || !m.repeat.iter().all(|n| (1..=MAX_REPEAT).contains(n))
             || (m.cell.is_none() && !is_one_cell(&m.repeat))
             || m.drawn.as_ref().is_some_and(|d| {
-                d.atoms.len() != ids.len()
+                d.atoms.len() > linked.len()
+                    || d.atoms.iter().map(|a| a.0).collect::<HashSet<_>>().len() != d.atoms.len()
                     || d.at.is_some_and(|p| !p.is_finite())
-                    || d.atoms
-                        .iter()
-                        .any(|(id, p, z, _)| !ids.contains(id) || !p.is_finite() || !z.is_finite())
+                    || d.atoms.iter().any(|(id, p, z, _)| {
+                        !linked.contains(id) || !p.is_finite() || !z.is_finite()
+                    })
             })
         {
             return Err("Invalid 3D model".into());
@@ -1398,13 +1615,19 @@ pub fn validate(doc: &Document) -> Result<(), String> {
     Ok(())
 }
 
-/// Drop models that lost an atom. Validation tolerates them, so edits that
-/// remove atoms before reconciling stay valid; [`reconcile`] drops them too.
+/// Prune deleted source atoms from generated links, preserving their stored
+/// geometry while any source remains. Imported geometry retains its existing
+/// whole-structure deletion behavior.
 pub fn prune(doc: &mut Document) {
     crystal::mark_distance_bonds(doc);
     let present: HashSet<_> = doc.atoms.iter().map(|a| a.id).collect();
-    doc.models
-        .retain(|m| m.atoms.iter().all(|a| present.contains(&a.id)));
+    doc.models.retain_mut(|model| {
+        if model.is_file_derived() {
+            return model.atoms.iter().all(|a| present.contains(&a.id));
+        }
+        prune_sources(model, &present);
+        !model.linked_atoms.is_empty()
+    });
 }
 
 /// Whether the model's atoms are whole molecules: one connected molecule, or
@@ -1419,42 +1642,115 @@ fn whole(doc: &Document, model: &Model3d) -> bool {
         .all(|b| ids.contains(&b.a) == ids.contains(&b.b))
 }
 
-/// Drop a loaded file's models that are not one whole molecule. Unlike
-/// [`prune`], nothing is mid-edit here.
+/// Keep surviving generated sources across splits and joins. Imported models
+/// retain their whole-structure topology rule.
 pub fn retain_whole(doc: &mut Document) {
     crystal::mark_distance_bonds(doc);
     let models = std::mem::take(&mut doc.models);
-    doc.models = models.into_iter().filter(|m| whole(doc, m)).collect();
+    doc.models = models
+        .into_iter()
+        .filter(|model| {
+            if model.is_file_derived() {
+                whole(doc, model)
+            } else {
+                model.linked_atoms.iter().any(|id| doc.atom(*id).is_some())
+            }
+        })
+        .collect();
+    prune(doc);
 }
 
-/// Called in the same transaction as the edit. A model whose atoms are no
-/// longer exactly one molecule, or whose molecule changed chemically since
-/// `before` (element, charge, bonds, stereo, …; not its 2D layout), is dropped.
-/// A crystal keeps its imported geometry and provenance for element- or
-/// charge-only substitutions; bonds and boundary crossings are not recomputed.
-/// Atom IDs can be reused and equivalent atoms swapped without changing a
-/// canonical SMILES, so the check compares atoms and bonds by ID.
+/// Preserve the conformer while retaining all surviving source links. Legacy
+/// geometry acquires its baseline from the chemistry before its first edit.
 pub fn reconcile(doc: &mut Document, before: &Document) {
     crystal::inherit_distance_bonds(doc, before);
-    if doc.models.is_empty() {
-        return;
-    }
+    let present: HashSet<_> = doc.atoms.iter().map(|a| a.id).collect();
     let models = std::mem::take(&mut doc.models);
     doc.models = models
         .into_iter()
-        .filter(|m| {
-            let ids = m.ids();
-            let kept = before.models.iter().any(|old| old.ids() == ids);
-            whole(doc, m)
-                && (!kept
-                    || if m.cell.is_some() {
-                        crystal_substitution(before, doc, &ids)
-                    } else {
-                        chemistry(before, &ids) == chemistry(doc, &ids)
-                            && stereo(before, &ids) == stereo(doc, &ids)
-                    })
+        .filter_map(|mut model| {
+            let old = before.models.iter().find(|old| same_geometry(old, &model));
+            if model.is_file_derived() {
+                return (whole(doc, &model)
+                    && (old.is_none() || crystal_substitution(before, doc, &model.ids())))
+                .then_some(model);
+            }
+            if model.fingerprint.is_none() || model.generated.is_none() {
+                let mut baseline = old.cloned().unwrap_or_else(|| model.clone());
+                baseline.capture_generated(if old.is_some() { before } else { doc });
+                if model.generated.is_none() && baseline.generated.is_some() {
+                    model.atoms = baseline.atoms;
+                    model.hydrogens = baseline.hydrogens;
+                    model.generated = baseline.generated;
+                }
+                if model.fingerprint.is_none() {
+                    model.fingerprint = baseline.fingerprint;
+                }
+            }
+            prune_sources(&mut model, &present);
+            if model.linked_atoms.is_empty() {
+                return None;
+            }
+            if let Some(old) = old
+                && old.linked_atoms != model.linked_atoms
+                && let Some(origin) = frame_origin(before, old)
+                && let Some(center) = layout_center(doc, &model)
+            {
+                model.offset = Point::new(origin.x - center.x, origin.y - center.y);
+                if let Some(previous) = layout_center(before, old)
+                    && let Some(at) = model.drawn.as_mut().and_then(|drawn| drawn.at.as_mut())
+                {
+                    *at = at.offset(center.x - previous.x, center.y - previous.y);
+                }
+            }
+            Some(model)
         })
         .collect();
+    require_version(doc);
+}
+
+fn same_geometry(a: &Model3d, b: &Model3d) -> bool {
+    a.atoms
+        .iter()
+        .map(|a| a.xyz)
+        .eq(b.atoms.iter().map(|a| a.xyz))
+        && a.geometry_sources()
+            .into_iter()
+            .zip(b.geometry_sources())
+            .all(|(old, new)| old == new || new.is_none())
+}
+
+fn prune_sources(model: &mut Model3d, present: &HashSet<u64>) {
+    model.linked_atoms.retain(|id| present.contains(id));
+    if let Some(generated) = &mut model.generated {
+        for source in &mut generated.sources {
+            if source.is_some_and(|id| !model.linked_atoms.contains(&id)) {
+                *source = None;
+            }
+        }
+    }
+    if let Some(drawn) = &mut model.drawn {
+        drawn.atoms.retain(|(id, _, _, _)| present.contains(id));
+        for (_, _, _, stereo) in &mut drawn.atoms {
+            if stereo
+                .as_ref()
+                .is_some_and(|stereo| stereo.neighbors.iter().any(|id| !present.contains(id)))
+            {
+                *stereo = None;
+            }
+        }
+        drawn
+            .bonds
+            .retain(|bond| present.contains(&bond.0) && present.contains(&bond.1));
+        for (_, _, stereo, atoms, _) in &mut drawn.bonds {
+            if atoms.iter().any(|id| !present.contains(id)) {
+                *stereo = None;
+                atoms.clear();
+            }
+        }
+        let mapping = present.iter().map(|id| (*id, *id)).collect();
+        drawn.depth_appearance = crate::depth_appearance::remap(&drawn.depth_appearance, &mapping);
+    }
 }
 
 /// Crystal bonds describe imported geometry, so changing the elements must
@@ -1507,36 +1803,8 @@ fn crystal_substitution(before: &Document, doc: &Document, ids: &HashSet<u64>) -
     normalized(before) == normalized(doc)
 }
 
-/// Atom chiral tags, then each bond's stereo, stereo atoms and unknown flag.
-type Stereo = (Vec<u8>, Vec<(u8, Vec<usize>, bool)>);
-/// Stereo as perceived from the drawing, which reads E/Z and R/S from 2D
-/// positions and wedges as well as stored fields; `None` when the molecule
-/// cannot be perceived.
-fn stereo(doc: &Document, ids: &HashSet<u64>) -> Option<Stereo> {
-    let atoms: Vec<_> = doc
-        .atoms
-        .iter()
-        .map(|a| a.id)
-        .filter(|id| ids.contains(id))
-        .collect();
-    let part = crate::editing::analysis_document(doc, &atoms);
-    let metadata = crate::chemistry::document::prepare(&part)
-        .ok()?
-        .state
-        .metadata;
-    Some((
-        metadata.atoms.iter().map(|a| a.chiral_tag).collect(),
-        metadata
-            .bonds
-            .into_iter()
-            .map(|b| (b.stereo, b.stereo_atoms, b.unknown_stereo))
-            .collect(),
-    ))
-}
-
 /// The chemistry of these atoms and their bonds, without presentation. Bond
-/// appearance and stored stereo count only through the stereo they mark, see
-/// [`stereo`]: flattening the view stores the drawn stereo without changing it.
+/// appearance and stored stereo are compared separately for imported models.
 fn chemistry(doc: &Document, ids: &HashSet<u64>) -> (Vec<Atom>, Vec<Bond>) {
     let atoms = doc
         .atoms
@@ -1564,6 +1832,7 @@ fn chemistry(doc: &Document, ids: &HashSet<u64>) -> (Vec<Atom>, Vec<Bond>) {
             distance_derived: false,
             highlight: None,
             ring_arc: false,
+            projection: false,
             z_order: 0,
             indicator: Default::default(),
             cip_label: None,
@@ -1788,7 +2057,14 @@ pub fn linear_carbon(doc: &Document, model: &Model3d, id: u64) -> bool {
     if doc.atom(id).is_none_or(|a| a.element != "C") {
         return false;
     }
-    let at = |id: u64| model.atoms.iter().find(|a| a.id == id).map(|a| a.xyz);
+    let sources = model.geometry_sources();
+    let at = |id: u64| {
+        sources
+            .iter()
+            .position(|source| *source == Some(id))
+            .and_then(|index| model.atoms.get(index))
+            .map(|a| a.xyz)
+    };
     let neighbours: Vec<_> = doc
         .bonds
         .iter()
@@ -1815,7 +2091,7 @@ pub fn linear_carbon(doc: &Document, model: &Model3d, id: u64) -> bool {
 /// the best one does (see [`separation`]), the one nearest a family's
 /// standard slight tilt wins, so the usual view is kept wherever it reads
 /// well.
-fn crystal_rotation(vectors: [[f32; 3]; 3], labels: &Labels) -> [f32; 4] {
+fn crystal_rotation(vectors: [[f32; 3]; 3], labels: &CrystalLabels) -> [f32; 4] {
     type V = [f64; 3];
     let dot = |a: V, b: V| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     let unit = |v: V| {
@@ -1947,7 +2223,7 @@ const SEPARATION_CAP: f32 = 4.;
 /// the cell's edges and the `stubs` of bonds leaving it. The least, over each
 /// pair, of how far apart they are, across or along, as a fraction of what
 /// keeps them apart: 1 or more when nothing overlaps.
-fn separation(q: [f32; 4], labels: &Labels, vectors: [[f32; 3]; 3]) -> f32 {
+fn separation(q: [f32; 4], labels: &CrystalLabels, vectors: [[f32; 3]; 3]) -> f32 {
     let width = |letters: usize| LETTER_WIDTH * letters.max(1) as f32;
     let apart = |s: [f32; 3], t: [f32; 3], wide: f32, room: f32| {
         ((s[0] - t[0]).abs() / (wide + room)).max((s[1] - t[1]).abs() / (LABEL_HEIGHT + room))
@@ -2060,7 +2336,7 @@ fn separation(q: [f32; 4], labels: &Labels, vectors: [[f32; 3]; 3]) -> f32 {
 /// labelled atom's position and letter count, the bonds between them (as
 /// index pairs, the lower first) and the 2D stubs of the bonds that leave
 /// the cell.
-struct Labels<'a> {
+struct CrystalLabels<'a> {
     atoms: &'a [([f32; 3], usize)],
     bonds: HashSet<(usize, usize)>,
     stubs: &'a [([f32; 3], [f32; 3])],
@@ -2231,10 +2507,10 @@ fn sticks(doc: &Document, model: &Model3d, shown: &[bool]) -> Option<Vec<(usize,
         .enumerate()
         .map(|(i, a)| (a.id, i))
         .collect();
-    let mut bonds: Vec<(usize, usize)> = doc
-        .bonds
-        .iter()
-        .filter_map(|b| Some((*index.get(&b.a)?, *index.get(&b.b)?)))
+    let mut bonds: Vec<(usize, usize)> = model
+        .geometry_bonds(doc)
+        .into_iter()
+        .map(|[a, b]| (a, b))
         .collect();
     for (i, h) in model.hydrogens.iter().enumerate() {
         bonds.push((*index.get(&h.parent)?, model.atoms.len() + i));
@@ -2522,8 +2798,8 @@ const MITER: f32 = 6.;
 const ARC_STEP: f32 = std::f32::consts::PI / 16.;
 
 /// The model as drawn: each ball's centre and radius, and each half-bond as
-/// its end points and half width, in drawing units. `None` while an atom is
-/// missing.
+/// its end points and half width, in drawing units. `None` without a source or
+/// without sufficient legacy geometry metadata.
 #[allow(clippy::type_complexity)]
 pub fn balls_and_sticks(
     doc: &Document,
@@ -2617,6 +2893,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         /// The half-bond from a point toward another.
         Bond(usize, usize),
         Atom(usize),
+        Label(usize),
         /// A dashed half-bond leaving the cell from a point, with its end.
         Crossing(usize, [f32; 3]),
     }
@@ -2671,6 +2948,13 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                 Some((z, 1, z, Item::Atom(i)))
             }),
     );
+    items.extend(view.symbols.iter().enumerate().filter_map(|(i, symbol)| {
+        if view.shown.get(i) != Some(&true) || !model.labels.shows(symbol) {
+            return None;
+        }
+        let z = rotated.get(i)?[2];
+        Some((z, 2, z, Item::Label(i)))
+    }));
     items.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
     // Where each half-bond is drawn, so the first of a pair can reach under
     // the second.
@@ -2679,7 +2963,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         .enumerate()
         .filter_map(|(n, (.., item))| match item {
             Item::Bond(s, o) => Some(((*s, *o), n)),
-            Item::Atom(_) | Item::Crossing(..) => None,
+            Item::Atom(_) | Item::Label(_) | Item::Crossing(..) => None,
         })
         .collect();
     // Overlapping balls show only what lies in front, with seams between,
@@ -2691,7 +2975,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             .iter()
             .filter_map(|(.., item)| match item {
                 Item::Atom(i) => Some(*i),
-                Item::Bond(..) | Item::Crossing(..) => None,
+                Item::Bond(..) | Item::Label(_) | Item::Crossing(..) => None,
             })
             .collect();
         view.contacts(&atoms, grown)
@@ -2713,7 +2997,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     let mut rims: (Vec<Vec<Point>>, Vec<Vec<Point>>) = Default::default();
     let mut drawn = vec![];
     for (n, (_, _, z, item)) in items.into_iter().enumerate() {
-        let (Item::Bond(i, _) | Item::Atom(i) | Item::Crossing(i, _)) = item;
+        let (Item::Bond(i, _) | Item::Atom(i) | Item::Label(i) | Item::Crossing(i, _)) = item;
         let fading = view.symbols.get(i) == Some(&"H") && grown < 1.;
         let symbol = *view.symbols.get(i)?;
         let base = mix(
@@ -2723,6 +3007,35 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         );
         let wire = rgb(mix(base, BLACK, if symbol == "C" { 0.35 } else { 0.1 }));
         let primitive = match item {
+            Item::Label(i) => {
+                let (center, factor) = view.project(*rotated.get(i)?);
+                let size = (view.scale * factor * 0.34).clamp(model.size / 55., model.size / 16.);
+                let style = crate::typography::TextStyle {
+                    bold: true,
+                    ..Default::default()
+                };
+                let width = crate::style::styled_text_width(symbol, size, &style);
+                // Light labels on dark spheres and dark labels on light
+                // spheres; the same depth fade as the atom keeps them seated.
+                let surface = if matches!(model.style, Style::Wireframe | Style::Stick) {
+                    float(backdrop)
+                } else {
+                    base
+                };
+                let lightness = surface[0] * 0.2126 + surface[1] * 0.7152 + surface[2] * 0.0722;
+                let ink = if lightness < 135. { WHITE } else { [24.; 3] };
+                let color = rgb(mix(ink, float(backdrop), fade(z)));
+                Primitive::Text {
+                    position: center.offset(-width / 2., -size * 0.6),
+                    text: symbol.into(),
+                    size,
+                    // Text primitives undergo theme conversion in all
+                    // backends; its reversible transform preserves this
+                    // already resolved model color exactly.
+                    color: doc.canvas_theme.color(color),
+                    style,
+                }
+            }
             Item::Crossing(i, end) => {
                 let (start, f) = view.project(*rotated.get(i)?);
                 let (end, _) = view.project(end);
@@ -3649,9 +3962,9 @@ pub fn lay_out_flat(doc: &mut Document, model: &Model3d) {
     let units = flat_scale(doc, model);
     let positions: HashMap<u64, [f32; 3]> = viewed(doc, model).into_iter().collect();
     let linear: HashSet<u64> = model
-        .atoms
-        .iter()
-        .map(|a| a.id)
+        .geometry_sources()
+        .into_iter()
+        .flatten()
         .filter(|id| linear_carbon(doc, model, *id))
         .collect();
     for atom in &mut doc.atoms {
@@ -3731,7 +4044,7 @@ fn along_view(doc: &Document, model: &Model3d, cell: &Cell, along: Along) -> (f3
             .unwrap_or_default()
             .map(|v| v * n)
     });
-    let labels = Labels {
+    let labels = CrystalLabels {
         atoms: &atoms,
         bonds: HashSet::new(),
         stubs: &[],
@@ -3776,8 +4089,9 @@ impl Flat {
         let pairs: Vec<(V, V)> = model
             .atoms
             .iter()
-            .filter_map(|p| {
-                let a = doc.atom(p.id)?;
+            .zip(model.geometry_sources())
+            .filter_map(|(p, source)| {
+                let a = doc.atom(source?)?;
                 let to = [a.position.x, -a.position.y, a.depth];
                 Some((p.xyz.map(f64::from), to.map(f64::from)))
             })

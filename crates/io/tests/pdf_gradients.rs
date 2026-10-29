@@ -216,7 +216,7 @@ fn ethanol() -> Document {
     .to_vec();
     doc.models
         .push(Model3d::new(&doc, atoms, vec![], ForceField::Mmff94s));
-    doc.require_version(reshiki_model::document::MODELS_3D);
+    reshiki_model::models3d::require_version(&mut doc);
     assert!(set_display(&mut doc, 0, Display::ThreeD));
     doc
 }

@@ -51,7 +51,11 @@ Select a whole molecule and right-click it and choose **Show as**, or open **Pro
 - **Both** puts the model beside the drawing.
 - **2D** shows the drawing again.
 
-The first switch generates the model with the same method as **3D optimize…** (ETKDG, then MMFF94s); later switches reuse it. When the model appears, the atoms move from the drawing into 3D and the hydrogens grow out of their atoms. Each switch is one Undo step. The chemistry, atom IDs and your 2D layout never change. Click the model to select its molecule; it then moves, aligns and copies with it. Editing the molecule's chemistry removes the model and shows the drawing again.
+The first switch generates the model with the same method as **3D optimize…** (ETKDG, then MMFF94s); later switches reuse it. When the model appears, the atoms move from the drawing into 3D and the hydrogens grow out of their atoms. Each switch is one Undo step. The chemistry, atom IDs and your 2D layout never change. Click the model to select its molecule; it then moves, aligns and copies with it.
+
+Editing the molecule's chemistry keeps the arranged model and shows **Structure changed · Update model** above the selected model and in **Properties → Structure**. Choose **Update model** to generate a conformer for the edited structure. Moving the 2D atoms or changing their appearance does not require an update. Generation runs in the background, keeps the view, frame and appearance, and commits one Undo step when it succeeds. Press **Escape** to cancel; cancellation, failure or another edit leaves the previous model in place. ReShiki never replaces a conformer automatically.
+
+Splitting or joining structures keeps each arranged model and its surviving atom links. **Update model** replaces every model linked to the updated molecule with one model, keeping the selected model's view settings and combining their saved **Original drawing** layouts. Updating or regenerating requires one connected source structure. If a split leaves the source disconnected, generation reports that limit and keeps the previous model.
 
 Once the model is selected:
 
@@ -64,18 +68,26 @@ Drag the frame's edge, or a model that is not selected, to move it. The **3D til
 
 To go back to 2D, **Properties → Structure → 2D layout** offers **Original drawing**, the layout you drew, or **From the 3D view**, which flattens the model as it is turned now, with far bonds lighter, like **3D optimize…**. **Show as → 2D from the 3D view** in the right-click menu does the same. Each molecule keeps its own choice, and a flattened molecule keeps the layout you drew, so **Original drawing** brings it back, even after saving and reopening.
 
+When the source chemistry has changed, **From the 3D view** is unavailable and shows **Update the model first**. **Original drawing** remains available.
+
 While the model is shown, **Properties → 3D model** changes how it looks:
 
 - **Style:** **Ball & stick**, **Stick** (tubes joined with clean mitered joints), **Wireframe** or **Space-filling**.
 - **Look:** **Flat · journal**, with thin outlines (a soft light rim on a dark canvas), or **Glossy · slides**.
 - **Hydrogens:** **All**, **Polar** (on N, O and S) or **None**.
+- **Atom labels:** **None** (the default), **Heteroatoms** (elements other than carbon and hydrogen) or **All**. Only visible atoms receive labels.
 - **Depth fade** and **Perspective** sliders.
 - **Background:** **None** or **Soft card**.
 - **Reset view** shows the model's opening view again.
+- **Regenerate conformer** generates a fresh conformer while keeping the view, frame and appearance. It runs in the background, can be cancelled with **Escape**, and commits one Undo step on success.
 
 The model's colours follow the drawing's colour theme (**Publication** uses the **Presentation** colours) and the light or dark canvas.
 
 Each change, including one slider drag, is one Undo step.
+
+Models newly imported from crystal and XYZ files keep their imported geometry, including plain XYZ models without a cell or site labels. They do not show the changed-structure message, **Update model** or **Regenerate conformer**; their appearance controls remain available.
+
+Older saved `.rsk` drawings can lack both a chemistry fingerprint and import provenance. ReShiki uses their current chemistry as a baseline and permits **Update model** and **Regenerate conformer**, unless a unit cell or file atom sites identify imported geometry. A plain XYZ model saved without those markers is indistinguishable from a generated model. Regeneration can replace its original coordinates, but happens only as an explicit action that can be undone. Reopen the original XYZ file to retain its import provenance.
 
 A `.rsk` file keeps the model. PNG, SVG and PDF show it as vector shapes. MOL, CDX/CDXML and SMILES contain the 2D structure only. Files saved by this version need this version or later to open.
 

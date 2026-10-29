@@ -344,7 +344,26 @@ impl Presentation {
             copy = copy
                 .saturating_add(std::mem::size_of::<crate::models3d::Model3d>())
                 .saturating_add(records::<crate::models3d::Placed>(m.atoms.len()))
-                .saturating_add(records::<crate::models3d::Hydrogen>(m.hydrogens.len()));
+                .saturating_add(records::<crate::models3d::Hydrogen>(m.hydrogens.len()))
+                .saturating_add(records::<u64>(m.linked_atoms.len()))
+                .saturating_add(m.fingerprint.as_ref().map_or(0, String::len));
+            work.charge(m.linked_atoms.len())?;
+            if let Some(generated) = &m.generated {
+                work.charge(
+                    generated
+                        .elements
+                        .len()
+                        .saturating_add(generated.bonds.len())
+                        .saturating_add(generated.sources.len()),
+                )?;
+                copy = copy
+                    .saturating_add(records::<String>(generated.elements.len()))
+                    .saturating_add(records::<[usize; 2]>(generated.bonds.len()))
+                    .saturating_add(records::<Option<u64>>(generated.sources.len()));
+                for element in &generated.elements {
+                    copy = copy.saturating_add(element.len());
+                }
+            }
         }
         for g in graphics {
             work.charge(1)?;

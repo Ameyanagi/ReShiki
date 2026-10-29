@@ -111,17 +111,9 @@ fn setup(input: &Path, reset: bool) -> App {
         .unwrap(),
     );
     if reset {
-        // Reuse one actual worker conformer, creating its opening view through
-        // each source's production constructor rather than generating a new
-        // random pose for the comparison.
+        // Reuse one actual worker conformer with the production opening view.
         let old = &app.tab.doc.models[0];
-        let opening = models3d::Model3d::new(
-            &app.tab.doc,
-            old.atoms.clone(),
-            old.hydrogens.clone(),
-            old.force_field,
-        );
-        app.tab.doc.models[0].rotation = opening.rotation;
+        app.tab.doc.models[0].rotation = old.initial_view(&app.tab.doc);
     }
     app.tab.selected.clear();
     app.tab.saved = app.tab.doc.clone();
@@ -167,11 +159,11 @@ fn hint(path: &Path, bounds: Rectangle) -> bool {
 
 fn correlations(doc: &Document) -> [f32; 2] {
     let model = &doc.models[0];
-    let n = model.atoms.len() as f32;
-    let center = model
-        .atoms
-        .iter()
-        .map(|placed| doc.atom(placed.id).unwrap().position)
+    let ids = model.linked_ids(doc);
+    let n = ids.len() as f32;
+    let center = ids
+        .into_iter()
+        .map(|id| doc.atom(id).unwrap().position)
         .fold(reshiki::document::Point::default(), |sum, p| {
             sum.offset(p.x / n, p.y / n)
         });
@@ -260,11 +252,7 @@ async fn model_face_frames_and_hints_renderer_evidence() {
     let mut app = setup(&inputs.join("glucose-model.rsk"), false);
     show_only(&mut app);
     let original = app.tab.doc.clone();
-    let atoms: Vec<_> = app.tab.doc.models[0]
-        .atoms
-        .iter()
-        .map(|atom| atom.id)
-        .collect();
+    let atoms = app.tab.doc.models[0].linked_ids(&app.tab.doc);
     let mut tree = Tree::empty();
     let bounds = settle(&mut app, &mut renderer, &mut tree, size);
     center(&mut app, 2.);

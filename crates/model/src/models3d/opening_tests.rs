@@ -31,16 +31,20 @@ fn correlation(model: &Model3d, doc: &Document) -> [f32; 2] {
     let center = heavy_center(&model.points(doc).unwrap());
     let n = model.atoms.len() as f32;
     let drawing = model
-        .atoms
-        .iter()
-        .map(|p| doc.atom(p.id).unwrap().position)
+        .geometry_sources()
+        .into_iter()
+        .map(|id| doc.atom(id.unwrap()).unwrap().position)
         .fold(Point::default(), |sum, p| sum.offset(p.x / n, p.y / n));
     let q = model.initial_view(doc);
-    model.atoms.iter().fold([0.; 2], |[x, y], placed| {
-        let p = rotate(q, sub(placed.xyz, center));
-        let at = doc.atom(placed.id).unwrap().position;
-        [x + (at.x - drawing.x) * p[0], y - (at.y - drawing.y) * p[1]]
-    })
+    model
+        .atoms
+        .iter()
+        .zip(model.geometry_sources())
+        .fold([0.; 2], |[x, y], (placed, source)| {
+            let p = rotate(q, sub(placed.xyz, center));
+            let at = doc.atom(source.unwrap()).unwrap().position;
+            [x + (at.x - drawing.x) * p[0], y - (at.y - drawing.y) * p[1]]
+        })
 }
 
 fn proper(q: [f32; 4]) {

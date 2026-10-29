@@ -38,7 +38,7 @@ fn drawing() -> (Document, Vec<u64>, u64) {
     ];
     let model = Model3d::new(&doc, atoms, hydrogens, ForceField::Mmff94s);
     doc.models.push(model);
-    doc.require_version(MODELS_3D);
+    require_version(&mut doc);
     (doc, vec![c1, c2, o], methane)
 }
 
@@ -87,7 +87,7 @@ fn native_files_round_trip_models_and_omit_the_key_without_one() {
     let (doc, ..) = shown(Display::Both);
     let bytes = doc.file_json().unwrap();
     let read = Document::from_json(&bytes).unwrap();
-    assert_eq!(read.version, crate::document::DISTANCE_BONDS);
+    assert_eq!(read.version, crate::document::MODEL_POLISH);
     assert_eq!(read.models, doc.models);
     assert_eq!(read.file_json().unwrap(), bytes);
 
@@ -121,7 +121,7 @@ fn validation_rejects_malformed_models_and_older_versions() {
     }
     let mut twice = doc.clone();
     twice.models.push(twice.models[0].clone());
-    assert!(twice.validate().is_err(), "an atom in two models");
+    twice.validate().unwrap(); // Joined updates may retain overlapping views.
     // Raw serde paths keep the version check.
     let mut old = serde_json::to_value(&doc).unwrap();
     old["version"] = (MODELS_3D - 1).into();
@@ -130,14 +130,15 @@ fn validation_rejects_malformed_models_and_older_versions() {
 }
 
 #[test]
-fn deleting_an_atom_drops_the_model_but_other_edits_keep_it() {
+fn deleting_an_atom_keeps_the_stale_model_and_other_edits_keep_it_current() {
     let (doc, atoms, methane) = shown(Display::ThreeD);
     let mut other = doc.clone();
     other.delete(&[methane]);
     assert_eq!(other.models, doc.models);
     let mut cut = doc.clone();
     cut.delete(&[atoms[2]]);
-    assert!(cut.models.is_empty());
+    assert_eq!(cut.models.len(), 1);
+    assert!(cut.models[0].is_stale(&cut));
     cut.validate().unwrap();
 
     // Moving the molecule carries the frame with it.
@@ -152,25 +153,28 @@ fn deleting_an_atom_drops_the_model_but_other_edits_keep_it() {
 }
 
 #[test]
-fn chemical_edits_and_joined_components_drop_the_model() {
+fn chemical_edits_and_joined_components_preserve_stale_geometry() {
     let (doc, atoms, methane) = shown(Display::Both);
     let mut element = doc.clone();
     let before = element.clone();
     element.atom_mut(atoms[2]).unwrap().element = "N".into();
     commit(&mut element, before);
-    assert!(element.models.is_empty());
+    assert_eq!(element.models.len(), 1);
+    assert!(element.models[0].is_stale(&element));
 
     let mut joined = doc.clone();
     let before = joined.clone();
     joined.add_bond(atoms[2], methane, 1, "plain");
     commit(&mut joined, before);
-    assert!(joined.models.is_empty());
+    assert_eq!(joined.models.len(), 1);
+    assert!(joined.models[0].is_stale(&joined));
 
     let mut order = doc.clone();
     let before = order.clone();
     order.bonds[0].order = 2;
     commit(&mut order, before);
-    assert!(order.models.is_empty());
+    assert_eq!(order.models.len(), 1);
+    assert!(order.models[0].is_stale(&order));
 
     // Presentation is not chemistry.
     let mut color = doc.clone();
@@ -192,15 +196,25 @@ fn copy_and_paste_remap_the_model_with_its_molecule() {
     let ids = editing::append(&mut pasted, &part, Point::new(0., 120.));
     assert_eq!(pasted.models.len(), 2);
     let copy = &pasted.models[1];
-    assert!(copy.atoms.iter().all(|a| ids.contains(&a.id)));
-    assert!(copy.hydrogens.iter().all(|h| copy.contains(h.parent)));
+    assert!(
+        copy.geometry_sources()
+            .iter()
+            .flatten()
+            .all(|id| ids.contains(id))
+    );
+    assert!(
+        copy.hydrogens
+            .iter()
+            .all(|h| (h.parent as usize) < copy.atoms.len())
+    );
+    assert_eq!(copy.atoms, doc.models[0].atoms);
     assert_eq!(copy.rotation, doc.models[0].rotation);
     pasted.validate().unwrap();
 
     // A drawing that never had a model gains one at the model version.
     let mut fresh = Document::default();
     editing::append(&mut fresh, &part, Point::default());
-    assert_eq!(fresh.version, MODELS_3D);
+    assert_eq!(fresh.version, crate::document::MODEL_POLISH);
     fresh.validate().unwrap();
 }
 
@@ -271,6 +285,123 @@ fn a_kept_drawn_layout_comes_back_where_the_molecule_is() {
     }
 }
 
+fn snapshot_models() -> (Document, Vec<u64>, u64) {
+    let (mut doc, atoms, methane) = shown(Display::Both);
+    let model = Model3d::new(
+        &doc,
+        vec![Placed {
+            id: methane,
+            xyz: [4., 1., 0.5],
+        }],
+        vec![],
+        ForceField::Mmff94s,
+    );
+    doc.models.push(model);
+    (doc, atoms, methane)
+}
+
+fn flatten_with_kept_snapshot(doc: &mut Document, index: usize) {
+    let model = doc.models[index].clone();
+    let drawn = model
+        .drawn
+        .clone()
+        .unwrap_or_else(|| Drawn::of(doc, &model));
+    let center = layout_center(doc, &model).unwrap();
+    lay_out_flat(doc, &model);
+    let flat = layout_center(doc, &model).unwrap();
+    doc.translate(&model.linked_ids(doc), center.x - flat.x, center.y - flat.y);
+    doc.models[index].drawn = Some(drawn.kept(doc, &model));
+    doc.models[index].layout = Layout::View;
+}
+
+fn combine_snapshot_models(doc: &mut Document) {
+    let atoms = doc
+        .atoms
+        .iter()
+        .enumerate()
+        .map(|(index, atom)| Placed {
+            id: atom.id,
+            xyz: [index as f32 * 1.4, (index % 2) as f32 * 0.8, 0.],
+        })
+        .collect();
+    let mut model = Model3d::new(doc, atoms, vec![], ForceField::Mmff94s);
+    model.drawn = Drawn::combined(doc, &model, &doc.models);
+    doc.models = vec![model];
+}
+
+#[test]
+fn combined_drawn_layouts_follow_independent_source_moves_and_a_later_joined_move() {
+    let (mut doc, atoms, methane) = snapshot_models();
+    let original = doc.clone();
+    flatten_with_kept_snapshot(&mut doc, 0);
+    flatten_with_kept_snapshot(&mut doc, 1);
+    let moves = [Point::new(40., 25.), Point::new(-30., 55.)];
+    doc.translate(&atoms, moves[0].x, moves[0].y);
+    doc.translate(&[methane], moves[1].x, moves[1].y);
+    doc.add_bond(atoms[2], methane, 1, "plain");
+    combine_snapshot_models(&mut doc);
+    doc.validate().unwrap();
+
+    let joined_move = Point::new(15., -18.);
+    let linked = doc.models[0].linked_ids(&doc);
+    doc.translate(&linked, joined_move.x, joined_move.y);
+    assert!(restore_drawing(&mut doc, 0));
+    for atom in &original.atoms {
+        let by = moves[usize::from(atom.id == methane)];
+        let expected = atom
+            .position
+            .offset(by.x + joined_move.x, by.y + joined_move.y);
+        let restored = doc.atom(atom.id).unwrap();
+        assert!(
+            restored.position.distance(expected) < 1e-3,
+            "atom {}: {:?} != {expected:?}",
+            atom.id,
+            restored.position
+        );
+        assert_eq!(restored.depth, atom.depth);
+    }
+    doc.validate().unwrap();
+}
+
+#[test]
+fn combined_drawn_layout_completes_unsaved_sources_before_another_flatten() {
+    let (mut doc, atoms, methane) = snapshot_models();
+    let mut original = doc.clone();
+    flatten_with_kept_snapshot(&mut doc, 0);
+    assert!(doc.models[1].drawn.is_none());
+    let added = doc.add_atom("F", Point::new(240., 30.));
+    original.atoms.push(doc.atom(added).unwrap().clone());
+    doc.add_bond(methane, added, 1, "plain");
+    doc.add_bond(atoms[2], methane, 1, "plain");
+    combine_snapshot_models(&mut doc);
+    doc.validate().unwrap();
+
+    flatten_with_kept_snapshot(&mut doc, 0);
+    for id in [methane, added] {
+        assert!(
+            doc.atom(id)
+                .unwrap()
+                .position
+                .distance(original.atom(id).unwrap().position)
+                > 1.,
+            "atom {id} must actually move during the joined flatten"
+        );
+    }
+    assert!(restore_drawing(&mut doc, 0));
+    for atom in &original.atoms {
+        let restored = doc.atom(atom.id).unwrap();
+        assert!(
+            restored.position.distance(atom.position) < 1e-3,
+            "atom {}: {:?} != {:?}",
+            atom.id,
+            restored.position,
+            atom.position
+        );
+        assert_eq!(restored.depth, atom.depth);
+    }
+    doc.validate().unwrap();
+}
+
 #[test]
 fn a_kept_drawn_layout_is_pasted_with_its_model_and_restores_on_the_copy() {
     let (doc, atoms, original) = flattened();
@@ -288,7 +419,7 @@ fn a_kept_drawn_layout_is_pasted_with_its_model_and_restores_on_the_copy() {
     pasted.validate().unwrap();
 
     // The copy comes back where it was pasted, clear of its source.
-    let copy: Vec<_> = pasted.models[1].atoms.iter().map(|a| a.id).collect();
+    let copy = pasted.models[1].linked_ids(&pasted);
     let (to, from) = (molecule_center(&pasted, 1), molecule_center(&doc, 0));
     let by = Point::new(to.x - from.x, to.y - from.y);
     assert!(by.distance(Point::default()) > 1.);
@@ -615,7 +746,7 @@ fn model_all(doc: &mut Document, display: Display) {
         .collect();
     let model = Model3d::new(doc, atoms, vec![], ForceField::Mmff94s);
     doc.models.push(model);
-    doc.require_version(MODELS_3D);
+    require_version(doc);
     set_display(doc, 0, display);
 }
 
@@ -630,7 +761,7 @@ fn moved(doc: &Document, moves: &[(u64, Point)]) -> Document {
 }
 
 #[test]
-fn moving_atoms_that_flip_drawn_stereo_drops_the_model() {
+fn moving_atoms_that_flip_drawn_stereo_marks_the_model_stale() {
     // (E)-1,2-difluoroethene.
     let mut doc = Document::default();
     let c1 = doc.add_atom("C", Point::new(0., 0.));
@@ -643,9 +774,8 @@ fn moving_atoms_that_flip_drawn_stereo_drops_the_model() {
     model_all(&mut doc, Display::Both);
     assert_eq!(moved(&doc, &[(f2, Point::new(60., 34.))]).models.len(), 1);
     assert!(
-        moved(&doc, &[(f2, Point::new(54., -30.))])
-            .models
-            .is_empty()
+        moved(&doc, &[(f2, Point::new(54., -30.))]).models[0]
+            .is_stale(&moved(&doc, &[(f2, Point::new(54., -30.))]))
     );
 
     // A wedged centre whose plain neighbours swap places is inverted.
@@ -663,7 +793,7 @@ fn moving_atoms_that_flip_drawn_stereo_drops_the_model() {
         &doc,
         &[(cl, Point::new(-31., 18.)), (br, Point::new(31., 18.))],
     );
-    assert!(swapped.models.is_empty());
+    assert!(swapped.models[0].is_stale(&swapped));
 }
 
 #[test]
@@ -684,24 +814,21 @@ fn bond_styles_and_label_display_are_presentation() {
 }
 
 #[test]
-fn loading_drops_models_that_are_not_one_whole_molecule() {
+fn loading_keeps_generated_views_but_drops_imported_views_with_partial_sources() {
     let (doc, atoms, methane) = shown(Display::ThreeD);
-    let mut partial = doc.clone();
-    partial.models[0].atoms.pop();
-    partial.models[0].hydrogens.retain(|h| h.parent != atoms[2]);
-    // Whole molecules may share a model, as a crystal's do, but not a
-    // molecule bonded to atoms outside it.
-    let mut spanning = doc.clone();
-    let chloro = spanning.add_atom("Cl", Point::new(240., 0.));
-    spanning.add_bond(methane, chloro, 1, "plain");
-    spanning.models[0].atoms.push(Placed {
-        id: methane,
-        xyz: [3., 0., 0.],
-    });
-    for file in [partial, spanning] {
-        let read = Document::from_json(&file.file_json().unwrap()).unwrap();
-        assert!(read.models.is_empty());
-    }
+    let mut joined = doc.clone();
+    joined.add_bond(atoms[2], methane, 1, "plain");
+    let read = Document::from_json(&joined.file_json().unwrap()).unwrap();
+    assert_eq!(read.models, joined.models);
+    assert!(read.models[0].is_stale(&read));
+
+    let mut imported = doc.clone();
+    imported.models[0] = imported.models[0]
+        .clone()
+        .with_cell(&imported, None, vec![]);
+    imported.add_bond(atoms[2], methane, 1, "plain");
+    let read = Document::from_json(&imported.file_json().unwrap()).unwrap();
+    assert!(read.models.is_empty());
 }
 
 #[test]
@@ -772,7 +899,7 @@ fn chemistry_and_reaction_roles_keep_a_drawing_with_a_model_valid() {
     let role = crate::reactions::Role::Reactant;
     crate::reactions::assign(&mut doc, arrow, &atoms[..1], role).unwrap();
     crate::reactions::assign(&mut doc, arrow, &[methane], crate::reactions::Role::Product).unwrap();
-    assert_eq!(doc.version, MODELS_3D);
+    assert_eq!(doc.version, crate::document::MODEL_POLISH);
     assert_eq!(doc.models.len(), 1);
 }
 
@@ -1221,7 +1348,7 @@ fn lone(
         .collect();
     doc.models
         .push(Model3d::new(&doc, placed, hydrogens, ForceField::Mmff94s));
-    doc.require_version(MODELS_3D);
+    require_version(&mut doc);
     assert!(set_display(&mut doc, 0, Display::ThreeD));
     edit(&mut doc.models[0]);
     doc
@@ -1679,7 +1806,7 @@ fn styles_and_settings_round_trip() {
     assert_eq!(saved["look"], "glossy");
     assert_eq!(saved["show_hydrogens"], "polar");
     assert_eq!(saved["background"], "card");
-    assert_eq!(json["version"], crate::document::DISTANCE_BONDS);
+    assert_eq!(json["version"], crate::document::MODEL_POLISH);
     assert_eq!(Document::from_json(&bytes).unwrap().models, doc.models);
 
     // Earlier version 28 files without the settings read the defaults.
@@ -1803,7 +1930,7 @@ fn model_ring(doc: &mut Document, ids: &[u64]) {
         .collect();
     let model = Model3d::new(doc, atoms, vec![], ForceField::Mmff94s);
     doc.models.push(model);
-    doc.require_version(MODELS_3D);
+    require_version(doc);
     let last = doc.models.len() - 1;
     assert!(set_display(doc, last, Display::ThreeD));
 }

@@ -69,9 +69,9 @@ pub fn objects(doc: &Document, polygon: &[Point]) -> Vec<u64> {
             && crate::models3d::frame_corners(doc, model)
                 .is_some_and(|corners| encloses(polygon, &corners, true))
         {
-            for atom in &model.atoms {
-                if !result.contains(&atom.id) {
-                    result.push(atom.id);
+            for id in model.linked_ids(doc) {
+                if !result.contains(&id) {
+                    result.push(id);
                 }
             }
         }

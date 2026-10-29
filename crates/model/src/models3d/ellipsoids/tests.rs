@@ -12,8 +12,8 @@ fn cell(vectors: [[f32; 3]; 3]) -> Cell {
     }
 }
 
-fn view(doc: &Document, perspective: bool) -> View<'_> {
-    let model = Model3d::new(
+fn point(doc: &Document) -> Model3d {
+    Model3d::new(
         doc,
         vec![Placed {
             id: doc.atoms[0].id,
@@ -21,8 +21,11 @@ fn view(doc: &Document, perspective: bool) -> View<'_> {
         }],
         vec![],
         ForceField::Uff,
-    );
-    let mut view = View::new(doc, &model).unwrap();
+    )
+}
+
+fn view<'a>(doc: &'a Document, model: &'a Model3d, perspective: bool) -> View<'a> {
+    let mut view = View::new(doc, model).unwrap();
     view.origin = Point::new(30., 40.);
     view.scale = 10.;
     view.camera = 10.;
@@ -130,14 +133,18 @@ fn orthographic_and_perspective_silhouettes_match_known_axes() {
         axes: [[2., 0., 0.], [0., 1., 0.], [0., 0., 0.5]],
         anisotropic: true,
     };
-    let flat = ellipsoid.project(&view(&doc, false), [0.; 3]).unwrap();
+    let flat = ellipsoid
+        .project(&view(&doc, &point(&doc), false), [0.; 3])
+        .unwrap();
     assert_eq!(flat.center, Point::new(30., 40.));
     close(flat.axes[0].x.hypot(flat.axes[0].y) as f64, 20.);
     close(flat.axes[1].x.hypot(flat.axes[1].y) as f64, 10.);
     assert!(flat.contains(Point::new(50., 40.), 0.));
     assert!(!flat.contains(Point::new(50.1, 40.), 0.));
     assert!(flat.contains(Point::new(50.1, 40.), 0.2));
-    let perspective = ellipsoid.project(&view(&doc, true), [0.; 3]).unwrap();
+    let perspective = ellipsoid
+        .project(&view(&doc, &point(&doc), true), [0.; 3])
+        .unwrap();
     let spread = 1. / (1. - 0.5f64.powi(2) / 100.).sqrt();
     close(
         perspective.axes[0].x.hypot(perspective.axes[0].y) as f64,
@@ -148,7 +155,7 @@ fn orthographic_and_perspective_silhouettes_match_known_axes() {
         10. * spread,
     );
     let off_axis = Ellipsoid::sphere(1.)
-        .project(&view(&doc, true), [3., 0., 0.])
+        .project(&view(&doc, &point(&doc), true), [3., 0., 0.])
         .unwrap();
     close(off_axis.center.x as f64, 30. + 3000. / 99.);
 }
@@ -156,7 +163,8 @@ fn orthographic_and_perspective_silhouettes_match_known_axes() {
 #[test]
 fn every_perspective_rim_ray_is_tangent_to_the_rotated_ellipsoid() {
     let doc = document();
-    let view = view(&doc, true);
+    let model = point(&doc);
+    let view = view(&doc, &model, true);
     let ellipsoid = Ellipsoid {
         axes: [[1.8, 0., 0.], [0., 0.7, 0.], [0., 0., 0.35]],
         anisotropic: true,
@@ -198,7 +206,8 @@ fn every_perspective_rim_ray_is_tangent_to_the_rotated_ellipsoid() {
 #[test]
 fn aniso_sections_render_through_the_shared_svg_path_and_iso_is_plain() {
     let doc = document();
-    let view = view(&doc, true);
+    let model = point(&doc);
+    let view = view(&doc, &model, true);
     let ball = Ellipsoid::sphere(1.);
     let plain = ball
         .draw(&view, [0.; 3], [0.3, 0.5, 0.8], false, None)

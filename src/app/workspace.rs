@@ -239,7 +239,7 @@ impl App {
             .into();
         let paper = self.with_drop_overlay(
             sensor(super::atom_text::canvas_anchor(self.with_context_menu(
-                self.with_inline_text(drawing.map(Message::Canvas)),
+                self.with_inline_text(self.with_model_notice(drawing.map(Message::Canvas))),
             )))
             .on_show(Message::Viewport)
             .on_resize(Message::Viewport)

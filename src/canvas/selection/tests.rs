@@ -362,7 +362,7 @@ fn a_molecule_shown_in_3d_keeps_rotation_and_corners_but_not_edges() {
         .to_vec();
     doc.models
         .push(Model3d::new(&doc, placed, vec![], ForceField::Mmff94s));
-    doc.require_version(reshiki::document::MODELS_3D);
+    reshiki::models3d::require_version(&mut doc);
     let camera = Camera::default();
     let bounds = Rectangle::new(Point::ORIGIN, Size::new(400., 300.));
     let c = doc.add_atom("N", World::new(80., 0.));

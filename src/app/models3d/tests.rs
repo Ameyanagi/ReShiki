@@ -2,6 +2,9 @@ use super::*;
 use reshiki::document::{Document, Point};
 use reshiki::geometry::{Conformer, Point3};
 
+#[path = "phase4_tests.rs"]
+mod phase4;
+
 /// Ethanol, selected, and a separate oxygen; saved, so edits show as unsaved.
 fn drawing() -> (App, Vec<u64>, u64) {
     let (mut app, _) = App::new();
@@ -39,7 +42,7 @@ fn generated(app: &App) -> (Key, Arc<Optimized>) {
         gradient: None,
         converged: true,
         iterations: 1,
-        force_field: ForceField::Mmff94s,
+        force_field: job.force_field,
         diagnostics: vec![],
     };
     (job.key, Arc::new(optimized))
@@ -245,12 +248,18 @@ fn each_switch_is_one_undo_step_and_keeps_chemistry() {
     assert!(!app.error, "{}", app.status);
     assert_eq!(displays(&app.tab.doc), [Display::ThreeD]);
     assert_eq!(frames(&app), 1);
-    assert_eq!(app.tab.doc.version, reshiki::document::MODELS_3D);
+    assert_eq!(app.tab.doc.version, reshiki::document::MODEL_POLISH);
     assert_eq!(app.tab.doc.atoms, original.atoms);
     assert_eq!(app.tab.doc.bonds, original.bonds);
     let model = &app.tab.doc.models[0];
-    assert_eq!(model.atoms.iter().map(|a| a.id).collect::<Vec<_>>(), atoms);
-    assert_eq!(model.hydrogens[0].parent, atoms[0]);
+    assert_eq!(
+        model.geometry_sources(),
+        atoms.iter().copied().map(Some).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        model.geometry_sources()[model.hydrogens[0].parent as usize],
+        Some(atoms[0])
+    );
     assert!(app.dirty());
 
     show(&mut app, Display::TwoD);
@@ -393,7 +402,11 @@ fn duplicate_copies_the_model_with_its_molecule() {
     let [original, copy] = app.tab.doc.models.as_slice() else {
         panic!("Duplicate keeps one model per molecule");
     };
-    assert!(copy.atoms.iter().all(|a| app.tab.selected.contains(&a.id)));
+    assert!(
+        copy.linked_ids(&app.tab.doc)
+            .iter()
+            .all(|id| app.tab.selected.contains(id))
+    );
     assert_eq!(copy.rotation, original.rotation);
     assert_eq!(copy.display, Display::ThreeD);
 }
@@ -524,6 +537,7 @@ fn choosing_what_is_active_again_changes_nothing() {
         Setting::Style(Style::BallStick),
         Setting::Look(Look::Flat),
         Setting::Hydrogens(Hydrogens::All),
+        Setting::Labels(Labels::None),
         Setting::Background(Background::None),
         Setting::DepthFade(depth),
     ] {
@@ -544,11 +558,12 @@ fn each_model_setting_is_one_undo_step_and_a_slider_drag_is_one() {
     set(&mut app, Setting::Style(Style::SpaceFilling));
     set(&mut app, Setting::Look(Look::Glossy));
     set(&mut app, Setting::Hydrogens(Hydrogens::Polar));
+    set(&mut app, Setting::Labels(Labels::All));
     set(&mut app, Setting::Background(Background::Card));
     set(&mut app, Setting::Background(Background::Card));
     assert_eq!(
         frames(&app),
-        start + 4,
+        start + 5,
         "repeating a choice records nothing"
     );
     // A drag sends many values, then the release.
@@ -560,31 +575,33 @@ fn each_model_setting_is_one_undo_step_and_a_slider_drag_is_one() {
         set(&mut app, Setting::Perspective(value));
     }
     let _ = app.update(Message::Models3d(Action::SlideEnd));
-    assert_eq!(frames(&app), start + 6);
+    assert_eq!(frames(&app), start + 7);
     let model = &app.tab.doc.models[0];
     assert_eq!(
         (
             model.style,
             model.look,
             model.show_hydrogens,
+            model.labels,
             model.background
         ),
         (
             Style::SpaceFilling,
             Look::Glossy,
             Hydrogens::Polar,
+            Labels::All,
             Background::Card
         )
     );
     assert_eq!((model.depth_fade, model.perspective), (0.6, 0.));
-    assert_eq!(app.tab.doc.version, reshiki::document::MODELS_3D);
+    assert_eq!(app.tab.doc.version, reshiki::document::MODEL_POLISH);
 
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc.models[0].perspective, original.perspective);
     assert_eq!(app.tab.doc.models[0].depth_fade, 0.6);
     let _ = app.update(Message::Undo);
     assert_eq!(app.tab.doc.models[0].depth_fade, original.depth_fade);
-    for _ in 0..4 {
+    for _ in 0..5 {
         let _ = app.update(Message::Undo);
     }
     assert_eq!(app.tab.doc.models[0], original);
@@ -1069,6 +1086,12 @@ async fn model_section_controls_change_the_model() -> Result<(), String> {
             Setting::Style(Style::SpaceFilling),
         ),
         ("model-look-glossy", Setting::Look(Look::Glossy)),
+        ("model-labels-none", Setting::Labels(Labels::None)),
+        (
+            "model-labels-heteroatoms",
+            Setting::Labels(Labels::Heteroatoms),
+        ),
+        ("model-labels-all", Setting::Labels(Labels::All)),
         (
             "model-hydrogens-Polar",
             Setting::Hydrogens(Hydrogens::Polar),

@@ -23,16 +23,20 @@ fn lone_crystal_atom() -> Document {
     // A live cell is also protected when there are no within-cell bonds to mark.
     let mut doc = Document::default();
     let id = doc.add_atom("He", Point::default());
-    let mut model = Model3d::new(
+    let model = Model3d::new(
         &doc,
         vec![Placed { id, xyz: [0.; 3] }],
         vec![],
         ForceField::Uff,
+    )
+    .with_cell(
+        &doc,
+        Some(Cell {
+            vectors: [[10., 0., 0.], [0., 10., 0.], [0., 0., 10.]],
+            crossing: vec![],
+        }),
+        vec![],
     );
-    model.cell = Some(Cell {
-        vectors: [[10., 0., 0.], [0., 10., 0.], [0., 0., 10.]],
-        crossing: vec![],
-    });
     doc.models.push(model);
     doc.require_version(CRYSTALS);
     doc.validate().unwrap();

@@ -303,7 +303,7 @@ async fn cleanup_keeps_the_hidden_drawing_of_a_molecule_shown_in_3d() {
     .to_vec();
     let model = Model3d::new(&doc, atoms, vec![], ForceField::Mmff94s);
     doc.models.push(model);
-    doc.require_version(crate::document::MODELS_3D);
+    crate::models3d::require_version(&mut doc);
     assert!(set_display(&mut doc, 0, Display::ThreeD));
     let engine = LocalEngine::default();
     let clean = |scope, selected: Vec<u64>| {

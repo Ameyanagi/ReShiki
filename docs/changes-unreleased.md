@@ -1,5 +1,16 @@
 # Unreleased changes
 
+Under review: @Ameyanagi — linked 3D models keep their arranged conformer after
+a chemical edit and offer **Structure changed · Update model**. Explicit
+**Update model** and **Regenerate conformer** run in the background, can be
+cancelled, keep the view and appearance, and commit one Undo step. **Atom
+labels** offers **None**, **Heteroatoms** and **All**; new crystal and XYZ imports
+keep their geometry without update or regeneration. Older saved models without
+import provenance use the current chemistry as their baseline; see the guide's
+legacy XYZ limit.
+([issue #386, phase 4](https://github.com/Ameyanagi/ReShiki/issues/386), [PR #659](https://github.com/Ameyanagi/ReShiki/pull/659));
+[3D model guide](3d-keyboard-drawing.md#show-a-molecule-as-a-3d-model).
+
 Under review: @Ameyanagi — CIF ORTEP thermal ellipsoids at 30/50/70/90%
 probability, principal-plane outlines and a shaded octant, plus Molecule only
 and optional solvent hiding. The same drawing exports to SVG, PNG and PDF;

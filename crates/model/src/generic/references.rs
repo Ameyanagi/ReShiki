@@ -115,7 +115,7 @@ pub(super) fn reject_changed_references(
     if doc
         .models
         .iter()
-        .any(|m| m.atoms.iter().any(|a| changed_ids.contains(&a.id)))
+        .any(|m| m.linked_ids(doc).iter().any(|id| changed_ids.contains(id)))
     {
         return Err(reference_error("3D models"));
     }

@@ -125,6 +125,46 @@ fn generation_offers_retained_depth_in_physical_units_without_mutating_the_sourc
         .unwrap();
     assert!(request.coordinates.is_empty());
 }
+
+#[test]
+fn explicit_generation_seeds_preserve_field_and_reject_values_outside_sampling_range() {
+    let prepared = Prepared::new(&ethanol(), &[]).unwrap();
+    let default = prepared
+        .native_request(
+            ForceField::Mmff94s,
+            reshiki_geometry::Operation::Generate,
+            None,
+            &[],
+            500,
+        )
+        .unwrap();
+    assert_eq!(default.seed, DEFAULT_SEED);
+    assert_eq!(
+        serde_json::to_value(
+            prepared
+                .generation_request(ForceField::Mmff94s, DEFAULT_SEED)
+                .unwrap()
+        )
+        .unwrap(),
+        serde_json::to_value(default).unwrap()
+    );
+    for field in [ForceField::Mmff94, ForceField::Mmff94s, ForceField::Uff] {
+        for seed in [0, DEFAULT_SEED + 1, GENERATION_SEED_MAX] {
+            let request = prepared.generation_request(field, seed).unwrap();
+            assert_eq!(request.seed, seed);
+            assert_eq!(request.field, field.native());
+            assert_eq!(request.conformers, 8);
+            assert!(request.coordinates.is_empty());
+        }
+        for seed in [-1, GENERATION_SEED_MAX + 1, i32::MAX] {
+            assert!(matches!(
+                prepared.generation_request(field, seed),
+                Err(Error::Invalid(_))
+            ));
+        }
+    }
+}
+
 fn identity(doc: &Document) -> String {
     let molecule = molecular::prepare(doc).unwrap();
     crate::chemistry::smiles::write::write(&molecule.state, Default::default())
@@ -498,19 +538,27 @@ fn a_model_keeps_drawing_ids_and_parents_its_force_field_hydrogens() {
     let mut placed = other.model(&optimized(&other, vec![0])).unwrap();
     placed.display = crate::models3d::Display::ThreeD;
     doc.models.push(placed);
-    doc.require_version(crate::document::MODELS_3D);
+    crate::models3d::require_version(&mut doc);
     doc.atom_mut(41).unwrap().depth = 30.;
 
     let prepared = Prepared::new(&doc, &[3]).unwrap();
     let model = prepared.model(&optimized(&prepared, vec![0, 2])).unwrap();
     let ids = prepared.ids();
-    assert_eq!(model.atoms.iter().map(|a| a.id).collect::<Vec<_>>(), ids);
+    assert_eq!(
+        model.geometry_sources(),
+        ids.iter().copied().map(Some).collect::<Vec<_>>()
+    );
     assert_eq!(
         model.hydrogens.iter().map(|h| h.parent).collect::<Vec<_>>(),
-        [ids[0], ids[2]]
+        [0, 2]
     );
     assert_eq!(model.atoms[1].xyz, [1.5, 0., 0.]);
     assert_eq!(model.force_field, crate::models3d::ForceField::Mmff94s);
+    assert!(model.fingerprint.is_some());
+    assert!(!model.is_stale(&doc));
+    let generated = model.generated.as_ref().unwrap();
+    assert_eq!(generated.elements, ["C", "C", "O"]);
+    assert_eq!(generated.bonds, [[0, 1], [1, 2]]);
     // The drawing keeps its 2D atoms; only the model holds the conformer.
     assert_eq!(prepared.source().atoms, doc.atoms);
     // Generation for a model embeds afresh instead of reusing drawn depth.
@@ -589,6 +637,27 @@ fn flattening_a_model_projects_its_view_at_the_drawing_centre_and_scale() {
     }
 }
 
+#[test]
+fn flattening_a_stale_model_requires_update_after_addition_or_deletion() {
+    let doc = ethanol();
+    let prepared = Prepared::new(&doc, &[]).unwrap();
+    let model = prepared.model(&optimized(&prepared, vec![])).unwrap();
+    for delete in [false, true] {
+        let mut edited = doc.clone();
+        if delete {
+            edited.delete(&[89]);
+        } else {
+            let added = edited.add_atom("C", Point::new(140., 20.));
+            edited.add_bond(89, added, 1, "plain");
+        }
+        let current = Prepared::new(&edited, &[]).unwrap();
+        assert!(matches!(
+            current.flattened(&model),
+            Err(Error::Selection("Update the model first"))
+        ));
+    }
+}
+
 /// #409: links to what the prepared molecule leaves out (its name caption, an
 /// arrow's condition text, another molecule's depth fade) never stop a model.
 #[test]
@@ -664,7 +733,7 @@ fn links_outside_the_molecule_do_not_stop_a_model() {
             doc.generic.clone(),
         );
         doc.models.push(model);
-        doc.require_version(crate::document::MODELS_3D);
+        crate::models3d::require_version(&mut doc);
         doc.validate().unwrap();
         assert_eq!(
             (

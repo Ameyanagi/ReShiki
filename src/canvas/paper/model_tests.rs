@@ -22,7 +22,7 @@ fn drawing() -> (Document, Vec<u64>) {
         vec![],
         ForceField::Mmff94s,
     ));
-    doc.require_version(reshiki::document::MODELS_3D);
+    reshiki::models3d::require_version(&mut doc);
     reshiki::models3d::set_display(&mut doc, 0, Display::ThreeD);
     (doc, vec![a, b])
 }

@@ -122,7 +122,7 @@ impl MoleculeCanvas<'_> {
         if p.x < lo.x - pad || p.x > hi.x + pad || p.y < lo.y - pad || p.y > hi.y + pad {
             return None;
         }
-        let atoms: Vec<_> = model.atoms.iter().map(|a| a.id).collect();
+        let atoms = model.linked_ids(self.doc);
         let hit = hit_selection(self.doc, p, self.camera.world_len(PICK_RADIUS_PX));
         let clicked = if hit.is_empty() {
             atoms.clone()

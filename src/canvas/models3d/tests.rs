@@ -29,7 +29,7 @@ fn drawing() -> (Document, Vec<u64>) {
         ForceField::Mmff94s,
     );
     doc.models.push(model);
-    doc.require_version(reshiki::document::MODELS_3D);
+    reshiki::models3d::require_version(&mut doc);
     assert!(models3d::set_display(&mut doc, 0, Display::ThreeD));
     (doc, vec![c1, c2, o])
 }
@@ -579,7 +579,7 @@ fn corner_handles_resize_the_frame_and_edges_are_hidden() {
     }];
     doc.models
         .push(Model3d::new(&doc, placed, hydrogens, ForceField::Mmff94s));
-    doc.require_version(reshiki::document::MODELS_3D);
+    reshiki::models3d::require_version(&mut doc);
     assert!(models3d::set_display(&mut doc, 0, Display::ThreeD));
     let selection = SelectionBox::new(&doc, &[c], canvas.camera, BOUNDS).unwrap();
     let (_, hi) = reshiki::scene::selection_bounds(&doc, &[c]).unwrap();

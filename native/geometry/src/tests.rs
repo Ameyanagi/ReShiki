@@ -230,6 +230,48 @@ fn seeded_sampling_is_repeatable_and_does_not_substitute_force_fields() {
 }
 
 #[test]
+fn changing_generation_seed_samples_a_new_flexible_conformer() {
+    let edges: Vec<_> = (0..9).map(|a| (a, a + 1, 1)).collect();
+    let mut request = molecule(&[6; 10], &edges, ForceField::MMFF94s);
+    request.seed = 0x52534b;
+    request.conformers = 8;
+    let first = solve(&request).unwrap();
+    // ETKDG assigns consecutive seeds to its eight samples. Advancing by a
+    // larger stride avoids reusing most of the previous sample batch.
+    request.seed += 1_000_003;
+    let next = solve(&request).unwrap();
+    let repeated = solve(&request).unwrap();
+    assert_eq!(first.field, next.field);
+    assert_eq!(first.hydrogen_parents, next.hydrogen_parents);
+    assert_eq!(next.coordinates, repeated.coordinates);
+    // Compare internal distances so a rigid rotation alone cannot count as
+    // another conformer of this flexible chain.
+    let squared_distance = |points: &[[f64; 3]], a: usize, b: usize| {
+        points[a]
+            .iter()
+            .zip(points[b])
+            .map(|(a, b)| (a - b).powi(2))
+            .sum::<f64>()
+    };
+    let mut largest_change = 0_f64;
+    for a in 0..request.atoms.len() {
+        for b in a + 1..request.atoms.len() {
+            largest_change = largest_change.max(
+                (squared_distance(&first.coordinates, a, b)
+                    - squared_distance(&next.coordinates, a, b))
+                .abs(),
+            );
+        }
+    }
+    assert!(
+        largest_change > 0.1,
+        "Different seed batches should sample distinct chain conformers: {largest_change}; energies {} and {}",
+        first.energy,
+        next.energy
+    );
+}
+
+#[test]
 fn generation_seed_contract_and_invalid_geometry_fallback_are_bounded() {
     let mut request = ethanol(ForceField::UFF);
     request.coordinates = vec![[0., 0., 0.]; 2];

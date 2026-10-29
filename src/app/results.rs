@@ -402,6 +402,8 @@ fn completion(message: &Message) -> Option<Completion> {
         Message::Models3d(action) => match action {
             super::models3d::Action::Generated(..) => Some(Completion::Models3d),
             super::models3d::Action::Show(..)
+            | super::models3d::Action::Update
+            | super::models3d::Action::Regenerate
             | super::models3d::Action::Set(..)
             | super::models3d::Action::SlideEnd
             | super::models3d::Action::Unchanged
