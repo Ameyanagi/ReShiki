@@ -2249,7 +2249,11 @@ impl View<'_> {
     /// its start's perspective to one middle width shared by both halves, so
     /// they meet at the colour seam and a stick never outgrows its joint.
     fn half_bond(&self, s: usize, o: usize) -> Option<(Point, Point, f32, f32)> {
-        let (ps, po) = (*self.rotated.get(s)?, *self.rotated.get(o)?);
+        let (centre, po) = (*self.rotated.get(s)?, *self.rotated.get(o)?);
+        let ps = centre;
+        // The colour seam sits midway between the ellipsoid surfaces, but the
+        // stick starts at the centre: its own atom is drawn over it, so the
+        // flat end never shows a gap against the curved outline.
         let (ps, po) = if self.style == Style::Ellipsoids {
             let d = sub(po, ps);
             let distance = length(d);
@@ -2274,7 +2278,7 @@ impl View<'_> {
         } else {
             (ps, po)
         };
-        let (start, fs) = self.project(ps);
+        let (start, fs) = self.project(centre);
         let (middle, fm) = self.project(zip3(ps, po, |a, b| (a + b) / 2.));
         let radius = match self.style {
             Style::BallStick | Style::Ellipsoids => BOND_RADIUS * self.scale,

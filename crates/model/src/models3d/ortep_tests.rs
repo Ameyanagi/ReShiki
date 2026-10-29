@@ -138,23 +138,22 @@ fn ortep_uses_adps_and_fixed_hydrogen_missing_and_invalid_fallbacks() {
 }
 
 #[test]
-fn ortep_bonds_start_at_ellipsoid_surfaces_and_end_at_the_shared_midpoint() {
+fn ortep_bonds_start_at_atom_centres_and_meet_midway_between_surfaces() {
     let mut doc = crystal();
     doc.models[0].style = Style::Ellipsoids;
     let view = View::new(&doc, &doc.models[0]).unwrap();
     let (a, m, ..) = view.half_bond(0, 1).unwrap();
     let (b, n, ..) = view.half_bond(1, 0).unwrap();
+    let (p, q) = (
+        view.project(view.rotated[0]).0,
+        view.project(view.rotated[1]).0,
+    );
+    // Each stick runs under its own ellipsoid from the centre, so its flat
+    // end never leaves a gap against the curved outline.
+    assert!(a.distance(p) < 1e-5 && b.distance(q) < 1e-5);
     assert!(m.distance(n) < 1e-5);
-    assert!(
-        (a.x - view.project(view.rotated[0]).0.x - 0.2 * Probability::Fifty.scale() * view.scale)
-            .abs()
-            < 1e-4
-    );
-    assert!(
-        (view.project(view.rotated[1]).0.x - b.x - 0.3 * Probability::Fifty.scale() * view.scale)
-            .abs()
-            < 1e-4
-    );
+    let k = Probability::Fifty.scale() * view.scale;
+    assert!((m.x - (p.x + 0.2 * k + q.x - 0.3 * k) / 2.).abs() < 1e-4);
 }
 
 #[test]
