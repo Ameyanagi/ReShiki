@@ -36,6 +36,7 @@ pub struct Joins<'a> {
     atoms: std::collections::HashMap<u64, (&'a crate::document::Atom, bool)>,
     incident: std::collections::HashMap<u64, Vec<(usize, &'a Bond)>>,
     eligible: std::collections::HashSet<(u64, u64)>,
+    centered: std::collections::HashSet<(u64, u64)>,
 }
 impl<'a> Joins<'a> {
     pub fn new(doc: &'a Document) -> Self {
@@ -58,7 +59,22 @@ impl<'a> Joins<'a> {
         let mut incident: std::collections::HashMap<u64, Vec<(usize, &'a Bond)>> =
             Default::default();
         let mut eligible_bonds = std::collections::HashSet::new();
+        let mut centered = std::collections::HashSet::new();
         for (index, bond) in doc.bonds.iter().enumerate() {
+            // Centered rails can meet existing outlines, but are not themselves
+            // skeleton edges for other bonds' corners (including cumulenes).
+            if bond.order == 2
+                && bond.display == "plain"
+                && bond
+                    .secondary_display
+                    .as_deref()
+                    .is_none_or(|d| d == "plain")
+                && !bond.ring_arc
+                && crate::scene::double_position(faces, bond)
+                    == crate::bonds::DoublePosition::Center
+            {
+                centered.insert((bond.a, bond.b));
+            }
             if eligible(faces, bond) {
                 eligible_bonds.insert((bond.a, bond.b));
                 if doc.bond_visible(bond.a, bond.b) {
@@ -73,6 +89,7 @@ impl<'a> Joins<'a> {
             atoms,
             incident,
             eligible: eligible_bonds,
+            centered,
         }
     }
     fn neighbors(&self, bond: &Bond, id: u64) -> impl Iterator<Item = &'a Bond> {
@@ -88,6 +105,9 @@ impl<'a> Joins<'a> {
                 || [b.a, b.b]
                     .iter()
                     .any(|id| self.neighbors(b, *id).next().is_some()))
+    }
+    pub(crate) fn centered(&self, b: &Bond) -> bool {
+        self.centered.contains(&(b.a, b.b))
     }
 }
 #[cfg(test)]
@@ -185,6 +205,119 @@ impl Joins<'_> {
             point.offset(offset.x * scale, offset.y * scale)
         };
         [corner(1.), corner(-1.)]
+    }
+    fn centered_caps(
+        &self,
+        b: &Bond,
+        start: Point,
+        end: Point,
+        offset: f32,
+    ) -> [Option<[Point; 2]>; 2] {
+        if !self.centered(b) {
+            return [None, None];
+        }
+        [
+            self.centered_cap(b, b.a, start, end, offset),
+            self.centered_cap(b, b.b, end, start, -offset),
+        ]
+    }
+    pub(crate) fn centered_polygon(
+        &self,
+        b: &Bond,
+        start: Point,
+        end: Point,
+        offset: f32,
+    ) -> Option<Vec<Point>> {
+        match self.centered_caps(b, start, end, offset) {
+            [Some([al, ar]), Some([bl, br])] => Some(vec![al, br, bl, ar]),
+            [None, None] => None,
+            caps => {
+                // Retain the existing round end in one silhouette, so rear
+                // opacity never paints overlapping pieces of the same rail.
+                let mut points =
+                    crate::rear_opacity::capsule(start, end, self.doc.drawing_style.line_width());
+                if let Some(cap) = caps[0] {
+                    points.truncate(points.len() / 2);
+                    points.extend(cap);
+                } else if let Some(cap) = caps[1] {
+                    points.drain(..points.len() / 2);
+                    points.extend(cap);
+                }
+                // Match the winding of the other joined bond outlines.
+                points.reverse();
+                Some(points)
+            }
+        }
+    }
+    fn centered_cap(
+        &self,
+        b: &Bond,
+        id: u64,
+        point: Point,
+        opposite: Point,
+        offset: f32,
+    ) -> Option<[Point; 2]> {
+        let length = point.distance(opposite).max(0.001);
+        let u = Point::new(
+            (opposite.x - point.x) / length,
+            (opposite.y - point.y) / length,
+        );
+        let origin = point.offset(u.y * offset, -u.x * offset);
+        if self
+            .atoms
+            .get(&id)
+            .is_none_or(|(a, visible)| a.position.distance(origin) > 0.001 || *visible)
+        {
+            return None;
+        }
+        // Both rail edges meet the same neighbour on the rail's side.
+        let side = offset.signum();
+        let (adj, end, _) = self
+            .neighbors(b, id)
+            .filter_map(|adj| {
+                let end = self.atoms.get(&other(adj, id))?.0.position;
+                let v = subtract(end, origin);
+                let angle = (side * cross(u, v).atan2(u.x * v.x + u.y * v.y))
+                    .rem_euclid(std::f32::consts::TAU);
+                (v.distance(Point::default()) > 0.001
+                    && angle > 0.001
+                    && angle < std::f32::consts::PI - 0.001)
+                    .then_some((adj, end, angle))
+            })
+            .min_by(|a, b| a.2.total_cmp(&b.2))?;
+        if adj.display != "plain" {
+            return None;
+        }
+        let adjacent_length = origin.distance(end).max(0.001);
+        let v = Point::new(
+            (end.x - origin.x) / adjacent_length,
+            (end.y - origin.y) / adjacent_length,
+        );
+        let width = self.doc.drawing_style.line_width() / 2.;
+        // Extend across the unchanged neighbour up to its far edge.
+        let edge_side = -side;
+        let a = origin.offset(v.y * width * edge_side, -v.x * width * edge_side);
+        let adjacent_direction = subtract(
+            end.offset(v.y * width * edge_side, -v.x * width * edge_side),
+            a,
+        );
+        let limit = (offset.abs() + 4. * width).min(0.45 * length.min(adjacent_length));
+        let corner = |side: f32| {
+            let start = point.offset(-u.y * width * side, u.x * width * side);
+            let direction = subtract(
+                opposite.offset(-u.y * width * side, u.x * width * side),
+                start,
+            );
+            let denominator = cross(direction, adjacent_direction);
+            if denominator.abs() < 0.001 {
+                return None;
+            }
+            let t = cross(subtract(a, start), adjacent_direction) / denominator;
+            let intersection = start.offset(direction.x * t, direction.y * t);
+            // Reject distant intersections without moving a rail edge sideways.
+            (intersection.distance(point) <= limit).then_some(intersection)
+        };
+        Some([corner(1.)?, corner(-1.)?])
     }
     pub fn polygon(&self, b: &Bond, start: Point, end: Point) -> Vec<Point> {
         let [al, ar] = self.cap(b, b.a, start, end);

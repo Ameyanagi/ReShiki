@@ -2672,7 +2672,9 @@ fn push_bond_rails(
                 support: vec![],
             },
         });
-        let primitive = if index == 0 && *offset == 0. && joins.needed(b) {
+        let primitive = if let Some(points) = joins.centered_polygon(b, first, last, *offset) {
+            Primitive::Polygon(points)
+        } else if index == 0 && *offset == 0. && joins.needed(b) {
             Primitive::Polygon(joins.polygon(b, first, last))
         } else if display == "bold" {
             // An explicitly centered bold rail still needs flat
@@ -2758,7 +2760,7 @@ fn collect_joined_outlines(
     b: &Bond,
 ) {
     let BondScene { joins, .. } = scene;
-    if joins.needed(b) && b.display != "hollow_wedge" {
+    if (joins.needed(b) || joins.centered(b)) && b.display != "hollow_wedge" {
         use crate::graphics::PathCommand;
         let mut secondary = Vec::new();
         for primitive in out.drain(bond_start..) {

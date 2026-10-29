@@ -46,15 +46,35 @@ fn bond_radius(doc: &Document, bond: &Bond, joins: &crate::bond_joins::Joins<'_>
         0.
     };
     let mut envelope = offset.max(wave) + ink;
-    // A sharp joined corner can extend farther than half the bold width.
+    // A sharp joined corner can extend farther than the nominal bond envelope.
     // Reuse the actual bounded outline, rather than estimating its angle.
-    if joins.needed(bond)
+    if (joins.needed(bond) || joins.centered(bond))
         && let Some((a, b)) = doc.atom(bond.a).zip(doc.atom(bond.b))
     {
-        for point in joins.polygon(bond, a.position, b.position) {
-            envelope = envelope.max(crate::graphics::segment_distance(
-                point, a.position, b.position,
-            ));
+        let mut include = |points: Vec<Point>| {
+            for point in points {
+                envelope = envelope.max(crate::graphics::segment_distance(
+                    point, a.position, b.position,
+                ));
+            }
+        };
+        if joins.needed(bond) {
+            include(joins.polygon(bond, a.position, b.position));
+        }
+        if joins.centered(bond) {
+            let length = a.position.distance(b.position).max(0.001);
+            let nx = -(b.position.y - a.position.y) / length;
+            let ny = (b.position.x - a.position.x) / length;
+            for offset in [-spacing / 2., spacing / 2.] {
+                if let Some(points) = joins.centered_polygon(
+                    bond,
+                    a.position.offset(nx * offset, ny * offset),
+                    b.position.offset(nx * offset, ny * offset),
+                    offset,
+                ) {
+                    include(points);
+                }
+            }
         }
     }
     radius(style).max(envelope + style.line_width())
@@ -517,6 +537,61 @@ pub(crate) fn inherit_merged(doc: &mut Document, mapping: &HashMap<u64, u64>) {
             .find(|bond| (bond.a == a && bond.b == b) || (bond.a == b && bond.b == a))
         {
             bond.highlight.get_or_insert(color);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn centered_double_highlight_contains_joined_rail_corners() {
+        let mut doc = Document::default();
+        doc.drawing_style.bond_spacing_ratio = 0.05;
+        let a = doc.add_atom("C", Point::default());
+        let b = doc.add_atom("C", Point::new(42., 0.));
+        doc.add_bond(a, b, 2, "plain");
+        doc.bonds[0].double_position = crate::bonds::DoublePosition::Center;
+        doc.bonds[0].highlight = Some(Color::Custom([255, 220, 0]));
+        for degrees in [-145_f32, 145.] {
+            let angle = degrees.to_radians();
+            let c = doc.add_atom("C", Point::new(angle.cos() * 42., angle.sin() * 42.));
+            doc.add_bond(a, c, 1, "plain");
+        }
+        let bond = &doc.bonds[0];
+        let joins = crate::bond_joins::Joins::new(&doc);
+        let (lo, hi) = bond_bounds(&doc, bond, &joins).unwrap();
+        let paint = primitives_with_opacity(&doc, &crate::rear_opacity::Paint::new(&doc));
+        let Primitive::Path { commands, .. } = &paint[0] else {
+            panic!("Expected a highlight capsule");
+        };
+        let PathCommand::Move(top) = commands[0] else {
+            panic!("Expected the capsule's top edge");
+        };
+        let radius = -top.y;
+        let spacing = doc.drawing_style.bond_length_world * doc.drawing_style.bond_spacing_ratio;
+        for offset in [-spacing / 2., spacing / 2.] {
+            let points = joins
+                .centered_polygon(
+                    bond,
+                    Point::new(0., offset),
+                    Point::new(42., offset),
+                    offset,
+                )
+                .unwrap();
+            assert!(
+                points
+                    .iter()
+                    .any(|p| p.x < -4. && p.distance(Point::default()) > 4.6)
+            );
+            for point in points {
+                assert!(
+                    crate::graphics::segment_distance(point, Point::default(), Point::new(42., 0.))
+                        < radius
+                );
+                assert!(point.x >= lo.x && point.x <= hi.x && point.y >= lo.y && point.y <= hi.y);
+            }
         }
     }
 }
