@@ -207,11 +207,14 @@ pub const CRYSTALS: u32 = 29;
 pub const DISTANCE_BONDS: u32 = 30;
 /// Custom arrow-label clearances. Auto-only drawings still use version 30.
 pub const ARROW_LABEL_GAPS: u32 = 31;
+/// Thermal ellipsoid style and molecule-only crystal display settings.
+pub const ORTEP: u32 = 32;
 /// Linked conformer snapshots, generation seeds and 3D atom labels.
-pub const MODEL_POLISH: u32 = 32;
+pub const MODEL_POLISH: u32 = 33;
 
-/// The newest document format this build reads. Native output uses version 30,
-/// version 31 for custom reaction-label gaps, or version 32 for model polish.
+/// The newest document format this build reads. Native output uses version 30
+/// unless a custom reaction-label gap requires version 31, ORTEP settings
+/// require version 32 or model polish requires version 33.
 ///
 /// | Version | Added |
 /// | --- | --- |
@@ -239,8 +242,9 @@ pub const MODEL_POLISH: u32 = 32;
 /// | 29 | Crystal unit cells and atom sites on 3D models (#417; 0.13.0). |
 /// | 30 | Persistent distance-derived bond provenance (#517). |
 /// | 31 | Custom clearances for attached reaction labels (#600). |
-/// | 32 | Linked conformer snapshots, generation seeds and 3D atom labels (#386 phase 4). |
-pub const VERSION: u32 = 32;
+/// | 32 | Thermal ellipsoids and molecule-only crystal display (#417). |
+/// | 33 | Linked conformer snapshots, generation seeds and 3D atom labels (#386 phase 4). |
+pub const VERSION: u32 = 33;
 
 fn newer_version(version: u64) -> String {
     format!(
@@ -409,6 +413,12 @@ impl Document {
     pub fn file_version(&self) -> u32 {
         if self.models.iter().any(|model| model.needs_polish_version()) {
             MODEL_POLISH
+        } else if self
+            .models
+            .iter()
+            .any(crate::models3d::Model3d::needs_ortep)
+        {
+            ORTEP
         } else if self.arrow_labels.iter().any(|label| label.gap.is_some()) {
             ARROW_LABEL_GAPS
         } else {

@@ -292,7 +292,7 @@ fn polygon(points: &[Point], field: DepthField, keep: Side) -> Vec<Point> {
     }
     clipped
 }
-pub(super) fn capsule(a: Point, b: Point, width: f32) -> Vec<Point> {
+pub(crate) fn capsule(a: Point, b: Point, width: f32) -> Vec<Point> {
     let angle = (b.y - a.y).atan2(b.x - a.x);
     let radius = width / 2.;
     [b, a]

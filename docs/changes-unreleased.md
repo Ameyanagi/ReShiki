@@ -11,6 +11,12 @@ legacy XYZ limit.
 ([issue #386, phase 4](https://github.com/Ameyanagi/ReShiki/issues/386), [PR #659](https://github.com/Ameyanagi/ReShiki/pull/659));
 [3D model guide](3d-keyboard-drawing.md#show-a-molecule-as-a-3d-model).
 
+Under review: @Ameyanagi — CIF ORTEP thermal ellipsoids at 30/50/70/90%
+probability, principal-plane outlines and a shaded octant, plus Molecule only
+and optional solvent hiding. The same drawing exports to SVG, PNG and PDF;
+settings persist in native files (version 32 when used).
+[Issue #417, phase 4](https://github.com/Ameyanagi/ReShiki/issues/417), [PR #649](https://github.com/Ameyanagi/ReShiki/pull/649).
+
 **Python package — under review in [PR #611](https://github.com/Ameyanagi/ReShiki/pull/611).** Draw, convert and analyze structures
 from scripts, Jupyter, pandas and Excel with the same headless Rust engine as the
 editor. Immutable objects support chained cleanup and styles; parallel batches

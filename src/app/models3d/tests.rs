@@ -1172,6 +1172,7 @@ fn the_structure_note_names_the_current_style() {
         (Style::Stick, "Stick"),
         (Style::Wireframe, "Wireframe"),
         (Style::SpaceFilling, "Space-filling"),
+        (Style::Ellipsoids, "Ellipsoids"),
     ] {
         set(&mut app, Setting::Style(style));
         assert_eq!(

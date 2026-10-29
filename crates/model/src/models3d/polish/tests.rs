@@ -571,6 +571,7 @@ fn file_models_are_exempt_with_a_cell_or_only_imported_sites() {
                 id: ids[0],
                 label: "C1".into(),
                 adp: None,
+                asymmetric: true,
             }],
         );
         assert!(doc.models[0].is_file_derived());

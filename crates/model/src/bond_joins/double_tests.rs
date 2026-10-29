@@ -60,6 +60,201 @@ fn raster(doc: &Document) -> Result<(resvg::tiny_skia::Pixmap, Point, f32), Stri
     ))
 }
 
+fn centered_junction(ring: bool, element: &str, position: DoublePosition) -> Document {
+    let mut doc = Document::default();
+    let joint = doc.add_atom("C", Point::default());
+    let end = doc.add_atom(element, Point::new(42., 0.));
+    doc.add_bond(joint, end, 2, "plain");
+    doc.bonds[0].double_position = position;
+    let upper = doc.add_atom("C", Point::new(-21., -36.373));
+    let lower = doc.add_atom("C", Point::new(-21., 36.373));
+    doc.add_bond(joint, upper, 1, "plain");
+    doc.add_bond(joint, lower, 1, "plain");
+    if ring {
+        let a = doc.add_atom("C", Point::new(-63., -36.373));
+        let b = doc.add_atom("C", Point::new(-84., 0.));
+        let c = doc.add_atom("C", Point::new(-63., 36.373));
+        for (a, b) in [(upper, a), (a, b), (b, c), (c, lower)] {
+            doc.add_bond(a, b, 1, "plain");
+        }
+    }
+    doc
+}
+
+fn check_centered_junction(source: Document) -> Result<(), String> {
+    for rotation in [0_f32, 31., 97., 183., 271.] {
+        for reversed in [false, true] {
+            let mut doc = source.clone();
+            if reversed {
+                for bond in &mut doc.bonds {
+                    bond.reverse();
+                }
+                doc.bonds.reverse();
+            }
+            let ids = doc.all_ids();
+            editing::transform_about(&mut doc, &ids, Point::default(), 1., rotation);
+            let saved = doc.clone();
+            let (pixmap, origin, scale) = raster(&doc)?;
+            let (sin, cos) = rotation.to_radians().sin_cos();
+            let alpha = |x: f32, y: f32| -> Result<u8, String> {
+                let p = Point::new(x * cos - y * sin, x * sin + y * cos);
+                Ok(pixmap
+                    .pixel(
+                        ((p.x - origin.x) * scale).floor() as u32,
+                        ((p.y - origin.y) * scale).floor() as u32,
+                    )
+                    .ok_or("Outside raster")?
+                    .alpha())
+            };
+            let half =
+                doc.drawing_style.bond_length_world * doc.drawing_style.bond_spacing_ratio / 2.;
+            let width = doc.drawing_style.line_width() / 2.;
+            for sign in [-1., 1.] {
+                // Between the old round cap and the neighbouring single's near
+                // edge, inside the rail's width: this was a background notch.
+                assert_eq!(
+                    alpha(-1.1, sign * (half + width * 0.5))?,
+                    255,
+                    "Rail notch: rotation {rotation}, reversed {reversed}, side {sign}"
+                );
+                // Beyond the neighbour's far edge must remain background.
+                assert_eq!(
+                    alpha(-4.3, sign * half)?,
+                    0,
+                    "Rail overshoot: rotation {rotation}, reversed {reversed}, side {sign}"
+                );
+            }
+            assert_eq!(alpha(21., 0.)?, 0, "Centered rails became a filled bar");
+            assert_eq!(doc, saved, "Rendering changed chemical state");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn centered_acetone_rails_close_the_carbonyl_junction() -> Result<(), String> {
+    check_centered_junction(centered_junction(false, "O", DoublePosition::Auto))
+}
+
+#[test]
+fn centered_cyclohexanone_rails_close_the_exocyclic_junction() -> Result<(), String> {
+    check_centered_junction(centered_junction(true, "O", DoublePosition::Auto))
+}
+
+#[test]
+fn centered_methylidene_rails_close_the_substituted_carbon_junction() -> Result<(), String> {
+    check_centered_junction(centered_junction(false, "C", DoublePosition::Center))
+}
+
+#[test]
+fn centered_caps_choose_the_nearest_neighbor_on_each_side_and_bound_their_reach() {
+    let mut doc = centered_junction(false, "C", DoublePosition::Center);
+    // Two rays on each side; inserting the farther rays first must not affect
+    // which edge caps a rail. Acute neighbours also require trimming a rail.
+    for (atom, angle) in [(2, 120_f32), (3, -140.)] {
+        let (sin, cos) = angle.to_radians().sin_cos();
+        doc.atoms[atom].position = Point::new(42. * cos, 42. * sin);
+    }
+    for angle in [60_f32, -70.] {
+        let (sin, cos) = angle.to_radians().sin_cos();
+        let end = doc.add_atom("C", Point::new(42. * cos, 42. * sin));
+        doc.add_bond(1, end, 1, "plain");
+    }
+    let half = doc.drawing_style.bond_length_world * doc.drawing_style.bond_spacing_ratio / 2.;
+    let width = doc.drawing_style.line_width() / 2.;
+    let joins = bond_joins::Joins::new(&doc);
+    for (offset, angle) in [(half, 60_f32), (-half, -70.)] {
+        let caps = joins.centered_caps(
+            &doc.bonds[0],
+            Point::new(0., offset),
+            Point::new(42., offset),
+            offset,
+        );
+        let cap = caps[0].expect("Nearest neighbour cap");
+        let (sin, cos) = angle.to_radians().sin_cos();
+        for point in cap {
+            assert!((cos * point.y - sin * point.x - offset.signum() * width).abs() < 0.001);
+            assert!(((point.y - offset).abs() - width).abs() < 0.001);
+        }
+        assert!(caps[1].is_none(), "Terminal end acquired a join");
+    }
+    doc.bonds[3].display = "bold".into();
+    assert!(
+        bond_joins::Joins::new(&doc).centered_caps(
+            &doc.bonds[0],
+            Point::new(0., half),
+            Point::new(42., half),
+            half,
+        )[0]
+        .is_none(),
+        "Skipped a nearer unsupported outline to join a farther bond"
+    );
+    for angle in [1_f32, 179.] {
+        let mut doc = centered_junction(false, "C", DoublePosition::Center);
+        let (sin, cos) = angle.to_radians().sin_cos();
+        doc.atoms[3].position = Point::new(42. * cos, 42. * sin);
+        assert!(
+            bond_joins::Joins::new(&doc).centered_caps(
+                &doc.bonds[0],
+                Point::new(0., half),
+                Point::new(42., half),
+                half,
+            )[0]
+            .is_none(),
+            "Distant intersection at {angle} degrees was not bounded"
+        );
+    }
+}
+
+#[test]
+fn centered_caps_leave_labels_terminals_cumulenes_and_other_styles_unchanged() {
+    let source = centered_junction(false, "C", DoublePosition::Center);
+    let half =
+        source.drawing_style.bond_length_world * source.drawing_style.bond_spacing_ratio / 2.;
+    let caps = |doc: &Document| {
+        bond_joins::Joins::new(doc).centered_caps(
+            &doc.bonds[0],
+            Point::new(0., half),
+            Point::new(42., half),
+            half,
+        )
+    };
+    for label in ["O", "explicit C", "isotope", "radical"] {
+        let mut doc = source.clone();
+        match label {
+            "O" => doc.atoms[0].element = "O".into(),
+            "explicit C" => doc.atoms[0].display.carbons = Some(crate::atom_labels::Carbons::All),
+            "isotope" => doc.atoms[0].isotope = 13,
+            _ => doc.atoms[0].radical_electrons = 1,
+        }
+        assert_eq!(caps(&doc), [None, None], "Joined visible {label} label");
+    }
+    let mut terminal = source.clone();
+    terminal.bonds.truncate(1);
+    assert_eq!(caps(&terminal), [None, None]);
+    for order in [2, 3] {
+        let mut doc = source.clone();
+        for bond in &mut doc.bonds[1..] {
+            bond.order = order;
+            bond.double_position = DoublePosition::Center;
+        }
+        assert_eq!(caps(&doc), [None, None], "Joined centered/triple neighbour");
+    }
+    for display in ["bold", "wedge", "hollow_wedge", "hash", "wavy"] {
+        let mut doc = source.clone();
+        for bond in &mut doc.bonds[1..] {
+            bond.display = display.into();
+        }
+        assert_eq!(caps(&doc), [None, None], "Joined {display} neighbour");
+        let mut doc = source.clone();
+        doc.bonds[0].display = display.into();
+        assert_eq!(caps(&doc), [None, None], "Joined {display} double");
+    }
+    let mut doc = source;
+    doc.bonds[0].secondary_display = Some("dashed".into());
+    assert_eq!(caps(&doc), [None, None], "Changed a styled secondary rail");
+}
+
 #[test]
 fn colored_branches_join_the_same_ring_outline_without_changing_chemistry() -> anyhow::Result<()> {
     use anyhow::Context;

@@ -815,6 +815,7 @@ fn file_derived_models_with_cell_sites_or_marker_never_generate_but_accept_label
                 id: atoms[0],
                 label: "C1".into(),
                 adp: None,
+                asymmetric: true,
             }]
         } else {
             vec![]
@@ -923,6 +924,7 @@ async fn phase4_controls_activate_only_for_the_appropriate_models() -> Result<()
                     id: atoms[0],
                     label: "C1".into(),
                     adp: None,
+                    asymmetric: true,
                 }]
             } else {
                 vec![]

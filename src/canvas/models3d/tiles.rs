@@ -95,6 +95,7 @@ pub(in crate::canvas) fn is_model(primitive: &Primitive) -> bool {
         p => matches!(
             p,
             Primitive::Sphere { .. }
+                | Primitive::Ellipsoid { .. }
                 | Primitive::ShadedQuad { .. }
                 | Primitive::ShadedPolygon { .. }
                 | Primitive::Contour { .. }

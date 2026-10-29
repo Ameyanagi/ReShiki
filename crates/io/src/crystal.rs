@@ -66,6 +66,8 @@ struct Atom {
     label: String,
     xyz: V3,
     adp: Option<Adp>,
+    /// A listed CIF input site, before symmetry expansion.
+    asymmetric: bool,
 }
 
 /// What a reader keeps of a file.

@@ -132,7 +132,7 @@ Leaf crates depend on no layer crate; only `reshiki-windows` uses another leaf, 
 | `crates/model/src/style.rs` and `assets/drawing_style.json` | Shared JACS / ACS defaults, publication units and font advances                |
 | `reference/engine/worker.py`                                | Independent Python/RDKit reference, enabled by `rdkit-reference`               |
 
-Document coordinates use screen-style positive-down Y, with 28 world units per RDKit coordinate unit. The default single bond is 42 world units, representing 14.4 publication points in the JACS / ACS preset. The camera never changes stored coordinates or export size. Native documents save as JSON format version 30, version 31 when they contain a custom arrow-label gap, or version 32 for linked-model state, explicit file-geometry provenance or atom labels, and accept versions 1–32 when reading; see [document format versions](#document-format-versions). Version 17 stores theme palette colors by name and custom colors as displayed; reading an older dark-canvas drawing converts its custom colors once to the lightness-flipped values it showed. Version 16 embeds custom themes and version 15 adds explicit reaction roles tied to arrow and atom IDs. A drawing from a newer ReShiki reports the document version it needs instead of a parse error. Version 14 adds validated per-document drawing settings; the physical coordinate scale remains fixed at 14.4/42 points per world unit. New presentation fields prompted version increments so older editors reject unsupported documents. History and camera are session state.
+Document coordinates use screen-style positive-down Y, with 28 world units per RDKit coordinate unit. The default single bond is 42 world units, representing 14.4 publication points in the JACS / ACS preset. The camera never changes stored coordinates or export size. Native documents save as JSON format version 30, version 31 when they contain a custom arrow-label gap, version 32 for ORTEP settings, or version 33 for linked-model state, explicit file-geometry provenance or atom labels, and accept versions 1–33 when reading; see [document format versions](#document-format-versions). Version 17 stores theme palette colors by name and custom colors as displayed; reading an older dark-canvas drawing converts its custom colors once to the lightness-flipped values it showed. Version 16 embeds custom themes and version 15 adds explicit reaction roles tied to arrow and atom IDs. A drawing from a newer ReShiki reports the document version it needs instead of a parse error. Version 14 adds validated per-document drawing settings; the physical coordinate scale remains fixed at 14.4/42 points per world unit. New presentation fields prompted version increments so older editors reject unsupported documents. History and camera are session state.
 
 Atoms retain formal charge, isotope, explicit-H count, implicit-H policy, map number and tetrahedral winding. Winding refers to an explicit ordered list of stable neighbor IDs. Molecule preparation compensates for neighbor permutations, preventing array reordering from reversing a stereocenter. Double-bond stereo stores its reference atoms separately. Topology edits invalidate affected stereo and derived labels; a background refresh recomputes chemistry. Explicit Check also refreshes computed properties.
 
@@ -140,12 +140,14 @@ Atoms retain formal charge, isotope, explicit-H count, implicit-H policy, map nu
 
 `VERSION` in `crates/model/src/document.rs` is the newest format this build
 reads. Its doc comment holds the table below; update both together.
-`Document::file_version` selects version 32 when a model retains linked-conformer
-source state, a generation seed, explicit file-geometry provenance or atom labels, version 31 for a custom arrow-label
-gap, otherwise version 30. Newly generated linked models carry source state;
+`Document::file_version` selects version 33 when a model retains linked-conformer
+source state, a generation seed, explicit file-geometry provenance or atom labels, version 32 for thermal ellipsoids or nondefault ORTEP controls,
+version 31 for a custom arrow-label gap, otherwise version 30. Newly generated linked models carry source state;
 an unlabeled imported model identified by its cell or file atom sites does not
-require version 32 by itself. A plain XYZ model without either needs version 32
+require version 33 by itself. A plain XYZ model without either needs version 33
 to preserve its file-geometry marker.
+Optional asymmetric-unit site provenance alone does not raise the version;
+older readers can discard it safely.
 ReShiki 0.13.0 reads versions up to 29 and cannot open
 newly saved drawings; it reports the version it needs. Version 30 protects
 distance-derived bond provenance: an older reader must not discard it and
@@ -179,7 +181,8 @@ whose model was already discarded cannot recover that missing source context.
 | 29      | Crystal unit cells and atom sites on 3D models (#417; 0.13.0).                  |
 | 30      | Persistent distance-derived bond provenance (#517).                             |
 | 31      | Custom clearances for attached reaction labels (#600).                          |
-| 32      | Linked conformer snapshots, generation seeds and 3D atom labels (#386 phase 4). |
+| 32      | Thermal ellipsoids and molecule-only crystal display (#417).                    |
+| 33      | Linked conformer snapshots, generation seeds and 3D atom labels (#386 phase 4). |
 
 ## Chemistry requests
 

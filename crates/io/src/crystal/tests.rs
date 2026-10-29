@@ -134,6 +134,136 @@ fn co2_keeps_whole_molecules_with_centres_in_the_cell() {
 }
 
 #[test]
+fn co2_molecule_view_completes_the_asymmetric_unit_and_hides_packing() {
+    let (doc, _) = open("cif", CO2);
+    let m = model(&doc);
+    assert_eq!(m.sites.iter().filter(|site| site.asymmetric).count(), 2);
+    let shown = crate::models3d::crystal::molecule_atoms(&doc, m, true);
+    assert_eq!(shown.len(), 3);
+    let ids: Vec<_> = shown.iter().copied().collect();
+    assert_eq!(
+        crate::models3d::crystal::composition(&doc, &ids)
+            .unwrap()
+            .formula,
+        "CO2"
+    );
+    assert_eq!(
+        doc.bonds
+            .iter()
+            .filter(|bond| shown.contains(&bond.a) && shown.contains(&bond.b))
+            .count(),
+        2
+    );
+    assert_eq!(
+        crate::models3d::crystal::molecule_atoms(&doc, m, false),
+        shown
+    );
+    // View selection leaves the full unit cell available for switching back.
+    assert_eq!(doc.atoms.len(), 12);
+    let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(reopened.models, doc.models);
+    assert_eq!(
+        crate::models3d::crystal::molecule_atoms(&reopened, model(&reopened), true),
+        shown
+    );
+}
+
+#[test]
+fn ferrocene_molecule_view_shows_one_complete_discrete_molecule() {
+    let (doc, _) = open(
+        "cif",
+        include_str!("../../../../tests/fixtures/crystal/cod-7033930.cif"),
+    );
+    let m = model(&doc);
+    let shown = crate::models3d::crystal::molecule_atoms(&doc, m, true);
+    assert_eq!(shown.len(), 21);
+    let ids: Vec<_> = shown.iter().copied().collect();
+    assert_eq!(
+        crate::models3d::crystal::composition(&doc, &ids)
+            .unwrap()
+            .formula,
+        "C10H10Fe"
+    );
+    assert!(
+        m.sites
+            .iter()
+            .filter(|site| site.asymmetric)
+            .all(|site| shown.contains(&site.id))
+    );
+    assert_eq!(doc.atoms.len(), 42);
+    assert_eq!(
+        crate::models3d::crystal::molecule_atoms(&doc, m, false),
+        shown
+    );
+}
+
+#[test]
+fn network_molecule_view_keeps_the_entire_unit_cell() {
+    let (doc, _) = open("cif", NACL);
+    let all = doc.atoms.iter().map(|atom| atom.id).collect();
+    for include_solvent in [true, false] {
+        assert_eq!(
+            crate::models3d::crystal::molecule_atoms(&doc, model(&doc), include_solvent),
+            all
+        );
+    }
+}
+
+#[test]
+fn cif_input_provenance_survives_missing_reordered_and_overlapping_symmetry() {
+    let cell = CELL
+        .replace("length_a 4", "length_a 20")
+        .replace("length_b 4", "length_b 20")
+        .replace("length_c 4", "length_c 20");
+    let sites = "loop_\n_atom_site_label\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\nAr1 .1 .2 .3\n";
+    for operators in ["'-x,-y,-z'\n'x,y,z'", "'x+1,y,z'\n'-x,-y,-z'"] {
+        let text = format!("{cell}loop_\n_symmetry_equiv_pos_as_xyz\n{operators}\n{sites}");
+        let (doc, _) = open("cif", &text);
+        let m = model(&doc);
+        assert_eq!(doc.atoms.len(), 2, "{operators}");
+        assert_eq!(m.sites.iter().filter(|site| site.asymmetric).count(), 1);
+        let shown = crate::models3d::crystal::molecule_atoms(&doc, m, true);
+        assert_eq!(shown.len(), 1);
+        let source = m
+            .atoms
+            .iter()
+            .find(|atom| shown.contains(&atom.id))
+            .unwrap();
+        assert!(distance(source.xyz, [2., 4., 6.]) < 1e-4);
+    }
+    // An incomplete operator list continues to import only its listed
+    // symmetry images. Without any retained source position, the view keeps
+    // all imported atoms as it does for legacy files without provenance.
+    let text = format!("{cell}loop_\n_symmetry_equiv_pos_as_xyz\n'-x,-y,-z'\n{sites}");
+    let (doc, _) = open("cif", &text);
+    assert_eq!(doc.atoms.len(), 1);
+    assert!(!model(&doc).sites[0].asymmetric);
+    assert!(distance(model(&doc).atoms[0].xyz, [18., 16., 14.]) < 1e-4);
+    assert_eq!(
+        crate::models3d::crystal::molecule_atoms(&doc, model(&doc), true).len(),
+        1
+    );
+    // A nonidentity operation may still keep a source atom on a special
+    // position, so provenance follows positions rather than operator names.
+    let text = text.replace("Ar1 .1 .2 .3", "Ar1 0 0 0");
+    let (special, _) = open("cif", &text);
+    assert_eq!(special.atoms.len(), 1);
+    assert!(model(&special).sites[0].asymmetric);
+    // A second input record can occupy a symmetry copy already generated for
+    // the first. Its provenance must promote that atom rather than be lost.
+    let text = format!(
+        "{cell}loop_\n_symmetry_equiv_pos_as_xyz\n'-x,-y,-z'\n'x,y,z'\n{sites}Ar2 .9 .8 .7\n"
+    );
+    let (doc, _) = open("cif", &text);
+    assert_eq!(doc.atoms.len(), 2);
+    assert!(model(&doc).sites.iter().all(|site| site.asymmetric));
+    assert_eq!(
+        crate::models3d::crystal::molecule_atoms(&doc, model(&doc), true).len(),
+        2
+    );
+}
+
+#[test]
 fn pdb_reads_cryst1_and_a_whole_molecule() {
     let (doc, _) = open("pdb", UREA);
     let m = model(&doc);
@@ -1174,6 +1304,7 @@ fn bond_orders_do_not_depend_on_atom_order() {
         label: String::new(),
         xyz: [0.; 3],
         adp: None,
+        asymmetric: false,
     };
     let mut atoms: Vec<_> = (0..10).map(|_| atom("C")).collect();
     let mut bonds = vec![(0, 1)];

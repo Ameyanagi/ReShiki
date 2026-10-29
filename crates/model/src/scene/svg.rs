@@ -330,6 +330,33 @@ fn push_svg(s: &mut String, drawing: Vec<Primitive>, frame: &Frame, halos: &mut 
                     }
                 }
             }
+            Primitive::Ellipsoid { center, axes, focal, stops, outline, section } => {
+                let [a, b] = axes.map(|a| a.x.hypot(a.y));
+                let angle = axes[0].y.atan2(axes[0].x).to_degrees();
+                let (defs, id) = gradient(
+                    frame,
+                    "radialGradient",
+                    &format!(
+                        "cx=\"0\" cy=\"0\" r=\"1\" fx=\"{}\" fy=\"{}\" fr=\"{}\" gradientTransform=\"scale({a} {b})\"",
+                        focal.x, focal.y, crate::models3d::FOCAL_RADIUS
+                    ),
+                    &stops,
+                );
+                s.push_str(&format!(
+                    "{defs}<g transform=\"translate({} {}) rotate({angle})\"><ellipse rx=\"{a}\" ry=\"{b}\" fill=\"url(#{id})\"{}/></g>",
+                    center.x, center.y, outline_paint(outline)
+                ));
+                if let Some(section) = section {
+                    let octant = ring_data(&section.octant, true, center, 0.);
+                    let arcs: String = section.arcs.iter().map(|arc| ring_data(arc, false, center, 0.)).collect();
+                    let [r, g, b] = section.fill;
+                    let [sr, sg, sb] = section.color;
+                    s.push_str(&format!(
+                        "<path d=\"{octant}\" fill=\"rgb({r},{g},{b})\" stroke=\"rgb({sr},{sg},{sb})\" stroke-width=\"{}\" stroke-linejoin=\"round\"/><path d=\"{arcs}\" fill=\"none\" stroke=\"rgb({sr},{sg},{sb})\" stroke-width=\"{}\" stroke-linecap=\"round\"/>",
+                        section.width, section.width
+                    ));
+                }
+            }
             Primitive::ShadedQuad {
                 corners,
                 from,
@@ -558,6 +585,7 @@ fn push_halo(s: &mut String, primitives: &[Primitive], radius: f32, color: &str)
             Primitive::Picture(_)
             | Primitive::Halo { .. }
             | Primitive::Sphere { .. }
+            | Primitive::Ellipsoid { .. }
             | Primitive::ShadedQuad { .. }
             | Primitive::ShadedPolygon { .. }
             | Primitive::Contour { .. }

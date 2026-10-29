@@ -33,7 +33,8 @@ without a cell opens as a 3D model.
 
 **Show as 3D** shows the model in that same view: drag inside the frame to turn
 it, double-click to come back to the opening view, and use **Properties → 3D
-model** for **Ball & stick**, **Stick**, **Wireframe** or **Space-filling**.
+model** for **Ball & stick**, **Stick**, **Wireframe** or **Space-filling**, plus
+**Ellipsoids** when displacement parameters are present.
 **Show as 2D** brings back the opening drawing, or **From the 3D view**
 flattens the model as it is turned; **Both** puts the model beside the
 drawing.
@@ -106,6 +107,48 @@ other appearance controls remain available in **Properties → 3D model**.
   atoms shown (of the selected atoms, if any) and says that chemical analysis
   is unavailable, since the bonds come from distances, not chemistry.
 
+## ORTEP thermal ellipsoids
+
+When a model has displacement parameters, choose **Properties → 3D model →
+Ellipsoids**. The ellipsoids enclose **50%** probability by default; choose
+**30 / 50 / 70 / 90%** to change their size. Anisotropic Uᵢⱼ values are
+converted from the CIF cell basis to a Cartesian displacement covariance.
+The principal axes give the orientation and their square-root eigenvalues,
+scaled for the chosen probability, give the radii. Isotropic U values give
+spheres at the same probability.
+
+Each anisotropic non-hydrogen atom has principal-plane ellipse outlines,
+with solid visible halves, and a darker octant facing the viewer bounded by
+three arcs. The projected outline follows the exact ellipse under the current
+rotation and perspective. **Flat** and **Glossy** retain their usual shading;
+bonds are sticks between the ellipsoid surfaces. Hydrogens, atoms without
+ADPs and atoms with non-positive-definite displacement tensors use small fixed
+spheres. Their size does not depend on probability. SVG, PNG and PDF export
+use the same drawing as the canvas.
+
+For a crystal, **Molecule only → On** shows the whole molecule or molecules
+containing the CIF's asymmetric-unit atoms, without the unit cell or packing.
+Molecules already made whole across cell boundaries remain whole. This changes
+only the 3D display: hidden atoms and bonds remain in the document, its formula
+and its saved structure. Repeat settings do not add copies to this view.
+
+With Molecule only on, **Include solvent** defaults to **On**. Set it to
+**Off** to hide discrete molecules with **at most eight non-hydrogen atoms**
+and **fewer non-hydrogen atoms than the largest selected discrete molecule**.
+All equally large molecules remain. This size rule is a display convenience,
+not chemical solvent recognition: small coformers, counterions or ligands can
+also be hidden. Extended networks are retained and have no isolated whole
+molecule to extract; their cell atoms remain visible without the box or
+boundary half-bonds. For older saved crystals and formats without
+asymmetric-unit provenance, Molecule only conservatively keeps all molecules.
+Reopen the original CIF to recover the asymmetric-unit selection.
+
+The style, probability and filter choices survive native save/reopen and
+Undo. Drawings using these settings require document version **32**; drawings
+with the default controls retain their previous version **30**, or **31** if
+they have custom reaction-label gaps. Older drawings keep their display and
+open with 50% probability, Molecule only off and Include solvent on.
+
 ## Editing a crystal
 
 Changing an in-cell atom’s element or formal charge keeps the unit cell,
@@ -147,7 +190,8 @@ A saved `.rsk` file keeps only what the structure needs: the lattice vectors,
 each atom's element, position and charge, the bonds, the bonds that leave the
 cell, and from the file each atom's label and displacement parameters. ADPs are
 kept as U in Å² (B values are divided by 8π²), anisotropic U as CIF writes
-them, for thermal ellipsoids in a later version. Import notes, including omitted
+them. CIF sites also retain a flag identifying asymmetric-unit atoms for
+the Molecule only display filter. Import notes, including omitted
 alternative sites and overlapping atoms, stay in **Properties → Molecular
 properties** and survive saving and reopening. CIF disorder counts refer to
 alternative site records before symmetry expansion; PDB alternate-location
@@ -158,9 +202,10 @@ Everything else in the file —
 bibliography, reflections, other data blocks, other XYZ properties or PDB
 records — is read past and not kept, so a saved drawing stays small.
 
-Saved drawings use document version 30 or later, retaining distance-derived
-bond provenance even after the cell is removed. Atom labels on a model, and
-plain XYZ models without a unit cell or site records, require version 32.
+Saved drawings without ORTEP settings use document version 30 (31 with custom
+reaction-label gaps), which retains distance-derived
+bond provenance even after the cell is removed. Atom labels on a model, and plain XYZ models
+without a unit cell or site records, require version 33.
 ReShiki 0.13.0 and earlier
 cannot open these files; their newer-version message asks for an update.
 Version 29 crystals still open and acquire provenance from their live cells.

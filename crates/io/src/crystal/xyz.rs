@@ -134,6 +134,7 @@ pub(super) fn read(text: &str) -> Result<Structure, Error> {
             label: String::new(),
             xyz,
             adp: None,
+            asymmetric: false,
         });
     }
     Ok(Structure {
