@@ -1,22 +1,22 @@
 # ReShiki videos
 
-These videos and posters are unchanged copies from the sibling `reshiki-promo` project, imported on 2026-09-28.
+These videos and posters are unchanged copies from the sibling `reshiki-promo` project. The release highlights were imported on 2026-09-28 and the full tour on 2026-10-29.
 
-- **Full tour:** `reshiki-promo.mp4`, from `out/reshiki-full-0.9.1.mp4`, is 165.59 seconds (displayed as 2:46).
+- **Full tour:** `reshiki-promo.mp4`, from `out/reshiki-0.13.1.mp4`, is 237.40 seconds (displayed as 3:57). It shows ReShiki 0.13.1.
 - **Release highlights:** `reshiki-0.9.1.mp4` is 130.45 seconds (displayed as 2:10). It covers the broader 0.9 features; the 0.9.1 patch fixes Windows dropdown shadows.
 - Both are 1920 × 1080, with H.264 video, AAC audio, and English captions burned in.
 
-| Website file               | Source file                    | SHA-256                                                            |
-| -------------------------- | ------------------------------ | ------------------------------------------------------------------ |
-| `reshiki-promo.mp4`        | `out/reshiki-full-0.9.1.mp4`   | `1ff808ef08f075528065483b65620151f41c7b899edf3c10f61414bc4cbf504b` |
-| `reshiki-promo-poster.png` | `out/thumbnail-full-0.9.1.png` | `45092518c988befa54bf25ee9e24cb54307dd7d518ee01dccf9a363b64dd3e30` |
-| `reshiki-0.9.1.mp4`        | `out/reshiki-0.9.1.mp4`        | `c26a65ae1c88d544217485bd590b267f4413ef05235bfb97fd74c358f2b9cb88` |
-| `reshiki-0.9.1-poster.png` | `out/thumbnail-0.9.1.png`      | `78505bef819e38582370d544bea54af98445558d57cb69cb1d1815ab5a207804` |
+| Website file               | Source file                | SHA-256                                                            |
+| -------------------------- | -------------------------- | ------------------------------------------------------------------ |
+| `reshiki-promo.mp4`        | `out/reshiki-0.13.1.mp4`   | `6012ea8663da49eb0ac848420d855d2680c76eb8d6e1c37a7babfa935e636058` |
+| `reshiki-promo-poster.png` | `out/thumbnail-0.13.1.png` | `ece4d04cc538ffa419be389ec74b8b83c00329000bbe538b1c57330c99989fde` |
+| `reshiki-0.9.1.mp4`        | `out/reshiki-0.9.1.mp4`    | `c26a65ae1c88d544217485bd590b267f4413ef05235bfb97fd74c358f2b9cb88` |
+| `reshiki-0.9.1-poster.png` | `out/thumbnail-0.9.1.png`  | `78505bef819e38582370d544bea54af98445558d57cb69cb1d1815ab5a207804` |
 
 The homepage features the full tour and links to the release-highlights player in the 0.9.1 changelog. The README uses the full-tour poster as a link to the homepage player.
 
 Both players display their posters until playback starts. Native controls, inline playback, direct download links, and `preload="none"` let visitors choose when to load the videos. The full tour keeps its existing `/media/reshiki-promo.mp4` URL so older links continue to work. These static files are included in the existing GitHub Pages build.
 
-The homepage and download links include `?v=0.9.1` on the full tour and poster to avoid stale CDN or browser copies after replacing the files. Update this cache version when replacing those assets again.
+The homepage and download links include `?v=0.13.1` on the full tour and poster to avoid stale CDN or browser copies after replacing the files. Update this cache version when replacing those assets again.
 
 To refresh a video, copy the rendered MP4 and matching poster from the promo project, update its duration and checksum here and in the page captions, and run `bun run docs:check` and `bun run docs:build` from the ReShiki repository root. Verify playback and mobile layout before publishing.
