@@ -13,7 +13,8 @@ use std::collections::BTreeMap;
 mod clip;
 mod ink;
 mod visibility;
-use clip::{capsule, flatten, mask_clip, split_curve, split_fill, split_intervals};
+pub(crate) use clip::capsule;
+use clip::{flatten, mask_clip, split_curve, split_fill, split_intervals};
 
 pub const EXPORT_NOTICE: &str = "This chemical format does not retain rear opacity. Chemical structure and XYZ are unchanged; use native ReShiki for editable appearance or SVG/PDF/PNG for the figure.";
 
