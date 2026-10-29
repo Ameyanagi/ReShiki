@@ -272,6 +272,22 @@ pub(super) struct Projection {
     pub axes: [Point; 2],
 }
 impl Projection {
+    /// How far a ray from `from` along the unit `direction` runs before it
+    /// leaves the ellipse.
+    pub fn exit(&self, from: Point, direction: Point) -> Option<f32> {
+        let w = Point::new(from.x - self.center.x, from.y - self.center.y);
+        let (mut a, mut b, mut c) = (0., 0., -1.);
+        for axis in self.axes {
+            let n = axis.x * axis.x + axis.y * axis.y;
+            let (d, p) = (
+                (direction.x * axis.x + direction.y * axis.y) / n,
+                (w.x * axis.x + w.y * axis.y) / n,
+            );
+            (a, b, c) = (a + d * d, b + 2. * d * p, c + p * p);
+        }
+        let root = (b * b - 4. * a * c).sqrt();
+        (a > 0. && root.is_finite()).then(|| (root - b) / (2. * a))
+    }
     #[cfg(test)]
     pub fn contains(&self, point: Point, margin: f32) -> bool {
         let d = Point::new(point.x - self.center.x, point.y - self.center.y);

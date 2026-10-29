@@ -2279,7 +2279,30 @@ impl View<'_> {
             (ps, po)
         };
         let (start, fs) = self.project(centre);
-        let (middle, fm) = self.project(zip3(ps, po, |a, b| (a + b) / 2.));
+        let (mut middle, fm) = self.project(zip3(ps, po, |a, b| (a + b) / 2.));
+        if self.style == Style::Ellipsoids {
+            // The colour changes midway between where the stick leaves each
+            // outline on screen, so a bond tilted in depth still shows equal
+            // halves.
+            let (end, _) = self.project(*self.rotated.get(o)?);
+            let length = start.distance(end);
+            let d = Point::new((end.x - start.x) / length, (end.y - start.y) / length);
+            let exit = |i: usize, from: Point, direction: Point| {
+                let ellipsoid = self.ellipsoids.get(i).and_then(Option::as_ref);
+                match ellipsoid {
+                    Some(e) => e
+                        .project(self, *self.rotated.get(i)?)?
+                        .exit(from, direction),
+                    None => Some(self.balls().find(|b| b.0 == i)?.2),
+                }
+            };
+            if let (Some(a), Some(b)) = (exit(s, start, d), exit(o, end, Point::new(-d.x, -d.y)))
+                && length > 0.
+            {
+                let t = (a + length - b) / 2.;
+                middle = start.offset(d.x * t, d.y * t);
+            }
+        }
         let radius = match self.style {
             Style::BallStick | Style::Ellipsoids => BOND_RADIUS * self.scale,
             Style::Stick => STICK_RADIUS * self.scale,
