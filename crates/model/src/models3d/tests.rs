@@ -1945,6 +1945,7 @@ fn crystal() -> (Document, [u64; 2]) {
         id: na,
         label: "Na1".into(),
         adp: Some(Adp::Aniso([0.01, 0.02, 0.03, 0., 0.001, -0.002])),
+        asymmetric: false,
     }];
     let model =
         Model3d::new(&doc, atoms, vec![], ForceField::Mmff94s).with_cell(&doc, Some(cell), sites);

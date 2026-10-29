@@ -149,13 +149,15 @@ pub(super) fn deduplicate(atoms: &mut Vec<Atom>, lattice: Option<&Lattice>) -> u
     let before = atoms.len();
     let mut kept: Vec<Atom> = Vec::with_capacity(atoms.len());
     for atom in atoms.drain(..) {
-        let same = kept.iter().any(|k| {
+        let same = kept.iter_mut().find(|k| {
             lattice.map_or_else(
                 || length(sub(k.xyz, atom.xyz)) < SAME_SITE,
                 |l| l.within(k.xyz, atom.xyz, SAME_SITE),
             )
         });
-        if !same {
+        if let Some(earlier) = same {
+            earlier.asymmetric |= atom.asymmetric;
+        } else {
             kept.push(atom);
         }
     }
@@ -398,11 +400,12 @@ pub(super) fn document(structure: Structure) -> Result<Document, Error> {
     let sites: Vec<Site> = ids
         .iter()
         .zip(&atoms)
-        .filter(|(_, a)| !a.label.is_empty() || a.adp.is_some())
+        .filter(|(_, a)| !a.label.is_empty() || a.adp.is_some() || a.asymmetric)
         .map(|(id, a)| Site {
             id: *id,
             label: a.label.chars().take(64).collect(),
             adp: a.adp,
+            asymmetric: a.asymmetric,
         })
         .collect();
     let cell = lattice.map(|l| Cell {
