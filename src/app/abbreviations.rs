@@ -184,6 +184,7 @@ impl App {
                     if count == 1 { "" } else { "s" }
                 );
                 self.tool = Tool::Select;
+                return Task::none();
             }
         }
         self.inspector_tab = InspectorTab::Abbreviations;

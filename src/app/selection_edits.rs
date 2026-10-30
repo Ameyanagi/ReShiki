@@ -125,7 +125,21 @@ impl App {
             reshiki::models3d::roll(&mut self.tab.doc, &self.tab.selected, degrees);
         }
         editing::transform(&mut self.tab.doc, &ids, transform);
+        let revision = self.tab.revision;
         self.changed(before);
+        if self.tab.revision != revision
+            && let editing::Transform::Rotate(degrees) = transform
+        {
+            self.status = format!(
+                "Rotated {}° {}",
+                degrees.abs(),
+                if degrees > 0. {
+                    "clockwise"
+                } else {
+                    "counterclockwise"
+                }
+            );
+        }
     }
     pub(super) fn arrange_selection(&mut self, arrange: reshiki::editing::Arrange) {
         let before = self.tab.doc.clone();
