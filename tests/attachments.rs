@@ -445,12 +445,12 @@ async fn public_import_export_preserves_semantics_without_false_molecular_analys
                 "{format}"
             );
         }
-        assert!(
-            engine
-                .execute(Request::molecule("analyze", doc))
-                .await
-                .is_err()
-        );
+        let analyzed = engine
+            .execute(Request::molecule("analyze", doc))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        assert!(analyzed.analysis.is_none());
+        assert_eq!(analyzed.warnings, [attachments::ANALYSIS_NOTICE]);
     }
     Ok(())
 }
