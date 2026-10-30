@@ -74,12 +74,15 @@ Text fields keep ordinary typing, and Cmd/Ctrl shortcuts never type their letter
 
 ## Mouse and keyboard drawing by default
 
-In Select/Lasso, the marker and context row show the active hotspot without
-requiring F8. A single selected atom or bond's two selected endpoints provide
-an initial target; otherwise the nearest visible atom or bond to the view
-centre is used. Blank drawings initially start at the view centre. Move the
-pointer or click to transfer the hotspot to an atom, bond, or empty position.
-After a keyboard step, a stationary pointer does not steal its new target.
+In Select/Lasso, keyboard drawing works without requiring F8. A single selected
+atom or bond's two selected endpoints provide a visible initial target;
+otherwise the nearest visible atom or bond to the view centre is used, with
+the marker and target text hidden. Blank drawings initially target the view
+centre, also hidden. The first actual pointer motion over the canvas, canvas
+click, or arrow or drawing key reveals the hotspot. A drawing key uses that
+initial target immediately. Move the pointer or click to transfer the hotspot
+to an atom, bond, or empty position. After a keyboard step, a stationary pointer
+does not steal its new target.
 
 | Key                           | Result with keyboard drawing on                                              |
 | ----------------------------- | ---------------------------------------------------------------------------- |
@@ -122,10 +125,12 @@ Undo/Redo restore their hotspot and mark.
 
 F8/Off is a per-tab opt-out that survives tool and tab changes; new tabs start
 on. Other drawing tools suspend the hotspot and clear a pending mark. Returning
-to Select/Lasso resumes it automatically unless opted out. Text fields, label
-drafts, and dialogs retain their typing and caret keys. Cmd/Ctrl and Alt keep
-their modified commands, and **Shift+3–8** still chooses ring tools. Escape
-preserves the on/off preference.
+to Select/Lasso resumes it automatically unless opted out. Without a selected
+atom or bond, the resumed target stays hidden until pointer motion, a canvas
+click, or an arrow or drawing key, including after applying a text label.
+Text fields, label drafts, and dialogs retain their typing and caret keys.
+Cmd/Ctrl and Alt keep their modified commands, and **Shift+3–8** still chooses
+ring tools. Escape preserves the on/off preference.
 
 With keyboard drawing off, classic contextual keys use hover or selection,
 and arrows nudge the selection by 1 / 10 drawing units. Clear the selection
@@ -175,6 +180,11 @@ Choose an element in **Atoms**, then drag from an existing atom to add it with a
 | 6 / 7 / v / u             | Attach a 6 / 5 / 3 / 4 member ring                          |
 | Enter or =                | Edit atom label                                             |
 | g / ?                     | Select target / open its properties                         |
+
+Group keys replace endpoints and isolated atoms. At other atoms with an implicit
+H to spare, they add a single bond and the group in one Undo step, using the same
+placement as **1** followed by the group key. Non-endpoints without a free H and
+atoms inside a group refuse the edit.
 
 Defined groups keep their underlying atoms and bonds, so molecular properties include their composition. Variable R/X labels do not define a complete molecular formula. **j** and **J** retain the metal as the target for repeated ligand insertion; chemical charges are retained. The initial ligand uses a 60° perspective tilt with tapered front edges and the metal contact behind the ring. Its X/Y/Z coordinates are retained, so the 3D Tilt tool can rotate it further and update the thick/tapered perspective edges. Crossing clearance is recalculated from depth as you drag or tilt the ligand; the contact can pass in front of the far ring edge and ellipse. Cp carries −1 in the chemical data; arene is neutral. Cp’s minus sign is hidden by default in the drawing. Charge display can be changed in Atoms → Show charge without changing that data. Native documents retain the 3D model. Tested Cp/arene ligands also copy as editable CDX, including aromatic ellipses, perspective edges, hidden ligand charges and multi-center targets. Other unsupported appearances are converted only in the external copy, or use a reported picture fallback; see the [compatibility table](clipboard.md#changes-made-for-an-external-copy).
 

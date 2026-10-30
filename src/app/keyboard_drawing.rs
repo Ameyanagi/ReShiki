@@ -261,6 +261,7 @@ impl App {
         if !self.keyboard_drawing_active() {
             return Task::none();
         }
+        self.tab.keyboard_drawing.show_target();
         match key {
             "[" => return self.keyboard_drawing_action(Action::Mark),
             "]" => return self.keyboard_drawing_action(Action::Connect),

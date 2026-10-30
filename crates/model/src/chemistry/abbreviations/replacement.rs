@@ -187,8 +187,7 @@ pub fn replace_with_policy(
     policy: AttachmentPolicy,
 ) -> Result<Document> {
     if crate::common_groups::LABELS.contains(&label) {
-        return crate::common_groups::replace(document, selection, label)
-            .map_err(Error::Definition);
+        return crate::common_groups::replace(document, selection, label);
     }
     let found = lookup(label)?.ok_or(Error::Label)?;
     replace_preset(document, selection, label, found, policy)
@@ -199,8 +198,7 @@ pub fn replace_with_policy(
 /// another group (MgBr from Et) must keep their own chemistry.
 pub fn replace_bundled(document: &Document, selection: &[u64], label: &str) -> Result<Document> {
     if crate::common_groups::LABELS.contains(&label) {
-        return crate::common_groups::replace(document, selection, label)
-            .map_err(Error::Definition);
+        return crate::common_groups::replace(document, selection, label);
     }
     let found = lookup_bundled(label)?.ok_or(Error::Label)?;
     replace_preset(
