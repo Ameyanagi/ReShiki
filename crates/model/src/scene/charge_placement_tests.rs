@@ -202,6 +202,183 @@ fn clear_automatic_charges_keep_the_exact_existing_layout() {
     }
 }
 
+fn charge_ink(doc: &Document, id: u64, text: &str) -> Vec<(Point, Point)> {
+    let runs: Vec<_> = atom_label_runs(doc.atom(id).unwrap(), doc)
+        .into_iter()
+        .filter(|run| matches!(run, Primitive::Text { text: content, .. } if content == text))
+        .collect();
+    label_ink_boxes(&runs)
+}
+
+fn assert_charge_clears_labels(doc: &Document, id: u64, text: &str) {
+    let gap = doc.drawing_style.font_size() * 0.12;
+    for (lo, hi) in charge_ink(doc, id, text) {
+        for atom in doc.atoms.iter().filter(|a| a.id != id) {
+            for (a, b) in atom_label_ink_boxes(atom, doc) {
+                assert!(
+                    hi.x <= a.x - gap + 0.002
+                        || lo.x >= b.x + gap - 0.002
+                        || hi.y <= a.y - gap + 0.002
+                        || lo.y >= b.y + gap - 0.002,
+                    "Charge crowds label {}",
+                    atom.id
+                );
+            }
+        }
+    }
+}
+
+fn assert_charge_clears_bonds(doc: &Document, id: u64, text: &str) {
+    let ink = charge_ink(doc, id, text);
+    let mut without_charge = doc.clone();
+    without_charge.atom_mut(id).unwrap().display.hide_charge = true;
+    for primitive in primitives(&without_charge) {
+        if let Primitive::Line(start, end, width) = primitive {
+            let length = start.distance(end);
+            let ux = (end.x - start.x) / length;
+            let uy = (end.y - start.y) / length;
+            assert_eq!(
+                label_end(start, ux, uy, &ink, length, width * 0.5),
+                start,
+                "Charge crosses a bond from {start:?} to {end:?}"
+            );
+        }
+    }
+}
+
+/// Issue #633: the usual superscript can crowd a ligand without hitting a shaft.
+#[test]
+fn square_planar_pd_charge_avoids_ligand_ink_and_keeps_clear_layouts() {
+    let mut doc = Document::default();
+    let pd = doc.add_atom("Pd", Point::default());
+    for position in [
+        Point::new(42., 0.),
+        Point::new(0., 42.),
+        Point::new(-42., 0.),
+        Point::new(0., -42.),
+    ] {
+        let cl = doc.add_atom("Cl", position);
+        doc.add_bond(pd, cl, 1, "plain");
+    }
+    doc.atom_mut(pd).unwrap().charge = -2;
+    let old =
+        atom_label_runs_with_charge_layout(doc.atom(pd).unwrap(), &doc, ChargeLayout::Unplaced);
+    let old_charge = old
+        .iter()
+        .find_map(|run| match run {
+            Primitive::Text { position, text, .. } if text == "2−" => Some(*position),
+            _ => None,
+        })
+        .unwrap();
+    let charge = charge_run(&doc, pd, "2−");
+    assert_eq!(charge.x, old_charge.x);
+    assert!(
+        charge.y < old_charge.y,
+        "Crowded charge must rise at the right"
+    );
+    assert_charge_clears_labels(&doc, pd, "2−");
+    assert_charge_clears_bonds(&doc, pd, "2−");
+
+    let ids = doc.all_ids();
+    crate::editing::transform_about(&mut doc, &ids, Point::default(), 1.5, 45.);
+    let core = label_ink_boxes(&old[..1]);
+    let charge = label_ink_boxes(&old[1..]);
+    let core_left = core.iter().map(|(lo, _)| lo.x).reduce(f32::min).unwrap();
+    let core_right = core.iter().map(|(_, hi)| hi.x).reduce(f32::max).unwrap();
+    let charge_left = charge.iter().map(|(lo, _)| lo.x).reduce(f32::min).unwrap();
+    let charge_right = charge.iter().map(|(_, hi)| hi.x).reduce(f32::max).unwrap();
+    // Before #633, the clear diagonal complex already used this centered,
+    // raised slot because its upper-right shaft crosses the usual superscript.
+    assert_eq!(
+        charge_run(&doc, pd, "2−"),
+        old_charge.offset(
+            (core_left + core_right - charge_left - charge_right) * 0.5,
+            -3. * doc.drawing_style.font_size() * 0.25
+        ),
+        "Clear diagonal complex changed its existing charge placement"
+    );
+    for hydrogens in [0, 4] {
+        let mut doc = Document::default();
+        let n = doc.add_atom("N", Point::default());
+        let atom = doc.atom_mut(n).unwrap();
+        atom.charge = 1;
+        atom.explicit_h = hydrogens;
+        atom.no_implicit = true;
+        assert_eq!(
+            format!("{:?}", atom_label_runs(doc.atom(n).unwrap(), &doc)),
+            format!(
+                "{:?}",
+                atom_label_runs_with_charge_layout(
+                    doc.atom(n).unwrap(),
+                    &doc,
+                    ChargeLayout::Unplaced
+                )
+            ),
+            "Clear atom with {hydrogens} hydrogens moved its charge"
+        );
+    }
+}
+
+/// Issue #660: a raised nitro O− charge must still belong visually to the O.
+#[test]
+fn nitro_oxygen_charge_stays_nearer_its_own_ink_than_nitrogen() {
+    for reflected in [false, true] {
+        let mut doc = Document::default();
+        let n = doc.add_atom("N", Point::default());
+        let double_o = doc.add_atom("O", Point::new(0., -42.));
+        let methyl = doc.add_atom("C", Point::new(42. * 3_f32.sqrt() * 0.5, 21.));
+        let o = doc.add_atom("O", Point::new(-42. * 3_f32.sqrt() * 0.5, 21.));
+        doc.add_bond(n, double_o, 2, "plain");
+        doc.add_bond(n, methyl, 1, "plain");
+        doc.add_bond(n, o, 1, "plain");
+        doc.atom_mut(n).unwrap().charge = 1;
+        doc.atom_mut(o).unwrap().charge = -1;
+        if reflected {
+            for atom in &mut doc.atoms {
+                atom.position.x = -atom.position.x;
+            }
+        }
+        let runs = atom_label_runs(doc.atom(o).unwrap(), &doc);
+        let charge_ink = charge_ink(&doc, o, "−");
+        let distance_to = |id| {
+            let core = label_ink_boxes(&atom_label_runs_with_charge_layout(
+                doc.atom(id).unwrap(),
+                &doc,
+                ChargeLayout::Omitted,
+            ));
+            charge_ink
+                .iter()
+                .flat_map(|(lo, hi)| {
+                    core.iter().map(move |(a, b)| {
+                        let dx = (a.x - hi.x).max(lo.x - b.x).max(0.);
+                        let dy = (a.y - hi.y).max(lo.y - b.y).max(0.);
+                        dx * dx + dy * dy
+                    })
+                })
+                .fold(f32::INFINITY, f32::min)
+        };
+        assert!(
+            distance_to(o) < distance_to(n),
+            "O− charge is closer to N than its own O"
+        );
+        assert_charge_clears_bonds(&doc, o, "−");
+        if reflected {
+            assert_eq!(
+                format!("{runs:?}"),
+                format!(
+                    "{:?}",
+                    atom_label_runs_with_charge_layout(
+                        doc.atom(o).unwrap(),
+                        &doc,
+                        ChargeLayout::Unplaced
+                    )
+                ),
+                "Clear mirrored O− superscript moved"
+            );
+        }
+    }
+}
+
 #[test]
 fn moved_charge_and_automatic_radical_remain_one_superscript_cluster() {
     let mut doc = chelate(true);
@@ -377,7 +554,7 @@ fn core_covered_neighbors_still_reserve_their_visible_manual_marks() {
 }
 
 #[test]
-fn jointly_covered_endpoint_cores_do_not_move_charge_or_force_an_arrow() {
+fn jointly_covered_endpoint_cores_keep_charge_clear_without_forcing_an_arrow() {
     let mut doc = chelate(true);
     let donor = doc.atom_mut(2).unwrap();
     donor.position.x *= 0.5;
@@ -401,14 +578,27 @@ fn jointly_covered_endpoint_cores_do_not_move_charge_or_force_an_arrow() {
     let donor_trim = (donor.position.x - donor_end.x) * ux + (donor.position.y - donor_end.y) * uy;
     assert!(metal_trim < length - 0.1 && donor_trim < length - 0.1);
     assert!(length - metal_trim - donor_trim <= 0.1);
-    assert_eq!(
+    assert_ne!(
         format!("{:?}", atom_label_runs(metal, &doc)),
         format!(
             "{:?}",
             atom_label_runs_with_charge_layout(metal, &doc, ChargeLayout::Unplaced)
         ),
-        "A jointly core-covered contact cannot justify moving the charge"
+        "The compressed donor label still crowds the usual charge"
     );
+    let gap = doc.drawing_style.font_size() * 0.12;
+    for (lo, hi) in charge_ink(&doc, metal.id, "3+") {
+        for (a, b) in atom_label_ink_boxes(donor, &doc) {
+            assert!(
+                hi.x <= a.x - gap + 0.002
+                    || lo.x >= b.x + gap - 0.002
+                    || hi.y <= a.y - gap + 0.002
+                    || lo.y >= b.y + gap - 0.002,
+                "Charge crowds the compressed donor"
+            );
+        }
+    }
+    assert_charge_clears_bonds(&doc, metal.id, "3+");
     assert_eq!(
         primitives(&doc)
             .iter()

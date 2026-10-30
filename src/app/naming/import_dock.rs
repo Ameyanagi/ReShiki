@@ -14,7 +14,6 @@ impl App {
             Some(
                 Pending::Import { .. }
                     | Pending::Request(_)
-                    | Pending::Generate(_)
                     | Pending::Preview(_)
                     | Pending::Online(_)
             )
@@ -208,9 +207,7 @@ impl App {
                     .style(muted_text),
             );
         }
-        if let Some(notice) = &state.notice
-            && notice.source == NoticeSource::Parse
-        {
+        if let Some(notice) = &state.notice {
             content = content.push(
                 text(notice.summary())
                     .size(12)
@@ -269,9 +266,7 @@ impl App {
                 .on_press_maybe(can_resolve.then_some(Message::Naming(Action::Resolve))),
             );
         }
-        if let Some(notice) = &state.notice
-            && notice.source == NoticeSource::Parse
-        {
+        if let Some(notice) = &state.notice {
             content = content.push(text(&notice.detail).size(11));
         }
         if let Some(preview) = &state.preview {
@@ -304,15 +299,6 @@ impl App {
                     .then_some(Message::Naming(Action::Generate)),
             ),
         );
-        if let Some(notice) = &state.notice
-            && notice.source == NoticeSource::Generate
-        {
-            content = content.push(
-                text(&notice.detail)
-                    .size(11)
-                    .color(self.theme().palette().danger),
-            );
-        }
         content.push(self.generated_name_controls()).into()
     }
 

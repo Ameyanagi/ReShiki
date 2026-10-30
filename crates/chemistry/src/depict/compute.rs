@@ -23,6 +23,9 @@ pub struct Options {
     pub canonical_orientation: bool,
     pub use_ring_templates: bool,
     pub work_limit: usize,
+    /// Run the RDKit 2026.09.1 path angle expansion after the RDKit 2026.03.6
+    /// collision stages (#632). Disable for exact 2026.03.6 parity.
+    pub path_angle_expansion: bool,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -31,6 +34,7 @@ impl Default for Options {
             canonical_orientation: true,
             use_ring_templates: false,
             work_limit: expansion::MAX_WORK,
+            path_angle_expansion: true,
         }
     }
 }
@@ -143,7 +147,7 @@ fn compute_inner(
     );
     let allowance = remaining.saturating_sub(reserve);
     let mut available = allowance;
-    let repaired = repair(&initial, &mut available);
+    let repaired = repair(&initial, options.path_angle_expansion, &mut available);
     *remaining -= allowance - available;
     match repaired {
         Ok(fragments) => initial.fragments = fragments,
@@ -162,6 +166,7 @@ fn compute_inner(
 
 fn repair(
     initial: &expansion::Initial,
+    path_angle_expansion: bool,
     remaining: &mut usize,
 ) -> Result<Vec<rings::Fragment>, collision::Error> {
     let collision = collision::Input::new_with_work(
@@ -181,6 +186,13 @@ fn repair(
         *fragment = collision.apply_with_work(fragment, collision::Stage::OpenAngles, remaining)?;
         *fragment =
             collision.apply_with_work(fragment, collision::Stage::ShortenBonds, remaining)?;
+        if path_angle_expansion {
+            *fragment = collision.apply_with_work(
+                fragment,
+                collision::Stage::PathAngleExpansion,
+                remaining,
+            )?;
+        }
     }
     Ok(fragments)
 }

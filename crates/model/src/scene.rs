@@ -2500,34 +2500,41 @@ fn push_hashed_wedge(
 ) {
     let BondScene { style, .. } = scene;
     let BondFrame {
-        start, end, nx, ny, ..
+        a,
+        z,
+        start,
+        end,
+        nx,
+        ny,
+        ..
     } = frame;
+    let length = start.distance(end);
+    let trimmed = start != a.position || end != z.position;
     let spacing = style.world(style.hash_spacing_pt);
-    let count = (start.distance(end) / spacing).floor().max(1.0) as u32;
+    // Label trimming must leave enough bars to read as a bond, all the way
+    // to the label edge. Unlabelled bonds retain their existing spacing.
+    let count = if trimmed {
+        (length / spacing).ceil().max(3.0)
+    } else {
+        (length / spacing).floor().max(1.0)
+    } as u32;
     for i in 1..=count {
-        let t = (i as f32 * spacing / start.distance(end)).min(1.0);
+        let t = if trimmed {
+            i as f32 / count as f32
+        } else {
+            (i as f32 * spacing / length).min(1.0)
+        };
         let p = Point::new(
             start.x + (end.x - start.x) * t,
             start.y + (end.y - start.y) * t,
         );
         let t = if b.display == "hashed" { 1.0 } else { t };
+        let half = (style.line_width()
+            + t * (style.world(style.bold_width_pt) - style.line_width()))
+            / 2.0;
         pieces.push(BondPiece::plain(Primitive::Line(
-            p.offset(
-                nx * (style.line_width()
-                    + t * (style.world(style.bold_width_pt) - style.line_width()))
-                    / 2.0,
-                ny * (style.line_width()
-                    + t * (style.world(style.bold_width_pt) - style.line_width()))
-                    / 2.0,
-            ),
-            p.offset(
-                -nx * (style.line_width()
-                    + t * (style.world(style.bold_width_pt) - style.line_width()))
-                    / 2.0,
-                -ny * (style.line_width()
-                    + t * (style.world(style.bold_width_pt) - style.line_width()))
-                    / 2.0,
-            ),
+            p.offset(nx * half, ny * half),
+            p.offset(-nx * half, -ny * half),
             style.line_width(),
         )));
     }

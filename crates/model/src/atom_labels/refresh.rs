@@ -3,7 +3,10 @@
 //! are exact chemical drawings, including coordinates and stereo, and survive
 //! only into the next snapshot. Errors are isolated to connected molecules.
 use crate::{chemistry::document as chemistry, document::Document};
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 const MAX_CACHED_ATOMS: usize = 8192;
 const MAX_CACHED_BONDS: usize = 16384;
@@ -164,6 +167,78 @@ pub fn label_hydrogens(document: &Document, id: u64) -> Option<u32> {
         .atoms
         .into_iter()
         .find_map(|(atom, h, _)| (atom == id).then_some(h))
+}
+
+/// Works out the hydrogen labels of the molecules an edit from `before`
+/// changed, so the edit is never shown with them bare: those with an atom
+/// whose valence inputs changed, or that gained, lost or changed a bond.
+/// Other molecules keep theirs until the off-thread refresh. Like it, failed
+/// and crystal molecules keep their labels.
+pub fn refresh_edited(before: &Document, document: &mut Document) {
+    if !crate::transaction::chemistry_changed(before, document) {
+        return;
+    }
+    let valence = |a: &crate::document::Atom| {
+        (
+            a.element.clone(),
+            a.charge,
+            a.radical_electrons,
+            a.explicit_h,
+            a.no_implicit,
+            a.aromatic,
+            a.isotope,
+        )
+    };
+    let atoms: HashMap<_, _> = before.atoms.iter().map(|a| (a.id, a)).collect();
+    let old: HashMap<_, _> = before.bonds.iter().map(|b| (pair(b.a, b.b), b)).collect();
+    let new: HashMap<_, _> = document.bonds.iter().map(|b| (pair(b.a, b.b), b)).collect();
+    let edited: HashSet<_> = document
+        .atoms
+        .iter()
+        .filter(|a| {
+            atoms
+                .get(&a.id)
+                .is_none_or(|old| valence(old) != valence(a))
+        })
+        .map(|a| a.id)
+        .chain(
+            document
+                .bonds
+                .iter()
+                .filter(|b| {
+                    old.get(&pair(b.a, b.b))
+                        .is_none_or(|o| (o.a, o.order) != (b.a, b.order))
+                })
+                .chain(
+                    before
+                        .bonds
+                        .iter()
+                        .filter(|b| !new.contains_key(&pair(b.a, b.b))),
+                )
+                .flat_map(|b| [b.a, b.b]),
+        )
+        .collect();
+    if edited.is_empty() {
+        return;
+    }
+    let distance_atoms = crate::models3d::crystal::analysis_atoms(document);
+    let mut hydrogens = HashMap::new();
+    for component in components(document).0 {
+        if component.atoms.iter().any(|a| edited.contains(&a.id))
+            && !component
+                .atoms
+                .iter()
+                .any(|a| distance_atoms.contains(&a.id))
+            && let Ok(computed) = compute(&component)
+        {
+            hydrogens.extend(computed.atoms.into_iter().map(|(id, h, _)| (id, h)));
+        }
+    }
+    for atom in &mut document.atoms {
+        if let Some(h) = hydrogens.get(&atom.id) {
+            atom.label_h = *h;
+        }
+    }
 }
 
 fn compute(source: &Document) -> Result<Computed, String> {

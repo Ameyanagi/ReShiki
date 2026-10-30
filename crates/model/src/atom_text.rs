@@ -210,7 +210,19 @@ fn apply_entry(
         return Err("Read from this bond, NC is an isocyanide and OCN a cyanate, which have no catalog group. Type CN or NCO, or choose Text label.".into());
     }
     let formula = (mode != Mode::Text).then(|| formula_group(text)).flatten();
+    let explicit = if mode != Mode::Text && !element {
+        hydride::parse(text)
+    } else {
+        Ok(None)
+    };
+    let replaced_group = doc.abbreviation(id).filter(|_| {
+        mode != Mode::Text
+            && (mode == Mode::Auto && element || !known_group(text))
+            && formula.is_none()
+            && (element || explicit.as_ref().is_ok_and(|h| h.is_some()))
+    });
     if mode == Mode::Group
+        && replaced_group.is_none()
         && !known_group(text)
         && formula.is_none()
         && let Some(group) = doc.abbreviation(id)
@@ -228,9 +240,10 @@ fn apply_entry(
         result.validate()?;
         return Ok(result);
     }
-    if mode == Mode::Group
-        || formula.is_some()
-        || mode == Mode::Auto && !element && !sided && known_group(text)
+    if replaced_group.is_none()
+        && (mode == Mode::Group
+            || formula.is_some()
+            || mode == Mode::Auto && !element && !sided && known_group(text))
     {
         let selected = doc
             .abbreviation(id)
@@ -320,17 +333,23 @@ fn apply_entry(
         result.validate()?;
         return Ok(result);
     }
-    if doc.abbreviations.iter().any(|a| a.members.contains(&id)) {
+    if replaced_group.is_none() && doc.abbreviations.iter().any(|a| a.members.contains(&id)) {
         return Err(
             "Expand this abbreviation before replacing an individual atom with text or an element."
                 .into(),
         );
     }
-    let explicit = if mode != Mode::Text && !element {
-        hydride::parse(text)?
+    let mut stripped;
+    let doc = if let Some(group) = replaced_group {
+        stripped = doc.clone();
+        let removed: Vec<_> = group.members.iter().copied().filter(|&a| a != id).collect();
+        stripped.expand_abbreviations(&[id]);
+        stripped.delete(&removed);
+        &stripped
     } else {
-        None
+        doc
     };
+    let explicit = explicit?;
     let new_element = if let Some(h) = &explicit {
         h.element.as_str()
     } else if mode != Mode::Text && element {
@@ -390,8 +409,11 @@ fn apply_entry(
     if new_element == "C" {
         a.display.carbons = Some(crate::atom_labels::Carbons::All);
     }
-    if previous != (a.element.clone(), a.charge, a.explicit_h, a.no_implicit) {
-        stereo::invalidate(doc, &mut result, &[id])?;
+    if replaced_group.is_some()
+        || previous != (a.element.clone(), a.charge, a.explicit_h, a.no_implicit)
+    {
+        let affected = replaced_group.map_or(std::slice::from_ref(&id), |g| g.members.as_slice());
+        stereo::invalidate(doc, &mut result, affected)?;
     }
     result.validate()?;
     Ok(result)

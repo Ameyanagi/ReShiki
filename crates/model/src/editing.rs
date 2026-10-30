@@ -44,6 +44,7 @@ pub fn add_bonded_atom(
         doc.invalidate_chemistry(&[start, id]);
         doc.add_bond(start, id, 1, "plain");
     }
+    crate::reactions::reconcile(&mut doc)?;
     doc.validate()?;
     Ok((doc, id))
 }

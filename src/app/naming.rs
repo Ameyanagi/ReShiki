@@ -39,9 +39,9 @@ impl Ticket {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Pending {
     Request(Ticket),
-    Generate(Ticket),
     Online(Ticket),
     Preview(Ticket),
+    Generate(Ticket),
     Caption(Ticket),
     Import { ticket: Ticket, add_caption: bool },
 }
@@ -49,20 +49,11 @@ impl Pending {
     fn ticket(self) -> Ticket {
         match self {
             Self::Request(ticket)
-            | Self::Generate(ticket)
             | Self::Online(ticket)
             | Self::Preview(ticket)
+            | Self::Generate(ticket)
             | Self::Caption(ticket)
             | Self::Import { ticket, .. } => ticket,
-        }
-    }
-
-    fn source(self) -> NoticeSource {
-        match self {
-            Self::Generate(_) | Self::Caption(_) => NoticeSource::Generate,
-            Self::Request(_) | Self::Online(_) | Self::Preview(_) | Self::Import { .. } => {
-                NoticeSource::Parse
-            }
         }
     }
 }
@@ -148,30 +139,17 @@ enum NoticeKind {
     Info,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum NoticeSource {
-    Parse,
-    Generate,
-}
-
 #[derive(Debug, Clone)]
 struct Notice {
     kind: NoticeKind,
     detail: String,
-    source: NoticeSource,
 }
 impl Notice {
     fn new(kind: NoticeKind, detail: impl Into<String>) -> Self {
         Self {
             kind,
             detail: detail.into(),
-            source: NoticeSource::Parse,
         }
-    }
-
-    fn with_source(mut self, source: NoticeSource) -> Self {
-        self.source = source;
-        self
     }
 
     fn summary(&self) -> &str {
@@ -208,6 +186,7 @@ pub(super) struct State {
     smiles: String,
     acknowledged: bool,
     structure: Option<(Ticket, Record)>,
+    structure_error: Option<String>,
     notice: Option<Notice>,
     label_target: Option<Vec<u64>>,
     add_name_below: bool,
@@ -228,6 +207,7 @@ impl Default for State {
             smiles: String::new(),
             acknowledged: false,
             structure: None,
+            structure_error: None,
             notice: None,
             label_target: None,
             add_name_below: true,
@@ -364,13 +344,13 @@ impl App {
         };
         self.tab.naming.pending = Some(Pending::Request(ticket));
         self.tab.naming.label_target = None;
-        self.tab.naming.notice = None;
         ticket
     }
 
     fn naming_preview_ticket(&mut self) -> Ticket {
         let ticket = self.naming_ticket();
         self.tab.naming.pending = Some(Pending::Preview(ticket));
+        self.tab.naming.notice = None;
         ticket
     }
 
@@ -380,51 +360,61 @@ impl App {
     ) -> (Ticket, naming::Cancel) {
         let ticket = self.naming_ticket();
         self.tab.naming.pending = Some(pending(ticket));
+        if !matches!(
+            self.tab.naming.pending,
+            Some(Pending::Generate(_) | Pending::Caption(_))
+        ) {
+            self.tab.naming.notice = None;
+        }
         let cancel = naming::Cancel::default();
         self.tab.naming.local_cancel = Some(cancel.clone());
         (ticket, cancel)
     }
 
     fn naming_finished(&mut self, ticket: Ticket, result: Result<Outcome, naming::Error>) {
-        let Some(pending) = self.tab.naming.pending else {
-            return;
-        };
-        if pending.ticket() != ticket || ticket.epoch != self.tab.file_epoch {
+        if self.tab.naming.pending.map(Pending::ticket) != Some(ticket)
+            || ticket.epoch != self.tab.file_epoch
+        {
             return;
         }
-        let online = matches!(pending, Pending::Online(_));
-        let caption = matches!(pending, Pending::Caption(_));
-        let source = pending.source();
-        let import_caption = match pending {
-            Pending::Import { add_caption, .. } => Some(add_caption),
+        let online = matches!(self.tab.naming.pending, Some(Pending::Online(_)));
+        let generate = matches!(self.tab.naming.pending, Some(Pending::Generate(_)));
+        let caption = matches!(self.tab.naming.pending, Some(Pending::Caption(_)));
+        let import_caption = match self.tab.naming.pending {
+            Some(Pending::Import { add_caption, .. }) => Some(add_caption),
             _ => None,
         };
         let target = self.tab.naming.label_target.take();
         self.tab.naming.pending = None;
         self.tab.naming.local_cancel = None;
         if ticket.revision != self.tab.revision {
-            self.tab.naming.notice = Some(
-                Notice::new(NoticeKind::Retry, "The drawing changed. Try again.")
-                    .with_source(source),
-            );
             if caption {
                 self.status = "The molecule changed while naming. Show its name again".into();
                 self.error = true;
+            } else if generate {
+                self.tab.naming.structure_error = Some("The drawing changed. Try again.".into());
+            } else {
+                self.tab.naming.notice = Some(Notice::new(
+                    NoticeKind::Retry,
+                    "The drawing changed. Try again.",
+                ));
             }
             return;
         }
         match result {
             Err(error) => {
-                let notice = if online {
-                    Notice::new(NoticeKind::Retry, error.to_string())
-                } else {
-                    Notice::from(error)
-                };
                 if caption {
-                    self.status = notice.detail.clone();
+                    self.status = error.to_string();
                     self.error = true;
+                } else if generate {
+                    self.tab.naming.structure_error = Some(error.to_string());
+                } else {
+                    self.tab.naming.notice = Some(if online {
+                        Notice::new(NoticeKind::Retry, error.to_string())
+                    } else {
+                        Notice::from(error)
+                    });
                 }
-                self.tab.naming.notice = Some(notice.with_source(source));
             }
             Ok(Outcome::Names(records, preview)) => {
                 self.tab.naming.candidates = records;
@@ -462,26 +452,28 @@ impl App {
                 self.tab.naming.name = name;
             }
             Action::Cancel => {
-                let online = matches!(self.tab.naming.pending, Some(Pending::Online(_)));
-                let source = self
-                    .tab
-                    .naming
-                    .pending
-                    .map_or(NoticeSource::Parse, Pending::source);
+                let pending = self.tab.naming.pending;
                 self.tab.naming.stop_request();
-                self.tab.naming.notice = Some(
-                    Notice::new(
-                        NoticeKind::Retry,
-                        if online {
-                            "Online lookup was cancelled"
-                        } else if source == NoticeSource::Generate {
-                            "Local name generation was cancelled"
-                        } else {
-                            "Local name parsing was cancelled"
-                        },
-                    )
-                    .with_source(source),
-                );
+                match pending {
+                    Some(Pending::Generate(_)) => {
+                        self.tab.naming.structure_error =
+                            Some("Local name generation was cancelled".into());
+                    }
+                    Some(Pending::Caption(_)) => {
+                        self.status = "Local name generation was cancelled".into();
+                        self.error = true;
+                    }
+                    _ => {
+                        self.tab.naming.notice = Some(Notice::new(
+                            NoticeKind::Retry,
+                            if matches!(pending, Some(Pending::Online(_))) {
+                                "Online lookup was cancelled"
+                            } else {
+                                "Local name parsing was cancelled"
+                            },
+                        ));
+                    }
+                }
             }
             Action::AskOnline => self.ask_online_name(),
             Action::ConfirmOnline(serial) => return self.confirm_online_name(serial),
@@ -506,6 +498,7 @@ impl App {
                 }
                 let (ticket, cancel) = self.begin_naming(Pending::Generate);
                 self.tab.naming.structure = None;
+                self.tab.naming.structure_error = None;
                 let document = self.tab.doc.clone();
                 let selected = self.tab.selected.clone();
                 return Task::perform(
@@ -700,16 +693,14 @@ impl App {
         if !ticket.is_current(self.tab.revision, self.tab.file_epoch) {
             const DETAIL: &str =
                 "The drawing changed. Generate its name again before inserting a caption";
-            self.tab.naming.notice =
-                Some(Notice::new(NoticeKind::Retry, DETAIL).with_source(NoticeSource::Generate));
+            self.tab.naming.structure_error = Some(DETAIL.into());
             return;
         }
         let current = naming::selected_identity(&self.tab.doc, &self.tab.selected);
         if !current.is_ok_and(|i| i.smiles == record.canonical_smiles) {
             const DETAIL: &str =
                 "The selection changed. Select the named molecule before inserting a caption";
-            self.tab.naming.notice =
-                Some(Notice::new(NoticeKind::Retry, DETAIL).with_source(NoticeSource::Generate));
+            self.tab.naming.structure_error = Some(DETAIL.into());
             return;
         }
         let atoms = editing::analysis_atoms(&self.tab.doc, &self.tab.selected);
@@ -776,9 +767,7 @@ impl App {
                 ),
         ]
         .spacing(10);
-        if let Some(notice) = &state.notice
-            && notice.source == NoticeSource::Parse
-        {
+        if let Some(notice) = &state.notice {
             name = name.push(
                 text(&notice.detail)
                     .size(12)
@@ -801,7 +790,7 @@ impl App {
         if let Some(preview) = &state.preview {
             name = name.push(self.naming_preview(preview));
         }
-        let mut structure = column![
+        let structure = column![
             section("STRUCTURE → NAME"),
             text(STRUCTURE_HINT).size(11).style(muted_text),
             accessible_command(
@@ -810,20 +799,10 @@ impl App {
                 "Generate selected name",
             )
             .on_press_maybe(idle.then_some(Message::Naming(Action::Generate))),
+            self.generated_name_controls(),
         ]
         .spacing(10);
-        if let Some(notice) = &state.notice
-            && notice.source == NoticeSource::Generate
-        {
-            structure = structure.push(
-                text(&notice.detail)
-                    .size(12)
-                    .color(self.theme().palette().danger),
-            );
-        }
-        column![name, structure.push(self.generated_name_controls())]
-            .spacing(24)
-            .into()
+        column![name, structure].spacing(24).into()
     }
 
     /// The parsed name's editable preview, its SMILES and the insertion.

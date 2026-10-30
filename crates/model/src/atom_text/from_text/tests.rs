@@ -185,8 +185,8 @@ fn plain_formula_and_manual_text_use_atom_entry_semantics() -> Result<(), String
         let result = converted.atom(atom).ok_or("Missing converted atom")?;
         assert_eq!(result.element, element, "{text}");
         assert_eq!(result.explicit_h, hydrogens, "{text}");
-        // Entry retains explicit H chemistry and clears the computed H cache.
-        assert_eq!(result.label_h, 0, "{text}");
+        // Entry keeps explicit H chemistry and shows it until the next check.
+        assert_eq!(result.label_h, hydrogens, "{text}");
         assert_eq!(result.charge, charge, "{text}");
         assert_eq!(result.display.variable.as_deref(), variable, "{text}");
         assert_eq!(result.display.label_scripts, stored, "{text}");
