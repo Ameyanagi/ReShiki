@@ -354,7 +354,9 @@ fn coordinates(
         },
     )?;
     let positions = template_retry::improve(state, &ranks, conformer.positions);
-    Ok(chain_layout::improve(state, &ranks, positions))
+    let mut layout = chain_layout::improve(state, &ranks, positions);
+    chemistry::layout_refinement::straighten(state, &mut layout.positions, None);
+    Ok(layout)
 }
 
 fn layout(

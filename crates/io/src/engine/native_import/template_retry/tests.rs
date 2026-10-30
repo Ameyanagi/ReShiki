@@ -138,7 +138,7 @@ fn old_overlapping_whole_molecule_keeps_the_visible_stereo_guard() -> anyhow::Re
 }
 
 #[test]
-fn clear_bridged_and_disjoint_ring_imports_keep_native_coordinates() -> anyhow::Result<()> {
+fn clear_bridged_and_disjoint_ring_imports_keep_native_shape() -> anyhow::Result<()> {
     for text in ["C1C2CC3CC1CC(C2)C3", "CC(c1ccccc1)CC(c1ccccc1)"] {
         let input = smiles::read(text)?;
         let state = &input.prepared.state;
@@ -149,10 +149,8 @@ fn clear_bridged_and_disjoint_ring_imports_keep_native_coordinates() -> anyhow::
             Default::default(),
         )?
         .positions;
-        assert_eq!(
-            super::super::coordinates(state, &input.reaction_properties)?.positions,
-            original
-        );
+        let positions = super::super::coordinates(state, &input.reaction_properties)?.positions;
+        super::super::tests::assert_rigid_rotation(&original, &positions);
     }
     Ok(())
 }
@@ -176,10 +174,8 @@ fn a_template_that_increases_collisions_is_not_published() -> anyhow::Result<()>
     .positions;
     assert_eq!(collisions(state, &original, 4096), 2);
     assert_eq!(collisions(state, &candidate, 4096), 4);
-    assert_eq!(
-        super::super::coordinates(state, &input.reaction_properties)?.positions,
-        original
-    );
+    let positions = super::super::coordinates(state, &input.reaction_properties)?.positions;
+    super::super::tests::assert_rigid_rotation(&original, &positions);
     Ok(())
 }
 
