@@ -21,12 +21,15 @@ fn caption(doc: &mut Document, text: &str, center: Point, format: &TextFormat) {
     if text.is_empty() {
         return;
     }
-    let size = crate::typography::layout(text, format);
+    let mut text = text.to_owned();
+    let mut format = format.clone();
+    crate::typography::normalize_subscript_digits(&mut text, &mut format);
+    let size = crate::typography::layout(&text, &format);
     doc.annotations.push(Annotation {
         id: doc.next_id(),
         position: center.offset(-size.width / 2., 0.),
-        text: text.into(),
-        format: format.clone(),
+        text,
+        format,
     });
 }
 fn separate_components(doc: &mut Document, gap: f32) {
@@ -159,6 +162,7 @@ async fn prepare(
     }
     let mut label_format = settings.format.clone();
     label_format.alignment = TextAlign::Center;
+    crate::typography::normalize_subscript_digits(&mut label, &mut label_format);
     let max_label_width = (hi.x - lo.x).max(settings.bond_length * 4.5);
     let natural = crate::typography::layout(&label, &label_format).width;
     if natural > max_label_width {
@@ -302,6 +306,7 @@ pub async fn render_progress<P: From<Event>>(
     let mut settings = settings.clone();
     settings.format.spans.clear();
     settings.format.width_pt = None;
+    settings.format.name_breaks = false;
     settings.format.validate("")?;
     if !settings.bond_length.is_finite() || !(4.0..=600.).contains(&settings.bond_length) {
         return Err("Invalid drawing bond length".into());
@@ -383,11 +388,14 @@ pub async fn render_progress<P: From<Event>>(
         x += gap;
         let mut conditions_format = settings.format.clone();
         conditions_format.alignment = TextAlign::Center;
-        let natural = crate::typography::layout(&reaction.conditions, &conditions_format);
-        if natural.width > gap * 4. {
-            conditions_format.width_pt = Some(gap * 4. * crate::style::DEFAULT.points_per_world());
+        conditions_format.width_pt = None;
+        let mut conditions_text = reaction.conditions.clone();
+        crate::typography::normalize_subscript_digits(&mut conditions_text, &mut conditions_format);
+        let natural = crate::typography::layout(&conditions_text, &conditions_format);
+        if natural.width > gap * 8. {
+            conditions_format.width_pt = Some(gap * 8. * crate::style::DEFAULT.points_per_world());
         }
-        let conditions = crate::typography::layout(&reaction.conditions, &conditions_format);
+        let conditions = crate::typography::layout(&conditions_text, &conditions_format);
         let width = conditions.width.max(gap * 2.8) + gap * 0.4;
         let mut style = settings.arrow_style.clone();
         let preset = crate::arrows::Preset::from_kind(&reaction.arrow);
@@ -405,7 +413,7 @@ pub async fn render_progress<P: From<Event>>(
         ));
         caption(
             &mut doc,
-            &reaction.conditions,
+            &conditions_text,
             Point::new(x + width / 2., y - conditions.height - gap * 0.45),
             &conditions_format,
         );

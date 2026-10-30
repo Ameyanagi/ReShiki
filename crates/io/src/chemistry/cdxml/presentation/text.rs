@@ -80,6 +80,7 @@ impl NativeText {
             alignment: self.format.alignment,
             line_spacing: self.format.line_spacing as f32,
             width_pt: self.format.width_pt.map(|width| width as f32),
+            ..Default::default()
         };
         format.validate(&self.text).map_err(Error::Document)?;
         Ok((self.text, format))

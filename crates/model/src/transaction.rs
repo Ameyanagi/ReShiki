@@ -149,11 +149,12 @@ pub fn reconcile(doc: &mut Document, before: Document) -> Result<Reconciled, Rej
     crate::ring_fills::prune(doc);
     crate::depth_appearance::prune(doc);
     doc.reconcile_abbreviations(&before);
-    crate::arrow_anchors::reconcile(doc);
     if let Err(error) = crate::reactions::reconcile(doc) {
         *doc = before;
         return Err(Rejection::Reactions(error));
     }
+    crate::reaction_mapping::reconcile_label_changes(&before, doc);
+    crate::arrow_anchors::reconcile(doc);
     crate::molecule_names::reconcile(doc, &before);
     crate::arrow_labels::reconcile(doc, &before);
     crate::models3d::reconcile(doc, &before);

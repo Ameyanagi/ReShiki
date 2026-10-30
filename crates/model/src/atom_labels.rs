@@ -289,6 +289,18 @@ pub(crate) fn appendage_position(atom: &Atom, doc: &Document) -> HydrogenPositio
         return atom.display.hydrogen_position;
     }
     let directions = bond_directions(atom, doc);
+    // Isolated hydrogen halides conventionally read HF, HCl, HBr and HI.
+    let hydrogens = if atom.no_implicit {
+        atom.explicit_h
+    } else {
+        atom.label_h.max(atom.explicit_h)
+    };
+    if directions.is_empty()
+        && hydrogens == 1
+        && matches!(atom.element.as_str(), "F" | "Cl" | "Br" | "I")
+    {
+        return H::Left;
+    }
     let sum_x = directions.iter().map(|p| p.x).sum::<f32>();
     let sum_y = directions.iter().map(|p| p.y).sum::<f32>();
     let left = sum_x > 0.1;

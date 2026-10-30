@@ -27,6 +27,83 @@ fn begin(app: &mut App, id: Option<u64>) {
 }
 
 #[test]
+fn unicode_subscript_caption_commits_ascii_and_reopens_with_explicit_formatting() {
+    let mut app = app();
+    begin(&mut app, None);
+    type_text(&mut app, "H₂O");
+    assert_eq!(
+        app.tab.caption, "H₂O",
+        "the draft stays literal until Apply"
+    );
+    let before = app.tab.doc.clone();
+    assert!(app.finish_inline(true));
+    let caption = &app.tab.doc.annotations[0];
+    assert_eq!(caption.text, "H2O");
+    assert_eq!(caption.format.spans.len(), 1);
+    assert_eq!(
+        (caption.format.spans[0].start, caption.format.spans[0].end),
+        (1, 2)
+    );
+    assert_eq!(caption.format.at(1).script, Script::Subscript);
+    let id = caption.id;
+    let committed = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, committed);
+    begin(&mut app, Some(id));
+    assert_eq!(app.tab.caption, "H2O");
+    assert_eq!(app.tab.caption_format.at(1).script, Script::Subscript);
+    assert!(app.finish_inline(true));
+    assert_eq!(app.tab.doc, committed);
+}
+
+#[test]
+fn pasted_captions_normalize_subscripts_before_native_document_insertion() {
+    let mut source = Document::default();
+    source.annotations.push(Annotation {
+        id: 1,
+        position: Point::default(),
+        text: "K₂CO₃, DMF".into(),
+        format: Default::default(),
+    });
+    let oxygen = source.add_atom("O", Point::new(100., 0.));
+    reshiki::molecule_names::show(
+        &mut source,
+        &[oxygen],
+        "H₂O".into(),
+        "O".into(),
+        TextFormat::default(),
+    )
+    .unwrap();
+    let mut app = app();
+    let text = format!(
+        "{}{}",
+        reshiki::editing::CLIPBOARD_PREFIX,
+        serde_json::to_string(&source.current()).unwrap()
+    );
+    let _ = app.update(Message::Pasted(Some(text)));
+    let caption = &app.tab.doc.annotations[0];
+    assert_eq!(caption.text, "K2CO3, DMF");
+    for offset in [1, 4] {
+        assert_eq!(caption.format.at(offset).script, Script::Subscript);
+    }
+    let name = &app.tab.doc.molecule_names[0];
+    assert_eq!(name.text, "H2O");
+    let named_caption = app
+        .tab
+        .doc
+        .annotations
+        .iter()
+        .find(|caption| caption.id == name.annotation)
+        .unwrap();
+    assert_eq!(named_caption.text, name.text);
+    assert_eq!(named_caption.format.at(1).script, Script::Subscript);
+    assert!(named_caption.format.name_breaks);
+    app.tab.doc.validate().unwrap();
+}
+
+#[test]
 fn new_formula_captions_format_automatically_and_manual_controls_win() {
     let mut app = app();
     begin(&mut app, None);

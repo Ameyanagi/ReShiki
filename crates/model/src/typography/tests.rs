@@ -4,6 +4,102 @@ use super::{
 };
 
 #[test]
+fn unicode_subscript_digits_store_ascii_with_the_manual_script_layout() {
+    use super::{TextFormat, layout, normalize_subscript_digits};
+    for (input, expected, start, end) in
+        [("H₂O", "H2O", 1, 2), ("x₀₁₂₃₄₅₆₇₈₉", "x0123456789", 1, 11)]
+    {
+        let mut text = input.to_owned();
+        let mut format = TextFormat::default();
+        normalize_subscript_digits(&mut text, &mut format);
+        assert_eq!(text, expected);
+        assert_eq!(format.spans.len(), 1);
+        assert_eq!((format.spans[0].start, format.spans[0].end), (start, end));
+        assert_eq!(format.spans[0].style.script, Script::Subscript);
+        format.validate(&text).unwrap();
+
+        let mut manual = TextFormat::default();
+        manual.apply(
+            expected,
+            Some(start..end),
+            &super::StyleChange::Script(Script::Subscript),
+        );
+        let actual = layout(&text, &format);
+        let expected = layout(expected, &manual);
+        assert_eq!(
+            (actual.width, actual.height),
+            (expected.width, expected.height)
+        );
+        assert_eq!(actual.fragments.len(), expected.fragments.len());
+        for (actual, expected) in actual.fragments.iter().zip(&expected.fragments) {
+            assert_eq!(actual.text, expected.text);
+            assert_eq!(actual.position, expected.position);
+            assert_eq!(actual.style, expected.style);
+        }
+        let normalized = (text.clone(), format.clone());
+        normalize_subscript_digits(&mut text, &mut format);
+        assert_eq!((text, format), normalized);
+    }
+}
+
+#[test]
+fn unicode_subscript_digits_remap_utf8_spans_and_preserve_effective_styles() {
+    use super::{StyleChange, TextFormat, normalize_subscript_digits};
+    let mut text = "触媒 H₂O, CO₃ 尾".to_owned();
+    let mut format = TextFormat::default();
+    format.style.family = "Helvetica".into();
+    format.style.size_pt = 14.;
+    format.style.formula = true;
+    // A styled span includes the digit, and another starts after both digits.
+    let water = text.find('H').unwrap();
+    let water_end = text.find(',').unwrap();
+    let tail = text.find('尾').unwrap();
+    format.apply(&text, Some(water..water_end), &StyleChange::Bold(true));
+    format.apply(&text, Some(tail..text.len()), &StyleChange::Italic(true));
+    let original = text.clone();
+    let original_styles: Vec<_> = original
+        .char_indices()
+        .map(|(offset, _)| format.at(offset).clone())
+        .collect();
+    normalize_subscript_digits(&mut text, &mut format);
+    assert_eq!(text, "触媒 H2O, CO3 尾");
+    format.validate(&text).unwrap();
+    for (((offset, c), source), original) in text
+        .char_indices()
+        .zip(original.chars())
+        .zip(original_styles)
+    {
+        let mut expected = original;
+        if matches!(source, '₀'..='₉') {
+            expected.script = Script::Subscript;
+            expected.formula = false;
+            assert!(c.is_ascii_digit());
+        }
+        assert_eq!(format.at(offset), &expected, "{c} at {offset}");
+    }
+    let tail_span = format.spans.iter().find(|span| span.style.italic).unwrap();
+    assert_eq!((tail_span.start, tail_span.end), (tail - 4, text.len()));
+}
+
+#[test]
+fn text_without_unicode_subscript_digits_keeps_its_original_spans() {
+    use super::{TextFormat, TextSpan, TextStyle, normalize_subscript_digits};
+    let mut text = "H2O ² ₊₋⁺".to_owned();
+    // Non-digit Unicode scripts remain literal; only U+2080..U+2089 convert.
+    let mut format = TextFormat {
+        spans: vec![TextSpan {
+            start: 0,
+            end: 1,
+            style: TextStyle::default(),
+        }],
+        ..Default::default()
+    };
+    let original = (text.clone(), format.clone());
+    normalize_subscript_digits(&mut text, &mut format);
+    assert_eq!((text, format), original);
+}
+
+#[test]
 fn free_label_formula_runs_cover_the_golden_table() {
     use Script::{Normal as N, Subscript as B, Superscript as P};
     type Run = (std::ops::Range<usize>, Script);
@@ -217,4 +313,72 @@ fn wrapping_breaks_between_words_never_inside_one() {
     let kana = lines("ﾊﾞﾊﾞﾊﾞﾊﾞﾊﾞﾊﾞﾊﾞﾊﾞ", 12.);
     assert!(kana.len() > 1);
     assert!(kana.iter().all(|line| !line.starts_with('ﾞ')), "{kana:?}");
+}
+
+#[test]
+fn generated_names_wrap_only_at_chemical_punctuation() {
+    use super::{TextAlign, TextFormat, layout};
+    let name = "(1R,2S,5R)-5-methyl-2-(propan-2-yl)cyclohexan-1-ol";
+    let width = crate::style::DEFAULT.bond_length_world * 6.;
+    let format = TextFormat {
+        alignment: TextAlign::Center,
+        width_pt: Some(width * crate::style::DEFAULT.points_per_world()),
+        name_breaks: true,
+        ..Default::default()
+    };
+    let laid_out = layout(name, &format);
+    let mut lines: Vec<(f32, String)> = vec![];
+    for fragment in &laid_out.fragments {
+        match lines.last_mut() {
+            Some((y, text)) if (*y - fragment.position.y).abs() < 0.001 => {
+                text.push_str(&fragment.text);
+            }
+            _ => lines.push((fragment.position.y, fragment.text.clone())),
+        }
+    }
+    assert!(lines.len() > 1, "{lines:?}");
+    assert_eq!(
+        lines
+            .iter()
+            .map(|(_, text)| text.as_str())
+            .collect::<String>(),
+        name
+    );
+    for (index, (_, text)) in lines.iter().enumerate() {
+        assert!(
+            layout(text, &TextFormat::default()).width <= width + 0.001,
+            "{text}"
+        );
+        if index + 1 < lines.len() {
+            assert!(text.ends_with(['-', ',']), "{text}");
+        }
+    }
+    for word in ["methyl", "propan", "cyclohexan"] {
+        assert!(
+            lines.iter().any(|(_, text)| text.contains(word)),
+            "{word}: {lines:?}"
+        );
+    }
+    // The caption-specific rule is absent in old documents and ordinary text.
+    let plain = TextFormat {
+        name_breaks: false,
+        ..format.clone()
+    };
+    assert!(layout(name, &plain).width > width);
+    let encoded = serde_json::to_value(&plain).unwrap();
+    assert!(encoded.get("name_breaks").is_none());
+    assert!(
+        !serde_json::from_value::<TextFormat>(encoded)
+            .unwrap()
+            .name_breaks
+    );
+    let encoded = serde_json::to_value(&format).unwrap();
+    assert!(
+        serde_json::from_value::<TextFormat>(encoded)
+            .unwrap()
+            .name_breaks
+    );
+    let mut edited = format;
+    edited.edited(name, "My sample", 0..name.len());
+    assert!(!edited.name_breaks);
 }

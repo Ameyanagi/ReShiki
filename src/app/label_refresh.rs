@@ -127,6 +127,7 @@ impl App {
             return;
         }
         let before = self.tab.doc.clone();
+        reshiki::reaction_mapping::reflow_separators(&before, &mut self.tab.doc);
         let Ok(reconciled) = reshiki::transaction::reconcile(&mut self.tab.doc, before) else {
             return;
         };
