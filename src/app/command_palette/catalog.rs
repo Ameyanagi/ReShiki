@@ -466,8 +466,21 @@ fn inserts(app: &App) -> Vec<Command> {
             .keys(keys),
         );
     }
+    let terminal = app.command_target().atom().is_some_and(|id| {
+        app.tab
+            .doc
+            .bonds
+            .iter()
+            .filter(|bond| bond.a == id || bond.b == id)
+            .count()
+            == 1
+    });
     for symbol in reshiki::editing::ELEMENTS {
         let name = element_name(symbol).unwrap_or_else(|| symbol.to_string());
+        let mut synonyms = format!("element atom {symbol}");
+        if *symbol == "O" && terminal {
+            synonyms.push_str(" hydroxy hydroxyl");
+        }
         list.push(
             Command::new(
                 if name == *symbol {
@@ -477,7 +490,7 @@ fn inserts(app: &App) -> Vec<Command> {
                 },
                 Insert,
                 "Change the selected or pointed atom, or choose the atom tool",
-                &format!("element atom {symbol}"),
+                &synonyms,
                 Run::Element(symbol),
             )
             .keys(key_list(|k| {
@@ -1526,6 +1539,7 @@ pub(crate) fn parameterised(app: &App, query: &str) -> Option<Command> {
 
 fn command_with(app: &App, word: Word, number: Option<f32>, value: &str) -> Option<Command> {
     let command = match (word, number) {
+        // Through the Rotation field, so full turns keep Undo and Redo.
         (Word::Rotate(sign), Some(n)) => {
             let degrees = sign * n;
             let way = if degrees < 0. {
@@ -1533,12 +1547,18 @@ fn command_with(app: &App, word: Word, number: Option<f32>, value: &str) -> Opti
             } else {
                 "clockwise"
             };
-            send(
+            Command::new(
                 format!("Rotate selection {}° {way}", degrees.abs()),
                 Category::Edit,
                 "Rotate the selection clockwise; negative turns counterclockwise",
                 "",
-                Message::Transform(Transform::Rotate(degrees)),
+                Run::Send(vec![
+                    Message::NumericTransform(numeric_transforms::Action::Input(
+                        Field::Rotation,
+                        (degrees % 360.).to_string(),
+                    )),
+                    Message::NumericTransform(numeric_transforms::Action::Apply(Field::Rotation)),
+                ]),
             )
             .need(Need::Selection)
         }
@@ -1602,9 +1622,9 @@ fn command_with(app: &App, word: Word, number: Option<f32>, value: &str) -> Opti
             ]),
         ),
         (Word::BondLength, Some(n)) if n > 0. => send(
-            format!("Bond length {n} pt"),
+            format!("New bond length {n} pt"),
             Category::View,
-            "Set the drawing bond length",
+            "For bonds you draw next; use scale to resize the drawing",
             "",
             Message::DrawingLength(value.into()),
         ),

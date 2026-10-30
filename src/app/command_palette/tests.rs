@@ -524,6 +524,30 @@ fn atom_edits_use_the_contextual_keys() {
 }
 
 #[test]
+fn hydroxy_finds_oxygen_only_for_a_single_terminal_atom() {
+    let mut app = app();
+    // Toluene (Cc1ccccc1): a methyl carbon attached to a benzene ring.
+    app.tab.doc = reshiki::rings::Preset::Benzene.document(42., false);
+    let ring = app.tab.doc.atoms[0].id;
+    let methyl = app.tab.doc.add_atom("C", Point::new(84., 0.));
+    app.tab.doc.add_bond(ring, methyl, 1, "plain");
+
+    app.tab.selected = vec![methyl];
+    for query in ["hydroxy", "hydroxyl"] {
+        search(&mut app, query);
+        assert_eq!(top(&app).name, "Oxygen (O)", "{query}");
+    }
+    app.tab.selected = vec![ring];
+    search(&mut app, "hydroxy");
+    assert!(
+        !app.commands
+            .ranked()
+            .iter()
+            .any(|command| command.name == "Oxygen (O)")
+    );
+}
+
+#[test]
 fn tool_and_menu_entries_send_their_messages() {
     let mut app = app();
     run(&mut app, "lasso");
@@ -693,6 +717,38 @@ fn recent_commands_lead_an_empty_query() {
     let ranked = app.commands.ranked();
     assert_eq!(ranked[0].name, "Zoom in");
     assert_eq!(ranked[1].name, "Lasso tool");
+}
+
+#[test]
+fn available_recents_lead_blocked_recents_on_an_empty_query() {
+    let mut app = app();
+    let (doc, molecule, _) = crate::canvas::tilt::shown(reshiki::models3d::Display::TwoD);
+    app.tab.doc = doc;
+    app.tab.selected = molecule.to_vec();
+    run(&mut app, "lasso");
+    run(&mut app, "zoom in");
+    run(&mut app, "Molecular formula and properties");
+    app.tab.busy = false;
+    run(&mut app, "Show as 2D and 3D");
+    app.tab.selected.clear();
+    open(&mut app);
+
+    let ranked = app.commands.ranked();
+    assert_eq!(
+        ranked
+            .iter()
+            .take(4)
+            .map(|command| command.name.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "Molecular formula and properties",
+            "Zoom in",
+            "Lasso tool",
+            "Show as 2D and 3D",
+        ]
+    );
+    assert!(app.command_unavailable(ranked[0]).is_none());
+    assert!(app.command_unavailable(ranked[3]).is_some());
 }
 
 #[test]
@@ -1255,7 +1311,13 @@ fn command_word_prefixes_take_a_value() {
     assert_eq!(named(&app, "ri 7").unwrap(), "Insert 7-membered ring");
     assert_eq!(named(&app, "el pd").unwrap(), "Element Pd");
     assert_eq!(named(&app, "font 12").unwrap(), "Font size 12 pt");
-    assert_eq!(named(&app, "bond len 14").unwrap(), "Bond length 14 pt");
+    for query in ["bond length 14", "bond len 14"] {
+        assert_eq!(named(&app, query).unwrap(), "New bond length 14 pt");
+        assert_eq!(
+            catalog::parameterised(&app, query).unwrap().detail,
+            "For bonds you draw next; use scale to resize the drawing"
+        );
+    }
     assert_eq!(named(&app, "chain 5").unwrap(), "Chain tool with 5 atoms");
     // One letter is too short to pick a command word.
     assert!(named(&app, "r 30").is_none());
@@ -1268,6 +1330,31 @@ fn command_word_prefixes_take_a_value() {
     assert_eq!(top(&app).name, "Set charge to -1");
     let _ = app.update(Message::Commands(Action::Submit));
     assert_eq!(app.tab.doc.atom(a).unwrap().charge, -1);
+}
+
+#[test]
+fn full_turn_commands_preserve_the_document_and_redo() {
+    let mut app = app();
+    let (a, b) = ethane(&mut app);
+    app.tab.selected = vec![a, b];
+    let before = app.tab.doc.clone();
+    run(&mut app, "rot 30");
+    let rotated = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(app.tab.history.can_redo());
+
+    for query in ["rot 360", "rot -360", "rot 720", "rot -720", "rot 0"] {
+        let revision = app.tab.revision;
+        run(&mut app, query);
+        assert_eq!(app.tab.doc, before, "{query}");
+        assert_eq!(app.tab.revision, revision, "{query}");
+        assert!(!app.tab.history.can_undo(), "{query}");
+        assert!(app.tab.history.can_redo(), "{query}");
+        assert_eq!(app.status, "No transform needed", "{query}");
+    }
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, rotated);
 }
 
 #[test]
