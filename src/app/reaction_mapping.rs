@@ -26,6 +26,7 @@ pub(super) struct State {
     pending: Option<(u64, u64)>,
     proposal: Option<Arc<Proposal>>,
     preview: Option<Preview>,
+    pub(super) review_pair: Option<(u64, u64)>,
 }
 
 struct Preview {
@@ -61,6 +62,7 @@ impl State {
     fn set_proposal(&mut self, proposal: Option<Arc<Proposal>>) {
         self.proposal = proposal;
         self.preview = None;
+        self.review_pair = None;
     }
 
     pub(super) fn is_pending(&self) -> bool {
@@ -96,8 +98,16 @@ async fn calculate(source: Document, arrow: u64) -> Result<Arc<Proposal>, String
 }
 impl App {
     pub(super) fn sync_mapping_preview(&mut self) {
+        if self.tab.mapping.review_pair.is_some_and(|(a, b)| {
+            self.tab.selected.len() != 2
+                || !self.tab.selected.contains(&a)
+                || !self.tab.selected.contains(&b)
+        }) {
+            self.tab.mapping.review_pair = None;
+        }
         let Some(proposal) = &self.tab.mapping.proposal else {
             self.tab.mapping.preview = None;
+            self.tab.mapping.review_pair = None;
             return;
         };
         let key = (self.tab.revision, self.tab.label_generation);
@@ -114,7 +124,11 @@ impl App {
             }
             return;
         }
-        self.tab.mapping.preview = Some(Preview::new(key, proposal, &self.tab.doc));
+        let preview = Preview::new(key, proposal, &self.tab.doc);
+        if !preview.current {
+            self.tab.mapping.review_pair = None;
+        }
+        self.tab.mapping.preview = Some(preview);
     }
 
     /// The one selected atom that atom-map commands edit. Shared with the
@@ -291,9 +305,11 @@ impl App {
             .mapping
             .proposal
             .as_ref()
+            .filter(|p| p.current(&self.tab.doc))
             .and_then(|p| p.pairs.get(index))
         {
             self.tab.selected = vec![*a, *b];
+            self.tab.mapping.review_pair = Some((*a, *b));
             self.tool = Tool::Select;
         }
     }

@@ -7,6 +7,8 @@ mod model_tests;
 #[cfg(test)]
 mod orbital_tests;
 mod overlays;
+#[cfg(test)]
+mod review_tests;
 pub(super) use overlays::OrbitGuideCache;
 mod placement;
 
@@ -135,16 +137,20 @@ impl MoleculeCanvas<'_> {
             if rotating {
                 rotation_ink = reshiki::scene::label_ink_boxes(&scene);
             }
-            markers.draw_with_nmr(frame, camera, bounds, true, &nmr_ids);
+            if !self.reviewing_pair {
+                markers.draw_with_nmr(frame, camera, bounds, true, &nmr_ids);
+            }
             draw_primitives(frame, &scene, camera, bounds, 0.);
         } else {
-            markers::Markers::new(&preview, selected).draw_with_nmr(
-                frame,
-                self.camera,
-                bounds,
-                true,
-                &nmr_ids,
-            );
+            if !self.reviewing_pair {
+                markers::Markers::new(&preview, selected).draw_with_nmr(
+                    frame,
+                    self.camera,
+                    bounds,
+                    true,
+                    &nmr_ids,
+                );
+            }
             if rotating {
                 let scene = reshiki::scene::primitives(&preview);
                 rotation_ink = reshiki::scene::label_ink_boxes(&scene);

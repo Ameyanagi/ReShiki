@@ -726,6 +726,26 @@ impl MoleculeCanvas<'_> {
             translation: cached,
             ink: rotation_ink,
         } = selection;
+        if self.reviewing_pair {
+            for atom in selected.iter().filter_map(|id| preview.atom(*id)) {
+                let (lo, hi) = reshiki::scene::atom_label_ink_bounds(atom, preview)
+                    .unwrap_or((atom.position, atom.position));
+                let lo = self.camera.screen(lo, bounds);
+                let hi = self.camera.screen(hi, bounds);
+                let size =
+                    iced::Size::new((hi.x - lo.x + 8.).max(16.), (hi.y - lo.y + 8.).max(16.));
+                let center = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+                frame.stroke(
+                    &Path::rounded_rectangle(
+                        center - Vector::new(size.width / 2., size.height / 2.),
+                        size,
+                        5.into(),
+                    ),
+                    Stroke::default().with_width(2.5).with_color(ACCENT),
+                );
+            }
+            return;
+        }
         if self.tool.selects() && self.optimizer.is_none() {
             if let (Some(Gesture::Transform(drag)), Some(p)) = (&state.gesture, state.cursor)
                 && matches!(drag.handle, Handle::Rotate)

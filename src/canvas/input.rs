@@ -270,11 +270,13 @@ impl MoleculeCanvas<'_> {
         }
         if cursor.is_over(bounds) {
             if self.tool.selects() {
-                if let Some(selection) =
-                    state
-                        .scene
-                        .borrow_mut()
-                        .selection(self.doc, self.selected, self.camera, bounds)
+                if !self.reviewing_pair
+                    && let Some(selection) = state.scene.borrow_mut().selection(
+                        self.doc,
+                        self.selected,
+                        self.camera,
+                        bounds,
+                    )
                     && let Some(p) = cursor.position()
                     && let Some(handle) = selection.hit(Point::new(p.x - bounds.x, p.y - bounds.y))
                 {
