@@ -138,7 +138,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          - os: macos-15
             python: "3.12.15"
           - os: windows-2022
             python: cpython-3.12.15-windows-x86_64-none
@@ -239,7 +239,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          - os: macos-15
             target: aarch64-apple-darwin
             python: "3.12.15"
           - os: windows-2022
@@ -409,7 +409,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          - os: macos-15
             target: aarch64-apple-darwin
           - os: macos-15-intel
             target: x86_64-apple-darwin
@@ -466,7 +466,7 @@ jobs:
       matrix:
         shard: [0, 1, 2, 3]
         platform:
-          - os: macos-14
+          - os: macos-15
             target: aarch64-apple-darwin
             python: "3.12.15"
           - os: windows-2022
@@ -554,7 +554,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          - os: macos-15
             fixture: macos
             python: "3.12.15"
           - os: windows-2022

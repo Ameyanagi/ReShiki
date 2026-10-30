@@ -5,7 +5,6 @@ use reshiki::editing::Transform;
 #[ignore = "Opt-in actual-widget crystal and disconnected ordinary Properties regression"]
 async fn lazy_crystal_properties_keep_scope_and_ordinary_analysis() {
     use iced::advanced::{renderer::Headless, widget::operation};
-    use reshiki::models3d::{Cell, ForceField, Model3d, Placed};
     #[derive(Default)]
     struct PanelText(Vec<String>);
     impl iced::advanced::widget::Operation for PanelText {
@@ -33,7 +32,7 @@ async fn lazy_crystal_properties_keep_scope_and_ordinary_analysis() {
     .unwrap();
     let panel_text = |app: &App, renderer: &mut iced::Renderer| {
         let mut ui = iced_runtime::UserInterface::build(
-            app.molecular_properties(),
+            app.molecular_section(),
             iced::Size::new(300., 800.),
             iced_runtime::user_interface::Cache::new(),
             renderer,
@@ -44,50 +43,54 @@ async fn lazy_crystal_properties_keep_scope_and_ordinary_analysis() {
     };
     let (mut app, _) = App::new();
     app.tab.busy = false;
-    let carbon = app.tab.doc.add_atom("C", Default::default());
-    let oxygen = app
+    app.tab.doc = reshiki::crystal::read(
+        "cif",
+        include_str!("../../../tests/fixtures/crystal/nacl.cif"),
+    )
+    .unwrap()
+    .0;
+    let potassium = app
         .tab
         .doc
-        .add_atom("O", reshiki::document::Point::new(42., 0.));
-    app.tab.doc.add_bond(carbon, oxygen, 1, "plain");
-    let model = Model3d::new(
+        .atoms
+        .iter()
+        .find(|a| a.element == "Na")
+        .unwrap()
+        .id;
+    app.tab.doc = reshiki::atom_text::apply(
         &app.tab.doc,
-        vec![
-            Placed {
-                id: carbon,
-                xyz: [0.; 3],
-            },
-            Placed {
-                id: oxygen,
-                xyz: [1.4, 0., 0.],
-            },
-        ],
-        vec![],
-        ForceField::Mmff94s,
+        potassium,
+        "K+",
+        reshiki::atom_text::Mode::Auto,
     )
-    .with_cell(
-        &app.tab.doc,
-        Some(Cell {
-            vectors: [[5., 0., 0.], [0., 5., 0.], [0., 0., 5.]],
-            crossing: vec![],
-        }),
-        vec![],
-    );
-    app.tab.doc.models.push(model);
-    for selected in [vec![], vec![carbon, oxygen]] {
+    .unwrap();
+    for selected in [vec![], vec![potassium]] {
         app.tab.selected = selected;
-        let text = panel_text(&app, &mut renderer);
-        assert!(
-            text.contains(reshiki::models3d::crystal::ANALYSIS_NOTICE),
-            "{text}"
-        );
-        let composition =
-            reshiki::models3d::crystal::composition(&app.tab.doc, &app.tab.selected).unwrap();
-        assert!(text.contains(&format!(
-            "{} · {:.3}\u{a0}g/\u{2060}mol",
-            composition.formula, composition.mass
-        )));
-        assert!(!text.contains("Calculating"));
+        assert!(app.next_property_request().is_none());
+        for expanded in [false, true] {
+            app.tab.inspector_ui.seed_molecular(Some(expanded));
+            let text = panel_text(&app, &mut renderer);
+            assert!(
+                text.contains("Whole drawing · Cl4KNa3 · 249.880\u{a0}g/\u{2060}mol"),
+                "{text}"
+            );
+            assert_eq!(
+                text.contains("Selection · K+ · 39.098\u{a0}g/\u{2060}mol"),
+                !app.tab.selected.is_empty(),
+                "{text}"
+            );
+            assert_eq!(
+                text.matches("\u{a0}g/\u{2060}mol").count(),
+                if app.tab.selected.is_empty() { 1 } else { 2 },
+                "{text}"
+            );
+            assert_eq!(
+                text.contains(reshiki::models3d::crystal::ANALYSIS_NOTICE),
+                expanded,
+                "{text}"
+            );
+            assert!(!text.contains("Calculating"));
+        }
     }
     let ordinary = app
         .tab

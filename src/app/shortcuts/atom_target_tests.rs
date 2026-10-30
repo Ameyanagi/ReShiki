@@ -507,6 +507,9 @@ fn terminal_carbonyl_keeps_carbon_on_the_chain_and_oxygen_on_the_other_side() {
     // With just a horizontal incoming bond, its normal +60° growth goes to
     // carbon and the remaining -60° direction goes to oxygen.
     let (mut app, a, target, unrelated) = bond_fixture();
+    reshiki::atom_labels::refresh::Refresh::calculate(&app.tab.doc, &Default::default())
+        .unwrap()
+        .apply(&mut app.tab.doc);
     let before = app.tab.doc.clone();
     hover(&mut app, Point::new(42., 0.));
     key(&mut app, "2");
@@ -1181,7 +1184,12 @@ fn every_bond_style_and_ring_key_uses_the_hovered_bond_instead_of_selected_atoms
         hover(&mut app, Point::new(21., 0.));
         key(&mut app, shortcut);
         assert!(!app.error, "{shortcut}: {}", app.status);
-        assert_eq!(app.tab.doc.atoms, before.atoms);
+        let mut expected_atoms = before.atoms.clone();
+        for atom in &mut expected_atoms {
+            // Changing the bond order refreshes its molecule's hydrogen labels.
+            atom.label_h = app.tab.doc.atom(atom.id).unwrap().label_h;
+        }
+        assert_eq!(app.tab.doc.atoms, expected_atoms);
         assert_eq!(app.tab.doc.bonds.len(), before.bonds.len());
         let bond = app
             .tab
@@ -1231,8 +1239,12 @@ fn every_bond_style_and_ring_key_uses_the_hovered_bond_instead_of_selected_atoms
             before.bonds.len() + count - 1,
             "{shortcut}: close one ring"
         );
-        assert_eq!(app.tab.doc.atom(a), before.atom(a));
-        assert_eq!(app.tab.doc.atom(b), before.atom(b));
+        for id in [a, b] {
+            let mut expected = before.atom(id).unwrap().clone();
+            // Fusing a ring changes the endpoint carbons' hydrogen counts.
+            expected.label_h = app.tab.doc.atom(id).unwrap().label_h;
+            assert_eq!(app.tab.doc.atom(id), Some(&expected));
+        }
         assert_unrelated(&before, &app.tab.doc, &unrelated);
         assert_one_undo(&mut app, &before);
     }

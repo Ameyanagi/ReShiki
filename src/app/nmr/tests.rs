@@ -1300,7 +1300,10 @@ fn restore_during_prediction_keeps_source_work_and_allows_prediction_in_the_reco
             > 0
     );
     let key = app.tab.nmr.job.pending.clone().unwrap();
-    let recovered = ethyl_acetate_doc();
+    let mut recovered = ethyl_acetate_doc();
+    reshiki::atom_labels::refresh::Refresh::calculate(&recovered, &Default::default())
+        .unwrap()
+        .apply(&mut recovered);
     let path = directory.path().join("4294967294-nmr.json");
     std::fs::write(&path, "draft").unwrap();
     app.tabs.recovery_root = Some(directory.path().into());
