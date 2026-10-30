@@ -21,6 +21,42 @@ pub(crate) const CASES: &[(&str, &str)] = &[
     ("CCOC(=O)C", "ethyl ethanoate"),
     ("CC(C)OC(=O)C", "propan-2-yl ethanoate"),
     ("CCOC(=O)C(C)C", "ethyl 2-methylpropanoate"),
+    ("CCOC(=O)/C=C/C", "ethyl (2E)-but-2-enoate"),
+    ("CCOC(=O)/C=C/c1ccccc1", "ethyl (2E)-3-phenylprop-2-enoate"),
+    ("CCOC(=O)/C=C\\c1ccccc1", "ethyl (2Z)-3-phenylprop-2-enoate"),
+    ("OC(=O)Cc1ccccc1", "2-phenylethanoic acid"),
+    ("OC(=O)CC1CC1", "2-cyclopropylethanoic acid"),
+    ("OC(=O)CC1CCCCC1", "2-cyclohexylethanoic acid"),
+    ("OC(=O)CC1CCCCCCC1", "2-cyclooctylethanoic acid"),
+    ("OC(=O)CC1CCCCCCCCCCC1", "2-cyclododecylethanoic acid"),
+    ("OC(=O)CC1CCC(C)CC1", "2-(4-methylcyclohexyl)ethanoic acid"),
+    ("COc1ccc(CC(=O)O)cc1", "2-(4-methoxyphenyl)ethanoic acid"),
+    (
+        "OC(=O)Cc1cc(C)cc(C)c1",
+        "2-(3,5-dimethylphenyl)ethanoic acid",
+    ),
+    (
+        "CC(C)Cc1ccc(C(C)C(=O)O)cc1",
+        "2-[4-(2-methylpropyl)phenyl]propanoic acid",
+    ),
+    ("C[C@H](c1ccccc1)C(=O)O", "(2R)-2-phenylpropanoic acid"),
+    ("C[C@@H](c1ccccc1)C(=O)O", "(2S)-2-phenylpropanoic acid"),
+    ("OC(=O)Cc1ccccn1", "2-(pyridin-2-yl)ethanoic acid"),
+    ("OC(=O)Cc1cccnc1", "2-(pyridin-3-yl)ethanoic acid"),
+    ("OC(=O)Cc1ccncc1", "2-(pyridin-4-yl)ethanoic acid"),
+    ("OC(=O)Cc1cccnn1", "2-(pyridazin-3-yl)ethanoic acid"),
+    ("OC(=O)Cc1ccc[nH]1", "2-(1H-pyrrol-2-yl)ethanoic acid"),
+    ("OC(=O)Cc1ccco1", "2-(furan-2-yl)ethanoic acid"),
+    ("OC(=O)Cc1cccs1", "2-(thiophen-2-yl)ethanoic acid"),
+    ("OC(=O)Cc1nccs1", "2-(1,3-thiazol-2-yl)ethanoic acid"),
+    (
+        "OC(=O)Cc1nc(C)cs1",
+        "2-(4-methyl-1,3-thiazol-2-yl)ethanoic acid",
+    ),
+    ("NC(=O)Cc1ccccc1", "2-phenylethanamide"),
+    ("N#CCc1ccccc1", "2-phenylethanenitrile"),
+    ("O=CCc1ccccc1", "2-phenylethanal"),
+    ("CC(=O)c1ccccc1", "1-phenylethan-1-one"),
     ("CC(=O)N", "ethanamide"),
     ("OCCC(=O)N", "3-hydroxypropanamide"),
     ("CC#N", "ethanenitrile"),
@@ -100,6 +136,8 @@ fn graph_permutations_and_hydrogen_spelling_do_not_change_name() -> Result<(), S
         vec!["CC(O)C(=O)O", "OC(=O)C(O)C", "C(C)(O)C(O)=O"],
         vec!["Oc1ccc(C)cc1", "Cc1ccc(O)cc1", "OC1=CC=C(C)C=C1"],
         vec!["C/C=C/C", "C(\\C)=C/C"],
+        vec!["OC(=O)Cc1ccccc1", "c1ccccc1CC(O)=O"],
+        vec!["COc1ccc(CC(=O)O)cc1", "OC(=O)Cc1ccc(OC)cc1"],
     ] {
         let name = generate(at(&alternatives, 0)?)?;
         for text in alternatives {
@@ -127,6 +165,14 @@ fn unsupported_features_never_become_neutral_unlabeled_or_simplified_names() {
         "[CH3]",
         "[Na+].[Cl-]",
         "CCCCCC(C[C@H](F)Cl)CCCCCC",
+        "OC(=O)c1ccccc1", // direct ring carbon suffixes
+        "COC(=O)c1ccccc1",
+        "O=Cc1ccc(O)c(OC)c1",
+        "NC(=O)c1cccnc1",
+        "OC(=O)Cc1ccc(O)cc1",         // groups on both ring and chain
+        "OC(=O)Cc1ccc(CO)cc1",        // functionalized ring branch
+        "OC(=O)C[C@H]1CCCC(C)C1",     // specified ring stereo
+        "OC(=O)Cc1ccc(-c2ccccc2)cc1", // a second ring
     ] {
         assert!(
             generate(smiles).is_err(),

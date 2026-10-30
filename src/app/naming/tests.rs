@@ -620,3 +620,138 @@ fn local_parse_cancels_obsolete_tickets() {
     assert!(app.tab.naming.local_cancel.is_none());
     assert_eq!(app.tab.naming.name, "propane");
 }
+
+#[test]
+fn refusals_retries_and_cancellation_keep_the_naming_action_source() {
+    for (action, source, cancelled) in [
+        (
+            Action::Resolve,
+            NoticeSource::Parse,
+            "Local name parsing was cancelled",
+        ),
+        (
+            Action::Generate,
+            NoticeSource::Generate,
+            "Local name generation was cancelled",
+        ),
+    ] {
+        for completion in ["refused", "stale", "cancelled"] {
+            let (mut app, _) = App::new();
+            app.tab.naming.name = "ethanol".into();
+            let before = app.tab.doc.clone();
+            let _ = app.naming_action(action.clone());
+            let ticket = app.tab.naming.pending.unwrap().ticket();
+            match completion {
+                "cancelled" => {
+                    let _ = app.naming_action(Action::Cancel);
+                }
+                "stale" => {
+                    app.tab.revision += 1;
+                    let _ = app.naming_action(Action::Finished(
+                        ticket,
+                        Box::new(Ok(Outcome::Structure(record("CCO")))),
+                    ));
+                }
+                _ => {
+                    let _ = app.naming_action(Action::Finished(
+                        ticket,
+                        Box::new(Err(naming::Error::Rejected(
+                            "Unsupported multiple-bond placement".into(),
+                        ))),
+                    ));
+                }
+            }
+            let notice = app.tab.naming.notice.as_ref().unwrap();
+            assert_eq!(notice.source, source, "{action:?}: {completion}");
+            assert_eq!(
+                notice.detail,
+                match completion {
+                    "cancelled" => cancelled,
+                    "stale" => "The drawing changed. Try again.",
+                    _ => "Unsupported multiple-bond placement",
+                }
+            );
+            assert_eq!(app.tab.doc, before);
+            assert!(!app.tab.history.can_undo());
+            assert!(app.tab.naming.pending.is_none());
+        }
+    }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in actual-widget naming refusal placement regression"]
+async fn refusal_is_rendered_below_the_action_that_produced_it() -> Result<(), String> {
+    use iced::advanced::{renderer::Headless, widget::operation};
+    #[derive(Default)]
+    struct Texts(Vec<(String, iced::Rectangle)>);
+    impl iced::advanced::widget::Operation for Texts {
+        fn traverse(
+            &mut self,
+            operate: &mut dyn FnMut(&mut dyn iced::advanced::widget::Operation),
+        ) {
+            operate(self);
+        }
+        fn text(
+            &mut self,
+            _: Option<&iced::advanced::widget::Id>,
+            bounds: iced::Rectangle,
+            value: &str,
+        ) {
+            self.0.push((value.into(), bounds));
+        }
+    }
+    const REFUSAL: &str = "Unsupported multiple-bond placement";
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .ok_or("No renderer")?;
+    let (mut app, _) = App::new();
+    app.tab.naming.name = "ethanol".into();
+    for (action, source) in [
+        (Action::Generate, NoticeSource::Generate),
+        (Action::Resolve, NoticeSource::Parse),
+    ] {
+        let _ = app.naming_action(action);
+        assert!(app.tab.naming.notice.is_none());
+        let ticket = app.tab.naming.pending.unwrap().ticket();
+        let _ = app.naming_action(Action::Finished(
+            ticket,
+            Box::new(Err(naming::Error::Rejected(REFUSAL.into()))),
+        ));
+        assert_eq!(app.tab.naming.notice.as_ref().unwrap().source, source);
+        let mut ui = iced_runtime::UserInterface::build(
+            app.naming_panel(),
+            iced::Size::new(340., 1000.),
+            Default::default(),
+            &mut renderer,
+        );
+        let mut texts = Texts::default();
+        ui.operate(&renderer, &mut operation::black_box(&mut texts));
+        let bounds = |value: &str| {
+            texts
+                .0
+                .iter()
+                .find(|(text, _)| text == value)
+                .map(|(_, bounds)| *bounds)
+                .unwrap_or_else(|| panic!("Missing {value}: {:?}", texts.0))
+        };
+        assert_eq!(
+            texts.0.iter().filter(|(text, _)| text == REFUSAL).count(),
+            1
+        );
+        let refusal = bounds(REFUSAL);
+        let parse = bounds("Parse name");
+        let structure = bounds("STRUCTURE → NAME");
+        let generate = bounds("Generate selected name");
+        if source == NoticeSource::Generate {
+            assert!(refusal.y >= generate.y + generate.height);
+        } else {
+            assert!(refusal.y >= parse.y + parse.height);
+            assert!(refusal.y + refusal.height <= structure.y);
+        }
+    }
+    Ok(())
+}

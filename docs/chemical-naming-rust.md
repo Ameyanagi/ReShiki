@@ -138,6 +138,11 @@ includes carbon chains with supported branching and unsaturation, simple
 cycloalkanes, benzene and selected heteroaromatic parents; acids, simple esters,
 primary amides, nitriles, aldehydes, ketones, alcohols, primary amines, ethers
 and halogen substituents; and supported parent R/S and E/Z configurations.
+When a suffix group belongs to an acyclic chain, one ring can be a phenyl,
+cycloalkyl or supported heteroaryl substituent, including simple alkyl,
+alkoxy and halogen substitution on that ring. Direct ring carbon suffixes
+(such as benzoic acid or nicotinamide), suffix groups on both the ring and
+chain, and molecules with multiple rings remain unsupported.
 Carbon stems are limited to 20 atoms and substituent nesting to three levels.
 Unsupported functional groups and stereo contexts return an error. A generated
 name appears only after the local Rust parser reconstructs the same graph and
