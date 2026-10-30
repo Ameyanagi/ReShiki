@@ -59,7 +59,7 @@ fn stale_background_labels_schedule_their_next_refresh_in_the_same_tab() {
     assert!(app.tab.label_refresh.pending.is_none());
     let tab = &app.tabs.background[0];
     assert_eq!(tab.doc.atom(oxygen).unwrap().element, "N");
-    assert_eq!(tab.doc.atom(oxygen).unwrap().label_h, 0);
+    assert_eq!(tab.doc.atom(oxygen).unwrap().label_h, 2);
     let next = tab.label_refresh.pending.unwrap();
     assert_eq!(next.revision, revision);
     assert_eq!(next.epoch, key.epoch);
@@ -120,9 +120,11 @@ fn rapid_edits_coalesce_and_stale_success_and_errors_cannot_publish() {
         let _ = app.update(Message::ContextKey("s".into()));
         assert_eq!(app.tab.label_refresh.pending, Some(old));
         let latest = app.tab.revision;
+        let drawing = app.tab.doc.clone();
         let _ = app.update(Message::LabelsReady(old, result));
+        assert_eq!(app.tab.doc, drawing);
         assert_eq!(app.tab.doc.atom(id).unwrap().element, "S");
-        assert_eq!(app.tab.doc.atom(id).unwrap().label_h, 0);
+        assert_eq!(app.tab.doc.atom(id).unwrap().label_h, 1);
         assert!(app.tab.chemistry_notice.is_none());
         let key = app.tab.label_refresh.pending.unwrap();
         assert_eq!(key.revision, latest);
@@ -208,18 +210,21 @@ fn single_bond(app: &mut App) -> Key {
 fn new_hydrogens_move_attached_arrows_clear_as_the_labels_land() {
     let (mut app, oxygen) = carbonyl_with_arrow();
     let original = app.tab.doc.clone();
+    let stale = original.arrows[0].start;
     let key = single_bond(&mut app);
-    let stale = app.tab.doc.arrows[0].start;
+    // The edit already labels the OH and moves the arrow clear of it.
+    assert_eq!(app.tab.doc.atom(oxygen).unwrap().label_h, 1);
+    assert!(app.tab.doc.arrows[0].start.distance(stale) > 1.);
     let frames = app.tab.history.undo_frames().count();
     let labels = compute(&app);
     let mut landed = app.tab.doc.clone();
     labels.as_ref().unwrap().apply(&mut landed);
     let _ = app.update(Message::LabelsReady(key, labels));
-    // No pan or edit: the labels themselves move the arrow clear of the H.
+    // The background refresh needs no further layout repair.
     assert_eq!(app.tab.doc.atom(oxygen).unwrap().label_h, 1);
     assert_eq!(app.tab.doc, reconciled(&landed));
     assert!(app.tab.doc.arrows[0].start.distance(stale) > 1.);
-    assert_eq!(app.tab.revision, key.revision.wrapping_add(1));
+    assert_eq!(app.tab.revision, key.revision);
     assert_eq!(app.tab.history.undo_frames().count(), frames);
     assert!(app.dirty());
     let repaired = app.tab.doc.clone();
@@ -379,7 +384,12 @@ fn labels_that_change_no_layout_change_nothing_else() {
 #[test]
 fn move_and_attach_keeps_its_drawing_until_it_closes() {
     let (mut app, _) = carbonyl_with_arrow();
-    let key = single_bond(&mut app);
+    // An opened drawing can still need labels and their layout repair.
+    let mut file = app.tab.doc.clone();
+    file.bonds[0].order = 1;
+    app.show_opened(file, Some("old.rsk".into()));
+    let _ = app.start_label_refresh();
+    let key = app.tab.label_refresh.pending.unwrap();
     let stale = app.tab.doc.arrows.clone();
     app.tab.selected = vec![app.tab.doc.atoms[2].id];
     let _ = app.update(Message::Join(crate::app::joining::Action::Begin));
@@ -448,4 +458,26 @@ fn applying_an_unchanged_text_draft_settles_the_repair_without_an_undo_step() {
     assert_ne!(app.tab.doc.arrows, file.arrows, "The arrow moved clear");
     assert!(!app.tab.history.can_undo());
     assert!(!app.dirty());
+}
+
+#[test]
+fn keyboard_edits_show_hydrogen_labels_before_the_refresh_lands() {
+    let (mut app, _) = App::new();
+    app.tab.doc = Document::default();
+    let c = app.tab.doc.add_atom("C", Point::default());
+    let n = app.tab.doc.add_atom("N", Point::new(42., 0.));
+    app.tab.doc.add_bond(c, n, 1, "plain");
+    let water = app.tab.doc.add_atom("O", Point::new(0., 200.));
+    Refresh::calculate(&app.tab.doc, &Refresh::default())
+        .unwrap()
+        .apply(&mut app.tab.doc);
+    app.tab.selected = vec![c];
+    let _ = app.update(Message::ContextKey("1".into()));
+    let h = |app: &App, id| app.tab.doc.atom(id).unwrap().label_h;
+    assert_eq!((h(&app, n), h(&app, water)), (2, 2));
+    let grown = app.tab.selected[0];
+    assert_ne!(grown, c);
+    let _ = app.update(Message::ContextKey("n".into()));
+    assert_eq!(app.tab.doc.atom(grown).unwrap().element, "N");
+    assert_eq!((h(&app, grown), h(&app, n), h(&app, water)), (2, 2, 2));
 }

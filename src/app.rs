@@ -689,6 +689,9 @@ impl App {
             return;
         }
         self.prepare_document_change(self.tab.doc != before);
+        // Label the edited molecules before reconciling, so the edit's first
+        // frame and the layout around it already have their hydrogens.
+        reshiki::atom_labels::refresh::refresh_edited(&before, &mut self.tab.doc);
         let reconciled = match reshiki::transaction::reconcile(&mut self.tab.doc, before) {
             Ok(reconciled) => reconciled,
             Err(rejection) => {
@@ -714,6 +717,7 @@ impl App {
             return Ok(());
         }
         let before = self.tab.doc.clone();
+        reshiki::atom_labels::refresh::refresh_edited(&before, &mut candidate);
         let reconciled = reshiki::transaction::reconcile(&mut candidate, before)
             .map_err(|error| error.message().to_owned())?;
         let changed = candidate != *reconciled.before();

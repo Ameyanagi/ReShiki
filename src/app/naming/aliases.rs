@@ -147,6 +147,9 @@ impl App {
 
     pub(super) fn generated_name_controls(&self) -> Element<'_, Message> {
         let mut content = column![].spacing(8);
+        if let Some(error) = &self.tab.naming.structure_error {
+            content = content.push(text(error).size(12).color(self.theme().palette().danger));
+        }
         if let Some((ticket, record)) = &self.tab.naming.structure {
             let current = ticket.is_current(self.tab.revision, self.tab.file_epoch);
             content = content.push(section("GENERATED SYSTEMATIC NAME · LOCAL RULES"));

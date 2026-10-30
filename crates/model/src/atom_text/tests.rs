@@ -768,8 +768,8 @@ fn typed_charges_follow_element_hydride_text_and_link_grammars() -> Result<(), S
                 assert_eq!(atom.charge, charge, "{text}");
                 assert!(atom.no_implicit, "{text}");
                 assert_eq!(atom.explicit_h, hydrogens, "{text}");
-                // label_h is computed; the edit clears it until the next check.
-                assert_eq!(atom.label_h, 0, "{text}");
+                // The typed hydrogens show until the next check computes them.
+                assert_eq!(atom.label_h, hydrogens, "{text}");
                 assert!(atom.display.variable.is_none(), "{text}");
                 assert!(result.generic.links.is_empty(), "{text}");
                 assert_eq!(entry(atom), canonical, "{text}");
