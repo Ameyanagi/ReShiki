@@ -338,6 +338,8 @@ impl<'a> Input<'a> {
             self.apply_in_place(value, stage, session)
         })
     }
+    /// RDKit 2026.03.6 parity sequence; the solver applies
+    /// `Stage::PathAngleExpansion` separately afterwards.
     pub(super) fn repair_with_work(
         &self,
         fragment: &Fragment,
@@ -348,7 +350,6 @@ impl<'a> Input<'a> {
                 Stage::BondAndSpiroFlip,
                 Stage::OpenAngles,
                 Stage::ShortenBonds,
-                Stage::PathAngleExpansion,
             ] {
                 self.apply_in_place(value, stage, session)?;
             }
