@@ -536,8 +536,8 @@ impl Document {
                 }
             })
             .collect();
+        // Hydrogen labels stay until the edit's commit relabels its molecules.
         for atom in &mut self.atoms {
-            atom.label_h = 0;
             if affected.contains(&atom.id)
                 || atom
                     .stereo

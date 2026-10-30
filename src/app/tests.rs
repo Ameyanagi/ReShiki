@@ -1615,7 +1615,14 @@ fn matching_dative_click_swaps_direction_like_reverse_bonds_in_one_undo_step() {
     // reverse_drawn's own stereo_atoms reversal is covered by the model test.
     assert!(!original.bonds[0].stereo_atoms.is_empty());
     assert!(clicked.bonds[0].stereo_atoms.is_empty());
-    assert!(clicked.atoms.iter().all(|atom| atom.label_h == 0));
+    assert_eq!(
+        clicked
+            .atoms
+            .iter()
+            .map(|atom| atom.label_h)
+            .collect::<Vec<_>>(),
+        vec![1, 0, 3, 3]
+    );
     assert_eq!(app.tab.selected, vec![donor, acceptor]);
     assert_eq!(app.status, "Drawing changed");
     assert_eq!(app.tab.history.undo_frames().count(), 1);
@@ -2327,10 +2334,17 @@ fn clicking_existing_bonds_cycles_order_and_can_be_undone() {
         let a = app.tab.doc.add_atom("C", Point::default());
         let b = app.tab.doc.add_atom("C", Point::new(42.0, 0.0));
         app.tab.doc.add_bond(a, b, 1, "plain");
+        for atom in &mut app.tab.doc.atoms {
+            atom.label_h = 3;
+        }
         let original = app.tab.doc.clone();
         for order in [2, 3, 1] {
             app.edit(Edit::Click(Point::new(21.0, 0.0)));
-            assert_eq!(app.tab.doc.atoms, original.atoms);
+            let mut expected_atoms = original.atoms.clone();
+            for atom in &mut expected_atoms {
+                atom.label_h = u32::from(4 - order);
+            }
+            assert_eq!(app.tab.doc.atoms, expected_atoms);
             assert_eq!(app.tab.doc.bonds.len(), 1);
             assert_eq!(app.tab.doc.bonds[0].order, order);
             assert_eq!(app.tab.doc.bonds[0].display, "plain");
@@ -2404,8 +2418,10 @@ fn aromatic_plane_bond_matches_preview_and_undo_restores_xyz() -> Result<(), Str
     let before = app.tab.doc.clone();
     app.tool = Tool::Atom;
     app.element = "O".into();
-    let (preview, added) =
+    let (mut preview, added) =
         growth::place(&before, id, end, "O", reshiki::bonds::BondPreset::Single)?;
+    reshiki::atom_labels::refresh::Refresh::calculate(&preview, &Default::default())?
+        .apply(&mut preview);
     app.edit(Edit::PlaneBond(id, end));
     assert_eq!(app.tab.doc, preview);
     assert_eq!(app.tab.selected, vec![added]);
@@ -2548,14 +2564,16 @@ fn pan_after_labels_land_moves_only_the_camera() {
     });
     app.tab.doc.arrows.push(arrow);
     app.tab.selected = vec![oxygen];
-    let _ = app.update(Message::ContextKey("o".into()));
-    let key = app.tab.label_refresh.pending_key().unwrap();
     let start = app.tab.doc.arrows[0].start;
+    let _ = app.update(Message::ContextKey("o".into()));
+    assert_eq!(app.tab.doc.atom(oxygen).unwrap().label_h, 1);
+    // The committed edit already clears the new H before the worker replies.
+    assert!(app.tab.doc.arrows[0].start.distance(start) > 1.);
+    let key = app.tab.label_refresh.pending_key().unwrap();
+    let labeled = app.tab.doc.clone();
     let labels = Refresh::calculate(&app.tab.doc, &Default::default()).map(std::sync::Arc::new);
     let _ = app.update(Message::LabelsReady(key, labels));
-    assert_eq!(app.tab.doc.atom(oxygen).unwrap().label_h, 1);
-    // The arrow cleared the new H as the labels landed.
-    assert!(app.tab.doc.arrows[0].start.distance(start) > 1.);
+    assert_eq!(app.tab.doc, labeled);
     let document = app.tab.doc.clone();
     let revision = app.tab.revision;
     let frames = app.tab.history.undo_frames().count();
