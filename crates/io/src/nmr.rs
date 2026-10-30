@@ -39,6 +39,7 @@ pub struct Row {
     pub hydrogen_count: u8,
     pub radius: Option<u8>,
     pub statistics: Option<Statistics>,
+    /// A missing-data reason or a caution on a retained numerical prediction.
     pub limitation: Option<String>,
 }
 impl Row {

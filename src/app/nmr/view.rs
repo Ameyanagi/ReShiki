@@ -626,14 +626,19 @@ pub(super) fn site_description(nucleus: Nucleus, row: &engine::Row, label: &str)
             )
         },
         |s| {
-            format!(
+            let mut description = format!(
                 "Predicted {:.3} ppm; shell {}; {} references; SD {:.3} ppm",
                 s.median,
                 row.radius
                     .map_or_else(|| "—".into(), |radius| radius.to_string()),
                 s.support,
                 s.standard_deviation
-            )
+            );
+            if let Some(note) = &row.limitation {
+                description.push_str(". ");
+                description.push_str(note);
+            }
+            description
         },
     );
     format!("Select {} NMR row {label}. {prediction}", nucleus.label())

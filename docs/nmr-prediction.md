@@ -41,6 +41,9 @@ atom in the drawing.
   atom the match reaches, **references** is the number of independent
   reference molecules, and **SD** is the spread of their values. SD is not an
   error bar.
+- A **Broad match** note appears directly under a value when the shortest
+  supported shell pools a wide spread of reference shifts. The value stays in
+  the table, plot and labels; the note also appears in copied and exported data.
 - Details also shows the method, data version, conditions, limitations and
   data credit, and offers **Hide plot** / **Show plot**. In the floating
   palette it adds **Reset position** and the **−** / **+** size buttons.
@@ -82,6 +85,10 @@ atom in the drawing.
 - A row with too little reference data stays empty and says why. Even simple
   molecules can be partly covered: in the ¹H result for ethanol only the CH₃
   group gets a value.
+- A broad short-shell match can pool different chemical environments. For
+  example, the bundled data gives paracetamol and acetanilide's acetyl CH₃
+  group a median of 1.501 ppm with a **Broad match** note (Shell 2, SD
+  0.507 ppm). This is a reference-group estimate, not an acetyl-specific value.
 - Results are estimates, not assignments or simulated spectra.
 
 ## Implementation notes
@@ -123,6 +130,15 @@ independent reference molecule groups. **SD** is the sample standard deviation
 of their observed environment-group medians. It describes reference dispersion
 and is not a calibrated error bar or confidence interval. The export also
 includes the observed minimum and maximum.
+
+A supported radius-2 match is marked **Broad match** when its SD is at least
+0.5 ppm for ¹H or 5 ppm for ¹³C. These descriptive cutoffs flag 49 of 151 ¹H
+radius-2 entries (32.5%) and 224 of 2,176 ¹³C entries (10.3%) in the bundled
+index; all of those entries meet the two-molecule support requirement. The
+radius-2 SD medians are 0.362 and 1.577 ppm, respectively. The cutoffs expose
+broad fallback groups while leaving narrower radius-2 matches unmarked. They
+do not change the chosen reference median or coverage, and an unmarked value
+is not a claim of calibrated accuracy.
 
 ### Coverage and accuracy
 

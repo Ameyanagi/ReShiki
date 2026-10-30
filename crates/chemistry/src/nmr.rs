@@ -120,6 +120,7 @@ pub struct Prediction {
     pub site: Site,
     pub radius: Option<u8>,
     pub statistics: Option<Statistics>,
+    /// A missing-data reason or a caution on a retained numerical prediction.
     pub limitation: Option<String>,
 }
 
@@ -163,6 +164,18 @@ impl Index {
                 {
                     prediction.radius = Some(radius);
                     prediction.statistics = Some(statistics.clone());
+                    // Short spheres can pool unlike chemical environments. These
+                    // spread cutoffs describe broad reference groups, not errors.
+                    let broad_match_sd = match nucleus {
+                        Nucleus::H1 => 0.5,
+                        Nucleus::C13 => 5.,
+                    };
+                    if radius == MIN_RADIUS && statistics.standard_deviation >= broad_match_sd {
+                        prediction.limitation = Some(format!(
+                            "Broad match · Shell {radius} · SD {:.3} ppm",
+                            statistics.standard_deviation
+                        ));
+                    }
                     break;
                 }
             }
