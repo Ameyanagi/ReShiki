@@ -722,6 +722,7 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
                 alignment,
                 width_pt: Some(83.5),
                 line_spacing: 1.37,
+                name_breaks: false,
                 style: TextStyle {
                     family: "Hiragino Sans".into(),
                     color: reshiki::palette::Color::Custom([145, 60, 220]),
