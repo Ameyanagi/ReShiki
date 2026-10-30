@@ -494,31 +494,38 @@ impl App {
     }
 
     fn property_summary(&self) -> String {
-        let summary = |scope: &str, analysis: Option<&Analysis>| {
-            analysis.map_or_else(
+        let summary = |scope: &str, atoms: &[u64], analysis: Option<&Analysis>| {
+            let properties = if reshiki::models3d::crystal::touches(&self.tab.doc, atoms) {
+                reshiki::models3d::crystal::composition(&self.tab.doc, atoms)
+                    .ok()
+                    .map(|p| (p.formula, p.mass))
+            } else {
+                analysis.map(|a| (a.formula.clone(), a.mass))
+            };
+            properties.map_or_else(
                 || scope.into(),
-                |a| format!("{scope} · {} · {:.3}\u{a0}g/\u{2060}mol", a.formula, a.mass),
+                |(formula, mass)| format!("{scope} · {formula} · {mass:.3}\u{a0}g/\u{2060}mol"),
             )
         };
-        let whole = if self.whole_property_analysis().is_none()
+        let whole = if !reshiki::models3d::crystal::touches(&self.tab.doc, &[])
+            && self.whole_property_analysis().is_none()
             && self
                 .property_result(&self.whole_property_key())
                 .is_some_and(Result::is_err)
         {
             "Whole drawing · Unavailable".into()
         } else {
-            summary("Whole drawing", self.whole_property_analysis())
+            summary("Whole drawing", &[], self.whole_property_analysis())
         };
-        if self.tab.selected.is_empty() {
-            whole
+        let Some(key) = self.property_key() else {
+            return whole;
+        };
+        let selection = if key.atoms.is_empty() {
+            "No atoms selected".into()
         } else {
-            let selection = if self.property_key().is_some_and(|key| key.atoms.is_empty()) {
-                "No atoms selected".into()
-            } else {
-                summary("Selection", self.property_analysis())
-            };
-            format!("{whole}\n{selection}")
-        }
+            summary("Selection", &key.atoms, self.property_analysis())
+        };
+        format!("{whole}\n{selection}")
     }
 
     pub(super) fn inspector_section<'a>(
@@ -872,15 +879,6 @@ impl App {
             .spacing(8);
             for note in reshiki::models3d::crystal::import_notes(&self.tab.doc, &ids) {
                 body = body.push(text(note).size(11).style(muted_text));
-            }
-            if let Ok(composition) = reshiki::models3d::crystal::composition(&self.tab.doc, &ids) {
-                body = body.push(
-                    text(format!(
-                        "{} · {:.3}\u{a0}g/\u{2060}mol",
-                        composition.formula, composition.mass
-                    ))
-                    .size(14),
-                );
             }
             return container(body).padding(10).into();
         }

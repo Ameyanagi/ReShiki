@@ -1124,6 +1124,8 @@ fn marked_coordination_is_explicit_and_preserves_ordinary_connect_checks() {
     app.tab.doc.atom_mut(donor).unwrap().explicit_h = 2;
     let c = app.tab.doc.add_atom("C", Point::new(80., 0.));
     app.tab.doc.add_bond(donor, c, 1, "plain");
+    app.tab.doc.atom_mut(donor).unwrap().label_h = 2;
+    app.tab.doc.atom_mut(c).unwrap().label_h = 3;
     let original = app.tab.doc.clone();
     app.tab
         .keyboard_drawing
@@ -1158,6 +1160,8 @@ fn repeated_marked_coordination_reports_duplicate_without_another_history_frame(
     app.tab.doc.atom_mut(donor).unwrap().explicit_h = 2;
     let carbon = app.tab.doc.add_atom("C", Point::new(80., 0.));
     app.tab.doc.add_bond(donor, carbon, 1, "plain");
+    app.tab.doc.atom_mut(donor).unwrap().label_h = 2;
+    app.tab.doc.atom_mut(carbon).unwrap().label_h = 3;
     let original = app.tab.doc.clone();
     let history = app.tab.history.undo_frames().len();
     for status in [

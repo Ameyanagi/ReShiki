@@ -200,7 +200,8 @@ fn recovering_a_light_draft_preserves_it_without_replacing_dark_preference() {
     let _ = app.update(Message::CanvasTheme(Dark));
     let _ = app.update(Message::Undo);
     let mut recovered = reshiki::document::Document::default();
-    recovered.add_atom("O", reshiki::document::Point::default());
+    let oxygen = recovered.add_atom("O", reshiki::document::Point::default());
+    recovered.atom_mut(oxygen).unwrap().label_h = 2;
     let dir = tempfile::tempdir().unwrap();
     app.recovered.push(reshiki::recovery::Candidate {
         path: dir.path().join("closed-draft.json"),
