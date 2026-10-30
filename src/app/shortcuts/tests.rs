@@ -183,6 +183,43 @@ fn hover_atom_shortcuts_reveal_carbon_replace_elements_and_undo_once() {
     assert_eq!(app.tab.doc, original);
 }
 
+#[tokio::test]
+async fn hover_carbon_shortcut_restores_drawing_defaults_when_replacing_bromine() {
+    use super::super::Request;
+    let (mut app, _) = App::new();
+    app.tab.doc = app
+        .engine
+        .request(Request::import_smiles("COc1ccc(Br)cc1"))
+        .await
+        .unwrap()
+        .document
+        .unwrap();
+    let bromine = app
+        .tab
+        .doc
+        .atoms
+        .iter()
+        .find(|atom| atom.element == "Br")
+        .unwrap()
+        .clone();
+    let original = app.tab.doc.clone();
+    app.edit(Edit::Hover(Some(bromine.position)));
+    let _ = app.context_key("c");
+    let carbon = app.tab.doc.atom(bromine.id).unwrap();
+    assert_eq!(carbon.element, "C");
+    assert_eq!(carbon.display.carbons, None);
+    assert_eq!(carbon.display.hydrogens, None);
+    let molecule = reshiki::chemistry::document::prepare(&app.tab.doc).unwrap();
+    let facts = molecule.state.graph.atom_facts().unwrap();
+    assert_eq!(
+        reshiki::chemistry::properties(&facts).unwrap().formula,
+        "C8H10O"
+    );
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, original);
+    assert!(!app.tab.history.can_undo());
+}
+
 #[test]
 fn selected_and_hovered_bond_shortcuts_set_order_and_cycle_only_double_position() {
     let (mut app, _) = App::new();

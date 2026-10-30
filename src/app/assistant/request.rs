@@ -295,11 +295,19 @@ impl App {
             self.assistant.error = false;
             return;
         }
-        self.assistant.status = "Stopped · Completed previews are retained".into();
-        self.assistant.record(
-            "ReShiki",
-            "Stopped. Completed previews remain available below.".into(),
-        );
+        if self.assistant.draft.is_some() {
+            self.assistant.status = "Stopped · Completed previews are retained".into();
+            self.assistant.record(
+                "ReShiki",
+                "Stopped. Completed previews remain available below.".into(),
+            );
+        } else {
+            self.assistant.status = "Stopped".into();
+            self.assistant.record(
+                "ReShiki",
+                "Stopped before a preview was ready. Nothing was added to the drawing.".into(),
+            );
+        }
     }
     pub(super) fn assistant_reset(&mut self) {
         self.assistant.tab = None;

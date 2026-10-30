@@ -377,11 +377,15 @@ impl App {
         let mut scored: Vec<(u32, usize, u8)> = if query.is_empty() {
             catalog
                 .iter()
+                .zip(&blocked)
                 .enumerate()
-                .map(|(i, command)| {
+                .map(|(i, (command, blocked))| {
                     let recent = state.recent.iter().position(|name| *name == command.name);
                     match recent {
-                        Some(age) => (1000 - age as u32, i, 2),
+                        Some(age) => {
+                            let score = if *blocked { 500 } else { 1000 };
+                            (score - age as u32, i, 2)
+                        }
                         None => (boost(command.category), i, 0),
                     }
                 })
@@ -422,8 +426,8 @@ impl App {
             })
         });
         let blocked = |i: usize| blocked.get(i).copied().unwrap_or(false);
-        // An exact alias or recent command ranks first even when it cannot
-        // run, to say why.
+        // An exact alias ranks first even when it cannot run, to say why.
+        // Recent commands stay above the rest, with available ones first.
         let late = |i: usize, tier: u8| tier < 2 && blocked(i);
         scored.sort_by_key(|&(score, i, tier)| (late(i, tier), Reverse(tier), Reverse(score), i));
         let best = scored.iter().map(|(score, ..)| *score).max().unwrap_or(0);

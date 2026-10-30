@@ -1469,6 +1469,89 @@ fn secondary_click_selects_its_target_and_preserves_an_existing_multi_selection(
 }
 
 #[test]
+fn auto_chain_held_press_previews_only_start_but_click_commits_hexane() {
+    let doc = Document::default();
+    let canvas = chain_canvas(&doc, ChainMode::Straight);
+    let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+    let cursor = mouse::Cursor::Available(Point::new(200., 150.));
+    let mut state = State::default();
+    canvas.update(
+        &mut state,
+        &Event::Mouse(mouse::Event::CursorMoved {
+            position: Point::new(200., 150.),
+        }),
+        bounds,
+        cursor,
+    );
+    canvas.update(
+        &mut state,
+        &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+        bounds,
+        cursor,
+    );
+    let Some(Gesture::Chain {
+        start,
+        pressed,
+        points,
+        snaking,
+        dragged,
+        ..
+    }) = &state.gesture
+    else {
+        panic!("Held chain press")
+    };
+    let (preview, target) = canvas.chain_plan(
+        (*start, *pressed),
+        (None, None),
+        points,
+        (*snaking, *dragged, true),
+        *pressed,
+        state.modifiers,
+    );
+    assert_eq!(preview, vec![*start]);
+    assert_eq!(target, None);
+    for (distance, count) in [(40., 2), (75., 3), (110., 4)] {
+        let (preview, _) = canvas.chain_plan(
+            (*start, *pressed),
+            (None, None),
+            points,
+            (false, true, true),
+            start.offset(distance, 0.),
+            state.modifiers,
+        );
+        assert_eq!(preview.len(), count);
+    }
+    let edit = canvas
+        .update(
+            &mut state,
+            &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            bounds,
+            cursor,
+        )
+        .unwrap()
+        .into_inner()
+        .0
+        .unwrap();
+    let Edit::Chain {
+        points,
+        source,
+        target,
+        ..
+    } = edit
+    else {
+        panic!("Click chain")
+    };
+    assert_eq!(points.len(), 6);
+    let (committed, _) = chains::place(&doc, &points, source, target, 8.).unwrap();
+    let molecule = reshiki::chemistry::document::prepare(&committed).unwrap();
+    let facts = molecule.state.graph.atom_facts().unwrap();
+    assert_eq!(
+        reshiki::chemistry::properties(&facts).unwrap().formula,
+        "C6H14"
+    );
+}
+
+#[test]
 fn chain_click_and_fast_drag_keep_attachment_count_and_preview_geometry() {
     let mut doc = Document::default();
     let source = doc.add_atom("N", World::new(-120., 0.));
@@ -1490,7 +1573,7 @@ fn chain_click_and_fast_drag_keep_attachment_count_and_preview_geometry() {
         (World::new(-120., 0.), World::new(-120., 0.)),
         (Some(source), None),
         &[World::new(-120., 0.)],
-        (false, true),
+        (false, true, true),
         World::new(120., 0.),
         iced::keyboard::Modifiers::empty(),
     );
@@ -1529,7 +1612,7 @@ fn chain_click_and_fast_drag_keep_attachment_count_and_preview_geometry() {
         (last, last),
         (ids.last().copied(), None),
         &[last],
-        (false, false),
+        (false, false, false),
         last,
         iced::keyboard::Modifiers::empty(),
     );

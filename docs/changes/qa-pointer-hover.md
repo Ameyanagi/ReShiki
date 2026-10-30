@@ -1,6 +1,6 @@
 # Keyboard hotspot navigation and large-gallery hover (#572, #573)
 
-Under review: fixes for [#572](https://github.com/Ameyanagi/ReShiki/issues/572)
+Shipped in 0.13.1: fixes for [#572](https://github.com/Ameyanagi/ReShiki/issues/572)
 and [#573](https://github.com/Ameyanagi/ReShiki/issues/573), by
 [@Ameyanagi](https://github.com/Ameyanagi) in
 [PR #578](https://github.com/Ameyanagi/ReShiki/pull/578).

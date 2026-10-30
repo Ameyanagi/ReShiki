@@ -1,10 +1,11 @@
 # Atom labels and owned indicators — 2026-09-20
 
-Properties → **Atom labels & numbering** opens the display controls. Choose
-Whole drawing or Selected atoms, then choose skeletal, terminal, internal or
-all carbon labels. Implied hydrogens can be shown or hidden, with automatic,
-left, right, above or below placement on the affected atoms. These are display
-settings: changing them does not change the molecular graph or its formula.
+Properties → Labels & chemistry → **Atom labels & numbering…** opens the
+display controls. Choose Whole drawing or Selected atoms, then choose skeletal,
+terminal, internal or all carbon labels. Implied hydrogens can be shown or hidden,
+with automatic, left, right, above or below placement on the affected atoms.
+These are display settings: changing them does not change the molecular graph
+or its formula.
 Drawing carbon/H/stereo defaults apply to newly added atoms. Hydrogen placement
 is a per-atom choice applied to the current scope.
 

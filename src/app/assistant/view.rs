@@ -26,6 +26,12 @@ impl App {
                 scrollable(chat)
                     .id("assistant-chat")
                     .height(Length::Fill)
+                    .direction(scrollable::Direction::Vertical(
+                        scrollable::Scrollbar::new()
+                            .width(3)
+                            .scroller_width(3)
+                            .spacing(3)
+                    ))
                     .on_scroll(|v| Message::Assistant(Action::ChatScrolled {
                         follow: v.content_bounds().height <= v.bounds().height
                             || v.relative_offset().y >= 0.97,
@@ -152,6 +158,14 @@ impl App {
     fn assistant_activity_card(&self) -> Element<'_, Message> {
         let state = &self.assistant;
         let seconds = state.started.map(|t| t.elapsed().as_secs()).unwrap_or(0);
+        let hint = if state
+            .last_activity
+            .is_some_and(|t| t.elapsed().as_secs() >= 8)
+        {
+            "Waiting for the next step"
+        } else {
+            "You can keep drawing"
+        };
         let mut activity = column![
             row![
                 text(&state.status).size(13).width(Length::Fill),
@@ -159,11 +173,10 @@ impl App {
             ]
             .spacing(8)
             .align_y(Alignment::Center),
-            text(format!(
-                "Elapsed {seconds}s · You can keep drawing or close this panel"
-            ))
-            .size(11)
-            .style(super::super::workspace::muted_text),
+            text(format!("Elapsed {seconds}s · {hint}"))
+                .size(11)
+                .wrapping(text::Wrapping::None)
+                .style(super::super::workspace::muted_text),
         ]
         .spacing(10);
         if !state.running_model.is_empty() {
@@ -184,16 +197,6 @@ impl App {
                     iced::widget::progress_bar(0. ..=total as f32, completed as f32).girth(3),
                 );
             }
-        }
-        if state
-            .last_activity
-            .is_some_and(|t| t.elapsed().as_secs() >= 8)
-        {
-            activity = activity.push(
-                text("Generation is still running. Waiting for the next completed step…")
-                    .size(11)
-                    .style(super::super::workspace::muted_text),
-            );
         }
         if let Some(doc) = &state.preview {
             activity = activity.push(self.assistant_preview_canvas(doc));

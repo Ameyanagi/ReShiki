@@ -86,7 +86,8 @@ impl App {
             Action::Close => return self.nmr_close(),
             Action::Dock => return self.nmr_dock(),
             Action::Undock => return self.nmr_undock(),
-            Action::Predict(nucleus) => return self.nmr_predict(nucleus),
+            // Only the nucleus buttons send this; they keep Show labels.
+            Action::Predict(nucleus) => return self.nmr_predict(nucleus, true),
             Action::Finished(key, result) => return self.nmr_finished(key, result),
             Action::SelectRow(index) => return self.nmr_select_row(index),
             Action::SelectMarker(indices) => return self.nmr_select_marker(indices),
@@ -116,7 +117,7 @@ impl App {
         }
         // The Properties entry predicts the currently selected
         // molecule, including when another valid report was retained.
-        self.nmr_predict(self.tab.nmr.job.nucleus)
+        self.nmr_predict(self.tab.nmr.job.nucleus, false)
     }
 
     fn nmr_close(&mut self) -> Task<Message> {
@@ -135,7 +136,7 @@ impl App {
         self.tab.nmr.dock.docked = true;
         self.place_nmr_inspector(true);
         if self.tab.nmr.job.result.is_none() && self.tab.nmr.job.pending.is_none() {
-            return self.nmr_predict(self.tab.nmr.job.nucleus);
+            return self.nmr_predict(self.tab.nmr.job.nucleus, false);
         }
         Task::none()
     }
@@ -174,7 +175,10 @@ impl App {
         Task::none()
     }
 
-    fn nmr_predict(&mut self, nucleus: Nucleus) -> Task<Message> {
+    fn nmr_predict(&mut self, nucleus: Nucleus, keep_labels: bool) -> Task<Message> {
+        if !keep_labels {
+            self.tab.nmr.labels.visible = false;
+        }
         if self.tab.nmr.job.pending.is_some() {
             return Task::none();
         }
@@ -183,7 +187,6 @@ impl App {
         self.tab.nmr.job.nucleus = nucleus;
         self.tab.nmr.job.result = None;
         self.tab.nmr.job.presentation = None;
-        self.tab.nmr.labels.visible = false;
         self.tab.nmr.labels.menu = false;
         let request = match engine::prepare(&self.tab.doc, &self.tab.selected) {
             Ok(r) => r,

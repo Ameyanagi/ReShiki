@@ -208,7 +208,18 @@ pub fn atom_edit(
         ));
     }
     if let Some((label, mode)) = atom_label(key) {
-        return Some(label_edit(doc, id, label, mode));
+        return Some(
+            label_edit(doc, id, label, mode).map(|(mut candidate, focus)| {
+                if key == "c"
+                    && doc.atom(id).is_some_and(|atom| atom.element != "C")
+                    && let Some(atom) = candidate.atom_mut(id)
+                {
+                    atom.display.carbons = None;
+                    atom.display.hydrogens = None;
+                }
+                (candidate, focus)
+            }),
+        );
     }
     if ![
         "d", "+", "-", "0", "1", "2", "4", "5", "8", "9", "z", "K", "k",

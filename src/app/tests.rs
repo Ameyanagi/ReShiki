@@ -354,6 +354,56 @@ fn abbreviation_display_changes_are_unsaved_and_undoable() {
 }
 
 #[test]
+fn expand_all_abbreviations_preserves_properties_and_empty_selection() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let a = app.tab.doc.add_atom("C", Point::default());
+    let b = app.tab.doc.add_atom("O", Point::new(42., 0.));
+    let c = app.tab.doc.add_atom("C", Point::new(63., 36.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
+    app.tab.doc.add_bond(b, c, 1, "plain");
+    app.tab.doc.contract(&[b, c], "OMe", "MeO").unwrap();
+    app.inspector_open = true;
+    app.inspector_tab = InspectorTab::Properties;
+    app.tab.selected.clear();
+
+    let _ = app.update(Message::Abbreviations(abbreviations::Action::ExpandAll));
+
+    assert!(app.tab.doc.abbreviations.is_empty());
+    assert!(app.inspector_open);
+    assert_eq!(app.inspector_tab, InspectorTab::Properties);
+    assert!(app.tab.selected.is_empty());
+}
+
+#[test]
+fn rotation_shortcuts_report_direction_and_angle() {
+    use iced::keyboard::{Key, Modifiers, key::Named};
+
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let a = app.tab.doc.add_atom("C", Point::default());
+    let b = app.tab.doc.add_atom("O", Point::new(42., 0.));
+    app.tab.doc.add_bond(a, b, 1, "plain");
+    app.tab.selected = vec![a, b];
+
+    for (key, status) in [
+        (Named::ArrowDown, "Rotated 15° clockwise"),
+        (Named::ArrowLeft, "Rotated 1° counterclockwise"),
+    ] {
+        let before = app.tab.doc.clone();
+        let revision = app.tab.revision;
+        let key = Key::Named(key);
+        let message = shortcuts::key_message(&key, &key, Modifiers::ALT).unwrap();
+        let _ = app.update(message);
+        assert_eq!(app.status, status);
+        assert_eq!(app.tab.revision, revision + 1);
+        assert_ne!(app.tab.doc, before);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+    }
+}
+
+#[test]
 fn cleanup_requires_apply_can_cancel_and_rejects_stale_results() {
     let (mut app, _) = App::new();
     app.tab.busy = false;
