@@ -1,5 +1,9 @@
 use super::*;
-use crate::chemistry::{cleanup, document as molecular, smiles};
+use crate::chemistry::{
+    cleanup, document as molecular,
+    inchi::{kernel, key},
+    smiles,
+};
 
 const ARTEMISININ: &str = "C[C@@H]1CC[C@H]2[C@H](C(=O)O[C@H]3[C@@]24[C@H]1CC[C@](O3)(OO4)C)C";
 
@@ -69,9 +73,9 @@ fn bridged_template_retry_separates_artemisinin_and_preserves_cleanup_identity()
         Default::default(),
     )?;
     assert!(bridged(state));
-    assert_eq!(collisions(state, &native.positions, 4096), 2);
+    assert_eq!(collisions(state, &native.positions, 4096, 1.5), 11);
     let positions = super::super::coordinates(state, &input.reaction_properties)?.positions;
-    assert_eq!(collisions(state, &positions, 4096), 0);
+    assert_eq!(collisions(state, &positions, 4096, 1.5), 0);
     assert_eq!(
         positions,
         super::super::coordinates(state, &input.reaction_properties)?.positions
@@ -174,8 +178,8 @@ fn a_template_that_increases_collisions_is_not_published() -> anyhow::Result<()>
         },
     )?
     .positions;
-    assert_eq!(collisions(state, &original, 4096), 2);
-    assert_eq!(collisions(state, &candidate, 4096), 4);
+    assert_eq!(collisions(state, &original, 4096, 1.5), 4);
+    assert_eq!(collisions(state, &candidate, 4096, 1.5), 9);
     assert_eq!(
         super::super::coordinates(state, &input.reaction_properties)?.positions,
         original
@@ -306,5 +310,83 @@ fn cleanup_repairs_the_previous_inward_template_without_changing_visible_identit
     outward_methyl(&cleaned);
     peroxide_ink(&cleaned);
     assert_eq!(visible_identity(&cleaned)?, expected);
+    Ok(())
+}
+
+const CODEINE: &str = "COc1ccc2c3c1O[C@H]1[C@@H](O)C=C[C@H]4[C@@H](C2)N(C)CC[C@@]341";
+
+/// Smallest distance, in bond lengths, from an atom to a bond it is not part of.
+fn atom_bond_clearance(state: &State, positions: &[Point3]) -> f64 {
+    let mut best = f64::INFINITY;
+    for bond in &state.graph.bonds {
+        let (a, b) = (positions[bond.a], positions[bond.b]);
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let length = dx.hypot(dy);
+        for (atom, p) in positions.iter().enumerate() {
+            if atom == bond.a || atom == bond.b {
+                continue;
+            }
+            let t = (((p.x - a.x) * dx + (p.y - a.y) * dy) / (length * length)).clamp(0., 1.);
+            best = best.min((p.x - a.x - t * dx).hypot(p.y - a.y - t * dy) / 1.5);
+        }
+    }
+    best
+}
+
+#[test]
+fn codeine_import_keeps_every_atom_clear_of_bonds_it_does_not_belong_to() -> anyhow::Result<()> {
+    let input = smiles::read(CODEINE)?;
+    let state = &input.prepared.state;
+    let positions = super::super::coordinates(state, &input.reaction_properties)?.positions;
+    assert_eq!(collisions(state, &positions, 4096, 1.5), 0);
+    let clearance = atom_bond_clearance(state, &positions);
+    assert!(
+        clearance >= 0.3,
+        "atom lies {clearance:.3} bond lengths from a foreign bond"
+    );
+    assert_eq!(
+        positions,
+        super::super::coordinates(state, &input.reaction_properties)?.positions
+    );
+    let expected = smiles::write::write(state, Default::default())?.text;
+    let inchi = kernel::generate(&kernel::Molecule::prepare(state, None)?)
+        .map_err(anyhow::Error::msg)?
+        .inchi;
+    let expected_key = key::from_inchi(&inchi)?;
+    let document = imported(CODEINE, true)?;
+    let mut request = crate::engine::Request::molecule("clean", document.clone());
+    request.cleanup = Some(crate::cleanup::Options {
+        keep_orientation: true,
+        ..Default::default()
+    });
+    let cleaned = crate::engine::native_cleanup::prepare(&request)?;
+    for document in [&document, &cleaned.document] {
+        let molecule = molecular::prepare(document)?;
+        assert!(atom_bond_clearance(&molecule.state, &molecule.positions) >= 0.3);
+        assert_eq!(
+            smiles::write::write(&molecule.state, Default::default())?.text,
+            expected
+        );
+        let inchi = kernel::generate(&kernel::Molecule::prepare(
+            &molecule.state,
+            Some(&molecule.positions),
+        )?)
+        .map_err(anyhow::Error::msg)?
+        .inchi;
+        assert_eq!(key::from_inchi(&inchi)?, expected_key);
+        // Recover stereo from the actual wedges, independently of saved tags.
+        let mut visible = document.clone();
+        for atom in &mut visible.atoms {
+            atom.stereo = None;
+        }
+        for bond in &mut visible.bonds {
+            bond.stereo = None;
+            bond.stereo_atoms.clear();
+        }
+        assert_eq!(
+            smiles::write::write(&molecular::prepare(&visible)?.state, Default::default())?.text,
+            expected
+        );
+    }
     Ok(())
 }

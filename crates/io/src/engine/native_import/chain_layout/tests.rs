@@ -182,6 +182,17 @@ fn exclusions_and_small_or_clear_drawings_preserve_native_coordinates() -> anyho
     assert!(!supported_stereo(&state));
     let (state, _, _) = input("CC(c1ccccc1)CC(c1ccccc1)")?;
     assert!(backbone(&state).is_none());
+    let original = vec![
+        Point3 {
+            x: 1.1,
+            y: 2.7,
+            z: 0.
+        };
+        state.graph.atoms.len()
+    ];
+    let result = for_cleanup(&state, original.clone(), 1.7, true);
+    assert_eq!(result.positions, original);
+    assert!(result.warnings.is_empty());
     let (state, ranks, original) =
         input("C[C@@H]1CC[C@H]2[C@H](C(=O)O[C@H]3[C@@]24[C@H]1CC[C@](O3)(OO4)C)C")?;
     let result = improve(&state, &ranks, original.positions.clone());
@@ -208,5 +219,150 @@ fn unsupported_long_chain_keeps_its_layout_and_the_import_warning() -> anyhow::R
     };
     assert_eq!(prepared.molecule.positions, original.positions);
     assert_eq!(prepared.warnings, [NOTICE]);
+    Ok(())
+}
+
+#[test]
+fn whole_cleanup_of_an_imported_long_chain_stays_clear() -> anyhow::Result<()> {
+    for (name, text, formula) in [
+        ("polystyrene100", "CC(c1ccccc1)".repeat(100), "C800H802"),
+        (
+            "alanine200",
+            format!("{}O", "NC(C)C(=O)".repeat(200)),
+            "C600H1002N200O201",
+        ),
+        (
+            "stereo-alanine200",
+            format!("{}O", "N[C@@H](C)C(=O)".repeat(200)),
+            "C600H1002N200O201",
+        ),
+    ] {
+        let super::super::Preparation::Complete(imported) =
+            super::super::prepare(crate::engine::Request::import_smiles(&text))?
+        else {
+            anyhow::bail!("{name}: import did not complete");
+        };
+        assert!(imported.warnings.is_empty(), "{name}");
+        let expected = smiles::write::write(&imported.molecule.state, Default::default())?.text;
+        let request = crate::engine::Request::molecule("clean", imported.document);
+        let cleaned = crate::engine::native_cleanup::prepare(&request)?;
+        assert!(
+            cleaned.warnings.is_empty(),
+            "{name}: {:?}",
+            cleaned.warnings
+        );
+        let after = cleaned.molecule.expect("whole cleanup analysis");
+        assert_eq!(
+            clearance::geometry(&after.state, &after.positions),
+            Quality::Clear,
+            "{name} geometry"
+        );
+        assert_eq!(
+            clearance::labels(&after.state, &after.positions, &cleaned.document),
+            Quality::Clear,
+            "{name} label ink"
+        );
+        assert_eq!(
+            smiles::write::write(&after.state, Default::default())?.text,
+            expected,
+            "{name} canonical isomeric SMILES"
+        );
+        let facts = after.state.graph.atom_facts().map_err(anyhow::Error::msg)?;
+        assert_eq!(
+            crate::chemistry::properties(&facts)
+                .map_err(anyhow::Error::msg)?
+                .formula,
+            formula,
+            "{name} formula"
+        );
+        let mut visible = cleaned.document;
+        for atom in &mut visible.atoms {
+            atom.stereo = None;
+        }
+        for bond in &mut visible.bonds {
+            bond.stereo = None;
+            bond.stereo_atoms.clear();
+        }
+        assert_eq!(
+            smiles::write::write(&molecular::prepare(&visible)?.state, Default::default())?.text,
+            expected,
+            "{name} visible stereochemistry"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn cleanup_fallback_restores_the_requested_bond_length() -> anyhow::Result<()> {
+    let (state, _, original) = input(&"CC(c1ccccc1)".repeat(30))?;
+    for scale in [0.75, 1.6] {
+        let mut scaled = original.positions.clone();
+        for p in &mut scaled {
+            p.x *= scale;
+            p.y *= scale;
+        }
+        let result = for_cleanup(&state, scaled, 1.5 * scale, false);
+        assert!(result.warnings.is_empty());
+        for bond in &state.graph.bonds {
+            let a = result.positions[bond.a];
+            let b = result.positions[bond.b];
+            assert!(((a.x - b.x).hypot(a.y - b.y) - 1.5 * scale).abs() < 1e-6);
+        }
+        let normalized = result
+            .positions
+            .iter()
+            .map(|p| Point3 {
+                x: p.x / scale,
+                y: p.y / scale,
+                z: p.z,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(clearance::geometry(&state, &normalized), Quality::Clear);
+    }
+    let document = label_document(&state, &original.positions)
+        .ok_or_else(|| anyhow::anyhow!("Scaled cleanup drawing"))?;
+    let mut request = crate::engine::Request::molecule("clean", document);
+    request
+        .document
+        .as_mut()
+        .expect("cleanup document")
+        .drawing_style
+        .set_bond_length(14.4 * 1.6);
+    let cleaned = crate::engine::native_cleanup::prepare(&request)?;
+    assert!(cleaned.warnings.is_empty());
+    let after = cleaned.molecule.expect("scaled whole cleanup analysis");
+    let bond_length = f64::from(cleaned.document.drawing_style.bond_length_world) / 28.;
+    for bond in &after.state.graph.bonds {
+        let a = after.positions[bond.a];
+        let b = after.positions[bond.b];
+        assert!(((a.x - b.x).hypot(a.y - b.y) - bond_length).abs() < 1e-6);
+    }
+    Ok(())
+}
+
+#[test]
+fn partial_cleanup_preserves_fixed_atoms_and_warns_about_crowded_chains() -> anyhow::Result<()> {
+    let (state, _, original) = input(&"CC(c1ccccc1)".repeat(30))?;
+    let result = for_cleanup(&state, original.positions.clone(), 1.5, true);
+    assert_eq!(result.positions, original.positions);
+    assert_eq!(result.warnings, [NOTICE]);
+    let molecule = molecular::Molecule {
+        positions: original.positions,
+        ..super::super::molecule(state)?
+    };
+    let drawing = molecular::for_import(&molecule, false, &vec![None; molecule.ids.len()])?;
+    let labels = drawing.labels()?;
+    let document = drawing.finish(labels)?;
+    let mut request = crate::engine::Request::molecule("clean", document.clone());
+    request.cleanup = Some(crate::cleanup::Options {
+        scope: crate::cleanup::Scope::SelectedAtoms,
+        ..Default::default()
+    });
+    request.selected_ids = Some(vec![molecule.ids[0]]);
+    let cleaned = crate::engine::native_cleanup::prepare(&request)?;
+    assert_eq!(cleaned.warnings, [NOTICE]);
+    for (before, after) in document.atoms.iter().zip(&cleaned.document.atoms).skip(1) {
+        assert_eq!(after.position, before.position);
+    }
     Ok(())
 }
