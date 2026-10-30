@@ -7,10 +7,10 @@ use std::collections::{HashSet, VecDeque};
 mod clearance;
 use clearance::Quality;
 
-pub(super) const NOTICE: &str =
+pub(in crate::engine) const NOTICE: &str =
     "Layout still has overlaps or could not be fully checked · Review the drawing before export";
 
-pub(super) struct Layout {
+pub(in crate::engine) struct Layout {
     pub positions: Vec<Point3>,
     pub warnings: Vec<String>,
 }
@@ -179,6 +179,57 @@ pub(super) fn improve(
     original: Vec<Point3>,
 ) -> Layout {
     improve_with_limit(state, ranks, original, 20_000_000)
+}
+
+pub(in crate::engine) fn for_cleanup(
+    state: &State,
+    original: Vec<Point3>,
+    bond_length: f64,
+    fixed: bool,
+) -> Layout {
+    if backbone(state).is_none() {
+        return Layout {
+            positions: original,
+            warnings: vec![],
+        };
+    }
+    // The fallback seeds and clearance thresholds use the native 1.5-unit
+    // bond length. Cleanup restores the drawing's scale before its rigid
+    // orientation and identity/visible-stereo checks run.
+    let scale = bond_length / 1.5;
+    let normalized = original
+        .iter()
+        .map(|p| Point3 {
+            x: p.x / scale,
+            y: p.y / scale,
+            z: p.z,
+        })
+        .collect::<Vec<_>>();
+    if clearance::geometry(state, &normalized) == Quality::Clear {
+        return Layout {
+            positions: original,
+            warnings: vec![],
+        };
+    }
+    if fixed {
+        // A new backbone would move the caller's fixed atoms. Preserve the
+        // solver's exact coordinates and report any remaining crowded chain.
+        return Layout {
+            positions: original,
+            warnings: vec![NOTICE.into()],
+        };
+    }
+    let ranks = vec![depict::ranks::AtomProperties::default(); state.graph.atoms.len()];
+    let mut layout = improve(state, &ranks, normalized);
+    if !layout.warnings.is_empty() {
+        layout.positions = original;
+        return layout;
+    }
+    for p in &mut layout.positions {
+        p.x *= scale;
+        p.y *= scale;
+    }
+    layout
 }
 
 fn improve_with_limit(

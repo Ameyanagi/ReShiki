@@ -3,7 +3,11 @@
 //! Each component is laid out and checked before the next component starts.
 //! The original-precision final molecule is analyzed independently from its f32
 //! drawing; selected-scope chemistry warnings never hide helper failures.
-use super::{Request, Response, native_response};
+use super::{
+    Request, Response,
+    native_import::{chain_layout, template_retry},
+    native_response,
+};
 use crate::chemistry::{self, cleanup, depict};
 use std::sync::Arc;
 
@@ -78,7 +82,7 @@ pub async fn execute(
     .await?
 }
 
-fn prepare(request: &Request) -> Result<cleanup::Cleaned, Error> {
+pub(super) fn prepare(request: &Request) -> Result<cleanup::Cleaned, Error> {
     if request.protocol != crate::engine::PROTOCOL {
         return Err(Error::Protocol);
     }
@@ -95,12 +99,13 @@ fn prepare(request: &Request) -> Result<cleanup::Cleaned, Error> {
         request.cleanup.unwrap_or_default(),
         request.selected_ids.as_deref().unwrap_or_default(),
     )?;
-    prepared.finish_with(|request| {
+    let mut crowded = false;
+    let mut cleaned = prepared.finish_with(|request| {
         // from_document and cleanup's identity SMILES pass do not set the
         // native _chiralAtomRank property. The independent public-layout
         // observer checks its absence, including selected and stereo cases.
         let ranks = vec![None; request.molecule.state.graph.atoms.len()];
-        Ok(depict::compute(
+        let mut positions = depict::compute(
             &request.molecule.state,
             &ranks,
             Some(request.fixed),
@@ -111,6 +116,26 @@ fn prepare(request: &Request) -> Result<cleanup::Cleaned, Error> {
                 ..Default::default()
             },
         )?
-        .positions)
-    })
+        .positions;
+        if request.fixed.is_empty() {
+            positions = template_retry::improve(
+                &request.molecule.state,
+                &vec![depict::ranks::AtomProperties::default(); ranks.len()],
+                positions,
+                request.bond_length,
+            );
+        }
+        let layout = chain_layout::for_cleanup(
+            &request.molecule.state,
+            positions,
+            request.bond_length,
+            !request.fixed.is_empty(),
+        );
+        crowded |= !layout.warnings.is_empty();
+        Ok::<_, Error>(layout.positions)
+    })?;
+    if crowded {
+        cleaned.warnings.push(chain_layout::NOTICE.into());
+    }
+    Ok(cleaned)
 }
