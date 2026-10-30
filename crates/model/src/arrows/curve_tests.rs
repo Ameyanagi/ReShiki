@@ -241,6 +241,164 @@ fn collapsed_cubic_tangents_keep_the_shaft_inside_full_and_half_heads() {
     }
 }
 
+/// Rounded #717 square-handle offsets in screen points at 225% zoom.
+fn narrow_bow() -> Arrow {
+    let mut arrow = Arrow::new(
+        1,
+        Point::new(0., 15.),
+        Point::new(0., 0.),
+        Preset::Curved,
+        ArrowStyle::default(),
+    );
+    arrow.cubic = Some([
+        arrow.start.offset(22. / 2.25, -25. / 2.25),
+        arrow.end.offset(22. / 2.25, 15. / 2.25),
+    ]);
+    arrow
+}
+
+fn assert_terminal_ink_covered(shaft: &super::ArrowPath, head: &super::ArrowPath) {
+    let polygon = &crate::graphics::flattened(&head.commands)[0];
+    let radius = shaft.style.width() * 0.5;
+    let [PathCommand::Move(start), PathCommand::Cubic(a, b, end)] = shaft.commands.as_slice()
+    else {
+        panic!("One exactly trimmed cubic shaft");
+    };
+    for i in 0..128 {
+        let (sin, cos) = (i as f32 * std::f32::consts::TAU / 128.).sin_cos();
+        assert!(
+            crate::selection_region::contains(polygon, end.offset(cos * radius, sin * radius)),
+            "Exposed terminal cap at {end:?}"
+        );
+    }
+    // Inspect both stroke edges for the last radius of the rendered shaft,
+    // as well as its cap: a covered cap alone can hide a side spur upstream.
+    for i in 0..=256 {
+        let t = 1. - i as f32 / 256.;
+        let u = 1. - t;
+        let center = start
+            .lerp(*a, t)
+            .lerp(a.lerp(*b, t), t)
+            .lerp(a.lerp(*b, t).lerp(b.lerp(*end, t), t), t);
+        if center.distance(*end) > radius {
+            break;
+        }
+        let velocity = Point::new(
+            3. * (u * u * (a.x - start.x) + 2. * u * t * (b.x - a.x) + t * t * (end.x - b.x)),
+            3. * (u * u * (a.y - start.y) + 2. * u * t * (b.y - a.y) + t * t * (end.y - b.y)),
+        );
+        let direction = super::unit(Point::default(), velocity);
+        for side in [-radius, radius] {
+            assert!(crate::selection_region::contains(
+                polygon,
+                center.offset(-direction.y * side, direction.x * side)
+            ));
+        }
+    }
+}
+
+#[test]
+fn mechanism_curvature_717_solid_full_notch_joins_tight_cubic_and_covers_terminal_ink() {
+    let mut turning = narrow_bow();
+    // Stress the same short span with a turn that used to expose the shaft
+    // beside the tangent head, before the curve returned to the tip.
+    turning.cubic = Some([Point::new(25., -35.), Point::new(-8., 15.)]);
+    for original in [narrow_bow(), turning] {
+        for reversed in [false, true] {
+            let mut arrow = original.clone();
+            if reversed {
+                arrow.reverse();
+            }
+            let paths = arrow.paths();
+            let [
+                PathCommand::Move(tip),
+                PathCommand::Line(left),
+                PathCommand::Line(notch),
+                PathCommand::Line(right),
+                PathCommand::Close,
+            ] = paths[1].commands.as_slice()
+            else {
+                panic!("Solid full head");
+            };
+            let radius = paths[0].style.width() * 0.5;
+            let closest = (0..=4096)
+                .map(|i| notch.distance(arrow.point(i as f32 / 4096.)))
+                .fold(f32::MAX, f32::min);
+            assert!(closest < radius * 0.05, "Notch beside shaft by {closest}");
+            let base = left.lerp(*right, 0.5);
+            near(super::unit(base, *tip), super::unit(*notch, arrow.end));
+            assert_terminal_ink_covered(&paths[0], &paths[1]);
+            assert_eq!(
+                arrow.arrival_head_path().unwrap().commands,
+                paths[1].commands
+            );
+        }
+    }
+}
+
+#[test]
+fn mechanism_curvature_717_cubic_half_head_axis_uses_its_visible_neck() {
+    for side in [1., -1.] {
+        let mut arrow = narrow_bow();
+        let style = arrow.style.as_mut().unwrap();
+        style.head = if side > 0. { Head::Left } else { Head::Right };
+        let paths = arrow.paths();
+        let commands = &paths[1].commands;
+        let (tip, wing, outer, inner) = (
+            commands[0].points()[0],
+            commands[1].points()[0],
+            commands[2].points()[0],
+            commands[3].points()[0],
+        );
+        let neck = outer.lerp(inner, 0.5);
+        let direction = super::unit(neck, arrow.end);
+        let style = arrow.appearance();
+        let radius = paths[0].style.width() * 0.5;
+        let length = crate::style::DEFAULT
+            .world(style.head_length_pt)
+            .min(arrow.start.distance(arrow.end) * 0.4);
+        let width = crate::style::DEFAULT.world(style.head_width_pt) + radius;
+        near(
+            wing,
+            tip.offset(
+                -direction.x * length + direction.y * side * width,
+                -direction.y * length - direction.x * side * width,
+            ),
+        );
+        assert!((neck.distance(arrow.end) - length * (1. - style.head_notch)).abs() < 0.0001);
+        assert_terminal_ink_covered(&paths[0], &paths[1]);
+        assert_eq!(
+            arrow.arrival_head_path().unwrap().commands,
+            paths[1].commands
+        );
+    }
+}
+
+#[test]
+fn mechanism_curvature_717_gentle_full_head_stays_within_one_tenth_point() {
+    let mut arrow = cubic();
+    arrow.cubic = Some([Point::new(40., -4.), Point::new(80., -4.)]);
+    let style = arrow.appearance();
+    let mut tangent_head = Vec::new();
+    arrow.head_path(
+        &style,
+        arrow.end,
+        arrow.shaft_tangent(1., false),
+        style.head,
+        &mut |commands, _, _| tangent_head = commands,
+    );
+    let paths = arrow.paths();
+    let tolerance = crate::style::DEFAULT.world(0.1);
+    for (old, current) in tangent_head
+        .iter()
+        .flat_map(PathCommand::points)
+        .zip(paths[1].commands.iter().flat_map(PathCommand::points))
+    {
+        assert!(old.distance(current) < tolerance);
+    }
+    assert_terminal_ink_covered(&paths[0], &paths[1]);
+}
+
 #[test]
 fn preset_transitions_preserve_only_matching_or_mechanism_curve_geometry() {
     let start = Point::new(2., -4.);

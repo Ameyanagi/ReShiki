@@ -877,7 +877,118 @@ fn mechanism_attachment_312_pi_bond_to_own_oxygen_head_clears_the_bond() {
         clearance > 55.,
         "arrowhead within {clearance} deg of the C=O bond"
     );
-    assert!(head_ink_gap(&d, arrow) > 0.);
+    assert!(rendered_head_ink_gap(&d, arrow) > 0.);
+}
+#[test]
+fn mechanism_attachment_699_acetyl_chloride_pi_to_oxygen_has_a_bond_sized_bow() {
+    for side in [-1., 1.] {
+        for fraction in [0.3, 0.32, 0.5, 0.7] {
+            let mut d = Document::default();
+            let c = d.add_atom("C", Point::new(0., 0.));
+            let o = d.add_atom("O", Point::new(0., -42.));
+            d.add_bond(c, o, 2, "plain");
+            for (symbol, x, y) in [("C", -36., 21.), ("Cl", 39., 15.)] {
+                let n = d.add_atom(symbol, Point::new(x * side, y));
+                d.add_bond(c, n, 1, "plain");
+            }
+            let id = create(
+                &mut d,
+                &Pick::Bond {
+                    a: c,
+                    b: o,
+                    fraction,
+                },
+                &Pick::Atom(o),
+                Preset::Curved,
+                ArrowStyle::preset(Preset::Curved),
+            )
+            .unwrap();
+            let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+            let points: Vec<_> = (0..=256).map(|i| arrow.point(i as f32 / 256.)).collect();
+            // The methyl side has more free angle than the chlorine side.
+            assert!(points.iter().all(|p| p.x * side < 0.));
+            let min = points.iter().map(|p| p.y).fold(f32::MAX, f32::min);
+            let max = points.iter().map(|p| p.y).fold(f32::MIN, f32::max);
+            assert!(
+                max - min >= 42. * 0.6,
+                "bow extent {} at {fraction}",
+                max - min
+            );
+            assert!(ink_gap(&d, &points) > DEFAULT.world(arrow.appearance().width_pt) * 0.5);
+            assert!(rendered_head_ink_gap(&d, arrow) > 0.);
+        }
+    }
+}
+#[test]
+fn mechanism_attachment_701_bromine_homolysis_fishhooks_have_separate_clear_bows() {
+    for reverse in [false, true] {
+        let mut d = Document::default();
+        let left = d.add_atom("Br", Point::new(0., 0.));
+        let right = d.add_atom("Br", Point::new(42., 0.));
+        d.add_bond(left, right, 1, "plain");
+        for atom in if reverse {
+            [right, left]
+        } else {
+            [left, right]
+        } {
+            create(
+                &mut d,
+                &Pick::Bond {
+                    a: left,
+                    b: right,
+                    fraction: 0.5,
+                },
+                &Pick::Atom(atom),
+                Preset::Fishhook,
+                ArrowStyle::preset(Preset::Fishhook),
+            )
+            .unwrap();
+        }
+        let pen = DEFAULT.world(d.arrows[0].appearance().width_pt) * 0.5;
+        let labels: Vec<_> = d
+            .atoms
+            .iter()
+            .flat_map(|a| crate::scene::atom_label_ink_boxes(a, &d))
+            .collect();
+        for arrow in &d.arrows {
+            let points: Vec<_> = (0..=256).map(|i| arrow.point(i as f32 / 256.)).collect();
+            assert!(ink_gap(&d, &points) > pen, "shaft touches Br-Br ink");
+            assert!(rendered_head_ink_gap(&d, arrow) > 0.);
+            for path in arrow.paths() {
+                for contour in crate::graphics::flattened(&path.commands) {
+                    for p in contour {
+                        for (lo, hi) in &labels {
+                            let nearest = Point::new(p.x.clamp(lo.x, hi.x), p.y.clamp(lo.y, hi.y));
+                            assert!(p.distance(nearest) > pen, "arrow touches a Br label");
+                        }
+                    }
+                }
+            }
+        }
+        let segments: Vec<Vec<_>> = d
+            .arrows
+            .iter()
+            .map(|arrow| {
+                arrow
+                    .paths()
+                    .iter()
+                    .flat_map(|path| {
+                        crate::graphics::flattened(&path.commands)
+                            .into_iter()
+                            .flat_map(|contour| {
+                                contour.windows(2).map(|w| (w[0], w[1])).collect::<Vec<_>>()
+                            })
+                    })
+                    .collect()
+            })
+            .collect();
+        assert!(
+            segments[0].iter().all(|(a, b)| segments[1]
+                .iter()
+                .all(|(c, d)| segment_gap(*a, *b, *c, *d) > 2. * pen)),
+            "fishhook ink overlaps"
+        );
+    }
 }
 #[test]
 fn mechanism_attachment_312_bond_avoidance_keeps_approach_on_source_side() {
@@ -897,7 +1008,7 @@ fn mechanism_attachment_312_bond_avoidance_keeps_approach_on_source_side() {
         "arrival {arrival:?} turned behind the target"
     );
     assert!(head_bond_clearance(&d, arrow, c) > 50.);
-    assert!(head_ink_gap(&d, arrow) > 0.);
+    assert!(rendered_head_ink_gap(&d, arrow) > 0.);
 }
 #[test]
 fn mechanism_attachment_312_bond_avoidance_stays_in_the_default_opening() {
@@ -934,48 +1045,15 @@ fn mechanism_attachment_312_clear_default_arrival_is_unchanged() {
         unit(Point::new(-1., 0.7)),
     );
 }
-/// Smallest gap between the modelled arrowhead outline and rendered bond ink.
-fn head_ink_gap(d: &Document, arrow: &Arrow) -> f32 {
-    let style = arrow.appearance();
-    let axis = unit(delta(arrow.cubic.unwrap()[1], arrow.end));
-    let n = Point::new(-axis.y, axis.x);
-    let length = DEFAULT
-        .world(style.head_length_pt)
-        .min(arrow.start.distance(arrow.end) * 0.4);
-    let half = DEFAULT.world(style.head_width_pt);
-    let base = arrow.end.offset(axis.x * length, axis.y * length);
-    let corners = [
-        arrow.end,
-        base.offset(n.x * half, n.y * half),
-        base.offset(-n.x * half, -n.y * half),
-    ];
-    let samples: Vec<Point> = (0..3)
-        .flat_map(|i| {
-            let (p, q) = (corners[i], corners[(i + 1) % 3]);
-            (0..=128).map(move |k| {
-                let t = k as f32 / 128.;
-                p.offset((q.x - p.x) * t, (q.y - p.y) * t)
-            })
-        })
-        .collect();
-    ink_gap(d, &samples) - DEFAULT.world(style.width_pt) * 0.5
-}
 /// Smallest gap between the filled arrowhead outlines `arrow` renders and
 /// rendered bond ink.
 fn rendered_head_ink_gap(d: &Document, arrow: &Arrow) -> f32 {
-    use crate::graphics::PathCommand;
     let mut samples = Vec::new();
     for path in arrow.paths().into_iter().filter(|p| p.filled) {
-        let mut outline = Vec::new();
-        for command in path.commands {
-            match command {
-                PathCommand::Move(p) | PathCommand::Line(p) => outline.push(p),
-                PathCommand::Cubic(_, _, p) => outline.push(p),
-                PathCommand::Close => {}
+        for outline in crate::graphics::flattened(&path.commands) {
+            for edge in outline.windows(2) {
+                samples.extend((0..=128).map(|k| edge[0].lerp(edge[1], k as f32 / 128.)));
             }
-        }
-        for (p, q) in outline.iter().zip(outline.iter().cycle().skip(1)) {
-            samples.extend((0..=128).map(|k| p.lerp(*q, k as f32 / 128.)));
         }
     }
     assert!(!samples.is_empty(), "arrow renders no filled head");
@@ -1067,8 +1145,53 @@ fn mechanism_attachment_312_lone_pair_to_acetone_head_clears_rendered_bonds() {
     }
     let id = lone_pair_arrow_to(&mut d, c);
     let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
-    let gap = head_ink_gap(&d, arrow);
+    let gap = rendered_head_ink_gap(&d, arrow);
     assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
+}
+#[test]
+fn mechanism_attachment_671_level_methoxide_to_acetone_uses_the_source_opening() {
+    for degrees in -10..=10 {
+        let mut d = Document::default();
+        let c = d.add_atom("C", Point::new(0., 0.));
+        for (degrees, symbol, order) in [(270f32, "O", 2), (150., "C", 1), (30., "C", 1)] {
+            let angle = degrees.to_radians();
+            let n = d.add_atom(symbol, Point::new(42. * angle.cos(), 42. * angle.sin()));
+            d.add_bond(c, n, order, "plain");
+        }
+        let angle = (degrees as f32).to_radians();
+        let o = d.add_atom("O", Point::new(-126., -106. * angle.tan()));
+        d.atom_mut(o).unwrap().charge = -1;
+        let methyl = d.add_atom("C", d.atom(o).unwrap().position.offset(-42., 0.));
+        d.add_bond(methyl, o, 1, "plain");
+        scientific::attach(
+            d.atom_mut(o).unwrap(),
+            SymbolKind::LonePair,
+            Point::new(20., 0.),
+        )
+        .unwrap();
+        let source = Pick::LonePair {
+            atom: o,
+            mark: d.atom(o).unwrap().marks[0].clone(),
+        };
+        let id = create(
+            &mut d,
+            &source,
+            &Pick::Atom(c),
+            Preset::Curved,
+            ArrowStyle::preset(Preset::Curved),
+        )
+        .unwrap();
+        let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
+        assert!(
+            rendered_head_ink_gap(&d, arrow) > 0.,
+            "head touches bond at {degrees} deg"
+        );
+        let shaft: Vec<_> = (0..=512).map(|i| arrow.point(i as f32 / 512.)).collect();
+        assert!(
+            ink_gap(&d, &shaft) > DEFAULT.world(arrow.appearance().width_pt) * 0.5,
+            "shaft touches bond at {degrees} deg"
+        );
+    }
 }
 #[test]
 fn mechanism_attachment_312_head_clears_bold_bond_width() {
@@ -1081,7 +1204,7 @@ fn mechanism_attachment_312_head_clears_bold_bond_width() {
     }
     let id = lone_pair_arrow_to(&mut d, c);
     let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
-    let gap = head_ink_gap(&d, arrow);
+    let gap = rendered_head_ink_gap(&d, arrow);
     assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
 }
 #[test]
@@ -1095,7 +1218,7 @@ fn mechanism_attachment_312_head_clears_aromatic_dashed_rail() {
     }
     let id = lone_pair_arrow_to(&mut d, c);
     let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
-    let gap = head_ink_gap(&d, arrow);
+    let gap = rendered_head_ink_gap(&d, arrow);
     assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
 }
 #[test]
@@ -1131,7 +1254,7 @@ fn mechanism_attachment_312_short_arrow_scores_its_shortened_head() {
     d.bonds[0].double_position = crate::bonds::DoublePosition::Center;
     let id = lone_pair_arrow_from(&mut d, -55., c);
     let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
-    let gap = head_ink_gap(&d, arrow);
+    let gap = rendered_head_ink_gap(&d, arrow);
     assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
 }
 #[test]
@@ -1147,7 +1270,7 @@ fn mechanism_attachment_312_projected_dative_uses_its_drawn_width() {
     d.add_bond(c, side, 1, "plain");
     let id = lone_pair_arrow_to(&mut d, c);
     let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
-    let gap = head_ink_gap(&d, arrow);
+    let gap = rendered_head_ink_gap(&d, arrow);
     assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
 }
 #[test]
@@ -1162,7 +1285,7 @@ fn mechanism_attachment_312_head_clears_crossed_wavy_double_bond() {
     d.bonds[0].double_position = crate::bonds::DoublePosition::Left;
     let id = lone_pair_arrow_to(&mut d, c);
     let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
-    let gap = head_ink_gap(&d, arrow);
+    let gap = rendered_head_ink_gap(&d, arrow);
     assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
 }
 #[test]
@@ -1186,7 +1309,7 @@ fn mechanism_attachment_312_long_thin_head_is_checked_along_its_length() {
     (style.head_length_pt, style.head_width_pt, style.width_pt) = (24., 0.25, 0.6);
     let id = create(&mut d, &source, &Pick::Atom(c), Preset::Curved, style).unwrap();
     let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
-    let gap = head_ink_gap(&d, arrow);
+    let gap = rendered_head_ink_gap(&d, arrow);
     assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
 }
 #[test]
@@ -1202,7 +1325,7 @@ fn mechanism_attachment_312_head_clears_bold_secondary_rail() {
     d.bonds[0].secondary_display = Some("bold".into());
     let id = lone_pair_arrow_to(&mut d, c);
     let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
-    let gap = head_ink_gap(&d, arrow);
+    let gap = rendered_head_ink_gap(&d, arrow);
     assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
 }
 #[test]
@@ -1217,7 +1340,7 @@ fn mechanism_attachment_312_aromatic_rail_ignores_saved_position() {
     d.bonds[0].double_position = crate::bonds::DoublePosition::Left;
     let id = lone_pair_arrow_to(&mut d, c);
     let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
-    let gap = head_ink_gap(&d, arrow);
+    let gap = rendered_head_ink_gap(&d, arrow);
     assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
 }
 #[test]
@@ -1243,7 +1366,7 @@ fn mechanism_attachment_312_head_clears_double_bond_rails() {
     }
     let id = lone_pair_arrow_to(&mut d, c);
     let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
-    let gap = head_ink_gap(&d, arrow);
+    let gap = rendered_head_ink_gap(&d, arrow);
     assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
 }
 #[test]
@@ -1259,7 +1382,7 @@ fn mechanism_attachment_312_head_clears_mitered_bold_junction() {
     }
     let id = lone_pair_arrow_to(&mut d, c);
     let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
-    let gap = head_ink_gap(&d, arrow);
+    let gap = rendered_head_ink_gap(&d, arrow);
     assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
 }
 #[test]
@@ -1277,7 +1400,7 @@ fn mechanism_attachment_312_head_clears_mitered_side_double_backbone() {
     }
     let id = lone_pair_arrow_to(&mut d, c);
     let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
-    let gap = head_ink_gap(&d, arrow);
+    let gap = rendered_head_ink_gap(&d, arrow);
     assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
 }
 #[test]
@@ -1293,7 +1416,7 @@ fn mechanism_attachment_312_head_clears_hatch_stroke() {
     }
     let id = lone_pair_arrow_to(&mut d, c);
     let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
-    let gap = head_ink_gap(&d, arrow);
+    let gap = rendered_head_ink_gap(&d, arrow);
     assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
 }
 #[test]
@@ -1309,7 +1432,7 @@ fn mechanism_attachment_312_head_clears_joined_hollow_wedge_outline() {
     }
     let id = lone_pair_arrow_to(&mut d, c);
     let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
-    let gap = head_ink_gap(&d, arrow);
+    let gap = rendered_head_ink_gap(&d, arrow);
     assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
 }
 #[test]
@@ -1336,7 +1459,7 @@ fn mechanism_attachment_312_tiny_head_inside_a_miter_fill_is_detected() {
     (style.width_pt, style.head_length_pt, style.head_width_pt) = (0.1, 0.5, 0.25);
     let id = create(&mut d, &source, &Pick::Atom(c), Preset::Curved, style).unwrap();
     let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
-    let gap = head_ink_gap(&d, arrow);
+    let gap = rendered_head_ink_gap(&d, arrow);
     assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
 }
 #[test]
@@ -1351,7 +1474,7 @@ fn mechanism_attachment_312_search_finds_a_clear_direction_between_coarse_steps(
     }
     let id = lone_pair_arrow_to(&mut d, c);
     let arrow = d.arrows.iter().find(|a| a.id == id).unwrap();
-    let gap = head_ink_gap(&d, arrow);
+    let gap = rendered_head_ink_gap(&d, arrow);
     assert!(gap > 0., "arrowhead overlaps bond ink by {}", -gap);
 }
 #[test]
@@ -1618,8 +1741,9 @@ fn aim(d: &Document, id: u64, degrees: f32) -> Point {
 #[test]
 fn mechanism_attachment_379_aimed_end_head_clears_the_carbonyl() {
     let (d, c, id) = acetone_arrow();
-    // Up-left, toward the C=O axis, as when the user aims at the carbonyl.
-    let p = aim(&d, id, 235.);
+    // The default now uses the upper-left opening. Aim down-left toward its
+    // methyl bond to exercise an edit that still puts the head on bond ink.
+    let p = aim(&d, id, 120.);
     let plain = bare_edit(&d, id, 4, p);
     assert!(
         rendered_head_ink_gap(&plain, arrow(&plain, id)) < 0.,
@@ -1630,7 +1754,6 @@ fn mechanism_attachment_379_aimed_end_head_clears_the_carbonyl() {
     let a = arrow(&aimed, id);
     let gap = rendered_head_ink_gap(&aimed, a);
     assert!(gap > 0., "aimed arrowhead overlaps bond ink by {}", -gap);
-    assert!(head_ink_gap(&aimed, a) > 0.);
     // The aim is kept, and the attachment and start are untouched.
     near(arrival(a), arrival(arrow(&plain, id)));
     assert_eq!(
