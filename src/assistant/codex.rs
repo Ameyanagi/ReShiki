@@ -582,7 +582,7 @@ async fn generate(
         if server.cancel.stopped() { return Err("Stopped".into()); }
         if let Err(error) = checked {
             outcome.review.verified = false;
-            outcome.review.issues.push(format!("Visual review could not finish: {error}"));
+            outcome.review.issues.push(review_failure_message(&error));
             outcome.review.summary = "Draft retained for manual review.".into();
         }
         if outcome.proposal.sketch.is_some() && !outcome.review.issues.iter().any(|s|s == super::sketch::REVIEW_NOTE) {
@@ -592,6 +592,13 @@ async fn generate(
     }.await;
     server.shutdown().await;
     result
+}
+
+fn review_failure_message(error: &str) -> String {
+    format!(
+        "Visual review could not finish: {}. Improve layout checks this draft again.",
+        error.trim_end_matches('.')
+    )
 }
 
 async fn prepare_source_image(

@@ -1,5 +1,15 @@
 use super::*;
 
+#[test]
+fn review_failure_points_to_improve_layout_without_doubled_period() {
+    for error in ["Provider unavailable", "Provider unavailable."] {
+        assert_eq!(
+            review_failure_message(error),
+            "Visual review could not finish: Provider unavailable. Improve layout checks this draft again."
+        );
+    }
+}
+
 fn transparent_source_image() -> anyhow::Result<crate::pictures::Picture> {
     let rgba = image::RgbaImage::from_fn(8, 6, |x, y| {
         image::Rgba([0, 0, 0, if x == y { 255 } else { 0 }])
