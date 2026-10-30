@@ -514,6 +514,45 @@ fn accept_all_applies_valid_proposals_as_one_undo_and_respects_changed_selection
     assert!(app.assistant.error);
 }
 #[test]
+fn assistant_stop_before_preview_reports_nothing_added() {
+    let (mut app, _) = App::new();
+    let original = app.tab.doc.clone();
+    app.assistant.busy = true;
+    app.assistant_stop();
+    assert!(!app.assistant.busy);
+    assert_eq!(app.assistant.status, "Stopped");
+    assert_eq!(
+        app.assistant.messages.last().unwrap().text,
+        "Stopped before a preview was ready. Nothing was added to the drawing."
+    );
+    assert!(app.assistant.draft.is_none());
+    assert_eq!(app.tab.doc, original);
+}
+
+#[test]
+fn assistant_stop_with_preview_retains_draft() {
+    let (mut app, _) = App::new();
+    let original = app.tab.doc.clone();
+    app.assistant.busy = true;
+    let mut preview = Document::default();
+    preview.add_atom("O", reshiki::document::Point::default());
+    app.assistant.preview = Some(preview.clone());
+    app.assistant.pending_scope = Some((app.tab.file_epoch, app.tab.revision, vec![]));
+    app.assistant_stop();
+    assert!(!app.assistant.busy);
+    assert_eq!(
+        app.assistant.status,
+        "Stopped · Completed previews are retained"
+    );
+    assert_eq!(
+        app.assistant.messages.last().unwrap().text,
+        "Stopped. Completed previews remain available below."
+    );
+    assert_eq!(app.assistant.draft.as_ref().unwrap().fragment, preview);
+    assert_eq!(app.tab.doc, original);
+}
+
+#[test]
 fn immediate_activity_stop_retains_preview_and_unverified_drafts_require_review() {
     let (mut app, _) = App::new();
     app.tab.busy = false;
