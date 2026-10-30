@@ -120,6 +120,95 @@ fn stored(host: &HeadlessHost, composed: &Value) -> Arc<Document> {
         .doc
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn conditions_fit_the_arrow_before_wrapping_at_eight_bond_lengths() {
+    let host = host();
+    for conditions in [
+        "AcOH, NaOAc",
+        "H₂SO₄\nheat",
+        "sodium acetate in acetic acid at room temperature overnight",
+    ] {
+        let mut proposal = reaction();
+        proposal.reactions[0].conditions = conditions.into();
+        let composed = compose_ok(&host, call("compose", arguments(&proposal, None))).await;
+        let doc = stored(&host, &composed);
+        let text = conditions.replace('₂', "2").replace('₄', "4");
+        let caption = doc.annotations.iter().find(|a| a.text == text).unwrap();
+        let natural = crate::typography::layout(
+            &caption.text,
+            &crate::typography::TextFormat {
+                width_pt: None,
+                ..caption.format.clone()
+            },
+        );
+        let layout = crate::typography::layout(&caption.text, &caption.format);
+        let gap = doc.drawing_style.bond_length_world;
+        let points = doc.drawing_style.points_per_world();
+        match conditions {
+            "AcOH, NaOAc" => {
+                assert!(caption.format.width_pt.is_none());
+                assert_eq!(layout.fragments.len(), 1);
+                let arrow = &doc.arrows[0];
+                let length = arrow.start.distance(arrow.end);
+                assert!((length - (natural.width.max(gap * 2.8) + gap * 0.4)).abs() < 0.01);
+                assert!(
+                    (65. ..85.).contains(&(length * points)),
+                    "{} pt",
+                    length * points
+                );
+            }
+            "H₂SO₄\nheat" => {
+                assert_eq!(caption.text, "H2SO4\nheat");
+                assert!(caption.format.width_pt.is_none());
+                assert!(
+                    (layout.height
+                        - caption.format.style.size() * caption.format.line_spacing * 2.)
+                        .abs()
+                        < 0.001
+                );
+            }
+            _ => {
+                assert!(natural.width > gap * 8.);
+                assert!((caption.format.width_pt.unwrap() - gap * 8. * points).abs() < 0.001);
+                assert!(layout.fragments.len() > 1);
+                assert!(layout.width <= gap * 8. + 0.001);
+                assert_eq!(
+                    layout
+                        .fragments
+                        .iter()
+                        .map(|f| f.text.as_str())
+                        .collect::<String>(),
+                    text
+                );
+                assert!(
+                    layout.fragments[..layout.fragments.len() - 1]
+                        .iter()
+                        .all(|f| f.text.ends_with(char::is_whitespace))
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn generated_name_wrapping_does_not_leak_into_composed_text() {
+    let mut settings = DrawingSettings::default();
+    settings.format.name_breaks = true;
+    let mut proposal = reaction();
+    proposal.reactions[0].conditions = "AcOH,NaOAc,toluene,AcOH,NaOAc,toluene".into();
+    let doc = crate::render(&LocalEngine::default(), &proposal, &settings)
+        .await
+        .unwrap();
+    let caption = doc
+        .annotations
+        .iter()
+        .find(|a| a.text == proposal.reactions[0].conditions)
+        .unwrap();
+    assert!(!caption.format.name_breaks);
+    let layout = crate::typography::layout(&caption.text, &caption.format);
+    assert_eq!(layout.fragments.len(), 1);
+}
+
 /// The assistant's draft for `proposal`: render, then finish the layout
 /// (src/assistant/codex.rs).
 async fn drafted(proposal: &Proposal, settings: &DrawingSettings) -> (Document, Vec<String>) {
@@ -140,6 +229,48 @@ fn bond_lengths(doc: &Document) -> Vec<f32> {
             a.distance(doc.atom(bond.b).unwrap().position)
         })
         .collect()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn compose_normalizes_unicode_subscripts_in_conditions_and_sketch_captions() {
+    use crate::typography::Script;
+    let host = host();
+    let mut proposal = reaction();
+    proposal.reactions[0].conditions = "K₂CO₃, DMF".into();
+    let composed = compose_ok(&host, call("compose", arguments(&proposal, None))).await;
+    let doc = stored(&host, &composed);
+    let condition = doc
+        .annotations
+        .iter()
+        .find(|a| a.text == "K2CO3, DMF")
+        .unwrap();
+    assert_eq!(condition.format.spans.len(), 2);
+    for offset in [1, 4] {
+        assert_eq!(condition.format.at(offset).script, Script::Subscript);
+    }
+    assert_eq!(condition.format.at(7).script, Script::Normal);
+    doc.validate().unwrap();
+
+    let mut proposal = sketched();
+    proposal
+        .sketch
+        .as_mut()
+        .unwrap()
+        .captions
+        .push(crate::sketch::Caption {
+            text: "H₂O".into(),
+            position: Point::new(0., 2.),
+            color: Some([35, 80, 120]),
+        });
+    let composed = compose_ok(&host, call("compose", arguments(&proposal, None))).await;
+    let doc = stored(&host, &composed);
+    let caption = doc.annotations.iter().find(|a| a.text == "H2O").unwrap();
+    assert_eq!(caption.format.at(1).script, Script::Subscript);
+    assert_eq!(
+        caption.format.at(1).color,
+        crate::palette::Color::imported([35, 80, 120])
+    );
+    doc.validate().unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

@@ -117,20 +117,23 @@ impl App {
             return Err("This label changed elsewhere. Copy your draft or cancel before editing the updated label.".into());
         }
         self.tab.caption_format.validate(&self.tab.caption)?;
+        let mut text = self.tab.caption.clone();
+        let mut format = self.tab.caption_format.clone();
+        reshiki::typography::normalize_subscript_digits(&mut text, &mut format);
         let mut doc = self.tab.doc.clone();
         match (&state.original, self.tab.caption.trim().is_empty()) {
             (Some(original), true) => doc.delete(&[original.id]),
             (Some(original), false) => {
                 if let Some(label) = doc.annotations.iter_mut().find(|a| a.id == original.id) {
-                    label.text = self.tab.caption.clone();
-                    label.format = self.tab.caption_format.clone();
+                    label.text = text;
+                    label.format = format;
                 }
             }
             (None, false) => doc.annotations.push(Annotation {
                 id: doc.next_id(),
                 position: state.position,
-                text: self.tab.caption.clone(),
-                format: self.tab.caption_format.clone(),
+                text,
+                format,
             }),
             (None, true) => {}
         }

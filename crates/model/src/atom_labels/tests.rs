@@ -1,5 +1,49 @@
 use super::*;
 
+#[test]
+fn isolated_hydrogen_halides_read_hydrogen_first_and_respect_overrides() {
+    for element in ["F", "Cl", "Br", "I"] {
+        let mut doc = Document::default();
+        let id = doc.add_atom(element, Point::default());
+        doc.atom_mut(id).unwrap().label_h = 1;
+        assert_eq!(
+            appendage_position(doc.atom(id).unwrap(), &doc),
+            HydrogenPosition::Left
+        );
+        let mut text: Vec<_> = crate::scene::primitives(&doc)
+            .into_iter()
+            .filter_map(|p| match p {
+                crate::scene::Primitive::Text { position, text, .. } => Some((position.x, text)),
+                _ => None,
+            })
+            .collect();
+        text.sort_by(|a, b| a.0.total_cmp(&b.0));
+        assert_eq!(
+            text.into_iter().map(|(_, text)| text).collect::<String>(),
+            format!("H{element}")
+        );
+
+        doc.atom_mut(id).unwrap().display.hydrogen_position = HydrogenPosition::Right;
+        assert_eq!(
+            appendage_position(doc.atom(id).unwrap(), &doc),
+            HydrogenPosition::Right
+        );
+        doc.atom_mut(id).unwrap().display.hydrogen_position = HydrogenPosition::Auto;
+        doc.atom_mut(id).unwrap().label_h = 2;
+        assert_eq!(
+            appendage_position(doc.atom(id).unwrap(), &doc),
+            HydrogenPosition::Right
+        );
+        doc.atom_mut(id).unwrap().label_h = 1;
+        let carbon = doc.add_atom("C", Point::new(-42., 0.));
+        doc.add_bond(id, carbon, 1, "plain");
+        assert_eq!(
+            appendage_position(doc.atom(id).unwrap(), &doc),
+            HydrogenPosition::Right
+        );
+    }
+}
+
 /// A mapped atom at the origin with plain bonds to carbons at `neighbors`.
 fn mapped(element: &str, neighbors: &[Point]) -> (Document, Indicator) {
     let mut doc = Document::default();
