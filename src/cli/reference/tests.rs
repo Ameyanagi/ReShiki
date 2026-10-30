@@ -11,6 +11,24 @@ fn the_agent_reference_is_current() {
 }
 
 #[test]
+fn the_agent_api_versions_are_current() {
+    let table = include_str!("../../../docs/agent-api.md")
+        .split_once("## Versioning\n")
+        .unwrap()
+        .1;
+    for (field, version) in [
+        ("app", env!("CARGO_PKG_VERSION").to_string()),
+        ("document", crate::document::VERSION.to_string()),
+    ] {
+        let row = table
+            .lines()
+            .find(|line| line.starts_with(&format!("| `{field}` ")))
+            .unwrap();
+        assert_eq!(row.split('|').nth(2).unwrap().trim(), version, "{field}");
+    }
+}
+
+#[test]
 fn help_is_verbatim_and_commands_and_tools_keep_catalog_order() {
     let reference = agent_reference();
     assert!(reference.contains(&format!("```text\n{}```", help(None))));

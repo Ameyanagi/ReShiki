@@ -5,7 +5,7 @@ Reaction roles connect editable molecules to a drawing arrow. They stay attached
 ## Define a reaction
 
 1. Draw or import the molecules and a reaction arrow.
-2. Open **Properties → Reaction roles…**, or **Export → Reaction roles & export…**.
+2. Open **Properties → Labels & chemistry → Reaction roles…**, or **Export → Reaction roles & export…**.
 3. Choose the arrow for this step. For several steps, each arrow has its own roles.
 4. Select a molecule on the canvas and choose **Assign selected molecules** under Reactants, Products, or Reagents / catalysts. Selecting one atom assigns its complete connected molecule. You can assign several selected molecules together.
 5. Click a structure thumbnail in the inspector to select that participant on the canvas. Reassigning it moves it to the chosen role. **Clear selected roles** removes its membership without deleting the molecule.

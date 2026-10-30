@@ -61,7 +61,7 @@ for this import path and its limits.
    Special → ReShiki drawing object**.
 3. Double-click the drawing to open it in ReShiki. Keep the Office document open.
 4. Edit and press **Ctrl+S**. ReShiki confirms when Office accepts the update.
-5. Close the ReShiki editing window and save the Office document.
+5. Close the drawing's tab (Ctrl+W) and save the Office document.
 
 The Office file contains the drawing; it does not depend on an external
 `.rsk` file. ReShiki must be installed to edit it. The installer registers
