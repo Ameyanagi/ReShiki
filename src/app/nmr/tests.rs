@@ -1457,6 +1457,28 @@ fn assignment_labels_survive_geometry_but_close_and_chemical_edits_clear_them() 
 }
 
 #[test]
+fn assignment_labels_survive_nucleus_switches() {
+    let mut app = ethyl_acetate();
+    let _ = app.nmr_action(Action::Predict(Nucleus::H1));
+    finish_prediction(&mut app);
+    let _ = app.nmr_action(Action::ToggleLabels);
+    let _ = app.nmr_action(Action::LabelMode(LabelMode::Both));
+
+    for nucleus in [Nucleus::C13, Nucleus::H1] {
+        let _ = app.nmr_action(Action::Predict(nucleus));
+        assert!(app.tab.nmr.labels.visible);
+        assert_eq!(app.tab.nmr.labels.mode, LabelMode::Both);
+        assert!(app.nmr_canvas().is_none());
+        finish_prediction(&mut app);
+        assert!(app.tab.nmr.labels.visible);
+        let canvas = app.nmr_canvas().unwrap();
+        assert_eq!(canvas.mode, LabelMode::Both);
+        assert_eq!(canvas.report.nucleus, nucleus);
+        assert!(canvas.report.rows.iter().any(|row| row.shift().is_some()));
+    }
+}
+
+#[test]
 fn nearby_plot_markers_cycle_distinct_original_atoms_without_editing() {
     let mut app = ethyl_acetate();
     let _ = app.nmr_action(Action::Predict(Nucleus::C13));
