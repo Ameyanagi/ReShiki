@@ -1,8 +1,11 @@
 //! Deterministic collision correction from RDKit 2026.03.6 EmbeddedFrag.cpp,
 //! DepictUtils.cpp and Matrices.cpp. BSD-3-Clause; see licenses/rdkit/NOTICE.
+//! Final path angle expansion comes from RDKit 2026.09.1 (#9378).
 //! Operations return detached state, including the native density side effects.
 
 mod repair;
+#[cfg(test)]
+mod tests;
 
 use super::{
     geometry::{self, Point},
@@ -18,6 +21,12 @@ const COLLISION_THRESHOLD: f64 = 0.70;
 const HETEROATOM_SCALE: f64 = 1.3;
 const MAX_ITERATIONS: usize = 15;
 const MAX_FLIPS: usize = 3;
+// RDKit 2026.09.1 (#9378) path angle expansion parameters.
+const ANGLE_EXPANSION_INCREMENT: f64 = 0.0873; // 5 degrees
+const MAX_ANGLE_EXPANSION: f64 = 3.0 * ANGLE_EXPANSION_INCREMENT;
+const MAX_ANGLE_EXPANSION_ITERS: usize = 20;
+// SPhos needs a second 5-degree trial to get past a temporary extra clash.
+const ANGLE_EXPANSION_TRIAL_STEPS: usize = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
@@ -34,6 +43,7 @@ pub enum Stage {
     BondAndSpiroFlip,
     OpenAngles,
     ShortenBonds,
+    PathAngleExpansion,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -338,6 +348,7 @@ impl<'a> Input<'a> {
                 Stage::BondAndSpiroFlip,
                 Stage::OpenAngles,
                 Stage::ShortenBonds,
+                Stage::PathAngleExpansion,
             ] {
                 self.apply_in_place(value, stage, session)?;
             }
@@ -384,6 +395,7 @@ impl<'a> Input<'a> {
             Stage::BondAndSpiroFlip => self.bond_and_spiro(value, session),
             Stage::OpenAngles => self.open_angles(value, session),
             Stage::ShortenBonds => self.shorten_bonds(value, session),
+            Stage::PathAngleExpansion => self.path_angle_expansion(value, session),
         }
     }
     fn distance(&self, a: usize, b: usize, session: &mut Session) -> Result<usize, Error> {

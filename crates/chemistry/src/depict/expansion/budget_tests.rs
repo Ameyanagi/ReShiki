@@ -61,6 +61,7 @@ fn repair(initial: &Initial, remaining: &mut usize) -> anyhow::Result<Vec<Fragme
         collision::Stage::BondAndSpiroFlip,
         collision::Stage::OpenAngles,
         collision::Stage::ShortenBonds,
+        collision::Stage::PathAngleExpansion,
     ] {
         for fragment in &mut fragments {
             *fragment = input.apply_with_work(fragment, stage, remaining)?;

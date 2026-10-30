@@ -181,6 +181,8 @@ fn repair(
         *fragment = collision.apply_with_work(fragment, collision::Stage::OpenAngles, remaining)?;
         *fragment =
             collision.apply_with_work(fragment, collision::Stage::ShortenBonds, remaining)?;
+        *fragment =
+            collision.apply_with_work(fragment, collision::Stage::PathAngleExpansion, remaining)?;
     }
     Ok(fragments)
 }
