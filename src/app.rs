@@ -1099,6 +1099,9 @@ impl App {
             &message,
             Message::Canvas(Edit::BeginTransform(_))
                 | Message::Mapping(reaction_mapping::Action::Open)
+        ) || matches!(
+            &message,
+            Message::Commands(action) if self.commands.reveals_section(action)
         );
         let refresh_dimensions = matches!(
             &message,

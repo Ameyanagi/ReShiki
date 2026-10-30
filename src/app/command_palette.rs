@@ -3,7 +3,7 @@
 //! the path its button, menu or key already uses, so an edit is one undo step.
 use super::{
     App, Message, Pending,
-    help::{chord, modal, row_button, search},
+    help::{Placement, chord, modal, row_button, search},
     workspace::{control, muted_text},
 };
 use crate::canvas::Edit;
@@ -22,6 +22,8 @@ const RESULTS: &str = "command-palette-results";
 const RECENT: usize = 8;
 /// Rows that fit the list, for Page Up and Page Down.
 const PAGE: isize = 10;
+const ROW_HEIGHT: f32 = 28.;
+const ROW_SPACING: f32 = 2.;
 /// A whole word of a command's name scores 60; weaker best matches also
 /// offer to insert the query as a chemical name or SMILES.
 const STRONG: u32 = 60;
@@ -33,6 +35,7 @@ pub enum Action {
     Query(String),
     /// Move the selection by this many rows, stopping at either end.
     Move(isize),
+    Scrolled(scrollable::Viewport),
     /// Show one category's results, or all, as its chip does.
     Filter(Option<Category>),
     /// Step through the filter chips, wrapping, as Tab and Shift+Tab do.
@@ -58,11 +61,35 @@ pub(super) struct State {
     pub(super) filter: Option<Category>,
     /// The selected position in `results`.
     selected: usize,
+    scroll_offset: f32,
+    viewport_height: f32,
     /// Names of recently run commands, newest first.
     recent: Vec<String>,
 }
 
 impl State {
+    pub(super) fn reveals_section(&self, action: &Action) -> bool {
+        if !self.open {
+            return false;
+        }
+        let command = match action {
+            Action::Run(index) => self.items.get(*index),
+            Action::Submit => self.current(),
+            _ => None,
+        };
+        command.is_some_and(|command| match &command.run {
+            Run::MolecularProperties => true,
+            Run::Send(messages) => messages.iter().any(|message| {
+                matches!(
+                    message,
+                    Message::Canvas(Edit::BeginTransform(_))
+                        | Message::Mapping(super::reaction_mapping::Action::Open)
+                )
+            }),
+            _ => false,
+        })
+    }
+
     pub(super) fn current(&self) -> Option<&Command> {
         self.results
             .get(self.selected)
@@ -105,6 +132,7 @@ impl State {
             .filter(|i| self.filter.is_none_or(|f| self.in_category(*i, f)))
             .collect();
         self.selected = 0;
+        self.scroll_offset = 0.;
     }
 }
 
@@ -222,6 +250,23 @@ impl App {
         }
     }
 
+    fn command_target_hint(&self, target: &Target) -> String {
+        if !self.tab.selected.is_empty() {
+            let count = self.tab.selected.len();
+            return format!(
+                "Acts on {count} selected object{}",
+                if count == 1 { "" } else { "s" }
+            );
+        }
+        if let Some((a, b)) = target.bond() {
+            return format!("Acts on bond {a}–{b} (pointed)");
+        }
+        if let Some(atom) = target.atom().and_then(|id| self.tab.doc.atom(id)) {
+            return format!("Acts on {} #{} (pointed)", atom.element, atom.id);
+        }
+        "Choose a command to run".into()
+    }
+
     /// Why a command cannot run now; the palette shows it greyed with this.
     pub(super) fn command_unavailable(&self, command: &Command) -> Option<&'static str> {
         self.need_unavailable(command.need, &self.command_target())
@@ -277,6 +322,7 @@ impl App {
                 state.open = true;
                 state.query.clear();
                 state.filter = None;
+                state.viewport_height = 0.;
                 state.catalog = items.len();
                 state.items = items;
                 self.rank_commands();
@@ -307,13 +353,23 @@ impl App {
                 let state = &mut self.commands;
                 let last = state.results.len().saturating_sub(1);
                 state.selected = state.selected.saturating_add_signed(step).min(last);
-                return iced::widget::operation::snap_to(
+                if state.viewport_height == 0. {
+                    return Task::none();
+                }
+                let offset =
+                    row_scroll_offset(state.selected, state.scroll_offset, state.viewport_height);
+                if offset == state.scroll_offset {
+                    return Task::none();
+                }
+                state.scroll_offset = offset;
+                return iced::widget::operation::scroll_to(
                     RESULTS,
-                    iced::widget::operation::RelativeOffset {
-                        x: 0.,
-                        y: state.selected as f32 / last.max(1) as f32,
-                    },
+                    iced::widget::operation::AbsoluteOffset { x: 0., y: offset },
                 );
+            }
+            Action::Scrolled(viewport) => {
+                self.commands.scroll_offset = viewport.absolute_offset().y;
+                self.commands.viewport_height = viewport.bounds().height;
             }
             Action::Run(index) => {
                 let state = &mut self.commands;
@@ -391,20 +447,11 @@ impl App {
                 })
                 .collect()
         } else {
-            // `:w file` saves as and `:e file` opens; paths come from the dialog.
-            let word = query.split_whitespace().next().unwrap_or_default();
-            let argument = word.len() < query.len();
             catalog
                 .iter()
                 .enumerate()
                 .filter_map(|(i, command)| {
-                    let alias = command.aliases.contains(&query)
-                        || argument
-                            && match word {
-                                "w" | "sav" | "saveas" => command.aliases.contains(&"sav"),
-                                "e" | "edit" => command.aliases.contains(&"e"),
-                                _ => false,
-                            };
+                    let alias = command.aliases.contains(&query);
                     if alias {
                         return Some((10_000, i, 2));
                     }
@@ -520,7 +567,9 @@ impl App {
             state.recent.truncate(RECENT);
         }
         // A pending Move & attach would take over template placement.
-        if !matches!(command.run, Run::Send(_)) && self.tab.joining.is_some() {
+        if !matches!(command.run, Run::Send(_) | Run::MolecularProperties)
+            && self.tab.joining.is_some()
+        {
             self.cancel_join();
         }
         let target = self.command_target();
@@ -536,6 +585,7 @@ impl App {
                 }
                 Task::batch(tasks)
             }
+            Run::MolecularProperties => self.show_molecular_properties(),
             Run::Bond(preset) => {
                 if target.bonds.is_empty() {
                     return self.update(Message::Tool(super::palettes::bond_tool(preset)));
@@ -586,6 +636,8 @@ impl App {
                 let anchor = self.insert_point(&target);
                 self.insert_template(index);
                 self.edit(Edit::Template(anchor, None));
+                self.tool = crate::canvas::Tool::Select;
+                self.templates.active = false;
                 Task::none()
             }
             Run::SetCharge(charge) => {
@@ -606,6 +658,8 @@ impl App {
                 self.imports.set_text(&smiles);
                 self.update(Message::InsertInput)
             }
+            Run::SaveAs(name) => self.save_drawing_named(name),
+            Run::OpenNamed(name) => self.open_drawing_named(name),
             Run::SaveAndClose => {
                 if self.dirty() {
                     // The save dialog's Save answer: close once the save succeeds.
@@ -736,7 +790,7 @@ impl App {
         .size(14)
         .padding(8);
         let query = state.query();
-        let mut list = column![].spacing(2);
+        let mut list = column![].spacing(ROW_SPACING);
         for (position, &index) in state.results.iter().enumerate() {
             let Some(command) = state.items.get(index) else {
                 continue;
@@ -818,16 +872,24 @@ impl App {
             .align_y(Alignment::Center),
             search,
             chips,
-            scrollable(list.padding([0, 12]))
-                .id(RESULTS)
-                .width(Length::Fill)
-                .height(Length::Fill),
+            container(
+                scrollable(list.padding([0, 12]))
+                    .id(RESULTS)
+                    .on_scroll(|viewport| Message::Commands(Action::Scrolled(viewport)))
+                    .width(Length::Fill)
+                    .height(Length::Shrink),
+            )
+            // Leave room for the header and footer within the dialog's cap.
+            .max_height(320),
             container(text(detail).size(12).wrapping(Wrapping::None))
                 .width(Length::Fill)
                 .clip(true),
-            text("↑ ↓ move · Tab filters · ↩ runs · Esc closes · Acts on the selection, else the pointed atom or bond")
-                .size(12)
-                .style(muted_text),
+            text(format!(
+                "↑ ↓ move · Tab filters · ↩ runs · Esc closes · {}",
+                self.command_target_hint(&target)
+            ))
+            .size(12)
+            .style(muted_text),
         ]
         .spacing(14);
         modal(
@@ -835,8 +897,22 @@ impl App {
             content.into(),
             760.,
             560.,
+            Placement::Top,
             Message::Commands(Action::Close),
         )
+    }
+}
+
+/// Move only far enough to reveal the highlighted row in full.
+fn row_scroll_offset(index: usize, offset: f32, viewport: f32) -> f32 {
+    let top = index as f32 * (ROW_HEIGHT + ROW_SPACING);
+    let bottom = top + ROW_HEIGHT;
+    if top < offset {
+        top
+    } else if bottom > offset + viewport {
+        bottom - viewport
+    } else {
+        offset
     }
 }
 
@@ -887,7 +963,7 @@ fn result_row(
         .align_y(Alignment::Center),
     )
     .padding([0, 8])
-    .height(28)
+    .height(ROW_HEIGHT)
     .align_y(Alignment::Center);
     row_button(id, command.name.clone(), body, selected, on_press)
 }

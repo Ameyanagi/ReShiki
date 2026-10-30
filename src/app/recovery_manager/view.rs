@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::{
-    help::modal,
+    help::{Placement, modal},
     workspace::{control, hover_hint, muted_text},
 };
 use iced::widget::{Space, column, container, row, scrollable, text, tooltip};
@@ -287,6 +287,7 @@ impl App {
             content,
             640.,
             if dialog == Dialog::Picker { 490. } else { 250. },
+            Placement::Center,
             Message::Recovery(Action::Close),
         )
     }

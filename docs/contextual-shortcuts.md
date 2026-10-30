@@ -12,6 +12,12 @@ The preview pane labels its drawings **Example: before** and **Example: after**.
 
 Press **:** to open the **command palette**. Over an atom or bond **:** opens it too, since it has no drawing meaning there; inside a text field, **:** is typed as usual. Type part of a command and press **Enter** (or click a row) to run it; unlike Help, the palette runs the command and closes. **Up/Down** move, **Page Up/Page Down** move a screenful, **Home/End** go to the first and last result, and **Escape** closes. Each one-line row shows its category and its shortcut, if it has one, so the palette also teaches the keys; the selected row's description is shown below the list. The chips under the search field (**All**, **Insert**, **Bond**…) show how many results each category has: click one, or press **Tab** / **Shift+Tab**, to show only that category.
 
+Commands opens near the top of the window, horizontally centered, and shrinks
+to fit its results up to its maximum height. Its hint names the pointed target
+or counts the selected objects. Keyboard navigation scrolls only far enough
+to keep the highlighted row fully visible; a new query or filter returns the
+list to the top. Help keeps its centered dialog.
+
 The palette searches the same way as Help. Each word you type may start any word of a command's name, keywords or shortcut, in any order (**ben to** finds **Benzene tool**). A word that matches nothing more directly may be the initials of the name's words (**bt**), letters in order (**bnz**), or, in five or more letters, carry one typo (**benzne**). An exact name ranks first, then names whose words all start with what you typed, then keyword and description matches. It lists:
 
 - **Insert**: rings (cyclopropane to cyclooctane, benzene, chairs, cyclopentadiene, Haworth rings), the template library, the import examples, every abbreviation preset (OMe, Boc, Ph, Ts, TBS…, also found by name such as **methoxy** or **tosyl**) and every element (by symbol or name, such as **bromine**).
@@ -20,23 +26,32 @@ The palette searches the same way as Help. Each word you type may start any word
 
 Commands act on the **selection**; with nothing selected, on the atom or bond under the pointer (or the keyboard-drawing hotspot). **double bond** makes the selected bonds double; with no bond, it chooses the double-bond tool. **benzene** attaches a ring to the selected atom or fuses it to the selected bond the same way the **a** key does, and otherwise adds it at the center of the view and selects it. Every edit is one Undo step. Commands whose name or shortcut key matches rank above those matched only by keyword or description. A command that needs a target it does not have stays listed, greyed and below the commands that can run, with the reason under the list. With an empty search, recently run commands come first; commands for the current target rank higher. Recent commands that cannot run come after those that can.
 
+A template command places once and returns to Select, including when placement
+is refused. It keeps the Templates tool's **Keep placing** preference unchanged.
+
 Some commands take a value after their word: **rotate 30** (or **rotate ccw 30**), **tilt up 20** (also **down**, **left**, **right**, or **tilt x -15** and **tilt y 15**, in degrees as the Tilt X/Y fields take them), **scale 150** (percent, relative and uniform, as the Scale field), **zoom 150**, **charge -1**, **element Pd**, **font size 12**, **bond length 14** (for new bonds), **ring 7** and **chain 5**. Any prefix of two or more letters works for the word, as in **rot 30**, **zo 150**, **ch -1** or **bond len 14**; the row with the value ranks first, greyed with the reason when it cannot run yet, and the chemical-name row below is not offered. Tilt turns a molecule shown as a 3D model, as the Tilt X/Y fields do; scale follows the Scale field, which asks you to switch such a molecule to 2D first. Each command is one Undo step. When nothing matches well, the palette offers to insert the text as a chemical name (**ibuprofen**) or, if it is valid SMILES, as SMILES (**c1ccccc1O**).
 
 Vim-style commands rank first when typed exactly:
 
-| Command                    | Action                                          |
-| -------------------------- | ----------------------------------------------- |
-| :w                         | Save                                            |
-| :w _name_ / :sav / :saveas | Save as (the location is chosen in the dialog)  |
-| :q                         | Close the tab, asking to save changes           |
-| :q!                        | Close the tab without saving                    |
-| :wq / :x                   | Save, then close the tab                        |
-| :qa                        | Close the window, asking about each unsaved tab |
-| :e / :e _name_             | Open (the file is chosen in the dialog)         |
-| :tabnew / :new / :enew     | New drawing                                     |
-| :tabn / :tabp              | Next / previous tab                             |
-| :u / :red                  | Undo / redo                                     |
-| :noh                       | Clear highlight colors from the selection       |
+| Command                                  | Action                                                          |
+| ---------------------------------------- | --------------------------------------------------------------- |
+| :w                                       | Save                                                            |
+| :sav / :saveas                           | Save as, suggesting the current drawing's name                  |
+| :w _name_ / :sav _name_ / :saveas _name_ | Save as, suggesting _name_.rsk in the location dialog           |
+| :q                                       | Close the tab, asking to save changes                           |
+| :q!                                      | Close the tab without saving                                    |
+| :wq / :x                                 | Save, then close the tab                                        |
+| :qa                                      | Close the window, asking about each unsaved tab                 |
+| :e                                       | Open a file chosen in the dialog                                |
+| :e _name_ / :edit _name_                 | Open _name_.rsk next to the current saved drawing, if it exists |
+| :tabnew / :new / :enew                   | New drawing                                                     |
+| :tabn / :tabp                            | Next / previous tab                                             |
+| :u / :red                                | Undo / redo                                                     |
+| :noh                                     | Clear highlight colors from the selection                       |
+
+A file name that already has a native extension (**.rsk**, **.reshiki** or
+**.moruno**) keeps it. A named **:e** that cannot find its file shows a status
+message and keeps the current drawing open.
 
 ## Editable examples
 
