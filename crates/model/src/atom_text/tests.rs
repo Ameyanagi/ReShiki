@@ -1201,6 +1201,72 @@ fn formula(doc: &Document) -> Result<String, Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn atom_labels_replace_collapsed_groups_while_custom_names_rename_them()
+-> Result<(), Box<dyn std::error::Error>> {
+    let source = depicted_smiles("O=C(O)c1ccccc1O")?;
+    let anchor = source.atoms.last().unwrap().id;
+    let aspirin = apply(&source, anchor, "OAc", Mode::Auto)?;
+    assert_eq!(formula(&aspirin)?, "C9H8O4");
+    for mode in [Mode::Group, Mode::Auto] {
+        for (text, element, hydrogens, charge) in [
+            ("O", "O", 0, 0),
+            ("OH", "O", 1, 0),
+            ("Cl", "Cl", 0, 0),
+            ("NH2", "N", 2, 0),
+            ("SH", "S", 1, 0),
+            ("O-", "O", 0, -1),
+            ("NH3+", "N", 3, 1),
+        ] {
+            let result = apply(&aspirin, anchor, text, mode)?;
+            assert!(result.abbreviations.is_empty(), "{text} {mode}");
+            assert_eq!(result.atoms.len(), source.atoms.len(), "{text} {mode}");
+            assert_eq!(result.bonds, source.bonds, "{text} {mode}");
+            let atom = result.atom(anchor).unwrap();
+            assert_eq!(atom.element, element, "{text} {mode}");
+            assert_eq!(atom.explicit_h, hydrogens, "{text} {mode}");
+            assert_eq!(atom.charge, charge, "{text} {mode}");
+            assert_eq!(atom.position, source.atom(anchor).unwrap().position);
+            if matches!(text, "O" | "OH") {
+                assert_eq!(formula(&result)?, "C7H6O3", "{text} {mode}");
+            }
+            result.validate()?;
+        }
+    }
+    let renamed = apply(&aspirin, anchor, "Custom", Mode::Group)?;
+    assert_eq!(renamed.abbreviation(anchor).unwrap().label, "Custom");
+    assert_eq!(renamed.atoms, aspirin.atoms);
+    assert_eq!(renamed.bonds, aspirin.bonds);
+    let hidden = aspirin
+        .abbreviation(anchor)
+        .unwrap()
+        .members
+        .iter()
+        .copied()
+        .find(|&id| id != anchor)
+        .unwrap();
+    assert!(apply(&aspirin, hidden, "O", Mode::Auto).is_err());
+    assert!(apply(&aspirin, anchor, "O", Mode::Text).is_err());
+
+    let (source, center, oxygen) = chiral_alcohol();
+    let mut protected = apply(&source, oxygen, "OAc", Mode::Auto)?;
+    let atom = protected.atom_mut(center).unwrap();
+    atom.cip_label = Some("R".into());
+    atom.label_h = 1;
+    for mode in [Mode::Group, Mode::Auto] {
+        for text in ["O", "OH"] {
+            let result = apply(&protected, oxygen, text, mode)?;
+            assert_eq!(
+                result.atom(center).unwrap().stereo,
+                source.atom(center).unwrap().stereo,
+                "{text} {mode}"
+            );
+            assert!(result.atom(center).unwrap().cip_label.is_none());
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn protecting_group_labels_are_real_groups_that_expand_and_contract()
 -> Result<(), Box<dyn std::error::Error>> {
     // Formulas of the methyl compound CH3-R, written out independently.
