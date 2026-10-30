@@ -1106,7 +1106,7 @@ def handle(request):
             request["document"], request.get("selected_ids"), request["format"], from_document
         )
         response["warnings"].append(
-            "Reaction files preserve participants, atom maps and stereo. Save .reshiki to retain captions, arrow appearance and drawing layout."
+            "Reaction files preserve participants, atom maps and stereo. Save .rsk to retain captions, arrow appearance and drawing layout."
         )
         return response
     if operation == "aromatic":
@@ -1236,7 +1236,7 @@ def handle(request):
             fmt = request["format"]
             if doc.get("reactions"):
                 response["warnings"].append(
-                    "This drawing or molecule format does not retain reaction roles. Use RXN/reaction SMILES for reaction data, or .reshiki for the complete scheme."
+                    "This drawing or molecule format does not retain reaction roles. Use RXN/reaction SMILES for reaction data, or .rsk for the complete scheme."
                 )
             exotic = {b["order"] for b in drawing_bonds} & {0, 5, 6, 7}
             if (

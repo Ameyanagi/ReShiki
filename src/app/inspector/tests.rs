@@ -84,7 +84,7 @@ async fn lazy_crystal_properties_keep_scope_and_ordinary_analysis() {
         let composition =
             reshiki::models3d::crystal::composition(&app.tab.doc, &app.tab.selected).unwrap();
         assert!(text.contains(&format!(
-            "{} · {:.3} g/mol",
+            "{} · {:.3}\u{a0}g/\u{2060}mol",
             composition.formula, composition.mass
         )));
         assert!(!text.contains("Calculating"));

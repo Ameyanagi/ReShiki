@@ -142,7 +142,11 @@ impl App {
                 self.tab.mapping.text = value;
             }
             Action::Auto => return self.start_auto_map(),
-            Action::Dismiss => self.tab.mapping.set_proposal(None),
+            Action::Dismiss => {
+                self.tab.mapping.set_proposal(None);
+                self.status = "Atom-map proposal discarded".into();
+                self.error = false;
+            }
             Action::ReviewPair(index) => self.review_pair(index),
             Action::Position => self.position_labels(),
             Action::Apply => {

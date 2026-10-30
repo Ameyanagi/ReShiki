@@ -500,6 +500,7 @@ async fn copying_unvalidated_rings_keeps_editable_exchange_and_paste_warning() -
             generation: Some("test".into()),
             representations: vec![source],
         },
+        false,
     )
     .await
     .map_err(anyhow::Error::msg)?;
@@ -519,6 +520,7 @@ async fn copying_unvalidated_rings_keeps_editable_exchange_and_paste_warning() -
             generation: Some("test".into()),
             representations: vec![binary.clone()],
         },
+        false,
     )
     .await
     .map_err(anyhow::Error::msg)?;
@@ -704,6 +706,7 @@ async fn previous_native_and_text_clipboards_remain_editable() -> anyhow::Result
                 generation: Some("test".into()),
                 representations: vec![Representation::new(kind, contents.as_bytes())],
             },
+            false,
         )
         .await
         .map_err(anyhow::Error::msg)?;
@@ -746,6 +749,7 @@ async fn old_dark_reshiki_clipboards_convert_colors_once() -> anyhow::Result<()>
                 generation: Some("test".into()),
                 representations: vec![Representation::new(NATIVE, data)],
             },
+            false,
         )
         .await
         .map_err(anyhow::Error::msg)?;
@@ -801,6 +805,7 @@ async fn dark_depth_copy_materializes_external_paint_before_switching_paper() ->
                 generation: Some("test".into()),
                 representations: vec![native_representation.clone()],
             },
+            false,
         )
         .await
         .map_err(anyhow::Error::msg)?;
@@ -863,6 +868,7 @@ async fn only_reshiki_clipboards_keep_palette_references() -> anyhow::Result<()>
                 generation: Some("test".into()),
                 representations: vec![Representation::new(kind, data)],
             },
+            false,
         )
         .await
         .map_err(anyhow::Error::msg)?;
@@ -1134,6 +1140,7 @@ async fn platform_packets_prefer_chemical_text_over_pictures_and_skip_other_text
                     generation: Some("test".into()),
                     representations,
                 },
+                false,
             )
             .await
             .unwrap();
@@ -1187,6 +1194,7 @@ async fn failed_native_cdx_and_cdxml_fall_through_and_newer_drawing_error_is_ret
             generation: Some("test".into()),
             representations: vec![cdx.clone(), newer.clone()],
         },
+        false,
     )
     .await
     .unwrap();
@@ -1214,6 +1222,7 @@ async fn failed_native_cdx_and_cdxml_fall_through_and_newer_drawing_error_is_ret
                 generation: Some("test".into()),
                 representations: vec![mol.clone(), failed],
             },
+            false,
         )
         .await
         .unwrap();
@@ -1236,6 +1245,32 @@ async fn failed_native_cdx_and_cdxml_fall_through_and_newer_drawing_error_is_ret
     .unwrap_err();
     assert!(error.contains("newer version of ReShiki"), "{error}");
     assert!(error.contains("Update ReShiki"), "{error}");
+}
+
+#[tokio::test]
+async fn text_only_clipboard_reports_no_picture_for_picture_paste() {
+    for (kind, image_only, expected) in [
+        ("public.text", true, "No picture on the clipboard"),
+        (
+            "public.utf8-plain-text",
+            true,
+            "No picture on the clipboard",
+        ),
+        (
+            "public.text",
+            false,
+            "No supported drawing on the clipboard",
+        ),
+    ] {
+        let packet = Packet {
+            generation: Some("test".into()),
+            representations: vec![Representation::new(kind, b"plain text")],
+        };
+        let error = paste_packet_with_warnings(Default::default(), packet, image_only)
+            .await
+            .unwrap_err();
+        assert_eq!(error, expected);
+    }
 }
 
 #[tokio::test]
@@ -1446,6 +1481,7 @@ async fn empty_clipboard_drawing_falls_through_to_picture() {
                 generation: Some("test".into()),
                 representations: vec![empty.clone(), png.clone()],
             },
+            false,
         )
         .await
         .unwrap();

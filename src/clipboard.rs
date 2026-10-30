@@ -597,7 +597,14 @@ pub async fn paste_with_warnings(
         paste_representation(engine.clone(), item)
     })
     .await?
-    .ok_or_else(|| "No supported drawing on the clipboard".into())
+    .ok_or_else(|| {
+        if image_only {
+            "No picture on the clipboard"
+        } else {
+            "No supported drawing on the clipboard"
+        }
+        .into()
+    })
 }
 
 async fn read_packet(
@@ -752,16 +759,19 @@ pub async fn picture() -> Result<Option<crate::pictures::Picture>, String> {
 
 #[cfg(test)]
 async fn paste_packet(engine: LocalEngine, packet: Packet) -> Result<Document, String> {
-    Ok(paste_packet_with_warnings(engine, packet).await?.document)
+    Ok(paste_packet_with_warnings(engine, packet, false)
+        .await?
+        .document)
 }
 
 #[cfg(test)]
 async fn paste_packet_with_warnings(
     engine: LocalEngine,
     packet: Packet,
+    image_only: bool,
 ) -> Result<PasteOutcome, String> {
     read_candidates(
-        false,
+        image_only,
         |formats, _, _, _| {
             let item = formats.iter().find_map(|kind| {
                 packet
@@ -778,7 +788,14 @@ async fn paste_packet_with_warnings(
         move |item| paste_representation(engine.clone(), item),
     )
     .await?
-    .ok_or_else(|| "No supported drawing on the clipboard".into())
+    .ok_or_else(|| {
+        if image_only {
+            "No picture on the clipboard"
+        } else {
+            "No supported drawing on the clipboard"
+        }
+        .into()
+    })
 }
 
 async fn paste_representation(

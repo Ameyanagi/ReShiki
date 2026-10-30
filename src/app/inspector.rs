@@ -497,7 +497,7 @@ impl App {
         let summary = |scope: &str, analysis: Option<&Analysis>| {
             analysis.map_or_else(
                 || scope.into(),
-                |a| format!("{scope} · {} · {:.3} g/mol", a.formula, a.mass),
+                |a| format!("{scope} · {} · {:.3}\u{a0}g/\u{2060}mol", a.formula, a.mass),
             )
         };
         let whole = if self.whole_property_analysis().is_none()
@@ -876,7 +876,7 @@ impl App {
             if let Ok(composition) = reshiki::models3d::crystal::composition(&self.tab.doc, &ids) {
                 body = body.push(
                     text(format!(
-                        "{} · {:.3} g/mol",
+                        "{} · {:.3}\u{a0}g/\u{2060}mol",
                         composition.formula, composition.mass
                     ))
                     .size(14),
@@ -898,7 +898,7 @@ impl App {
                 body = body
                     .push(
                         text(format!(
-                            "{} · {:.3} g/mol",
+                            "{} · {:.3}\u{a0}g/\u{2060}mol",
                             composition.formula, composition.mass
                         ))
                         .size(14),

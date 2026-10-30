@@ -38,6 +38,14 @@ fn act(app: &mut App, action: Action) -> Task<Message> {
 }
 
 #[test]
+fn recovery_bin_name_matches_the_platform() {
+    #[cfg(windows)]
+    assert_eq!(BIN_NAME, "Recycle Bin");
+    #[cfg(not(windows))]
+    assert_eq!(BIN_NAME, "Trash");
+}
+
+#[test]
 fn review_lists_real_drafts_and_restores_only_checked_drawings() {
     let (_directory, store, mut app) = seeded();
     assert_eq!(title(&app.recovered[0]), "newest.rsk");
@@ -109,7 +117,10 @@ async fn confirmed_discard_removes_real_files_and_a_fresh_scan_is_empty() {
     assert!(!app.recovery_manager.open());
     assert!(paths.iter().all(|path| !path.exists()));
     assert!(store.candidates().is_empty());
-    assert!(app.status.contains("Trash"));
+    assert_eq!(
+        app.status,
+        format!("Moved 2 recovery drafts to the {BIN_NAME}")
+    );
 }
 
 #[test]

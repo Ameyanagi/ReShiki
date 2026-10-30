@@ -8,6 +8,8 @@ use reshiki::{
     typography::{Script, StyleChange, TextAlign, TextFormat, TextStyle},
 };
 
+const PLACEHOLDER: &str = "Type a label…";
+
 #[derive(Debug, Clone)]
 pub enum Action {
     Begin(Option<u64>, Point),
@@ -304,7 +306,15 @@ impl App {
         let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
         let position = self.tab.camera.screen(state.position, paper);
         let size = (self.tab.caption_format.style.size() * self.tab.camera.zoom).clamp(12., 56.);
-        let natural = reshiki::typography::layout(&self.tab.caption, &self.tab.caption_format);
+        // Size an empty editor for its placeholder so the hint never wraps out of view.
+        let natural = reshiki::typography::layout(
+            if self.tab.caption.is_empty() {
+                PLACEHOLDER
+            } else {
+                &self.tab.caption
+            },
+            &self.tab.caption_format,
+        );
         let old = state
             .original
             .as_ref()
@@ -364,7 +374,7 @@ impl App {
             .line_height(self.tab.caption_format.line_spacing)
             .padding(7)
             .height(editor_height)
-            .placeholder("Type a label…")
+            .placeholder(PLACEHOLDER)
             .on_action(Message::CaptionAction)
             .highlight_with::<CaptionHighlighter>(
                 {

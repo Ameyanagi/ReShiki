@@ -142,10 +142,11 @@ fn distance_response(request: &Request) -> Result<Response, Error> {
     let document = request.document.as_ref().ok_or(Error::MissingDocument)?;
     document.validate().map_err(Error::Chemistry)?;
     let (output, warnings) = match request.operation.as_str() {
-        "analyze" => (
+        "analyze" if crate::models3d::crystal::touches(document, &[]) => (
             None,
             vec![crate::models3d::crystal::analysis_notice(document).into()],
         ),
+        "analyze" => (None, vec![crate::attachments::ANALYSIS_NOTICE.into()]),
         "export" => {
             let format = request.format.as_deref().ok_or(Error::MissingFormat)?;
             match format {
@@ -166,6 +167,16 @@ fn distance_response(request: &Request) -> Result<Response, Error> {
         engine_version: chemistry::RDKIT_VERSION.into(),
         warnings,
     })
+}
+
+/// Valid multi-center/variable attachments have no ordinary molecular
+/// identity, so checking them reports the analysis limit, not an error.
+fn attachment_analysis_route(request: &Request) -> bool {
+    request.operation == "analyze"
+        && request
+            .document
+            .as_ref()
+            .is_some_and(crate::attachments::present)
 }
 
 /// Build an atomic response without changing either snapshot. `prepared` may
@@ -214,7 +225,7 @@ pub(crate) async fn execute_with_config(
     request: Request,
     config: Option<Config>,
 ) -> Result<Response, Error> {
-    if distance_route(&request) {
+    if distance_route(&request) || attachment_analysis_route(&request) {
         // This precedes the attachment-only MOL route, which otherwise does
         // not need ordinary molecular preparation. Validation stays first
         // inside the blocking route, including the document's format version.
@@ -313,7 +324,7 @@ async fn build_with_config(
     prepared: Option<Arc<Prepared>>,
     config: Option<Config>,
 ) -> Result<Response, Error> {
-    if distance_route(&request) {
+    if distance_route(&request) || attachment_analysis_route(&request) {
         return crate::task::spawn_blocking(move || distance_response(&request)).await?;
     }
     let source = Arc::clone(&request);

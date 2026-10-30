@@ -4,7 +4,7 @@ use crate::document::Document;
 
 pub(crate) const DATIVE_MOL_NOTICE: &str = "MOL retains directed dative chemistry and metal charge, but omits solid/hashed coordination projection appearance. Use native ReShiki or figure export to retain that drawing.";
 pub(crate) const DATIVE_CDX_NOTICE: &str = "CDXML/CDX retains directed coordination chemistry and ReShiki projection attributes. ChemDraw 26 displays dative arrows and removes wedge/hash paint on save. Use native ReShiki or figure export for faithful projection appearance.";
-pub(crate) const REACTION_ROLES_NOTICE: &str = "This drawing or molecule format does not retain reaction roles. Use RXN/reaction SMILES for reaction data, or .reshiki for the complete scheme.";
+pub(crate) const REACTION_ROLES_NOTICE: &str = "This drawing or molecule format does not retain reaction roles. Use RXN/reaction SMILES for reaction data, or .rsk for the complete scheme.";
 pub(crate) const UNVALIDATED_NOTICE: &str =
     "Drawing exported; chemical assignments remain unvalidated.";
 pub(crate) const CRYSTAL_DRAWING_NOTICE: &str = "CDXML/CDX exports the 2D atoms and bonds as an unvalidated drawing, without the unit cell, periodic copies or distance-derived bond provenance. Reimported bonds may be interpreted as chemical bonds. Use native ReShiki to retain that information.";

@@ -806,7 +806,10 @@ impl super::App {
                     export_status(&saved.path, &saved.details, cfg!(target_arch = "wasm32"));
                 self.error = false;
             }
-            Ok(None) => {}
+            Ok(None) => {
+                self.status = "Export canceled".into();
+                self.error = false;
+            }
             Err(e) => {
                 self.status = e;
                 self.error = true;

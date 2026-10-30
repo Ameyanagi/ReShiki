@@ -335,6 +335,41 @@ fn full_range_styles_are_reflected_in_the_toolbar_after_commit() {
 }
 
 #[test]
+fn empty_editor_is_wide_enough_for_the_zoomed_placeholder() {
+    use iced::advanced::{graphics::text::Paragraph, text::Paragraph as _};
+    let format = TextFormat::default();
+    let natural = reshiki::typography::layout(PLACEHOLDER, &format);
+    for zoom in [1.5, 3.] {
+        let size = (format.style.size() * zoom).clamp(12., 56.);
+        let bounds = editor_bounds(
+            iced::Size::new(1600., 1000.),
+            iced::Rectangle::new(iced::Point::new(60., 70.), iced::Size::ZERO),
+            natural.width * zoom + 36.,
+            natural.height * zoom + 20.,
+            40.,
+            None,
+        );
+        let placeholder = Paragraph::with_text(iced::advanced::Text {
+            content: PLACEHOLDER,
+            bounds: iced::Size::INFINITE,
+            size: iced::Pixels(size),
+            line_height: format.line_spacing.into(),
+            font: iced::Font::with_name(reshiki::style::font_name(&format.style.family)),
+            align_x: Default::default(),
+            align_y: iced::alignment::Vertical::Top,
+            shaping: iced::advanced::text::Shaping::Advanced,
+            wrapping: iced::advanced::text::Wrapping::Word,
+        });
+        // The editor and popup pad the text by 7 and 2 px on each side.
+        assert!(
+            bounds.width - 18. >= placeholder.min_width(),
+            "{zoom}: {bounds:?} {}",
+            placeholder.min_width()
+        );
+    }
+}
+
+#[test]
 fn popup_stays_in_view_at_document_edges_with_long_labels() {
     let viewport = iced::Size::new(420., 360.);
     for anchor in [

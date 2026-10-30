@@ -9,6 +9,12 @@ use std::{collections::BTreeSet, path::PathBuf};
 
 mod view;
 
+const BIN_NAME: &str = if cfg!(windows) {
+    "Recycle Bin"
+} else {
+    "Trash"
+};
+
 #[derive(Debug, Clone)]
 pub enum Action {
     Show,
@@ -143,7 +149,7 @@ impl App {
                     )
                 } else {
                     format!(
-                        "Moved {count} recovery {} to the Trash",
+                        "Moved {count} recovery {} to the {BIN_NAME}",
                         plural(count, "draft", "drafts")
                     )
                 };
