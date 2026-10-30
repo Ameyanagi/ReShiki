@@ -8,6 +8,11 @@ use iced::{Color, Point, Rectangle};
 use reshiki::chains;
 use std::borrow::Cow;
 
+fn chain_badge_text(added: usize, bonds: usize) -> String {
+    let bond = if bonds == 1 { "bond" } else { "bonds" };
+    format!("{added} new C · {bonds} {bond}")
+}
+
 impl MoleculeCanvas<'_> {
     pub(super) fn preview_chain(
         &self,
@@ -42,7 +47,7 @@ impl MoleculeCanvas<'_> {
                 (*start, *pressed),
                 (*source, *source_text),
                 points,
-                (*snaking, *dragged),
+                (*snaking, *dragged, true),
                 cursor,
                 state.modifiers,
             );
@@ -77,7 +82,7 @@ impl MoleculeCanvas<'_> {
                         if cancelled {
                             "Release to cancel".into()
                         } else {
-                            format!("{added} new C · {} bonds", points.len().saturating_sub(1))
+                            chain_badge_text(added, points.len().saturating_sub(1))
                         },
                         true,
                     ));
@@ -550,5 +555,18 @@ impl MoleculeCanvas<'_> {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::chain_badge_text;
+
+    #[test]
+    fn chain_badge_pluralizes_bonds() {
+        assert_eq!(chain_badge_text(1, 0), "1 new C · 0 bonds");
+        assert_eq!(chain_badge_text(2, 1), "2 new C · 1 bond");
+        assert_eq!(chain_badge_text(3, 2), "3 new C · 2 bonds");
+        assert_eq!(chain_badge_text(6, 5), "6 new C · 5 bonds");
     }
 }

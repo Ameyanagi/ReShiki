@@ -188,16 +188,19 @@ impl MoleculeCanvas<'_> {
         origin: (World, World),
         source: (Option<u64>, Option<u64>),
         points: &[World],
-        flags: (bool, bool),
+        flags: (bool, bool, bool),
         cursor: World,
         modifiers: iced::keyboard::Modifiers,
     ) -> (Vec<World>, Option<u64>) {
         let (start, pressed) = origin;
         let (source, source_text) = source;
         let attached = source.is_some() || source_text.is_some();
-        let (snaking, dragged) = flags;
+        let (snaking, dragged, preview) = flags;
         let click = !dragged && pressed.distance(cursor) < 3.0 / self.camera.zoom;
-        if dragged && pressed.distance(cursor) < 3.0 / self.camera.zoom {
+        // A held Auto press previews only the start; release still places the click size.
+        if pressed.distance(cursor) < 3.0 / self.camera.zoom
+            && (dragged || preview && self.chain_drawing.atoms.is_none())
+        {
             return (vec![start], None);
         }
         let mut bond = self.bond_drawing.unconstrained(modifiers.alt());

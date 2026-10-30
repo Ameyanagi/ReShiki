@@ -44,7 +44,7 @@ impl MoleculeCanvas<'_> {
                     (start, pressed),
                     (source, source_text),
                     &points,
-                    (snaking, dragged),
+                    (snaking, dragged, false),
                     p,
                     state.modifiers,
                 );
