@@ -104,8 +104,9 @@ other appearance controls remain available in **Properties → 3D model**.
 - **Atoms** are explicit: no hydrogens are added, and a charge in a CIF type
   symbol (`Na1+`, `O2-`) or a PDB charge column stays on the atom.
 - **Properties → Molecular properties** gives the formula and mass of the
-  atoms shown (of the selected atoms, if any) and says that chemical analysis
-  is unavailable, since the bonds come from distances, not chemistry.
+  whole drawing and, when atoms are selected, their formula and mass as well.
+  It says that chemical analysis is unavailable, since the bonds come from
+  distances, not chemistry.
 
 ## ORTEP thermal ellipsoids
 

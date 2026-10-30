@@ -250,3 +250,35 @@ fn refresh_preserves_manual_dummy_label_scripts() {
     assert_eq!(source.atom(id).unwrap().display, before);
     source.validate().unwrap();
 }
+
+#[test]
+fn edits_label_only_the_molecules_they_change() {
+    let mut doc = Document::default();
+    let c = doc.add_atom("C", Point::default());
+    let n = doc.add_atom("N", Point::new(42., 0.));
+    doc.add_bond(c, n, 1, "plain");
+    let water = doc.add_atom("O", Point::new(0., 200.));
+    Refresh::calculate(&doc, &Refresh::default())
+        .unwrap()
+        .apply(&mut doc);
+    // A label the edit must not touch: water is not edited.
+    doc.atom_mut(water).unwrap().label_h = 7;
+    let before = doc.clone();
+    let grown = doc.add_atom("C", Point::new(84., 0.));
+    doc.add_bond(n, grown, 1, "plain");
+    refresh_edited(&before, &mut doc);
+    let h = |doc: &Document, id| doc.atom(id).unwrap().label_h;
+    assert_eq!((h(&doc, c), h(&doc, n), h(&doc, grown)), (3, 1, 3));
+    assert_eq!(h(&doc, water), 7);
+    // Deleting a neighbor relabels the atom it leaves.
+    let before = doc.clone();
+    doc.delete(&[grown]);
+    refresh_edited(&before, &mut doc);
+    assert_eq!(h(&doc, n), 2);
+    // A move alone recomputes nothing.
+    doc.atom_mut(n).unwrap().label_h = 9;
+    let before = doc.clone();
+    doc.translate(&[n], 5., 0.);
+    refresh_edited(&before, &mut doc);
+    assert_eq!(h(&doc, n), 9);
+}

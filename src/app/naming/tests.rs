@@ -1,5 +1,137 @@
-use super::test_support::record;
+use super::test_support::{ethanol, record};
 use super::*;
+
+#[test]
+fn structure_naming_failures_do_not_create_name_import_notices() {
+    for generate in [false, true] {
+        for stale in [false, true] {
+            let (mut app, _) = App::new();
+            app.tab.busy = false;
+            app.tab.doc = ethanol();
+            app.tab.selected = app.tab.doc.all_ids();
+            let action = if generate {
+                Action::Generate
+            } else {
+                Action::ShowMoleculeName(app.tab.selected.clone())
+            };
+            let _ = app.naming_action(action);
+            let pending = app.tab.naming.pending.unwrap();
+            if generate {
+                assert!(matches!(pending, Pending::Generate(_)));
+            } else {
+                assert!(matches!(pending, Pending::Caption(_)));
+            }
+            let detail = "Unsupported fused-ring parent in local organic rules";
+            let result = if stale {
+                app.tab.revision += 1;
+                Ok(Outcome::Structure(record("CCO")))
+            } else {
+                Err(naming::Error::Rejected(detail.into()))
+            };
+            let before = app.tab.doc.clone();
+            let _ = app.naming_action(Action::Finished(pending.ticket(), Box::new(result)));
+            assert!(app.tab.naming.notice.is_none());
+            assert_eq!(app.tab.doc, before);
+            assert!(!app.tab.history.can_undo());
+            if generate {
+                assert_eq!(
+                    app.tab.naming.structure_error.as_deref(),
+                    Some(if stale {
+                        "The drawing changed. Try again."
+                    } else {
+                        detail
+                    })
+                );
+            } else {
+                assert!(app.tab.naming.structure_error.is_none());
+                assert!(app.error);
+                assert_eq!(
+                    app.status,
+                    if stale {
+                        "The molecule changed while naming. Show its name again"
+                    } else {
+                        detail
+                    }
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn structure_naming_preserves_import_notice_and_resolve_clears_only_that_notice() {
+    for generate in [false, true] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.doc = ethanol();
+        app.tab.selected = app.tab.doc.all_ids();
+        app.tab.naming.name = "ethanol".into();
+        let notice = "Keep the name import details";
+        app.tab.naming.notice = Some(Notice::new(NoticeKind::Info, notice));
+        let previous_error = "Previous structure naming error";
+        app.tab.naming.structure_error = Some(previous_error.into());
+        let action = if generate {
+            Action::Generate
+        } else {
+            Action::ShowMoleculeName(app.tab.selected.clone())
+        };
+        let _ = app.naming_action(action);
+        assert_eq!(app.tab.naming.notice.as_ref().unwrap().detail, notice);
+        assert_eq!(
+            app.tab.naming.structure_error.as_deref(),
+            (!generate).then_some(previous_error)
+        );
+        let ticket = app.tab.naming.pending.unwrap().ticket();
+        let detail = "Cannot generate this structure name";
+        let _ = app.naming_action(Action::Finished(
+            ticket,
+            Box::new(Err(naming::Error::Rejected(detail.into()))),
+        ));
+        assert_eq!(app.tab.naming.notice.as_ref().unwrap().detail, notice);
+        let structure_error = if generate { detail } else { previous_error };
+        assert_eq!(
+            app.tab.naming.structure_error.as_deref(),
+            Some(structure_error)
+        );
+        let _ = app.naming_action(Action::Resolve);
+        assert!(matches!(app.tab.naming.pending, Some(Pending::Request(_))));
+        assert!(app.tab.naming.notice.is_none());
+        assert_eq!(
+            app.tab.naming.structure_error.as_deref(),
+            Some(structure_error)
+        );
+    }
+}
+
+#[test]
+fn cancelling_structure_naming_preserves_name_import_notice() {
+    for generate in [false, true] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.doc = ethanol();
+        app.tab.selected = app.tab.doc.all_ids();
+        let notice = "Keep the name import details";
+        app.tab.naming.notice = Some(Notice::new(NoticeKind::Info, notice));
+        let action = if generate {
+            Action::Generate
+        } else {
+            Action::ShowMoleculeName(app.tab.selected.clone())
+        };
+        let _ = app.naming_action(action);
+        let _ = app.naming_action(Action::Cancel);
+        assert!(!app.tab.naming.is_pending());
+        assert!(app.tab.naming.local_cancel.is_none());
+        assert_eq!(app.tab.naming.notice.as_ref().unwrap().detail, notice);
+        let detail = "Local name generation was cancelled";
+        if generate {
+            assert_eq!(app.tab.naming.structure_error.as_deref(), Some(detail));
+        } else {
+            assert!(app.tab.naming.structure_error.is_none());
+            assert!(app.error);
+            assert_eq!(app.status, detail);
+        }
+    }
+}
 
 #[test]
 fn native_open_preserves_pending_naming_in_an_empty_source_tab() {

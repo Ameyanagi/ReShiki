@@ -77,21 +77,18 @@ fn stale_or_unsupported_completion_changes_no_drawing_or_history() {
         assert!(!app.tab.history.can_undo());
         assert!(app.error);
         assert!(!app.status.is_empty());
-        let notice = app.tab.naming.notice.as_ref().unwrap();
+        assert!(app.tab.naming.notice.is_none());
+        assert!(app.tab.naming.structure_error.is_none());
         if stale {
-            assert_eq!(notice.kind, NoticeKind::Retry);
-            assert_eq!(notice.detail, "The drawing changed. Try again.");
             assert_eq!(
                 app.status,
                 "The molecule changed while naming. Show its name again"
             );
         } else {
-            assert_eq!(notice.kind, NoticeKind::Unsupported);
             assert_eq!(
-                notice.detail,
+                app.status,
                 "Unsupported fused-ring parent in local organic rules"
             );
-            assert_eq!(app.status, notice.detail);
         }
     }
 }

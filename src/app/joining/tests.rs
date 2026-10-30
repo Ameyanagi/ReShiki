@@ -20,7 +20,7 @@ fn joining_uses_the_preview_and_is_one_undo_step() {
     let _ = app.update(Message::Join(Action::Begin));
     assert_eq!(app.tab.doc, before);
     let state = app.tab.joining.as_ref().unwrap();
-    let (expected, _) = state
+    let (mut expected, _) = state
         .prepared
         .place(
             Point::default(),
@@ -30,6 +30,9 @@ fn joining_uses_the_preview_and_is_one_undo_step() {
             state.mode,
         )
         .unwrap();
+    for (atom, hydrogens) in expected.atoms.iter_mut().zip([3, 2, 3]) {
+        atom.label_h = hydrogens;
+    }
     let _ = app.update(Message::Canvas(Edit::Template(Point::default(), None)));
     assert!(app.tab.joining.is_none());
     assert_eq!(app.tab.doc, expected);
@@ -139,7 +142,8 @@ fn coordination() -> (App, u64, u64, u64) {
     for (a, b) in [(n, c), (c, c2), (c2, n2)] {
         app.tab.doc.add_bond(a, b, 1, "plain");
     }
-    for id in [n, n2] {
+    // Start with refreshed labels so adding coordination preserves every atom field.
+    for id in [n, c, c2, n2] {
         app.tab.doc.atom_mut(id).unwrap().label_h = 2;
     }
     app.tab.selected = vec![n];
@@ -606,7 +610,7 @@ fn join_routes_statuses_and_generic_admission_match_the_baseline_table() {
                 case.name
             );
             let before = app.tab.doc.clone();
-            let expected = if blocked {
+            let mut expected = if blocked {
                 (before.clone(), app.tab.selected.clone())
             } else {
                 match case.route {
@@ -643,6 +647,8 @@ fn join_routes_statuses_and_generic_admission_match_the_baseline_table() {
                     JoinPlan::Merge => app.merge_selected_atoms().unwrap(),
                 }
             };
+            // The app commits the model route with current hydrogen labels.
+            reshiki::atom_labels::refresh::refresh_edited(&before, &mut expected.0);
             let history = app.tab.history.undo_frames().len();
             let revision = app.tab.revision;
             let _ = app.update(message);
