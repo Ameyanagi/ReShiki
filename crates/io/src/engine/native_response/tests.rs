@@ -380,9 +380,9 @@ const LOSS_REAR: &str = "This chemical format does not retain rear opacity. Chem
 const LOSS_ANCHOR: &str = "Arrow curves are preserved; editing attachment links are omitted from this external format. Chemistry is unchanged. Use a native ReShiki file to retain links.";
 const LOSS_DATIVE_MOL: &str = "MOL retains directed dative chemistry and metal charge, but omits solid/hashed coordination projection appearance. Use native ReShiki or figure export to retain that drawing.";
 const LOSS_DATIVE_DRAWING: &str = "CDXML/CDX retains directed coordination chemistry and ReShiki projection attributes. ChemDraw 26 displays dative arrows and removes wedge/hash paint on save. Use native ReShiki or figure export for faithful projection appearance.";
-const LOSS_REACTION_ROLES: &str = "This drawing or molecule format does not retain reaction roles. Use RXN/reaction SMILES for reaction data, or .reshiki for the complete scheme.";
+const LOSS_REACTION_ROLES: &str = "This drawing or molecule format does not retain reaction roles. Use RXN/reaction SMILES for reaction data, or .rsk for the complete scheme.";
 const LOSS_UNVALIDATED: &str = "Drawing exported; chemical assignments remain unvalidated.";
-const LOSS_REACTION_DRAWING: &str = "Reaction files preserve participants, atom maps and stereo. Save .reshiki to retain captions, arrow appearance and drawing layout.";
+const LOSS_REACTION_DRAWING: &str = "Reaction files preserve participants, atom maps and stereo. Save .rsk to retain captions, arrow appearance and drawing layout.";
 const LOSS_REAR_DRAWING_ERROR: &str = "Invalid editable drawing: CDXML/CDX cannot preserve rear opacity. Use native ReShiki for editable appearance or SVG, PDF or PNG for the figure. Set rear opacity to 100% for editable CDXML/CDX.";
 const LOSS_ATTACHMENT_IDENTIFIER_ERROR: &str = "Invalid drawing: Multi-center/variable attachment targets require CDXML, CDX, V3000 MOL or native ReShiki export; ordinary molecular identifiers cannot retain them.";
 const LOSS_INVALID_VALENCE_ERROR: &str =
@@ -403,6 +403,57 @@ fn flip_notice_document_chirality(document: &mut Document) -> anyhow::Result<()>
         .find_map(|atom| atom.stereo.as_mut())
         .ok_or_else(|| anyhow::anyhow!("Missing captured chiral winding"))?;
     stereo.winding = if stereo.winding == "cw" { "ccw" } else { "cw" }.into();
+    Ok(())
+}
+
+#[tokio::test]
+async fn attachment_analysis_retains_drawing_without_molecular_identifiers() -> anyhow::Result<()> {
+    let mut document =
+        loss_notice_document(LossNoticeBase::Attachment, LossNoticeDecoration::Plain)?;
+    for kind in [
+        crate::attachments::Kind::MultiCenter,
+        crate::attachments::Kind::Variable,
+    ] {
+        document
+            .atoms
+            .iter_mut()
+            .find(|atom| atom.attachment.is_some())
+            .unwrap()
+            .attachment = Some(kind);
+        document.validate().map_err(anyhow::Error::msg)?;
+        let request = Request::molecule("analyze", document.clone());
+        for response in [
+            execute(request.clone()).await?,
+            build(
+                Arc::new(request),
+                None,
+                Config::new(PathBuf::from("/missing-attachment-inchi-helper")),
+            )
+            .await?,
+        ] {
+            assert_eq!(response.document.as_ref(), Some(&document));
+            assert!(response.analysis.is_none() && response.output.is_none());
+            assert_eq!(response.warnings, [LOSS_ATTACHMENT]);
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn attachment_analysis_rejects_missing_target_atoms() -> anyhow::Result<()> {
+    let mut document =
+        loss_notice_document(LossNoticeBase::Attachment, LossNoticeDecoration::Plain)?;
+    document
+        .atoms
+        .iter_mut()
+        .find(|atom| atom.attachment.is_some())
+        .unwrap()
+        .centroid[0] = u64::MAX;
+    let expected = document.validate().unwrap_err();
+    let error = execute(Request::molecule("analyze", document))
+        .await
+        .unwrap_err();
+    assert!(matches!(error, Error::Chemistry(ref message) if *message == expected));
     Ok(())
 }
 
@@ -1071,6 +1122,10 @@ async fn unprepared_drawing_export_loss_notices_are_pinned() -> anyhow::Result<(
             format,
         );
     }
+    let error = execute(Request::molecule("analyze", document))
+        .await
+        .unwrap_err();
+    assert_eq!(error.to_string(), LOSS_INVALID_VALENCE_ERROR);
     Ok(())
 }
 

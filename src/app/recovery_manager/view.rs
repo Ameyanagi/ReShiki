@@ -7,13 +7,14 @@ use iced::widget::{Space, column, container, row, scrollable, text, tooltip};
 use iced::{Alignment, Border, Element, Length};
 
 fn action(
-    label: &'static str,
+    label: impl Into<String>,
     id: &'static str,
     action: Action,
     primary: bool,
     enabled: bool,
 ) -> Element<'static, Message> {
-    reshiki::accessibility::button(id, label, text(label).size(12))
+    let label = label.into();
+    reshiki::accessibility::button(id, label.clone(), text(label).size(12))
         .on_press_maybe(enabled.then_some(Message::Recovery(action)))
         .padding([6, 10])
         .style(control(primary))
@@ -237,16 +238,16 @@ impl App {
                             plural(count, "draft", "drafts")
                         ),
                         "The browser has no Trash. These recovery copies cannot be restored after deletion. Saved drawing files are not changed.",
-                        "Delete permanently",
+                        "Delete permanently".into(),
                     )
                 } else {
                     (
                         format!(
-                            "Move {count} recovery {} to the Trash?",
+                            "Move {count} recovery {} to the {BIN_NAME}?",
                             plural(count, "draft", "drafts")
                         ),
                         "These are the recovery copies offered at startup. Saved drawing files and drafts owned by running instances are not changed.",
-                        "Move to Trash",
+                        format!("Move to {BIN_NAME}"),
                     )
                 };
                 column![

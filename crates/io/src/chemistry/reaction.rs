@@ -48,7 +48,7 @@ fn invalid(message: impl Into<String>) -> Error {
     Error::Invalid(message.into())
 }
 
-pub const EXPORT_WARNING: &str = "Reaction files preserve participants, atom maps and stereo. Save .reshiki to retain captions, arrow appearance and drawing layout.";
+pub const EXPORT_WARNING: &str = "Reaction files preserve participants, atom maps and stereo. Save .rsk to retain captions, arrow appearance and drawing layout.";
 
 struct OutputRow {
     label: &'static str,

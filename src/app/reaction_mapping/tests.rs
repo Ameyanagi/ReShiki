@@ -278,6 +278,22 @@ fn ready_action_sets_status_error_and_proposal_without_history() {
 }
 
 #[test]
+fn dismissing_a_ready_proposal_clears_its_preview_and_replaces_the_ready_receipt() {
+    let mut app = action_app();
+    let before = app.tab.doc.clone();
+    let (epoch, serial, proposal) = pending_proposal(&mut app);
+    let _ = app.update(Message::Mapping(Action::Ready(epoch, serial, Ok(proposal))));
+    assert_eq!(app.status, "Atom-map proposal ready to review");
+    assert!(app.tab.mapping.proposal.is_some());
+    assert!(app.tab.mapping.preview.is_some());
+    let _ = app.update(Message::Mapping(Action::Dismiss));
+    assert_outcome(&app, "Atom-map proposal discarded", false, 0);
+    assert!(app.tab.mapping.proposal.is_none());
+    assert!(app.tab.mapping.preview.is_none());
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
 fn apply_proposal_action_updates_status_error_and_one_history_frame() {
     let mut app = action_app();
     let (_, _, proposal) = pending_proposal(&mut app);
@@ -288,13 +304,15 @@ fn apply_proposal_action_updates_status_error_and_one_history_frame() {
 }
 
 #[test]
-fn dismiss_action_preserves_status_error_and_history() {
+fn dismiss_action_updates_status_and_error_without_changing_document_or_history() {
     let mut app = action_app();
+    let before = app.tab.doc.clone();
     let (_, _, proposal) = pending_proposal(&mut app);
     app.tab.mapping.proposal = Some(proposal);
     let _ = app.mapping_action(Action::Dismiss);
-    assert_outcome(&app, BEFORE_ACTION, true, 0);
+    assert_outcome(&app, "Atom-map proposal discarded", false, 0);
     assert!(app.tab.mapping.proposal.is_none());
+    assert_eq!(app.tab.doc, before);
 }
 
 #[test]

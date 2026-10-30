@@ -81,6 +81,17 @@ fn exporting_a_snapshot_blocks_duplicate_exports_and_always_resets() {
 }
 
 #[test]
+fn canceling_a_structure_export_finishes_with_a_non_error_receipt() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let _ = app.update(Message::Export("mol"));
+    app.error = true;
+    let _ = app.update(Message::Exported(Ok(None)));
+    assert_eq!(app.status, "Export canceled");
+    assert!(!app.error);
+}
+
+#[test]
 fn export_format_labels_cover_figure_and_structure_formats() {
     for (format, expected) in [
         ("png", "PNG"),
