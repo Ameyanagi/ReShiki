@@ -201,6 +201,53 @@ fn ethyl_acetate_is_a_fully_supported_small_organic_acceptance_example() {
             report.rows.len(),
             if nucleus == Nucleus::H1 { 3 } else { 4 }
         );
+        assert!(report.rows.iter().all(|row| row.limitation.is_none()));
+    }
+}
+
+#[test]
+fn acetyl_arylamide_methyls_retain_their_shift_with_an_explicit_broad_match_note() {
+    for (smiles, supported) in [("CC(=O)Nc1ccc(O)cc1", 5), ("CC(=O)Nc1ccccc1", 6)] {
+        let prepared = crate::chemistry::smiles::prepare(smiles).unwrap();
+        let count = prepared.state.graph.atoms.len();
+        let molecule = document::Molecule {
+            rdkit_version: crate::chemistry::RDKIT_VERSION,
+            ids: (1..=count as u64).collect(),
+            positions: vec![crate::chemistry::stereo::Point3::default(); count],
+            state: prepared.state,
+        };
+        let drawing = document::for_import(&molecule, false, &prepared.dummy_labels).unwrap();
+        let labels = drawing.labels().unwrap();
+        let doc = drawing.finish(labels).unwrap();
+        let report = predict(&prepare(&doc, &[]).unwrap(), Nucleus::H1).unwrap();
+        let (index, methyl) = report
+            .rows
+            .iter()
+            .enumerate()
+            .find(|(_, row)| row.hydrogen_count == 3)
+            .unwrap();
+        let statistics = methyl.statistics.as_ref().unwrap();
+        assert_eq!(methyl.atom_id, 1, "{smiles}");
+        assert_eq!(methyl.radius, Some(2), "{smiles}");
+        assert!((statistics.median - 1.500625).abs() < 1e-6, "{smiles}");
+        assert_eq!(statistics.support, 156, "{smiles}");
+        assert!((statistics.standard_deviation - 0.5074984).abs() < 1e-6);
+        assert_eq!(
+            methyl.limitation.as_deref(),
+            Some("Broad match · Shell 2 · SD 0.507 ppm"),
+            "{smiles}"
+        );
+        assert_eq!(report.rows.len(), 7, "{smiles}");
+        assert_eq!(report.supported_count(), supported, "{smiles}");
+        assert_eq!(report.shifts().count(), supported, "{smiles}");
+        assert!(
+            report
+                .shifts()
+                .any(|shift| shift == (index, statistics.median))
+        );
+        assert!(to_tsv(&report).contains(
+            "1\t3\t1.501\t2\t156\t0.507\t0.580\t2.730\tBroad match · Shell 2 · SD 0.507 ppm"
+        ));
     }
 }
 

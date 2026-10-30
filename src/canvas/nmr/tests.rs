@@ -22,6 +22,90 @@ fn bounds() -> Rectangle {
 }
 
 #[test]
+fn cleaned_carvone_assignments_avoid_every_drawn_bond_line() {
+    use reshiki::chemistry::{self, cleanup, depict, document as molecular, smiles};
+
+    let input = smiles::read("CC1=CC[C@H](CC1=O)C(C)=C").unwrap();
+    let ranks = input
+        .reaction_properties
+        .iter()
+        .map(|properties| depict::ranks::AtomProperties::from_pairs(properties))
+        .collect::<Vec<_>>();
+    let positions = depict::compute_with_rank_properties(
+        &input.prepared.state,
+        &ranks,
+        None,
+        Default::default(),
+    )
+    .unwrap()
+    .positions;
+    let molecule = molecular::Molecule {
+        rdkit_version: chemistry::RDKIT_VERSION,
+        ids: (1..=input.prepared.state.graph.atoms.len() as u64).collect(),
+        positions,
+        state: input.prepared.state,
+    };
+    let drawing = molecular::for_import(&molecule, false, &input.prepared.dummy_labels).unwrap();
+    let labels = drawing.labels().unwrap();
+    let doc = drawing.finish(labels).unwrap();
+    let prepared = cleanup::prepare(&doc, Default::default(), &[]).unwrap();
+    let layouts = prepared
+        .requests()
+        .map(|request| {
+            depict::compute(
+                &request.molecule.state,
+                &vec![None; request.molecule.ids.len()],
+                Some(request.fixed),
+                depict::Options {
+                    bond_length: request.bond_length,
+                    canonical_orientation: request.canonical_orientation,
+                    use_ring_templates: request.use_ring_templates,
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .positions
+        })
+        .collect();
+    let doc = prepared.finish(layouts).unwrap().document;
+    let report =
+        reshiki::nmr::predict(&reshiki::nmr::prepare(&doc, &[]).unwrap(), Nucleus::H1).unwrap();
+    assert_eq!(report.supported_count(), 7);
+    let (lo, hi) = reshiki::scene::bounds(&reshiki::scene::primitives(&doc));
+    let segments = ink_segments(&doc);
+    let camera = Camera {
+        center: World::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.),
+        zoom: 2.,
+    };
+    for mode in [LabelMode::Atom, LabelMode::Shift, LabelMode::Both] {
+        let labels = placements(
+            &doc,
+            Context {
+                report: &report,
+                supported: None,
+                mode,
+            },
+            camera,
+            bounds(),
+        );
+        assert_eq!(labels.len(), 7);
+        for label in labels {
+            for &(a, b, width) in &segments {
+                assert!(
+                    !segment_crosses(
+                        padded(label.bounds, width * camera.zoom / 2.),
+                        camera.screen(a, bounds()),
+                        camera.screen(b, bounds()),
+                    ),
+                    "{mode:?} label {} crosses drawn ink {a:?}-{b:?}",
+                    label.text,
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn assignment_numbers_use_original_atoms_and_avoid_fixture_symbols_and_each_other() {
     let (doc, report) = fixture(Nucleus::C13);
     let original = doc.clone();

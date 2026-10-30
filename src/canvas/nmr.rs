@@ -111,6 +111,51 @@ pub(super) fn memoized_placements(
     placements_with_width(doc, context, camera, bounds, |text| widths.width(text))
 }
 
+/// Bond centre lines plus every drawn stroke as world-space segments with
+/// their widths, so labels also avoid inset ring-double rails and styled
+/// bonds. The centre lines keep labels out of filled bold and wedge bonds.
+fn ink_segments(doc: &Document) -> Vec<(reshiki::document::Point, reshiki::document::Point, f32)> {
+    use reshiki::scene::Primitive;
+    let mut ink = reshiki::scene::primitives(doc);
+    let mut segments: Vec<_> = doc
+        .bonds
+        .iter()
+        .filter(|b| doc.bond_visible(b.a, b.b))
+        .filter_map(|b| {
+            Some((
+                doc.atom(b.a)?.position,
+                doc.atom(b.b)?.position,
+                doc.drawing_style.line_width(),
+            ))
+        })
+        .collect();
+    while let Some(primitive) = ink.pop() {
+        let (paths, width) = match primitive {
+            Primitive::Line(a, b, width) => (vec![vec![a, b]], width),
+            Primitive::Path {
+                commands, style, ..
+            } => (reshiki::graphics::flattened(&commands), style.width()),
+            Primitive::Polygon(mut points) => {
+                points.extend(points.first().copied());
+                (vec![points], 0.)
+            }
+            Primitive::Opacity { alpha, primitive } if alpha > 0. => {
+                ink.push(*primitive);
+                continue;
+            }
+            _ => continue,
+        };
+        for path in paths {
+            segments.extend(
+                path.iter()
+                    .zip(path.iter().skip(1))
+                    .map(|(&a, &b)| (a, b, width)),
+            );
+        }
+    }
+    segments
+}
+
 fn placements_with_width(
     doc: &Document,
     context: Context<'_>,
@@ -143,15 +188,14 @@ fn placements_with_width(
             }
         })
         .collect();
-    let bonds: Vec<_> = doc
-        .bonds
-        .iter()
-        .filter(|b| doc.bond_visible(b.a, b.b))
-        .filter_map(|b| {
-            Some((
-                camera.screen(doc.atom(b.a)?.position, bounds),
-                camera.screen(doc.atom(b.b)?.position, bounds),
-            ))
+    let bonds: Vec<_> = ink_segments(doc)
+        .into_iter()
+        .map(|(a, b, width)| {
+            (
+                camera.screen(a, bounds),
+                camera.screen(b, bounds),
+                width * camera.zoom / 2.,
+            )
         })
         .collect();
     let mut result = Vec::new();
@@ -213,12 +257,8 @@ fn placements_with_width(
                     .count();
                 let crossings = bonds
                     .iter()
-                    .filter(|&&(a, b)| {
-                        segment_crosses(
-                            padded(rect, doc.drawing_style.line_width() * camera.zoom / 2. + 1.),
-                            a,
-                            b,
-                        )
+                    .filter(|&&(a, b, half_width)| {
+                        segment_crosses(padded(rect, half_width + 1.), a, b)
                     })
                     .count();
                 let score = collisions as f32 * 10_000.
