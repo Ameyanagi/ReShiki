@@ -1,6 +1,6 @@
 # Journal drawing presets
 
-Choose a journal directly from the preset selector beside the color theme selector and sun/moon canvas toggle. Selecting a journal applies its dimensions and scales the drawing in one Undo step. Choose **Drawing style…** at the bottom for a preview and detailed settings. The selector contains **JACS / ACS**, **Nature**, **RSC**, **Angewandte**, **SYNLETT / SYNTHESIS**, and **Custom**. Each journal choice has a **Publisher instructions ↗** link in the panel.
+Choose a journal directly from the preset selector beside the color theme selector and sun/moon canvas toggle. Selecting a journal applies its dimensions and scales the drawing in one Undo step. Choose **Manage styles…** at the bottom for a preview and detailed settings. The selector lists **JACS / ACS**, **Nature**, **RSC**, **Angewandte** and **SYNLETT / SYNTHESIS**. When the current settings match none of them, the selector shows **Custom**. Each journal choice has a **Publisher instructions ↗** link in the panel.
 
 These five presets use publisher recommendations or publisher downloads. The ChemDraw standard baseline and bundled variants are excluded. Publisher guidance takes precedence where written dimensions differ from older downloads.
 

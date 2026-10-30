@@ -16,6 +16,9 @@ show Automatic/Above beside those buttons instead of paragraph Justify. The atom
 label dialog retains name, chemical/text mode and Apply/Cancel without a duplicate
 alignment picker. Mixed values do not highlight a misleading alignment.
 
+Since 0.13.1 the editor also has an Alignment list under Label type; see
+[the atom label editor QA record](changes/qa-atom-label-editor.md).
+
 The updated app suite passed 152 tests (2 ignored). Coverage includes multiple
 selected groups, untouched unselected groups, unchanged atoms/bonds, mixed
 caption/group edits, paragraph defaults, inline text drafts and Undo/Redo.

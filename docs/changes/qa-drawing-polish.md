@@ -1,6 +1,6 @@
 # Rotation overlays, atom palette and Structure input
 
-Under review: @Ameyanagi in [PR #567](https://github.com/Ameyanagi/ReShiki/pull/567).
+Shipped in 0.13.1 in [PR #567](https://github.com/Ameyanagi/ReShiki/pull/567), by @Ameyanagi.
 
 This review covers [#552](https://github.com/Ameyanagi/ReShiki/issues/552),
 [#553](https://github.com/Ameyanagi/ReShiki/issues/553),

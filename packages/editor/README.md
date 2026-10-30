@@ -34,7 +34,9 @@ the license texts and third-party notices to `dist/licenses`.
 
 The editor is the desktop app's window, drawn into a page element with
 WebGPU, or WebGL2 where the browser has no WebGPU. It fills the element, so
-give the element a size. The bare imports below work with a bundler or the
+give the element a size of at least 1040 × 680 CSS pixels, the desktop window
+minimum. At narrower widths, the tool palette and 300 px inspector leave
+little or no room to draw. The bare imports below work with a bundler or the
 [import map in the plain HTML recipe](#plain-html-page).
 
 ```js
@@ -101,7 +103,7 @@ The custom element wraps `mount`:
 <script type="module">
   import "@ameyanagi/reshiki/element";
 </script>
-<reshiki-editor src="caffeine.mol" format="mol" style="height: 600px"></reshiki-editor>
+<reshiki-editor src="caffeine.mol" format="mol" style="height: 680px"></reshiki-editor>
 ```
 
 It fires `ready` and `change`, and `error` when the editor cannot start, for
@@ -138,7 +140,7 @@ Save the following as `index.html` in that folder:
       }
     }
   </script>
-  <reshiki-editor src="caffeine.mol" format="mol" style="height: 600px"></reshiki-editor>
+  <reshiki-editor src="caffeine.mol" format="mol" style="height: 680px"></reshiki-editor>
   <script type="module">
     import "@ameyanagi/reshiki/element";
     const element = document.querySelector("reshiki-editor");
@@ -226,11 +228,15 @@ data removes it all.
 
 As in the desktop app, each drawing with unsaved changes has a recovery draft,
 written within about a second of each change. If the page is reloaded, closed
-or crashes, the next page of the site offers the drafts in the status bar
-(**Recovery draft · Restore · Dismiss**). Drafts of the site's other open tabs
-are not offered (this needs Web Locks, which current browsers have). The page
-cannot write while it unloads, so a change made in the last second before a
-reload can be lost.
+or crashes, the next page of the site offers the drafts in the status bar: the
+number of drafts, the newest drawing's title and its age, with **Restore…**,
+**Discard…** and **Dismiss**. **Restore…** lists the drafts by title, date and
+atom count and restores the checked ones or all of them as tabs. **Discard…**
+asks before deleting the offered drafts permanently, since the browser has no
+Trash. **Dismiss** hides the offer until the page is loaded again and keeps
+the drafts. Drafts of the site's other open tabs are not offered (this needs
+Web Locks, which current browsers have). The page cannot write while it unloads,
+so a change made in the last second before a reload can be lost.
 
 ### Content Security Policy
 

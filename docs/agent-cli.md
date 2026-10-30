@@ -306,8 +306,8 @@ several lines:
     "analyzed_atoms": ["1", "2", "3", "4", "5", "6", "7"]
   },
   "versions": {
-    "app": "0.12.0",
-    "document": 26,
+    "app": "0.13.1",
+    "document": 33,
     "engine_protocol": 1,
     "operation_api": 1
   },
@@ -332,7 +332,7 @@ line. `cli` lists the formats the command line reads and writes. `grants` and
 neither.
 
 `reshiki --version` (or `reshiki --cli --version`) prints only the
-application version, such as `reshiki 0.12.0`, and exits without opening a
+application version, such as `reshiki 0.13.1`, and exits without opening a
 window.
 
 <details>
@@ -403,8 +403,8 @@ window.
   "operation_api": 1,
   "stability": "experimental",
   "versions": {
-    "app": "0.12.0",
-    "document": 26,
+    "app": "0.13.1",
+    "document": 33,
     "engine_protocol": 1,
     "operation_api": 1
   }
