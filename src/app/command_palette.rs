@@ -227,9 +227,20 @@ impl App {
         self.need_unavailable(command.need, &self.command_target())
     }
 
+    /// Refuse before the modal gates commit or cancel a live editing draft.
+    pub(super) fn command_action_unavailable(&self, action: &Action) -> bool {
+        let command = match action {
+            Action::Run(index) => self.commands.items.get(*index),
+            Action::Submit => self.commands.current(),
+            _ => None,
+        };
+        self.commands.open && command.is_some_and(|c| self.command_unavailable(c).is_some())
+    }
+
     fn need_unavailable(&self, need: Need, target: &Target) -> Option<&'static str> {
         match need {
             Need::Nothing => None,
+            Need::Blocked(reason) => Some(reason),
             Need::Selection => self
                 .tab
                 .selected
@@ -243,6 +254,10 @@ impl App {
                 (ids.iter()
                     .any(|id| reshiki::models3d::hides(&self.tab.doc, *id)))
                 .then_some(super::numeric_transforms::RESIZE_SHOWN_IN_3D)
+            }),
+            Need::Flippable => self.need_unavailable(Need::Selection, target).or_else(|| {
+                reshiki::models3d::refusal(&self.tab.doc, &self.tab.selected, "flip")
+                    .map(|_| "Switch to 2D to flip the drawing")
             }),
             Need::Molecule => self
                 .tab
@@ -354,14 +369,20 @@ impl App {
         let query = self.commands.query().to_owned();
         let query = query.as_str();
         let extra = catalog::parameterised(self, query);
-        // A blocked scale keeps its explanation first, followed by the existing
+        // A blocked scale or flip keeps its explanation first, followed by the
         // explicit display switch. Only one whole model can use that switch.
-        let resize_recovery = extra
+        let display_recovery = extra
             .as_ref()
+            .or_else(|| {
+                self.commands.catalog().iter().find(|command| {
+                    command.need == Need::Flippable
+                        && !query.is_empty()
+                        && search::in_name_or_keys(*command, query)
+                })
+            })
             .filter(|command| {
-                command.need == Need::Resizable
-                    && self.need_unavailable(command.need, &target)
-                        == Some(super::numeric_transforms::RESIZE_SHOWN_IN_3D)
+                matches!(command.need, Need::Resizable | Need::Flippable)
+                    && self.need_unavailable(command.need, &target).is_some()
                     && self.selected_model().is_some()
             })
             .map(|command| command.name.clone());
@@ -408,8 +429,27 @@ impl App {
                     if alias {
                         return Some((10_000, i, 2));
                     }
-                    let score = search::score(command, query)?;
-                    let tier = search::in_name_or_keys(command, query) as u8;
+                    let keyword = query.chars().count() >= 2
+                        && !query.eq_ignore_ascii_case("template")
+                        && match &command.run {
+                            Run::Template(index, _) => {
+                                self.templates.library.get(*index).is_some_and(|template| {
+                                    template
+                                        .keywords
+                                        .iter()
+                                        .any(|keyword| keyword.eq_ignore_ascii_case(query))
+                                })
+                            }
+                            _ => false,
+                        };
+                    let score = if keyword {
+                        let mut exact = command.clone();
+                        exact.name = query.into();
+                        search::score(&exact, query)
+                    } else {
+                        search::score(command, query)
+                    }?;
+                    let tier = (keyword || search::in_name_or_keys(command, query)) as u8;
                     Some((score + boost(command.category), i, tier))
                 })
                 .collect()
@@ -467,7 +507,7 @@ impl App {
                 ),
             ));
         }
-        // Query rows rank among the others by whether they can run too.
+        // Explicit value rows stay first, including their refusal reason.
         let rows: Vec<_> = (rows.into_iter())
             .map(|(first, c)| (first, self.need_unavailable(c.need, &target).is_some(), c))
             .collect();
@@ -479,14 +519,14 @@ impl App {
             let index = state.items.len();
             state.items.push(command);
             let at = match (first, blocked) {
-                (true, false) => 0,
+                (true, _) => 0,
                 (false, true) => state.hits.len(),
                 _ => split,
             };
             split += usize::from(!blocked);
             state.hits.insert(at, index);
         }
-        if let Some(blocked) = resize_recovery
+        if let Some(blocked) = display_recovery
             && let Some(recovery) = state
                 .catalog()
                 .iter()
@@ -499,7 +539,9 @@ impl App {
                     .get(*index)
                     .is_some_and(|command| command.name == blocked)
             }) {
-                state.hits.insert(at + 1, recovery);
+                let index = state.hits.remove(at);
+                state.hits.insert(0, index);
+                state.hits.insert(1, recovery);
             }
         }
         let filter = state.filter;
@@ -717,10 +759,14 @@ impl App {
         let current = state.current();
         let name = match current {
             Some(command) => format!(
-                "Run a command; {} results; selected {}, {}",
+                "Run a command; {} result{}; selected {}, {}{}",
                 state.results.len(),
+                if state.results.len() == 1 { "" } else { "s" },
                 command.name,
-                command.category.label()
+                command.category.label(),
+                self.need_unavailable(command.need, &target)
+                    .map(|reason| format!(", unavailable: {reason}"))
+                    .unwrap_or_default()
             ),
             None => "Run a command; no results".into(),
         };
@@ -758,7 +804,7 @@ impl App {
                 command,
                 query,
                 position == state.selected,
-                self.need_unavailable(command.need, &target).is_none(),
+                self.need_unavailable(command.need, &target),
                 Message::Commands(Action::Run(index)),
             ));
         }
@@ -851,9 +897,10 @@ fn result_row(
     command: &Command,
     query: &str,
     selected: bool,
-    enabled: bool,
+    unavailable: Option<&str>,
     on_press: Message,
 ) -> Element<'static, Message> {
+    let enabled = unavailable.is_none();
     let name = rich_text(name_spans(&command.name, query))
         .size(13)
         .wrapping(Wrapping::None);
@@ -889,7 +936,16 @@ fn result_row(
     .padding([0, 8])
     .height(28)
     .align_y(Alignment::Center);
-    row_button(id, command.name.clone(), body, selected, on_press)
+    let mut label = command.name.clone();
+    if let Some(reason) = unavailable {
+        label.push_str(&format!(
+            ", {}, unavailable: {reason}",
+            command.category.label()
+        ));
+    }
+    row_button(id, label, body, selected, on_press)
+        .enabled(enabled)
+        .into()
 }
 
 /// `name` split into runs, the characters the query matches in bold.

@@ -63,9 +63,11 @@ impl Category {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Need {
     Nothing,
+    Blocked(&'static str),
     Selection,
     /// A selection the Scale field can resize: none of it shown only in 3D.
     Resizable,
+    Flippable,
     Molecule,
     Bond,
     Atom,
@@ -691,13 +693,15 @@ fn edits() -> Vec<Command> {
             "Mirror the selection left to right",
             "mirror reflect",
             Message::Transform(Transform::FlipHorizontal),
-        ),
+        )
+        .need(Need::Flippable),
         selection(
             "Flip vertically",
             "Mirror the selection top to bottom",
             "mirror reflect",
             Message::Transform(Transform::FlipVertical),
-        ),
+        )
+        .need(Need::Flippable),
         selection(
             "Clean up structure",
             "Preview a cleaned-up layout",
@@ -1127,7 +1131,7 @@ fn files() -> Vec<Command> {
             File,
             "Copy as ChemDraw CDXML",
             "chemdraw clipboard",
-            Message::Shortcut(shortcuts::Action::CopyText("cdxml")),
+            Message::CopyAs(reshiki::clipboard::CopyFormat::Cdxml),
         )
         .keys(keys(command, "D")),
         send(
@@ -1135,7 +1139,7 @@ fn files() -> Vec<Command> {
             File,
             "Copy as SMILES",
             "chemical text clipboard",
-            Message::Shortcut(shortcuts::Action::CopyText("smiles")),
+            Message::CopyChemicalText,
         )
         .keys(keys(command | alt, "C")),
         send(
@@ -1143,7 +1147,7 @@ fn files() -> Vec<Command> {
             File,
             "Copy as MOL text",
             "molfile clipboard",
-            Message::Shortcut(shortcuts::Action::CopyText("mol")),
+            Message::CopyAs(reshiki::clipboard::CopyFormat::Mol),
         )
         .keys(keys(command | alt, "O")),
     ];
@@ -1611,7 +1615,7 @@ fn command_with(app: &App, word: Word, number: Option<f32>, value: &str) -> Opti
             Run::SetCharge(n as i32),
         )
         .need(Need::OneAtom),
-        (Word::FontSize, Some(n)) if n > 0. => Command::new(
+        (Word::FontSize, Some(n)) => Command::new(
             format!("Font size {n} pt"),
             Category::Edit,
             "Set the selected text's size",
@@ -1620,7 +1624,12 @@ fn command_with(app: &App, word: Word, number: Option<f32>, value: &str) -> Opti
                 Message::FontSize(value.into()),
                 Message::ApplyFontSize,
             ]),
-        ),
+        )
+        .need(if (4. ..=144.).contains(&n) {
+            Need::Nothing
+        } else {
+            Need::Blocked("Enter a font size from 4 to 144 pt")
+        }),
         (Word::BondLength, Some(n)) if n > 0. => send(
             format!("New bond length {n} pt"),
             Category::View,
@@ -1628,25 +1637,38 @@ fn command_with(app: &App, word: Word, number: Option<f32>, value: &str) -> Opti
             "",
             Message::DrawingLength(value.into()),
         ),
-        (Word::Ring, Some(n)) if (3. ..=8.).contains(&n) && n.fract() == 0. => Command::new(
+        (Word::Ring, Some(n)) => Command::new(
             format!("Insert {n}-membered ring"),
             Category::Insert,
             "Attach to the selected or pointed atom or bond, or add at the center",
             "",
             Run::Ring(Ring::Size(n as u8, false)),
-        ),
-        (Word::Chain, Some(n))
-            if n >= 1. && n.fract() == 0. && n <= reshiki::chains::MAX_ATOMS as f32 =>
-        {
+        )
+        .need(if (3. ..=8.).contains(&n) && n.fract() == 0. {
+            Need::Nothing
+        } else {
+            Need::Blocked("Rings have 3 to 8 atoms")
+        }),
+        (Word::Chain, Some(n)) => {
+            static LIMIT: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+                format!("Chains have 1 to {} atoms", reshiki::chains::MAX_ATOMS)
+            });
             Command::new(
                 format!("Chain tool with {n} atoms"),
                 Category::Tool,
                 "Draw chains of this length",
                 "",
                 Run::Send(vec![
-                    Message::ChainAtoms((n as usize).to_string()),
+                    Message::ChainAtoms(n.to_string()),
                     Message::Tool(Tool::Chain(ChainMode::Straight)),
                 ]),
+            )
+            .need(
+                if n >= 1. && n.fract() == 0. && n <= reshiki::chains::MAX_ATOMS as f32 {
+                    Need::Nothing
+                } else {
+                    Need::Blocked(&LIMIT)
+                },
             )
         }
         (Word::Element, None) => {
