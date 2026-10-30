@@ -457,4 +457,177 @@ impl Input<'_> {
         }
         Ok(())
     }
+
+    fn atoms_on_side(
+        &self,
+        value: &Fragment,
+        center: usize,
+        start: usize,
+        exclude: usize,
+        session: &mut Session,
+    ) -> Result<Vec<usize>, Error> {
+        let mut result = Vec::new();
+        let mut seen = BTreeSet::from([center, exclude]);
+        let mut queue = VecDeque::from([start]);
+        while let Some(id) = queue.pop_front() {
+            session.spend(1)?;
+            if !seen.insert(id) {
+                continue;
+            }
+            if value.atoms.contains_key(&id) {
+                result.push(id);
+            }
+            for &(neighbor, _) in at(&self.neighbors, id)? {
+                session.spend(1)?;
+                if !seen.contains(&neighbor) {
+                    queue.push_back(neighbor);
+                }
+            }
+        }
+        Ok(result)
+    }
+    fn open_angle_by_increment(
+        &self,
+        value: &mut Fragment,
+        [previous, center, next]: [usize; 3],
+        session: &mut Session,
+    ) -> Result<bool, Error> {
+        let pivot = atom(value, center)?.location;
+        let v1 = sub(atom(value, previous)?.location, pivot)?;
+        let v2 = sub(atom(value, next)?.location, pivot)?;
+        let side1 = self.atoms_on_side(value, center, previous, next, session)?;
+        let side2 = self.atoms_on_side(value, center, next, previous, session)?;
+        session.spend(side1.len() + side2.len())?;
+        let first = side1.iter().copied().collect::<BTreeSet<_>>();
+        // An alternate path around the center would distort a cycle.
+        if side2.iter().any(|id| first.contains(id)) {
+            return Ok(false);
+        }
+        let contains_fixed = |side: &[usize]| -> Result<bool, Error> {
+            for &id in side {
+                if atom(value, id)?.fixed {
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        };
+        session.spend(side1.len() + side2.len())?;
+        let fixed1 = contains_fixed(&side1)?;
+        let fixed2 = contains_fixed(&side2)?;
+        if fixed1 && fixed2 {
+            return Ok(false);
+        }
+        let rotate_first = fixed2 || (!fixed1 && side1.len() < side2.len());
+        let angle_between = |a: Point, b: Point| -> Result<f64, Error> {
+            let denominator = number(squared(a)?.sqrt() * squared(b)?.sqrt())?;
+            if denominator < 1.0e-8 {
+                return Ok(-1.0);
+            }
+            let cosine = number((a.x * b.x + a.y * b.y) / denominator)?;
+            Ok(cosine.clamp(-1.0, 1.0).acos())
+        };
+        let original = angle_between(v1, v2)?;
+        if original < 0.0 {
+            return Ok(false);
+        }
+        for increment in [ANGLE_EXPANSION_INCREMENT, -ANGLE_EXPANSION_INCREMENT] {
+            session.spend(1)?;
+            let transform = Transform::rotate(pivot, increment)?;
+            let moving = atom(value, if rotate_first { previous } else { next })?.location;
+            let moved = sub(transform.apply(moving)?, pivot)?;
+            if angle_between(moved, if rotate_first { v2 } else { v1 })? > original + 1.0e-8 {
+                for &id in if rotate_first { &side1 } else { &side2 } {
+                    session.spend(1)?;
+                    let a = atom_mut(value, id)?;
+                    a.location = transform.apply(a.location)?;
+                }
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+    pub(super) fn path_angle_expansion(
+        &self,
+        value: &mut Fragment,
+        session: &mut Session,
+    ) -> Result<(), Error> {
+        let canonical = |(a, b): (usize, usize)| (a.min(b), a.max(b));
+        // Shortened bonds must not become actionable atom clashes. Resolve
+        // atom clashes first so remaining crossings cannot reject an improvement.
+        let find = |value: &mut Fragment, session: &mut Session| -> Result<Vec<_>, Error> {
+            let mut pairs = self.find_in_place(value, false, session)?;
+            session.spend(pairs.len())?;
+            pairs.retain(|&pair| !self.bonds.contains_key(&canonical(pair)));
+            if pairs.is_empty() {
+                pairs = self.find_in_place(value, true, session)?;
+                session.spend(pairs.len())?;
+                pairs.retain(|&pair| !self.bonds.contains_key(&canonical(pair)));
+            }
+            Ok(pairs)
+        };
+        let mut skipped = BTreeSet::new();
+        let mut totals = BTreeMap::<_, f64>::new();
+        let mut pairs = find(value, session)?;
+        for _ in 0..MAX_ANGLE_EXPANSION_ITERS {
+            session.spend(pairs.len())?;
+            let Some(&pair) = pairs
+                .iter()
+                .find(|&&pair| !skipped.contains(&canonical(pair)))
+            else {
+                break;
+            };
+            let key = canonical(pair);
+            let path = self.shortest_path(pair.0, pair.1, session)?;
+            session.spend(value.atoms.len())?;
+            let saved = value.atoms.values().map(|a| a.location).collect::<Vec<_>>();
+            let mut accepted = false;
+            // Try one further increment before rejecting a temporary increase.
+            // Only publish a trial with no more collisions than the saved layout.
+            for _ in 0..ANGLE_EXPANSION_TRIAL_STEPS {
+                let mut expanded = false;
+                for angle in path.windows(3) {
+                    session.spend(1)?;
+                    let [previous, center, next] = [*at(angle, 0)?, *at(angle, 1)?, *at(angle, 2)?];
+                    let mut same_ring = false;
+                    for &id in at(&self.atom_rings, center)? {
+                        let ring = at(&self.rings.atoms, id)?;
+                        session.spend(1 + 2 * ring.len())?;
+                        if ring.contains(&previous) && ring.contains(&next) {
+                            same_ring = true;
+                            break;
+                        }
+                    }
+                    if same_ring {
+                        continue;
+                    }
+                    let total = totals.entry((key, center)).or_default();
+                    if *total < MAX_ANGLE_EXPANSION
+                        && self.open_angle_by_increment(value, [previous, center, next], session)?
+                    {
+                        *total += ANGLE_EXPANSION_INCREMENT;
+                        expanded = true;
+                    }
+                }
+                if !expanded {
+                    break;
+                }
+                let trial = find(value, session)?;
+                if trial.len() <= pairs.len() {
+                    pairs = trial;
+                    accepted = true;
+                    break;
+                }
+            }
+            if !accepted {
+                session.spend(value.atoms.len() + totals.len())?;
+                for (a, location) in value.atoms.values_mut().zip(saved) {
+                    a.location = location;
+                }
+                totals.retain(|&(pair, _), _| pair != key);
+                skipped.insert(key);
+                pairs = find(value, session)?;
+            }
+        }
+        Ok(())
+    }
 }
