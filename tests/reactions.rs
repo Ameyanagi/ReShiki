@@ -76,6 +76,67 @@ fn growth_and_invalid_cross_role_edits_are_checked() {
 }
 
 #[tokio::test]
+async fn atom_drag_grows_reaction_participants_and_rejects_cross_participant_bonds() {
+    let source = LocalEngine::default()
+        .execute(Request::import(
+            "rsmi",
+            "O=Cc1ccc(Br)cc1>>O=Cc1ccc(-c2ccccc2)cc1",
+        ))
+        .await
+        .unwrap()
+        .document
+        .unwrap();
+    let aldehyde_carbon = |role| {
+        source
+            .bonds
+            .iter()
+            .filter(|bond| bond.order == 2)
+            .flat_map(|bond| [(bond.a, bond.b), (bond.b, bond.a)])
+            .find(|(carbon, oxygen)| {
+                source.reactions[0].participants(role)[0]
+                    .atoms
+                    .contains(carbon)
+                    && source.atom(*carbon).unwrap().element == "C"
+                    && source.atom(*oxygen).unwrap().element == "O"
+            })
+            .unwrap()
+            .0
+    };
+    let product = aldehyde_carbon(Role::Product);
+    let reactant = aldehyde_carbon(Role::Reactant);
+    let mut doc = source.clone();
+    for (role, carbon) in [(Role::Product, product), (Role::Reactant, reactant)] {
+        let end = doc.atom(carbon).unwrap().position.offset(0., -42.);
+        let (grown, hydrogen) = editing::add_bonded_atom(&doc, carbon, end, None, "H").unwrap();
+        assert_eq!(grown.atom(hydrogen).unwrap().element, "H");
+        assert!(
+            grown.reactions[0].participants(role)[0]
+                .atoms
+                .contains(&hydrogen)
+        );
+        assert_eq!(
+            grown.reactions[0].participants(role)[0].atoms.len(),
+            doc.reactions[0].participants(role)[0].atoms.len() + 1
+        );
+        grown.validate().unwrap();
+        doc = grown;
+    }
+    let error = editing::add_bonded_atom(
+        &doc,
+        product,
+        doc.atom(reactant).unwrap().position,
+        Some(reactant),
+        "H",
+    )
+    .unwrap_err();
+    assert_eq!(
+        error,
+        "This joins separate reaction participants. Clear their reaction roles before joining them."
+    );
+    source.validate().unwrap();
+}
+
+#[tokio::test]
 async fn reaction_bridge_preserves_roles_stereo_mapping_and_cleanup() {
     let engine = LocalEngine::default();
     for smiles in [

@@ -192,7 +192,9 @@ fn atom_drag_to_caption_converts_only_the_target_and_undo_restores_it() {
 
     assert!(!app.error, "{}", app.status);
     assert_eq!(app.status, "Bond from text");
-    assert_eq!(app.tab.doc.atom(source), before.atom(source));
+    let mut expected_source = before.atom(source).unwrap().clone();
+    expected_source.label_h = 1;
+    assert_eq!(app.tab.doc.atom(source), Some(&expected_source));
     assert!(app.tab.doc.annotations.is_empty());
     assert_eq!((app.tab.doc.atoms.len(), app.tab.doc.bonds.len()), (2, 1));
     let pd = app

@@ -18,6 +18,8 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use std::sync::Arc;
 mod chain_layout;
 mod template_retry;
+#[cfg(test)]
+mod tests;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Deferred {

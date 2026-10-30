@@ -51,6 +51,12 @@ fn primary_j_first_and_second_chelate_donors_preserve_links_atom_identity_charge
             "../../../tests/fixtures/coordination/co-en3-before.rsk"
         ))
         .unwrap();
+        // Seed CH2 labels as on a refreshed native load.
+        for atom in &mut doc.atoms {
+            if atom.element == "C" {
+                atom.label_h = 2;
+            }
+        }
         let id = link(&mut doc, 2, 1);
         let mut app = ready(doc);
         let original = app.tab.doc.clone();

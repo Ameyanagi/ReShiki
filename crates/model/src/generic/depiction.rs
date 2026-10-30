@@ -172,6 +172,7 @@ impl Plan {
                     canonical_orientation: true,
                     use_ring_templates: true,
                     work_limit: work.remaining,
+                    ..Default::default()
                 },
                 &mut work.remaining,
             )

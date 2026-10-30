@@ -125,8 +125,12 @@ fn compare(case: &Case) -> anyhow::Result<(bool, usize)> {
     let before = serde_json::to_value(&case.state)?;
     let native_defaults =
         options.bond_length.is_none() && options.canon_orient && !options.use_ring_templates;
+    // The path angle expansion stage postdates the captured RDKit 2026.03.6.
     let solver_options = if native_defaults {
-        depict::Options::default()
+        depict::Options {
+            path_angle_expansion: false,
+            ..Default::default()
+        }
     } else {
         depict::Options {
             bond_length: options
@@ -137,6 +141,7 @@ fn compare(case: &Case) -> anyhow::Result<(bool, usize)> {
                 .unwrap_or(1.5),
             canonical_orientation: options.canon_orient,
             use_ring_templates: options.use_ring_templates,
+            path_angle_expansion: false,
             ..Default::default()
         }
     };

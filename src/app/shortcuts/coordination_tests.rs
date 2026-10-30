@@ -37,6 +37,12 @@ fn join_uses_command_j_on_macos_and_control_j_elsewhere() {
 #[test]
 fn join_coordinates_all_six_en_donors_in_either_selection_order_without_moving_atoms() {
     let mut app = drawing();
+    // Seed CH2 labels as on a refreshed native load.
+    for atom in &mut app.tab.doc.atoms {
+        if atom.element == "C" {
+            atom.label_h = 2;
+        }
+    }
     let original = app.tab.doc.clone();
     let revision = app.tab.revision;
     let mut snapshots = vec![original.clone()];

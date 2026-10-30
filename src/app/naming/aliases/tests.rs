@@ -250,10 +250,9 @@ fn stale_selection_epoch_and_invalid_alias_never_partially_change_the_drawing() 
     assert!(
         app.tab
             .naming
-            .notice
+            .structure_error
             .as_ref()
             .unwrap()
-            .detail
             .contains("selection changed")
     );
     app.tab.selected = app.tab.doc.all_ids();
