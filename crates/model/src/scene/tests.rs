@@ -74,6 +74,61 @@ fn primitives_build_join_geometry_once_plus_once_for_highlights() {
 use super::*;
 
 #[test]
+fn label_trimmed_hash_reaches_oxygen_without_changing_unlabelled_hashes() {
+    for element in ["O", "C"] {
+        let mut doc = Document::default();
+        let length = doc.drawing_style.bond_length_world;
+        let diagonal = length / 2_f32.sqrt();
+        let a = doc.add_atom("C", Point::default());
+        let z = doc.add_atom(element, Point::new(-diagonal, -diagonal));
+        doc.atom_mut(z).unwrap().no_implicit = true;
+        doc.add_bond(a, z, 1, "hash");
+        let style = &doc.drawing_style;
+        let spacing = style.world(style.hash_spacing_pt);
+        let (start, end) = bond_segment(&doc, &doc.bonds[0], None).unwrap();
+        let bars: Vec<_> = primitives(&doc)
+            .into_iter()
+            .filter_map(|part| match part {
+                Primitive::Line(a, b, _) => Some((
+                    Point::new((a.x + b.x) * 0.5, (a.y + b.y) * 0.5),
+                    a.distance(b),
+                )),
+                _ => None,
+            })
+            .collect();
+        if element == "O" {
+            assert!(start.distance(end) < 3. * spacing);
+            assert!(bars.len() >= 3, "A label-trimmed hash must read as a bond");
+            assert!(bars.last().unwrap().0.distance(end) <= spacing * 0.5);
+            for (i, &(center, width)) in bars.iter().enumerate() {
+                let expected_center = start.lerp(end, (i + 1) as f32 / bars.len() as f32);
+                assert!(
+                    center.distance(expected_center) < 0.001,
+                    "Spread the hash bars"
+                );
+                let expected = style.line_width()
+                    + (i + 1) as f32 / bars.len() as f32
+                        * (style.world(style.bold_width_pt) - style.line_width());
+                assert!(
+                    (width - expected).abs() < 0.001,
+                    "Taper over the drawn span"
+                );
+            }
+        } else {
+            let count = (length / spacing).floor() as usize;
+            assert_eq!(bars.len(), count);
+            for (i, &(center, width)) in bars.iter().enumerate() {
+                let along = (i + 1) as f32 * spacing;
+                assert!((start.distance(center) - along).abs() < 0.001);
+                let expected = style.line_width()
+                    + along / length * (style.world(style.bold_width_pt) - style.line_width());
+                assert!((width - expected).abs() < 0.001);
+            }
+        }
+    }
+}
+
+#[test]
 fn overlapping_atom_label_ink_keeps_reverse_paint_order() {
     let mut doc = Document::default();
     let first = doc.add_atom("N", Point::default());
