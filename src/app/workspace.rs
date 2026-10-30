@@ -304,6 +304,7 @@ impl App {
                 attach_targets: self.tab.arrows.attach_targets,
             },
             doc: self.display_document(),
+            reviewing_pair: self.tab.mapping.review_pair.is_some() && self.tool.selects(),
             selected: if self.tab.cleanup.is_some() || self.tab.inline_text.is_some() {
                 &[]
             } else {

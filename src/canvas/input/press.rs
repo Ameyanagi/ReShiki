@@ -262,6 +262,7 @@ impl MoleculeCanvas<'_> {
         last_transform_click: Option<HandleClick>,
     ) -> Option<Action<Edit>> {
         if self.tool.selects()
+            && !self.reviewing_pair
             && let Some(selection) =
                 state
                     .scene

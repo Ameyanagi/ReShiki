@@ -955,6 +955,7 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
         std::sync::LazyLock::new(GraphicStyle::default);
     MoleculeCanvas {
         nmr: None,
+        reviewing_pair: false,
         optimizer: None,
         keyboard_target: None,
         morph: None,
