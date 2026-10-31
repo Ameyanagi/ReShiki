@@ -752,3 +752,87 @@ fn local_parse_cancels_obsolete_tickets() {
     assert!(app.tab.naming.local_cancel.is_none());
     assert_eq!(app.tab.naming.name, "propane");
 }
+
+#[tokio::test]
+#[ignore = "Opt-in actual-widget naming refusal placement regression"]
+async fn refusal_is_rendered_below_the_action_that_produced_it() -> Result<(), String> {
+    use iced::advanced::{renderer::Headless, widget::operation};
+    #[derive(Default)]
+    struct Texts(Vec<(String, iced::Rectangle)>);
+    impl iced::advanced::widget::Operation for Texts {
+        fn traverse(
+            &mut self,
+            operate: &mut dyn FnMut(&mut dyn iced::advanced::widget::Operation),
+        ) {
+            operate(self);
+        }
+        fn text(
+            &mut self,
+            _: Option<&iced::advanced::widget::Id>,
+            bounds: iced::Rectangle,
+            value: &str,
+        ) {
+            self.0.push((value.into(), bounds));
+        }
+    }
+    const REFUSAL: &str = "Unsupported multiple-bond placement";
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .ok_or("No renderer")?;
+    for generating in [true, false] {
+        let (mut app, _) = App::new();
+        app.tab.naming.name = "ethanol".into();
+        let _ = app.naming_action(if generating {
+            Action::Generate
+        } else {
+            Action::Resolve
+        });
+        assert!(app.tab.naming.notice.is_none());
+        let ticket = app.tab.naming.pending.unwrap().ticket();
+        let _ = app.naming_action(Action::Finished(
+            ticket,
+            Box::new(Err(naming::Error::Rejected(REFUSAL.into()))),
+        ));
+        if generating {
+            assert!(app.tab.naming.notice.is_none());
+            assert_eq!(app.tab.naming.structure_error.as_deref(), Some(REFUSAL));
+        } else {
+            assert_eq!(app.tab.naming.notice.as_ref().unwrap().detail, REFUSAL);
+        }
+        let mut ui = iced_runtime::UserInterface::build(
+            app.naming_panel(),
+            iced::Size::new(340., 1000.),
+            Default::default(),
+            &mut renderer,
+        );
+        let mut texts = Texts::default();
+        ui.operate(&renderer, &mut operation::black_box(&mut texts));
+        let bounds = |value: &str| {
+            texts
+                .0
+                .iter()
+                .find(|(text, _)| text == value)
+                .map(|(_, bounds)| *bounds)
+                .unwrap_or_else(|| panic!("Missing {value}: {:?}", texts.0))
+        };
+        assert_eq!(
+            texts.0.iter().filter(|(text, _)| text == REFUSAL).count(),
+            1
+        );
+        let refusal = bounds(REFUSAL);
+        let parse = bounds("Parse name");
+        let structure = bounds("STRUCTURE → NAME");
+        let generate = bounds("Generate selected name");
+        if generating {
+            assert!(refusal.y >= generate.y + generate.height);
+        } else {
+            assert!(refusal.y >= parse.y + parse.height);
+            assert!(refusal.y + refusal.height <= structure.y);
+        }
+    }
+    Ok(())
+}

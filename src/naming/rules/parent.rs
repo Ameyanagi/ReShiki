@@ -13,9 +13,30 @@ pub(super) fn candidates(c: &mut Context) -> Result<Vec<Candidate>, String> {
         );
     }
     if rings == 1 {
-        return cycle(c);
-    }
-    if c.state.graph.atoms.iter().any(|a| a.aromatic) {
+        let ring = cycle(c)?;
+        let atoms = &at(&ring, 0)?.0;
+        if c.groups.iter().all(|g| atoms.contains(&g.anchor)) {
+            return Ok(ring);
+        }
+        if c.groups.iter().any(|g| atoms.contains(&g.anchor)) {
+            return Err("Names for compounds with suffix groups on both a ring and a side chain aren't supported yet".into());
+        }
+        if c.groups.iter().any(|g| {
+            matches!(
+                g.kind,
+                GroupKind::Acid
+                    | GroupKind::Ester
+                    | GroupKind::Amide
+                    | GroupKind::Nitrile
+                    | GroupKind::Aldehyde
+            ) && c
+                .edges(g.anchor)
+                .is_ok_and(|e| e.iter().any(|e| atoms.contains(&e.0)))
+        }) {
+            return Err("Names for ring compounds with an acid, ester, amide or similar suffix directly on the ring aren't supported yet".into());
+        }
+        c.ring = ring;
+    } else if c.state.graph.atoms.iter().any(|a| a.aromatic) {
         return Err("Aromatic atoms require a supported exact ring parent".into());
     }
     if !c.state.graph.atoms.iter().any(|a| a.atomic_number == 6) {
@@ -126,11 +147,7 @@ fn cycle(c: &mut Context) -> Result<Vec<Candidate>, String> {
     if !(3..=12).contains(&alive.len()) {
         return Err("This profile supports simple ring parents of 3–12 atoms".into());
     }
-    if c.groups.iter().any(|g| !alive.contains(&g.anchor)) {
-        return Err(
-            "Acyclic suffix groups attached to ring parents are outside this profile".into(),
-        );
-    }
+    let suffix_on_ring = c.groups.iter().all(|g| alive.contains(&g.anchor));
     let first = *alive.first().ok_or("Missing ring parent")?;
     let mut path = vec![first];
     let mut previous = usize::MAX;
@@ -188,7 +205,7 @@ fn cycle(c: &mut Context) -> Result<Vec<Candidate>, String> {
                 ParentKind::Cycle
             } else if all_carbon && numbered.len() == 6 {
                 ParentKind::Retained(
-                    match c.senior() {
+                    match c.senior().filter(|_| suffix_on_ring) {
                         Some(GroupKind::Alcohol) => "phenol",
                         Some(GroupKind::Amine) => "aniline",
                         None => "benzene",
@@ -207,6 +224,7 @@ fn cycle(c: &mut Context) -> Result<Vec<Candidate>, String> {
                 for &(b, _, _) in c.edges(a)? {
                     if c.number(b)? == 6
                         && !alive.contains(&b)
+                        && suffix_on_ring
                         && branch_size(c, b, &alive)? > alive.len()
                     {
                         return Err(

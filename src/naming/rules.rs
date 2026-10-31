@@ -65,6 +65,8 @@ struct Context {
     adjacent: Vec<Vec<(usize, u8, usize)>>,
     hydrogens: Vec<u8>,
     groups: Vec<Group>,
+    /// Numberings of the single ring when it is a chain substituent.
+    ring: Vec<parent::Candidate>,
     stereo_labels: Vec<(chemistry::stereo::cip::configuration::Target, char)>,
     work: usize,
 }
@@ -120,6 +122,7 @@ impl Context {
             adjacent,
             hydrogens,
             groups: vec![],
+            ring: vec![],
             stereo_labels,
             work: WORK_LIMIT,
         };
@@ -150,6 +153,11 @@ impl Context {
         self.groups.iter().map(|g| g.kind).max()
     }
     fn carbon_component(&self, start: usize) -> Result<BTreeSet<usize>, String> {
+        let ring = self
+            .ring
+            .first()
+            .map(|r| r.0.as_slice())
+            .unwrap_or_default();
         let mut seen = BTreeSet::new();
         let mut todo = vec![start];
         while let Some(atom) = todo.pop() {
@@ -160,7 +168,8 @@ impl Context {
                 return Err("Carbon parent has a noncarbon atom".into());
             }
             todo.extend(self.edges(atom)?.iter().filter_map(|&(b, _, _)| {
-                (self.number(b).ok() == Some(6) && !seen.contains(&b)).then_some(b)
+                (self.number(b).ok() == Some(6) && !ring.contains(&b) && !seen.contains(&b))
+                    .then_some(b)
             }));
         }
         Ok(seen)

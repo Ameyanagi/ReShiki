@@ -76,6 +76,31 @@ pub(super) fn build(c: &mut Context, parent: Vec<usize>, kind: ParentKind) -> Re
         {
             return Err("Unsaturated nonaromatic rings are outside this profile".into());
         }
+    }
+    ast.prefixes.extend(branches(c, &ast.parent, &mut covered)?);
+    if covered.len() != c.state.graph.atoms.len() {
+        return Err(
+            "The naming AST did not account for every atom; no partial name was generated".into(),
+        );
+    }
+    // Functional-group pattern checks and branch traversal account for all
+    // nonparent bonds; bonds between two consumed but unrelated roles reject.
+    for bond in &c.state.graph.bonds {
+        if !covered.contains(&bond.a) || !covered.contains(&bond.b) {
+            return Err("Unaccounted naming bond".into());
+        }
+    }
+    ast.stereo = stereo(c, &locant_map)?;
+    Ok(ast)
+}
+
+fn branches(
+    c: &mut Context,
+    parent: &[usize],
+    covered: &mut BTreeSet<usize>,
+) -> Result<Vec<Prefix>, String> {
+    let mut prefixes = vec![];
+    for (i, &a) in parent.iter().enumerate() {
         let edges = c.edges(a)?.to_vec();
         for (b, order, _) in edges {
             if covered.contains(&b) {
@@ -87,7 +112,11 @@ pub(super) fn build(c: &mut Context, parent: Vec<usize>, kind: ParentKind) -> Re
             let locant = i + 1;
             let (text, complex) = match c.number(b)? {
                 6 => {
-                    let (text, atoms) = alkyl(c, b, &covered, 0)?;
+                    let (text, atoms) = if c.ring.first().is_some_and(|r| r.0.contains(&b)) {
+                        ring_prefix(c, b, covered)?
+                    } else {
+                        alkyl(c, b, covered, 0)?
+                    };
                     covered.extend(atoms);
                     let complex = text.contains('-');
                     (text, complex)
@@ -119,7 +148,7 @@ pub(super) fn build(c: &mut Context, parent: Vec<usize>, kind: ParentKind) -> Re
                         .ok_or("Missing ether carbon")?
                         .0;
                     covered.insert(b);
-                    let (text, atoms) = alkyl(c, carbon, &covered, 0)?;
+                    let (text, atoms) = alkyl(c, carbon, covered, 0)?;
                     covered.extend(atoms);
                     alkoxy(text)
                 }
@@ -128,27 +157,66 @@ pub(super) fn build(c: &mut Context, parent: Vec<usize>, kind: ParentKind) -> Re
                         .into(),
                 ),
             };
-            ast.prefixes.push(Prefix {
+            prefixes.push(Prefix {
                 locant,
                 text,
                 complex,
             });
         }
     }
-    if covered.len() != c.state.graph.atoms.len() {
-        return Err(
-            "The naming AST did not account for every atom; no partial name was generated".into(),
-        );
+    Ok(prefixes)
+}
+
+fn ring_prefix(
+    c: &mut Context,
+    start: usize,
+    excluded: &BTreeSet<usize>,
+) -> Result<(String, BTreeSet<usize>), String> {
+    let mut candidates = vec![];
+    for (parent, kind) in c.ring.clone() {
+        c.spend(parent.len())?;
+        let attachment = parent
+            .iter()
+            .position(|&a| a == start)
+            .ok_or("Missing ring attachment")?
+            + 1;
+        let root = match &kind {
+            ParentKind::Cycle if attachment == 1 => format!("cyclo{}yl", stem(parent.len())?),
+            ParentKind::Retained(text) if text == "benzene" && attachment == 1 => "phenyl".into(),
+            ParentKind::Retained(text) if text != "benzene" => {
+                format!("{}-{attachment}-yl", text.strip_suffix('e').unwrap_or(text))
+            }
+            _ => continue,
+        };
+        let mut covered = excluded.clone();
+        covered.extend(parent.iter().copied());
+        let prefixes = branches(c, &parent, &mut covered)?;
+        let prefix = prefixes_text(&prefixes)?;
+        let separator = if !prefix.is_empty() && root.starts_with(|c: char| c.is_ascii_digit()) {
+            "-"
+        } else {
+            ""
+        };
+        let text = format!("{prefix}{separator}{root}");
+        let ast = Ast {
+            parent,
+            kind,
+            senior: None,
+            suffix_locants: vec![attachment],
+            prefixes,
+            doubles: vec![],
+            triples: vec![],
+            stereo: vec![],
+            ester_alcohol: None,
+        };
+        candidates.push((parent::score(c, &ast), text, covered));
     }
-    // Functional-group pattern checks and branch traversal account for all
-    // nonparent bonds; bonds between two consumed but unrelated roles reject.
-    for bond in &c.state.graph.bonds {
-        if !covered.contains(&bond.a) || !covered.contains(&bond.b) {
-            return Err("Unaccounted naming bond".into());
-        }
-    }
-    ast.stereo = stereo(c, &locant_map)?;
-    Ok(ast)
+    candidates.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
+    let (_, text, covered) = candidates
+        .into_iter()
+        .next()
+        .ok_or("Unsupported ring substituent attachment")?;
+    Ok((text, covered.difference(excluded).copied().collect()))
 }
 
 /// P-63.2.2: the retained methoxy/ethoxy/propoxy/butoxy prefixes are fully
@@ -319,10 +387,18 @@ fn prefixes_text(prefixes: &[Prefix]) -> Result<String, String> {
     for (text, (mut places, complex)) in groups {
         places.sort();
         let body = if complex {
+            // P-16.5.4: nested enclosing marks go ( ), [ ], { }.
+            let (open, close) = if text.contains('[') {
+                ('{', '}')
+            } else if text.contains('(') {
+                ('[', ']')
+            } else {
+                ('(', ')')
+            };
             match places.len() {
-                1 => format!("({text})"),
-                2 => format!("bis({text})"),
-                3 => format!("tris({text})"),
+                1 => format!("{open}{text}{close}"),
+                2 => format!("bis{open}{text}{close}"),
+                3 => format!("tris{open}{text}{close}"),
                 _ => return Err("Repeated complex substituents above tris are unsupported".into()),
             }
         } else {

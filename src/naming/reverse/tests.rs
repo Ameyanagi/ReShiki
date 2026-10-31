@@ -71,6 +71,30 @@ async fn native_worker_then_local_opsin_verifies_supported_names() -> Result<(),
     Ok(())
 }
 
+#[test]
+fn in_process_opsin_reconstructs_every_generated_rule_case() -> Result<(), String> {
+    for &(smiles, expected_name) in rules::tests::CASES {
+        let name = rules::generate(smiles)?;
+        assert_eq!(name, expected_name, "{smiles}");
+        let request = super::super::local::parse_request(&name).map_err(|e| e.to_string())?;
+        let reply = worker::respond(&request)?;
+        let parsed =
+            super::super::local::parse_result(&name, &reply).map_err(|e| format!("{name}: {e}"))?;
+        let identity = Identity {
+            smiles: smiles.into(),
+            warnings: vec![],
+        };
+        generated_record(
+            &identity,
+            super::super::canonical_smiles(smiles)?,
+            name,
+            &parsed,
+        )
+        .map_err(|e| format!("{smiles}: {e}"))?;
+    }
+    Ok(())
+}
+
 #[tokio::test]
 async fn independent_decoder_canary_catches_connectivity_stereo_isotope_charge_and_tautomer_loss()
 -> Result<(), String> {
