@@ -19,11 +19,17 @@ pub struct Stroke {
 pub(super) struct PointDrag {
     pub id: u64,
     pub index: usize,
+    pub node: bool,
+    pub free: bool,
     pub pressed: World,
     pub original: World,
 }
 
 impl PointDrag {
+    pub(super) fn dragged(&self, pointer: World, camera: super::Camera) -> bool {
+        self.pressed.distance(pointer) >= camera.world_len(DRAG_SLOP_PX)
+    }
+
     pub(super) fn target(&self, pointer: World) -> World {
         if pointer == self.pressed {
             self.original

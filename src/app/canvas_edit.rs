@@ -43,6 +43,9 @@ impl App {
             Edit::PointerHover(offset) => Edit::Hover(offset.map(|p| self.tab.camera.pointer(p))),
             edit => edit,
         };
+        if !matches!(edit, Edit::PathNodeClick(..) | Edit::Hover(_)) {
+            self.path_click = None;
+        }
         match edit {
             Edit::ArrowTarget(p, bypass) => {
                 self.arrow_target_click(p, bypass);
@@ -223,6 +226,30 @@ impl App {
                     return;
                 }
                 self.sync_arc();
+            }
+            Edit::PathNodeClick(id, index) => {
+                self.path_node_click(id, index, iced::time::Instant::now());
+                return;
+            }
+            Edit::PathPoint {
+                id,
+                index,
+                point,
+                free,
+            } => {
+                self.tab.path_point = Some((id, index));
+                if let Some(graphic) = self.tab.doc.graphics.iter_mut().find(|g| g.id == id) {
+                    let result = if free {
+                        graphic.move_path_point_free(index, point)
+                    } else {
+                        graphic.move_path_point(index, point)
+                    };
+                    if let Err(error) = result {
+                        self.status = error;
+                        self.error = true;
+                        return;
+                    }
+                }
             }
             Edit::Template(anchor, direction) => {
                 return self.place_template(anchor, direction, before);
