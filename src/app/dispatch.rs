@@ -176,6 +176,7 @@ impl App {
             Message::Charge(delta) => self.change_charge(delta),
             Message::ApplyIsotope => self.apply_isotope(),
             Message::CopySmiles => return Some(self.copy_smiles()),
+            Message::CopyChemicalText => return Some(self.copy_chemical_text()),
             // Tabs wait while the save dialog asks about the tab in front.
             Message::New | Message::Open if self.pending.is_some() => {}
             Message::New => return Some(self.new_document()),

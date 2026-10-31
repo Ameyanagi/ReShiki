@@ -46,6 +46,25 @@ fn top(app: &App) -> &Command {
     app.commands.current().expect("a result")
 }
 
+#[test]
+fn exact_template_keywords_rank_as_names_without_changing_other_first_results() {
+    let mut app = app();
+    // Before #630, Phe ranked Phenol first; the other first results are kept.
+    for (query, expected) in [
+        ("Phe", "L-Phenylalanine"),
+        ("pHE", "L-Phenylalanine"),
+        ("phenol", "Phenol"),
+        ("Trp", "L-Tryptophan"),
+        ("Gly", "Glycine"),
+        ("benzene", "Benzene"),
+        ("F", "CF3"),
+        ("f", "Fluorine (F)"),
+    ] {
+        search(&mut app, query);
+        assert_eq!(top(&app).name, expected, "{query}");
+    }
+}
+
 /// The pre-#587 query, kept independent of the indexed membership path.
 fn original_command_target(app: &App) -> Target {
     let doc = &app.tab.doc;
@@ -331,6 +350,62 @@ fn blocked_3d_scale_offers_an_explicit_2d_recovery_and_two_undo_steps() {
     );
 }
 
+#[test]
+fn blocked_3d_flips_offer_2d_recovery_and_mixed_selections_stay_available() {
+    use reshiki::models3d::Display;
+
+    for (query, expected) in [
+        ("flip horizontal", "Flip horizontally"),
+        ("flip vertical", "Flip vertically"),
+    ] {
+        let mut app = app();
+        let (doc, molecule, drawn) = crate::canvas::tilt::shown(Display::ThreeD);
+        app.tab.doc = doc;
+        app.tab.selected = molecule.to_vec();
+        let before = app.tab.doc.clone();
+        search(&mut app, query);
+        let ranked = app.commands.ranked();
+        assert_eq!(ranked[0].name, expected);
+        assert_eq!(
+            app.command_unavailable(ranked[0]),
+            Some("Switch to 2D to flip the drawing")
+        );
+        assert_eq!(ranked[1].name, "Show as 2D drawing");
+        assert!(app.command_unavailable(ranked[1]).is_none());
+        let _ = app.update(Message::Commands(Action::Submit));
+        assert!(app.commands.open && app.error);
+        assert_eq!(app.status, "Switch to 2D to flip the drawing");
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.selected, molecule);
+        assert!(!app.tab.history.can_undo());
+
+        let _ = app.update(Message::Commands(Action::Move(1)));
+        let _ = app.update(Message::Commands(Action::Submit));
+        assert!(!app.commands.open);
+        assert_eq!(app.tab.doc.models[0].display, Display::TwoD);
+        let two_d = app.tab.doc.clone();
+        run(&mut app, query);
+        assert!(!app.commands.open);
+        assert_ne!(app.tab.doc, two_d);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, two_d);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+
+        app.tab.selected = [molecule, drawn].concat();
+        search(&mut app, query);
+        assert_eq!(top(&app).name, expected);
+        assert!(app.command_unavailable(top(&app)).is_none());
+        assert!(
+            !app.commands
+                .ranked()
+                .iter()
+                .any(|row| row.name == "Show as 2D drawing")
+        );
+    }
+}
+
 fn ethane(app: &mut App) -> (u64, u64) {
     let a = app.tab.doc.add_atom("C", Point::new(0., 0.));
     let b = app.tab.doc.add_atom("C", Point::new(42., 0.));
@@ -589,6 +664,82 @@ fn unavailable_commands_stay_listed_and_do_nothing() {
     assert!(app.command_unavailable(top(&app)).is_some());
     let _ = app.update(Message::Commands(Action::Submit));
     assert!(app.error);
+}
+
+#[tokio::test]
+async fn chemical_copy_rows_prepare_the_selection_or_whole_drawing() {
+    use iced::futures::StreamExt;
+    use reshiki::clipboard::CopyFormat;
+
+    for (query, format, modifiers, key) in [
+        ("Copy SMILES", CopyFormat::Smiles, Modifiers::ALT, "C"),
+        ("Copy CDXML", CopyFormat::Cdxml, Modifiers::empty(), "D"),
+        ("Copy MOL", CopyFormat::Mol, Modifiers::ALT, "O"),
+    ] {
+        for selected in [false, true] {
+            let mut app = app();
+            let (a, b) = ethane(&mut app);
+            app.tab.doc.add_atom("O", Point::new(240., 0.));
+            if selected {
+                app.tab.selected = vec![a, b];
+            }
+            let before = app.tab.doc.clone();
+            let selection = app.tab.selected.clone();
+            search(&mut app, query);
+            assert_eq!(top(&app).name, query);
+            assert_eq!(
+                top(&app).keys,
+                crate::app::shortcuts::keys(Modifiers::COMMAND | modifiers, key)
+            );
+            assert!(app.command_unavailable(top(&app)).is_none());
+            let task = app.update(Message::Commands(Action::Submit));
+            assert!(!app.commands.open && !app.error, "{query}: {}", app.status);
+            assert!(app.copy_as_busy && app.tab.clipboard_busy);
+            assert_eq!(
+                app.status,
+                format!("Preparing {} for the clipboard…", format.label())
+            );
+            let mut stream = iced_runtime::task::into_stream(task).unwrap();
+            let Some(iced_runtime::Action::Output(Message::Tab(tab, message))) =
+                stream.next().await
+            else {
+                panic!("{query} keeps preparation with its drawing");
+            };
+            assert_eq!(tab, app.tab.id);
+            let Message::CopyAsPrepared(copy_key, result) = *message else {
+                panic!("{query} prepares chemical text");
+            };
+            let copy = result.unwrap();
+            assert_eq!(copy_key.format, format);
+            assert_eq!(copy_key.selected, selection);
+            let text = copy.text().unwrap();
+            let atoms = match format {
+                CopyFormat::Smiles => reshiki::chemistry::smiles::parse(text)
+                    .unwrap()
+                    .graph
+                    .atoms
+                    .len(),
+                CopyFormat::Mol => reshiki::chemistry::molfile::read(text)
+                    .unwrap()
+                    .molecule
+                    .state
+                    .graph
+                    .atoms
+                    .len(),
+                CopyFormat::Cdxml => reshiki::chemistry::cdxml::read(text)
+                    .unwrap()
+                    .fragments
+                    .iter()
+                    .map(|fragment| fragment.graph.atoms.len())
+                    .sum(),
+                _ => unreachable!(),
+            };
+            assert_eq!(atoms, if selected { 2 } else { 3 }, "{query}");
+            assert_eq!(app.tab.doc, before);
+            assert_eq!(app.tab.selected, selection);
+            assert!(!app.tab.history.can_undo());
+        }
+    }
 }
 
 #[test]
@@ -898,7 +1049,10 @@ fn review_fixes_for_targets_parameters_and_stale_rows() {
     assert!(app.command_unavailable(top(&app)).is_none());
 
     // Chain lengths follow the chain field's own limits.
-    assert!(catalog::parameterised(&app, "chain 513").is_none());
+    assert!(matches!(
+        catalog::parameterised(&app, "chain 513").unwrap().need,
+        Need::Blocked(_)
+    ));
     let chain = catalog::parameterised(&app, "chain 5.0").unwrap();
     assert!(matches!(&chain.run, Run::Send(m)
         if matches!(m.as_slice(), [Message::ChainAtoms(n), _] if n == "5")));
@@ -1119,8 +1273,7 @@ fn tab_cycles_the_category_filter_and_a_new_query_resets_it() {
 #[test]
 fn unavailable_commands_rank_after_available_ones() {
     let mut app = app();
-    // Rows the query creates rank by availability too.
-    for query in ["copy", "charge", "bond", "select", "nmr", "rotate 30"] {
+    for query in ["copy", "charge", "bond", "select", "nmr"] {
         search(&mut app, query);
         let state = &app.commands;
         let blocked: Vec<_> = state
@@ -1330,6 +1483,141 @@ fn command_word_prefixes_take_a_value() {
     assert_eq!(top(&app).name, "Set charge to -1");
     let _ = app.update(Message::Commands(Action::Submit));
     assert_eq!(app.tab.doc.atom(a).unwrap().charge, -1);
+}
+
+#[test]
+fn out_of_range_font_sizes_stay_first_and_leave_the_document_and_input_untouched() {
+    let mut app = app();
+    let id = app.tab.doc.next_id();
+    app.tab.doc.annotations.push(reshiki::document::Annotation {
+        id,
+        position: Point::default(),
+        text: "Caption".into(),
+        format: Default::default(),
+    });
+    app.tab.selected = vec![id];
+    let before = app.tab.doc.clone();
+    let input = app.tab.font_size_input.clone();
+    for size in [-1, 0, 3, 145] {
+        search(&mut app, &format!("font size {size}"));
+        assert_eq!(top(&app).name, format!("Font size {size} pt"));
+        assert_eq!(
+            app.command_unavailable(top(&app)),
+            Some("Enter a font size from 4 to 144 pt")
+        );
+        assert!(
+            !app.commands
+                .ranked()
+                .iter()
+                .any(|row| matches!(row.run, Run::Name(_)))
+        );
+        let _ = app.update(Message::Commands(Action::Submit));
+        assert!(app.commands.open && app.error);
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.font_size_input, input);
+        assert!(!app.tab.history.can_undo());
+    }
+    for size in [4, 12, 144] {
+        search(&mut app, &format!("font size {size}"));
+        assert!(app.command_unavailable(top(&app)).is_none());
+    }
+    run(&mut app, "font size 12");
+    assert!(!app.commands.open);
+    assert_eq!(app.tab.doc.annotations[0].format.style.size_pt, 12.);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[test]
+fn blocked_value_rows_keep_an_active_caption_draft_uncommitted() {
+    use crate::app::inline_text;
+    use iced::widget::text_editor::{Action as Input, Edit};
+
+    let mut app = app();
+    let _ = app.update(Message::InlineText(inline_text::Action::Begin(
+        None,
+        Point::default(),
+    )));
+    let _ = app.update(Message::CaptionAction(Input::Edit(Edit::Paste(
+        std::sync::Arc::new("Caption".into()),
+    ))));
+    let before = app.tab.doc.clone();
+    let input = app.tab.font_size_input.clone();
+    for query in ["font size 3", "ring 2", "chain 600"] {
+        search(&mut app, query);
+        let index = app.commands.results[0];
+        for action in [Action::Submit, Action::Run(index)] {
+            let _ = app.update(Message::Commands(action));
+            assert!(app.commands.open && app.error);
+            assert_eq!(app.tab.doc, before);
+            assert_eq!(app.tab.font_size_input, input);
+            assert!(app.tab.inline_text.is_some());
+            assert_eq!(app.tab.caption, "Caption");
+            assert!(!app.tab.history.can_undo());
+        }
+    }
+}
+
+#[test]
+fn out_of_range_ring_and_chain_sizes_stay_first_and_do_nothing() {
+    let mut app = app();
+    let before = app.tab.doc.clone();
+    let tool = app.tool;
+    let input = app.tab.chain_atoms_input.clone();
+    let chain_reason = format!("Chains have 1 to {} atoms", reshiki::chains::MAX_ATOMS);
+    for (query, name, reason) in [
+        (
+            "ring 2",
+            "Insert 2-membered ring",
+            "Rings have 3 to 8 atoms",
+        ),
+        (
+            "ring 9",
+            "Insert 9-membered ring",
+            "Rings have 3 to 8 atoms",
+        ),
+        (
+            "ring 3.5",
+            "Insert 3.5-membered ring",
+            "Rings have 3 to 8 atoms",
+        ),
+        ("chain 0", "Chain tool with 0 atoms", chain_reason.as_str()),
+        (
+            "chain 600",
+            "Chain tool with 600 atoms",
+            chain_reason.as_str(),
+        ),
+    ] {
+        search(&mut app, query);
+        assert_eq!(top(&app).name, name);
+        assert_eq!(app.command_unavailable(top(&app)), Some(reason));
+        assert!(
+            !app.commands
+                .ranked()
+                .iter()
+                .any(|row| matches!(row.run, Run::Name(_)))
+        );
+        let _ = app.update(Message::Commands(Action::Submit));
+        assert!(app.commands.open && app.error);
+        assert_eq!(app.status, reason);
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tool, tool);
+        assert_eq!(app.tab.chain_atoms_input, input);
+        assert!(!app.tab.history.can_undo());
+    }
+    run(&mut app, "ring 7");
+    assert!(!app.commands.open);
+    assert_eq!(app.tab.doc.atoms.len(), before.atoms.len() + 7);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    run(&mut app, "chain 5");
+    assert!(!app.commands.open);
+    assert_eq!(app.tool, Tool::Chain(reshiki::chains::ChainMode::Straight));
+    assert_eq!(app.tab.chain_drawing.atoms, Some(5));
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
 }
 
 #[test]

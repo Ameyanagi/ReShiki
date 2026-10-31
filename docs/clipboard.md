@@ -25,6 +25,8 @@ To paste a structure into a text field such as SciFinder's, select it and use **
 
 **Cmd/Ctrl+Alt+O** copies MOL text. Both text shortcuts require a selection. Select the complete molecule to avoid exporting only a fragment.
 
+The command palette's **Copy SMILES**, **Copy CDXML** and **Copy MOL** rows copy the selection, or the whole drawing when nothing is selected. Their keyboard shortcuts still require a selection.
+
 ## Copy as
 
 Right-click and choose **Copy as…** to choose one format: **PNG**, **SVG**, **PDF**, **MOL**, **SMILES**, **InChI**, **CDXML**, **CDX**, **RXN · V3000**, **Reaction SMILES**, or **ChemDoodle JSON · reaction**. The submenu says **selected objects** when there is a selection and **whole drawing** otherwise. It uses the same selection rules as ordinary Copy, retaining required abbreviation and attachment members. It does not automatically select the rest of a partially selected molecule; use **Select molecule** first when that is what you need.
