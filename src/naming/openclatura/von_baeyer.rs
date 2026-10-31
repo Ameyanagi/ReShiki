@@ -15,7 +15,9 @@ type Adjacency = BTreeMap<usize, AtomSet>;
 type OrderedAdjacency = BTreeMap<usize, Vec<usize>>;
 pub type DescriptorPaths = (Option<String>, Vec<Vec<usize>>);
 const MAIN_RING_WALK_STATES: usize = 2_000_000;
-const MAX_CYCLE_SPACE_RANK: usize = 28;
+// Upstream divergence: upstream allows rank 28 (2.7e8 subsets, tens of
+// seconds); naming runs interactively, so larger blocks abstain at rank 20.
+const MAX_CYCLE_SPACE_RANK: usize = 20;
 const MAX_LONGEST_CYCLES: usize = 4096;
 
 #[derive(Clone, Debug)]
