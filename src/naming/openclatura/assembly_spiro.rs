@@ -10,7 +10,7 @@ use super::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct SpiroAssembly {
     pub parent_locant: String,
     pub side_locant: String,
@@ -23,23 +23,6 @@ pub struct SpiroAssembly {
     pub side_prime: String,
     pub cited_first: bool,
     pub continuation: Option<Box<SpiroAssembly>>,
-}
-impl Default for SpiroAssembly {
-    fn default() -> Self {
-        Self {
-            parent_locant: String::new(),
-            side_locant: String::new(),
-            side_parent_name: String::new(),
-            side_prefixes: vec![],
-            side_suffixes: vec![],
-            side_stereo: vec![],
-            side_substituents: vec![],
-            side_parts: None,
-            side_prime: "'".into(),
-            cited_first: false,
-            continuation: None,
-        }
-    }
 }
 impl SpiroAssembly {
     pub fn new(side_locant: impl Into<String>, side_parent_name: impl Into<String>) -> Self {
@@ -54,10 +37,8 @@ impl SpiroAssembly {
 
 pub fn prime_side_locant(locant: &str) -> String {
     let (base, annotation) = locant
-        .split_once("lambda^")
-        .map_or((locant, "".into()), |(base, n)| {
-            (base, format!("lambda^{n}"))
-        });
+        .find("lambda^")
+        .map_or((locant, ""), |i| locant.split_at(i));
     format!(
         "{base}{}{annotation}",
         if !base.is_empty() && !base.ends_with('\'') {
@@ -66,13 +47,6 @@ pub fn prime_side_locant(locant: &str) -> String {
             ""
         }
     )
-}
-fn ring_only_prime(locant: &str) -> String {
-    if locant.starts_with(|c: char| c.is_ascii_digit()) {
-        prime_side_locant(locant)
-    } else {
-        locant.into()
-    }
 }
 fn is_systematic_fusion(parts: &AssemblyParts) -> bool {
     parts
@@ -376,8 +350,9 @@ fn project_locanted_hw_component(parts: &mut AssemblyParts) {
     parts.elided_unsaturation_locants.clear();
 }
 
-/// Preserve the component-local proof before independently rendering its parent.
 type ParentRenderer<'a> = &'a mut dyn FnMut(&mut AssemblyParts) -> Result<String, String>;
+
+/// Preserve the component-local proof before independently rendering its parent.
 pub fn spiro_assembly_from_parts(
     parts: &AssemblyParts,
     junction_locant: &str,
@@ -678,10 +653,10 @@ fn reprime_side(side: &SpiroAssembly, prime: &str) -> SpiroAssembly {
 }
 fn prime_central_parts(parts: &mut AssemblyParts, keep_name_internals: bool) {
     let prime = |l: &str| {
-        if keep_name_internals {
-            ring_only_prime(l)
-        } else {
+        if !keep_name_internals || l.starts_with(|c: char| c.is_ascii_digit()) {
             prime_side_locant(l)
+        } else {
+            l.into()
         }
     };
     for s in &mut parts.substituents {
@@ -984,12 +959,11 @@ fn hoist_side_substituent_prefixes(
 }
 fn normalize_spiro(mut side: SpiroAssembly) -> SpiroAssembly {
     if side.side_parts.is_none() {
-        let (prefixes, parent, suffixes, stereo) =
-            extract_spiro_side_prefixes(&side.side_parent_name);
-        side.side_prefixes.extend(prefixes);
-        side.side_parent_name = parent;
-        side.side_suffixes.extend(suffixes);
-        side.side_stereo.extend(stereo);
+        let extracted = extract_spiro_side_prefixes(&side.side_parent_name);
+        side.side_prefixes.extend(extracted.prefixes);
+        side.side_parent_name = extracted.parent_name;
+        side.side_suffixes.extend(extracted.suffixes);
+        side.side_stereo.extend(extracted.stereo);
     }
     side
 }
@@ -1113,10 +1087,10 @@ fn retained_n_info(parent: &str) -> Option<(usize, String)> {
     };
     Some((size, explicit))
 }
-fn side_locant(side: &SpiroAssembly) -> String {
+fn side_locant(side: &SpiroAssembly, parent_name: &str) -> String {
     if side.side_parts.is_none()
         && side.side_locant == "1"
-        && let Some((size, _)) = retained_n_info(&side.side_parent_name)
+        && let Some((size, _)) = retained_n_info(parent_name)
         && size > 0
     {
         return (size / 2 + 1).to_string();
@@ -1135,12 +1109,12 @@ fn prime_side_suffixes(side: &SpiroAssembly) -> Vec<(String, String)> {
         .collect()
 }
 fn format_side_suffixes(suffixes: &[(String, String)]) -> String {
-    let mut grouped: Vec<(String, Vec<String>)> = vec![];
+    let mut grouped: Vec<(&str, Vec<&str>)> = vec![];
     for (l, s) in suffixes {
-        if let Some((_, locants)) = grouped.iter_mut().find(|(word, _)| word == s) {
-            locants.push(l.clone());
+        if let Some((_, locants)) = grouped.iter_mut().find(|(word, _)| *word == s.as_str()) {
+            locants.push(l);
         } else {
-            grouped.push((s.clone(), vec![l.clone()]));
+            grouped.push((s, vec![l]));
         }
     }
     grouped
@@ -1317,11 +1291,11 @@ fn format_dispiro_core(core: &str, terminal: &str, sides: &[SpiroAssembly]) -> S
     let mut core = format!(
         "dispiro[{}-{},{}'-{}-{}',{}''-{}]",
         side_name(&first.side_parent_name),
-        side_locant(first),
+        side_locant(first, &first.side_parent_name),
         first.parent_locant,
         side_name(&unprime_inline_replacement_prefix(core)),
         second.parent_locant,
-        side_locant(second),
+        side_locant(second, &second.side_parent_name),
         side_name(&second.side_parent_name)
     );
     let prefixes: Vec<_> = first
@@ -1348,27 +1322,29 @@ fn format_dispiro_core(core: &str, terminal: &str, sides: &[SpiroAssembly]) -> S
         core.push_str(&format_side_suffixes(&suffixes));
     }
     if !prefixes.is_empty() {
-        // Upstream divergence: both sides already carry their final dispiro
-        // scope. Re-priming the first side moves its replacement onto the
-        // central component, whose locants have one prime.
+        // Upstream divergence: sides keep their final dispiro scope; re-priming moves replacements to the core.
         core = format!("{}{core}", prefixes.join("-"));
     }
     core
 }
-pub fn format_spiro_core(
+pub(super) struct SpiroCore {
+    pub(super) core: String,
+    pub(super) suffix: String,
+}
+
+pub(super) fn format_spiro_core(
     stem: &str,
     unsat: &str,
     terminal: &str,
     sides: &[SpiroAssembly],
     suffix: &str,
     parent_terminal: &str,
-) -> (String, String, String) {
+) -> SpiroCore {
     if sides.is_empty() {
-        return (
-            format!("{stem}{unsat}{terminal}"),
-            terminal.into(),
-            suffix.into(),
-        );
+        return SpiroCore {
+            core: format!("{stem}{unsat}{terminal}"),
+            suffix: suffix.into(),
+        };
     }
     let mut core = format!(
         "{stem}{unsat}{}",
@@ -1379,31 +1355,36 @@ pub fn format_spiro_core(
         }
     );
     if sides.len() == 2 && !core.starts_with("spiro[") {
-        return (
-            format_dispiro_core(&core, terminal, sides),
-            String::new(),
-            suffix.into(),
-        );
+        return SpiroCore {
+            core: format_dispiro_core(&core, terminal, sides),
+            suffix: suffix.into(),
+        };
     }
     let mut prefixes = vec![];
     let mut suffixes = vec![];
     for side in sides {
-        let mut side = side.clone();
         prefixes.extend(side.side_prefixes.iter().cloned());
-        suffixes.extend(prime_side_suffixes(&side));
-        if side.side_parts.is_none() {
-            let (ps, parent, ss, _) = extract_spiro_side_prefixes(&side.side_parent_name);
-            prefixes.extend(ps);
+        suffixes.extend(prime_side_suffixes(side));
+        let extracted_parent = if side.side_parts.is_none() {
+            let extracted = extract_spiro_side_prefixes(&side.side_parent_name);
+            prefixes.extend(extracted.prefixes);
             suffixes.extend(
-                ss.into_iter()
+                extracted
+                    .suffixes
+                    .into_iter()
                     .map(|(l, s)| (format!("{}'", l.trim_end_matches('\'')), s)),
             );
-            side.side_parent_name = parent;
-        }
+            Some(extracted.parent_name)
+        } else {
+            None
+        };
+        let parent_name = extracted_parent
+            .as_deref()
+            .unwrap_or(&side.side_parent_name);
         if core.starts_with("spiro[") {
             continue;
         }
-        let name = side_name(&side.side_parent_name);
+        let name = side_name(parent_name);
         if let Some(tail) = &side.continuation {
             prefixes.extend(tail.side_prefixes.iter().cloned());
             suffixes.extend(prime_side_suffixes(tail));
@@ -1418,16 +1399,15 @@ pub fn format_spiro_core(
             );
         } else if side.cited_first {
             core = format!(
-                "spiro[{}-{},{}'-{core}]",
-                side.side_parent_name,
-                side_locant(&side),
+                "spiro[{parent_name}-{},{}'-{core}]",
+                side_locant(side, parent_name),
                 side.parent_locant
             );
         } else {
             core = format!(
                 "spiro[{core}-{},{}'-{name}]",
                 side.parent_locant,
-                side_locant(&side)
+                side_locant(side, parent_name)
             );
         }
     }
@@ -1457,16 +1437,17 @@ pub fn format_spiro_core(
     if !side_first {
         core = prime_inline_replacement_prefixes(&core);
     }
-    (core, String::new(), suffix)
+    SpiroCore { core, suffix }
 }
 
-type ExtractedSide = (
-    Vec<String>,
-    String,
-    Vec<(String, String)>,
-    Vec<(String, String)>,
-);
-pub fn extract_spiro_side_prefixes(side_name: &str) -> ExtractedSide {
+struct ExtractedSide {
+    prefixes: Vec<String>,
+    parent_name: String,
+    suffixes: Vec<(String, String)>,
+    stereo: Vec<(String, String)>,
+}
+
+fn extract_spiro_side_prefixes(side_name: &str) -> ExtractedSide {
     let mut normalized = side_name.trim().to_owned();
     if normalized.starts_with('(') && normalized.ends_with(')') {
         normalized = normalized[1..normalized.len() - 1].into();
@@ -1549,7 +1530,12 @@ pub fn extract_spiro_side_prefixes(side_name: &str) -> ExtractedSide {
         });
     }
     let Some((parent, mut prefix)) = found else {
-        return (vec![], normalized, suffixes, vec![]);
+        return ExtractedSide {
+            prefixes: vec![],
+            parent_name: normalized,
+            suffixes,
+            stereo: vec![],
+        };
     };
     let mut stereo = vec![];
     if prefix.starts_with('(')
@@ -1572,27 +1558,38 @@ pub fn extract_spiro_side_prefixes(side_name: &str) -> ExtractedSide {
     }
     normalized = retained_n_info(&parent).map_or(parent, |(_, name)| name);
     if prefix.is_empty() {
-        return (vec![], normalized, suffixes, stereo);
+        return ExtractedSide {
+            prefixes: vec![],
+            parent_name: normalized,
+            suffixes,
+            stereo,
+        };
     }
     let mut segments: Vec<String> = prefix.split('-').map(str::to_owned).collect();
     let mut depth = 0_i32;
-    for i in 0..segments.len() {
+    let mut remaining = segments.iter_mut().peekable();
+    while let Some(segment) = remaining.next() {
         let nested = depth > 0;
-        depth += segments[i].matches('(').count() as i32 - segments[i].matches(')').count() as i32;
-        if nested || depth > 0 || !segments[i].chars().all(|c| c.is_ascii_digit() || c == ',') {
+        depth += segment.matches('(').count() as i32 - segment.matches(')').count() as i32;
+        if nested || depth > 0 || !segment.chars().all(|c| c.is_ascii_digit() || c == ',') {
             continue;
         }
-        let next = segments.get(i + 1).map(String::as_str).unwrap_or("");
+        let next = remaining.peek().map(|s| s.as_str()).unwrap_or("");
         if WITHIN_NAME.iter().any(|p| next.starts_with(p)) {
             continue;
         }
-        segments[i] = segments[i]
+        *segment = segment
             .split(',')
             .map(|l| format!("{l}'"))
             .collect::<Vec<_>>()
             .join(",");
     }
-    (vec![segments.join("-")], normalized, suffixes, stereo)
+    ExtractedSide {
+        prefixes: vec![segments.join("-")],
+        parent_name: normalized,
+        suffixes,
+        stereo,
+    }
 }
 fn extract_side_suffixes(name: &str) -> (String, Vec<(String, String)>) {
     let Some((left, word)) = name.rsplit_once('-') else {
@@ -1650,10 +1647,10 @@ mod tests {
         side.parent_locant = "3".into();
         side.side_suffixes = vec![("2".into(), "one".into())];
         assert_eq!(
-            format_spiro_core("indolin", "", "e", &[side], "-2-one", "e").0,
+            format_spiro_core("indolin", "", "e", &[side], "-2-one", "e").core,
             "spiro[indoline-3,4'-cyclopentane]"
         );
-        let (core, _, suffix) = format_spiro_core(
+        let formatted = format_spiro_core(
             "indolin",
             "",
             "e",
@@ -1665,8 +1662,8 @@ mod tests {
             "-2-one",
             "e",
         );
-        assert_eq!(suffix, "-2,2'-dione");
-        assert!(core.ends_with(']'));
+        assert_eq!(formatted.suffix, "-2,2'-dione");
+        assert!(formatted.core.ends_with(']'));
     }
     #[test]
     fn dispiro_replacements_keep_each_components_final_scope() {
@@ -1689,10 +1686,10 @@ mod tests {
     }
     #[test]
     fn side_prefix_projection_respects_nested_locants() {
-        let (prefix, parent, _, stereo) =
+        let extracted =
             extract_spiro_side_prefixes("(2R)-2-(2,6-difluorophenyl)-3-methylcyclopentane");
-        assert_eq!(parent, "cyclopentane");
-        assert_eq!(prefix, ["2'-(2,6-difluorophenyl)-3'-methyl"]);
-        assert_eq!(stereo, [("2'".into(), "R".into())]);
+        assert_eq!(extracted.parent_name, "cyclopentane");
+        assert_eq!(extracted.prefixes, ["2'-(2,6-difluorophenyl)-3'-methyl"]);
+        assert_eq!(extracted.stereo, [("2'".into(), "R".into())]);
     }
 }

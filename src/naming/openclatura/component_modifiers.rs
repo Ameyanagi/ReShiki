@@ -173,13 +173,13 @@ pub fn add_component_n_substituents(
             .unwrap_or(carbon);
         let mut guanidine = BTreeMap::new();
         if matches!(key, "amidine" | "ring_amidine") {
-            nitrogens.sort_by_key(|&n| mol.get_bond(n, core).map_or(0, |b| b.order));
+            nitrogens.sort_by_key(|&n| mol.bond_order(n, core));
         } else if rule.has_capability("hydrazide") {
             let centers = group
                 .descriptor
                 .as_ref()
-                .map(|d| d.centers.clone())
-                .unwrap_or_else(|| vec![core]);
+                .map(|d| d.centers.as_slice())
+                .unwrap_or(std::slice::from_ref(&core));
             nitrogens.sort_by_key(|&n| !centers.iter().any(|&c| mol.get_bond(n, c).is_some()));
         } else if key == "guanidine" {
             let imino = nitrogens

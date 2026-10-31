@@ -175,7 +175,7 @@ fn nitrogen_group_prefix(
         .unwrap_or(group.attachment_carbon);
     ns.sort_by_key(|&n| {
         if amidine {
-            mol.get_bond(n, core).map_or(0, |b| b.order)
+            mol.bond_order(n, core)
         } else {
             usize::from(mol.get_bond(n, core).is_none())
         }

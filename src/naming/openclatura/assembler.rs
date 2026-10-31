@@ -11,9 +11,22 @@ use super::{
     assembly_utils::{needs_hyphen, parse_locant},
     formatting::format_multiplier,
     fused_ion_templates::{consume_fused_ion_operation, select_fused_ion_operation},
-    name_postprocessing::apply_data_postprocessing,
+    nomenclature::section,
 };
 use std::collections::{BTreeMap, BTreeSet};
+
+fn apply_data_postprocessing(name: &str) -> String {
+    let mut name = name.to_owned();
+    if let Some(rules) = section("postprocess_literal_replacements").as_array() {
+        for rule in rules {
+            if let (Some(from), Some(to)) = (rule["pattern"].as_str(), rule["replacement"].as_str())
+            {
+                name = name.replace(from, to);
+            }
+        }
+    }
+    name
+}
 
 pub fn post_process_name(name: &str) -> String {
     let name = apply_data_postprocessing(name)
@@ -21,21 +34,22 @@ pub fn post_process_name(name: &str) -> String {
         .replace("aminoimino", "hydrazono");
     apply_data_postprocessing(&name)
 }
-fn indicated_run(text: &str) -> Option<(Vec<String>, usize)> {
-    let (run, _) = text.split_once('-')?;
-    let locs: Option<Vec<_>> = run
+struct IndicatedHydrogenRun<'a> {
+    locants: Vec<&'a str>,
+    remainder: &'a str,
+}
+
+fn indicated_run(text: &str) -> Option<IndicatedHydrogenRun<'_>> {
+    let (run, remainder) = text.split_once('-')?;
+    let locants = run
         .split(',')
         .map(|s| {
             let l = s.strip_suffix('H')?;
             let digits = l.chars().take_while(|c| c.is_ascii_digit()).count();
-            if digits == 0 || !l[digits..].chars().all(|c| c.is_ascii_lowercase()) {
-                None
-            } else {
-                Some(l.to_owned())
-            }
+            (digits > 0 && l[digits..].chars().all(|c| c.is_ascii_lowercase())).then_some(l)
         })
-        .collect();
-    Some((locs?, run.len() + 1))
+        .collect::<Option<_>>()?;
+    Some(IndicatedHydrogenRun { locants, remainder })
 }
 /// Saturation beyond the retained hydride's quota is added H or a hydro prefix.
 fn normalize_indicated_hydrogen_quota(parts: &mut AssemblyParts, core: &str) -> String {
@@ -50,7 +64,7 @@ fn normalize_indicated_hydrogen_quota(parts: &mut AssemblyParts, core: &str) -> 
     {
         return core.into();
     }
-    let stem_cited = indicated_run(core).map_or_else(Vec::new, |(locants, _)| locants);
+    let stem_cited = indicated_run(core).map_or_else(Vec::new, |run| run.locants);
     let citations: Vec<_> = parts
         .hydro_operations
         .iter()
@@ -58,16 +72,18 @@ fn normalize_indicated_hydrogen_quota(parts: &mut AssemblyParts, core: &str) -> 
         .filter(|(_, operation)| {
             operation.operation_kind == "indicated_hydrogen" && operation.key != "added_hydrogen"
         })
-        .map(|(index, operation)| (index, operation.locants.clone()))
+        .map(|(index, _)| index)
         .collect();
     let mut cited: Vec<_> = stem_cited
         .into_iter()
-        .chain(
-            citations
+        .chain(citations.iter().flat_map(|&index| {
+            parts.hydro_operations[index]
+                .locants
                 .iter()
-                .flat_map(|(_, locants)| locants.iter().cloned()),
-        )
-        .chain(parts.indicated_hydrogens.iter().cloned())
+                .map(String::as_str)
+        }))
+        .chain(parts.indicated_hydrogens.iter().map(String::as_str))
+        .map(str::to_owned)
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect();
@@ -141,11 +157,12 @@ fn normalize_indicated_hydrogen_quota(parts: &mut AssemblyParts, core: &str) -> 
         return core.into();
     }
     let mut respelled = BTreeSet::new();
-    for (index, locants) in citations {
+    for index in citations {
+        let operation = &mut parts.hydro_operations[index];
+        let locants = &operation.locants;
         if !locants.iter().any(|locant| surplus.contains(locant)) {
             continue;
         }
-        let operation = &mut parts.hydro_operations[index];
         if locants.iter().all(|locant| added.contains(locant)) {
             operation.key = "added_hydrogen".into();
         } else if locants.iter().all(|locant| hydro.contains(locant)) {
@@ -154,7 +171,7 @@ fn normalize_indicated_hydrogen_quota(parts: &mut AssemblyParts, core: &str) -> 
         } else {
             return core.into();
         }
-        respelled.extend(locants);
+        respelled.extend(locants.iter().cloned());
     }
     for (locants, kind) in [(&added, "added_hydrogen"), (&hydro, "additive_hydrogen")] {
         let mut pending: Vec<_> = locants.difference(&respelled).cloned().collect();
@@ -195,16 +212,17 @@ fn normalize_indicated_hydrogen_quota(parts: &mut AssemblyParts, core: &str) -> 
 }
 
 fn respell_indicated_hydrogen(text: &str, respelled: &BTreeSet<String>) -> Option<String> {
-    let (locants, end) = indicated_run(text)?;
-    let remaining = locants
+    let run = indicated_run(text)?;
+    let remaining = run
+        .locants
         .iter()
-        .filter(|locant| !respelled.contains(*locant))
+        .filter(|locant| !respelled.contains(**locant))
         .map(|locant| format!("{locant}H"))
         .collect::<Vec<_>>();
     Some(if remaining.is_empty() {
-        text[end..].into()
+        run.remainder.into()
     } else {
-        format!("{}-{}", remaining.join(","), &text[end..])
+        format!("{}-{}", remaining.join(","), run.remainder)
     })
 }
 
@@ -214,13 +232,13 @@ fn add_indicated_hydrogen_prefix(parts: &mut AssemblyParts, core: &str) -> Strin
         .hydro_operations
         .iter()
         .filter(|o| o.operation_kind == "additive_hydrogen")
-        .flat_map(|o| o.locants.clone())
+        .flat_map(|o| o.locants.iter().cloned())
         .collect();
     let mut indicated: Vec<_> = parts
         .hydro_operations
         .iter()
         .filter(|o| o.operation_kind == "indicated_hydrogen")
-        .flat_map(|o| o.locants.clone())
+        .flat_map(|o| o.locants.iter().cloned())
         .collect();
     if indicated.is_empty() {
         indicated = parts.indicated_hydrogens.clone();
@@ -242,9 +260,9 @@ fn add_indicated_hydrogen_prefix(parts: &mut AssemblyParts, core: &str) -> Strin
             .flat_map(|o| o.locants.iter())
             .collect();
         if !indicated.iter().all(|l| added.contains(l))
-            && let Some((_, end)) = indicated_run(&core)
+            && let Some(run) = indicated_run(&core)
         {
-            core = core[end..].into();
+            core = run.remainder.into();
         }
         core = format!(
             "{}-{core}",
@@ -266,7 +284,7 @@ fn add_indicated_hydrogen_prefix(parts: &mut AssemblyParts, core: &str) -> Strin
             .retained_parent_metadata
             .as_ref()
             .map_or(0, |m| m.indicated_hydrogen_count);
-        let cited = indicated_run(&core).map_or(0, |(ls, _)| ls.len());
+        let cited = indicated_run(&core).map_or(0, |run| run.locants.len());
         if cited > 0 && cited < stated {
             stated = cited;
         }
@@ -303,7 +321,7 @@ fn move_added_hydrogen(parts: &AssemblyParts, core: &str, suffix: &str) -> (Stri
         .hydro_operations
         .iter()
         .filter(|o| o.key == "added_hydrogen")
-        .flat_map(|o| o.locants.iter())
+        .flat_map(|o| o.locants.iter().map(String::as_str))
         .collect();
     if added.is_empty() {
         return (core.into(), suffix.into());
@@ -327,15 +345,16 @@ fn move_added_hydrogen(parts: &AssemblyParts, core: &str, suffix: &str) -> (Stri
     } else {
         return (core.into(), suffix.into());
     };
-    let Some((cited, end)) = indicated_run(&core[start..]) else {
+    let Some(run) = indicated_run(&core[start..]) else {
         return (core.into(), suffix.into());
     };
-    let (moving, kept): (Vec<_>, Vec<_>) = cited.into_iter().partition(|l| added.contains(l));
+    let (moving, kept): (Vec<_>, Vec<_>) =
+        run.locants.into_iter().partition(|l| added.contains(*l));
     if moving.is_empty() {
         return (core.into(), suffix.into());
     }
     let head = &core[..start];
-    let tail = &core[start + end..];
+    let tail = run.remainder;
     let new_core = if !kept.is_empty() {
         format!(
             "{head}{}-{tail}",
@@ -368,16 +387,16 @@ fn move_added_hydrogen(parts: &AssemblyParts, core: &str, suffix: &str) -> (Stri
 fn add_stereo(parts: &AssemblyParts, word: &str) -> String {
     let mut features = vec![];
     for feature in &parts.stereo_features {
-        if !features.contains(feature) {
-            features.push(feature.clone());
+        if !features.contains(&feature) {
+            features.push(feature);
         }
     }
     let unlocanted: BTreeSet<_> = features
         .iter()
         .filter(|(l, _)| l.is_empty())
-        .map(|(_, d)| d.clone())
+        .map(|(_, d)| d.as_str())
         .collect();
-    features.retain(|(l, d)| l != "1" || !unlocanted.contains(d));
+    features.retain(|(l, d)| l != "1" || !unlocanted.contains(d.as_str()));
     features.sort_by_key(|(l, _)| {
         if l.is_empty() {
             (0, 0, String::new())
@@ -422,12 +441,11 @@ fn add_front_modifiers(parts: &AssemblyParts, word: &str) -> String {
         {
             by_name.entry(m).or_default().push(l);
         }
-        let mut names: Vec<_> = by_name.keys().copied().collect();
-        names.sort_by_key(|n| front_modifier_sort_key(n));
-        let mods = names
+        let mut modifiers: Vec<_> = by_name.into_iter().collect();
+        modifiers.sort_by_key(|(name, _)| front_modifier_sort_key(name));
+        let mods = modifiers
             .into_iter()
-            .map(|name| {
-                let mut locs = by_name[name].clone();
+            .map(|(name, mut locs)| {
                 locs.sort_by_key(|l| (l.len(), *l));
                 format!(
                     "{}-{}",
@@ -489,21 +507,21 @@ pub fn assemble_name_raw(parts: &mut AssemblyParts) -> Result<String, String> {
             "e".into()
         };
         let stem = format!("{a_prefix}{stem}");
-        let (stem, unsat, terminal, suffix) = if parts.is_substituent {
-            format_substituent_tail(parts, &stem, &terminal)
+        let tail = if parts.is_substituent {
+            format_substituent_tail(parts, &stem)
         } else {
             format_parent_tail(parts, &stem, &terminal)?
         };
-        let (core, _, suffix) = super::assembly_spiro::format_spiro_core(
-            &stem,
-            &unsat,
-            &terminal,
+        let spiro = super::assembly_spiro::format_spiro_core(
+            &tail.stem,
+            &tail.unsaturation,
+            &tail.terminal,
             &spiro_sides,
-            &suffix,
+            &tail.suffix,
             &parent_terminal,
         );
-        let core = add_indicated_hydrogen_prefix(parts, &core);
-        let (core, suffix) = move_added_hydrogen(parts, &core, &suffix);
+        let core = add_indicated_hydrogen_prefix(parts, &spiro.core);
+        let (core, suffix) = move_added_hydrogen(parts, &core, &spiro.suffix);
         format!("{core}{suffix}")
     };
     let charged_hyphen = !prefix.is_empty()
@@ -518,8 +536,8 @@ pub fn assemble_name_raw(parts: &mut AssemblyParts) -> Result<String, String> {
     let mut word = add_stereo(parts, &word);
     let mut relative = vec![];
     for p in &parts.relative_stereo_prefixes {
-        if !relative.contains(p) {
-            relative.push(p.clone());
+        if !relative.contains(&p.as_str()) {
+            relative.push(p.as_str());
         }
     }
     if !relative.is_empty() {

@@ -29,9 +29,7 @@ fn with_atoms(exclude: &AtomSet, atoms: impl IntoIterator<Item = usize>) -> Atom
     out
 }
 pub fn upstream_bond_order(mol: &Molecule, start: usize, upstream: Option<usize>) -> usize {
-    upstream
-        .and_then(|up| mol.get_bond(start, up))
-        .map_or(0, |b| b.order)
+    upstream.map_or(0, |up| mol.bond_order(start, up))
 }
 pub fn subgraph_neighbors(
     mol: &Molecule,
@@ -54,21 +52,14 @@ pub fn double_bonded_neighbors(mol: &Molecule, start: usize, symbol: &str) -> Ve
         })
         .collect()
 }
-fn branch(
-    mol: &Molecule,
-    start: usize,
-    exclude: &AtomSet,
-    upstream: usize,
-) -> Result<String, String> {
-    name_subgraph_with_upstream(mol, start, exclude, Some(upstream))
-}
 fn plain_branch(
     mol: &Molecule,
     start: usize,
     exclude: &AtomSet,
     upstream: usize,
 ) -> Result<String, String> {
-    branch(mol, start, exclude, upstream).map(|s| strip_outer_parentheses(&s))
+    name_subgraph_with_upstream(mol, start, exclude, Some(upstream))
+        .map(|s| strip_outer_parentheses(&s))
 }
 fn branches(
     mol: &Molecule,
@@ -78,7 +69,7 @@ fn branches(
 ) -> Result<Vec<String>, String> {
     roots
         .iter()
-        .map(|&n| branch(mol, n, exclude, upstream))
+        .map(|&n| name_subgraph_with_upstream(mol, n, exclude, Some(upstream)))
         .collect()
 }
 fn center(names: &[String]) -> String {
@@ -96,7 +87,12 @@ fn prefix(symbol: &str, oxo: usize) -> Option<String> {
         .as_str()
         .map(str::to_owned)
 }
-fn charged_prefix(symbol: &str, charge: i32, kind: &str) -> Option<String> {
+fn charged_prefix(symbol: &str, charge: i32, order: usize) -> Option<String> {
+    let kind = match order {
+        2 => "double",
+        3 => "triple",
+        _ => "single",
+    };
     section("heteroatom_charge_prefixes")
         [format!("{symbol}:{}:{kind}", if charge > 0 { "+" } else { "-" })]
     .as_str()
@@ -395,8 +391,7 @@ fn name_oxygen(
         return Err(unsupported("oxygen bonding state"));
     }
     if atom.charge == 1 && matches!(order, 1 | 2) {
-        let suffix = charged_prefix("O", 1, if order == 2 { "double" } else { "single" })
-            .ok_or_else(|| unsupported("O"))?;
+        let suffix = charged_prefix("O", 1, order).ok_or_else(|| unsupported("O"))?;
         let ns = branches(mol, &roots, &with_atoms(exclude, [start]), start)?;
         return Ok(if ns.is_empty() {
             suffix
@@ -485,11 +480,10 @@ fn name_oxygen(
             "hydroperoxy".into()
         });
     }
-    let b = branch(mol, next, &with_atoms(exclude, [start]), start)?;
+    let b = name_subgraph_with_upstream(mol, next, &with_atoms(exclude, [start]), Some(start))?;
     // Upstream's sulfonic-acid-to-sulfonamido conversion preserves the O-N-S
     // linkage when the named nitrogen bears the proved sulfonyl group.
-    // Upstream divergence: other simple amidooxy contractions can change the
-    // parsed connectivity of a carbon-acyl aminooxy ligand.
+    // Upstream divergence: other amidooxy contractions change a carbon-acyl aminooxy ligand's parsed connectivity.
     if strip_outer_parentheses(&b).ends_with("amido")
         && !is_complex_prefix(&strip_outer_parentheses(&b))
         && !is_sulfonamido_oxygen_ligand(mol, start, next)
@@ -544,7 +538,7 @@ fn name_nitrogen(
         return Ok(if order == 3 {
             "nitrilo".into()
         } else if order == 2 {
-            charged_prefix("N", atom.charge, "double")
+            charged_prefix("N", atom.charge, 2)
                 .filter(|_| atom.charge != 0)
                 .unwrap_or_else(|| "imino".into())
         } else if atom.charge > 0 {
@@ -672,7 +666,7 @@ fn name_nitrogen(
             {
                 name
             } else {
-                branch(mol, n, &with_atoms(exclude, [start]), start)?
+                name_subgraph_with_upstream(mol, n, &with_atoms(exclude, [start]), Some(start))?
             }
         };
         if !b.is_empty() {
@@ -694,7 +688,7 @@ fn sulfur_imide_branch(
     exclude: &AtomSet,
     oxygen: &[usize],
 ) -> Result<Option<String>, String> {
-    let order = mol.get_bond(nitrogen, sulfur).map_or(0, |b| b.order);
+    let order = mol.bond_order(nitrogen, sulfur);
     if order == 0 {
         return Ok(None);
     }
@@ -928,6 +922,11 @@ fn name_sulfur(
         .filter(|n| !oxo.contains(n) && !nitrogens.contains(n))
         .collect();
     let sp = stereo(mol, start);
+    let sulfanyl_suffix = if order == 2 {
+        "sulfanylidene"
+    } else {
+        "sulfanyl"
+    };
     if oxo.len() == 1 && nitrogens.len() == 1 {
         let suffix = format!("sulfonimidoyl{}", if order == 2 { "idene" } else { "" });
         let n = nitrogens[0];
@@ -949,32 +948,25 @@ fn name_sulfur(
         } else {
             String::new()
         };
-        if roots.is_empty() {
-            return Ok(format!("{sp}{n_sub}{suffix}"));
-        }
-        if roots.len() == 1 {
-            let b = plain_branch(mol, roots[0], &blocked, start)?;
-            return Ok(if !b.is_empty() && !n_sub.is_empty() {
-                format!("({sp}{n_sub}S-{b}{suffix})")
-            } else if !b.is_empty() {
-                format!("({sp}{b}{suffix})")
-            } else {
-                format!("{sp}{suffix}")
-            });
-        }
-        let mut ns = branches(mol, &roots, &blocked, start)?;
-        ns.push("oxo".into());
-        ns.push("imino".into());
-        return Ok(lambda(
-            mol,
-            start,
-            &ns,
-            if order == 2 {
-                "sulfanylidene"
-            } else {
-                "sulfanyl"
-            },
-        ));
+        return match roots.as_slice() {
+            [] => Ok(format!("{sp}{n_sub}{suffix}")),
+            [root] => {
+                let b = plain_branch(mol, *root, &blocked, start)?;
+                Ok(if !b.is_empty() && !n_sub.is_empty() {
+                    format!("({sp}{n_sub}S-{b}{suffix})")
+                } else if !b.is_empty() {
+                    format!("({sp}{b}{suffix})")
+                } else {
+                    format!("{sp}{suffix}")
+                })
+            }
+            _ => {
+                let mut ns = branches(mol, &roots, &blocked, start)?;
+                ns.push("oxo".into());
+                ns.push("imino".into());
+                Ok(lambda(mol, start, &ns, sulfanyl_suffix))
+            }
+        };
     }
     if !oxo.is_empty() {
         let suffix = format!(
@@ -986,37 +978,25 @@ fn name_sulfur(
             }),
             if order == 2 { "idene" } else { "" }
         );
-        if roots.is_empty() {
-            return Ok(format!("{sp}{suffix}"));
-        }
-        if roots.len() == 1 {
-            let b = plain_branch(mol, roots[0], &blocked, start)?;
-            let (g, bare) = sulfonyl_group(&b, &suffix);
-            return Ok(if bare {
-                format!("{sp}{g}")
-            } else {
-                format!("({sp}{g})")
-            });
-        }
-        let mut ns = branches(mol, &roots, &blocked, start)?;
-        ns.extend(vec!["oxo".into(); oxo.len()]);
-        return Ok(lambda(
-            mol,
-            start,
-            &ns,
-            if order == 2 {
-                "sulfanylidene"
-            } else {
-                "sulfanyl"
-            },
-        ));
+        return match roots.as_slice() {
+            [] => Ok(format!("{sp}{suffix}")),
+            [root] => {
+                let b = plain_branch(mol, *root, &blocked, start)?;
+                let (g, bare) = sulfonyl_group(&b, &suffix);
+                Ok(if bare {
+                    format!("{sp}{g}")
+                } else {
+                    format!("({sp}{g})")
+                })
+            }
+            _ => {
+                let mut ns = branches(mol, &roots, &blocked, start)?;
+                ns.extend(vec!["oxo".into(); oxo.len()]);
+                Ok(lambda(mol, start, &ns, sulfanyl_suffix))
+            }
+        };
     }
     if !nitrogens.is_empty() {
-        let suffix = if order == 2 {
-            "sulfanylidene"
-        } else {
-            "sulfanyl"
-        };
         let mut imino = Vec::new();
         for &nitrogen in &nitrogens {
             let n_roots: Vec<_> = mol
@@ -1029,14 +1009,14 @@ fn name_sulfur(
             imino.push(format_amino_from_branches(&ns, true, false, false));
         }
         if roots.is_empty() {
-            return Ok(format!("{sp}{}{suffix}", center(&imino)));
+            return Ok(format!("{sp}{}{sulfanyl_suffix}", center(&imino)));
         }
         let mut ns = branches(mol, &roots, &blocked, start)?;
         imino.append(&mut ns);
         if order != 2 && roots.len() == 1 && nitrogens.len() == 1 {
-            return Ok(format!("({sp}{}{suffix})", center(&imino)));
+            return Ok(format!("({sp}{}{sulfanyl_suffix})", center(&imino)));
         }
-        return Ok(lambda(mol, start, &imino, suffix));
+        return Ok(lambda(mol, start, &imino, sulfanyl_suffix));
     }
     if roots.is_empty() {
         return Ok(
@@ -1061,16 +1041,7 @@ fn name_sulfur(
             && mol.atoms[&start].total_h_count > 0
             && substituent_bonding_number(mol, start) != 2
         {
-            return Ok(lambda(
-                mol,
-                start,
-                &ns,
-                if order == 2 {
-                    "sulfanylidene"
-                } else {
-                    "sulfanyl"
-                },
-            ));
+            return Ok(lambda(mol, start, &ns, sulfanyl_suffix));
         }
         if super::nomenclature::RULES
             .heteroatoms
@@ -1089,16 +1060,7 @@ fn name_sulfur(
     if mol.atoms[&start].charge > 0 && order != 2 {
         return Ok(format!("({sp}{}sulfaniumyl)", center(&ns)));
     }
-    Ok(lambda(
-        mol,
-        start,
-        &ns,
-        if order == 2 {
-            "sulfanylidene"
-        } else {
-            "sulfanyl"
-        },
-    ))
+    Ok(lambda(mol, start, &ns, sulfanyl_suffix))
 }
 
 pub fn name_heteroatom_subgraph(
@@ -1142,7 +1104,12 @@ pub fn name_heteroatom_subgraph(
                         if oxo.contains(&n) {
                             Ok("oxo".into())
                         } else {
-                            branch(mol, n, &with_atoms(exclude, [start]), start)
+                            name_subgraph_with_upstream(
+                                mol,
+                                n,
+                                &with_atoms(exclude, [start]),
+                                Some(start),
+                            )
                         }
                     })
                     .collect::<Result<Vec<_>, String>>()?;
@@ -1194,16 +1161,8 @@ pub fn name_heteroatom_subgraph(
                     return Err(unsupported("pnictogen charge bonding state"));
                 }
                 Some(
-                    charged_prefix(
-                        symbol,
-                        atom.charge,
-                        match order {
-                            2 => "double",
-                            3 => "triple",
-                            _ => "single",
-                        },
-                    )
-                    .ok_or_else(|| unsupported("pnictogen charge prefix"))?,
+                    charged_prefix(symbol, atom.charge, order)
+                        .ok_or_else(|| unsupported("pnictogen charge prefix"))?,
                 )
             } else {
                 None
@@ -1264,15 +1223,7 @@ pub fn name_heteroatom_subgraph(
                     .any(|&n| charge_normalized_chalcogenido(mol, Some(start), n));
                 if atom.charge != 0
                     && !balanced
-                    && let Some(charged) = charged_prefix(
-                        symbol,
-                        atom.charge,
-                        match order {
-                            2 => "double",
-                            3 => "triple",
-                            _ => "single",
-                        },
-                    )
+                    && let Some(charged) = charged_prefix(symbol, atom.charge, order)
                 {
                     suffix = charged;
                 }
@@ -1555,7 +1506,7 @@ fn guanidino_prefix(
             {
                 continue;
             }
-            let name = branch(mol, n, &blocked, nitrogen)?;
+            let name = name_subgraph_with_upstream(mol, n, &blocked, Some(nitrogen))?;
             if name.is_empty() {
                 return Ok(None);
             }

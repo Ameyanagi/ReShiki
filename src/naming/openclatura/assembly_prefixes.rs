@@ -11,8 +11,9 @@ use std::collections::BTreeMap;
 
 fn ignored_prefix_len(text: &str) -> usize {
     // The registry's prefix pattern recognizes locant lists and italic descriptors.
-    let end = text.find(['-', ')']);
-    let Some(end) = end else { return 0 };
+    let Some(end) = text.find(['-', ')']) else {
+        return 0;
+    };
     let prefix = &text[..end];
     let words = [
         "sec", "tert", "t", "s", "d", "l", "m", "o", "p", "alpha", "beta", "gamma",
@@ -37,14 +38,15 @@ fn ignored_prefix_len(text: &str) -> usize {
     }
 }
 pub fn substituent_sort_key(name: &str) -> String {
-    let mut text = name.to_lowercase();
+    let lowercase = name.to_lowercase();
+    let mut text = lowercase.as_str();
     loop {
-        text = text.trim_start_matches(['(', '[', '{', ')']).to_owned();
-        let n = ignored_prefix_len(&text);
+        text = text.trim_start_matches(['(', '[', '{', ')']);
+        let n = ignored_prefix_len(text);
         if n == 0 {
-            return text;
+            return text.to_owned();
         }
-        text = text[n..].to_owned();
+        text = &text[n..];
     }
 }
 fn group_offers_second_position(key: &str) -> bool {
@@ -177,7 +179,10 @@ pub fn format_substituent_prefixes(parts: &AssemblyParts) -> String {
     for name in names {
         let items = &grouped[name];
         let optional = items.iter().all(|i| i.outer_parentheses_optional);
-        let mut locs: Vec<String> = items.iter().flat_map(|i| i.locants.clone()).collect();
+        let mut locs: Vec<_> = items
+            .iter()
+            .flat_map(|i| i.locants.iter().cloned())
+            .collect();
         locs.sort_by_key(|l| parse_locant(l));
         let per = if name.contains("diyl") && !name.contains("ylidene") {
             2
@@ -214,9 +219,7 @@ pub fn format_substituent_prefixes(parts: &AssemblyParts) -> String {
             used = name[1..name.len() - 1].into();
         }
         if complex && !is_fully_enclosed(&used) {
-            // Upstream divergence: an unlocanted diazenyl sibling needs its
-            // own boundary. Otherwise a preceding ring becomes a ligand on
-            // diazenyl instead of a second substituent on the named parent.
+            // Upstream divergence: bracket a diazenyl sibling to preserve its attachment to the parent.
             if count > 1 || !loc.is_empty() || (grouped.len() > 1 && name == "diazenyl") {
                 used = format!("({used})");
             }
@@ -244,7 +247,7 @@ pub fn format_replacement_prefixes(parts: &AssemblyParts) -> String {
         return String::new();
     }
     let charged = super::assembly_charge::single_charged_replacement_locants(parts);
-    let mut groups: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut groups: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
     for item in &parts.a_prefixes {
         let name =
             if item.name == "aza" && item.locants.first().is_some_and(|l| charged.contains(l)) {
@@ -257,23 +260,22 @@ pub fn format_replacement_prefixes(parts: &AssemblyParts) -> String {
                 &item.name
             };
         groups
-            .entry(name.clone())
+            .entry(name)
             .or_default()
-            .extend(item.locants.clone());
+            .extend(item.locants.iter().map(String::as_str));
     }
-    let mut names: Vec<_> = groups.keys().collect();
-    names.sort_by_key(|n| {
+    let mut groups: Vec<_> = groups.into_iter().collect();
+    groups.sort_by_key(|(name, _)| {
         RULES
             .assembly
             .replacement_prefix_order
-            .get(*n)
+            .get(*name)
             .copied()
             .unwrap_or(99)
     });
-    names
+    groups
         .into_iter()
-        .map(|name| {
-            let mut locs = groups[name].clone();
+        .map(|(name, mut locs)| {
             locs.sort_by_key(|l| parse_locant(l));
             let mult = if locs.len() > 1 {
                 multipliers::basic(locs.len())

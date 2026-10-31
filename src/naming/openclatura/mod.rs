@@ -33,8 +33,6 @@ mod ionic_naming;
 mod locant_elision;
 mod locants;
 mod molecule;
-mod name_assembly;
-mod name_postprocessing;
 mod namer;
 mod nomenclature;
 mod numbering;

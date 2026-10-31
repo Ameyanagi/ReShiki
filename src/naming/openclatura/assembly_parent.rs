@@ -54,9 +54,9 @@ fn functional_ring_parent(name: &str, key: &str) -> Option<String> {
     }
     None
 }
-fn halide_word(key: &str) -> Option<String> {
+fn halide_word(key: &str) -> Option<&'static str> {
     let suffix = RULES.functional_groups.get(key)?.suffix.as_deref()?;
-    suffix.strip_prefix("oyl ").map(str::to_owned)
+    suffix.strip_prefix("oyl ")
 }
 fn retained_chain_name(length: usize, key: &str, count: usize) -> Option<String> {
     if let Some(name) =
@@ -287,7 +287,7 @@ pub fn promote_retained_functional_parent(parts: &mut AssemblyParts) -> Result<(
     }
     Ok(())
 }
-pub fn substituent_attachment_kind(parts: &AssemblyParts) -> &'static str {
+fn substituent_attachment_kind(parts: &AssemblyParts) -> &'static str {
     match parts.attachment_order {
         3 => "triple",
         2 => "double",
@@ -383,10 +383,8 @@ fn promote_carbamimidoyl(parts: &mut AssemblyParts) {
             .into_iter()
             .find(|(_, s)| simple.contains(&s.as_str()))
             .map_or(1, |(n, _)| n);
-        prefixes.push((
-            ligands.clone(),
-            format!("{}-{ligands}", vec![loc; count].join(",")),
-        ));
+        let prefix = format!("{}-{ligands}", vec![loc; count].join(","));
+        prefixes.push((ligands, prefix));
     }
     prefixes.sort_by_key(|p| substituent_sort_key(&p.0));
     parts.retained_substituent_name = Some(format!(
@@ -619,11 +617,15 @@ pub fn always_print_substituent_locant(parts: &AssemblyParts) -> bool {
                 .any(|s| stem.ends_with(s))
         })
 }
-pub fn format_substituent_tail(
-    parts: &AssemblyParts,
-    stem: &str,
-    _terminal: &str,
-) -> (String, String, String, String) {
+#[derive(Default)]
+pub(super) struct ParentTail {
+    pub(super) stem: String,
+    pub(super) unsaturation: String,
+    pub(super) terminal: String,
+    pub(super) suffix: String,
+}
+
+pub(super) fn format_substituent_tail(parts: &AssemblyParts, stem: &str) -> ParentTail {
     let kind = substituent_attachment_kind(parts);
     let mut suffix = RULES.assembly.substituent_attachment_suffixes[kind].clone();
     if kind == "acyl" && parts.parent_length == 1 && !parts.substituents.is_empty() {
@@ -631,27 +633,34 @@ pub fn format_substituent_tail(
     }
     if parts.is_acyl_substituent {
         if suffix == RULES.assembly.substituent_attachment_suffixes["acyl_on_branch"] {
-            return (String::new(), String::new(), suffix, String::new());
+            return ParentTail {
+                terminal: suffix,
+                ..Default::default()
+            };
         }
         if parts.parent_length == 1 || parts.parent_length == 2 {
-            return (
-                (if parts.parent_length == 1 {
+            return ParentTail {
+                stem: (if parts.parent_length == 1 {
                     "form"
                 } else {
                     "acet"
                 })
                 .into(),
-                String::new(),
-                "yl".into(),
-                String::new(),
-            );
+                terminal: "yl".into(),
+                ..Default::default()
+            };
         }
-        let (stem, unsat) = if parts.unsaturations.is_empty() {
+        let (stem, unsaturation) = if parts.unsaturations.is_empty() {
             (stem.to_owned(), "an".into())
         } else {
             format_unsaturations(parts, stem, false)
         };
-        return (stem, unsat, suffix, String::new());
+        return ParentTail {
+            stem,
+            unsaturation,
+            terminal: suffix,
+            suffix: String::new(),
+        };
     }
     let always = parts.spiro_prefix_composition || always_print_substituent_locant(parts);
     let two = !parts.is_ring
@@ -660,13 +669,13 @@ pub fn format_substituent_tail(
         && parts.unsaturations.len() == 1
         && parts.unsaturations[0].locants == ["1"];
     if !always && two {
-        let (stem, unsat) = format_unsaturations(parts, stem, true);
-        return (
+        let (stem, unsaturation) = format_unsaturations(parts, stem, true);
+        return ParentTail {
             stem,
-            unsat,
-            append_charge_suffixes_to_terminal(parts, &suffix),
-            String::new(),
-        );
+            unsaturation,
+            terminal: append_charge_suffixes_to_terminal(parts, &suffix),
+            suffix: String::new(),
+        };
     }
     let terminal = if parts.retained_name.as_deref() == Some("benzene") {
         "yl".into()
@@ -692,12 +701,12 @@ pub fn format_substituent_tail(
             },
         )
     };
-    (
+    ParentTail {
         stem,
-        unsat,
-        append_charge_suffixes_to_terminal(parts, &terminal),
-        String::new(),
-    )
+        unsaturation: unsat,
+        terminal: append_charge_suffixes_to_terminal(parts, &terminal),
+        suffix: String::new(),
+    }
 }
 fn sole_group_redundant(parts: &AssemblyParts) -> bool {
     if parts
@@ -838,11 +847,11 @@ fn redundant_unsaturation(parts: &AssemblyParts) -> bool {
         && parts.principal_group.is_none()
         && parts.parent_charges.is_empty()
 }
-pub fn format_parent_tail(
+pub(super) fn format_parent_tail(
     parts: &AssemblyParts,
     stem: &str,
     terminal: &str,
-) -> Result<(String, String, String, String), String> {
+) -> Result<ParentTail, String> {
     let (stem, unsat) = if !has_retained_like_parent(parts) {
         if parts.unsaturations.is_empty() {
             (stem.to_owned(), "an".into())
@@ -866,7 +875,12 @@ pub fn format_parent_tail(
         terminal.clear();
         suffix = format!("{charge}{suffix}");
     }
-    Ok((stem, unsat, terminal, suffix))
+    Ok(ParentTail {
+        stem,
+        unsaturation: unsat,
+        terminal,
+        suffix,
+    })
 }
 
 #[cfg(test)]
@@ -880,7 +894,10 @@ mod tests {
         parts.is_ring = true;
         parts.is_substituent = true;
         parts.spiro_prefix_composition = true;
-        assert_eq!(format_substituent_tail(&parts, "cyclohex", "e").2, "-1-yl");
+        assert_eq!(
+            format_substituent_tail(&parts, "cyclohex").terminal,
+            "-1-yl"
+        );
         parts.is_substituent = false;
         parts.unsaturations.push(UnsaturationItem {
             bond_key: "double".into(),
@@ -888,7 +905,9 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(
-            format_parent_tail(&parts, "cyclohex", "e").unwrap().1,
+            format_parent_tail(&parts, "cyclohex", "e")
+                .unwrap()
+                .unsaturation,
             "-1-en"
         );
     }
