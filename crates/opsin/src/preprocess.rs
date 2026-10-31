@@ -1,5 +1,11 @@
 //! `PreProcessor` and the normalization portion of `StringTools`, OPSIN 2.9.0.
+//! Phane superscript handling: upstream main, 42e87ac6.
 use crate::ParsingError;
+use regex::Regex;
+use std::sync::LazyLock;
+
+static JAVA_DECIMAL_DIGIT: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\A\p{Nd}\z").expect("Java decimal digit category"));
 
 pub fn preprocess(name: &str) -> Result<String, ParsingError> {
     // Java String.trim removes only characters <= U+0020.
@@ -31,6 +37,30 @@ pub fn preprocess(name: &str) -> Result<String, ParsingError> {
                 }
             }
         }
+        if let Some(digit) = superscript_digit_to_digit(ch) {
+            if i > 0 && superscript_digit_to_digit(chars[i - 1]).is_some() {
+                replaced.push(digit);
+            } else if i > 0 && is_java_digit(chars[i - 1]) {
+                replaced.push('^');
+                replaced.push(digit);
+            } else {
+                replaced.push(ch);
+            }
+            i += 1;
+            continue;
+        }
+        if ch == '<' {
+            let remaining = &chars[i..];
+            if starts_with_sup_tag(remaining, "<sup>") {
+                replaced.push('^');
+                i += 5;
+                continue;
+            }
+            if starts_with_sup_tag(remaining, "</sup>") {
+                i += 6;
+                continue;
+            }
+        }
         if matches!(ch, 's' | 'S')
             && i + 4 < chars.len()
             && chars[i + 1..i + 5]
@@ -46,6 +76,34 @@ pub fn preprocess(name: &str) -> Result<String, ParsingError> {
         i += 1;
     }
     normalize_representation(&replaced)
+}
+
+fn superscript_digit_to_digit(ch: char) -> Option<char> {
+    Some(match ch {
+        '\u{2070}' => '0',
+        '\u{b9}' => '1',
+        '\u{b2}' => '2',
+        '\u{b3}' => '3',
+        '\u{2074}'..='\u{2079}' => char::from_u32('4' as u32 + ch as u32 - 0x2074)?,
+        _ => return None,
+    })
+}
+
+fn starts_with_sup_tag(remaining: &[char], tag: &str) -> bool {
+    remaining.len() >= tag.len()
+        && remaining
+            .iter()
+            .zip(tag.chars())
+            .all(|(&actual, expected)| {
+                // Java regionMatches(true) uses Unicode simple case conversion.
+                // Long s is the only non-ASCII equivalent in these two tag names.
+                actual.eq_ignore_ascii_case(&expected) || (actual == '\u{17f}' && expected == 's')
+            })
+}
+
+fn is_java_digit(ch: char) -> bool {
+    // Character.isDigit(charAt(i - 1)) observes a single UTF-16 code unit.
+    ch as u32 <= 0xffff && JAVA_DECIMAL_DIGIT.is_match(ch.encode_utf8(&mut [0; 4]))
 }
 
 fn normalize_representation(input: &str) -> Result<String, ParsingError> {

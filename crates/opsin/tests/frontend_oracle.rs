@@ -89,7 +89,7 @@ fn complete_parser_and_parse_ranking_match_pinned_opsin() {
         }
         cases += 1;
     }
-    assert_eq!(cases, 4_736);
+    assert_eq!(cases, 5_436);
     assert_eq!(
         failure_count,
         0,

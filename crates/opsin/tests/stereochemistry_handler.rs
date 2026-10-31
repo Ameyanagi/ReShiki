@@ -201,6 +201,51 @@ fn upstream_e_z_and_cis_trans_bond_cases() {
         assert_eq!(cis_trans_unambiguous_on_bond(state.graph(), bond), expected)
     }
 }
+
+#[test]
+fn compound_locants_restrict_stereochemistry_to_the_named_bond() {
+    for (locant, succeeds) in [
+        ("2(3^1)", true),
+        ("2[3^1]", true),
+        ("2{3^1}", true),
+        ("2(1)", false),
+        ("2(9)", false),
+    ] {
+        let (mut state, mut a, r, _, f) = fixture("CC=CC");
+        state.graph_mut().remove_locant(AtomId(2), "3");
+        state.graph_mut().add_locant(AtomId(2), "3^1");
+        let id = token(
+            &mut a,
+            r,
+            STEREOCHEMISTRY_EL,
+            "E",
+            &[
+                (TYPE_ATR, E_OR_Z_TYPE_VAL),
+                (VALUE_ATR, "E"),
+                (LOCANT_ATR, locant),
+            ],
+        );
+        let result = apply(&mut state, &mut a, f, &[id]);
+        let bond = state.graph().bond_between(AtomId(1), AtomId(2)).unwrap();
+        if succeeds {
+            result.unwrap();
+            assert_eq!(
+                state.graph().bond(bond).stereo.as_ref().unwrap().value,
+                BondStereoValue::Trans
+            );
+            assert!(a[id].parent.is_none());
+        } else {
+            assert_eq!(
+                result.unwrap_err().to_string(),
+                format!(
+                    "Could not find bond that: {} was referring to",
+                    a.to_xml(id)
+                )
+            );
+            assert!(state.graph().bond(bond).stereo.is_none());
+        }
+    }
+}
 #[test]
 fn unsupported_descriptors_follow_exact_warning_categories() {
     for kind in [

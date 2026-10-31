@@ -1,5 +1,6 @@
 //! Ordered destructive semantic parsing, ported from OPSIN `ComponentGenerator`.
 //! Source: OPSIN 2.9.0, b91b610af5ab07560fedb20730d7aef46bb2bca0.
+//! Phane skeleton and locant updates: upstream main, 42e87ac6.
 //! Copyright Daniel Lowe and OPSIN contributors; MIT (see LICENSE).
 
 use crate::api::{OpsinWarning, ParseOptions, WarningKind};
@@ -127,6 +128,7 @@ impl<'a> ComponentGenerator<'a> {
         }
         for group in groups {
             self.detect_alkane_fused_ring_bridges(group);
+            self.process_phane_skeleton(group)?;
             self.process_rings(group)?;
             self.handle_group_irregularities(group)?;
         }
@@ -251,7 +253,10 @@ impl<'a> ComponentGenerator<'a> {
                             return err("OPSIN bug: malformed locant text");
                         };
                         let inner = text[start + 1..text.len() - 1].to_string();
-                        if matches(&inner, r"(?i:[1-9][0-9]*[a-g]?'*H(,[1-9][0-9]*[a-g]?'*H)*)") {
+                        if matches(
+                            &inner,
+                            r"(?i:[1-9][0-9]*(\^[1-9][0-9]*)?[a-g]?'*H(,[1-9][0-9]*(\^[1-9][0-9]*)?[a-g]?'*H)*)",
+                        ) {
                             *text = remove_dash(&text[..start]).to_string();
                             for h in inner.split(',') {
                                 let hloc = fix_locant_capitalisation(&h[..h.len() - 1]);
@@ -1483,6 +1488,29 @@ impl<'a> ComponentGenerator<'a> {
             self.arena.detach(u)
         }
     }
+    fn process_phane_skeleton(&mut self, group: NodeId) -> Result {
+        if !self.attr_is(group, SUBTYPE_ATR, PHANE_SUBTYPE_VAL) {
+            return Ok(());
+        }
+        let Some(node_count) = self
+            .arena
+            .previous_sibling(group)
+            .filter(|&node| self.arena[node].name == MULTIPLIER_EL)
+        else {
+            return err("Expected a multiplier indicating the number of nodes before phane");
+        };
+        let count = self.attr(node_count, VALUE_ATR);
+        let nodes = count
+            .parse::<i32>()
+            .map_err(|_| ComponentGenerationError(format!("For input string: \"{count}\"")))?;
+        let skeleton = self.arena.previous_sibling(node_count);
+        if nodes < 2 || (nodes < 3 && self.is(skeleton, CYCLO_EL)) {
+            return err(format!("Phane skeleton has too few nodes: {nodes}"));
+        }
+        self.set(group, VALUE_ATR, "C".repeat(nodes as usize));
+        self.arena.detach(node_count);
+        Ok(())
+    }
     fn process_rings(&mut self, g: NodeId) -> Result {
         if let Some(p) = self.arena.previous_sibling_ignoring(g, &[LOCANT_EL]) {
             match self.arena[p].name.as_str() {
@@ -2489,7 +2517,7 @@ pub fn standardize_locant_variants(text: &str) -> String {
     text = standardize_locant_prime_position(&text);
     if text.chars().next().is_some_and(char::is_alphabetic) {
         let pattern = rx(&format!(
-            "^({ELEMENT_SYMBOLS}'*)[\\^\\[\\(\\{{~\\*<]*(?:[sS][uU][pP][ ]?)?([^\\^\\[\\(\\{{~\\*<\\]\\)\\}}>]+)[^\\[\\(\\{{]*"
+            "^({ELEMENT_SYMBOLS}'*)[\\^\\[\\(\\{{~\\*<]*(?:[sS][uU][pP][ ]?)?([^\\^\\[\\(\\{{~\\*<\\]\\)\\}}>]+(?:\\^[^\\^\\[\\(\\{{~\\*<\\]\\)\\}}>]+)?)[^\\[\\(\\{{]*"
         ));
         if let Some(c) = pattern.captures(&text) {
             let replacement = format!("{}{}", &c[1], &c[2]);
@@ -2733,5 +2761,35 @@ fn append_ring_locations(smiles: &mut String, locations: &HashMap<usize, Vec<usi
         for &label in labels {
             smiles.push_str(&ring_closure(label))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn phane_skeleton_rejects_a_signed_negative_count_before_mutation() {
+        // A direct method fixture: lexical multiplier tokens never have a
+        // negative value, and earlier pipeline stages parse their own counts.
+        let mut arena = Arena::default();
+        let root = arena.grouping(ROOT_EL);
+        let multiplier = arena.token(MULTIPLIER_EL, "multiplier");
+        arena[multiplier].set_attribute(VALUE_ATR, "-1");
+        arena.add_child(root, multiplier);
+        let group = arena.token(GROUP_EL, "phan");
+        arena[group].set_attribute(SUBTYPE_ATR, PHANE_SUBTYPE_VAL);
+        arena[group].set_attribute(VALUE_ATR, "C");
+        arena.add_child(root, group);
+        let before = arena.to_xml(root);
+        let mut context = ComponentGenerationContext::default();
+        assert_eq!(
+            ComponentGenerator::new(&mut arena, &mut context)
+                .process_phane_skeleton(group)
+                .unwrap_err()
+                .to_string(),
+            "Phane skeleton has too few nodes: -1"
+        );
+        assert_eq!(arena.to_xml(root), before);
     }
 }

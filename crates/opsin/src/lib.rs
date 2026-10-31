@@ -1,4 +1,4 @@
-//! Native Rust migration of OPSIN 2.9.0.
+//! Native Rust migration of OPSIN main, commit 42e87ac6.
 //!
 //! The embedded resources and annotation algorithm are ported from the pinned
 //! upstream source. The migration ledger records which structure-building
@@ -28,6 +28,7 @@ pub mod graph;
 pub mod isotope_specification_parser;
 pub mod parse_rules;
 pub mod parse_tree;
+pub mod phane_amplifier;
 mod pipeline;
 pub mod preprocess;
 mod resource_data;
@@ -53,10 +54,10 @@ pub use api::{
 };
 use std::sync::{Arc, OnceLock};
 
-pub const UPSTREAM_VERSION: &str = "2.9.0";
-pub const UPSTREAM_COMMIT: &str = "b91b610af5ab07560fedb20730d7aef46bb2bca0";
+pub const UPSTREAM_VERSION: &str = "3.0-SNAPSHOT";
+pub const UPSTREAM_COMMIT: &str = "42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91";
 pub const RESOURCE_FINGERPRINT: &str =
-    "3c543268d173cc89b50d68be6ea967f22fc80e6d7384511612a32e4844ae4af5";
+    "bc977c95bd647cd90048215a2a82baa7d173c5373991ebc01690a0fe4137b062";
 pub const PORT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Debug, Clone)]

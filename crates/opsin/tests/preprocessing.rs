@@ -75,3 +75,39 @@ fn other_dashes_remain_hyphens() {
         assert_eq!(preprocess(&input).unwrap(), "2-methylpyridine");
     }
 }
+
+#[test]
+fn upstream_superscript_digits() {
+    for (input, expected) in [
+        ("1\u{2074}-ol", "1^4-ol"),
+        ("4\u{b9}\u{2070},5\u{b2}-diol", "4^10,5^2-diol"),
+        ("3\u{b9}-yl", "3^1-yl"),
+    ] {
+        assert_eq!(preprocess(input).unwrap(), expected, "{input}");
+    }
+}
+
+#[test]
+fn upstream_html_superscripts() {
+    for input in ["1<sup>4</sup>-ol", "1<SUP>4</SUP>-ol"] {
+        assert_eq!(preprocess(input).unwrap(), "1^4-ol");
+    }
+}
+
+#[test]
+fn superscript_replacements_observe_original_input_context() {
+    for (input, expected) in [
+        ("\u{b2}\u{b3}H", "23H"),
+        ("\u{b2}H", "2H"),
+        (
+            "1\u{2070}\u{b9}\u{b2}\u{b3}\u{2074}\u{2075}\u{2076}\u{2077}\u{2078}\u{2079}",
+            "1^0123456789",
+        ),
+        ("N<SuP>2</sUp>", "N^2"),
+        ("1<\u{17f}up>4</\u{17f}up>", "1^4"),
+        ("1<sup>4</sup>\u{b2}", "1^42"),
+        ("</sup>1", "1"),
+    ] {
+        assert_eq!(preprocess(input).unwrap(), expected, "{input}");
+    }
+}

@@ -1,6 +1,7 @@
 //! Application of OPSIN stereochemical descriptors to the completed graph.
 //! Port of `StereochemistryHandler.java`, OPSIN 2.9.0,
 //! b91b610af5ab07560fedb20730d7aef46bb2bca0; MIT, Daniel Lowe and contributors.
+//! Compound locant stereobonds: upstream main, 42e87ac6.
 //! Hydrogen neighbours must be physical atoms before this pass. A lone pair
 //! is represented by the centre itself, as in the upstream StereoAnalyser.
 
@@ -414,10 +415,30 @@ impl<'a> StereochemistryHandler<'a> {
         cis_trans: bool,
     ) -> Result<bool> {
         let candidates = if let Some(locant) = locant {
-            self.graph()
-                .atom_by_locant(fragment, locant)
-                .map(|a| self.graph().atom(a).bonds.clone())
-                .unwrap_or_default()
+            let compound = crate::tree_tools::split_compound_locant(locant);
+            let (locant, second_atom) = if let Some((ref base, compound)) = compound {
+                let Some(second_atom) = self.graph().atom_by_locant(fragment, compound) else {
+                    return Ok(false);
+                };
+                (base.as_str(), Some(second_atom))
+            } else {
+                (locant, None)
+            };
+            if let Some(first_atom) = self.graph().atom_by_locant(fragment, locant) {
+                self.graph()
+                    .atom(first_atom)
+                    .bonds
+                    .iter()
+                    .copied()
+                    .filter(|&bond| {
+                        second_atom.is_none_or(|second| {
+                            self.graph().bond(bond).other_atom(first_atom) == Some(second)
+                        })
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            }
         } else {
             let mut bonds = self.graph().fragment(fragment).bonds.clone();
             let mut inter = Vec::new();

@@ -1,5 +1,5 @@
 //! Exercise the pinned resource dialect, rather than a hand-picked subset of
-//! generic SMILES. This is frozen OPSIN 2.9.0 XML in the crate, never a runtime
+//! generic SMILES. This is frozen OPSIN main XML in the crate, never a runtime
 //! upstream checkout or network resource.
 use opsin::{graph::Graph, smiles::build_fragment};
 
@@ -52,7 +52,7 @@ fn build_every_literal_group_resource() {
             }
         }
     }
-    assert_eq!(examples, 3_182, "Frozen literal resource coverage changed");
+    assert_eq!(examples, 3_183, "Frozen literal resource coverage changed");
     assert!(
         failures.is_empty(),
         "{} failures out of {examples} frozen resource groups:\n{}",

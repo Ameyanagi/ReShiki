@@ -1,7 +1,6 @@
-//! Frozen dev-only Java oracle, OPSIN 2.9.0 MIT Daniel Lowe/contributors.
-//! Source b91b610af5ab07560fedb20730d7aef46bb2bca0; official Maven
-//! opsin-core-2.9.0-jar-with-dependencies.jar SHA256
-//! 627ee5da4af551f9c4d1d766f545eb7cf519a344776e0bb677247a47abac0252.
+//! Frozen dev-only Java oracle, OPSIN main MIT Daniel Lowe/contributors.
+//! Source 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91; development jar and
+//! fixture SHA256 identities are recorded in provenance/manifest.json.
 //! Captured with package-local SMILESFragmentBuilder.build(value,type,labels),
 //! then FragmentTools.convertSpareValenciesToDoubleBonds. Tests invoke no Java.
 use opsin::{
@@ -93,8 +92,8 @@ fn every_distinct_literal_resource_has_source_cycles_indicated_h_and_kekulizatio
             }
         }
     }
-    assert_eq!(literals, 3182);
-    assert_eq!(inputs.len(), 2642);
+    assert_eq!(literals, 3183);
+    assert_eq!(inputs.len(), 2643);
     let actual_inputs: String = inputs
         .iter()
         .map(|(value, kind, labels)| format!("{value}\t{kind}\t{labels}\n"))

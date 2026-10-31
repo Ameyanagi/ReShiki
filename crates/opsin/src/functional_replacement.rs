@@ -1,5 +1,6 @@
 //! Functional replacement, ported from OPSIN 2.9.0 `FunctionalReplacement.java`.
 //! Source commit b91b610af5ab07560fedb20730d7aef46bb2bca0.
+//! Shared OpsinTools numeric locants: upstream main, 42e87ac6.
 //! Copyright Daniel Lowe and OPSIN contributors; MIT (see LICENSE).
 //!
 //! The source's atom and suffix insertion order is retained. In particular,
@@ -40,10 +41,7 @@ fn value_number(arena: &Arena, node: NodeId) -> Result<usize> {
         .map_err(|_| error("Malformed multiplier"))
 }
 fn numeric_locant(value: &str) -> bool {
-    static REGEX: OnceLock<Regex> = OnceLock::new();
-    REGEX
-        .get_or_init(|| Regex::new(r"^\d+[a-z]?'*$").unwrap())
-        .is_match(value)
+    crate::fragment_tools::is_numeric_locant(value)
 }
 fn element_locant(value: &str) -> bool {
     static REGEX: OnceLock<Regex> = OnceLock::new();

@@ -435,6 +435,7 @@ Br[O-]	nonCarboxylicAcid	none
 Br[Se](Br)=O	simpleGroup	none
 C	acidStem	1
 C	chain	numeric
+C	ring	numeric
 C	substituent	1
 C	substituent	none
 C#C	chain	1/2

@@ -1,5 +1,6 @@
 //! Structure-aware component processing from OPSIN 2.9.0.
 //! Source: `ComponentProcessor.java`, commit b91b610af5ab07560fedb20730d7aef46bb2bca0.
+//! Phane/ring-assembly extensions: upstream commit 42e87ac6.
 //! Copyright Daniel Lowe and OPSIN contributors; MIT (see LICENSE).
 
 use crate::ParsingError;
@@ -2768,7 +2769,7 @@ impl ComponentProcessor<'_> {
             }
             arena.detach(last);
         } else if values.len() == 1 {
-            let regex = regex::Regex::new(r"^[A-Z][a-z]?'*(\d+[a-z]?'*)?$").unwrap();
+            let regex = regex::Regex::new(r"^[A-Z][a-z]?'*(\d+(?:\^\d+)?[a-z]?'*)?$").unwrap();
             if regex.is_match(&values[0]) {
                 return Ok(());
             }
@@ -2778,7 +2779,7 @@ impl ComponentProcessor<'_> {
                 .get(&group)
                 .cloned()
                 .unwrap_or_default();
-            let numeric = regex::Regex::new(r"^\d+[a-z]?'*$").unwrap();
+            let numeric = regex::Regex::new(r"^\d+(?:\^\d+)?[a-z]?'*$").unwrap();
             for suffix in suffixes {
                 let Some(target) = self
                     .state
@@ -3747,6 +3748,7 @@ impl ComponentProcessor<'_> {
                 crate::component_processor_rings::process_fused_ring_bridges(
                     self.state, arena, sub,
                 )?;
+                crate::phane_amplifier::process_phane_amplification(self.state, arena, sub)?;
                 crate::component_processor_rings::assign_element_symbol_locants(
                     self.state, arena, sub,
                 )?;
@@ -4029,6 +4031,14 @@ pub const SOURCE_METHOD_COVERAGE: &[(&str, &str)] = &[
     (
         "processRingAssemblies",
         "component_processor_rings::process_ring_assemblies",
+    ),
+    (
+        "convertSuperscriptRingAssemblyLocants",
+        "component_processor_rings::convert_superscript_ring_assembly_locants",
+    ),
+    (
+        "addSuperscriptLocantsToRingAssembly",
+        "component_processor_rings::add_superscript_locants_to_ring_assembly",
     ),
     (
         "determineElementsToResolveIntoRingAssembly",

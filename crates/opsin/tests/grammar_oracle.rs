@@ -69,7 +69,7 @@ fn native_annotation_and_tokenization_match_pinned_opsin() {
         }
         cases += 1;
     }
-    assert_eq!(cases, 7_050, "all 1,175 names in all six oracle modes");
+    assert_eq!(cases, 8_100, "all 1,350 names in all six oracle modes");
     assert!(
         failures.is_empty(),
         "Native frontend differences:\n{}",

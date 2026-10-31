@@ -1,6 +1,7 @@
 //! Ring-family passes from OPSIN `ComponentProcessor.java` (2826–3924).
 //!
 //! Source: OPSIN 2.9.0, b91b610af5ab07560fedb20730d7aef46bb2bca0.
+//! Phane/ring-assembly extensions: upstream commit 42e87ac6.
 //! Copyright Daniel Lowe and OPSIN contributors; MIT (see LICENSE).
 //! Inventory: processHW; assignElementSymbolLocants; processRingAssemblies;
 //! determineElementsToResolveIntoRingAssembly; processPolyCyclicSpiroNomenclature;
@@ -400,7 +401,9 @@ pub fn process_ring_assemblies(
                 arena.detach(locant);
             } else {
                 let text = arena.value(locant);
-                let text = text.strip_suffix('-').unwrap_or(&text);
+                let text = convert_superscript_ring_assembly_locants(
+                    text.strip_suffix('-').unwrap_or(&text),
+                )?;
                 let per_ring: Vec<_> = text.split([':', ';']).collect();
                 if per_ring.len() != count.saturating_sub(1) {
                     return Err(error(format!(
@@ -540,6 +543,7 @@ pub fn process_ring_assemblies(
                     .map_err(graph_error)?;
             }
         }
+        add_superscript_locants_to_ring_assembly(state, ring);
         let name = format!("{}{}", arena.value(multiplier), arena.value(group));
         arena[group].set_value(name);
         if let Some(open) = arena
@@ -554,6 +558,44 @@ pub fn process_ring_assemblies(
         arena.detach(multiplier);
     }
     Ok(())
+}
+
+/// Converts `ring^locant` assembly connections into their primed form.
+fn convert_superscript_ring_assembly_locants(locant_text: &str) -> Result<String> {
+    if !locant_text.contains('^') {
+        return Ok(locant_text.into());
+    }
+    static SUPERSCRIPT_RING_LOCANT: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"([1-9][0-9]*)\^([1-9][0-9]*[a-z]?)").unwrap());
+    let mut converted = String::new();
+    let mut end = 0;
+    for captures in SUPERSCRIPT_RING_LOCANT.captures_iter(locant_text) {
+        let matched = captures.get(0).unwrap();
+        let ring: i32 = captures[1]
+            .parse()
+            .map_err(|_| error(format!("For input string: \"{}\"", &captures[1])))?;
+        converted.push_str(&locant_text[end..matched.start()]);
+        converted.push_str(&captures[2]);
+        converted.push_str(&"'".repeat((ring - 1) as usize));
+        end = matched.end();
+    }
+    converted.push_str(&locant_text[end..]);
+    Ok(converted)
+}
+
+/// Adds `ring^locant` aliases to numeric locants on every assembly component.
+fn add_superscript_locants_to_ring_assembly(state: &mut BuildState, ring_assembly: FragmentId) {
+    static PRIMED_LOCANT: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"^([1-9][0-9]*[a-z]?)('*)$").unwrap());
+    for atom in state.graph().fragment(ring_assembly).atoms.clone() {
+        for locant in state.graph().atom(atom).locants.clone() {
+            if let Some(captures) = PRIMED_LOCANT.captures(&locant) {
+                state
+                    .graph_mut()
+                    .add_locant(atom, format!("{}^{}", captures[2].len() + 1, &captures[1]));
+            }
+        }
+    }
 }
 
 pub fn determine_elements_to_resolve_into_ring_assembly(
@@ -1202,15 +1244,31 @@ pub fn process_fused_ring_bridges(
     arena: &mut Arena,
     sub_or_root: NodeId,
 ) -> Result<()> {
-    let bridges = arena.children_named(sub_or_root, FUSEDRINGBRIDGE_EL);
-    let Some(&last) = bridges.last() else {
-        return Ok(());
-    };
-    let group =
-        next_named(arena, last, GROUP_EL).ok_or_else(|| error("Bridge has no ring group"))?;
+    let mut bridges_of_group: Vec<(Option<NodeId>, Vec<NodeId>)> = Vec::new();
+    for bridge in arena.children_named(sub_or_root, FUSEDRINGBRIDGE_EL) {
+        let group = next_named(arena, bridge, GROUP_EL);
+        if let Some((_, bridges)) = bridges_of_group.iter_mut().find(|(id, _)| *id == group) {
+            bridges.push(bridge);
+        } else {
+            bridges_of_group.push((group, vec![bridge]));
+        }
+    }
+    for (group, bridges) in bridges_of_group {
+        let group = group.ok_or_else(|| error("Bridge has no ring group"))?;
+        process_fused_ring_bridges_of_group(state, arena, group, &bridges)?;
+    }
+    Ok(())
+}
+
+fn process_fused_ring_bridges_of_group(
+    state: &mut BuildState,
+    arena: &mut Arena,
+    group: NodeId,
+    bridges: &[NodeId],
+) -> Result<()> {
     let ring = fragment(arena, group)?;
     let mut bridge_ring_atoms: Vec<(FragmentId, [AtomId; 2])> = Vec::new();
-    for bridge in bridges {
+    for &bridge in bridges {
         let mut locants: Option<Vec<[String; 2]>> = None;
         let mut count = 1;
         if let Some(previous) = arena.previous_sibling(bridge) {
@@ -1344,7 +1402,8 @@ pub fn process_fused_ring_bridges(
 }
 
 fn locant_number(state: &BuildState, atom: AtomId) -> usize {
-    static NUMERIC: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(\d+)[a-z]?'*$").unwrap());
+    static NUMERIC: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"^(\d+)(?:\^\d+)?[a-z]?'*$").unwrap());
     state
         .graph()
         .atom(atom)
