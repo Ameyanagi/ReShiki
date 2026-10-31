@@ -158,6 +158,7 @@ pub enum InspectorTab {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    ModifiersChanged(iced::keyboard::Modifiers),
     #[cfg(target_os = "linux")]
     LinuxClipboardWindow(iced::window::Id),
     Accessibility(accessibility::Action),
@@ -458,6 +459,7 @@ pub struct App {
     /// The last Text-tool click on an atom, to recognize a double-click.
     text_click: Option<(iced::time::Instant, u64)>,
     path_click: Option<(iced::time::Instant, (document_tab::TabId, u64, usize))>,
+    shift_held: bool,
 }
 /// How often drafts catch up with their drawings. A browser page can be
 /// reloaded or closed at any moment, and cannot write when it unloads, so it
@@ -561,6 +563,7 @@ impl App {
             last_label: None,
             text_click: None,
             path_click: None,
+            shift_held: false,
         };
         if let Some(message) = abbreviations::load_user_catalog() {
             if app.recovered.is_empty() {
@@ -642,6 +645,11 @@ impl App {
             },
             iced::window::close_requests().map(Message::Close),
             iced::event::listen_with(|event, status, _window| {
+                if let iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(modifiers)) =
+                    event
+                {
+                    return Some(Message::ModifiersChanged(modifiers));
+                }
                 if let iced::Event::Window(event) = &event {
                     return import::drag_event(event);
                 }
@@ -907,6 +915,11 @@ impl App {
             .unwrap_or(&self.tab.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        // Modifier releases must reach buttons even when a widget or modal captures input.
+        if let Message::ModifiersChanged(modifiers) = message {
+            self.shift_held = modifiers.shift();
+            return Task::none();
+        }
         // A touch can confirm its mouse press and move/release together. Each
         // edit still passes through the same focus and preview gates as a mouse.
         let message =

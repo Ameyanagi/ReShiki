@@ -468,6 +468,50 @@ impl App {
                     .width(Length::Fill)
                     .on_press(Message::ArrowAction(message))
             };
+            let curved = self.tab.doc.arrows.iter().any(|arrow| {
+                self.tab.selected.contains(&arrow.id) && arrow.bezier_controls().is_some()
+            });
+            let mut straighten =
+                row![action("arrow.straighten", "Straighten", Action::Straighten)].spacing(4);
+            if curved {
+                straighten = straighten.push(hover_hint(
+                    accessible_command("arrow.smooth", "Smooth bow", "Smooth")
+                        .width(Length::Fill)
+                        .on_press(Message::Graphics(super::graphics::Action::Cleanup(
+                            super::graphics::Cleanup::Smooth,
+                        ))),
+                    "Even out the bow's tangent angles and lengths",
+                    tooltip::Position::Top,
+                ));
+            } else {
+                straighten = straighten.push(Space::new().width(Length::Fill));
+            }
+            let mut commands = column![
+                row![
+                    action("arrow.reverse", "Reverse", Action::Reverse),
+                    action("arrow.flip-bend", "Flip bend", Action::Flip),
+                ]
+                .spacing(4),
+                straighten,
+            ]
+            .spacing(2);
+            if curved {
+                commands = commands.push(
+                    row![
+                        hover_hint(
+                            accessible_command("arrow.symmetrise", "Symmetrise", "Symmetrise")
+                                .width(Length::Fill)
+                                .on_press(Message::Graphics(super::graphics::Action::Cleanup(
+                                    super::graphics::Cleanup::Symmetrise { upright: false },
+                                ))),
+                            "Average the bow across its perpendicular bisector",
+                            tooltip::Position::Top,
+                        ),
+                        Space::new().width(Length::Fill),
+                    ]
+                    .spacing(4),
+                );
+            }
             // Unavailable Detach buttons say why on hover.
             let detach = |id, name, label, message: Option<Action>, why| {
                 let available = message.is_some();
@@ -481,17 +525,7 @@ impl App {
                 }
             };
             panel = panel.push(
-                column![
-                    row![
-                        action("arrow.reverse", "Reverse", Action::Reverse),
-                        action("arrow.flip-bend", "Flip bend", Action::Flip),
-                    ]
-                    .spacing(4),
-                    row![
-                        action("arrow.straighten", "Straighten", Action::Straighten),
-                        Space::new().width(Length::Fill),
-                    ]
-                    .spacing(4),
+                commands.push(
                     row![
                         detach(
                             "arrow.detach-start",
@@ -509,8 +543,7 @@ impl App {
                         ),
                     ]
                     .spacing(4),
-                ]
-                .spacing(2),
+                ),
             );
         }
         geometry = geometry.push(command(

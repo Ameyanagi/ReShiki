@@ -855,6 +855,16 @@ async fn every_context_row_fits_the_minimum_window() {
             open(&mut app, benzene());
             app.tool = tool;
             app.tab.selected = app.tab.doc.all_ids().into_iter().take(selected).collect();
+            if tool == Tool::EditPoints && selected == 1 {
+                let id = app.tab.doc.next_id();
+                app.tab.doc.graphics.push(Graphic::pen_curve(
+                    id,
+                    World::default(),
+                    World::new(100., 0.),
+                    Default::default(),
+                ));
+                app.tab.selected = vec![id];
+            }
             app.tab.bond_drawing.fixed_angles = !reset;
             app.inspector_open = tab.is_some();
             app.inspector_tab = tab.unwrap_or(app.inspector_tab);
