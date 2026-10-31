@@ -109,8 +109,8 @@ impl WrapperParentPlan {
     pub fn select(&self, index: usize) -> Result<Self, String> {
         let entries = self
             .locant_maps()
-            .get(index)
-            .cloned()
+            .into_iter()
+            .nth(index)
             .ok_or("invalid wrapper locant selection")?;
         let model = self
             .bond_models
@@ -401,11 +401,9 @@ pub fn plan_bridged_fusion_wrapper_with_options(
                     else {
                         continue;
                     };
-                    operations.sort_by_key(|o| {
-                        (
-                            o.prefix.trim_start_matches('(').to_owned(),
-                            o.endpoint_locants.clone(),
-                        )
+                    operations.sort_by(|a, b| {
+                        (a.prefix.trim_start_matches('('), &a.endpoint_locants)
+                            .cmp(&(b.prefix.trim_start_matches('('), &b.endpoint_locants))
                     });
                     let unlocalized = operations.len() == 1
                         && operations[0].kind == NondetachableBridgeKind::Carbo
@@ -639,7 +637,7 @@ fn removal_groups(
         segments: &[AtomSet],
         start: usize,
         left: usize,
-        current: &AtomSet,
+        current: AtomSet,
         state: &mut CandidateGroups,
     ) {
         if state.generated > state.limit {
@@ -654,7 +652,7 @@ fn removal_groups(
                     .groups
                     .entry(current.len())
                     .or_default()
-                    .insert(current.clone());
+                    .insert(current);
             }
             return;
         }
@@ -666,7 +664,7 @@ fn removal_groups(
                 segments,
                 index + 1,
                 left - 1,
-                &current.union(&segments[index]).copied().collect(),
+                current.union(&segments[index]).copied().collect(),
                 state,
             );
             if state.generated > state.limit {
@@ -681,7 +679,7 @@ fn removal_groups(
         groups: BTreeMap::new(),
     };
     for count in 1..=segments.len() {
-        choose(segments, 0, count, &AtomSet::new(), &mut state);
+        choose(segments, 0, count, AtomSet::new(), &mut state);
         if state.generated > limit {
             break;
         }
@@ -736,7 +734,7 @@ fn junction_path_interiors(
         }
     }
     let mut result: Vec<_> = interiors.into_iter().collect();
-    result.sort_by_key(|p| (p.len(), p.clone()));
+    result.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
     result
 }
 
@@ -954,10 +952,11 @@ fn retained_wrapper_parent(
         metadata.relocated_indicated_h = first.indicated_h != first.template.default_indicated_h;
         metadata
     });
+    let (locant_maps, bond_models) = candidates.into_iter().unzip();
     let parent = WrapperParentPlan {
         hydride: RingParent::from_retained_locant_maps(
             atoms.clone(),
-            candidates.iter().map(|(m, _)| m.clone()).collect(),
+            locant_maps,
             retained_parent_output_name(
                 &first.template.name,
                 "wrapped_parent",
@@ -966,7 +965,7 @@ fn retained_wrapper_parent(
             ),
             metadata,
         )?,
-        bond_models: candidates.into_iter().map(|(_, model)| model).collect(),
+        bond_models,
         selected_locant_map: None,
         selected_bond_model: None,
     };
@@ -1069,7 +1068,10 @@ fn bridge_operations(
 ) -> Option<Vec<NondetachableBridgeOperation>> {
     let mut operations = Vec::new();
     for path in paths {
-        let (path, endpoints) = orient_bridge_path(mol, path, parent, locants)?;
+        let OrientedBridgePath {
+            atoms: path,
+            endpoints,
+        } = orient_bridge_path(mol, path, parent, locants)?;
         if mol.get_bond(path[0], endpoints.0)?.order != 1
             || mol.get_bond(*path.last()?, endpoints.1)?.order != 1
             || mol.get_bond(endpoints.0, endpoints.1).is_some()
@@ -1101,12 +1103,17 @@ fn bridge_operations(
     }
     Some(operations)
 }
+struct OrientedBridgePath {
+    atoms: Vec<usize>,
+    endpoints: (usize, usize),
+}
+
 fn orient_bridge_path(
     mol: &Molecule,
     path: &[usize],
     parent: &AtomSet,
     locants: &LocantMap,
-) -> Option<(Vec<usize>, (usize, usize))> {
+) -> Option<OrientedBridgePath> {
     let attachments = |a: usize| {
         let mut neighbors: Vec<_> = mol
             .get_neighbors(a)
@@ -1123,7 +1130,10 @@ fn orient_bridge_path(
             return None;
         }
         endpoints.sort_by_key(|a| locant_key(&locants[a]));
-        return Some((path.to_vec(), (endpoints[0], endpoints[1])));
+        return Some(OrientedBridgePath {
+            atoms: path.to_vec(),
+            endpoints: (endpoints[0], endpoints[1]),
+        });
     }
     if path.is_empty()
         || path[1..path.len() - 1]
@@ -1136,20 +1146,24 @@ fn orient_bridge_path(
     if left.len() != 1 || right.len() != 1 {
         return None;
     }
-    let forward = (path.to_vec(), (left[0], right[0]));
-    let reverse = (
-        path.iter().rev().copied().collect::<Vec<_>>(),
-        (right[0], left[0]),
-    );
-    for candidate in [&forward, &reverse] {
-        if composite_bridge_construction(mol, &candidate.0).is_some() {
-            return Some(candidate.clone());
-        }
+    let forward = OrientedBridgePath {
+        atoms: path.to_vec(),
+        endpoints: (left[0], right[0]),
+    };
+    let reverse = OrientedBridgePath {
+        atoms: path.iter().rev().copied().collect(),
+        endpoints: (right[0], left[0]),
+    };
+    if composite_bridge_construction(mol, &forward.atoms).is_some() {
+        return Some(forward);
     }
-    let orientation_key = |candidate: &(Vec<usize>, (usize, usize))| {
+    if composite_bridge_construction(mol, &reverse.atoms).is_some() {
+        return Some(reverse);
+    }
+    let orientation_key = |candidate: &OrientedBridgePath| {
         (
             candidate
-                .0
+                .atoms
                 .windows(2)
                 .enumerate()
                 .filter_map(|(i, p)| {
@@ -1158,8 +1172,8 @@ fn orient_bridge_path(
                         .map(|_| i + 1)
                 })
                 .collect::<Vec<_>>(),
-            locant_key(&locants[&candidate.1.0]),
-            locant_key(&locants[&candidate.1.1]),
+            locant_key(&locants[&candidate.endpoints.0]),
+            locant_key(&locants[&candidate.endpoints.1]),
         )
     };
     Some(if orientation_key(&forward) <= orientation_key(&reverse) {
@@ -1422,10 +1436,10 @@ fn audit_bridge_plan(
         let endpoints =
             AtomSet::from([operation.endpoint_atom_ids.0, operation.endpoint_atom_ids.1]);
         if attachments != endpoints
-            || operation.endpoint_locants
+            || (&operation.endpoint_locants.0, &operation.endpoint_locants.1)
                 != (
-                    locants[&operation.endpoint_atom_ids.0].clone(),
-                    locants[&operation.endpoint_atom_ids.1].clone(),
+                    &locants[&operation.endpoint_atom_ids.0],
+                    &locants[&operation.endpoint_atom_ids.1],
                 )
         {
             return Ok(None);

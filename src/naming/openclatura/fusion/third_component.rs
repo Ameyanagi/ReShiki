@@ -29,7 +29,7 @@ use super::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-pub const THIRD_COMPONENT_TIER: &str = "p25.5-skeletal-replacement-v1";
+const THIRD_COMPONENT_TIER: &str = "p25.5-skeletal-replacement-v1";
 
 /// Audited skeletal-replacement resolution of a cyclic component cover.
 #[derive(Clone, Debug)]
@@ -458,13 +458,9 @@ fn carbon_parent(carbon: &Molecule, atoms: &AtomSet) -> Result<Option<RingParent
             .filter(|m| m.template.name == name)
             .map(|m| m.atom_to_locant)
             .collect();
-        return RingParent::from_retained_locant_maps(
-            atoms.clone(),
-            maps,
-            name.clone(),
-            retained_parent_metadata(&name),
-        )
-        .map(Some);
+        let metadata = retained_parent_metadata(&name);
+        return RingParent::from_retained_locant_maps(atoms.clone(), maps, name, metadata)
+            .map(Some);
     }
     let Some(plan) = plan_fusion_parent(carbon, atoms)? else {
         return Ok(None);

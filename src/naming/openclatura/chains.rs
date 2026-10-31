@@ -10,6 +10,7 @@ use super::polycycle_topology::{
 };
 use super::python_int_set::PythonIntSet;
 use super::ring_renderer::is_von_baeyer_descriptor;
+use super::von_baeyer::{DescriptorPaths, descriptor_candidates};
 
 #[derive(Clone, Debug, Default)]
 pub struct RingSystem {
@@ -36,13 +37,6 @@ impl PolycycleDescriptorCandidate {
     pub fn descriptor_allowed(&self) -> bool {
         !self.is_von_baeyer || !self.numberings.is_empty()
     }
-}
-
-pub fn get_von_baeyer_descriptor_candidates(
-    atoms: &AtomSet,
-    edges: &EdgeSet,
-) -> Vec<super::von_baeyer::DescriptorPaths> {
-    super::von_baeyer::descriptor_candidates(atoms, edges)
 }
 
 fn audited_von_baeyer_numberings(
@@ -96,8 +90,8 @@ pub fn polyspiro_or_von_baeyer_candidate(
             .collect();
         let mut accepted_descriptor = None;
         let mut accepted = Vec::new();
-        for (index, (descriptor, paths)) in
-            get_von_baeyer_descriptor_candidates(&canonical_atoms, &canonical_edges)
+        for (index, DescriptorPaths { descriptor, paths }) in
+            descriptor_candidates(&canonical_atoms, &canonical_edges)
                 .into_iter()
                 .enumerate()
         {
@@ -740,18 +734,17 @@ fn ranking_order(mol: &Molecule, u: usize, v: usize) -> usize {
     }
 }
 
-fn rank_invariants<T: Ord + Clone>(invariants: BTreeMap<usize, T>) -> BTreeMap<usize, usize> {
-    let ordering: BTreeMap<T, usize> = invariants
+fn rank_invariants<T: Ord>(invariants: BTreeMap<usize, T>) -> BTreeMap<usize, usize> {
+    let ordering: BTreeMap<&T, usize> = invariants
         .values()
-        .cloned()
         .collect::<BTreeSet<_>>()
         .into_iter()
         .enumerate()
         .map(|(rank, key)| (key, rank))
         .collect();
     invariants
-        .into_iter()
-        .map(|(idx, key)| (idx, ordering[&key]))
+        .iter()
+        .map(|(&idx, key)| (idx, ordering[key]))
         .collect()
 }
 

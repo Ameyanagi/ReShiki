@@ -3,7 +3,7 @@
 //! Descriptor numberings are admitted only after rebuilding their ring edges.
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-use super::graph_kernel::EdgeSet;
+use super::graph_kernel::{EdgeSet, connected_components, normalize_edge};
 use super::molecule::{AtomSet, Molecule};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -44,7 +44,7 @@ pub struct RingNumbering {
     pub bridgehead_locants: Vec<usize>,
 }
 
-pub fn bridgehead_locants(kind: &str, descriptor_numbers: &[usize]) -> Vec<usize> {
+fn bridgehead_locants(kind: &str, descriptor_numbers: &[usize]) -> Vec<usize> {
     if kind == "bicyclo" && !descriptor_numbers.is_empty() {
         vec![1, descriptor_numbers[0] + 2]
     } else {
@@ -85,7 +85,11 @@ pub fn build_von_baeyer_numbering(
     let parsed = parse_von_baeyer_descriptor(descriptor);
     let (kind, numbers) = parsed.map_or_else(
         || ("polycycle".into(), Vec::new()),
-        |(count, base, bridges)| {
+        |ParsedVonBaeyer {
+             count,
+             base,
+             bridges,
+         }| {
             (
                 super::ring_renderer::von_baeyer_kind(count),
                 base.into_iter()
@@ -117,7 +121,7 @@ pub fn edges_within_atoms(mol: &Molecule, atoms: &AtomSet) -> EdgeSet {
     mol.bonds
         .values()
         .filter(|b| atoms.contains(&b.u) && atoms.contains(&b.v))
-        .map(|b| normalized_edge(b.u, b.v))
+        .map(|b| normalize_edge(b.u, b.v))
         .collect()
 }
 
@@ -142,7 +146,7 @@ pub fn has_multiple_spiro_centers(atoms: &AtomSet, edges: &EdgeSet) -> bool {
         >= 2
 }
 
-pub fn adjacent_atoms(atom: usize, edges: &EdgeSet) -> AtomSet {
+fn adjacent_atoms(atom: usize, edges: &EdgeSet) -> AtomSet {
     edges
         .iter()
         .filter_map(|&(u, v)| {
@@ -181,7 +185,7 @@ pub fn bicyclo_proof(atoms: &AtomSet, edges: &EdgeSet) -> Option<BicycloProof> {
             return None;
         }
     }
-    let direct = edges.contains(&normalized_edge(first, second));
+    let direct = edges.contains(&normalize_edge(first, second));
     if components.len() + usize::from(direct) != 3 {
         return None;
     }
@@ -244,28 +248,6 @@ pub fn bicyclo_proof(atoms: &AtomSet, edges: &EdgeSet) -> Option<BicycloProof> {
     })
 }
 
-fn connected_components(atoms: &AtomSet, edges: &EdgeSet) -> Vec<AtomSet> {
-    let mut components = Vec::new();
-    let mut seen = AtomSet::new();
-    for &start in atoms {
-        if !seen.insert(start) {
-            continue;
-        }
-        let mut component = AtomSet::new();
-        let mut pending = VecDeque::from([start]);
-        while let Some(current) = pending.pop_front() {
-            component.insert(current);
-            for neighbor in adjacent_atoms(current, edges) {
-                if atoms.contains(&neighbor) && seen.insert(neighbor) {
-                    pending.push_back(neighbor);
-                }
-            }
-        }
-        components.push(component);
-    }
-    components
-}
-
 pub fn monospiro_proof(atoms: &AtomSet, edges: &EdgeSet) -> Option<MonospiroProof> {
     let spiro_atoms: Vec<_> = internal_degrees(atoms, edges)
         .into_iter()
@@ -321,7 +303,7 @@ pub fn monospiro_proof(atoms: &AtomSet, edges: &EdgeSet) -> Option<MonospiroProo
     })
 }
 
-pub fn linear_dispiro_proof(atoms: &AtomSet, edges: &EdgeSet) -> Option<LinearDispiroProof> {
+fn linear_dispiro_proof(atoms: &AtomSet, edges: &EdgeSet) -> Option<LinearDispiroProof> {
     let degrees = internal_degrees(atoms, edges);
     let centers: Vec<_> = degrees
         .iter()
@@ -337,7 +319,7 @@ pub fn linear_dispiro_proof(atoms: &AtomSet, edges: &EdgeSet) -> Option<LinearDi
         return None;
     }
     let (mut terminal, middle) = dispiro_components(atoms, edges, [*first, *second]);
-    let has_direct_middle = edges.contains(&normalized_edge(*first, *second));
+    let has_direct_middle = edges.contains(&normalize_edge(*first, *second));
     if terminal.len() != 2 || middle.len() + usize::from(has_direct_middle) != 2 {
         return None;
     }
@@ -345,22 +327,22 @@ pub fn linear_dispiro_proof(atoms: &AtomSet, edges: &EdgeSet) -> Option<LinearDi
     // independently applies the terminal heteroatom and size preference.
     terminal.sort_by(|left, right| {
         right
-            .0
+            .atoms
             .len()
-            .cmp(&left.0.len())
-            .then_with(|| left.0.cmp(&right.0))
+            .cmp(&left.atoms.len())
+            .then_with(|| left.atoms.cmp(&right.atoms))
     });
-    if terminal[0].1 == terminal[1].1 {
+    if terminal[0].spiro_atom == terminal[1].spiro_atom {
         return None;
     }
     let descriptor_numbers = [
-        terminal[0].0.len(),
+        terminal[0].atoms.len(),
         if has_direct_middle {
             0
         } else {
             middle[0].len()
         },
-        terminal[1].0.len(),
+        terminal[1].atoms.len(),
         if has_direct_middle {
             middle[0].len()
         } else {
@@ -373,19 +355,22 @@ pub fn linear_dispiro_proof(atoms: &AtomSet, edges: &EdgeSet) -> Option<LinearDi
     Some(LinearDispiroProof {
         descriptor_numbers,
         spiro_atoms: [*first, *second],
-        terminal_components: [terminal[0].0.clone(), terminal[1].0.clone()],
+        terminal_components: [terminal[0].atoms.clone(), terminal[1].atoms.clone()],
         middle_components: middle,
         has_direct_middle,
     })
 }
 
-type TerminalComponents = Vec<(AtomSet, usize)>;
+struct TerminalComponent {
+    atoms: AtomSet,
+    spiro_atom: usize,
+}
 
 fn dispiro_components(
     atoms: &AtomSet,
     edges: &EdgeSet,
     centers: [usize; 2],
-) -> (TerminalComponents, Vec<AtomSet>) {
+) -> (Vec<TerminalComponent>, Vec<AtomSet>) {
     let center_set = AtomSet::from(centers);
     let non_spiro = atoms.difference(&center_set).copied().collect();
     let mut terminal = Vec::new();
@@ -398,7 +383,10 @@ fn dispiro_components(
             .collect();
         if attachments.len() == 1 {
             if let Some(&attachment) = attachments.first() {
-                terminal.push((component, attachment));
+                terminal.push(TerminalComponent {
+                    atoms: component,
+                    spiro_atom: attachment,
+                });
             }
         } else if attachments == center_set {
             middle.push(component);
@@ -423,10 +411,16 @@ pub fn linear_dispiro_descriptor_and_paths(
                 component.clone(),
             )
         };
-        key(&left.0).cmp(&key(&right.0))
+        key(&left.atoms).cmp(&key(&right.atoms))
     });
-    let (first_terminal, first_spiro) = &terminal[0];
-    let (second_terminal, second_spiro) = &terminal[1];
+    let TerminalComponent {
+        atoms: first_terminal,
+        spiro_atom: first_spiro,
+    } = &terminal[0];
+    let TerminalComponent {
+        atoms: second_terminal,
+        spiro_atom: second_spiro,
+    } = &terminal[1];
     if first_spiro == second_spiro {
         return None;
     }
@@ -559,8 +553,8 @@ pub fn dedupe_paths(paths: Vec<Vec<usize>>) -> Vec<Vec<usize>> {
         .collect()
 }
 
-fn normalized_edge(first: usize, second: usize) -> (usize, usize) {
-    (first.min(second), first.max(second))
+fn atom_at_locant(path: &[usize], locant: usize) -> Option<usize> {
+    path.get(locant.wrapping_sub(1)).copied()
 }
 
 /// Rebuild a descriptor's edges from its proposed locants and require identity.
@@ -577,11 +571,8 @@ pub fn audit_ring_numbering(
     }
     let mut expected = EdgeSet::new();
     let mut edge = |first: usize, second: usize| {
-        if let (Some(&u), Some(&v)) = (
-            path.get(first.wrapping_sub(1)),
-            path.get(second.wrapping_sub(1)),
-        ) {
-            expected.insert(normalized_edge(u, v));
+        if let (Some(u), Some(v)) = (atom_at_locant(path, first), atom_at_locant(path, second)) {
+            expected.insert(normalize_edge(u, v));
         }
     };
     let expected_count = match (kind, numbers) {
@@ -638,7 +629,11 @@ fn append_bicyclo_edges(edge: &mut impl FnMut(usize, usize), [first, second, thi
     }
 }
 
-type ParsedVonBaeyer = (usize, [usize; 3], Vec<(usize, [usize; 2])>);
+struct ParsedVonBaeyer {
+    count: usize,
+    base: [usize; 3],
+    bridges: Vec<(usize, [usize; 2])>,
+}
 
 fn parse_von_baeyer_descriptor(descriptor: &str) -> Option<ParsedVonBaeyer> {
     let count = super::ring_renderer::von_baeyer_cycle_count(Some(descriptor))?;
@@ -666,12 +661,21 @@ fn parse_von_baeyer_descriptor(descriptor: &str) -> Option<ParsedVonBaeyer> {
         }
         bridges.push((length.parse().ok()?, [first.min(second), first.max(second)]));
     }
-    Some((count, base, bridges))
+    Some(ParsedVonBaeyer {
+        count,
+        base,
+        bridges,
+    })
 }
 
 /// Rebuild every primary and secondary bridge from the descriptor's locants.
 pub fn audit_von_baeyer_descriptor(descriptor: &str, path: &[usize], edges: &EdgeSet) -> bool {
-    let Some((count, base, bridges)) = parse_von_baeyer_descriptor(descriptor) else {
+    let Some(ParsedVonBaeyer {
+        count,
+        base,
+        bridges,
+    }) = parse_von_baeyer_descriptor(descriptor)
+    else {
         return false;
     };
     let base_count = base.iter().sum::<usize>() + 2;
@@ -689,11 +693,8 @@ pub fn audit_von_baeyer_descriptor(descriptor: &str, path: &[usize], edges: &Edg
     let mut expected = EdgeSet::new();
     let mut valid = true;
     let mut edge = |first: usize, second: usize| {
-        if let (Some(&u), Some(&v)) = (
-            path.get(first.wrapping_sub(1)),
-            path.get(second.wrapping_sub(1)),
-        ) {
-            expected.insert(normalized_edge(u, v));
+        if let (Some(u), Some(v)) = (atom_at_locant(path, first), atom_at_locant(path, second)) {
+            expected.insert(normalize_edge(u, v));
         } else {
             valid = false;
         }
@@ -718,7 +719,12 @@ pub fn audit_von_baeyer_descriptor(descriptor: &str, path: &[usize], edges: &Edg
 /// bridges from their higher attachment locant and orders them by attachments.
 /// Upstream's own audit instead numbers from the lower attachment locant.
 pub fn audit_von_baeyer_opsin_reading(descriptor: &str, path: &[usize], edges: &EdgeSet) -> bool {
-    let Some((count, base, bridges)) = parse_von_baeyer_descriptor(descriptor) else {
+    let Some(ParsedVonBaeyer {
+        count,
+        base,
+        bridges,
+    }) = parse_von_baeyer_descriptor(descriptor)
+    else {
         return false;
     };
     let base_count = base.iter().sum::<usize>() + 2;
@@ -733,11 +739,8 @@ pub fn audit_von_baeyer_opsin_reading(descriptor: &str, path: &[usize], edges: &
     let mut expected = EdgeSet::new();
     let mut valid = true;
     let mut edge = |first: usize, second: usize| {
-        if let (Some(&u), Some(&v)) = (
-            path.get(first.wrapping_sub(1)),
-            path.get(second.wrapping_sub(1)),
-        ) {
-            expected.insert(normalized_edge(u, v));
+        if let (Some(u), Some(v)) = (atom_at_locant(path, first), atom_at_locant(path, second)) {
+            expected.insert(normalize_edge(u, v));
         } else {
             valid = false;
         }
@@ -903,7 +906,7 @@ mod tests {
         let path: Vec<_> = (0..10).collect();
         let mut edges = EdgeSet::new();
         let mut edge = |a, b| {
-            edges.insert(normalized_edge(a - 1, b - 1));
+            edges.insert(normalize_edge(a - 1, b - 1));
         };
         append_bicyclo_edges(&mut edge, [3, 2, 1]);
         append_bridge(&mut edge, 2, 5, 9, 1);
@@ -923,7 +926,7 @@ mod tests {
         let path: Vec<_> = (0..10).collect();
         let mut edges = EdgeSet::new();
         let mut edge = |a, b| {
-            edges.insert(normalized_edge(a - 1, b - 1));
+            edges.insert(normalize_edge(a - 1, b - 1));
         };
         append_bicyclo_edges(&mut edge, [3, 2, 1]);
         append_bridge(&mut edge, 5, 2, 9, 1);

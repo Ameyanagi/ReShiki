@@ -52,7 +52,7 @@ impl RingParent {
         }
     }
 
-    pub fn from_retained_locant_maps(
+    pub(super) fn from_retained_locant_maps(
         atoms: AtomSet,
         maps: Vec<BTreeMap<usize, String>>,
         name: String,
@@ -70,7 +70,7 @@ impl RingParent {
         Ok(parent)
     }
 
-    pub fn from_fusion_plan(plan: FusionParentPlan) -> Result<Self, String> {
+    pub(super) fn from_fusion_plan(plan: FusionParentPlan) -> Result<Self, String> {
         if !plan.audit.confirmed() {
             return Err("openclatura: fusion parent requires a confirmed audit".into());
         }
@@ -99,7 +99,7 @@ impl RingParent {
         Ok(parent)
     }
 
-    pub fn from_fusion_wrapper(plan: BridgedFusionWrapperPlan) -> Result<Self, String> {
+    pub(super) fn from_fusion_wrapper(plan: BridgedFusionWrapperPlan) -> Result<Self, String> {
         if !plan.audit_ok {
             return Err("openclatura: bridged fusion parent requires a confirmed audit".into());
         }
@@ -130,7 +130,7 @@ impl RingParent {
         Ok(parent)
     }
 
-    pub fn into_skeletal_replacement_fusion(
+    pub(super) fn into_skeletal_replacement_fusion(
         mut self,
         replacement_atom_ids: Vec<usize>,
         audit_checks: Vec<String>,
@@ -148,63 +148,57 @@ impl RingParent {
         Ok(self)
     }
 
-    pub fn is_systematic_fusion(&self) -> bool {
+    pub(super) fn is_systematic_fusion(&self) -> bool {
         self.kind == ParentHydrideKind::SystematicFusion
     }
-    pub fn is_skeletal_replacement_fusion(&self) -> bool {
+    pub(super) fn is_skeletal_replacement_fusion(&self) -> bool {
         self.kind == ParentHydrideKind::SkeletalReplacementFusion
     }
-    pub fn is_bridged_fusion(&self) -> bool {
-        self.kind == ParentHydrideKind::BridgedFusion
-    }
-    pub fn is_fusion_parent(&self) -> bool {
+    pub(super) fn is_fusion_parent(&self) -> bool {
         self.kind != ParentHydrideKind::Retained
     }
-    pub fn uses_fusion_plan(&self) -> bool {
+    pub(super) fn uses_fusion_plan(&self) -> bool {
         self.fusion_plan.is_some()
             && matches!(
                 self.kind,
                 ParentHydrideKind::SystematicFusion | ParentHydrideKind::SkeletalReplacementFusion
             )
     }
-    pub fn absorbs_skeletal_replacement(&self) -> bool {
-        !self.is_skeletal_replacement_fusion()
-    }
 
-    pub fn audit_ok(&self) -> bool {
-        if self.is_bridged_fusion() {
-            return self
+    pub(super) fn audit_ok(&self) -> bool {
+        match self.kind {
+            ParentHydrideKind::BridgedFusion => self
                 .fusion_wrapper_plan
                 .as_ref()
-                .is_some_and(|p| p.audit_ok);
-        }
-        if self.is_systematic_fusion() {
-            return self
+                .is_some_and(|p| p.audit_ok),
+            ParentHydrideKind::SystematicFusion => self
                 .fusion_plan
                 .as_ref()
-                .is_some_and(|p| p.audit.confirmed());
+                .is_some_and(|p| p.audit.confirmed()),
+            ParentHydrideKind::SkeletalReplacementFusion
+                if self.skeletal_replacement_atom_ids.is_empty()
+                    || self.skeletal_replacement_audit_checks.is_empty()
+                    || self
+                        .skeletal_replacement_atom_ids
+                        .iter()
+                        .any(|a| !self.atoms.contains(a))
+                    || self
+                        .replacement_fusion_state
+                        .as_ref()
+                        .is_some_and(|s| !s.audit_ok()) =>
+            {
+                false
+            }
+            ParentHydrideKind::Retained | ParentHydrideKind::SkeletalReplacementFusion => {
+                self.retained_locant_maps.iter().all(|m| {
+                    m.keys().copied().collect::<AtomSet>() == self.atoms
+                        && m.values().collect::<BTreeSet<_>>().len() == self.atoms.len()
+                })
+            }
         }
-        if self.is_skeletal_replacement_fusion()
-            && (self.skeletal_replacement_atom_ids.is_empty()
-                || self.skeletal_replacement_audit_checks.is_empty()
-                || self
-                    .skeletal_replacement_atom_ids
-                    .iter()
-                    .any(|a| !self.atoms.contains(a))
-                || self
-                    .replacement_fusion_state
-                    .as_ref()
-                    .is_some_and(|s| !s.audit_ok()))
-        {
-            return false;
-        }
-        self.retained_locant_maps.iter().all(|m| {
-            m.keys().copied().collect::<AtomSet>() == self.atoms
-                && m.values().collect::<BTreeSet<_>>().len() == self.atoms.len()
-        })
     }
 
-    pub fn base_name(&self) -> Option<&str> {
+    pub(super) fn base_name(&self) -> Option<&str> {
         if self.is_skeletal_replacement_fusion()
             && let Some(state) = &self.replacement_fusion_state
         {
@@ -224,7 +218,7 @@ impl RingParent {
             })
     }
 
-    pub fn bond_model(&self) -> Option<&ParentBondModel> {
+    pub(super) fn bond_model(&self) -> Option<&ParentBondModel> {
         self.replacement_fusion_state
             .as_ref()
             .map(|s| &s.bond_model)
@@ -237,7 +231,7 @@ impl RingParent {
             .or_else(|| self.fusion_plan.as_ref().map(|p| &p.bond_model))
     }
 
-    pub fn derivative_state(&self) -> Option<&ParentDerivativeState> {
+    pub(super) fn derivative_state(&self) -> Option<&ParentDerivativeState> {
         self.replacement_fusion_state
             .as_ref()
             .map(|s| &s.derivative_state)
@@ -249,7 +243,7 @@ impl RingParent {
             })
     }
 
-    pub fn proof_locant_maps(&self) -> Vec<BTreeMap<usize, String>> {
+    pub(super) fn proof_locant_maps(&self) -> Vec<BTreeMap<usize, String>> {
         if let Some(plan) = &self.fusion_plan {
             return plan.numbering.string_input_locant_maps();
         }

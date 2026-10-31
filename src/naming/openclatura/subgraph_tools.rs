@@ -6,6 +6,7 @@ use super::assembly_parts::AssemblyParts;
 use super::chains::get_cyclic_atoms;
 use super::locants::parse_locant;
 use super::molecule::{AtomSet, Molecule};
+use super::ring_parent::ParentHydrideKind;
 
 /// Return the connected branch reached without crossing the parent boundary.
 pub fn subgraph_component(mol: &Molecule, start_idx: usize, exclude_atoms: &AtomSet) -> AtomSet {
@@ -130,7 +131,7 @@ pub fn add_parent_features(
         .parent_hydride
         .as_ref()
         .map_or(parts.fusion_plan.is_some(), |parent| {
-            parent.absorbs_skeletal_replacement()
+            parent.kind != ParentHydrideKind::SkeletalReplacementFusion
         });
     for &idx in numbered_path.iter().filter(|_| !absorbs_replacement) {
         let atom = &mol.atoms[&idx];

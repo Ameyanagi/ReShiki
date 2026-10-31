@@ -13,7 +13,13 @@ use super::ring_renderer::render_von_baeyer_descriptor;
 
 type Adjacency = BTreeMap<usize, AtomSet>;
 type OrderedAdjacency = BTreeMap<usize, Vec<usize>>;
-pub type DescriptorPaths = (Option<String>, Vec<Vec<usize>>);
+
+#[derive(Clone, Debug)]
+pub struct DescriptorPaths {
+    pub descriptor: Option<String>,
+    pub paths: Vec<Vec<usize>>,
+}
+
 const MAIN_RING_WALK_STATES: usize = 2_000_000;
 // Upstream divergence: upstream allows rank 28 (2.7e8 subsets, tens of
 // seconds); naming runs interactively, so larger blocks abstain at rank 20.
@@ -24,7 +30,6 @@ const MAX_LONGEST_CYCLES: usize = 4096;
 struct LegacyBridge {
     nodes: AtomSet,
     endpoints: [usize; 2],
-    length: usize,
 }
 
 fn python_adjacency(adj: &Adjacency) -> OrderedAdjacency {
@@ -253,7 +258,10 @@ pub fn descriptor_candidates(atoms: &AtomSet, edges: &EdgeSet) -> Vec<Descriptor
     let largest = largest_cycles_walk(atoms, &ordered_adj)
         .unwrap_or_else(|| largest_cycles_from_cycle_space(atoms, edges, &adj));
     if largest.is_empty() {
-        return vec![(None, vec![atoms.iter().copied().collect()])];
+        return vec![DescriptorPaths {
+            descriptor: None,
+            paths: vec![atoms.iter().copied().collect()],
+        }];
     }
     let mut candidates = Vec::new();
     for main_ring in &largest {
@@ -270,7 +278,6 @@ pub fn descriptor_candidates(atoms: &AtomSet, edges: &EdgeSet) -> Vec<Descriptor
                 bridges.push(LegacyBridge {
                     nodes: AtomSet::new(),
                     endpoints: [first, second],
-                    length: 0,
                 });
             }
         }
@@ -286,13 +293,11 @@ pub fn descriptor_candidates(atoms: &AtomSet, edges: &EdgeSet) -> Vec<Descriptor
             }
             if connections.len() >= 2 {
                 bridges.push(LegacyBridge {
-                    length: component.len(),
                     nodes: component,
                     endpoints: [connections[0].1, connections[1].1],
                 });
                 for &(first, second) in &connections[2..] {
                     bridges.push(LegacyBridge {
-                        length: 0,
                         nodes: AtomSet::new(),
                         endpoints: [first, second],
                     });
@@ -306,17 +311,17 @@ pub fn descriptor_candidates(atoms: &AtomSet, edges: &EdgeSet) -> Vec<Descriptor
         {
             continue;
         }
-        bridges.sort_by_key(|bridge| std::cmp::Reverse(bridge.length));
+        bridges.sort_by_key(|bridge| std::cmp::Reverse(bridge.nodes.len()));
         let position: BTreeMap<_, _> = main_ring
             .iter()
             .enumerate()
             .map(|(i, &atom)| (atom, i))
             .collect();
-        let maximum = bridges[0].length;
+        let maximum = bridges[0].nodes.len();
         let selected = bridges
             .iter()
             .enumerate()
-            .filter(|(_, bridge)| bridge.length == maximum)
+            .filter(|(_, bridge)| bridge.nodes.len() == maximum)
             .filter_map(|(i, bridge)| {
                 let division = main_ring_division(bridge, &position, main_ring.len())?;
                 let first = position[&bridge.endpoints[0]];
@@ -334,7 +339,10 @@ pub fn descriptor_candidates(atoms: &AtomSet, edges: &EdgeSet) -> Vec<Descriptor
         candidates.push(((std::cmp::Reverse(maximum), division), main_ring, bridges));
     }
     if candidates.is_empty() {
-        return vec![(None, vec![largest[0].clone()])];
+        return vec![DescriptorPaths {
+            descriptor: None,
+            paths: vec![largest[0].clone()],
+        }];
     }
     candidates.sort_by_key(|candidate| candidate.0);
     // The upstream caller consumes at most 256 rendered choices. Applying the
@@ -369,7 +377,7 @@ fn legacy_from_candidate(
         branch1.reverse();
         branch2.reverse();
     }
-    let bridge_path = if main.length > 0 {
+    let bridge_path = if !main.nodes.is_empty() {
         bridge_interior_path(adj, &main.nodes, first, second)
     } else {
         Vec::new()
@@ -380,7 +388,7 @@ fn legacy_from_candidate(
     let mut path2: Vec<_> = branch1.iter().rev().copied().collect();
     path2.extend_from_slice(&branch2[1..branch2.len() - 1]);
     path2.extend(bridge_path.iter().rev().copied());
-    let mut primary = [branch1.len() - 2, branch2.len() - 2, main.length];
+    let mut primary = [branch1.len() - 2, branch2.len() - 2, main.nodes.len()];
     primary.sort_by(|a, b| b.cmp(a));
     let mut orientations = Vec::new();
     for mut path in [path1, path2] {
@@ -391,11 +399,11 @@ fn legacy_from_candidate(
             .collect();
         let mut extras: Vec<_> = bridges[1..]
             .iter()
-            .filter(|bridge| bridge.length > 0)
+            .filter(|bridge| !bridge.nodes.is_empty())
             .collect();
         extras.sort_by_key(|bridge| {
             secondary_numbering_key(
-                bridge.length,
+                bridge.nodes.len(),
                 *base.get(&bridge.endpoints[0]).unwrap_or(&1),
                 *base.get(&bridge.endpoints[1]).unwrap_or(&1),
             )
@@ -425,7 +433,7 @@ fn legacy_from_candidate(
             .map(|bridge| {
                 let a = *pos.get(&bridge.endpoints[0]).unwrap_or(&1);
                 let b = *pos.get(&bridge.endpoints[1]).unwrap_or(&1);
-                (bridge.length, a.min(b), a.max(b))
+                (bridge.nodes.len(), a.min(b), a.max(b))
             })
             .collect();
         chords.sort_by_key(|&(length, low, high)| secondary_numbering_key(length, low, high));
@@ -445,7 +453,10 @@ fn legacy_from_candidate(
     orientations.sort_by(|a, b| a.0.cmp(&b.0));
     orientations
         .into_iter()
-        .map(|(_, descriptor, path)| (Some(descriptor), vec![path]))
+        .map(|(_, descriptor, path)| DescriptorPaths {
+            descriptor: Some(descriptor),
+            paths: vec![path],
+        })
         .collect()
 }
 

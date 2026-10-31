@@ -53,11 +53,8 @@ pub fn plan_fusion_parent(mol: &Molecule, atoms: &AtomSet) -> PlanResult {
     result
 }
 
-fn unported(error: &str) -> bool {
-    error.starts_with("openclatura:") && error.contains("not ported")
-}
 fn rejected(error: String) -> PlanResult {
-    if unported(&error) {
+    if error.starts_with("openclatura:") && error.contains("not ported") {
         Err(error)
     } else {
         Ok(None)
@@ -142,8 +139,9 @@ fn plan_uncached(mol: &Molecule, atoms: &AtomSet) -> PlanResult {
         ) {
             Ok(Some(plan)) => return Ok(Some(plan)),
             Ok(None) => (),
-            Err(error) if unported(&error) => return Err(error),
-            Err(_) => (),
+            Err(error) => {
+                rejected(error)?;
+            }
         }
     }
     Ok(None)
@@ -163,8 +161,8 @@ pub(super) fn plan_numbered_candidate(
     let specs = component_specs(ast, registry)?;
     let directed = component_entry_layouts(face_model, ast, &specs)?;
     let component_directed = directed.is_some();
-    let layouts = if let Some(layouts) = directed {
-        layouts
+    let layouts = if let Some(layouts) = &directed {
+        layouts.as_slice()
     } else {
         if intrinsic_layouts.is_none() {
             *intrinsic_layouts = Some(preferred_intrinsic_layouts(
@@ -172,7 +170,7 @@ pub(super) fn plan_numbered_candidate(
                 fusion_nomenclature_config().search.layout_states,
             )?);
         }
-        intrinsic_layouts.as_ref().cloned().unwrap_or_default()
+        intrinsic_layouts.as_deref().unwrap_or_default()
     };
     if layouts.is_empty() {
         return Ok(None);
@@ -194,7 +192,7 @@ pub(super) fn plan_numbered_candidate(
                 mol,
                 bounded,
                 Some(face_model),
-                &layouts,
+                layouts,
                 prove_carbon_h,
             )?;
             numbering_cache.insert(prove_carbon_h, selection.clone());
@@ -205,7 +203,7 @@ pub(super) fn plan_numbered_candidate(
             mol,
             bounded,
             Some(face_model),
-            &layouts,
+            layouts,
             prove_carbon_h,
         )?
     };
@@ -268,7 +266,9 @@ pub(super) fn plan_numbered_candidate(
             {
                 alternatives.push(plan)
             }
-            Err(error) if unported(&error) => return Err(error),
+            Err(error) => {
+                rejected(error)?;
+            }
             _ => (),
         }
     }
@@ -511,12 +511,7 @@ fn cited_indicated_hydrogens(
     let candidate_atoms: AtomSet = candidates.iter().copied().collect();
     let mut unpaired = AtomSet::new();
     for assignment in &bond_model.allowed_kekule_assignments {
-        let paired = assignment
-            .orders
-            .iter()
-            .filter(|(_, o)| *o == 2)
-            .flat_map(|&(e, _)| [e.0, e.1])
-            .collect();
+        let paired = assignment.paired_atoms();
         unpaired.extend(candidate_atoms.difference(&paired));
     }
     let mut component_h_roles = AtomSet::new();
