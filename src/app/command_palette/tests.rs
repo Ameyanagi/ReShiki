@@ -47,6 +47,37 @@ fn top(app: &App) -> &Command {
 }
 
 #[test]
+fn path_cleanup_catalog_has_selection_commands_and_explicit_upright_axis() {
+    for (query, name, upright) in [
+        ("Smooth", "Smooth", None),
+        ("Symmetrise", "Symmetrise", Some(false)),
+        ("Symmetrise upright", "Symmetrise upright", Some(true)),
+    ] {
+        let mut app = app();
+        search(&mut app, query);
+        let index = row(&app, name);
+        assert_eq!(top(&app).name, name);
+        let command = &app.commands.items[index];
+        assert_eq!(command.need, catalog::Need::Selection);
+        let catalog::Run::Send(messages) = &command.run else {
+            panic!("cleanup dispatch");
+        };
+        let [Message::Graphics(super::super::graphics::Action::Cleanup(cleanup))] =
+            messages.as_slice()
+        else {
+            panic!("cleanup message");
+        };
+        match (cleanup, upright) {
+            (super::super::graphics::Cleanup::Smooth, None) => {}
+            (super::super::graphics::Cleanup::Symmetrise { upright: actual }, Some(expected)) => {
+                assert_eq!(*actual, expected);
+            }
+            _ => panic!("cleanup axis"),
+        }
+    }
+}
+
+#[test]
 fn exact_template_keywords_rank_as_names_without_changing_other_first_results() {
     let mut app = app();
     // Before #630, Phe ranked Phenol first; the other first results are kept.

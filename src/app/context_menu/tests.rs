@@ -29,6 +29,50 @@ fn labels(app: &App, page: Page) -> Vec<&'static str> {
         .collect()
 }
 
+#[test]
+fn path_cleanup_entries_follow_eligible_selection_and_run_through_menu() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let mut graphic = reshiki::graphics::Graphic::pen_curve(
+        1,
+        World::default(),
+        World::new(100., 0.),
+        Default::default(),
+    );
+    graphic.path = vec![
+        reshiki::graphics::PathCommand::Move(World::default()),
+        reshiki::graphics::PathCommand::Line(World::new(50., 0.)),
+        reshiki::graphics::PathCommand::Line(World::new(100., 0.)),
+    ];
+    graphic.node_types.clear();
+    app.tab.doc.graphics = vec![graphic];
+    assert!(!labels(&app, Page::Main).contains(&"Smooth"));
+    app.tab.selected = vec![1];
+    assert!(labels(&app, Page::Main).contains(&"Smooth"));
+    assert!(labels(&app, Page::Main).contains(&"Symmetrise"));
+    let before = app.tab.doc.clone();
+    run_item(&mut app, Page::Main, "Smooth").unwrap();
+    assert_eq!(app.status, "Smoothed 1 object");
+    assert_eq!(
+        app.tab.doc.graphics[0].path_summary().unwrap().node_count(),
+        2
+    );
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    app.tab.doc.arrows.push(Arrow::new(
+        2,
+        World::default(),
+        World::new(100., 0.),
+        Default::default(),
+        Default::default(),
+    ));
+    app.tab.selected = vec![2];
+    assert!(!labels(&app, Page::Main).contains(&"Symmetrise"));
+    app.tab.doc.arrows[0].cubic = Some([World::new(20., -20.), World::new(80., -22.)]);
+    assert!(labels(&app, Page::Main).contains(&"Symmetrise"));
+}
+
 /// Labels and separators ("—") of a menu page, in order.
 fn outline(app: &App, page: Page) -> Vec<&'static str> {
     app.context_entries(page)

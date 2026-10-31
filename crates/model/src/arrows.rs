@@ -233,6 +233,63 @@ fn segment_distance(p: Point, a: Point, b: Point) -> f32 {
     };
     p.distance(a.lerp(b, t.clamp(0., 1.)))
 }
+
+/// Endpoint controls in matching chord frames: forward at the start, backward
+/// at the end, with the same normal on both sides.
+struct Bow {
+    direction: (f64, f64),
+    length: f64,
+    vectors: [(f64, f64); 2],
+}
+impl Bow {
+    fn read(arrow: &Arrow) -> Option<Self> {
+        let [a, b] = arrow.bezier_controls()?;
+        let dx = f64::from(arrow.end.x) - f64::from(arrow.start.x);
+        let dy = f64::from(arrow.end.y) - f64::from(arrow.start.y);
+        let length = dx.hypot(dy);
+        if length <= 1e-9 {
+            return None;
+        }
+        let direction = (dx / length, dy / length);
+        let local = |origin: Point, control: Point, sign: f64| {
+            let dx = f64::from(control.x) - f64::from(origin.x);
+            let dy = f64::from(control.y) - f64::from(origin.y);
+            (
+                sign * (dx * direction.0 + dy * direction.1),
+                dy * direction.0 - dx * direction.1,
+            )
+        };
+        Some(Self {
+            direction,
+            length,
+            vectors: [local(arrow.start, a, 1.), local(arrow.end, b, -1.)],
+        })
+    }
+    fn mismatch(&self) -> f64 {
+        let [a, b] = self.vectors;
+        (a.0 - b.0).hypot(a.1 - b.1)
+    }
+    fn store(&self, arrow: &mut Arrow, (x, y): (f64, f64)) -> bool {
+        // Leave symmetric legacy geometry untouched, including its encoding.
+        if self.mismatch() <= self.length * 1e-6 {
+            return false;
+        }
+        let (ux, uy) = self.direction;
+        let point = |origin: Point, sign: f64| {
+            Point::new(
+                (f64::from(origin.x) + sign * x * ux - y * uy) as f32,
+                (f64::from(origin.y) + sign * x * uy + y * ux) as f32,
+            )
+        };
+        let controls = [point(arrow.start, 1.), point(arrow.end, -1.)];
+        if arrow.bezier_controls() == Some(controls) {
+            return false;
+        }
+        arrow.cubic = Some(controls);
+        arrow.control = None;
+        true
+    }
+}
 impl Arrow {
     pub fn new(id: u64, start: Point, end: Point, preset: Preset, style: ArrowStyle) -> Self {
         Self {
@@ -526,6 +583,41 @@ impl Arrow {
         if let Some(c) = self.control_point() {
             self.control = Some(reflect(c));
         }
+    }
+    /// Even out a bow's tangent angles and lengths when its directions differ
+    /// by less than 20 degrees. More deliberate shapes are left untouched.
+    pub fn smooth_bow(&mut self) -> Result<bool, String> {
+        let Some(bow) = Bow::read(self) else {
+            return Ok(false);
+        };
+        let [a, b] = bow.vectors;
+        if a.1 * b.1 < 0. {
+            return Ok(false);
+        }
+        let (a_angle, b_angle) = (a.1.atan2(a.0), b.1.atan2(b.0));
+        if (a_angle - b_angle).abs() >= 20_f64.to_radians() {
+            return Ok(false);
+        }
+        let angle = (a_angle + b_angle) * 0.5;
+        let length = (a.0.hypot(a.1) + b.0.hypot(b.1)) * 0.5;
+        Ok(bow.store(self, (length * angle.cos(), length * angle.sin())))
+    }
+    /// Mirror a modestly lopsided bow across the endpoints' perpendicular
+    /// bisector, preserving both endpoints and their attachments.
+    pub fn symmetrise(&mut self) -> Result<bool, String> {
+        let Some(bow) = Bow::read(self) else {
+            return Ok(false);
+        };
+        let [a, b] = bow.vectors;
+        // Ignore opposite-side noise below 1% of the chord. Limit each
+        // control's adjustment to 10% of the chord so cleanup keeps the shape.
+        let side_tolerance = bow.length * 0.01;
+        if (a.1 * b.1 < 0. && a.1.abs().min(b.1.abs()) > side_tolerance)
+            || bow.mismatch() > bow.length * 0.2
+        {
+            return Err("Not symmetric enough: arrow bow is too asymmetric".into());
+        }
+        Ok(bow.store(self, ((a.0 + b.0) * 0.5, (a.1 + b.1) * 0.5)))
     }
     pub fn validate(&self) -> Result<(), String> {
         if !Preset::ALL.iter().any(|p| p.kind() == self.kind) {
@@ -1045,6 +1137,8 @@ impl Arrow {
     }
 }
 
+#[cfg(test)]
+mod cleanup_tests;
 #[cfg(test)]
 mod curve_tests;
 #[cfg(test)]

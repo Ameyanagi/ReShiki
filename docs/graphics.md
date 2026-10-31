@@ -31,6 +31,25 @@ Select a graphic to move, copy, duplicate, rotate, reflect or resize it.
 **New path** and **Finish** show while the **Pen path** tool is active. Each
 segment is one Undo step; Escape cancels the segment you are drawing.
 
+Select pen paths, Bézier curves or curved arrows and choose **Smooth** or
+**Symmetrise** from the canvas menu or command palette. Both commands apply to
+the whole selection in one Undo step. They are also buttons in the
+inspector's Pen path panel (as **Smooth path** and **Symmetrise**) and the
+curved arrow panel.
+
+**Smooth** aligns cubic handles at joints bent less than 20°, following the
+straight segment at mixed joints and preserving intended corners. It removes
+redundant nodes within a quarter of the line width of the original path.
+It runs only when commanded. For curved arrows it evens the
+angle and length of a lopsided bow when the end angles differ by less than 20°.
+
+**Symmetrise** finds the best mirror axis, including tilted axes, and averages
+both sides. Hold Shift when clicking it to use a vertical or horizontal axis;
+the palette also has **Symmetrise upright**. Shapes too far from symmetric are
+left unchanged with a reason in the status bar. Curved arrows use the
+perpendicular bisector of their endpoints; Shift has no effect on them. Arrow
+endpoints, attachments and arrowheads stay in place.
+
 ### Edit points
 
 1. Select a curve or path and choose **Edit curve points**.

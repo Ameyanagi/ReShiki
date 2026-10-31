@@ -21,6 +21,7 @@ impl App {
             // Routed by the gates or update_front before dispatch.
             // Autosaved: handled before editor/modal guards.
             Message::Accessibility(_)
+            | Message::ModifiersChanged(_)
             | Message::CopyFrame(_)
             | Message::Assistant(_)
             | Message::Updates(_)

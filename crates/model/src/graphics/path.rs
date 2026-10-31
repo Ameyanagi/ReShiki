@@ -3,6 +3,9 @@ use super::{BracketSides, Graphic, GraphicKind, GraphicStyle, PathCommand};
 use crate::document::Point;
 use serde::{Deserialize, Serialize};
 
+mod smooth;
+mod symmetry;
+
 pub const MIN_OPEN_NODES: usize = 2;
 pub const MIN_CLOSED_NODES: usize = 3;
 

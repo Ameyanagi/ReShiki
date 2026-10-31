@@ -1,5 +1,13 @@
 # Unreleased changes
 
+Pen paths, Bézier curves and curved arrows gain **Smooth** and
+**Symmetrise** commands in the canvas menu and command palette, with buttons
+in the Pen path and curved arrow panels. Smooth aligns gentle joints and
+removes redundant path nodes; Symmetrise averages nearly mirrored shapes about
+their best axis. Shift chooses an upright axis for paths and curves. Each
+command is one Undo step for the selection.
+([issue #760](https://github.com/Ameyanagi/ReShiki/issues/760)).
+
 Under review: @Ameyanagi — **Import → Name** reads phane (cyclophane) names such
 as `1,4(1,4)-dibenzenacyclohexaphane`, and the offline name parser now follows
 OPSIN's main branch (commit `42e87ac6`) instead of the 2.9.0 release, with its

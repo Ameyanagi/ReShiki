@@ -186,6 +186,7 @@ impl App {
         summary: &PathSummary,
     ) -> Column<'a, Message> {
         let send = |a| Message::Graphics(super::Action::Path(a));
+        let cleanup = |c| Message::Graphics(super::Action::Cleanup(c));
         let choices: Vec<_> = summary
             .nodes()
             .enumerate()
@@ -252,6 +253,21 @@ impl App {
                             })),
                         path_button("pen-continue", "Continue drawing")
                             .on_press_maybe((!closed).then(|| send(Action::Continue)))
+                    ]
+                    .spacing(4),
+                    row![
+                        hover_hint(
+                            path_button("pen-smooth", "Smooth path")
+                                .on_press(cleanup(super::Cleanup::Smooth)),
+                            "Align gentle joints and remove redundant nodes",
+                            tooltip::Position::Bottom,
+                        ),
+                        hover_hint(
+                            path_button("pen-symmetrise", "Symmetrise")
+                                .on_press(cleanup(super::Cleanup::Symmetrise { upright: false })),
+                            super::SYMMETRISE_HINT,
+                            tooltip::Position::Bottom,
+                        )
                     ]
                     .spacing(4),
                 ]
