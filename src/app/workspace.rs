@@ -24,6 +24,8 @@ mod selection_canvas_qa;
 #[cfg(test)]
 mod status_tests;
 #[cfg(test)]
+mod template_tests;
+#[cfg(test)]
 mod view_parity_tests;
 
 /// Counts used by molecular properties and both naming preview layouts.
@@ -1683,32 +1685,52 @@ impl App {
         let action = Message::Templates;
         let state = &self.templates;
         if !state.active {
-            body = body.push(
-                column![
-                    crate::appearance::text_input("Search names, collections…", &state.query)
-                        .on_input(|s| Message::Templates(A::Search(s)))
-                        .size(12)
-                        .padding(8),
-                    crate::appearance::pick_list(
-                        [Filter::All, Filter::Mine, Filter::Favorites],
-                        Some(state.filter),
-                        |f| Message::Templates(A::Filter(f))
-                    )
-                    .text_size(12)
-                    .padding(6)
-                    .width(Length::Fill),
-                ]
-                .spacing(8),
-            );
-            if state.collection != "All collections"
-                || !state.query.is_empty()
-                || state.filter != Filter::All
-            {
-                body = body.push(command("← Categories", action(A::Browse)));
+            let mut search = column![
+                crate::appearance::text_input("Search names, collections…", &state.query)
+                    .on_input(|s| Message::Templates(A::Search(s)))
+                    .size(12)
+                    .padding(8),
+            ]
+            .spacing(8);
+            if state.collection != "All collections" && !state.query.trim().is_empty() {
+                search = search.push(
+                    row![
+                        text(format!("In {}", state.collection))
+                            .size(11)
+                            .style(muted_text)
+                            .width(Length::Fill),
+                        command("Search all", action(A::SearchAll)),
+                    ]
+                    .spacing(3)
+                    .align_y(Alignment::Center),
+                );
             }
-            if state.can_forward() {
-                body = body.push(command("Forward →", action(A::Forward)));
-            }
+            body = body
+                .push(
+                    search.push(
+                        crate::appearance::pick_list(
+                            [Filter::All, Filter::Mine, Filter::Favorites],
+                            Some(state.filter),
+                            |f| Message::Templates(A::Filter(f)),
+                        )
+                        .text_size(12)
+                        .padding(6)
+                        .width(Length::Fill),
+                    ),
+                )
+                .push(
+                    row![
+                        command("← Categories", action(A::Browse)).on_press_maybe(
+                            (state.collection != "All collections"
+                                || !state.query.is_empty()
+                                || state.filter != Filter::All)
+                                .then(|| action(A::Browse)),
+                        ),
+                        command("Forward →", action(A::Forward))
+                            .on_press_maybe(state.can_forward().then(|| action(A::Forward))),
+                    ]
+                    .spacing(3),
+                );
             body = body.push(
                 button(text("Save selection as template").size(12))
                     .padding(7)
@@ -1838,9 +1860,10 @@ impl App {
             let mut categories =
                 std::collections::BTreeMap::<&str, (usize, &reshiki::templates::Template)>::new();
             for template in state.library.iter() {
-                let name = super::template_library::category(template);
-                let entry = categories.entry(name).or_insert((0, template));
-                entry.0 += 1;
+                for name in super::template_library::categories(template) {
+                    let entry = categories.entry(name).or_insert((0, template));
+                    entry.0 += 1;
+                }
             }
             body = body
                 .push(horizontal_line())
