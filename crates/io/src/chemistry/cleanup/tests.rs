@@ -159,6 +159,18 @@ fn keeping_orientation_leaves_substituted_six_rings_on_the_grid() -> anyhow::Res
         let cleaned = clean(&source, Options::default(), &[], 0.)?;
         let after = cleaned.molecule.as_ref().unwrap();
         ring_on_grid(after);
+        let ring = &before.state.rings.atoms[0];
+        for (&a, &b) in ring.iter().zip(ring.iter().cycle().skip(1)) {
+            let direction =
+                |points: &[Point3]| (points[b].y - points[a].y).atan2(points[b].x - points[a].x);
+            let angle = direction(&after.positions) - direction(&before.positions);
+            let error = angle.sin().atan2(angle.cos()).abs();
+            assert!(
+                error <= 1.5_f64.to_radians(),
+                "Ring bond {a}–{b} turned by {:.6} degrees",
+                error.to_degrees()
+            );
+        }
         let (before, after) = (centroid(&before.positions), centroid(&after.positions));
         assert!((before.x - after.x).hypot(before.y - after.y) < 1e-10);
         assert!(cleaned.warnings.is_empty());
@@ -179,6 +191,42 @@ fn cleanup_without_keep_orientation_straightens_a_rotated_solver_layout() -> any
         7_f64.to_radians(),
     )?;
     ring_on_grid(cleaned.molecule.as_ref().unwrap());
+    Ok(())
+}
+
+#[test]
+fn cleanup_with_keep_orientation_straightens_a_tilted_drawing() -> anyhow::Result<()> {
+    for text in [PROPYLBENZENE, ASPIRIN] {
+        let source = drawing(text)?;
+        // A ring that turns at most 15 degrees onto the grid from a 20-degree
+        // tilt lands on the 30-degree line, not back on 0.
+        let ring = molecular::prepare(&source)?.state.rings.atoms.remove(0);
+        let (a, b) = (ring[0], ring[1]);
+        let direction = |molecule: &Molecule| {
+            let (a, b) = (molecule.positions[a], molecule.positions[b]);
+            (b.y - a.y).atan2(b.x - a.x)
+        };
+        for tilt in [7_f32, -9., 20.] {
+            let mut source = source.clone();
+            let (s, c) = tilt.to_radians().sin_cos();
+            for atom in &mut source.atoms {
+                let point = atom.position;
+                atom.position.x = c * point.x - s * point.y;
+                atom.position.y = s * point.x + c * point.y;
+            }
+            let before = molecular::prepare(&source)?;
+            let cleaned = clean(&source, Options::default(), &[], 0.)?;
+            let after = cleaned.molecule.as_ref().unwrap();
+            ring_on_grid(after);
+            let angle = direction(after) - direction(&before);
+            let turn = angle.sin().atan2(angle.cos()).abs();
+            assert!(
+                turn <= 15_f64.to_radians(),
+                "{text} tilted by {tilt} degrees turned by {:.6} degrees",
+                turn.to_degrees()
+            );
+        }
+    }
     Ok(())
 }
 
