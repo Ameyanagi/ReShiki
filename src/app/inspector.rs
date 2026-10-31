@@ -716,6 +716,12 @@ impl App {
             .style(muted_text)
         ]
         .spacing(10);
+        let crystal_first = self.selected_existing_model().is_some_and(|model| {
+            model.cell.is_some() && model.display == reshiki::models3d::Display::TwoD
+        });
+        if crystal_first && let Some(section) = self.structure_section() {
+            body = body.push(section);
+        }
         if self
             .selected_existing_model()
             .is_some_and(|model| model.display == reshiki::models3d::Display::ThreeD)
@@ -876,8 +882,8 @@ impl App {
                 }
             },
         ));
-        // Show as and the 3D model are secondary, so they follow the chemistry.
-        if let Some(section) = self.structure_section() {
+        // A 2D crystal keeps Repeat and Look along first; other model controls follow chemistry.
+        if !crystal_first && let Some(section) = self.structure_section() {
             body = body.push(section);
         }
         if let Some(section) = self.model_section() {
@@ -1135,6 +1141,11 @@ impl App {
     fn opened_section(&self) -> Option<Section> {
         if self.tab.selected.is_empty() {
             return (!self.tab.doc.atoms.is_empty()).then_some(Section::Molecule);
+        }
+        if self.selected_existing_model().is_some_and(|model| {
+            model.cell.is_some() && model.display == reshiki::models3d::Display::TwoD
+        }) {
+            return Some(Section::Structure);
         }
         let selected: HashSet<_> = self.tab.selected.iter().copied().collect();
         if self

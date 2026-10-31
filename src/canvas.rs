@@ -174,6 +174,8 @@ pub enum Edit {
     Select(Vec<u64>),
     /// Preserve the exact mouse position for a keyboard hotspot handoff.
     SelectAt(Vec<u64>, World),
+    /// Retarget the keyboard hotspot after committing a pointer drag.
+    Release(Box<Edit>, World),
     RelaxDragStart {
         session: u64,
         atom: u64,

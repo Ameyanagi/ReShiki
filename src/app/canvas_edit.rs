@@ -105,7 +105,7 @@ impl App {
         }
         if let Edit::Hover(point) = edit {
             self.tab.hover = point.map(|p| (p, self.tab.file_epoch));
-            self.keyboard_pointer_hover(point);
+            self.keyboard_pointer_target(point, false);
             self.hover_bond_text(point);
             return;
         }
@@ -149,6 +149,7 @@ impl App {
             // These edits are handled by the leading match, before preview gates.
             Edit::ContextMenu { .. } | Edit::ArrowTarget(..) | Edit::CancelArrowSource => return,
             Edit::Touch(_)
+            | Edit::Release(..)
             | Edit::Hover(_)
             | Edit::PointerHover(_)
             | Edit::RelaxDragStart { .. }

@@ -1100,6 +1100,10 @@ impl App {
             self.inspector_width(),
             self.viewport,
         );
+        let (message, release_point) = match message {
+            Message::Canvas(Edit::Release(edit, point)) => (Message::Canvas(*edit), Some(point)),
+            message => (message, None),
+        };
         let pointer_selection = match &message {
             Message::Canvas(Edit::Select(_)) => Some(
                 self.tab
@@ -1143,6 +1147,9 @@ impl App {
         }
         if let Some(point) = pointer_selection {
             self.keyboard_pointer_selection(point);
+        }
+        if let Some(point) = release_point {
+            self.keyboard_pointer_target(Some(point), true);
         }
         let task = Task::batch([task, self.start_label_refresh(), self.start_autosave()]);
         self.tab.nmr.invalidate_if_changed_cached(
