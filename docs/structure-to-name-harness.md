@@ -56,17 +56,21 @@ The fast subset is all 203 curated rows, every 10th random PubChem row, every
 5th openclatura row per category, and the first 500 generated molecules (934
 structures). The full run uses all fixture rows and 3,000 generated molecules.
 
-## Baseline (openclatura port, stage 2, 2026-10-31)
+## Baseline (openclatura port, stage 3, 2026-10-31)
 
 `namer` calls `naming::openclatura::name_smiles`, the Rust port of openclatura
-0.4.3. It names one connected component whose rings are monocycles, separate
-or joined at spiro atoms: chains, monocycles, ring assemblies (biphenyl,
-phenylpyridine, terphenyls) and von Baeyer spiro parents (`spiro[4.5]decane`,
-`1,4-dioxaspiro[4.5]decane`, `dispiro[3.1.3.1]decane`). Fused, bridged and
-bicyclo ring systems, and more than one component, decline. No wrong names in
-any check. Unparseable rows are openclatura names the OPSIN port cannot read
-(mostly chalcogen peroxides, thioperoxy anhydrides and r/s labels); they are
-not counted as correct. Fast subset about 10 s; full corpus about 65 s.
+0.4.3. It names one connected component whose ring systems are monocycles,
+ring assemblies, spiro systems built from monocycles, and von Baeyer systems
+(`bicyclo[2.2.1]heptane`, `1-azabicyclo[2.2.2]octane`,
+`tricyclo[4.3.0.0^{3,9}]nonane`, `adamantane`, `cubane`) with heteroatom
+replacement, unsaturation, suffixes and stereo. Fused ring systems decline,
+and so does any bridged block that fusion nomenclature might claim (an aromatic
+atom, or two SSSR rings of five or more atoms sharing one bond); upstream tries
+fusion first, and fusion is not ported yet. A spiro junction on a polycyclic
+block and more than one component also decline. No wrong names in any check.
+Unparseable rows are openclatura names the OPSIN port cannot read (mostly
+chalcogen peroxides, thioperoxy anhydrides and r/s labels); they are not
+counted as correct. Fast subset about 10 s; full corpus about 65 s.
 
 Stage 1 (at most one ring; 659 corpus rows): 615 correct, 0 wrong, 41
 unparseable, 3 declined; text equals openclatura's for 654 of 658 rows with a
@@ -88,12 +92,27 @@ such decline. The remaining
 `spiro[indene-1,1'-indene]`). Previous rules-namer baseline: structure 145,
 name 31, parity 105, generated 1717 (full).
 
+Stage 3 (von Baeyer systems; 604 corpus rows had a fused or bridged block):
+35 are now correct, including all 14 `mr_bridged` rows; 34 equal openclatura's
+text and one (a corrin skeleton) gets a von Baeyer name where upstream uses a
+retained name. The other 569 are fused or fusion-eligible (555) or spiro
+junctions on a polycyclic block (14). Named from their original SMILES, the
+in-scope corpus and generated molecules match upstream for 212 of 214 (both
+others are spiro junctions), and held-out generated sets of about 6,000
+von Baeyer molecules match for 83–92%; the rest decline. Most of those
+declines are stereo that upstream's own name loses or that the OPSIN reading
+cannot place: unresolved ring stereo, nitrogen and lone-pair centres,
+pseudoasymmetric (r/s) centres on a von Baeyer parent, and secondary bridges
+numbered in the direction OPSIN does not read. The generated `tricyclo`
+declines (61) are fusion names upstream (`decahydrocyclopenta[cd]pentalene`,
+`octahydro-2,5-methanopentalene`).
+
 | Check                   |      Fast |                                    Full |
 | ----------------------- | --------: | --------------------------------------: |
-| structure               | 261 / 434 |                      939 / 1597 (58.8%) |
-| name                    | 162 / 246 | 439 / 685 (64.1%), 18 input unparseable |
-| parity (exact text)     | 268 / 434 |                      974 / 1592 (61.2%) |
-| generated               | 429 / 500 |                     2577 / 3000 (85.9%) |
+| structure               | 281 / 434 |                      974 / 1597 (61.0%) |
+| name                    | 179 / 246 | 461 / 685 (67.3%), 18 input unparseable |
+| parity (exact text)     | 288 / 434 |                     1008 / 1592 (63.3%) |
+| generated               | 464 / 500 |                     2789 / 3000 (93.0%) |
 | unparseable (structure) |        10 |                                      41 |
 
 ### Structure round trip
@@ -104,24 +123,24 @@ name 31, parity 105, generated 1717 (full).
 | alkenyl_benzyl      |               9 / 10 |       9 / 10 (90.0%) |
 | chain_ring_prefix   |              12 / 12 |     12 / 12 (100.0%) |
 | data                |               0 / 13 |        0 / 63 (0.0%) |
-| drug                |              10 / 20 |      10 / 20 (50.0%) |
+| drug                |              11 / 20 |      11 / 20 (55.0%) |
 | exploratory         |                1 / 1 |       4 / 4 (100.0%) |
 | fixtures            |              22 / 22 |    103 / 106 (97.2%) |
 | heterocycle         |              17 / 25 |      17 / 25 (68.0%) |
-| integration         |               0 / 16 |        1 / 80 (1.2%) |
+| integration         |               0 / 16 |        2 / 80 (2.5%) |
 | mr_assembly         |               8 / 10 |       8 / 10 (80.0%) |
-| mr_bridged          |               0 / 14 |        0 / 14 (0.0%) |
+| mr_bridged          |              14 / 14 |     14 / 14 (100.0%) |
 | mr_fused            |               0 / 20 |        0 / 20 (0.0%) |
 | mr_macro_other      |                4 / 7 |        4 / 7 (57.1%) |
 | mr_spiro            |                6 / 7 |        6 / 7 (85.7%) |
 | natural_product     |              11 / 19 |      11 / 19 (57.9%) |
-| pubchem_random      |              29 / 50 |    309 / 500 (61.8%) |
+| pubchem_random      |              31 / 50 |    316 / 500 (63.2%) |
 | ring_ON_ester_amide |              10 / 10 |     10 / 10 (100.0%) |
-| roundtrip           |              44 / 77 |    227 / 383 (59.3%) |
+| roundtrip           |              47 / 77 |    239 / 383 (62.4%) |
 | stereo              |              16 / 16 |     16 / 16 (100.0%) |
 | suffix_on_ring      |              20 / 20 |     20 / 20 (100.0%) |
 | unit                |              29 / 52 |    159 / 258 (61.6%) |
-| total               |            261 / 434 |   939 / 1597 (58.8%) |
+| total               |            281 / 434 |   974 / 1597 (61.0%) |
 
 ### Name round trip
 
@@ -130,46 +149,46 @@ name 31, parity 105, generated 1717 (full).
 | alcohol_amine       |              13 / 13 |     13 / 13 (100.0%) |
 | alkenyl_benzyl      |               9 / 10 |       9 / 10 (90.0%) |
 | chain_ring_prefix   |              12 / 12 |     12 / 12 (100.0%) |
-| drug                |               9 / 19 |       9 / 19 (47.4%) |
+| drug                |              10 / 19 |      10 / 19 (52.6%) |
 | heterocycle         |              17 / 25 |      17 / 25 (68.0%) |
 | mr_assembly         |               8 / 10 |       8 / 10 (80.0%) |
-| mr_bridged          |               0 / 14 |        0 / 14 (0.0%) |
+| mr_bridged          |              14 / 14 |     14 / 14 (100.0%) |
 | mr_fused            |               0 / 20 |        0 / 20 (0.0%) |
 | mr_macro_other      |                4 / 6 |        4 / 6 (66.7%) |
 | mr_spiro            |                6 / 7 |        6 / 7 (85.7%) |
 | natural_product     |              11 / 17 |      11 / 17 (64.7%) |
-| pubchem_random      |              29 / 49 |    306 / 488 (62.7%) |
+| pubchem_random      |              31 / 49 |    313 / 488 (64.1%) |
 | ring_ON_ester_amide |              10 / 10 |     10 / 10 (100.0%) |
 | stereo              |              14 / 14 |     14 / 14 (100.0%) |
 | suffix_on_ring      |              20 / 20 |     20 / 20 (100.0%) |
-| total               |            162 / 246 |    439 / 685 (64.1%) |
+| total               |            179 / 246 |    461 / 685 (67.3%) |
 
 ### Parity (exact openclatura text)
 
-| Category            | Fast exact / total | Full exact / total |
-| ------------------- | -----------------: | -----------------: |
-| alcohol_amine       |            13 / 13 |   13 / 13 (100.0%) |
-| alkenyl_benzyl      |             9 / 10 |     9 / 10 (90.0%) |
-| chain_ring_prefix   |            12 / 12 |   12 / 12 (100.0%) |
-| data                |             0 / 13 |      0 / 63 (0.0%) |
-| drug                |            10 / 20 |    10 / 20 (50.0%) |
-| exploratory         |              1 / 1 |     4 / 4 (100.0%) |
-| fixtures            |            22 / 22 |  103 / 106 (97.2%) |
-| heterocycle         |            17 / 25 |    17 / 25 (68.0%) |
-| integration         |             0 / 16 |      2 / 80 (2.5%) |
-| mr_assembly         |             8 / 10 |     8 / 10 (80.0%) |
-| mr_bridged          |             0 / 14 |      0 / 14 (0.0%) |
-| mr_fused            |             0 / 20 |      0 / 20 (0.0%) |
-| mr_macro_other      |              4 / 7 |      4 / 7 (57.1%) |
-| mr_spiro            |              6 / 7 |      6 / 7 (85.7%) |
-| natural_product     |            11 / 19 |    11 / 19 (57.9%) |
-| pubchem_random      |            26 / 50 |  304 / 495 (61.4%) |
-| ring_ON_ester_amide |            10 / 10 |   10 / 10 (100.0%) |
-| roundtrip           |            44 / 77 |  226 / 383 (59.0%) |
-| stereo              |            16 / 16 |   16 / 16 (100.0%) |
-| suffix_on_ring      |            20 / 20 |   20 / 20 (100.0%) |
-| unit                |            39 / 52 |  199 / 258 (77.1%) |
-| total               |          268 / 434 | 974 / 1592 (61.2%) |
+| Category            | Fast exact / total |  Full exact / total |
+| ------------------- | -----------------: | ------------------: |
+| alcohol_amine       |            13 / 13 |    13 / 13 (100.0%) |
+| alkenyl_benzyl      |             9 / 10 |      9 / 10 (90.0%) |
+| chain_ring_prefix   |            12 / 12 |    12 / 12 (100.0%) |
+| data                |             0 / 13 |       0 / 63 (0.0%) |
+| drug                |            11 / 20 |     11 / 20 (55.0%) |
+| exploratory         |              1 / 1 |      4 / 4 (100.0%) |
+| fixtures            |            22 / 22 |   103 / 106 (97.2%) |
+| heterocycle         |            17 / 25 |     17 / 25 (68.0%) |
+| integration         |             0 / 16 |       2 / 80 (2.5%) |
+| mr_assembly         |             8 / 10 |      8 / 10 (80.0%) |
+| mr_bridged          |            14 / 14 |    14 / 14 (100.0%) |
+| mr_fused            |             0 / 20 |       0 / 20 (0.0%) |
+| mr_macro_other      |              4 / 7 |       4 / 7 (57.1%) |
+| mr_spiro            |              6 / 7 |       6 / 7 (85.7%) |
+| natural_product     |            11 / 19 |     11 / 19 (57.9%) |
+| pubchem_random      |            28 / 50 |   311 / 495 (62.8%) |
+| ring_ON_ester_amide |            10 / 10 |    10 / 10 (100.0%) |
+| roundtrip           |            47 / 77 |   238 / 383 (62.1%) |
+| stereo              |            16 / 16 |    16 / 16 (100.0%) |
+| suffix_on_ring      |            20 / 20 |    20 / 20 (100.0%) |
+| unit                |            39 / 52 |   199 / 258 (77.1%) |
+| total               |          288 / 434 | 1008 / 1592 (63.3%) |
 
 ### Generated stress set
 
@@ -184,7 +203,7 @@ name 31, parity 105, generated 1717 (full).
 | alkyne              |              21 / 21 |   125 / 125 (100.0%) |
 | amide               |              21 / 21 |   125 / 125 (100.0%) |
 | amine               |              21 / 21 |   125 / 125 (100.0%) |
-| bicyclo             |               0 / 21 |       0 / 125 (0.0%) |
+| bicyclo             |              21 / 21 |   125 / 125 (100.0%) |
 | ester               |              21 / 21 |   125 / 125 (100.0%) |
 | ether               |              20 / 20 |   125 / 125 (100.0%) |
 | fused-aromatic      |               0 / 21 |       0 / 125 (0.0%) |
@@ -195,11 +214,11 @@ name 31, parity 105, generated 1717 (full).
 | n-substituted-amide |              21 / 21 |   125 / 125 (100.0%) |
 | nitrile             |              21 / 21 |   125 / 125 (100.0%) |
 | ring-assembly       |              21 / 21 |   125 / 125 (100.0%) |
-| ring-with-group     |              12 / 20 |     77 / 125 (61.6%) |
+| ring-with-group     |              17 / 20 |    100 / 125 (80.0%) |
 | spiro               |              21 / 21 |   125 / 125 (100.0%) |
 | tetrahedral-stereo  |              20 / 20 |   125 / 125 (100.0%) |
-| tricyclo            |               0 / 21 |       0 / 125 (0.0%) |
-| total               |            429 / 500 |  2577 / 3000 (85.9%) |
+| tricyclo            |               9 / 21 |     64 / 125 (51.2%) |
+| total               |            464 / 500 |  2789 / 3000 (93.0%) |
 
 ## Chemistry crate readiness for the port
 
