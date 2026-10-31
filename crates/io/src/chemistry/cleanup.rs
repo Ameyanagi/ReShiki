@@ -385,6 +385,10 @@ impl Prepared {
                 &part.fixed,
                 self.options.keep_orientation,
             )?;
+            if part.fixed.len() < 2 {
+                let pivot = part.fixed.keys().next().copied();
+                super::layout_refinement::straighten(&part.molecule.state, &mut layout, pivot);
+            }
             for (&index, fixed) in &part.fixed {
                 let point = layout.get_mut(index).ok_or(Error::Layout)?;
                 if native_hypot(point.x - fixed.x, point.y - fixed.y) > 1e-6 {
@@ -620,3 +624,6 @@ fn rewedge(molecule: &Molecule, base: &Document, work: &mut usize) -> Result<Vec
     }
     Ok(result)
 }
+
+#[cfg(test)]
+mod tests;
