@@ -21,6 +21,9 @@ use iced::{Color, Point, Rectangle, mouse};
 use reshiki::document::Document;
 use std::borrow::Cow;
 
+/// Space above the paper's bottom edge occupied by the hint strip and its gap.
+pub(crate) const HINT_STRIP_HEIGHT_PX: f32 = 34.;
+
 /// The document as the in-progress gesture would leave it, plus its transient decorations.
 struct Draft<'d> {
     preview: Cow<'d, Document>,

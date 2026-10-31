@@ -20,16 +20,18 @@ file…** to insert it into the drawing. These files are read:
 
 A structure with a cell opens as a 2D drawing with depth, in a parallel
 projection so the cell's edges stay parallel. The opening view is chosen so
-the labels read well: of the views that show every axis, keep the origin
-behind the box and keep atom labels, axis labels, bonds and box edges apart
-nearly as well as the best one, the one closest to the cell as
-crystallographers draw it wins (_b_ to the right, _c_ up and _a_ toward you,
+the labels read well: of the views that show every axis and keep the origin
+behind the box, it first keeps atom labels nearly as far apart as the best
+view, then compares clearance from axis labels, bonds and box edges. The
+one closest to the cell as crystallographers draw it wins (_b_ to the right,
+_c_ up and _a_ toward you,
 seen a little from above); otherwise a slight tilt off looking down _c_ or
 down the body diagonal, as for a rhombohedral primitive cell. Rutile's Ti no
 longer sits behind O. The drawing is at the usual scale (1.5 Å per bond
 length) or larger, so the shortest cell edge is at least 8 label heights and
 a bond between two labels, as CO₂'s C=O, at least 2.4. A plain XYZ file
-without a cell opens as a 3D model.
+without a cell opens as a 3D model. If atom labels still overlap in the best
+view, an import note suggests **Look along** or **Show as 3D**; all labels stay.
 
 **Show as 3D** shows the model in that same view: drag inside the frame to turn
 it, double-click to come back to the opening view, and use **Properties → 3D
@@ -82,8 +84,10 @@ other appearance controls remain available in **Properties → 3D model**.
 - **Look along** _a_, _b_, _c_ or [111] turns the 2D drawing to look down that
   direction, tilted a little (at most about 15°) where atoms stacked one
   behind another would hide each other, as rock salt's along _c_. An axis seen
-  end-on has no label. Turning on a repeat looks along whichever of the four
-  keeps the labels of all the cells farthest apart.
+  end-on has no label. Each repeat change looks along whichever of the four
+  keeps the labels of all the cells nearly as far apart as the best view,
+  preferring a lattice axis, until you choose a direction explicitly; that
+  choice stays selected and is kept in the file.
 - **Molecular crystals** keep whole molecules. Each molecule is made whole
   across the cell boundary and kept once, where its centre lies in the cell, so
   atoms of a molecule on a corner or face stick out of the box.

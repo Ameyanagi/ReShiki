@@ -76,6 +76,7 @@ use grid::GridCache;
 pub use hit::{bond_text_at, distance_to_segment, hit_object};
 use iced::widget::canvas::{self, Action, Geometry, Path, Stroke};
 use iced::{Color, Event, Point, Rectangle, Renderer, Theme, Vector, mouse};
+pub(crate) use paper::HINT_STRIP_HEIGHT_PX;
 #[cfg_attr(
     target_arch = "wasm32",
     expect(
@@ -95,7 +96,7 @@ use reshiki::{
     graphics::{ArcGeometry, BracketSides, GraphicStyle},
     scientific::Phase,
 };
-pub(crate) use selection::rotate;
+pub(crate) use selection::{FRAME_PADDING_PX, ROTATION_KNOB_RADIUS_PX, ROTATION_STEM_PX, rotate};
 use selection::{Handle, SelectionBox, TransformDrag};
 use std::sync::LazyLock;
 pub(crate) use text_cache::prepare_fonts;
