@@ -633,6 +633,110 @@ fn whole_molecules_open_properties_and_partial_selections_keep_their_section() {
 }
 
 #[test]
+fn selected_2d_crystal_opens_structure() {
+    use reshiki::models3d::Display;
+    let (mut app, _) = App::new();
+    app.tab.doc = reshiki::crystal::read(
+        "cif",
+        include_str!("../../../tests/fixtures/crystal/nacl.cif"),
+    )
+    .unwrap()
+    .0;
+    assert_eq!(app.opened_section(), Some(Section::Molecule));
+    app.tab.doc.models[0].display = Display::TwoD;
+    for selected in [
+        vec![app.tab.doc.atoms[0].id],
+        app.tab.doc.atoms.iter().map(|atom| atom.id).collect(),
+    ] {
+        app.tab.selected = selected;
+        assert_eq!(app.opened_section(), Some(Section::Structure));
+    }
+    for display in [Display::ThreeD, Display::Both] {
+        app.tab.doc.models[0].display = display;
+        assert_ne!(app.opened_section(), Some(Section::Structure));
+    }
+    app.tab.doc.models[0].display = Display::TwoD;
+    let ordinary = app.tab.doc.add_atom("N", Default::default());
+    app.tab.selected = vec![ordinary];
+    assert_eq!(app.opened_section(), Some(Section::Atoms));
+    app.tab.selected = vec![app.tab.doc.atoms[0].id];
+    app.tab.doc.models[0].cell = None;
+    assert_eq!(app.opened_section(), Some(Section::Atoms));
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer crystal Structure section order regression"]
+async fn selected_2d_crystal_puts_structure_before_molecular_properties() -> Result<(), String> {
+    use iced::advanced::{renderer::Headless, widget::operation};
+    use reshiki::models3d::Display;
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .ok_or("No renderer")?;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::crystal::read(
+        "cif",
+        include_str!("../../../tests/fixtures/crystal/nacl.cif"),
+    )
+    .unwrap()
+    .0;
+    let crystal = app.tab.doc.atoms[0].id;
+    let ordinary = app.tab.doc.add_atom("N", Default::default());
+    let size = iced::Size::new(300., 2400.);
+    for (selected, display, first) in [
+        (crystal, Display::TwoD, "inspector-section-Structure"),
+        (ordinary, Display::TwoD, "inspector-section-Molecule"),
+        (crystal, Display::ThreeD, "inspector-section-Molecule"),
+        (crystal, Display::Both, "inspector-section-Molecule"),
+    ] {
+        app.tab.selected = vec![selected];
+        app.tab.doc.models[0].display = display;
+        let mut ui = iced_runtime::UserInterface::build(
+            app.ordinary_properties_panel(),
+            size,
+            iced_runtime::user_interface::Cache::new(),
+            &mut renderer,
+        );
+        let mut collect = reshiki::accessibility::Collect::new(iced::Rectangle::with_size(size));
+        ui.operate(&renderer, &mut operation::black_box(&mut collect));
+        let nodes = &collect.snapshot().nodes;
+        assert_eq!(
+            nodes
+                .iter()
+                .find(|node| node.id.starts_with("inspector-section-"))
+                .unwrap()
+                .id,
+            first,
+        );
+        assert_eq!(
+            nodes
+                .iter()
+                .filter(|node| node.id == "inspector-section-Structure")
+                .count(),
+            1
+        );
+        if selected == crystal && display == Display::TwoD {
+            assert!(nodes.iter().any(|node| node.id == "structure-repeat-a-2"));
+            assert!(nodes.iter().any(|node| node.id == "structure-look-a"));
+            assert!(!nodes.iter().any(|node| node.id == "model-controls-open"));
+            assert_eq!(
+                nodes
+                    .iter()
+                    .find(|node| node.id == "inspector-section-Molecule")
+                    .unwrap()
+                    .expanded,
+                Some(false)
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn focused_model_controls_override_only_the_explicit_model_section_preference() {
     let (mut app, _) = App::new();
     app.tab.busy = false;

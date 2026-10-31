@@ -152,6 +152,18 @@ impl MoleculeCanvas<'_> {
             Edit::Select(ids) => self.pointer_selection(ids, p),
             edit => edit,
         };
+        let model_drag = match &edit {
+            Edit::ModelView { .. } | Edit::ResizeModels { .. } => true,
+            Edit::Move(ids, ..) | Edit::Transform { ids, .. } => {
+                reshiki::models3d::shows_3d(self.doc, ids)
+            }
+            _ => false,
+        };
+        let edit = if self.keyboard_target.is_some() && model_drag {
+            Edit::Release(Box::new(edit), p)
+        } else {
+            edit
+        };
         Some(Action::publish(edit).and_capture())
     }
     fn release_graphic(
