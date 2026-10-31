@@ -333,3 +333,82 @@ async fn inspector_motion_renderer_evidence() {
         Some(&output.join("marks-after.png")),
     );
 }
+
+/// #655: a scroll offset left on another drawing's selected Properties must
+/// not carry over to a newly opened drawing's first selection.
+#[tokio::test]
+#[ignore = "Opt-in renderer inspector scroll check"]
+async fn a_new_drawing_shows_selected_properties_from_the_top() {
+    use iced::advanced::widget::{Id, operation::Scrollable};
+    struct Offset(Option<f32>);
+    impl Operation for Offset {
+        fn traverse(&mut self, visit: &mut dyn FnMut(&mut dyn Operation)) {
+            visit(self);
+        }
+        fn scrollable(
+            &mut self,
+            id: Option<&Id>,
+            _: Rectangle,
+            _: Rectangle,
+            translation: iced::Vector,
+            _: &mut dyn Scrollable,
+        ) {
+            if id == Some(&Id::from("inspector-content")) {
+                self.0 = Some(translation.y);
+            }
+        }
+    }
+    let offset = |app: &App, renderer: &mut iced::Renderer, tree: &mut Tree| {
+        let mut offset = Offset(None);
+        operate(app, renderer, tree, size(), &mut offset);
+        offset.0.expect("Properties scrolls")
+    };
+    fn size() -> Size {
+        Size::new(1600., 1000.)
+    }
+    let crystal = |source| reshiki::crystal::read("cif", source).unwrap().0;
+    let mut renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .unwrap();
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.inspector_open = true;
+    app.inspector_tab = InspectorTab::Properties;
+    let mut tree = Tree::empty();
+    super::layout_snapshots::open(
+        &mut app,
+        crystal(include_str!("../../../tests/fixtures/crystal/nacl.cif")),
+    );
+    let task = app.update(Message::SelectAll);
+    run(&mut app, &mut renderer, &mut tree, size(), task).await;
+    settle(&mut app, &mut renderer, &mut tree, size());
+    let mut scroll = iced::advanced::widget::operation::scrollable::scroll_to::<()>(
+        "inspector-content".into(),
+        iced::widget::operation::AbsoluteOffset {
+            x: None,
+            y: Some(5000.),
+        },
+    );
+    operate(&app, &mut renderer, &mut tree, size(), &mut scroll);
+    settle(&mut app, &mut renderer, &mut tree, size());
+    assert!(offset(&app, &mut renderer, &mut tree) > 0.);
+
+    let task = app.update(Message::New);
+    run(&mut app, &mut renderer, &mut tree, size(), task).await;
+    super::layout_snapshots::open(
+        &mut app,
+        crystal(include_str!(
+            "../../../tests/fixtures/crystal/cod-7033930.cif"
+        )),
+    );
+    app.tab.busy = false;
+    settle(&mut app, &mut renderer, &mut tree, size());
+    let task = app.update(Message::SelectAll);
+    run(&mut app, &mut renderer, &mut tree, size(), task).await;
+    settle(&mut app, &mut renderer, &mut tree, size());
+    assert_eq!(offset(&app, &mut renderer, &mut tree), 0.);
+}

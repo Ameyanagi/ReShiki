@@ -784,9 +784,15 @@ impl App {
             self.tab.chemistry_notice = None;
         }
         if committed.recorded {
+            let previous = self.tab.revision;
             self.tab.revision = self.tab.revision.wrapping_add(1);
             if committed.chemistry_changed {
                 self.tab.analysis = None;
+            } else {
+                let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
+                self.tab
+                    .inspector_ui
+                    .advance_revision(epoch, previous, revision);
             }
             self.error = false;
             self.status = if unit_cell_removed {
@@ -922,12 +928,25 @@ impl App {
             return Task::none();
         }
         self.sync_drawing_panel_context();
-        let task = self.handle(message);
+        let document = (self.tab.id, self.tab.file_epoch);
+        let mut task = self.handle(message);
         self.sync_drawing_panel_context();
         self.settle_deferred_label_layout();
         // Any message may change the drawing, some (previews, background
         // labels) without a new revision, so the next view compares afresh.
         self.tab.forget_unsaved();
+        // All Properties pages share one scrollable, which keeps its offset
+        // even while a short page hides it. Another tab or a newly opened
+        // drawing starts from the top, whichever path brought it forward.
+        if document != (self.tab.id, self.tab.file_epoch) {
+            task = Task::batch([
+                task,
+                iced::widget::operation::snap_to(
+                    "inspector-content",
+                    iced::widget::operation::RelativeOffset::START,
+                ),
+            ]);
+        }
         task
     }
     fn handle(&mut self, message: Message) -> Task<Message> {

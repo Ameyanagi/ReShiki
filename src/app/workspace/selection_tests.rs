@@ -178,6 +178,92 @@ fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
 }
 
 #[test]
+fn select_all_keeps_a_closed_caption_inspector_closed() {
+    for open in [false, true] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.inspector_open = open;
+        app.inspector_tab = InspectorTab::Import;
+        app.viewport = iced::Size::new(1000. - app.inspector_width(), 600.);
+        app.tab.camera.zoom = 2.;
+        app.tab.camera.center = Point::new(42., -20.);
+        app.tab.doc.annotations.push(Annotation {
+            id: 1,
+            position: Point::new(-120., 30.),
+            text: "Conditions".into(),
+            format: Default::default(),
+        });
+        let camera = app.tab.camera;
+        let viewport = app.viewport;
+        let _ = app.update(Message::SelectAll);
+        assert_eq!(app.tab.selected, [1]);
+        assert_eq!(app.tool, Tool::Select);
+        assert_eq!(app.tab.caption_target, Some(1));
+        assert_eq!(app.inspector_open, open);
+        assert_eq!(
+            app.inspector_tab,
+            if open {
+                InspectorTab::Properties
+            } else {
+                InspectorTab::Import
+            }
+        );
+        if !open {
+            assert_eq!(app.tab.camera.center, camera.center);
+            assert_eq!(app.tab.camera.zoom, camera.zoom);
+            assert_eq!(app.viewport, viewport);
+        }
+    }
+}
+
+#[test]
+fn caption_context_menu_keeps_a_closed_inspector_closed() {
+    for open in [false, true] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.inspector_open = open;
+        app.inspector_tab = InspectorTab::Import;
+        app.viewport = iced::Size::new(1000. - app.inspector_width(), 600.);
+        app.tab.camera.zoom = 2.;
+        app.tab.camera.center = Point::new(42., -20.);
+        app.tab.doc.annotations.push(Annotation {
+            id: 1,
+            position: Point::new(-120., 30.),
+            text: "Conditions".into(),
+            format: Default::default(),
+        });
+        let camera = app.tab.camera;
+        let viewport = app.viewport;
+        let position = iced::Point::new(300., 200.);
+        let _ = app.update(Message::Canvas(Edit::ContextMenu {
+            position,
+            selected: vec![1],
+            hit: vec![1],
+        }));
+        let menu = app.context_menu.as_ref().expect("Caption context menu");
+        assert_eq!(menu.position, position);
+        assert_eq!(menu.hit, Some(vec![1]));
+        assert_eq!(app.tab.selected, [1]);
+        assert_eq!(app.tool, Tool::Select);
+        assert_eq!(app.tab.caption_target, Some(1));
+        assert_eq!(app.inspector_open, open);
+        assert_eq!(
+            app.inspector_tab,
+            if open {
+                InspectorTab::Properties
+            } else {
+                InspectorTab::Import
+            }
+        );
+        if !open {
+            assert_eq!(app.tab.camera.center, camera.center);
+            assert_eq!(app.tab.camera.zoom, camera.zoom);
+            assert_eq!(app.viewport, viewport);
+        }
+    }
+}
+
+#[test]
 fn selection_revealing_properties_keeps_targets_at_the_same_screen_position() {
     for zoom in [0.5, 1., 2.] {
         for (open, tab) in [

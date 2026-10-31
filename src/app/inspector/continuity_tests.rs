@@ -1,6 +1,6 @@
 //! Revision-keyed whole/selection receipts and explicit Molecular header preferences.
 use super::*;
-use crate::app::document_tab::TabId;
+use crate::app::{atom_text, document_tab::TabId};
 
 async fn analyze(app: &App, key: &PropertyKey) -> Analysis {
     app.engine
@@ -270,6 +270,150 @@ async fn tagged_whole_job_finishes_in_its_background_tab_and_is_ready_on_return(
             .contains("Whole drawing · H2O · 18.015\u{a0}g/\u{2060}mol")
     );
     assert!(app.next_property_request().is_none());
+}
+
+#[tokio::test]
+async fn atom_editor_admits_automatic_property_refresh_and_completion() {
+    use iced::futures::StreamExt;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let o = app.tab.doc.add_atom("O", Default::default());
+    app.tab.selected = vec![o];
+    let _ = app.update(Message::AtomText(atom_text::Action::Begin(Some(o))));
+    assert!(app.tab.atom_text.is_some());
+    let _ = app.update(Message::InspectorAction(Action::RefreshProperties));
+    assert!(app.tab.inspector_ui.pending.is_none());
+    let key = app.property_request_key();
+    let task = app.update(Message::InspectorAction(Action::RefreshPropertiesFor(
+        key.clone(),
+    )));
+    assert_eq!(app.tab.inspector_ui.pending.as_ref(), Some(&key));
+    let mut outputs = iced_runtime::task::into_stream(task).expect("The property worker starts");
+    while let Some(action) = outputs.next().await {
+        if let iced_runtime::Action::Output(message) = action {
+            let _ = app.update(message);
+        }
+    }
+    assert!(app.tab.atom_text.is_some());
+    assert!(app.tab.inspector_ui.pending.is_none());
+    assert_eq!(
+        app.property_summary(),
+        "Whole drawing · H2O · 18.015\u{a0}g/\u{2060}mol\nSelection · H2O · 18.015\u{a0}g/\u{2060}mol"
+    );
+}
+
+#[tokio::test]
+async fn atom_editor_settles_a_property_request_started_before_editing() {
+    use iced::futures::StreamExt;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let o = app.tab.doc.add_atom("O", Default::default());
+    app.tab.selected = vec![o];
+    let key = app.property_request_key();
+    let task = app.update(Message::InspectorAction(Action::RefreshPropertiesFor(
+        key.clone(),
+    )));
+    assert_eq!(app.tab.inspector_ui.pending.as_ref(), Some(&key));
+    let _ = app.update(Message::AtomText(atom_text::Action::Begin(Some(o))));
+    assert!(app.tab.atom_text.is_some());
+    let mut outputs = iced_runtime::task::into_stream(task).expect("The property worker starts");
+    while let Some(action) = outputs.next().await {
+        if let iced_runtime::Action::Output(message) = action {
+            let _ = app.update(message);
+        }
+    }
+    assert!(app.tab.atom_text.is_some());
+    assert!(app.tab.inspector_ui.pending.is_none());
+    assert!(app.property_analysis().is_some());
+}
+
+#[tokio::test]
+async fn view_edits_preserve_cached_and_in_flight_properties_until_chemistry_changes() {
+    use crate::canvas::Edit;
+    use iced::futures::StreamExt;
+    use reshiki::{
+        document::Point,
+        models3d::{Model3d, Placed},
+    };
+    for pending in [false, true] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let o = app.tab.doc.add_atom("O", Point::default());
+        app.tab.doc.add_atom("N", Point::new(100., 0.));
+        let model = Model3d::new(
+            &app.tab.doc,
+            vec![Placed {
+                id: o,
+                xyz: [0.; 3],
+            }],
+            vec![],
+            Default::default(),
+        );
+        app.tab.doc.models.push(model);
+        reshiki::models3d::require_version(&mut app.tab.doc);
+        app.tab.selected = vec![o];
+        settle(&mut app, true).await;
+        settle(&mut app, false).await;
+        let summary = app.property_summary();
+        assert!(summary.contains("Selection · H2O · 18.015\u{a0}g/\u{2060}mol"));
+        let task = pending.then(|| app.update(Message::InspectorAction(Action::RefreshProperties)));
+        let before = app.tab.doc.clone();
+        let revision = app.tab.revision;
+        for rotation in [[0., 1., 0., 0.], [0., 0., 1., 0.]] {
+            let _ = app.update(Message::Canvas(Edit::ModelView {
+                atoms: vec![o],
+                rotation,
+            }));
+        }
+        assert_eq!(app.tab.revision, revision + 2);
+        assert!(!reshiki::transaction::chemistry_changed(
+            &before,
+            &app.tab.doc
+        ));
+        assert!(app.property_result(&app.whole_property_key()).is_some());
+        if let Some(task) = task {
+            let mut outputs = iced_runtime::task::into_stream(task).unwrap();
+            while let Some(action) = outputs.next().await {
+                if let iced_runtime::Action::Output(message) = action {
+                    let _ = app.update(message);
+                }
+            }
+        }
+        assert!(app.tab.inspector_ui.pending.is_none());
+        assert_eq!(app.property_summary(), summary);
+        assert!(app.next_property_request().is_none());
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.property_summary(), summary);
+        assert!(app.next_property_request().is_none());
+
+        // An in-flight receipt must stay stale across a chemistry edit followed
+        // by a view edit, just like results already in the cache.
+        let task = app.update(Message::InspectorAction(Action::RefreshProperties));
+        app.tool = Tool::Atom;
+        app.element = "C".into();
+        let before = app.tab.doc.clone();
+        let _ = app.update(Message::Canvas(Edit::Click(Point::default())));
+        assert!(reshiki::transaction::chemistry_changed(
+            &before,
+            &app.tab.doc
+        ));
+        let revision = app.tab.revision;
+        let _ = app.update(Message::Canvas(Edit::ModelView {
+            atoms: vec![o],
+            rotation: [1., 0., 0., 0.],
+        }));
+        assert_eq!(app.tab.revision, revision + 1);
+        let mut outputs = iced_runtime::task::into_stream(task).unwrap();
+        while let Some(action) = outputs.next().await {
+            if let iced_runtime::Action::Output(message) = action {
+                let _ = app.update(message);
+            }
+        }
+        assert!(app.tab.inspector_ui.pending.is_none());
+        assert!(app.whole_property_analysis().is_none());
+        assert!(app.property_analysis().is_none());
+        assert!(!app.property_summary().contains("H2O · 18.015"));
+    }
 }
 
 #[tokio::test]
