@@ -50,8 +50,8 @@ fn cut(seen: &Option<Seen>) -> bool {
     matches!(seen, Some(Seen::Shown { .. })) && !whole(seen)
 }
 
-fn contacts(balls: &[Ball], project: impl Fn(V) -> Point) -> Contacts {
-    super::contacts(balls, None, project)
+fn contacts(balls: &[Ball], project: impl Fn(V) -> Point + Sync) -> Contacts {
+    super::contacts(balls, None, STEPS, project)
 }
 
 /// The region's boundary points off the rim: the cut.
@@ -177,7 +177,7 @@ fn assert_visible_surfaces(balls: &[Ball], eye: Option<f32>) {
         let scale = eye.map_or(1., |z| z / (z - q[2]));
         Point::new(q[0] * scale, -q[1] * scale)
     };
-    let found = super::contacts(balls, eye, project);
+    let found = super::contacts(balls, eye, STEPS, project);
     let mut visible = 0;
     for (i, &a) in balls.iter().enumerate() {
         let facing = Facing::new(a, eye);
@@ -239,6 +239,50 @@ fn near_axis_hydrogen_caps_keep_every_visible_surface_in_both_projections() {
                 // A third intersecting sphere also cuts the cap, so the
                 // complement's hole must compose correctly with other cuts.
                 assert_visible_surfaces(&[pair[0], pair[1], ball([0.6, 0.6, 1.4], 0.85)], eye);
+            }
+        }
+    }
+}
+
+#[test]
+fn turning_contacts_keep_seam_ends_in_both_projections() {
+    for eye in [None, Some(8.)] {
+        let project = |q: V| {
+            let scale = eye.map_or(1., |z| z / (z - q[2]));
+            Point::new(q[0] * scale, -q[1] * scale)
+        };
+        for degrees in [0_f32, 5., 11.9, 30., 90.] {
+            let angle = degrees.to_radians();
+            let pair = [
+                ball([0., 0., 0.], 1.7),
+                ball([1.09 * angle.sin(), 0., 1.09 * angle.cos()], 1.1),
+            ];
+            let triple = [pair[0], pair[1], ball([0.6, 0.6, 1.4], 0.85)];
+            for balls in [&pair[..], &triple[..]] {
+                let still = super::contacts(balls, eye, STEPS, project);
+                let turning = super::contacts(balls, eye, TURNING_STEPS, project);
+                for (a, b) in still.seen.iter().zip(&turning.seen) {
+                    assert_eq!(
+                        matches!(a, Some(Seen::Shown { .. })),
+                        matches!(b, Some(Seen::Shown { .. }))
+                    );
+                }
+                assert!(!still.seams.is_empty());
+                assert_eq!(still.seams.len(), turning.seams.len());
+                let mut fewer = false;
+                for ((pair, runs), (other_pair, other_runs)) in
+                    still.seams.iter().zip(&turning.seams)
+                {
+                    assert_eq!(pair, other_pair);
+                    assert_eq!(runs.len(), other_runs.len());
+                    for (run, other) in runs.iter().zip(other_runs) {
+                        assert!(other.len() <= run.len());
+                        fewer |= other.len() < run.len();
+                        assert!(run[0].distance(other[0]) < 1e-5);
+                        assert!(run.last().unwrap().distance(*other.last().unwrap()) < 1e-5);
+                    }
+                }
+                assert!(fewer);
             }
         }
     }
@@ -363,4 +407,54 @@ fn free_arcs_take_out_overlapping_and_wrapping_spans() {
         assert!((a0 - e0).abs() < 1e-5 && (a1 - e1).abs() < 1e-5, "{arcs:?}");
     }
     assert!(free(&[(0., PI)]).is_empty());
+}
+
+/// Chunks and reused buffers keep the exact contours in ball order.
+#[test]
+fn many_balls_keep_the_serial_contact_order() {
+    for degrees in [0_f32, 11.9, 30., 90.] {
+        let (s, c) = degrees.to_radians().sin_cos();
+        let balls: Vec<_> = (0..97)
+            .map(|i| {
+                let [x, y, z] = [i % 6, i / 6 % 4, i / 24].map(|q| q as f32 * 1.6 - 3.);
+                Ball {
+                    p: [c * x + s * z, y, c * z - s * x],
+                    r: [1.7, 1.2, 1.5][i % 3],
+                    fading: i % 5 == 0,
+                }
+            })
+            .collect();
+        for eye in [None, Some(20.)] {
+            let project = |q: V| {
+                let scale = eye.map_or(1., |z| z / (z - q[2]));
+                Point::new(17. + q[0] * scale, 29. - q[1] * scale)
+            };
+            let near = neighbours(&balls);
+            for steps in [STEPS, TURNING_STEPS] {
+                let found = super::contacts(&balls, eye, steps, project);
+                let serial: Vec<_> = balls
+                    .iter()
+                    .zip(&near)
+                    .map(|(&a, near)| {
+                        (!near.is_empty()).then(|| {
+                            seen(
+                                a,
+                                &Facing::new(a, eye),
+                                near,
+                                &balls,
+                                steps,
+                                &project,
+                                &mut FloatOverlay::new_empty(
+                                    Default::default(),
+                                    Default::default(),
+                                    0,
+                                ),
+                            )
+                        })
+                    })
+                    .collect();
+                assert_eq!(found.seen, serial, "{degrees}, {eye:?}, {steps}");
+            }
+        }
+    }
 }
