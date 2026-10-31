@@ -238,8 +238,8 @@ pub struct Model3d {
     #[serde(skip)]
     pub morph: Option<f32>,
     /// Set on the canvas's drawing copy while the model is turned or tilted:
-    /// its balls are drawn whole, back to front, and cut where they meet only
-    /// once it is let go. Never saved.
+    /// its balls keep their cuts and seams with fewer chords, refined once
+    /// it is let go. A morph keeps full detail. Never saved.
     #[serde(skip)]
     pub turning: bool,
 }
@@ -2826,12 +2826,18 @@ impl View<'_> {
     /// opaque copies cut like the atoms they copy.
     /// The last few views are kept, so an edit
     /// elsewhere in the drawing does not work them out again.
-    fn contacts(&self, atoms: &[usize], grown: f32) -> Contacts {
+    fn contacts(&self, atoms: &[usize], grown: f32, turning: bool) -> Contacts {
+        let steps = if turning && grown >= 1. {
+            contact::TURNING_STEPS
+        } else {
+            contact::STEPS
+        };
         // Everything the result depends on, exactly.
         let mut key: Vec<u32> = [self.origin.x, self.origin.y, self.scale, self.camera]
             .map(f32::to_bits)
             .to_vec();
         key.push(u32::from(self.perspective > 0.));
+        key.push(steps.to_bits());
         for &i in atoms {
             let symbol = self.symbols.get(i).copied().unwrap_or_default();
             key.push(i as u32);
@@ -2853,7 +2859,7 @@ impl View<'_> {
                 .map(|(_, found)| found.clone())
         });
         kept.unwrap_or_else(|| {
-            let found = self.find_contacts(atoms, grown);
+            let found = self.find_contacts(atoms, grown, steps);
             CONTACTS.with_borrow_mut(|kept| {
                 if kept.len() >= KEPT {
                     kept.remove(0);
@@ -2864,7 +2870,7 @@ impl View<'_> {
         })
     }
 
-    fn find_contacts(&self, atoms: &[usize], grown: f32) -> Contacts {
+    fn find_contacts(&self, atoms: &[usize], grown: f32, steps: f32) -> Contacts {
         let balls: Vec<contact::Ball> = atoms
             .iter()
             .filter_map(|&i| {
@@ -2880,7 +2886,7 @@ impl View<'_> {
             return HashMap::new();
         }
         let eye = (self.perspective > 0.).then_some(self.camera);
-        let found = contact::contacts(&balls, eye, |q| self.project(q).0);
+        let found = contact::contacts(&balls, eye, steps, |q| self.project(q).0);
         let mut out: HashMap<usize, Option<Contact>> = HashMap::new();
         for (&atom, seen) in atoms.iter().zip(found.seen) {
             let value = match seen {
@@ -3094,11 +3100,10 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             Item::Atom(_) | Item::Label(_) | Item::Crossing(..) => None,
         })
         .collect();
-    // Overlapping balls show only what lies in front, with seams between,
-    // once the model stops turning. A morph keeps them: they hide the
+    // Overlapping balls show only what lies in front, with seams between.
+    // Turning uses fewer chords; a morph keeps full detail to hide the
     // hydrogens growing out of their atoms.
-    let cut = !model.turning || grown < 1.;
-    let mut contacts = if matches!(style, Style::SpaceFilling | Style::BallStick) && cut {
+    let mut contacts = if matches!(style, Style::SpaceFilling | Style::BallStick) {
         let atoms: Vec<usize> = items
             .iter()
             .filter_map(|(.., item)| match item {
@@ -3106,7 +3111,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                 Item::Bond(..) | Item::Label(_) | Item::Crossing(..) => None,
             })
             .collect();
-        view.contacts(&atoms, grown)
+        view.contacts(&atoms, grown, model.turning)
     } else {
         HashMap::new()
     };

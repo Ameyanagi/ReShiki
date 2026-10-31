@@ -1200,19 +1200,26 @@ fn each_style_draws_the_prototype_shapes() {
     assert!((spread(&b) - 0.23 / 0.33).abs() < 0.08, "{b:?}");
 }
 
-/// While it turns, a space-filling model draws every ball whole, back to
-/// front; let go, it is cut exactly as before.
+/// While it turns, a space-filling model keeps its balls cut where they
+/// meet (#756); let go, it is cut exactly as before.
 #[test]
-fn a_turning_model_draws_whole_balls_until_let_go() {
+fn a_turning_model_keeps_its_seams() {
     let (mut doc, at_rest) = styled(|m| m.style = Style::SpaceFilling);
     doc.models[0].turning = true;
     let turning = primitives(&doc);
-    let spheres = turning
+    let cut = turning
         .iter()
-        .filter(|p| matches!(p, Primitive::Sphere { contact: None, .. }))
+        .filter(|p| {
+            matches!(
+                p,
+                Primitive::Sphere {
+                    contact: Some(_),
+                    ..
+                }
+            )
+        })
         .count();
-    assert_eq!(spheres, counts(&turning).0);
-    assert_eq!(spheres, 5);
+    assert_eq!(cut, 5);
     doc.models[0].turning = false;
     assert_eq!(format!("{:?}", primitives(&doc)), format!("{at_rest:?}"));
 }
@@ -1225,6 +1232,33 @@ fn a_model_turned_while_it_morphs_keeps_its_contacts() {
     doc.models[0].rotation = turn(doc.models[0].rotation, 6., 0., false);
     let still = format!("{:?}", primitives(&doc));
     doc.models[0].turning = true;
+    assert_eq!(format!("{:?}", primitives(&doc)), still);
+}
+
+#[test]
+fn turning_ball_and_stick_keeps_overlapping_balls_cut() {
+    let mut doc = lone(&[("C", [0., 0., 0.]), ("O", [0.4, 0., 0.])], &[], |m| {
+        m.style = Style::BallStick;
+    });
+    let still = format!("{:?}", primitives(&doc));
+    doc.models[0].turning = true;
+    let turning = primitives(&doc);
+    assert_eq!(
+        turning
+            .iter()
+            .filter(|p| matches!(
+                p,
+                Primitive::Sphere {
+                    contact: Some(_),
+                    ..
+                }
+            ))
+            .count(),
+        2
+    );
+    assert!(turning.iter().any(|p| matches!(p,
+        Primitive::Sphere { contact: Some(c), .. } if !c.seams.is_empty())));
+    doc.models[0].turning = false;
     assert_eq!(format!("{:?}", primitives(&doc)), still);
 }
 
@@ -1245,8 +1279,15 @@ fn kept_contacts_match_a_fresh_drawing() {
         } else {
             doc.models[0].rotation = turn(doc.models[0].rotation, 12., 5., false);
         }
-        let _ = primitives(&doc);
-        assert_eq!(format!("{:?}", primitives(&doc)), fresh(&doc), "{step}");
+        for turning in [false, true, false] {
+            doc.models[0].turning = turning;
+            let _ = primitives(&doc);
+            assert_eq!(
+                format!("{:?}", primitives(&doc)),
+                fresh(&doc),
+                "{step}, turning={turning}"
+            );
+        }
     }
 }
 
