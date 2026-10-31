@@ -7,9 +7,9 @@ use super::formatting::{
 use super::molecule::{AtomSet, Molecule};
 use super::namer::name_subgraph_with_upstream;
 use super::nomenclature::section;
-use super::rules::elements;
+use super::rules::{elements, multipliers};
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::sync::LazyLock;
 
 #[expect(
@@ -103,14 +103,26 @@ fn charged_prefix(symbol: &str, charge: i32, kind: &str) -> Option<String> {
     .map(str::to_owned)
 }
 pub fn substituent_bonding_number(mol: &Molecule, idx: usize) -> usize {
+    let atom = &mol.atoms[&idx];
+    let sulfur_ylide = atom.symbol == "S"
+        && atom.charge > 0
+        && mol.get_neighbors(idx).iter().any(|n| {
+            mol.atoms[n].is_carbon()
+                && mol.atoms[n].charge < 0
+                && mol.get_bond(idx, *n).is_some_and(|b| b.order == 2)
+        });
     mol.get_neighbors(idx)
         .iter()
         .filter_map(|&n| mol.get_bond(idx, n))
         .map(|b| b.order)
         .sum::<usize>()
-        + mol.atoms[&idx]
-            .total_h_count
-            .max(mol.atoms[&idx].explicit_h_count)
+        + if sulfur_ylide {
+            0
+        } else if atom.total_h_count > 0 {
+            atom.total_h_count
+        } else {
+            atom.explicit_h_count
+        }
 }
 fn lambda(mol: &Molecule, idx: usize, names: &[String], suffix: &str) -> String {
     format!(
@@ -239,6 +251,64 @@ fn sulfonyl_group(branch: &str, suffix: &str) -> (String, bool) {
     (format!("{b}{suffix}"), false)
 }
 
+struct CarbonylFragmentStyle<'a> {
+    branch_suffix: &'a str,
+    fallback: &'a str,
+    amino_base: Option<&'a str>,
+    wrap: bool,
+}
+
+fn carbonyl_like_fragment(
+    mol: &Molecule,
+    center: usize,
+    attach: usize,
+    double_atoms: &[usize],
+    exclude: &AtomSet,
+    style: CarbonylFragmentStyle<'_>,
+) -> Result<String, String> {
+    let CarbonylFragmentStyle {
+        branch_suffix,
+        fallback,
+        amino_base,
+        wrap,
+    } = style;
+    let next = mol
+        .get_neighbors(center)
+        .iter()
+        .copied()
+        .filter(|n| *n != attach && !double_atoms.contains(n))
+        .find(|n| mol.atoms[n].is_carbon())
+        .or_else(|| {
+            mol.get_neighbors(center)
+                .iter()
+                .copied()
+                .find(|n| *n != attach && !double_atoms.contains(n))
+        });
+    let Some(next) = next else {
+        return Ok(fallback.into());
+    };
+    let blocked = with_atoms(
+        exclude,
+        [attach, center]
+            .into_iter()
+            .chain(double_atoms.iter().copied()),
+    );
+    let name = plain_branch(mol, next, &blocked, center)?;
+    if name.is_empty() {
+        return Ok(fallback.into());
+    }
+    if let Some(base) = amino_base
+        && let Some(before) = name.strip_suffix("amino")
+    {
+        return Ok(format!("({before}{base})"));
+    }
+    Ok(if wrap {
+        format!("({name}{branch_suffix})")
+    } else {
+        format!("{name}{branch_suffix}")
+    })
+}
+
 fn name_oxygen(
     mol: &Molecule,
     start: usize,
@@ -308,22 +378,19 @@ fn name_oxygen(
         });
     }
     if mol.atoms[&next].is_carbon() && ns.len() == 1 {
-        let other = mol
-            .get_neighbors(next)
-            .iter()
-            .copied()
-            .find(|n| *n != start && !ns.contains(n));
-        return Ok(if let Some(n) = other {
-            let b = plain_branch(
-                mol,
-                n,
-                &with_atoms(exclude, [start, next].into_iter().chain(ns)),
-                next,
-            )?;
-            format!("({b}carbonothioyloxy)")
-        } else {
-            "methanethioyloxy".into()
-        });
+        return carbonyl_like_fragment(
+            mol,
+            next,
+            start,
+            &ns,
+            exclude,
+            CarbonylFragmentStyle {
+                branch_suffix: "carbonothioyloxy",
+                fallback: "methanethioyloxy",
+                amino_base: None,
+                wrap: true,
+            },
+        );
     }
     if mol.atoms[&next].symbol == "O" {
         let other: Vec<_> = mol
@@ -463,7 +530,47 @@ fn name_nitrogen(
     }
     let mut names = Vec::new();
     for n in roots {
-        let b = branch(mol, n, &with_atoms(exclude, [start]), start)?;
+        let oxygen = double_bonded_neighbors(mol, n, "O");
+        let sulfur = double_bonded_neighbors(mol, n, "S");
+        let b = if mol.atoms[&n].is_carbon() && oxygen.len() == 1 {
+            let acyl = plain_branch(mol, n, &with_atoms(exclude, [start]), start)?;
+            if acyl.is_empty() {
+                "formyl".into()
+            } else {
+                acyl
+            }
+        } else if mol.atoms[&n].is_carbon() && sulfur.len() == 1 {
+            carbonyl_like_fragment(
+                mol,
+                n,
+                start,
+                &sulfur,
+                exclude,
+                CarbonylFragmentStyle {
+                    branch_suffix: "carbonothioyl",
+                    fallback: "methanethioyl",
+                    amino_base: Some("carbamothioyl"),
+                    wrap: false,
+                },
+            )?
+        } else {
+            let charge_separated_sulfonyl = mol.degree(n) == 4
+                && mol.get_neighbors(n).iter().any(|i| {
+                    mol.atoms[i].symbol == "O"
+                        && mol.atoms[i].charge == -1
+                        && mol.degree(*i) == 1
+                        && mol.get_bond(n, *i).is_some_and(|b| b.order == 1)
+                });
+            if mol.atoms[&n].symbol == "S"
+                && !oxygen.is_empty()
+                && !charge_separated_sulfonyl
+                && let Some(name) = sulfur_imide_branch(mol, start, n, exclude, &oxygen)?
+            {
+                name
+            } else {
+                branch(mol, n, &with_atoms(exclude, [start]), start)?
+            }
+        };
         if !b.is_empty() {
             names.push(b);
         }
@@ -476,6 +583,119 @@ fn name_nitrogen(
     ))
 }
 
+fn sulfur_imide_branch(
+    mol: &Molecule,
+    nitrogen: usize,
+    sulfur: usize,
+    exclude: &AtomSet,
+    oxygen: &[usize],
+) -> Result<Option<String>, String> {
+    let order = mol.get_bond(nitrogen, sulfur).map_or(0, |b| b.order);
+    if order == 0 {
+        return Ok(None);
+    }
+    let blocked = with_atoms(
+        exclude,
+        [nitrogen, sulfur].into_iter().chain(oxygen.iter().copied()),
+    );
+    let roots: Vec<_> = subgraph_neighbors(mol, sulfur, exclude, Some(nitrogen))
+        .into_iter()
+        .filter(|n| !oxygen.contains(n))
+        .collect();
+    if order == 2 {
+        if let Some(name) = cyclic_sulfur_imide(mol, sulfur, nitrogen, &roots, oxygen) {
+            return Ok(Some(name));
+        }
+        let mut names = branches(mol, &roots, &blocked, sulfur)?;
+        names.extend(vec!["oxo".into(); oxygen.len()]);
+        return Ok(Some(if names.is_empty() {
+            "sulfanylidene".into()
+        } else if names.len() == oxygen.len() {
+            format!("{}sulfanylidene", format_counted_prefixes(&names))
+        } else {
+            strip_outer_parentheses(&lambda(mol, sulfur, &names, "sulfanylidene"))
+        }));
+    }
+    let further: Vec<_> = mol
+        .get_neighbors(sulfur)
+        .iter()
+        .copied()
+        .filter(|n| *n != nitrogen && !oxygen.contains(n))
+        .collect();
+    if further.len() > 1 {
+        return Ok(None);
+    }
+    let Some(&next) = further.first() else {
+        return Ok(Some("sulfo".into()));
+    };
+    let name = plain_branch(mol, next, &blocked, sulfur)?;
+    let suffix = if oxygen.len() == 2 {
+        "sulfonyl"
+    } else {
+        "sulfinyl"
+    };
+    let (name, _) = sulfonyl_group(&name, suffix);
+    Ok(Some(format!("{}{name}", stereo(mol, sulfur))))
+}
+
+fn cyclic_sulfur_imide(
+    mol: &Molecule,
+    sulfur: usize,
+    nitrogen: usize,
+    roots: &[usize],
+    oxygen: &[usize],
+) -> Option<String> {
+    if roots.len() != 2 {
+        return None;
+    }
+    let blocked: AtomSet = [sulfur, nitrogen]
+        .into_iter()
+        .chain(oxygen.iter().copied())
+        .collect();
+    let mut seen = AtomSet::from([roots[0]]);
+    let mut queue = VecDeque::from([(roots[0], vec![roots[0]])]);
+    while let Some((current, path)) = queue.pop_front() {
+        if current == roots[1] {
+            if !path.iter().all(|n| mol.atoms[n].is_carbon()) {
+                return None;
+            }
+            let parent = match path.len() + 1 {
+                3 => "thiirane",
+                4 => "thietane",
+                5 => "thiolane",
+                6 => "thiane",
+                7 => "thiepane",
+                8 => "thiocane",
+                _ => return None,
+            };
+            let prefix = match oxygen.len() {
+                0 => String::new(),
+                1 => "1-oxo-".into(),
+                count => format!("1-{}oxo-", multipliers::basic(count)),
+            };
+            return Some(format!(
+                "{prefix}1lambda^{}-{}-1-ylidene",
+                substituent_bonding_number(mol, sulfur),
+                parent.trim_end_matches('e')
+            ));
+        }
+        for &next in mol.get_neighbors(current) {
+            if blocked.contains(&next)
+                || seen.contains(&next)
+                || !mol.atoms[&next].is_carbon()
+                || mol.get_bond(current, next).is_none_or(|b| b.order != 1)
+            {
+                continue;
+            }
+            seen.insert(next);
+            let mut next_path = path.clone();
+            next_path.push(next);
+            queue.push_back((next, next_path));
+        }
+    }
+    None
+}
+
 /// Exact oxygen-ligand signatures consumed by the data-shaped class prefixes.
 fn central_oxo(
     mol: &Molecule,
@@ -485,6 +705,9 @@ fn central_oxo(
     let symbol = &mol.atoms[&start].symbol;
     let mut counts = BTreeMap::<&str, usize>::new();
     let mut oxygen = Vec::new();
+    let mut role_classified = true;
+    let mut hypervalent_classified =
+        matches!(symbol.as_str(), "P" | "S" | "Se" | "Cl" | "Br" | "I");
     for &n in mol.get_neighbors(start) {
         if exclude.contains(&n) || mol.atoms[&n].symbol != "O" {
             continue;
@@ -494,58 +717,71 @@ fn central_oxo(
             .get_bond(start, n)
             .ok_or_else(|| unsupported("oxo ligand connectivity"))?
             .order;
-        let kind = if order == 2 {
-            "oxo"
-        } else if order == 1 && mol.degree(n) == 1 && a.charge < 0 {
-            "oxido"
-        } else if order == 1 && mol.degree(n) == 1 {
-            "hydroxy"
-        } else if order == 1
-            && mol
-                .get_neighbors(n)
-                .iter()
-                .any(|o| *o != start && mol.atoms[o].symbol == "O")
+        let side: Vec<_> = mol
+            .get_neighbors(n)
+            .iter()
+            .copied()
+            .filter(|o| *o != start)
+            .collect();
+        let kind = if order == 2
+            || (matches!(symbol.as_str(), "Cl" | "Br" | "I")
+                && order == 1
+                && mol.degree(n) == 1
+                && a.charge < 0)
         {
-            "peroxy"
-        } else if order == 1
-            && mol
-                .get_neighbors(n)
-                .iter()
-                .any(|o| *o != start && mol.atoms[o].is_carbon())
-        {
-            "alkoxy"
+            Some("oxo")
+        } else if side.is_empty() {
+            Some(if a.charge < 0 { "oxido" } else { "hydroxy" })
+        } else if side.len() != 1 || exclude.contains(&side[0]) {
+            hypervalent_classified = false;
+            None
+        } else if mol.atoms[&side[0]].symbol == "O" {
+            Some("peroxy")
+        } else if mol.atoms[&side[0]].is_carbon() {
+            Some("alkoxy")
         } else {
-            return Err(unsupported(symbol));
+            // Hypervalent roles retain oxygen bonded to another heteroatom as
+            // a sigma ligand, rather than consuming it in an oxo class.
+            None
         };
-        *counts.entry(kind).or_default() += 1;
+        if let Some(kind) = kind {
+            *counts.entry(kind).or_default() += 1;
+        } else {
+            role_classified = false;
+        }
         oxygen.push(n);
     }
-    let class = SPECS["central_oxo_substituent_classes"]
-        .as_array()
-        .and_then(|rows| {
-            rows.iter().find(|row| {
-                row["symbol"].as_str() == Some(symbol)
-                    && ["oxo", "oxido", "hydroxy", "alkoxy", "peroxy"]
-                        .iter()
-                        .all(|k| {
-                            row[*k].as_u64().unwrap_or(0) == *counts.get(k).unwrap_or(&0) as u64
-                        })
-            })
-        })
-        .and_then(|row| row["prefix"].as_str())
-        .map(str::to_owned);
-    let excluded =
-        if class.is_some() || !matches!(symbol.as_str(), "P" | "S" | "Se" | "Cl" | "Br" | "I") {
-            oxygen
-        } else {
-            oxygen
-                .into_iter()
-                .filter(|n| {
-                    mol.get_bond(start, *n).is_some_and(|bond| bond.order == 2)
-                        || mol.atoms[n].charge < 0
+    let class = if role_classified {
+        SPECS["central_oxo_substituent_classes"]
+            .as_array()
+            .and_then(|rows| {
+                rows.iter().find(|row| {
+                    row["symbol"].as_str() == Some(symbol)
+                        && ["oxo", "oxido", "hydroxy", "alkoxy", "peroxy"]
+                            .iter()
+                            .all(|k| {
+                                row[*k].as_u64().unwrap_or(0) == *counts.get(k).unwrap_or(&0) as u64
+                            })
                 })
-                .collect()
-        };
+            })
+            .and_then(|row| row["prefix"].as_str())
+            .map(str::to_owned)
+    } else {
+        None
+    };
+    let excluded = if class.is_some() || (role_classified && !hypervalent_classified) {
+        oxygen
+    } else if hypervalent_classified {
+        oxygen
+            .into_iter()
+            .filter(|n| {
+                mol.get_bond(start, *n).is_some_and(|bond| bond.order == 2)
+                    || (mol.degree(*n) == 1 && mol.atoms[n].charge < 0)
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
     Ok((excluded, class))
 }
 
@@ -1180,4 +1416,51 @@ fn charge_normalized_chalcogenido(mol: &Molecule, center: Option<usize>, ligand:
         && mol.atoms[&ligand].charge < 0
         && mol.degree(ligand) == 1
         && mol.atoms[&ligand].total_h_count == 0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::central_oxo;
+    use crate::naming::openclatura::{
+        graph_io::read_smiles, molecule::AtomSet, namer::name_subgraph_with_upstream,
+    };
+
+    #[test]
+    fn heteroatom_branches_preserve_acyl_ligands_and_oxo_roles() -> Result<(), String> {
+        for (smiles, expected) in [
+            ("CNC(=S)CC(C)C", "2-methylpropylcarbonothioylamino"),
+            ("CNC(=S)N(C)C", "((dimethylcarbamothioyl)amino)"),
+            ("CN(C(=O)OC)C", "(methoxycarbonyl(methyl)amino)"),
+            ("COC(=S)N(C)C", "(dimethylaminocarbonothioyloxy)"),
+            ("CP(=O)(O)ON", "((aminooxy)(hydroxy)phosphoryl)"),
+            ("CS(=O)(=O)ON=CC", "(ethylideneaminooxysulfonyl)"),
+            (
+                "CN=S(=O)(C)C",
+                "((dimethyl(oxo)-lambda^6-sulfanylidene)amino)",
+            ),
+            (
+                "CN=S1(=O)CCCC1",
+                "((1-oxo-1lambda^6-thiolan-1-ylidene)amino)",
+            ),
+        ] {
+            let mol = read_smiles(smiles)?;
+            assert_eq!(
+                name_subgraph_with_upstream(&mol, 1, &AtomSet::from([0]), Some(0))?,
+                expected,
+                "{smiles}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn generic_oxygen_ligands_stay_outside_exact_oxo_classes() -> Result<(), String> {
+        for smiles in ["CP(=O)(O)ON", "CP(=O)(O)OP(=O)(O)O", "CP(=O)(O)OBr"] {
+            let mol = read_smiles(smiles)?;
+            let (oxygen, class) = central_oxo(&mol, 1, &AtomSet::from([0]))?;
+            assert_eq!(oxygen, vec![2], "{smiles}");
+            assert_eq!(class, None, "{smiles}");
+        }
+        Ok(())
+    }
 }

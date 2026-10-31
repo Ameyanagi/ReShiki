@@ -6,7 +6,7 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use super::assembly_prefixes::substituent_sort_key;
-use super::chains::get_cyclic_atoms;
+use super::chains::{canonical_ranks, get_cyclic_atoms};
 use super::formatting::{
     format_center_ligands_by, format_multiplier, oxy_prefix_from_branch, strip_outer_parentheses,
 };
@@ -14,7 +14,7 @@ use super::molecule::{Atom, AtomSet, Bond, Molecule, component_atoms_until_block
 use super::namer::name_subgraph_with_upstream;
 use super::nomenclature::RULES;
 use super::perception::{PerceivedGroup, perceive_groups};
-use super::rules::{elements, multipliers, stems};
+use super::rules::{elements, multipliers, retained, stems};
 use super::subgraph_tools::subgraph_component;
 
 fn set<const N: usize>(atoms: [usize; N]) -> AtomSet {
@@ -427,6 +427,609 @@ fn ligand_name(
     Ok(strip_outer_parentheses(&branch_name(
         mol, atoms, root, blocked, central,
     )?))
+}
+
+#[derive(Clone, Debug)]
+struct AzineSide {
+    carbon: usize,
+    nitrogen: usize,
+    atoms: AtomSet,
+}
+
+/// The graph roles from `nitrogen_roles.azine_roles`: the two carbon sides
+/// must partition the component after the C=N-N=C nitrogens are blocked.
+fn azine_roles(mol: &Molecule, atoms: &AtomSet) -> Vec<[AzineSide; 2]> {
+    let mut roles = Vec::new();
+    for &n1 in atoms {
+        if mol.atoms[&n1].symbol != "N" {
+            continue;
+        }
+        for &n2 in mol.get_neighbors(n1) {
+            if n2 <= n1
+                || !atoms.contains(&n2)
+                || mol.atoms[&n2].symbol != "N"
+                || order(mol, n1, n2) != 1
+            {
+                continue;
+            }
+            let double_carbon = |nitrogen, blocked| {
+                let candidates: Vec<_> = mol
+                    .get_neighbors(nitrogen)
+                    .iter()
+                    .copied()
+                    .filter(|n| {
+                        *n != blocked && mol.atoms[n].is_carbon() && order(mol, nitrogen, *n) == 2
+                    })
+                    .collect();
+                (candidates.len() == 1).then(|| candidates[0])
+            };
+            let (Some(c1), Some(c2)) = (double_carbon(n1, n2), double_carbon(n2, n1)) else {
+                continue;
+            };
+            let core = set([n1, n2]);
+            let side1 = component_atoms_until_blocked(mol, atoms, c1, &core);
+            let side2 = component_atoms_until_blocked(mol, atoms, c2, &core);
+            if side1.is_empty() || side2.is_empty() || !side1.is_disjoint(&side2) {
+                continue;
+            }
+            if side1
+                .iter()
+                .chain(&side2)
+                .chain(&core)
+                .copied()
+                .collect::<AtomSet>()
+                != *atoms
+            {
+                continue;
+            }
+            roles.push([
+                AzineSide {
+                    carbon: c1,
+                    nitrogen: n1,
+                    atoms: side1,
+                },
+                AzineSide {
+                    carbon: c2,
+                    nitrogen: n2,
+                    atoms: side2,
+                },
+            ]);
+        }
+    }
+    roles
+}
+
+fn is_amidino_carbon(mol: &Molecule, carbon: usize, nitrogen: usize) -> bool {
+    let others: Vec<_> = mol
+        .get_neighbors(carbon)
+        .iter()
+        .copied()
+        .filter(|n| *n != nitrogen)
+        .collect();
+    others.len() == 2
+        && others
+            .iter()
+            .all(|n| mol.atoms[n].symbol == "N" && order(mol, carbon, *n) == 1)
+}
+
+fn hydrazone_stereo_prefix(mol: &Molecule, carbon: usize, nitrogen: usize, parent: &str) -> String {
+    let Some(stereo) = mol
+        .get_bond(carbon, nitrogen)
+        .and_then(|b| b.stereo.as_deref())
+        .filter(|stereo| matches!(*stereo, "E" | "Z"))
+    else {
+        return String::new();
+    };
+    let locant = parent
+        .strip_suffix("-one")
+        .and_then(|s| s.rsplit_once("an-"))
+        .map(|(_, locant)| locant)
+        .filter(|locant| !locant.is_empty() && locant.bytes().all(|b| b.is_ascii_digit()))
+        .unwrap_or("1");
+    format!("({locant}{stereo})-")
+}
+
+/// Port of the ordered `simple_azine_parent_name` shortcut. In particular,
+/// substituted amidino sides use their recursively named ylidenes before an
+/// anhydride elsewhere in a ligand can choose the whole-component citation.
+fn simple_azine_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, String> {
+    for sides in azine_roles(mol, atoms) {
+        let parents = [
+            carbonyl_equivalent_side_name(mol, &sides[0], false)?,
+            carbonyl_equivalent_side_name(mol, &sides[1], false)?,
+        ];
+        let ylidenes = [
+            carbonyl_equivalent_side_name(mol, &sides[0], true)?,
+            carbonyl_equivalent_side_name(mol, &sides[1], true)?,
+        ];
+        if parents.iter().chain(&ylidenes).any(String::is_empty) {
+            for parent_side in 0..2 {
+                if parents[parent_side].is_empty() {
+                    continue;
+                }
+                let other = &sides[1 - parent_side];
+                let ylidene = strip_outer_parentheses(&branch_name(
+                    mol,
+                    atoms,
+                    other.carbon,
+                    &set([other.nitrogen]),
+                    other.nitrogen,
+                )?);
+                if !ylidene.is_empty() && ylidene.ends_with("ylidene") {
+                    let side = &sides[parent_side];
+                    let stereo = hydrazone_stereo_prefix(
+                        mol,
+                        side.carbon,
+                        side.nitrogen,
+                        &parents[parent_side],
+                    );
+                    return Ok(Some(format!(
+                        "{stereo}{} {ylidene}hydrazone",
+                        parents[parent_side]
+                    )));
+                }
+            }
+            let amidino = sides
+                .each_ref()
+                .map(|side| is_amidino_carbon(mol, side.carbon, side.nitrogen));
+            let aldehyde = sides.each_ref().map(|side| {
+                mol.get_neighbors(side.carbon)
+                    .iter()
+                    .filter(|n| **n != side.nitrogen && mol.atoms[n].symbol != "H")
+                    .count()
+                    <= 1
+            });
+            let substituted_amidino = sides.iter().zip(amidino).any(|(side, amidino)| {
+                amidino
+                    && mol.get_neighbors(side.carbon).iter().any(|ligand| {
+                        mol.atoms[ligand].symbol == "N"
+                            && *ligand != side.nitrogen
+                            && mol.get_neighbors(*ligand).iter().any(|other| {
+                                *other != side.carbon && mol.atoms[other].symbol != "H"
+                            })
+                    })
+            });
+            if amidino.into_iter().filter(|yes| *yes).count() == 1
+                && (substituted_amidino
+                    || !aldehyde
+                        .into_iter()
+                        .zip(amidino)
+                        .any(|(aldehyde, amidino)| aldehyde && !amidino))
+            {
+                let mut names = Vec::new();
+                for side in &sides {
+                    names.push(strip_outer_parentheses(&branch_name(
+                        mol,
+                        atoms,
+                        side.carbon,
+                        &set([side.nitrogen]),
+                        side.nitrogen,
+                    )?));
+                }
+                if names
+                    .iter()
+                    .all(|name| !name.is_empty() && name.ends_with("ylidene"))
+                {
+                    names.sort_by_key(|name| substituent_sort_key(name));
+                    return Ok(Some(format!("1-({})-2-({})hydrazine", names[0], names[1])));
+                }
+            }
+            continue;
+        }
+        let ranks = canonical_ranks(mol, None);
+        let left_bond = mol.get_bond(sides[0].carbon, sides[0].nitrogen);
+        let right_bond = mol.get_bond(sides[1].carbon, sides[1].nitrogen);
+        if ranks[&sides[0].carbon] == ranks[&sides[1].carbon]
+            && ranks[&sides[0].nitrogen] == ranks[&sides[1].nitrogen]
+            && let (Some(left), Some(right)) = (left_bond, right_bond)
+            && left.stereo == right.stereo
+        {
+            return Ok(Some(
+                if let Some(stereo) = left.stereo.as_deref().filter(|s| matches!(*s, "E" | "Z")) {
+                    format!("1,2-bis[({stereo})-{}]hydrazine", ylidenes[0])
+                } else {
+                    format!("1,2-bis({})hydrazine", ylidenes[0])
+                },
+            ));
+        }
+        let parent_side =
+            usize::from((sides[1].atoms.len(), &parents[1]) > (sides[0].atoms.len(), &parents[0]));
+        let side = &sides[parent_side];
+        let stereo =
+            hydrazone_stereo_prefix(mol, side.carbon, side.nitrogen, &parents[parent_side]);
+        return Ok(Some(format!(
+            "{stereo}{} {}hydrazone",
+            parents[parent_side],
+            ylidenes[1 - parent_side]
+        )));
+    }
+    Ok(None)
+}
+
+fn ordered_simple_ring(mol: &Molecule, atoms: &AtomSet) -> Vec<usize> {
+    if atoms.len() < 3
+        || atoms.iter().any(|i| {
+            mol.get_neighbors(*i)
+                .iter()
+                .filter(|n| atoms.contains(n))
+                .count()
+                != 2
+        })
+    {
+        return Vec::new();
+    }
+    let Some(&start) = atoms.first() else {
+        return Vec::new();
+    };
+    let mut path = vec![start];
+    let mut previous = None;
+    loop {
+        let current = *path.last().unwrap_or(&start);
+        let next = mol
+            .get_neighbors(current)
+            .iter()
+            .copied()
+            .filter(|n| atoms.contains(n) && Some(*n) != previous)
+            .min();
+        let Some(next) = next else {
+            return Vec::new();
+        };
+        if next == start {
+            return if path.len() == atoms.len() {
+                path
+            } else {
+                Vec::new()
+            };
+        }
+        if path.contains(&next) {
+            return Vec::new();
+        }
+        previous = Some(current);
+        path.push(next);
+    }
+}
+
+fn simple_cycle_unsaturation_locants(mol: &Molecule, path: &[usize]) -> Vec<usize> {
+    path.iter()
+        .enumerate()
+        .filter_map(|(i, atom)| {
+            (order(mol, *atom, path[(i + 1) % path.len()]) == 2).then_some(i + 1)
+        })
+        .collect()
+}
+
+fn simple_replacement_cycle_name(mol: &Molecule, path: &[usize]) -> String {
+    let mut hetero = BTreeMap::<(usize, String), Vec<usize>>::new();
+    for (offset, atom) in path.iter().enumerate() {
+        if mol.atoms[atom].is_carbon() {
+            continue;
+        }
+        let Some(element) = elements::get(&mol.atoms[atom].symbol) else {
+            return String::new();
+        };
+        let Some(prefix) = element.hw_stem.as_ref().filter(|s| !s.is_empty()) else {
+            return String::new();
+        };
+        hetero
+            .entry((element.hw_priority.unwrap_or(999), prefix.clone()))
+            .or_default()
+            .push(offset + 1);
+    }
+    let mut prefix = String::new();
+    for ((_, name), locants) in hetero {
+        let multiplier = if locants.len() == 1 {
+            String::new()
+        } else {
+            multipliers::basic(locants.len())
+        };
+        prefix.push_str(&format!(
+            "{}-{multiplier}{name}",
+            locants
+                .iter()
+                .map(usize::to_string)
+                .collect::<Vec<_>>()
+                .join(",")
+        ));
+    }
+    let stem = stems::stem_for(path.len());
+    let locants = simple_cycle_unsaturation_locants(mol, path);
+    if locants.is_empty() {
+        return format!("{prefix}cyclo{stem}an");
+    }
+    let multiplier = if locants.len() == 1 {
+        String::new()
+    } else {
+        multipliers::basic(locants.len())
+    };
+    format!(
+        "{prefix}cyclo{stem}a-{}-{multiplier}en",
+        locants
+            .iter()
+            .map(usize::to_string)
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+fn retained_locant_sort_key(locant: &str) -> (usize, &str) {
+    let digits: String = locant.chars().take_while(char::is_ascii_digit).collect();
+    (digits.parse().unwrap_or(999), locant)
+}
+
+fn carbaldehyde_side_ring(mol: &Molecule, side: &AzineSide) -> Option<(AtomSet, usize)> {
+    if !side.atoms.contains(&side.carbon) || !mol.atoms[&side.carbon].is_carbon() {
+        return None;
+    }
+    let ring: AtomSet = side
+        .atoms
+        .difference(&set([side.carbon]))
+        .copied()
+        .collect();
+    if ring.len() < 3 {
+        return None;
+    }
+    let neighbors: Vec<_> = mol
+        .get_neighbors(side.carbon)
+        .iter()
+        .copied()
+        .filter(|n| ring.contains(n) && order(mol, side.carbon, *n) == 1)
+        .collect();
+    (neighbors.len() == 1).then(|| (ring, neighbors[0]))
+}
+
+fn carbonyl_equivalent_side_name(
+    mol: &Molecule,
+    side: &AzineSide,
+    as_ylidene: bool,
+) -> Result<String, String> {
+    if let Some((ring, attachment)) = carbaldehyde_side_ring(mol, side) {
+        let path = ordered_simple_ring(mol, &ring);
+        if !path.is_empty() {
+            let homocyclic = path
+                .iter()
+                .all(|i| mol.atoms[i].symbol == mol.atoms[&path[0]].symbol);
+            if let Some(parent) = retained::get_retained_ring(mol, &path) {
+                let mut locant = parent
+                    .locant_maps
+                    .iter()
+                    .filter_map(|map| map.get(&attachment))
+                    .min_by_key(|s| retained_locant_sort_key(s))
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        if homocyclic {
+                            "1".into()
+                        } else {
+                            String::new()
+                        }
+                    });
+                if locant.is_empty() {
+                    let name = strip_outer_parentheses(&branch_name(
+                        mol,
+                        &ring,
+                        attachment,
+                        &AtomSet::new(),
+                        side.carbon,
+                    )?);
+                    if let Some((_, candidate)) =
+                        name.strip_suffix("-yl").and_then(|s| s.rsplit_once('-'))
+                        && candidate.as_bytes().first().is_some_and(u8::is_ascii_digit)
+                        && {
+                            let tail = candidate.trim_start_matches(|c: char| c.is_ascii_digit());
+                            tail.is_empty()
+                                || (tail.len() == 1 && tail.as_bytes()[0].is_ascii_lowercase())
+                        }
+                    {
+                        locant = candidate.to_owned();
+                    }
+                }
+                if !locant.is_empty() {
+                    return Ok(if parent.name == "benzene" {
+                        if as_ylidene {
+                            "benzylidene"
+                        } else {
+                            "benzaldehyde"
+                        }
+                        .into()
+                    } else if as_ylidene {
+                        let stem = RULES
+                            .retained
+                            .substituent_stems
+                            .get(&parent.name)
+                            .map(|(stem, _)| stem.as_str())
+                            .filter(|stem| !stem.is_empty())
+                            .unwrap_or_else(|| parent.name.trim_end_matches('e'));
+                        format!("{stem}-{locant}-ylmethylidene")
+                    } else {
+                        format!("{}-{locant}-carbaldehyde", parent.name)
+                    });
+                }
+            }
+            // A heterocycle uses its retained/Hantzsch-Widman citation rather
+            // than numbering replacement prefixes from the attachment.
+            if homocyclic {
+                let offset = path.iter().position(|i| *i == attachment).unwrap_or(0);
+                let forward: Vec<_> = path[offset..]
+                    .iter()
+                    .chain(&path[..offset])
+                    .copied()
+                    .collect();
+                let reverse: Vec<_> = std::iter::once(forward[0])
+                    .chain(forward[1..].iter().copied().rev())
+                    .collect();
+                let oriented = [forward, reverse]
+                    .into_iter()
+                    .min_by_key(|path| (simple_cycle_unsaturation_locants(mol, path), path.clone()))
+                    .unwrap_or_default();
+                let name = simple_replacement_cycle_name(mol, &oriented);
+                if !name.is_empty() {
+                    return Ok(if as_ylidene {
+                        format!("{name}-1-ylmethylidene")
+                    } else {
+                        format!("{name}-1-carbaldehyde")
+                    });
+                }
+            }
+        }
+    }
+    if as_ylidene {
+        let path = ordered_simple_ring(mol, &side.atoms);
+        if !path.is_empty()
+            && path.iter().all(|i| {
+                mol.atoms[i].is_carbon()
+                    || elements::get(&mol.atoms[i].symbol).is_some_and(|e| e.hw_stem.is_some())
+            })
+        {
+            type RingChoice = ((Vec<usize>, usize, Vec<usize>), String);
+            let mut choices: Vec<RingChoice> = Vec::new();
+            let priority = path
+                .iter()
+                .filter(|i| !mol.atoms[i].is_carbon())
+                .filter_map(|i| elements::get(&mol.atoms[i].symbol)?.hw_priority)
+                .min();
+            for offset in 0..path.len() {
+                let forward: Vec<_> = path[offset..]
+                    .iter()
+                    .chain(&path[..offset])
+                    .copied()
+                    .collect();
+                let reverse: Vec<_> = std::iter::once(forward[0])
+                    .chain(forward[1..].iter().copied().rev())
+                    .collect();
+                for oriented in [forward, reverse] {
+                    if let Some(priority) = priority
+                        && (mol.atoms[&oriented[0]].is_carbon()
+                            || elements::get(&mol.atoms[&oriented[0]].symbol)
+                                .and_then(|e| e.hw_priority)
+                                != Some(priority))
+                    {
+                        continue;
+                    }
+                    let locant = oriented.iter().position(|i| *i == side.carbon).unwrap_or(0) + 1;
+                    let hetero = oriented
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(i, atom)| (!mol.atoms[atom].is_carbon()).then_some(i + 1))
+                        .collect();
+                    let name = simple_replacement_cycle_name(mol, &oriented);
+                    if !name.is_empty() {
+                        choices.push((
+                            (hetero, locant, oriented),
+                            format!("{name}-{locant}-ylidene"),
+                        ));
+                    }
+                }
+            }
+            if let Some((_, name)) = choices.into_iter().min() {
+                return Ok(name);
+            }
+        }
+    }
+    simple_carbonyl_side_name(mol, side, as_ylidene)
+}
+
+fn simple_carbonyl_side_name(
+    mol: &Molecule,
+    side: &AzineSide,
+    as_ylidene: bool,
+) -> Result<String, String> {
+    if side.atoms.iter().any(|i| !mol.atoms[i].is_carbon()) {
+        return Ok(String::new());
+    }
+    let edges: Vec<_> = side
+        .atoms
+        .iter()
+        .flat_map(|a| {
+            mol.get_neighbors(*a)
+                .iter()
+                .filter(move |b| side.atoms.contains(b) && a < b)
+                .map(move |b| (*a, *b))
+        })
+        .collect();
+    if edges.len() != side.atoms.len() - 1
+        || edges
+            .iter()
+            .any(|(a, b)| !matches!(order(mol, *a, *b), 1..=3))
+    {
+        return Ok(String::new());
+    }
+    let ends: Vec<_> = side
+        .atoms
+        .iter()
+        .copied()
+        .filter(|i| {
+            mol.get_neighbors(*i)
+                .iter()
+                .filter(|n| side.atoms.contains(n))
+                .count()
+                <= 1
+        })
+        .collect();
+    let mut path = Vec::new();
+    for &start in &ends {
+        for &end in &ends {
+            let candidate = carbon_path(mol, &side.atoms, start, end);
+            if candidate.contains(&side.carbon) && candidate.len() > path.len() {
+                path = candidate;
+            }
+        }
+    }
+    if path.len() != side.atoms.len() {
+        return Ok(String::new());
+    }
+    // Upstream takes the first endpoint from a Python set, then retains that
+    // path orientation for unsaturation while minimizing the carbonyl locant.
+    // Only name sides whose spelling is independent of that incidental order.
+    let bond_orders: Vec<_> = path
+        .windows(2)
+        .map(|pair| order(mol, pair[0], pair[1]))
+        .collect();
+    if !bond_orders.iter().eq(bond_orders.iter().rev()) {
+        return Err("openclatura: azine unsaturation depends on upstream set ordering".into());
+    }
+    let locant = path.iter().position(|i| *i == side.carbon).unwrap_or(0) + 1;
+    let locant = locant.min(path.len() - locant + 1);
+    let stem = stems::stem_for(path.len());
+    let mut parts = Vec::new();
+    for (bond_order, ending) in [(2, "ene"), (3, "yne")] {
+        let locants: Vec<_> = path
+            .windows(2)
+            .enumerate()
+            .filter_map(|(i, pair)| (order(mol, pair[0], pair[1]) == bond_order).then_some(i + 1))
+            .collect();
+        if !locants.is_empty() {
+            let multiplier = if locants.len() == 1 {
+                String::new()
+            } else {
+                multipliers::basic(locants.len())
+            };
+            parts.push(format!(
+                "{}-{multiplier}{ending}",
+                locants
+                    .iter()
+                    .map(usize::to_string)
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ));
+        }
+    }
+    let unsaturation = if parts.is_empty() {
+        "an".into()
+    } else {
+        format!("-{}", parts.join("-"))
+    };
+    Ok(if as_ylidene {
+        if path.len() == 1 {
+            "methylidene".into()
+        } else {
+            format!("{stem}{unsaturation}-{locant}-ylidene")
+        }
+    } else if path.len() == 1 {
+        "formaldehyde".into()
+    } else if locant == 1 {
+        format!("{stem}{unsaturation}al")
+    } else {
+        format!("{stem}{unsaturation}-{locant}-one")
+    })
 }
 
 fn sulfoxide_parent_name(mol: &Molecule, atoms: &AtomSet) -> Option<String> {
@@ -992,7 +1595,13 @@ fn organophosphorus_acid_name(
         }
         ligands.push(name);
     }
-    let ligand = center_ligands(&ligands);
+    // Phosphinic acids group their carbon ligands as a centre prefix. The
+    // single phosphonic-acid ligand is cited directly by the upstream route.
+    let ligand = if phosphinic {
+        center_ligands(&ligands)
+    } else {
+        ligands.remove(0)
+    };
     let mut modifiers = Vec::new();
     for oxygen in esters {
         let Some(root) = mol.get_neighbors(oxygen).iter().copied().find(|n| *n != c) else {
@@ -2254,6 +2863,9 @@ pub fn structural_replacement_parent_result(
     if let Some(name) = small_inorganic_parent_name(mol, atoms) {
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
+    if let Some(name) = simple_azine_parent_name(mol, atoms)? {
+        return Ok(Some(StructuralParentName::ordinary(name)));
+    }
     if let Some(name) = phosphane_borane_zwitterion_name(mol, atoms)? {
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
@@ -2341,6 +2953,77 @@ mod tests {
             Some("methyl dihydrogen phosphate")
         );
         assert_eq!(special("CB(O)O").as_deref(), Some("methylboronic acid"));
+    }
+
+    #[test]
+    fn phosphorus_functional_parents_keep_their_own_ligand_grouping() {
+        for (smiles, expected) in [
+            ("CCC(CC)P(=O)(OC)OC", "dimethyl pentan-3-ylphosphonate"),
+            ("CCC(CC)P(=O)(O)O", "pentan-3-ylphosphonic acid"),
+            ("CCC(CC)[PH](=O)O", "(pentan-3-yl)phosphinic acid"),
+        ] {
+            assert_eq!(special(smiles).as_deref(), Some(expected), "{smiles}");
+        }
+    }
+
+    #[test]
+    fn azine_shortcut_uses_symmetric_carbonyl_and_ring_side_roles() {
+        for (smiles, expected) in [
+            ("C=N-N=C", "1,2-bis(methylidene)hydrazine"),
+            ("CC(C)=NN=C(C)C", "1,2-bis(propan-2-ylidene)hydrazine"),
+            ("CCC(C)=NN=CC", "butan-2-one ethan-1-ylidenehydrazone"),
+            ("C/C=N/N=C/C", "1,2-bis[(E)-ethan-1-ylidene]hydrazine"),
+            ("c1ccccc1C=NN=C", "benzaldehyde methylidenehydrazone"),
+            (
+                "c1ccncc1C=NN=C",
+                "pyridine-3-carbaldehyde methylidenehydrazone",
+            ),
+            ("C1CCCCC1=NN=C", "formaldehyde cyclohexylidenehydrazone"),
+        ] {
+            let mol = read_smiles(smiles).unwrap();
+            let actual =
+                super::super::component_namer::name_component(&mol, &all_atoms(&mol)).unwrap();
+            assert_eq!(actual, expected, "{smiles}");
+        }
+    }
+
+    #[test]
+    fn azine_unsaturation_requires_order_independent_locants() {
+        for smiles in [
+            "CCCC=NN=CCC=C",
+            "CCCC=NN=CCC#C",
+            "C=CCC=NN=CCCC",
+            "C#CCC=NN=CCCC",
+        ] {
+            assert_eq!(
+                super::super::name_smiles(smiles).unwrap_err(),
+                "openclatura: azine unsaturation depends on upstream set ordering",
+                "{smiles}"
+            );
+        }
+        for smiles in ["CCCC=NN=CC=CC", "CC=CC=NN=CCCC"] {
+            assert_eq!(
+                super::super::name_smiles(smiles).as_deref(),
+                Ok("butanal but-2-ene-1-ylidenehydrazone"),
+                "{smiles}"
+            );
+        }
+    }
+
+    #[test]
+    fn substituted_amidino_azine_precedes_a_ligand_anhydride() {
+        let smiles = "CC(=O)OC(=O)N(/C(N)=N/N=C=O)C(C)C";
+        let mol = read_smiles(smiles).unwrap();
+        let atoms = all_atoms(&mol);
+        let expected = "1-((1E)-(((acetyloxy)carbonyl)(propan-2-yl)amino)(amino)methylidene)-2-(oxomethylidene)hydrazine";
+        assert_eq!(
+            simple_azine_parent_name(&mol, &atoms).unwrap().as_deref(),
+            Some(expected)
+        );
+        assert_eq!(
+            super::super::component_namer::name_component(&mol, &atoms).unwrap(),
+            expected
+        );
     }
 
     #[test]

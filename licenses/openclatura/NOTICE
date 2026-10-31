@@ -1,5 +1,12 @@
-openclatura structure-to-name reference data
-============================================
+openclatura structure-to-name source and reference data
+======================================================
+
+src/naming/openclatura/ is a native Rust adaptation of the openclatura 0.4.3
+plain-name pipeline for acyclic and monocyclic structures. Its embedded
+data/ JSON registries are copied from the same upstream release. The graph
+adapter uses ReShiki's native chemistry implementation in place of RDKit;
+tests/fixtures/openclatura/graph_oracle.json records upstream read_smiles
+results with RDKit 2026.09.1 for comparison with that adapter.
 
 tests/fixtures/s2n/openclatura_tests.tsv and the openclatura_name column of
 tests/fixtures/s2n/bakeoff_corpus.tsv are derived from openclatura 0.4.3
@@ -13,5 +20,5 @@ tests/fixtures/s2n/bakeoff_corpus.tsv are derived from openclatura 0.4.3
 Copyright (c) 2026 lamalab-org
 Licensed under MIT; see LICENSE in this directory.
 
-These fixtures retain their MIT terms and are not represented as original
-dual-licensed ReShiki material.
+The adapted source, copied registries, and derived fixtures retain their MIT
+terms and are not represented as original dual-licensed ReShiki material.

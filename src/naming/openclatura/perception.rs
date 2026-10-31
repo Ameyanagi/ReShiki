@@ -41,6 +41,7 @@ impl FunctionalGroupDescriptor {
             .iter()
             .copied()
             .chain(self.ligands.iter().map(|l| l.atom))
+            .chain(self.ligands.iter().filter_map(|l| l.attachment_atom))
             .chain(self.linker_paths.iter().flatten().copied())
             .chain(self.shared_atoms.iter().copied())
             .chain(
@@ -1003,7 +1004,12 @@ fn carbonyl_group(
         ),
     ))
 }
-fn acyl_group(m: &Molecule, c: usize, used: &AtomSet, cyclic: &AtomSet) -> Option<PerceivedGroup> {
+fn acyl_group(
+    m: &Molecule,
+    c: usize,
+    used: &AtomSet,
+    cyclic: &AtomSet,
+) -> Option<Vec<PerceivedGroup>> {
     let ligands = m
         .get_neighbors(c)
         .iter()
@@ -1085,6 +1091,36 @@ fn acyl_group(m: &Molecule, c: usize, used: &AtomSet, cyclic: &AtomSet) -> Optio
                 && (l.role != "heteroatom_link" || multi_acyl || (!ns.is_empty() && registered(l)))
         })
         .collect::<Vec<_>>();
+    // A competing nitrogen derivative retains the registered carbamate route,
+    // while the full acyl descriptor records both chalcogen linkers.
+    if singles.len() == 1
+        && !ns.is_empty()
+        && hs.is_empty()
+        && singles[0].role == "chalcogen_link"
+        && registered(singles[0])
+        && let Some(end) = singles[0].attachment_atom
+        && let Some(terminal) = classify_chalcogen_ligand(m, singles[0].atom, end)
+        && matches!(
+            terminal.role.as_str(),
+            "hydrogen_bearing" | "anionic" | "carbon_link"
+        )
+    {
+        let single = singles[0].clone();
+        let registered_atoms = [c, double.atom, single.atom];
+        let mut desc = descriptor(
+            "acyl",
+            "ester",
+            vec![c],
+            vec![double, single, terminal],
+            attachment,
+            external,
+        );
+        desc.linker_paths = vec![vec![c, desc.ligands[1].atom, end]];
+        let (key, _) = resolve_acyl(&desc);
+        let mut acyl = group("acyl", false, attachment, desc.atom_ids());
+        acyl.descriptor = Some(desc);
+        return Some(vec![acyl, group(key, true, attachment, registered_atoms)]);
+    }
     if singles.len() == 1
         && hs.is_empty()
         && (ns.is_empty()
@@ -1092,8 +1128,7 @@ fn acyl_group(m: &Molecule, c: usize, used: &AtomSet, cyclic: &AtomSet) -> Optio
                 singles[0].role.as_str(),
                 "hydrogen_bearing" | "anionic" | "heteroatom_link"
             )
-            || (singles[0].role == "carbon_link" && registered(singles[0]))
-            || (singles[0].role == "chalcogen_link" && registered(singles[0])))
+            || (singles[0].role == "carbon_link" && registered(singles[0])))
     {
         let single = singles[0].clone();
         if single.role == "chalcogen_link" {
@@ -1103,7 +1138,7 @@ fn acyl_group(m: &Molecule, c: usize, used: &AtomSet, cyclic: &AtomSet) -> Optio
                 && cyclic.contains(&end)
                 && closes_ring(m, c, single.atom, double.atom, cyclic)
             {
-                return carbonyl_group(m, c, attachment, double, "ketone");
+                return carbonyl_group(m, c, attachment, double, "ketone").map(|g| vec![g]);
             }
             let terminal = classify_chalcogen_ligand(m, single.atom, end)?;
             let derivative = match terminal.role.as_str() {
@@ -1123,7 +1158,7 @@ fn acyl_group(m: &Molecule, c: usize, used: &AtomSet, cyclic: &AtomSet) -> Optio
             );
             desc.linker_paths = vec![vec![c, desc.ligands[1].atom, end]];
             let (key, rule) = resolve_peroxy(&desc);
-            return Some(desc_group(key, rule, attachment, atoms, desc));
+            return Some(vec![desc_group(key, rule, attachment, atoms, desc)]);
         }
         if matches!(single.role.as_str(), "carbon_link" | "heteroatom_link")
             && cyclic.contains(&c)
@@ -1131,7 +1166,7 @@ fn acyl_group(m: &Molecule, c: usize, used: &AtomSet, cyclic: &AtomSet) -> Optio
             && single.attachment_atom.is_some_and(|a| cyclic.contains(&a))
             && closes_ring(m, c, single.atom, double.atom, cyclic)
         {
-            return carbonyl_group(m, c, attachment, double, "ketone");
+            return carbonyl_group(m, c, attachment, double, "ketone").map(|g| vec![g]);
         }
         let derivative = match single.role.as_str() {
             "hydrogen_bearing" => "acid",
@@ -1151,7 +1186,7 @@ fn acyl_group(m: &Molecule, c: usize, used: &AtomSet, cyclic: &AtomSet) -> Optio
             desc.linker_paths = vec![vec![c, desc.ligands[1].atom, n]];
         }
         let (key, rule) = resolve_acyl(&desc);
-        return Some(desc_group(key, rule, attachment, atoms, desc));
+        return Some(vec![desc_group(key, rule, attachment, atoms, desc)]);
     }
     if hs.len() == 1 && ns.is_empty() {
         let h = hs[0];
@@ -1166,7 +1201,7 @@ fn acyl_group(m: &Molecule, c: usize, used: &AtomSet, cyclic: &AtomSet) -> Optio
         );
         desc.leaving_group = Some(leaving_descriptor(m, symbol(m, h), c, vec![h]));
         let (key, rule) = resolve_acyl(&desc);
-        return Some(desc_group(key, rule, attachment, atoms, desc));
+        return Some(vec![desc_group(key, rule, attachment, atoms, desc)]);
     }
     if ns.is_empty() {
         return None;
@@ -1181,7 +1216,7 @@ fn acyl_group(m: &Molecule, c: usize, used: &AtomSet, cyclic: &AtomSet) -> Optio
     });
     let n = ns[0];
     if cyclic.contains(&c) && cyclic.contains(&n) && closes_ring(m, c, n, double.atom, cyclic) {
-        return carbonyl_group(m, c, attachment, double, "ketone");
+        return carbonyl_group(m, c, attachment, double, "ketone").map(|g| vec![g]);
     }
     let (mut attachment, mut external) = (attachment, external);
     let (derivative, group_ns) = if let Some(v) = hydrazide_ns(m, c, n, cyclic) {
@@ -1208,7 +1243,7 @@ fn acyl_group(m: &Molecule, c: usize, used: &AtomSet, cyclic: &AtomSet) -> Optio
         external,
     );
     let (key, rule) = resolve_acyl(&desc);
-    Some(desc_group(key, rule, attachment, atoms, desc))
+    Some(vec![desc_group(key, rule, attachment, atoms, desc)])
 }
 fn leaving_descriptor(
     m: &Molecule,
@@ -2425,17 +2460,19 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
     }
     for (&c, a) in &m.atoms {
         if a.is_carbon()
-            && let Some(g) = acyl_group(m, c, &consumed, &cyclic)
+            && let Some(acyl_groups) = acyl_group(m, c, &consumed, &cyclic)
         {
-            if g.is_principal_candidate {
-                consumed.extend(
-                    g.atoms_involved
-                        .iter()
-                        .filter(|&&n| n != g.attachment_carbon)
-                        .copied(),
-                );
+            for g in acyl_groups {
+                if g.is_principal_candidate {
+                    consumed.extend(
+                        g.atoms_involved
+                            .iter()
+                            .filter(|&&n| n != g.attachment_carbon)
+                            .copied(),
+                    );
+                }
+                groups.push(g);
             }
-            groups.push(g);
         }
     }
     // Remaining carbon-bound C=N nitrogens become imines/hydrazones.
@@ -2800,71 +2837,6 @@ mod tests {
             groups
                 .iter()
                 .any(|g| g.key == "carboxylate" && g.is_principal_candidate)
-        );
-    }
-    #[test]
-    #[ignore = "development parity against Python perception JSON"]
-    fn perception_oracle() {
-        let path = std::env::var("OPENCLATURA_PERCEPTION_ORACLE").unwrap();
-        let rows: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-        let mut exact = 0;
-        let mut different = Vec::new();
-        let mut declined = Vec::new();
-        for row in rows.as_array().unwrap() {
-            let smiles = row["smiles"].as_str().unwrap();
-            let mol = match read_smiles(smiles) {
-                Ok(m) => m,
-                Err(e) => {
-                    declined.push(format!("{smiles}: {e}"));
-                    continue;
-                }
-            };
-            let actual = perceive_groups(&mol).iter().map(|g| {
-                let rule = g.resolved_rule.as_ref().map(|r| serde_json::json!({
-                    "key": r.key, "role": r.role, "prefix": r.prefix, "suffix": r.suffix,
-                    "multi_suffix": r.multi_suffix.as_ref().map(|m| &m.multiplier_positions),
-                    "suffix_multiplier_positions": r.suffix_multiplier_positions,
-                    "seniority": r.seniority, "suffix_with_locant": r.suffix_with_locant,
-                    "needs_locant": r.needs_locant, "families": r.families,
-                    "capabilities": r.capabilities, "citation_suffixes": r.citation_suffixes,
-                }));
-                serde_json::json!({
-                    "key": g.key, "is_principal_candidate": g.is_principal_candidate,
-                    "attachment_carbon": g.attachment_carbon, "atoms_involved": g.atoms_involved,
-                    "prefix": g.prefix(),
-                    "suffix": g.resolved_rule.as_ref().and_then(|r| r.suffix.as_deref()),
-                    "seniority": g.resolved_rule.as_ref().and_then(|r| r.seniority.as_deref()),
-                    "rule": rule,
-                })
-            }).collect::<Vec<_>>();
-            let mut expected = row["groups"].as_array().unwrap().clone();
-            for g in &mut expected {
-                if let Some(n) = g["seniority"].as_i64() {
-                    g["seniority"] = serde_json::json!([n]);
-                }
-            }
-            if actual == expected {
-                exact += 1;
-            } else {
-                different
-                    .push(serde_json::json!({"smiles":smiles,"expected":expected,"actual":actual}));
-            }
-        }
-        std::fs::write(
-            "/private/tmp/openclatura_perception_diff.json",
-            serde_json::to_string_pretty(&different).unwrap(),
-        )
-        .unwrap();
-        eprintln!(
-            "perception parity exact={exact} different={} declined={}",
-            different.len(),
-            declined.len()
-        );
-        eprintln!("declined {:?}", declined);
-        assert!(
-            different.is_empty(),
-            "perception differences written to /private/tmp/openclatura_perception_diff.json"
         );
     }
 }

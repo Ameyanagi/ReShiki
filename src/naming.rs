@@ -18,6 +18,7 @@ mod client;
 mod local;
 mod online;
 pub use online::resolve_name_online;
+pub mod openclatura;
 mod reverse;
 mod rules;
 #[cfg(test)]

@@ -1,11 +1,12 @@
 //! Native Rust port of openclatura 0.4.3 (MIT), plain-name stage-one pipeline.
+//! Attribution and license terms are in `licenses/openclatura/`.
 //!
 //! Supports one connected component with at most one independent ring.
 // Graph IDs and numbered parent paths are validated at construction and retain
 // their identity in induced subgraphs. Direct indexing preserves the upstream
 // rule comparisons; immutable JSON Value indexing also returns null for a
 // missing optional field. Neither requires speculative recovery values.
-#![allow(clippy::indexing_slicing)]
+#![cfg_attr(not(test), allow(clippy::indexing_slicing))]
 
 mod assembler;
 mod assembly_charge;

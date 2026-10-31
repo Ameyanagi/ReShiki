@@ -269,7 +269,7 @@ pub fn ester_prefix_from_group(
     if RULES.prefixes.peroxy_ester_groups.contains(&group.key) {
         return Ok(format!(
             "({}peroxycarbonyl)",
-            format_multiplier(&strip_outer_parentheses(&branch), 1, true)
+            format_multiplier(&strip_outer_parentheses(&branch), 1, false)
         ));
     }
     Ok(format!("({}{suffix})", oxy_prefix_from_branch(&branch)))
@@ -486,4 +486,30 @@ pub fn collect_component_prefix_substituents(
         handled.extend(&group.atoms_involved);
     }
     Ok((mapping, handled))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::name_smiles;
+
+    #[test]
+    fn peroxy_ester_prefix_encloses_only_complex_ligands() {
+        for (smiles, expected) in [
+            ("COOC(=O)CC(=O)O", "2-(methylperoxycarbonyl)acetic acid"),
+            (
+                "CC(C)OOC(=O)CC(=O)O",
+                "2-((propan-2-yl)peroxycarbonyl)acetic acid",
+            ),
+        ] {
+            assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
+        }
+    }
+
+    #[test]
+    fn peroxy_carbamate_keeps_competing_ester_prefix_route() {
+        assert_eq!(
+            name_smiles("COOC(=O)N1[C@H](C=O)CC[C@H]1C(=O)O").as_deref(),
+            Ok("(2S,5S)-5-formyl-1-((methoxyoxy)carbonyl)pyrrolidine-2-carboxylic acid")
+        );
+    }
 }

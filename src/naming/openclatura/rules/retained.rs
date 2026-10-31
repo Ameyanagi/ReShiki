@@ -8,7 +8,7 @@ use super::{elements, elision, multipliers};
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::{LazyLock, RwLock};
+use std::sync::LazyLock;
 
 #[derive(Clone, Debug)]
 pub struct RetainedMatch {
@@ -38,8 +38,6 @@ pub struct MonocycleSpec {
 static SPECS: LazyLock<Vec<MonocycleSpec>> = LazyLock::new(|| {
     serde_json::from_value(section("retained_monocycle_specs").clone()).expect("monocycle specs")
 });
-static GENERATED: LazyLock<RwLock<BTreeMap<String, MonocycleSpec>>> =
-    LazyLock::new(|| RwLock::new(BTreeMap::new()));
 #[allow(
     clippy::expect_used,
     reason = "Retained graph templates are immutable checked-in JSON data."
@@ -49,13 +47,15 @@ static GRAPH_PARENTS: LazyLock<Value> = LazyLock::new(|| {
         .expect("retained graph data")
 });
 
-pub fn monocycle_spec_for_name(name: &str) -> Option<MonocycleSpec> {
-    GENERATED
-        .read()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .get(name)
-        .cloned()
-        .or_else(|| SPECS.iter().find(|s| s.name == name).cloned())
+fn monocycle_spec_for_name(name: &str) -> Option<MonocycleSpec> {
+    SPECS.iter().find(|spec| spec.name == name).cloned()
+}
+
+/// Upstream memoizes generated specs by name for later hydro/indicated-H use.
+/// Those callers also have the ring, so reproduce its spec directly and check
+/// the name instead of making one molecule's result depend on earlier calls.
+fn generated_spec_for_name(mol: &Molecule, path: &[usize], name: &str) -> Option<MonocycleSpec> {
+    hw_spec_for_ring(mol, path).filter(|spec| spec.name == name)
 }
 
 pub fn get_retained_ring(mol: &Molecule, path: &[usize]) -> Option<RetainedMatch> {
@@ -531,8 +531,8 @@ pub fn hw_spec_for_ring(mol: &Molecule, path: &[usize]) -> Option<MonocycleSpec>
     for (_, s) in &hetero {
         *symbols.entry(s.clone()).or_default() += 1;
     }
-    let spec = MonocycleSpec {
-        name: name.clone(),
+    Some(MonocycleSpec {
+        name,
         size: path.len(),
         double_bonds: if doubles == 0 {
             0
@@ -544,12 +544,7 @@ pub fn hw_spec_for_ring(mol: &Molecule, path: &[usize]) -> Option<MonocycleSpec>
         },
         symbols,
         ..Default::default()
-    };
-    GENERATED
-        .write()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .insert(name, spec.clone());
-    Some(spec)
+    })
 }
 
 fn needs_lambda(mol: &Molecule, idx: usize) -> bool {
@@ -597,10 +592,11 @@ pub fn mancude_monocycle_hydro_plan(
     path: &[usize],
     retained_name: Option<&str>,
 ) -> Option<HydroPlan> {
-    let spec = monocycle_spec_for_name(retained_name?)?;
-    if spec.size != path.len() {
-        return None;
-    }
+    let name = retained_name?;
+    // rules.retained prefers a matching mancude registry spec before HW.
+    let spec = monocycle_spec_for_name(name)
+        .filter(|spec| spec.double_bonds > 0 && spec.size == path.len())
+        .or_else(|| generated_spec_for_name(mol, path, name))?;
     mancude_hydro_plan(mol, path, spec.double_bonds)
 }
 
@@ -670,11 +666,14 @@ pub fn is_saturated_ring_site(mol: &Molecule, idx: usize, ring: &AtomSet) -> boo
     !bonds.is_empty() && bonds.iter().all(|b| b.order == 1)
 }
 
-pub fn cites_indicated_hydrogen(name: Option<&str>) -> bool {
+pub fn cites_indicated_hydrogen(mol: &Molecule, path: &[usize], name: Option<&str>) -> bool {
     let Some(name) = name else {
         return false;
     };
-    if let Some(spec) = monocycle_spec_for_name(name) {
+    // namer_config checks generated HW metadata before the retained registry.
+    if let Some(spec) =
+        generated_spec_for_name(mol, path, name).or_else(|| monocycle_spec_for_name(name))
+    {
         let fixed: usize = spec
             .symbols
             .iter()
@@ -759,6 +758,38 @@ mod tests {
         assert_eq!(get_retained_ring(&mol, path).unwrap().name, "pyridine");
         let plan = mancude_monocycle_hydro_plan(&mol, path, Some("pyridine")).unwrap();
         assert_eq!((plan.indicated, plan.added, plan.citable.len()), (0, 0, 4));
+    }
+    #[test]
+    fn generated_hydrogen_metadata_is_available_without_prior_recognition() {
+        // Upstream HW specs for these rings are azepine (3 double bonds,
+        // indicated H) and oxepine (3 double bonds, fixed saturated O).
+        let mol = read_smiles("N1CCC=CC=C1").unwrap();
+        let rings = find_ring_systems(&mol, &AtomSet::new());
+        let path = &rings[0].paths[0];
+        let plan = mancude_monocycle_hydro_plan(&mol, path, Some("azepine")).unwrap();
+        assert_eq!(
+            (plan.indicated, plan.added, plan.citable),
+            (1, 0, vec![0, 1, 2])
+        );
+        assert!(cites_indicated_hydrogen(&mol, path, Some("azepine")));
+        assert!(mancude_monocycle_hydro_plan(&mol, path, Some("oxepine")).is_none());
+
+        let oxygen = read_smiles("O1C=CC=CC=C1").unwrap();
+        let oxygen_rings = find_ring_systems(&oxygen, &AtomSet::new());
+        let oxygen_path = &oxygen_rings[0].paths[0];
+        assert!(!cites_indicated_hydrogen(
+            &oxygen,
+            oxygen_path,
+            Some("oxepine")
+        ));
+        assert!(!cites_indicated_hydrogen(
+            &oxygen,
+            oxygen_path,
+            Some("azepine")
+        ));
+
+        assert_eq!(get_retained_ring(&mol, path).unwrap().name, "azepine");
+        assert!(cites_indicated_hydrogen(&mol, path, Some("azepine")));
     }
     #[test]
     fn ring_triple_bonds_cannot_be_hw_saturated_parents() {

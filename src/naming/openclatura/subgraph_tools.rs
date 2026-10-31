@@ -216,7 +216,7 @@ pub fn add_indicated_hydrogens(
         recast_ring_ketone_hydrogens(parts, locants);
         return;
     }
-    if !retained::cites_indicated_hydrogen(Some(name)) {
+    if !retained::cites_indicated_hydrogen(mol, numbered_path, Some(name)) {
         return;
     }
     if name == "tetrazole" && numbered_path.iter().any(|idx| mol.atoms[idx].charge != 0) {
