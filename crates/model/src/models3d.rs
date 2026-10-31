@@ -214,6 +214,12 @@ pub struct Model3d {
     /// [`MAX_REPEAT`] each): the model's own cell and lighter copies of it.
     #[serde(default = "one_cell", skip_serializing_if = "is_one_cell")]
     pub repeat: [u8; 3],
+    /// The lattice direction chosen for the crystal's 2D drawing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub along: Option<Along>,
+    /// Keep an explicitly chosen lattice direction when the repeat changes.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub manual_along: bool,
     #[serde(default)]
     pub background: Background,
     pub force_field: ForceField,
@@ -606,6 +612,8 @@ impl Model3d {
             show_hydrogens: Hydrogens::default(),
             charges: false,
             repeat: one_cell(),
+            along: None,
+            manual_along: false,
             background: Background::default(),
             force_field,
             layout: Layout::Original,
@@ -648,8 +656,11 @@ impl Model3d {
     fn fit(&mut self, doc: &Document) {
         self.rotation = self.initial_view(doc);
         let points = self.points(doc).unwrap_or_default();
-        // The model's ångström scale matches the drawing: 1.5 Å per bond length.
-        let units = doc.drawing_style.bond_length_world / 1.5;
+        let units = if self.cell.is_some() {
+            flat_scale(doc, self)
+        } else {
+            doc.drawing_style.bond_length_world / 1.5
+        };
         let center = self.center(&points);
         let reach = reach(&points, center, Style::BallStick).max(self.cell_reach(center));
         self.size = (reach * units / 0.44).max(1.);
@@ -1432,7 +1443,10 @@ pub fn set_rotation(doc: &mut Document, id: u64, rotation: [f32; 4]) -> bool {
         return false;
     }
     let changed = model.rotation != rotation;
-    model.rotation = rotation;
+    if changed {
+        model.rotation = rotation;
+        model.along = None;
+    }
     changed
 }
 
@@ -2087,10 +2101,9 @@ pub fn linear_carbon(doc: &Document, model: &Model3d, id: u64) -> bool {
 /// viewer), looking down c (a to the right, b up) and down the body
 /// diagonal. Each must show every axis and point c (or b) up, and where any
 /// view allows it, hide the origin behind the box, so that a, b and c end on
-/// its outline. Of the views that keep the `labels` nearly as far apart as
-/// the best one does (see [`separation`]), the one nearest a family's
-/// standard slight tilt wins, so the usual view is kept wherever it reads
-/// well.
+/// its outline. Keep atom labels nearly as far apart as the best view,
+/// then compare their clearance from bonds, edges and axis labels. The one
+/// nearest a family's standard slight tilt wins wherever it reads well.
 fn crystal_rotation(vectors: [[f32; 3]; 3], labels: &CrystalLabels) -> [f32; 4] {
     type V = [f64; 3];
     let dot = |a: V, b: V| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -2160,7 +2173,8 @@ fn crystal_rotation(vectors: [[f32; 3]; 3], labels: &CrystalLabels) -> [f32; 4] 
                         let ([x1, y1, _], [x2, y2, _]) = (at(1), at(2));
                         x1 * y2 - y1 * x2 > 0.
                     });
-                    views.push((separation(q, labels, vectors), near, q, back));
+                    let (pairs, score) = separation(q, labels, vectors);
+                    views.push((score, near, q, back, pairs));
                 }
             }
         }
@@ -2169,9 +2183,13 @@ fn crystal_rotation(vectors: [[f32; 3]; 3], labels: &CrystalLabels) -> [f32; 4] 
     if views.iter().any(|v| v.3) {
         views.retain(|v| v.3);
     }
+    let pairs = views.iter().map(|v| v.4).fold(f32::NEG_INFINITY, f32::max);
+    // Fully separated atom labels need no further preference. Otherwise
+    // favour their best views before bonds or box edges can cap the score.
+    views.retain(|v| v.4 >= if pairs >= 1. { 1. } else { 0.9 * pairs });
     let best = views.iter().map(|v| v.0).fold(f32::NEG_INFINITY, f32::max);
     let good = 0.9 * best.min(GOOD_SEPARATION);
-    if let Some((_, _, q, _)) = views
+    if let Some((_, _, q, _, _)) = views
         .iter()
         .filter(|v| v.0 >= good)
         .min_by(|u, v| u.1.total_cmp(&v.1))
@@ -2222,8 +2240,9 @@ const SEPARATION_CAP: f32 = 4.;
 /// of one of the lattice `vectors`, from each other, and the axis labels from
 /// the cell's edges and the `stubs` of bonds leaving it. The least, over each
 /// pair, of how far apart they are, across or along, as a fraction of what
-/// keeps them apart: 1 or more when nothing overlaps.
-fn separation(q: [f32; 4], labels: &CrystalLabels, vectors: [[f32; 3]; 3]) -> f32 {
+/// keeps them apart: 1 or more when nothing overlaps. Return the atom-label
+/// pair clearance separately from the overall clearance.
+fn separation(q: [f32; 4], labels: &CrystalLabels, vectors: [[f32; 3]; 3]) -> (f32, f32) {
     let width = |letters: usize| LETTER_WIDTH * letters.max(1) as f32;
     let apart = |s: [f32; 3], t: [f32; 3], wide: f32, room: f32| {
         ((s[0] - t[0]).abs() / (wide + room)).max((s[1] - t[1]).abs() / (LABEL_HEIGHT + room))
@@ -2249,6 +2268,7 @@ fn separation(q: [f32; 4], labels: &CrystalLabels, vectors: [[f32; 3]; 3]) -> f3
         x(a).total_cmp(&x(b))
     });
     let mut least = SEPARATION_CAP;
+    let mut pairs = SEPARATION_CAP;
     for (n, &i) in order.iter().enumerate() {
         let Some((s, ws)) = seen.get(i) else { continue };
         for &j in order.iter().skip(n + 1) {
@@ -2263,6 +2283,7 @@ fn separation(q: [f32; 4], labels: &CrystalLabels, vectors: [[f32; 3]; 3]) -> f3
                 0.
             };
             least = least.min(apart(*s, *t, (ws + wt) / 2., room));
+            pairs = pairs.min(apart(*s, *t, (ws + wt) / 2., 0.));
         }
     }
     let cell = Cell {
@@ -2329,7 +2350,7 @@ fn separation(q: [f32; 4], labels: &CrystalLabels, vectors: [[f32; 3]; 3]) -> f3
             least = least.min(to_segment(*label, from, to) / AXIS_CLEAR);
         }
     }
-    least
+    (pairs, least)
 }
 
 /// What a crystal's opening view keeps apart, in label heights: each
@@ -3900,7 +3921,8 @@ fn ghosts(
 }
 
 /// A direction a crystal's 2D drawing can look along.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Along {
     A,
     B,
@@ -3988,6 +4010,7 @@ pub fn look_along(doc: &mut Document, index: usize, along: Along) -> bool {
         return false;
     };
     let mut turned = model.clone();
+    turned.along = Some(along);
     turned.rotation = along_view(doc, model, cell, along).1;
     let before = layout_center(doc, model);
     let atoms = doc.atoms.clone();
@@ -4005,35 +4028,38 @@ pub fn look_along(doc: &mut Document, index: usize, along: Along) -> bool {
     changed
 }
 
-/// The direction along which the labels of every cell `model` shows keep
-/// farthest apart, by [`separation`].
+/// The direction along which the atom labels of every cell `model` shows
+/// keep nearly as far apart as the best view, preferring a lattice axis.
 pub fn best_along(doc: &Document, model: &Model3d) -> Along {
     let Some(cell) = &model.cell else {
         return Along::C;
     };
-    Along::ALL
+    let views = Along::ALL.map(|along| (along_view(doc, model, cell, along).0, along));
+    let best = views.iter().map(|v| v.0).fold(f32::NEG_INFINITY, f32::max);
+    // Prefer a lattice axis when its labels keep nearly as far apart.
+    views
         .into_iter()
-        .map(|along| (along_view(doc, model, cell, along).0, along))
-        .fold((f32::NEG_INFINITY, Along::C), |best, next| {
-            if next.0 > best.0 { next } else { best }
-        })
-        .1
+        .find(|v| v.0 >= if best >= 1. { 1. } else { 0.9 * best })
+        .map_or(Along::C, |(_, along)| along)
 }
 
 /// The view looking along `along`, tilted a little, at most about 15°, where
 /// that keeps labels of atoms stacked one behind another apart, as rock
-/// salt's along c; with its score by [`separation`] over every cell shown.
+/// salt's along c; with the atom-label pair clearance over every cell shown.
 fn along_view(doc: &Document, model: &Model3d, cell: &Cell, along: Along) -> (f32, [f32; 4]) {
     let k = flat_scale(doc, model) / doc.drawing_style.font_size().max(1e-3);
     let repeat = model.repeat.map(|n| i32::from(n.clamp(1, MAX_REPEAT)));
-    let labelled = model.labelled(doc);
-    let atoms: Vec<_> = grid(repeat)
+    let labelled: HashMap<_, _> = model
+        .labelled(doc)
         .into_iter()
-        .flat_map(|c| {
+        .map(|(id, p, n)| (id, (p, n)))
+        .collect();
+    let atoms: Vec<_> = shown_sites(doc, model)
+        .into_iter()
+        .filter_map(|(id, c)| {
+            let (p, n) = labelled.get(&id)?;
             let shift = cell.at(c.map(|v| v as f32));
-            labelled
-                .iter()
-                .map(move |(_, p, n)| (zip3(*p, shift, |p, s| (p + s) * k), *n))
+            Some((zip3(*p, shift, |p, s| (p + s) * k), *n))
         })
         .collect();
     let vectors = [0, 1, 2].map(|i| {
@@ -4056,16 +4082,19 @@ fn along_view(doc: &Document, model: &Model3d, cell: &Cell, along: Along) -> (f3
         for j in -5..=5 {
             let (x, y) = (0.05 * f64::from(i), 0.05 * f64::from(j));
             let q = tilted(basis, x, y);
-            views.push((separation(q, &labels, vectors), x.hypot(y), q));
+            let (pairs, score) = separation(q, &labels, vectors);
+            views.push((score, x.hypot(y), q, pairs));
         }
     }
+    let pairs = views.iter().map(|v| v.3).fold(f32::NEG_INFINITY, f32::max);
+    views.retain(|v| v.3 >= if pairs >= 1. { 1. } else { 0.9 * pairs });
     let best = views.iter().map(|v| v.0).fold(f32::NEG_INFINITY, f32::max);
     let good = 0.9 * best.min(GOOD_SEPARATION);
     views
         .into_iter()
         .filter(|v| v.0 >= good)
         .min_by(|u, v| u.1.total_cmp(&v.1))
-        .map_or((best, quaternion(basis)), |(score, _, q)| (score, q))
+        .map_or((pairs, quaternion(basis)), |(_, _, q, pairs)| (pairs, q))
 }
 
 /// How much of a bond leaving the cell its 2D stub draws.

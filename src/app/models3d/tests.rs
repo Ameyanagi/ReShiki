@@ -116,6 +116,62 @@ fn showing_a_stored_model_reveals_clipped_bounds_and_preserves_fitting_camera() 
 }
 
 #[test]
+fn revealing_a_stored_model_keeps_its_rotation_knob_and_frame_clear_of_canvas_edges() {
+    use crate::canvas::{
+        FRAME_PADDING_PX, HINT_STRIP_HEIGHT_PX, ROTATION_KNOB_RADIUS_PX, ROTATION_STEM_PX,
+    };
+
+    for rulers in [false, true] {
+        for top in [true, false] {
+            let (mut app, atoms) = with_model(Display::ThreeD);
+            show(&mut app, Display::TwoD);
+            app.guides.rulers = rulers;
+            app.viewport = iced::Size::new(900., 600.);
+            app.tab.camera.zoom = 1.5;
+            let mut preview = app.tab.doc.clone();
+            models3d::set_display(&mut preview, 0, Display::ThreeD);
+            let (lo, hi) = reshiki::scene::selection_bounds(&preview, &atoms).unwrap();
+            let paper = app.guides.paper(iced::Rectangle::with_size(app.viewport));
+            let edge = FRAME_PADDING_PX + ROTATION_KNOB_RADIUS_PX;
+            app.tab.camera.center = Point::new(
+                (lo.x + hi.x) / 2.,
+                if top {
+                    lo.y + (paper.height / 2. - edge) / app.tab.camera.zoom
+                } else {
+                    hi.y - (paper.height / 2. - edge) / app.tab.camera.zoom
+                },
+            );
+            let camera = app.tab.camera;
+            let screen_lo = camera.screen(lo, paper);
+            let screen_hi = camera.screen(hi, paper);
+            let knob = FRAME_PADDING_PX + ROTATION_STEM_PX + ROTATION_KNOB_RADIUS_PX;
+            assert!(screen_lo.y - FRAME_PADDING_PX > 0.);
+            assert!(screen_hi.y + FRAME_PADDING_PX < paper.height);
+            if top {
+                assert!(screen_lo.y - knob < 0.);
+            } else {
+                assert!(screen_hi.y + FRAME_PADDING_PX > paper.height - HINT_STRIP_HEIGHT_PX);
+            }
+
+            show(&mut app, Display::ThreeD);
+            assert_ne!(app.tab.camera.center, camera.center);
+            assert_eq!(app.tab.camera.zoom, camera.zoom, "Only a pan is needed");
+            let screen_lo = app.tab.camera.screen(lo, paper);
+            let screen_hi = app.tab.camera.screen(hi, paper);
+            assert!(screen_lo.y - knob >= 0.);
+            assert!(screen_hi.y + FRAME_PADDING_PX <= paper.height - HINT_STRIP_HEIGHT_PX);
+
+            show(&mut app, Display::TwoD);
+            app.tab.camera.center = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+            let camera = app.tab.camera;
+            show(&mut app, Display::ThreeD);
+            assert_eq!(app.tab.camera.center, camera.center);
+            assert_eq!(app.tab.camera.zoom, camera.zoom);
+        }
+    }
+}
+
+#[test]
 fn generated_model_reveals_its_target_after_selection_changed() {
     let (mut app, atoms, water) = drawing();
     app.viewport = iced::Size::new(900., 600.);
@@ -1220,16 +1276,122 @@ fn a_first_repeat_looks_along_the_clearest_axis_in_one_undo_step() {
     assert_ne!(app.tab.doc.models[0].rotation, rotation);
     assert_ne!(app.tab.doc.atoms, atoms);
     assert_eq!(frames(&app), start + 1);
-    // A later repeat keeps the view; looking along an axis turns it.
-    let turned = app.tab.doc.models[0].rotation;
+    // A later repeat chooses again for the larger block.
+    let mut expected = app.tab.doc.clone();
+    expected.models[0].repeat = [2, 2, 2];
+    let along = models3d::best_along(&expected, &expected.models[0]);
+    models3d::look_along(&mut expected, 0, along);
     set(&mut app, Setting::Repeat([2, 2, 2]));
-    assert_eq!(app.tab.doc.models[0].rotation, turned);
-    set(&mut app, Setting::LookAlong(models3d::Along::Diagonal));
+    assert_eq!(app.tab.doc.models[0].rotation, expected.models[0].rotation);
+    assert_eq!(app.tab.doc.models[0].along, Some(along));
+    assert!(!app.tab.doc.models[0].manual_along);
+    let turned = app.tab.doc.models[0].rotation;
+    let explicit = if along == models3d::Along::C {
+        models3d::Along::A
+    } else {
+        models3d::Along::C
+    };
+    set(&mut app, Setting::LookAlong(explicit));
     assert_ne!(app.tab.doc.models[0].rotation, turned);
     assert_eq!(frames(&app), start + 3);
     for _ in 0..3 {
         let _ = app.update(Message::Undo);
     }
     assert_eq!(app.tab.doc.models[0].repeat, [1, 1, 1]);
+    assert_eq!(app.tab.doc.models[0].along, None);
+    assert!(!app.tab.doc.models[0].manual_along);
     assert_eq!(app.tab.doc.atoms, atoms);
+}
+
+/// The least distance between the ink boxes of NaCl's repeated ion labels,
+/// measured in their half-widths and half-heights; one means no overlap.
+fn repeated_ion_separation(doc: &Document) -> f32 {
+    use reshiki::scene::Primitive;
+    let boxes: Vec<_> = reshiki::scene::primitives(doc)
+        .into_iter()
+        .filter_map(|p| match &p {
+            Primitive::Opacity { primitive, .. }
+                if matches!(primitive.as_ref(), Primitive::Text { text, .. } if matches!(text.as_str(), "Na" | "Cl")) =>
+            {
+                let ink = reshiki::scene::label_ink_boxes(&[p]);
+                ink.into_iter().reduce(|(lo, hi), (other_lo, other_hi)| {
+                    (
+                        Point::new(lo.x.min(other_lo.x), lo.y.min(other_lo.y)),
+                        Point::new(hi.x.max(other_hi.x), hi.y.max(other_hi.y)),
+                    )
+                })
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        boxes.len(),
+        models3d::shown_sites(doc, &doc.models[0]).len()
+    );
+    let mut least = f32::INFINITY;
+    for (i, (lo, hi)) in boxes.iter().enumerate() {
+        for (other_lo, other_hi) in &boxes[i + 1..] {
+            let dx = ((lo.x + hi.x) - (other_lo.x + other_hi.x)).abs();
+            let dy = ((lo.y + hi.y) - (other_lo.y + other_hi.y)).abs();
+            let width = hi.x - lo.x + other_hi.x - other_lo.x;
+            let height = hi.y - lo.y + other_hi.y - other_lo.y;
+            least = least.min((dx / width).max(dy / height));
+        }
+    }
+    least
+}
+
+#[test]
+fn nacl_repeats_choose_a_clear_view_and_keep_an_explicit_direction() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab.doc = reshiki::crystal::read(
+        "cif",
+        include_str!("../../../tests/fixtures/crystal/nacl.cif"),
+    )
+    .unwrap()
+    .0;
+    app.tab.selected = app.tab.doc.atoms.iter().map(|a| a.id).collect();
+    let start = frames(&app);
+    let version = app.tab.doc.file_version();
+    for (i, repeat) in [[2, 1, 1], [2, 2, 1], [2, 2, 2]].into_iter().enumerate() {
+        set(&mut app, Setting::Repeat(repeat));
+        let model = &app.tab.doc.models[0];
+        assert_eq!(model.repeat, repeat);
+        assert_eq!(model.along, Some(models3d::best_along(&app.tab.doc, model)));
+        assert!(!model.manual_along);
+        assert_eq!(frames(&app), start + i + 1);
+    }
+    let automatic = repeated_ion_separation(&app.tab.doc);
+    let mut along_c = app.tab.doc.clone();
+    models3d::look_along(&mut along_c, 0, models3d::Along::C);
+    let reference = repeated_ion_separation(&along_c);
+    assert!(
+        automatic + 1e-3 >= reference || automatic >= 1.,
+        "{automatic} < {reference}"
+    );
+    let after = app.tab.doc.clone();
+    set(&mut app, Setting::Repeat([2, 2, 2]));
+    assert_eq!(app.tab.doc, after);
+    assert_eq!(frames(&app), start + 3);
+
+    set(&mut app, Setting::LookAlong(models3d::Along::A));
+    let explicit = app.tab.doc.models[0].rotation;
+    set(&mut app, Setting::Repeat([3, 2, 2]));
+    assert_eq!(app.tab.doc.models[0].rotation, explicit);
+    assert_eq!(app.tab.doc.models[0].along, Some(models3d::Along::A));
+    assert!(app.tab.doc.models[0].manual_along);
+    let reopened = Document::from_json(&app.tab.doc.file_json().unwrap()).unwrap();
+    assert_eq!(reopened.models, app.tab.doc.models);
+    assert_eq!(reopened.file_version(), version);
+    let mut legacy = serde_json::to_value(&reopened).unwrap();
+    legacy["models"][0].as_object_mut().unwrap().remove("along");
+    legacy["models"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("manual_along");
+    let legacy = Document::from_json(&serde_json::to_vec(&legacy).unwrap()).unwrap();
+    assert_eq!(legacy.models[0].along, None);
+    assert!(!legacy.models[0].manual_along);
+    assert_eq!(legacy.file_version(), reopened.file_version());
 }

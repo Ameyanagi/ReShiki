@@ -1506,3 +1506,39 @@ fn overlap_note_is_kept_on_a_model_without_a_cell_too() {
     let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
     assert_eq!(model(&reopened).notes, warnings);
 }
+
+#[test]
+fn aspirin_opens_on_a_view_whose_atom_labels_keep_apart() {
+    let (doc, warnings) = open(
+        "cif",
+        include_str!("../../../../tests/fixtures/crystal/cod-1516479.cif"),
+    );
+    let drawn = crate::models3d::drawn(&doc);
+    let boxes: Vec<_> = drawn
+        .atoms
+        .iter()
+        .filter_map(|a| Some((&a.element, crate::scene::atom_label_ink_bounds(a, &drawn)?)))
+        .collect();
+    let overlaps: Vec<_> = boxes
+        .iter()
+        .enumerate()
+        .flat_map(|(i, (a, (lo, hi)))| {
+            boxes[i + 1..].iter().filter_map(move |(b, (l, h))| {
+                let apart = hi.x < l.x || h.x < lo.x || hi.y < l.y || h.y < lo.y;
+                (!apart).then(|| format!("{a}@{lo:?} on {b}@{l:?}"))
+            })
+        })
+        .collect();
+    assert!(
+        overlaps.is_empty()
+            || (warnings
+                .iter()
+                .any(|note| note.contains("No view keeps every atom label apart"))
+                && overlaps.len() <= 1),
+        "{} overlaps: {overlaps:#?}; warnings: {warnings:?}",
+        overlaps.len()
+    );
+    assert_eq!(model(&doc).notes, warnings);
+    let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(model(&reopened).notes, warnings);
+}

@@ -479,18 +479,22 @@ impl App {
             Setting::Background(background) => model.background = background,
             Setting::DepthFade(value) => model.depth_fade = value.clamp(0., 1.),
             Setting::Perspective(value) => model.perspective = value.clamp(0., 1.),
-            Setting::ResetView => model.rotation = reset.unwrap_or(model.rotation),
+            Setting::ResetView => {
+                model.rotation = reset.unwrap_or(model.rotation);
+                model.along = None;
+                model.manual_along = false;
+            }
             Setting::Charges(shown) => model.charges = shown,
             Setting::Repeat(repeat) => model.repeat = repeat,
-            Setting::LookAlong(_) => {}
+            Setting::LookAlong(_) => model.manual_along = true,
         }
-        // Looking along an axis lays the drawing out again; so does a first
-        // repeat, along the axis whose labels keep farthest apart.
-        let first_repeat = matches!(setting, Setting::Repeat(r) if r != [1; 3])
-            && before.models.get(index).is_some_and(|m| m.repeat == [1; 3]);
+        // Every changed repeat chooses a clear view until a direction is
+        // chosen explicitly; that direction keeps its tilt as the block grows.
+        let repeat_changed = matches!(setting, Setting::Repeat(r)
+            if before.models.get(index).is_some_and(|m| m.repeat != r && !m.manual_along));
         let along = match setting {
             Setting::LookAlong(along) => Some(along),
-            _ if first_repeat => self
+            _ if repeat_changed => self
                 .tab
                 .doc
                 .models
@@ -501,7 +505,7 @@ impl App {
         if let Some(along) = along {
             models3d::look_along(&mut self.tab.doc, index, along);
         }
-        // The active choice again changes nothing and adds no Undo step.
+        // An unchanged choice adds no Undo step.
         if self.tab.doc == before {
             return;
         }
@@ -813,10 +817,27 @@ impl App {
         }
         let ids = reshiki::molecule_names::include_annotations(&self.tab.doc, atoms);
         if let Some((lo, hi)) = reshiki::scene::selection_bounds(&self.tab.doc, &ids) {
-            // Include the visible selected-model outline without moving an
-            // already visible result or zooming in on a smaller molecule.
-            let margin = 12. / self.tab.camera.zoom;
-            self.reveal_if_clipped(lo.offset(-margin, -margin), hi.offset(margin, margin));
+            // Keep the selection frame, rotation knob and bottom hint clear
+            // without moving an already visible result or zooming in.
+            use crate::canvas::{
+                FRAME_PADDING_PX, HINT_STRIP_HEIGHT_PX, ROTATION_KNOB_RADIUS_PX, ROTATION_STEM_PX,
+            };
+            let top = FRAME_PADDING_PX + ROTATION_STEM_PX + ROTATION_KNOB_RADIUS_PX;
+            let bottom = FRAME_PADDING_PX + HINT_STRIP_HEIGHT_PX;
+            let padded = |zoom: f32| {
+                (
+                    lo.offset(-FRAME_PADDING_PX / zoom, -top / zoom),
+                    hi.offset(FRAME_PADDING_PX / zoom, bottom / zoom),
+                )
+            };
+            let zoom = self.tab.camera.zoom;
+            let (a, b) = padded(zoom);
+            self.reveal_if_clipped(a, b);
+            // Zooming out shrinks the margins: pad again at the new zoom.
+            if self.tab.camera.zoom < zoom {
+                let (a, b) = padded(self.tab.camera.zoom);
+                self.reveal_bounds(a, b);
+            }
         }
     }
 
@@ -987,11 +1008,14 @@ impl App {
             body = body.push(text("Look along").size(12)).push(
                 row(models3d::Along::ALL.map(|along| {
                     let name = along.name();
+                    let active = model.along == Some(along);
                     accessible_command(
                         format!("structure-look-{name}"),
                         format!("Look along {name}"),
                         name,
                     )
+                    .checked(active)
+                    .style(control(active))
                     .width(Length::Fill)
                     .on_press_maybe(set(Setting::LookAlong(along)))
                     .into()
