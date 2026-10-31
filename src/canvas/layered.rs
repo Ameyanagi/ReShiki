@@ -10,6 +10,16 @@ use iced::widget::canvas::{self, Program};
 use iced::{Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector};
 use std::rc::Rc;
 
+pub(super) type RetainedGeometry =
+    <canvas::Geometry as iced::advanced::graphics::cache::Cached>::Cache;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) struct FrameKey {
+    clip: [u32; 4],
+    offset: [u32; 2],
+    dark: bool,
+}
+
 struct Shared<P>(Rc<P>);
 impl<M, P: Program<M>> Program<M> for Shared<P> {
     type State = P::State;
@@ -186,6 +196,26 @@ impl<'a> Frame<'a> {
         self.dark = theme.is_dark();
         self
     }
+    pub(super) fn key(&self) -> FrameKey {
+        FrameKey {
+            clip: [
+                self.clip.x.to_bits(),
+                self.clip.y.to_bits(),
+                self.clip.width.to_bits(),
+                self.clip.height.to_bits(),
+            ],
+            offset: [self.offset.x.to_bits(), self.offset.y.to_bits()],
+            dark: self.dark,
+        }
+    }
+    /// A separate layer with the same clipping, coordinates, colors and fonts.
+    pub(super) fn layer(&self) -> Self {
+        Self {
+            dark: self.dark,
+            text_cache: self.text_cache,
+            ..Self::clipped(self.renderer, self.clip, self.offset)
+        }
+    }
     fn display_style(&self, style: canvas::Style) -> canvas::Style {
         match style {
             canvas::Style::Solid(color) => crate::appearance::color(self.dark, color).into(),
@@ -226,6 +256,12 @@ impl<'a> Frame<'a> {
                 frame.translate(self.offset);
                 draw(frame);
             }));
+    }
+    /// Append a complete retained layer sequence, preserving picture ordering.
+    pub(super) fn retained(&mut self, geometry: &[RetainedGeometry]) {
+        use iced::advanced::graphics::cache::Cached;
+        self.split();
+        self.layers.extend(geometry.iter().map(Cached::load));
     }
     pub fn finish(mut self) -> Vec<canvas::Geometry> {
         self.split();

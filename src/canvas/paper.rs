@@ -2,6 +2,8 @@
 
 mod bond_text;
 mod draft;
+mod geometry;
+pub(super) use geometry::SceneGeometryCache;
 #[cfg(test)]
 mod model_tests;
 #[cfg(test)]
@@ -137,10 +139,14 @@ impl MoleculeCanvas<'_> {
             if rotating {
                 rotation_ink = reshiki::scene::label_ink_boxes(&scene);
             }
-            if !self.reviewing_pair {
-                markers.draw_with_nmr(frame, camera, bounds, true, &nmr_ids);
-            }
-            draw_primitives(frame, &scene, camera, bounds, 0.);
+            state.geometry.borrow_mut().draw(
+                frame,
+                (markers, scene),
+                camera,
+                bounds,
+                &nmr_ids,
+                self.reviewing_pair,
+            );
         } else {
             if !self.reviewing_pair {
                 markers::Markers::new(&preview, selected).draw_with_nmr(

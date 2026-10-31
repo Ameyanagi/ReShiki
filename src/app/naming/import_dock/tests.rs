@@ -25,6 +25,74 @@ async fn preview(app: &App, smiles: &str) -> Result<Preview, String> {
         .map_err(|error| error.to_string())
 }
 
+#[tokio::test]
+async fn name_insert_keeps_the_camera_when_structure_and_caption_fit() -> Result<(), String> {
+    for rulers in [false, true] {
+        let mut app = ready();
+        app.engine = LocalEngine::in_process();
+        app.tab.doc = Document::default();
+        app.viewport = iced::Size::new(1200., 800.);
+        app.guides.rulers = rulers;
+        app.tab.camera = Camera {
+            center: Point::new(140., -80.),
+            zoom: 1.5,
+        };
+        let camera = app.tab.camera;
+        let result = preview(&app, "CCO").await?;
+        app.tab.naming.set_preview(result);
+
+        app.insert_import_preview(true);
+
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(app.tab.doc.annotations.len(), 1);
+        assert_eq!(app.tab.camera.center, camera.center);
+        assert_eq!(app.tab.camera.zoom, camera.zoom);
+        let paper = app.guides.paper(iced::Rectangle::with_size(app.viewport));
+        let visible = iced::Rectangle::with_size(paper.size());
+        let (lo, hi) = reshiki::scene::selection_bounds(&app.tab.doc, &app.tab.selected).unwrap();
+        assert!(visible.contains(app.tab.camera.screen(lo, paper)));
+        assert!(visible.contains(app.tab.camera.screen(hi, paper)));
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn name_insert_reveals_both_structures_and_captions_without_zooming_in() -> Result<(), String>
+{
+    let mut app = ready();
+    app.engine = LocalEngine::in_process();
+    app.tab.doc = Document::default();
+    app.viewport = iced::Size::new(1200., 800.);
+    app.tab.camera = Camera {
+        center: Point::new(300., 0.),
+        zoom: 1.25,
+    };
+    let result = preview(&app, "CCO").await?;
+    app.tab.naming.set_preview(result.clone());
+    app.insert_import_preview(true);
+    assert!(!app.error, "{}", app.status);
+    app.tab.camera.center = Point::default();
+    let camera = app.tab.camera;
+    let paper = app.guides.paper(iced::Rectangle::with_size(app.viewport));
+    let visible = iced::Rectangle::with_size(paper.size());
+    let (lo, hi) = reshiki::scene::selection_bounds(&app.tab.doc, &app.tab.doc.all_ids()).unwrap();
+    assert!(camera.screen(lo, paper).x > paper.width * 2. / 3.);
+    assert!(visible.contains(camera.screen(hi, paper)));
+    app.tab.naming.set_preview(result);
+
+    app.insert_import_preview(true);
+
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.atoms.len(), 6);
+    assert_eq!(app.tab.doc.annotations.len(), 2);
+    assert_eq!(app.tab.doc.molecule_names.len(), 2);
+    assert!(app.tab.camera.zoom <= camera.zoom);
+    let (lo, hi) = reshiki::scene::selection_bounds(&app.tab.doc, &app.tab.doc.all_ids()).unwrap();
+    assert!(visible.contains(app.tab.camera.screen(lo, paper)));
+    assert!(visible.contains(app.tab.camera.screen(hi, paper)));
+    Ok(())
+}
+
 fn complete(app: &mut App, ticket: Ticket, preview: Preview) {
     let _ = app.naming_action(Action::Finished(
         ticket,

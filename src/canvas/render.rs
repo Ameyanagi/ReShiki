@@ -40,6 +40,13 @@ pub(super) fn draw_primitives(
     draw_primitives_with_opacity(frame, primitives, camera, bounds, minimum, 1.);
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Primitives drawn by `draw_primitives`, so tests can see whether a
+    /// redraw reused the scene geometry.
+    pub(super) static DRAWN_PRIMITIVES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 fn draw_primitives_with_opacity(
     frame: &mut layered::Frame<'_>,
     primitives: &[Primitive],
@@ -52,6 +59,8 @@ fn draw_primitives_with_opacity(
         color.a *= opacity;
         color
     };
+    #[cfg(test)]
+    DRAWN_PRIMITIVES.with(|n| n.set(n.get() + primitives.len()));
     for (i, primitive) in primitives.iter().enumerate() {
         match primitive {
             // Each run of model primitives, a fading one included, is drawn

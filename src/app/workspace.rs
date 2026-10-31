@@ -14,6 +14,8 @@ use reshiki::bonds::BondPreset;
 use reshiki::typography::{Script, StyleChange};
 
 #[cfg(test)]
+mod cleanup_tests;
+#[cfg(test)]
 pub(super) mod layout_snapshots;
 #[cfg(test)]
 mod model_controls_qa;
@@ -357,13 +359,6 @@ impl App {
                     .on_toggle(
                         |original| Message::Cleanup(super::cleanup::Action::Original(original))
                     ),
-                Space::new().width(Length::Fill),
-                command("Cancel", Message::Cleanup(super::cleanup::Action::Cancel)),
-                button(text("Apply").size(12))
-                    .on_press_maybe(
-                        (!self.tab.busy).then_some(Message::Cleanup(super::cleanup::Action::Apply))
-                    )
-                    .style(crate::appearance::primary),
             ]
             .spacing(10)
             .align_y(Alignment::Center),
@@ -373,12 +368,20 @@ impl App {
                     .text_size(11)
                     .size(13)
                     .on_toggle(|keep| Message::Cleanup(super::cleanup::Action::Orientation(keep))),
-                text(preview.job.options.scope.hint())
-                    .size(11)
-                    .style(muted_text),
+                Space::new().width(Length::Fill),
+                accessible_command("cleanup.cancel", "Cancel cleanup preview", "Cancel")
+                    .on_press(Message::Cleanup(super::cleanup::Action::Cancel)),
+                accessible_command("cleanup.apply", "Apply cleanup preview", "Apply")
+                    .on_press_maybe(
+                        (!self.tab.busy).then_some(Message::Cleanup(super::cleanup::Action::Apply))
+                    )
+                    .style(crate::appearance::primary),
             ]
-            .spacing(16)
+            .spacing(10)
             .align_y(Alignment::Center),
+            text(preview.job.options.scope.hint())
+                .size(11)
+                .style(muted_text),
         ]
         .spacing(6);
         for warning in &preview.warnings {
