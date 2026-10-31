@@ -36,11 +36,12 @@ impl App {
             | Message::Autosaved(..)
             | Message::FilePrepared(..)
             | Message::OfficePrepared(..)
-            | Message::Saved(..) => {}
+            | Message::Saved(..)
+            | Message::DownloadName(_) => {}
             #[cfg(any(windows, target_os = "linux"))]
             Message::Desktop(_) => {}
             #[cfg(target_arch = "wasm32")]
-            Message::Host(_) | Message::DownloadName(_) | Message::SaveDownload(_) => {}
+            Message::Host(_) | Message::SaveDownload(_) => {}
             Message::KeyboardDrawing(action) => return Some(self.keyboard_drawing_action(action)),
             Message::Optimization(action) => return Some(self.optimization_action(action)),
             Message::Models3d(action) => return Some(self.models3d_action(action)),
@@ -219,6 +220,8 @@ impl App {
             | Message::CopyAsWritten(..)
             | Message::ClipboardRead { .. }
             | Message::Pasted(_)
+            | Message::ExportReady(_)
+            | Message::SaveExport(..)
             | Message::Exported(_)) => return Some(self.update_document_result(message)),
         }
         None
@@ -234,6 +237,10 @@ impl App {
             Message::LabelsReady(key, result) => self.labels_ready(key, result),
             Message::Mapping(action) => return self.mapping_action(action),
             Message::FigureExported(result) => self.figure_exported(result),
+            Message::ExportReady(export) => {
+                return self.export_ready(export, cfg!(target_arch = "wasm32"));
+            }
+            Message::SaveExport(name, export) => return export.save(name),
             Message::Printing(action) => return self.print_action(action),
             Message::DrawingStyle(action) => return self.drawing_style_action(action),
             Message::Assistant(action) => return self.assistant_action(action),

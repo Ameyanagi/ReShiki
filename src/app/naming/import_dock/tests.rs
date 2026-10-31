@@ -36,6 +36,72 @@ fn complete(app: &mut App, ticket: Ticket, preview: Preview) {
 }
 
 #[tokio::test]
+async fn clearing_name_input_closes_preview_and_reopening_selects_the_retained_name() {
+    use iced::advanced::widget::{Id, operation::Outcome};
+    use iced::futures::StreamExt;
+    use iced::widget::text_input::{State, Value};
+    type InputState = State<<iced::Renderer as iced::advanced::text::Renderer>::Paragraph>;
+
+    async fn input_state(task: Task<Message>) -> InputState {
+        let mut state = InputState::new();
+        let id = Id::new("import-name");
+        let mut actions = iced_runtime::task::into_stream(task).expect("Name input widget task");
+        while let Some(action) = actions.next().await {
+            let iced_runtime::Action::Widget(mut operation) = action else {
+                continue;
+            };
+            loop {
+                operation.focusable(Some(&id), iced::Rectangle::default(), &mut state);
+                operation.text_input(Some(&id), iced::Rectangle::default(), &mut state);
+                if let Outcome::Chain(next) = operation.finish() {
+                    operation = next;
+                } else {
+                    break;
+                }
+            }
+        }
+        state
+    }
+
+    let mut app = ready();
+    for message in [
+        Message::Inspector(InspectorTab::Import),
+        Message::Imports(import::Action::InputKind(InputKind::Name)),
+    ] {
+        let state = input_state(app.update(message)).await;
+        assert!(state.is_focused());
+        assert_eq!(
+            state.cursor().selection(&Value::new(&app.tab.naming.name)),
+            Some((0, "ethanol".len())),
+        );
+    }
+    app.tab.naming.set_preview(Preview::new(
+        record(),
+        super::super::test_support::ethanol(),
+        vec![],
+        "CCO".into(),
+    ));
+    app.tab.naming.preview_open = true;
+    app.tab.naming.notice = Some(Notice::new(NoticeKind::Info, "Preview ready"));
+    app.tab.naming.import_alias = Some(0);
+    let before = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    let frames = app.tab.history.frames();
+
+    let state = input_state(app.update(Message::Naming(Action::ClearName))).await;
+
+    assert!(app.tab.naming.name.is_empty());
+    assert!(app.tab.naming.preview.is_none());
+    assert!(!app.tab.naming.preview_open);
+    assert!(app.tab.naming.notice.is_none());
+    assert!(app.tab.naming.import_alias.is_none());
+    assert!(state.is_focused(), "Clear returns focus to the Name box");
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(app.tab.history.frames(), frames);
+}
+
+#[tokio::test]
 async fn one_insert_resolves_and_commits_structure_and_verified_caption_together()
 -> Result<(), String> {
     let mut app = ready();
@@ -561,6 +627,7 @@ async fn default_dock_exposes_one_insert_and_collapses_preview_and_details() -> 
         "import-kind-structure",
         "import-kind-name",
         "import-name",
+        "import-clear",
         "import-name-caption",
         "import-name-preview",
         "import-name-insert",
@@ -596,6 +663,15 @@ async fn default_dock_exposes_one_insert_and_collapses_preview_and_details() -> 
         &mut iced::advanced::widget::operation::black_box(&mut activate),
     );
     assert!(matches!(activate.message(), Some(Message::InsertInput)));
+    let mut activate = Activate::<Message>::new("import-clear");
+    ui.operate(
+        &renderer,
+        &mut iced::advanced::widget::operation::black_box(&mut activate),
+    );
+    assert!(matches!(
+        activate.message(),
+        Some(Message::Naming(Action::ClearName))
+    ));
     Ok(())
 }
 
