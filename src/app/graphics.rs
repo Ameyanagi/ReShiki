@@ -6,6 +6,7 @@ use iced::{Alignment, Length};
 use reshiki::graphics::GraphicKind;
 use reshiki::palette::{Color as Paint, Palette, Row};
 pub(super) mod path;
+mod path_cleanup;
 
 const ATTACH_SYMBOLS_HINT: &str = concat!(
     "Attached charges and radicals update chemistry. Lone pairs annotate the atom. ",
@@ -26,7 +27,18 @@ const SNAP_ORBITALS_HINT: &str = concat!(
 mod tests;
 
 #[cfg(test)]
+mod path_cleanup_tests;
+#[cfg(test)]
 mod path_tests;
+
+#[derive(Debug, Clone, Copy)]
+pub enum Cleanup {
+    Smooth,
+    Symmetrise { upright: bool },
+}
+
+pub(super) const SYMMETRISE_HINT: &str =
+    "Average across the best mirror axis · Shift: upright axis";
 
 #[derive(Clone, Copy)]
 pub(super) enum ColorField {
@@ -47,6 +59,7 @@ pub enum Action {
     ApplyFill,
     Sides(BracketSides),
     Path(path::Action),
+    Cleanup(Cleanup),
     ScientificKind(GraphicKind),
     OrbitalPhase(reshiki::scientific::Phase),
     FlipPhase(bool),
@@ -82,6 +95,7 @@ impl App {
             Action::SnapOrbitals(value) => self.tab.snap_orbitals = value,
             Action::Sides(sides) => self.set_graphic_sides(sides),
             Action::Path(action) => self.path_action(action),
+            Action::Cleanup(command) => self.cleanup_paths(command),
         }
     }
     /// The orbital tool's one Snap to atoms option, in the context row like

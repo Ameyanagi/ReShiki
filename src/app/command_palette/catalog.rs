@@ -788,6 +788,30 @@ fn edits() -> Vec<Command> {
             Message::AddFrame(GraphicKind::Rectangle),
         ),
         selection(
+            "Smooth",
+            "Align gentle joints and remove redundant nodes from paths, curves and curved arrows",
+            "pen bezier cleanup bow",
+            Message::Graphics(super::super::graphics::Action::Cleanup(
+                super::super::graphics::Cleanup::Smooth,
+            )),
+        ),
+        selection(
+            "Symmetrise",
+            "Average a path, curve or curved arrow across its best mirror axis",
+            "symmetric symmetry pen bezier bow",
+            Message::Graphics(super::super::graphics::Action::Cleanup(
+                super::super::graphics::Cleanup::Symmetrise { upright: false },
+            )),
+        ),
+        selection(
+            "Symmetrise upright",
+            "Average a path or curve across its best vertical or horizontal mirror axis",
+            "symmetric symmetry pen bezier bow",
+            Message::Graphics(super::super::graphics::Action::Cleanup(
+                super::super::graphics::Cleanup::Symmetrise { upright: true },
+            )),
+        ),
+        selection(
             "Expand abbreviations",
             "Show the atoms of the selected groups",
             "ungroup label",

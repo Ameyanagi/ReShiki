@@ -474,6 +474,22 @@ impl App {
                 true,
             ));
         }
+        if self.has_cleanup_selection() {
+            entries.push(command(
+                "Smooth",
+                Message::Graphics(super::graphics::Action::Cleanup(
+                    super::graphics::Cleanup::Smooth,
+                )),
+                true,
+            ));
+            entries.push(command(
+                "Symmetrise",
+                Message::Graphics(super::graphics::Action::Cleanup(
+                    super::graphics::Cleanup::Symmetrise { upright: false },
+                )),
+                true,
+            ));
+        }
         entries
     }
 
@@ -991,6 +1007,16 @@ impl App {
                         _ => None,
                     };
                     let accessible_name = keyboard_hint.unwrap_or(label);
+                    let hint = if matches!(&action, Action::Run(message) if matches!(
+                        message.as_ref(),
+                        Message::Graphics(super::graphics::Action::Cleanup(
+                            super::graphics::Cleanup::Symmetrise { .. }
+                        ))
+                    )) {
+                        Some(super::graphics::SYMMETRISE_HINT)
+                    } else {
+                        keyboard_hint
+                    };
                     let label = text(label).size(12).width(Length::Fill);
                     let label = if destructive {
                         label.style(crate::appearance::text_color(Color::from_rgb8(167, 59, 51)))
@@ -1046,7 +1072,7 @@ impl App {
                             enabled.then_some(Message::ContextMenu(Action::Activate(level, index))),
                         );
                     items.push(index);
-                    let item: Element<'_, Message> = if let Some(hint) = keyboard_hint {
+                    let item: Element<'_, Message> = if let Some(hint) = hint {
                         super::workspace::hover_hint(
                             item,
                             hint.to_owned(),
