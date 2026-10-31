@@ -1322,7 +1322,7 @@ fn wrapper_parent_derivative_state(
     )
 }
 fn carbo_bridge_prefix(length: usize, double_locants: &[String]) -> String {
-    let stem = stems::get(length).stem;
+    let stem = stems::stem_for(length);
     if double_locants.is_empty() {
         return format!("{stem}ano");
     }

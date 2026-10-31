@@ -1,4 +1,5 @@
 //! Plain graph model and helpers ported from openclatura's `molecule.py`.
+use super::graph_kernel::{Edge, normalize_edge};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::{
     cell::{Cell, RefCell},
@@ -8,6 +9,7 @@ use std::{
 pub type AtomSet = BTreeSet<usize>;
 
 const NAMING_LIMIT_ERROR: &str = "openclatura: naming complexity limit exceeded";
+const NAMING_WORK_LIMIT: usize = 500_000;
 
 // Upstream divergence: one shared request budget bounds recursive naming and exhaustive path search.
 #[derive(Debug)]
@@ -19,7 +21,7 @@ struct NamingBudget {
 impl Default for NamingBudget {
     fn default() -> Self {
         Self {
-            remaining: Cell::new(500_000),
+            remaining: Cell::new(NAMING_WORK_LIMIT),
             depth: Cell::new(0),
         }
     }
@@ -60,6 +62,10 @@ impl Atom {
         self.symbol == "C"
     }
 
+    pub fn has_stereo(&self) -> bool {
+        self.stereo.is_some() || self.raw_stereo.is_some()
+    }
+
     pub fn element(&self) -> Option<&'static super::rules::elements::Element> {
         super::rules::elements::get(&self.symbol)
     }
@@ -96,7 +102,7 @@ pub struct Molecule {
     pub bonds: BTreeMap<usize, Bond>,
     // Neighbor order is molecular bond insertion order, not numeric atom order.
     adjacency: BTreeMap<usize, Vec<usize>>,
-    bond_lookup: BTreeMap<(usize, usize), usize>,
+    bond_lookup: BTreeMap<Edge, usize>,
     pub accurate_cip: BTreeMap<usize, String>,
     pub legacy_cip: BTreeMap<usize, String>,
     pub substituted_symbols: AtomSet,
@@ -127,10 +133,6 @@ impl Clone for Molecule {
             naming_budget: Rc::clone(&self.naming_budget),
         }
     }
-}
-
-fn pair(u: usize, v: usize) -> (usize, usize) {
-    (u.min(v), u.max(v))
 }
 
 impl Molecule {
@@ -180,7 +182,10 @@ impl Molecule {
         if bond.u == bond.v {
             return Err("Cannot bond an atom to itself.".into());
         }
-        if self.bond_lookup.contains_key(&pair(bond.u, bond.v)) {
+        if self
+            .bond_lookup
+            .contains_key(&normalize_edge(bond.u, bond.v))
+        {
             return Err(format!(
                 "Atoms {} and {} are already bonded.",
                 bond.u, bond.v
@@ -193,7 +198,8 @@ impl Molecule {
         self.fusion_plan_cache.get_mut().clear();
         self.third_component_plan_cache.get_mut().clear();
         self.adjacency.entry(bond.v).or_default().push(bond.u);
-        self.bond_lookup.insert(pair(bond.u, bond.v), bond.idx);
+        self.bond_lookup
+            .insert(normalize_edge(bond.u, bond.v), bond.idx);
         self.bonds.insert(bond.idx, bond);
         Ok(())
     }
@@ -204,8 +210,12 @@ impl Molecule {
 
     pub fn get_bond(&self, u: usize, v: usize) -> Option<&Bond> {
         self.bond_lookup
-            .get(&pair(u, v))
+            .get(&normalize_edge(u, v))
             .and_then(|id| self.bonds.get(id))
+    }
+
+    pub fn bond_order(&self, u: usize, v: usize) -> usize {
+        self.get_bond(u, v).map_or(0, |bond| bond.order)
     }
 
     pub fn degree(&self, atom_idx: usize) -> usize {
@@ -268,7 +278,9 @@ impl Molecule {
         }
         for bond in self.bonds.values() {
             if atom_ids.contains(&bond.u) && atom_ids.contains(&bond.v) {
-                fragment.bond_lookup.insert(pair(bond.u, bond.v), bond.idx);
+                fragment
+                    .bond_lookup
+                    .insert(normalize_edge(bond.u, bond.v), bond.idx);
                 fragment.bonds.insert(bond.idx, bond.clone());
             }
         }

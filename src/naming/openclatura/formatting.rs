@@ -74,7 +74,7 @@ pub fn format_counted_prefixes(names: &[String]) -> String {
         .collect()
 }
 fn terminal_alkyl_stem(name: &str) -> Option<String> {
-    stems::terminal_stem(name).map(|s| s.stem)
+    stems::terminal_stem(name)
 }
 pub fn format_center_ligands_by(names: &[String], sort_key: impl Fn(&str) -> String) -> String {
     let counts = count_names(names);
@@ -84,8 +84,7 @@ pub fn format_center_ligands_by(names: &[String], sort_key: impl Fn(&str) -> Str
     for (i, name) in ordered.iter().enumerate() {
         let count = counts[*name];
         let substituted = terminal_alkyl_stem(name)
-            .map(|s| *name != &format!("{s}yl") && *name != &format!("cyclo{s}yl"))
-            .unwrap_or(false);
+            .is_some_and(|s| *name != &format!("{s}yl") && *name != &format!("cyclo{s}yl"));
         let mut ligand = if count > 1 && substituted && !is_fully_enclosed(name) {
             format!("{}({name})", multipliers::complex_(count))
         } else {

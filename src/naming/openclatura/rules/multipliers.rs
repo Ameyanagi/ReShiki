@@ -46,20 +46,20 @@ pub fn numerical_term(count: usize) -> String {
 }
 pub fn get(count: usize) -> Multiplier {
     assert!((2..=1000).contains(&count));
-    let b = match count {
+    let basic = match count {
         2 => "di".into(),
         3 => "tri".into(),
         _ => numerical_term(count),
     };
-    let c = match count {
+    let complex = match count {
         2 => "bis".into(),
         3 => "tris".into(),
-        _ => format!("{}akis", numerical_term(count).trim_end_matches('a')),
+        _ => format!("{}akis", basic.trim_end_matches('a')),
     };
     Multiplier {
         count,
-        basic: b,
-        complex: c,
+        basic,
+        complex,
     }
 }
 pub fn basic(count: usize) -> String {

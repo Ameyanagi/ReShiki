@@ -34,19 +34,18 @@ pub fn von_baeyer_kind(cycle_count: usize) -> String {
 
 pub fn von_baeyer_cycle_count(descriptor: Option<&str>) -> Option<usize> {
     let prefix = descriptor?.split_once("cyclo[")?.0;
-    if let Some(count) = section("polycycle_prefixes")
+    let rendered_prefix = format!("{prefix}cyclo");
+    section("polycycle_prefixes")
         .as_object()
         .and_then(|prefixes| {
             prefixes.iter().find_map(|(count, rendered)| {
-                (rendered.as_str() == Some(&format!("{prefix}cyclo")))
-                    .then(|| count.parse::<usize>().ok().map(|count| count + 1))
-                    .flatten()
+                if rendered.as_str()? != rendered_prefix {
+                    return None;
+                }
+                Some(count.parse::<usize>().ok()? + 1)
             })
         })
-    {
-        return Some(count);
-    }
-    (2..=1000).find(|&count| multipliers::basic(count) == prefix)
+        .or_else(|| (2..=1000).find(|&count| multipliers::basic(count) == prefix))
 }
 
 pub fn is_von_baeyer_descriptor(descriptor: Option<&str>) -> bool {

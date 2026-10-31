@@ -2,10 +2,10 @@
 use super::assembly_parts::{AssemblyParts, RenderedSubstituentName, SubstituentItem};
 use super::assembly_prefixes::substituent_sort_key;
 use super::chains::{find_all_carbon_paths, find_ring_systems, get_cyclic_atoms};
+use super::component_group_rules::amide_nitrogen;
 use super::formatting::{
     format_center_ligands_by, is_complex_prefix, is_composite_prefix, strip_outer_parentheses,
 };
-use super::group_atom_roles::amide_nitrogen;
 use super::heteroatom_subgraphs::name_heteroatom_subgraph;
 use super::locant_elision::apply_redundant_locant_elision;
 use super::molecule::{Atom, AtomSet, Bond, Molecule, bond_ids_within, charged_atoms};

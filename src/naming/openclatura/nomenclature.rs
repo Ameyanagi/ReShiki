@@ -25,7 +25,10 @@ pub fn table_string(value: &Value) -> &str {
     value.as_str().expect("checked-in table column is a string")
 }
 pub fn string_map(name: &str) -> BTreeMap<String, String> {
-    section(name)
+    values_string_map(section(name))
+}
+fn values_string_map(value: &Value) -> BTreeMap<String, String> {
+    value
         .as_object()
         .into_iter()
         .flatten()
@@ -165,11 +168,9 @@ pub fn rule_from_value(key: &str, row: &Value) -> FunctionalGroupRule {
                 .collect()
         })
         .unwrap_or_else(|| vec![0]);
-    let families = if row.get("families").is_some() {
-        values_strings(&row["families"])
-    } else {
-        derived_families(key)
-    };
+    let families = row
+        .get("families")
+        .map_or_else(|| derived_families(key), values_strings);
     let mut capabilities = values_strings(&row["capabilities"]);
     capabilities.extend(
         families
@@ -196,12 +197,7 @@ pub fn rule_from_value(key: &str, row: &Value) -> FunctionalGroupRule {
         needs_locant: row["needs_locant"].as_bool().unwrap_or(true),
         families,
         capabilities,
-        citation_suffixes: row["citation_suffixes"]
-            .as_object()
-            .into_iter()
-            .flatten()
-            .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_owned())))
-            .collect(),
+        citation_suffixes: values_string_map(&row["citation_suffixes"]),
     }
 }
 // All required fields below belong to the immutable checked-in registry schema.
@@ -310,8 +306,11 @@ pub struct NomenclatureRegistry {
     pub assembly: AssemblyRules,
     pub functional_groups: FunctionalGroupRules,
 }
-fn rows(name: &str) -> Vec<Value> {
-    section(name).as_array().cloned().unwrap_or_default()
+fn rows(name: &str) -> &'static [Value] {
+    section(name)
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or_default()
 }
 fn s(v: &Value, k: &str) -> String {
     v[k].as_str().unwrap_or_default().to_owned()
@@ -373,7 +372,7 @@ pub static RULES: LazyLock<NomenclatureRegistry> = LazyLock::new(|| Nomenclature
     components: ComponentRules {
         mononuclear_parent_hydrides: string_map("mononuclear_parent_hydrides"),
         retained_homonuclear_chain_names: string_map("retained_homonuclear_chain_names"),
-        replacement_parent_oxoacid_specs: rows("replacement_parent_oxoacid_specs"),
+        replacement_parent_oxoacid_specs: rows("replacement_parent_oxoacid_specs").to_vec(),
     },
     ions: IonRules {
         single_atom_cations: string_set("single_atom_cations"),
@@ -400,7 +399,7 @@ pub static RULES: LazyLock<NomenclatureRegistry> = LazyLock::new(|| Nomenclature
             .collect(),
         replacement_charge_prefixes: string_map("replacement_charge_prefixes"),
         heteroatom_charge_prefixes: string_map("heteroatom_charge_prefixes"),
-        anion_suffix_placements: rows("anion_suffix_placements"),
+        anion_suffix_placements: rows("anion_suffix_placements").to_vec(),
     },
     assembly: AssemblyRules {
         replacement_prefix_order: usize_map("replacement_prefix_order"),

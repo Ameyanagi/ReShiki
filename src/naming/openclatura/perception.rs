@@ -6,11 +6,21 @@ use super::nomenclature::{
 };
 use std::collections::{BTreeSet, VecDeque};
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LigandRole {
+    DoubleBonded,
+    Anionic,
+    HydrogenBearing,
+    ChalcogenLink,
+    CarbonLink,
+    HeteroatomLink,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChalcogenLigand {
     pub atom: usize,
     pub element: String,
-    pub role: String,
+    pub role: LigandRole,
     pub center: usize,
     pub bond_id: usize,
     pub attachment_atom: Option<usize>,
@@ -51,7 +61,7 @@ impl FunctionalGroupDescriptor {
             )
             .collect()
     }
-    pub fn ligands_with_role(&self, role: &str) -> Vec<&ChalcogenLigand> {
+    pub fn ligands_with_role(&self, role: LigandRole) -> Vec<&ChalcogenLigand> {
         self.ligands.iter().filter(|l| l.role == role).collect()
     }
 }
@@ -92,14 +102,12 @@ impl PerceivedGroup {
     pub fn prefix(&self) -> Option<&str> {
         self.resolved_rule.as_ref()?.prefix.as_deref()
     }
-}
-fn group(
-    key: impl Into<String>,
-    principal: bool,
-    attachment: usize,
-    atoms: impl IntoIterator<Item = usize>,
-) -> PerceivedGroup {
-    PerceivedGroup::new(key, principal, attachment, atoms)
+    fn atoms_without_attachment(&self) -> impl Iterator<Item = usize> + '_ {
+        self.atoms_involved
+            .iter()
+            .filter(|&&atom| atom != self.attachment_carbon)
+            .copied()
+    }
 }
 fn desc_group(
     key: String,
@@ -108,21 +116,12 @@ fn desc_group(
     atoms: impl IntoIterator<Item = usize>,
     desc: FunctionalGroupDescriptor,
 ) -> PerceivedGroup {
-    let mut g = group(key, true, attachment, atoms);
+    let mut g = PerceivedGroup::new(key, true, attachment, atoms);
     g.descriptor = Some(desc);
     if rule.is_some() {
         g.resolved_rule = rule;
     }
     g
-}
-fn order(m: &Molecule, a: usize, b: usize) -> usize {
-    m.get_bond(a, b).map_or(0, |b| b.order)
-}
-fn symbol(m: &Molecule, a: usize) -> &str {
-    &m.atoms[&a].symbol
-}
-fn carbon(m: &Molecule, a: usize) -> bool {
-    symbol(m, a) == "C"
 }
 fn is_chalcogen(s: &str) -> bool {
     matches!(s, "O" | "S" | "Se" | "Te" | "Po")
@@ -139,7 +138,7 @@ pub fn classify_chalcogen_ligand(m: &Molecule, center: usize, a: usize) -> Optio
     // Upstream divergence: ordinary chalcogen roles require exact charge and hydrogen states.
     let (role, attachment) =
         if b.order == 2 && m.degree(a) == 1 && atom.charge == 0 && atom.total_h_count == 0 {
-            ("double_bonded", None)
+            (LigandRole::DoubleBonded, None)
         } else if b.order != 1 {
             return None;
         } else {
@@ -150,22 +149,22 @@ pub fn classify_chalcogen_ligand(m: &Molecule, center: usize, a: usize) -> Optio
                 .filter(|n| *n != center)
                 .collect::<Vec<_>>();
             if atom.charge == -1 && atom.total_h_count == 0 && side.is_empty() {
-                ("anionic", None)
+                (LigandRole::Anionic, None)
             } else if atom.charge == 0
                 && atom.total_h_count == 1
                 && side.is_empty()
                 && atom.radical_electrons == 0
             {
-                ("hydrogen_bearing", None)
+                (LigandRole::HydrogenBearing, None)
             } else if atom.charge == 0 && atom.total_h_count == 0 && side.len() == 1 {
                 let n = side[0];
                 (
-                    if is_chalcogen(symbol(m, n)) {
-                        "chalcogen_link"
-                    } else if carbon(m, n) {
-                        "carbon_link"
+                    if is_chalcogen(&m.atoms[&n].symbol) {
+                        LigandRole::ChalcogenLink
+                    } else if m.atoms[&n].is_carbon() {
+                        LigandRole::CarbonLink
                     } else {
-                        "heteroatom_link"
+                        LigandRole::HeteroatomLink
                     },
                     Some(n),
                 )
@@ -176,7 +175,7 @@ pub fn classify_chalcogen_ligand(m: &Molecule, center: usize, a: usize) -> Optio
     Some(ChalcogenLigand {
         atom: a,
         element: atom.symbol.clone(),
-        role: role.into(),
+        role,
         center,
         bond_id: b.idx,
         attachment_atom: attachment,
@@ -188,7 +187,7 @@ fn terminal_double(m: &Molecule, c: usize, used: &AtomSet) -> Option<ChalcogenLi
         .iter()
         .filter(|n| !used.contains(n))
         .filter_map(|&n| classify_chalcogen_ligand(m, c, n))
-        .filter(|l| l.role == "double_bonded")
+        .filter(|l| l.role == LigandRole::DoubleBonded)
         .collect::<Vec<_>>();
     (ds.len() == 1).then(|| ds[0].clone())
 }
@@ -253,7 +252,7 @@ fn external_attachment(m: &Molecule, c: usize, cyclic: &AtomSet) -> (usize, bool
         .copied()
         .filter(|n| cyclic.contains(n))
         .collect::<Vec<_>>();
-    if !cyclic.contains(&c) && rings.len() == 1 && order(m, c, rings[0]) == 1 {
+    if !cyclic.contains(&c) && rings.len() == 1 && m.bond_order(c, rings[0]) == 1 {
         (rings[0], true)
     } else {
         (c, false)
@@ -586,7 +585,7 @@ fn hydrazide_ns(m: &Molecule, c: usize, n: usize, cyclic: &AtomSet) -> Option<Ve
     }
     if m.get_neighbors(c)
         .iter()
-        .any(|&x| x != n && symbol(m, x) == "N")
+        .any(|&x| x != n && m.atoms[&x].symbol == "N")
     {
         return None;
     }
@@ -594,7 +593,7 @@ fn hydrazide_ns(m: &Molecule, c: usize, n: usize, cyclic: &AtomSet) -> Option<Ve
         .get_neighbors(n)
         .iter()
         .copied()
-        .filter(|&x| x != c && symbol(m, x) == "N" && order(m, n, x) == 1)
+        .filter(|&x| x != c && m.atoms[&x].symbol == "N" && m.bond_order(n, x) == 1)
         .collect::<Vec<_>>();
     if tail.len() != 1 {
         return None;
@@ -602,16 +601,16 @@ fn hydrazide_ns(m: &Molecule, c: usize, n: usize, cyclic: &AtomSet) -> Option<Ve
     let t = tail[0];
     if cyclic.contains(&t)
         || m.atoms[&t].charge != 0
-        || m.get_neighbors(t)
-            .iter()
-            .any(|&x| x != n && (!matches!(symbol(m, x), "C" | "H") || order(m, t, x) != 1))
+        || m.get_neighbors(t).iter().any(|&x| {
+            x != n && (!matches!(m.atoms[&x].symbol.as_str(), "C" | "H") || m.bond_order(t, x) != 1)
+        })
     {
         return None;
     }
     Some(vec![n, t])
 }
 fn is_nitro_n(m: &Molecule, n: usize, parent: usize) -> bool {
-    if symbol(m, n) != "N" || m.atoms[&n].total_h_count != 0 {
+    if m.atoms[&n].symbol != "N" || m.atoms[&n].total_h_count != 0 {
         return false;
     }
     let other = m
@@ -623,7 +622,7 @@ fn is_nitro_n(m: &Molecule, n: usize, parent: usize) -> bool {
     !other.is_empty()
         && other
             .iter()
-            .all(|&x| symbol(m, x) == "O" && m.degree(x) == 1)
+            .all(|&x| m.atoms[&x].symbol == "O" && m.degree(x) == 1)
 }
 fn urea_ns(m: &Molecule, c: usize, ns: &[usize], cyclic: &AtomSet) -> Option<Vec<usize>> {
     if cyclic.contains(&c) || ns.len() != 2 || m.degree(c) != 3 {
@@ -634,8 +633,9 @@ fn urea_ns(m: &Molecule, c: usize, ns: &[usize], cyclic: &AtomSet) -> Option<Vec
             || m.atoms[&n].charge != 0
             || m.get_neighbors(n).iter().any(|&x| {
                 x != c
-                    && ((matches!(symbol(m, x), "N" | "O" | "S") && !is_nitro_n(m, x, n))
-                        || order(m, n, x) != 1)
+                    && ((matches!(m.atoms[&x].symbol.as_str(), "N" | "O" | "S")
+                        && !is_nitro_n(m, x, n))
+                        || m.bond_order(n, x) != 1)
             })
     }) {
         return None;
@@ -649,12 +649,12 @@ fn plain_amine_n(m: &Molecule, n: usize, c: usize, cyclic: &AtomSet) -> bool {
         && m.atoms[&n].charge == 0
         && m.get_neighbors(n).iter().all(|&x| {
             x == c
-                || (order(m, n, x) == 1
-                    && matches!(symbol(m, x), "C" | "H")
+                || (m.bond_order(n, x) == 1
+                    && matches!(m.atoms[&x].symbol.as_str(), "C" | "H")
                     && !m.get_neighbors(x).iter().any(|&far| {
                         far != n
-                            && order(m, x, far) == 2
-                            && matches!(symbol(m, far), "O" | "S" | "N")
+                            && m.bond_order(x, far) == 2
+                            && matches!(m.atoms[&far].symbol.as_str(), "O" | "S" | "N")
                     }))
         })
 }
@@ -670,14 +670,14 @@ fn amidine(
         || !matches!(m.degree(c), 2 | 3)
         || m.get_neighbors(dn)
             .iter()
-            .any(|&n| n != c && (order(m, dn, n) != 1 || symbol(m, n) == "N"))
+            .any(|&n| n != c && (m.bond_order(dn, n) != 1 || m.atoms[&n].symbol == "N"))
     {
         return None;
     }
     let singles = ns
         .iter()
         .copied()
-        .filter(|&n| n != dn && order(m, c, n) == 1)
+        .filter(|&n| n != dn && m.bond_order(c, n) == 1)
         .collect::<Vec<_>>();
     if singles.is_empty() || !singles.iter().all(|&n| plain_amine_n(m, n, c, cyclic)) {
         return None;
@@ -692,16 +692,16 @@ fn amidine(
         .chain(std::iter::once(dn))
         .chain(singles.iter().copied());
     if singles.len() == 2 && others.is_empty() {
-        return Some(group("guanidine", true, c, atoms));
+        return Some(PerceivedGroup::new("guanidine", true, c, atoms));
     }
     if singles.len() == 1 && others.is_empty() && m.degree(c) == 2 {
-        return Some(group("amidine", true, c, atoms));
+        return Some(PerceivedGroup::new("amidine", true, c, atoms));
     }
-    if singles.len() != 1 || others.len() != 1 || !carbon(m, others[0]) {
+    if singles.len() != 1 || others.len() != 1 || !m.atoms[&others[0]].is_carbon() {
         return None;
     }
-    let ext = cyclic.contains(&others[0]) && order(m, c, others[0]) == 1;
-    Some(group(
+    let ext = cyclic.contains(&others[0]) && m.bond_order(c, others[0]) == 1;
+    Some(PerceivedGroup::new(
         if ext { "ring_amidine" } else { "amidine" },
         true,
         if ext { others[0] } else { c },
@@ -711,18 +711,18 @@ fn amidine(
 fn has_multiple(m: &Molecule, a: usize, allowed: &AtomSet) -> bool {
     m.get_neighbors(a)
         .iter()
-        .any(|&n| !allowed.contains(&n) && symbol(m, n) != "H" && order(m, a, n) > 1)
+        .any(|&n| !allowed.contains(&n) && m.atoms[&n].symbol != "H" && m.bond_order(a, n) > 1)
 }
 fn amidino_tail(m: &Molecule, n: usize, allowed: &AtomSet) -> AtomSet {
     for &c in m.get_neighbors(n) {
-        if allowed.contains(&c) || !carbon(m, c) || order(m, n, c) != 2 {
+        if allowed.contains(&c) || !m.atoms[&c].is_carbon() || m.bond_order(n, c) != 2 {
             continue;
         }
         let ns = m
             .get_neighbors(c)
             .iter()
             .copied()
-            .filter(|&x| x != n && symbol(m, x) == "N" && order(m, c, x) == 1)
+            .filter(|&x| x != n && m.atoms[&x].symbol == "N" && m.bond_order(c, x) == 1)
             .collect::<Vec<_>>();
         if ns.len() == 2 {
             return ns.into_iter().chain([c]).collect();
@@ -733,12 +733,12 @@ fn amidino_tail(m: &Molecule, n: usize, allowed: &AtomSet) -> AtomSet {
 fn terminal_imino(m: &Molecule, n: usize, allowed: &AtomSet) -> bool {
     m.get_neighbors(n).iter().any(|&c| {
         !allowed.contains(&c)
-            && matches!(symbol(m, c), "C" | "N")
-            && order(m, n, c) == 2
-            && (carbon(m, c)
+            && matches!(m.atoms[&c].symbol.as_str(), "C" | "N")
+            && m.bond_order(n, c) == 2
+            && (m.atoms[&c].is_carbon()
                 || m.get_neighbors(c)
                     .iter()
-                    .all(|&x| x == n || symbol(m, x) == "H"))
+                    .all(|&x| x == n || m.atoms[&x].symbol == "H"))
     })
 }
 fn hydrazone_key_attachment(
@@ -753,18 +753,22 @@ fn hydrazone_key_attachment(
         .copied()
         .filter(|n| cyclic.contains(n))
         .collect::<Vec<_>>();
-    let cs = m.get_neighbors(c).iter().filter(|&&n| carbon(m, n)).count();
+    let cs = m
+        .get_neighbors(c)
+        .iter()
+        .filter(|&&n| m.atoms[&n].is_carbon())
+        .count();
     let non_h = m
         .get_neighbors(c)
         .iter()
-        .filter(|&&n| symbol(m, n) != "H")
+        .filter(|&&n| m.atoms[&n].symbol != "H")
         .count();
-    let attach = if !cyclic.contains(&c) && ring.len() == 1 && cs == 1 && order(m, c, ring[0]) == 1
-    {
-        ring[0]
-    } else {
-        c
-    };
+    let attach =
+        if !cyclic.contains(&c) && ring.len() == 1 && cs == 1 && m.bond_order(c, ring[0]) == 1 {
+            ring[0]
+        } else {
+            c
+        };
     let key = if attach != c && non_h == 2 {
         if amidino {
             "ring_aldehyde_amidinohydrazone"
@@ -793,8 +797,8 @@ fn nitrogen_chain_roles(m: &Molecule, cyclic: &AtomSet, consumed: &AtomSet) -> V
         for &n in m.get_neighbors(c) {
             if blocked.contains(&n)
                 || cyclic.contains(&n)
-                || symbol(m, n) != "N"
-                || !matches!(order(m, c, n), 1 | 2)
+                || m.atoms[&n].symbol != "N"
+                || !matches!(m.bond_order(c, n), 1 | 2)
             {
                 continue;
             }
@@ -803,7 +807,10 @@ fn nitrogen_chain_roles(m: &Molecule, cyclic: &AtomSet, consumed: &AtomSet) -> V
                 .iter()
                 .copied()
                 .filter(|&x| {
-                    x != c && !blocked.contains(&x) && !cyclic.contains(&x) && symbol(m, x) == "N"
+                    x != c
+                        && !blocked.contains(&x)
+                        && !cyclic.contains(&x)
+                        && m.atoms[&x].symbol == "N"
                 })
                 .collect::<Vec<_>>();
             if tails.len() != 1 {
@@ -812,12 +819,12 @@ fn nitrogen_chain_roles(m: &Molecule, cyclic: &AtomSet, consumed: &AtomSet) -> V
             let t = tails[0];
             if m.get_neighbors(t)
                 .iter()
-                .any(|&x| x != n && symbol(m, x) != "H")
+                .any(|&x| x != n && m.atoms[&x].symbol != "H")
             {
                 continue;
             }
-            let cn = order(m, c, n);
-            let nn = order(m, n, t);
+            let cn = m.bond_order(c, n);
+            let nn = m.bond_order(n, t);
             let charges = [atom.charge, m.atoms[&n].charge, m.atoms[&t].charge];
             let (key, variant) = if cn == 1 && nn == 2 && charges == [0, 0, 0] {
                 ("diazenyl", "carbon_bound_neutral_diazene")
@@ -833,7 +840,7 @@ fn nitrogen_chain_roles(m: &Molecule, cyclic: &AtomSet, consumed: &AtomSet) -> V
             } else {
                 continue;
             };
-            let mut g = group(key, key == "diazonio", c, [n, t]);
+            let mut g = PerceivedGroup::new(key, key == "diazonio", c, [n, t]);
             g.variant = Some(variant.into());
             g.role = Some("nitrogen_chain".into());
             roles.push(g);
@@ -848,16 +855,18 @@ fn nitrogen_chain_roles(m: &Molecule, cyclic: &AtomSet, consumed: &AtomSet) -> V
             .get_neighbors(n)
             .iter()
             .copied()
-            .filter(|&x| symbol(m, x) != "H" && (symbol(m, x) != "N" || cyclic.contains(&x)))
+            .filter(|&x| {
+                m.atoms[&x].symbol != "H" && (m.atoms[&x].symbol != "N" || cyclic.contains(&x))
+            })
             .collect::<Vec<_>>();
-        if external.len() != 1 || order(m, n, external[0]) != 1 {
+        if external.len() != 1 || m.bond_order(n, external[0]) != 1 {
             continue;
         }
         let mids = m
             .get_neighbors(n)
             .iter()
             .copied()
-            .filter(|&x| symbol(m, x) == "N" && !blocked.contains(&x) && !cyclic.contains(&x))
+            .filter(|&x| m.atoms[&x].symbol == "N" && !blocked.contains(&x) && !cyclic.contains(&x))
             .collect::<Vec<_>>();
         if mids.len() != 1 {
             continue;
@@ -868,7 +877,7 @@ fn nitrogen_chain_roles(m: &Molecule, cyclic: &AtomSet, consumed: &AtomSet) -> V
             .iter()
             .copied()
             .filter(|&x| {
-                x != n && symbol(m, x) == "N" && !blocked.contains(&x) && !cyclic.contains(&x)
+                x != n && m.atoms[&x].symbol == "N" && !blocked.contains(&x) && !cyclic.contains(&x)
             })
             .collect::<Vec<_>>();
         if tails.len() != 1 {
@@ -877,14 +886,14 @@ fn nitrogen_chain_roles(m: &Molecule, cyclic: &AtomSet, consumed: &AtomSet) -> V
         let t = tails[0];
         if m.get_neighbors(t)
             .iter()
-            .any(|&x| x != mid && symbol(m, x) != "H")
+            .any(|&x| x != mid && m.atoms[&x].symbol != "H")
             || m.get_neighbors(mid)
                 .iter()
-                .any(|&x| x != n && x != t && symbol(m, x) != "H")
+                .any(|&x| x != n && x != t && m.atoms[&x].symbol != "H")
         {
             continue;
         }
-        let bonds = (order(m, n, mid), order(m, mid, t));
+        let bonds = (m.bond_order(n, mid), m.bond_order(mid, t));
         let charges = (atom.charge, m.atoms[&mid].charge, m.atoms[&t].charge);
         let key = match (bonds, charges) {
             ((2, 2), (0, 0, 0) | (0, 1, -1) | (-1, 1, 0)) => "azido",
@@ -893,7 +902,7 @@ fn nitrogen_chain_roles(m: &Molecule, cyclic: &AtomSet, consumed: &AtomSet) -> V
             ((1, 1), (0, 0, 0)) => "hydrazinylamino",
             _ => continue,
         };
-        let mut g = group(key, false, external[0], [n, mid, t]);
+        let mut g = PerceivedGroup::new(key, false, external[0], [n, mid, t]);
         g.role = Some("nitrogen_chain".into());
         roles.push(g);
     }
@@ -906,7 +915,7 @@ fn nitrogen_chain_roles(m: &Molecule, cyclic: &AtomSet, consumed: &AtomSet) -> V
             .get_neighbors(n)
             .iter()
             .copied()
-            .find(|&x| carbon(m, x) && order(m, n, x) == 2)
+            .find(|&x| m.atoms[&x].is_carbon() && m.bond_order(n, x) == 2)
         else {
             continue;
         };
@@ -915,10 +924,10 @@ fn nitrogen_chain_roles(m: &Molecule, cyclic: &AtomSet, consumed: &AtomSet) -> V
             .iter()
             .copied()
             .filter(|&x| {
-                x != c && !blocked.contains(&x) && !cyclic.contains(&x) && symbol(m, x) == "N"
+                x != c && !blocked.contains(&x) && !cyclic.contains(&x) && m.atoms[&x].symbol == "N"
             })
             .collect::<Vec<_>>();
-        if tails.len() != 1 || order(m, n, tails[0]) != 1 {
+        if tails.len() != 1 || m.bond_order(n, tails[0]) != 1 {
             continue;
         }
         let t = tails[0];
@@ -934,7 +943,7 @@ fn nitrogen_chain_roles(m: &Molecule, cyclic: &AtomSet, consumed: &AtomSet) -> V
             continue;
         }
         tail.extend([n, t]);
-        let mut g = group(key, true, attach, tail);
+        let mut g = PerceivedGroup::new(key, true, attach, tail);
         g.variant = Some("carbon_nitrogen_double_bond".into());
         g.role = Some("nitrogen_chain".into());
         roles.push(g);
@@ -949,28 +958,28 @@ fn nitrogen_chain_roles(m: &Molecule, cyclic: &AtomSet, consumed: &AtomSet) -> V
             .iter()
             .copied()
             .filter(|&x| {
-                symbol(m, x) == "N"
+                m.atoms[&x].symbol == "N"
                     && !blocked.contains(&x)
                     && !cyclic.contains(&x)
                     && m.atoms[&x].charge == 0
             })
             .collect::<Vec<_>>();
-        if tails.len() != 1 || order(m, n, tails[0]) != 1 {
+        if tails.len() != 1 || m.bond_order(n, tails[0]) != 1 {
             continue;
         }
         let cs = m
             .get_neighbors(n)
             .iter()
             .copied()
-            .filter(|&x| carbon(m, x))
+            .filter(|&x| m.atoms[&x].is_carbon())
             .collect::<Vec<_>>();
         if cs.len() != 1
-            || order(m, n, cs[0]) != 1
+            || m.bond_order(n, cs[0]) != 1
             || has_multiple(m, tails[0], &AtomSet::from([n]))
         {
             continue;
         }
-        let mut g = group("hydrazine", false, cs[0], [n, tails[0]]);
+        let mut g = PerceivedGroup::new("hydrazine", false, cs[0], [n, tails[0]]);
         g.variant = Some("prefix".into());
         g.role = Some("nitrogen_chain".into());
         roles.push(g);
@@ -987,7 +996,6 @@ fn nitrogen_chain_roles(m: &Molecule, cyclic: &AtomSet, consumed: &AtomSet) -> V
     roles
 }
 fn carbonyl_group(
-    _m: &Molecule,
     c: usize,
     attachment: usize,
     ligand: ChalcogenLigand,
@@ -1024,7 +1032,7 @@ fn acyl_group(
         .collect::<Vec<_>>();
     let doubles = ligands
         .iter()
-        .filter(|l| l.role == "double_bonded")
+        .filter(|l| l.role == LigandRole::DoubleBonded)
         .collect::<Vec<_>>();
     if doubles.len() != 1 {
         return None;
@@ -1035,39 +1043,39 @@ fn acyl_group(
         .get_neighbors(c)
         .iter()
         .copied()
-        .filter(|n| !used.contains(n) && symbol(m, *n) == "N" && order(m, c, *n) == 1)
+        .filter(|n| !used.contains(n) && m.atoms[n].symbol == "N" && m.bond_order(c, *n) == 1)
         .collect::<Vec<_>>();
     let hs = m
         .get_neighbors(c)
         .iter()
         .copied()
-        .filter(|n| !used.contains(n) && is_halogen(symbol(m, *n)) && order(m, c, *n) == 1)
+        .filter(|n| !used.contains(n) && is_halogen(&m.atoms[n].symbol) && m.bond_order(c, *n) == 1)
         .collect::<Vec<_>>();
     let multi_acyl = m
         .get_neighbors(c)
         .iter()
         .copied()
-        .filter(|&n| carbon(m, n))
+        .filter(|&n| m.atoms[&n].is_carbon())
         .any(|n| {
             m.get_neighbors(n)
                 .iter()
                 .copied()
-                .filter(|&x| x != c && carbon(m, x))
+                .filter(|&x| x != c && m.atoms[&x].is_carbon())
                 .any(|other| {
                     let ls = m
                         .get_neighbors(other)
                         .iter()
                         .filter_map(|&x| classify_chalcogen_ligand(m, other, x))
                         .collect::<Vec<_>>();
-                    ls.iter().any(|l| l.role == "double_bonded")
+                    ls.iter().any(|l| l.role == LigandRole::DoubleBonded)
                         && ls.iter().any(|l| {
                             matches!(
-                                l.role.as_str(),
-                                "hydrogen_bearing"
-                                    | "anionic"
-                                    | "carbon_link"
-                                    | "heteroatom_link"
-                                    | "chalcogen_link"
+                                l.role,
+                                LigandRole::HydrogenBearing
+                                    | LigandRole::Anionic
+                                    | LigandRole::CarbonLink
+                                    | LigandRole::HeteroatomLink
+                                    | LigandRole::ChalcogenLink
                             )
                         })
                 })
@@ -1084,17 +1092,19 @@ fn acyl_group(
         .iter()
         .filter(|l| {
             matches!(
-                l.role.as_str(),
-                "hydrogen_bearing"
-                    | "anionic"
-                    | "carbon_link"
-                    | "heteroatom_link"
-                    | "chalcogen_link"
+                l.role,
+                LigandRole::HydrogenBearing
+                    | LigandRole::Anionic
+                    | LigandRole::CarbonLink
+                    | LigandRole::HeteroatomLink
+                    | LigandRole::ChalcogenLink
             ) && m
                 .get_neighbors(l.atom)
                 .iter()
                 .all(|n| *n == c || Some(*n) == l.attachment_atom)
-                && (l.role != "heteroatom_link" || multi_acyl || (!ns.is_empty() && registered(l)))
+                && (l.role != LigandRole::HeteroatomLink
+                    || multi_acyl
+                    || (!ns.is_empty() && registered(l)))
         })
         .collect::<Vec<_>>();
     // A competing nitrogen derivative retains the registered carbamate route,
@@ -1102,13 +1112,13 @@ fn acyl_group(
     if singles.len() == 1
         && !ns.is_empty()
         && hs.is_empty()
-        && singles[0].role == "chalcogen_link"
+        && singles[0].role == LigandRole::ChalcogenLink
         && registered(singles[0])
         && let Some(end) = singles[0].attachment_atom
         && let Some(terminal) = classify_chalcogen_ligand(m, singles[0].atom, end)
         && matches!(
-            terminal.role.as_str(),
-            "hydrogen_bearing" | "anionic" | "carbon_link"
+            terminal.role,
+            LigandRole::HydrogenBearing | LigandRole::Anionic | LigandRole::CarbonLink
         )
     {
         let single = singles[0].clone();
@@ -1123,34 +1133,37 @@ fn acyl_group(
         );
         desc.linker_paths = vec![vec![c, desc.ligands[1].atom, end]];
         let (key, _) = resolve_acyl(&desc);
-        let mut acyl = group("acyl", false, attachment, desc.atom_ids());
+        let mut acyl = PerceivedGroup::new("acyl", false, attachment, desc.atom_ids());
         acyl.descriptor = Some(desc);
-        return Some(vec![acyl, group(key, true, attachment, registered_atoms)]);
+        return Some(vec![
+            acyl,
+            PerceivedGroup::new(key, true, attachment, registered_atoms),
+        ]);
     }
     if singles.len() == 1
         && hs.is_empty()
         && (ns.is_empty()
             || matches!(
-                singles[0].role.as_str(),
-                "hydrogen_bearing" | "anionic" | "heteroatom_link"
+                singles[0].role,
+                LigandRole::HydrogenBearing | LigandRole::Anionic | LigandRole::HeteroatomLink
             )
-            || (singles[0].role == "carbon_link" && registered(singles[0])))
+            || (singles[0].role == LigandRole::CarbonLink && registered(singles[0])))
     {
         let single = singles[0].clone();
-        if single.role == "chalcogen_link" {
+        if single.role == LigandRole::ChalcogenLink {
             let end = single.attachment_atom?;
             if cyclic.contains(&c)
                 && cyclic.contains(&single.atom)
                 && cyclic.contains(&end)
                 && closes_ring(m, c, single.atom, double.atom, cyclic)
             {
-                return carbonyl_group(m, c, attachment, double, "ketone").map(|g| vec![g]);
+                return carbonyl_group(c, attachment, double, "ketone").map(|g| vec![g]);
             }
             let terminal = classify_chalcogen_ligand(m, single.atom, end)?;
-            let derivative = match terminal.role.as_str() {
-                "hydrogen_bearing" => "acid",
-                "anionic" => "anion",
-                "carbon_link" => "ester",
+            let derivative = match terminal.role {
+                LigandRole::HydrogenBearing => "acid",
+                LigandRole::Anionic => "anion",
+                LigandRole::CarbonLink => "ester",
                 _ => return None,
             };
             let atoms = [c, double.atom, single.atom, terminal.atom];
@@ -1166,17 +1179,19 @@ fn acyl_group(
             let (key, rule) = resolve_peroxy(&desc);
             return Some(vec![desc_group(key, rule, attachment, atoms, desc)]);
         }
-        if matches!(single.role.as_str(), "carbon_link" | "heteroatom_link")
-            && cyclic.contains(&c)
+        if matches!(
+            single.role,
+            LigandRole::CarbonLink | LigandRole::HeteroatomLink
+        ) && cyclic.contains(&c)
             && cyclic.contains(&single.atom)
             && single.attachment_atom.is_some_and(|a| cyclic.contains(&a))
             && closes_ring(m, c, single.atom, double.atom, cyclic)
         {
-            return carbonyl_group(m, c, attachment, double, "ketone").map(|g| vec![g]);
+            return carbonyl_group(c, attachment, double, "ketone").map(|g| vec![g]);
         }
-        let derivative = match single.role.as_str() {
-            "hydrogen_bearing" => "acid",
-            "anionic" => "anion",
+        let derivative = match single.role {
+            LigandRole::HydrogenBearing => "acid",
+            LigandRole::Anionic => "anion",
             _ => "ester",
         };
         let atoms = [c, double.atom, single.atom];
@@ -1205,7 +1220,12 @@ fn acyl_group(
             attachment,
             external,
         );
-        desc.leaving_group = Some(leaving_descriptor(m, symbol(m, h), c, vec![h]));
+        desc.leaving_group = Some(leaving_descriptor(
+            m,
+            m.atoms[&h].symbol.as_str(),
+            c,
+            vec![h],
+        ));
         let (key, rule) = resolve_acyl(&desc);
         return Some(vec![desc_group(key, rule, attachment, atoms, desc)]);
     }
@@ -1217,12 +1237,12 @@ fn acyl_group(
             !cyclic.contains(&n),
             m.get_neighbors(n)
                 .iter()
-                .any(|&x| x != c && symbol(m, x) != "H"),
+                .any(|&x| x != c && m.atoms[&x].symbol != "H"),
         ))
     });
     let n = ns[0];
     if cyclic.contains(&c) && cyclic.contains(&n) && closes_ring(m, c, n, double.atom, cyclic) {
-        return carbonyl_group(m, c, attachment, double, "ketone").map(|g| vec![g]);
+        return carbonyl_group(c, attachment, double, "ketone").map(|g| vec![g]);
     }
     let (mut attachment, mut external) = (attachment, external);
     let (derivative, group_ns) = if let Some(v) = hydrazide_ns(m, c, n, cyclic) {
@@ -1279,7 +1299,7 @@ fn pseudohalide_group(
     let double = terminal_double(m, c, used)?;
     let mut leaving = None;
     for &first in m.get_neighbors(c) {
-        if first == double.atom || used.contains(&first) || order(m, c, first) != 1 {
+        if first == double.atom || used.contains(&first) || m.bond_order(c, first) != 1 {
             continue;
         }
         let side = m
@@ -1292,16 +1312,19 @@ fn pseudohalide_group(
             continue;
         }
         let second = side[0];
-        let bond = order(m, first, second);
-        if symbol(m, first) == "C" && symbol(m, second) == "N" && bond == 3 && m.degree(second) == 1
+        let bond = m.bond_order(first, second);
+        if m.atoms[&first].symbol == "C"
+            && m.atoms[&second].symbol == "N"
+            && bond == 3
+            && m.degree(second) == 1
         {
             leaving = Some(leaving_descriptor(m, "CN", c, vec![first, second]));
             break;
         }
-        if symbol(m, first) != "N" {
+        if m.atoms[&first].symbol != "N" {
             continue;
         }
-        if symbol(m, second) == "C" && bond == 3 && m.degree(second) == 1 {
+        if m.atoms[&second].symbol == "C" && bond == 3 && m.degree(second) == 1 {
             leaving = Some(leaving_descriptor(m, "NC", c, vec![first, second]));
             break;
         }
@@ -1315,18 +1338,18 @@ fn pseudohalide_group(
             continue;
         }
         let third = tails[0];
-        let kind = if symbol(m, second) == "N"
-            && symbol(m, third) == "N"
+        let kind = if m.atoms[&second].symbol == "N"
+            && m.atoms[&third].symbol == "N"
             && m.atoms[&second].charge > 0
             && m.atoms[&third].charge < 0
         {
             "N3".to_owned()
-        } else if symbol(m, second) == "C"
+        } else if m.atoms[&second].symbol == "C"
             && bond == 2
-            && order(m, second, third) == 2
-            && matches!(symbol(m, third), "O" | "S" | "Se" | "Te")
+            && m.bond_order(second, third) == 2
+            && matches!(m.atoms[&third].symbol.as_str(), "O" | "S" | "Se" | "Te")
         {
-            format!("NC{}", symbol(m, third))
+            format!("NC{}", m.atoms[&third].symbol.as_str())
         } else {
             continue;
         };
@@ -1336,7 +1359,7 @@ fn pseudohalide_group(
     let leaving = leaving?;
     if m.get_neighbors(c)
         .iter()
-        .any(|&n| n != double.atom && n != leaving.attachment_atom && !carbon(m, n))
+        .any(|&n| n != double.atom && n != leaving.attachment_atom && !m.atoms[&n].is_carbon())
     {
         return None;
     }
@@ -1368,20 +1391,24 @@ fn cyclic_imide(
     used: &AtomSet,
     cyclic: &AtomSet,
 ) -> Option<PerceivedGroup> {
-    if symbol(m, n) != "N" || m.atoms[&n].charge != 0 || used.contains(&n) || !cyclic.contains(&n) {
+    if m.atoms[&n].symbol != "N"
+        || m.atoms[&n].charge != 0
+        || used.contains(&n)
+        || !cyclic.contains(&n)
+    {
         return None;
     }
     let mut cs = m
         .get_neighbors(n)
         .iter()
         .copied()
-        .filter(|&c| cyclic.contains(&c) && carbon(m, c) && order(m, n, c) == 1)
+        .filter(|&c| cyclic.contains(&c) && m.atoms[&c].is_carbon() && m.bond_order(n, c) == 1)
         .collect::<Vec<_>>();
     cs.sort();
     if cs.len() != 2
         || m.get_neighbors(n)
             .iter()
-            .any(|&x| !cs.contains(&x) && order(m, n, x) != 1)
+            .any(|&x| !cs.contains(&x) && m.bond_order(n, x) != 1)
     {
         return None;
     }
@@ -1416,8 +1443,8 @@ fn is_complete_acyl_end(m: &Molecule, center: usize, double: usize, linkage: usi
         || atom.charge != 0
         || atom.radical_electrons != 0
         || atom.is_aromatic
-        || order(m, center, double) != 2
-        || order(m, center, linkage) != 1
+        || m.bond_order(center, double) != 2
+        || m.bond_order(center, linkage) != 1
     {
         return false;
     }
@@ -1430,11 +1457,11 @@ fn is_complete_acyl_end(m: &Molecule, center: usize, double: usize, linkage: usi
     if remaining.is_empty() {
         return atom.total_h_count == 1;
     }
-    if remaining.len() != 1 || atom.total_h_count != 0 || order(m, center, remaining[0]) != 1 {
+    if remaining.len() != 1 || atom.total_h_count != 0 || m.bond_order(center, remaining[0]) != 1 {
         return false;
     }
     let substituent = remaining[0];
-    if carbon(m, substituent) {
+    if m.atoms[&substituent].is_carbon() {
         return true;
     }
     let mut component = AtomSet::from([substituent]);
@@ -1474,13 +1501,13 @@ fn anhydride_groups(m: &Molecule, used: &AtomSet) -> Vec<PerceivedGroup> {
             let Some(second) = l.attachment_atom else {
                 continue;
             };
-            let (other, bridge) = if l.role == "carbon_link" {
+            let (other, bridge) = if l.role == LigandRole::CarbonLink {
                 (second, vec![first])
-            } else if l.role == "chalcogen_link" {
+            } else if l.role == LigandRole::ChalcogenLink {
                 let Some(l2) = classify_chalcogen_ligand(m, first, second) else {
                     continue;
                 };
-                if l2.role != "carbon_link" {
+                if l2.role != LigandRole::CarbonLink {
                     continue;
                 }
                 let Some(other) = l2.attachment_atom else {
@@ -1490,7 +1517,7 @@ fn anhydride_groups(m: &Molecule, used: &AtomSet) -> Vec<PerceivedGroup> {
             } else {
                 continue;
             };
-            if c == other || !carbon(m, other) {
+            if c == other || !m.atoms[&other].is_carbon() {
                 continue;
             }
             let Some(right) = terminal_double(m, other, used) else {
@@ -1539,17 +1566,17 @@ fn anhydride_groups(m: &Molecule, used: &AtomSet) -> Vec<PerceivedGroup> {
             d.linker_paths = vec![path];
             let standard = ds.iter().all(|l| l.element == "O")
                 && bridge.len() == 1
-                && symbol(m, bridge[0]) == "O";
+                && m.atoms[&bridge[0]].symbol == "O";
             let (key, rule) = if standard {
                 ("anhydride".into(), None)
             } else {
                 let mut sites = vec![ds[0].element.clone()];
-                sites.extend(bridge.iter().map(|&n| symbol(m, n).to_owned()));
+                sites.extend(bridge.iter().map(|&n| m.atoms[&n].symbol.clone()));
                 sites.push(ds[1].element.clone());
                 let key = format!("anhydride_{}", sites.join("_"));
                 let es = bridge
                     .iter()
-                    .map(|&n| symbol(m, n).to_owned())
+                    .map(|&n| m.atoms[&n].symbol.clone())
                     .collect::<Vec<_>>();
                 let suffix = if es.len() == 1 {
                     if es[0] == "O" {
@@ -1596,14 +1623,13 @@ fn central_group(
         || used.contains(&c)
         || cyclic.contains(&c)
         || a.charge != 0
-        || a.stereo.is_some()
-        || a.raw_stereo.is_some()
+        || a.has_stereo()
     {
         return None;
     }
     if m.get_neighbors(c)
         .iter()
-        .any(|&n| !is_chalcogen(symbol(m, n)) && order(m, c, n) > 1)
+        .any(|&n| !is_chalcogen(&m.atoms[&n].symbol) && m.bond_order(c, n) > 1)
     {
         return None;
     }
@@ -1611,7 +1637,7 @@ fn central_group(
         .get_neighbors(c)
         .iter()
         .copied()
-        .filter(|&n| carbon(m, n) && order(m, c, n) == 1)
+        .filter(|&n| m.atoms[&n].is_carbon() && m.bond_order(c, n) == 1)
         .collect::<Vec<_>>();
     if anchors.len() != 1 {
         return None;
@@ -1626,7 +1652,7 @@ fn central_group(
         .collect::<Vec<_>>();
     let doubles = ligands
         .iter()
-        .filter(|l| l.role == "double_bonded")
+        .filter(|l| l.role == LigandRole::DoubleBonded)
         .cloned()
         .collect::<Vec<_>>();
     if !matches!(doubles.len(), 1 | 2) {
@@ -1636,8 +1662,11 @@ fn central_group(
         .iter()
         .filter(|l| {
             matches!(
-                l.role.as_str(),
-                "hydrogen_bearing" | "anionic" | "carbon_link" | "chalcogen_link"
+                l.role,
+                LigandRole::HydrogenBearing
+                    | LigandRole::Anionic
+                    | LigandRole::CarbonLink
+                    | LigandRole::ChalcogenLink
             )
         })
         .cloned()
@@ -1648,16 +1677,16 @@ fn central_group(
         .copied()
         .filter(|n| {
             !used.contains(n)
-                && symbol(m, *n) == "N"
+                && m.atoms[n].symbol == "N"
                 && m.atoms[n].charge == 0
-                && order(m, c, *n) == 1
+                && m.bond_order(c, *n) == 1
         })
         .collect::<Vec<_>>();
     let hs = m
         .get_neighbors(c)
         .iter()
         .copied()
-        .filter(|n| !used.contains(n) && is_halogen(symbol(m, *n)) && order(m, c, *n) == 1)
+        .filter(|n| !used.contains(n) && is_halogen(&m.atoms[n].symbol) && m.bond_order(c, *n) == 1)
         .collect::<Vec<_>>();
     let mut group_atoms: AtomSet = doubles.iter().map(|l| l.atom).chain([c]).collect();
     let mut dligands = doubles.clone();
@@ -1666,21 +1695,21 @@ fn central_group(
         let t = terminals[0].clone();
         group_atoms.insert(t.atom);
         dligands.push(t.clone());
-        if t.role == "chalcogen_link" {
+        if t.role == LigandRole::ChalcogenLink {
             let end = classify_chalcogen_ligand(m, t.atom, t.attachment_atom?)?;
-            let der = match end.role.as_str() {
-                "hydrogen_bearing" => "acid",
-                "anionic" => "anion",
-                "carbon_link" => "ester",
+            let der = match end.role {
+                LigandRole::HydrogenBearing => "acid",
+                LigandRole::Anionic => "anion",
+                LigandRole::CarbonLink => "ester",
                 _ => return None,
             };
             group_atoms.insert(end.atom);
             dligands.push(end);
             der
         } else {
-            match t.role.as_str() {
-                "hydrogen_bearing" => "acid",
-                "anionic" => "anion",
+            match t.role {
+                LigandRole::HydrogenBearing => "acid",
+                LigandRole::Anionic => "anion",
                 _ => "ester",
             }
         }
@@ -1693,9 +1722,9 @@ fn central_group(
             let t = pair[1];
             if m.get_neighbors(t).iter().any(|&x| {
                 x != n
-                    && carbon(m, x)
+                    && m.atoms[&x].is_carbon()
                     && m.get_neighbors(x).iter().any(|&far| {
-                        far != t && is_chalcogen(symbol(m, far)) && order(m, x, far) > 1
+                        far != t && is_chalcogen(&m.atoms[&far].symbol) && m.bond_order(x, far) > 1
                     })
             }) {
                 return None;
@@ -1703,10 +1732,11 @@ fn central_group(
             group_atoms.extend(pair);
             "hydrazide"
         } else {
-            if m.get_neighbors(n)
-                .iter()
-                .any(|&x| x != c && (!matches!(symbol(m, x), "C" | "H") || order(m, n, x) != 1))
-            {
+            if m.get_neighbors(n).iter().any(|&x| {
+                x != c
+                    && (!matches!(m.atoms[&x].symbol.as_str(), "C" | "H")
+                        || m.bond_order(n, x) != 1)
+            }) {
                 return None;
             }
             group_atoms.insert(n);
@@ -1715,7 +1745,12 @@ fn central_group(
     } else if hs.len() == 1 {
         let h = hs[0];
         group_atoms.insert(h);
-        leaving = Some(leaving_descriptor(m, symbol(m, h), c, vec![h]));
+        leaving = Some(leaving_descriptor(
+            m,
+            m.atoms[&h].symbol.as_str(),
+            c,
+            vec![h],
+        ));
         "acid_halide"
     } else {
         return None;
@@ -1737,12 +1772,12 @@ fn resolve_central(d: &FunctionalGroupDescriptor) -> Option<(String, Option<Func
     let doubles = d
         .ligands
         .iter()
-        .filter(|l| l.role == "double_bonded")
+        .filter(|l| l.role == LigandRole::DoubleBonded)
         .collect::<Vec<_>>();
     let terminal = d
         .ligands
         .iter()
-        .filter(|l| l.role != "double_bonded")
+        .filter(|l| l.role != LigandRole::DoubleBonded)
         .collect::<Vec<_>>();
     let origin = section("chalcogen_central_acid_origins")
         .as_array()?
@@ -1921,8 +1956,8 @@ fn composable_groups(m: &Molecule) -> Vec<PerceivedGroup> {
     let mut result = Vec::new();
     for b in m.bonds.values() {
         if b.order != 1
-            || !is_chalcogen(symbol(m, b.u))
-            || !is_chalcogen(symbol(m, b.v))
+            || !is_chalcogen(&m.atoms[&b.u].symbol)
+            || !is_chalcogen(&m.atoms[&b.v].symbol)
             || [b.u, b.v]
                 .iter()
                 .any(|n| m.atoms[n].charge != 0 || m.atoms[n].radical_electrons != 0)
@@ -1943,8 +1978,8 @@ fn composable_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             .collect::<Vec<_>>();
         if left.len() != 1
             || right.len() != 1
-            || !carbon(m, left[0])
-            || !carbon(m, right[0])
+            || !m.atoms[&left[0]].is_carbon()
+            || !m.atoms[&right[0]].is_carbon()
             || connected_without(m, left[0], right[0], &AtomSet::from([b.u, b.v]))
         {
             continue;
@@ -1952,7 +1987,8 @@ fn composable_groups(m: &Molecule) -> Vec<PerceivedGroup> {
         if [(left[0], b.u), (right[0], b.v)].iter().any(|&(c, link)| {
             m.get_neighbors(c).iter().any(|&n| {
                 n != link
-                    && classify_chalcogen_ligand(m, c, n).is_some_and(|l| l.role == "double_bonded")
+                    && classify_chalcogen_ligand(m, c, n)
+                        .is_some_and(|l| l.role == LigandRole::DoubleBonded)
             })
         }) {
             continue;
@@ -1966,7 +2002,7 @@ fn composable_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             false,
         );
         d.linker_paths = vec![vec![left[0], b.u, b.v, right[0]]];
-        let mut g = group("peroxide", false, left[0], [b.u, b.v]);
+        let mut g = PerceivedGroup::new("peroxide", false, left[0], [b.u, b.v]);
         g.descriptor = Some(d);
         result.push(g);
     }
@@ -1975,10 +2011,10 @@ fn composable_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             continue;
         }
         for &e in m.get_neighbors(n) {
-            if !is_chalcogen(symbol(m, e))
+            if !is_chalcogen(&m.atoms[&e].symbol)
                 || m.atoms[&e].charge != -1
                 || m.degree(e) != 1
-                || order(m, n, e) != 1
+                || m.bond_order(n, e) != 1
             {
                 continue;
             }
@@ -1991,18 +2027,18 @@ fn composable_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             let cs = others
                 .iter()
                 .copied()
-                .filter(|&x| carbon(m, x))
+                .filter(|&x| m.atoms[&x].is_carbon())
                 .collect::<Vec<_>>();
             if cs.is_empty()
-                || others.iter().any(|&x| !carbon(m, x))
-                || cs.iter().any(|&c| order(m, n, c) == 3)
+                || others.iter().any(|&x| !m.atoms[&x].is_carbon())
+                || cs.iter().any(|&c| m.bond_order(n, c) == 3)
             {
                 continue;
             }
             let Some(ligand) = classify_chalcogen_ligand(m, n, e) else {
                 continue;
             };
-            let mut g = group("nitrogen_chalcogenide", false, cs[0], [n, e]);
+            let mut g = PerceivedGroup::new("nitrogen_chalcogenide", false, cs[0], [n, e]);
             g.descriptor = Some(descriptor(
                 "nitrogen_chalcogenide",
                 "zwitterion",
@@ -2030,7 +2066,7 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             .get_neighbors(n)
             .iter()
             .copied()
-            .filter(|&x| symbol(m, x) == "O")
+            .filter(|&x| m.atoms[&x].symbol == "O")
             .collect::<Vec<_>>();
         let adj = m
             .get_neighbors(n)
@@ -2039,19 +2075,19 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             .filter(|x| !os.contains(x))
             .collect::<Vec<_>>();
         let hydroxyl = os.iter().any(|&o| {
-            m.atoms[&o].charge == 0 && order(m, n, o) == 1 && m.atoms[&o].total_h_count > 0
+            m.atoms[&o].charge == 0 && m.bond_order(n, o) == 1 && m.atoms[&o].total_h_count > 0
         });
         if os.len() == 2
             && adj.len() == 1
             && a.total_h_count == 0
             && !hydroxyl
-            && (a.charge == 1 || os.iter().any(|&o| order(m, n, o) == 2))
+            && (a.charge == 1 || os.iter().any(|&o| m.bond_order(n, o) == 2))
         {
             let atoms = os.iter().copied().chain([n]).collect::<Vec<_>>();
-            groups.push(group("nitro", false, adj[0], atoms.clone()));
+            groups.push(PerceivedGroup::new("nitro", false, adj[0], atoms.clone()));
             consumed.extend(atoms);
-        } else if os.len() == 1 && adj.len() == 1 && order(m, n, os[0]) == 2 {
-            groups.push(group("nitroso", false, adj[0], [n, os[0]]));
+        } else if os.len() == 1 && adj.len() == 1 && m.bond_order(n, os[0]) == 2 {
+            groups.push(PerceivedGroup::new("nitroso", false, adj[0], [n, os[0]]));
             consumed.extend([n, os[0]]);
         }
     }
@@ -2071,7 +2107,7 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             continue;
         };
         for &n in m.get_neighbors(c) {
-            if symbol(m, n) != "N" || consumed.contains(&n) || order(m, c, n) != 1 {
+            if m.atoms[&n].symbol != "N" || consumed.contains(&n) || m.bond_order(c, n) != 1 {
                 continue;
             }
             let Some(ns) = hydrazide_ns(m, c, n, &cyclic) else {
@@ -2102,12 +2138,7 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
     consumed.extend(claimed);
     for &c in m.atoms.keys() {
         if let Some(g) = central_group(m, c, &consumed, &cyclic) {
-            consumed.extend(
-                g.atoms_involved
-                    .iter()
-                    .filter(|&&n| n != g.attachment_carbon)
-                    .copied(),
-            );
+            consumed.extend(g.atoms_without_attachment());
             groups.push(g);
         }
     }
@@ -2116,12 +2147,7 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             && !consumed.contains(&c)
             && let Some(g) = pseudohalide_group(m, c, &consumed, &cyclic)
         {
-            consumed.extend(
-                g.atoms_involved
-                    .iter()
-                    .filter(|&&n| n != g.attachment_carbon)
-                    .copied(),
-            );
+            consumed.extend(g.atoms_without_attachment());
             groups.push(g);
         }
     }
@@ -2140,31 +2166,32 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             .get_neighbors(n)
             .iter()
             .copied()
-            .filter(|&x| order(m, n, x) == 2)
+            .filter(|&x| m.bond_order(n, x) == 2)
             .collect::<Vec<_>>();
-        if doubles.len() != 1 || carbon(m, doubles[0]) {
+        if doubles.len() != 1 || m.atoms[&doubles[0]].is_carbon() {
             continue;
         }
         let center = doubles[0];
         if m.get_neighbors(n)
             .iter()
-            .any(|&x| x != center && order(m, n, x) != 1)
+            .any(|&x| x != center && m.bond_order(n, x) != 1)
         {
             continue;
         }
         let senior = m.get_neighbors(n).iter().any(|&x| {
             x != center
-                && symbol(m, x) != "H"
-                && (symbol(m, x) == "N"
-                    || (carbon(m, x)
+                && m.atoms[&x].symbol != "H"
+                && (m.atoms[&x].symbol == "N"
+                    || (m.atoms[&x].is_carbon()
                         && m.get_neighbors(x).iter().any(|&far| {
-                            matches!(symbol(m, far), "O" | "S" | "N") && order(m, x, far) == 2
+                            matches!(m.atoms[&far].symbol.as_str(), "O" | "S" | "N")
+                                && m.bond_order(x, far) == 2
                         })))
         });
         if m.degree(n) != 1 && (!cyclic.contains(&center) || senior) {
             continue;
         }
-        let mut g = group("imino_prefix", false, center, [n]);
+        let mut g = PerceivedGroup::new("imino_prefix", false, center, [n]);
         g.variant = Some(
             if m.degree(n) == 1 {
                 "terminal_heteroatom_imino"
@@ -2185,7 +2212,7 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             .get_neighbors(n)
             .iter()
             .copied()
-            .filter(|&x| symbol(m, x) == "N")
+            .filter(|&x| m.atoms[&x].symbol == "N")
             .collect::<Vec<_>>();
         let adj = m
             .get_neighbors(n)
@@ -2193,7 +2220,7 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             .copied()
             .filter(|x| !ns.contains(x))
             .collect::<Vec<_>>();
-        if adj.len() != 1 || ns.len() != 1 || order(m, n, adj[0]) != 1 {
+        if adj.len() != 1 || ns.len() != 1 || m.bond_order(n, adj[0]) != 1 {
             continue;
         }
         let mid = ns[0];
@@ -2201,21 +2228,21 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             .get_neighbors(mid)
             .iter()
             .copied()
-            .filter(|&x| x != n && symbol(m, x) == "N")
+            .filter(|&x| x != n && m.atoms[&x].symbol == "N")
             .collect::<Vec<_>>();
         if tails.len() == 1 && m.degree(tails[0]) == 1 {
-            groups.push(group("azido", false, adj[0], [n, mid, tails[0]]));
+            groups.push(PerceivedGroup::new(
+                "azido",
+                false,
+                adj[0],
+                [n, mid, tails[0]],
+            ));
             consumed.extend([n, mid, tails[0]]);
         }
     }
     for g in anhydride_groups(m, &consumed) {
         if g.is_principal_candidate {
-            consumed.extend(
-                g.atoms_involved
-                    .iter()
-                    .filter(|&&n| n != g.attachment_carbon)
-                    .copied(),
-            );
+            consumed.extend(g.atoms_without_attachment());
         }
         groups.push(g);
     }
@@ -2227,7 +2254,7 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             .get_neighbors(s)
             .iter()
             .copied()
-            .filter(|&x| symbol(m, x) == "O")
+            .filter(|&x| m.atoms[&x].symbol == "O")
             .collect::<Vec<_>>();
         let adj = m
             .get_neighbors(s)
@@ -2238,34 +2265,38 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
         if !cyclic.contains(&s)
             && os.len() == 2
             && adj.len() == 2
-            && os.iter().all(|&o| order(m, s, o) == 2 && m.degree(o) == 1)
+            && os
+                .iter()
+                .all(|&o| m.bond_order(s, o) == 2 && m.degree(o) == 1)
         {
             let cs = adj
                 .iter()
                 .copied()
-                .filter(|&c| carbon(m, c))
+                .filter(|&c| m.atoms[&c].is_carbon())
                 .collect::<Vec<_>>();
             let hs = adj
                 .iter()
                 .copied()
-                .filter(|&x| !carbon(m, x))
+                .filter(|&x| !m.atoms[&x].is_carbon())
                 .collect::<Vec<_>>();
             if cs.len() == 1 && hs.len() == 1 {
                 let h = hs[0];
                 let key = if m.atoms[&s].charge == 0 && m.atoms[&h].charge == 0 {
-                    if symbol(m, h) == "N"
+                    if m.atoms[&h].symbol == "N"
                         && !cyclic.contains(&h)
                         && m.get_neighbors(h).iter().all(|&x| {
                             x == s
-                                || (!matches!(symbol(m, x), "N" | "O" | "S") && order(m, h, x) == 1)
+                                || (!matches!(m.atoms[&x].symbol.as_str(), "N" | "O" | "S")
+                                    && m.bond_order(h, x) == 1)
                         })
                     {
                         Some("sulfonamide".to_owned())
-                    } else if is_halogen(symbol(m, h)) && m.degree(h) == 1 {
+                    } else if is_halogen(&m.atoms[&h].symbol) && m.degree(h) == 1 {
                         Some(format!(
                             "sulfonyl_{}",
                             table_string(
-                                &section("chalcogen_acyl_leaving_groups")[symbol(m, h)]["word"]
+                                &section("chalcogen_acyl_leaving_groups")
+                                    [m.atoms[&h].symbol.as_str()]["word"]
                             )
                         ))
                     } else {
@@ -2276,7 +2307,7 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
                 };
                 if let Some(key) = key {
                     let atoms = os.iter().copied().chain([s, h]).collect::<Vec<_>>();
-                    groups.push(group(key, true, cs[0], atoms.clone()));
+                    groups.push(PerceivedGroup::new(key, true, cs[0], atoms.clone()));
                     consumed.extend(atoms);
                     continue;
                 }
@@ -2284,13 +2315,13 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
         }
         if os.len() >= 3
             && adj.len() == 1
-            && carbon(m, adj[0])
-            && os.iter().filter(|&&o| order(m, s, o) == 2).count() >= 2
+            && m.atoms[&adj[0]].is_carbon()
+            && os.iter().filter(|&&o| m.bond_order(s, o) == 2).count() >= 2
         {
             let singles = os
                 .iter()
                 .copied()
-                .filter(|&o| order(m, s, o) == 1)
+                .filter(|&o| m.bond_order(s, o) == 1)
                 .collect::<Vec<_>>();
             if cyclic.contains(&s) && singles.iter().any(|o| cyclic.contains(o)) {
                 continue;
@@ -2306,7 +2337,7 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             };
             if let Some(key) = key {
                 let atoms = os.iter().copied().chain([s]).collect::<Vec<_>>();
-                groups.push(group(key, true, adj[0], atoms.clone()));
+                groups.push(PerceivedGroup::new(key, true, adj[0], atoms.clone()));
                 consumed.extend(atoms);
             }
         }
@@ -2320,29 +2351,29 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             .get_neighbors(c)
             .iter()
             .copied()
-            .filter(|n| symbol(m, *n) == "N" && !consumed.contains(n))
+            .filter(|n| m.atoms[n].symbol == "N" && !consumed.contains(n))
             .collect::<Vec<_>>();
         let os = m
             .get_neighbors(c)
             .iter()
             .copied()
-            .filter(|n| symbol(m, *n) == "O" && !consumed.contains(n))
+            .filter(|n| m.atoms[n].symbol == "O" && !consumed.contains(n))
             .collect::<Vec<_>>();
         let ss = m
             .get_neighbors(c)
             .iter()
             .copied()
-            .filter(|n| symbol(m, *n) == "S" && !consumed.contains(n))
+            .filter(|n| m.atoms[n].symbol == "S" && !consumed.contains(n))
             .collect::<Vec<_>>();
-        let dn = ns.iter().copied().find(|&n| order(m, c, n) == 2);
+        let dn = ns.iter().copied().find(|&n| m.bond_order(c, n) == 2);
         let double_o = os
             .iter()
             .copied()
-            .find(|&n| order(m, c, n) == 2 && m.degree(n) == 1);
+            .find(|&n| m.bond_order(c, n) == 2 && m.degree(n) == 1);
         let double_s = ss
             .iter()
             .copied()
-            .find(|&n| order(m, c, n) == 2 && m.degree(n) == 1);
+            .find(|&n| m.bond_order(c, n) == 2 && m.degree(n) == 1);
         if let Some(n) = dn {
             if let Some(e) = double_s.or(double_o)
                 && let Some(attach) = m.get_neighbors(n).iter().copied().find(|x| *x != c)
@@ -2352,36 +2383,31 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
                 } else {
                     "isocyanato"
                 };
-                groups.push(group(key, false, attach, [c, n, e]));
+                groups.push(PerceivedGroup::new(key, false, attach, [c, n, e]));
                 consumed.extend([c, n, e]);
                 continue;
             }
             if !cyclic.contains(&c)
                 && let Some(g) = amidine(m, c, n, &ns, &cyclic)
             {
-                consumed.extend(
-                    g.atoms_involved
-                        .iter()
-                        .filter(|&&x| x != g.attachment_carbon)
-                        .copied(),
-                );
+                consumed.extend(g.atoms_without_attachment());
                 groups.push(g);
                 continue;
             }
         }
-        if let Some(n) = ns.iter().copied().find(|&n| order(m, c, n) == 3) {
+        if let Some(n) = ns.iter().copied().find(|&n| m.bond_order(c, n) == 3) {
             // Upstream divergence: cyanato/thiocyanato consumes a neutral
             // divalent linker, never a skeletal ring atom or an H-bearing
             // hypervalent chalcogen carrying an additional cyano branch.
             let is_cyano_linker = |&x: &usize| {
-                order(m, c, x) == 1
+                m.bond_order(c, x) == 1
                     && !cyclic.contains(&x)
                     && m.degree(x) == 2
                     && m.atoms[&x].charge == 0
                     && m.atoms[&x].total_h_count == 0
                     && m.get_neighbors(x)
                         .iter()
-                        .all(|&neighbor| order(m, x, neighbor) == 1)
+                        .all(|&neighbor| m.bond_order(x, neighbor) == 1)
             };
             let single_s = ss.iter().copied().find(is_cyano_linker);
             let single_o = os.iter().copied().find(is_cyano_linker);
@@ -2393,7 +2419,7 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
                 } else {
                     "cyanato"
                 };
-                groups.push(group(key, false, attach, [c, n, e]));
+                groups.push(PerceivedGroup::new(key, false, attach, [c, n, e]));
                 consumed.extend([c, n, e]);
             }
         }
@@ -2402,24 +2428,21 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
         if !a.is_carbon() || consumed.contains(&c) {
             continue;
         }
-        let Some(n) = m
-            .get_neighbors(c)
-            .iter()
-            .copied()
-            .find(|n| symbol(m, *n) == "N" && !consumed.contains(n) && order(m, c, *n) == 3)
-        else {
+        let Some(n) = m.get_neighbors(c).iter().copied().find(|n| {
+            m.atoms[n].symbol == "N" && !consumed.contains(n) && m.bond_order(c, *n) == 3
+        }) else {
             continue;
         };
         let terminal = m.get_neighbors(n).iter().copied().find(|&e| {
             e != c
-                && is_chalcogen(symbol(m, e))
+                && is_chalcogen(&m.atoms[&e].symbol)
                 && m.atoms[&e].charge == -1
                 && m.degree(e) == 1
-                && order(m, n, e) == 1
+                && m.bond_order(n, e) == 1
         });
         if let Some(e) = terminal.filter(|_| m.atoms[&n].charge == 1) {
             let (attach, external) = external_attachment(m, c, &cyclic);
-            let element = symbol(m, e);
+            let element = m.atoms[&e].symbol.as_str();
             let key = format!("{}nitrile_{}", if external { "ring_" } else { "" }, element);
             let policy = &section("chalcogen_rule_policies")["nitrile_chalcogenide"];
             let vals = [
@@ -2464,11 +2487,11 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             continue;
         }
         if let Some(attach) = m.get_neighbors(n).iter().copied().find(|x| *x != c) {
-            groups.push(group("isocyano", false, attach, [c, n]));
+            groups.push(PerceivedGroup::new("isocyano", false, attach, [c, n]));
             consumed.extend([c, n]);
         } else {
             let (attach, external) = external_attachment(m, c, &cyclic);
-            groups.push(group(
+            groups.push(PerceivedGroup::new(
                 if external { "ring_nitrile" } else { "nitrile" },
                 true,
                 attach,
@@ -2483,12 +2506,7 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
         {
             for g in acyl_groups {
                 if g.is_principal_candidate {
-                    consumed.extend(
-                        g.atoms_involved
-                            .iter()
-                            .filter(|&&n| n != g.attachment_carbon)
-                            .copied(),
-                    );
+                    consumed.extend(g.atoms_without_attachment());
                 }
                 groups.push(g);
             }
@@ -2503,7 +2521,7 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             .get_neighbors(n)
             .iter()
             .copied()
-            .find(|&x| carbon(m, x) && order(m, n, x) == 2)
+            .find(|&x| m.atoms[&x].is_carbon() && m.bond_order(n, x) == 2)
         else {
             continue;
         };
@@ -2511,13 +2529,13 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             .get_neighbors(n)
             .iter()
             .copied()
-            .filter(|&x| symbol(m, x) == "N")
+            .filter(|&x| m.atoms[&x].symbol == "N")
             .collect::<Vec<_>>();
         if ns
             .iter()
-            .any(|&x| order(m, n, x) == 1 && is_nitro_n(m, x, n))
+            .any(|&x| m.bond_order(n, x) == 1 && is_nitro_n(m, x, n))
         {
-            groups.push(group(
+            groups.push(PerceivedGroup::new(
                 if a.charge > 0 { "iminium" } else { "imine" },
                 true,
                 c,
@@ -2527,7 +2545,7 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             continue;
         }
         if let Some(&n2) = ns.first()
-            && order(m, n, n2) == 1
+            && m.bond_order(n, n2) == 1
         {
             let tail = amidino_tail(m, n2, &AtomSet::from([n]));
             if has_multiple(m, n2, &AtomSet::from([n])) && tail.is_empty() {
@@ -2540,12 +2558,12 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
                 if attach != c {
                     atoms.insert(c);
                 }
-                groups.push(group(key, true, attach, atoms.clone()));
+                groups.push(PerceivedGroup::new(key, true, attach, atoms.clone()));
                 consumed.extend(atoms);
                 continue;
             }
         }
-        groups.push(group(
+        groups.push(PerceivedGroup::new(
             if a.charge > 0 { "iminium" } else { "imine" },
             true,
             c,
@@ -2561,29 +2579,29 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             .get_neighbors(n)
             .iter()
             .copied()
-            .filter(|&x| carbon(m, x))
+            .filter(|&x| m.atoms[&x].is_carbon())
             .collect::<Vec<_>>();
         let ns = m
             .get_neighbors(n)
             .iter()
             .copied()
-            .filter(|&x| symbol(m, x) == "N" && m.atoms[&x].charge == 0)
+            .filter(|&x| m.atoms[&x].symbol == "N" && m.atoms[&x].charge == 0)
             .collect::<Vec<_>>();
         if let (Some(&c), Some(&n2)) = (cs.first(), ns.first()) {
             // Python truthiness of index zero is intentionally preserved here.
             if c != 0
-                && order(m, n, c) == 1
-                && order(m, n, n2) == 1
+                && m.bond_order(n, c) == 1
+                && m.bond_order(n, n2) == 1
                 && !has_multiple(m, n2, &AtomSet::from([n]))
             {
                 if !cyclic.contains(&n2) {
-                    let mut g = group("hydrazine", false, c, [n, n2]);
+                    let mut g = PerceivedGroup::new("hydrazine", false, c, [n, n2]);
                     g.variant = Some("prefix".into());
                     g.role = Some("nitrogen_chain".into());
                     groups.push(g);
                     consumed.extend([n, n2]);
                 } else {
-                    groups.push(group("amine", true, c, [n]));
+                    groups.push(PerceivedGroup::new("amine", true, c, [n]));
                     consumed.insert(n);
                 }
             }
@@ -2601,7 +2619,7 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
                 continue;
             }
             let first = m.get_neighbors(end)[0];
-            if !is_chalcogen(symbol(m, first)) || consumed.contains(&first) {
+            if !is_chalcogen(&m.atoms[&first].symbol) || consumed.contains(&first) {
                 continue;
             }
             let anchors = m
@@ -2610,14 +2628,14 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
                 .copied()
                 .filter(|n| *n != end)
                 .collect::<Vec<_>>();
-            if anchors.len() != 1 || !carbon(m, anchors[0]) {
+            if anchors.len() != 1 || !m.atoms[&anchors[0]].is_carbon() {
                 continue;
             }
             let anchor = anchors[0];
             if m.get_neighbors(anchor).iter().any(|&n| {
                 n != first
                     && classify_chalcogen_ligand(m, anchor, n)
-                        .is_some_and(|l| l.role == "double_bonded")
+                        .is_some_and(|l| l.role == LigandRole::DoubleBonded)
             }) {
                 continue;
             }
@@ -2627,7 +2645,7 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             ) else {
                 continue;
             };
-            if l.role != "chalcogen_link" || t.role != "hydrogen_bearing" {
+            if l.role != LigandRole::ChalcogenLink || t.role != LigandRole::HydrogenBearing {
                 continue;
             }
             let mut d = descriptor(
@@ -2639,8 +2657,14 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
                 false,
             );
             d.linker_paths = vec![vec![anchor, first, end]];
-            if matches!((symbol(m, first), symbol(m, end)), ("O", "S") | ("S", "O")) {
-                let mut g = group("peroxol", false, anchor, [first, end]);
+            if matches!(
+                (
+                    m.atoms[&first].symbol.as_str(),
+                    m.atoms[&end].symbol.as_str()
+                ),
+                ("O", "S") | ("S", "O")
+            ) {
+                let mut g = PerceivedGroup::new("peroxol", false, anchor, [first, end]);
                 g.descriptor = Some(d);
                 groups.push(g);
                 continue;
@@ -2648,11 +2672,17 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             let policy = section("chalcogen_peroxol_rules")
                 .as_array()
                 .and_then(|rows| {
-                    rows.iter()
-                        .find(|r| r["first"] == symbol(m, first) && r["terminal"] == symbol(m, end))
+                    rows.iter().find(|r| {
+                        r["first"] == m.atoms[&first].symbol.as_str()
+                            && r["terminal"] == m.atoms[&end].symbol.as_str()
+                    })
                 });
             if let Some(policy) = policy {
-                let key = format!("peroxol_{}_{}", symbol(m, first), symbol(m, end));
+                let key = format!(
+                    "peroxol_{}_{}",
+                    m.atoms[&first].symbol.as_str(),
+                    m.atoms[&end].symbol.as_str()
+                );
                 let fp = &section("chalcogen_rule_policies")["peroxol"];
                 let mut rule = dynamic_rule(
                     &key,
@@ -2681,15 +2711,15 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
         let Some(l) = classify_chalcogen_ligand(m, center, e) else {
             continue;
         };
-        if l.role == "double_bonded" {
-            if !carbon(m, center) {
+        if l.role == LigandRole::DoubleBonded {
+            if !m.atoms[&center].is_carbon() {
                 continue;
             }
             if l.element != "O"
                 && (m.atoms.values().any(|a| a.charge != 0)
                     || m.get_neighbors(center)
                         .iter()
-                        .any(|&x| x != e && !carbon(m, x)))
+                        .any(|&x| x != e && !m.atoms[&x].is_carbon()))
             {
                 continue;
             }
@@ -2721,18 +2751,19 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             consumed.insert(e);
             continue;
         }
-        if !matches!(l.role.as_str(), "hydrogen_bearing" | "anionic") {
+        if !matches!(l.role, LigandRole::HydrogenBearing | LigandRole::Anionic) {
             continue;
         }
         let charge_separated = m.atoms[&center].charge > 0
             && m.get_neighbors(center).iter().any(|&n| {
                 n != e
                     && classify_chalcogen_ligand(m, center, n).is_some_and(|other| {
-                        other.element == l.element && other.role == "double_bonded"
+                        other.element == l.element && other.role == LigandRole::DoubleBonded
                     })
             });
-        let noncarbon_anion = l.role == "anionic" && l.element != "O" && !charge_separated;
-        if !carbon(m, center) && !noncarbon_anion {
+        let noncarbon_anion =
+            l.role == LigandRole::Anionic && l.element != "O" && !charge_separated;
+        if !m.atoms[&center].is_carbon() && !noncarbon_anion {
             continue;
         }
         let derivative = if a.charge < 0 { "anion" } else { "alcohol" };
@@ -2758,9 +2789,9 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
         } else {
             "amine"
         };
-        let principal = key != "aminium" || adj.iter().all(|&x| order(m, n, x) == 1);
+        let principal = key != "aminium" || adj.iter().all(|&x| m.bond_order(n, x) == 1);
         for &c in adj {
-            groups.push(group(key, principal, c, [n]));
+            groups.push(PerceivedGroup::new(key, principal, c, [n]));
         }
         consumed.insert(n);
     }
@@ -2779,7 +2810,7 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             && a.charge == 0
             && a.total_h_count == 0
         {
-            groups.push(group(key, false, m.get_neighbors(h)[0], [h]));
+            groups.push(PerceivedGroup::new(key, false, m.get_neighbors(h)[0], [h]));
             consumed.insert(h);
         }
     }

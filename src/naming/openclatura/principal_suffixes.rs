@@ -7,10 +7,10 @@ pub fn render_principal_suffix(rule: &FunctionalGroupRule, count: usize) -> Stri
     if count <= 1 {
         return suffix.clone();
     }
-    let positions = if rule.suffix_multiplier_positions.is_empty() {
-        vec![0]
+    let positions: &[usize] = if rule.suffix_multiplier_positions.is_empty() {
+        &[0]
     } else {
-        rule.suffix_multiplier_positions.clone()
+        &rule.suffix_multiplier_positions
     };
     suffix
         .split_whitespace()

@@ -1,25 +1,26 @@
 //! Small grammar utilities shared by the plain-name formatters.
 pub fn parse_locant(text: &str) -> (u8, usize, String) {
     let before = text.split('(').next().unwrap_or(text);
-    let digits: String = before.chars().take_while(|c| c.is_ascii_digit()).collect();
-    if !digits.is_empty()
-        && before[digits.len()..]
+    let digit_count = before.bytes().take_while(u8::is_ascii_digit).count();
+    if digit_count > 0
+        && before[digit_count..]
             .chars()
             .all(|c| c.is_ascii_alphabetic())
     {
         return (
             1,
-            digits.parse().unwrap_or(0),
-            before[digits.len()..].to_owned(),
+            before[..digit_count].parse().unwrap_or(0),
+            before[digit_count..].to_owned(),
         );
     }
-    let digits: String = text
-        .chars()
-        .skip_while(|c| !c.is_ascii_digit())
-        .take_while(|c| c.is_ascii_digit())
-        .collect();
-    if !digits.is_empty() {
-        return (1, digits.parse().unwrap_or(0), text.to_owned());
+    let digits = text.trim_start_matches(|c: char| !c.is_ascii_digit());
+    let digit_count = digits.bytes().take_while(u8::is_ascii_digit).count();
+    if digit_count > 0 {
+        return (
+            1,
+            digits[..digit_count].parse().unwrap_or(0),
+            text.to_owned(),
+        );
     }
     (0, 0, text.to_owned())
 }

@@ -3,6 +3,8 @@ pub use super::assembly_utils::parse_locant;
 use super::molecule::{AtomSet, Molecule};
 use std::collections::BTreeSet;
 
+pub type LocantKey = (usize, u8, String, usize);
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SystemLocant {
     pub base: usize,
@@ -73,7 +75,7 @@ pub fn parse_system_locant(value: &str) -> Result<SystemLocant, String> {
         interior_distance,
     })
 }
-pub fn retained_locant_sort_key(value: &str) -> (usize, u8, String, usize) {
+pub fn retained_locant_sort_key(value: &str) -> LocantKey {
     if let Ok(locant) = parse_system_locant(value) {
         return (
             locant.base,

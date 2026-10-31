@@ -2,12 +2,12 @@
 use super::{
     assembly_parts::{AssemblyParts, SubstituentItem},
     assembly_prefixes::substituent_sort_key,
+    component_group_rules::ester_or_peroxy_single_oxygen,
     formatting::strip_outer_parentheses,
-    group_atom_roles::ester_or_peroxy_single_oxygen,
     locants::parse_locant,
     molecule::{AtomSet, Molecule, bond_ids_within},
     namer::{name_subgraph_rendered, name_subgraph_with_upstream},
-    perception::PerceivedGroup,
+    perception::{LigandRole, PerceivedGroup},
     subgraph_tools::subgraph_component,
 };
 use std::collections::BTreeMap;
@@ -47,8 +47,8 @@ pub fn add_component_front_modifiers(
         let branch = name_subgraph_with_upstream(mol, root, &blocked, Some(linker))?;
         let mut modifier = strip_outer_parentheses(&branch);
         if let Some(d) = &group.descriptor {
-            let linkers = d.ligands_with_role("carbon_link");
-            let doubles = d.ligands_with_role("double_bonded");
+            let linkers = d.ligands_with_role(LigandRole::CarbonLink);
+            let doubles = d.ligands_with_role(LigandRole::DoubleBonded);
             if !linkers.is_empty()
                 && !doubles.is_empty()
                 && d.ligands.iter().any(|l| l.element != "O")
@@ -56,7 +56,7 @@ pub fn add_component_front_modifiers(
                 let element_locant = d
                     .ligands
                     .iter()
-                    .filter(|l| l.role != "double_bonded")
+                    .filter(|l| l.role != LigandRole::DoubleBonded)
                     .map(|l| l.element.as_str())
                     .collect::<String>();
                 if super::formatting::is_complex_prefix(&modifier) {

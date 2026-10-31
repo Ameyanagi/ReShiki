@@ -2,15 +2,15 @@
 use super::{
     assembly_parts::SubstituentItem,
     assembly_prefixes::substituent_sort_key,
+    component_group_rules::{amide_nitrogen, ester_or_peroxy_single_oxygen},
     formatting::{
         format_center_ligands_by, format_multiplier, oxy_prefix_from_branch,
         strip_outer_parentheses,
     },
-    group_atom_roles::{amide_nitrogen, ester_or_peroxy_single_oxygen},
     molecule::{AtomSet, Molecule, bond_ids_within},
     namer::name_subgraph_with_upstream,
     nomenclature::RULES,
-    perception::PerceivedGroup,
+    perception::{LigandRole, PerceivedGroup},
     subgraph_tools::subgraph_component,
 };
 use std::collections::BTreeMap;
@@ -44,7 +44,7 @@ fn element_ligand(branch: &str, element: &str) -> Result<String, String> {
 fn central_linkage_prefix(group: &PerceivedGroup) -> Option<&'static str> {
     let descriptor = group.descriptor.as_ref()?;
     let element = descriptor.central_element.as_deref()?;
-    let count = descriptor.ligands_with_role("double_bonded").len();
+    let count = descriptor.ligands_with_role(LigandRole::DoubleBonded).len();
     super::nomenclature::section("chalcogen_central_acid_origins")
         .as_array()?
         .iter()
@@ -62,11 +62,11 @@ fn descriptor_ester_prefix(
     let Some(d) = &group.descriptor else {
         return Ok(None);
     };
-    let doubles = d.ligands_with_role("double_bonded");
+    let doubles = d.ligands_with_role(LigandRole::DoubleBonded);
     let linkers: Vec<_> = d
         .ligands
         .iter()
-        .filter(|l| l.role != "double_bonded")
+        .filter(|l| l.role != LigandRole::DoubleBonded)
         .collect();
     let Some(terminal) = linkers.last() else {
         return Ok(None);
@@ -106,7 +106,7 @@ fn central_chalcogen_linkage_prefix(
     let bridge: Vec<_> = d
         .ligands
         .iter()
-        .filter(|l| l.role != "double_bonded")
+        .filter(|l| l.role != LigandRole::DoubleBonded)
         .collect();
     let Some(base) = central_linkage_prefix(group) else {
         return Ok(group.prefix().unwrap_or("").into());
@@ -115,7 +115,7 @@ fn central_chalcogen_linkage_prefix(
         return Ok(group.prefix().unwrap_or("").into());
     }
     let terminal = bridge[1];
-    let terminal_text = if terminal.role == "hydrogen_bearing" {
+    let terminal_text = if terminal.role == LigandRole::HydrogenBearing {
         let key = super::nomenclature::section("chalcogen_simple_group_keys")
             .as_array()
             .and_then(|rows| {
@@ -128,7 +128,10 @@ fn central_chalcogen_linkage_prefix(
             .and_then(|r| r["key"].as_str());
         key.and_then(|k| RULES.functional_groups.cited_prefix_for(k))
             .unwrap_or_default()
-    } else if matches!(terminal.role.as_str(), "carbon_link" | "heteroatom_link") {
+    } else if matches!(
+        terminal.role,
+        LigandRole::CarbonLink | LigandRole::HeteroatomLink
+    ) {
         if let Some(root) = terminal.attachment_atom {
             let mut blocked = context.sub_exclude.clone();
             blocked.insert(terminal.atom);
@@ -332,7 +335,7 @@ pub fn prefix_from_group(
     {
         if d.ligands
             .iter()
-            .filter(|l| l.role != "double_bonded")
+            .filter(|l| l.role != LigandRole::DoubleBonded)
             .count()
             == 2
         {

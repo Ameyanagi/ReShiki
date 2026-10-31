@@ -322,17 +322,16 @@ pub fn assign_local_cip_with_locant_labels(
             flag_possible: false,
         },
     )?;
-    let mut result = BTreeMap::new();
-    for idx in raw_atoms {
-        if let Some(label) = atom_to_native
-            .get(idx)
-            .and_then(|&native| assigned.properties.atoms.get(native))
-            .and_then(|a| a.cip_code.as_ref())
-        {
-            result.insert(*idx, label.clone());
-        }
-    }
-    Ok(result)
+    Ok(raw_atoms
+        .iter()
+        .filter_map(|idx| {
+            atom_to_native
+                .get(idx)
+                .and_then(|&native| assigned.properties.atoms.get(native))
+                .and_then(|a| a.cip_code.as_ref())
+                .map(|label| (*idx, label.clone()))
+        })
+        .collect())
 }
 
 #[cfg(test)]

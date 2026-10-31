@@ -125,9 +125,10 @@ fn match_fused_templates(mol: &Molecule, path: &[usize]) -> Option<RetainedMatch
     if matches.is_empty()
         && path.iter().all(|idx| {
             mol.atoms[idx].charge == 0
-                && mol.get_neighbors(*idx).iter().all(|n| {
-                    ring.contains(n) || mol.get_bond(*idx, *n).is_none_or(|b| b.order <= 1)
-                })
+                && mol
+                    .get_neighbors(*idx)
+                    .iter()
+                    .all(|n| ring.contains(n) || mol.bond_order(*idx, *n) <= 1)
         })
     {
         matches = match_retained_graph_templates(mol, &ring, true);
@@ -167,10 +168,7 @@ pub fn count_double_bonds_in_ring(mol: &Molecule, path: &[usize]) -> usize {
     }
     path.iter()
         .enumerate()
-        .filter(|&(i, &idx)| {
-            mol.get_bond(idx, path[(i + 1) % path.len()])
-                .is_some_and(|b| b.order == 2)
-        })
+        .filter(|&(i, &idx)| mol.bond_order(idx, path[(i + 1) % path.len()]) == 2)
         .count()
 }
 
@@ -179,7 +177,7 @@ fn no_cumulated_double_bonds(mol: &Molecule, path: &[usize]) -> bool {
     path.iter().all(|&idx| {
         mol.get_neighbors(idx)
             .iter()
-            .filter(|&&n| ring.contains(&n) && mol.get_bond(idx, n).is_some_and(|b| b.order == 2))
+            .filter(|&&n| ring.contains(&n) && mol.bond_order(idx, n) == 2)
             .count()
             <= 1
     })
@@ -265,12 +263,11 @@ fn hetero_distances(mol: &Molecule, path: &[usize]) -> Vec<usize> {
 }
 fn chalcogen_distances(mol: &Molecule, path: &[usize]) -> Vec<usize> {
     let mut result = Vec::new();
-    for (i, idx) in path
+    for (i, _) in path
         .iter()
         .enumerate()
         .filter(|(_, idx)| matches!(mol.atoms[idx].symbol.as_str(), "O" | "S"))
     {
-        let _ = idx;
         for (j, _) in path
             .iter()
             .enumerate()
@@ -674,7 +671,7 @@ pub fn mancude_hydro_plan(
         .filter(|&&idx| {
             mol.get_neighbors(idx)
                 .iter()
-                .any(|&n| !ring.contains(&n) && mol.get_bond(idx, n).is_some_and(|b| b.order > 1))
+                .any(|&n| !ring.contains(&n) && mol.bond_order(idx, n) > 1)
         })
         .copied()
         .collect();

@@ -1,7 +1,7 @@
 //! Functional-group atom roles and preprocessing of parent candidates.
 use super::molecule::{AtomSet, Molecule};
 use super::nomenclature::RULES;
-use super::perception::PerceivedGroup;
+use super::perception::{LigandRole, PerceivedGroup};
 
 pub fn bridge_oxygen(m: &Molecule, g: &PerceivedGroup) -> Option<usize> {
     g.atoms_involved
@@ -11,7 +11,7 @@ pub fn bridge_oxygen(m: &Molecule, g: &PerceivedGroup) -> Option<usize> {
 }
 pub fn ester_single_oxygen(m: &Molecule, g: &PerceivedGroup) -> Option<usize> {
     if let Some(d) = &g.descriptor
-        && let Some(l) = d.ligands.iter().find(|l| l.role == "carbon_link")
+        && let Some(l) = d.ligands.iter().find(|l| l.role == LigandRole::CarbonLink)
     {
         return Some(l.atom);
     }
@@ -47,19 +47,15 @@ pub fn amide_nitrogen(m: &Molecule, g: &PerceivedGroup) -> Option<usize> {
         .find(|n| m.atoms[n].symbol == "N")
 }
 pub fn hydrazone_characteristic_carbon(m: &Molecule, g: &PerceivedGroup) -> Option<usize> {
-    for n in &g.atoms_involved {
-        if m.atoms[n].symbol != "N" {
-            continue;
-        }
-        if let Some(c) =
-            m.get_neighbors(*n).iter().copied().find(|c| {
-                m.atoms[c].is_carbon() && m.get_bond(*n, *c).is_some_and(|b| b.order == 2)
-            })
-        {
-            return Some(c);
-        }
-    }
-    None
+    g.atoms_involved
+        .iter()
+        .filter(|&n| m.atoms[n].symbol == "N")
+        .find_map(|&n| {
+            m.get_neighbors(n)
+                .iter()
+                .copied()
+                .find(|c| m.atoms[c].is_carbon() && m.bond_order(n, *c) == 2)
+        })
 }
 pub fn group_carbon_off_attachment(m: &Molecule, g: &PerceivedGroup) -> Option<usize> {
     let c = g
@@ -138,7 +134,7 @@ pub fn exclude_nonparent_group_atoms(
                 atoms.extend(
                     d.ligands
                         .iter()
-                        .filter(|l| l.role == "carbon_link")
+                        .filter(|l| l.role == LigandRole::CarbonLink)
                         .map(|l| l.atom),
                 );
             }
@@ -158,7 +154,7 @@ pub fn exclude_nonparent_group_atoms(
                 atoms.extend(
                     d.ligands
                         .iter()
-                        .filter(|l| l.role == "carbon_link")
+                        .filter(|l| l.role == LigandRole::CarbonLink)
                         .map(|l| l.atom),
                 );
             }

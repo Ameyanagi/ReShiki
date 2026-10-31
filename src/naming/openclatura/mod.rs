@@ -27,7 +27,6 @@ mod fused_ion_templates;
 mod fusion;
 mod graph_io;
 mod graph_kernel;
-mod group_atom_roles;
 mod heteroatom_subgraphs;
 mod identity_validation;
 mod ionic_naming;
