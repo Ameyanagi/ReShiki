@@ -1,5 +1,11 @@
 # Unreleased changes
 
+Under review: @Ameyanagi — **Import → Name** reads phane (cyclophane) names such
+as `1,4(1,4)-dibenzenacyclohexaphane`, and the offline name parser now follows
+OPSIN's main branch (commit `42e87ac6`) instead of the 2.9.0 release, with its
+later vocabulary and interpretation fixes.
+([issue #731](https://github.com/Ameyanagi/ReShiki/issues/731), [PR #751](https://github.com/Ameyanagi/ReShiki/pull/751)).
+
 Under review: @Ameyanagi — linked 3D models keep their arranged conformer after
 a chemical edit and offer **Structure changed · Update model**. Explicit
 **Update model** and **Regenerate conformer** run in the background, can be
