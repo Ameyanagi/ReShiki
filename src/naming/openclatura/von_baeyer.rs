@@ -8,9 +8,11 @@ use super::molecule::{AtomSet, Molecule};
 use super::polycycle_topology::{
     RingNumbering, audit_von_baeyer_descriptor, build_von_baeyer_numbering,
 };
+use super::python_int_set::PythonIntSet;
 use super::ring_renderer::render_von_baeyer_descriptor;
 
 type Adjacency = BTreeMap<usize, AtomSet>;
+type OrderedAdjacency = BTreeMap<usize, Vec<usize>>;
 pub type DescriptorPaths = (Option<String>, Vec<Vec<usize>>);
 const MAIN_RING_WALK_STATES: usize = 2_000_000;
 const MAX_CYCLE_SPACE_RANK: usize = 28;
@@ -23,7 +25,24 @@ struct LegacyBridge {
     length: usize,
 }
 
-fn bridge_interior_path(adj: &Adjacency, nodes: &AtomSet, start: usize, end: usize) -> Vec<usize> {
+fn python_adjacency(adj: &Adjacency) -> OrderedAdjacency {
+    // Upstream divergence: upstream inserts neighbors in tuple-edge-set order.
+    // Rebuilding from sorted IDs retains integer-table traversal, but a hash
+    // collision between neighbor IDs can still depend on that insertion order.
+    adj.iter()
+        .map(|(&atom, neighbors)| {
+            let neighbors: PythonIntSet = neighbors.iter().copied().collect();
+            (atom, neighbors.iter().collect())
+        })
+        .collect()
+}
+
+fn bridge_interior_path(
+    adj: &OrderedAdjacency,
+    nodes: &AtomSet,
+    start: usize,
+    end: usize,
+) -> Vec<usize> {
     let mut queue = VecDeque::from([(start, Vec::new())]);
     let mut visited = AtomSet::new();
     while let Some((current, path)) = queue.pop_front() {
@@ -42,7 +61,7 @@ fn bridge_interior_path(adj: &Adjacency, nodes: &AtomSet, start: usize, end: usi
     Vec::new()
 }
 
-fn largest_cycles_walk(atoms: &AtomSet, adj: &Adjacency) -> Option<Vec<Vec<usize>>> {
+fn largest_cycles_walk(atoms: &AtomSet, adj: &OrderedAdjacency) -> Option<Vec<Vec<usize>>> {
     let mut states = 0;
     let mut longest = 0;
     let mut cycles = Vec::new();
@@ -51,7 +70,7 @@ fn largest_cycles_walk(atoms: &AtomSet, adj: &Adjacency) -> Option<Vec<Vec<usize
         let mut path = vec![start];
         let mut stack = vec![(start, 0)];
         while let Some(&(current, index)) = stack.last() {
-            let Some(&neighbor) = adj[&current].iter().nth(index) else {
+            let Some(&neighbor) = adj[&current].get(index) else {
                 stack.pop();
                 path.pop();
                 continue;
@@ -228,7 +247,8 @@ fn main_ring_division(
 /// cycle-space bounds deliberately abstain on an unmanageable graph.
 pub fn descriptor_candidates(atoms: &AtomSet, edges: &EdgeSet) -> Vec<DescriptorPaths> {
     let adj = adjacency_from_edges(atoms, edges);
-    let largest = largest_cycles_walk(atoms, &adj)
+    let ordered_adj = python_adjacency(&adj);
+    let largest = largest_cycles_walk(atoms, &ordered_adj)
         .unwrap_or_else(|| largest_cycles_from_cycle_space(atoms, edges, &adj));
     if largest.is_empty() {
         return vec![(None, vec![atoms.iter().copied().collect()])];
@@ -314,15 +334,12 @@ pub fn descriptor_candidates(atoms: &AtomSet, edges: &EdgeSet) -> Vec<Descriptor
     if candidates.is_empty() {
         return vec![(None, vec![largest[0].clone()])];
     }
-    // Upstream divergence: ascending Rust sets settle otherwise equal search
-    // preferences deterministically; Python's bare set traversal may offer a
-    // different audited descriptor first. The P-23 selection key is unchanged.
     candidates.sort_by_key(|candidate| candidate.0);
     // The upstream caller consumes at most 256 rendered choices. Applying the
     // same bound here avoids materializing the rest of a symmetric skeleton.
     candidates
         .into_iter()
-        .flat_map(|(_, ring, bridges)| legacy_from_candidate(ring, &bridges, atoms, &adj))
+        .flat_map(|(_, ring, bridges)| legacy_from_candidate(ring, &bridges, atoms, &ordered_adj))
         .take(256)
         .collect()
 }
@@ -331,7 +348,7 @@ fn legacy_from_candidate(
     ring: &[usize],
     bridges: &[LegacyBridge],
     atoms: &AtomSet,
-    adj: &Adjacency,
+    adj: &OrderedAdjacency,
 ) -> Vec<DescriptorPaths> {
     let main = &bridges[0];
     let [first, second] = main.endpoints;
@@ -834,7 +851,8 @@ mod tests {
                 })
                 .collect::<BTreeSet<_>>()
         };
-        let exhaustive = cycle_edges(largest_cycles_walk(&atoms, &adjacency).unwrap());
+        let exhaustive =
+            cycle_edges(largest_cycles_walk(&atoms, &python_adjacency(&adjacency)).unwrap());
         let space = cycle_edges(largest_cycles_from_cycle_space(&atoms, &edges, &adjacency));
         assert_eq!(space.len(), 3);
         assert_eq!(space, exhaustive);
@@ -870,5 +888,55 @@ mod tests {
                 .iter()
                 .all(|candidate| candidate.numbering.audit_ok)
         );
+    }
+
+    #[test]
+    fn main_ring_integer_set_walk_preserves_first_audited_descriptor() {
+        for (smiles, expected) in [
+            (
+                "B1CCC2CC3=CC1C32c1ccccc1-c1ccccc1",
+                "tricyclo[5.1.1.0^{3,8}]",
+            ),
+            (
+                "C=CC1=COC2CC3C2C2CC1C32",
+                "tetracyclo[7.1.1.0^{3,10}.0^{2,5}]",
+            ),
+            (
+                "O=[N+]([O-])[C@]12C[C@@H]3CC[C@H](CO1)C[C@@H]32",
+                "tricyclo[4.2.2.0^{3,9}]",
+            ),
+            (
+                "CCC1=C2CCC3=C1[C@H](C3)[C@H](C#N)C2",
+                "tricyclo[4.2.2.0^{3,9}]",
+            ),
+            ("CC1CC2=C3CC1CCC=C3C2", "tricyclo[5.2.2.0^{3,10}]"),
+            (
+                "FC1C2CCC3C=PC4C=C4C1CCC(C3)O2",
+                "tetracyclo[8.4.1.1^{4,13}.0^{5,7}]",
+            ),
+            (
+                "CCC12CC3(N)C4CCC(C4)C(B1C(C)C)C23",
+                "tetracyclo[5.2.1.1^{2,4}.0^{3,6}]",
+            ),
+        ] {
+            let mol = read_smiles(smiles).unwrap();
+            let system = super::super::chains::find_ring_systems(&mol, &AtomSet::new())
+                .into_iter()
+                .find(|system| system.is_polycycle)
+                .unwrap();
+            let edges = edges_within_atoms(&mol, &system.atoms);
+            assert_eq!(
+                system.polycycle_descriptor.as_deref(),
+                Some(expected),
+                "{smiles}"
+            );
+            assert!(
+                system
+                    .paths
+                    .iter()
+                    .all(|path| audit_von_baeyer_descriptor(expected, path, &edges))
+            );
+            assert!(!system.paths.is_empty());
+        }
     }
 }

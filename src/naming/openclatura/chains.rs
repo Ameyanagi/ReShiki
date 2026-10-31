@@ -1,15 +1,14 @@
 //! Carbon-chain enumeration and audited ring systems from Python `chains.py`.
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::graph_kernel::{
-    EdgeSet, adjacency_from_edges, biconnected_edge_components, connected_components,
-};
+use super::graph_kernel::{EdgeSet, adjacency_from_edges, biconnected_edge_components};
 use super::molecule::{AtomSet, Molecule};
 use super::polycycle_topology::{
     RingNumbering, audit_ring_numbering, bicyclo_proof, build_ring_numbering,
     build_von_baeyer_numbering, dedupe_paths, edges_within_atoms, has_multiple_spiro_centers,
     linear_dispiro_descriptor_and_paths, monospiro_proof,
 };
+use super::python_int_set::PythonIntSet;
 use super::ring_renderer::is_von_baeyer_descriptor;
 
 #[derive(Clone, Debug, Default)]
@@ -494,25 +493,23 @@ fn fallback_bicyclo_paths(
     edges: &EdgeSet,
     [first, second]: [usize; 2],
 ) -> Vec<Vec<usize>> {
-    // Upstream divergence: bare Python integer-set walks become ascending
-    // BTreeSet walks. Equal-score bridge orders can therefore choose another
-    // audited numbering (and another secondary unsaturation locant spelling).
     let adj = adjacency_from_edges(atoms, edges);
     let mut between = Vec::new();
     if adj[&first].contains(&second) {
         between.push(Vec::new());
     }
-    let outside = atoms
-        .difference(&AtomSet::from([first, second]))
-        .copied()
-        .collect();
-    for component in connected_components(&outside, edges) {
-        let Some(&root) = component.first() else {
+    // Python builds a new integer set here. Its table traversal settles equal
+    // bridge lengths before the chemical numbering criteria are compared.
+    let python_atoms: PythonIntSet = atoms.iter().copied().collect();
+    let outside = python_atoms.difference(&[first, second].into_iter().collect());
+    let outside_atoms: AtomSet = outside.iter().collect();
+    let mut visited = AtomSet::new();
+    for root in outside.iter() {
+        if visited.contains(&root) {
             continue;
-        };
+        }
         let mut traversal = Vec::new();
         let mut queue = std::collections::VecDeque::from([root]);
-        let mut visited = AtomSet::new();
         while let Some(current) = queue.pop_front() {
             if !visited.insert(current) {
                 continue;
@@ -521,10 +518,13 @@ fn fallback_bicyclo_paths(
             queue.extend(
                 adj[&current]
                     .iter()
-                    .filter(|neighbor| component.contains(neighbor) && !visited.contains(neighbor))
+                    .filter(|neighbor| {
+                        outside_atoms.contains(neighbor) && !visited.contains(neighbor)
+                    })
                     .copied(),
             );
         }
+        let component: AtomSet = traversal.iter().copied().collect();
         let Some(&start) = traversal.iter().find(|atom| adj[atom].contains(&first)) else {
             continue;
         };
@@ -920,6 +920,26 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    #[test]
+    fn bicyclo_bridge_ties_preserve_secondary_unsaturation_locants() {
+        for (smiles, expected) in [
+            (
+                "FC12C=CC(=C1c1ccccc1)C2c1ccccc1",
+                "4-fluoro-5,6-diphenylbicyclo[2.1.1]hexa-1(6),2-diene",
+            ),
+            (
+                "COC(=O)SC1C2=CC1C2",
+                "((bicyclo[1.1.1]pent-1(5)-en-2-yl)sulfanyl)(methoxy)methanone",
+            ),
+            (
+                "Cc1cc(C2(F)C3=C=C2C3)ccn1",
+                "4-(2-fluorobicyclo[1.1.1]penta-1(5),3(5)-dien-2-yl)-2-methylpyridine",
+            ),
+        ] {
+            assert_eq!(super::super::name_smiles(smiles).as_deref(), Ok(expected));
+        }
     }
 
     #[test]

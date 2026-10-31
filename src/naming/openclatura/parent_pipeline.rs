@@ -131,6 +131,22 @@ pub fn build_parent_parts(
     root: Option<usize>,
     upstream: Option<usize>,
 ) -> Result<AssemblyParts, String> {
+    if retained_name.is_none()
+        && let Some(descriptor) = selection.polycycle_descriptor.as_deref()
+        && super::ring_renderer::is_von_baeyer_descriptor(Some(descriptor))
+        && !super::polycycle_topology::audit_von_baeyer_opsin_reading(
+            descriptor,
+            numbered_path,
+            &super::polycycle_topology::edges_within_atoms(
+                mol,
+                &numbered_path.iter().copied().collect(),
+            ),
+        )
+    {
+        // Upstream divergence: its secondary-bridge reconstruction can move
+        // atoms and their substituents when the emitted name is read by OPSIN.
+        return Err("openclatura: secondary-bridge numbering disagrees with OPSIN reading".into());
+    }
     let mut parts = AssemblyParts::new(numbered_path.len());
     parts.is_ring = selection.is_ring;
     parts.is_bicycle = selection.is_bicycle;
@@ -223,6 +239,19 @@ fn add_relative_ring_stereo(
             .any(|idx| mol.atoms[idx].raw_stereo.is_some() && mol.atoms[idx].stereo.is_none())
     {
         return Err("openclatura: unresolved multicyclic stereochemistry not ported".into());
+    }
+    // Upstream divergence: OPSIN reads no pseudoasymmetric r/s descriptor on a
+    // von Baeyer parent back, and a strained cage can read as another isomer.
+    if (parts.is_bicycle
+        || super::ring_renderer::is_von_baeyer_descriptor(parts.polycycle_descriptor.as_deref()))
+        && path.iter().any(|idx| {
+            mol.atoms[idx]
+                .stereo
+                .as_deref()
+                .is_some_and(|label| label == "r" || label == "s")
+        })
+    {
+        return Err("openclatura: pseudoasymmetric von Baeyer centres are not validated".into());
     }
     if !parts.is_ring || parts.is_bicycle || parts.is_spiro || parts.is_polycycle {
         return Ok(());
@@ -379,10 +408,43 @@ mod tests {
     }
 
     #[test]
+    fn von_baeyer_parents_decline_pseudoasymmetric_centres() {
+        for smiles in [
+            "C12=C3C4=C1[C@@H]1[C@H]2[C@H]3N41",
+            "CN1[C@@H]2CC[C@H]1C[C@@H](OC(=O)[C@@H](CO)c1ccccc1)C2",
+        ] {
+            assert_eq!(
+                name_smiles(smiles).unwrap_err(),
+                "openclatura: pseudoasymmetric von Baeyer centres are not validated",
+                "{smiles}",
+            );
+        }
+    }
+
+    #[test]
     fn bicyclic_parents_decline_unresolved_relative_stereochemistry() {
         for smiles in ["C1CC[C@H]2CCCCC[C@H](CC1)OCCC2", "C1C[C@H]2CC[C@@H]12"] {
             assert!(name_smiles(smiles).is_err(), "{smiles}");
         }
+    }
+
+    #[test]
+    fn secondary_bridge_reading_disagreement_declines_with_or_without_stereo() {
+        for smiles in [
+            "OC[C@@H]1C=C2C[C@H](Cl)[C@H]1CC[C@@H]1CCCCCC[C@@H]2CCCCC1",
+            "OC[C@H]1C=C2C[C@H](Cl)[C@H]1CC[C@@H]1CCCCCC[C@@H]2CCCCC1",
+            "OCC1C=C2CC(Cl)C1CCC1CCCCCCC2CCCCC1",
+        ] {
+            assert_eq!(
+                name_smiles(smiles).unwrap_err(),
+                "openclatura: secondary-bridge numbering disagrees with OPSIN reading",
+                "{smiles}",
+            );
+        }
+        assert_eq!(
+            name_smiles("CC1C(F)CCCC2CCCC=CCC1C1CC(CC2)C1").as_deref(),
+            Ok("17-fluoro-18-methyltricyclo[6.5.5.1^{9,11}]nonadec-5-ene"),
+        );
     }
 
     #[test]

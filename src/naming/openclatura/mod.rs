@@ -41,6 +41,7 @@ mod perception;
 mod polycycle_topology;
 mod principal_groups;
 mod principal_suffixes;
+mod python_int_set;
 mod ring_renderer;
 mod rules;
 mod small_ring_stereo;
@@ -58,7 +59,7 @@ pub fn name_smiles(smiles: &str) -> Result<String, String> {
         return Err("openclatura: polonium nomenclature is not validated".into());
     }
     // Upstream divergence: nitrogen stereocentres and ring stereocentres with a
-    // lone pair (three single bonds: P, As, S+) read back through OPSIN as
+    // lone pair (for example three single bonds on P, As, S+) read back through OPSIN as
     // another stereoisomer, or lose their descriptor.
     let cyclic = chains::get_cyclic_atoms(&mol, &molecule::AtomSet::new());
     if mol.atoms.values().any(|atom| {
@@ -67,6 +68,7 @@ pub fn name_smiles(smiles: &str) -> Result<String, String> {
                 || !atom.is_carbon()
                     && cyclic.contains(&atom.idx)
                     && mol.degree(atom.idx) == 3
+                    && has_nonbonding_pair(atom, 3)
                     && mol
                         .get_neighbors(atom.idx)
                         .iter()
@@ -79,6 +81,23 @@ pub fn name_smiles(smiles: &str) -> Result<String, String> {
         return Err("openclatura: expected one connected component".into());
     }
     namer::name_component(&mol, &components[0])
+}
+
+/// Count nonbonding electrons on the main-group elements that can carry
+/// tetrahedral tags. Attached hydrogens also consume bonding electrons:
+/// a three-neighbour Si–H centre has four bonds and no lone pair.
+fn has_nonbonding_pair(atom: &molecule::Atom, bond_order_sum: usize) -> bool {
+    let outer_electrons = match atom.symbol.as_str() {
+        "C" | "Si" | "Ge" | "Sn" | "Pb" => 4,
+        "N" | "P" | "As" | "Sb" | "Bi" => 5,
+        "O" | "S" | "Se" | "Te" | "Po" => 6,
+        "F" | "Cl" | "Br" | "I" | "At" => 7,
+        _ => return false,
+    };
+    outer_electrons
+        - atom.charge
+        - (bond_order_sum + atom.total_h_count + atom.radical_electrons) as i32
+        >= 2
 }
 
 #[cfg(test)]
@@ -141,6 +160,21 @@ mod tests {
             "C[S@+]1CCCC1C",
         ] {
             assert!(name_smiles(smiles).is_err(), "{smiles}");
+        }
+    }
+
+    #[test]
+    fn tetrahedral_group_four_ring_hydrides_have_no_lone_pair() {
+        for element in ["Si", "Ge", "Sn"] {
+            let smiles = format!("C[{element}@H]1CCCC1F");
+            assert!(name_smiles(&smiles).is_ok(), "{smiles}");
+        }
+        for smiles in ["C[P@]1CCCC1F", "C[As@]1CCCC1F", "C[S@+]1CCCC1F"] {
+            assert_eq!(
+                name_smiles(smiles).unwrap_err(),
+                "openclatura: N and ring lone-pair stereocentres are not validated",
+                "{smiles}",
+            );
         }
     }
 

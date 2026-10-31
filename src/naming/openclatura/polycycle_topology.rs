@@ -714,6 +714,65 @@ pub fn audit_von_baeyer_descriptor(descriptor: &str, path: &[usize], edges: &Edg
     valid && next == path.len() + 1 && expected == *edges
 }
 
+/// Rebuild the numbered graph read by OPSIN, which numbers positive secondary
+/// bridges from their higher attachment locant and orders them by attachments.
+/// Upstream's own audit instead numbers from the lower attachment locant.
+pub fn audit_von_baeyer_opsin_reading(descriptor: &str, path: &[usize], edges: &EdgeSet) -> bool {
+    let Some((count, base, bridges)) = parse_von_baeyer_descriptor(descriptor) else {
+        return false;
+    };
+    let base_count = base.iter().sum::<usize>() + 2;
+    if count != bridges.len() + 2
+        || base_count + bridges.iter().map(|(length, _)| length).sum::<usize>() != path.len()
+        || path.iter().copied().collect::<AtomSet>().len() != path.len()
+        || path.iter().copied().collect::<AtomSet>()
+            != edges.iter().flat_map(|&(u, v)| [u, v]).collect()
+    {
+        return false;
+    }
+    let mut expected = EdgeSet::new();
+    let mut valid = true;
+    let mut edge = |first: usize, second: usize| {
+        if let (Some(&u), Some(&v)) = (
+            path.get(first.wrapping_sub(1)),
+            path.get(second.wrapping_sub(1)),
+        ) {
+            expected.insert(normalized_edge(u, v));
+        } else {
+            valid = false;
+        }
+    };
+    append_bicyclo_edges(&mut edge, base);
+    for &(length, [first, second]) in &bridges {
+        if length == 0 {
+            edge(first, second);
+        }
+    }
+    let mut secondary: Vec<_> = bridges
+        .into_iter()
+        .filter(|(length, _)| *length > 0)
+        .collect();
+    secondary.sort_by_key(|&(length, [low, high])| std::cmp::Reverse((high, low, length)));
+    let mut next = base_count + 1;
+    while !secondary.is_empty() {
+        let previous = secondary.len();
+        let mut dependent = Vec::new();
+        for (length, [low, high]) in secondary {
+            if high >= next {
+                dependent.push((length, [low, high]));
+                continue;
+            }
+            append_bridge(&mut edge, high, low, next, length);
+            next += length;
+        }
+        if dependent.len() == previous {
+            return false;
+        }
+        secondary = dependent;
+    }
+    valid && next == path.len() + 1 && expected == *edges
+}
+
 fn append_ring_segment(
     edge: &mut impl FnMut(usize, usize),
     start: usize,
@@ -820,6 +879,64 @@ mod tests {
             "tricyclo[3.2.2.0^{1,5}]",
             &duplicate,
             &edges
+        ));
+    }
+
+    #[test]
+    fn opsin_audit_detects_secondary_bridge_direction_and_order() {
+        let mol = read_smiles("OCC1C=C2CC(Cl)C1CCC1CCCCCCC2CCCCC1").unwrap();
+        let path = [
+            11, 12, 13, 14, 15, 16, 17, 18, 4, 3, 2, 8, 9, 10, 23, 22, 21, 20, 19, 5, 6,
+        ];
+        let edges = edges_within_atoms(&mol, &path.iter().copied().collect());
+        let descriptor = "tricyclo[6.6.5.2^{9,12}]";
+        assert!(audit_von_baeyer_descriptor(descriptor, &path, &edges));
+        assert!(!audit_von_baeyer_opsin_reading(descriptor, &path, &edges));
+        let mut reversed = path;
+        reversed[19..].reverse();
+        assert!(audit_von_baeyer_opsin_reading(
+            descriptor, &reversed, &edges
+        ));
+
+        // Even one-atom bridges change identity if their descriptor order
+        // differs from OPSIN's descending attachment-locant order.
+        let path: Vec<_> = (0..10).collect();
+        let mut edges = EdgeSet::new();
+        let mut edge = |a, b| {
+            edges.insert(normalized_edge(a - 1, b - 1));
+        };
+        append_bicyclo_edges(&mut edge, [3, 2, 1]);
+        append_bridge(&mut edge, 2, 5, 9, 1);
+        append_bridge(&mut edge, 3, 6, 10, 1);
+        let descriptor = "tetracyclo[3.2.1.1^{2,5}.1^{3,6}]";
+        assert!(audit_von_baeyer_descriptor(descriptor, &path, &edges));
+        assert!(!audit_von_baeyer_opsin_reading(descriptor, &path, &edges));
+        let mut reordered = path;
+        reordered.swap(8, 9);
+        assert!(audit_von_baeyer_opsin_reading(
+            descriptor, &reordered, &edges
+        ));
+    }
+
+    #[test]
+    fn opsin_audit_resolves_secondary_bridge_dependencies() {
+        let path: Vec<_> = (0..10).collect();
+        let mut edges = EdgeSet::new();
+        let mut edge = |a, b| {
+            edges.insert(normalized_edge(a - 1, b - 1));
+        };
+        append_bicyclo_edges(&mut edge, [3, 2, 1]);
+        append_bridge(&mut edge, 5, 2, 9, 1);
+        append_bridge(&mut edge, 9, 3, 10, 1);
+        assert!(audit_von_baeyer_opsin_reading(
+            "tetracyclo[3.2.1.1^{2,5}.1^{3,9}]",
+            &path,
+            &edges,
+        ));
+        assert!(!audit_von_baeyer_opsin_reading(
+            "tetracyclo[3.2.1.1^{2,10}.1^{3,9}]",
+            &path,
+            &edges,
         ));
     }
 
