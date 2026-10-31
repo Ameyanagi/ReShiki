@@ -65,6 +65,8 @@ pub struct HydroOperation {
 #[derive(Clone, Debug, Default)]
 pub struct RetainedParentMetadata {
     pub indicated_hydrogen_count: usize,
+    pub mancude_double_bonds: usize,
+    pub default_indicated_h: Vec<String>,
 }
 #[derive(Clone, Debug)]
 pub struct AssemblyParts {

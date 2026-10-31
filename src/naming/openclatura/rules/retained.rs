@@ -705,6 +705,10 @@ pub fn parent_metadata(name: &str) -> Option<super::super::assembly_parts::Retai
         })
         .unwrap_or_default();
     Some(super::super::assembly_parts::RetainedParentMetadata {
+        mancude_double_bonds: row["template"]["mancude_double_bonds"]
+            .as_u64()
+            .unwrap_or(0) as usize,
+        default_indicated_h: default.clone(),
         indicated_hydrogen_count: row["template"]["indicated_hydrogen_count"]
             .as_u64()
             .map(|count| count as usize)

@@ -2,6 +2,7 @@
 //!
 //! Input identity checks remain those of the naming subsystem. In particular,
 //! this adapter does not use upstream's unsanitized fallback to bypass them.
+use super::graph_kernel::biconnected_edge_components;
 use super::molecule::{Atom, AtomSet, Bond, Molecule};
 use reshiki_chemistry::{
     ELEMENTS, kekulize, ranking, smiles,
@@ -9,19 +10,16 @@ use reshiki_chemistry::{
 };
 use std::collections::{BTreeMap, VecDeque};
 
-/// Read one acyclic or monocyclic molecular graph, retaining source atom order.
+/// Read one graph with disjoint monocyclic ring blocks, retaining source atom order.
 pub fn read_smiles(text: &str) -> Result<Molecule, String> {
     // This is deliberately checked on the original text, before preparation
     // can clean winding, remove hydrogen atoms or normalize unsupported input.
     let canonical = super::super::canonical_smiles(text)?;
     if canonical.contains('.') {
-        return Err("Openclatura stage 1 requires a single connected molecule".into());
+        return Err("Openclatura requires a single connected molecule".into());
     }
     let prepared = smiles::prepare(text).map_err(|error| error.to_string())?;
     let mut state = prepared.state;
-    if state.graph.bonds.len() >= state.graph.atoms.len().saturating_add(1) {
-        return Err("Openclatura stage 1 supports at most one ring".into());
-    }
     let atom_metadata = state
         .graph
         .atoms
@@ -171,8 +169,35 @@ pub fn read_smiles(text: &str) -> Result<Molecule, String> {
             in_small_ring,
         })?;
     }
+    require_disjoint_monocyclic_blocks(&mol)?;
     super::identity_validation::validate_input(&mol)?;
     Ok(mol)
+}
+
+/// The stage-two boundary permits any number of separate monocycles joined by
+/// bridges or chains. A spiro articulation still joins two cyclic blocks, so
+/// checking each block's cycle rank alone would admit an unsupported parent.
+fn require_disjoint_monocyclic_blocks(mol: &Molecule) -> Result<(), String> {
+    let atoms = mol.atoms.keys().copied().collect();
+    let mut ring_atoms = AtomSet::new();
+    for block in biconnected_edge_components(mol, &atoms) {
+        let mut degrees = BTreeMap::<usize, usize>::new();
+        for &(u, v) in &block {
+            *degrees.entry(u).or_default() += 1;
+            *degrees.entry(v).or_default() += 1;
+        }
+        if block.len() < degrees.len() {
+            continue;
+        }
+        if block.len() != degrees.len() || degrees.values().any(|&degree| degree != 2) {
+            return Err("openclatura: fused and bridged ring systems are not ported".into());
+        }
+        if degrees.keys().any(|idx| ring_atoms.contains(idx)) {
+            return Err("openclatura: spiro ring systems are not ported".into());
+        }
+        ring_atoms.extend(degrees.into_keys());
+    }
+    Ok(())
 }
 
 fn atom_cip(state: &perception::State) -> BTreeMap<usize, String> {
@@ -383,5 +408,29 @@ mod tests {
             );
         }
         assert!(read_smiles("[13CH3][C@@H](F)Cl").is_ok());
+    }
+
+    #[test]
+    fn separate_monocycles_are_supported_across_bridges_and_chains() {
+        for text in [
+            "C1CC1C2CC2",
+            "C1CC1CC2CC2",
+            "c1ccccc1-c2ccccc2",
+            "C1CC1CC2CC2CC3CC3",
+        ] {
+            read_smiles(text).unwrap_or_else(|error| panic!("{text}: {error}"));
+        }
+    }
+
+    #[test]
+    fn shared_ring_atoms_remain_outside_the_supported_topology() {
+        for (text, reason) in [
+            ("C1CCC2(CC1)CCCC2", "spiro"),
+            ("C1CCC2CCCCC2C1", "fused and bridged"),
+            ("C1CC2CCC1C2", "fused and bridged"),
+        ] {
+            let error = read_smiles(text).unwrap_err();
+            assert!(error.contains(reason), "{text}: {error}");
+        }
     }
 }

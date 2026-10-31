@@ -6,7 +6,7 @@ use super::{
         promote_acyl_substituent_name, promote_benzene_retained_name,
         promote_retained_functional_parent, promote_retained_substituent_name,
     },
-    assembly_parts::AssemblyParts,
+    assembly_parts::{AssemblyParts, HydroOperation},
     assembly_prefixes::{format_replacement_prefixes, format_substituent_prefixes},
     assembly_utils::{needs_hyphen, parse_locant},
     formatting::format_multiplier,
@@ -36,8 +36,172 @@ fn indicated_run(text: &str) -> Option<(Vec<String>, usize)> {
         .collect();
     Some((locs?, run.len() + 1))
 }
-fn add_indicated_hydrogen_prefix(parts: &AssemblyParts, core: &str) -> String {
-    let mut core = core.to_owned();
+/// Saturation beyond the retained hydride's quota is added H or a hydro prefix.
+fn normalize_indicated_hydrogen_quota(parts: &mut AssemblyParts, core: &str) -> String {
+    let Some(quota) = super::additive::parent_indicated_hydrogen_quota(parts) else {
+        return core.into();
+    };
+    if core.contains("lambda")
+        || parts
+            .retained_name
+            .as_ref()
+            .is_some_and(|name| name.contains("lambda"))
+    {
+        return core.into();
+    }
+    let stem_cited = indicated_run(core).map_or_else(Vec::new, |(locants, _)| locants);
+    let citations: Vec<_> = parts
+        .hydro_operations
+        .iter()
+        .enumerate()
+        .filter(|(_, operation)| {
+            operation.operation_kind == "indicated_hydrogen" && operation.key != "added_hydrogen"
+        })
+        .map(|(index, operation)| (index, operation.locants.clone()))
+        .collect();
+    let mut cited: Vec<_> = stem_cited
+        .into_iter()
+        .chain(
+            citations
+                .iter()
+                .flat_map(|(_, locants)| locants.iter().cloned()),
+        )
+        .chain(parts.indicated_hydrogens.iter().cloned())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    cited.sort_by_key(|locant| parse_locant(locant));
+    if cited.len() <= quota {
+        return core.into();
+    }
+    let surplus: BTreeSet<_> = cited.into_iter().skip(quota).collect();
+    let mut bonded: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+    for (left, right) in parts.parent_bond_ids_by_locants.keys() {
+        bonded.entry(left).or_default().insert(right);
+        bonded.entry(right).or_default().insert(left);
+    }
+    let suffix_locants: BTreeSet<_> = parts
+        .principal_group
+        .iter()
+        .flat_map(|group| group.locants.iter().map(String::as_str))
+        .collect();
+    let added: BTreeSet<_> = surplus
+        .iter()
+        .filter(|locant| {
+            parts.parent_charges.is_empty()
+                && bonded
+                    .get(locant.as_str())
+                    .is_some_and(|neighbors| !neighbors.is_disjoint(&suffix_locants))
+        })
+        .cloned()
+        .collect();
+    let mut hydro: BTreeSet<_> = surplus.difference(&added).cloned().collect();
+    let claimed: BTreeSet<_> = parts
+        .hydro_operations
+        .iter()
+        .filter(|operation| {
+            operation.operation_kind == "additive_hydrogen" || operation.key == "added_hydrogen"
+        })
+        .flat_map(|operation| operation.locants.iter().cloned())
+        .collect();
+    if !surplus.is_disjoint(&claimed) {
+        return core.into();
+    }
+    let prefix_locants: BTreeSet<_> = parts
+        .substituents
+        .iter()
+        .filter(|item| {
+            parts.parent_charges.is_empty()
+                && (["oxo", "thioxo", "sulfanylidene", "selanylidene", "imino"]
+                    .contains(&item.name.as_str())
+                    || item.name.ends_with("ylidene"))
+        })
+        .flat_map(|item| item.locants.iter())
+        .filter(|locant| !claimed.contains(*locant))
+        .map(String::as_str)
+        .collect();
+    let adjacent: Vec<_> = hydro
+        .iter()
+        .filter_map(|site| bonded.get(site.as_str()))
+        .flat_map(|neighbors| {
+            neighbors
+                .intersection(&prefix_locants)
+                .map(|locant| (*locant).to_owned())
+        })
+        .collect();
+    hydro.extend(adjacent);
+    let existing_hydro: usize = parts
+        .hydro_operations
+        .iter()
+        .filter(|operation| operation.operation_kind == "additive_hydrogen")
+        .map(|operation| operation.locants.len())
+        .sum();
+    if !(existing_hydro + hydro.len()).is_multiple_of(2) {
+        return core.into();
+    }
+    let mut respelled = BTreeSet::new();
+    for (index, locants) in citations {
+        if !locants.iter().any(|locant| surplus.contains(locant)) {
+            continue;
+        }
+        let operation = &mut parts.hydro_operations[index];
+        if locants.iter().all(|locant| added.contains(locant)) {
+            operation.key = "added_hydrogen".into();
+        } else if locants.iter().all(|locant| hydro.contains(locant)) {
+            operation.key = "additive_hydrogen".into();
+            operation.operation_kind = "additive_hydrogen".into();
+        } else {
+            return core.into();
+        }
+        respelled.extend(locants);
+    }
+    for (locants, kind) in [(&added, "added_hydrogen"), (&hydro, "additive_hydrogen")] {
+        let mut pending: Vec<_> = locants.difference(&respelled).cloned().collect();
+        if !pending.is_empty() {
+            pending.sort_by_key(|locant| parse_locant(locant));
+            parts.hydro_operations.push(HydroOperation {
+                key: kind.into(),
+                locants: pending,
+                operation_kind: kind.into(),
+            });
+        }
+    }
+    parts
+        .indicated_hydrogens
+        .retain(|locant| !hydro.contains(locant));
+    if (!hydro.is_empty() || !added.is_empty())
+        && parts
+            .retained_name
+            .as_deref()
+            .is_some_and(|name| indicated_run(name).is_some())
+        && let Some(metadata) = &mut parts.retained_parent_metadata
+    {
+        metadata
+            .default_indicated_h
+            .retain(|locant| !hydro.contains(locant) && !added.contains(locant));
+        metadata.indicated_hydrogen_count = metadata
+            .indicated_hydrogen_count
+            .min(metadata.default_indicated_h.len());
+    }
+    respell_indicated_hydrogen(core, &hydro).unwrap_or_else(|| core.into())
+}
+
+fn respell_indicated_hydrogen(text: &str, respelled: &BTreeSet<String>) -> Option<String> {
+    let (locants, end) = indicated_run(text)?;
+    let remaining = locants
+        .iter()
+        .filter(|locant| !respelled.contains(*locant))
+        .map(|locant| format!("{locant}H"))
+        .collect::<Vec<_>>();
+    Some(if remaining.is_empty() {
+        text[end..].into()
+    } else {
+        format!("{}-{}", remaining.join(","), &text[end..])
+    })
+}
+
+fn add_indicated_hydrogen_prefix(parts: &mut AssemblyParts, core: &str) -> String {
+    let mut core = normalize_indicated_hydrogen_quota(parts, core);
     let mut additive: Vec<_> = parts
         .hydro_operations
         .iter()
@@ -320,6 +484,26 @@ mod tests {
         nomenclature::{rule_from_value, section},
     };
     use super::*;
+
+    #[test]
+    fn oxo_prefixes_cite_retained_ring_hydrogenation() {
+        for (smiles, expected) in [
+            (
+                "CC1=CC(=CC=C1)CN2C=CC=C(C2=O)C(=O)NCCCNS(=O)(=O)C",
+                "N-(3-methanesulfonamidopropyl)-1-((3-methylphenyl)methyl)-2-oxo-1,2-dihydropyridine-3-carboxamide",
+            ),
+            (
+                "C1=CNC(=O)C(=C1)C(=O)NC2=NC(=CS2)CC(=O)NC3=CC=C(C=C3)C(=O)N",
+                "N-(4-(2-((4-carbamoylphenyl)amino)-2-oxoethyl)-1,3-thiazol-2-yl)-2-oxo-1,2-dihydropyridine-3-carboxamide",
+            ),
+        ] {
+            assert_eq!(
+                super::super::name_smiles(smiles).as_deref(),
+                Ok(expected),
+                "{smiles}"
+            );
+        }
+    }
 
     #[test]
     fn selected_principal_citation_requires_a_suffix_renderer() {

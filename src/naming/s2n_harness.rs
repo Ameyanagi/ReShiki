@@ -111,6 +111,35 @@ impl Measurements {
         result
     }
 
+    /// Classify a name produced elsewhere for `smiles`; empty means declined.
+    fn classify_given(&mut self, smiles: &str, name: &str) -> Outcome {
+        let mut result = Outcome {
+            class: Class::Declined,
+            name: name.into(),
+            expected: super::canonical_smiles(smiles).unwrap_or_default(),
+            actual: String::new(),
+            reason: String::new(),
+        };
+        if name.is_empty() || result.expected.is_empty() {
+            return result;
+        }
+        match self.parse_name(name) {
+            Err(reason) => {
+                result.class = Class::Unparseable;
+                result.reason = reason;
+            }
+            Ok(actual) => {
+                result.class = if actual == result.expected {
+                    Class::Correct
+                } else {
+                    Class::Wrong
+                };
+                result.actual = actual;
+            }
+        }
+        result
+    }
+
     /// All four checks share the same structural classification. Text parity
     /// is an additional metric: alternative valid names are not wrong graphs.
     fn classify(&mut self, smiles: &str) -> Outcome {
@@ -483,10 +512,28 @@ fn s2n_extra_file() {
         return;
     };
     let text = std::fs::read_to_string(path).expect("read S2N_EXTRA");
+    // S2N_EXTRA_GIVEN round-trips the name in the second column instead of
+    // calling the namer, e.g. to measure upstream openclatura's own output.
+    let given = std::env::var_os("S2N_EXTRA_GIVEN").is_some();
     let mut measurements = Measurements::default();
     let mut counts = BTreeMap::<_, usize>::new();
-    for smiles in text.lines().filter_map(|line| line.split('\t').next()) {
-        let outcome = measurements.classify(smiles);
+    let mut rows = String::new();
+    for line in text.lines().filter(|line| !line.is_empty()) {
+        let mut fields = line.split('\t');
+        let smiles = fields.next().unwrap_or_default();
+        let outcome = if given {
+            measurements.classify_given(smiles, fields.next().unwrap_or_default())
+        } else {
+            measurements.classify(smiles)
+        };
+        writeln!(
+            rows,
+            "{:?}\t{smiles}\t{}\t{}",
+            outcome.class,
+            outcome.name,
+            field(&outcome.reason)
+        )
+        .unwrap();
         *counts.entry(format!("{:?}", outcome.class)).or_default() += 1;
         if matches!(outcome.class, Class::Wrong | Class::Unparseable) {
             println!(
@@ -496,6 +543,9 @@ fn s2n_extra_file() {
                 field(&outcome.reason)
             );
         }
+    }
+    if let Some(out) = std::env::var_os("S2N_EXTRA_OUT") {
+        std::fs::write(out, rows).expect("write S2N_EXTRA_OUT");
     }
     println!("{counts:?}");
 }

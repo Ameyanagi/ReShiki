@@ -693,4 +693,50 @@ mod tests {
         }
         Ok(())
     }
+
+    #[test]
+    fn disjoint_ring_branches_keep_recursive_parent_and_attachment_names() {
+        use crate::naming::openclatura::name_smiles;
+
+        for (smiles, expected) in [
+            ("C1=CC=NC(=C1)C2=CC=CC=N2", "2-(pyridin-2-yl)pyridine"),
+            ("C1CCC(CC1)C2=CC=CC=C2", "cyclohexylbenzene"),
+            (
+                "C1=CC=C(C=C1)C2=CC=C(C=C2)C3=CC=CC=C3",
+                "1,4-diphenylbenzene",
+            ),
+            (
+                "C1=CC=C(C=C1)C2=CC(=CC=C2)C3=CC=CC=C3",
+                "1,3-diphenylbenzene",
+            ),
+            (
+                "CN(C)CCOC(C1=CC=CC=C1)C2=CC=CC=C2",
+                "2-((diphenylmethyl)oxy)-N,N-dimethylethan-1-amine",
+            ),
+            (
+                "c1ccc(-c2cccc(Nc3cnccn3)n2)cc1",
+                "N-(6-phenylpyridin-2-yl)pyrazin-2-amine",
+            ),
+        ] {
+            assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
+        }
+    }
+
+    #[test]
+    fn ring_branches_preserve_bond_and_atom_stereochemistry() {
+        use crate::naming::openclatura::name_smiles;
+
+        for (smiles, expected) in [
+            (
+                "C1=CC=C(C=C1)/C=C/C2=CC=CC=C2",
+                "(1E)-2-phenylethenylbenzene",
+            ),
+            (
+                "CN1CCC[C@H]1C2=CN=CC=C2",
+                "3-((2S)-1-methylpyrrolidin-2-yl)pyridine",
+            ),
+        ] {
+            assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
+        }
+    }
 }

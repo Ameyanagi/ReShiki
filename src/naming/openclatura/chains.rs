@@ -1,6 +1,7 @@
-//! Carbon-chain enumeration and the single-cycle part of Python `chains.py`.
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+//! Carbon-chain enumeration and disjoint monocyclic systems from Python `chains.py`.
+use std::collections::{BTreeMap, BTreeSet};
 
+use super::graph_kernel::biconnected_edge_components;
 use super::molecule::{AtomSet, Molecule};
 
 #[derive(Clone, Debug, Default)]
@@ -18,31 +19,14 @@ pub fn get_cyclic_atoms(mol: &Molecule, exclude_atoms: &AtomSet) -> AtomSet {
         .filter(|i| !exclude_atoms.contains(i))
         .copied()
         .collect();
-    let mut cyclic = AtomSet::new();
-    for &start in &valid {
-        'edges: for &next in mol.get_neighbors(start) {
-            if !valid.contains(&next) {
-                continue;
-            }
-            let mut visited = BTreeSet::from([start, next]);
-            let mut queue = VecDeque::from([next]);
-            while let Some(current) = queue.pop_front() {
-                for &neighbor in mol.get_neighbors(current) {
-                    if !valid.contains(&neighbor) {
-                        continue;
-                    }
-                    if neighbor == start && current != next {
-                        cyclic.insert(start);
-                        break 'edges;
-                    }
-                    if visited.insert(neighbor) {
-                        queue.push_back(neighbor);
-                    }
-                }
-            }
-        }
-    }
-    cyclic
+    biconnected_edge_components(mol, &valid)
+        .into_iter()
+        .filter_map(|block| {
+            let atoms: AtomSet = block.iter().flat_map(|&(u, v)| [u, v]).collect();
+            (block.len() >= atoms.len()).then_some(atoms)
+        })
+        .flatten()
+        .collect()
 }
 
 pub fn find_all_carbon_paths(
@@ -109,48 +93,50 @@ pub fn find_all_carbon_paths(
     Ok(unique)
 }
 
-/// Stage 1 admits exactly one monocycle; fused, bridged, spiro and separate
-/// multiple-ring systems have no match here.
+/// The E == V branch of upstream `find_ring_systems`, in graph-block order.
+/// Fused, bridged and spiro parents are declined at the input boundary.
 pub fn find_ring_systems(mol: &Molecule, exclude_atoms: &AtomSet) -> Vec<RingSystem> {
-    let atoms = get_cyclic_atoms(mol, exclude_atoms);
-    if atoms.len() < 3
-        || atoms.iter().any(|&idx| {
-            mol.get_neighbors(idx)
-                .iter()
-                .filter(|n| atoms.contains(n))
-                .count()
-                != 2
-        })
-    {
-        return Vec::new();
-    }
-    let Some(&start) = atoms.first() else {
-        return Vec::new();
-    };
-    let mut current = start;
-    let mut path = vec![start];
-    let mut visited = AtomSet::from([start]);
-    while path.len() < atoms.len() {
-        let next = mol
-            .get_neighbors(current)
-            .iter()
-            .filter(|n| atoms.contains(n) && !visited.contains(n))
-            .min()
-            .copied();
-        let Some(next) = next else {
-            return Vec::new();
+    let cyclic = get_cyclic_atoms(mol, exclude_atoms);
+    let mut systems = Vec::new();
+    for block in biconnected_edge_components(mol, &cyclic) {
+        let atoms: AtomSet = block.iter().flat_map(|&(u, v)| [u, v]).collect();
+        if atoms.len() < 3 || block.len() != atoms.len() {
+            continue;
+        }
+        let mut adjacency: BTreeMap<usize, AtomSet> = BTreeMap::new();
+        for (u, v) in block {
+            adjacency.entry(u).or_default().insert(v);
+            adjacency.entry(v).or_default().insert(u);
+        }
+        if adjacency.values().any(|neighbors| neighbors.len() != 2) {
+            continue;
+        }
+        let Some(&start) = atoms.first() else {
+            continue;
         };
-        visited.insert(next);
-        path.push(next);
-        current = next;
+        let mut current = start;
+        let mut path = vec![start];
+        let mut visited = AtomSet::from([start]);
+        while path.len() < atoms.len() {
+            let next = adjacency[&current]
+                .iter()
+                .find(|neighbor| !visited.contains(neighbor))
+                .copied();
+            let Some(next) = next else {
+                break;
+            };
+            visited.insert(next);
+            path.push(next);
+            current = next;
+        }
+        if path.len() == atoms.len() && adjacency[&current].contains(&start) {
+            systems.push(RingSystem {
+                atoms,
+                paths: vec![path],
+            });
+        }
     }
-    if mol.get_bond(current, start).is_none() {
-        return Vec::new();
-    }
-    vec![RingSystem {
-        atoms,
-        paths: vec![path],
-    }]
+    systems
 }
 
 fn ranking_order(mol: &Molecule, u: usize, v: usize) -> usize {
@@ -293,6 +279,40 @@ mod tests {
         let mol = read_smiles("C1CCCCC1").unwrap();
         assert!(get_cyclic_atoms(&mol, &AtomSet::from([0])).is_empty());
     }
+
+    #[test]
+    fn separate_ring_systems_follow_upstream_block_and_walk_order() {
+        let mol = read_smiles("C1(C2CCC2)CCC1").unwrap();
+        let systems = find_ring_systems(&mol, &AtomSet::new());
+        assert_eq!(
+            systems
+                .iter()
+                .map(|system| system.paths.clone())
+                .collect::<Vec<_>>(),
+            vec![vec![vec![0, 5, 6, 7]], vec![vec![1, 2, 3, 4]]]
+        );
+        // The bridge between two cyclic atoms belongs to neither ring block.
+        assert_eq!(systems[0].atoms, AtomSet::from([0, 5, 6, 7]));
+        assert_eq!(systems[1].atoms, AtomSet::from([1, 2, 3, 4]));
+
+        let remaining = find_ring_systems(&mol, &AtomSet::from([0]));
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].paths, vec![vec![1, 2, 3, 4]]);
+    }
+
+    #[test]
+    fn linking_chain_atoms_are_not_cyclic() {
+        let mol = read_smiles("C1(CC2CCC2)CCC1").unwrap();
+        assert_eq!(
+            get_cyclic_atoms(&mol, &AtomSet::new()),
+            AtomSet::from([0, 2, 3, 4, 5, 6, 7, 8])
+        );
+        assert_eq!(
+            find_all_carbon_paths(&mol, &AtomSet::new()).unwrap(),
+            vec![vec![1]]
+        );
+    }
+
     #[test]
     fn aromatic_morgan_ranks_preserve_ring_symmetry() {
         let mol = read_smiles("c1ccccc1").unwrap();
