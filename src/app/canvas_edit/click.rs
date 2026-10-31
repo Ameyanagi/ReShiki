@@ -7,6 +7,7 @@ use reshiki::editing;
 impl App {
     pub(super) fn canvas_click(&mut self, p: Point, before: Document) {
         let hit = canvas::hit_object(&self.tab.doc, p, 10.0 / self.tab.camera.zoom);
+        let mut charge_kept = None;
         match self.tool {
             Tool::Atom => {
                 if let Some(id) = self.tab.doc.nearest(p, 10.0 / self.tab.camera.zoom) {
@@ -22,7 +23,11 @@ impl App {
                         a.display.set_variable(None);
                         a.explicit_h = 0;
                         a.no_implicit = crystal;
-                        a.charge = 0;
+                        if !crystal {
+                            a.charge = 0;
+                        } else if a.charge != 0 {
+                            charge_kept = Some(charge_kept_status(&a.element, a.charge));
+                        }
                         a.isotope = 0;
                     }
                     self.tab.selected = vec![id];
@@ -76,6 +81,11 @@ impl App {
             _ => self.tab.selected = hit.into_iter().collect(),
         }
         self.changed(before);
+        if !self.error
+            && let Some(status) = charge_kept
+        {
+            self.status = status;
+        }
     }
     fn click_bond_tool(&mut self, p: Point, before: Document) {
         let atom = self.tab.doc.nearest(p, 10.0 / self.tab.camera.zoom);
@@ -241,3 +251,18 @@ impl App {
 
 #[cfg(test)]
 mod tests;
+
+/// The status after an element change on a crystal site that kept its ion's
+/// charge, such as "Br−: charge kept".
+pub(in crate::app) fn charge_kept_status(element: &str, charge: i32) -> String {
+    let amount = charge.unsigned_abs();
+    format!(
+        "{element}{}{}: charge kept · Edit atom label to change it",
+        if amount > 1 {
+            amount.to_string()
+        } else {
+            String::new()
+        },
+        if charge > 0 { "+" } else { "−" }
+    )
+}

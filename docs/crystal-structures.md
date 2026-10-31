@@ -228,8 +228,12 @@ its import provenance.
   Symmetry comes only from `_space_group_symop_operation_xyz` or
   `_symmetry_equiv_pos_as_xyz`; a file that lists none shows its listed atoms
   and says so, unless its space group is P1. Of disordered sites, atoms without
-  a disorder group and those of the lowest group of each disorder assembly are
-  kept. Atoms with an occupancy of 0 and dummy atoms
+  a disorder group and those in group 0 are kept. Each disorder assembly keeps
+  the group with the highest occupancy when every site within each group has
+  the same known occupancy and no other group ties it. If occupancies are mixed,
+  missing or tied, its lowest group number is kept. The import note names the
+  kept and omitted groups and their occupancies when known. Atoms with an
+  occupancy of 0 and dummy atoms
   (`_atom_site_calc_flag dum`) are skipped. Atoms closer than 0.25 Å to one
   already kept, such as the copies of an atom on a symmetry element, are the
   same site.

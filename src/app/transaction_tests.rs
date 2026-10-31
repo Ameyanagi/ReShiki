@@ -834,28 +834,71 @@ fn an_edit_removing_the_unit_cell_reports_it_and_preserves_analysis_provenance()
 
 #[test]
 fn element_tool_keeps_crystal_sites_explicit_and_retains_the_cell() {
-    let mut app = app();
-    app.tab.doc =
-        reshiki::crystal::read("cif", include_str!("../../tests/fixtures/crystal/nacl.cif"))
+    for (source, element, charge, formula, status) in [
+        ("Na", "K", 1, "Cl4KNa3", "K+"),
+        ("Cl", "Br", -1, "BrCl3Na4", "Br−"),
+    ] {
+        let mut app = app();
+        app.tab.doc =
+            reshiki::crystal::read("cif", include_str!("../../tests/fixtures/crystal/nacl.cif"))
+                .unwrap()
+                .0;
+        let atom = app
+            .tab
+            .doc
+            .atoms
+            .iter()
+            .find(|a| a.element == source)
             .unwrap()
-            .0;
-    let atom = app
-        .tab
-        .doc
-        .atoms
-        .iter()
-        .find(|a| a.element == "Na")
-        .unwrap()
-        .clone();
+            .clone();
+        let before = app.tab.doc.clone();
+        app.tool = Tool::Atom;
+        app.element = element.into();
+        app.error = true;
+        app.edit(Edit::Click(atom.position));
+        assert_eq!(app.tab.doc.models, before.models);
+        let replaced = app.tab.doc.atom(atom.id).unwrap();
+        assert_eq!(replaced.element, element);
+        assert_eq!(replaced.charge, charge);
+        assert!(replaced.no_implicit);
+        assert_eq!(
+            reshiki::models3d::crystal::composition(&app.tab.doc, &[])
+                .unwrap()
+                .formula,
+            formula
+        );
+        assert_eq!(
+            app.status,
+            format!("{status}: charge kept · Edit atom label to change it")
+        );
+        assert!(!app.error);
+        let committed = app.tab.doc.clone();
+        app.step_history(false);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+        app.step_history(true);
+        assert_eq!(app.tab.doc, committed);
+    }
+}
+
+#[test]
+fn element_tool_resets_charge_on_an_ordinary_atom() {
+    let mut app = app();
+    let id = app.tab.doc.add_atom("Cl", Point::default());
+    app.tab.doc.atom_mut(id).unwrap().charge = -1;
     let before = app.tab.doc.clone();
     app.tool = Tool::Atom;
-    app.element = "K".into();
-    app.edit(Edit::Click(atom.position));
-    assert_eq!(app.tab.doc.models, before.models);
-    assert_eq!(app.tab.doc.atom(atom.id).unwrap().element, "K");
-    assert!(app.tab.doc.atom(atom.id).unwrap().no_implicit);
+    app.element = "Br".into();
+    app.edit(Edit::Click(Point::default()));
+    let replaced = app.tab.doc.atom(id).unwrap();
+    assert_eq!(replaced.element, "Br");
+    assert_eq!(replaced.charge, 0);
+    assert!(!replaced.no_implicit);
+    assert_eq!(app.status, CHEMISTRY);
+    assert!(!app.error);
     app.step_history(false);
     assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
 }
 
 #[test]

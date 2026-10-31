@@ -186,6 +186,15 @@ pub fn label_edit(
         if mode == Mode::Auto
             && let Some(atom) = candidate.atom_mut(id)
         {
+            if editing::ELEMENTS.contains(&label)
+                && doc
+                    .models
+                    .iter()
+                    .any(|m| m.cell.is_some() && m.contains(id))
+                && let Some(source) = doc.atom(id)
+            {
+                atom.charge = source.charge;
+            }
             atom.display.hydrogens = Some(true);
         }
         (candidate, id)

@@ -402,16 +402,19 @@ fn symmetry_operators_parse_in_their_usual_spellings() {
 const CELL: &str = "data_t\n_cell_length_a 4\n_cell_length_b 4\n_cell_length_c 4\n_cell_angle_alpha 90\n_cell_angle_beta 90\n_cell_angle_gamma 90\n";
 
 #[test]
-fn disorder_keeps_the_first_alternative() {
+fn disorder_keeps_the_lowest_group_without_known_occupancy() {
     let text = format!(
-        "{CELL}_space_group_name_H-M_alt 'P 1'\nloop_\n_atom_site_label\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n_atom_site_disorder_group\nC1 0.1 0.1 0.1 .\nO1A 0.4 0.1 0.1 1\nO1B 0.1 0.4 0.1 2\nN1 0.6 0.6 0.6 2\n"
+        "{CELL}_space_group_name_H-M_alt 'P 1'\nloop_\n_atom_site_label\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n_atom_site_disorder_group\nC1 0.1 0.1 0.1 .\nO1B 0.1 0.4 0.1 2\nO1A 0.4 0.1 0.1 1\nN1 0.6 0.6 0.6 2\n"
     );
     let (doc, warnings) = open("cif", &text);
     let labels: Vec<_> = model(&doc).sites.iter().map(|s| s.label.clone()).collect();
     assert_eq!(labels, ["C1", "O1A"]);
     assert_eq!(warnings.len(), 1, "{warnings:?}");
     assert_eq!(warnings, model(&doc).notes);
-    assert!(warnings[0].contains("2 alternative site records"));
+    assert_eq!(
+        warnings[0],
+        "Disordered sites: kept group 1; left out group 2, 2 site records"
+    );
 }
 
 #[test]
@@ -421,13 +424,28 @@ fn cod_ferrocene_import_note_survives_native_save_and_reopen() {
         include_str!("../../../../tests/fixtures/crystal/cod-7033930.cif"),
     );
     assert_eq!(model(&doc).notes, warnings);
+    let labels: Vec<_> = model(&doc)
+        .sites
+        .iter()
+        .map(|site| site.label.as_str())
+        .collect();
+    for prefix in ['C', 'H'] {
+        for number in 1..=5 {
+            assert!(!labels.contains(&format!("{prefix}{number}").as_str()));
+        }
+        for number in 6..=10 {
+            assert!(labels.contains(&format!("{prefix}{number}").as_str()));
+        }
+    }
     assert!(
         warnings
             .iter()
-            .any(|note| note.contains("10 alternative site records"))
+            .any(|note| note
+                == "Disordered sites: kept group 2 (occupancy 0.691) of assembly A; left out group 1 (0.309), 10 site records")
     );
     let composition = crate::models3d::crystal::composition(&doc, &[]).unwrap();
     assert_eq!(composition.formula, "C20H20Fe2");
+    assert!((composition.mass - 372.070).abs() < 0.001);
     let saved = doc.file_json().unwrap();
     let reopened = Document::from_json(&saved).unwrap();
     assert_eq!(model(&reopened).notes, warnings);
@@ -591,12 +609,18 @@ fn the_import_engine_reads_crystal_files_and_keeps_the_model() {
 fn cif_reads_occupancy_assemblies_and_text_fields_by_the_syntax() {
     let atoms = "loop_\n_atom_site_label\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n_atom_site_occupancy\n_atom_site_disorder_assembly\n_atom_site_disorder_group\n";
     let text = format!(
-        "{CELL}_audit_creation_method loop_based\n_publ_section_comment\n;\nnote\n; _space_group_name_H-M_alt 'P 1'\n{atoms}C0 .2 .2 .2 0 . .\nO1 .2 .2 .2 1 . .\nN1A .5 .1 .1 .5 A 1\nN1B .1 .5 .1 .5 A 2\nS1C .1 .1 .5 .5 B 3\nS1D .7 .7 .5 .5 B 4\n"
+        "{CELL}_audit_creation_method loop_based\n_publ_section_comment\n;\nnote\n; _space_group_name_H-M_alt 'P 1'\n{atoms}C0 .2 .2 .2 0 . .\nO1 .2 .2 .2 1 . 0\nN1A .5 .1 .1 .3 A 1\nN1B .1 .5 .1 .7 A 2\nS1C .1 .1 .5 .8 B 3\nS1D .7 .7 .5 .2 B 4\n"
     );
     let (doc, warnings) = open("cif", &text);
     let labels: Vec<_> = model(&doc).sites.iter().map(|s| s.label.as_str()).collect();
-    // The unoccupied carbon is left out, and each assembly keeps its first group.
-    assert_eq!(labels, ["O1", "N1A", "S1C"]);
+    // The unoccupied carbon is left out; assemblies choose independently.
+    assert_eq!(labels, ["O1", "N1B", "S1C"]);
+    assert_eq!(
+        warnings,
+        [
+            "Disordered sites: kept group 2 (occupancy 0.7) of assembly A; left out group 1 (0.3); kept group 3 (occupancy 0.8) of assembly B; left out group 4 (0.2), 2 site records"
+        ]
+    );
     // The space group after the closing semicolon was read: no P1 warning.
     assert!(
         !warnings.iter().any(|w| w.contains("symmetry")),
@@ -606,6 +630,89 @@ fn cif_reads_occupancy_assemblies_and_text_fields_by_the_syntax() {
         "{CELL}_space_group_name_H-M_alt 'P 1'\nloop_\n_atom_site_label\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n_atom_site_disorder_group\nC1 0 0 0 -9223372036854775808\n"
     );
     assert_eq!(open("cif", &huge).0.atoms.len(), 1);
+}
+
+#[test]
+fn cif_disorder_requires_uniform_known_group_occupancies() {
+    let atoms = "loop_\n_atom_site_label\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n_atom_site_occupancy\n_atom_site_disorder_group\n";
+    for (first, second) in [(".2", ".3"), (".2", "?"), ("?", ".2"), (".", ".2")] {
+        let text = format!(
+            "{CELL}_space_group_name_H-M_alt 'P 1'\n{atoms}O1A .1 .1 .1 {first} 1\nO2A .4 .1 .1 {second} 1\nO3A .7 .1 .1 {first} 1\nO1B .1 .4 .1 .8 2\nO2B .4 .4 .1 .8 2\n"
+        );
+        let (doc, warnings) = open("cif", &text);
+        let labels: Vec<_> = model(&doc).sites.iter().map(|s| s.label.as_str()).collect();
+        assert_eq!(labels, ["O1A", "O2A", "O3A"], "{first}, {second}");
+        assert_eq!(
+            warnings,
+            ["Disordered sites: kept group 1; left out group 2 (0.8), 2 site records"],
+            "{first}, {second}"
+        );
+    }
+    // A known occupancy in one group is insufficient to compare the assembly.
+    let text = format!(
+        "{CELL}_space_group_name_H-M_alt 'P 1'\n{atoms}O1A .1 .1 .1 .2 1\nO1B .1 .4 .1 ? 2\n"
+    );
+    let (doc, warnings) = open("cif", &text);
+    assert_eq!(model(&doc).sites[0].label, "O1A");
+    assert_eq!(
+        warnings,
+        ["Disordered sites: kept group 1 (occupancy 0.2); left out group 2, 1 site record"]
+    );
+}
+
+#[test]
+fn cif_disorder_uses_group_occupancy_instead_of_the_site_count() {
+    let text = format!(
+        "{CELL}_space_group_name_H-M_alt 'P 1'\nloop_\n_atom_site_label\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n_atom_site_occupancy\n_atom_site_disorder_group\nO1A .1 .1 .1 .4 1\nO2A .4 .1 .1 .4 1\nO3A .7 .1 .1 .4 1\nO1B .1 .4 .1 .6 -2\n"
+    );
+    let (doc, warnings) = open("cif", &text);
+    assert_eq!(doc.atoms.len(), 1);
+    assert_eq!(model(&doc).sites[0].label, "O1B");
+    assert_eq!(
+        warnings,
+        ["Disordered sites: kept group 2 (occupancy 0.6); left out group 1 (0.4), 3 site records"]
+    );
+}
+
+#[test]
+fn cif_disorder_keeps_the_lowest_group_when_occupancies_tie() {
+    let atoms = "loop_\n_atom_site_label\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n_atom_site_occupancy\n_atom_site_disorder_group\n";
+    for (rows, note) in [
+        (
+            "O1B .1 .4 .1 .5 2\nO1A .1 .1 .1 .5 1\n",
+            "Disordered sites: kept group 1 (occupancy 0.5); left out group 2 (0.5), 1 site record",
+        ),
+        (
+            "O1C .4 .4 .1 .4 3\nO1B .1 .4 .1 .2 2\nO1A .1 .1 .1 .4 1\n",
+            "Disordered sites: kept group 1 (occupancy 0.4); left out groups 2 (0.2), 3 (0.4), 2 site records",
+        ),
+    ] {
+        let text = format!("{CELL}_space_group_name_H-M_alt 'P 1'\n{atoms}{rows}");
+        let (doc, warnings) = open("cif", &text);
+        assert_eq!(doc.atoms.len(), 1);
+        assert_eq!(model(&doc).sites[0].label, "O1A");
+        assert_eq!(warnings, [note]);
+    }
+}
+
+#[test]
+fn cif_disorder_note_summarizes_many_assemblies_within_the_note_limit() {
+    let rows: String = ('A'..='H')
+        .enumerate()
+        .map(|(i, set)| {
+            let x = 0.05 + 0.1 * i as f64;
+            format!("O{i}A {x} .1 .1 .3 {set} 1\nO{i}B {x} .6 .1 .7 {set} 2\n")
+        })
+        .collect();
+    let text = format!(
+        "{CELL}_space_group_name_H-M_alt 'P 1'\nloop_\n_atom_site_label\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n_atom_site_occupancy\n_atom_site_disorder_assembly\n_atom_site_disorder_group\n{rows}"
+    );
+    let (doc, warnings) = open("cif", &text);
+    assert_eq!(doc.atoms.len(), 8);
+    assert_eq!(
+        warnings,
+        ["Disordered sites: kept one group in each of 8 assemblies, 8 site records"]
+    );
 }
 
 #[test]
