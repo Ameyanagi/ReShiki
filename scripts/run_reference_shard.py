@@ -36,6 +36,7 @@ DEFAULT_SECONDS = 20
 # Shard 0 exists for every --count, so an assignment can never fall outside it.
 WORKSPACE_TARGET_SHARDS = {
     ("reshiki-io", "pdf_gradients"): 0,
+    ("reshiki-io", "spacefill_seams"): 0,
     ("reshiki-macos", "native_print"): 0,
     ("reshiki-geometry", "c60"): 0,
     ("reshiki-geometry", "embedding"): 0,

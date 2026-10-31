@@ -334,10 +334,10 @@ fn translucent_copies_leave_the_original_surface_and_contacts_cache_intact() {
     view.rotated[0] = [0.; 3];
     view.rotated[copy] = [0., 0., 0.5];
     let atoms = [0, copy];
-    assert!(!view.contacts(&atoms, 1.).contains_key(&0));
+    assert!(!view.contacts(&atoms, 1., false).contains_key(&0));
     // The exact same pose must recalculate contacts when the front ball is opaque.
     view.solid = view.symbols.len();
-    assert!(view.contacts(&atoms, 1.).contains_key(&0));
+    assert!(view.contacts(&atoms, 1., false).contains_key(&0));
 }
 
 #[test]
