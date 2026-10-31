@@ -981,6 +981,7 @@ async fn paper_layers_match_captured_baseline() {
             }
             "keyboard_target" => {
                 canvas.keyboard_target = Some(World::new(300., 200.));
+                canvas.keyboard_marker = true;
                 None
             }
             "pages_grid" => {

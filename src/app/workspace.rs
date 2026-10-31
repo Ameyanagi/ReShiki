@@ -24,6 +24,8 @@ mod selection_canvas_qa;
 #[cfg(test)]
 mod status_tests;
 #[cfg(test)]
+mod template_tests;
+#[cfg(test)]
 mod view_parity_tests;
 
 /// Counts used by molecular properties and both naming preview layouts.
@@ -36,16 +38,17 @@ pub(super) fn atom_bond_counts(atoms: usize, bonds: usize) -> String {
 }
 
 impl App {
-    fn keyboard_context_summary(&self) -> String {
+    fn keyboard_context_summary(&self) -> Option<String> {
         use reshiki::keyboard_drawing::Target;
-        match self.tab.keyboard_drawing.target() {
+        self.tab.keyboard_drawing.marker_point(&self.tab.doc)?;
+        Some(match self.tab.keyboard_drawing.target() {
             Target::Blank(_) => "Empty position".into(),
             Target::Atom(id) => self.tab.doc.atom(id).map_or_else(
                 || "Empty position".into(),
                 |atom| format!("{} #{id}", atom.element),
             ),
             Target::Bond(a, b) => format!("Bond {a}–{b}"),
-        }
+        })
     }
 
     pub(super) fn selection_summary(&self) -> String {
@@ -272,12 +275,11 @@ impl App {
             nmr: self.nmr_canvas(),
             optimizer: self.optimization_canvas(),
             keyboard_target: if self.keyboard_drawing_active() {
-                self.tab
-                    .keyboard_drawing
-                    .marker_point(self.display_document())
+                self.tab.keyboard_drawing.point(self.display_document())
             } else {
                 None
             },
+            keyboard_marker: self.tab.keyboard_drawing.shown(),
             morph: self.model_morph(),
             model_generation: self.model_generation(),
             element: &self.element,
@@ -1034,7 +1036,7 @@ impl App {
             super::object_toolbar::COMPACT_WIDTH,
         ));
         let summary = if keyboard {
-            Some(self.keyboard_context_summary())
+            self.keyboard_context_summary()
         } else {
             (select && !self.tab.selected.is_empty()).then(|| self.selection_summary())
         };
@@ -1445,12 +1447,13 @@ impl App {
 
     fn selection_tool_options(&self, summary: bool) -> Vec<Element<'_, Message>> {
         let mut options = Vec::new();
-        if summary && self.keyboard_drawing_active() {
+        if summary
+            && self.keyboard_drawing_active()
+            && let Some(summary) = self.keyboard_context_summary()
+        {
             options.push(
                 hover_hint(
-                    text(self.keyboard_context_summary())
-                        .size(11)
-                        .style(muted_text),
+                    text(summary).size(11).style(muted_text),
                     self.tab.keyboard_drawing.active_label(&self.tab.doc),
                     tooltip::Position::Bottom,
                 )
@@ -1682,32 +1685,52 @@ impl App {
         let action = Message::Templates;
         let state = &self.templates;
         if !state.active {
-            body = body.push(
-                column![
-                    crate::appearance::text_input("Search names, collections…", &state.query)
-                        .on_input(|s| Message::Templates(A::Search(s)))
-                        .size(12)
-                        .padding(8),
-                    crate::appearance::pick_list(
-                        [Filter::All, Filter::Mine, Filter::Favorites],
-                        Some(state.filter),
-                        |f| Message::Templates(A::Filter(f))
-                    )
-                    .text_size(12)
-                    .padding(6)
-                    .width(Length::Fill),
-                ]
-                .spacing(8),
-            );
-            if state.collection != "All collections"
-                || !state.query.is_empty()
-                || state.filter != Filter::All
-            {
-                body = body.push(command("← Categories", action(A::Browse)));
+            let mut search = column![
+                crate::appearance::text_input("Search names, collections…", &state.query)
+                    .on_input(|s| Message::Templates(A::Search(s)))
+                    .size(12)
+                    .padding(8),
+            ]
+            .spacing(8);
+            if state.collection != "All collections" && !state.query.trim().is_empty() {
+                search = search.push(
+                    row![
+                        text(format!("In {}", state.collection))
+                            .size(11)
+                            .style(muted_text)
+                            .width(Length::Fill),
+                        command("Search all", action(A::SearchAll)),
+                    ]
+                    .spacing(3)
+                    .align_y(Alignment::Center),
+                );
             }
-            if state.can_forward() {
-                body = body.push(command("Forward →", action(A::Forward)));
-            }
+            body = body
+                .push(
+                    search.push(
+                        crate::appearance::pick_list(
+                            [Filter::All, Filter::Mine, Filter::Favorites],
+                            Some(state.filter),
+                            |f| Message::Templates(A::Filter(f)),
+                        )
+                        .text_size(12)
+                        .padding(6)
+                        .width(Length::Fill),
+                    ),
+                )
+                .push(
+                    row![
+                        command("← Categories", action(A::Browse)).on_press_maybe(
+                            (state.collection != "All collections"
+                                || !state.query.is_empty()
+                                || state.filter != Filter::All)
+                                .then(|| action(A::Browse)),
+                        ),
+                        command("Forward →", action(A::Forward))
+                            .on_press_maybe(state.can_forward().then(|| action(A::Forward))),
+                    ]
+                    .spacing(3),
+                );
             body = body.push(
                 button(text("Save selection as template").size(12))
                     .padding(7)
@@ -1837,9 +1860,10 @@ impl App {
             let mut categories =
                 std::collections::BTreeMap::<&str, (usize, &reshiki::templates::Template)>::new();
             for template in state.library.iter() {
-                let name = super::template_library::category(template);
-                let entry = categories.entry(name).or_insert((0, template));
-                entry.0 += 1;
+                for name in super::template_library::categories(template) {
+                    let entry = categories.entry(name).or_insert((0, template));
+                    entry.0 += 1;
+                }
             }
             body = body
                 .push(horizontal_line())

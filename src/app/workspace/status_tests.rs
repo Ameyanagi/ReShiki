@@ -7,6 +7,24 @@ use iced::advanced::{
 use iced::{Rectangle, Size};
 use reshiki::document::Document;
 
+#[test]
+fn keyboard_drawing_context_hides_the_unpointed_initial_target() {
+    use reshiki::document::Point;
+    use reshiki::keyboard_drawing::Target;
+    let (mut app, _) = App::new();
+    app.tab.doc = Document::default();
+    let point = Point::new(0., 0.);
+    let id = app.tab.doc.add_atom("C", point);
+    app.tab.selected.clear();
+    app.tab.file_epoch += 1;
+    app.sync_keyboard_drawing();
+    assert_eq!(app.keyboard_context_summary(), None);
+    app.tab
+        .keyboard_drawing
+        .pointer_target(point, Target::Atom(id), &app.tab.doc, false);
+    assert_eq!(app.keyboard_context_summary(), Some(format!("C #{id}")));
+}
+
 #[derive(Default)]
 struct StatusBounds {
     message: Option<Rectangle>,

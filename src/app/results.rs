@@ -502,6 +502,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 Action::Browse
                 | Action::Forward
                 | Action::Search(..)
+                | Action::SearchAll
                 | Action::Filter(..)
                 | Action::Collection(..)
                 | Action::Name(..)
@@ -703,6 +704,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Save
         | Message::Export(..)
         | Message::CopySmiles
+        | Message::CopyChemicalText
         | Message::Copy(..)
         | Message::CopyImage
         | Message::CopyAs(..)

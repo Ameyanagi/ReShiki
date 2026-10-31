@@ -283,6 +283,53 @@ pub(super) fn card<'a>(body: impl Into<Element<'a, Message>>) -> Element<'a, Mes
         .into()
 }
 impl App {
+    pub(super) fn show_molecular_properties(&mut self) -> Task<Message> {
+        self.inspector_open = true;
+        self.inspector_tab = InspectorTab::Properties;
+        self.tab.inspector_ui.model_controls = false;
+        self.tab
+            .inspector_ui
+            .update(Action::Section(Section::Molecule, true));
+
+        let key = self.property_request_key();
+        let properties = if key.atoms.is_empty() {
+            Err("Select atoms or bonds to calculate their properties".into())
+        } else if reshiki::models3d::crystal::touches(&self.tab.doc, &key.atoms) {
+            reshiki::models3d::crystal::composition(&self.tab.doc, &key.atoms)
+        } else if reshiki::attachments::present(&self.tab.doc) {
+            if self.tab.selected.is_empty() {
+                reshiki::attachments::composition(&self.tab.doc)
+            } else {
+                reshiki::attachments::composition(&reshiki::editing::selection(
+                    &self.tab.doc,
+                    &self.tab.selected,
+                ))
+            }
+        } else {
+            reshiki::chemistry::document::prepare(&self.property_document(&key))
+                .map_err(|error| error.to_string())
+                .and_then(|molecule| molecule.state.graph.atom_facts())
+                .and_then(|atoms| reshiki::chemistry::properties(&atoms))
+        };
+        match properties {
+            Ok(properties) => {
+                self.status = format!(
+                    "Molecular properties · {} · {:.3} g/mol",
+                    properties.formula, properties.mass
+                );
+                self.error = false;
+            }
+            Err(error) => {
+                self.status = error;
+                self.error = true;
+            }
+        }
+        iced::advanced::widget::operate(reshiki::accessibility::FocusControl::reveal(
+            "inspector-section-Molecule",
+        ))
+        .discard()
+    }
+
     fn property_key(&self) -> Option<PropertyKey> {
         if self.tab.selected.is_empty() {
             return None;

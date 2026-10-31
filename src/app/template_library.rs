@@ -33,6 +33,7 @@ pub enum Action {
     Browse,
     Forward,
     Search(String),
+    SearchAll,
     Filter(Filter),
     Collection(String),
     Name(String),
@@ -67,21 +68,28 @@ struct Location {
     scroll: f32,
 }
 
-pub fn category(template: &reshiki::templates::Template) -> &str {
-    if template.id.starts_with("builtin:") {
-        if matches!(template.group.as_str(), "Rings" | "Heterocycles")
-            && template
-                .smiles
-                .chars()
-                .any(|c| matches!(c, 'c' | 'n' | 'o' | 's' | 'p' | 'b'))
-        {
-            return "Aromatics";
-        }
-        if template.group == "Rings" {
-            return "Cycloalkanes";
-        }
-    }
-    &template.group
+pub fn categories(template: &reshiki::templates::Template) -> impl Iterator<Item = &str> {
+    let builtin = template.id.starts_with("builtin:");
+    let aromatic = builtin
+        && matches!(template.group.as_str(), "Rings" | "Heterocycles")
+        && template
+            .smiles
+            .chars()
+            .any(|c| matches!(c, 'c' | 'n' | 'o' | 's' | 'p' | 'b'));
+    let primary = if aromatic {
+        "Aromatics"
+    } else if builtin && template.group == "Rings" {
+        "Cycloalkanes"
+    } else {
+        &template.group
+    };
+    let heterocycle = (aromatic
+        && template
+            .smiles
+            .chars()
+            .any(|c| matches!(c, 'n' | 'o' | 's' | 'p' | 'b')))
+    .then_some("Heterocycles");
+    [Some(primary), heterocycle].into_iter().flatten()
 }
 
 pub struct State {
@@ -188,7 +196,10 @@ impl State {
         self.editing = false;
         self.draft = None;
         if self.collection != "All collections"
-            && !self.library.iter().any(|t| category(t) == self.collection)
+            && !self
+                .library
+                .iter()
+                .any(|t| categories(t).any(|name| name == self.collection))
         {
             self.collection = "All collections".into();
         }
@@ -221,18 +232,13 @@ impl State {
             Filter::All => true,
             Filter::Mine => index >= LIBRARY.len(),
             Filter::Favorites => self.library.favorite(&t.id),
-        }) && (self.collection == "All collections" || self.collection == category(t))
+        }) && (self.collection == "All collections"
+            || categories(t).any(|name| name == self.collection))
             && query.split_whitespace().all(|word| {
-                format!(
-                    "{} {} {} {} {}",
-                    category(t),
-                    t.name,
-                    t.group,
-                    t.smiles,
-                    t.keywords.join(" ")
-                )
-                .to_lowercase()
-                .contains(word)
+                categories(t)
+                    .chain([t.name.as_str(), t.group.as_str(), t.smiles.as_str()])
+                    .chain(t.keywords.iter().map(String::as_str))
+                    .any(|text| text.to_lowercase().contains(word))
             })
     }
     pub fn search_rank(&self, t: &reshiki::templates::Template) -> u8 {
@@ -554,7 +560,7 @@ impl App {
             && !state
                 .library
                 .iter()
-                .any(|t| category(t) == state.collection)
+                .any(|t| categories(t).any(|name| name == state.collection))
         {
             state.collection = "All collections".into();
         }
@@ -608,13 +614,14 @@ impl App {
     pub(super) fn template_action(&mut self, action: Action) -> Task<Message> {
         let navigation = matches!(
             &action,
-            Action::Browse | Action::Forward | Action::Collection(_)
+            Action::Browse | Action::Forward | Action::Collection(_) | Action::SearchAll
         );
         let reveal = matches!(
             action,
             Action::Browse
                 | Action::Forward
                 | Action::Collection(_)
+                | Action::SearchAll
                 | Action::BeginSave
                 | Action::EditDetails
                 | Action::SaveDetails
@@ -837,6 +844,12 @@ impl App {
                 }
             }
             Action::Search(s) => state.query = s,
+            Action::SearchAll => {
+                state.remember(self.template_index);
+                state.collection = "All collections".into();
+                state.active = false;
+                self.tool = Tool::Select;
+            }
             Action::Filter(f) => {
                 state.remember(self.template_index);
                 state.filter = f;
