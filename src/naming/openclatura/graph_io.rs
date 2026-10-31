@@ -171,6 +171,7 @@ pub fn read_smiles(text: &str) -> Result<Molecule, String> {
     }
     require_monocyclic_ring_blocks(&mol)?;
     super::identity_validation::validate_input(&mol)?;
+    super::identity_validation::validate_mancude_duplicate_ranking(&mol)?;
     Ok(mol)
 }
 

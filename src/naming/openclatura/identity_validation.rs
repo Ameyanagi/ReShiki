@@ -1,6 +1,7 @@
 //! Input states that the plain-name renderers cannot preserve.
 use super::molecule::Molecule;
 use super::perception::PerceivedGroup;
+use std::collections::BTreeSet;
 
 pub fn validate_principal_charge_roles(
     groups: &[PerceivedGroup],
@@ -94,9 +95,103 @@ pub fn validate_input(mol: &Molecule) -> Result<(), String> {
     Ok(())
 }
 
+/// Upstream divergence: CIP implementations disagree on the duplicate atom of
+/// a mancude ring bond (RDKit's labels and the OPSIN reading of the same name
+/// differ). Decline a stereocentre whose ranking of two ligands at the first
+/// sphere depends on which aromatic neighbour that duplicate copies.
+pub fn validate_mancude_duplicate_ranking(mol: &Molecule) -> Result<(), String> {
+    let z = |idx: usize| mol.atoms[&idx].element().map_or(0, |e| e.atomic_number);
+    // Descending atomic numbers seen from `center`, one entry per duplicate.
+    let spheres = |center: usize, ligand: usize| -> Vec<Vec<usize>> {
+        let atom = &mol.atoms[&ligand];
+        let mut base = vec![1; atom.total_h_count];
+        let mut kekule_dup = false;
+        for &n in mol.get_neighbors(ligand) {
+            if n == center {
+                continue;
+            }
+            base.push(z(n));
+            let order = mol.get_bond(ligand, n).map_or(1, |b| b.order);
+            if atom.is_aromatic && mol.atoms[&n].is_aromatic && order == 2 {
+                kekule_dup = true;
+            } else {
+                base.extend(std::iter::repeat_n(z(n), order.saturating_sub(1)));
+            }
+        }
+        if mol.get_bond(ligand, center).is_some_and(|b| b.order == 2) {
+            base.push(z(center));
+        }
+        let mut variants: Vec<Vec<usize>> = if kekule_dup {
+            mol.get_neighbors(ligand)
+                .iter()
+                .filter(|&&n| n != center && mol.atoms[&n].is_aromatic)
+                .map(|&n| [base.clone(), vec![z(n)]].concat())
+                .collect()
+        } else {
+            vec![base]
+        };
+        for variant in &mut variants {
+            variant.sort_unstable_by(|a, b| b.cmp(a));
+            variant.resize(4, 0);
+        }
+        variants.dedup();
+        variants
+    };
+    for (&center, atom) in &mol.atoms {
+        if atom.stereo.is_none() {
+            continue;
+        }
+        let ligands: Vec<_> = mol
+            .get_neighbors(center)
+            .iter()
+            .map(|&l| (z(l), spheres(center, l)))
+            .collect();
+        for (i, (zi, left)) in ligands.iter().enumerate() {
+            for (zj, right) in &ligands[i + 1..] {
+                if zi != zj || (left.len() == 1 && right.len() == 1) {
+                    continue;
+                }
+                let orders: BTreeSet<_> = left
+                    .iter()
+                    .flat_map(|l| right.iter().map(move |r| l.cmp(r)))
+                    .collect();
+                if orders.len() > 1 || orders.contains(&std::cmp::Ordering::Equal) {
+                    return Err(format!(
+                        "openclatura: CIP rank at atom {center} depends on a mancude duplicate atom"
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use crate::naming::openclatura::name_smiles;
+
+    #[test]
+    fn public_entry_declines_kekule_dependent_cip_ranks() {
+        for smiles in [
+            "NC(N)[C@@H](C)c1ncncc1",
+            "O=[N+]([O-])[C@@H]1NCC[C@@H]1c1ncccc1",
+            "O=[N+]([O-])[C@@H]1NCC[C@@H]1c1ncncc1Br",
+        ] {
+            assert!(name_smiles(smiles).is_err(), "{smiles}");
+        }
+        for (smiles, expected) in [
+            (
+                "O=[N+]([O-])[C@@H]1NCC[C@@H]1c1ccncc1",
+                "4-((2S,3R)-2-nitropyrrolidin-3-yl)pyridine",
+            ),
+            (
+                "O=[N+]([O-])C[C@@H](C)c1ncccc1",
+                "2-((2R)-1-nitropropan-2-yl)pyridine",
+            ),
+        ] {
+            assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
+        }
+    }
 
     #[test]
     fn public_entry_declines_unrepresented_charge_states() {
