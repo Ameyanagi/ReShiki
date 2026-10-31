@@ -31,6 +31,9 @@ use std::collections::{HashMap, HashSet};
 #[cfg(test)]
 mod tests;
 
+pub(crate) const CIP_WORK_LIMIT_MESSAGE: &str =
+    "This structure has too much stereochemistry to process · Try a shorter chain or a fragment";
+
 fn at<T>(items: &[T], id: usize) -> Result<&T, String> {
     items
         .get(id)
