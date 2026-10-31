@@ -673,11 +673,7 @@ fn build_candidate(
         }
         bridge.attachments.sort_by_key(|atom| locants[atom]);
         if bridge.length > 0 {
-            if locants[&bridge.attachments[0]] <= locants[&bridge.attachments[1]] {
-                path.extend(&bridge.atoms);
-            } else {
-                path.extend(bridge.atoms.iter().rev().copied());
-            }
+            path.extend(&bridge.atoms);
         }
         locants = path
             .iter()

@@ -44,7 +44,6 @@ impl RegisteredFusionComponent {
 struct GeneratedHWPolicy {
     usable_as_parent: bool,
     usable_as_attached: bool,
-    rule_reference: String,
 }
 #[derive(Clone, Debug)]
 pub struct FusionComponentRegistry {
@@ -320,7 +319,7 @@ impl FusionComponentRegistry {
         for size in annulenes {
             let name = format!("[{size}]annulene");
             let stem = stems::stem_for(size);
-            registry.register(&json!({"key":name,"parent_name":name,"attached_prefix":format!("cyclo{stem}a"),"allow_as_parent":true,"allow_as_attached":true,"omit_attached_locants":true,"rule":"P-25.3.2.1.1"}))?;
+            registry.register(&json!({"key":name,"parent_name":name,"attached_prefix":format!("cyclo{stem}a"),"allow_as_parent":true,"allow_as_attached":true,"omit_attached_locants":true}))?;
         }
         for policy in data["retained_component_generators"]
             .as_array()
@@ -357,7 +356,7 @@ impl FusionComponentRegistry {
                     .unwrap_or_else(|| s.template.output_name());
                 let parent = parent.strip_prefix(&h).unwrap_or(&parent).to_owned();
                 let ring_count = s.rings.len();
-                registry.register(&json!({"key":name,"parent_name":parent,"allow_as_parent":policy["allow_as_parent"],"allow_as_peri_parent":policy["allow_as_peri_parent"],"allow_as_attached":policy["allow_as_attached"],"horizontal_ring_count":ring_count,"rule":policy["rule"]}))?;
+                registry.register(&json!({"key":name,"parent_name":parent,"allow_as_parent":policy["allow_as_parent"],"allow_as_peri_parent":policy["allow_as_peri_parent"],"allow_as_attached":policy["allow_as_attached"],"horizontal_ring_count":ring_count}))?;
             }
         }
         for p in data["systematic_component_generators"]
@@ -371,7 +370,6 @@ impl FusionComponentRegistry {
             registry.generated_hw_policy = Some(GeneratedHWPolicy {
                 usable_as_parent: p["allow_as_parent"].as_bool().unwrap_or(false),
                 usable_as_attached: p["allow_as_attached"].as_bool().unwrap_or(false),
-                rule_reference: txt(p, "rule"),
             });
         }
         Ok(registry)
@@ -418,7 +416,6 @@ impl FusionComponentRegistry {
             s.usable_as_parent = row["allow_as_parent"].as_bool().unwrap_or(false);
             s.usable_as_attached = row["allow_as_attached"].as_bool().unwrap_or(false);
             s.usable_as_peri_parent = row["allow_as_peri_parent"].as_bool().unwrap_or(false);
-            s.rule_reference = txt(row, "rule");
             s.accepted_general_prefixes = strings(&row["accepted_general_prefixes"]);
             s.horizontal_ring_count = row["horizontal_ring_count"]
                 .as_u64()
@@ -670,7 +667,6 @@ impl FusionComponentRegistry {
         spec.attached_prefix = prefix;
         spec.usable_as_parent = policy.usable_as_parent;
         spec.usable_as_attached = policy.usable_as_attached;
-        spec.rule_reference = policy.rule_reference.clone();
         spec.horizontal_ring_count = 1;
         spec.multiplicative_prefix_style =
             if hetero.len() > 1 { "complex" } else { "basic" }.into();

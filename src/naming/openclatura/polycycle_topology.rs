@@ -16,10 +16,7 @@ pub struct MonospiroProof {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LinearDispiroProof {
-    pub descriptor_numbers: [usize; 4],
     pub spiro_atoms: [usize; 2],
-    pub terminal_components: [AtomSet; 2],
-    pub middle_components: Vec<AtomSet>,
     pub has_direct_middle: bool,
 }
 
@@ -353,10 +350,7 @@ fn linear_dispiro_proof(atoms: &AtomSet, edges: &EdgeSet) -> Option<LinearDispir
         return None;
     }
     Some(LinearDispiroProof {
-        descriptor_numbers,
         spiro_atoms: [*first, *second],
-        terminal_components: [terminal[0].atoms.clone(), terminal[1].atoms.clone()],
-        middle_components: middle,
         has_direct_middle,
     })
 }
@@ -404,14 +398,14 @@ pub fn linear_dispiro_descriptor_and_paths(
     let proof = linear_dispiro_proof(atoms, edges)?;
     let (mut terminal, middle) = dispiro_components(atoms, edges, proof.spiro_atoms);
     terminal.sort_by(|left, right| {
-        let key = |component: &AtomSet| {
+        let [left, right] = [&left.atoms, &right.atoms].map(|component| {
             (
                 usize::from(!component.iter().any(|atom| mol.atoms[atom].symbol != "C")),
                 component.len(),
-                component.clone(),
+                component,
             )
-        };
-        key(&left.atoms).cmp(&key(&right.atoms))
+        });
+        left.cmp(&right)
     });
     let TerminalComponent {
         atoms: first_terminal,

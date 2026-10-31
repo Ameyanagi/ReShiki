@@ -49,16 +49,11 @@ pub fn values_strings(value: &Value) -> BTreeSet<String> {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct MultiSuffixTemplate {
-    pub multiplier_positions: Vec<usize>,
-}
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FunctionalGroupRule {
     pub key: String,
     pub role: String,
     pub prefix: Option<String>,
     pub suffix: Option<String>,
-    pub multi_suffix: Option<MultiSuffixTemplate>,
     pub suffix_multiplier_positions: Vec<usize>,
     pub seniority: Option<Vec<i64>>,
     pub suffix_with_locant: bool,
@@ -188,9 +183,6 @@ pub fn rule_from_value(key: &str, row: &Value) -> FunctionalGroupRule {
         role: row["role"].as_str().unwrap_or("principal").to_owned(),
         prefix: row["prefix"].as_str().map(str::to_owned),
         suffix: row["suffix"].as_str().map(str::to_owned),
-        multi_suffix: (!row["multi_suffix"].is_null()).then(|| MultiSuffixTemplate {
-            multiplier_positions: positions.clone(),
-        }),
         suffix_multiplier_positions: positions,
         seniority,
         suffix_with_locant: row["suffix_with_locant"].as_bool().unwrap_or(false),
@@ -235,9 +227,6 @@ fn functional_groups() -> FunctionalGroupRules {
                     .as_i64()
                     .expect("checked-in leaving-group rank"),
             ]);
-            r.multi_suffix = Some(MultiSuffixTemplate {
-                multiplier_positions: vec![0, 1],
-            });
             r.suffix_multiplier_positions = vec![0, 1];
             r.suffix_with_locant = external;
             by_key.insert(key.to_owned(), r);

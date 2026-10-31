@@ -1,8 +1,7 @@
 //! Structural functional-group detectors in the same priority order as Openclatura.
 use super::molecule::{AtomSet, Molecule};
 use super::nomenclature::{
-    FunctionalGroupRule, MultiSuffixTemplate, RULES, rule_from_value, section, table_rows,
-    table_string,
+    FunctionalGroupRule, RULES, rule_from_value, section, table_rows, table_string,
 };
 use std::collections::{BTreeSet, VecDeque};
 
@@ -21,8 +20,6 @@ pub struct ChalcogenLigand {
     pub atom: usize,
     pub element: String,
     pub role: LigandRole,
-    pub center: usize,
-    pub bond_id: usize,
     pub attachment_atom: Option<usize>,
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -30,7 +27,6 @@ pub struct LeavingGroupDescriptor {
     pub kind: String,
     pub attachment_atom: usize,
     pub atom_ids: Vec<usize>,
-    pub bond_ids: Vec<usize>,
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FunctionalGroupDescriptor {
@@ -72,7 +68,6 @@ pub struct PerceivedGroup {
     pub attachment_carbon: usize,
     pub atoms_involved: AtomSet,
     pub variant: Option<String>,
-    pub role: Option<String>,
     pub descriptor: Option<FunctionalGroupDescriptor>,
     pub resolved_rule: Option<FunctionalGroupRule>,
 }
@@ -176,8 +171,6 @@ pub fn classify_chalcogen_ligand(m: &Molecule, center: usize, a: usize) -> Optio
         atom: a,
         element: atom.symbol.clone(),
         role,
-        center,
-        bond_id: b.idx,
         attachment_atom: attachment,
     })
 }
@@ -341,7 +334,6 @@ fn dynamic_rule(
     suffix: Option<String>,
     seniority: Vec<i64>,
     external: bool,
-    multi: bool,
 ) -> FunctionalGroupRule {
     let mut r = rule_from_value(key, policy);
     r.role = "principal".into();
@@ -350,9 +342,6 @@ fn dynamic_rule(
     r.seniority = Some(seniority);
     r.suffix_with_locant = external;
     r.suffix_multiplier_positions = vec![0];
-    r.multi_suffix = multi.then(|| MultiSuffixTemplate {
-        multiplier_positions: vec![0],
-    });
     r
 }
 fn resolve_acyl(d: &FunctionalGroupDescriptor) -> (String, Option<FunctionalGroupRule>) {
@@ -426,7 +415,6 @@ fn resolve_acyl(d: &FunctionalGroupDescriptor) -> (String, Option<FunctionalGrou
                 None,
                 seniority,
                 d.is_external,
-                false,
             )),
         );
     }
@@ -472,7 +460,6 @@ fn resolve_acyl(d: &FunctionalGroupDescriptor) -> (String, Option<FunctionalGrou
         policy["suffix"].as_str().map(|p| format_template(p, &vals)),
         seniority,
         d.is_external,
-        policy["multi_suffix"].as_bool() != Some(false),
     );
     if let Some(t) = policy["citation_suffix"].as_str() {
         r.citation_suffixes
@@ -575,7 +562,6 @@ fn resolve_peroxy(d: &FunctionalGroupDescriptor) -> (String, Option<FunctionalGr
         Some(suffix),
         seniority,
         d.is_external,
-        false,
     );
     (key, Some(r))
 }
@@ -842,7 +828,6 @@ fn nitrogen_chain_roles(m: &Molecule, cyclic: &AtomSet, consumed: &AtomSet) -> V
             };
             let mut g = PerceivedGroup::new(key, key == "diazonio", c, [n, t]);
             g.variant = Some(variant.into());
-            g.role = Some("nitrogen_chain".into());
             roles.push(g);
         }
     }
@@ -902,9 +887,7 @@ fn nitrogen_chain_roles(m: &Molecule, cyclic: &AtomSet, consumed: &AtomSet) -> V
             ((1, 1), (0, 0, 0)) => "hydrazinylamino",
             _ => continue,
         };
-        let mut g = PerceivedGroup::new(key, false, external[0], [n, mid, t]);
-        g.role = Some("nitrogen_chain".into());
-        roles.push(g);
+        roles.push(PerceivedGroup::new(key, false, external[0], [n, mid, t]));
     }
     blocked.extend(roles.iter().flat_map(|g| g.atoms_involved.iter().copied()));
     for (&n, atom) in &m.atoms {
@@ -945,7 +928,6 @@ fn nitrogen_chain_roles(m: &Molecule, cyclic: &AtomSet, consumed: &AtomSet) -> V
         tail.extend([n, t]);
         let mut g = PerceivedGroup::new(key, true, attach, tail);
         g.variant = Some("carbon_nitrogen_double_bond".into());
-        g.role = Some("nitrogen_chain".into());
         roles.push(g);
     }
     blocked.extend(roles.iter().flat_map(|g| g.atoms_involved.iter().copied()));
@@ -981,7 +963,6 @@ fn nitrogen_chain_roles(m: &Molecule, cyclic: &AtomSet, consumed: &AtomSet) -> V
         }
         let mut g = PerceivedGroup::new("hydrazine", false, cs[0], [n, tails[0]]);
         g.variant = Some("prefix".into());
-        g.role = Some("nitrogen_chain".into());
         roles.push(g);
     }
     let mut seen = AtomSet::new();
@@ -1220,12 +1201,7 @@ fn acyl_group(
             attachment,
             external,
         );
-        desc.leaving_group = Some(leaving_descriptor(
-            m,
-            m.atoms[&h].symbol.as_str(),
-            c,
-            vec![h],
-        ));
+        desc.leaving_group = Some(leaving_descriptor(m.atoms[&h].symbol.as_str(), vec![h]));
         let (key, rule) = resolve_acyl(&desc);
         return Some(vec![desc_group(key, rule, attachment, atoms, desc)]);
     }
@@ -1271,23 +1247,11 @@ fn acyl_group(
     let (key, rule) = resolve_acyl(&desc);
     Some(vec![desc_group(key, rule, attachment, atoms, desc)])
 }
-fn leaving_descriptor(
-    m: &Molecule,
-    kind: &str,
-    c: usize,
-    atoms: Vec<usize>,
-) -> LeavingGroupDescriptor {
-    let mut path = vec![c];
-    path.extend(&atoms);
-    let bonds = path
-        .windows(2)
-        .filter_map(|w| m.get_bond(w[0], w[1]).map(|b| b.idx))
-        .collect();
+fn leaving_descriptor(kind: &str, atoms: Vec<usize>) -> LeavingGroupDescriptor {
     LeavingGroupDescriptor {
         kind: kind.into(),
         attachment_atom: atoms[0],
         atom_ids: atoms,
-        bond_ids: bonds,
     }
 }
 fn pseudohalide_group(
@@ -1318,14 +1282,14 @@ fn pseudohalide_group(
             && bond == 3
             && m.degree(second) == 1
         {
-            leaving = Some(leaving_descriptor(m, "CN", c, vec![first, second]));
+            leaving = Some(leaving_descriptor("CN", vec![first, second]));
             break;
         }
         if m.atoms[&first].symbol != "N" {
             continue;
         }
         if m.atoms[&second].symbol == "C" && bond == 3 && m.degree(second) == 1 {
-            leaving = Some(leaving_descriptor(m, "NC", c, vec![first, second]));
+            leaving = Some(leaving_descriptor("NC", vec![first, second]));
             break;
         }
         let tails = m
@@ -1353,7 +1317,7 @@ fn pseudohalide_group(
         } else {
             continue;
         };
-        leaving = Some(leaving_descriptor(m, &kind, c, vec![first, second, third]));
+        leaving = Some(leaving_descriptor(&kind, vec![first, second, third]));
         break;
     }
     let leaving = leaving?;
@@ -1432,7 +1396,6 @@ fn cyclic_imide(
         None,
         None,
         vec![policy["seniority"].as_i64().unwrap_or(65)],
-        false,
         false,
     );
     Some(desc_group(key, Some(rule), cs[0], atoms, d))
@@ -1598,7 +1561,6 @@ fn anhydride_groups(m: &Molecule, used: &AtomSet) -> Vec<PerceivedGroup> {
                     Some(suffix),
                     seniority,
                     false,
-                    false,
                 );
                 (key, Some(r))
             };
@@ -1745,12 +1707,7 @@ fn central_group(
     } else if hs.len() == 1 {
         let h = hs[0];
         group_atoms.insert(h);
-        leaving = Some(leaving_descriptor(
-            m,
-            m.atoms[&h].symbol.as_str(),
-            c,
-            vec![h],
-        ));
+        leaving = Some(leaving_descriptor(m.atoms[&h].symbol.as_str(), vec![h]));
         "acid_halide"
     } else {
         return None;
@@ -1860,7 +1817,6 @@ fn resolve_central(d: &FunctionalGroupDescriptor) -> Option<(String, Option<Func
             Some(suffix),
             seniority,
             true,
-            false,
         );
         return Some((key, Some(rule)));
     }
@@ -1941,15 +1897,7 @@ fn resolve_central(d: &FunctionalGroupDescriptor) -> Option<(String, Option<Func
             ],
         )
     };
-    let rule = dynamic_rule(
-        &key,
-        policy,
-        Some(prefix),
-        Some(suffix),
-        seniority,
-        true,
-        true,
-    );
+    let rule = dynamic_rule(&key, policy, Some(prefix), Some(suffix), seniority, true);
     Some((key, Some(rule)))
 }
 fn composable_groups(m: &Molecule) -> Vec<PerceivedGroup> {
@@ -2200,7 +2148,6 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             }
             .into(),
         );
-        g.role = Some("chalcogen_imide".into());
         groups.push(g);
         consumed.insert(n);
     }
@@ -2469,7 +2416,6 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
                 Some(format_template(table_string(&policy["suffix"]), &vals)),
                 vec![policy["seniority"].as_i64().unwrap_or(5), rank(element)],
                 external,
-                true,
             );
             let Some(ligand) = classify_chalcogen_ligand(m, n, e) else {
                 continue;
@@ -2597,7 +2543,6 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
                 if !cyclic.contains(&n2) {
                     let mut g = PerceivedGroup::new("hydrazine", false, c, [n, n2]);
                     g.variant = Some("prefix".into());
-                    g.role = Some("nitrogen_chain".into());
                     groups.push(g);
                     consumed.extend([n, n2]);
                 } else {
@@ -2690,7 +2635,6 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
                     None,
                     policy["suffix"].as_str().map(str::to_owned),
                     vec![105, policy["rank"].as_i64().unwrap_or(0)],
-                    true,
                     true,
                 );
                 rule.capabilities = super::nomenclature::values_strings(&policy["capabilities"]);

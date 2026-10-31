@@ -73,9 +73,6 @@ pub fn format_counted_prefixes(names: &[String]) -> String {
         .map(|(n, c)| format_multiplier(n, *c, safe))
         .collect()
 }
-fn terminal_alkyl_stem(name: &str) -> Option<String> {
-    stems::terminal_stem(name)
-}
 pub fn format_center_ligands_by(names: &[String], sort_key: impl Fn(&str) -> String) -> String {
     let counts = count_names(names);
     let mut ordered: Vec<_> = counts.keys().collect();
@@ -83,7 +80,7 @@ pub fn format_center_ligands_by(names: &[String], sort_key: impl Fn(&str) -> Str
     let mut rendered = String::new();
     for (i, name) in ordered.iter().enumerate() {
         let count = counts[*name];
-        let substituted = terminal_alkyl_stem(name)
+        let substituted = stems::terminal_stem(name)
             .is_some_and(|s| *name != &format!("{s}yl") && *name != &format!("cyclo{s}yl"));
         let mut ligand = if count > 1 && substituted && !is_fully_enclosed(name) {
             format!("{}({name})", multipliers::complex_(count))
@@ -105,7 +102,7 @@ pub fn substituted_alkoxy_prefix(branch: &str) -> Option<String> {
     if !branch.contains("hydroxy") {
         return None;
     }
-    let stem = terminal_alkyl_stem(branch)?;
+    let stem = stems::terminal_stem(branch)?;
     let terminal = format!("{stem}yl");
     let prefix = branch.strip_suffix(&terminal)?;
     Some(if prefix.is_empty() {

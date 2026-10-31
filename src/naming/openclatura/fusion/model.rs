@@ -207,7 +207,6 @@ pub struct FusionComponentSpec {
     pub template: RetainedGraphTemplate,
     pub usable_as_parent: bool,
     pub usable_as_attached: bool,
-    pub rule_reference: String,
     pub accepted_general_prefixes: Vec<String>,
     pub horizontal_ring_count: usize,
     pub multiplicative_prefix_style: String,
