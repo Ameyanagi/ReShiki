@@ -12,6 +12,11 @@ pub enum Action {
         reason = "Matched by the inline editor's shortcuts; never sent here"
     )]
     Send,
+    #[expect(
+        dead_code,
+        reason = "Matched by the inline editor's shortcuts; never sent here"
+    )]
+    Retry,
     Poll,
     ViewImage(Option<reshiki::pictures::Picture>),
 }
@@ -52,7 +57,7 @@ impl App {
                 self.palette = None;
             }
             Action::ViewImage(image) => self.assistant.viewed_image = image,
-            Action::Send | Action::Poll => {}
+            Action::Send | Action::Retry | Action::Poll => {}
         }
         Task::none()
     }

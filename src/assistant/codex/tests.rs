@@ -507,3 +507,333 @@ async fn request_preflight_reports_typed_setup_changes_without_inference() -> an
     ));
     Ok(())
 }
+
+/// A fake app-server that answers each turn/start with the next scripted batch of events.
+#[cfg(unix)]
+async fn fake_turns(turns: Value) -> anyhow::Result<(Server, tempfile::TempDir)> {
+    let evidence = tempfile::tempdir()?;
+    let script = r#"
+import json, sys, pathlib
+turns = json.loads(sys.argv[1])
+root = pathlib.Path(sys.argv[2])
+count = 0
+for line in sys.stdin:
+    event = json.loads(line)
+    if event.get('method') != 'turn/start': continue
+    count += 1
+    root.joinpath(str(count)).write_text(json.dumps(event['params']))
+    for out in turns.pop(0) if turns else []:
+        print(json.dumps(out), flush=True)
+"#;
+    let mut child = Command::new("python3")
+        .arg("-u")
+        .arg("-c")
+        .arg(script)
+        .arg(serde_json::to_string(&turns)?)
+        .arg(evidence.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .kill_on_drop(true)
+        .spawn()?;
+    let input = child
+        .stdin
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("missing stdin"))?;
+    let output = BufReader::new(
+        child
+            .stdout
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("missing stdout"))?,
+    );
+    Ok((
+        Server {
+            child,
+            input,
+            output,
+            directory: tempfile::tempdir()?,
+            next_id: 1,
+            cancel: Cancel::default(),
+            timeout: Timeout::new(
+                tokio::time::Instant::now(),
+                "Fixture turn",
+                Duration::from_secs(10),
+            ),
+        },
+        evidence,
+    ))
+}
+
+#[cfg(unix)]
+fn final_message(thread: &str, phase: &str, text: &str) -> [Value; 2] {
+    [
+        json!({"method":"item/completed","params":{"threadId":thread,"item":{"type":"agentMessage","phase":phase,"text":text}}}),
+        json!({"method":"turn/completed","params":{"threadId":thread,"turn":{"status":"completed"}}}),
+    ]
+}
+
+/// Codex 0.164 lets the model spawn a subagent (`subAgentActivity`). The child
+/// thread's prose final answer and `turn/completed` arrive on the same stream
+/// before the parent's structured answer, as captured live for #709.
+#[cfg(unix)]
+#[tokio::test]
+async fn subagent_turns_do_not_end_the_structured_turn() -> anyhow::Result<()> {
+    let valid = r#"{"summary":"ok","issues":[],"edits":[]}"#;
+    let [child_message, child_done] = final_message(
+        "child",
+        "final_answer",
+        "The graph and coordinate audit found no required chemical corrections.",
+    );
+    let [message, done] = final_message("test", "final_answer", valid);
+    let (mut server, _evidence) =
+        fake_turns(json!([[child_message, child_done, message, done]])).await?;
+    let (tx, _rx) = tokio::sync::mpsc::channel(32);
+    let turn = Turn {
+        thread: "test",
+        effort: "low",
+        tier: None,
+        progress: &tx,
+        canvas: None,
+        source: None,
+    };
+    let value = run_turn(
+        &mut server,
+        &turn,
+        json!([]),
+        super::super::review::schema(),
+        false,
+    )
+    .await
+    .map_err(anyhow::Error::msg)?;
+    assert_eq!(value, serde_json::from_str::<Value>(valid)?);
+    server.shutdown().await;
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn structured_turns_ignore_child_deltas_and_commentary_output() -> anyhow::Result<()> {
+    let valid = json!({"explanation":"parent"});
+    let [message, done] = final_message("test", "final_answer", &valid.to_string());
+    let [commentary, _] = final_message("test", "commentary", r#"{"explanation":"commentary"}"#);
+    let (mut server, evidence) = fake_turns(json!([[
+        {"method":"item/agentMessage/delta","params":{"threadId":"child","delta":"{\"explanation\":\"child\"}"}},
+        {"method":"item/agentMessage/delta","params":{"threadId":"test","delta":"{\"explanation\":\"parent\"}"}},
+        message, commentary, done
+    ]]))
+    .await?;
+    let (tx, mut rx) = tokio::sync::mpsc::channel(32);
+    let turn = Turn {
+        thread: "test",
+        effort: "low",
+        tier: None,
+        progress: &tx,
+        canvas: None,
+        source: None,
+    };
+    let value = run_turn(&mut server, &turn, json!([]), super::super::schema(), true)
+        .await
+        .map_err(anyhow::Error::msg)?;
+    assert_eq!(value, valid);
+    assert!(matches!(rx.try_recv()?, Progress::Reply(reply) if reply == "parent"));
+    assert!(rx.try_recv().is_err());
+    assert!(!evidence.path().join("2").exists());
+    server.shutdown().await;
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn structured_turns_read_wrapped_json_without_retry() -> anyhow::Result<()> {
+    let valid = json!({"summary":"ok","issues":[],"edits":[]});
+    for wrapped in [
+        format!("```json\n{valid}\n```"),
+        format!("Here is the requested review:\n{valid}\nThe review is complete."),
+    ] {
+        let (mut server, evidence) =
+            fake_turns(json!([final_message("test", "final_answer", &wrapped)])).await?;
+        let (tx, _rx) = tokio::sync::mpsc::channel(32);
+        let turn = Turn {
+            thread: "test",
+            effort: "low",
+            tier: None,
+            progress: &tx,
+            canvas: None,
+            source: None,
+        };
+        let value = run_turn(
+            &mut server,
+            &turn,
+            json!([]),
+            super::super::review::schema(),
+            false,
+        )
+        .await
+        .map_err(anyhow::Error::msg)?;
+        assert_eq!(value, valid);
+        assert!(evidence.path().join("1").exists());
+        assert!(!evidence.path().join("2").exists());
+        server.shutdown().await;
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn invalid_structured_turns_retry_once_with_json_only_input() -> anyhow::Result<()> {
+    for allow_planning in [true, false] {
+        let (schema, valid) = if allow_planning {
+            (
+                super::super::schema(),
+                serde_json::to_value(super::super::Proposal::default())?,
+            )
+        } else {
+            (
+                super::super::review::schema(),
+                json!({"summary":"ok","issues":[],"edits":[]}),
+            )
+        };
+        for invalid in [String::new(), "図を確認しました。".repeat(40)] {
+            let (mut server, evidence) = fake_turns(json!([
+                final_message("test", "final_answer", &invalid),
+                final_message("test", "final_answer", &valid.to_string())
+            ]))
+            .await?;
+            let (tx, _rx) = tokio::sync::mpsc::channel(32);
+            let turn = Turn {
+                thread: "test",
+                effort: "low",
+                tier: Some("fast"),
+                progress: &tx,
+                canvas: None,
+                source: None,
+            };
+            let value = run_turn(
+                &mut server,
+                &turn,
+                json!([{"type":"text","text":"Prepare this drawing"}]),
+                schema.clone(),
+                allow_planning,
+            )
+            .await
+            .map_err(anyhow::Error::msg)?;
+            assert_eq!(value, valid);
+            let first: Value =
+                serde_json::from_str(&std::fs::read_to_string(evidence.path().join("1"))?)?;
+            let retry: Value =
+                serde_json::from_str(&std::fs::read_to_string(evidence.path().join("2"))?)?;
+            for request in [&first, &retry] {
+                assert_eq!(request["threadId"], "test");
+                assert_eq!(request["outputSchema"], schema);
+                assert_eq!(request["effort"], "low");
+                assert_eq!(request["serviceTierForTurn"], "fast");
+            }
+            let input = retry["input"].as_array().unwrap();
+            assert_eq!(input.len(), 1);
+            assert_eq!(input[0]["type"], "text");
+            let text = input[0]["text"].as_str().unwrap();
+            assert!(text.contains("only the JSON object"));
+            assert!(text.contains("Do not include prose or Markdown fences"));
+            assert!(text.len() < 200);
+            assert!(!evidence.path().join("3").exists());
+            server.shutdown().await;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn invalid_structured_turns_return_a_plain_error_after_one_retry() -> anyhow::Result<()> {
+    let (mut server, evidence) = fake_turns(json!([
+        final_message("test", "final_answer", "The requested review is complete."),
+        final_message("test", "final_answer", "{broken}")
+    ]))
+    .await?;
+    let (tx, _rx) = tokio::sync::mpsc::channel(32);
+    let turn = Turn {
+        thread: "test",
+        effort: "low",
+        tier: None,
+        progress: &tx,
+        canvas: None,
+        source: None,
+    };
+    let error = run_turn(
+        &mut server,
+        &turn,
+        json!([]),
+        super::super::review::schema(),
+        false,
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error, "The model's reply couldn't be read.");
+    assert!(evidence.path().join("2").exists());
+    assert!(!evidence.path().join("3").exists());
+    server.shutdown().await;
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn source_color_review_notes_do_not_block_automatic_application() -> anyhow::Result<()> {
+    let note = "Source label colours differ: amino labels use journal black.";
+    let critique =
+        json!({"summary":"Exact final image checked","issues":[],"notes":[note],"edits":[]});
+    let (mut server, evidence) = fake_turns(json!([final_message(
+        "test",
+        "final_answer",
+        &critique.to_string()
+    )]))
+    .await?;
+    let (tx, _rx) = tokio::sync::mpsc::channel(32);
+    let mut document = crate::document::Document::default();
+    document.arrows.push(crate::document::Arrow::new(
+        1,
+        crate::document::Point::new(0., 0.),
+        crate::document::Point::new(160., 0.),
+        crate::arrows::Preset::Forward,
+        Default::default(),
+    ));
+    let mut outcome = super::super::review::Outcome {
+        proposal: Default::default(),
+        document,
+        review: Default::default(),
+    };
+    let source = server.directory.path().join("source.png");
+    let turn = Turn {
+        thread: "test",
+        effort: "low",
+        tier: None,
+        progress: &tx,
+        canvas: None,
+        source: Some(&source),
+    };
+    review_draft(&mut server, &turn, "Reconstruct this image", &mut outcome)
+        .await
+        .map_err(anyhow::Error::msg)?;
+    assert!(outcome.review.verified);
+    assert!(outcome.review.issues.is_empty());
+    assert_eq!(outcome.review.notes, [note]);
+    assert!(outcome.review.can_auto_apply());
+
+    let request: Value =
+        serde_json::from_str(&std::fs::read_to_string(evidence.path().join("1"))?)?;
+    let source_text = request["input"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|input| input["text"].as_str())
+        .find(|text| text.starts_with("Original source image."))
+        .unwrap();
+    let must_match = source_text.split("must match.").next().unwrap();
+    assert!(!must_match.contains("colors") && !must_match.contains("colours"));
+    assert!(source_text.contains("unless the original request asks to keep the source colors"));
+    assert!(source_text.contains("a color difference belongs in notes, never in issues"));
+    assert!(!IMAGE_INSTRUCTIONS.contains("Use atom colors and real graph abbreviations"));
+    assert!(IMAGE_INSTRUCTIONS.contains("Label and atom colors are style"));
+    assert!(IMAGE_INSTRUCTIONS.contains("unless the user asks to keep the source colors"));
+    server.shutdown().await;
+    Ok(())
+}

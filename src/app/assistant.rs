@@ -63,6 +63,7 @@ pub enum Action {
     Replace(bool),
     AutoApply(bool),
     Send,
+    Retry,
     Improve,
     PreviewTarget(String),
     PreviewEdit(assistant::review::Edit),
@@ -145,6 +146,7 @@ pub struct State {
     pub busy: bool,
     status: String,
     error: bool,
+    retry: bool,
     serial: u64,
     cancel: codex::Cancel,
     progress: Option<tokio::sync::mpsc::Receiver<codex::Progress>>,
@@ -247,7 +249,9 @@ impl App {
                     let task = self.background_result(id, Message::Assistant(action));
                     return super::tagged(task, id);
                 }
-                Action::Send | Action::Improve | Action::Apply => return Task::none(),
+                Action::Send | Action::Retry | Action::Improve | Action::Apply => {
+                    return Task::none();
+                }
                 _ => {}
             }
         }
@@ -316,6 +320,27 @@ impl App {
             Action::PreviewEdit(edit) => self.assistant_preview_edit(edit),
             action @ (Action::Send | Action::Improve) => {
                 return self.assistant_request(matches!(action, Action::Improve));
+            }
+            Action::Retry => {
+                if self.assistant.retry
+                    && !self.assistant.busy
+                    && let Some(message) = self
+                        .assistant
+                        .messages
+                        .iter()
+                        .rev()
+                        .find(|m| m.role == "You")
+                {
+                    self.assistant.input = text_editor::Content::with_text(&message.text);
+                    self.assistant.source_image = message.image.clone();
+                    // Keep the retained draft when the request cannot start.
+                    let draft = self.assistant.draft.take();
+                    let task = self.assistant_request(false);
+                    if !self.assistant.busy {
+                        self.assistant.draft = draft;
+                    }
+                    return task;
+                }
             }
             Action::Done {
                 serial,

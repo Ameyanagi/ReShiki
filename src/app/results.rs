@@ -483,6 +483,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Replace(..)
                 | Action::AutoApply(..)
                 | Action::Send
+                | Action::Retry
                 | Action::Improve
                 | Action::PreviewTarget(..)
                 | Action::PreviewEdit(..)
