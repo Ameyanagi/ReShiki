@@ -115,6 +115,7 @@ pub fn substituent_locant_string(
         && !parts.is_bicycle
         && !parts.is_spiro
         && !parts.is_polycycle
+        && !parts.spiro_prefix_composition
         && !ambiguous
     {
         return String::new();

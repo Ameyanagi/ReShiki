@@ -48,8 +48,22 @@ pub fn inferred_ionic_retained_parent(parts: &AssemblyParts) -> Option<String> {
 }
 pub fn has_retained_like_parent(parts: &AssemblyParts) -> bool {
     parts.retained_name.is_some()
-        || parts.fusion_plan.is_some()
+        || parts
+            .parent_hydride
+            .as_ref()
+            .is_some_and(|parent| parent.is_fusion_parent())
+        || parts.parent_hydride.is_none() && parts.fusion_plan.is_some()
         || inferred_ionic_retained_parent(parts).is_some()
+}
+fn fusion_plan(parts: &AssemblyParts) -> Option<&super::fusion::model::FusionParentPlan> {
+    if let Some(parent) = &parts.parent_hydride {
+        parent
+            .is_fusion_parent()
+            .then_some(parent.fusion_plan.as_ref())
+            .flatten()
+    } else {
+        parts.fusion_plan.as_ref()
+    }
 }
 pub fn single_charged_replacement_locants(parts: &AssemblyParts) -> BTreeSet<String> {
     if parts.retained_name.is_some() || inferred_ionic_retained_parent(parts).is_some() {
@@ -110,7 +124,7 @@ pub fn parent_charge_suffix(parts: &AssemblyParts) -> String {
 }
 
 fn fusion_parent_charge_suffix(parts: &AssemblyParts) -> Option<String> {
-    let plan = parts.fusion_plan.as_ref()?;
+    let plan = fusion_plan(parts).filter(|plan| plan.audit.confirmed())?;
     if !plan
         .charge_operations
         .iter()
@@ -162,7 +176,7 @@ fn fusion_parent_charge_suffix(parts: &AssemblyParts) -> Option<String> {
 
 /// Check the graph-bound charge proof before any parent suffix is rendered.
 pub fn prepare_fusion_charge_assembly(parts: &mut AssemblyParts) -> Result<(), String> {
-    let Some(plan) = &parts.fusion_plan else {
+    let Some(plan) = fusion_plan(parts) else {
         return Ok(());
     };
     if !plan.audit.confirmed() {

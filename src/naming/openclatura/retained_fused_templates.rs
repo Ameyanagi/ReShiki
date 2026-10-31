@@ -93,6 +93,14 @@ static ALL_TEMPLATES: LazyLock<Vec<RetainedGraphTemplate>> = LazyLock::new(|| {
     }
     templates
 });
+#[allow(
+    clippy::expect_used,
+    reason = "Immutable checked-in retained localized pi states"
+)]
+static LOCALIZED_PI: LazyLock<Value> = LazyLock::new(|| {
+    serde_json::from_str(include_str!("data/retained_fused_localized_pi.json"))
+        .expect("retained localized pi states")
+});
 static ENABLED_TEMPLATES: LazyLock<Vec<RetainedGraphTemplate>> = LazyLock::new(|| {
     ALL_TEMPLATES
         .iter()
@@ -521,6 +529,15 @@ pub(super) fn match_retained_graph_template_maps_with_options(
     {
         return Vec::new();
     }
+    // Upstream divergence: hydrogenating a localized retained parent can make
+    // its remaining 4n pi cycle ambiguous again. Hydro locants identify the
+    // saturated sites, but do not select either alternating state of that cycle.
+    if LOCALIZED_PI["parents"][&t.name].is_array()
+        && atoms.iter().any(|&a| is_saturated_site(mol, a, atoms))
+        && has_localized_alternating_4n_cycle(mol, atoms)
+    {
+        return Vec::new();
+    }
     let by_locant = if relocate {
         relocatable_atom_by_locant(t)
     } else {
@@ -627,6 +644,31 @@ pub(super) fn match_retained_graph_template_maps_with_options(
             return Vec::new();
         }
     }
+    // Upstream divergence: graph automorphisms need not preserve the localized
+    // pi state of a retained citation. Keep its fixed inter-ring/alternating
+    // bonds while allowing ordinary Kekule alternatives in aromatic subgraphs.
+    // Hydro locants instead identify the reduced parent state, checked above.
+    if let Some(reference) = LOCALIZED_PI["parents"][&t.name]
+        .as_array()
+        .filter(|_| !atoms.iter().any(|&a| is_saturated_site(mol, a, atoms)))
+    {
+        assignments.retain(|assignment| {
+            reference.iter().all(|bond| {
+                let Some((left, right, expected)) = bond["locants"][0]
+                    .as_str()
+                    .zip(bond["locants"][1].as_str())
+                    .zip(bond["order"].as_u64())
+                    .map(|((left, right), expected)| (left, right, expected as usize))
+                else {
+                    return false;
+                };
+                let u = assignment[index[left]];
+                let v = assignment[index[right]];
+                mol.get_bond(u, v)
+                    .is_some_and(|actual| actual.order == expected)
+            })
+        });
+    }
     let mut order: Vec<_> = (0..t.locants.len()).collect();
     order.sort_by_key(|&i| {
         (
@@ -671,6 +713,53 @@ pub(super) fn match_retained_graph_template_maps_with_options(
         })
         .collect()
 }
+fn has_localized_alternating_4n_cycle(mol: &Molecule, atoms: &AtomSet) -> bool {
+    fn search(
+        mol: &Molecule,
+        atoms: &AtomSet,
+        path: &mut Vec<usize>,
+        next_order: usize,
+        localized: bool,
+        remaining: &mut usize,
+    ) -> bool {
+        if *remaining == 0 {
+            return true;
+        }
+        *remaining -= 1;
+        let start = path[0];
+        let current = path[path.len() - 1];
+        for &next in mol.get_neighbors(current) {
+            if !atoms.contains(&next) || next < start {
+                continue;
+            }
+            let Some(bond) = mol
+                .get_bond(current, next)
+                .filter(|b| b.order == next_order)
+            else {
+                continue;
+            };
+            let localized = localized || !bond.is_aromatic;
+            if next == start {
+                if path.len() >= 4 && path.len().is_multiple_of(4) && localized {
+                    return true;
+                }
+            } else if !path.contains(&next) {
+                path.push(next);
+                let found = search(mol, atoms, path, 3 - next_order, localized, remaining);
+                path.pop();
+                if found {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+    let mut remaining = 10_000;
+    atoms
+        .iter()
+        .any(|&start| search(mol, atoms, &mut vec![start], 2, false, &mut remaining))
+}
+
 fn relocated_indicated_h(
     mol: &Molecule,
     t: &RetainedGraphTemplate,
@@ -1084,6 +1173,55 @@ mod tests {
             Some("naphthalene")
         );
     }
+    #[test]
+    fn retained_localized_pi_state_constrains_all_numbering_maps() {
+        for (smiles, expected) in [
+            ("c1ccc2c(c1)-c1ccccc1-2", "biphenylene"),
+            ("c1ccc2c(c1)-c1ccccc1-c1ccccc1-c1ccccc1-2", "tetraphenylene"),
+        ] {
+            assert_eq!(super::super::name_smiles(smiles).as_deref(), Ok(expected));
+        }
+        for smiles in [
+            "c1ccc2c(c1)=c1ccccc1=2",
+            "Clc1cccc2c1=c1ccccc1=2",
+            "c1ccc2c(c1)=c1ccccc1=c1ccccc1=c1ccccc1=2",
+            "C1=CC2=C(CC1)C1=C2CCC=C1",
+            "C1=CC2=c3ccccc3=C2CC1",
+        ] {
+            let mol = read_smiles(smiles).unwrap();
+            let ring = mol
+                .atoms
+                .iter()
+                .filter(|(_, atom)| atom.symbol == "C")
+                .map(|(&idx, _)| idx)
+                .collect();
+            for (allow_nonaromatic, allow_relocated_indicated_h) in
+                [(false, false), (true, false), (false, true), (true, true)]
+            {
+                assert!(
+                    match_retained_graph_templates_with_options(
+                        &mol,
+                        &ring,
+                        MatchOptions {
+                            family: Some("fused"),
+                            allow_nonaromatic,
+                            allow_relocated_indicated_h,
+                            ..Default::default()
+                        },
+                    )
+                    .is_empty(),
+                    "{smiles}"
+                );
+            }
+        }
+        // A numbering that exchanges these localized bonds must not turn a
+        // position-3 substituent into position 1 on the cited indacene parent.
+        assert_eq!(
+            super::super::name_smiles("ClC1=c2cc3c(cc2C=C1)=CC=C3").as_deref(),
+            Ok("3-chloros-indacene")
+        );
+    }
+
     #[test]
     fn preferred_output_names_have_metadata_and_aliases_do_not() {
         assert!(retained_parent_metadata("2,3-dihydro-1H-indole").is_some());

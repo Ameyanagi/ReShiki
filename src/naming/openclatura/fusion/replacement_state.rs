@@ -33,15 +33,10 @@ impl ReplacementHydrogenBalance {
 #[derive(Clone, Debug)]
 pub struct ReplacementFusionState {
     pub graph: FusionGraph,
-    // Keep the proved replacement bond domain and citation as evidence for the
-    // deferred renderer. Its applicability gate currently reads only audit_ok.
-    #[allow(dead_code)]
     pub bond_model: ParentBondModel,
     pub derivative_state: ParentDerivativeState,
-    #[allow(dead_code)]
     pub indicated_hydrogens: Vec<String>,
     pub hydrogen_balances: Vec<ReplacementHydrogenBalance>,
-    #[allow(dead_code)]
     pub rendered_name: String,
     pub audit_checks: Vec<String>,
 }

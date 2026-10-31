@@ -15,6 +15,7 @@ mod assembly_charge;
 mod assembly_parent;
 mod assembly_parts;
 mod assembly_prefixes;
+mod assembly_spiro;
 mod assembly_utils;
 mod chains;
 mod component_group_rules;
@@ -51,10 +52,12 @@ mod retained_fused_templates;
 mod retained_graph_model;
 mod retained_name_policy;
 mod retained_specs;
+mod ring_parent;
 mod ring_renderer;
 mod rules;
 mod small_ring_stereo;
 mod special_cases;
+mod spiro_subgraph;
 mod subgraph_tools;
 mod von_baeyer;
 
@@ -130,8 +133,8 @@ mod tests {
             assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
         }
         assert_eq!(
-            name_smiles("C1CCC2(C1)Oc1ccccc1O2").unwrap_err(),
-            "openclatura: systematic fusion not ported",
+            name_smiles("C1CCC2(C1)Oc1ccccc1O2").as_deref(),
+            Ok("spiro[1,3-benzodioxole-2,1'-cyclopentane]"),
         );
     }
 
@@ -162,7 +165,6 @@ mod tests {
             "C1CC12CC23CC34CC4",
             "S123(CC1)(CC2)CC3",
             "[c-]1ccccc1-c1ccccc1",
-            "C1CCC2(CC1)C1CCCCC1C2",
             "C1CCC2(CC1)CCCC2.C",
             "[13CH2]1CCC2(CC1)CCCC2",
             "C[C@H]1C2(CC2)[C@@H](C)C13CC3",

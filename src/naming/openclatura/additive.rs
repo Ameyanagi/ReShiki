@@ -10,7 +10,15 @@ use std::collections::{BTreeMap, BTreeSet};
 type Site = (String, usize);
 
 pub fn parent_indicated_hydrogen_quota(parts: &AssemblyParts) -> Option<usize> {
-    if let Some(plan) = &parts.fusion_plan {
+    let plan = if let Some(parent) = &parts.parent_hydride {
+        parent
+            .uses_fusion_plan()
+            .then_some(parent.fusion_plan.as_ref())
+            .flatten()
+    } else {
+        parts.fusion_plan.as_ref()
+    };
+    if let Some(plan) = plan {
         let model =
             super::fusion::numbering::parent_bond_model(&plan.abstract_parent_graph).ok()?;
         return Some(
@@ -623,7 +631,12 @@ fn collect_indicated_hydrogens(
 }
 
 fn recast_ring_ketone_hydrogens(parts: &mut AssemblyParts, locants: &BTreeMap<usize, String>) {
-    if parts.fusion_plan.is_some() {
+    if parts
+        .parent_hydride
+        .as_ref()
+        .is_some_and(|parent| parent.uses_fusion_plan() && parent.derivative_state().is_some())
+        || parts.parent_hydride.is_none() && parts.fusion_plan.is_some()
+    {
         return;
     }
     let Some(group) = parts.principal_group.as_ref().filter(|g| g.key == "ketone") else {
@@ -694,12 +707,23 @@ fn add_proved_parent_hydrogens(
     locants: &BTreeMap<usize, String>,
 ) -> Result<bool, String> {
     use super::fusion::mancude::{CompareOptions, compare_actual_parent_to_implied_parent};
-    let Some(model) = &parts.parent_bond_model else {
+    let Some(model) = parts
+        .parent_hydride
+        .as_ref()
+        .and_then(|parent| parent.bond_model())
+        .or(parts.parent_bond_model.as_ref())
+    else {
         return Ok(false);
     };
+    let state = parts
+        .parent_hydride
+        .as_ref()
+        .and_then(|parent| parent.derivative_state())
+        .or(parts.parent_derivative_state.as_ref())
+        .cloned();
     let delta = if let Some(delta) = &parts.parent_bond_delta {
         Some(delta.clone())
-    } else if let Some(state) = &parts.parent_derivative_state {
+    } else if let Some(state) = &state {
         Some(state.bond_delta.clone())
     } else {
         compare_actual_parent_to_implied_parent(
@@ -716,7 +740,15 @@ fn add_proved_parent_hydrogens(
     let Some(delta) = delta.filter(|delta| delta.compatible) else {
         return Ok(false);
     };
-    if parts.fusion_plan.as_ref().is_some_and(|plan| {
+    let plan = if let Some(parent) = &parts.parent_hydride {
+        parent
+            .uses_fusion_plan()
+            .then_some(parent.fusion_plan.as_ref())
+            .flatten()
+    } else {
+        parts.fusion_plan.as_ref()
+    };
+    if plan.is_some_and(|plan| {
         plan.audit
             .checks
             .iter()
@@ -724,7 +756,7 @@ fn add_proved_parent_hydrogens(
     }) {
         return Ok(true);
     }
-    let fusion_added_only = parts.fusion_plan.is_some()
+    let fusion_added_only = plan.is_some()
         && !delta.added_hydrogen_operations.is_empty()
         && delta.hydrogenated_edges.is_empty()
         && delta.additional_multiple_bond_ids.is_empty();
@@ -738,7 +770,7 @@ fn add_proved_parent_hydrogens(
     if intrinsic || fusion_added_only {
         return Ok(true);
     }
-    if let Some(state) = &parts.parent_derivative_state
+    if let Some(state) = &state
         && !state.hydro_operations.is_empty()
     {
         for op in &state.hydro_operations {
@@ -753,8 +785,11 @@ fn add_proved_parent_hydrogens(
         return Ok(false);
     }
     let indicated: AtomSet = parts
-        .retained_parent_metadata
-        .iter()
+        .parent_hydride
+        .as_ref()
+        .and_then(|parent| parent.hydride_metadata.as_ref())
+        .or(parts.retained_parent_metadata.as_ref())
+        .into_iter()
         .flat_map(|metadata| metadata.default_indicated_h.iter())
         .filter_map(|locant| {
             locants
@@ -799,7 +834,12 @@ fn apply_retained_oxo_carbon_hydrogen(
     ) else {
         return Ok(false);
     };
-    if group.key != "ketone" {
+    if group.key != "ketone"
+        || parts
+            .parent_hydride
+            .as_ref()
+            .is_some_and(|parent| parent.is_fusion_parent())
+    {
         return Ok(false);
     }
     let mut declared: Vec<_> = name_indicated_hydrogen_locants(Some(name))
@@ -845,12 +885,24 @@ fn apply_retained_oxo_carbon_hydrogen(
         Some(&proof.indicated_h),
     ));
     parts.hydro_operations.push(proof.added_hydrogen);
+    if let Some(parent) = &mut parts.parent_hydride {
+        parent.parent_name = parts.retained_name.clone();
+        parent.parent_bond_model = Some(proof.model.clone());
+    }
     parts.parent_bond_model = Some(proof.model);
     Ok(true)
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn bridge_oxo_composition_does_not_invent_hydrogenation() {
+        assert_eq!(
+            super::super::name_smiles("C12C(C=C(C3=CC=CC=C13)O2)=O").as_deref(),
+            Ok("1,4-epoxynaphthalen-2(1H)-one")
+        );
+    }
+
     #[test]
     fn retained_derivatives_reject_conflicting_cited_hydrogen_states() {
         assert_eq!(

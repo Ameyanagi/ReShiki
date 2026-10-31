@@ -17,6 +17,36 @@ struct ChargeSite {
 /// Admit oxo protonation only where the naming grammar preserves its charge.
 pub fn validate_heteroatom_oxo_charge_states(mol: &Molecule) -> Result<(), String> {
     for (&id, atom) in &mol.atoms {
+        // Upstream divergence: neutral imine suffixes do not encode a terminal
+        // imine anion. Decline before parent selection can lose its N charge.
+        if atom.symbol == "N"
+            && atom.charge < 0
+            && mol.degree(id) == 1
+            && mol.get_neighbors(id).iter().any(|&neighbor| {
+                mol.atoms[&neighbor].is_carbon()
+                    && mol
+                        .get_bond(id, neighbor)
+                        .is_some_and(|bond| bond.order == 2)
+            })
+        {
+            return Err("openclatura: anionic terminal imine charge state is not supported".into());
+        }
+        // Upstream divergence: oxido on an H-bearing chalcogen can be read as
+        // neutral oxo, consuming both its anionic charge and the chalcogen H.
+        if atom.symbol == "O"
+            && atom.charge < 0
+            && mol.degree(id) == 1
+            && mol.get_neighbors(id).iter().any(|&neighbor| {
+                let center = &mol.atoms[&neighbor];
+                matches!(center.symbol.as_str(), "S" | "Se" | "Te")
+                    && center.total_h_count > 0
+                    && mol
+                        .get_bond(id, neighbor)
+                        .is_some_and(|bond| bond.order == 1)
+            })
+        {
+            return Err("openclatura: oxido on an H-bearing chalcogen is not supported".into());
+        }
         if atom.symbol != "O" || atom.charge != 1 || atom.total_h_count == 0 {
             continue;
         }
@@ -918,6 +948,30 @@ mod tests {
             );
         }
         for smiles in ["CS(=O)(=O)C", "C=[OH+]", "C[OH2+]"] {
+            let mol = read_smiles(smiles).unwrap();
+            assert!(
+                validate_heteroatom_oxo_charge_states(&mol).is_ok(),
+                "{smiles}"
+            );
+        }
+    }
+
+    #[test]
+    fn external_ligands_cannot_lose_charge_or_chalcogen_hydrogen() {
+        use super::super::graph_io::read_smiles;
+        for smiles in ["[O-][SH]1c2ccc3cc1ccc3c2", "[N-]=C1CCCCC1"] {
+            let mol = read_smiles(smiles).unwrap();
+            assert!(
+                validate_heteroatom_oxo_charge_states(&mol).is_err(),
+                "{smiles}"
+            );
+        }
+        for smiles in [
+            "C[S+](C)[O-]",
+            "N=C1CCCCC1",
+            "[NH2+]=C1CCCCC1",
+            "[SH2]1c2ccc3cc1ccc3c2",
+        ] {
             let mol = read_smiles(smiles).unwrap();
             assert!(
                 validate_heteroatom_oxo_charge_states(&mol).is_ok(),

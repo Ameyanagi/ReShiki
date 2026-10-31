@@ -24,7 +24,7 @@ use super::{
     mancude::{
         ParentDerivativeOptions, ParentDerivativeState, has_complete_saturated_hydrogenation,
         indicated_hydrogen_parent_bond_model, parent_derivative_state,
-        saturated_nitrogen_hydrogen_sites,
+        protonated_hydrogenation_is_complete, saturated_nitrogen_hydrogen_sites,
     },
     model::*,
     numbering::{
@@ -400,6 +400,18 @@ fn complete_fusion_plan(
         derivative_state = complete_state;
         indicated_h.clear();
     }
+    // Upstream divergence: removing a reduced edge incident to indicated N-H
+    // can lose the carbon endpoint's hydrogen. Require the cited H/hydro sites
+    // to preserve the ring pi count and the pi degree of each nonaromatic carbon.
+    if !protonated_hydrogenation_is_complete(
+        mol,
+        atoms,
+        &bond_model,
+        &derivative_state,
+        &indicated_atoms,
+    )? {
+        return Err("openclatura: protonated fused hydrogenation state not ported".into());
+    }
     if fusion_nomenclature_config()
         .rules
         .support
@@ -708,6 +720,29 @@ fn unresolved_localized_pi_cycle(
 mod tests {
     use super::super::super::graph_io::read_smiles;
     use super::*;
+
+    #[test]
+    fn protonated_fused_citations_preserve_carbon_hydrogenation() {
+        for smiles in [
+            "C1=CC2CCCCC2[NH2+]1",
+            "C1=CCC2CC[NH2+]CC2CC1",
+            "C1=CC2CCCC2C[NH2+]1",
+            "C1=CC2CCCCCC2C[NH2+]1",
+        ] {
+            let mol = read_smiles(smiles).unwrap();
+            let atoms = mol.atoms.keys().copied().collect();
+            let error = plan_fusion_parent(&mol, &atoms).unwrap_err();
+            assert!(error.contains("protonated"), "{smiles}: {error}");
+        }
+        for smiles in ["C1=CC2C[NH2+]CCC2CC1", "C1=CCC2CC[NH2+]CCC2CC1"] {
+            let mol = read_smiles(smiles).unwrap();
+            let atoms = mol.atoms.keys().copied().collect();
+            assert!(
+                plan_fusion_parent(&mol, &atoms).unwrap().is_some(),
+                "{smiles}"
+            );
+        }
+    }
 
     #[test]
     fn localized_nonaromatic_pi_alternatives_require_a_citation_witness() {

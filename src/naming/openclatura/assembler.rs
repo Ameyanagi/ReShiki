@@ -177,9 +177,9 @@ fn normalize_indicated_hydrogen_quota(parts: &mut AssemblyParts, core: &str) -> 
             .as_deref()
             .or_else(|| {
                 parts
-                    .fusion_plan
+                    .parent_hydride
                     .as_ref()
-                    .map(|plan| plan.rendered_base_name.as_str())
+                    .and_then(|parent| parent.base_name())
             })
             .is_some_and(|name| indicated_run(name).is_some())
         && let Some(metadata) = &mut parts.retained_parent_metadata
@@ -288,8 +288,9 @@ fn add_indicated_hydrogen_prefix(parts: &mut AssemblyParts, core: &str) -> Strin
                             .map(|(edge, _)| *edge)
                             .collect()
             });
-        if fully_hydrogenated_fusion
-            || additive.len() + indicated.len().max(stated) == parts.parent_length
+        if !parts.spiro_prefix_composition
+            && (fully_hydrogenated_fusion
+                || additive.len() + indicated.len().max(stated) == parts.parent_length)
         {
             return format!("{hydro}{sep}{core}");
         }
@@ -465,6 +466,8 @@ pub fn assemble_name_raw(parts: &mut AssemblyParts) -> Result<String, String> {
     promote_retained_substituent_name(parts);
     promote_benzene_retained_name(parts);
     promote_retained_functional_parent(parts)?;
+    let spiro_sides = super::assembly_spiro::split_spiro_substituents(parts)?;
+    parts.spiro_prefix_composition = !spiro_sides.is_empty();
     let prefix = format_substituent_prefixes(parts);
     let a_prefix = format_replacement_prefixes(parts);
     let core = if let Some(name) = fused_ion_candidate
@@ -476,13 +479,30 @@ pub fn assemble_name_raw(parts: &mut AssemblyParts) -> Result<String, String> {
         name.clone()
     } else {
         let (stem, terminal) = parent_stem_and_terminal(parts)?;
+        let parent_terminal = if parts
+            .parent_hydride
+            .as_ref()
+            .is_some_and(|p| p.uses_fusion_plan())
+        {
+            terminal.clone()
+        } else {
+            "e".into()
+        };
         let stem = format!("{a_prefix}{stem}");
         let (stem, unsat, terminal, suffix) = if parts.is_substituent {
             format_substituent_tail(parts, &stem, &terminal)
         } else {
             format_parent_tail(parts, &stem, &terminal)?
         };
-        let core = add_indicated_hydrogen_prefix(parts, &format!("{stem}{unsat}{terminal}"));
+        let (core, _, suffix) = super::assembly_spiro::format_spiro_core(
+            &stem,
+            &unsat,
+            &terminal,
+            &spiro_sides,
+            &suffix,
+            &parent_terminal,
+        );
+        let core = add_indicated_hydrogen_prefix(parts, &core);
         let (core, suffix) = move_added_hydrogen(parts, &core, &suffix);
         format!("{core}{suffix}")
     };

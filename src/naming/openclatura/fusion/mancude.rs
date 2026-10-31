@@ -277,6 +277,74 @@ pub fn has_complete_saturated_hydrogenation(
             .iter()
             .all(|(e, o)| *o == 1 || (*o == 2 && edges.contains(e)))
 }
+/// A charged sigma N citation must preserve ring pi count and hydrogen sites.
+pub fn protonated_hydrogenation_is_complete(
+    mol: &Molecule,
+    atoms: &AtomSet,
+    model: &ParentBondModel,
+    state: &ParentDerivativeState,
+    indicated: &AtomSet,
+) -> Result<bool, String> {
+    if !atoms.iter().any(|&id| {
+        let atom = &mol.atoms[&id];
+        atom.symbol == "N"
+            && atom.charge == 1
+            && atom.total_h_count > 0
+            && atom.total_h_count + mol.degree(id) == 4
+            && all_single(mol, id)
+    }) || !mol.bonds.values().any(|bond| {
+        atoms.contains(&bond.u) && atoms.contains(&bond.v) && bond.order == 2 && !bond.is_aromatic
+    }) || state.external_pi_operations().next().is_some()
+        || !state.unsaturation_operations.is_empty()
+    {
+        return Ok(true);
+    }
+    let sites = indicated
+        .union(&state.bond_delta.hydrogenated_atom_ids())
+        .copied()
+        .collect();
+    let remaining = match single_site_parent_model(model, &sites) {
+        Ok(remaining) => remaining,
+        Err(error) if super::numbering::mancude_search_budget_exceeded(&error) => {
+            return Err(error);
+        }
+        Err(_) => return Ok(false),
+    };
+    let observed = mol
+        .bonds
+        .values()
+        .filter(|bond| atoms.contains(&bond.u) && atoms.contains(&bond.v) && bond.order == 2)
+        .count();
+    Ok(remaining.maximum_non_cumulative_double_bonds == observed
+        && remaining
+            .allowed_kekule_assignments
+            .iter()
+            .all(|assignment| {
+                atoms
+                    .iter()
+                    .filter(|id| {
+                        matches!(mol.atoms[id].symbol.as_str(), "C" | "N")
+                            && !mol.atoms[id].is_aromatic
+                    })
+                    .all(|id| {
+                        let expected_pi: usize = assignment
+                            .orders
+                            .iter()
+                            .filter(|((u, v), _)| u == id || v == id)
+                            .map(|(_, order)| order - 1)
+                            .sum();
+                        let actual_pi: usize = mol
+                            .get_neighbors(*id)
+                            .iter()
+                            .filter(|neighbor| atoms.contains(neighbor))
+                            .filter_map(|neighbor| mol.get_bond(*id, *neighbor))
+                            .map(|bond| bond.order - 1)
+                            .sum();
+                        expected_pi == actual_pi
+                    })
+            }))
+}
+
 fn single_bonded_parent_nitrogen(mol: &Molecule, atoms: &AtomSet, id: usize) -> bool {
     let atom = &mol.atoms[&id];
     atom.symbol == "N"

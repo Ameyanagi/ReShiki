@@ -15,6 +15,7 @@ pub struct SubstituentItem {
     pub bond_ids: AtomSet,
     pub charge_atom_ids: AtomSet,
     pub outer_parentheses_optional: bool,
+    pub spiro: Option<Box<super::assembly_spiro::SpiroAssembly>>,
 }
 impl SubstituentItem {
     pub fn new(name: impl Into<String>, locants: Vec<String>) -> Self {
@@ -67,6 +68,7 @@ pub struct HydroOperation {
 }
 #[derive(Clone, Debug, Default)]
 pub struct RetainedParentMetadata {
+    pub derivative_stem: Option<String>,
     pub indicated_hydrogen_count: usize,
     pub mancude_double_bonds: usize,
     pub default_indicated_h: Vec<String>,
@@ -95,6 +97,7 @@ pub struct AssemblyParts {
     pub retained_substituent_name: Option<String>,
     pub retained_parent_metadata: Option<RetainedParentMetadata>,
     pub fusion_plan: Option<super::fusion::model::FusionParentPlan>,
+    pub parent_hydride: Option<super::ring_parent::RingParent>,
     pub parent_bond_model: Option<super::fusion::model::ParentBondModel>,
     pub parent_bond_delta: Option<super::fusion::mancude::ParentBondDelta>,
     pub parent_derivative_state: Option<super::fusion::mancude::ParentDerivativeState>,
@@ -124,6 +127,8 @@ pub struct AssemblyParts {
     pub elided_unsaturation_locants: BTreeSet<String>,
     pub elide_principal_group_locants: bool,
     pub is_spiro_component: bool,
+    pub is_spiro_side_projection: bool,
+    pub spiro_prefix_composition: bool,
 }
 impl Default for AssemblyParts {
     fn default() -> Self {
@@ -152,6 +157,7 @@ impl AssemblyParts {
             retained_substituent_name: None,
             retained_parent_metadata: None,
             fusion_plan: None,
+            parent_hydride: None,
             parent_bond_model: None,
             parent_bond_delta: None,
             parent_derivative_state: None,
@@ -181,6 +187,8 @@ impl AssemblyParts {
             elided_unsaturation_locants: BTreeSet::new(),
             elide_principal_group_locants: false,
             is_spiro_component: false,
+            is_spiro_side_projection: false,
+            spiro_prefix_composition: false,
         }
     }
 }

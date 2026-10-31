@@ -154,7 +154,7 @@ fn direct_subgraph_prefix(
     Ok(None)
 }
 
-fn select_subgraph_parent(
+pub(super) fn select_subgraph_parent(
     mol: &Molecule,
     start: usize,
     component: &AtomSet,
@@ -228,6 +228,28 @@ fn collect_subgraph_substituents(
         handled.extend(&group.atoms_involved);
     }
     for &idx in parent_path {
+        let neighbors: Vec<_> = mol
+            .get_neighbors(idx)
+            .iter()
+            .copied()
+            .filter(|n| !parent.contains(n) && !handled.contains(n) && !exclude.contains(n))
+            .collect();
+        if let Some((start, _)) =
+            super::spiro_subgraph::find_spiro_side_pair(mol, idx, &neighbors, &parent, exclude)
+        {
+            let side =
+                super::spiro_subgraph::spiro_side_component(mol, idx, start, &parent, exclude);
+            let atoms: AtomSet = side.iter().copied().filter(|a| *a != idx).collect();
+            let mut item = SubstituentItem::new("", Vec::new());
+            item.atom_ids = atoms.clone();
+            item.bond_ids = bond_ids_within(mol, &side);
+            item.charge_atom_ids = charged_atoms(mol, &atoms);
+            item.spiro = Some(Box::new(super::spiro_subgraph::spiro_subgraph_assembly(
+                mol, idx, &side,
+            )?));
+            mapping.entry(idx).or_default().push(item);
+            handled.extend(atoms);
+        }
         for &n in mol.get_neighbors(idx) {
             if parent.contains(&n)
                 || handled.contains(&n)
@@ -238,11 +260,12 @@ fn collect_subgraph_substituents(
             }
             let mut branch_exclude = exclude.clone();
             branch_exclude.extend(&parent);
+            let atoms = subgraph_component(mol, n, &branch_exclude);
+            super::spiro_subgraph::require_single_parent_attachment(mol, &atoms, &parent)?;
             let name = name_subgraph_rendered(mol, n, &branch_exclude, Some(idx))?;
             if name.text.is_empty() {
                 return Err("openclatura: empty recursive substituent".into());
             }
-            let atoms = subgraph_component(mol, n, &branch_exclude);
             let mut attached = atoms.clone();
             attached.insert(idx);
             let mut item = SubstituentItem::new(name.text, Vec::new());
@@ -396,7 +419,11 @@ pub fn name_subgraph_rendered(
     }
     let raw = carbanion.unwrap_or(raw);
     let text = finalize_subgraph_name(raw, &parts);
-    let text = if parts.fusion_plan.is_some() {
+    let text = if parts
+        .parent_hydride
+        .as_ref()
+        .is_some_and(|p| p.is_fusion_parent())
+    {
         text
     } else {
         super::ionic_naming::apply_anionic_parent_names(

@@ -124,13 +124,11 @@ fn has_unproved_protonated_junction_donor(mol: &Molecule, atoms: &AtomSet) -> bo
         if mixed_donor {
             return true;
         }
-        let junctions: Vec<_> = neighbors
+        neighbors
             .iter()
             .copied()
             .filter(|n| atoms.contains(n) && mol.atoms[n].symbol == "C" && degree(*n) == 3)
-            .collect();
-        junctions.len() >= 2
-            && junctions.iter().any(|&junction| {
+            .any(|junction| {
                 mol.get_neighbors(junction)
                     .iter()
                     .filter(|n| atoms.contains(n))
@@ -145,8 +143,8 @@ pub fn fusion_charge_operations(
     numbering: &FusionNumberingProof,
 ) -> Result<Vec<FusionChargeOperation>, String> {
     let atoms = graph.atoms.iter().map(|a| a.id).collect();
-    // Upstream divergence: protonating a sigma donor between carbon fusion
-    // junctions is not jointly bound to the adjacent reduced junction's H.
+    // Upstream divergence: protonating a sigma donor adjacent to even one
+    // carbon fusion junction is not jointly bound to the reduced junction's H.
     // Indicated N-H can consume a parent pi bond while its carbon endpoint's
     // hydrogen is lost, allowing reconstruction to move the ring reduction.
     // A second fixed-single skeletal donor creates the same competing carbon-H
@@ -229,6 +227,8 @@ mod tests {
     #[test]
     fn protonated_donor_citation_cannot_hide_a_reduced_carbon_junction() {
         for smiles in [
+            "C1=CC2CCCCC2[NH2+]1",
+            "C1=CC2CCCCC2[NH+](C)1",
             "C[NH+]1C2C=CC=CC2C2=C1CCC=C2",
             "[NH2+]1C2C=CC=CC2C2=C1CCC=C2",
         ] {

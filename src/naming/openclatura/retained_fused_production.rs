@@ -72,8 +72,13 @@ pub fn production_retained_fused_parent(
     {
         return Ok(None);
     }
-    // SubstituentItem's ported shape contains rendered, already verified items;
-    // spiro substituents are rejected before this parent-production boundary.
+    if substituent_mapping
+        .values()
+        .flatten()
+        .any(|item| item.spiro.is_some())
+    {
+        return Ok(None);
+    }
     let mut features: AtomSet = substituent_mapping.keys().copied().collect();
     features.extend(attachment_atom);
     features.extend(

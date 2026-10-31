@@ -310,24 +310,6 @@ pub fn find_ring_systems(
             })
         })
         .collect();
-    for (index, block) in blocks.iter().enumerate() {
-        for other in &blocks[index + 1..] {
-            if !block.atoms.is_disjoint(&other.atoms)
-                && (!block.is_monocycle || !other.is_monocycle)
-            {
-                // Upstream divergence: spiro_subgraph/assembly_spiro fused-side plans
-                // require systematic fusion, even when the side has a retained name.
-                if has_fused_side_topology(mol, &block.atoms)
-                    || has_fused_side_topology(mol, &other.atoms)
-                {
-                    return Err("openclatura: systematic fusion not ported".into());
-                }
-                return Err(
-                    "openclatura: spiro junction on a polycyclic ring system not ported".into(),
-                );
-            }
-        }
-    }
     let mut changed = true;
     while changed {
         changed = false;
@@ -525,18 +507,11 @@ pub fn find_ring_systems(
                     ..RingSystem::default()
                 });
             } else {
-                // Upstream divergence: an unsupported larger spiro parent
-                // keeps its complete boundary even when legacy discovery only
-                // offers one terminal ring. Assembly then declines the parent.
                 systems.push(RingSystem {
                     paths: vec![
                         candidate
                             .paths
                             .first()
-                            .filter(|path| {
-                                path.len() == atoms.len()
-                                    && path.iter().copied().collect::<AtomSet>() == atoms
-                            })
                             .cloned()
                             .unwrap_or_else(|| atoms.iter().copied().collect()),
                     ],
@@ -585,46 +560,6 @@ pub fn find_ring_systems(
         }
     }
     Ok(merge_polyspiro_ring_systems(mol, systems))
-}
-
-/// A fused side requires the separate spiro/fusion composition handoff.
-fn has_fused_side_topology(mol: &Molecule, atoms: &AtomSet) -> bool {
-    let edges = edges_within_atoms(mol, atoms);
-    if edges.len() <= atoms.len() {
-        return false;
-    }
-    if atoms.iter().any(|id| mol.atoms[id].is_aromatic) {
-        return true;
-    }
-    // A shared bond between two rings leaves two alternate paths between its
-    // endpoints. The bounded planner owns the full component applicability.
-    edges.iter().any(|&(start, end)| {
-        let mut paths = Vec::new();
-        let mut stack = vec![(start, vec![start])];
-        while let Some((current, path)) = stack.pop() {
-            for &next in mol.get_neighbors(current) {
-                if !atoms.contains(&next)
-                    || (current == start && next == end)
-                    || path.contains(&next)
-                {
-                    continue;
-                }
-                if next == end {
-                    if path.len() >= 4 {
-                        paths.push(path[1..].iter().copied().collect::<AtomSet>());
-                    }
-                } else if path.len() < 8 {
-                    let mut next_path = path.clone();
-                    next_path.push(next);
-                    stack.push((next, next_path));
-                }
-            }
-        }
-        paths
-            .iter()
-            .enumerate()
-            .any(|(i, p)| paths[i + 1..].iter().any(|q| p.is_disjoint(q)))
-    })
 }
 
 fn confirmed_fusion_numbering_paths(
@@ -1036,14 +971,20 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_larger_spiro_retains_its_whole_parent_boundary() {
+    fn larger_spiro_fallback_exposes_a_component_for_graph_composition() {
         let mol = read_smiles("C1CC12CC23CC34CC4").unwrap();
         let systems = find_ring_systems(&mol, &AtomSet::new()).unwrap();
         assert_eq!(systems.len(), 1);
         assert!(systems[0].is_polycycle);
         assert!(systems[0].polycycle_descriptor.is_none());
         assert_eq!(systems[0].atoms.len(), mol.atoms.len());
-        assert_eq!(systems[0].paths[0].len(), mol.atoms.len());
+        assert_eq!(systems[0].paths[0].len(), 3);
+        assert!(
+            systems[0].paths[0]
+                .iter()
+                .all(|atom| systems[0].atoms.contains(atom))
+        );
+        assert!(super::super::name_smiles("C1CC12CC23CC34CC4").is_err());
     }
 
     #[test]

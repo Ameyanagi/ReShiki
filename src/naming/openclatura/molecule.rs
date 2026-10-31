@@ -103,6 +103,12 @@ pub struct Molecule {
     /// A plan is valid only for this molecular graph and its chemical state.
     pub(crate) fusion_plan_cache:
         RefCell<BTreeMap<AtomSet, Result<Option<super::fusion::model::FusionParentPlan>, String>>>,
+    pub(crate) third_component_plan_cache: RefCell<
+        BTreeMap<
+            AtomSet,
+            Result<Option<super::fusion::third_component::ThirdComponentFusionPlan>, String>,
+        >,
+    >,
     naming_budget: Rc<NamingBudget>,
 }
 
@@ -117,6 +123,7 @@ impl Clone for Molecule {
             legacy_cip: self.legacy_cip.clone(),
             substituted_symbols: self.substituted_symbols.clone(),
             fusion_plan_cache: RefCell::default(),
+            third_component_plan_cache: RefCell::default(),
             naming_budget: Rc::clone(&self.naming_budget),
         }
     }
@@ -161,6 +168,7 @@ impl Molecule {
         }
         self.adjacency.insert(atom.idx, Vec::new());
         self.fusion_plan_cache.get_mut().clear();
+        self.third_component_plan_cache.get_mut().clear();
         self.atoms.insert(atom.idx, atom);
         Ok(())
     }
@@ -183,6 +191,7 @@ impl Molecule {
         }
         self.adjacency.entry(bond.u).or_default().push(bond.v);
         self.fusion_plan_cache.get_mut().clear();
+        self.third_component_plan_cache.get_mut().clear();
         self.adjacency.entry(bond.v).or_default().push(bond.u);
         self.bond_lookup.insert(pair(bond.u, bond.v), bond.idx);
         self.bonds.insert(bond.idx, bond);
@@ -209,6 +218,7 @@ impl Molecule {
             .ok_or_else(|| format!("Unknown atom index: {atom_idx}"))?
             .charge = charge;
         self.fusion_plan_cache.get_mut().clear();
+        self.third_component_plan_cache.get_mut().clear();
         Ok(())
     }
 
@@ -218,6 +228,7 @@ impl Molecule {
             .ok_or_else(|| format!("Unknown bond index: {bond_idx}"))?
             .order = order;
         self.fusion_plan_cache.get_mut().clear();
+        self.third_component_plan_cache.get_mut().clear();
         Ok(())
     }
 

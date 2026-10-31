@@ -463,7 +463,27 @@ pub fn promote_retained_substituent_name(parts: &mut AssemblyParts) {
     }
 }
 pub fn parent_stem_and_terminal(parts: &AssemblyParts) -> Result<(String, String), String> {
-    if let Some(plan) = &parts.fusion_plan {
+    if let Some(parent) = parts
+        .parent_hydride
+        .as_ref()
+        .filter(|parent| parent.is_fusion_parent())
+    {
+        if parts.is_substituent
+            && let Some(stem) = parent
+                .hydride_metadata
+                .as_ref()
+                .and_then(|metadata| metadata.derivative_stem.as_ref())
+        {
+            return Ok((stem.clone(), String::new()));
+        }
+        let name = parent
+            .base_name()
+            .ok_or("openclatura: fusion parent has no audited spelling")?;
+        return Ok(split_parent_terminal(name));
+    }
+    if parts.parent_hydride.is_none()
+        && let Some(plan) = &parts.fusion_plan
+    {
         return Ok(
             if let Some(stem) = plan.rendered_base_name.strip_suffix('e') {
                 (stem.into(), "e".into())
@@ -496,6 +516,13 @@ pub fn parent_stem_and_terminal(parts: &AssemblyParts) -> Result<(String, String
             (name.clone(), String::new())
         });
     }
+    if let Some(name) = parts
+        .parent_hydride
+        .as_ref()
+        .and_then(|parent| parent.base_name())
+    {
+        return Ok(split_parent_terminal(name));
+    }
     let stem = stems::stem_for(parts.parent_length);
     Ok((
         if parts.is_bicycle {
@@ -523,6 +550,13 @@ pub fn parent_stem_and_terminal(parts: &AssemblyParts) -> Result<(String, String
         },
         "e".into(),
     ))
+}
+fn split_parent_terminal(name: &str) -> (String, String) {
+    if let Some(stem) = name.strip_suffix('e') {
+        (stem.into(), "e".into())
+    } else {
+        (name.into(), String::new())
+    }
 }
 pub fn format_unsaturations(
     parts: &AssemblyParts,
@@ -625,7 +659,7 @@ pub fn format_substituent_tail(
         };
         return (stem, unsat, suffix, String::new());
     }
-    let always = always_print_substituent_locant(parts);
+    let always = parts.spiro_prefix_composition || always_print_substituent_locant(parts);
     let two = !parts.is_ring
         && parts.parent_length == 2
         && parts.attachment_locant == "1"
@@ -749,6 +783,7 @@ pub fn format_principal_suffix(
                 && !parts.is_bicycle
                 && !parts.is_spiro
                 && !parts.is_polycycle
+                && !parts.spiro_prefix_composition
                 && parts.retained_name.is_none())
             || sole_group_redundant(parts))
     {
@@ -818,7 +853,11 @@ pub fn format_parent_tail(
         if parts.unsaturations.is_empty() {
             (stem.to_owned(), "an".into())
         } else {
-            format_unsaturations(parts, stem, redundant_unsaturation(parts))
+            format_unsaturations(
+                parts,
+                stem,
+                redundant_unsaturation(parts) && !parts.spiro_prefix_composition,
+            )
         }
     } else {
         (stem.to_owned(), String::new())
@@ -834,4 +873,29 @@ pub fn format_parent_tail(
         suffix = format!("{charge}{suffix}");
     }
     Ok((stem, unsat, terminal, suffix))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn spiro_composition_keeps_attachment_and_parent_unsaturation_locants() {
+        use super::super::assembly_parts::UnsaturationItem;
+        let mut parts = AssemblyParts::new(6);
+        parts.is_ring = true;
+        parts.is_substituent = true;
+        parts.spiro_prefix_composition = true;
+        assert_eq!(format_substituent_tail(&parts, "cyclohex", "e").2, "-1-yl");
+        parts.is_substituent = false;
+        parts.unsaturations.push(UnsaturationItem {
+            bond_key: "double".into(),
+            locants: vec!["1".into()],
+            ..Default::default()
+        });
+        assert_eq!(
+            format_parent_tail(&parts, "cyclohex", "e").unwrap().1,
+            "-1-en"
+        );
+    }
 }

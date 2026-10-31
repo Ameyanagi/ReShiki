@@ -1,0 +1,170 @@
+{
+  "source": {
+    "basis": "OPSIN 2.9.0 retained parent tokens in arylGroups.xml; tetraphenylene systematic retained citation",
+    "note": "Only bonds outside the reference aromatic subgraph are fixed. Aromatic Kekule alternatives remain equivalent; retained numbering must preserve these localized bonds."
+  },
+  "parents": {
+    "biphenylene": [
+      {
+        "locants": [
+          "4a",
+          "4b"
+        ],
+        "order": 1
+      },
+      {
+        "locants": [
+          "8a",
+          "8b"
+        ],
+        "order": 1
+      }
+    ],
+    "s-indacene": [
+      {
+        "locants": [
+          "1",
+          "2"
+        ],
+        "order": 2
+      },
+      {
+        "locants": [
+          "2",
+          "3"
+        ],
+        "order": 1
+      },
+      {
+        "locants": [
+          "3",
+          "3a"
+        ],
+        "order": 2
+      },
+      {
+        "locants": [
+          "4a",
+          "5"
+        ],
+        "order": 1
+      },
+      {
+        "locants": [
+          "5",
+          "6"
+        ],
+        "order": 2
+      },
+      {
+        "locants": [
+          "6",
+          "7"
+        ],
+        "order": 1
+      },
+      {
+        "locants": [
+          "7",
+          "7a"
+        ],
+        "order": 2
+      },
+      {
+        "locants": [
+          "1",
+          "8a"
+        ],
+        "order": 1
+      }
+    ],
+    "as-indacene": [
+      {
+        "locants": [
+          "1",
+          "2"
+        ],
+        "order": 2
+      },
+      {
+        "locants": [
+          "2",
+          "3"
+        ],
+        "order": 1
+      },
+      {
+        "locants": [
+          "3",
+          "3a"
+        ],
+        "order": 2
+      },
+      {
+        "locants": [
+          "5a",
+          "6"
+        ],
+        "order": 2
+      },
+      {
+        "locants": [
+          "6",
+          "7"
+        ],
+        "order": 1
+      },
+      {
+        "locants": [
+          "7",
+          "8"
+        ],
+        "order": 2
+      },
+      {
+        "locants": [
+          "8",
+          "8a"
+        ],
+        "order": 1
+      },
+      {
+        "locants": [
+          "1",
+          "8b"
+        ],
+        "order": 1
+      }
+    ],
+    "tetraphenylene": [
+      {
+        "locants": [
+          "4a",
+          "4b"
+        ],
+        "order": 1
+      },
+      {
+        "locants": [
+          "8a",
+          "8b"
+        ],
+        "order": 1
+      },
+      {
+        "locants": [
+          "12a",
+          "12b"
+        ],
+        "order": 1
+      },
+      {
+        "locants": [
+          "16a",
+          "16b"
+        ],
+        "order": 1
+      }
+    ]
+  }
+}

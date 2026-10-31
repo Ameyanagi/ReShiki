@@ -163,6 +163,7 @@ pub fn substituent_locant_set_is_unique(
         || grouped_count != 1
         || parts.is_substituent
         || parts.is_bicycle
+        || parts.spiro_prefix_composition
         || parts.is_spiro
         || parts.is_polycycle
         || parts.principal_group.is_some()
