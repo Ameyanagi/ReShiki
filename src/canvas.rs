@@ -165,6 +165,15 @@ pub enum Edit {
     /// as the live preview uses them; a chemical symbol's attachment is separate.
     Orbital(World, World, bool, bool),
     GraphicPoint(u64, usize, World),
+    /// Move a connected path handle, optionally breaking its node's tangency.
+    PathPoint {
+        id: u64,
+        index: usize,
+        point: World,
+        free: bool,
+    },
+    /// The app counts consecutive node clicks before cycling the node type.
+    PathNodeClick(u64, usize),
     /// The pointer and whether Option/Alt or Shift freed the orbit.
     AtomMark(u64, usize, World, bool),
     AtomIndicator(reshiki::atom_labels::Owner, World),

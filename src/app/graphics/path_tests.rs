@@ -1,6 +1,7 @@
 use super::*;
 use crate::canvas::pen::Stroke;
 use path::Action as PathAction;
+use reshiki::graphics::{Graphic, PathNodeType};
 
 fn send(app: &mut App, action: PathAction) {
     let _ = app.update(Message::Graphics(Action::Path(action)));
@@ -44,6 +45,7 @@ fn compound_path_point_edit_matches_generic_preview_and_has_one_history_step() {
         PathCommand::Line(points[4]),
         PathCommand::Cubic(points[5], points[6], points[7]),
     ];
+    graphic.node_types.clear();
     assert_eq!(graphic.path_handles(), None);
     assert_eq!(graphic.edit_points(), points);
     app.tab.doc.graphics[0] = graphic;
@@ -90,6 +92,10 @@ fn pen_each_completed_segment_is_one_undo_step_and_preserves_chemistry() {
     assert_eq!(app.tab.doc.graphics.len(), 3);
     let id = app.tab.selected[0];
     let first = app.tab.doc.clone();
+    assert_eq!(
+        first.graphics[2].node_types,
+        vec![PathNodeType::Corner, PathNodeType::Symmetric]
+    );
     app.edit(Edit::PenSegment(Stroke {
         start: Point::new(480., 30.),
         end: Point::new(480., 30.),
@@ -99,6 +105,10 @@ fn pen_each_completed_segment_is_one_undo_step_and_preserves_chemistry() {
     assert_eq!(app.tab.selected, vec![id]);
     assert_eq!(app.tab.doc.graphics.len(), 3);
     let second = app.tab.doc.clone();
+    assert_eq!(
+        second.graphics[2].node_types.last(),
+        Some(&PathNodeType::Corner)
+    );
     app.edit(Edit::PenSegment(Stroke {
         start: Point::new(560., 50.),
         end: Point::new(560., 100.),
@@ -106,6 +116,10 @@ fn pen_each_completed_segment_is_one_undo_step_and_preserves_chemistry() {
         close: false,
     }));
     let third = app.tab.doc.clone();
+    assert_eq!(
+        third.graphics[2].node_types.last(),
+        Some(&PathNodeType::Symmetric)
+    );
     for expected in [&second, &first, &before] {
         let _ = app.update(Message::Undo);
         assert_eq!(&app.tab.doc, expected);
@@ -372,4 +386,237 @@ fn pen_edge_on_offset_click_selects_without_error_and_only_a_drag_is_rejected() 
             assert!(app.status.contains("Rotate this edge-on projected path"));
         }
     }
+}
+
+fn node_type_app() -> App {
+    let mut app = fixture_app();
+    let id = app.tab.selected[0];
+    let mut graphic = Graphic::pen_curve(
+        id,
+        Point::new(-80., 0.),
+        Point::default(),
+        Default::default(),
+    );
+    graphic
+        .append_pen_node(Point::new(80., 0.), Some(Point::new(100., 30.)))
+        .unwrap();
+    graphic
+        .move_path_point_free(4, Point::new(20., -30.))
+        .unwrap();
+    app.tab.doc.graphics[0] = graphic;
+    let _ = app.update(Message::Tool(Tool::EditPoints));
+    app.tab.path_point = Some((id, 3));
+    app
+}
+
+#[test]
+fn edit_points_node_double_click_cycles_once_without_moving_or_extra_history() {
+    use crate::canvas::{Camera, pen_tests::point_gesture};
+    use iced::Vector;
+    for (initial, next) in [
+        (PathNodeType::Corner, PathNodeType::Smooth),
+        (PathNodeType::Smooth, PathNodeType::Symmetric),
+        (PathNodeType::Symmetric, PathNodeType::Corner),
+    ] {
+        let mut app = node_type_app();
+        let id = app.tab.selected[0];
+        app.tab.doc.graphics[0]
+            .set_path_node_type(3, initial)
+            .unwrap();
+        let before = app.tab.doc.clone();
+        let node = before.graphics[0].edit_points()[3];
+        for click in 0..2 {
+            let events = point_gesture(
+                &app.tab.doc,
+                id,
+                Camera::default(),
+                3,
+                Vector::new(2., -1.),
+                Vector::new(1., 0.),
+            );
+            assert_eq!(events.preview, app.tab.doc);
+            for edit in events.before_release {
+                let _ = app.update(Message::Canvas(edit));
+            }
+            let _ = app.update(Message::Canvas(events.release));
+            if click == 0 {
+                assert_eq!(app.tab.doc, before);
+                assert!(!app.tab.history.can_undo());
+            }
+        }
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(app.tab.doc.graphics[0].node_types[1], next);
+        assert_eq!(app.tab.doc.graphics[0].edit_points()[3], node);
+        let after = app.tab.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, after);
+    }
+}
+
+#[test]
+fn edit_points_control_drags_commit_the_constrained_or_alt_preview_in_one_undo() {
+    use crate::canvas::{Camera, pen_tests::point_gesture_with_modifiers};
+    use iced::{Vector, keyboard::Modifiers};
+    for kind in [
+        PathNodeType::Corner,
+        PathNodeType::Smooth,
+        PathNodeType::Symmetric,
+    ] {
+        for modifiers in [Modifiers::empty(), Modifiers::ALT] {
+            let mut app = node_type_app();
+            let id = app.tab.selected[0];
+            app.tab.doc.graphics[0].set_path_node_type(3, kind).unwrap();
+            let before = app.tab.doc.clone();
+            let events = point_gesture_with_modifiers(
+                &before,
+                id,
+                Camera::default(),
+                4,
+                Vector::new(2., -1.),
+                Vector::new(25., 17.),
+                modifiers,
+            );
+            for edit in events.before_release {
+                let _ = app.update(Message::Canvas(edit));
+            }
+            let _ = app.update(Message::Canvas(events.release));
+            assert!(!app.error, "{}", app.status);
+            assert_eq!(app.tab.doc, events.preview);
+            let after = app.tab.doc.clone();
+            let old = before.graphics[0].edit_points();
+            let moved = after.graphics[0].edit_points();
+            assert_ne!(moved[4], old[4]);
+            if modifiers.alt() || kind == PathNodeType::Corner {
+                assert_eq!(moved[2], old[2]);
+                assert_eq!(after.graphics[0].node_types[1], PathNodeType::Corner);
+            } else {
+                assert_ne!(moved[2], old[2]);
+                assert!(
+                    (moved[2].distance(moved[3]) - old[2].distance(old[3])).abs() < 0.001
+                        || kind == PathNodeType::Symmetric
+                );
+                if kind == PathNodeType::Symmetric {
+                    assert!(
+                        moved[2].distance(Point::new(
+                            2. * moved[3].x - moved[4].x,
+                            2. * moved[3].y - moved[4].y
+                        )) < 0.001
+                    );
+                }
+            }
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.tab.doc, before);
+            assert!(!app.tab.history.can_undo());
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.tab.doc, after);
+        }
+    }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real Edit points context-row accessibility regression"]
+async fn edit_points_context_buttons_set_the_controls_owner_type_with_one_undo() {
+    use iced::advanced::{renderer::Headless, widget::operation};
+    use iced_runtime::{UserInterface, user_interface::Cache};
+    use reshiki::accessibility::{Activate, Collect};
+    let size = iced::Size::new(700., 80.);
+    let mut renderer =
+        <iced::Renderer as Headless>::new(iced::Font::default(), iced::Pixels(16.), None)
+            .await
+            .unwrap();
+    let mut app = node_type_app();
+    let id = app.tab.selected[0];
+    app.tab.path_point = None;
+    {
+        let mut ui = UserInterface::build(
+            Element::from(iced::widget::row(app.edit_points_node_options())),
+            size,
+            Cache::new(),
+            &mut renderer,
+        );
+        let mut collect = Collect::new(iced::Rectangle::with_size(size));
+        ui.operate(&renderer, &mut operation::black_box(&mut collect));
+        assert_eq!(collect.snapshot().nodes.len(), 3);
+        assert!(collect.snapshot().nodes.iter().all(|node| !node.enabled));
+    }
+    app.tab.path_point = Some((id, 4));
+    for (id, kind) in [
+        ("edit-points-smooth", PathNodeType::Smooth),
+        ("edit-points-symmetric", PathNodeType::Symmetric),
+        ("edit-points-corner", PathNodeType::Corner),
+    ] {
+        let before = app.tab.doc.clone();
+        let message = {
+            let mut ui = UserInterface::build(
+                Element::from(iced::widget::row(app.edit_points_node_options())),
+                size,
+                Cache::new(),
+                &mut renderer,
+            );
+            let mut activate = Activate::<Message>::new(id);
+            ui.operate(&renderer, &mut operation::black_box(&mut activate));
+            activate.message().cloned().unwrap()
+        };
+        let _ = app.update(message);
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(app.tab.doc.graphics[0].node_types[1], kind);
+        let after = app.tab.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, after);
+        // Start the next independent command without earlier history entries.
+        app.tab.history = Default::default();
+    }
+    app.tab.selected.clear();
+    assert!(app.edit_points_node_options().is_empty());
+}
+
+#[test]
+fn edit_points_node_type_actions_set_the_control_owner_with_one_undo() {
+    for kind in [
+        PathNodeType::Corner,
+        PathNodeType::Smooth,
+        PathNodeType::Symmetric,
+    ] {
+        let mut app = node_type_app();
+        let id = app.tab.selected[0];
+        if kind == PathNodeType::Corner {
+            app.tab.doc.graphics[0]
+                .set_path_node_type(3, PathNodeType::Symmetric)
+                .unwrap();
+        }
+        app.tab.path_point = Some((id, 4));
+        let before = app.tab.doc.clone();
+        send(&mut app, PathAction::NodeType(kind));
+        assert_eq!(app.tab.doc.graphics[0].node_types[1], kind);
+        assert_eq!(app.tab.path_point, Some((id, 4)));
+        let after = app.tab.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, after);
+    }
+}
+
+#[test]
+fn edit_points_node_clicks_require_the_same_node_within_the_double_click_interval() {
+    use std::time::Duration;
+    let mut app = node_type_app();
+    let id = app.tab.selected[0];
+    let before = app.tab.doc.clone();
+    let now = iced::time::Instant::now();
+    app.path_node_click(id, 0, now);
+    app.path_node_click(id, 3, now + Duration::from_millis(100));
+    app.path_node_click(id, 3, now + Duration::from_millis(600));
+    app.edit(Edit::Select(vec![]));
+    app.edit(Edit::Select(vec![id]));
+    app.path_node_click(id, 3, now + Duration::from_millis(650));
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
 }

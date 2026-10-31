@@ -14,6 +14,7 @@ use tokio::{
     process::{Child, ChildStdin, ChildStdout, Command},
 };
 
+pub use super::progress::Pass;
 pub use super::settings::Model;
 mod connection;
 pub use connection::ConnectionError;
@@ -28,6 +29,7 @@ use reshiki_agent::tool_spec::ToolSpec;
 pub enum Progress {
     Status(String),
     Plan(String),
+    Pass(Pass),
     Proposal(Box<super::Proposal>),
     Structures { completed: usize, total: usize },
     Preview(Box<crate::document::Document>),
@@ -40,6 +42,7 @@ pub enum Progress {
 impl From<Event> for Progress {
     fn from(event: Event) -> Self {
         match event {
+            Event::Pass(pass) => Self::Pass(pass),
             Event::Proposal(proposal) => Self::Proposal(proposal),
             Event::Structures { completed, total } => Self::Structures { completed, total },
             Event::Preview(document) => Self::Preview(document),
@@ -570,6 +573,7 @@ async fn generate(
             let _ = progress.send(Progress::Plan(format!("{} reaction panels · {}", proposal.reactions.len(), match proposal.composition.arrangement { super::composition::Arrangement::Rows => "Aligned reaction rows", super::composition::Arrangement::Central => "Main reaction with surrounding examples", super::composition::Arrangement::Grid => "Labeled reaction grid", super::composition::Arrangement::Branching => "Shared structure with outward reaction branches" }))).await;
             let settings = canvas.as_ref().map(|c| c.settings.clone()).unwrap_or_default();
             let engine = crate::engine::LocalEngine::default();
+            let _ = progress.send(Progress::Pass(Pass::Final)).await;
             let document = tokio::select! {
                 result = super::render_progress(&engine, &proposal, &settings, Some(&progress)) => result?,
                 _ = server.cancel.cancelled() => return Err("Stopped".into()),
@@ -719,6 +723,9 @@ async fn run_turn(
                         }
                         .into(),
                     ));
+                    if name == "canvas_preview" {
+                        let _ = progress.send(Progress::Pass(Pass::Preview)).await;
+                    }
                     tokio::select! {
                         result = canvas.call_progress(name, arguments, &tool_engine, Some(progress)) => result.map(tool_response),
                         _ = server.cancel.cancelled() => return Err("Stopped".into()),

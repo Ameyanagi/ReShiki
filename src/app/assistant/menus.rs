@@ -29,14 +29,19 @@ impl App {
                                 )),
                         );
                 }
-                if state.source_image.is_some() {
-                    options = options.push(
-                        action("Remove attached image", Action::ClearImage)
-                            .width(Length::Fill)
-                            .on_press_maybe(
-                                (!state.busy).then_some(Message::Assistant(Action::ClearImage)),
-                            ),
-                    );
+                if let Some(source) = &state.source_image {
+                    options = options
+                        .push(
+                            action("View image", Action::ViewImage(Some(source.clone())))
+                                .width(Length::Fill),
+                        )
+                        .push(
+                            action("Remove attached image", Action::ClearImage)
+                                .width(Length::Fill)
+                                .on_press_maybe(
+                                    (!state.busy).then_some(Message::Assistant(Action::ClearImage)),
+                                ),
+                        );
                 }
                 options = options.push(
                     rich_text(super::super::shortcuts::spans(&format!(

@@ -2090,7 +2090,11 @@ fn graphic_and_curve_point_drags_publish_one_edit_and_do_not_mutate_preview() {
     let original = with_curve.clone();
     assert!(matches!(
         pointer_gesture(&canvas, Point::new(183., 100.), Point::new(200., 80.)),
-        Edit::GraphicPoint(1, 1, _)
+        Edit::PathPoint {
+            id: 1,
+            index: 1,
+            ..
+        }
     ));
     assert_eq!(with_curve, original);
 

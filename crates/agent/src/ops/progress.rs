@@ -67,7 +67,7 @@ impl Monotonic {
 }
 
 /// Reports each [`Event::Structures`] from `rx` to `sink` until every sender
-/// is dropped. Proposals and previews are ignored.
+/// is dropped. Pass markers, proposals and previews are ignored.
 pub async fn forward(mut rx: Receiver<Event>, sink: Arc<Monotonic>) {
     while let Some(event) = rx.recv().await {
         if let Event::Structures { completed, total } = event {

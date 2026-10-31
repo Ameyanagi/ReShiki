@@ -229,6 +229,8 @@ impl MoleculeCanvas<'_> {
                         state.gesture = Some(Gesture::PathPoint(crate::canvas::pen::PointDrag {
                             id: g.id,
                             index: handle.index,
+                            node: handle.node,
+                            free: !handle.node && state.modifiers.alt(),
                             pressed: p,
                             original: handle.point,
                         }));
