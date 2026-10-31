@@ -273,6 +273,11 @@ fn dynamic_tools_keep_slice_order_and_omit_title_and_hints() {
 
 #[test]
 fn progress_events_map_to_codex_variants_without_reallocation() {
+    for pass in [Pass::Preview, Pass::Final] {
+        assert!(
+            matches!(Progress::from(Event::Pass(pass)), Progress::Pass(converted) if converted == pass)
+        );
+    }
     let document = Box::new(crate::document::Document::default());
     let document_ptr = &*document as *const _;
     let proposal = Box::new(super::super::Proposal::default());

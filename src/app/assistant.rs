@@ -132,6 +132,8 @@ pub struct State {
     preview: Option<Document>,
     preview_target: Option<String>,
     structures: Option<(usize, usize)>,
+    // Later preparation passes hide their restarting structure counts.
+    preparation: Option<codex::Pass>,
     checking: usize,
     last_activity: Option<std::time::Instant>,
     elapsed: u64,
@@ -258,7 +260,10 @@ impl App {
                 | Action::ImageExample
         );
         match action {
-            Action::ViewImage(image) => self.assistant.viewed_image = image,
+            Action::ViewImage(image) => {
+                self.assistant.menu = None;
+                self.assistant.viewed_image = image;
+            }
             Action::Open => return self.assistant_open(),
             Action::SetupHelp(help) => return self.assistant_setup_help(help),
             Action::SetupHelpOpened(help, result) => {
