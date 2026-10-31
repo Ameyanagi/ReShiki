@@ -958,6 +958,7 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
         reviewing_pair: false,
         optimizer: None,
         keyboard_target: None,
+        keyboard_marker: false,
         morph: None,
         model_generation: None,
         element: "C",

@@ -118,6 +118,21 @@ fn carbon_labels_stay_individual_and_stagger_close_real_shifts() {
 }
 
 #[test]
+fn broad_match_notes_keep_plot_markers_and_accessible_predictions() {
+    let mut report = carbon();
+    let note = "Broad match · Shell 2 · SD 5.100 ppm";
+    report.rows[0].limitation = Some(note.into());
+    let labels = groups(&report, Axis::new(&report), 384.);
+    assert_coverage_and_clear_labels(&report, &labels, 384.);
+    assert_eq!(labels.len(), 4);
+    let description = marker_name(&report, &[0]);
+    assert!(description.contains("Predicted 14.200 ppm"));
+    assert!(description.contains(note));
+    let app = app_with_report(&report);
+    assert_eq!(app.status, "¹³C NMR · 4 of 4 atoms predicted");
+}
+
+#[test]
 fn cached_plot_widths_and_names_preserve_every_group() {
     let mut reports = vec![carbon()];
     let mut dense = carbon();

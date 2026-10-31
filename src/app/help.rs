@@ -409,7 +409,7 @@ fn list_row(
         .align_y(Alignment::Center),
     )
     .padding([6, 8]);
-    row_button(id, label, body, selected, on_press)
+    row_button(id, label, body, selected, on_press).into()
 }
 
 /// A result row's selection highlight and named button, shared with the
@@ -420,7 +420,7 @@ pub(super) fn row_button(
     body: iced::widget::Container<'static, Message>,
     selected: bool,
     on_press: Message,
-) -> Element<'static, Message> {
+) -> reshiki::accessibility::Button<'static, Message> {
     let body = body.width(Length::Fill).style(move |theme| {
         crate::appearance::container(
             theme,
@@ -446,7 +446,6 @@ pub(super) fn row_button(
         })
         .on_press(on_press)
         .tab_stop(false)
-        .into()
 }
 
 fn drawing(label: &'static str, doc: reshiki::document::Document) -> Element<'static, Message> {

@@ -318,6 +318,79 @@ fn selected_graphic(kind: GraphicKind, size: Size) -> App {
 }
 
 #[tokio::test]
+#[ignore = "Opt-in real command palette accessibility and input regression"]
+async fn command_palette_unavailable_rows_publish_disabled_state_and_reason() {
+    use crate::app::command_palette::Action;
+    let size = Size::new(1280., 820.);
+    let mut ui = Ui::new(size).await;
+    let (mut app, _) = App::new();
+    app.viewport = size;
+    app.tab.busy = false;
+    let _ = app.update(Message::Commands(Action::Open));
+    let _ = app.update(Message::Commands(Action::Query("copy nmr report".into())));
+    let before = app.tab.doc.clone();
+    let snapshot = ui.snapshot(&app);
+    let row = snapshot
+        .nodes
+        .iter()
+        .find(|node| node.id.starts_with("command-palette-row-"))
+        .expect("Copy NMR report row");
+    assert_eq!(row.role, Role::Button);
+    assert!(!row.enabled);
+    assert_eq!(
+        row.name,
+        "Copy NMR report, Analyze, unavailable: Predict NMR first"
+    );
+    let field = snapshot
+        .nodes
+        .iter()
+        .find(|node| node.id == "command-palette-search")
+        .unwrap();
+    assert_eq!(
+        field.name,
+        "Run a command; 1 result; selected Copy NMR report, Analyze, unavailable: Predict NMR first"
+    );
+
+    // Its click action still explains the refusal without closing the palette.
+    let mut view = UserInterface::build(
+        app.view(),
+        size,
+        std::mem::take(&mut ui.cache),
+        &mut ui.renderer,
+    );
+    let mut messages = vec![];
+    let _ = view.update(
+        &[
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+        ],
+        mouse::Cursor::Available(row.bounds.center()),
+        &mut ui.renderer,
+        &mut iced::advanced::clipboard::Null,
+        &mut messages,
+    );
+    ui.cache = view.into_cache();
+    assert_eq!(messages.len(), 1);
+    assert!(matches!(messages[0], Message::Commands(Action::Run(_))));
+    for message in messages {
+        let _ = app.update(message);
+    }
+    assert!(app.commands.open);
+    assert_eq!(app.status, "Predict NMR first");
+
+    ui.focus(&app, "command-palette-search");
+    let (_, messages) = ui.event(&app, key(Named::Enter, Modifiers::empty(), false));
+    assert_eq!(messages.len(), 1);
+    assert!(matches!(messages[0], Message::Commands(Action::Submit)));
+    for message in messages {
+        let _ = app.update(message);
+    }
+    assert!(app.commands.open);
+    assert_eq!(app.status, "Predict NMR first");
+    assert_eq!(app.tab.doc, before);
+}
+
+#[tokio::test]
 #[ignore = "Opt-in real mechanism geometry button metadata and action regression"]
 async fn mechanism_geometry_buttons_publish_native_actions_and_one_keyboard_undo() {
     use crate::app::arrows::Action;

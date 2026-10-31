@@ -266,6 +266,7 @@ pub enum Message {
     Save,
     Export(&'static str),
     CopySmiles,
+    CopyChemicalText,
     Copy(bool),
     CopyImage,
     CopyAs(reshiki::clipboard::CopyFormat),

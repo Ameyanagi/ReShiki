@@ -221,6 +221,7 @@ pub struct State {
     enabled: bool,
     suspended: bool,
     initialized: bool,
+    shown: bool,
     automatic_blank: bool,
     pointer: Option<Point>,
     pointer_owned: bool,
@@ -236,6 +237,7 @@ impl Default for State {
             enabled: true,
             suspended: false,
             initialized: false,
+            shown: false,
             automatic_blank: false,
             pointer: None,
             pointer_owned: false,
@@ -265,13 +267,22 @@ impl State {
         self.current.marked
     }
 
-    pub fn marker_point(&self, doc: &Document) -> Option<Point> {
+    /// The active drawing point, whether or not its marker is shown yet.
+    pub fn point(&self, doc: &Document) -> Option<Point> {
         self.active().then(|| {
             self.current
                 .target
                 .point(doc)
                 .unwrap_or(self.current.position)
         })
+    }
+
+    pub fn marker_point(&self, doc: &Document) -> Option<Point> {
+        self.point(doc).filter(|_| self.shown)
+    }
+
+    pub fn shown(&self) -> bool {
+        self.shown
     }
 
     pub fn active_label(&self, doc: &Document) -> String {
@@ -323,7 +334,8 @@ impl State {
     }
 
     /// Initialize newly opened documents and resume after a tool change while
-    /// retaining the user's explicit F8 preference.
+    /// retaining the user's explicit F8 preference. Automatic targets stay
+    /// hidden until pointer or keyboard interaction.
     pub fn ensure_target(&mut self, doc: &Document, selected: &[u64], center: Point, epoch: u64) {
         self.check_epoch(epoch);
         if self.initialized && !self.suspended && !self.automatic_blank {
@@ -331,7 +343,7 @@ impl State {
             return;
         }
         self.suspended = false;
-        let target = match selected {
+        let selected_target = match selected {
             [id] if visible_atom(doc, *id) => Some(Target::Atom(*id)),
             [a, b]
                 if Target::Bond(*a, *b).point(doc).is_some()
@@ -341,24 +353,28 @@ impl State {
                 Some(Target::Bond((*a).min(*b), (*a).max(*b)))
             }
             _ => None,
-        }
-        .or_else(|| {
-            let points: HashMap<_, _> = doc
-                .atoms
-                .iter()
-                .map(|atom| (atom.id, atom.position))
-                .collect();
-            hotspots(doc).into_iter().min_by(|a, b| {
-                let distance = |target: Target| {
-                    position(target, &points).map_or(f32::INFINITY, |point| point.distance(center))
-                };
-                distance(*a)
-                    .total_cmp(&distance(*b))
-                    .then(a.identity().cmp(&b.identity()))
+        };
+        let shown = self.shown || selected_target.is_some();
+        let target = selected_target
+            .or_else(|| {
+                let points: HashMap<_, _> = doc
+                    .atoms
+                    .iter()
+                    .map(|atom| (atom.id, atom.position))
+                    .collect();
+                hotspots(doc).into_iter().min_by(|a, b| {
+                    let distance = |target: Target| {
+                        position(target, &points)
+                            .map_or(f32::INFINITY, |point| point.distance(center))
+                    };
+                    distance(*a)
+                        .total_cmp(&distance(*b))
+                        .then(a.identity().cmp(&b.identity()))
+                })
             })
-        })
-        .unwrap_or(Target::Blank(center));
+            .unwrap_or(Target::Blank(center));
         self.set_target(target, doc);
+        self.shown = shown;
         self.automatic_blank = matches!(target, Target::Blank(_));
     }
 
@@ -367,6 +383,7 @@ impl State {
     pub fn suspend(&mut self) {
         self.suspended = true;
         self.initialized = false;
+        self.shown = false;
         self.automatic_blank = false;
         self.current.target = Target::Blank(self.current.position);
         self.current.marked = None;
@@ -381,6 +398,7 @@ impl State {
     }
 
     pub fn set_target(&mut self, target: Target, doc: &Document) {
+        self.show_target();
         self.pointer_owned = false;
         self.initialized = true;
         self.automatic_blank = false;
@@ -388,6 +406,10 @@ impl State {
         if let Some(position) = target.point(doc) {
             self.current.position = position;
         }
+    }
+
+    pub fn show_target(&mut self) {
+        self.shown = true;
     }
 
     /// Only new pointer coordinates transfer ownership from the keyboard.
@@ -430,6 +452,7 @@ impl State {
     }
 
     pub fn mark(&mut self, id: u64) {
+        self.show_target();
         self.current.marked = Some(id);
     }
     pub fn clear_mark(&mut self) {
@@ -437,6 +460,7 @@ impl State {
     }
 
     pub fn move_target(&mut self, doc: &Document, direction: Direction, same_kind: bool) -> bool {
+        self.show_target();
         self.pointer_owned = false;
         if let Some(target) = navigate(doc, self.current.target, direction, same_kind) {
             self.set_target(target, doc);

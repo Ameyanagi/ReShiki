@@ -16,6 +16,7 @@ pub struct Button<'a, Message> {
     name: String,
     inner: iced_button::Button<'a, Message>,
     action: Option<Message>,
+    enabled: Option<bool>,
     checked: Option<bool>,
     expanded: Option<bool>,
     value: Option<String>,
@@ -32,6 +33,7 @@ pub fn button<'a, Message: Clone + 'static>(
         name: name.into(),
         inner: iced_button(content),
         action: None,
+        enabled: None,
         checked: None,
         expanded: None,
         value: None,
@@ -70,6 +72,13 @@ impl<'a, Message: Clone + 'static> Button<'a, Message> {
     pub fn on_press_maybe(mut self, message: Option<Message>) -> Self {
         self.inner = self.inner.on_press_maybe(message.clone());
         self.action = message;
+        self
+    }
+
+    /// Override the accessible state while keeping the press action, so an
+    /// unavailable command can still explain why it cannot run.
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = Some(enabled);
         self
     }
 
@@ -191,7 +200,7 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for Button<'_, M
             } else {
                 Role::Button
             },
-            enabled: self.action.is_some(),
+            enabled: self.enabled.unwrap_or(self.action.is_some()),
             focused: state.focused,
             checked: self.checked,
             expanded: self.expanded,

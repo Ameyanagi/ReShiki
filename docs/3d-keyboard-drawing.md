@@ -303,10 +303,13 @@ separately makes rear ink lighter or transparent from
 ## Draw with mouse and keyboard
 
 Keyboard drawing is **on by default** in Select and Lasso, including new blank
-drawings. The marker and context row show the active atom, bond, or empty
-position. No F8 activation is needed. An initial single selected atom or bond's
-two endpoints provide the target; otherwise the nearest visible atom or bond
-to the view centre is used. A blank drawing initially targets the view centre.
+drawings. No F8 activation is needed. An initial single selected atom or bond's
+two endpoints provide a visible target; otherwise the nearest visible atom or
+bond to the view centre is used, with the marker and target text hidden. A blank
+drawing initially targets the view centre, also hidden. The first actual pointer
+motion over the canvas, canvas click, or arrow or drawing key reveals the hotspot.
+A drawing key uses the initial target immediately, so keyboard-only startup
+keeps the same placement.
 
 Actual mouse motion or a canvas click transfers the hotspot to the pointed
 atom, bond, or empty position. Arrow navigation and keyboard edits then retain
@@ -365,8 +368,10 @@ tab's on/off choice; it is not a persistent off command.
 
 Other drawing tools suspend the hotspot and clear a pending connection mark.
 Return to Select or Lasso to resume automatically, unless this tab was opted
-out. Text fields, atom-label drafts, and dialogs retain their typing and caret
-keys; finish or cancel them before canvas shortcuts. Cmd/Ctrl and Alt retain
+out. Without a selected atom or bond, the resumed target stays hidden until
+pointer motion, a canvas click, or an arrow or drawing key, including after
+applying a text label. Text fields, atom-label drafts, and dialogs retain their
+typing and caret keys; finish or cancel them before canvas shortcuts. Cmd/Ctrl and Alt retain
 their usual modified commands. Lowercase and uppercase remain distinct, and
 **Shift+3–8** still selects ring tools.
 

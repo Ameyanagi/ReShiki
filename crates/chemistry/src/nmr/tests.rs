@@ -100,6 +100,7 @@ fn longest_supported_sphere_and_unsupported_are_explicit() {
         .unwrap();
     assert_eq!(rows[0].radius, Some(3));
     assert_eq!(rows[0].statistics.as_ref().unwrap().median, 3.);
+    assert!(rows[0].limitation.is_none());
     assert!(rows[1].statistics.is_none());
     assert!(
         rows[2]
@@ -117,6 +118,52 @@ fn longest_supported_sphere_and_unsupported_are_explicit() {
         )
         .is_err()
     );
+}
+#[test]
+fn broad_match_notes_use_nucleus_spread_cutoffs_only_at_the_shortest_sphere() {
+    let env = environment("CC");
+    for (nucleus, sd, broad) in [
+        (Nucleus::H1, 0.499, false),
+        (Nucleus::H1, 0.5, true),
+        (Nucleus::H1, 0.501, true),
+        (Nucleus::C13, 0.5, false),
+        (Nucleus::C13, 4.999, false),
+        (Nucleus::C13, 5., true),
+        (Nucleus::C13, 5.001, true),
+    ] {
+        let site = env.sites(nucleus).unwrap().remove(0);
+        for radius in MIN_RADIUS..=MAX_RADIUS {
+            let statistics = Statistics {
+                support: MIN_SUPPORT,
+                median: 1.5,
+                standard_deviation: sd,
+                minimum: 0.,
+                maximum: 10.,
+            };
+            let mut index = Index::default();
+            index.entries.insert(
+                (
+                    nucleus,
+                    radius,
+                    env.code(&site, nucleus, radius, Environment::deadline())
+                        .unwrap(),
+                ),
+                statistics.clone(),
+            );
+            let rows = index
+                .predict(&env, nucleus, Environment::deadline())
+                .unwrap();
+            let row = &rows[0];
+            assert_eq!(row.radius, Some(radius));
+            assert_eq!(
+                serde_json::to_value(&row.statistics).unwrap(),
+                serde_json::to_value(&statistics).unwrap()
+            );
+            let expected = (broad && radius == MIN_RADIUS)
+                .then(|| format!("Broad match · Shell {radius} · SD {sd:.3} ppm"));
+            assert_eq!(row.limitation, expected, "{nucleus:?} {radius} {sd}");
+        }
+    }
 }
 #[test]
 fn unsupported_chemistry_never_receives_guessed_numbers() {

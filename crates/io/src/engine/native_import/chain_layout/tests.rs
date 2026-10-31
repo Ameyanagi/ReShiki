@@ -202,7 +202,7 @@ fn exclusions_and_small_or_clear_drawings_preserve_native_coordinates() -> anyho
 }
 
 #[test]
-fn unsupported_long_chain_keeps_its_layout_and_the_import_warning() -> anyhow::Result<()> {
+fn unsupported_long_chain_keeps_its_shape_and_the_import_warning() -> anyhow::Result<()> {
     let text = format!("C/C=C/{}", "CC(c1ccccc1)".repeat(30));
     let (state, _, original) = input(&text)?;
     assert!(backbone(&state).is_some());
@@ -217,7 +217,7 @@ fn unsupported_long_chain_keeps_its_layout_and_the_import_warning() -> anyhow::R
     let super::super::Preparation::Complete(prepared) = super::super::prepare(request)? else {
         anyhow::bail!("Import did not complete");
     };
-    assert_eq!(prepared.molecule.positions, original.positions);
+    super::super::tests::assert_rigid_rotation(&original.positions, &prepared.molecule.positions);
     assert_eq!(prepared.warnings, [NOTICE]);
     Ok(())
 }
