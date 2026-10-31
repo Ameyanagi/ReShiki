@@ -12,6 +12,7 @@
 //!
 //! A model read from a crystal file (#417) may hold several molecules, or an
 //! extended network, with its unit cell: see [`crystal`].
+mod cell_occlusion;
 mod contact;
 pub mod crystal;
 mod ellipsoids;
@@ -210,7 +211,7 @@ pub struct Model3d {
     /// default, as the formula carries them.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub charges: bool,
-    /// How many cells along a, b and c a crystal's 2D drawing shows (1 to
+    /// How many cells along a, b and c a crystal shows (1 to
     /// [`MAX_REPEAT`] each): the model's own cell and lighter copies of it.
     #[serde(default = "one_cell", skip_serializing_if = "is_one_cell")]
     pub repeat: [u8; 3],
@@ -248,9 +249,9 @@ fn is_included(included: &bool) -> bool {
 fn is_one_cell(repeat: &[u8; 3]) -> bool {
     *repeat == one_cell()
 }
-/// The most cells a crystal's 2D drawing repeats along each axis.
+/// The most cells a crystal repeats along each axis.
 pub const MAX_REPEAT: u8 = 4;
-/// The opacity of the copies of a crystal's cell in 2D.
+/// The opacity of a crystal's boundary and repeat copies.
 const GHOST: f32 = 0.55;
 
 fn is_original(layout: &Layout) -> bool {
@@ -647,49 +648,84 @@ impl Model3d {
     /// Face the opening view and size the frame at the drawing's scale.
     fn fit(&mut self, doc: &Document) {
         self.rotation = self.initial_view(doc);
-        let points = self.points(doc).unwrap_or_default();
         // The model's ångström scale matches the drawing: 1.5 Å per bond length.
         let units = doc.drawing_style.bond_length_world / 1.5;
+        self.size = (self.reach(doc) * units / 0.44).max(1.);
+    }
+
+    /// The ball-and-stick and cell reach used to size the model's frame.
+    pub fn reach(&self, doc: &Document) -> f32 {
+        let points = self.points(doc).unwrap_or_default();
         let center = self.center(&points);
-        let reach = reach(&points, center, Style::BallStick).max(self.cell_reach(center));
-        self.size = (reach * units / 0.44).max(1.);
+        reach(&points, center, Style::BallStick).max(self.cell_reach(doc, center))
     }
 
     /// The centre the model turns about: its cell's, or its heavy atoms'.
     fn center(&self, points: &[(&str, [f32; 3])]) -> [f32; 3] {
-        self.cell
-            .as_ref()
-            .map_or_else(|| heavy_center(points), Cell::center)
+        self.whole_cell()
+            .map_or_else(|| heavy_center(points), |cell| cell.center())
+    }
+
+    /// The box enclosing every cell of the repeat.
+    #[allow(clippy::indexing_slicing)] // Both arrays have exactly three axes.
+    fn whole_cell(&self) -> Option<Cell> {
+        let cell = self.cell.as_ref()?;
+        Some(Cell {
+            vectors: std::array::from_fn(|k| {
+                cell.vectors[k].map(|v| v * f32::from(self.repeat[k].clamp(1, MAX_REPEAT)))
+            }),
+            crossing: vec![],
+        })
     }
 
     /// The farthest the cell box and its axis labels reach from `center`,
     /// in ångström; 0 without a cell.
-    fn cell_reach(&self, center: [f32; 3]) -> f32 {
-        self.cell.as_ref().map_or(0., |cell| {
-            let labels = cell.vectors.map(|v| v.map(|x| x * (1. + LABEL_AHEAD)));
-            let box_reach = cell
-                .corners()
-                .iter()
-                .chain(&labels)
-                .map(|p| length(sub(*p, center)))
-                .fold(0., f32::max)
-                * (1. + LABEL_ROOM);
-            // The half-bonds leaving the cell end halfway to the next cell.
-            let at = |id: u64| self.atoms.iter().find(|a| a.id == id).map(|a| a.xyz);
-            let halves = cell
-                .crossing
-                .iter()
-                .filter_map(|c| {
-                    let (a, b) = (at(c.a)?, at(c.b)?);
-                    let far = zip3(b, cell.translation(c.image), |p, t| p + t);
-                    let middle = zip3(a, far, |p, q| (p + q) / 2.);
-                    // b's half runs from b by the same vector the other way.
-                    let other = zip3(b, sub(middle, a), |p, h| p - h);
-                    Some(length(sub(middle, center)).max(length(sub(other, center))))
-                })
-                .fold(0., f32::max);
-            box_reach.max(halves)
-        })
+    fn cell_reach(&self, doc: &Document, center: [f32; 3]) -> f32 {
+        self.cell
+            .as_ref()
+            .zip(self.whole_cell())
+            .map_or(0., |(cell, whole)| {
+                let labels = whole.vectors.map(|v| v.map(|x| x * (1. + LABEL_AHEAD)));
+                let box_reach = whole
+                    .corners()
+                    .iter()
+                    .chain(&labels)
+                    .map(|p| length(sub(*p, center)))
+                    .fold(0., f32::max)
+                    * (1. + LABEL_ROOM);
+                // The half-bonds leaving the cell end halfway to the next cell.
+                let atoms: HashMap<_, _> = self.atoms.iter().map(|a| (a.id, a.xyz)).collect();
+                let at = |id| atoms.get(&id).copied();
+                let mut offsets: HashMap<u64, Vec<[f32; 3]>> = HashMap::new();
+                for (id, image) in shown_sites(doc, self) {
+                    offsets
+                        .entry(id)
+                        .or_default()
+                        .push(cell.at(image.map(|v| v as f32)));
+                }
+                let halves = cell
+                    .crossing
+                    .iter()
+                    .filter_map(|c| {
+                        let (a, b) = (at(c.a)?, at(c.b)?);
+                        let far = zip3(b, cell.translation(c.image), |p, t| p + t);
+                        let middle = zip3(a, far, |p, q| (p + q) / 2.);
+                        // b's half runs from b by the same vector the other way.
+                        let other = zip3(b, sub(middle, a), |p, h| p - h);
+                        Some(
+                            [(c.a, middle), (c.b, other)]
+                                .into_iter()
+                                .flat_map(|(id, p)| {
+                                    offsets.get(&id).into_iter().flatten().map(move |t| {
+                                        length(sub(zip3(p, *t, |p, t| p + t), center))
+                                    })
+                                })
+                                .fold(0., f32::max),
+                        )
+                    })
+                    .fold(0., f32::max);
+                box_reach.max(halves)
+            })
     }
 
     /// The opening view, facing the broadest side in the drawing's direction,
@@ -966,6 +1002,10 @@ struct View<'a> {
     rotated: Vec<[f32; 3]>,
     /// Whether each point is drawn, see [`Model3d::shown`].
     shown: Vec<bool>,
+    /// Display-only copies follow the original geometry points.
+    originals: usize,
+    copies: HashMap<(u64, [i32; 3]), usize>,
+    bonds: Vec<(usize, usize)>,
     style: Style,
     /// Thermal semiaxes in the rotated frame; absent for fixed small balls.
     ellipsoids: Vec<Option<Ellipsoid>>,
@@ -980,7 +1020,8 @@ struct View<'a> {
 impl View<'_> {
     fn new<'a>(doc: &'a Document, model: &'a Model3d) -> Option<View<'a>> {
         let center = layout_center(doc, model)?;
-        let points = model.points(doc)?;
+        let mut points = model.points(doc)?;
+        let originals = points.len();
         let mut shown = model.shown(doc);
         let molecule_only = model.molecule_only && model.cell.is_some();
         if molecule_only {
@@ -995,6 +1036,57 @@ impl View<'_> {
                 *show &= selected.contains(&id);
             }
         }
+        let sites: HashMap<_, _> = model.sites.iter().map(|s| (s.id, s.adp)).collect();
+        let mut ellipsoids: Vec<_> = points
+            .iter()
+            .enumerate()
+            .map(|(i, (symbol, _))| {
+                if model.style != Style::Ellipsoids || *symbol == "H" {
+                    return None;
+                }
+                let id = model.atoms.get(i)?.id;
+                Ellipsoid::of((*sites.get(&id)?)?, model.cell.as_ref(), model.probability)
+            })
+            .collect();
+        let mut bonds = sticks(doc, model, &shown)?;
+        let mut copies = HashMap::new();
+        if let Some(cell) = model.cell.as_ref().filter(|_| !molecule_only) {
+            let index: HashMap<_, _> = model
+                .atoms
+                .iter()
+                .enumerate()
+                .map(|(i, a)| (a.id, i))
+                .collect();
+            let sites = shown_sites(doc, model);
+            let mut indices = vec![];
+            for &(id, image) in &sites {
+                let &source = index.get(&id)?;
+                let i = if image == [0; 3] {
+                    source
+                } else {
+                    let i = points.len();
+                    let (symbol, p) = *points.get(source)?;
+                    points.push((
+                        symbol,
+                        zip3(p, cell.at(image.map(|v| v as f32)), |p, t| p + t),
+                    ));
+                    shown.push(*shown.get(source)?);
+                    ellipsoids.push(*ellipsoids.get(source)?);
+                    i
+                };
+                indices.push(i);
+                copies.insert((id, image), i);
+            }
+            if model.style != Style::SpaceFilling {
+                let copied = site_bonds(doc, model, &sites)
+                    .into_iter()
+                    .filter_map(|(a, b, _)| Some((*indices.get(a)?, *indices.get(b)?)))
+                    .collect::<Vec<_>>();
+                bonds.retain(|&(a, b)| a >= model.atoms.len() || b >= model.atoms.len());
+                bonds.extend(copied);
+                bonds.retain(|&(a, b)| shown.get(a) == Some(&true) && shown.get(b) == Some(&true));
+            }
+        }
         let drawn: Vec<_> = points
             .iter()
             .zip(&shown)
@@ -1006,18 +1098,6 @@ impl View<'_> {
         } else {
             model.center(&points)
         };
-        let sites: HashMap<_, _> = model.sites.iter().map(|s| (s.id, s.adp)).collect();
-        let ellipsoids: Vec<_> = points
-            .iter()
-            .enumerate()
-            .map(|(i, (symbol, _))| {
-                if model.style != Style::Ellipsoids || *symbol == "H" {
-                    return None;
-                }
-                let id = model.atoms.get(i)?.id;
-                Ellipsoid::of((*sites.get(&id)?)?, model.cell.as_ref(), model.probability)
-            })
-            .collect();
         // The bounding sphere holds the cell and its labels too.
         let reach = if model.style == Style::Ellipsoids {
             points
@@ -1037,7 +1117,7 @@ impl View<'_> {
         .max(if molecule_only {
             0.
         } else {
-            model.cell_reach(c)
+            model.cell_reach(doc, c)
         });
         Some(View {
             center: c,
@@ -1047,6 +1127,9 @@ impl View<'_> {
                 .collect(),
             symbols: points.into_iter().map(|(s, _)| s).collect(),
             shown,
+            originals,
+            copies,
+            bonds,
             style: model.style,
             ellipsoids: ellipsoids
                 .into_iter()
@@ -2698,8 +2781,9 @@ impl View<'_> {
 impl View<'_> {
     /// Where the balls `atoms`, in drawing order, overlap: for each ball cut
     /// by others its visible part, `None` when nothing of it shows. Each seam
-    /// goes with the later ball of its pair. Balls fading in after `grown`
-    /// cut only each other. The last few views are kept, so an edit
+    /// goes with the later ball of its pair. Lighter copies and hydrogens
+    /// fading in after `grown` do not cut the opaque atoms behind them.
+    /// The last few views are kept, so an edit
     /// elsewhere in the drawing does not work them out again.
     fn contacts(&self, atoms: &[usize], grown: f32) -> Contacts {
         // Everything the result depends on, exactly.
@@ -2718,7 +2802,9 @@ impl View<'_> {
                     .map(f32::to_bits),
             );
             key.push(self.style.atom_radius(symbol).to_bits());
-            key.push(u32::from(symbol == "H" && grown < 1.));
+            key.push(u32::from(
+                i >= self.originals || symbol == "H" && grown < 1.,
+            ));
         }
         let kept = CONTACTS.with_borrow(|kept| {
             kept.iter()
@@ -2745,7 +2831,7 @@ impl View<'_> {
                 Some(contact::Ball {
                     p: *self.rotated.get(i)?,
                     r: self.style.atom_radius(symbol),
-                    fading: symbol == "H" && grown < 1.,
+                    fading: i >= self.originals || symbol == "H" && grown < 1.,
                 })
             })
             .collect();
@@ -2814,6 +2900,7 @@ pub fn balls_and_sticks(
     let bonded: HashSet<usize> = bonds.iter().flat_map(|&(a, b)| [a, b]).collect();
     let balls = view
         .balls()
+        .filter(|(i, ..)| *i < view.originals)
         .filter_map(|(i, q, r)| match view.style {
             Style::Wireframe => (!bonded.contains(&i)).then_some((q, view.wire)),
             _ => Some((q, r)),
@@ -2843,7 +2930,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         view.morph(doc, model, e);
         e
     });
-    let mut bonds = sticks(doc, model, &view.shown)?;
+    let mut bonds = view.bonds.clone();
     if model.style == Style::Ellipsoids {
         bonds.retain(|&(a, b)| view.half_bond(a, b).is_some());
     }
@@ -2994,11 +3081,16 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         .map(|s| (*s, element_color(doc, s)))
         .collect();
     // Stick style's outline: one stroke of every shape, behind all of them.
-    let mut rims: (Vec<Vec<Point>>, Vec<Vec<Point>>) = Default::default();
+    let mut rims: [Vec<Vec<Point>>; 4] = Default::default();
     let mut drawn = vec![];
     for (n, (_, _, z, item)) in items.into_iter().enumerate() {
         let (Item::Bond(i, _) | Item::Atom(i) | Item::Label(i) | Item::Crossing(i, _)) = item;
         let fading = view.symbols.get(i) == Some(&"H") && grown < 1.;
+        let ghost = match item {
+            Item::Bond(a, b) => a >= view.originals || b >= view.originals,
+            _ => i >= view.originals,
+        };
+        let alpha = if ghost { GHOST } else { 1. } * if fading || ghost { grown } else { 1. };
         let symbol = *view.symbols.get(i)?;
         let base = mix(
             float(*colors.get(symbol).unwrap_or(&GREY)),
@@ -3069,7 +3161,7 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             Item::Atom(i) => {
                 if let Some(ellipsoid) = view.ellipsoids.get(i).and_then(Option::as_ref) {
                     drawn.push((
-                        fading,
+                        alpha,
                         ellipsoid.draw(&view, *rotated.get(i)?, base, glossy, outline(line))?,
                     ));
                     continue;
@@ -3083,14 +3175,16 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                 let r = style.atom_radius(symbol) * view.scale * f;
                 if style == Style::Stick {
                     let steps = 48;
-                    if fading { &mut rims.1 } else { &mut rims.0 }.push(
-                        (0..steps)
-                            .map(|k| {
-                                let t = std::f32::consts::TAU * k as f32 / steps as f32;
-                                q.offset(r * t.cos(), r * t.sin())
-                            })
-                            .collect(),
-                    );
+                    if let Some(rim) = rims.get_mut(usize::from(ghost) * 2 + usize::from(fading)) {
+                        rim.push(
+                            (0..steps)
+                                .map(|k| {
+                                    let t = std::f32::consts::TAU * k as f32 / steps as f32;
+                                    q.offset(r * t.cos(), r * t.sin())
+                                })
+                                .collect(),
+                        );
+                    }
                 }
                 Primitive::Sphere {
                     center: q,
@@ -3177,9 +3271,13 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                         let mut points = vec![end.offset(lx * width, ly * width)];
                         points.extend(joint);
                         points.push(end.offset(-lx * width, -ly * width));
-                        if fading { &mut rims.1 } else { &mut rims.0 }.push(points.clone());
+                        if let Some(rim) =
+                            rims.get_mut(usize::from(ghost) * 2 + usize::from(fading))
+                        {
+                            rim.push(points.clone());
+                        }
                         drawn.push((
-                            fading,
+                            alpha,
                             Primitive::ShadedPolygon {
                                 points,
                                 from: e.offset(nx * half, ny * half),
@@ -3208,9 +3306,9 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
                 }
             }
         };
-        drawn.push((fading, primitive));
+        drawn.push((alpha, primitive));
     }
-    // Hydrogens fade in as a whole, as the prototype's globalAlpha does.
+    // Hydrogens, copies and the cell fade in during the morph.
     let fade_in = |fading: bool, primitive| {
         if fading {
             Primitive::Opacity {
@@ -3233,26 +3331,55 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
         width: (model.size / 220.).clamp(1., 3.),
         size: (model.size * 0.06).clamp(8., 60.),
         crowded: [false; 3],
+        occluders: (style == Style::SpaceFilling).then_some(&view),
     };
     let (behind, front) = model
         .cell
         .as_ref()
         .filter(|_| !model.molecule_only)
-        .map(|cell| {
-            let (hidden, edges, marks) = cell_ink(&frame, cell, ink, float(backdrop));
+        .zip(model.whole_cell())
+        .map(|(cell, whole)| {
+            let (mut hidden, edges, marks) = cell_ink(&frame, &whole, ink, float(backdrop));
+            hidden.extend(seams(
+                &frame,
+                cell,
+                model.repeat.map(|n| i32::from(n.clamp(1, MAX_REPEAT))),
+                ink,
+                float(backdrop),
+            ));
             (hidden, [edges, marks].concat())
         })
         .unwrap_or_default();
     let cell_fading = grown < 1.;
     out.extend(behind.into_iter().map(|p| fade_in(cell_fading, p)));
     if let Some(outline) = outline(line * 2.) {
-        for (polygons, fading) in [(rims.0, false), (rims.1, true)] {
+        for (polygons, alpha) in rims
+            .into_iter()
+            .zip([1., grown, GHOST * grown, GHOST * grown])
+        {
             if !polygons.is_empty() {
-                out.push(fade_in(fading, Primitive::Contour { polygons, outline }));
+                let primitive = Primitive::Contour { polygons, outline };
+                out.push(if alpha < 1. {
+                    Primitive::Opacity {
+                        alpha,
+                        primitive: Box::new(primitive),
+                    }
+                } else {
+                    primitive
+                });
             }
         }
     }
-    out.extend(drawn.into_iter().map(|(fading, p)| fade_in(fading, p)));
+    out.extend(drawn.into_iter().map(|(alpha, p)| {
+        if alpha < 1. {
+            Primitive::Opacity {
+                alpha,
+                primitive: Box::new(p),
+            }
+        } else {
+            p
+        }
+    }));
     out.extend(front.into_iter().map(|p| fade_in(cell_fading, p)));
     Some(())
 }
@@ -3274,7 +3401,13 @@ fn crossing_halves(view: &View, model: &Model3d) -> Vec<(usize, [f32; 3])> {
         .enumerate()
         .map(|(i, a)| (a.id, i))
         .collect();
-    let shown = |i: usize| view.shown.get(i) == Some(&true);
+    let mut copies: HashMap<u64, Vec<([i32; 3], usize)>> = HashMap::new();
+    for (&(id, image), &i) in &view.copies {
+        copies.entry(id).or_default().push((image, i));
+    }
+    for sites in copies.values_mut() {
+        sites.sort_unstable_by_key(|(_, i)| *i);
+    }
     let mut halves = vec![];
     for c in &cell.crossing {
         let (Some(&ia), Some(&ib)) = (index.get(&c.a), index.get(&c.b)) else {
@@ -3288,15 +3421,33 @@ fn crossing_halves(view: &View, model: &Model3d) -> Vec<(usize, [f32; 3])> {
         ) else {
             continue;
         };
-        if !shown(ia) || !shown(ib) {
+        if view.shown.get(ia) != Some(&true) || view.shown.get(ib) != Some(&true) {
             continue;
         }
         let shift = cell.translation(c.image);
         // From a toward b's copy, and from b toward a's copy the other way.
         let ab = sub(zip3(pb.xyz, shift, |p, t| p + t), pa.xyz);
         let half = rotate(model.rotation, ab.map(|v| v / 2.));
-        halves.push((ia, zip3(ra, half, |p, h| p + h)));
-        halves.push((ib, zip3(rb, half, |p, h| p - h)));
+        for (id, partner, sign, base) in [(c.a, c.b, 1, ra), (c.b, c.a, -1, rb)] {
+            for &(image, i) in copies.get(&id).into_iter().flatten() {
+                let to = zip3(image, c.image.map(i32::from), |at, step| at + sign * step);
+                let inside = to
+                    .into_iter()
+                    .zip(model.repeat)
+                    .all(|(at, n)| (0..i32::from(n.clamp(1, MAX_REPEAT))).contains(&at));
+                if inside
+                    || view.copies.contains_key(&(partner, to))
+                    || view.shown.get(i) != Some(&true)
+                {
+                    continue;
+                }
+                let Some(&start) = view.rotated.get(i) else {
+                    continue;
+                };
+                let end = zip3(base, half, |p, h| p + sign as f32 * h);
+                halves.push((i, zip3(end, sub(start, base), |p, t| p + t)));
+            }
+        }
     }
     halves
 }
@@ -3313,6 +3464,8 @@ struct CellView<'a> {
     /// Whether an atom sits on the end of each lattice vector, so its label
     /// keeps further off.
     crowded: [bool; 3],
+    /// Space-filling balls that hide front edges and the origin marker.
+    occluders: Option<&'a View<'a>>,
 }
 
 /// The cell box: its hidden edges dashed, its front edges with the origin
@@ -3377,19 +3530,22 @@ fn cell_ink(
                 *b = 1;
             }
             let Some(to) = corner(bits) else { continue };
-            let (from, to) = ((view.project)(from), (view.project)(to));
             if front(k1, i) || front(k2, j) {
-                edges.push(Primitive::Wire {
-                    from,
-                    to,
+                let pieces = view.occluders.map_or_else(
+                    || vec![(from, to)],
+                    |balls| cell_occlusion::edge(balls, from, to),
+                );
+                edges.extend(pieces.into_iter().map(|(from, to)| Primitive::Wire {
+                    from: (view.project)(from),
+                    to: (view.project)(to),
                     width,
                     color: edge,
                     dash: 0.,
-                });
+                }));
             } else {
                 behind.push(Primitive::Wire {
-                    from,
-                    to,
+                    from: (view.project)(from),
+                    to: (view.project)(to),
                     width,
                     color: hidden,
                     dash: width * 3.,
@@ -3401,7 +3557,11 @@ fn cell_ink(
     // Text colours are given for a light canvas; the canvas and exports
     // turn them for a dark one, as they do atom labels.
     let text = rgb(mix(BLACK, WHITE, 0.15));
-    if let Some(origin) = corner([0; 3]) {
+    if let Some(origin) = corner([0; 3])
+        && !view
+            .occluders
+            .is_some_and(|balls| cell_occlusion::hidden(balls, origin, true))
+    {
         let center = (view.project)(origin);
         edges.push(Primitive::Sphere {
             center,
@@ -3510,17 +3670,10 @@ pub(crate) fn flat_cells(models: &[Model3d], doc: &Document) -> FlatCells {
             width: line,
             size: style.font_size(),
             crowded,
+            occluders: None,
         };
-        let whole = Cell {
-            vectors: [0, 1, 2].map(|k| {
-                let n = repeat.get(k).copied().unwrap_or(1) as f32;
-                cell.vectors
-                    .get(k)
-                    .copied()
-                    .unwrap_or_default()
-                    .map(|v| v * n)
-            }),
-            crossing: vec![],
+        let Some(whole) = model.whole_cell() else {
+            continue;
         };
         let (hidden, edges, marks) = cell_ink(&view, &whole, ink, backdrop);
         out.behind.extend(hidden);
@@ -3766,7 +3919,7 @@ fn seams(
 /// Where each atom's copy in each cell of a repeat went, by atom and cell.
 type Copies = HashMap<(u64, [i32; 3]), u64>;
 
-/// Every copy of `model`'s atoms its 2D drawing shows, by atom and cell:
+/// Every copy of `model`'s atoms its drawing and 3D model show, by atom and cell:
 /// each atom in every cell of the repeat, and again, as crystallographers
 /// draw a cell, one cell on along each axis where it lies on the near face of
 /// that axis, so the far faces, edges and corners of the whole repeat are
@@ -3860,12 +4013,10 @@ fn ghosts(
         atom_labels: doc.atom_labels.clone(),
         ..Default::default()
     };
-    let ids = model.ids();
     let origin = fit.place([0.; 3]);
     let mut index = HashMap::new();
-    let mut next = 1;
-    for &(id, c) in sites {
-        let Some(atom) = doc.atom(id) else { continue };
+    for (next, &(id, c)) in (1..).zip(sites) {
+        let atom = doc.atom(id)?;
         let shift = sub(fit.place(cell.at(c.map(|v| v as f32))), origin);
         let mut copy = atom.clone();
         copy.id = next;
@@ -3873,33 +4024,52 @@ fn ghosts(
         copy.depth = atom.depth + shift[2];
         index.insert((id, c), next);
         ghost.atoms.push(copy);
-        next += 1;
     }
-    let mut cells: Vec<[i32; 3]> = sites.iter().map(|(_, c)| *c).collect();
-    cells.sort_unstable();
-    cells.dedup();
-    for &c in &cells {
-        for bond in doc.bonds.iter().filter(|b| ids.contains(&b.a)) {
-            let (Some(&a), Some(&b)) = (index.get(&(bond.a, c)), index.get(&(bond.b, c))) else {
-                continue;
-            };
-            let mut copy = bond.clone();
-            (copy.a, copy.b) = (a, b);
-            ghost.bonds.push(copy);
-        }
-        for x in &cell.crossing {
-            let to = zip3(c, x.image.map(i32::from), |c, i| c + i);
-            if let (Some(&a), Some(&b)) = (index.get(&(x.a, c)), index.get(&(x.b, to))) {
-                ghost
-                    .bonds
-                    .push(crate::document::Bond::plain(a, b, 1, "plain"));
-            }
-        }
+    for (a, b, source) in site_bonds(doc, model, sites) {
+        let (a, b) = (a as u64 + 1, b as u64 + 1);
+        let mut bond = source
+            .cloned()
+            .unwrap_or_else(|| Bond::plain(a, b, 1, "plain"));
+        (bond.a, bond.b) = (a, b);
+        ghost.bonds.push(bond);
     }
     (!ghost.atoms.is_empty()).then_some((ghost, index))
 }
 
-/// A direction a crystal's 2D drawing can look along.
+/// Bonds within and between the shown cells, with their source drawing bond
+/// when present. Both renderers use the same copy topology.
+fn site_bonds<'a>(
+    doc: &'a Document,
+    model: &Model3d,
+    sites: &[(u64, [i32; 3])],
+) -> Vec<(usize, usize, Option<&'a Bond>)> {
+    let index: HashMap<_, _> = sites
+        .iter()
+        .enumerate()
+        .map(|(i, site)| (*site, i))
+        .collect();
+    let mut cells: Vec<_> = sites.iter().map(|(_, c)| *c).collect();
+    cells.sort_unstable();
+    cells.dedup();
+    let ids = model.ids();
+    let mut out = vec![];
+    for c in cells {
+        for bond in doc.bonds.iter().filter(|b| ids.contains(&b.a)) {
+            if let (Some(&a), Some(&b)) = (index.get(&(bond.a, c)), index.get(&(bond.b, c))) {
+                out.push((a, b, Some(bond)));
+            }
+        }
+        for x in model.cell.iter().flat_map(|cell| &cell.crossing) {
+            let to = zip3(c, x.image.map(i32::from), |c, i| c + i);
+            if let (Some(&a), Some(&b)) = (index.get(&(x.a, c)), index.get(&(x.b, to))) {
+                out.push((a, b, None));
+            }
+        }
+    }
+    out
+}
+
+/// A direction a crystal's drawing or 3D model can look along.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Along {
     A,
@@ -4218,6 +4388,8 @@ fn solve3(a: [[f64; 3]; 3], b: [f64; 3]) -> Option<[f64; 3]> {
     x.iter().all(|v| v.is_finite()).then_some(x)
 }
 
+#[cfg(test)]
+mod crystal_3d_tests;
 #[cfg(test)]
 mod opening_tests;
 #[cfg(test)]

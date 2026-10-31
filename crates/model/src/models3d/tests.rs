@@ -2084,6 +2084,7 @@ fn crystal() -> (Document, [u64; 2]) {
 
 fn dashed(p: &Primitive) -> Option<f32> {
     match p {
+        Primitive::Opacity { primitive, .. } => dashed(primitive),
         Primitive::Wire { dash, .. } if *dash > 0. => Some(*dash),
         _ => None,
     }
@@ -2119,10 +2120,12 @@ fn the_cell_draws_hidden_edges_behind_and_front_edges_and_labels_in_front() {
             .iter()
             .filter(|p| matches!(p, Primitive::Wire { dash, .. } if *dash == 0.))
             .count();
-        assert!(solid >= 9, "{style:?}");
-        // Bonds leaving the cell: one dashed half from each ion.
+        if style != Style::SpaceFilling {
+            assert!(solid >= 9, "{style:?}");
+        }
+        // Seven corner copies still point outside; the eighth meets Cl.
         let leaving = parts.iter().filter_map(dashed).count() - behind;
-        let expected = if style == Style::SpaceFilling { 0 } else { 2 };
+        let expected = if style == Style::SpaceFilling { 0 } else { 7 };
         assert_eq!(leaving, expected, "{style:?}");
     }
     assert!(scene::svg(&doc).contains("stroke-dasharray"));
