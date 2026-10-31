@@ -737,7 +737,13 @@ fn ordered_simple_ring(mol: &Molecule, atoms: &AtomSet) -> Vec<usize> {
 
 /// Retained biphenyl requires two complete benzene rings joined by one bridge.
 fn biphenyl_parent_result(mol: &Molecule, atoms: &AtomSet) -> Option<String> {
-    if atoms.len() != 12 || atoms.iter().any(|idx| !mol.atoms[idx].is_carbon()) {
+    // Upstream divergence: the fixed name also requires neutral ring carbons.
+    if atoms.len() != 12
+        || atoms.iter().any(|idx| {
+            let atom = &mol.atoms[idx];
+            !atom.is_carbon() || atom.charge != 0 || atom.radical_electrons != 0
+        })
+    {
         return None;
     }
     let bridges: Vec<_> = mol

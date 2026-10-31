@@ -41,7 +41,6 @@ mod perception;
 mod polycycle_topology;
 mod principal_groups;
 mod principal_suffixes;
-mod ring_parent;
 mod ring_renderer;
 mod rules;
 mod small_ring_stereo;
@@ -57,14 +56,22 @@ pub fn name_smiles(smiles: &str) -> Result<String, String> {
     if mol.atoms.values().any(|atom| atom.symbol == "Po") {
         return Err("openclatura: polonium nomenclature is not validated".into());
     }
-    // Upstream divergence: aziridine nitrogen stereo labels in spiro parents and
-    // ring substituents read back inverted through OPSIN; decline all N centres.
-    if mol
-        .atoms
-        .values()
-        .any(|atom| atom.symbol == "N" && (atom.stereo.is_some() || atom.raw_stereo.is_some()))
-    {
-        return Err("openclatura: nitrogen stereocentres are not validated".into());
+    // Upstream divergence: nitrogen stereocentres and ring stereocentres with a
+    // lone pair (three single bonds: P, As, S+) read back through OPSIN as
+    // another stereoisomer, or lose their descriptor.
+    let cyclic = chains::get_cyclic_atoms(&mol, &molecule::AtomSet::new());
+    if mol.atoms.values().any(|atom| {
+        (atom.stereo.is_some() || atom.raw_stereo.is_some())
+            && (atom.symbol == "N"
+                || !atom.is_carbon()
+                    && cyclic.contains(&atom.idx)
+                    && mol.degree(atom.idx) == 3
+                    && mol
+                        .get_neighbors(atom.idx)
+                        .iter()
+                        .all(|&n| mol.get_bond(atom.idx, n).is_some_and(|b| b.order == 1)))
+    }) {
+        return Err("openclatura: N and ring lone-pair stereocentres are not validated".into());
     }
     let components = graph_io::get_connected_components(&mol);
     if components.len() != 1 {
@@ -103,6 +110,8 @@ mod tests {
     fn unsupported_spiro_topologies_decline() {
         for smiles in [
             "C1CC12CC23CC34CC4",
+            "S123(CC1)(CC2)CC3",
+            "[c-]1ccccc1-c1ccccc1",
             "C1CCC2(CC1)C1CCCCC1C2",
             "C1CCC2(CC1)CCCC2.C",
             "[13CH2]1CCC2(CC1)CCCC2",
@@ -125,6 +134,10 @@ mod tests {
             "COC(=O)NOOC1CCCCC1",
             "O[N@]1CC12CC2",
             "CN(C)[N@]1CC1(C)CO",
+            "C[P@]1CCCC1C",
+            "C[P@]1CCCC12CCCC2",
+            "C[As@]1CCCC1C",
+            "C[S@+]1CCCC1C",
         ] {
             assert!(name_smiles(smiles).is_err(), "{smiles}");
         }

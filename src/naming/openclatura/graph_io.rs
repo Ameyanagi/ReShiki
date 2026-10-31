@@ -180,6 +180,7 @@ pub fn read_smiles(text: &str) -> Result<Molecule, String> {
 /// bridged, and spiro systems containing fused blocks remain outside scope.
 fn require_monocyclic_ring_blocks(mol: &Molecule) -> Result<(), String> {
     let atoms = mol.atoms.keys().copied().collect();
+    let mut ring_blocks = BTreeMap::<usize, usize>::new();
     for block in biconnected_edge_components(mol, &atoms) {
         let mut degrees = BTreeMap::<usize, usize>::new();
         for &(u, v) in &block {
@@ -191,6 +192,15 @@ fn require_monocyclic_ring_blocks(mol: &Molecule) -> Result<(), String> {
         }
         if block.len() != degrees.len() || degrees.values().any(|&degree| degree != 2) {
             return Err("openclatura: fused and bridged ring systems are not ported".into());
+        }
+        // Upstream divergence: a third ring on one spiro atom needs the
+        // unported spiro side-pair assembly (find_spiro_side_pair).
+        for atom in degrees.into_keys() {
+            let count = ring_blocks.entry(atom).or_default();
+            *count += 1;
+            if *count > 2 {
+                return Err("openclatura: three rings at one spiro atom are not ported".into());
+            }
         }
     }
     Ok(())

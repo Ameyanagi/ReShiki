@@ -80,22 +80,12 @@ pub fn build_parent_parts(
     parts.is_bicycle = selection.is_bicycle;
     parts.is_spiro = selection.is_spiro;
     parts.is_polycycle = selection.is_polycycle;
-    parts.bicycle_xyz = if selection.is_bicycle {
-        selection.xyz
-    } else {
-        (0, 0, 0)
-    };
     parts.spiro_xy = if selection.is_spiro {
         (selection.xyz.0, selection.xyz.1)
     } else {
         (0, 0)
     };
-    parts.polycycle_descriptor = selection
-        .ring_parent
-        .as_ref()
-        .and_then(|parent| parent.descriptor.clone())
-        .filter(|_| selection.is_polycycle)
-        .or_else(|| selection.polycycle_descriptor.clone());
+    parts.polycycle_descriptor = selection.polycycle_descriptor.clone();
     parts.retained_parent_metadata = retained_name
         .as_deref()
         .and_then(super::rules::retained::parent_metadata);

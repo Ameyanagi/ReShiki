@@ -2,7 +2,6 @@
 use super::{
     chains::{RingSystem, canonical_ranks},
     molecule::{AtomSet, Molecule},
-    ring_parent::RingParent,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -15,7 +14,6 @@ pub struct ParentSelection {
     pub is_polycycle: bool,
     pub xyz: (usize, usize, usize),
     pub polycycle_descriptor: Option<String>,
-    pub ring_parent: Option<RingParent>,
     pub fixed_start_required: bool,
 }
 
@@ -31,14 +29,7 @@ impl ParentSelection {
         self
     }
     pub fn requires_fixed_substituent_start(&self) -> bool {
-        self.fixed_start_required
-            || self
-                .ring_parent
-                .as_ref()
-                .is_some_and(RingParent::requires_fixed_numbering)
-            || self.is_bicycle
-            || self.is_spiro
-            || self.is_polycycle
+        self.fixed_start_required || self.is_bicycle || self.is_spiro || self.is_polycycle
     }
 }
 
@@ -171,7 +162,6 @@ pub fn select_principal_parent(
                     is_polycycle: false,
                     xyz: (0, 0, 0),
                     polycycle_descriptor: None,
-                    ring_parent: None,
                     fixed_start_required: false,
                 },
             )
@@ -205,7 +195,6 @@ pub fn select_principal_parent(
                         is_polycycle: rs.is_polycycle,
                         xyz: (rs.x, rs.y, if rs.is_bicycle { rs.z } else { 0 }),
                         polycycle_descriptor: rs.polycycle_descriptor.clone(),
-                        ring_parent: Some(RingParent::from_ring_system(rs)),
                         fixed_start_required: false,
                     },
                 )

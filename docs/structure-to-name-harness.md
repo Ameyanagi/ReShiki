@@ -76,12 +76,14 @@ input atom order: the harness names its canonical SMILES, and upstream's
 tie-breaking depends on atom order (Python itself returns the port's name for
 another atom order). Named from their original SMILES, the stage-2 corpus and
 generated molecules (619) and held-out generated sets of about 16,000 ring
-assemblies and spiro systems match upstream exactly except for 118 declines
+assemblies and spiro systems match upstream exactly except for 121 declines
 and one E/Z descriptor. In 103 of those declines and the E/Z row, upstream's
-own name round-trips to a different structure; the other 15 come from a
-conservative check on stereocentres ranked through a mancude-ring duplicate
-atom, where RDKit's CIP labels and the OPSIN reading can disagree (lines
-marked `Upstream divergence` in `src/naming/openclatura/`). The remaining
+own name round-trips to a different structure; the other 18 come from
+conservative checks on stereo the OPSIN reading can invert: stereocentres
+ranked through a mancude-ring duplicate atom (RDKit's CIP labels and OPSIN can
+disagree there), nitrogen centres and ring centres with a lone pair (P, As,
+S+). Lines marked `Upstream divergence` in `src/naming/openclatura/` list every
+such decline. The remaining
 `mr_assembly` and `mr_spiro` rows need fused parents (`naphthalene`,
 `spiro[indene-1,1'-indene]`). Previous rules-namer baseline: structure 145,
 name 31, parity 105, generated 1717 (full).

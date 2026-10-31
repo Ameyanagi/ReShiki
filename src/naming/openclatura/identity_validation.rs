@@ -97,45 +97,59 @@ pub fn validate_input(mol: &Molecule) -> Result<(), String> {
 
 /// Upstream divergence: CIP implementations disagree on the duplicate atom of
 /// a mancude ring bond (RDKit's labels and the OPSIN reading of the same name
-/// differ). Decline a stereocentre whose ranking of two ligands at the first
-/// sphere depends on which aromatic neighbour that duplicate copies.
+/// differ). Decline a stereocentre whose ligand ranking, compared sphere by
+/// sphere, is decided or tied where that duplicate's element is ambiguous.
 pub fn validate_mancude_duplicate_ranking(mol: &Molecule) -> Result<(), String> {
+    const SPHERES: usize = 8;
     let z = |idx: usize| mol.atoms[&idx].element().map_or(0, |e| e.atomic_number);
-    // Descending atomic numbers seen from `center`, one entry per duplicate.
-    let spheres = |center: usize, ligand: usize| -> Vec<Vec<usize>> {
-        let atom = &mol.atoms[&ligand];
-        let mut base = vec![1; atom.total_h_count];
-        let mut kekule_dup = false;
-        for &n in mol.get_neighbors(ligand) {
-            if n == center {
-                continue;
+    // Per sphere, descending atomic numbers with each ambiguous duplicate at
+    // its lowest and at its highest element.
+    let spheres = |center: usize, ligand: usize| -> Vec<[Vec<usize>; 2]> {
+        let mut seen = BTreeSet::from([center, ligand]);
+        let mut frontier = vec![(ligand, center)];
+        let mut result = Vec::new();
+        for _ in 0..SPHERES {
+            let mut sphere: [Vec<usize>; 2] = Default::default();
+            let mut next = Vec::new();
+            for &(atom_idx, parent) in &frontier {
+                let atom = &mol.atoms[&atom_idx];
+                let mut entries = vec![1; atom.total_h_count];
+                let mut aromatic_double = false;
+                for &n in mol.get_neighbors(atom_idx) {
+                    let order = mol.get_bond(atom_idx, n).map_or(1, |b| b.order);
+                    let aromatic = atom.is_aromatic && mol.atoms[&n].is_aromatic;
+                    aromatic_double |= aromatic && order == 2;
+                    let duplicates = if aromatic { 0 } else { order - 1 };
+                    entries.extend(std::iter::repeat_n(z(n), duplicates));
+                    if n == parent {
+                        continue;
+                    }
+                    entries.push(z(n));
+                    if seen.insert(n) {
+                        next.push((n, atom_idx));
+                    }
+                }
+                let variants: Vec<_> = mol
+                    .get_neighbors(atom_idx)
+                    .iter()
+                    .filter(|&&n| aromatic_double && mol.atoms[&n].is_aromatic)
+                    .map(|&n| z(n))
+                    .collect();
+                for (side, duplicate) in sphere
+                    .iter_mut()
+                    .zip([variants.iter().min(), variants.iter().max()])
+                {
+                    side.extend(&entries);
+                    side.extend(duplicate);
+                }
             }
-            base.push(z(n));
-            let order = mol.get_bond(ligand, n).map_or(1, |b| b.order);
-            if atom.is_aromatic && mol.atoms[&n].is_aromatic && order == 2 {
-                kekule_dup = true;
-            } else {
-                base.extend(std::iter::repeat_n(z(n), order.saturating_sub(1)));
+            for side in &mut sphere {
+                side.sort_unstable_by(|a, b| b.cmp(a));
             }
+            result.push(sphere);
+            frontier = next;
         }
-        if mol.get_bond(ligand, center).is_some_and(|b| b.order == 2) {
-            base.push(z(center));
-        }
-        let mut variants: Vec<Vec<usize>> = if kekule_dup {
-            mol.get_neighbors(ligand)
-                .iter()
-                .filter(|&&n| n != center && mol.atoms[&n].is_aromatic)
-                .map(|&n| [base.clone(), vec![z(n)]].concat())
-                .collect()
-        } else {
-            vec![base]
-        };
-        for variant in &mut variants {
-            variant.sort_unstable_by(|a, b| b.cmp(a));
-            variant.resize(4, 0);
-        }
-        variants.dedup();
-        variants
+        result
     };
     for (&center, atom) in &mol.atoms {
         if atom.stereo.is_none() {
@@ -148,17 +162,22 @@ pub fn validate_mancude_duplicate_ranking(mol: &Molecule) -> Result<(), String> 
             .collect();
         for (i, (zi, left)) in ligands.iter().enumerate() {
             for (zj, right) in &ligands[i + 1..] {
-                if zi != zj || (left.len() == 1 && right.len() == 1) {
+                if zi != zj {
                     continue;
                 }
-                let orders: BTreeSet<_> = left
-                    .iter()
-                    .flat_map(|l| right.iter().map(move |r| l.cmp(r)))
-                    .collect();
-                if orders.len() > 1 || orders.contains(&std::cmp::Ordering::Equal) {
-                    return Err(format!(
-                        "openclatura: CIP rank at atom {center} depends on a mancude duplicate atom"
-                    ));
+                for (l, r) in left.iter().zip(right) {
+                    let orders: BTreeSet<_> = l
+                        .iter()
+                        .flat_map(|l| r.iter().map(move |r| l.cmp(r)))
+                        .collect();
+                    if orders.len() > 1 {
+                        return Err(format!(
+                            "openclatura: CIP rank at atom {center} depends on a mancude duplicate atom"
+                        ));
+                    }
+                    if !orders.contains(&std::cmp::Ordering::Equal) {
+                        break;
+                    }
                 }
             }
         }
@@ -176,6 +195,8 @@ mod tests {
             "NC(N)[C@@H](C)c1ncncc1",
             "O=[N+]([O-])[C@@H]1NCC[C@@H]1c1ncccc1",
             "O=[N+]([O-])[C@@H]1NCC[C@@H]1c1ncncc1Br",
+            "C[C@H](Cc1ncccc1)CC=NC1CCCCC1",
+            "C[C@H](Cc1ncccc1)CC=NC1CCC2(CC1)CCCC2",
         ] {
             assert!(name_smiles(smiles).is_err(), "{smiles}");
         }
