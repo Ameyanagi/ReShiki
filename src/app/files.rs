@@ -298,6 +298,19 @@ pub struct Saved {
 
 pub type Opened = Option<(PathBuf, Result<Prepared, String>)>;
 
+/// Ex file commands use native drawings, retaining an explicit native suffix.
+pub(super) fn native_drawing_name(name: &str) -> String {
+    if std::path::Path::new(name)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(reshiki::compatibility::is_native_extension)
+    {
+        name.into()
+    } else {
+        format!("{name}.{}", reshiki::compatibility::NATIVE_EXTENSION)
+    }
+}
+
 fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String> {
     let extension = path
         .extension()
@@ -434,6 +447,24 @@ impl super::App {
             format!("{stem}.{}", reshiki::compatibility::NATIVE_EXTENSION)
         };
         (path, name)
+    }
+
+    /// A named edit opens beside the saved drawing without asking for a path.
+    pub(super) fn open_drawing_named(&mut self, name: String) -> Task<Message> {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(path) = self
+            .tab
+            .path
+            .as_ref()
+            .and_then(|path| path.parent())
+            .map(|parent| parent.join(&name))
+            .filter(|path| path.is_file())
+        {
+            return Task::perform(read(path), Message::FilePrepared);
+        }
+        self.status = format!("{name} not found next to the current drawing");
+        self.error = true;
+        Task::none()
     }
 
     pub(super) fn file_saved(
@@ -612,6 +643,16 @@ impl super::App {
     pub(super) fn save_drawing(&mut self, save_as: bool) -> Task<Message> {
         self.save_drawing_to(
             save_as,
+            None,
+            #[cfg(target_arch = "wasm32")]
+            None,
+        )
+    }
+
+    pub(super) fn save_drawing_named(&mut self, name: String) -> Task<Message> {
+        self.save_drawing_to(
+            true,
+            Some(name),
             #[cfg(target_arch = "wasm32")]
             None,
         )
@@ -619,12 +660,13 @@ impl super::App {
 
     #[cfg(target_arch = "wasm32")]
     pub(super) fn save_download(&mut self, name: String) -> Task<Message> {
-        self.save_drawing_to(true, Some(name))
+        self.save_drawing_to(true, None, Some(name))
     }
 
     fn save_drawing_to(
         &mut self,
         save_as: bool,
+        name: Option<String>,
         #[cfg(target_arch = "wasm32")] download_name: Option<String>,
     ) -> Task<Message> {
         if !save_as {
@@ -637,7 +679,10 @@ impl super::App {
             .as_ref()
             .filter(|_| self.office_document() && !save_as)
             .map(|binding| binding.host);
-        let (path, suggested_name) = self.drawing_save_target(save_as);
+        let (path, suggested_name) = match name {
+            Some(name) => (None, name),
+            None => self.drawing_save_target(save_as),
+        };
         if self.file_io.saving {
             // Only this tab's own save can go on with the dialog's action.
             if self.file_io.saving_tab != Some(self.tab.id) {

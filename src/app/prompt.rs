@@ -4,7 +4,7 @@
 //! build asks here instead.
 use super::{
     App, Message,
-    help::modal,
+    help::{Placement, modal},
     workspace::{control, muted_text},
 };
 use iced::keyboard::{Key, Modifiers, key::Named};
@@ -147,6 +147,7 @@ impl App {
             content.into(),
             440.,
             height,
+            Placement::Center,
             Message::Prompt(Answer::Cancel),
         )
     }
