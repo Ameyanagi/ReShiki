@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 
 use super::assembly_parts::{AssemblyParts, ParentChargeItem, SubstituentItem};
 use super::molecule::{AtomSet, Molecule, bond_ids_within};
-use super::numbering::choose_parent_numbering;
+use super::numbering::{NumberingTopology, choose_parent_numbering};
 use super::parent_selection::ParentSelection;
 
 pub struct ParentAssemblyPlan {
@@ -36,7 +36,12 @@ pub fn build_parent_assembly_plan(
         locant_maps,
         selection.is_ring,
         retained_name.as_deref(),
-        selection.fixed_start_required,
+        selection.requires_fixed_substituent_start(),
+        NumberingTopology {
+            is_bicycle: selection.is_bicycle,
+            is_spiro: selection.is_spiro,
+            is_polycycle: selection.is_polycycle,
+        },
     );
     let locant_map = selected_map.unwrap_or_else(|| {
         numbered_path
@@ -50,7 +55,7 @@ pub fn build_parent_assembly_plan(
         &numbered_path,
         &locant_map,
         retained_name,
-        selection.is_ring,
+        selection,
         root,
         upstream,
     )?;
@@ -66,12 +71,31 @@ pub fn build_parent_parts(
     numbered_path: &[usize],
     locants: &BTreeMap<usize, String>,
     retained_name: Option<String>,
-    is_ring: bool,
+    selection: &ParentSelection,
     root: Option<usize>,
     upstream: Option<usize>,
 ) -> Result<AssemblyParts, String> {
     let mut parts = AssemblyParts::new(numbered_path.len());
-    parts.is_ring = is_ring;
+    parts.is_ring = selection.is_ring;
+    parts.is_bicycle = selection.is_bicycle;
+    parts.is_spiro = selection.is_spiro;
+    parts.is_polycycle = selection.is_polycycle;
+    parts.bicycle_xyz = if selection.is_bicycle {
+        selection.xyz
+    } else {
+        (0, 0, 0)
+    };
+    parts.spiro_xy = if selection.is_spiro {
+        (selection.xyz.0, selection.xyz.1)
+    } else {
+        (0, 0)
+    };
+    parts.polycycle_descriptor = selection
+        .ring_parent
+        .as_ref()
+        .and_then(|parent| parent.descriptor.clone())
+        .filter(|_| selection.is_polycycle)
+        .or_else(|| selection.polycycle_descriptor.clone());
     parts.retained_parent_metadata = retained_name
         .as_deref()
         .and_then(super::rules::retained::parent_metadata);
@@ -140,7 +164,16 @@ fn add_relative_ring_stereo(
     path: &[usize],
     locants: &BTreeMap<usize, String>,
 ) -> Result<(), String> {
-    if !parts.is_ring {
+    // Upstream divergence: its polycycle shortcut drops unresolved relative
+    // stereotags. Decline these until a spiro stereo renderer preserves them.
+    if (parts.is_spiro || parts.is_polycycle)
+        && path
+            .iter()
+            .any(|idx| mol.atoms[idx].raw_stereo.is_some() && mol.atoms[idx].stereo.is_none())
+    {
+        return Err("openclatura: unresolved spiro stereochemistry not ported".into());
+    }
+    if !parts.is_ring || parts.is_bicycle || parts.is_spiro || parts.is_polycycle {
         return Ok(());
     }
     let scoped =
@@ -250,6 +283,21 @@ mod tests {
             ("C[C@H]1C[C@H](C1)C", "cis-1,3-dimethylcyclobutane"),
             ("C[C@H]1C[C@H](C)C1", "trans-1,3-dimethylcyclobutane"),
             ("C[C@H]1C[C@@H](C1)C", "trans-1,3-dimethylcyclobutane"),
+        ] {
+            assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
+        }
+    }
+
+    #[test]
+    fn spiro_parents_keep_descriptor_numbering_and_internal_bond_locants() {
+        for (smiles, expected) in [
+            ("C1CCC2(CC1)CCCC2", "spiro[4.5]decane"),
+            ("C1CCC2(CC1)OCCO2", "1,4-dioxaspiro[4.5]decane"),
+            ("BrC1=CCC12CCCCO2", "1-bromo-5-oxaspiro[3.5]non-1-ene"),
+            (
+                "BrC1C2(CCCS2)C12CCS2",
+                "10-bromo-1,6-dithiadispiro[3.0.4.1]decane",
+            ),
         ] {
             assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
         }

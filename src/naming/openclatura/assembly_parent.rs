@@ -463,8 +463,8 @@ pub fn promote_retained_substituent_name(parts: &mut AssemblyParts) {
     }
 }
 pub fn parent_stem_and_terminal(parts: &AssemblyParts) -> Result<(String, String), String> {
-    if parts.is_bicycle || parts.is_spiro || parts.is_polycycle {
-        return Err("Unsupported polycyclic assembly".into());
+    if parts.is_bicycle {
+        return Err("openclatura: bicyclo assembly not ported".into());
     }
     if has_ionic_retained_parent(parts)
         && let Some(name) = parts
@@ -491,7 +491,19 @@ pub fn parent_stem_and_terminal(parts: &AssemblyParts) -> Result<(String, String
     }
     let stem = stems::stem_for(parts.parent_length);
     Ok((
-        if parts.is_ring {
+        if parts.is_spiro {
+            let (x, y) = parts.spiro_xy;
+            format!(
+                "{}{stem}",
+                super::ring_renderer::render_ring_descriptor("spiro", &[x, y])
+            )
+        } else if parts.is_polycycle {
+            let descriptor = parts
+                .polycycle_descriptor
+                .as_deref()
+                .ok_or("openclatura: polycyclic parent has no audited descriptor")?;
+            format!("{descriptor}{stem}")
+        } else if parts.is_ring {
             format!("cyclo{stem}")
         } else {
             stem

@@ -7,6 +7,18 @@ use super::{
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NumberingTopology {
+    pub is_bicycle: bool,
+    pub is_spiro: bool,
+    pub is_polycycle: bool,
+}
+impl NumberingTopology {
+    fn has_fixed_paths(self) -> bool {
+        self.is_bicycle || self.is_spiro || self.is_polycycle
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct NumberingPreference {
     pub principal: Vec<usize>,
@@ -82,6 +94,7 @@ impl NumberingPreference {
     }
 }
 
+#[cfg(test)]
 pub fn number_parent(
     mol: &Molecule,
     candidate_paths: &[Vec<usize>],
@@ -91,11 +104,34 @@ pub fn number_parent(
     fixed_start: bool,
     retained_name: Option<&str>,
 ) -> Vec<usize> {
+    number_parent_with_topology(
+        mol,
+        candidate_paths,
+        principal_carbons,
+        substituent_mapping,
+        is_ring,
+        fixed_start,
+        retained_name,
+        NumberingTopology::default(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn number_parent_with_topology(
+    mol: &Molecule,
+    candidate_paths: &[Vec<usize>],
+    principal_carbons: &AtomSet,
+    substituent_mapping: &BTreeMap<usize, Vec<String>>,
+    is_ring: bool,
+    fixed_start: bool,
+    retained_name: Option<&str>,
+    topology: NumberingTopology,
+) -> Vec<usize> {
     let Some(path) = candidate_paths.first() else {
         return Vec::new();
     };
     let mut candidates = Vec::new();
-    if fixed_start {
+    if topology.has_fixed_paths() || fixed_start {
         candidates.extend_from_slice(candidate_paths);
     } else if is_ring {
         for i in 0..path.len() {
@@ -118,6 +154,7 @@ pub fn number_parent(
         principal_carbons,
         substituent_mapping,
         retained_name,
+        topology,
     );
     for candidate in &candidates[1..] {
         let evaluation = numbering_preference(
@@ -126,6 +163,7 @@ pub fn number_parent(
             principal_carbons,
             substituent_mapping,
             retained_name,
+            topology,
         );
         if evaluation.compare(&best_score, is_ring) == Ordering::Less {
             best = candidate.clone();
@@ -148,6 +186,7 @@ pub fn choose_parent_numbering(
     is_ring: bool,
     retained_name: Option<&str>,
     fixed_start: bool,
+    topology: NumberingTopology,
 ) -> (Vec<usize>, Option<BTreeMap<usize, String>>) {
     if !locant_maps.is_empty() {
         type L = (u8, usize, String);
@@ -233,29 +272,35 @@ pub fn choose_parent_numbering(
             return (path, Some(chosen));
         }
     }
-    (
-        number_parent(
-            mol,
-            candidate_paths,
-            principal_atoms,
-            substituent_mapping,
-            is_ring,
-            fixed_start,
-            retained_name,
-        ),
-        None,
-    )
+    let path = number_parent_with_topology(
+        mol,
+        candidate_paths,
+        principal_atoms,
+        substituent_mapping,
+        is_ring,
+        fixed_start,
+        retained_name,
+        topology,
+    );
+    let map = topology.has_fixed_paths().then(|| {
+        path.iter()
+            .enumerate()
+            .map(|(i, &idx)| (idx, (i + 1).to_string()))
+            .collect()
+    });
+    (path, map)
 }
 
-pub fn numbering_preference(
+fn numbering_preference(
     mol: &Molecule,
     path: &[usize],
     principal: &AtomSet,
     substituents: &BTreeMap<usize, Vec<String>>,
     retained_name: Option<&str>,
+    topology: NumberingTopology,
 ) -> NumberingPreference {
     let principal = get_atom_locants(path, principal);
-    let hetero_by_priority = heteroatom_locants_by_priority(mol, path, true);
+    let hetero_by_priority = heteroatom_locants_by_priority(mol, path, !topology.has_fixed_paths());
     let indicated_hydrogen = get_atom_locants(
         path,
         &indicated_hydrogen_like_atoms(mol, path, retained_name, false),
@@ -267,7 +312,13 @@ pub fn numbering_preference(
     let mut unsaturation = if retained_name.is_some() {
         Vec::new()
     } else {
-        let (d, t) = get_bond_locants(mol, path, false, false, false);
+        let (d, t) = get_bond_locants(
+            mol,
+            path,
+            topology.is_bicycle,
+            topology.is_spiro,
+            topology.is_polycycle,
+        );
         d.into_iter().chain(t).collect::<Vec<_>>()
     };
     unsaturation.sort();
@@ -505,5 +556,32 @@ mod tests {
         let subs = BTreeMap::from([(1, vec!["methyl".into()]), (5, vec!["ethyl".into()])]);
         let numbered = number_parent(&mol, &[path], &AtomSet::new(), &subs, false, false, None);
         assert_eq!(numbered, (0..7).rev().collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn spiro_numbering_scores_only_the_topology_candidates() {
+        let mol = read_smiles("C1CCC2(CC1)OCCO2").unwrap();
+        let rings = find_ring_systems(&mol, &AtomSet::new());
+        let system = &rings[0];
+        let (path, map) = choose_parent_numbering(
+            &mol,
+            &system.paths,
+            &AtomSet::new(),
+            &BTreeMap::new(),
+            &[],
+            true,
+            None,
+            false,
+            NumberingTopology {
+                is_spiro: true,
+                ..NumberingTopology::default()
+            },
+        );
+        assert!(system.paths.contains(&path));
+        assert_eq!(
+            heteroatom_locants_by_priority(&mol, &path, false),
+            vec![vec![1, 4]]
+        );
+        assert_eq!(map.as_ref().map(BTreeMap::len), Some(10));
     }
 }

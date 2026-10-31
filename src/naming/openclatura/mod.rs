@@ -1,7 +1,7 @@
 //! Native Rust port of openclatura 0.4.3 (MIT), plain-name pipeline.
 //! Attribution and license terms are in `licenses/openclatura/`.
 //!
-//! Supports one connected component whose ring systems are separate monocycles.
+//! Supports one connected component with monocyclic and pure spiro ring systems.
 // Graph IDs and numbered parent paths are validated at construction and retain
 // their identity in induced subgraphs. Direct indexing preserves the upstream
 // rule comparisons; immutable JSON Value indexing also returns null for a
@@ -38,8 +38,11 @@ mod numbering;
 mod parent_pipeline;
 mod parent_selection;
 mod perception;
+mod polycycle_topology;
 mod principal_groups;
 mod principal_suffixes;
+mod ring_parent;
+mod ring_renderer;
 mod rules;
 mod small_ring_stereo;
 mod special_cases;
@@ -54,6 +57,15 @@ pub fn name_smiles(smiles: &str) -> Result<String, String> {
     if mol.atoms.values().any(|atom| atom.symbol == "Po") {
         return Err("openclatura: polonium nomenclature is not validated".into());
     }
+    // Upstream divergence: aziridine nitrogen stereo labels in spiro parents and
+    // ring substituents read back inverted through OPSIN; decline all N centres.
+    if mol
+        .atoms
+        .values()
+        .any(|atom| atom.symbol == "N" && (atom.stereo.is_some() || atom.raw_stereo.is_some()))
+    {
+        return Err("openclatura: nitrogen stereocentres are not validated".into());
+    }
     let components = graph_io::get_connected_components(&mol);
     if components.len() != 1 {
         return Err("openclatura: expected one connected component".into());
@@ -67,6 +79,41 @@ mod tests {
     use std::io::Write;
 
     #[test]
+    fn spiro_parents_and_substituents_follow_oracle_names() {
+        for (smiles, expected) in [
+            ("C1CCC2(CC1)CCCC2", "spiro[4.5]decane"),
+            ("C1CCC2(CC1)OCCO2", "1,4-dioxaspiro[4.5]decane"),
+            ("O=C1CCCC12CCCCC2", "spiro[4.5]decan-1-one"),
+            ("C1=CC2(C1)CC1(CCC1)C2", "dispiro[3.1.3.1]dec-1-ene"),
+            ("C1=CC12NC21CC1", "7-azadispiro[2.0.2.1]hept-1-ene"),
+            (
+                "CN/C=C\\C1CC2(C1)CCC2",
+                "(1Z)-N-methyl-2-(spiro[3.3]heptan-2-yl)ethen-1-amine",
+            ),
+            (
+                "CC1=CC=C(C=C1)N2C(=O)C[C@@]3(C2=O)C=C(NN3)C(=O)OCC4=CC=CC=C4",
+                "benzyl (5S)-7-(4-methylphenyl)-6,8-dioxo-1,2,7-triazaspiro[4.4]non-3-ene-3-carboxylate",
+            ),
+        ] {
+            assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
+        }
+    }
+
+    #[test]
+    fn unsupported_spiro_topologies_decline() {
+        for smiles in [
+            "C1CC12CC23CC34CC4",
+            "C1CCC2(CC1)C1CCCCC1C2",
+            "C1CCC2(CC1)CCCC2.C",
+            "[13CH2]1CCC2(CC1)CCCC2",
+            "C[C@H]1C2(CC2)[C@@H](C)C13CC3",
+            "C[C@H]1C2(CC2)[C@H](C)C13CC3",
+        ] {
+            assert!(name_smiles(smiles).is_err(), "{smiles}");
+        }
+    }
+
+    #[test]
     fn declines_unrendered_group_and_attachment_features() {
         for smiles in [
             "CC(=[Po])[OH]",
@@ -76,6 +123,8 @@ mod tests {
             "O=C(O)[C@H](O)[C@@H](O)C(=O)OO",
             "CN(C(=O)[O-])C1(B(O)O)CCC1",
             "COC(=O)NOOC1CCCCC1",
+            "O[N@]1CC12CC2",
+            "CN(C)[N@]1CC1(C)CO",
         ] {
             assert!(name_smiles(smiles).is_err(), "{smiles}");
         }

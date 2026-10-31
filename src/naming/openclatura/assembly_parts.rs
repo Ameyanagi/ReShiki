@@ -67,6 +67,7 @@ pub struct RetainedParentMetadata {
     pub indicated_hydrogen_count: usize,
     pub mancude_double_bonds: usize,
     pub default_indicated_h: Vec<String>,
+    pub inherent_saturated_locants: Vec<String>,
 }
 #[derive(Clone, Debug)]
 pub struct AssemblyParts {
@@ -75,6 +76,9 @@ pub struct AssemblyParts {
     pub is_bicycle: bool,
     pub is_spiro: bool,
     pub is_polycycle: bool,
+    pub bicycle_xyz: (usize, usize, usize),
+    pub spiro_xy: (usize, usize),
+    pub polycycle_descriptor: Option<String>,
     pub is_substituent: bool,
     pub is_double_attach: bool,
     pub is_triple_attach: bool,
@@ -125,6 +129,9 @@ impl AssemblyParts {
             is_bicycle: false,
             is_spiro: false,
             is_polycycle: false,
+            bicycle_xyz: (0, 0, 0),
+            spiro_xy: (0, 0),
+            polycycle_descriptor: None,
             is_substituent: false,
             is_double_attach: false,
             is_triple_attach: false,

@@ -709,6 +709,13 @@ pub fn parent_metadata(name: &str) -> Option<super::super::assembly_parts::Retai
             .as_u64()
             .unwrap_or(0) as usize,
         default_indicated_h: default.clone(),
+        inherent_saturated_locants: row["template"]["atoms"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|atom| atom["saturated"].as_bool() == Some(true))
+            .filter_map(|atom| atom["locant"].as_str().map(str::to_owned))
+            .collect(),
         indicated_hydrogen_count: row["template"]["indicated_hydrogen_count"]
             .as_u64()
             .map(|count| count as usize)

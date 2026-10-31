@@ -32,19 +32,26 @@ pub fn needs_hyphen(left: &str, right: &str) -> bool {
     {
         return true;
     }
-    let tail = right.trim_start_matches(['N', 'O', 'S', 'P']);
-    if tail.len() != right.len() && tail.trim_start_matches('\'').starts_with([',', '-']) {
+    if right
+        .strip_prefix(['N', 'O', 'S', 'P'])
+        .is_some_and(|tail| tail.trim_start_matches('\'').starts_with([',', '-']))
+    {
         return true;
     }
-    if let Some(inner) = right
+    // A stereo descriptor such as `(1R,2E)` opening the right-hand side.
+    right
         .strip_prefix('(')
-        .and_then(|s| s.split_once(')').map(|(a, _)| a))
-    {
-        return inner.split(',').all(|s| {
-            s.starts_with(|c: char| c.is_ascii_digit()) && s.ends_with(['R', 'S', 'E', 'Z'])
-        });
-    }
-    false
+        .and_then(|s| s.split_once(')'))
+        .is_some_and(|(inner, _)| {
+            inner.split(',').all(|term| {
+                let letters = term.trim_start_matches(|c: char| c.is_ascii_digit());
+                letters.len() < term.len()
+                    && letters.ends_with(['R', 'S', 'E', 'Z'])
+                    && letters
+                        .chars()
+                        .all(|c| c.is_ascii_alphabetic() || c == '\'')
+            })
+        })
 }
 pub fn is_fully_enclosed(text: &str) -> bool {
     if !text.starts_with('(') || !text.ends_with(')') {
@@ -65,4 +72,20 @@ pub fn is_fully_enclosed(text: &str) -> bool {
         }
     }
     depth == 0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::needs_hyphen;
+
+    #[test]
+    fn only_a_leading_stereo_descriptor_takes_a_hyphen() {
+        assert!(needs_hyphen("methyl", "(1R,2E)-but-2-enyl"));
+        assert!(needs_hyphen("methyl", "(5'E)-1'-butyl"));
+        assert!(!needs_hyphen(
+            "(cyclopentyl)",
+            "(4-(((3R)-thiolan-3-yl)sulfanyl)pyridin-3-yl)"
+        ));
+        assert!(!needs_hyphen("methyl", "SO-x"));
+    }
 }

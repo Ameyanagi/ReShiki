@@ -528,10 +528,11 @@ fn s2n_extra_file() {
         };
         writeln!(
             rows,
-            "{:?}\t{smiles}\t{}\t{}",
+            "{:?}\t{smiles}\t{}\t{}\t{}",
             outcome.class,
             outcome.name,
-            field(&outcome.reason)
+            field(&outcome.reason),
+            outcome.actual
         )
         .unwrap();
         *counts.entry(format!("{:?}", outcome.class)).or_default() += 1;

@@ -2997,8 +2997,7 @@ pub fn structural_replacement_parent_result(
     mol: &Molecule,
     atoms: &AtomSet,
 ) -> Result<Option<StructuralParentName>, String> {
-    // Keep the Python shortcut precedence. Fused, bridged and spiro routes
-    // remain outside the disjoint-monocycle pipeline.
+    // Keep the Python shortcut precedence before ordinary chain and ring parents.
     if let Some(name) = small_inorganic_parent_name(mol, atoms) {
         require_stereo_free_core(mol, atoms)?;
         return Ok(Some(StructuralParentName::ordinary(name)));

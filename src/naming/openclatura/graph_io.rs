@@ -10,7 +10,7 @@ use reshiki_chemistry::{
 };
 use std::collections::{BTreeMap, VecDeque};
 
-/// Read one graph with disjoint monocyclic ring blocks, retaining source atom order.
+/// Read one graph with monocyclic or pure spiro ring systems, retaining source atom order.
 pub fn read_smiles(text: &str) -> Result<Molecule, String> {
     // This is deliberately checked on the original text, before preparation
     // can clean winding, remove hydrogen atoms or normalize unsupported input.
@@ -169,17 +169,16 @@ pub fn read_smiles(text: &str) -> Result<Molecule, String> {
             in_small_ring,
         })?;
     }
-    require_disjoint_monocyclic_blocks(&mol)?;
+    require_monocyclic_ring_blocks(&mol)?;
     super::identity_validation::validate_input(&mol)?;
     Ok(mol)
 }
 
-/// The stage-two boundary permits any number of separate monocycles joined by
-/// bridges or chains. A spiro articulation still joins two cyclic blocks, so
-/// checking each block's cycle rank alone would admit an unsupported parent.
-fn require_disjoint_monocyclic_blocks(mol: &Molecule) -> Result<(), String> {
+/// Every cyclic biconnected block must be one simple ring. Ring blocks may
+/// share a spiro articulation, or be joined by ordinary bridges/chains; fused,
+/// bridged, and spiro systems containing fused blocks remain outside scope.
+fn require_monocyclic_ring_blocks(mol: &Molecule) -> Result<(), String> {
     let atoms = mol.atoms.keys().copied().collect();
-    let mut ring_atoms = AtomSet::new();
     for block in biconnected_edge_components(mol, &atoms) {
         let mut degrees = BTreeMap::<usize, usize>::new();
         for &(u, v) in &block {
@@ -192,10 +191,6 @@ fn require_disjoint_monocyclic_blocks(mol: &Molecule) -> Result<(), String> {
         if block.len() != degrees.len() || degrees.values().any(|&degree| degree != 2) {
             return Err("openclatura: fused and bridged ring systems are not ported".into());
         }
-        if degrees.keys().any(|idx| ring_atoms.contains(idx)) {
-            return Err("openclatura: spiro ring systems are not ported".into());
-        }
-        ring_atoms.extend(degrees.into_keys());
     }
     Ok(())
 }
@@ -423,11 +418,23 @@ mod tests {
     }
 
     #[test]
-    fn shared_ring_atoms_remain_outside_the_supported_topology() {
+    fn pure_spiro_blocks_are_admitted() {
+        for text in [
+            "C1CCC2(CC1)CCCC2",
+            "C1CC12CC21CC1",
+            "C1CC2(C1)CCC1(CC2)CC1",
+            "C1CC1CC2CC23CC3",
+        ] {
+            read_smiles(text).unwrap_or_else(|error| panic!("{text}: {error}"));
+        }
+    }
+
+    #[test]
+    fn fused_bridged_and_spiro_with_fused_blocks_remain_outside_scope() {
         for (text, reason) in [
-            ("C1CCC2(CC1)CCCC2", "spiro"),
             ("C1CCC2CCCCC2C1", "fused and bridged"),
             ("C1CC2CCC1C2", "fused and bridged"),
+            ("C1CC2(C1)CCC1CCCCC12", "fused and bridged"),
         ] {
             let error = read_smiles(text).unwrap_err();
             assert!(error.contains(reason), "{text}: {error}");

@@ -428,7 +428,7 @@ fn add_front_modifiers(parts: &AssemblyParts, word: &str) -> String {
     format!("{mods} {word}")
 }
 pub fn assemble_name_raw(parts: &mut AssemblyParts) -> Result<String, String> {
-    if parts.is_bicycle || parts.is_spiro || parts.is_polycycle {
+    if parts.is_bicycle {
         return Err("Unsupported polycyclic assembly".into());
     }
     promote_acyl_substituent_name(parts);
@@ -495,6 +495,10 @@ mod tests {
             (
                 "C1=CNC(=O)C(=C1)C(=O)NC2=NC(=CS2)CC(=O)NC3=CC=C(C=C3)C(=O)N",
                 "N-(4-(2-((4-carbamoylphenyl)amino)-2-oxoethyl)-1,3-thiazol-2-yl)-2-oxo-1,2-dihydropyridine-3-carboxamide",
+            ),
+            (
+                "CC1=CC(=O)OC(=C1C(=O)NC2CC2)C",
+                "N-cyclopropyl-4,6-dimethyl-2-oxopyran-5-carboxamide",
             ),
         ] {
             assert_eq!(

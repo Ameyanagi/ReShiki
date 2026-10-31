@@ -2,6 +2,7 @@
 use super::{
     chains::{RingSystem, canonical_ranks},
     molecule::{AtomSet, Molecule},
+    ring_parent::RingParent,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -9,6 +10,12 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct ParentSelection {
     pub paths: Vec<Vec<usize>>,
     pub is_ring: bool,
+    pub is_bicycle: bool,
+    pub is_spiro: bool,
+    pub is_polycycle: bool,
+    pub xyz: (usize, usize, usize),
+    pub polycycle_descriptor: Option<String>,
+    pub ring_parent: Option<RingParent>,
     pub fixed_start_required: bool,
 }
 
@@ -22,6 +29,16 @@ impl ParentSelection {
     pub fn with_fixed_start(mut self, fixed: bool) -> Self {
         self.fixed_start_required = fixed;
         self
+    }
+    pub fn requires_fixed_substituent_start(&self) -> bool {
+        self.fixed_start_required
+            || self
+                .ring_parent
+                .as_ref()
+                .is_some_and(RingParent::requires_fixed_numbering)
+            || self.is_bicycle
+            || self.is_spiro
+            || self.is_polycycle
     }
 }
 
@@ -47,6 +64,7 @@ fn score(
     mol: &Molecule,
     path: &[usize],
     is_ring: bool,
+    ring_count: usize,
     principal: &[usize],
     ranks: &BTreeMap<usize, usize>,
 ) -> ParentScore {
@@ -113,7 +131,7 @@ fn score(
         ring_seniority: is_ring.then(|| {
             (
                 senior_hetero,
-                -1,
+                -(ring_count as i64),
                 -(path.len() as i64),
                 -hetero_count,
                 hetero_counts.clone(),
@@ -144,10 +162,16 @@ pub fn select_principal_parent(
         .filter(|p| !p.is_empty())
         .map(|path| {
             (
-                score(mol, path, false, principal_carbons, &ranks),
+                score(mol, path, false, 0, principal_carbons, &ranks),
                 ParentSelection {
                     paths: vec![path.clone()],
                     is_ring: false,
+                    is_bicycle: false,
+                    is_spiro: false,
+                    is_polycycle: false,
+                    xyz: (0, 0, 0),
+                    polycycle_descriptor: None,
+                    ring_parent: None,
                     fixed_start_required: false,
                 },
             )
@@ -159,10 +183,29 @@ pub fn select_principal_parent(
             .filter(|rs| !rs.paths.is_empty())
             .map(|rs| {
                 (
-                    score(mol, &rs.paths[0], true, principal_carbons, &ranks),
+                    score(
+                        mol,
+                        &rs.paths[0],
+                        true,
+                        if rs.is_polycycle {
+                            3
+                        } else if rs.is_bicycle || rs.is_spiro {
+                            2
+                        } else {
+                            1
+                        },
+                        principal_carbons,
+                        &ranks,
+                    ),
                     ParentSelection {
                         paths: rs.paths.clone(),
                         is_ring: true,
+                        is_bicycle: rs.is_bicycle,
+                        is_spiro: rs.is_spiro,
+                        is_polycycle: rs.is_polycycle,
+                        xyz: (rs.x, rs.y, if rs.is_bicycle { rs.z } else { 0 }),
+                        polycycle_descriptor: rs.polycycle_descriptor.clone(),
+                        ring_parent: Some(RingParent::from_ring_system(rs)),
                         fixed_start_required: false,
                     },
                 )

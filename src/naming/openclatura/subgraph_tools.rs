@@ -182,7 +182,10 @@ pub fn add_parent_features(
             };
             let loc = if high_idx == low_idx + 1 {
                 low_loc.clone()
-            } else if low_idx == 0 && high_idx == numbered_path.len() - 1 {
+            } else if low_idx == 0
+                && high_idx == numbered_path.len() - 1
+                && !(parts.is_bicycle || parts.is_spiro || parts.is_polycycle)
+            {
                 high_loc.clone()
             } else {
                 format!("{low_loc}({high_loc})")
@@ -251,6 +254,15 @@ pub fn add_indicated_hydrogens(
         return;
     }
     for &idx in numbered_path {
+        // The retained hydride already states template-inherent saturation.
+        // Counting it again would turn 2-oxopyran into 2-oxo-2H-pyran.
+        if parts
+            .retained_parent_metadata
+            .as_ref()
+            .is_some_and(|metadata| metadata.inherent_saturated_locants.contains(&locants[&idx]))
+        {
+            continue;
+        }
         let atom = &mol.atoms[&idx];
         if !matches!(
             atom.symbol.as_str(),
