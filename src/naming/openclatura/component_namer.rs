@@ -28,11 +28,11 @@ use super::{
 };
 use std::collections::BTreeMap;
 
-pub fn name_component(mol: &Molecule, component_atoms: &AtomSet) -> Result<String, String> {
+pub(super) fn name_component(mol: &Molecule, component_atoms: &AtomSet) -> Result<String, String> {
     name_component_with_citation(mol, component_atoms, None)
 }
 
-pub fn name_component_with_citation(
+pub(super) fn name_component_with_citation(
     mol: &Molecule,
     component_atoms: &AtomSet,
     citation: Option<&str>,
@@ -55,7 +55,7 @@ enum ComponentResult {
     Plan(Box<ParentAssemblyPlan>),
 }
 
-pub fn build_spiro_component_parts(
+pub(super) fn build_spiro_component_parts(
     mol: &Molecule,
     component_atoms: &AtomSet,
     junction: usize,
@@ -180,7 +180,7 @@ fn component_pipeline(
         mol,
         path,
         &mut mapping,
-        &handled,
+        handled,
         &principal_atoms,
         &base_exclude,
         &sub_exclude,
@@ -371,7 +371,7 @@ fn component_pipeline(
     Ok(ComponentResult::Plan(Box::new(plan)))
 }
 
-pub fn render_component_parent(
+pub(super) fn render_component_parent(
     mol: &Molecule,
     parts: &mut super::assembly_parts::AssemblyParts,
     numbered: &[usize],
@@ -406,18 +406,16 @@ pub fn render_component_parent(
     Ok(super::assembler::post_process_name(&name))
 }
 
-#[allow(clippy::too_many_arguments)]
 fn collect_component_branch_substituents(
     mol: &Molecule,
     path: &[usize],
     mapping: &mut BTreeMap<usize, Vec<SubstituentItem>>,
-    handled: &AtomSet,
+    mut handled: AtomSet,
     principal: &AtomSet,
     base_exclude: &AtomSet,
     sub_exclude: &AtomSet,
 ) -> Result<(), String> {
     let main: AtomSet = path.iter().copied().collect();
-    let mut handled = handled.clone();
     for &idx in path {
         let roots: Vec<_> = mol
             .get_neighbors(idx)

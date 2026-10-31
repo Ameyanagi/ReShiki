@@ -17,6 +17,9 @@ use super::perception::{PerceivedGroup, perceive_groups};
 use super::rules::{elements, multipliers, retained, stems};
 use super::subgraph_tools::subgraph_component;
 
+const SHORTCUT_STEREO_ERROR: &str =
+    "openclatura: shortcut cannot preserve configured stereochemistry";
+
 fn set<const N: usize>(atoms: [usize; N]) -> AtomSet {
     atoms.into_iter().collect()
 }
@@ -26,21 +29,15 @@ fn all_atoms(mol: &Molecule) -> AtomSet {
 fn outside(mol: &Molecule, atoms: &AtomSet) -> AtomSet {
     all_atoms(mol).difference(atoms).copied().collect()
 }
-fn order(mol: &Molecule, u: usize, v: usize) -> usize {
-    mol.get_bond(u, v).map_or(0, |b| b.order)
-}
-fn stereo_configured(mol: &Molecule, idx: usize) -> bool {
-    mol.atoms[&idx].stereo.is_some() || mol.atoms[&idx].raw_stereo.is_some()
-}
 fn require_stereo_free_core(mol: &Molecule, atoms: &AtomSet) -> Result<(), String> {
     // Upstream divergence: manually spelled shortcut cores must not discard configured atom or bond stereo.
-    if atoms.iter().any(|&idx| stereo_configured(mol, idx))
+    if atoms.iter().any(|&idx| mol.atoms[&idx].has_stereo())
         || mol
             .bonds
             .values()
             .any(|bond| atoms.contains(&bond.u) && atoms.contains(&bond.v) && bond.stereo.is_some())
     {
-        return Err("openclatura: shortcut cannot preserve configured stereochemistry".into());
+        return Err(SHORTCUT_STEREO_ERROR.into());
     }
     Ok(())
 }
@@ -59,13 +56,16 @@ fn branch_name(
     name_subgraph_with_upstream(mol, root, &exclude, Some(upstream))
 }
 
-pub fn single_atom_component_name(mol: &Molecule, component_atoms: &AtomSet) -> Option<String> {
+pub(super) fn single_atom_component_name(
+    mol: &Molecule,
+    component_atoms: &AtomSet,
+) -> Option<String> {
     if component_atoms.len() != 1 {
         return None;
     }
     let atom = &mol.atoms[component_atoms.first()?];
     // Upstream divergence: a retained single-atom hydride does not cite atom stereo.
-    if stereo_configured(mol, atom.idx) {
+    if mol.atoms[&atom.idx].has_stereo() {
         return None;
     }
     if atom.charge > 0 && RULES.ions.single_atom_cations.contains(&atom.symbol) {
@@ -115,7 +115,11 @@ pub fn single_atom_component_name(mol: &Molecule, component_atoms: &AtomSet) -> 
         .cloned()
 }
 
-type SmallSignature = (Vec<(String, i32)>, Vec<(String, String, usize)>);
+#[derive(PartialEq, Eq)]
+struct SmallSignature {
+    atoms: Vec<(String, i32)>,
+    bonds: Vec<(String, String, usize)>,
+}
 type SmallParentSpec<'a> = (
     &'a str,
     &'a [(&'a str, i32)],
@@ -137,7 +141,10 @@ fn small_signature(mol: &Molecule, atoms: &AtomSet) -> SmallSignature {
         })
         .collect();
     bonds.sort();
-    (atom_sig, bonds)
+    SmallSignature {
+        atoms: atom_sig,
+        bonds,
+    }
 }
 
 fn small_inorganic_parent_name(mol: &Molecule, atoms: &AtomSet) -> Option<String> {
@@ -284,7 +291,7 @@ fn small_inorganic_parent_name(mol: &Molecule, atoms: &AtomSet) -> Option<String
             .map(|&(s, t, o)| (s.min(t).to_owned(), s.max(t).to_owned(), o))
             .collect();
         b.sort();
-        if signature == (a, b) {
+        if signature == (SmallSignature { atoms: a, bonds: b }) {
             return Some(name.to_owned());
         }
     }
@@ -358,12 +365,13 @@ fn alkyl_ligand_name(
     let mut degree_sum = 0;
     for &idx in &carbons {
         for &n in mol.get_neighbors(idx) {
-            if atoms.contains(&n) && n != central {
-                if order(mol, idx, n) != 1 || !mol.atoms[&n].is_carbon() {
-                    return Ok(String::new());
-                }
-                degree_sum += 1;
+            if !atoms.contains(&n) || n == central {
+                continue;
             }
+            if mol.bond_order(idx, n) != 1 || !mol.atoms[&n].is_carbon() {
+                return Ok(String::new());
+            }
+            degree_sum += 1;
         }
     }
     if degree_sum / 2 != carbons.len() - 1 {
@@ -483,7 +491,7 @@ fn azine_roles(mol: &Molecule, atoms: &AtomSet) -> Vec<[AzineSide; 2]> {
             if n2 <= n1
                 || !atoms.contains(&n2)
                 || mol.atoms[&n2].symbol != "N"
-                || order(mol, n1, n2) != 1
+                || mol.bond_order(n1, n2) != 1
             {
                 continue;
             }
@@ -493,7 +501,9 @@ fn azine_roles(mol: &Molecule, atoms: &AtomSet) -> Vec<[AzineSide; 2]> {
                     .iter()
                     .copied()
                     .filter(|n| {
-                        *n != blocked && mol.atoms[n].is_carbon() && order(mol, nitrogen, *n) == 2
+                        *n != blocked
+                            && mol.atoms[n].is_carbon()
+                            && mol.bond_order(nitrogen, *n) == 2
                     })
                     .collect();
                 (candidates.len() == 1).then(|| candidates[0])
@@ -544,7 +554,7 @@ fn is_amidino_carbon(mol: &Molecule, carbon: usize, nitrogen: usize) -> bool {
     others.len() == 2
         && others
             .iter()
-            .all(|n| mol.atoms[n].symbol == "N" && order(mol, carbon, *n) == 1)
+            .all(|n| mol.atoms[n].symbol == "N" && mol.bond_order(carbon, *n) == 1)
 }
 
 fn hydrazone_stereo_prefix(mol: &Molecule, carbon: usize, nitrogen: usize, parent: &str) -> String {
@@ -579,8 +589,8 @@ fn simple_azine_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<St
             carbonyl_equivalent_side_name(mol, &sides[1], true)?,
         ];
         if parents.iter().chain(&ylidenes).any(String::is_empty) {
-            for parent_side in 0..2 {
-                if parents[parent_side].is_empty() {
+            for (parent_side, parent) in parents.iter().enumerate() {
+                if parent.is_empty() {
                     continue;
                 }
                 let other = &sides[1 - parent_side];
@@ -593,16 +603,8 @@ fn simple_azine_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<St
                 )?);
                 if !ylidene.is_empty() && ylidene.ends_with("ylidene") {
                     let side = &sides[parent_side];
-                    let stereo = hydrazone_stereo_prefix(
-                        mol,
-                        side.carbon,
-                        side.nitrogen,
-                        &parents[parent_side],
-                    );
-                    return Ok(Some(format!(
-                        "{stereo}{} {ylidene}hydrazone",
-                        parents[parent_side]
-                    )));
+                    let stereo = hydrazone_stereo_prefix(mol, side.carbon, side.nitrogen, parent);
+                    return Ok(Some(format!("{stereo}{} {ylidene}hydrazone", parent)));
                 }
             }
             let amidino = sides
@@ -679,7 +681,7 @@ fn simple_azine_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<St
             )
             .is_some_and(|bond| bond.stereo.is_some())
         {
-            return Err("openclatura: shortcut cannot preserve configured stereochemistry".into());
+            return Err(SHORTCUT_STEREO_ERROR.into());
         }
         let stereo =
             hydrazone_stereo_prefix(mol, side.carbon, side.nitrogen, &parents[parent_side]);
@@ -772,7 +774,7 @@ fn simple_cycle_unsaturation_locants(mol: &Molecule, path: &[usize]) -> Vec<usiz
     path.iter()
         .enumerate()
         .filter_map(|(i, atom)| {
-            (order(mol, *atom, path[(i + 1) % path.len()]) == 2).then_some(i + 1)
+            (mol.bond_order(*atom, path[(i + 1) % path.len()]) == 2).then_some(i + 1)
         })
         .collect()
 }
@@ -830,7 +832,7 @@ fn simple_replacement_cycle_name(mol: &Molecule, path: &[usize]) -> String {
     )
 }
 
-fn retained_locant_sort_key(locant: &str) -> (usize, &str) {
+fn carbonyl_side_locant_sort_key(locant: &str) -> (usize, &str) {
     let digits: String = locant.chars().take_while(char::is_ascii_digit).collect();
     (digits.parse().unwrap_or(999), locant)
 }
@@ -851,7 +853,7 @@ fn carbaldehyde_side_ring(mol: &Molecule, side: &AzineSide) -> Option<(AtomSet, 
         .get_neighbors(side.carbon)
         .iter()
         .copied()
-        .filter(|n| ring.contains(n) && order(mol, side.carbon, *n) == 1)
+        .filter(|n| ring.contains(n) && mol.bond_order(side.carbon, *n) == 1)
         .collect();
     (neighbors.len() == 1).then(|| (ring, neighbors[0]))
 }
@@ -888,7 +890,7 @@ fn carbonyl_equivalent_side_name_unchecked(
                     .locant_maps
                     .iter()
                     .filter_map(|map| map.get(&attachment))
-                    .min_by_key(|s| retained_locant_sort_key(s))
+                    .min_by_key(|s| carbonyl_side_locant_sort_key(s))
                     .cloned()
                     .unwrap_or_else(|| {
                         if homocyclic {
@@ -1043,7 +1045,7 @@ fn simple_carbonyl_side_name(
     if edges.len() != side.atoms.len() - 1
         || edges
             .iter()
-            .any(|(a, b)| !matches!(order(mol, *a, *b), 1..=3))
+            .any(|(a, b)| !matches!(mol.bond_order(*a, *b), 1..=3))
     {
         return Ok(String::new());
     }
@@ -1076,7 +1078,7 @@ fn simple_carbonyl_side_name(
     // Only name sides whose spelling is independent of that incidental order.
     let bond_orders: Vec<_> = path
         .windows(2)
-        .map(|pair| order(mol, pair[0], pair[1]))
+        .map(|pair| mol.bond_order(pair[0], pair[1]))
         .collect();
     if !bond_orders.iter().eq(bond_orders.iter().rev()) {
         return Err("openclatura: azine unsaturation depends on upstream set ordering".into());
@@ -1089,7 +1091,9 @@ fn simple_carbonyl_side_name(
         let locants: Vec<_> = path
             .windows(2)
             .enumerate()
-            .filter_map(|(i, pair)| (order(mol, pair[0], pair[1]) == bond_order).then_some(i + 1))
+            .filter_map(|(i, pair)| {
+                (mol.bond_order(pair[0], pair[1]) == bond_order).then_some(i + 1)
+            })
             .collect();
         if !locants.is_empty() {
             let multiplier = if locants.len() == 1 {
@@ -1144,10 +1148,10 @@ fn sulfoxide_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Strin
             return Ok(None);
         }
         if mol.atoms[&n].symbol == "O"
-            && (order(mol, central, n) == 2 || mol.atoms[&n].charge == -1)
+            && (mol.bond_order(central, n) == 2 || mol.atoms[&n].charge == -1)
         {
             oxygens.push(n);
-        } else if mol.atoms[&n].is_carbon() && order(mol, central, n) == 1 {
+        } else if mol.atoms[&n].is_carbon() && mol.bond_order(central, n) == 1 {
             roots.push(n);
         } else {
             return Ok(None);
@@ -1178,7 +1182,7 @@ fn sulfoxide_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Strin
         (
             mol.atoms[&central].charge,
             mol.atoms[&oxygen].charge,
-            order(mol, central, oxygen)
+            mol.bond_order(central, oxygen)
         ),
         (0, 0, 2) | (1, -1, 1)
     ) {
@@ -1187,7 +1191,7 @@ fn sulfoxide_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Strin
     require_stereo_free_core(mol, &oxygens.into_iter().collect())?;
     // Upstream divergence: an unassigned sulfoxide raw tag is not a rendered absolute descriptor.
     if mol.atoms[&central].raw_stereo.is_some() {
-        return Err("openclatura: shortcut cannot preserve configured stereochemistry".into());
+        return Err(SHORTCUT_STEREO_ERROR.into());
     }
     ligands.sort();
     let stereo = mol.atoms[&central]
@@ -1218,7 +1222,7 @@ fn competing_principal_group(mol: &Molecule, atoms: &AtomSet, central: usize) ->
 
 fn terminal_ligand_name(mol: &Molecule, idx: usize) -> String {
     // Upstream divergence: neutral terminal prefixes do not represent formal charge or atom stereo.
-    if mol.atoms[&idx].charge != 0 || stereo_configured(mol, idx) {
+    if mol.atoms[&idx].charge != 0 || mol.atoms[&idx].has_stereo() {
         return String::new();
     }
     match mol.atoms[&idx].symbol.as_str() {
@@ -1237,7 +1241,7 @@ fn central_ligand_name(
     central: usize,
     neighbor: usize,
 ) -> Result<String, String> {
-    if order(mol, central, neighbor) != 1 {
+    if mol.bond_order(central, neighbor) != 1 {
         return Ok(String::new());
     }
     let name = terminal_ligand_name(mol, neighbor);
@@ -1285,7 +1289,7 @@ fn simple_central_parent_hydride_name(
     }
     let c = centers[0];
     let a = &mol.atoms[&c];
-    if stereo_configured(mol, c) {
+    if mol.atoms[&c].has_stereo() {
         return Ok(None);
     }
     let senior = matches!(
@@ -1321,13 +1325,15 @@ fn simple_central_parent_hydride_name(
             && a.total_h_count == 0
             && mol.atoms[&n].symbol == "O"
             && mol.degree(n) == 1
-            && (order(mol, c, n) == 2 || (order(mol, c, n) == 1 && mol.atoms[&n].charge == -1))
+            && (mol.bond_order(c, n) == 2
+                || (mol.bond_order(c, n) == 1 && mol.atoms[&n].charge == -1))
         {
             oxide_oxygen = Some(n);
             continue;
         }
         let mut name = central_ligand_name(mol, atoms, c, n)?;
-        if name.is_empty() && hydrocarbyl && mol.atoms[&n].is_carbon() && order(mol, c, n) == 1 {
+        if name.is_empty() && hydrocarbyl && mol.atoms[&n].is_carbon() && mol.bond_order(c, n) == 1
+        {
             let ligand = component_atoms_until_blocked(mol, atoms, n, &set([c]));
             if !ligand.is_empty()
                 && !ligand.iter().any(|i| mol.atoms[i].charge != 0)
@@ -1351,7 +1357,7 @@ fn simple_central_parent_hydride_name(
     let valence: usize = mol
         .get_neighbors(c)
         .iter()
-        .map(|n| order(mol, c, *n))
+        .map(|n| mol.bond_order(c, *n))
         .sum::<usize>()
         + a.total_h_count.max(a.explicit_h_count);
     let lambda = if oxide_oxygen.is_some()
@@ -1381,10 +1387,19 @@ fn simple_central_parent_hydride_name(
     }))
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OxoLigandRole {
+    Oxo,
+    Oxido,
+    Hydroxy,
+    Alkoxy,
+    Peroxy,
+}
+
 #[derive(Clone, Debug)]
 struct OxoLigand {
     oxygen: usize,
-    role: &'static str,
+    role: OxoLigandRole,
     attachment: Option<usize>,
 }
 #[derive(Clone, Debug)]
@@ -1393,7 +1408,7 @@ struct OxoRole {
     ligands: Vec<OxoLigand>,
 }
 impl OxoRole {
-    fn count(&self, role: &str) -> usize {
+    fn count(&self, role: OxoLigandRole) -> usize {
         self.ligands.iter().filter(|l| l.role == role).count()
     }
     fn core(&self) -> AtomSet {
@@ -1417,11 +1432,11 @@ fn oxo_roles(mol: &Molecule, atoms: &AtomSet) -> Vec<OxoRole> {
         let mut valid = true;
         for &oxygen in mol.get_neighbors(central) {
             let normalized = matches!(mol.atoms[&central].symbol.as_str(), "Cl" | "Br" | "I")
-                && order(mol, central, oxygen) == 1
+                && mol.bond_order(central, oxygen) == 1
                 && mol.atoms[&oxygen].charge < 0
                 && mol.degree(oxygen) == 1;
-            let (role, attachment) = if order(mol, central, oxygen) == 2 || normalized {
-                ("oxo", None)
+            let (role, attachment) = if mol.bond_order(central, oxygen) == 2 || normalized {
+                (OxoLigandRole::Oxo, None)
             } else {
                 let neighbors: Vec<_> = mol
                     .get_neighbors(oxygen)
@@ -1432,16 +1447,16 @@ fn oxo_roles(mol: &Molecule, atoms: &AtomSet) -> Vec<OxoRole> {
                 if neighbors.is_empty() {
                     (
                         if mol.atoms[&oxygen].charge < 0 {
-                            "oxido"
+                            OxoLigandRole::Oxido
                         } else {
-                            "hydroxy"
+                            OxoLigandRole::Hydroxy
                         },
                         None,
                     )
                 } else if neighbors.len() == 1 && atoms.contains(&neighbors[0]) {
                     match mol.atoms[&neighbors[0]].symbol.as_str() {
-                        "C" => ("alkoxy", Some(neighbors[0])),
-                        "O" => ("peroxy", Some(neighbors[0])),
+                        "C" => (OxoLigandRole::Alkoxy, Some(neighbors[0])),
+                        "O" => (OxoLigandRole::Peroxy, Some(neighbors[0])),
                         _ => {
                             valid = false;
                             break;
@@ -1472,8 +1487,12 @@ where
     if atom.total_h_count != 0 {
         return None;
     }
-    let single = role.ligands.iter().filter(|l| l.role != "oxo").count();
-    let double = role.count("oxo");
+    let single = role
+        .ligands
+        .iter()
+        .filter(|l| l.role != OxoLigandRole::Oxo)
+        .count();
+    let double = role.count(OxoLigandRole::Oxo);
     RULES
         .components
         .replacement_parent_oxoacid_specs
@@ -1493,12 +1512,15 @@ fn oxoacid_parent_name(mol: &Molecule, atoms: &AtomSet) -> Option<String> {
         return None;
     }
     let r = &roles[0];
-    if r.count("alkoxy") > 0 || r.count("peroxy") > 0 || r.core() != *atoms {
+    if r.count(OxoLigandRole::Alkoxy) > 0
+        || r.count(OxoLigandRole::Peroxy) > 0
+        || r.core() != *atoms
+    {
         return None;
     }
     let spec = matching_oxo_spec(mol, r)?;
-    let field = if r.count("oxido") > 0
-        && r.count("hydroxy") == 0
+    let field = if r.count(OxoLigandRole::Oxido) > 0
+        && r.count(OxoLigandRole::Hydroxy) == 0
         && spec["ester_suffix"].as_str().is_some_and(|s| !s.is_empty())
     {
         "ester_suffix"
@@ -1542,15 +1564,15 @@ fn ester_modifier_name(
 fn oxoacid_ester_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, String> {
     let mut matches = Vec::new();
     for role in oxo_roles(mol, atoms) {
-        if stereo_configured(mol, role.central) {
+        if mol.atoms[&role.central].has_stereo() {
             continue;
         }
         let core = role.core();
         let central = &mol.atoms[&role.central];
-        if role.count("peroxy") > 0 {
+        if role.count(OxoLigandRole::Peroxy) > 0 {
             // Verified charge-normalized halogen peroxy ester templates.
-            if role.count("peroxy") != 1
-                || role.count("oxo") != 2
+            if role.count(OxoLigandRole::Peroxy) != 1
+                || role.count(OxoLigandRole::Oxo) != 2
                 || role.ligands.len() != 3
                 || central.charge != 2
             {
@@ -1562,7 +1584,11 @@ fn oxoacid_ester_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>,
                 "I" => "peroxyiodate",
                 _ => continue,
             };
-            let Some(peroxy) = role.ligands.iter().find(|l| l.role == "peroxy") else {
+            let Some(peroxy) = role
+                .ligands
+                .iter()
+                .find(|l| l.role == OxoLigandRole::Peroxy)
+            else {
                 continue;
             };
             let Some(distal) = peroxy.attachment else {
@@ -1598,7 +1624,11 @@ fn oxoacid_ester_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>,
         let Some(base) = spec["ester_suffix"].as_str().filter(|s| !s.is_empty()) else {
             continue;
         };
-        let esters: Vec<_> = role.ligands.iter().filter(|l| l.role == "alkoxy").collect();
+        let esters: Vec<_> = role
+            .ligands
+            .iter()
+            .filter(|l| l.role == OxoLigandRole::Alkoxy)
+            .collect();
         if esters.is_empty() {
             continue;
         }
@@ -1627,7 +1657,7 @@ fn oxoacid_ester_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>,
             continue;
         }
         require_stereo_free_core(mol, &core)?;
-        let hydroxy = role.count("hydroxy");
+        let hydroxy = role.count(OxoLigandRole::Hydroxy);
         let suffix = if hydroxy == 0 || spec.get("charge").is_some() {
             base.to_owned()
         } else {
@@ -1663,7 +1693,7 @@ fn organophosphorus_acid_name(
     let c = centers[0];
     let a = &mol.atoms[&c];
     if get_cyclic_atoms(mol, &AtomSet::new()).contains(&c)
-        || stereo_configured(mol, c)
+        || mol.atoms[&c].has_stereo()
         || competing_principal_group(mol, atoms, c)
     {
         return Ok(None);
@@ -1678,7 +1708,7 @@ fn organophosphorus_acid_name(
             return Ok(None);
         }
         let atom = &mol.atoms[&n];
-        let bond = order(mol, c, n);
+        let bond = mol.bond_order(c, n);
         if atom.symbol == "O"
             && (bond == 2 || !phosphinic && bond == 1 && atom.charge == -1 && mol.degree(n) == 1)
         {
@@ -1789,7 +1819,7 @@ fn organoboronic_acid_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Str
     }
     let (mut hydroxy, mut roots) = (Vec::new(), Vec::new());
     for &n in mol.get_neighbors(c) {
-        if !atoms.contains(&n) || order(mol, c, n) != 1 {
+        if !atoms.contains(&n) || mol.bond_order(c, n) != 1 {
             return Ok(None);
         }
         let a = &mol.atoms[&n];
@@ -1911,7 +1941,7 @@ fn chain_oxide_oxygens(
                     && mol.atoms[n].symbol == "O"
                     && mol.atoms[n].charge == -1
                     && mol.degree(*n) == 1
-                    && order(mol, i, *n) == 1
+                    && mol.bond_order(i, *n) == 1
             })
             .collect();
         if oxygens.len() != 1 {
@@ -2081,7 +2111,7 @@ fn homonuclear_chain_parent_name(
             return Ok(None);
         }
         let (attachment, root) = links[0];
-        let bond = order(mol, attachment, root);
+        let bond = mol.bond_order(attachment, root);
         if !matches!(bond, 1 | 2) || (bond == 2 && chain.len() <= 2) {
             return Ok(None);
         }
@@ -2102,13 +2132,16 @@ fn homonuclear_chain_parent_name(
     if covered != ligand_atoms {
         return Ok(None);
     }
-    let forward: Vec<_> = chain.windows(2).map(|p| order(mol, p[0], p[1])).collect();
-    type Choice = (
-        (usize, Vec<usize>, Vec<usize>, Vec<usize>),
-        String,
-        Vec<(usize, String)>,
-        Vec<usize>,
-    );
+    let forward: Vec<_> = chain
+        .windows(2)
+        .map(|p| mol.bond_order(p[0], p[1]))
+        .collect();
+    struct Choice {
+        key: (usize, Vec<usize>, Vec<usize>, Vec<usize>),
+        parent: String,
+        placed: Vec<(usize, String)>,
+        oriented: Vec<usize>,
+    }
     let mut best: Option<Choice> = None;
     for (oriented, orders) in [
         (chain.clone(), forward.clone()),
@@ -2140,20 +2173,31 @@ fn homonuclear_chain_parent_name(
             sorted_locs,
             placed.iter().map(|(l, _)| *l).collect(),
         );
-        if best.as_ref().is_none_or(|b| key < b.0) {
-            best = Some((key, parent, placed, oriented));
+        if best.as_ref().is_none_or(|best| key < best.key) {
+            best = Some(Choice {
+                key,
+                parent,
+                placed,
+                oriented,
+            });
         }
     }
-    let Some((_, parent, placed, oriented)) = best else {
+    let Some(Choice {
+        parent,
+        placed,
+        oriented,
+        ..
+    }) = best
+    else {
         return Ok(None);
     };
     // Upstream divergence: homonuclear chain assembly renders bond descriptors but no backbone atom stereo.
     if chain_set
         .iter()
         .chain(&oxide_atoms)
-        .any(|&idx| stereo_configured(mol, idx))
+        .any(|&idx| mol.atoms[&idx].has_stereo())
     {
-        return Err("openclatura: shortcut cannot preserve configured stereochemistry".into());
+        return Err(SHORTCUT_STEREO_ERROR.into());
     }
     let prefix = locanted_ligand_prefix(&placed);
     let mut name = format!("{prefix}{parent}");
@@ -2217,7 +2261,7 @@ fn nitrogen_ligands(
                 || branch.iter().any(|i| {
                     mol.get_neighbors(*i)
                         .iter()
-                        .any(|n| branch.contains(n) && order(mol, *i, *n) != 1)
+                        .any(|n| branch.contains(n) && mol.bond_order(*i, *n) != 1)
                 }))
         {
             return Ok(None);
@@ -2244,7 +2288,9 @@ fn hydroxyurea_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Str
                     .get_neighbors(*i)
                     .iter()
                     .filter(|n| {
-                        atoms.contains(n) && mol.atoms[n].symbol == "O" && order(mol, *i, **n) == 2
+                        atoms.contains(n)
+                            && mol.atoms[n].symbol == "O"
+                            && mol.bond_order(*i, **n) == 2
                     })
                     .count()
                     == 1
@@ -2252,7 +2298,9 @@ fn hydroxyurea_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Str
                     .get_neighbors(*i)
                     .iter()
                     .filter(|n| {
-                        atoms.contains(n) && mol.atoms[n].symbol == "N" && order(mol, *i, **n) == 1
+                        atoms.contains(n)
+                            && mol.atoms[n].symbol == "N"
+                            && mol.bond_order(*i, **n) == 1
                     })
                     .count()
                     == 2
@@ -2274,7 +2322,7 @@ fn hydroxyurea_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Str
         .get_neighbors(c)
         .iter()
         .copied()
-        .filter(|n| atoms.contains(n) && mol.atoms[n].symbol == "N" && order(mol, c, *n) == 1)
+        .filter(|n| atoms.contains(n) && mol.atoms[n].symbol == "N" && mol.bond_order(c, *n) == 1)
         .collect();
     if nitrogens
         .iter()
@@ -2289,7 +2337,10 @@ fn hydroxyurea_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Str
             .iter()
             .copied()
             .filter(|i| {
-                atoms.contains(i) && *i != c && mol.atoms[i].symbol == "O" && order(mol, n, *i) == 1
+                atoms.contains(i)
+                    && *i != c
+                    && mol.atoms[i].symbol == "O"
+                    && mol.bond_order(n, *i) == 1
             })
             .collect();
         if !oxygens.is_empty() {
@@ -2371,7 +2422,7 @@ fn sulfamic_acid_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>,
         let double: Vec<_> = oxygens
             .iter()
             .copied()
-            .filter(|o| order(mol, c, *o) == 2)
+            .filter(|o| mol.bond_order(c, *o) == 2)
             .collect();
         let single: Vec<_> = oxygens
             .iter()
@@ -2456,7 +2507,7 @@ fn azinic_acid_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, S
     let Some((n, root, oxygens)) = centers.pop() else {
         return Ok(None);
     };
-    let bond = order(mol, n, root);
+    let bond = mol.bond_order(n, root);
     if !matches!(bond, 1 | 2) {
         return Ok(None);
     }
@@ -2505,7 +2556,7 @@ fn phosphane_borane_zwitterion_name(
     let Some(&(p, b)) = pairs.first() else {
         return Ok(None);
     };
-    if stereo_configured(mol, p) {
+    if mol.atoms[&p].has_stereo() {
         return Ok(None);
     }
     let roots: Vec<_> = mol
@@ -2560,10 +2611,10 @@ fn sulfonium_ylide_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String
         return Ok(None);
     }
     let (s, c) = (sulfurs[0], carbons[0]);
-    if stereo_configured(mol, s)
+    if mol.atoms[&s].has_stereo()
         || mol.atoms[&s].total_h_count != 0
         || mol.atoms[&s].explicit_h_count != 0
-        || order(mol, s, c) != 1
+        || mol.bond_order(s, c) != 1
     {
         return Ok(None);
     }
@@ -2641,7 +2692,7 @@ fn sulfonium_ylide_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String
             && sub_atoms.iter().all(|i| {
                 mol.get_neighbors(*i)
                     .iter()
-                    .all(|n| !sub_atoms.contains(n) || order(mol, *i, *n) == 1)
+                    .all(|n| !sub_atoms.contains(n) || mol.bond_order(*i, *n) == 1)
             });
         if linear {
             return Ok(Some(format!(
@@ -2671,7 +2722,7 @@ fn nitrogen_chalcogenide_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<
             if !atoms.contains(&ch)
                 || e.charge >= 0
                 || mol.degree(ch) != 1
-                || order(mol, n, ch) != 1
+                || mol.bond_order(n, ch) != 1
                 || section("chalcogen_elements")[&e.symbol]["nitrogen_chalcogenide_citation"]
                     .as_str()
                     != Some("functional_class")
@@ -2687,7 +2738,7 @@ fn nitrogen_chalcogenide_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<
             if others.is_empty() || others.iter().any(|i| !mol.atoms[i].is_carbon()) {
                 continue;
             }
-            let orders: Vec<_> = others.iter().map(|i| order(mol, n, *i)).collect();
+            let orders: Vec<_> = others.iter().map(|i| mol.bond_order(n, *i)).collect();
             let imine = orders.iter().filter(|o| **o == 2).count() == 1
                 && orders.iter().all(|o| matches!(o, 1 | 2));
             let amine = orders.iter().all(|o| *o == 1);
@@ -2767,9 +2818,9 @@ fn peroxide_linkage_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Strin
         if [(left[0], l), (right[0], r)]
             .iter()
             .any(|(attachment, linker)| {
-                mol.get_neighbors(*attachment)
-                    .iter()
-                    .any(|n| n != linker && is_chalcogen(*n) && order(mol, *attachment, *n) == 2)
+                mol.get_neighbors(*attachment).iter().any(|n| {
+                    n != linker && is_chalcogen(*n) && mol.bond_order(*attachment, *n) == 2
+                })
             })
         {
             continue;
@@ -2892,7 +2943,7 @@ fn anhydride_class_name(mol: &Molecule, path: &[usize]) -> Option<String> {
             .replace("{replacement}", &replacement),
     )
 }
-pub fn try_name_anhydride_component(
+pub(super) fn try_name_anhydride_component(
     mol: &Molecule,
     groups: &[PerceivedGroup],
     principal_key: Option<&str>,
@@ -2941,11 +2992,11 @@ pub fn try_name_anhydride_component(
 }
 
 #[derive(Clone, Debug)]
-pub struct StructuralParentName {
-    pub name: String,
+pub(super) struct StructuralParentName {
+    pub(super) name: String,
     /// Only the homonuclear-chain route supplies the chain audit plan used by
     /// the upstream component-level suffix preference exception.
-    pub is_chain: bool,
+    pub(super) is_chain: bool,
 }
 
 impl StructuralParentName {
@@ -2957,7 +3008,7 @@ impl StructuralParentName {
     }
 }
 
-pub fn blocking_suffix_defers_to_chain_parent(
+pub(super) fn blocking_suffix_defers_to_chain_parent(
     mol: &Molecule,
     atoms: &AtomSet,
     groups: &[PerceivedGroup],
@@ -2992,14 +3043,14 @@ pub fn blocking_suffix_defers_to_chain_parent(
 }
 
 #[cfg(test)]
-pub fn structural_replacement_parent_name(
+fn structural_replacement_parent_name(
     mol: &Molecule,
     atoms: &AtomSet,
 ) -> Result<Option<String>, String> {
     Ok(structural_replacement_parent_result(mol, atoms)?.map(|result| result.name))
 }
 
-pub fn structural_replacement_parent_result(
+pub(super) fn structural_replacement_parent_result(
     mol: &Molecule,
     atoms: &AtomSet,
 ) -> Result<Option<StructuralParentName>, String> {

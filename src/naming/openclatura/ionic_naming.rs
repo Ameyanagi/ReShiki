@@ -15,7 +15,7 @@ struct ChargeSite {
 }
 
 /// Admit oxo protonation only where the naming grammar preserves its charge.
-pub fn validate_heteroatom_oxo_charge_states(mol: &Molecule) -> Result<(), String> {
+pub(super) fn validate_heteroatom_oxo_charge_states(mol: &Molecule) -> Result<(), String> {
     for (&id, atom) in &mol.atoms {
         // Upstream divergence: neutral imine suffixes do not encode a terminal
         // imine anion. Decline before parent selection can lose its N charge.
@@ -93,7 +93,7 @@ fn sites(
         .collect()
 }
 
-pub fn apply_anionic_parent_names(
+pub(super) fn apply_anionic_parent_names(
     name: &str,
     mol: &Molecule,
     path: &[usize],
@@ -336,9 +336,8 @@ fn indicated_end(text: &str, start: usize) -> Option<usize> {
 /// Walk the same ASCII parent-token grammar used by upstream's non-greedy
 /// regular expressions, including parenthesized numeric fused-ring locants.
 fn stem_ends(text: &str, start: usize, grammar: StemGrammar) -> Vec<usize> {
-    let mut ends = Vec::new();
-    let mut cursor = start;
-    while let Some(&b) = text.as_bytes().get(cursor) {
+    std::iter::successors(Some(start), |&cursor| {
+        let &b = text.as_bytes().get(cursor)?;
         let allowed = match grammar {
             StemGrammar::Simple => simple(b),
             StemGrammar::Rich => rich(b),
@@ -348,21 +347,19 @@ fn stem_ends(text: &str, start: usize, grammar: StemGrammar) -> Vec<usize> {
             StemGrammar::Ketone => rich(b),
         };
         if allowed {
-            cursor += 1;
+            Some(cursor + 1)
         } else if cursor > start && !matches!(grammar, StemGrammar::Simple) && b == b'(' {
-            let Some(end) = digits_end(text, cursor + 1) else {
-                break;
-            };
+            let end = digits_end(text, cursor + 1)?;
             if text.as_bytes().get(end) != Some(&b')') {
-                break;
+                return None;
             }
-            cursor = end + 1;
+            Some(end + 1)
         } else {
-            break;
+            None
         }
-        ends.push(cursor);
-    }
-    ends
+    })
+    .skip(1)
+    .collect()
 }
 
 // Match callbacks return the consumed suffix length and the replacement. The
@@ -453,9 +450,10 @@ fn accepts(key: &str, symbol: &str) -> bool {
         .and_then(|rule| rule.get("atom_symbols"))
         .and_then(serde_json::Value::as_array)
         .is_some_and(|symbols| {
-            symbols
-                .iter()
-                .any(|s| matches!(s.as_str(), Some("*")) || s.as_str() == Some(symbol))
+            symbols.iter().any(|s| {
+                s.as_str()
+                    .is_some_and(|allowed| allowed == "*" || allowed == symbol)
+            })
         })
 }
 
@@ -558,7 +556,6 @@ fn apply_suffix_rule(name: &str, site: &ChargeSite, key: &str) -> String {
             })
         }
         "terminal_characteristic_suffix_ide" => {
-            let mut result = name.to_owned();
             for suffix in ["dione", "diamine", "aminium", "iminium", "diazonium"] {
                 let Some(stem) = name.strip_suffix(&format!("-{suffix}")) else {
                     continue;
@@ -566,17 +563,17 @@ fn apply_suffix_rule(name: &str, site: &ChargeSite, key: &str) -> String {
                 let Some((parent, suffix_locants)) = stem.rsplit_once('-') else {
                     continue;
                 };
-                if !parent.is_empty()
-                    && !suffix_locants.is_empty()
-                    && suffix_locants
+                if parent.is_empty()
+                    || suffix_locants.is_empty()
+                    || !suffix_locants
                         .split(',')
                         .all(|l| !l.is_empty() && l.bytes().all(|b| b.is_ascii_digit()))
                 {
-                    result = format!("{parent}{operation}-{suffix_locants}-{suffix}");
-                    break;
+                    continue;
                 }
+                return format!("{parent}{operation}-{suffix_locants}-{suffix}");
             }
-            result
+            name.into()
         }
         _ => name.into(),
     }
@@ -727,7 +724,7 @@ fn belongs_to_parent_scope(name: &str, position: usize) -> bool {
     depth == 0
 }
 
-pub fn apply_cationic_imino_parent_prefixes(
+pub(super) fn apply_cationic_imino_parent_prefixes(
     name: &str,
     mol: &Molecule,
     path: &[usize],
@@ -774,7 +771,7 @@ pub fn apply_cationic_imino_parent_prefixes(
     Ok(updated)
 }
 
-pub fn apply_cationic_imino_names(name: &str, mol: &Molecule) -> Result<String, String> {
+pub(super) fn apply_cationic_imino_names(name: &str, mol: &Molecule) -> Result<String, String> {
     let first = mol
         .atoms
         .iter()

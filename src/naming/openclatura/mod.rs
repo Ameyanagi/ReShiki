@@ -3,10 +3,8 @@
 //!
 //! Supports chains, monocycles, retained and systematic fused parents, pure
 //! spiro and von Baeyer ring systems, with independent reconstruction proofs.
-// Graph IDs and numbered parent paths are validated at construction and retain
-// their identity in induced subgraphs. Direct indexing preserves the upstream
-// rule comparisons; immutable JSON Value indexing also returns null for a
-// missing optional field. Neither requires speculative recovery values.
+// Direct graph/path indexing preserves upstream invariants and panic behavior;
+// JSON Value indexing preserves null for missing optional fields.
 #![cfg_attr(not(test), allow(clippy::indexing_slicing))]
 
 mod additive;
@@ -61,7 +59,7 @@ mod von_baeyer;
 /// The naming profile on the worker wire and in generated-name warnings.
 pub(super) const PROFILE: &str = "openclatura 0.4.3 Rust port";
 
-pub fn name_smiles(smiles: &str) -> Result<String, String> {
+pub(super) fn name_smiles(smiles: &str) -> Result<String, String> {
     let mol = graph_io::read_smiles(smiles)?;
     if mol.atoms.values().any(|atom| atom.isotope.is_some()) {
         return Err("openclatura: isotopic naming not ported".into());
@@ -76,7 +74,7 @@ pub fn name_smiles(smiles: &str) -> Result<String, String> {
     // another stereoisomer, or lose their descriptor.
     let cyclic = chains::get_cyclic_atoms(&mol, &molecule::AtomSet::new());
     if mol.atoms.values().any(|atom| {
-        (atom.stereo.is_some() || atom.raw_stereo.is_some())
+        atom.has_stereo()
             && (atom.symbol == "N"
                 || !atom.is_carbon()
                     && cyclic.contains(&atom.idx)
@@ -85,7 +83,7 @@ pub fn name_smiles(smiles: &str) -> Result<String, String> {
                     && mol
                         .get_neighbors(atom.idx)
                         .iter()
-                        .all(|&n| mol.get_bond(atom.idx, n).is_some_and(|b| b.order == 1)))
+                        .all(|&n| mol.bond_order(atom.idx, n) == 1))
     }) {
         return Err("openclatura: N and ring lone-pair stereocentres are not validated".into());
     }
@@ -93,7 +91,7 @@ pub fn name_smiles(smiles: &str) -> Result<String, String> {
     if components.len() != 1 {
         return Err("openclatura: expected one connected component".into());
     }
-    namer::name_component(&mol, &components[0])
+    component_namer::name_component(&mol, &components[0])
 }
 
 /// Count nonbonding electrons on the main-group elements that can carry

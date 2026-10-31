@@ -3,6 +3,7 @@ use super::assembly_parts::{AssemblyParts, RenderedSubstituentName, SubstituentI
 use super::assembly_prefixes::substituent_sort_key;
 use super::chains::{find_all_carbon_paths, find_ring_systems, get_cyclic_atoms};
 use super::component_group_rules::amide_nitrogen;
+use super::component_namer::name_component;
 use super::formatting::{
     format_center_ligands_by, is_complex_prefix, is_composite_prefix, strip_outer_parentheses,
 };
@@ -20,12 +21,8 @@ use super::subgraph_tools::{
 };
 use std::collections::BTreeMap;
 
-pub fn name_component(mol: &Molecule, component_atoms: &AtomSet) -> Result<String, String> {
-    super::component_namer::name_component(mol, component_atoms)
-}
-
 /// Name a branch from its attachment atom and an explicit parent boundary.
-pub fn name_subgraph_with_upstream(
+pub(super) fn name_subgraph_with_upstream(
     mol: &Molecule,
     start_idx: usize,
     exclude_atoms: &AtomSet,
@@ -306,7 +303,7 @@ fn finalize_subgraph_name(mut name: String, parts: &AssemblyParts) -> String {
     format!("({name})")
 }
 
-pub fn name_subgraph_rendered(
+pub(super) fn name_subgraph_rendered(
     mol: &Molecule,
     start: usize,
     exclude: &AtomSet,
@@ -381,8 +378,8 @@ pub fn name_subgraph_rendered(
         &maps,
     )?;
     let mut parts = plan.parts;
-    if retained_metadata.is_some() {
-        parts.retained_parent_metadata = retained_metadata;
+    if let Some(metadata) = retained_metadata {
+        parts.retained_parent_metadata = Some(metadata);
     }
     emit_bond_stereo(
         mol,
@@ -516,27 +513,26 @@ fn acylamino_amido_prefix(
     upstream: Option<usize>,
 ) -> Result<Option<String>, String> {
     let atom = &mol.atoms[&nitrogen];
-    if atom.symbol != "N"
-        || atom.charge != 0
-        || atom.is_aromatic
-        || upstream.is_none()
-        || upstream
-            .and_then(|u| mol.get_bond(nitrogen, u))
-            .is_none_or(|b| b.order != 1)
-    {
+    if atom.symbol != "N" || atom.charge != 0 || atom.is_aromatic {
+        return Ok(None);
+    }
+    let Some(upstream) = upstream else {
+        return Ok(None);
+    };
+    if mol.bond_order(nitrogen, upstream) != 1 {
         return Ok(None);
     }
     let neighbors: Vec<_> = mol
         .get_neighbors(nitrogen)
         .iter()
         .copied()
-        .filter(|n| !exclude.contains(n) && Some(*n) != upstream)
+        .filter(|n| !exclude.contains(n) && *n != upstream)
         .collect();
     let centers: Vec<_> = neighbors
         .iter()
         .copied()
         .filter(|&c| {
-            if mol.get_bond(nitrogen, c).is_none_or(|b| b.order != 1) {
+            if mol.bond_order(nitrogen, c) != 1 {
                 return false;
             }
             let oxo: Vec<_> = mol
@@ -563,10 +559,9 @@ fn acylamino_amido_prefix(
             rest.len() <= 1 && rest.iter().all(|n| mol.atoms[n].is_carbon())
         })
         .collect();
-    if centers.len() != 1 {
+    let &[center] = centers.as_slice() else {
         return Ok(None);
-    }
-    let center = centers[0];
+    };
     let mut blocked = exclude.clone();
     blocked.insert(nitrogen);
     let acid_atoms = subgraph_component(mol, center, &blocked);

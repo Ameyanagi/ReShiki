@@ -1,6 +1,6 @@
-pub mod bonds;
-pub mod elements;
-pub mod elision;
-pub mod multipliers;
-pub mod retained;
-pub mod stems;
+pub(super) mod bonds;
+pub(super) mod elements;
+pub(super) mod elision;
+pub(super) mod multipliers;
+pub(super) mod retained;
+pub(super) mod stems;
