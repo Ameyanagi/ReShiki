@@ -20,6 +20,8 @@ mod online;
 pub use online::resolve_name_online;
 mod reverse;
 mod rules;
+#[cfg(test)]
+mod s2n_harness;
 pub mod worker;
 #[cfg(not(target_arch = "wasm32"))]
 pub use {

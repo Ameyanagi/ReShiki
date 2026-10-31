@@ -1,0 +1,895 @@
+smiles	name	source	asserted
+c1ccc2c(c1)CCOc1ccccc1-2	6,7-dihydrodibenzo[b,d]oxepine	data/fusion_pin_cases.json	1
+c1ccc2c(c1)CCSc1ccccc1-2	6,7-dihydrodibenzo[b,d]thiepine	data/fusion_pin_cases.json	1
+Oc1ccc2c(c1)CCOc1ccccc1-2	6,7-dihydrodibenzo[b,d]oxepin-9-ol	data/fusion_pin_cases.json	1
+Oc1ccc2c(c1)CCSc1ccccc1-2	6,7-dihydrodibenzo[b,d]thiepin-9-ol	data/fusion_pin_cases.json	1
+c1oc2ncccc2c1	furo[2,3-b]pyridine	data/fusion_pin_cases.json	1
+c1ccc2cc3ncccc3cc2c1	benzo[g]quinoline	data/fusion_pin_cases.json	1
+c1oc2nc3occc3cc2c1	difuro[2,3-b:3',2'-e]pyridine	data/fusion_pin_cases.json	1
+c1[se]c2ncccc2c1	selenopheno[2,3-b]pyridine	data/fusion_pin_cases.json	1
+c1oc2nccnc2c1	furo[2,3-b]pyrazine	data/fusion_pin_cases.json	1
+c1nnc2ncccc2c1	pyrido[2,3-c]pyridazine	data/fusion_pin_cases.json	1
+c1[nH]c2ncccc2n1	3H-imidazo[4,5-b]pyridine	data/fusion_pin_cases.json	1
+c1ccc2cc3ncncc3cc2c1	naphtho[2,3-d]pyrimidine	data/fusion_pin_cases.json	1
+c1ccc2cc3nccnc3cc2c1	naphtho[2,3-b]pyrazine	data/fusion_pin_cases.json	1
+c1ccc2cc3cnncc3cc2c1	naphtho[2,3-d]pyridazine	data/fusion_pin_cases.json	1
+c1ccc2cc3nnccc3cc2c1	naphtho[2,3-c]pyridazine	data/fusion_pin_cases.json	1
+c1oc2cc3ncncc3cc2c1	benzofuro[6,5-d]pyrimidine	data/fusion_pin_cases.json	1
+c1sc2cc3ncncc3cc2c1	benzothieno[6,5-d]pyrimidine	data/fusion_pin_cases.json	1
+c1oc2cc3nccnc3cc2c1	benzofuro[5,6-b]pyrazine	data/fusion_pin_cases.json	1
+c1sc2cc3nccnc3cc2c1	benzothieno[5,6-b]pyrazine	data/fusion_pin_cases.json	1
+c1oc2cc3cnncc3cc2c1	benzofuro[5,6-d]pyridazine	data/fusion_pin_cases.json	1
+c1oc2cc3nnccc3cc2c1	benzofuro[6,5-c]pyridazine	data/fusion_pin_cases.json	1
+c1oc2cc3nc4ccccc4nc3cc2c1	benzofuro[5,6-b]benzo[e]pyrazine	data/fusion_pin_cases.json	1
+c1sc2cc3nc4ccccc4nc3cc2c1	benzothieno[5,6-b]benzo[e]pyrazine	data/fusion_pin_cases.json	1
+c1oc2cc3[nH]ncc3cc2c1	1H-benzofuro[6,5-c]pyrazole	data/fusion_pin_cases.json	1
+c1oc2nc3occc3nc2c1	difuro[2,3-b:3',2'-e]pyrazine	data/fusion_pin_cases.json	1
+c1sc2nc3sccc3nc2c1	dithieno[2,3-b:3',2'-e]pyrazine	data/fusion_pin_cases.json	1
+c1oc2nc3sccc3cc2c1	furo[2,3-b]thieno[3,2-e]pyridine	data/fusion_pin_cases.json	1
+c1sc2nc3occc3cc2c1	furo[2,3-b]thieno[3,2-e]pyridine	data/fusion_pin_cases.json	1
+O1CC2=CC=CC3=C2C1=CC=C3	2H-benzo[1,2,3-cd]1-benzofuran	data/fusion_pin_cases.json	1
+N1CC2=CC=CC3=C2C1=CC=C3	1,2-dihydrobenzo[1,2,3-cd]indole	data/fusion_pin_cases.json	1
+S1CC2=CC=CC3=C2C1=CC=C3	2H-benzo[1,2,3-cd]1-benzothiophene	data/fusion_pin_cases.json	1
+Cc1oc2ncccc2c1	2-methylfuro[2,3-b]pyridine	data/fusion_pin_cases.json	1
+Oc1oc2ncccc2c1	furo[2,3-b]pyridin-2-ol	data/fusion_pin_cases.json	1
+Nc1oc2ncccc2c1	furo[2,3-b]pyridin-2-amine	data/fusion_pin_cases.json	1
+N#Cc1oc2ncccc2c1	furo[2,3-b]pyridine-2-carbonitrile	data/fusion_pin_cases.json	1
+O=Cc1oc2ncccc2c1	furo[2,3-b]pyridine-2-carbaldehyde	data/fusion_pin_cases.json	1
+O=C(O)c1oc2ncccc2c1	furo[2,3-b]pyridine-2-carboxylic acid	data/fusion_pin_cases.json	1
+NC(=O)c1oc2ncccc2c1	furo[2,3-b]pyridine-2-carboxamide	data/fusion_pin_cases.json	1
+CCOC(=O)c1oc2ncccc2c1	ethyl furo[2,3-b]pyridine-2-carboxylate	data/fusion_pin_cases.json	1
+O=C(Cl)c1oc2ncccc2c1	furo[2,3-b]pyridine-2-carbonyl chloride	data/fusion_pin_cases.json	1
+O=S(=O)(O)c1oc2ncccc2c1	furo[2,3-b]pyridine-2-sulfonic acid	data/fusion_pin_cases.json	1
+NS(=O)(=O)c1oc2ncccc2c1	furo[2,3-b]pyridine-2-sulfonamide	data/fusion_pin_cases.json	1
+O1C=CC=2C1=CN=CC2	furo[2,3-c]pyridine	data/fusion_pin_cases.json	1
+O1C=CC=2C=NC=CC21	furo[3,2-c]pyridine	data/fusion_pin_cases.json	1
+S1C=CC2=NC=CC=C21	thieno[3,2-b]pyridine	data/fusion_pin_cases.json	1
+S1C=CC=2C1=CN=CC2	thieno[2,3-c]pyridine	data/fusion_pin_cases.json	1
+S1C=CC=2C=NC=CC21	thieno[3,2-c]pyridine	data/fusion_pin_cases.json	1
+N1C=CC=2C1=CN=CC2	1H-pyrrolo[2,3-c]pyridine	data/fusion_pin_cases.json	1
+N1C=CC=2C=NC=CC21	1H-pyrrolo[3,2-c]pyridine	data/fusion_pin_cases.json	1
+[Se]1C=CC2=NC=CC=C21	selenopheno[3,2-b]pyridine	data/fusion_pin_cases.json	1
+S1C=2N(C=C1)C=CN2	imidazo[2,1-b][1,3]thiazole	data/fusion_pin_cases.json	1
+N1N=CC=2C1=NC=CC2	1H-pyrazolo[3,4-b]pyridine	data/fusion_pin_cases.json	1
+N1N=CC2=NC=CC=C21	1H-pyrazolo[4,3-b]pyridine	data/fusion_pin_cases.json	1
+O1C=NC2=NC=CC=C21	oxazolo[4,5-b]pyridine	data/fusion_pin_cases.json	1
+O1C=CC2OC=CC=C21	3aH-furo[3,2-b]pyran	data/fusion_pin_cases.json	1
+O1C2=C(C=C1)SC=C2	thieno[3,2-b]furan	data/fusion_pin_cases.json	1
+N1=C2C(=NC=C1)SC=C2	thieno[2,3-b]pyrazine	data/fusion_pin_cases.json	1
+O1C2=C(C=C1)C=CS2	thieno[2,3-b]furan	data/systematic_fusion_cases.json	1
+O1C=2C(=CC1)C=CC2	2H-cyclopenta[b]furan	data/systematic_fusion_cases.json	1
+[Se]1C2=C(C=C1)[Se]C=C2	selenopheno[3,2-b]selenophene	data/systematic_fusion_cases.json	1
+O1C=CC2=NC3=C(C=C21)SC=C3	furo[3,2-b]thieno[2,3-e]pyridine	data/systematic_fusion_cases.json	1
+O1C=CC2=C1C=C1C(=N2)C=CO1	difuro[3,2-b:2',3'-e]pyridine	data/systematic_fusion_cases.json	1
+C1=CC=C2C=C3C(=CC=C12)C=C1C=CC=CC1=C3	naphtho[2,3-f]azulene	data/systematic_fusion_cases.json	1
+C	methane	fixtures/diverse_corpus.golden.json	1
+CC	ethane	fixtures/diverse_corpus.golden.json	1
+CCC	propane	fixtures/diverse_corpus.golden.json	1
+CCCC	butane	fixtures/diverse_corpus.golden.json	1
+CC(C)C	2-methylpropane	fixtures/diverse_corpus.golden.json	1
+CC(C)(C)C	2,2-dimethylpropane	fixtures/diverse_corpus.golden.json	1
+CCCCCCCC	octane	fixtures/diverse_corpus.golden.json	1
+C1CCCCC1	cyclohexane	fixtures/diverse_corpus.golden.json	1
+C1CCCC1	cyclopentane	fixtures/diverse_corpus.golden.json	1
+C1CCC1	cyclobutane	fixtures/diverse_corpus.golden.json	1
+C1CC1	cyclopropane	fixtures/diverse_corpus.golden.json	1
+C=C	ethene	fixtures/diverse_corpus.golden.json	1
+CC=C	propene	fixtures/diverse_corpus.golden.json	1
+C=CC=C	buta-1,3-diene	fixtures/diverse_corpus.golden.json	1
+C#C	ethyne	fixtures/diverse_corpus.golden.json	1
+CC#C	propyne	fixtures/diverse_corpus.golden.json	1
+c1ccccc1	benzene	fixtures/diverse_corpus.golden.json	1
+Cc1ccccc1	methylbenzene	fixtures/diverse_corpus.golden.json	1
+c1ccc(O)cc1	phenol	fixtures/diverse_corpus.golden.json	1
+c1ccc(N)cc1	aniline	fixtures/diverse_corpus.golden.json	1
+c1ccc(Cl)cc1	chlorobenzene	fixtures/diverse_corpus.golden.json	1
+c1ccc2ccccc2c1	naphthalene	fixtures/diverse_corpus.golden.json	1
+CO	methanol	fixtures/diverse_corpus.golden.json	1
+CCO	ethanol	fixtures/diverse_corpus.golden.json	1
+CCCO	propan-1-ol	fixtures/diverse_corpus.golden.json	1
+CC(C)O	propan-2-ol	fixtures/diverse_corpus.golden.json	1
+OCCO	ethane-1,2-diol	fixtures/diverse_corpus.golden.json	1
+OCC(O)CO	propane-1,2,3-triol	fixtures/diverse_corpus.golden.json	1
+CC(=O)	ethanal	fixtures/diverse_corpus.golden.json	1
+CCC(=O)	propanal	fixtures/diverse_corpus.golden.json	1
+CC(=O)C	propan-2-one	fixtures/diverse_corpus.golden.json	1
+CCC(=O)CC	pentan-3-one	fixtures/diverse_corpus.golden.json	1
+CC(=O)O	acetic acid	fixtures/diverse_corpus.golden.json	1
+CCC(=O)O	propanoic acid	fixtures/diverse_corpus.golden.json	1
+OC(=O)CC(=O)O	malonic acid	fixtures/diverse_corpus.golden.json	1
+OC(=O)C(O)C(O)C(=O)O	2,3-dihydroxybutanedioic acid	fixtures/diverse_corpus.golden.json	1
+OC(=O)c1ccccc1	benzoic acid	fixtures/diverse_corpus.golden.json	1
+CC(=O)OC	methyl acetate	fixtures/diverse_corpus.golden.json	1
+CCOC(C)=O	ethyl acetate	fixtures/diverse_corpus.golden.json	1
+CC(=O)OCC	ethyl acetate	fixtures/diverse_corpus.golden.json	1
+CN	methanamine	fixtures/diverse_corpus.golden.json	1
+CCN	ethanamine	fixtures/diverse_corpus.golden.json	1
+CCCN	propan-1-amine	fixtures/diverse_corpus.golden.json	1
+CC(C)N	propan-2-amine	fixtures/diverse_corpus.golden.json	1
+CN(C)C	trimethylazane	fixtures/diverse_corpus.golden.json	1
+CC(=O)N	acetamide	fixtures/diverse_corpus.golden.json	1
+CC(=O)NC	N-methylacetamide	fixtures/diverse_corpus.golden.json	1
+CC(=O)Nc1ccccc1	N-phenylacetamide	fixtures/diverse_corpus.golden.json	1
+COC	methoxymethane	fixtures/diverse_corpus.golden.json	1
+CCOCC	ethoxyethane	fixtures/diverse_corpus.golden.json	1
+C1CCOCC1	oxane	fixtures/diverse_corpus.golden.json	1
+C1COCC1	oxolane	fixtures/diverse_corpus.golden.json	1
+C1COCO1	1,3-dioxolane	fixtures/diverse_corpus.golden.json	1
+c1ccoc1	furan	fixtures/diverse_corpus.golden.json	1
+c1cc[nH]c1	1H-pyrrole	fixtures/diverse_corpus.golden.json	1
+c1ccncc1	pyridine	fixtures/diverse_corpus.golden.json	1
+c1ccsc1	thiophene	fixtures/diverse_corpus.golden.json	1
+c1cnc[nH]1	1H-imidazole	fixtures/diverse_corpus.golden.json	1
+c1ccc2[nH]ccc2c1	1H-indole	fixtures/diverse_corpus.golden.json	1
+ClCCl	dichloromethane	fixtures/diverse_corpus.golden.json	1
+ClC(Cl)(Cl)Cl	tetrachloromethane	fixtures/diverse_corpus.golden.json	1
+FC(F)(F)F	tetrafluoromethane	fixtures/diverse_corpus.golden.json	1
+BrCC	bromoethane	fixtures/diverse_corpus.golden.json	1
+ClCC(Cl)C	1,2-dichloropropane	fixtures/diverse_corpus.golden.json	1
+N#CC	acetonitrile	fixtures/diverse_corpus.golden.json	1
+N#Cc1ccccc1	benzonitrile	fixtures/diverse_corpus.golden.json	1
+[N+](=O)(C)[O-]	nitromethane	fixtures/diverse_corpus.golden.json	1
+[N+](=O)([O-])c1ccccc1	nitrobenzene	fixtures/diverse_corpus.golden.json	1
+CS	methanethiol	fixtures/diverse_corpus.golden.json	1
+CSC	dimethylsulfane	fixtures/diverse_corpus.golden.json	1
+CS(=O)(=O)O	methanesulfonic acid	fixtures/diverse_corpus.golden.json	1
+CS(C)(=O)=O	(methylsulfonyl)methane	fixtures/diverse_corpus.golden.json	1
+CS(C)=O	dimethyl sulfoxide	fixtures/diverse_corpus.golden.json	1
+N#CC#N	ethanedinitrile	fixtures/diverse_corpus.golden.json	1
+OCC(N)C(=O)O	2-amino-3-hydroxypropanoic acid	fixtures/diverse_corpus.golden.json	1
+NC(Cc1ccccc1)C(=O)O	2-amino-3-phenylpropanoic acid	fixtures/diverse_corpus.golden.json	1
+NC(C(=O)O)C	2-aminopropanoic acid	fixtures/diverse_corpus.golden.json	1
+CC(N)C(=O)O	2-aminopropanoic acid	fixtures/diverse_corpus.golden.json	1
+OC1OC(CO)C(O)C(O)C1O	6-(hydroxymethyl)oxane-2,3,4,5-tetraol	fixtures/diverse_corpus.golden.json	1
+OCC1OC(O)C(O)C(O)C1O	6-(hydroxymethyl)oxane-2,3,4,5-tetraol	fixtures/diverse_corpus.golden.json	1
+CCCCCC=CCC=CCCCCCCCC(=O)O	octadeca-9,12-dienoic acid	fixtures/diverse_corpus.golden.json	1
+CCCCCCCCCCCCCC(=O)O	tetradecanoic acid	fixtures/diverse_corpus.golden.json	1
+Oc1ccc(O)cc1	benzene-1,4-diol	fixtures/diverse_corpus.golden.json	1
+Oc1cccc(O)c1	benzene-1,3-diol	fixtures/diverse_corpus.golden.json	1
+COc1ccccc1	methoxybenzene	fixtures/diverse_corpus.golden.json	1
+CC1=CC=CC=C1	methylbenzene	fixtures/diverse_corpus.golden.json	1
+CC(C)C1CCCCC1	(propan-2-yl)cyclohexane	fixtures/diverse_corpus.golden.json	1
+O=C1CCCCC1	cyclohexanone	fixtures/diverse_corpus.golden.json	1
+O=C1OCCO1	1,3-dioxolan-2-one	fixtures/diverse_corpus.golden.json	1
+O=C1OCC1	oxetan-2-one	fixtures/diverse_corpus.golden.json	1
+O=C1NCCC1	pyrrolidin-2-one	fixtures/diverse_corpus.golden.json	1
+O=C1CCCC1	cyclopentanone	fixtures/diverse_corpus.golden.json	1
+O=C1CCC=CC1	cyclohex-3-en-1-one	fixtures/diverse_corpus.golden.json	1
+c1ccc(-c2ccccc2)cc1	1,1'-biphenyl	fixtures/diverse_corpus.golden.json	1
+c1ccc2c(c1)[nH]c1ccccc12	9H-carbazole	fixtures/diverse_corpus.golden.json	1
+CC(=O)OC1CCCCC1	cyclohexyl acetate	fixtures/diverse_corpus.golden.json	1
+CCCCCC	hexane	fixtures/diverse_corpus.golden.json	1
+CC(C)(C)CC	2,2-dimethylbutane	fixtures/diverse_corpus.golden.json	1
+CCC(C)CC	3-methylpentane	fixtures/diverse_corpus.golden.json	1
+CC=CC	but-2-ene	fixtures/diverse_corpus.golden.json	1
+CC(C)=C	2-methylpropene	fixtures/diverse_corpus.golden.json	1
+C1=CC=CC=C1Cl	chlorobenzene	fixtures/diverse_corpus.golden.json	1
+NC(=O)N	urea	fixtures/diverse_corpus.golden.json	1
+NC(=N)N	guanidine	fixtures/diverse_corpus.golden.json	1
+N=C=O	isocyanic acid	fixtures/diverse_corpus.golden.json	1
+S=C=N	isothiocyanic acid	fixtures/diverse_corpus.golden.json	1
+[FH]	hydrogen fluoride	exploratory/test_charge_representation_gaps.py	1
+[ClH]	hydrogen chloride	exploratory/test_charge_representation_gaps.py	1
+[BrH]	hydrogen bromide	exploratory/test_charge_representation_gaps.py	1
+[IH]	hydrogen iodide	exploratory/test_charge_representation_gaps.py	1
+CC1CCCCCC2CCCC2C1	5-methyldodecahydrocyclopenta[9]annulene	integration/test_fusion_annulene_production.py	1
+OC1CCCCCC2CCCC2C1	dodecahydrocyclopenta[9]annulen-5-ol	integration/test_fusion_annulene_production.py	1
+CC1CCCCCCC2CCCC2C1	5-methyldodecahydro-1H-cyclopenta[10]annulene	integration/test_fusion_annulene_production.py	1
+OC1CCCCCCC2CCCC2C1	dodecahydro-1H-cyclopenta[10]annulen-5-ol	integration/test_fusion_annulene_production.py	1
+CC1=CC2CCCC2CCCCCC1	10-methyl-2,3,3a,4,5,6,7,8,9,11a-decahydro-1H-cyclopenta[10]annulene	integration/test_fusion_annulene_production.py	1
+OC1=CC2CCCC2CCCCCC1	2,3,3a,6,7,8,9,10,11,11a-decahydro-1H-cyclopenta[10]annulen-5-ol	integration/test_fusion_annulene_production.py	1
+CC(=O)OC1Oc2ccc(C)cc2-c2oc(=O)c([Se]c3ccccc3)cc21	9-methyl-2-oxo-3-(phenylselanyl)-2,5-dihydropyrano[3,2-c]benzo[e]pyran-5-yl acetate	integration/test_fusion_carbon_derivative_migration.py	1
+CC1=C2CC3C(C)(C=CC(=O)C34CO4)CC2OC1=O	3,8a-dimethyl-4a,8a,9,9a-tetrahydrospiro[benzo[f]1-benzofuran-5,2'-oxirane]-2,6(4H)-dione	integration/test_fusion_carbon_derivative_migration.py	1
+CC(C)(C)/C=C/C(=O)N1CCC[C@@H]2[C@H]1C[NH2+]C2	(2E)-1-((4aS,7aS)-2,3,4,4a,7,7a-hexahydro-6H-pyrrolo[3,4-b]pyridin-6-ium-1-yl)-4,4-dimethylpent-2-en-1-one	integration/test_fusion_cation_composition.py	1
+Cn1c(ccn1)C[NH+]2CCc3c(cc[nH]c3=O)C2	2-((1-methyl-1H-pyrazol-5-yl)methyl)-2,3,4,6-tetrahydropyrido[4,3-c]pyridin-2-ium-5-one	integration/test_fusion_cation_composition.py	1
+CN1CCCC2C1C[NH2+]C2	1-methyl-2,3,4,4a,7,7a-hexahydro-6H-pyrrolo[3,4-b]pyridin-6-ium	integration/test_fusion_cation_composition.py	1
+CCN1CCCC2C1C[NH2+]C2	1-ethyl-2,3,4,4a,7,7a-hexahydro-6H-pyrrolo[3,4-b]pyridin-6-ium	integration/test_fusion_cation_composition.py	1
+CN1CCCC2C1C[NH2+]C2C	1,5-dimethyl-2,3,4,4a,7,7a-hexahydro-6H-pyrrolo[3,4-b]pyridin-6-ium	integration/test_fusion_cation_composition.py	1
+[NH2+]1CCc2c(cc[nH]c2=O)C1	2,3,4,6-tetrahydropyrido[4,3-c]pyridin-2-ium-5-one	integration/test_fusion_cation_composition.py	1
+C[NH+]1CCc2c(cc[nH]c2=O)C1	2-methyl-2,3,4,6-tetrahydropyrido[4,3-c]pyridin-2-ium-5-one	integration/test_fusion_cation_composition.py	1
+CC[NH+]1CCc2c(cc[nH]c2=O)C1	2-ethyl-2,3,4,6-tetrahydropyrido[4,3-c]pyridin-2-ium-5-one	integration/test_fusion_cation_composition.py	1
+[NH2+]1CCc2cc[nH]c(=O)c2C1	2,3,4,7-tetrahydropyrido[3,4-c]pyridin-2-ium-8-one	integration/test_fusion_cation_composition.py	1
+[NH3+][C-]1C=CC2=NON=C12	cyclopenta[c][1,2,5]oxadiazol-4-ide-4-aminium	integration/test_fusion_charge_numbering.py	1
+[NH2+](C)[C-]1C=CC2=NON=C12	N-methylcyclopenta[c][1,2,5]oxadiazol-4-ide-4-aminium	integration/test_fusion_charge_numbering.py	1
+[N-]1[NH+]=CC=C2C=CN=C12	pyrrolo[2,3-c]pyridazin-1-ide-2-ium	integration/test_fusion_charged_migration.py	1
+[N-]1[NH+]=CC=C2N=CC=C12	pyrrolo[3,2-c]pyridazin-1-ide-2-ium	integration/test_fusion_charged_migration.py	1
+[N-]1[NH+]=CC=C2N=CN=C12	imidazo[4,5-c]pyridazin-1-ide-2-ium	integration/test_fusion_charged_migration.py	1
+[N-]1[NH+]=CN=C2C=CN=C12	pyrrolo[3,2-e][1,2,4]triazin-1-ide-2-ium	integration/test_fusion_charged_migration.py	1
+[N-]1[NH+]=CN=C2N=CN=C12	imidazo[4,5-e][1,2,4]triazin-1-ide-2-ium	integration/test_fusion_charged_migration.py	1
+[N-]1[NH+]=NC=C2N=CN=C12	imidazo[4,5-d][1,2,3]triazin-1-ide-2-ium	integration/test_fusion_charged_migration.py	1
+[NH3+][C-]1C=CC2=C1N=NO2	cyclopenta[d][1,2,3]oxadiazol-4-ide-4-aminium	integration/test_fusion_charged_migration.py	1
+O=C1[CH-]NC2=C1C[NH2+]C2	3-oxo-1,4,5,6-tetrahydropyrrolo[3,4-b]pyrrol-5-ium-2-ide	integration/test_fusion_charged_migration.py	1
+[N-]1[NH+]=C(C)C=C2C=CN=C12	3-methylpyrrolo[2,3-c]pyridazin-1-ide-2-ium	integration/test_fusion_charged_migration.py	1
+[N-]1[NH+]=C(C)C=C2N=CC=C12	3-methylpyrrolo[3,2-c]pyridazin-1-ide-2-ium	integration/test_fusion_charged_migration.py	1
+[N-]1[NH+]=C(C)C=C2N=CN=C12	3-methylimidazo[4,5-c]pyridazin-1-ide-2-ium	integration/test_fusion_charged_migration.py	1
+[NH2+](C)[C-]1C=CC2=C1N=NO2	N-methylcyclopenta[d][1,2,3]oxadiazol-4-ide-4-aminium	integration/test_fusion_charged_migration.py	1
+O=C1[CH-]N(C)C2=C1C[NH2+]C2	1-methyl-3-oxo-1,2,4,6-tetrahydro-5H-pyrrolo[3,4-b]pyrrol-5-ium-2-ide	integration/test_fusion_charged_migration.py	1
+O=C1[CH-]NC2=C1C[NH+](C)C2	5-methyl-3-oxo-1,4,5,6-tetrahydropyrrolo[3,4-b]pyrrol-5-ium-2-ide	integration/test_fusion_charged_migration.py	1
+N1CCCC2C1C[NH2+]C2	hexahydro-1H,6H-pyrrolo[3,4-b]pyridin-6-ium	integration/test_fusion_saturated_composition.py	1
+[NH2+]1CCCC2C1CNC2	hexahydro-1H,6H-pyrrolo[3,4-b]pyridin-1-ium	integration/test_fusion_saturated_composition.py	1
+[NH2+]1CCCC2C1C[NH2+]C2	hexahydro-1H,6H-pyrrolo[3,4-b]pyridin-1,6-diium	integration/test_fusion_saturated_composition.py	1
+N1CCCC2C1CNC2	hexahydro-1H,6H-pyrrolo[3,4-b]pyridine	integration/test_fusion_saturated_composition.py	1
+N1CCC2C1C[NH2+]C2	octahydropyrrolo[3,4-b]pyrrol-5-ium	integration/test_fusion_saturated_composition.py	1
+N1CCCC2C1C[NH2+]CC2	decahydropyrido[3,4-b]pyridin-7-ium	integration/test_fusion_saturated_composition.py	1
+N1CCCC2C1[NH2+]CC2	hexahydro-1H,7H-pyrrolo[2,3-b]pyridin-1-ium	integration/test_fusion_saturated_composition.py	1
+N1CCC(C)C2C1C[NH2+]C2	4-methylhexahydro-1H,6H-pyrrolo[3,4-b]pyridin-6-ium	integration/test_fusion_saturated_composition.py	1
+N1CCCC2C1C[NH+](C)C2	6-methylhexahydro-1H,6H-pyrrolo[3,4-b]pyridin-6-ium	integration/test_fusion_saturated_composition.py	1
+N1CCCC2C1C[NH+](CC)C2	6-ethylhexahydro-1H,6H-pyrrolo[3,4-b]pyridin-6-ium	integration/test_fusion_saturated_composition.py	1
+C[NH+]1CCCC2C1C[NH2+]C2	1-methylhexahydro-1H,6H-pyrrolo[3,4-b]pyridin-1,6-diium	integration/test_fusion_saturated_composition.py	1
+N1CCCC2C1CC[NH2+]C2	decahydropyrido[4,3-b]pyridin-6-ium	integration/test_fusion_saturated_composition.py	1
+[NH2+]1CCCC2C1CCNC2	decahydropyrido[4,3-b]pyridin-1-ium	integration/test_fusion_saturated_composition.py	1
+[NH2+]1CCCC2C1CC[NH2+]C2	decahydropyrido[4,3-b]pyridin-1,6-diium	integration/test_fusion_saturated_composition.py	1
+N1CCCC2C1CC[NH+](C)C2	6-methyldecahydropyrido[4,3-b]pyridin-6-ium	integration/test_fusion_saturated_composition.py	1
+C[NH+]1CCCC2C1CC[NH2+]C2	1-methyldecahydropyrido[4,3-b]pyridin-1,6-diium	integration/test_fusion_saturated_composition.py	1
+CN1CCCC2C1CC[NH2+]C2	1-methyldecahydropyrido[4,3-b]pyridin-6-ium	integration/test_fusion_saturated_composition.py	1
+CCN1CCCC2C1CC[NH2+]C2	1-ethyldecahydropyrido[4,3-b]pyridin-6-ium	integration/test_fusion_saturated_composition.py	1
+N1CCC2C(C1)C[NH2+]CC2	decahydropyrido[3,4-c]pyridin-7-ium	integration/test_fusion_saturated_composition.py	1
+N1CCC(C)C2C1CC[NH2+]C2	4-methyldecahydropyrido[4,3-b]pyridin-6-ium	integration/test_fusion_saturated_composition.py	1
+C[N+]([Se-])(C)C	trimethylazane selenide	integration/test_human_descriptor.py	0
+CC[Se]SC	Se-ethyl S-methyl selenothioperoxide	integration/test_human_descriptor.py	0
+CC1=CC2=C(O1)SC=C2	2-methylthieno[2,3-b]furan	integration/test_systematic_fusion.py	1
+O1C2=C(C=C1)C=C(S2)O	thieno[2,3-b]furan-5-ol	integration/test_systematic_fusion.py	1
+O1C=CC2=NC3=C(C=C21)SC(=C3)C(=O)O	furo[3,2-b]thieno[2,3-e]pyridine-6-carboxylic acid	integration/test_systematic_fusion.py	1
+CN1CCC2=C1C=NN2	4-methyl-5,6-dihydro-1H-pyrrolo[3,2-c]pyrazole	integration/test_systematic_fusion.py	1
+C1CC2OCC=CC2O1	2,3,3a,7a-tetrahydro-5H-furo[3,2-b]pyran	integration/test_systematic_fusion.py	1
+C1N=COC2=NON=C12	7H-[1,2,5]oxadiazolo[3,4-e][1,3]oxazine	integration/test_systematic_fusion.py	1
+CCOC(=O)c1c(NC(=O)C(CC)Sc2cccc(N)c2)sc2c1CCCCC2	ethyl 2-(2-((3-aminophenyl)sulfanyl)butanamido)-5,6,7,8-tetrahydro-4H-cyclohepta[b]thiophene-3-carboxylate	integration/test_systematic_fusion.py	1
+C1OCC2COCC12	tetrahydro-1H,3H-furo[3,4-c]furan	integration/test_systematic_fusion.py	1
+C1SCC2CSCC12	tetrahydro-1H,3H-thieno[3,4-c]thiophene	integration/test_systematic_fusion.py	1
+N1C=NC2=C1N=CN2	1,4-dihydroimidazo[4,5-d]imidazole	integration/test_systematic_fusion.py	1
+N1N=CC=2C1=CNN2	1,5-dihydropyrazolo[4,3-c]pyrazole	integration/test_systematic_fusion.py	1
+c1ccc2cc3ccccc3cc2c1	anthracene	integration/test_systematic_fusion.py	1
+c1ccc2c(c1)ccc1ccccc12	phenanthrene	integration/test_systematic_fusion.py	1
+C1=CC=C2C=CC=CC=C12	azulene	integration/test_systematic_fusion.py	1
+C1=CC=C2C=CC3=CC=CC4=CC=C1C2=C34	pyrene	integration/test_systematic_fusion.py	1
+C1=CC=CC2=NC3=CC=CC=C3C=C12	acridine	integration/test_systematic_fusion.py	1
+C1=CC=CC=2C3=CC=CC=C3NC12	9H-carbazole	integration/test_systematic_fusion.py	1
+N1=CN=C2N=CNC2=C1	7H-purine	integration/test_systematic_fusion.py	1
+C1=Cc2cc3ccc(cc4nc(cc5ccc(cc1n2)[nH]5)C=C4)[nH]3	porphyrin	integration/test_systematic_fusion.py	1
+C1=C2CCC(=N2)C=C2CCC(N2)C2CCC(=N2)C=C2CCC1=N2	corrin	integration/test_systematic_fusion.py	1
+C1C=CC2=C1C1=CC=CC=C1C=1C=CC=CC21	1H-cyclopenta[l]phenanthrene	integration/test_systematic_fusion.py	1
+N1=C2C3=C(N=NC3=N1)N=N2	1,2,3,4,5,6-hexaazacyclopenta[cd]pentalene	integration/test_third_component_fusion.py	1
+N1=C2C3=C(N=NC3=N1)C=C2	1,2,3,4-tetraazacyclopenta[cd]pentalene	integration/test_third_component_fusion.py	1
+CC1=CC=2C3=C1N=NC3=NN2	5-methyl-1,2,3,4-tetraazacyclopenta[cd]pentalene	integration/test_third_component_fusion.py	1
+FC1=CC=2C3=C1N=NC3=NN2	5-fluoro-1,2,3,4-tetraazacyclopenta[cd]pentalene	integration/test_third_component_fusion.py	1
+CC=O	ethanal	roundtrip/test_acids.py	
+CCC=O	propanal	roundtrip/test_acids.py	
+CC#N	acetonitrile	roundtrip/test_acids.py	
+COC(=O)C	methyl acetate	roundtrip/test_acids.py	
+CC(=O)Oc1ccccc1	phenyl acetate	roundtrip/test_acids.py	
+CC(O)C	propan-2-ol	roundtrip/test_alcohols.py	
+NCCO	2-aminoethan-1-ol	roundtrip/test_alcohols.py	
+C=CCC#C	pent-1-en-4-yne	roundtrip/test_alkenes_alkynes.py	
+C1=CC=CCC1	cyclohexa-1,3-diene	roundtrip/test_alkenes_alkynes.py	
+OCCC1CCCCC1	2-cyclohexylethan-1-ol	roundtrip/test_api.py	
+CC1CC1CC	1-ethyl-2-methylcyclopropane	roundtrip/test_bridges.py	
+CCCC(C)(C)CC	3,3-dimethylhexane	roundtrip/test_bridges.py	
+CC1CC1CC(C(C)C)C	1-(2,3-dimethylbutyl)-2-methylcyclopropane	roundtrip/test_bridges.py	
+c1ccnnc1	pyridazine	roundtrip/test_bridges.py	
+c1cncnc1	pyrimidine	roundtrip/test_bridges.py	
+c1c[nH]cn1	1H-imidazole	roundtrip/test_bridges.py	
+c1cocn1	1,3-oxazole	roundtrip/test_bridges.py	
+c1cnoc1	1,2-oxazole	roundtrip/test_bridges.py	
+C1CCNCC1	piperidine	roundtrip/test_bridges.py	
+C1COCCN1	morpholine	roundtrip/test_bridges.py	
+c1ccc2ncccc2c1	quinoline	unit/test_parent_hydride_handoff.py	1
+c1ccc2occc2c1	1-benzofuran	roundtrip/test_bridges.py	
+C1CC2CCC1C2	bicyclo[2.2.1]heptane	roundtrip/test_bridges.py	
+C1CCC2(CC1)CCC2	spiro[3.5]nonane	roundtrip/test_bridges.py	
+C1CO1	oxirane	roundtrip/test_bridges.py	
+O1COCC1	1,3-dioxolane	roundtrip/test_bridges.py	
+O1CC=CCC1	3,6-dihydro-2H-pyran	roundtrip/test_bridges.py	
+C1CCCCCC1	cycloheptane	roundtrip/test_bridges.py	
+C1CCCCCCC1	cyclooctane	roundtrip/test_bridges.py	
+CCCCC	pentane	roundtrip/test_composite_bridges.py	
+CC1CC1C	1,2-dimethylcyclopropane	roundtrip/test_composite_bridges.py	
+CC(C)CC	2-methylbutane	roundtrip/test_composite_bridges.py	
+CCCC(C(C)C)CC	3-ethyl-2-methylhexane	roundtrip/test_composite_bridges.py	
+C1C=CC2C=C3C=C4C=C5C=C6C=C7C=C8C=C9C=C%10C=C%11C=C%12C=C%13C=CC=CC%13=CC%12=CC%11=CC%10=CC9=CC8=CC7=CC6=CC5=CC4=CC3=CC=2C=1	tridecacene	roundtrip/test_fused_hydrocarbon_retained.py	
+C1=CC=CC2=CC3=CC4=CC5=CC6=CC7=CC=C8C=C9C=C%10C=C%11C=C%12C=C%13C=CC=CC%13=CC%12=CC%11=CC%10=CC9=CC8=C7C=C6C=C5C=C4C=C3C=C12	tridecaphene	roundtrip/test_fused_hydrocarbon_retained.py	
+C1=Cc2cccc3cccc1c23	acenaphthylene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1cc2c3c(cccc3c1)CC2	1,2-dihydroacenaphthylene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2c(c1)Cc1ccccc1-2	9H-fluorene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2c(c1)-c1cccc3cccc-2c13	fluoranthene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1cc2ccc3cccc4ccc(c1)c2c34	pyrene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2cc3c(ccc4ccccc43)cc2c1	benz[a]anthracene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2c(c1)ccc1c3ccccc3ccc21	chrysene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2cc3cc4ccccc4cc3cc2c1	tetracene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2cc3cc4cc5ccccc5cc4cc3cc2c1	pentacene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2cc3cc4cc5cc6ccccc6cc5cc4cc3cc2c1	hexacene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2cc3c(ccc4cc5ccccc5cc43)cc2c1	pentaphene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2cc3cc4c(ccc5cc6ccccc6cc54)cc3cc2c1	hexaphene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2cc3cc4c(ccc5cc6cc7ccccc7cc6cc54)cc3cc2c1	heptaphene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2cc3cc4cc5c(ccc6cc7cc8ccccc8cc7cc65)cc4cc3cc2c1	octaphene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2c(c1)-c1ccccc1-c1ccccc1-c1ccccc1-2	tetraphenylene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2c(c1)c1cccc3c4c5ccccc5c5cccc(c2c13)c54	rubicene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2cc3c(cc2c1)c1cc2ccccc2cc1c1cc2ccccc2cc31	trinaphthylene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2c(c1)cc1ccc3cc4c5ccccc5cc5ccc6cc2c1c3c6c54	pyranthrene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1cc2ccc3cc4ccc5ccc6ccc7cc8ccc1c1c2c3c2c4c5c6c7c2c81	ovalene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2c(c1)c1cccc3ccc4cccc2c4c31	benzo[e]pyrene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2c3c(ccc2c1)-c1cccc2cccc-3c12	benzo[j]fluoranthene	roundtrip/test_fused_hydrocarbon_retained.py	
+C1=Cc2cc3cccc4ccc5ccc1c2c5c43	cyclopenta[cd]pyrene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2c(c1)-c1cccc3c1c-2cc1ccccc13	benzo[b]fluoranthene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2cc3c(cc2c1)-c1cccc2cccc-3c12	benzo[k]fluoranthene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2c(c1)cc1ccc3cccc4ccc2c1c34	benzo[a]pyrene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2c(c1)-c1ccc3ccc4cccc5cc-2c1c3c45	indeno[1,2,3-cd]pyrene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2c(c1)ccc1cc3c(ccc4ccccc43)cc12	dibenz[a,h]anthracene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1cc2ccc3ccc4ccc5cccc6c(c1)c2c3c4c56	benzo[ghi]perylene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2cc3cc4cc5cc6cc7ccccc7cc6cc5cc4cc3cc2c1	heptacene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2cc3cc4cc5cc6cc7cc8ccccc8cc7cc6cc5cc4cc3cc2c1	octacene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2cc3cc4cc5cc6cc7cc8cc9ccccc9cc8cc7cc6cc5cc4cc3cc2c1	nonacene	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2c(c1)CCN2	2,3-dihydro-1H-indole	roundtrip/test_fused_hydrocarbon_retained.py	
+CN1CCc2ccccc21	1-methyl-2,3-dihydro-1H-indole	roundtrip/test_fused_hydrocarbon_retained.py	
+O=C1Cc2ccccc2N1	1,3-dihydro-2H-indol-2-one	roundtrip/test_fused_hydrocarbon_retained.py	
+OC(=O)C1Cc2ccccc2N1	2,3-dihydro-1H-indole-2-carboxylic acid	roundtrip/test_fused_hydrocarbon_retained.py	
+c1ccc2c(c1)CCC2	2,3-dihydro-1H-indene	roundtrip/test_fused_hydrocarbon_retained.py	
+NC1CCc2ccccc21	2,3-dihydro-1H-inden-1-amine	roundtrip/test_fused_hydrocarbon_retained.py	
+O=C1CCc2ccccc21	2,3-dihydro-1H-inden-1-one	roundtrip/test_fused_hydrocarbon_retained.py	
+O=C1Cc2ccccc2C1	1,3-dihydro-2H-inden-2-one	roundtrip/test_fused_hydrocarbon_retained.py	
+c1sc2nc3sccc3cc2c1	dithieno[2,3-b:3',2'-e]pyridine	roundtrip/test_fused_multiplicity.py	
+N	ammonia	unit/test_fusion_bridge_hydrogen_state.py	0
+O	water	unit/test_fusion_bridge_hydrogen_state.py	0
+S	sulfane	unit/test_spiro_component_scope.py	0
+c1cnc2cc[nH]c2c1	1H-pyrrolo[3,2-b]pyridine	roundtrip/test_fused_parents.py	
+CN1C=NC2=C1C(=O)N(C(=O)N2C)C	1,3,7-trimethyl-3,7-dihydro-1H-purine-2,6-dione	unit/test_audit_reconstruction.py	1
+C1CC2=CC=CC3=C2C1=CC=C3	1,2-dihydroacenaphthylene	roundtrip/test_fused_parents.py	
+c1ccc2cnccc2c1	isoquinoline	roundtrip/test_fused_parents.py	
+Cc1ccc2ncccc2c1	6-methylquinoline	roundtrip/test_fused_parents.py	
+COc1ccc2ncccc2c1	6-methoxyquinoline	roundtrip/test_fused_parents.py	
+N#Cc1ccc2ncccc2c1	quinoline-6-carbonitrile	roundtrip/test_fused_parents.py	
+O=C(O)c1ccc2ncccc2c1	quinoline-6-carboxylic acid	roundtrip/test_fused_parents.py	
+Cc1ccc2cnccc2c1	6-methylisoquinoline	roundtrip/test_fused_parents.py	
+c1nccc2cnccc12	2,6-naphthyridine	roundtrip/test_fused_parents.py	
+c1nccc2ccncc12	2,7-naphthyridine	roundtrip/test_fused_parents.py	
+Cc1nccc2cnccc12	1-methyl-2,6-naphthyridine	roundtrip/test_fused_parents.py	
+c1nncc2ccccc12	phthalazine	roundtrip/test_fused_parents.py	
+Cc1ncnc2ccccc12	4-methylquinazoline	roundtrip/test_fused_parents.py	
+c1ccc2sccc2c1	1-benzothiophene	roundtrip/test_fused_parents.py	
+c1ccc2nc3ccccc3cc2c1	acridine	roundtrip/test_fused_parents.py	
+C1=Cc2ccccc2C1	1H-indene	roundtrip/test_fused_parents.py	
+c1ccc2c(c1)CCc1ccccc1-2	9,10-dihydrophenanthrene	roundtrip/test_fused_parents.py	
+c1ccc2c(c1)-c1ccccc1-2	biphenylene	roundtrip/test_fused_parents.py	
+c1ccc2c(c1)c1ccccc1c1ccccc21	triphenylene	roundtrip/test_fused_parents.py	
+c1ncc2nc[nH]c2n1	9H-purine	roundtrip/test_fused_parents.py	
+c1ccc2[nH]ncc2c1	1H-indazole	roundtrip/test_fused_parents.py	
+c1ccc2ncncc2c1	quinazoline	roundtrip/test_fused_parents.py	
+c1ccc2nccnc2c1	quinoxaline	roundtrip/test_fused_parents.py	
+c1ccc2cnncc2c1	phthalazine	roundtrip/test_fused_parents.py	
+c1ccc2nnccc2c1	cinnoline	roundtrip/test_fused_parents.py	
+c1ccc2nc3ccccc3nc2c1	phenazine	roundtrip/test_fused_parents.py	
+C1=COc2ccccc2C1	4H-1-benzopyran	roundtrip/test_fused_parents.py	
+C1=Cc2ccccc2OC1	2H-1-benzopyran	roundtrip/test_fused_parents.py	
+N1CCCC2=CC=CC=C12	1,2,3,4-tetrahydroquinoline	roundtrip/test_fused_parents.py	
+C1CCC2=CC=CC=C2C1	1,2,3,4-tetrahydronaphthalene	roundtrip/test_fused_parents.py	
+Oc1cccc2c1NCCC2	1,2,3,4-tetrahydroquinolin-8-ol	roundtrip/test_fused_parents.py	
+C1Cc2ncccc2O1	2,3-dihydrofuro[3,2-b]pyridine	roundtrip/test_fused_parents.py	
+N1CCc2ncccc2C1	5,6,7,8-tetrahydro-1,6-naphthyridine	roundtrip/test_fused_parents.py	
+C1CNc2ncccc2C1	1,2,3,4-tetrahydro-1,8-naphthyridine	roundtrip/test_fused_parents.py	
+c1oc2ncncc2c1	furo[2,3-d]pyrimidine	roundtrip/test_fused_parents.py	
+Cc1cccc2ccccc12	1-methylnaphthalene	roundtrip/test_fused_parents.py	
+Cc1ccc2ccccc2c1	2-methylnaphthalene	roundtrip/test_fused_parents.py	
+Oc1cccc2ccccc12	naphthalen-1-ol	roundtrip/test_fused_parents.py	
+Nc1cccc2ccccc12	naphthalen-1-amine	roundtrip/test_fused_parents.py	
+Sc1cccc2ccccc12	naphthalene-1-thiol	roundtrip/test_fused_parents.py	
+Oc1cccc2ncccc12	quinolin-5-ol	roundtrip/test_fused_parents.py	
+Nc1cccc2[nH]ccc12	1H-indol-4-amine	roundtrip/test_fused_parents.py	
+Oc1cccc2occc12	1-benzofuran-4-ol	roundtrip/test_fused_parents.py	
+Oc1ccc2cc3ccccc3cc2c1	anthracen-2-ol	roundtrip/test_fused_parents.py	
+Oc1ccc2c(c1)ccc1ccccc12	phenanthren-2-ol	roundtrip/test_fused_parents.py	
+Oc1ccc2nc3ccccc3cc2c1	acridin-2-ol	roundtrip/test_fused_parents.py	
+C1=Cc2c(O)cccc2C1	1H-inden-4-ol	roundtrip/test_fused_parents.py	
+Oc1ccc2c(c1)CCc1ccccc1-2	9,10-dihydrophenanthren-2-ol	roundtrip/test_fused_parents.py	
+Oc1cc2ccc3cccc4ccc(c1)c2c34	pyren-2-ol	roundtrip/test_fused_parents.py	
+Oc1ccc2cc3c(ccc4ccccc43)cc2c1	benz[a]anthracen-9-ol	roundtrip/test_fused_parents.py	
+Oc1ccc2[nH]ncc2c1	1H-indazol-5-ol	roundtrip/test_fused_parents.py	
+Oc1ccc2ncncc2c1	quinazolin-6-ol	roundtrip/test_fused_parents.py	
+Oc1ccc2nccnc2c1	quinoxalin-6-ol	roundtrip/test_fused_parents.py	
+Oc1ccc2cnncc2c1	phthalazin-6-ol	roundtrip/test_fused_parents.py	
+Oc1ccc2nnccc2c1	cinnolin-6-ol	roundtrip/test_fused_parents.py	
+Oc1ccc2nc3ccccc3nc2c1	phenazin-2-ol	roundtrip/test_fused_parents.py	
+Oc1ccc2c(c1)[nH]c1ccccc12	9H-carbazol-2-ol	roundtrip/test_fused_parents.py	
+C1=COc2c(O)cccc2C1	4H-1-benzopyran-8-ol	roundtrip/test_fused_parents.py	
+C1=CSc2c(O)cccc2C1	4H-1-benzothiopyran-8-ol	roundtrip/test_fused_parents.py	
+C1=Cc2c(O)cccc2OC1	2H-1-benzopyran-5-ol	roundtrip/test_fused_parents.py	
+C1=Cc2c(O)cccc2SC1	2H-1-benzothiopyran-5-ol	roundtrip/test_fused_parents.py	
+CC1CC2=CC=CC3=C2C1=CC=C3	1-methyl-1,2-dihydroacenaphthylene	roundtrip/test_fused_parents.py	
+ClC1CC2=CC=CC3=C2C1=CC=C3	1-chloro-1,2-dihydroacenaphthylene	roundtrip/test_fused_parents.py	
+OP(=O)(O)c1oc2ncccc2c1	furo[2,3-b]pyridin-2-ylphosphonic acid	roundtrip/test_fused_parents.py	
+OS(=O)(=O)Oc1oc2ncccc2c1	furo[2,3-b]pyridin-2-yl hydrogen sulfate	roundtrip/test_fused_parents.py	
+OP(=O)(O)Oc1oc2ncccc2c1	furo[2,3-b]pyridin-2-yl dihydrogen phosphate	roundtrip/test_fused_parents.py	
+c1oc2ncccc2c1O[N+](=O)[O-]	furo[2,3-b]pyridin-3-yl nitrate	roundtrip/test_fused_parents.py	
+c1oc2ncccc2c1ON=O	furo[2,3-b]pyridin-3-yl nitrite	roundtrip/test_fused_parents.py	
+C=C1C(=O)[C@@]23CC[C@H]4[C@H](C(=O)O)CCC[C@@]4(C)[C@@H]2[C@@H](O)C[C@@H]1C3	(2S,4S,4aS,4bR,8R,8aS,10aR)-4-hydroxy-4b-methyl-12-methylidene-11-oxo-1,2,3,4,4a,4b,5,6,7,8,8a,9,10,10a-tetradecahydro-2,10a-ethanophenanthrene-8-carboxylic acid	roundtrip/test_fusion_bridge_derivatives.py	
+O=C1C[C@H]2CC[C@@H]1[C@H]1C(=O)N(c3ccc([N+](=O)[O-])cc3)C(=O)[C@@H]21	(3aS,4R,7R,7aR)-2-(4-nitrophenyl)-3a,4,5,6,7,7a-hexahydro-4,7-ethano-1H-isoindole-1,3,8(2H)-trione	roundtrip/test_fusion_bridge_derivatives.py	
+C12C(C=C(C3=CC=CC=C13)O2)=O	1,4-epoxynaphthalen-2(1H)-one	unit/test_fusion_wrappers.py	1
+C12=CC=C(C=3C4=CC=C(C13)C4)O2	1,4-epoxy-5,8-methanonaphthalene	unit/test_fusion_wrappers.py	1
+O=C(COc1ccc2nc3n(c(=O)c2c1)CCC3)Nc1ccc(F)cc1	N-(4-fluorophenyl)-2-((9-oxo-2,3-dihydro-1H-pyrrolo[1,2-a]benzo[d]pyrimidin-7-yl)oxy)acetamide	roundtrip/test_fusion_hydrogenation_regressions.py	1
+O=C(NCc1ccccc1)Nc1ccc(C2=CSC3=NCCN23)cc1	N-benzyl-N'-(4-(5,6-dihydroimidazo[2,1-b][1,3]thiazol-3-yl)phenyl)urea	roundtrip/test_fusion_hydrogenation_regressions.py	1
+O=c1c2ccccc2nc2n1CCC2	2,3-dihydropyrrolo[1,2-a]benzo[d]pyrimidin-9(1H)-one	roundtrip/test_fusion_hydrogenation_regressions.py	1
+C1=CSC2=NCCN12	5,6-dihydroimidazo[2,1-b][1,3]thiazole	roundtrip/test_fusion_hydrogenation_regressions.py	1
+O=c1c2ccccc2nc2n1CC(C)C2	2-methyl-2,3-dihydropyrrolo[1,2-a]benzo[d]pyrimidin-9(1H)-one	roundtrip/test_fusion_hydrogenation_regressions.py	1
+CC1CN2C(=NC1)SC=C2	6-methyl-6,7-dihydro-5H-thiazolo[3,2-a]pyrimidine	roundtrip/test_fusion_hydrogenation_regressions.py	1
+O=c1c2ccccc2nc2n1CC=C2	pyrrolo[1,2-a]benzo[d]pyrimidin-9(1H)-one	roundtrip/test_fusion_hydrogenation_regressions.py	1
+CCCCCC(=O)O[C@@H]1[C@@]2(C(C)C)O[C@H]2[C@@H]2O[C@]23[C@]12O[C@H]2C[C@H]1C2=C(CC[C@@]13C)C(=O)OC2	(1aR,2R,2aS,3aS,3bS,4aS,4bS,9bS,10aS)-4b-methyl-7-oxo-2a-(propan-2-yl)-2,2a,3a,3b,4b,5,6,9b,10,10a-decahydro-9H-trisoxireno[2',3':2,3;2'',3'':4,4a;2''',3''':10,10a]phenanthro[7,8-c]furan-2-yl hexanoate	roundtrip/test_fusion_multiplied_hw_grammar.py	
+CC(C)[C@]12O[C@H]1[C@@H]1O[C@]13[C@]1(O[C@H]1C[C@H]1C4=C(C(=O)c5ccccc5)OC(=O)C4CC[C@@]13C)[C@@H]2O	(1aS,2R,2aR,3aS,3bS,4aS,4bS,9bR,10aS)-9-benzoyl-2-hydroxy-4b-methyl-2a-(propan-2-yl)-2,2a,3a,3b,4b,6,6a,9b,10,10a-decahydrotrisoxireno[2',3':2,3;2'',3'':4,4a;2''',3''':10,10a]phenanthro[7,8-c]furan-7(5H)-one	roundtrip/test_fusion_multiplied_hw_grammar.py	
+C1=CC2=C3C4=C(C2C=C1)C1C=CC=CC1=C4c1ccccc13	4a,4c-dihydrodibenzo[1',2':1,2;1'',2'':5,6]pentaleno[3,3a,4-ab]indene	roundtrip/test_fusion_polycyclic_carbon_h.py	
+F	hydrogen fluoride	roundtrip/test_fusion_polycyclic_carbon_h.py	
+CCCl	chloroethane	roundtrip/test_haloalkanes.py	
+ClCCO	2-chloroethan-1-ol	roundtrip/test_haloalkanes.py	
+CC(F)C	2-fluoropropane	roundtrip/test_haloalkanes.py	
+COCCO	2-methoxyethan-1-ol	roundtrip/test_heteroatom_substituents.py	
+CN(C)CCO	2-(dimethylamino)ethan-1-ol	roundtrip/test_heteroatom_substituents.py	
+C[PH]CCO	2-(methylphosphanyl)ethan-1-ol	roundtrip/test_heteroatom_substituents.py	
+C[SeH]CCO	2-(methyl-lambda^3-selanyl)ethan-1-ol	roundtrip/test_heteroatom_substituents.py	
+C[SiH2]CCO	2-(methylsilyl)ethan-1-ol	roundtrip/test_heteroatom_substituents.py	
+c1n[nH]cn1	1H-1,2,4-triazole	roundtrip/test_heterocycles.py	
+OC1=CC=CCN1	1,6-dihydropyridin-2-ol	roundtrip/test_heterocycles.py	
+N1=C=CCCC1	1-azacyclohexa-1,2-diene	roundtrip/test_heterocycles.py	
+C1CN1	aziridine	roundtrip/test_heterocycles.py	
+C1COC1	oxetane	roundtrip/test_heterocycles.py	
+C1CNC1	azetidine	roundtrip/test_heterocycles.py	
+C1CCOC1	oxolane	roundtrip/test_heterocycles.py	
+C1CCNC1	pyrrolidine	roundtrip/test_heterocycles.py	
+O1CCOCC1	1,4-dioxane	roundtrip/test_heterocycles.py	
+O1CCSCC1	1,4-oxathiane	roundtrip/test_heterocycles.py	
+O1CCNCC1	morpholine	roundtrip/test_heterocycles.py	
+N1CCNCC1	piperazine	roundtrip/test_heterocycles.py	
+O1CCCOCC1	1,4-dioxepane	roundtrip/test_heterocycles.py	
+c1cnccn1	pyrazine	roundtrip/test_heterocycles.py	
+c1c[nH]nn1	1H-1,2,3-triazole	roundtrip/test_heterocycles.py	
+c1cscn1	1,3-thiazole	roundtrip/test_heterocycles.py	
+c1cnsc1	1,2-thiazole	roundtrip/test_heterocycles.py	
+O1CCCCCCCCCCC1	1-oxacyclododecane	roundtrip/test_heterocycles.py	
+O1CCNCCCCCCCCC1	1-oxa-4-azacyclotridecane	roundtrip/test_heterocycles.py	
+c1cc[se]c1	selenophene	roundtrip/test_heterocycles.py	
+c1cc[te]c1	tellurophene	roundtrip/test_heterocycles.py	
+N1NCCC1	pyrazolidine	roundtrip/test_heterocycles.py	
+N1CNCC1	imidazolidine	roundtrip/test_heterocycles.py	
+O1CNCC1	1,3-oxazolidine	roundtrip/test_heterocycles.py	
+S1NCCC1	1,2-thiazolidine	roundtrip/test_heterocycles.py	
+S1CCNCC1	thiomorpholine	roundtrip/test_heterocycles.py	
+[Se]1CCNCC1	1,4-selenazinane	roundtrip/test_heterocycles.py	
+[Te]1CCNCC1	1,4-tellurazinane	roundtrip/test_heterocycles.py	
+Oc1ccncc1	pyridin-4-ol	roundtrip/test_heterocycles.py	
+Nc1ccncc1	pyridin-4-amine	roundtrip/test_heterocycles.py	
+Sc1ccncc1	pyridine-4-thiol	roundtrip/test_heterocycles.py	
+Cc1ccncc1	4-methylpyridine	roundtrip/test_heterocycles.py	
+Clc1ccncc1	4-chloropyridine	roundtrip/test_heterocycles.py	
+O=C(O)c1ccncc1	pyridine-4-carboxylic acid	roundtrip/test_heterocycles.py	
+N#Cc1ccncc1	pyridine-4-carbonitrile	roundtrip/test_heterocycles.py	
+O=C1CO1	oxiran-2-one	roundtrip/test_heterocycles.py	
+O=C1NCCCCC1	azepan-2-one	roundtrip/test_heterocycles.py	
+O=C1NC=CC=C1	pyridin-2(1H)-one	roundtrip/test_heterocycles.py	
+N1CC=CC=C1	1,2-dihydropyridine	roundtrip/test_heterocycles.py	
+N1C=CCCCC1	2,3,4,5-tetrahydro-1H-azepine	roundtrip/test_heterocycles.py	
+N1CC=CCCCCCCC1	1-azacycloundec-3-ene	roundtrip/test_heterocycles.py	
+N1CCCC=CCCCCCC1	1-azacyclododec-5-ene	roundtrip/test_heterocycles.py	
+C=NC	N-methylmethanimine	roundtrip/test_imines.py	
+CC=NC	N-methylethanimine	roundtrip/test_imines.py	
+CC(=N)C	propan-2-imine	roundtrip/test_imines.py	
+C1CCCCC1=N	cyclohexanimine	roundtrip/test_imines.py	
+N1CCCCC1=N	piperidin-2-imine	roundtrip/test_imines.py	
+C1CCC2=CC=CC=C2C1=N	1,2,3,4-tetrahydronaphthalen-1-imine	roundtrip/test_imines.py	
+CCC(=O)C	butan-2-one	roundtrip/test_ketones.py	
+O=CCO	2-hydroxyethanal	roundtrip/test_ketones.py	
+C[Si](C)(C)C(F)Cl	(chlorofluoromethyl)trimethylsilane	roundtrip/test_ligand_parentheses.py	
+CC[Si](CC)(CC)C(F)Cl	(chlorofluoromethyl)triethylsilane	roundtrip/test_ligand_parentheses.py	
+CC(F)(Cl)[Si](CC)(CC)CC	(1-chloro-1-fluoroethyl)triethylsilane	roundtrip/test_ligand_parentheses.py	
+C[Si](C)(CCl)CCl	bis(chloromethyl)dimethylsilane	roundtrip/test_ligand_parentheses.py	
+CO[Si](OC)(C)(C)	dimethoxydimethylsilane	roundtrip/test_ligand_parentheses.py	
+C[Si](C)(CC(C)C)CC(C)C	dimethylbis(2-methylpropyl)silane	roundtrip/test_ligand_parentheses.py	
+CO[Si](OC)(OC(C)(C)C)OC(C)(C)C	bis(tert-butoxy)dimethoxysilane	roundtrip/test_ligand_parentheses.py	
+[Si](C)(CC)(CCC)CCCC	butyl(ethyl)(methyl)(propyl)silane	roundtrip/test_ligand_parentheses.py	
+[Si](CC(C)C)(CC(C)(C)C)(CCl)C(F)F	(chloromethyl)(difluoromethyl)(2,2-dimethylpropyl)(2-methylpropyl)silane	roundtrip/test_ligand_parentheses.py	
+[Si](CCl)(C(F)F)(C(Cl)Cl)C(F)(F)F	(chloromethyl)(dichloromethyl)(difluoromethyl)(trifluoromethyl)silane	roundtrip/test_ligand_parentheses.py	
+CC[Si](CC)(COC)COC	diethylbis(methoxymethyl)silane	roundtrip/test_ligand_parentheses.py	
+C[Ge](C)(CCl)CCl	bis(chloromethyl)dimethylgermane	roundtrip/test_ligand_parentheses.py	
+C[Sn](C)(CCl)CCl	bis(chloromethyl)dimethylstannane	roundtrip/test_ligand_parentheses.py	
+CP(C)(CCl)CCl	bis(chloromethyl)dimethyl-lambda5-phosphane	roundtrip/test_ligand_parentheses.py	
+B(C)(CCl)CCl	bis(chloromethyl)(methyl)borane	roundtrip/test_ligand_parentheses.py	
+O=C(O)CC(C(=O)N(CCl)CCl)	3-(bis(chloromethyl)carbamoyl)propanoic acid	roundtrip/test_ligand_parentheses.py	
+[N+](CCl)(CCl)(C)CC(=O)[O-]	2-(bis(chloromethyl)(methyl)ammonio)acetate	roundtrip/test_ligand_parentheses.py	
+[BH3-][P+](CCl)(CCl)C	(bis(chloromethyl)(methyl)phosphaniumyl)boranuide	roundtrip/test_ligand_parentheses.py	
+OB(CCl)CCl	bis(chloromethyl)borinic acid	roundtrip/test_ligand_parentheses.py	
+N=S(CCl)C(F)Cl	chloro((chloromethyl)(imino)sulfanyl)fluoromethane	roundtrip/test_ligand_parentheses.py	
+CN(C)S(=O)(=O)O	dimethylsulfamic acid	roundtrip/test_ligand_parentheses.py	
+C[NH3+]	methanaminium	roundtrip/test_nitro.py	
+C[N+](=O)[O-]	nitromethane	roundtrip/test_nitro.py	
+CC[N+](=O)[O-]	nitroethane	roundtrip/test_nitro.py	
+O=[N+]([O-])c1ccccc1	nitrobenzene	roundtrip/test_nitro.py	
+CC(O)CC	butan-2-ol	roundtrip/test_numbering.py	
+CCC(C)C	2-methylbutane	roundtrip/test_numbering.py	
+CCS(=O)(=O)O	ethanesulfonic acid	roundtrip/test_oxyacids.py	
+CCP(=O)(O)O	ethylphosphonic acid	roundtrip/test_oxyacids.py	
+CO[N+](=O)[O-]	methyl nitrate	roundtrip/test_oxyacids.py	
+CCO[N+](=O)[O-]	ethyl nitrate	roundtrip/test_oxyacids.py	
+CON=O	methyl nitrite	roundtrip/test_oxyacids.py	
+CCON=O	ethyl nitrite	roundtrip/test_oxyacids.py	
+CCOS(=O)(=O)O	ethyl hydrogen sulfate	roundtrip/test_oxyacids.py	
+CCOP(=O)(O)O	ethyl dihydrogen phosphate	roundtrip/test_oxyacids.py	
+CCCCC(CC)CCC(CC(C)C)OS(=O)(=O)O	7-ethyl-2-methylundecan-4-yl hydrogen sulfate	roundtrip/test_oxyacids.py	
+C1=CCNCC1	1,2,3,6-tetrahydropyridine	roundtrip/test_p13_additive.py	
+CP(F)(OC)c1ccccc1	fluoro(methoxy)(methyl)(phenyl)-lambda5-phosphane	roundtrip/test_p13_additive.py	
+C1COc2ncccc21	2,3-dihydrofuro[2,3-b]pyridine	roundtrip/test_p13_additive.py	
+c1ccccc1-c1ccccc1	1,1'-biphenyl	roundtrip/test_p13_conjunctive.py	0
+C1CC1-C1CC1	cyclopropylcyclopropane	roundtrip/test_p13_conjunctive.py	
+c1ccccc1-c2ccc(cc2)-c2ccccc2	1,4-diphenylbenzene	roundtrip/test_p13_conjunctive.py	
+C1=CCCCC1-C1=CCCCC1	3-(cyclohex-1-en-1-yl)cyclohex-1-ene	roundtrip/test_p13_conjunctive.py	
+C1=COC=CC1-C1=COC=CC1	3-(4H-pyran-4-yl)-4H-pyran	roundtrip/test_p13_conjunctive.py	
+OCCc1ccncc1	2-(pyridin-4-yl)ethan-1-ol	roundtrip/test_p13_conjunctive.py	
+OCCc1ccccc1-c1ccccc1	2-(2-phenylphenyl)ethan-1-ol	roundtrip/test_p13_conjunctive.py	
+C1CCCCC1CCO	2-cyclohexylethan-1-ol	roundtrip/test_p13_conjunctive.py	
+O=C(O)CC1CCCC1	2-cyclopentylacetic acid	roundtrip/test_p13_conjunctive.py	
+c1ccccc1CC(=O)O	2-phenylacetic acid	roundtrip/test_p13_conjunctive.py	
+c1ccccc1CC=O	2-phenylethanal	roundtrip/test_p13_conjunctive.py	
+c1ccccc1CC#N	2-phenylacetonitrile	roundtrip/test_p13_conjunctive.py	
+c1ccccc1C(C)O	1-phenylethan-1-ol	roundtrip/test_p13_conjunctive.py	
+c1ccccc1CC(C)O	1-phenylpropan-2-ol	roundtrip/test_p13_conjunctive.py	
+n1ccccc1C(C)O	1-(pyridin-2-yl)ethan-1-ol	roundtrip/test_p13_conjunctive.py	
+OCCC1=CC=NC=C1	2-(pyridin-4-yl)ethan-1-ol	roundtrip/test_p13_conjunctive.py	
+O=C(O)Cc1ccccn1	2-(pyridin-2-yl)acetic acid	roundtrip/test_p13_conjunctive.py	
+O=C(O)Cc1ccncc1	2-(pyridin-4-yl)acetic acid	roundtrip/test_p13_conjunctive.py	
+CC(C)(C)Oc1nc(Cl)c(Cl)c(OC(C)(C)C)c1Cl	2,4-bis(tert-butoxy)-3,5,6-trichloropyridine	roundtrip/test_p13_multiplicative.py	
+CC(O)c1cc(OC(C)(C)C)cc(OC(C)(C)C)c1	1-(3,5-bis(tert-butoxy)phenyl)ethan-1-ol	roundtrip/test_p13_multiplicative.py	
+N1CCCCC1	piperidine	roundtrip/test_p13_operations.py	
+NOC	(aminooxy)methane	roundtrip/test_p13_replacement.py	
+Cl[SiH]=[SiH]Cl	1,2-dichlorodisilene	roundtrip/test_p13_replacement.py	
+N1CC2CCC1C2	2-azabicyclo[2.2.1]heptane	roundtrip/test_p13_replacement.py	
+N1CC2CNCC1C2	3,6-diazabicyclo[3.2.1]octane	roundtrip/test_p13_replacement.py	
+CCNC(CN1CCC(C)(CC)CC1)C(C)C	N-ethyl-1-(4-ethyl-4-methylpiperidin-1-yl)-3-methylbutan-2-amine	roundtrip/test_p13_substitutive.py	
+CCc1ccc(-c2nc(C3(CN)CC3)[nH]c2C)cc1	1-(1-(4-(4-ethylphenyl)-5-methyl-1H-imidazol-2-yl)cyclopropyl)methanamine	roundtrip/test_p13_substitutive.py	
+CC=NO	N-hydroxyethanimine	roundtrip/test_p13_substitutive.py	
+CC=NN	acetaldehyde hydrazone	roundtrip/test_p13_substitutive.py	
+CC[SeH]	ethaneselenol	roundtrip/test_p13_substitutive.py	
+CC[TeH]	ethanetellurol	roundtrip/test_p13_substitutive.py	
+Cc1ccc(C(=O)N[C@H](C)CC(=O)NC(C)C)c(Br)c1	2-bromo-4-methyl-N-((2R)-4-oxo-4-((propan-2-yl)amino)butan-2-yl)benzamide	roundtrip/test_p13_substitutive.py	
+C#CC	propyne	roundtrip/test_p13_subtractive.py	
+C1CCCC=C1	cyclohexene	roundtrip/test_p13_subtractive.py	
+C1CC#CCC1	cyclohexyne	roundtrip/test_p13_subtractive.py	
+C1=CC2CCCCC2C1	3a,4,5,6,7,7a-hexahydro-1H-indene	roundtrip/test_polycycles.py	
+C1CCC2CCCCC2C1	decahydronaphthalene	roundtrip/test_polycycles.py	
+CC1CC2CCC1C2	2-methylbicyclo[2.2.1]heptane	roundtrip/test_polycycles.py	
+O1CC2CCC1C2	2-oxabicyclo[2.2.1]heptane	roundtrip/test_polycycles.py	
+C1CCC2(CC1)CCCCC2	spiro[5.5]undecane	roundtrip/test_polycycles.py	
+CC1CCC2(CC1)CCCCC2	3-methylspiro[5.5]undecane	roundtrip/test_polycycles.py	
+C1C2CC3CC1CC(C2)C3	adamantane	roundtrip/test_polycycles.py	
+C12C3C4C1C1C2C3C41	cubane	roundtrip/test_polycycles.py	
+C1CN2CCC1CC2	1-azabicyclo[2.2.2]octane	roundtrip/test_polycycles.py	
+O=S1CC2CCCCC2C1	2-oxooctahydro-2lambda^4-benzo[c]thiophene	roundtrip/test_polycyclic_descriptors.py	
+O=S1CCCC1	1-oxothiolane	roundtrip/test_polycyclic_descriptors.py	
+C1=CC2CCCCC2C=C1	1,2,3,4,4a,8a-hexahydronaphthalene	roundtrip/test_polycyclic_descriptors.py	
+C1=CC2CCC1C2	bicyclo[2.2.1]hept-2-ene	roundtrip/test_polycyclic_descriptors.py	
+CN1CC11C2C3CC2C13	1-methylspiro[aziridine-2,3'-tricyclo[2.2.0.0^{2,5}]hexane]	roundtrip/test_polycyclic_descriptors.py	
+C1C2C1C13COC21CO3	7,9-dioxatetracyclo[3.2.2.0^{1,5}.0^{2,4}]nonane	roundtrip/test_polycyclic_descriptors.py	
+C1NC23COC12C=CC3	7-oxa-9-azatricyclo[3.2.2.0^{1,5}]non-2-ene	roundtrip/test_polycyclic_descriptors.py	
+C1NC23COC12COC3	3,7-dioxa-9-azatricyclo[3.2.2.0^{1,5}]nonane	roundtrip/test_polycyclic_descriptors.py	
+NC(=O)Nc1ccc(CCC=O)cc1	N-(4-(3-oxopropyl)phenyl)urea	roundtrip/test_polyfunctional_fragments.py	
+CCNC(=NCCc1cnn(C)c1)N[C@@H]1CCN(C2CCCC2)C1	1-((3R)-1-cyclopentylpyrrolidin-3-yl)-3-ethyl-2-(2-(1-methyl-1H-pyrazol-4-yl)ethyl)guanidine	roundtrip/test_polyfunctional_fragments.py	
+CC(=O)c1ccnc2c([C@H](C)CNc3cc(-c4cnc(C)nc4)ncn3)cccc12	1-(8-((2S)-1-((6-(2-methylpyrimidin-5-yl)pyrimidin-4-yl)amino)propan-2-yl)quinolin-4-yl)ethan-1-one	roundtrip/test_polyfunctional_fragments.py	
+COc1ccc(Cl)c2sc(N3CCN(C(=O)c4nn(C)cc4C)CC3)nc12	(4-(7-chloro-4-methoxy-1,3-benzothiazol-2-yl)piperazin-1-yl)(1,4-dimethyl-1H-pyrazol-3-yl)methanone	roundtrip/test_polyfunctional_fragments.py	
+CN(C)CCNC(=O)c1ccnc(N2CCOCC2)n1	N-(2-(dimethylamino)ethyl)-2-(morpholin-4-yl)pyrimidine-4-carboxamide	roundtrip/test_polyfunctional_fragments.py	
+COc1cc(OC)cc(C(=O)NC(C(=O)NCc2ccc(C)cc2C)C(C)C)c1	N-(1-(((2,4-dimethylphenyl)methyl)amino)-3-methyl-1-oxobutan-2-yl)-3,5-dimethoxybenzamide	roundtrip/test_polyfunctional_fragments.py	
+CC(=O)c1ccnc2c(C(C)CNc3cc(-c4cnc(C)nc4)ncn3)cccc12	1-(8-(1-((6-(2-methylpyrimidin-5-yl)pyrimidin-4-yl)amino)propan-2-yl)quinolin-4-yl)ethan-1-one	roundtrip/test_polyfunctional_fragments.py	
+CCCOc1ccnc(NC(C)(CC)CCN)n1	3-methyl-N'-(4-propoxypyrimidin-2-yl)pentane-1,3-diamine	roundtrip/test_polyfunctional_fragments.py	
+NC1CN(C(CO)c2ccccc2)C1	2-(3-aminoazetidin-1-yl)-2-phenylethan-1-ol	roundtrip/test_polyfunctional_fragments.py	
+COc1cccc(S(=O)(=O)NC(=O)[C@@H](C)NC(=O)c2ccco2)c1	N-((2R)-1-(3-methoxybenzene-1-sulfonamido)-1-oxopropan-2-yl)furan-2-carboxamide	roundtrip/test_polyfunctional_fragments.py	
+CCS(=O)O	ethanesulfinic acid	roundtrip/test_principal_group_breadth.py	
+CCP(=O)O	ethylphosphinic acid	roundtrip/test_principal_group_breadth.py	
+CC[Se](=O)O	ethaneseleninic acid	roundtrip/test_principal_group_breadth.py	
+CC[Se](=O)(=O)O	ethaneselenonic acid	roundtrip/test_principal_group_breadth.py	
+CC[Te](=O)O	ethanetellurinic acid	roundtrip/test_principal_group_breadth.py	
+CC[Te](=O)(=O)O	ethanetelluronic acid	roundtrip/test_principal_group_breadth.py	
+CCB(O)O	ethylboronic acid	roundtrip/test_principal_group_breadth.py	
+CC(=N)N	ethanimidamide	roundtrip/test_principal_group_breadth.py	
+CC(=N)NCC	N-ethylethanimidamide	roundtrip/test_principal_group_breadth.py	
+CC(=NO)C	N-hydroxypropan-2-imine	roundtrip/test_principal_group_breadth.py	
+CC(=NOC)C	N-methoxypropan-2-imine	roundtrip/test_principal_group_breadth.py	
+CC(=NN)C	propan-2-one hydrazone	roundtrip/test_principal_group_breadth.py	
+CC(=NNC)C	N-methylpropan-2-one hydrazone	roundtrip/test_principal_group_breadth.py	
+COC(=N)C	1-methoxyethan-1-imine	roundtrip/test_principal_group_breadth.py	
+COC(=N)NCC	N-(1-imino-1-methoxymethyl)ethanamine	roundtrip/test_principal_group_breadth.py	
+O=S(O)c1oc2ncccc2c1	furo[2,3-b]pyridine-2-sulfinic acid	roundtrip/test_principal_group_breadth.py	
+OB(O)c1oc2ncccc2c1	(furo[2,3-b]pyridin-2-yl)boronic acid	roundtrip/test_principal_group_breadth.py	
+O=C(Nc1ccc2nc(=O)n3c(c2c1)NCC3)c1cc(Cl)ccc1Cl	2,5-dichloro-N-(5-oxo-2,3-dihydro-1H-imidazo[1,2-c]benzo[e]pyrimidin-9-yl)benzamide	roundtrip/test_remaining_fusion_composition_evidence.py	
+CCc1cccc2c1[nH]c1c3c(c(C(C)=O)cc12)C(=O)C=CC3=O	5-acetyl-10-ethyl-11H-benzo[a]carbazole-1,4-dione	roundtrip/test_remaining_fusion_composition_evidence.py	
+CC1(CO)CN(Cc2ccccc2)CC2CN(Cc3ccc(F)cc3)CCN21	(2-benzyl-8-((4-fluorophenyl)methyl)-4-methyloctahydro-4H-pyrazino[1,2-a]pyrazin-4-yl)methanol	roundtrip/test_remaining_fusion_composition_evidence.py	
+OP(=O)(O)O	phosphoric acid	unit/test_analysis.py	0
+O=S(=O)(O)O	sulfuric acid	roundtrip/test_replacement_parents.py	
+O=N(=O)O	nitric acid	roundtrip/test_replacement_parents.py	
+OBr	hypobromous acid	roundtrip/test_replacement_parents.py	
+C[BH2]	borylmethane	roundtrip/test_replacement_parents.py	
+Cl[SiH2]Cl	dichlorosilane	roundtrip/test_replacement_parents.py	
+COP(OC)OC	trimethyl phosphite	roundtrip/test_replacement_parents.py	
+CP(C)(C)=O	trimethylphosphane oxide	roundtrip/test_replacement_parents.py	
+CC(C)(C)O[SiH2]OC(C)(C)C	bis(tert-butoxy)silane	roundtrip/test_replacement_parents.py	
+CC(C)(C)O[PH](OC(C)(C)C)OC(C)(C)C	tris(tert-butoxy)-lambda4-phosphane	roundtrip/test_replacement_parents.py	
+[BH3]	borane	roundtrip/test_replacement_parents.py	
+[NH3]	ammonia	roundtrip/test_replacement_parents.py	
+[SiH4]	silane	roundtrip/test_replacement_parents.py	
+[PH3]	phosphane	roundtrip/test_replacement_parents.py	
+[AsH3]	arsane	roundtrip/test_replacement_parents.py	
+[SbH3]	stibane	roundtrip/test_replacement_parents.py	
+[BiH3]	bismuthane	roundtrip/test_replacement_parents.py	
+NN	hydrazine	roundtrip/test_replacement_parents.py	
+N=N	diazene	roundtrip/test_replacement_parents.py	
+NN=N	triaz-1-ene	roundtrip/test_replacement_parents.py	
+[SiH]#[SiH]	disilyne	roundtrip/test_replacement_parents.py	
+NNNNNNNNN	nonaazane	roundtrip/test_replacement_parents.py	
+SSSS	tetrasulfane	unit/test_polyoxide_chains.py	1
+[SiH3][SiH2][SiH2][SiH2][SiH3]	pentasilane	roundtrip/test_replacement_parents.py	
+C[SiH2][SiH2]C	1,2-dimethyldisilane	roundtrip/test_replacement_parents.py	
+Cl[SiH2][SiH2]Cl	1,2-dichlorodisilane	roundtrip/test_replacement_parents.py	
+CO[SiH2][SiH2]OC	1,2-dimethoxydisilane	roundtrip/test_replacement_parents.py	
+C[Si]#[Si]C	1,2-dimethyldisilyne	roundtrip/test_replacement_parents.py	
+c1ccccc1P(c2ccccc2)c2ccccc2	triphenylphosphane	roundtrip/test_replacement_parents.py	
+CO[Si](Cl)(C)c1ccccc1	chloro(methoxy)(methyl)(phenyl)silane	roundtrip/test_replacement_parents.py	
+CP(=O)(OC)c1ccccc1	methyl methyl(phenyl)phosphinate	roundtrip/test_replacement_parents.py	
+FP(F)(F)(F)F	pentafluoro-lambda5-phosphane	roundtrip/test_replacement_parents.py	
+N1=CC=CC2=CC=C3C(NC(CC3=C12)=O)=O	8,10-dihydro-1,8-phenanthroline-7,9-dione	roundtrip/test_retained_fused_production.py	1
+N1C(N=C2N=CN=C2C1=O)=O	1H-purine-2,6-dione	roundtrip/test_retained_fused_production.py	1
+C(C)O	ethanol	roundtrip/test_retained_fused_production.py	
+CP(C)(N=C=O)(N=C=O)N=C=O	(triisocyanato(methyl)-lambda^5-phosphanyl)methane	roundtrip/test_role_models.py	
+NNc1cn[nH]c1	4-hydrazinyl-1H-pyrazole	roundtrip/test_role_models.py	
+CN(C)Nc1cccc2ncccc12	5-(N',N'-dimethylhydrazinyl)quinoline	roundtrip/test_role_models.py	
+CN(C)C(=O)OP(=O)(O)O	dimethylcarbamoyl dihydrogen phosphate	roundtrip/test_role_models.py	
+COC(CO)(COC(=O)O)OC	3-hydroxy-2,2-dimethoxypropyl hydrogen carbonate	roundtrip/test_role_models.py	
+NNCCOS(=O)(=O)O	2-(hydrazinyl)ethyl hydrogen sulfate	roundtrip/test_role_models.py	
+N=S1C=CC1	1-imino-1lambda^4-thiacyclobut-2-ene	roundtrip/test_role_models.py	
+N=[Se]1C=CC=C1	1-iminoselenophene	roundtrip/test_role_models.py	
+N=S(Cl)CF	(chloro(imino)sulfanyl)fluoromethane	roundtrip/test_role_models.py	
+[S-][n+]1ccc(-c2ccncc2)cc1	4-(pyridin-4-yl)pyridin-1-ium-1-thiolate	roundtrip/test_role_models.py	
+[S-][n+]1ccc2ncccn21	pyrazolo[1,5-a]pyrimidin-1-ium-1-thiolate	roundtrip/test_role_models.py	
+C[S+](C)[CH-]C	1-(dimethylsulfaniumyl)ethan-1-ide	roundtrip/test_role_models.py	
+F[C@H](Cl)Br	(1R)-bromochlorofluoromethane	roundtrip/test_stereo.py	
+C/C=C/C	(2E)-but-2-ene	roundtrip/test_stereo.py	
+CC(Cl)CO	2-chloropropan-1-ol	roundtrip/test_substituents.py	
+C=CC1=CCCCC1	1-ethenylcyclohex-1-ene	roundtrip/test_substituents.py	
+CCC(=S)S	propanedithioic acid	unit/test_all_chalcogen_acyl_regressions.py	1
+CCC(=S)O	propanethioic O-acid	unit/test_all_chalcogen_acyl_regressions.py	1
+CCC(=O)S	propanethioic S-acid	unit/test_all_chalcogen_acyl_regressions.py	1
+CCC(=S)OC(=O)	formic propanethioic anhydride	unit/test_all_chalcogen_acyl_regressions.py	1
+CCC(=S)OSC(=S)CC	propanethioic thioperoxyanhydride	unit/test_all_chalcogen_acyl_regressions.py	1
+CCC(=S)OC(=S)CC	propanethioic anhydride	unit/test_all_chalcogen_acyl_regressions.py	1
+CC(=O)OOC(=O)C	acetic peroxyanhydride	unit/test_all_chalcogen_acyl_regressions.py	1
+CC(=O)SOC(=O)CC	S-acetic O-propanoic thioperoxyanhydride	unit/test_all_chalcogen_acyl_regressions.py	1
+CC(=O)OSC(=O)CC	O-acetic S-propanoic thioperoxyanhydride	unit/test_all_chalcogen_acyl_regressions.py	1
+CC(=O)OOC(=O)CC	acetic propanoic peroxyanhydride	unit/test_all_chalcogen_acyl_regressions.py	1
+[Na+]	sodium	unit/test_analysis.py	0
+O=C(O)Cc1ccc2cc3ccccc3cc2c1	2-(anthracen-2-yl)acetic acid	unit/test_analysis.py	1
+O=C(O)Cc1cccc2cc3ccccc3cc12	2-(anthracen-1-yl)acetic acid	unit/test_analysis.py	1
+O=C(O)Cc1c2ccccc2cc2ccccc12	2-(anthracen-9-yl)acetic acid	unit/test_analysis.py	1
+CNc1c(NC(=O)C=O)c2ccccc2c2ccccc12	N-(10-(methylamino)phenanthren-9-yl)-2-oxoacetamide	unit/test_analysis.py	1
+C[C@H]1C[C@@H](C)C1	cis-1,3-dimethylcyclobutane	unit/test_audit_reconstruction.py	0
+C[C@H]1C[C@H](C)C1	trans-1,3-dimethylcyclobutane	unit/test_audit_reconstruction.py	0
+C[C@H]1CC[C@@H](C)C1	(1R,3S)-1,3-dimethylcyclopentane	unit/test_audit_reconstruction.py	0
+C[C@H]1CC[C@H](C)C1	(1S,3S)-1,3-dimethylcyclopentane	unit/test_audit_reconstruction.py	0
+C[C@H]1CC[C@@H](C)CC1	cis-1,4-dimethylcyclohexane	unit/test_audit_reconstruction.py	0
+C[C@H]1CC[C@H](C)CC1	trans-1,4-dimethylcyclohexane	unit/test_audit_reconstruction.py	0
+C[C@H]1CCCC[C@H]1C	(1R,2S)-1,2-dimethylcyclohexane	unit/test_audit_reconstruction.py	0
+C[C@H]1CCCC[C@@H]1C	(1S,2S)-1,2-dimethylcyclohexane	unit/test_audit_reconstruction.py	0
+N[C@H]1CC[C@@H](O)CC1	cis-4-aminocyclohexanol	unit/test_audit_reconstruction.py	0
+N[C@H]1CC[C@H](O)CC1	trans-4-aminocyclohexanol	unit/test_audit_reconstruction.py	0
+CS(=O)(=O)[C@H]1C[C@@H](N)C1	cis-3-(methylsulfonyl)cyclobutanamine	unit/test_audit_reconstruction.py	0
+CS(=O)(=O)[C@H]1C[C@H](N)C1	trans-3-(methylsulfonyl)cyclobutanamine	unit/test_audit_reconstruction.py	0
+Cn1c(=O)c2[nH]cnc2n(C)c1=O	1,3-dimethyl-3,7-dihydro-1H-purine-2,6-dione	unit/test_audit_reconstruction.py	1
+Cn1cnc2c1c(=O)[nH]c(=O)n2C	3,7-dimethyl-3,7-dihydro-1H-purine-2,6-dione	unit/test_audit_reconstruction.py	1
+O=c1[nH]c(=O)c2[nH]cnc2[nH]1	3,7-dihydro-1H-purine-2,6-dione	unit/test_audit_reconstruction.py	1
+O=c1[nH]cnc2nc[nH]c12	1,7-dihydro-6H-purin-6-one	unit/test_audit_reconstruction.py	1
+Nc1nc2[nH]cnc2c(=O)[nH]1	2-amino-1,9-dihydro-6H-purin-6-one	unit/test_audit_reconstruction.py	1
+O=c1[nH]c(=O)c2[nH]c(=O)[nH]c2[nH]1	1H-purine-2,6,8(3H,7H,9H)-trione	unit/test_audit_reconstruction.py	1
+Cn1c(=O)n(C2CCCN(C(=O)c3cccs3)C2)c2ncncc21	7-methyl-9-(1-((thiophen-2-yl)carbonyl)piperidin-3-yl)-7,9-dihydro-8H-purin-8-one	unit/test_audit_reconstruction.py	1
+COC(=O)c1ccc(cc1)C(=NO)N	methyl 4-(N'-hydroxycarbamimidoyl)benzoate	unit/test_carbamimidoyl_stereo.py	1
+N/C(=N/O)c1ccccc1	(E)-N'-hydroxybenzenecarboximidamide	unit/test_carbamimidoyl_stereo.py	1
+CC(=O)CC(=O)OSC(C)(C)C	OS-(tert-butyl) 3-oxobutane(thioperoxoate)	unit/test_chalcogen_citation_compatibility.py	1
+C=CC(=O)SS	prop-2-ene(dithioperoxoic) acid	unit/test_chalcogen_citation_compatibility.py	1
+CC(C)SC(=O)c1cc(C(=O)O)no1	5-((propan-2-yl)sulfanylcarbonyl)-1,2-oxazole-3-carboxylic acid	unit/test_chalcogen_citation_compatibility.py	1
+CCCCOC(=S)CCC(=O)OCC	ethyl 3-(butoxycarbonothioyl)propanoate	unit/test_chalcogen_citation_compatibility.py	1
+CCc1cccc(C(=O)OS)c1	3-ethylbenzene-1-carbo(thioperoxoic) OS-acid	unit/test_chalcogen_citation_compatibility.py	1
+O=C(SSC(Cl)=CCl)c1cc(Cl)c(Cl)cc1Cl	SS-(1,2-dichloroethenyl) 2,4,5-trichlorobenzene-1-carbo(dithioperoxoate)	unit/test_chalcogen_citation_compatibility.py	1
+CC(=[Se])OC	O-methyl ethaneselenoate	unit/test_chalcogen_citation_compatibility.py	1
+CC(=O)[Te]C	Te-methyl ethanetelluroate	unit/test_chalcogen_citation_compatibility.py	1
+CCCCCCC(C)(C)C(=O)OSC(=S)n1nc(C)cc1C	O-2,2-dimethyloctanoic S-3,5-dimethyl-1H-pyrazole-1-carbothioic thioperoxyanhydride	unit/test_chalcogen_citation_compatibility.py	1
+Cc1ccc(C(=O)SC(=S)SCC#N)cc1	2-(((hydroxy)(thioxo)methyl)sulfanyl)acetonitrile 4-methylbenzoic thioanhydride	unit/test_chalcogen_citation_compatibility.py	1
+C[SeH]	methaneselenol	unit/test_chalcogen_functional_groups.py	0
+C[TeH]	methanetellurol	unit/test_chalcogen_functional_groups.py	0
+C[Se-]	methaneselenolate	unit/test_chalcogen_functional_groups.py	0
+C[Te-]	methanetellurolate	unit/test_chalcogen_functional_groups.py	0
+CC(=S)C	propane-2-thione	unit/test_chalcogen_functional_groups.py	0
+CC(=[Se])C	propane-2-selone	unit/test_chalcogen_functional_groups.py	0
+CC(=[Te])C	propane-2-tellone	unit/test_chalcogen_functional_groups.py	0
+CC(=[Se])	ethaneselenal	unit/test_chalcogen_functional_groups.py	0
+CC(=[Te])	ethanetellanal	unit/test_chalcogen_functional_groups.py	0
+C[Se]C	dimethylselane	unit/test_chalcogen_functional_groups.py	1
+C[Te]C	dimethyltellane	unit/test_chalcogen_functional_groups.py	1
+CC(=S)O	ethanethioic O-acid	unit/test_chalcogen_functional_groups.py	1
+CC(=O)[SH]	ethanethioic S-acid	unit/test_chalcogen_functional_groups.py	1
+CC(=S)[SH]	ethanedithioic acid	unit/test_chalcogen_functional_groups.py	1
+CC(=[Se])O	ethaneselenoic O-acid	unit/test_chalcogen_functional_groups.py	1
+CC(=O)[SeH]	ethaneselenoic Se-acid	unit/test_chalcogen_functional_groups.py	1
+CC(=[Se])[SeH]	ethanediselenoic acid	unit/test_chalcogen_functional_groups.py	1
+CC(=[Te])O	ethanetelluroic O-acid	unit/test_chalcogen_functional_groups.py	1
+CC(=O)[TeH]	ethanetelluroic Te-acid	unit/test_chalcogen_functional_groups.py	1
+CC(=[Te])[TeH]	ethaneditelluroic acid	unit/test_chalcogen_functional_groups.py	1
+CC(=S)[SeH]	ethaneselenothioic Se-acid	unit/test_chalcogen_functional_groups.py	1
+CC(=[Se])[SH]	ethaneselenothioic S-acid	unit/test_chalcogen_functional_groups.py	1
+CC(=[Te])[SeH]	ethaneselenotelluroic Se-acid	unit/test_chalcogen_functional_groups.py	1
+CC(=O)SC	S-methyl ethanethioate	unit/test_chalcogen_functional_groups.py	1
+CC(=S)OC	O-methyl ethanethioate	unit/test_chalcogen_functional_groups.py	1
+CC(=S)SC	S-methyl ethanedithioate	unit/test_chalcogen_functional_groups.py	1
+CC(=O)[Se]C	Se-methyl ethaneselenoate	unit/test_chalcogen_functional_groups.py	1
+CC(=[Te])N	ethanetelluroamide	unit/test_chalcogen_functional_groups.py	1
+CC(=[Se])NN	ethaneselenohydrazide	unit/test_chalcogen_functional_groups.py	1
+NC(=[Se])N	selenourea	unit/test_chalcogen_functional_groups.py	1
+NC(=[Te])N	tellurourea	unit/test_chalcogen_functional_groups.py	1
+CC(=[Se])Cl	ethaneselenoyl chloride	unit/test_chalcogen_functional_groups.py	1
+COO	methaneperoxol	unit/test_chalcogen_functional_groups.py	1
+CSO	(hydroxysulfanyl)methane	unit/test_chalcogen_functional_groups.py	1
+C[Se]O	methane-SeO-selenoperoxol	unit/test_chalcogen_functional_groups.py	1
+C[Te]O	methane-TeO-telluroperoxol	unit/test_chalcogen_functional_groups.py	1
+CO[SH]	(sulfanyloxy)methane	unit/test_chalcogen_functional_groups.py	1
+CO[SeH]	methane-OSe-selenoperoxol	unit/test_chalcogen_functional_groups.py	1
+CO[TeH]	methane-OTe-telluroperoxol	unit/test_chalcogen_functional_groups.py	1
+CS[SH]	methanedithioperoxol	unit/test_chalcogen_functional_groups.py	1
+C[Se][SH]	methane-SeS-selenothioperoxol	unit/test_chalcogen_functional_groups.py	1
+C[Te][SH]	methane-TeS-tellurothioperoxol	unit/test_chalcogen_functional_groups.py	1
+CS[SeH]	methane-SSe-selenothioperoxol	unit/test_chalcogen_functional_groups.py	1
+CS[TeH]	methane-STe-tellurothioperoxol	unit/test_chalcogen_functional_groups.py	1
+C[Se][SeH]	methanediselenoperoxol	unit/test_chalcogen_functional_groups.py	1
+C[Te][SeH]	methane-TeSe-selenotelluroperoxol	unit/test_chalcogen_functional_groups.py	1
+C[Se][TeH]	methane-SeTe-selenotelluroperoxol	unit/test_chalcogen_functional_groups.py	1
+C[Te][TeH]	methaneditelluroperoxol	unit/test_chalcogen_functional_groups.py	1
+CC(=O)OO	ethaneperoxoic acid	unit/test_chalcogen_functional_groups.py	1
+CC(=S)OO	ethaneperoxothioic acid	unit/test_chalcogen_functional_groups.py	1
+CC(=O)SO	ethane(thioperoxoic) SO-acid	unit/test_chalcogen_functional_groups.py	1
+CC(=O)O[SH]	ethane(thioperoxoic) OS-acid	unit/test_chalcogen_functional_groups.py	1
+CC(=[Se])S[TeH]	ethaneseleno(tellurothioperoxoic) STe-acid	unit/test_chalcogen_functional_groups.py	1
+CC(=O)OOC	methyl ethaneperoxoate	unit/test_chalcogen_functional_groups.py	1
+CC(=S)OOC	OO-methyl ethaneperoxothioate	unit/test_chalcogen_functional_groups.py	1
+CC(=O)SOC	SO-methyl ethane(thioperoxoate)	unit/test_chalcogen_functional_groups.py	1
+CC(=O)OSC	OS-methyl ethane(thioperoxoate)	unit/test_chalcogen_functional_groups.py	1
+CC(=S)OC(C)=O	acetic ethanethioic anhydride	unit/test_chalcogen_functional_groups.py	1
+CC(=S)OC(C)=S	ethanethioic anhydride	unit/test_chalcogen_functional_groups.py	1
+CC(=O)SC(C)=O	acetic thioanhydride	unit/test_chalcogen_functional_groups.py	1
+CC(=O)[Se]C(C)=O	acetic selenoanhydride	unit/test_chalcogen_functional_groups.py	1
+CC(=O)OOC(C)=O	acetic peroxyanhydride	unit/test_chalcogen_functional_groups.py	1
+CC(=O)SOC(C)=O	acetic thioperoxyanhydride	unit/test_chalcogen_functional_groups.py	1
+CC(=O)OSC(C)=O	acetic thioperoxyanhydride	unit/test_chalcogen_functional_groups.py	1
+CC(=O)SSC(C)=O	acetic dithioperoxyanhydride	unit/test_chalcogen_functional_groups.py	1
+CCC(=O)SOC(C)=O	O-acetic S-propanoic thioperoxyanhydride	unit/test_chalcogen_functional_groups.py	1
+CS(=O)O	methanesulfinic acid	unit/test_chalcogen_functional_groups.py	1
+C[Se](=O)(=O)O	methaneselenonic acid	unit/test_chalcogen_functional_groups.py	1
+C[Se](=O)O	methaneseleninic acid	unit/test_chalcogen_functional_groups.py	1
+C[Te](=O)(=O)O	methanetelluronic acid	unit/test_chalcogen_functional_groups.py	1
+C[Te](=O)O	methanetellurinic acid	unit/test_chalcogen_functional_groups.py	1
+CS(=S)(=O)O	methanesulfonothioic O-acid	unit/test_chalcogen_functional_groups.py	1
+CS(=O)(=O)S	methanesulfonothioic S-acid	unit/test_chalcogen_functional_groups.py	1
+C[Se](=S)(=O)O	methaneselenonothioic O-acid	unit/test_chalcogen_functional_groups.py	1
+CS(=O)(=O)OC	methyl methanesulfonate	unit/test_chalcogen_functional_groups.py	1
+CS(=O)(=O)N	methanesulfonamide	unit/test_chalcogen_functional_groups.py	1
+CS(=O)(=O)NN	methanesulfonohydrazide	unit/test_chalcogen_functional_groups.py	1
+CS(=O)(=O)N(N)C	N-methylmethanesulfonohydrazide	unit/test_chalcogen_functional_groups.py	1
+CS(=S)(=O)NN	methanesulfonothiohydrazide	unit/test_chalcogen_functional_groups.py	1
+C[Se](=O)(=O)NN	methaneselenonohydrazide	unit/test_chalcogen_functional_groups.py	1
+C[Te](=O)NN	methanetellurinohydrazide	unit/test_chalcogen_functional_groups.py	1
+CS(=O)(=O)Cl	methanesulfonyl chloride	unit/test_chalcogen_functional_groups.py	1
+CC(=O)Sc1ccc(Cl)c(Cl)c1	S-(3,4-dichlorophenyl) ethanethioate	unit/test_chalcogen_functional_groups.py	1
+CC(=O)[Se]c1ccc(Cl)c(Cl)c1	Se-(3,4-dichlorophenyl) ethaneselenoate	unit/test_chalcogen_functional_groups.py	1
+CC(=O)[Te]c1ccc(Cl)c(Cl)c1	Te-(3,4-dichlorophenyl) ethanetelluroate	unit/test_chalcogen_functional_groups.py	1
+CS(=O)(=O)OO	methanesulfonoperoxoic acid	unit/test_chalcogen_functional_groups.py	1
+CS(=O)(=O)SO	methanesulfono(thioperoxoic) SO-acid	unit/test_chalcogen_functional_groups.py	1
+CS(=O)(=O)O[SH]	methanesulfono(thioperoxoic) OS-acid	unit/test_chalcogen_functional_groups.py	1
+CS(=O)(=O)OOC	methyl methanesulfonoperoxoate	unit/test_chalcogen_functional_groups.py	1
+CS(=O)(=O)SOC	SO-methyl methanesulfono(thioperoxoate)	unit/test_chalcogen_functional_groups.py	1
+C#CC[N+](C)([O-])C(C)Cc1ccc(C)cc1	N-methyl-N-(1-(4-methylphenyl)propan-2-yl)-N-oxidoprop-2-yn-1-aminium	unit/test_chalcogen_functional_groups.py	1
+C=CC1CC[NH+]([O-])C1	3-ethenyl-1-oxidopyrrolidinium	unit/test_chalcogen_functional_groups.py	1
+CC[N+](C)(C)[S-]	N,N-dimethylethanamine sulfide	unit/test_chalcogen_functional_groups.py	1
+CC[N+](C)(C)[Se-]	N,N-dimethylethanamine selenide	unit/test_chalcogen_functional_groups.py	1
+CC[N+](C)(C)[Te-]	N,N-dimethylethanamine telluride	unit/test_chalcogen_functional_groups.py	1
+CC#[N+][O-]	ethanenitrile oxide	unit/test_chalcogen_functional_groups.py	1
+CC#[N+][S-]	ethanenitrile sulfide	unit/test_chalcogen_functional_groups.py	1
+CC#[N+][Se-]	ethanenitrile selenide	unit/test_chalcogen_functional_groups.py	1
+CC#[N+][Te-]	ethanenitrile telluride	unit/test_chalcogen_functional_groups.py	1
+c1ccccc1C#[N+][S-]	benzenecarbonitrile sulfide	unit/test_chalcogen_functional_groups.py	1
+COOC	1,2-dimethyldioxidane	unit/test_chalcogen_functional_groups.py	1
+CCOOC	1-ethyl-2-methyldioxidane	unit/test_chalcogen_functional_groups.py	1
+CSSC	1,2-dimethyldisulfane	unit/test_chalcogen_functional_groups.py	1
+C[Se][Se]C	1,2-dimethyldiselane	unit/test_chalcogen_functional_groups.py	1
+C[Te][Te]C	1,2-dimethylditellane	unit/test_chalcogen_functional_groups.py	1
+CSOC	methoxy(methyl)sulfane	unit/test_chalcogen_functional_groups.py	1
+CCOSC	ethoxy(methyl)sulfane	unit/test_chalcogen_functional_groups.py	1
+CO[Se]C	dimethyl selenoperoxide	unit/test_chalcogen_functional_groups.py	1
+CO[Te]C	dimethyl telluroperoxide	unit/test_chalcogen_functional_groups.py	1
+CS[Se]C	dimethyl selenothioperoxide	unit/test_chalcogen_functional_groups.py	1
+CS[Te]C	dimethyl tellurothioperoxide	unit/test_chalcogen_functional_groups.py	1
+C[Se][Te]C	dimethyl selenotelluroperoxide	unit/test_chalcogen_functional_groups.py	1
+CC(C)(O)C(C)(C)OSc1ccc(CCCO)cc1	3-(((4-(3-hydroxypropyl)phenyl)sulfanyl)oxy)-2,3-dimethylbutan-2-ol	unit/test_chalcogen_functional_groups.py	1
+C=CC(=O)Oc1ccc(-c2ccc(CCCOSC)cc2)cc1	4-(4-(3-(methylsulfanyloxy)propyl)phenyl)phenyl prop-2-enoate	unit/test_chalcogen_functional_groups.py	1
+CC(=[Se])CC(=O)O	3-selenoxobutanoic acid	unit/test_chalcogen_functional_groups.py	1
+CC([TeH])CC(=O)O	3-tellanylbutanoic acid	unit/test_chalcogen_functional_groups.py	1
+CC(=[Te])CC(=[Se])C	4-telluroxopentane-2-selone	unit/test_chalcogen_functional_groups.py	1
+CC(=[Se])CC(=[Se])C	pentane-2,4-diselone	unit/test_chalcogen_functional_groups.py	1
+c1ccccc1C(=[Se])O	benzenecarboselenoic O-acid	unit/test_chalcogen_functional_groups.py	1
+CC(=[Se])N(C)C	N,N-dimethylethaneselenoamide	unit/test_chalcogen_functional_groups.py	1
+CC(=[Te])N(C)NC	N,N'-dimethylethanetellurohydrazide	unit/test_chalcogen_functional_groups.py	1
+[Na+].CC(=[Se])[S-]	sodium ethaneselenothioate	unit/test_chalcogen_functional_groups.py	1
+CN(C)C(=O)ONC(=O)c1ccccc1	benzamido dimethylcarbamate	unit/test_chalcogen_functional_groups.py	1
+CCOC(=O)C(CC)(Cc1cccc2cccnc12)C(=O)ONC(=O)CC	1-ethyl 3-propanamido 2-ethyl-2-((quinolin-8-yl)methyl)propanedioate	unit/test_chalcogen_functional_groups.py	1
+CC(S(=O)(=O)O)S(=O)(=O)OO	1-((hydroxyoxy)sulfonyl)ethane-1-sulfonic acid	unit/test_chalcogen_functional_groups.py	1
+COOS(=O)(=O)c1ccccc1C(=O)O	2-((methoxyoxy)sulfonyl)benzoic acid	unit/test_chalcogen_functional_groups.py	1
+N#CC1CC(=O)NC1=O	3-cyanopyrrolidine-2,5-dione	unit/test_chalcogen_structural_roles.py	1
+N#CC1CC(=[Se])NC1=[Te]	4-cyano-5-telluroxopyrrolidine-2-selone	unit/test_chalcogen_structural_roles.py	1
+O=Cc1cc(NCCOCCOCCOCCC(=O)O)ccc1C(=O)NC1CCC(=O)NC1=O	3-((2-((2-((2-((4-((2,6-dioxopiperidin-3-yl)carbamoyl)-3-formylphenyl)amino)ethyl)oxy)ethyl)oxy)ethyl)oxy)propanoic acid	unit/test_chalcogen_structural_roles.py	1
+CC(=O)NOC1(C)C(=O)NC(=O)NC1=O	N-((5-methyl-2,4,6-trioxo-1,3-diazinan-5-yl)oxy)acetamide	unit/test_chalcogen_structural_roles.py	1
+CC(=O)N=[N+]=[N-]	acetyl azide	unit/test_chalcogen_structural_roles.py	1
+CCCC(=O)C#N	butanoyl cyanide	unit/test_chalcogen_structural_roles.py	1
+CC(=O)[N+]#[C-]	acetyl isocyanide	unit/test_chalcogen_structural_roles.py	1
+CC(=O)N=C=O	acetyl isocyanate	unit/test_chalcogen_structural_roles.py	1
+CC(=O)N=C=S	acetyl isothiocyanate	unit/test_chalcogen_structural_roles.py	1
+CC(=O)N=C=[Se]	acetyl isoselenocyanate	unit/test_chalcogen_structural_roles.py	1
+CC(=O)N=C=[Te]	acetyl isotellurocyanate	unit/test_chalcogen_structural_roles.py	1
+CC(=S)N=C=O	ethanethioyl isocyanate	unit/test_chalcogen_structural_roles.py	1
+CC(=[Se])N=C=S	ethaneselenoyl isothiocyanate	unit/test_chalcogen_structural_roles.py	1
+C1Cc2ncccc2C1=O	6,7-dihydro-5H-cyclopenta[b]pyridin-5-one	unit/test_fused_oxo_added_hydrogen_tier.py	1
+CC1Cc2ncccc2C1=O	6-methyl-6,7-dihydro-5H-cyclopenta[b]pyridin-5-one	unit/test_fused_oxo_added_hydrogen_tier.py	1
+C1Cc2ncc(Cl)cc2C1=O	3-chloro-6,7-dihydro-5H-cyclopenta[b]pyridin-5-one	unit/test_fused_oxo_added_hydrogen_tier.py	1
+c1cnc2[nH]cnc2c1	3H-imidazo[4,5-b]pyridine	unit/test_fusion_candidate_budget.py	1
+Brc1cn2c(n1)OCCC2	2-bromo-6,7-dihydro-5H-imidazo[2,1-b][1,3]oxazine	unit/test_fusion_candidate_budget.py	1
+CSc1nc(N)c2ccc3ccccc3c2n1	2-(methylsulfanyl)naphtho[1,2-d]pyrimidin-4-amine	unit/test_fusion_candidate_budget.py	1
+Cc1nc2cc(O)c3ccccc3c2o1	2-methylnaphtho[2,1-d][1,3]oxazol-5-ol	unit/test_fusion_candidate_budget.py	1
+Cc1c2ccccc2nc2cc3ccccc3n12	12-methylindolo[1,2-a]benzo[d]pyrimidine	unit/test_fusion_candidate_budget.py	1
+COC(=O)c1cc2c(cn1)ncn2Cc1ccc(F)cc1	methyl 1-((4-fluorophenyl)methyl)imidazo[4,5-c]pyridine-6-carboxylate	unit/test_fusion_candidate_budget.py	1
+C1C(C)c2ncccc2C1=O	7-methyl-6,7-dihydro-5H-cyclopenta[b]pyridin-5-one	unit/test_fusion_carbon_h_oxo_composition.py	0
+C1Cc2cnccc2C1=O	7H-cyclopenta[c]pyridin-5(6H)-one	unit/test_fusion_carbon_h_oxo_composition.py	0
+C1Cc2nccnc2C1=O	5H-cyclopenta[b]pyrazin-7(6H)-one	unit/test_fusion_carbon_h_oxo_composition.py	0
+C1N=CN(C)C2=C1N=CO2	4-methyl-4,7-dihydrooxazolo[5,4-d]pyrimidine	unit/test_fusion_heteroatom_pi_redistribution.py	1
+O=C1C=CC2=C1NC=C2	1H-cyclopenta[b]pyrrol-6-one	unit/test_fusion_intrinsic_h_suffix.py	1
+O=C1NC2=C(O1)C=CO2	furo[2,3-d][1,3]oxazol-2(3H)-one	unit/test_fusion_intrinsic_h_suffix.py	1
+O=C1NC2=C(OC=C2)O1	furo[3,2-d][1,3]oxazol-2(1H)-one	unit/test_fusion_intrinsic_h_suffix.py	1
+O=C1OC2=C(O1)C=CN2	4H-[1,3]dioxolo[4,5-b]pyrrol-2-one	unit/test_fusion_intrinsic_h_suffix.py	1
+CCN1CCC2=C1C=NN2	4-ethyl-5,6-dihydro-1H-pyrrolo[3,2-c]pyrazole	unit/test_fusion_mancude_aromatic_h.py	1
+CN1CC(C)C2=C1C=NN2	4,6-dimethyl-5,6-dihydro-1H-pyrrolo[3,2-c]pyrazole	unit/test_fusion_mancude_aromatic_h.py	1
+C1CC2=C(N1)C=CN2	1,2,3,4-tetrahydropyrrolo[3,2-b]pyrrole	unit/test_fusion_mixed_nh_donors.py	1
+c1cc2c([nH]1)CCN2	1,2,3,4-tetrahydropyrrolo[3,2-b]pyrrole	unit/test_fusion_mixed_nh_donors.py	1
+C1CC2=CNC=C2N1	1,2,3,5-tetrahydropyrrolo[3,4-b]pyrrole	unit/test_fusion_mixed_nh_donors.py	1
+c1[nH]cc2c1CCN2	1,2,3,5-tetrahydropyrrolo[3,4-b]pyrrole	unit/test_fusion_mixed_nh_donors.py	1
+C12=CC=C(C3=CC=CC=C13)O2	1,4-epoxynaphthalene	unit/test_fusion_wrappers.py	1
+C12=CC(=CC3=CC=4C5=CC=C(C4C=C13)O5)C2	5,8-epoxy-1,3-methanoanthracene	unit/test_fusion_wrappers.py	1
+N12C=CC3=CC(=CC=C13)C2	1,5-methanoindole	unit/test_fusion_wrappers.py	1
+C12=CC=C(C3=CC=CC=C13)CCCCCC2	1,4-hexanonaphthalene	unit/test_fusion_wrappers.py	1
+C12=CC=C(C3=CC=CC=C13)C=C2	1,4-ethenonaphthalene	unit/test_fusion_wrappers.py	1
+C12=CC=C(C3=CC=CC=C13)CC=C2	1,4-prop[1]enonaphthalene	unit/test_fusion_wrappers.py	1
+C12=CC=C(C3=CC=CC=C13)C=CC2	1,4-prop[1]enonaphthalene	unit/test_fusion_wrappers.py	1
+C12=CC=C(C3=CC=CC=C13)C=CC=C2	1,4-buta[1,3]dienonaphthalene	unit/test_fusion_wrappers.py	1
+C12CC=C(C3=CC=CC=C13)O2	1,2-dihydro-1,4-epoxynaphthalene	unit/test_fusion_wrappers.py	1
+CCOc1ccc(S(=O)(=O)N/N=C\c2c(F)c(F)c(F)c(F)c2F)cc1	(Z)-N-(4-ethoxyphenylsulfonyl)-2,3,4,5,6-pentafluorobenzaldehyde hydrazone	unit/test_hydrazone_stereo_scope.py	1
+CS(=O)(=O)N/N=C\c1ccccc1	(Z)-N-(methylsulfonyl)benzaldehyde hydrazone	unit/test_hydrazone_stereo_scope.py	1
+CS(=O)(=O)N/N=C/c1ccccc1	(E)-N-(methylsulfonyl)benzaldehyde hydrazone	unit/test_hydrazone_stereo_scope.py	1
+CS(=O)(=O)N/N=C\C	(Z)-N-(methylsulfonyl)acetaldehyde hydrazone	unit/test_hydrazone_stereo_scope.py	1
+CS(=O)(=O)NN=Cc1ccccc1	N-(methylsulfonyl)benzaldehyde hydrazone	unit/test_hydrazone_stereo_scope.py	1
+NC(=O)c1ccc(C(=O)O)cc1	4-carbamoylbenzoic acid	unit/test_parent_hydride_handoff.py	1
+COOOC	1,3-dimethyltrioxidane	unit/test_polyoxide_chains.py	1
+COOOOC	1,4-dimethyltetraoxidane	unit/test_polyoxide_chains.py	1
+COOOOOC	1,5-dimethylpentaoxidane	unit/test_polyoxide_chains.py	1
+CC(C)OOC(C)C	1,2-bis(propan-2-yl)dioxidane	unit/test_polyoxide_chains.py	1
+c1ccccc1OOOc1ccccc1	1,3-diphenyltrioxidane	unit/test_polyoxide_chains.py	1
+COOO	1-methyltrioxidane	unit/test_polyoxide_chains.py	1
+c1ccccc1O	phenol	unit/test_polyoxide_chains.py	1
+COCCOC	1,2-dimethoxyethane	unit/test_polyoxide_chains.py	1
+NNCCOC	1-(2-methoxyethyl)hydrazine	unit/test_polyoxide_chains.py	1
+SSCCOC	1-(2-methoxyethyl)disulfane	unit/test_polyoxide_chains.py	1
+CC(OC)NN	1-(1-methoxyethyl)hydrazine	unit/test_polyoxide_chains.py	1
+OONN	1-hydroperoxyhydrazine	unit/test_polyoxide_chains.py	1
+NNOO	1-hydroperoxyhydrazine	unit/test_polyoxide_chains.py	1
+OOCCNN	1-(2-hydroperoxyethyl)hydrazine	unit/test_polyoxide_chains.py	1
+SSS	trisulfane	unit/test_polyoxide_chains.py	1
+NNN	triazane	unit/test_polyoxide_chains.py	1
+COc1ccc2c(c1)Cc1cc(F)ccc12	2-fluoro-7-methoxy-9H-fluorene	unit/test_retained_parent_precedence_and_order.py	1
+COc1ccc2c(c1)Cc1cc(F)ccc1O2	2-fluoro-7-methoxy-9H-xanthene	unit/test_retained_parent_precedence_and_order.py	1
+COc1ccc2c(c1)[nH]c1cc(F)ccc12	2-fluoro-7-methoxy-9H-carbazole	unit/test_retained_parent_precedence_and_order.py	1
+COc1ccc2nc3ccc(F)cc3cc2c1	2-fluoro-7-methoxyacridine	unit/test_retained_parent_precedence_and_order.py	1
+COc1ccc2c(c1)oc1cc(F)ccc12	3-fluoro-7-methoxydibenzofuran	unit/test_retained_parent_precedence_and_order.py	1
+COc1ccc2cc3cc(F)ccc3cc2c1	2-fluoro-6-methoxyanthracene	unit/test_retained_parent_precedence_and_order.py	1
+COC(=O)C[C@]1(C)CC[C@@]2(O1)C(COC(C)=O)=CC[C@H]1C(C)(C)CCC[C@@]12C	methyl 2-((2'S,4aS,5'S,8aS)-2-((acetyloxy)methyl)-2',5,5,8a-tetramethylspiro[1,4,4a,5,6,7,8,8a-octahydronaphthalene-1,5'-oxolane]-2'-yl)acetate	unit/test_retained_parent_precedence_and_order.py	0
+Cc1ccc(F)c2c1C1(CN2)CC1N	7'-fluoro-4'-methylspiro[cyclopropane-2,3'-(2,3-dihydro-1H-indole)]-1-amine	unit/test_retained_parent_precedence_and_order.py	0
+CCCNC(=O)N1CCC2(CC1)Nc1ccccc1C(=O)N2Cc1ccccc1	3'-benzyl-4'-oxo-N-propylspiro[piperidine-4,2'-(1,2,3,4-tetrahydroquinazoline)]-1-carboxamide	unit/test_retained_parent_precedence_and_order.py	0
+COc1ccc2c(c1)C1(COC(N)=N1)c1cc(-c3cnccc3F)ccc1O2	2'-(4-fluoropyridin-3-yl)-7'-methoxyspiro[1-oxa-3-azacyclopent-2-ene-4,9'-xanthene]-2-amine	unit/test_retained_parent_precedence_and_order.py	0
