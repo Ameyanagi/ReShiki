@@ -23,13 +23,25 @@ pub(super) enum Prompt {
     /// Save, Don’t Save or Cancel for the drawing with this name, before the
     /// pending action goes on.
     Save(String),
-    #[cfg(target_arch = "wasm32")]
-    Download(String),
+    Download {
+        name: String,
+        action: Download,
+    },
     /// A notice with one OK button, which sends `then`.
     Notice {
         title: String,
         text: String,
         then: Box<Message>,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub(super) enum Download {
+    #[cfg(target_arch = "wasm32")]
+    Drawing,
+    Export {
+        tab: super::document_tab::TabId,
+        export: super::figure_export::Prepared,
     },
 }
 
@@ -52,11 +64,27 @@ impl Prompt {
                 Answer::Cancel => Message::Cancel,
             },
             Self::Notice { then, .. } => *then,
-            #[cfg(target_arch = "wasm32")]
-            Self::Download(name) => match answer {
-                Answer::Save if !name.trim().is_empty() => Message::SaveDownload(name),
-                _ => Message::Cancel,
-            },
+            Self::Download { name, action } => {
+                let save = answer == Answer::Save && !name.trim().is_empty();
+                match action {
+                    #[cfg(target_arch = "wasm32")]
+                    Download::Drawing => {
+                        if save {
+                            Message::SaveDownload(name)
+                        } else {
+                            Message::Cancel
+                        }
+                    }
+                    Download::Export { tab, export } => Message::Tab(
+                        tab,
+                        Box::new(if save {
+                            Message::SaveExport(name, export)
+                        } else {
+                            export.completed(Ok(None))
+                        }),
+                    ),
+                }
+            }
         }
     }
 }
@@ -87,9 +115,13 @@ impl App {
                 .style(control(primary))
         };
         let (title, description, buttons) = match prompt {
-            #[cfg(target_arch = "wasm32")]
-            Prompt::Download(_) => (
-                "Download drawing".into(),
+            Prompt::Download { action, .. } => (
+                match action {
+                    #[cfg(target_arch = "wasm32")]
+                    Download::Drawing => "Download drawing",
+                    Download::Export { .. } => "Download export",
+                }
+                .into(),
                 "Choose a file name. Downloading keeps any edits marked as unsaved.".into(),
                 row![
                     Space::new().width(Length::Fill),
@@ -121,10 +153,9 @@ impl App {
             text(description).size(13).style(muted_text),
         ]
         .spacing(10);
-        #[cfg(target_arch = "wasm32")]
-        let content = if let Prompt::Download(name) = prompt {
+        let content = if let Prompt::Download { name, .. } = prompt {
             content.push(
-                iced::widget::text_input("Drawing.rsk", name)
+                iced::widget::text_input("File name", name)
                     .id("download-name")
                     .on_input(Message::DownloadName)
                     .on_submit(Message::Prompt(Answer::Save)),
@@ -136,8 +167,7 @@ impl App {
             .push(Space::new().height(Length::Fill))
             .push(buttons.spacing(8).align_y(Alignment::Center));
         let height = 180.;
-        #[cfg(target_arch = "wasm32")]
-        let height = if matches!(prompt, Prompt::Download(_)) {
+        let height = if matches!(prompt, Prompt::Download { .. }) {
             225.
         } else {
             height

@@ -2082,6 +2082,40 @@ fn crystal() -> (Document, [u64; 2]) {
     (doc, [na, cl])
 }
 
+#[test]
+fn fresh_crystals_match_the_2d_cell_scale_and_keep_resized_frames() {
+    let (mut doc, _) = crystal();
+    doc.models[0].perspective = 0.;
+    let model = doc.models[0].clone();
+    lay_out_flat(&mut doc, &model);
+    let model = &doc.models[0];
+    let cell = model.cell.as_ref().unwrap();
+    let view = View::new(&doc, model).unwrap();
+    let flat = Flat::fit(&doc, model).unwrap();
+    let origin = view
+        .project(rotate(model.rotation, sub([0.; 3], view.center)))
+        .0;
+    let drawn = flat.place([0.; 3]);
+    for edge in cell.vectors {
+        let end = view
+            .project(rotate(model.rotation, sub(edge, view.center)))
+            .0;
+        let flat_end = flat.place(edge);
+        let width = (end.x - origin.x).hypot(end.y - origin.y);
+        let flat_width = (flat_end[0] - drawn[0]).hypot(flat_end[1] - drawn[1]);
+        assert!(
+            (width / flat_width - 1.).abs() < 0.1,
+            "{width} vs {flat_width}"
+        );
+    }
+    doc.models[0].size *= 1.7;
+    let size = doc.models[0].size;
+    for display in [Display::TwoD, Display::Both, Display::ThreeD] {
+        assert!(set_display(&mut doc, 0, display));
+        assert_eq!(doc.models[0].size, size);
+    }
+}
+
 fn dashed(p: &Primitive) -> Option<f32> {
     match p {
         Primitive::Opacity { primitive, .. } => dashed(primitive),

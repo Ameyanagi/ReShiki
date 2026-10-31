@@ -1,7 +1,8 @@
 # Crystal structure fixtures
 
-Except for `cod-7033930.cif` (see below), hand-written for ReShiki's crystal readers (#417). No file is copied from a
-database; each is typed from published cell and atom parameters, with the
+Except for the two COD entries below, hand-written for ReShiki's crystal
+readers (#417). No other file is copied from a database; each is typed from
+published cell and atom parameters, with the
 symmetry operators of the International Tables for Crystallography. They are
 offered under the project's license (`MIT OR Apache-2.0`).
 
@@ -28,3 +29,14 @@ assisted by the rotational mobility of cyclopentadienyl rings,” *Dalton
 Transactions* **44** (2015), 5688–5691,
 [doi:10.1039/C4DT03922J](https://doi.org/10.1039/C4DT03922J). The fixture tests
 the saved import note for ten excluded alternative site records.
+
+`cod-1516479.cif` is an unmodified Crystallography Open Database entry
+[1516479](https://www.crystallography.net/cod/1516479.cif), revision 274633
+(2022-04-22), downloaded 2026-10-31. It is third-party data, dedicated to the
+public domain under [CC0](https://www.crystallography.net/cod/); the original
+public-domain notice is preserved in the file. The aspirin structure is from
+Harrison, Ibberson, Robb, Whittaker, Wilson and Youngson, “In situ neutron
+diffraction studies of single crystals and powders during microwave
+irradiation,” *Faraday Discussions* **122** (2003), 363–379,
+[doi:10.1039/b203379h](https://doi.org/10.1039/b203379h). The fixture tests the
+opening view's atom-label clearance and its import note when labels overlap.

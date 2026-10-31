@@ -38,6 +38,21 @@ fn act(app: &mut App, action: Action) -> Task<Message> {
 }
 
 #[test]
+fn canvas_notice_is_visible_only_while_drafts_are_offered_on_empty_untitled() {
+    let (_directory, _store, mut app) = seeded();
+    assert!(app.recovery_notice().is_some());
+    let _ = app.update(Message::DismissRecovery);
+    assert!(app.recovery_notice().is_none());
+
+    let (_directory, _store, mut app) = seeded();
+    let before = app.tab.doc.clone();
+    app.tab.doc.add_atom("O", Point::default());
+    app.changed(before);
+    assert!(!app.recovered.is_empty());
+    assert!(app.recovery_notice().is_none());
+}
+
+#[test]
 fn recovery_bin_name_matches_the_platform() {
     #[cfg(windows)]
     assert_eq!(BIN_NAME, "Recycle Bin");

@@ -9,7 +9,111 @@ pub struct Saved {
     pub details: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum Kind {
+    Figure,
+    Structure,
+    Nmr,
+}
+
+#[derive(Debug, Clone)]
+pub struct Prepared {
+    pub bytes: Vec<u8>,
+    pub format: &'static str,
+    /// The suggested file name: the drawing's name, or "Molecule" while untitled.
+    pub name: String,
+    pub details: Vec<String>,
+    pub kind: Kind,
+}
+
+fn extension(format: &'static str) -> &'static str {
+    match format {
+        "svg-office" => "svg",
+        format => format,
+    }
+}
+
+impl Prepared {
+    pub(super) fn new(
+        bytes: Vec<u8>,
+        format: &'static str,
+        stem: Option<String>,
+        details: Vec<String>,
+        kind: Kind,
+    ) -> Self {
+        let name = format!(
+            "{}.{}",
+            stem.as_deref().unwrap_or("Molecule"),
+            extension(format)
+        );
+        Self {
+            bytes,
+            format,
+            name,
+            details,
+            kind,
+        }
+    }
+
+    pub(super) fn start(self) -> Task<Message> {
+        if cfg!(target_arch = "wasm32") {
+            Task::done(Message::ExportReady(self))
+        } else {
+            let name = self.name.clone();
+            self.save(name)
+        }
+    }
+
+    pub(super) fn completed(self, result: Result<Option<PathBuf>, String>) -> Message {
+        let result = result.map(|path| {
+            path.map(|path| Saved {
+                path,
+                details: self.details,
+            })
+        });
+        match self.kind {
+            Kind::Figure => Message::FigureExported(result),
+            Kind::Structure => Message::Exported(result),
+            Kind::Nmr => Message::Nmr(super::nmr::Action::Exported(
+                result.map(|saved| saved.map(|saved| saved.path)),
+            )),
+        }
+    }
+
+    pub(super) fn save(self, name: String) -> Task<Message> {
+        Task::perform(
+            async move {
+                let title = match self.kind {
+                    Kind::Nmr => "Export predicted NMR shifts".into(),
+                    _ => format!("Export {}", super::export_format_label(self.format)),
+                };
+                let result =
+                    super::files::save_bytes(&title, &name, extension(self.format), &self.bytes)
+                        .await;
+                self.completed(result)
+            },
+            std::convert::identity,
+        )
+    }
+}
+
 impl App {
+    /// The browser asks for a name only while the drawing is untitled.
+    pub(super) fn export_ready(&mut self, export: Prepared, browser: bool) -> Task<Message> {
+        let name = export.name.clone();
+        if browser && self.tab.path.is_none() && self.prompt.is_none() {
+            self.prompt = Some(super::prompt::Prompt::Download {
+                name,
+                action: super::prompt::Download::Export {
+                    tab: self.tab.id,
+                    export,
+                },
+            });
+            return iced::widget::operation::focus("download-name");
+        }
+        export.save(name)
+    }
+
     pub(super) fn export_figure(&mut self, format: &'static str, pages: bool) -> Task<Message> {
         if self.figure_exporting {
             return Task::none();
@@ -31,15 +135,20 @@ impl App {
                     reshiki::export::FILE_PIXELS,
                 )
                 .await?;
-                Ok(super::save_export(p.bytes, format, stem)
-                    .await?
-                    .map(|path| Saved {
-                        path,
-                        details: p.details,
-                    }))
+                Ok::<_, String>(Prepared::new(
+                    p.bytes,
+                    format,
+                    stem,
+                    p.details,
+                    Kind::Figure,
+                ))
             },
-            Message::FigureExported,
+            std::convert::identity,
         )
+        .then(|result| match result {
+            Ok(export) => export.start(),
+            Err(error) => Task::done(Message::FigureExported(Err(error))),
+        })
     }
 
     pub(super) fn figure_exported(&mut self, result: Result<Option<Saved>, String>) {

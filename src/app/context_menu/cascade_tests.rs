@@ -62,7 +62,9 @@ impl Ui {
                 &mut shell,
                 &self.viewport,
             );
-            assert_eq!(shell.event_status(), iced::event::Status::Captured);
+            if !matches!(event, Event::Window(_)) {
+                assert_eq!(shell.event_status(), iced::event::Status::Captured);
+            }
         }
         assert!(
             !messages
@@ -83,6 +85,21 @@ impl Ui {
             Event::Mouse(mouse::Event::CursorMoved { position: point }),
             mouse::Cursor::Available(point),
         );
+    }
+
+    fn redraw(&mut self, app: &mut App, point: Point, at: iced::time::Instant) -> Vec<Message> {
+        self.event(
+            app,
+            Event::Window(iced::window::Event::RedrawRequested(at)),
+            mouse::Cursor::Available(point),
+        )
+    }
+
+    fn rest(&mut self, app: &mut App, point: Point) {
+        self.hover(app, point);
+        let now = iced::time::Instant::now();
+        self.redraw(app, point, now);
+        self.redraw(app, point, now + cascade::HOVER_DELAY);
     }
 
     fn click(&mut self, app: &mut App, point: Point) {
@@ -134,6 +151,8 @@ impl Ui {
     ) -> (Rectangle, Rectangle, Vec<Rectangle>) {
         struct Find {
             target: Id,
+            pinned: bool,
+            panel: Rectangle,
             row: Option<(Rectangle, Rectangle)>,
             viewport: Rectangle,
             translation: Vector,
@@ -146,11 +165,15 @@ impl Ui {
                 if id == Some(&self.target) {
                     self.row = Some((
                         Rectangle {
-                            x: bounds.x - self.translation.x,
-                            y: bounds.y - self.translation.y,
+                            x: bounds.x - if self.pinned { 0. } else { self.translation.x },
+                            y: bounds.y - if self.pinned { 0. } else { self.translation.y },
                             ..bounds
                         },
-                        self.viewport,
+                        if self.pinned {
+                            self.panel
+                        } else {
+                            self.viewport
+                        },
                     ));
                 }
             }
@@ -173,13 +196,22 @@ impl Ui {
             &self.renderer,
             &layout::Limits::new(self.viewport.size(), self.viewport.size()),
         );
-        let panels = Layout::new(&node)
+        let panels: Vec<_> = Layout::new(&node)
             .children()
             .skip(1)
             .map(|panel| panel.bounds())
             .collect();
+        let page = app.context_menu.as_ref().unwrap().page_at(level).unwrap();
+        let pinned = page == Page::Main
+            && matches!(
+                &app.context_entries(page)[index],
+                Entry::Item { action: Action::Run(message), .. }
+                    if matches!(message.as_ref(), Message::Copy(false) | Message::Delete)
+            );
         let mut find = Find {
             target: cascade::row_id(level, index),
+            pinned,
+            panel: panels[level],
             row: None,
             viewport: self.viewport,
             translation: Vector::ZERO,
@@ -333,7 +365,7 @@ async fn hover_cascades_keep_parent_and_follow_rows_at_both_window_edges() {
                 ("3D tilt", Page::Tilt),
             ] {
                 let point = ui.row(&mut app, 0, label);
-                ui.hover(&mut app, point);
+                ui.rest(&mut app, point);
                 let menu = app.context_menu.as_ref().unwrap();
                 assert_eq!(menu.page, Page::Main, "Parent remains open");
                 assert_eq!(menu.children[0].page, page, "Hover opens {label}");
@@ -405,7 +437,7 @@ async fn submenu_clicks_recheck_disabled_commands_and_preserve_selection_and_und
     assert_eq!(app.tab.doc, original);
 
     let point = ui.row(&mut app, 0, "Arrange & transform");
-    ui.hover(&mut app, point);
+    ui.rest(&mut app, point);
     let point = ui.row(&mut app, 1, "Rotate +30°");
     ui.click(&mut app, point);
     assert!(app.context_menu.is_none());
@@ -442,7 +474,7 @@ async fn keyboard_navigation_reveals_rows_and_escape_closes_the_whole_cascade() 
     let (row, viewport, _) = ui.inspect(&app, level, focused);
     assert!(
         viewport.contains(row.center()),
-        "Keyboard focus scrolls the last row into view"
+        "Keyboard focus reaches the pinned last row"
     );
     ui.key(&mut app, Named::Home);
     let (level, focused) = app.context_menu.as_ref().unwrap().focused.unwrap();
@@ -618,15 +650,239 @@ async fn touch_uses_finger_position_for_submenu_clicks_and_outside_dismissal() {
 
 #[tokio::test]
 #[ignore = "Opt-in real renderer/menu input regression"]
+async fn compact_menu_pins_copy_and_delete_with_keyboard_and_accessibility_order() {
+    let mut ui = Ui::new(Size::new(600., 1000.)).await;
+    let mut app = selected_ring(Point::new(15., 15.));
+    let copy = index(&app, Page::Main, "Copy");
+    let delete = index(&app, Page::Main, "Delete");
+    let (_, _, panels) = ui.inspect(&app, 0, delete);
+    ui.viewport.height = panels[0].height / 2.;
+    let (body, _, _) = ui.row_text_layout(&app, 0, copy);
+    for index in [copy, delete] {
+        let (row, _, panels) = ui.inspect(&app, 0, index);
+        assert!(panels[0].contains(row.position()));
+        assert!(panels[0].contains(Point::new(row.x + row.width, row.y + row.height)));
+        assert!(
+            !body.contains(row.center()),
+            "Footer rows are outside the scroll area"
+        );
+    }
+
+    let mut widget = view(&app);
+    let node = widget.as_widget_mut().layout(
+        &mut ui.tree,
+        &ui.renderer,
+        &layout::Limits::new(ui.viewport.size(), ui.viewport.size()),
+    );
+    let mut collect = reshiki::accessibility::Collect::new(ui.viewport);
+    widget.as_widget_mut().operate(
+        &mut ui.tree,
+        Layout::new(&node),
+        &ui.renderer,
+        &mut iced::advanced::widget::operation::black_box(&mut collect),
+    );
+    let snapshot = collect.snapshot();
+    let names: Vec<_> = snapshot
+        .nodes
+        .iter()
+        .map(|node| node.name.as_str())
+        .collect();
+    assert_eq!(names.iter().filter(|name| **name == "Copy").count(), 1);
+    assert_eq!(names.iter().filter(|name| **name == "Delete").count(), 1);
+    assert_eq!(&names[names.len() - 2..], ["Copy", "Delete"]);
+    drop(widget);
+
+    let first = app
+        .context_entries(Page::Main)
+        .iter()
+        .position(|entry| matches!(entry, Entry::Item { enabled: true, .. }))
+        .unwrap();
+    for (key, expected) in [
+        (Named::Home, first),
+        (Named::End, delete),
+        (Named::ArrowDown, first),
+        (Named::ArrowUp, delete),
+        (Named::ArrowUp, copy),
+    ] {
+        ui.key(&mut app, key);
+        assert_eq!(
+            app.context_menu.as_ref().unwrap().focused,
+            Some((0, expected))
+        );
+    }
+    ui.key(&mut app, Named::Home);
+    let properties = index(&app, Page::Main, "Properties…");
+    let (before, _, _) = ui.inspect(&app, 0, properties);
+    let (pinned, _, _) = ui.inspect(&app, 0, delete);
+    ui.event(
+        &mut app,
+        Event::Mouse(mouse::Event::WheelScrolled {
+            delta: mouse::ScrollDelta::Lines { x: 0., y: -30. },
+        }),
+        mouse::Cursor::Available(body.center()),
+    );
+    let (after, _, _) = ui.inspect(&app, 0, properties);
+    assert!(after.y < before.y, "The body scrolls");
+    assert_eq!(
+        ui.inspect(&app, 0, delete).0,
+        pinned,
+        "The footer stays put"
+    );
+    let original = app.tab.doc.clone();
+    ui.click(&mut app, pinned.center());
+    assert!(app.context_menu.is_none());
+    assert!(app.tab.doc.atoms.is_empty());
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, original);
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer/menu input regression"]
+async fn submenu_hover_requires_rest_and_pointer_highlight_does_not_wait_for_app_state() {
+    let mut ui = Ui::new(Size::new(960., 1000.)).await;
+    let mut app = selected_ring(Point::new(15., 15.));
+    let bond = ui.row(&mut app, 0, "Bond appearance");
+    let copy_as = ui.row(&mut app, 0, "Copy as");
+    let start = iced::time::Instant::now();
+    ui.hover(&mut app, bond);
+    assert!(ui.redraw(&mut app, bond, start).is_empty());
+    ui.hover(&mut app, copy_as);
+    let crossed = start + cascade::HOVER_DELAY / 2;
+    assert!(ui.redraw(&mut app, copy_as, crossed).is_empty());
+    assert!(
+        ui.redraw(&mut app, copy_as, start + cascade::HOVER_DELAY)
+            .is_empty()
+    );
+    assert!(
+        app.context_menu.as_ref().unwrap().children.is_empty(),
+        "Crossed Bond appearance never opens"
+    );
+    ui.redraw(&mut app, copy_as, crossed + cascade::HOVER_DELAY);
+    assert_eq!(
+        app.context_menu.as_ref().unwrap().children[0].page,
+        Page::CopyAs
+    );
+
+    let cdx = index(
+        &app,
+        Page::CopyAs,
+        reshiki::clipboard::CopyFormat::Cdx.label(),
+    );
+    let pdf = index(
+        &app,
+        Page::CopyAs,
+        reshiki::clipboard::CopyFormat::Pdf.label(),
+    );
+    let cdx_row = ui.inspect(&app, 1, cdx).0;
+    let pdf_row = ui.inspect(&app, 1, pdf).0;
+    // Leave the application focused on CDX as if its hover message had just
+    // arrived; PDF's pointer highlight must not need another application update.
+    app.context_hover(1, cdx, true);
+    assert!(
+        ui.event(
+            &mut app,
+            Event::Mouse(mouse::Event::CursorMoved {
+                position: pdf_row.center()
+            }),
+            mouse::Cursor::Available(cdx_row.center()),
+        )
+        .is_empty(),
+        "Use each movement's own position, even in an event batch"
+    );
+    assert!(
+        ui.redraw(&mut app, pdf_row.center(), crossed + cascade::HOVER_DELAY)
+            .is_empty()
+    );
+    assert_eq!(app.context_menu.as_ref().unwrap().focused, Some((1, cdx)));
+    let mut widget = view(&app);
+    let node = widget.as_widget_mut().layout(
+        &mut ui.tree,
+        &ui.renderer,
+        &layout::Limits::new(ui.viewport.size(), ui.viewport.size()),
+    );
+    let mut messages = Vec::new();
+    widget.as_widget_mut().update(
+        &mut ui.tree,
+        &Event::Window(iced::window::Event::RedrawRequested(
+            crossed + cascade::HOVER_DELAY,
+        )),
+        Layout::new(&node),
+        mouse::Cursor::Available(pdf_row.center()),
+        &ui.renderer,
+        &mut iced::advanced::clipboard::Null,
+        &mut Shell::new(&mut messages),
+        &ui.viewport,
+    );
+    assert!(messages.is_empty());
+    iced::advanced::Renderer::reset(&mut ui.renderer, ui.viewport);
+    widget.as_widget().draw(
+        &ui.tree,
+        &mut ui.renderer,
+        &app.theme(),
+        &iced::advanced::renderer::Style::default(),
+        Layout::new(&node),
+        mouse::Cursor::Available(pdf_row.center()),
+        &ui.viewport,
+    );
+    let pixels = Headless::screenshot(&mut ui.renderer, Size::new(960, 1000), 1., Color::WHITE);
+    let sample = |row: Rectangle| {
+        let offset = ((row.center_y() as usize * 960) + (row.x + 3.) as usize) * 4;
+        &pixels[offset..offset + 4]
+    };
+    assert_eq!(
+        sample(cdx_row),
+        [255, 255, 255, 255],
+        "CDX is no longer drawn active"
+    );
+    assert_ne!(
+        sample(pdf_row),
+        sample(cdx_row),
+        "PDF is highlighted locally"
+    );
+    let parent = ui.inspect(&app, 0, index(&app, Page::Main, "Copy as")).0;
+    assert_ne!(
+        sample(parent),
+        sample(cdx_row),
+        "Open submenu parents stay highlighted"
+    );
+    drop(widget);
+    let previous = app
+        .context_entries(Page::CopyAs)
+        .iter()
+        .enumerate()
+        .take(pdf)
+        .rev()
+        .find_map(|(index, entry)| {
+            matches!(entry, Entry::Item { enabled: true, .. }).then_some(index)
+        })
+        .unwrap();
+    ui.key(&mut app, Named::ArrowUp);
+    assert_eq!(
+        app.context_menu.as_ref().unwrap().focused,
+        Some((1, previous)),
+        "Keyboard navigation starts from the locally hovered row"
+    );
+
+    let bond = ui.row(&mut app, 0, "Bond appearance");
+    ui.hover(&mut app, bond);
+    ui.click(&mut app, bond);
+    assert_eq!(
+        app.context_menu.as_ref().unwrap().children[0].page,
+        Page::Bonds,
+        "Click opens a submenu before its hover deadline"
+    );
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer/menu input regression"]
 async fn grabbed_scrollbar_keeps_scrolling_outside_panel_and_releases_there() {
     let mut ui = Ui::new(Size::new(600., 1000.)).await;
     let mut app = selected_ring(Point::new(15., 15.));
     let original = app.tab.doc.clone();
-    let target = index(&app, Page::Main, "Delete");
-    let (last_row, _, natural_panels) = ui.inspect(&app, 0, target);
-    // Derive the compact viewport from the actual laid-out last row. Copy as
-    // can remain visible in a 300px menu even while later rows overflow.
-    let content_height = last_row.y + last_row.height - natural_panels[0].y;
+    let target = index(&app, Page::Main, "Properties…");
+    let (_, _, natural_panels) = ui.inspect(&app, 0, target);
+    // Properties is the last scrolling row; Copy and Delete stay in the footer.
+    let content_height = natural_panels[0].height;
     ui.viewport = Rectangle::with_size(Size::new(600., content_height / 2.));
     let (before, viewport, panels) = ui.inspect(&app, 0, target);
     assert!(
@@ -675,7 +931,7 @@ async fn scrollable_bond_menu_reserves_gutter_for_text_and_shortcuts() {
         ui.viewport = Rectangle::with_size(size);
         let mut app = selected_ring(Point::new(size.width - 15., size.height - 15.));
         let point = ui.row(&mut app, 0, "Bond appearance");
-        ui.hover(&mut app, point);
+        ui.rest(&mut app, point);
         for label in ["Bond in front", "Saturated ↔ Aromatic"] {
             let index = index(&app, Page::Bonds, label);
             let (viewport, content, text) = ui.row_text_layout(&app, 1, index);

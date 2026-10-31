@@ -1,11 +1,12 @@
 //! CIF: the cell, fractional atom sites expanded by the listed symmetry
-//! operators, the first alternative of disordered sites and displacement
-//! parameters. Only those items are kept while reading; every other item,
-//! loop and data block is read past and dropped.
+//! operators, one disorder group per assembly (the major one by occupancy,
+//! or the lowest group number on mixed, missing or tied occupancies), and
+//! displacement parameters. Only those items are kept while reading; every
+//! other item, loop and data block is read past and dropped.
 use super::build::{Lattice, same_site, wrap};
 use super::{Atom, Error, MAX_ATOMS, Structure, V3, elements, number};
 use crate::models3d::Adp;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 #[derive(Debug)]
 struct Token {
@@ -423,10 +424,11 @@ pub(super) fn read(text: &str) -> Result<Structure, Error> {
     let b_iso = column("_atom_site_b_iso_or_equiv");
     let aniso = anisotropic(&block);
 
-    // The first alternative of disordered sites: no group, group 0, or the
-    // lowest group number of each disorder assembly, which is ordered
-    // independently of the others (a negative group sits on a special
-    // position).
+    // Each assembly keeps its most occupied group when every group has a
+    // uniform, known occupancy and no other group ties it; otherwise its
+    // lowest group.
+    // Ungrouped sites and group 0 stay. A negative group sits on a special
+    // position.
     let group_of = |row: &Vec<String>| -> Option<(String, u64)> {
         let number = group
             .and_then(|g| row.get(g))
@@ -441,13 +443,40 @@ pub(super) fn read(text: &str) -> Result<Structure, Error> {
             .unwrap_or_default();
         Some((set, number))
     };
-    let mut first_group: HashMap<String, u64> = HashMap::new();
-    for (set, number) in sites.rows.iter().filter_map(|(_, row)| group_of(row)) {
-        let first = first_group.entry(set).or_insert(number);
-        *first = (*first).min(number);
+    let mut groups: BTreeMap<String, BTreeMap<u64, Option<f64>>> = BTreeMap::new();
+    for (_, row) in &sites.rows {
+        if let Some((set, group)) = group_of(row) {
+            let value = occupancy.and_then(|o| row.get(o)).and_then(|v| number(v));
+            groups
+                .entry(set)
+                .or_default()
+                .entry(group)
+                .and_modify(|known| {
+                    if *known != value {
+                        *known = None;
+                    }
+                })
+                .or_insert(value);
+        }
     }
+    let selected: HashMap<_, _> = groups
+        .iter()
+        .map(|(set, groups)| {
+            let lowest = groups.keys().next().copied().unwrap_or_default();
+            let major = groups
+                .iter()
+                .map(|(&group, occupancy)| occupancy.map(|o| (group, o)))
+                .collect::<Option<Vec<_>>>()
+                .and_then(|known| {
+                    let top = known.iter().map(|k| k.1).fold(f64::MIN, f64::max);
+                    let mut most = known.iter().filter(|k| k.1 == top);
+                    most.next().filter(|_| most.next().is_none()).map(|k| k.0)
+                });
+            (set.clone(), major.unwrap_or(lowest))
+        })
+        .collect();
     let mut asymmetric = vec![];
-    let mut alternatives = 0;
+    let mut alternatives: BTreeMap<String, usize> = BTreeMap::new();
     for (line, row) in &sites.rows {
         let line = *line;
         if flag
@@ -457,9 +486,9 @@ pub(super) fn read(text: &str) -> Result<Structure, Error> {
             continue;
         }
         if let Some((set, number)) = group_of(row)
-            && first_group.get(&set) != Some(&number)
+            && selected.get(&set) != Some(&number)
         {
-            alternatives += 1;
+            *alternatives.entry(set).or_default() += 1;
             continue;
         }
         // An occupancy of 0 means the site holds none of this atom.
@@ -509,11 +538,47 @@ pub(super) fn read(text: &str) -> Result<Structure, Error> {
             .or_else(|| iso(b_iso, 1. / EIGHT_PI_SQUARED));
         asymmetric.push((f, element, charge, name, adp));
     }
-    if alternatives > 0 {
-        warnings.push(format!(
-            "Disordered sites: kept the first alternative, left out {alternatives} alternative site record{}",
-            if alternatives == 1 { "" } else { "s" }
-        ));
+    if !alternatives.is_empty() {
+        let details: Vec<_> = alternatives
+            .keys()
+            .filter_map(|set| {
+                let kept = *selected.get(set)?;
+                let groups = groups.get(set)?;
+                let occupancy = groups
+                    .get(&kept)?
+                    .map(|o| format!(" (occupancy {o})"))
+                    .unwrap_or_default();
+                let assembly = if set.is_empty() {
+                    String::new()
+                } else {
+                    format!(" of assembly {set}")
+                };
+                let left_out: Vec<_> = groups
+                    .iter()
+                    .filter(|(group, _)| **group != kept)
+                    .map(|(group, occupancy)| match occupancy {
+                        Some(o) => format!("{group} ({o})"),
+                        None => group.to_string(),
+                    })
+                    .collect();
+                Some(format!(
+                    "kept group {kept}{occupancy}{assembly}; left out group{} {}",
+                    if left_out.len() == 1 { "" } else { "s" },
+                    left_out.join(", ")
+                ))
+            })
+            .collect();
+        let count: usize = alternatives.values().sum();
+        let total = format!(", {count} site record{}", if count == 1 { "" } else { "s" });
+        let mut note = format!("Disordered sites: {}{total}", details.join("; "));
+        // Saved model notes hold at most 512 bytes: summarize many assemblies.
+        if note.len() > 512 {
+            note = format!(
+                "Disordered sites: kept one group in each of {} assemblies{total}",
+                details.len()
+            );
+        }
+        warnings.push(note);
     }
 
     let operators = symmetry(&block)?;

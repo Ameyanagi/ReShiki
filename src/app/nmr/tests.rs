@@ -1,6 +1,7 @@
 use super::test_support::{accept, ethyl_acetate_doc, predicted};
 use super::view::{Placement, panel_description};
 use super::*;
+use crate::app::files;
 #[cfg(windows)]
 use iced::widget::{Space, container};
 #[cfg(windows)]
