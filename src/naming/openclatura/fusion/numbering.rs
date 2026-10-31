@@ -11,6 +11,7 @@ use super::super::{
 use super::model::*;
 use super::{
     citation_numbering::numbered_parent_graphs_agree,
+    config::fusion_nomenclature_config,
     faces::{BoundedFaceModel, cycle_edge_iter as cycle_edges, typed_face_model},
     layout::preferred_intrinsic_layouts,
 };
@@ -38,16 +39,6 @@ impl CompletedNumbering {
 pub struct CompletedNumberingSelection {
     pub accepted: Vec<CompletedNumbering>,
     pub rejected: Vec<RejectedNumbering>,
-}
-
-#[cfg(test)]
-pub fn completed_system_numberings(
-    mol: &Molecule,
-    faces: &BoundedFaceModel,
-    face_model: Option<&FaceModel>,
-    layouts: &[FusedLayout],
-) -> Result<Vec<CompletedNumbering>, String> {
-    Ok(completed_system_numbering_selection(mol, faces, face_model, layouts, false)?.accepted)
 }
 
 /// Keep all tied maps after the ordered locant criteria and construction proof.
@@ -107,7 +98,7 @@ pub fn completed_system_numbering_selection(
             rejected.push(RejectedNumbering {
                 orientation_score: ComparisonKey::Tuple(vec![
                     layouts[candidate.layout_index.unwrap_or(0)].orientation_score.clone().into(),
-                    candidate.score.clone(),
+                    candidate.score,
                 ]),
                 reason: format!(
                     "layout {} start at face {}, atom {} loses the ordered completed-system locant criteria",
@@ -205,7 +196,10 @@ fn graph_numbering_candidates(
         return Ok(Vec::new());
     }
     let face_model = typed_face_model(mol, faces);
-    let layouts = preferred_intrinsic_layouts(&face_model)?;
+    let layouts = preferred_intrinsic_layouts(
+        &face_model,
+        fusion_nomenclature_config().search.layout_states,
+    )?;
     if layouts.is_empty() {
         return Ok(Vec::new());
     }
@@ -298,7 +292,7 @@ fn numbering_from_layout(
         let locant_map =
             number_completed_system(mol, faces, &perimeter, fusion_atoms, construction_order);
         let numbered = locant_map.map(|locants| CompletedNumbering {
-            perimeter: perimeter.clone(),
+            perimeter,
             atom_to_locant: ordered_locant_items(&locants),
             score: numbering_score(mol, &locants, fusion_atoms),
             layout_index: None,
@@ -592,12 +586,12 @@ fn numbering_score(
         .iter()
         .filter(|(a, _)| mol.atoms[a].symbol != "C")
         .collect();
-    let locant_tuple = |values: Vec<&String>| {
+    fn locant_tuple<'a>(values: impl IntoIterator<Item = &'a String>) -> ComparisonKey {
         let mut keys: Vec<_> = values.into_iter().map(|l| locant_key(l)).collect();
         keys.sort();
         ComparisonKey::Tuple(keys)
-    };
-    let all_hetero = locant_tuple(hetero.iter().map(|(_, l)| *l).collect());
+    }
+    let all_hetero = locant_tuple(hetero.iter().map(|(_, l)| *l));
     let by_element = ComparisonKey::Tuple(
         super::rules::general_heteroatom_count_precedence()
             .iter()
@@ -606,8 +600,7 @@ fn numbering_score(
                     hetero
                         .iter()
                         .filter(|(a, _)| mol.atoms[a].symbol == *symbol)
-                        .map(|(_, l)| *l)
-                        .collect(),
+                        .map(|(_, l)| *l),
                 )
             })
             .collect(),
@@ -616,21 +609,18 @@ fn numbering_score(
         fusion_atoms
             .iter()
             .filter(|a| mol.atoms[a].symbol == "C")
-            .map(|a| &locants[a])
-            .collect(),
+            .map(|a| &locants[a]),
     );
     let fusion_hetero = locant_tuple(
         fusion_atoms
             .iter()
             .filter(|a| mol.atoms[a].symbol != "C")
-            .map(|a| &locants[a])
-            .collect(),
+            .map(|a| &locants[a]),
     );
     let indicated_h = locant_tuple(
         indicated_hydrogen_candidate_atoms(mol, locants)
             .iter()
-            .map(|a| &locants[a])
-            .collect(),
+            .map(|a| &locants[a]),
     );
     ComparisonKey::Tuple(vec![
         all_hetero,
@@ -724,7 +714,7 @@ pub fn bond_model_indicated_hydrogen_atoms(
             .iter()
             .map(|&(e, o)| (normalize_edge(e.0, e.1), o))
             .collect();
-        if observed.keys().collect::<Vec<_>>() != allowed.keys().collect::<Vec<_>>() {
+        if !observed.keys().eq(allowed.keys()) {
             continue;
         }
         let mut indicated = AtomSet::new();
@@ -960,31 +950,33 @@ pub fn retained_template_parent_bond_model_with_budget(
         return Err("retained parent bond model requires a complete locant map".into());
     }
     let saturated_parent = template.mancude_double_bonds.is_none();
-    let mut atoms = template.atoms.clone();
-    if let Some(h) = indicated_h.filter(|h| *h != template.default_indicated_h.as_slice()) {
-        if h.len() != template.indicated_hydrogen_count()
-            || h.iter().any(|l| !mapping.contains_key(l))
-        {
-            return Err(
-                "retained indicated H must preserve template count and locant domain".into(),
-            );
-        }
-        let relocatable =
-            super::super::retained_fused_templates::relocatable_atom_by_locant(template);
-        // Template order is stable even when the locant lookup uses a sorted map.
-        atoms = template
-            .atoms
-            .iter()
-            .map(|a| {
-                let mut a = relocatable[&a.locant].clone();
-                if h.contains(&a.locant) {
-                    a.saturated = true;
-                    a.default_h = true;
-                }
-                a
-            })
-            .collect();
-    }
+    let mut atoms =
+        if let Some(h) = indicated_h.filter(|h| *h != template.default_indicated_h.as_slice()) {
+            if h.len() != template.indicated_hydrogen_count()
+                || h.iter().any(|l| !mapping.contains_key(l))
+            {
+                return Err(
+                    "retained indicated H must preserve template count and locant domain".into(),
+                );
+            }
+            let relocatable =
+                super::super::retained_fused_templates::relocatable_atom_by_locant(template);
+            // Template order is stable even when the locant lookup uses a sorted map.
+            template
+                .atoms
+                .iter()
+                .map(|a| {
+                    let mut a = relocatable[&a.locant].clone();
+                    if h.contains(&a.locant) {
+                        a.saturated = true;
+                        a.default_h = true;
+                    }
+                    a
+                })
+                .collect()
+        } else {
+            template.atoms.clone()
+        };
     let mut degrees: BTreeMap<&str, usize> =
         template.locants.iter().map(|l| (l.as_str(), 0)).collect();
     for b in &template.bonds {
@@ -998,10 +990,9 @@ pub fn retained_template_parent_bond_model_with_budget(
     }
     let graph = FusionGraph {
         atoms: atoms
-            .iter()
+            .into_iter()
             .map(|a| FusionGraphAtom {
                 id: mapping[&a.locant],
-                symbol: a.symbol.clone(),
                 formal_charge: a.charge,
                 pi_capacity: if saturated_parent {
                     0
@@ -1011,6 +1002,7 @@ pub fn retained_template_parent_bond_model_with_budget(
                 forced_single: saturated_parent || a.forced_single,
                 indicated_h_site: a.indicated_h_site || a.default_h,
                 saturated: a.saturated,
+                symbol: a.symbol,
             })
             .collect(),
         bonds: template
@@ -1190,8 +1182,13 @@ mod tests {
             .unwrap()
             .unwrap();
         let model = typed_face_model(&mol, &faces);
-        let layouts = preferred_intrinsic_layouts(&model).unwrap();
-        let numberings = completed_system_numberings(&mol, &faces, Some(&model), &layouts).unwrap();
+        let layouts =
+            preferred_intrinsic_layouts(&model, fusion_nomenclature_config().search.layout_states)
+                .unwrap();
+        let numberings =
+            completed_system_numbering_selection(&mol, &faces, Some(&model), &layouts, false)
+                .unwrap()
+                .accepted;
         let charged = mol
             .atoms
             .values()

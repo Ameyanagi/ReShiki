@@ -113,7 +113,7 @@ fn plan_uncached(mol: &Molecule, atoms: &AtomSet) -> PlanResult {
     };
     let mut intrinsic_layouts = None;
     if !can_use_component_entry_layout(&face_model) {
-        match preferred_intrinsic_layouts(&face_model) {
+        match preferred_intrinsic_layouts(&face_model, config.search.layout_states) {
             Ok(layouts) if !layouts.is_empty() => intrinsic_layouts = Some(layouts),
             Ok(_) => return Ok(None),
             Err(error) => return rejected(error),
@@ -167,7 +167,10 @@ pub(super) fn plan_numbered_candidate(
         layouts
     } else {
         if intrinsic_layouts.is_none() {
-            *intrinsic_layouts = Some(preferred_intrinsic_layouts(face_model)?);
+            *intrinsic_layouts = Some(preferred_intrinsic_layouts(
+                face_model,
+                fusion_nomenclature_config().search.layout_states,
+            )?);
         }
         intrinsic_layouts.as_ref().cloned().unwrap_or_default()
     };

@@ -14,6 +14,7 @@ use super::super::{
     ring_parent::RingParent,
 };
 use super::{
+    config::fusion_nomenclature_config,
     cover::{audit_component_cover, component_scope},
     descriptor::{
         DescriptorOptions, build_fusion_name_ast, iter_fusion_name_asts, render_fusion_name,
@@ -193,7 +194,10 @@ fn select_replacement_state(
     let registry = fusion_component_registry();
     let faces = typed_face_model(carbon, &bounded);
     let matches = registry.match_face_model(carbon, &faces)?;
-    let mut layouts = Some(preferred_intrinsic_layouts(&faces)?);
+    let mut layouts = Some(preferred_intrinsic_layouts(
+        &faces,
+        fusion_nomenclature_config().search.layout_states,
+    )?);
     let mut numbering_cache = BTreeMap::new();
     let first_core = carbon_plan_core(first_plan)?;
     let ranks = canonical_ranks(mol, None);

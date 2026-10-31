@@ -1,7 +1,11 @@
 //! Bounded, graph-proved systematic fusion citations and pure rendering.
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-use super::super::{locants::retained_locant_sort_key, molecule::Molecule, rules::multipliers};
+use super::super::{
+    locants::{LocantKey, retained_locant_sort_key},
+    molecule::Molecule,
+    rules::multipliers,
+};
 use super::{
     config::fusion_nomenclature_config,
     cover::{ComponentScope, CoverGraph, FusionInterface, audit_component_cover, component_scope},
@@ -13,12 +17,14 @@ use super::{
     },
 };
 
-type Key = ComparisonKey;
-type LocantKey = (usize, u8, String, usize);
 type JoinKey = (usize, usize, Vec<LocantKey>);
-type Preference = (Key, (usize, usize, Vec<i64>));
+type Preference = (ComparisonKey, (usize, usize, Vec<i64>));
 type OccurrenceIdentity = (BTreeSet<usize>, String, String, BTreeSet<usize>);
-type OccurrenceMappingGroup = (OccurrenceIdentity, Vec<FusionComponentMatch>);
+struct OccurrenceMappingGroup<'a> {
+    face_ids: BTreeSet<usize>,
+    atom_ids: BTreeSet<usize>,
+    mappings: Vec<&'a FusionComponentMatch>,
+}
 
 #[derive(Clone, Debug)]
 pub struct DescriptorOptions {
@@ -56,7 +62,7 @@ struct PreparedSelection {
     matches: Vec<FusionComponentMatch>,
     specs: BTreeMap<usize, FusionComponentSpec>,
     graph: CoverGraph<usize>,
-    hidden_parent_variants: BTreeSet<Key>,
+    hidden_parent_variants: BTreeSet<ComparisonKey>,
 }
 #[derive(Clone)]
 struct CitationTopology {
@@ -70,12 +76,12 @@ struct CitationTopology {
 }
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct CandidateScore {
-    seniority: Key,
+    seniority: ComparisonKey,
     location: ParentLocationKey,
     count: usize,
     maximum_order: usize,
     joins: Vec<JoinKey>,
-    attached_seniority: Vec<Key>,
+    attached_seniority: Vec<ComparisonKey>,
 }
 #[derive(Clone)]
 struct Candidate {
@@ -169,7 +175,7 @@ pub fn iter_fusion_name_asts<'a>(
         ));
     }
     let selections = exact_component_covers(&occurrence_options, &faces)?;
-    let mut parent_scopes: BTreeMap<Key, BTreeSet<BTreeSet<usize>>> = BTreeMap::new();
+    let mut parent_scopes: BTreeMap<ComparisonKey, BTreeSet<BTreeSet<usize>>> = BTreeMap::new();
     for option in &occurrence_options {
         let matched = &option.mappings[0];
         let spec = registry.spec_for_match(matched)?;
@@ -247,7 +253,6 @@ impl Iterator for FusionNameAstIter<'_> {
                 match candidates_for_selection(
                     self.mol,
                     &self.prepared[index],
-                    self.registry,
                     &self.options,
                     &seniority,
                 ) {
@@ -287,14 +292,12 @@ impl Iterator for FusionNameAstIter<'_> {
         }
     }
 }
-fn occurrence_option_key(
-    option: &OccurrenceOption,
-) -> (usize, i64, Vec<usize>, String, Vec<usize>) {
+fn occurrence_option_key(option: &OccurrenceOption) -> (usize, i64, Vec<usize>, &str, Vec<usize>) {
     (
         *option.face_ids.first().unwrap_or(&0),
         -(option.face_ids.len() as i64),
         option.face_ids.iter().copied().collect(),
-        option.mappings[0].template_name.clone(),
+        option.mappings[0].template_name.as_str(),
         option.atom_ids.iter().copied().collect(),
     )
 }
@@ -308,8 +311,8 @@ fn occurrence_options(
     matches: &[FusionComponentMatch],
     registry: &FusionComponentRegistry,
 ) -> Result<Vec<OccurrenceOption>, String> {
-    let mut group_indices = BTreeMap::new();
-    let mut grouped: Vec<OccurrenceMappingGroup> = Vec::new();
+    let mut group_indices: BTreeMap<OccurrenceIdentity, usize> = BTreeMap::new();
+    let mut grouped: Vec<OccurrenceMappingGroup<'_>> = Vec::new();
     for matched in matches {
         if matched.covered_face_ids.is_empty() {
             continue;
@@ -329,23 +332,33 @@ fn occurrence_options(
             index
         } else {
             let index = grouped.len();
-            group_indices.insert(key.clone(), index);
-            grouped.push((key, Vec::new()));
+            let group = OccurrenceMappingGroup {
+                face_ids: key.0.clone(),
+                atom_ids: key.3.clone(),
+                mappings: Vec::new(),
+            };
+            group_indices.insert(key, index);
+            grouped.push(group);
             index
         };
-        grouped[index].1.push(matched.clone());
+        grouped[index].mappings.push(matched);
     }
     if grouped.is_empty() {
         return Err("no exact component matches were supplied".into());
     }
     let mut options = Vec::new();
-    for ((face_ids, _, _, atom_ids), mappings) in grouped {
-        registry.spec_for_match(&mappings[0])?;
+    for OccurrenceMappingGroup {
+        face_ids,
+        atom_ids,
+        mappings,
+    } in grouped
+    {
+        registry.spec_for_match(mappings[0])?;
         let unique: BTreeMap<_, _> = mappings
             .into_iter()
-            .map(|m| (m.local_to_input_atom.clone(), m))
+            .map(|m| (m.local_to_input_atom.as_slice(), m))
             .collect();
-        let mut mappings: Vec<_> = unique.into_values().collect();
+        let mut mappings: Vec<_> = unique.into_values().cloned().collect();
         mappings.sort_by_key(|m| local_map_key(&m.local_to_input_atom));
         options.push(OccurrenceOption {
             face_ids,
@@ -353,7 +366,7 @@ fn occurrence_options(
             mappings,
         });
     }
-    options.sort_by_key(occurrence_option_key);
+    options.sort_by(|left, right| occurrence_option_key(left).cmp(&occurrence_option_key(right)));
     Ok(options)
 }
 fn exact_component_covers(
@@ -469,7 +482,7 @@ fn prepare_component_selection(
     mut options: Vec<OccurrenceOption>,
     registry: &FusionComponentRegistry,
     policy: &DescriptorOptions,
-    parent_scopes: &BTreeMap<Key, BTreeSet<BTreeSet<usize>>>,
+    parent_scopes: &BTreeMap<ComparisonKey, BTreeSet<BTreeSet<usize>>>,
 ) -> Result<Option<PreparedSelection>, String> {
     if options.len()
         > fusion_nomenclature_config()
@@ -478,7 +491,7 @@ fn prepare_component_selection(
     {
         return Ok(None);
     }
-    options.sort_by_key(occurrence_option_key);
+    options.sort_by(|left, right| occurrence_option_key(left).cmp(&occurrence_option_key(right)));
     let matches: Vec<_> = options
         .iter()
         .enumerate()
@@ -517,7 +530,7 @@ fn prepare_component_selection(
     {
         return Ok(None);
     }
-    let mut selected: BTreeMap<Key, BTreeSet<BTreeSet<usize>>> = BTreeMap::new();
+    let mut selected: BTreeMap<ComparisonKey, BTreeSet<BTreeSet<usize>>> = BTreeMap::new();
     for (m, scope) in matches.iter().zip(&scopes) {
         selected
             .entry(component_variant_identity(&specs[&m.occurrence_id]))
@@ -545,7 +558,7 @@ fn cover_node_key(
     node: usize,
     adjacency: &BTreeMap<usize, Vec<usize>>,
     specs: &BTreeMap<usize, FusionComponentSpec>,
-) -> (Key, i64, Key, usize) {
+) -> (ComparisonKey, i64, ComparisonKey, usize) {
     (
         component_spec_seniority_key(&specs[&node]).as_tuple(),
         -(adjacency[&node].len() as i64),
@@ -554,13 +567,11 @@ fn cover_node_key(
     )
 }
 fn parent_location_key(
-    parents: &BTreeMap<usize, usize>,
     orders: &BTreeMap<usize, usize>,
     roots: &[usize],
     interparents: &[usize],
     specs: &BTreeMap<usize, FusionComponentSpec>,
 ) -> ParentLocationKey {
-    let _ = parents;
     let maximum_attachment_order = orders.values().copied().max().unwrap_or(0);
     let attachment_count_by_order = (1..=maximum_attachment_order)
         .map(|level| -(orders.values().filter(|&&o| o == level).count() as i64))
@@ -591,8 +602,8 @@ fn parent_location_key(
         maximum_attachment_order,
         attachment_count_by_order,
         multiplicative_grouping_score: Vec::new(),
-        interparent_seniority: Key::tuple(interparent),
-        attached_component_preference: Key::tuple(attached),
+        interparent_seniority: ComparisonKey::tuple(interparent),
+        attached_component_preference: ComparisonKey::tuple(attached),
     }
 }
 fn pre_mapping_location_key(key: &ParentLocationKey) -> (usize, usize, Vec<i64>) {
@@ -606,7 +617,7 @@ fn citation_topology(
     adjacency: &BTreeMap<usize, Vec<usize>>,
     roots: Vec<usize>,
     specs: &BTreeMap<usize, FusionComponentSpec>,
-    hidden: &BTreeSet<Key>,
+    hidden: &BTreeSet<ComparisonKey>,
 ) -> CitationTopology {
     let mut parent_by_child = BTreeMap::new();
     let mut order_by_occurrence: BTreeMap<_, _> = roots.iter().map(|&r| (r, 0)).collect();
@@ -667,7 +678,6 @@ fn citation_topology(
         .collect();
     interparent_occurrences.sort_by_key(|&n| cover_node_key(n, adjacency, specs));
     let mut location_key = parent_location_key(
-        &parent_by_child,
         &order_by_occurrence,
         &roots,
         &interparent_occurrences,
@@ -727,7 +737,7 @@ fn root_sets(
 ) -> Vec<Vec<usize>> {
     let mut sets: Vec<_> = roots.iter().map(|r| vec![*r]).collect();
     if policy.multiparent_parents {
-        let mut variants: BTreeMap<Key, Vec<usize>> = BTreeMap::new();
+        let mut variants: BTreeMap<ComparisonKey, Vec<usize>> = BTreeMap::new();
         for &r in roots {
             variants
                 .entry(component_variant_identity(&prepared.specs[&r]))
@@ -790,8 +800,8 @@ fn citation_grammar_supported(
     }
     true
 }
-fn eligible_roots(prepared: &PreparedSelection) -> BTreeMap<Key, Vec<usize>> {
-    let mut roots: BTreeMap<Key, Vec<usize>> = BTreeMap::new();
+fn eligible_roots(prepared: &PreparedSelection) -> BTreeMap<ComparisonKey, Vec<usize>> {
+    let mut roots: BTreeMap<ComparisonKey, Vec<usize>> = BTreeMap::new();
     for matched in &prepared.matches {
         let spec = &prepared.specs[&matched.occurrence_id];
         if component_parent_eligible(matched, spec, &prepared.matches) {
@@ -841,9 +851,8 @@ fn selection_preference_tiers(
 fn candidates_for_selection(
     mol: &Molecule,
     prepared: &PreparedSelection,
-    registry: &FusionComponentRegistry,
     policy: &DescriptorOptions,
-    required_seniority: &Key,
+    required_seniority: &ComparisonKey,
 ) -> Result<Vec<Candidate>, String> {
     let mut mapping_sets = Vec::new();
     for (occurrence_id, option) in prepared.options.iter().enumerate() {
@@ -930,25 +939,33 @@ fn candidates_for_selection(
             }
         }
         if !candidates.is_empty() {
-            let _ = registry;
             return Ok(candidates);
         }
     }
     Ok(Vec::new())
 }
 
-pub type HostSideProjection = (BTreeMap<String, usize>, Vec<ComponentSide>, Vec<Edge>);
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HostSideProjection {
+    host_map: BTreeMap<String, usize>,
+    sides: Vec<ComponentSide>,
+    side_edges: Vec<Edge>,
+}
 pub fn host_side_projection(
     host: &FusionComponentMatch,
     spec: &FusionComponentSpec,
 ) -> Result<HostSideProjection, String> {
     let atoms = host.input_atom_by_locant();
     let sides = component_sides(spec)?;
-    let edges = sides
+    let side_edges = sides
         .iter()
         .map(|side| normalize_edge(atoms[&side.start_locant], atoms[&side.end_locant]))
         .collect();
-    Ok((atoms, sides, edges))
+    Ok(HostSideProjection {
+        host_map: atoms,
+        sides,
+        side_edges,
+    })
 }
 pub fn classify_ordered_fusion_interface(
     attached: &FusionComponentMatch,
@@ -972,7 +989,11 @@ fn classify_with_projection(
     if interface.shared_edges.is_empty() {
         return None;
     }
-    let (host_map, sides, side_edges) = projection;
+    let HostSideProjection {
+        host_map,
+        sides,
+        side_edges,
+    } = projection;
     let indices: BTreeSet<_> = side_edges
         .iter()
         .enumerate()
@@ -1110,16 +1131,19 @@ fn deduplicate_interface_equivalent_maps(
         .iter()
         .enumerate()
         .map(|(occurrence, mappings)| {
-            let relevant = atoms.get(&occurrence).cloned().unwrap_or_default();
-            let mut projected: BTreeMap<Vec<(usize, String)>, FusionComponentMatch> =
-                BTreeMap::new();
+            let relevant = atoms.get(&occurrence);
+            let mut projected: BTreeMap<Vec<(usize, &str)>, FusionComponentMatch> = BTreeMap::new();
             for mapping in mappings {
                 let inverse: BTreeMap<_, _> = mapping
                     .local_to_input_atom
                     .iter()
-                    .map(|(l, a)| (*a, l.clone()))
+                    .map(|(l, a)| (*a, l.as_str()))
                     .collect();
-                let projection = relevant.iter().map(|a| (*a, inverse[a].clone())).collect();
+                let projection = relevant
+                    .into_iter()
+                    .flatten()
+                    .map(|a| (*a, inverse[a]))
+                    .collect();
                 projected
                     .entry(projection)
                     .or_insert_with(|| mapping.clone());
@@ -1425,7 +1449,7 @@ fn multiplicative_groups(
     let mut depths = BTreeMap::new();
     let mut groups = Vec::new();
     for siblings in children.values() {
-        let mut patterns: BTreeMap<Key, Vec<usize>> = BTreeMap::new();
+        let mut patterns: BTreeMap<ComparisonKey, Vec<usize>> = BTreeMap::new();
         for child in siblings {
             if !children.contains_key(child) {
                 patterns
@@ -1474,16 +1498,16 @@ fn tree_citation_scope_supported(
     root: &FusionCitationNode,
     groups: &[FusionMultiplicityGroup],
 ) -> bool {
-    fn visit(
+    fn visit<'a>(
         node: &FusionCitationNode,
         depth: usize,
-        group_by_member: &BTreeMap<usize, Vec<usize>>,
-        visited: &mut BTreeSet<Vec<usize>>,
+        group_by_member: &BTreeMap<usize, &'a [usize]>,
+        visited: &mut BTreeSet<&'a [usize]>,
         level: &mut usize,
     ) -> bool {
         for child in node.children.iter().rev() {
             if let Some(group) = group_by_member.get(&child.occurrence_id)
-                && !visited.insert(group.clone())
+                && !visited.insert(*group)
             {
                 continue;
             }
@@ -1503,7 +1527,7 @@ fn tree_citation_scope_supported(
         .flat_map(|g| {
             g.occurrence_ids
                 .iter()
-                .map(|&id| (id, g.occurrence_ids.clone()))
+                .map(|&id| (id, g.occurrence_ids.as_slice()))
         })
         .collect();
     visit(root, 0, &group_by_member, &mut BTreeSet::new(), &mut 0)
@@ -1681,12 +1705,12 @@ fn build_candidate(
         .map(|j| FusionDescriptor::from_interface(&j.interface))
         .collect();
     let citation_plan = FusionCitationPlan {
-        roots: roots.clone(),
+        roots,
         primary_join_indices: (0..primary_count).collect(),
         interparent_join_indices: (primary_count..primary_count + interparent_count).collect(),
         cycle_closing_join_indices: (primary_count + interparent_count..joins.len()).collect(),
         interparent_occurrences: topology.interparent_occurrences.clone(),
-        render_order: citation_children.clone(),
+        render_order: citation_children,
     };
     let plan_kind = if topology.roots.len() > 1 {
         "multiparent"
@@ -1700,7 +1724,7 @@ fn build_candidate(
         "polycomponent_tree"
     };
     let mut exact_location = topology.location_key.clone();
-    let mut sorted_groups = groups.clone();
+    let mut sorted_groups: Vec<_> = groups.iter().collect();
     sorted_groups.sort_by_key(|g| (-(g.occurrence_ids.len() as i64), g.occurrence_ids.clone()));
     exact_location.multiplicative_grouping_score = sorted_groups
         .iter()
@@ -1716,11 +1740,13 @@ fn build_candidate(
             .copied()
             .max()
             .unwrap_or(0),
-        joins: citation_children
+        joins: citation_plan
+            .render_order
             .iter()
             .map(|c| join_preference_key(&primary_joins[c], ranks[c]))
             .collect(),
-        attached_seniority: citation_children
+        attached_seniority: citation_plan
+            .render_order
             .iter()
             .map(|c| component_spec_seniority_key(&specs[c]).as_tuple())
             .collect(),
@@ -1732,8 +1758,8 @@ fn build_candidate(
         parent_occurrences: topology.roots.clone(),
         component_occurrences,
         joins,
-        citation_tree: if roots.len() == 1 {
-            Some(roots[0].clone())
+        citation_tree: if citation_plan.roots.len() == 1 {
+            Some(citation_plan.roots[0].clone())
         } else {
             None
         },
@@ -1779,7 +1805,7 @@ pub fn render_fusion_name_parts(
         && specs
             .values()
             .all(|s| s.rings.len() == 1 && s.atoms().iter().all(|a| a.symbol == "C"));
-    let mut descriptors: BTreeMap<usize, Vec<FusionDescriptor>> = BTreeMap::new();
+    let mut descriptors: BTreeMap<usize, Vec<&FusionDescriptor>> = BTreeMap::new();
     if ast.joins.len() != ast.descriptors.len() {
         return Err("descriptor count must match join count".into());
     }
@@ -1787,22 +1813,24 @@ pub fn render_fusion_name_parts(
         descriptors
             .entry(join.attached_occurrence())
             .or_default()
-            .push(descriptor.clone());
+            .push(descriptor);
     }
     let groups: BTreeMap<_, _> = ast
         .multiplicative_groups
         .iter()
         .flat_map(|g| g.occurrence_ids.iter().map(move |&i| (i, g)))
         .collect();
-    let plan = ast
-        .citation_plan
-        .clone()
-        .or_else(|| {
-            ast.citation_tree
-                .clone()
-                .map(|r| FusionCitationPlan::from_tree(r, &ast.joins))
-        })
-        .ok_or("fusion AST has no citation plan")?;
+    let fallback_plan;
+    let plan = if let Some(plan) = &ast.citation_plan {
+        plan
+    } else {
+        fallback_plan = ast
+            .citation_tree
+            .clone()
+            .map(|r| FusionCitationPlan::from_tree(r, &ast.joins))
+            .ok_or("fusion AST has no citation plan")?;
+        &fallback_plan
+    };
     if plan.roots.is_empty() {
         return Err("fusion AST has no citation root".into());
     }
@@ -1864,7 +1892,7 @@ pub fn render_fusion_name_parts(
     struct Renderer<'a> {
         registry: &'a FusionComponentRegistry,
         specs: &'a BTreeMap<usize, FusionComponentSpec>,
-        descriptors: &'a BTreeMap<usize, Vec<FusionDescriptor>>,
+        descriptors: &'a BTreeMap<usize, Vec<&'a FusionDescriptor>>,
         groups: &'a BTreeMap<usize, &'a FusionMultiplicityGroup>,
         root: &'a FusionCitationNode,
         rendered_groups: BTreeSet<Vec<usize>>,
@@ -2209,7 +2237,7 @@ mod tests {
                 });
             }
         }
-        let matches = registry.match_faces(&mol, &faces, None, None).unwrap();
+        let matches = registry.match_faces(&mol, &faces, None).unwrap();
         (mol, matches)
     }
 

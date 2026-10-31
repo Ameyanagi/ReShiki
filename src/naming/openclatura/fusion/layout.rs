@@ -1,5 +1,7 @@
 //! Exact integer intrinsic fused-ring layouts and parser compatibility witnesses.
-use super::super::{locants::retained_locant_sort_key, molecule::AtomSet};
+use super::super::{
+    graph_kernel::normalize_edge, locants::retained_locant_sort_key, molecule::AtomSet,
+};
 use super::{
     config::{RingShapeSpec, fusion_nomenclature_config},
     faces::cycle_edges,
@@ -14,10 +16,10 @@ type Positions = BTreeMap<usize, Point>;
 type Orders = Vec<(usize, Vec<usize>)>;
 type Shapes = BTreeMap<usize, RingShapeSpec>;
 type Adjacent = BTreeSet<(usize, usize)>;
-pub const OPSIN_CONSTRUCTION_NUMBERING: &str = "opsin_component_construction_order";
-pub const OPSIN_RING_MAP_NUMBERING: &str = "opsin_ring_map_occupied_rows";
-pub const OPSIN_COUPLED_PENTAGON_AXES: &str = "opsin_coupled_two_port_pentagon_axes";
-pub const OPSIN_ENTRY_DIRECTIONS: &str = "opsin_entry_relative_ring_directions";
+const OPSIN_CONSTRUCTION_NUMBERING: &str = "opsin_component_construction_order";
+const OPSIN_RING_MAP_NUMBERING: &str = "opsin_ring_map_occupied_rows";
+const OPSIN_COUPLED_PENTAGON_AXES: &str = "opsin_coupled_two_port_pentagon_axes";
+const OPSIN_ENTRY_DIRECTIONS: &str = "opsin_entry_relative_ring_directions";
 #[derive(Debug)]
 pub(crate) struct Budget {
     pub limit: usize,
@@ -38,9 +40,6 @@ impl Budget {
             Ok(())
         }
     }
-}
-fn pair(a: usize, b: usize) -> (usize, usize) {
-    (a.min(b), a.max(b))
 }
 fn gcd(mut a: i64, mut b: i64) -> i64 {
     while b != 0 {
@@ -78,17 +77,16 @@ fn adjacent(model: &FaceModel) -> Adjacent {
     model
         .face_adjacency
         .iter()
-        .map(|&(a, b, _)| pair(a, b))
+        .map(|&(a, b, _)| normalize_edge(a, b))
         .collect()
 }
-fn order_map(orders: &Orders) -> BTreeMap<usize, Vec<usize>> {
-    orders.iter().cloned().collect()
+fn order_map(orders: &Orders) -> BTreeMap<usize, &[usize]> {
+    orders
+        .iter()
+        .map(|(id, order)| (*id, order.as_slice()))
+        .collect()
 }
-pub fn preferred_intrinsic_layouts(model: &FaceModel) -> Result<Vec<FusedLayout>, String> {
-    let c = &fusion_nomenclature_config().search;
-    preferred_intrinsic_layouts_with_options(model, c.layout_states, c.maximum_layouts, false)
-}
-pub fn preferred_intrinsic_layouts_with_budget(
+pub fn preferred_intrinsic_layouts(
     model: &FaceModel,
     budget: usize,
 ) -> Result<Vec<FusedLayout>, String> {
@@ -99,35 +97,28 @@ pub fn preferred_intrinsic_layouts_with_budget(
         false,
     )
 }
-#[derive(Clone)]
-struct PreferredLayoutCacheEntry {
+struct PreferredLayoutCacheKey {
     model: FaceModel,
     budget: usize,
     max_layouts: usize,
     opsin_ring_map: bool,
-    layouts: Vec<FusedLayout>,
 }
 thread_local! {
-    static PREFERRED_LAYOUT_CACHE: std::cell::RefCell<VecDeque<PreferredLayoutCacheEntry>> = const { std::cell::RefCell::new(VecDeque::new()) };
+    static PREFERRED_LAYOUT_CACHE: super::ThreadLocalCache<PreferredLayoutCacheKey, Vec<FusedLayout>> = const { super::ThreadLocalCache::new() };
 }
-pub fn preferred_intrinsic_layouts_with_options(
+fn preferred_intrinsic_layouts_with_options(
     model: &FaceModel,
     budget: usize,
     max_layouts: usize,
     opsin_ring_map: bool,
 ) -> Result<Vec<FusedLayout>, String> {
     if let Some(layouts) = PREFERRED_LAYOUT_CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        let index = cache.iter().position(|entry| {
+        cache.get(|entry| {
             entry.model == *model
                 && entry.budget == budget
                 && entry.max_layouts == max_layouts
                 && entry.opsin_ring_map == opsin_ring_map
-        })?;
-        let entry = cache.remove(index)?;
-        let layouts = entry.layouts.clone();
-        cache.push_back(entry);
-        Some(layouts)
+        })
     }) {
         return Ok(layouts);
     }
@@ -142,21 +133,19 @@ pub fn preferred_intrinsic_layouts_with_options(
         layouts
     };
     PREFERRED_LAYOUT_CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if cache.len() == 128 {
-            cache.pop_front();
-        }
-        cache.push_back(PreferredLayoutCacheEntry {
-            model: model.clone(),
-            budget,
-            max_layouts,
-            opsin_ring_map,
-            layouts: layouts.clone(),
-        });
+        cache.insert(
+            PreferredLayoutCacheKey {
+                model: model.clone(),
+                budget,
+                max_layouts,
+                opsin_ring_map,
+            },
+            layouts.clone(),
+        );
     });
     Ok(layouts)
 }
-pub fn intrinsic_fused_layouts_with_options(
+fn intrinsic_fused_layouts_with_options(
     model: &FaceModel,
     search_budget: usize,
     max_layouts: usize,
@@ -213,7 +202,7 @@ pub fn intrinsic_fused_layouts_with_options(
         .unwrap_or_default()
         .into_iter()
         .collect::<Vec<_>>();
-    systems.sort_by_key(|s| (s != "eisenstein", s.clone()));
+    systems.sort_by(|a, b| (a != "eisenstein", a).cmp(&(b != "eisenstein", b)));
     let mut roots = model.faces.iter().collect::<Vec<_>>();
     roots.sort_by_key(|f| (f.size, f.id));
     let mut state = SearchState {
@@ -274,6 +263,17 @@ struct SearchState {
     max_layouts: usize,
     opsin_ring_map: bool,
 }
+#[allow(
+    clippy::expect_used,
+    reason = "placed orders and validated adjacency refer to faces in this model"
+)]
+fn model_face(model: &FaceModel, id: usize) -> &Face {
+    model
+        .faces
+        .iter()
+        .find(|face| face.id == id)
+        .expect("placed and adjacent face IDs belong to the face model")
+}
 fn search_layouts(
     model: &FaceModel,
     orders: &Orders,
@@ -319,16 +319,8 @@ fn search_layouts(
     let Some((next, neighbor, edge)) = next_face(model, orders) else {
         return Ok(());
     };
-    #[allow(
-        clippy::unwrap_used,
-        reason = "next_face returns only IDs from the validated face adjacency"
-    )]
-    let face = model.faces.iter().find(|f| f.id == next).unwrap();
-    #[allow(
-        clippy::unwrap_used,
-        reason = "the selected placed neighbor belongs to the validated face model"
-    )]
-    let placed = model.faces.iter().find(|f| f.id == neighbor).unwrap();
+    let face = model_face(model, next);
+    let placed = model_face(model, neighbor);
     let Some(endpoints) = edge_endpoints(placed, edge) else {
         return Ok(());
     };
@@ -395,15 +387,11 @@ fn search_layouts(
     }
     Ok(())
 }
-#[allow(
-    clippy::unwrap_used,
-    reason = "known face membership is checked before face lookup in the short-circuit adjacency gate"
-)]
 fn valid_face_adjacency(model: &FaceModel) -> bool {
     let known = model.faces.iter().map(|f| f.id).collect::<AtomSet>();
-    if known.is_empty() {
+    let Some(&first) = known.first() else {
         return false;
-    }
+    };
     let mut seen_edges = AtomSet::new();
     let mut neighbors: BTreeMap<usize, Vec<usize>> = known.iter().map(|&a| (a, vec![])).collect();
     for &(a, b, e) in &model.face_adjacency {
@@ -411,40 +399,17 @@ fn valid_face_adjacency(model: &FaceModel) -> bool {
             || !known.contains(&a)
             || !known.contains(&b)
             || !seen_edges.insert(e)
-            || !model
-                .faces
-                .iter()
-                .find(|f| f.id == a)
-                .unwrap()
-                .edge_cycle
-                .contains(&e)
-            || !model
-                .faces
-                .iter()
-                .find(|f| f.id == b)
-                .unwrap()
-                .edge_cycle
-                .contains(&e)
+            || !model_face(model, a).edge_cycle.contains(&e)
+            || !model_face(model, b).edge_cycle.contains(&e)
         {
             return false;
         }
-        #[allow(
-            clippy::unwrap_used,
-            reason = "adjacency endpoints were proved known before filling the neighbor map"
-        )]
-        neighbors.get_mut(&a).unwrap().push(b);
-        #[allow(
-            clippy::unwrap_used,
-            reason = "adjacency endpoints were proved known before filling the neighbor map"
-        )]
-        neighbors.get_mut(&b).unwrap().push(a)
+        // Both keys are present because the endpoint membership gate passed.
+        neighbors.entry(a).or_default().push(b);
+        neighbors.entry(b).or_default().push(a)
     }
     let mut seen = AtomSet::new();
-    #[allow(
-        clippy::unwrap_used,
-        reason = "the empty face set was rejected at function entry"
-    )]
-    let mut pending = vec![*known.first().unwrap()];
+    let mut pending = vec![first];
     while let Some(n) = pending.pop() {
         if seen.insert(n) {
             pending.extend(&neighbors[&n]);
@@ -487,16 +452,12 @@ fn edge_endpoints(face: &Face, edge: usize) -> Option<(usize, usize)> {
     ))
 }
 fn oriented_cycle(cycle: &[usize], offset: usize, reverse: bool) -> Vec<usize> {
-    let seq = if reverse {
-        cycle.iter().rev().copied().collect::<Vec<_>>()
-    } else {
-        cycle.to_vec()
-    };
-    seq[offset..]
-        .iter()
-        .chain(&seq[..offset])
-        .copied()
-        .collect()
+    let mut order = cycle.to_vec();
+    if reverse {
+        order.reverse();
+    }
+    order.rotate_left(offset);
+    order
 }
 fn orders_starting_with_edge(cycle: &[usize], ends: (usize, usize)) -> Vec<Vec<usize>> {
     let mut result = vec![];
@@ -563,24 +524,19 @@ fn partial_layout_is_valid(
             settled_edges = edges.len();
             settled_faces = polygons.len()
         }
-        #[allow(
-            clippy::unwrap_used,
-            reason = "placed orders are constructed only from faces in this model"
-        )]
-        let face = model.faces.iter().find(|f| f.id == *id).unwrap();
+        let face = model_face(model, *id);
         for i in 0..face.size {
             let (a, b) = (face.atom_cycle[i], face.atom_cycle[(i + 1) % face.size]);
             let (Some(&p), Some(&q)) = (positions.get(&a), positions.get(&b)) else {
                 return false;
             };
-            if seen.insert(pair(a, b)) {
+            if seen.insert(normalize_edge(a, b)) {
                 edges.push((a, b, p, q))
             }
         }
         polygons.push((*id, order.iter().map(|a| positions[a]).collect::<Vec<_>>()));
     }
-    for i in 0..edges.len() {
-        let (a, b, p, q) = edges[i];
+    for (i, &(a, b, p, q)) in edges.iter().enumerate() {
         for &(c, d, r, s) in &edges[(i + 1).max(settled_edges)..] {
             if a == c || a == d || b == c || b == d {
                 continue;
@@ -591,10 +547,9 @@ fn partial_layout_is_valid(
         }
     }
     let adjacency = adjacent(model);
-    for i in 0..polygons.len() {
-        let (a, ref p) = polygons[i];
+    for (i, (a, p)) in polygons.iter().enumerate() {
         for (b, q) in &polygons[(i + 1).max(settled_faces)..] {
-            if !adjacency.contains(&pair(a, *b))
+            if !adjacency.contains(&normalize_edge(*a, *b))
                 && (polygon_center_strictly_inside(p, q) || polygon_center_strictly_inside(q, p))
             {
                 return false;
@@ -614,7 +569,7 @@ fn model_boundary_is_consistent(model: &FaceModel) -> bool {
             if model.perimeter_edges.contains(&e)
                 && let Some((a, b)) = edge_endpoints(f, e)
             {
-                perimeter.insert(pair(a, b));
+                perimeter.insert(normalize_edge(a, b));
             }
         }
     }
@@ -689,12 +644,9 @@ fn ring_axis_center(order: &[usize], positions: &Positions) -> Point {
             }
         }
     }
-    if centers.len() == 1 {
-        #[allow(
-            clippy::unwrap_used,
-            reason = "this branch requires exactly one center"
-        )]
-        *centers.first().unwrap()
+    let mut centers = centers.into_iter();
+    if let (Some(center), None) = (centers.next(), centers.next()) {
+        center
     } else {
         let n = order.len() as i64;
         (
@@ -912,9 +864,12 @@ pub(crate) fn opsin_occupied_row_orientation(centers: &Positions) -> Vec<i64> {
         .min()
         .unwrap_or_default()
 }
+#[allow(
+    clippy::unwrap_used,
+    reason = "face orders are simple cycles with at least three positioned atoms"
+)]
 fn orientation_score(
     centers: &Positions,
-    shapes: &Shapes,
     adjacent: &Adjacent,
     distortion: i64,
     orders: &Orders,
@@ -928,7 +883,7 @@ fn orientation_score(
     let mut rows: Vec<Vec<usize>> = vec![];
     for f in faces {
         if rows.last().and_then(|r| r.last()).is_none_or(|prev| {
-            centers[prev].1 != centers[&f].1 || !adjacent.contains(&pair(*prev, f))
+            centers[prev].1 != centers[&f].1 || !adjacent.contains(&normalize_edge(*prev, f))
         }) {
             rows.push(vec![])
         }
@@ -957,25 +912,9 @@ fn orientation_score(
             let ay = centers[&row[0]].1;
             let (mut ur, mut ll, mut above) = (0, 0, 0);
             for (_, o) in orders {
-                #[allow(
-                    clippy::unwrap_used,
-                    reason = "face orders are simple cycles with at least three positioned atoms"
-                )]
                 let x0 = o.iter().map(|a| 2 * positions[a].0).min().unwrap();
-                #[allow(
-                    clippy::unwrap_used,
-                    reason = "face orders are simple cycles with at least three positioned atoms"
-                )]
                 let x1 = o.iter().map(|a| 2 * positions[a].0).max().unwrap();
-                #[allow(
-                    clippy::unwrap_used,
-                    reason = "face orders are simple cycles with at least three positioned atoms"
-                )]
                 let y0 = o.iter().map(|a| positions[a].1).min().unwrap();
-                #[allow(
-                    clippy::unwrap_used,
-                    reason = "face orders are simple cycles with at least three positioned atoms"
-                )]
                 let y1 = o.iter().map(|a| positions[a].1).max().unwrap();
                 let half = |low, high, axis| {
                     if low < axis && axis < high {
@@ -999,7 +938,6 @@ fn orientation_score(
     if opsin {
         orientation = opsin_occupied_row_orientation(centers)
     }
-    let _ = shapes;
     let mut result = vec![distortion, -(count as i64)];
     result.extend(orientation);
     result
@@ -1039,16 +977,16 @@ fn opsin_pentagon_chain(orders: &Orders, adjacent: &Adjacent) -> Option<Vec<usiz
         return None;
     }
     for f in &path[1..path.len() - 1] {
-        let order = &om[f];
+        let order = om[f];
         if order.len() != 5 {
             return None;
         }
         let edges = neighbors[f]
             .iter()
-            .flat_map(|n| cycle_edges(&om[n]))
+            .flat_map(|n| cycle_edges(om[n]))
             .collect::<BTreeSet<_>>();
         let ports = (0..5)
-            .filter(|&i| edges.contains(&pair(order[i], order[(i + 1) % 5])))
+            .filter(|&i| edges.contains(&normalize_edge(order[i], order[(i + 1) % 5])))
             .collect::<Vec<_>>();
         if ports.len() != 2 || ![2, 3].contains(&((ports[0] + 5 - ports[1]) % 5)) {
             return None;
@@ -1079,6 +1017,10 @@ fn opsin_ring_map_tree(model: &FaceModel) -> bool {
                             == 1)
             }))
 }
+#[allow(
+    clippy::unwrap_used,
+    reason = "adjacency is derived from placed orders; retain the original panic if an endpoint is missing"
+)]
 fn two_port_pentagon_axes(orders: &Orders, centers: &Positions, adjacent: &Adjacent) -> Positions {
     if adjacent.len() + 1 != orders.len() {
         return centers.clone();
@@ -1086,15 +1028,7 @@ fn two_port_pentagon_axes(orders: &Orders, centers: &Positions, adjacent: &Adjac
     let mut neighbors: BTreeMap<usize, Vec<usize>> =
         orders.iter().map(|(f, _)| (*f, vec![])).collect();
     for &(a, b) in adjacent {
-        #[allow(
-            clippy::unwrap_used,
-            reason = "adjacency endpoints were proved known before filling the neighbor map"
-        )]
         neighbors.get_mut(&a).unwrap().push(b);
-        #[allow(
-            clippy::unwrap_used,
-            reason = "adjacency endpoints were proved known before filling the neighbor map"
-        )]
         neighbors.get_mut(&b).unwrap().push(a)
     }
     let edges = orders
@@ -1110,7 +1044,7 @@ fn two_port_pentagon_axes(orders: &Orders, centers: &Positions, adjacent: &Adjac
             .filter(|&i| {
                 neighbors[f]
                     .iter()
-                    .any(|n| edges[n].contains(&pair(o[i], o[(i + 1) % 5])))
+                    .any(|n| edges[n].contains(&normalize_edge(o[i], o[(i + 1) % 5])))
             })
             .collect::<Vec<_>>();
         if ports.len() == 2 && [2, 3].contains(&((ports[0] + 5 - ports[1]) % 5)) {
@@ -1151,7 +1085,7 @@ fn materialize_layouts(
     let adjacent = owners
         .values()
         .filter(|v| v.len() == 2)
-        .map(|v| pair(v[0], v[1]))
+        .map(|v| normalize_edge(v[0], v[1]))
         .collect::<Adjacent>();
     let integer = integer
         .iter()
@@ -1215,8 +1149,7 @@ fn materialize_layouts(
                 if opsin && direction_grid_centers(&oc, &adjacent).is_none() {
                     continue;
                 }
-                let score =
-                    orientation_score(&oc, shapes, &adjacent, distortion, orders, &op, opsin);
+                let score = orientation_score(&oc, &adjacent, distortion, orders, &op, opsin);
                 if best.as_ref().is_some_and(|b| &score > b) {
                     continue;
                 }
@@ -1369,6 +1302,10 @@ fn expand_proxy_layouts(
     sort_layouts(&mut result);
     result
 }
+#[allow(
+    clippy::unwrap_used,
+    reason = "targets have one fusion edge from their own edge cycle, and proxy faces are cloned from the original model"
+)]
 fn terminal_ring_proxy_layouts(
     model: &FaceModel,
     budget: usize,
@@ -1407,25 +1344,17 @@ fn terminal_ring_proxy_layouts(
     let mut paths = vec![];
     let mut removed = AtomSet::new();
     for face in &targets {
-        #[allow(
-            clippy::unwrap_used,
-            reason = "targets require exactly one fusion edge in this face"
-        )]
         let edge = *face
             .edge_cycle
             .iter()
             .find(|e| model.fusion_edges.contains(e))
             .unwrap();
-        #[allow(
-            clippy::unwrap_used,
-            reason = "the edge was selected from this face edge cycle"
-        )]
         let endpoints = edge_endpoints(face, edge).unwrap();
         let order = orders_starting_with_edge(&face.atom_cycle, endpoints).remove(0);
         let original = (0..face.size)
             .map(|i| {
                 (
-                    pair(face.atom_cycle[i], face.atom_cycle[(i + 1) % face.size]),
+                    normalize_edge(face.atom_cycle[i], face.atom_cycle[(i + 1) % face.size]),
                     face.edge_cycle[i],
                 )
             })
@@ -1435,15 +1364,14 @@ fn terminal_ring_proxy_layouts(
         let cycle = indices.iter().map(|&i| order[i]).collect();
         let mut edges = vec![];
         let mut face_removed = AtomSet::new();
-        for i in 0..indices.len() {
-            let start = indices[i];
+        for (i, &start) in indices.iter().enumerate() {
             let end = indices.get(i + 1).copied().unwrap_or(face.size);
             let path = (start..=end)
                 .map(|i| order[i % face.size])
                 .collect::<Vec<_>>();
             face_removed.extend(path[1..path.len() - 1].iter().copied());
             edges.push(if end == start + 1 {
-                original[&pair(path[0], path[1])]
+                original[&normalize_edge(path[0], path[1])]
             } else {
                 let e = next_edge;
                 next_edge += 1;
@@ -1460,10 +1388,6 @@ fn terminal_ring_proxy_layouts(
             return Ok(None);
         }
         removed.extend(face_removed);
-        #[allow(
-            clippy::unwrap_used,
-            reason = "the proxy face vector is cloned from the original model"
-        )]
         let proxy_face = faces.iter_mut().find(|f| f.id == face.id).unwrap();
         *proxy_face = Face {
             id: face.id,
@@ -1486,6 +1410,10 @@ fn terminal_ring_proxy_layouts(
         &["terminal nonfusion arcs subdivided without changing fusion axes".into()],
     )))
 }
+#[allow(
+    clippy::unwrap_used,
+    reason = "the port gate selects exactly two edges from this face, and proxy faces are cloned from the original model"
+)]
 fn two_port_large_ring_layouts(
     model: &FaceModel,
     budget: usize,
@@ -1528,20 +1456,8 @@ fn two_port_large_ring_layouts(
     if ports.len() != 2 {
         return Ok(vec![]);
     }
-    #[allow(
-        clippy::unwrap_used,
-        reason = "the preceding gate requires exactly two ports"
-    )]
     let first = *ports.first().unwrap();
-    #[allow(
-        clippy::unwrap_used,
-        reason = "ports are selected from this face edge cycle"
-    )]
     let entrance = edge_endpoints(face, first).unwrap();
-    #[allow(
-        clippy::unwrap_used,
-        reason = "exactly two distinct ports were selected from this face edge cycle"
-    )]
     let exit = edge_endpoints(face, *ports.iter().find(|&&e| e != first).unwrap()).unwrap();
     let mut distances = vec![face.size / 2 - 1];
     if face_id.is_some() && [7, 8].contains(&face.size) {
@@ -1551,7 +1467,9 @@ fn two_port_large_ring_layouts(
     for distance in distances {
         for endpoints in [entrance, (entrance.1, entrance.0)] {
             let order = orders_starting_with_edge(&face.atom_cycle, endpoints).remove(0);
-            if pair(order[distance], order[distance + 1]) == pair(exit.0, exit.1) {
+            if normalize_edge(order[distance], order[distance + 1])
+                == normalize_edge(exit.0, exit.1)
+            {
                 chosen = Some((distance, order));
                 break;
             }
@@ -1563,7 +1481,7 @@ fn two_port_large_ring_layouts(
     let Some((distance, order)) = chosen else {
         return Ok(vec![]);
     };
-    let short = order[1..=distance].to_vec();
+    let short = &order[1..=distance];
     let long = order[distance + 1..]
         .iter()
         .chain(&order[..1])
@@ -1594,7 +1512,7 @@ fn two_port_large_ring_layouts(
         let shoulder = (steps + 1) / 3;
         let middle = steps - 2 * shoulder;
         let paths = vec![
-            short,
+            short.to_vec(),
             long[..=shoulder].to_vec(),
             long[shoulder..=shoulder + middle].to_vec(),
             long[shoulder + middle..].to_vec(),
@@ -1624,7 +1542,7 @@ fn two_port_large_ring_layouts(
     let original = (0..face.size)
         .map(|i| {
             (
-                pair(face.atom_cycle[i], face.atom_cycle[(i + 1) % face.size]),
+                normalize_edge(face.atom_cycle[i], face.atom_cycle[(i + 1) % face.size]),
                 face.edge_cycle[i],
             )
         })
@@ -1639,7 +1557,7 @@ fn two_port_large_ring_layouts(
         + 1;
     let proxy_edges = (0..proxy_order.len())
         .map(|i| {
-            let e = pair(proxy_order[i], proxy_order[(i + 1) % proxy_order.len()]);
+            let e = normalize_edge(proxy_order[i], proxy_order[(i + 1) % proxy_order.len()]);
             original.get(&e).copied().unwrap_or_else(|| {
                 let e = next_edge;
                 next_edge += 1;
@@ -1648,10 +1566,6 @@ fn two_port_large_ring_layouts(
         })
         .collect();
     let mut faces = model.faces.clone();
-    #[allow(
-        clippy::unwrap_used,
-        reason = "the proxy face vector is cloned from the original model"
-    )]
     let proxy_face = faces.iter_mut().find(|f| f.id == face.id).unwrap();
     *proxy_face = Face {
         id: face.id,
@@ -1673,6 +1587,10 @@ fn two_port_large_ring_layouts(
         &evidence,
     ))
 }
+#[allow(
+    clippy::unwrap_used,
+    reason = "the gate requires one fusion edge, and both faces are proved to contain it before cycle positioning"
+)]
 fn ordinary_large_bicycle_layouts(
     model: &FaceModel,
     budget: usize,
@@ -1690,17 +1608,14 @@ fn ordinary_large_bicycle_layouts(
     {
         return Ok(vec![]);
     }
-    #[allow(
-        clippy::unwrap_used,
-        reason = "the preceding gate requires exactly one fusion edge"
-    )]
     let edge = *model.fusion_edges.first().unwrap();
     let left = &model.faces[0];
     let right = &model.faces[1];
     let Some((start, end)) = edge_endpoints(left, edge) else {
         return Ok(vec![]);
     };
-    if edge_endpoints(right, edge).map(|(a, b)| pair(a, b)) != Some(pair(start, end))
+    if edge_endpoints(right, edge).map(|(a, b)| normalize_edge(a, b))
+        != Some(normalize_edge(start, end))
         || left
             .atom_cycle
             .iter()
@@ -1718,10 +1633,6 @@ fn ordinary_large_bicycle_layouts(
     let mut positions = BTreeMap::from([(start, (0, -scale)), (end, (0, scale))]);
     let mut orders = vec![];
     for (sign, face) in [-1, 1].into_iter().zip(&model.faces) {
-        #[allow(
-            clippy::unwrap_used,
-            reason = "both faces were proved to contain the common fusion edge"
-        )]
         let offset = face.atom_cycle.iter().position(|&a| a == start).unwrap();
         let mut order = oriented_cycle(&face.atom_cycle, offset, false);
         if order[1] == end {
@@ -1763,7 +1674,7 @@ fn ordinary_large_bicycle_layouts(
             )
         })
         .collect::<Positions>();
-    let adjacent = BTreeSet::from([pair(left.id, right.id)]);
+    let adjacent = BTreeSet::from([normalize_edge(left.id, right.id)]);
     let mut budget = Budget::new(budget);
     let mut layouts = vec![];
     for sx in [-1, 1] {
@@ -1783,15 +1694,7 @@ fn ordinary_large_bicycle_layouts(
                     .iter()
                     .map(|f| (f.id, format!("ordinary-bicycle-{}", f.size)))
                     .collect(),
-                orientation_score: orientation_score(
-                    &oc,
-                    &BTreeMap::new(),
-                    &adjacent,
-                    1,
-                    &orders,
-                    &op,
-                    false,
-                ),
+                orientation_score: orientation_score(&oc, &adjacent, 1, &orders, &op, false),
                 audit_evidence: vec![
                     "two convex faces share only their vertical common edge",
                     "shared edge coordinates agree",
@@ -1932,10 +1835,9 @@ pub fn opsin_construction_atom_order(
 }
 /// Whether the face topology lies within the independently certified parser-numbering tier.
 pub fn parser_numbering_is_supported(model: &FaceModel) -> bool {
-    // Upstream divergence: an audited plane embedding proves molecular topology,
-    // but does not prove OPSIN's construction-dependent perimeter for coupled
-    // large rings or a large ring with three fusion ports. Terminal and two-port
-    // proxies independently certify one large-ring axis; composing those proxies
+    // Upstream divergence: a plane embedding does not certify OPSIN's construction-dependent perimeter.
+    // Coupled large rings or a large ring with three fusion ports need more proof.
+    // Terminal and two-port proxies independently certify one large-ring axis; composing those proxies
     // or selecting a branched entry needs an additional graph-bound parser witness.
     let large_faces = model
         .faces
@@ -2016,13 +1918,13 @@ fn cited_terminal_cycle(
                     .all(|&(a, b, _)| a == f.id || b == f.id)
         })
         .collect::<Vec<_>>();
-    if centers.len() != 1 {
+    let [center] = centers.as_slice() else {
         return None;
-    }
+    };
     let terminals = model
         .faces
         .iter()
-        .filter(|f| f.id != centers[0].id)
+        .filter(|f| f.id != center.id)
         .map(|f| (f.id, f))
         .collect::<BTreeMap<_, _>>();
     let mut sizes = terminals.values().map(|f| f.size).collect::<Vec<_>>();
@@ -2163,19 +2065,7 @@ pub fn component_entry_layouts(
     ast: &FusionNameAst,
     specs: &BTreeMap<usize, FusionComponentSpec>,
 ) -> Result<Option<Vec<FusedLayout>>, String> {
-    component_entry_layouts_with_budget(
-        model,
-        ast,
-        specs,
-        fusion_nomenclature_config().search.layout_states,
-    )
-}
-pub fn component_entry_layouts_with_budget(
-    model: &FaceModel,
-    ast: &FusionNameAst,
-    specs: &BTreeMap<usize, FusionComponentSpec>,
-    search_budget: usize,
-) -> Result<Option<Vec<FusedLayout>>, String> {
+    let search_budget = fusion_nomenclature_config().search.layout_states;
     if search_budget < 1 {
         return Err("layout search budget must be positive".into());
     }
@@ -2414,7 +2304,6 @@ pub fn component_entry_layouts_with_budget(
                 face_shapes: fs,
                 orientation_score: orientation_score(
                     &centers,
-                    &BTreeMap::new(),
                     &adjacent(model),
                     shape.distortion_rank as i64,
                     &placed,
@@ -2526,7 +2415,9 @@ mod tests {
         let atoms = mol.atoms.keys().copied().collect();
         let bounded = select_bounded_face_model(&mol, &atoms).unwrap().unwrap();
         let model = typed_face_model(&mol, &bounded);
-        let layouts = preferred_intrinsic_layouts(&model).unwrap();
+        let layouts =
+            preferred_intrinsic_layouts(&model, fusion_nomenclature_config().search.layout_states)
+                .unwrap();
         assert_eq!(layouts.len(), 4);
         for layout in layouts {
             assert_eq!(layout.orientation_score, vec![0, -2, -2, 2, -4]);
@@ -2554,7 +2445,9 @@ mod tests {
         let atoms = mol.atoms.keys().copied().collect();
         let bounded = select_bounded_face_model(&mol, &atoms).unwrap().unwrap();
         let model = typed_face_model(&mol, &bounded);
-        let layouts = preferred_intrinsic_layouts(&model).unwrap();
+        let layouts =
+            preferred_intrinsic_layouts(&model, fusion_nomenclature_config().search.layout_states)
+                .unwrap();
         assert!(!layouts.is_empty());
         let n = mol.atoms.len();
         let mut permuted = model.clone();
@@ -2566,7 +2459,11 @@ mod tests {
         for a in &mut permuted.outer_boundary {
             *a = n - 1 - *a
         }
-        let other = preferred_intrinsic_layouts(&permuted).unwrap();
+        let other = preferred_intrinsic_layouts(
+            &permuted,
+            fusion_nomenclature_config().search.layout_states,
+        )
+        .unwrap();
         assert_eq!(layouts[0].orientation_score, other[0].orientation_score);
         let geometry = |layouts: &[FusedLayout]| {
             layouts
@@ -2596,7 +2493,9 @@ mod tests {
         let mut sizes = model.faces.iter().map(|f| f.size).collect::<Vec<_>>();
         sizes.sort();
         assert_eq!(sizes, vec![3, 5, 12]);
-        let layouts = preferred_intrinsic_layouts(&model).unwrap();
+        let layouts =
+            preferred_intrinsic_layouts(&model, fusion_nomenclature_config().search.layout_states)
+                .unwrap();
         assert!(!layouts.is_empty());
         for layout in layouts {
             assert_eq!(layout.orientation_score, vec![0, -2, -6, 2, -8]);

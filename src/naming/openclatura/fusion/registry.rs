@@ -19,15 +19,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     sync::LazyLock,
 };
-#[allow(
-    dead_code,
-    reason = "Role filters remain part of the graph registry API; production requests both roles together"
-)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FusionComponentRole {
-    Parent,
-    Attached,
-}
 #[derive(Clone, Debug)]
 pub struct RegisteredFusionComponent {
     pub spec: FusionComponentSpec,
@@ -38,12 +29,6 @@ pub struct RegisteredFusionComponent {
 }
 type GeneratedRingMatch = (RegisteredFusionComponent, Vec<(String, usize)>);
 impl RegisteredFusionComponent {
-    pub fn eligible_for(&self, role: FusionComponentRole) -> bool {
-        match role {
-            FusionComponentRole::Parent => self.spec.usable_as_parent,
-            FusionComponentRole::Attached => self.spec.usable_as_attached,
-        }
-    }
     pub fn spec_for_template(&self, name: &str) -> Result<FusionComponentSpec, String> {
         if name.is_empty() || name == self.spec.template.name {
             return Ok(self.spec.clone());
@@ -121,8 +106,12 @@ fn ordered_perimeter(mut spec: FusionComponentSpec) -> FusionComponentSpec {
                 .count()
                 == 1
         {
-            adj.get_mut(a).map(|v| v.insert(c.clone()));
-            adj.get_mut(c).map(|v| v.insert(a.clone()));
+            if let Some(neighbors) = adj.get_mut(a) {
+                neighbors.insert(c.clone());
+            }
+            if let Some(neighbors) = adj.get_mut(c) {
+                neighbors.insert(a.clone());
+            }
         }
     }
     if peripheral.is_empty() || adj.values().any(|v| v.len() != 2) {
@@ -201,41 +190,38 @@ fn monocycle(name: &str, symbols: &[String], bond_class: &str, pin: bool) -> Fus
     }
 }
 #[allow(clippy::expect_used)]
-fn construction_orders() -> BTreeMap<String, FusionComponentConstructionOrder> {
-    let d: Value = serde_json::from_str(include_str!("../data/fusion_component_construction.json"))
-        .expect("checked-in construction JSON");
-    d["components"]
-        .as_object()
-        .into_iter()
-        .flatten()
-        .map(|(key, row)| {
-            (
-                key.clone(),
-                FusionComponentConstructionOrder {
-                    atom_locants: strings(&row["atom_locants"]),
-                    directed_bond_locants: Vec::new(),
-                    source: txt(&d, "source"),
-                    version: txt(&d, "version"),
-                },
-            )
-        })
-        .map(|(key, mut c)| {
-            let row = &d["components"][&key];
-            c.directed_bond_locants = row["directed_bond_locants"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .map(|e| {
-                    (
-                        e[0].as_str().unwrap_or_default().into(),
-                        e[1].as_str().unwrap_or_default().into(),
-                    )
-                })
-                .collect();
-            (key, c)
-        })
-        .collect()
-}
+static CONSTRUCTION_ORDERS: LazyLock<BTreeMap<String, FusionComponentConstructionOrder>> =
+    LazyLock::new(|| {
+        let d: Value =
+            serde_json::from_str(include_str!("../data/fusion_component_construction.json"))
+                .expect("checked-in construction JSON");
+        d["components"]
+            .as_object()
+            .into_iter()
+            .flatten()
+            .map(|(key, row)| {
+                (
+                    key.clone(),
+                    FusionComponentConstructionOrder {
+                        atom_locants: strings(&row["atom_locants"]),
+                        directed_bond_locants: row["directed_bond_locants"]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .map(|e| {
+                                (
+                                    e[0].as_str().unwrap_or_default().into(),
+                                    e[1].as_str().unwrap_or_default().into(),
+                                )
+                            })
+                            .collect(),
+                        source: txt(&d, "source"),
+                        version: txt(&d, "version"),
+                    },
+                )
+            })
+            .collect()
+    });
 impl FusionComponentRegistry {
     pub fn template_spec(&self, name: &str) -> Option<&FusionComponentSpec> {
         self.template_by_name.get(name)
@@ -251,8 +237,11 @@ impl FusionComponentRegistry {
             .or_else(|| self.generated_from_key(key))
     }
     pub fn spec_for_match(&self, m: &FusionComponentMatch) -> Result<FusionComponentSpec, String> {
+        if let Some(&i) = self.by_key.get(&m.spec_key) {
+            return self.components[i].spec_for_template(&m.template_name);
+        }
         let c = self
-            .get(&m.spec_key)
+            .generated_from_key(&m.spec_key)
             .ok_or_else(|| format!("unknown fusion component {}", m.spec_key))?;
         c.spec_for_template(&m.template_name)
     }
@@ -342,18 +331,15 @@ impl FusionComponentRegistry {
                 return Err("unsupported retained fusion family".into());
             }
             // The source registry iterates retained templates in their insertion order.
-            let names: Vec<_> = retained_graph_templates(true)
-                .iter()
-                .map(|t| t.name.clone())
-                .collect();
-            for name in names {
-                let Some(s) = registry.template_by_name.get(&name) else {
+            for template in retained_graph_templates(true) {
+                let name = &template.name;
+                let Some(s) = registry.template_by_name.get(name) else {
                     continue;
                 };
                 if registry
                     .components
                     .iter()
-                    .any(|c| c.template_names.contains(&name))
+                    .any(|c| c.template_names.contains(name))
                     || !is_benzoheterocycle(s)
                 {
                     continue;
@@ -366,7 +352,7 @@ impl FusionComponentRegistry {
                     .collect::<Vec<_>>()
                     .join(",")
                     + "-";
-                let parent = retained_parent_name_policy(&name)
+                let parent = retained_parent_name_policy(name)
                     .map(|p| p.output_name("fusion_component"))
                     .unwrap_or_else(|| s.template.output_name());
                 let parent = parent.strip_prefix(&h).unwrap_or(&parent).to_owned();
@@ -404,7 +390,7 @@ impl FusionComponentRegistry {
             vec![key.clone()]
         };
         let mut templates = Vec::new();
-        let construction = construction_orders();
+        let construction = &*CONSTRUCTION_ORDERS;
         for name in &names {
             if self
                 .components
@@ -486,19 +472,18 @@ impl FusionComponentRegistry {
         mol: &Molecule,
         model: &FaceModel,
     ) -> Result<Vec<FusionComponentMatch>, String> {
-        self.match_faces(mol, &model.faces, None, None)
+        self.match_faces(mol, &model.faces, None)
     }
     pub fn match_faces(
         &self,
         mol: &Molecule,
         faces: &[Face],
-        role: Option<FusionComponentRole>,
         skeleton: Option<&BTreeMap<usize, usize>>,
     ) -> Result<Vec<FusionComponentMatch>, String> {
         if faces.is_empty() {
             return Ok(Vec::new());
         }
-        let mut normalized = faces.to_vec();
+        let mut normalized: Vec<_> = faces.iter().collect();
         normalized.sort_by_key(|f| f.id);
         for f in &normalized {
             for &a in &f.atom_cycle {
@@ -521,7 +506,7 @@ impl FusionComponentRegistry {
         let mut seen = BTreeSet::new();
         let mut explicit = BTreeSet::new();
         for indices in subsets {
-            let subset: Vec<_> = indices.iter().map(|&i| &normalized[i]).collect();
+            let subset: Vec<_> = indices.iter().map(|&i| normalized[i]).collect();
             let atoms: AtomSet = subset
                 .iter()
                 .flat_map(|f| f.atom_cycle.iter().copied())
@@ -559,9 +544,6 @@ impl FusionComponentRegistry {
                     }
                     if subset.len() == 1 {
                         explicit.insert(subset[0].id);
-                    }
-                    if role.is_some_and(|r| !c.eligible_for(r)) {
-                        continue;
                     }
                     let local: Vec<_> = spec
                         .locants()
@@ -601,12 +583,7 @@ impl FusionComponentRegistry {
                 }
             }
         }
-        if let Some(policy) = &self.generated_hw_policy
-            && role.is_none_or(|r| match r {
-                FusionComponentRole::Parent => policy.usable_as_parent,
-                FusionComponentRole::Attached => policy.usable_as_attached,
-            })
-        {
+        if self.generated_hw_policy.is_some() {
             for f in &normalized {
                 if explicit.contains(&f.id) {
                     continue;
@@ -650,123 +627,6 @@ impl FusionComponentRegistry {
         }
         Ok(out)
     }
-}
-fn topology_key(k: &TopologyKey) -> ComparisonKey {
-    ComparisonKey::tuple([
-        k.size.into(),
-        ComparisonKey::Tuple(
-            k.symbols
-                .iter()
-                .map(|(s, n)| ComparisonKey::tuple([s.clone().into(), (*n).into()]))
-                .collect(),
-        ),
-        ComparisonKey::Tuple(
-            k.degrees
-                .iter()
-                .map(|(s, n)| ComparisonKey::tuple([(*s).into(), (*n).into()]))
-                .collect(),
-        ),
-        ComparisonKey::Tuple(
-            k.edge_degrees
-                .iter()
-                .map(|((a, b), n)| {
-                    ComparisonKey::tuple([
-                        ComparisonKey::tuple([(*a).into(), (*b).into()]),
-                        (*n).into(),
-                    ])
-                })
-                .collect(),
-        ),
-    ])
-}
-fn is_benzoheterocycle(s: &FusionComponentSpec) -> bool {
-    if !s.template.enabled
-        || !s.pin_component
-        || s.attached_prefix.is_empty()
-        || s.rings.len() != 2
-        || s.atoms().iter().any(|a| a.charge != 0 || a.saturated)
-        || s.atoms().iter().all(|a| a.symbol == "C")
-    {
-        return false;
-    }
-    let a: BTreeSet<_> = s.rings[0].iter().cloned().collect();
-    let b: BTreeSet<_> = s.rings[1].iter().cloned().collect();
-    let shared: BTreeSet<_> = a.intersection(&b).cloned().collect();
-    let atoms = s.template.atom_by_locant();
-    shared.len() == 2
-        && a.union(&b).cloned().collect::<BTreeSet<_>>() == s.locants().iter().cloned().collect()
-        && s.bonds()
-            .iter()
-            .any(|b| BTreeSet::from([b.locants.0.clone(), b.locants.1.clone()]) == shared)
-        && a.len().min(b.len()) >= 5
-        && [a, b]
-            .iter()
-            .any(|r| r.len() == 6 && r.iter().all(|l| atoms[l].symbol == "C"))
-}
-fn connected_face_subsets(faces: &[Face], sizes: &BTreeSet<usize>) -> Vec<Vec<usize>> {
-    let max = sizes.last().copied().unwrap_or(0);
-    let edges: Vec<BTreeSet<_>> = faces
-        .iter()
-        .map(|f| {
-            (0..f.size)
-                .map(|i| normalize_edge(f.atom_cycle[i], f.atom_cycle[(i + 1) % f.size]))
-                .collect()
-        })
-        .collect();
-    let adj: Vec<BTreeSet<_>> = (0..faces.len())
-        .map(|i| {
-            (0..faces.len())
-                .filter(|&j| i != j && !edges[i].is_disjoint(&edges[j]))
-                .collect()
-        })
-        .collect();
-    let mut all = BTreeSet::new();
-    let mut pending: Vec<_> = (0..faces.len()).map(|i| BTreeSet::from([i])).collect();
-    while let Some(s) = pending.pop() {
-        if s.len() > max || !all.insert(s.clone()) {
-            continue;
-        }
-        for &i in &s {
-            for &j in &adj[i] {
-                if !s.contains(&j) {
-                    let mut n = s.clone();
-                    n.insert(j);
-                    pending.push(n)
-                }
-            }
-        }
-    }
-    {
-        let mut result: Vec<Vec<usize>> = all
-            .into_iter()
-            .filter(|s| sizes.contains(&s.len()))
-            .map(|s| s.into_iter().collect())
-            .collect();
-        result.sort_by(|a, b| (a.len(), a).cmp(&(b.len(), b)));
-        result
-    }
-}
-#[allow(clippy::expect_used)]
-static REGISTRY: LazyLock<FusionComponentRegistry> = LazyLock::new(|| {
-    let d: Value = serde_json::from_str(include_str!("../data/fusion_components.json"))
-        .expect("checked-in fusion registry");
-    let registry =
-        FusionComponentRegistry::from_data(&d).expect("valid checked-in fusion component policy");
-    let config = super::config::fusion_nomenclature_config();
-    assert_eq!(
-        registry.version, config.registry_version,
-        "fusion registry and policy versions differ"
-    );
-    assert_eq!(
-        config.graph_source, "retained_graph_templates",
-        "fusion registry graph source differs"
-    );
-    registry
-});
-pub fn fusion_component_registry() -> &'static FusionComponentRegistry {
-    &REGISTRY
-}
-impl FusionComponentRegistry {
     fn generated_from_key(&self, key: &str) -> Option<RegisteredFusionComponent> {
         let symbols: Vec<String> = key
             .strip_prefix("generated-hw:")?
@@ -929,6 +789,119 @@ impl FusionComponentRegistry {
             .collect())
     }
 }
+fn topology_key(k: &TopologyKey) -> ComparisonKey {
+    ComparisonKey::tuple([
+        k.size.into(),
+        ComparisonKey::Tuple(
+            k.symbols
+                .iter()
+                .map(|(s, n)| ComparisonKey::tuple([s.clone().into(), (*n).into()]))
+                .collect(),
+        ),
+        ComparisonKey::Tuple(
+            k.degrees
+                .iter()
+                .map(|(s, n)| ComparisonKey::tuple([(*s).into(), (*n).into()]))
+                .collect(),
+        ),
+        ComparisonKey::Tuple(
+            k.edge_degrees
+                .iter()
+                .map(|((a, b), n)| {
+                    ComparisonKey::tuple([
+                        ComparisonKey::tuple([(*a).into(), (*b).into()]),
+                        (*n).into(),
+                    ])
+                })
+                .collect(),
+        ),
+    ])
+}
+fn is_benzoheterocycle(s: &FusionComponentSpec) -> bool {
+    if !s.template.enabled
+        || !s.pin_component
+        || s.attached_prefix.is_empty()
+        || s.rings.len() != 2
+        || s.atoms().iter().any(|a| a.charge != 0 || a.saturated)
+        || s.atoms().iter().all(|a| a.symbol == "C")
+    {
+        return false;
+    }
+    let a: BTreeSet<_> = s.rings[0].iter().collect();
+    let b: BTreeSet<_> = s.rings[1].iter().collect();
+    let shared: BTreeSet<_> = a.intersection(&b).copied().collect();
+    let atoms: BTreeMap<_, _> = s.atoms().iter().map(|a| (&a.locant, a)).collect();
+    shared.len() == 2
+        && a.union(&b).copied().collect::<BTreeSet<_>>() == s.locants().iter().collect()
+        && s.bonds()
+            .iter()
+            .any(|b| BTreeSet::from([&b.locants.0, &b.locants.1]) == shared)
+        && a.len().min(b.len()) >= 5
+        && [a, b]
+            .iter()
+            .any(|r| r.len() == 6 && r.iter().all(|l| atoms[l].symbol == "C"))
+}
+fn connected_face_subsets(faces: &[&Face], sizes: &BTreeSet<usize>) -> Vec<Vec<usize>> {
+    let max = sizes.last().copied().unwrap_or(0);
+    let edges: Vec<BTreeSet<_>> = faces
+        .iter()
+        .map(|f| {
+            (0..f.size)
+                .map(|i| normalize_edge(f.atom_cycle[i], f.atom_cycle[(i + 1) % f.size]))
+                .collect()
+        })
+        .collect();
+    let adj: Vec<BTreeSet<_>> = (0..faces.len())
+        .map(|i| {
+            (0..faces.len())
+                .filter(|&j| i != j && !edges[i].is_disjoint(&edges[j]))
+                .collect()
+        })
+        .collect();
+    let mut all = BTreeSet::new();
+    let mut pending: Vec<_> = (0..faces.len()).map(|i| BTreeSet::from([i])).collect();
+    while let Some(s) = pending.pop() {
+        if s.len() > max || !all.insert(s.clone()) {
+            continue;
+        }
+        for &i in &s {
+            for &j in &adj[i] {
+                if !s.contains(&j) {
+                    let mut n = s.clone();
+                    n.insert(j);
+                    pending.push(n)
+                }
+            }
+        }
+    }
+    let mut result: Vec<Vec<usize>> = all
+        .into_iter()
+        .filter(|s| sizes.contains(&s.len()))
+        .map(|s| s.into_iter().collect())
+        .collect();
+    result.sort_by(|a, b| (a.len(), a).cmp(&(b.len(), b)));
+    result
+}
+#[allow(clippy::expect_used)]
+static REGISTRY: LazyLock<FusionComponentRegistry> = LazyLock::new(|| {
+    let d: Value = serde_json::from_str(include_str!("../data/fusion_components.json"))
+        .expect("checked-in fusion registry");
+    let registry =
+        FusionComponentRegistry::from_data(&d).expect("valid checked-in fusion component policy");
+    let config = super::config::fusion_nomenclature_config();
+    assert_eq!(
+        registry.version, config.registry_version,
+        "fusion registry and policy versions differ"
+    );
+    assert_eq!(
+        config.graph_source, "retained_graph_templates",
+        "fusion registry graph source differs"
+    );
+    registry
+});
+pub fn fusion_component_registry() -> &'static FusionComponentRegistry {
+    &REGISTRY
+}
 fn maximum_cycle_matching(unavailable: &[bool]) -> usize {
     let Some(blocked) = unavailable.iter().position(|b| *b) else {
         return unavailable.len() / 2;
@@ -950,9 +923,7 @@ fn hw_forms(name: &str) -> (String, String) {
         .split_once('-')
         .filter(|(l, _)| l.split(',').all(|p| p.chars().all(|c| c.is_ascii_digit())))
         .map_or(("", name), |(l, b)| (l, b));
-    let prefix = base
-        .strip_suffix('e')
-        .map_or_else(|| format!("{base}o"), |s| format!("{s}o"));
+    let prefix = format!("{}o", base.strip_suffix('e').unwrap_or(base));
     if locants.is_empty() {
         (base.into(), prefix)
     } else {
@@ -1020,7 +991,7 @@ mod tests {
             size: 6,
             edge_cycle: Vec::new(),
         };
-        let matches = r.match_faces(&mol, &[f], None, None).unwrap();
+        let matches = r.match_faces(&mol, &[f], None).unwrap();
         assert_eq!(matches.len(), 6);
         for m in &matches {
             let spec = r.spec_for_match(m).unwrap();

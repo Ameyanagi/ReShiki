@@ -3,7 +3,7 @@ use super::super::molecule::AtomSet;
 use super::{
     faces::cycle_edge_iter,
     layout::{
-        Budget, Point, opsin_occupied_row_orientation, preferred_intrinsic_layouts_with_budget,
+        Budget, Point, opsin_occupied_row_orientation, preferred_intrinsic_layouts,
         segments_intersect,
     },
     model::{FaceModel, FusedLayout},
@@ -275,7 +275,7 @@ fn entry_direction_geometry_uncached(
     {
         return Ok(None);
     }
-    let layouts = preferred_intrinsic_layouts_with_budget(model, search_budget)?;
+    let layouts = preferred_intrinsic_layouts(model, search_budget)?;
     let Some(reference) = layouts.first() else {
         return Ok(None);
     };
