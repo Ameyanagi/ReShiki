@@ -102,8 +102,9 @@ pub fn substituent_locant_string(
             return String::new();
         }
     }
-    let ambiguous =
-        parts.retained_name.is_some() && retained_parent_attachment_is_ambiguous(parts, locs);
+    let ambiguous = super::retained_specs::retained_parent_spec(parts.retained_name.as_deref())
+        .is_some_and(|spec| spec.attachment_policy.use_parent_attachment_equivalence)
+        && retained_parent_attachment_is_ambiguous(parts, locs);
     if locs == ["1"]
         && parts.is_ring
         && parts.principal_group.is_none()
@@ -161,10 +162,15 @@ fn outer_parentheses_are_redundant(name: &str) -> bool {
 }
 pub fn format_substituent_prefixes(parts: &AssemblyParts) -> String {
     let mut grouped: BTreeMap<&str, Vec<_>> = BTreeMap::new();
+    let mut names = Vec::new();
     for sub in &parts.substituents {
-        grouped.entry(&sub.name).or_default().push(sub);
+        let items = grouped.entry(sub.name.as_str()).or_default();
+        if items.is_empty() {
+            names.push(sub.name.as_str());
+        }
+        items.push(sub);
     }
-    let mut names: Vec<_> = grouped.keys().copied().collect();
+    // Python's dict preserves first citation order when alphabetical keys tie.
     names.sort_by_key(|s| substituent_sort_key(s));
     let mut rendered = String::new();
     for name in names {
@@ -207,7 +213,10 @@ pub fn format_substituent_prefixes(parts: &AssemblyParts) -> String {
             used = name[1..name.len() - 1].into();
         }
         if complex && !is_fully_enclosed(&used) {
-            if count > 1 || !loc.is_empty() {
+            // Upstream divergence: an unlocanted diazenyl sibling needs its
+            // own boundary. Otherwise a preceding ring becomes a ligand on
+            // diazenyl instead of a second substituent on the named parent.
+            if count > 1 || !loc.is_empty() || (grouped.len() > 1 && name == "diazenyl") {
                 used = format!("({used})");
             }
         } else if loc.is_empty()
@@ -274,4 +283,15 @@ pub fn format_replacement_prefixes(parts: &AssemblyParts) -> String {
         })
         .collect::<Vec<_>>()
         .join("-")
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn sibling_diazenyl_keeps_its_carbonyl_attachment() {
+        assert_eq!(
+            super::super::name_smiles("C1=CC(=C2C=C(NC2=C1)C(=O)N=N)CN=[N+]=[N-]").as_deref(),
+            Ok("(4-(azidomethyl)-1H-indol-2-yl)(diazenyl)methanone"),
+        );
+    }
 }

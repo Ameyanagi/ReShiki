@@ -1,6 +1,6 @@
 //! Parent numbering criteria ported from Python `numbering.py`.
 use super::{
-    locants::{get_atom_locants, get_bond_locants, parse_locant},
+    locants::{get_atom_locants, get_bond_locants, retained_locant_sort_key},
     molecule::{AtomSet, Molecule},
     rules::{elements, retained},
 };
@@ -189,7 +189,7 @@ pub fn choose_parent_numbering(
     topology: NumberingTopology,
 ) -> (Vec<usize>, Option<BTreeMap<usize, String>>) {
     if !locant_maps.is_empty() {
-        type L = (u8, usize, String);
+        type L = (usize, u8, String, usize);
         type MapScore = (
             Vec<Vec<L>>,
             Vec<L>,
@@ -199,7 +199,7 @@ pub fn choose_parent_numbering(
             Vec<(String, L)>,
         );
         let evaluate = |map: &BTreeMap<usize, String>| -> MapScore {
-            let value = |idx: &usize| parse_locant(&map[idx]);
+            let value = |idx: &usize| retained_locant_sort_key(&map[idx]);
             let mut principal: Vec<_> = principal_atoms
                 .iter()
                 .filter(|idx| map.contains_key(idx))
@@ -268,7 +268,7 @@ pub fn choose_parent_numbering(
         };
         if let Some(chosen) = locant_maps.iter().min_by_key(|map| evaluate(map)).cloned() {
             let mut path: Vec<_> = chosen.keys().copied().collect();
-            path.sort_by_key(|idx| parse_locant(&chosen[idx]));
+            path.sort_by_key(|idx| retained_locant_sort_key(&chosen[idx]));
             return (path, Some(chosen));
         }
     }
@@ -529,7 +529,7 @@ mod tests {
     #[test]
     fn hw_numbering_prioritizes_senior_heteroatom_then_all_hetero_locants() {
         let mol = read_smiles("s1cnnc1").unwrap();
-        let rings = find_ring_systems(&mol, &AtomSet::new());
+        let rings = find_ring_systems(&mol, &AtomSet::new()).unwrap();
         let numbered = number_parent(
             &mol,
             &rings[0].paths,
@@ -561,7 +561,7 @@ mod tests {
     #[test]
     fn spiro_numbering_scores_only_the_topology_candidates() {
         let mol = read_smiles("C1CCC2(CC1)OCCO2").unwrap();
-        let rings = find_ring_systems(&mol, &AtomSet::new());
+        let rings = find_ring_systems(&mol, &AtomSet::new()).unwrap();
         let system = &rings[0];
         let (path, map) = choose_parent_numbering(
             &mol,

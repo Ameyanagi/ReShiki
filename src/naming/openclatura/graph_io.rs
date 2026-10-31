@@ -169,19 +169,17 @@ pub fn read_smiles(text: &str) -> Result<Molecule, String> {
             in_small_ring,
         })?;
     }
-    require_supported_ring_blocks(&mol, &state.rings.atoms)?;
+    require_supported_ring_blocks(&mut mol, &state.rings.atoms)?;
     super::identity_validation::validate_input(&mol)?;
     super::identity_validation::validate_mancude_duplicate_ranking(&mol)?;
     Ok(mol)
 }
 
-/// Simple cyclic blocks may share spiro articulations. A nonsimple block is
-/// supported only when upstream fusion selection certainly abstains, and may
-/// connect to other cyclic blocks only through ordinary bridges/chains.
-fn require_supported_ring_blocks(mol: &Molecule, rings: &[Vec<usize>]) -> Result<(), String> {
+/// Record fusion eligibility without suppressing retained-parent discovery.
+fn require_supported_ring_blocks(mol: &mut Molecule, rings: &[Vec<usize>]) -> Result<(), String> {
     let atoms = mol.atoms.keys().copied().collect();
     let mut cyclic_blocks = Vec::new();
-    let mut ring_blocks = BTreeMap::<usize, (usize, bool)>::new();
+    let mut ring_blocks = BTreeMap::<usize, usize>::new();
     for block in biconnected_edge_components(mol, &atoms) {
         let mut degrees = BTreeMap::<usize, usize>::new();
         for &(u, v) in &block {
@@ -194,34 +192,23 @@ fn require_supported_ring_blocks(mol: &Molecule, rings: &[Vec<usize>]) -> Result
         let nonsimple = block.len() != degrees.len() || degrees.values().any(|&degree| degree != 2);
         let block_atoms = degrees.into_keys().collect::<AtomSet>();
         for &atom in &block_atoms {
-            let (count, has_nonsimple) = ring_blocks.entry(atom).or_default();
-            *count += 1;
-            *has_nonsimple |= nonsimple;
+            *ring_blocks.entry(atom).or_default() += 1;
         }
         cyclic_blocks.push((block, block_atoms, nonsimple));
     }
-    for &(count, has_nonsimple) in ring_blocks.values() {
+    for &count in ring_blocks.values() {
         // Upstream divergence: a third ring on one spiro atom needs the
         // unported spiro side-pair assembly (find_spiro_side_pair).
         if count > 2 {
             return Err("openclatura: three rings at one spiro atom are not ported".into());
-        }
-        // Upstream divergence: spiro assembly on a polycyclic component is
-        // outside the pure-spiro and von Baeyer ports.
-        if count > 1 && has_nonsimple {
-            return Err(
-                "openclatura: spiro junction on a polycyclic ring system not ported".into(),
-            );
         }
     }
     for (block, block_atoms, nonsimple) in cyclic_blocks {
         if !nonsimple {
             continue;
         }
-        // Upstream divergence: fusion remains unported. Use the native
-        // symmetric SSSR and the pre-Kekule aromatic snapshot to admit only
-        // blocks on which fusion selection certainly abstains. Sharing a
-        // longer path (bridged rings) must not be mistaken for one fused bond.
+        // Preserve the input SSSR evidence for the later planner boundary.
+        // Sharing a longer path does not prove a fused bond.
         let block_rings: Vec<_> = rings
             .iter()
             .filter(|ring| ring.len() >= 5)
@@ -248,7 +235,7 @@ fn require_supported_ring_blocks(mol: &Molecule, rings: &[Vec<usize>]) -> Result
                     })
             });
         if block_atoms.iter().any(|atom| mol.atoms[atom].is_aromatic) || fusion_pair {
-            return Err("openclatura: fusion-eligible ring system not ported".into());
+            mol.fusion_eligible_blocks.push(block_atoms);
         }
     }
     Ok(())
@@ -504,7 +491,7 @@ mod tests {
     }
 
     #[test]
-    fn fusion_eligible_sssr_pairs_and_aromatic_blocks_remain_outside_scope() {
+    fn fusion_eligible_blocks_reach_parent_selection() {
         for text in [
             "C1CCC2CCCCC2C1",  // decalin.
             "C1CC2CCCC2C1",    // bicyclo[3.3.0]octane.
@@ -512,25 +499,18 @@ mod tests {
             "c1ccc2ccccc2c1",  // Aromatic fused system.
             "c1ccc2c(c1)CC2",  // Only one SSSR ring has five or more atoms.
         ] {
-            assert_eq!(
-                read_smiles(text).unwrap_err(),
-                "openclatura: fusion-eligible ring system not ported",
-                "{text}"
-            );
+            let mol = read_smiles(text).unwrap();
+            assert!(!mol.fusion_eligible_blocks.is_empty(), "{text}");
         }
     }
 
     #[test]
-    fn spiro_junctions_on_polycyclic_blocks_remain_outside_scope() {
+    fn spiro_junctions_on_polycyclic_blocks_reach_parent_selection() {
         for text in [
             "C1CC2(C1)CCC1CCCCC12", // A fused block and a simple cycle.
             "C12(CC1)CC3CCC2C3",    // A bridged block and a simple cycle.
         ] {
-            assert_eq!(
-                read_smiles(text).unwrap_err(),
-                "openclatura: spiro junction on a polycyclic ring system not ported",
-                "{text}"
-            );
+            read_smiles(text).unwrap_or_else(|error| panic!("{text}: {error}"));
         }
     }
 

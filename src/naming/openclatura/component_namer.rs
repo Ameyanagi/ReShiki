@@ -96,7 +96,7 @@ pub fn name_component_with_citation(
     let (principal, _) = partition_principal_and_prefix_groups(&groups, key.as_deref());
     exclude_nonparent_group_atoms(mol, &groups, &mut exclude, &cyclic);
     let chains = find_all_carbon_paths(mol, &exclude)?;
-    let rings = find_ring_systems(mol, &exclude);
+    let rings = find_ring_systems(mol, &exclude)?;
     let selection = select_principal_parent(mol, &chains, &rings, &principal)
         .ok_or("openclatura: no supported parent skeleton")?;
     let path = selection.primary_path();
@@ -107,7 +107,7 @@ pub fn name_component_with_citation(
     let (principal, prefix_groups) = partition_principal_and_prefix_groups(&groups, key.as_deref());
     let retained_match = resolve_retained_parent(mol, &selection);
     let mut retained_name = retained_match.as_ref().map(|r| r.name.clone());
-    let maps = retained_match.map(|r| r.locant_maps).unwrap_or_default();
+    let mut maps = retained_match.map(|r| r.locant_maps).unwrap_or_default();
     let principal_atoms = principal_involved_atoms(mol, &groups, key.as_deref(), path);
     let sub_exclude: AtomSet = base_exclude
         .iter()
@@ -126,6 +126,33 @@ pub fn name_component_with_citation(
         &base_exclude,
         &sub_exclude,
     )?;
+    let retained_fused = super::retained_fused_production::production_retained_fused_parent(
+        mol,
+        path,
+        component_atoms,
+        &groups,
+        key.as_deref(),
+        &mapping,
+        None,
+    )?;
+    let mut retained_metadata = None;
+    if let Some(retained) = retained_fused {
+        retained_name = Some(retained.name);
+        maps = retained.locant_maps;
+        retained_metadata = Some(retained.metadata);
+    } else if let Some(name) = &retained_name {
+        let context = if mapping.is_empty() && key.is_none() {
+            "unsubstituted_parent"
+        } else {
+            "composite_parent"
+        };
+        retained_name = Some(super::retained_name_policy::retained_parent_output_name(
+            name,
+            context,
+            &[],
+            None,
+        ));
+    }
     if retained_name.is_some()
         && maps.is_empty()
         && selection.is_polycycle
@@ -143,6 +170,9 @@ pub fn name_component_with_citation(
         retained_name,
         &maps,
     )?;
+    if retained_metadata.is_some() {
+        plan.parts.retained_parent_metadata = retained_metadata;
+    }
     let numbered = &plan.numbered_path;
     let locants = &plan.locant_map;
     let parts = &mut plan.parts;
@@ -169,7 +199,7 @@ pub fn name_component_with_citation(
         numbered,
         locants,
     );
-    add_indicated_hydrogens(mol, parts, numbered, locants);
+    add_indicated_hydrogens(mol, parts, numbered, locants)?;
     for &idx in numbered {
         for mut item in mapping.remove(&idx).unwrap_or_default() {
             item.locants.push(locants[&idx].clone());

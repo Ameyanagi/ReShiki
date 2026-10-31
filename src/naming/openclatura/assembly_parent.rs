@@ -476,9 +476,10 @@ pub fn parent_stem_and_terminal(parts: &AssemblyParts) -> Result<(String, String
     }
     if let Some(name) = &parts.retained_name {
         if parts.is_substituent
-            && let Some((stem, terminal)) = RULES.retained.substituent_stems.get(name)
+            && let Some(spec) = super::retained_specs::retained_parent_spec(Some(name))
+            && let Some(stem) = spec.substituent_stem
         {
-            return Ok((stem.clone(), terminal.clone()));
+            return Ok((stem, spec.substituent_terminal.unwrap_or_default()));
         }
         return Ok(if let Some(stem) = name.strip_suffix('e') {
             (stem.into(), "e".into())
@@ -563,6 +564,11 @@ pub fn always_print_substituent_locant(parts: &AssemblyParts) -> bool {
                 .retained_name
                 .as_deref()
                 .is_some_and(|s| s != "benzene"))
+    {
+        return true;
+    }
+    if super::retained_specs::retained_parent_spec(parts.retained_name.as_deref())
+        .is_some_and(|spec| spec.attachment_policy.print_substituent_locant)
     {
         return true;
     }

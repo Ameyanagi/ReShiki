@@ -1,7 +1,8 @@
 //! Native Rust port of openclatura 0.4.3 (MIT), plain-name pipeline.
 //! Attribution and license terms are in `licenses/openclatura/`.
 //!
-//! Supports chains, monocycles, pure spiro and non-fusion von Baeyer ring systems.
+//! Supports chains, monocycles, retained fused parents, pure spiro and non-fusion
+//! von Baeyer ring systems. Systematic fusion planning is deferred.
 // Graph IDs and numbered parent paths are validated at construction and retain
 // their identity in induced subgraphs. Direct indexing preserves the upstream
 // rule comparisons; immutable JSON Value indexing also returns null for a
@@ -21,6 +22,8 @@ mod component_modifiers;
 mod component_namer;
 mod formatting;
 mod functional_prefixes;
+mod fused_ion_templates;
+mod fusion;
 mod graph_io;
 mod graph_kernel;
 mod group_atom_roles;
@@ -42,6 +45,12 @@ mod polycycle_topology;
 mod principal_groups;
 mod principal_suffixes;
 mod python_int_set;
+mod retained_derivative_hydrogen;
+mod retained_fused_production;
+mod retained_fused_templates;
+mod retained_graph_model;
+mod retained_name_policy;
+mod retained_specs;
 mod ring_renderer;
 mod rules;
 mod small_ring_stereo;
@@ -104,6 +113,27 @@ fn has_nonbonding_pair(atom: &molecule::Atom, bond_order_sum: usize) -> bool {
 mod tests {
     use super::name_smiles;
     use std::io::Write;
+
+    #[test]
+    fn retained_fused_parents_precede_unported_fusion_planning() {
+        for (smiles, expected) in [
+            ("c1ccc2ccccc2c1", "naphthalene"),
+            ("c1ccc2cc3ccccc3cc2c1", "anthracene"),
+            ("c1ccc2[nH]ccc2c1", "1H-indole"),
+            ("c1ccc2c(c1)[nH]c1ccccc12", "9H-carbazole"),
+            ("C1CCC2=CC=CC=C2C1", "1,2,3,4-tetrahydronaphthalene"),
+            ("c1ccc2c(c1)CCN2", "2,3-dihydro-1H-indole"),
+        ] {
+            assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
+        }
+        for smiles in ["c1oc2ncccc2c1", "C1OCC2COCC12", "C1CCC2(C1)Oc1ccccc1O2"] {
+            assert_eq!(
+                name_smiles(smiles).unwrap_err(),
+                "openclatura: systematic fusion not ported",
+                "{smiles}"
+            );
+        }
+    }
 
     #[test]
     fn spiro_parents_and_substituents_follow_oracle_names() {

@@ -55,12 +55,15 @@ pub struct ParentChargeItem {
     pub locant: String,
     pub symbol: String,
     pub charge: i32,
+    pub atom_id: Option<usize>,
 }
 #[derive(Clone, Debug, Default)]
 pub struct HydroOperation {
     pub key: String,
     pub locants: Vec<String>,
     pub operation_kind: String,
+    pub atom_ids: Vec<usize>,
+    pub bond_ids: Vec<usize>,
 }
 #[derive(Clone, Debug, Default)]
 pub struct RetainedParentMetadata {
@@ -68,6 +71,8 @@ pub struct RetainedParentMetadata {
     pub mancude_double_bonds: usize,
     pub default_indicated_h: Vec<String>,
     pub inherent_saturated_locants: Vec<String>,
+    pub fusion_locants: Vec<String>,
+    pub relocated_indicated_h: bool,
 }
 #[derive(Clone, Debug)]
 pub struct AssemblyParts {
@@ -89,6 +94,9 @@ pub struct AssemblyParts {
     pub retained_absorbs_principal_group: bool,
     pub retained_substituent_name: Option<String>,
     pub retained_parent_metadata: Option<RetainedParentMetadata>,
+    pub parent_bond_model: Option<super::fusion::model::ParentBondModel>,
+    pub parent_bond_delta: Option<super::fusion::mancude::ParentBondDelta>,
+    pub parent_derivative_state: Option<super::fusion::mancude::ParentDerivativeState>,
     pub front_modifiers: Vec<String>,
     pub front_modifier_locants: Vec<Option<String>>,
     pub principal_suffix_modifiers: Vec<SubstituentItem>,
@@ -142,6 +150,9 @@ impl AssemblyParts {
             retained_absorbs_principal_group: false,
             retained_substituent_name: None,
             retained_parent_metadata: None,
+            parent_bond_model: None,
+            parent_bond_delta: None,
+            parent_derivative_state: None,
             front_modifiers: vec![],
             front_modifier_locants: vec![],
             principal_suffix_modifiers: vec![],

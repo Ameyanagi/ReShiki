@@ -923,6 +923,7 @@ mod tests {
         ] {
             let mol = read_smiles(smiles).unwrap();
             let system = super::super::chains::find_ring_systems(&mol, &AtomSet::new())
+                .unwrap()
                 .into_iter()
                 .find(|system| system.is_polycycle)
                 .unwrap();

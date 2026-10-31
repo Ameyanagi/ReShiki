@@ -59,7 +59,7 @@ fn generated_spec_for_name(mol: &Molecule, path: &[usize], name: &str) -> Option
 
 pub fn get_retained_ring(mol: &Molecule, path: &[usize]) -> Option<RetainedMatch> {
     if !is_monocycle(mol, path) {
-        return match_retained_cage_templates(mol, path);
+        return match_fused_templates(mol, path);
     }
     let double_bonds = count_double_bonds_in_ring(mol, path);
     let symbols: Vec<String> = path.iter().map(|i| mol.atoms[i].symbol.clone()).collect();
@@ -82,169 +82,65 @@ pub fn get_retained_ring(mol: &Molecule, path: &[usize]) -> Option<RetainedMatch
     })
 }
 
-/// The saturated cage subset of upstream's retained graph-template matcher.
-fn match_retained_cage_templates(mol: &Molecule, path: &[usize]) -> Option<RetainedMatch> {
+/// Retained parents selected before descriptor discovery by template capability.
+pub fn get_pre_descriptor_retained_ring(mol: &Molecule, path: &[usize]) -> Option<RetainedMatch> {
+    use super::super::retained_fused_templates::{
+        MatchOptions, match_retained_graph_templates_with_options,
+    };
+    let ring = path.iter().copied().collect();
+    let mut matches = match_retained_graph_templates_with_options(
+        mol,
+        &ring,
+        MatchOptions {
+            pre_descriptor_only: true,
+            ..Default::default()
+        },
+    );
+    if matches.is_empty() {
+        matches = match_retained_graph_templates_with_options(
+            mol,
+            &ring,
+            MatchOptions {
+                allow_nonaromatic: true,
+                pre_descriptor_only: true,
+                family: Some("macrocycle"),
+                ..Default::default()
+            },
+        );
+    }
+    let name = matches.first()?.template.name.clone();
+    Some(RetainedMatch {
+        locant_maps: matches
+            .into_iter()
+            .filter(|m| m.template.name == name)
+            .map(|m| m.atom_to_locant)
+            .collect(),
+        name,
+    })
+}
+fn match_fused_templates(mol: &Molecule, path: &[usize]) -> Option<RetainedMatch> {
+    use super::super::retained_fused_templates::match_retained_graph_templates;
     let ring: AtomSet = path.iter().copied().collect();
-    if ring.len() != path.len()
-        || ring.iter().any(|&idx| {
-            mol.atoms[&idx].symbol != "C"
-                // All-carbon graph templates use upstream's exact charge policy.
-                || mol.atoms[&idx].charge != 0
-                || !is_saturated_ring_site(mol, idx, &ring)
+    let mut matches = match_retained_graph_templates(mol, &ring, false);
+    if matches.is_empty()
+        && path.iter().all(|idx| {
+            mol.atoms[idx].charge == 0
+                && mol.get_neighbors(*idx).iter().all(|n| {
+                    ring.contains(n) || mol.get_bond(*idx, *n).is_none_or(|b| b.order <= 1)
+                })
         })
     {
-        return None;
+        matches = match_retained_graph_templates(mol, &ring, true);
     }
-    // Upstream divergence: only the retained cages admitted by the fusion
-    // boundary are ported here; fused/macrocyclic template providers are deferred.
-    for name in ["adamantane", "cubane"] {
-        let row = GRAPH_PARENTS["parents"]
-            .as_array()?
-            .iter()
-            .find(|row| row["name"].as_str() == Some(name))?;
-        let template = &row["template"];
-        let locants: Vec<_> = template["locants"]
-            .as_array()?
-            .iter()
-            .filter_map(Value::as_str)
-            .collect();
-        if locants.len() != ring.len() {
-            continue;
-        }
-        let mut neighbors = vec![AtomSet::new(); locants.len()];
-        for bond in template["bonds"].as_array()? {
-            let endpoints = bond["locants"].as_array()?;
-            let first = locants
-                .iter()
-                .position(|&locant| Some(locant) == endpoints[0].as_str())?;
-            let second = locants
-                .iter()
-                .position(|&locant| Some(locant) == endpoints[1].as_str())?;
-            neighbors[first].insert(second);
-            neighbors[second].insert(first);
-        }
-        let candidates: Vec<Vec<usize>> = neighbors
-            .iter()
-            .map(|adjacent| {
-                ring.iter()
-                    .copied()
-                    .filter(|&idx| {
-                        mol.get_neighbors(idx)
-                            .iter()
-                            .filter(|n| ring.contains(n))
-                            .count()
-                            == adjacent.len()
-                    })
-                    .collect()
-            })
-            .collect();
-        if candidates.iter().any(Vec::is_empty) {
-            continue;
-        }
-        let mut assignments = Vec::new();
-        collect_cage_locant_matches(
-            mol,
-            &locants,
-            &neighbors,
-            &candidates,
-            &mut vec![None; locants.len()],
-            &mut AtomSet::new(),
-            &mut assignments,
-        );
-        // Upstream's final match rank compares atom IDs in template locant order.
-        assignments.sort();
-        if !assignments.is_empty() {
-            return Some(RetainedMatch {
-                name: name.into(),
-                locant_maps: assignments
-                    .into_iter()
-                    .map(|assignment| {
-                        assignment
-                            .into_iter()
-                            .zip(&locants)
-                            .map(|(atom, &locant)| (atom, locant.to_owned()))
-                            .collect()
-                    })
-                    .collect(),
-            });
-        }
-    }
-    None
-}
-
-#[allow(clippy::too_many_arguments)]
-fn collect_cage_locant_matches(
-    mol: &Molecule,
-    locants: &[&str],
-    neighbors: &[AtomSet],
-    candidates: &[Vec<usize>],
-    assignment: &mut [Option<usize>],
-    used: &mut AtomSet,
-    matches: &mut Vec<Vec<usize>>,
-) {
-    if matches.len() >= 256 {
-        return;
-    }
-    if used.len() == locants.len() {
-        matches.push(assignment.iter().flatten().copied().collect());
-        return;
-    }
-    let remaining: Vec<_> = (0..locants.len())
-        .filter(|&i| assignment[i].is_none())
-        .collect();
-    let frontier: Vec<_> = remaining
-        .iter()
-        .copied()
-        .filter(|&i| neighbors[i].iter().any(|&n| assignment[n].is_some()))
-        .collect();
-    let search = if frontier.is_empty() {
-        &remaining
-    } else {
-        &frontier
-    };
-    let mut options_by_locant = Vec::new();
-    for &locant in search {
-        let options: Vec<_> = candidates[locant]
-            .iter()
-            .copied()
-            .filter(|&atom| {
-                !used.contains(&atom)
-                    && assignment.iter().enumerate().all(|(other, &assigned)| {
-                        assigned.is_none_or(|assigned| {
-                            neighbors[locant].contains(&other)
-                                == mol.get_bond(atom, assigned).is_some()
-                        })
-                    })
-            })
-            .collect();
-        if options.is_empty() {
-            return;
-        }
-        let assigned_count = neighbors[locant]
-            .iter()
-            .filter(|&&n| assignment[n].is_some())
-            .count();
-        options_by_locant.push((
-            options.len(),
-            std::cmp::Reverse(assigned_count),
-            std::cmp::Reverse(neighbors[locant].len()),
-            locants[locant],
-            locant,
-            options,
-        ));
-    }
-    let Some((_, _, _, _, locant, options)) = options_by_locant.into_iter().min() else {
-        return;
-    };
-    for atom in options {
-        assignment[locant] = Some(atom);
-        used.insert(atom);
-        collect_cage_locant_matches(
-            mol, locants, neighbors, candidates, assignment, used, matches,
-        );
-        used.remove(&atom);
-        assignment[locant] = None;
-    }
+    let name = matches.first()?.template.name.clone();
+    Some(RetainedMatch {
+        locant_maps: matches
+            .into_iter()
+            .filter(|m| m.template.name == name)
+            .map(|m| m.atom_to_locant)
+            .collect(),
+        name,
+    })
 }
 
 fn is_monocycle(mol: &Molecule, path: &[usize]) -> bool {
@@ -810,7 +706,7 @@ pub fn mancude_hydro_plan(
         .saturating_sub(fixed.len())
         .min(citable.len());
     let added = exocyclic.len().min(citable.len() - indicated);
-    if (citable.len() - indicated - added) % 2 != 0 {
+    if !(citable.len() - indicated - added).is_multiple_of(2) {
         return None;
     }
     Some(HydroPlan {
@@ -853,54 +749,7 @@ pub fn cites_indicated_hydrogen(mol: &Molecule, path: &[usize], name: Option<&st
 }
 
 pub fn parent_metadata(name: &str) -> Option<super::super::assembly_parts::RetainedParentMetadata> {
-    let row = GRAPH_PARENTS["parents"]
-        .as_array()?
-        .iter()
-        .find(|r| r["name"].as_str() == Some(name))?;
-    let default: Vec<String> = row
-        .get("default_indicated_h")
-        .or_else(|| row["template"].get("default_indicated_h"))
-        .and_then(Value::as_array)
-        .map(|v| {
-            v.iter()
-                .filter_map(Value::as_str)
-                .map(str::to_owned)
-                .collect()
-        })
-        .unwrap_or_default();
-    Some(super::super::assembly_parts::RetainedParentMetadata {
-        mancude_double_bonds: row["template"]["mancude_double_bonds"]
-            .as_u64()
-            .unwrap_or(0) as usize,
-        default_indicated_h: default.clone(),
-        inherent_saturated_locants: row["template"]["atoms"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter(|atom| atom["saturated"].as_bool() == Some(true))
-            .filter_map(|atom| atom["locant"].as_str().map(str::to_owned))
-            .collect(),
-        indicated_hydrogen_count: row["template"]["indicated_hydrogen_count"]
-            .as_u64()
-            .map(|count| count as usize)
-            .unwrap_or_else(|| {
-                if !default.is_empty() {
-                    default.len()
-                } else {
-                    row["template"]["atoms"]
-                        .as_array()
-                        .into_iter()
-                        .flatten()
-                        .filter(|atom| {
-                            atom["aromatic"].as_bool() == Some(false)
-                                && !atom["fusion"].as_bool().unwrap_or(false)
-                                && !elements::get(atom["symbol"].as_str().unwrap_or("C"))
-                                    .is_some_and(|e| e.mancude_forced_single)
-                        })
-                        .count()
-                }
-            }),
-    })
+    super::super::retained_fused_templates::retained_parent_metadata(name)
 }
 
 #[cfg(test)]
@@ -909,7 +758,7 @@ mod tests {
     use super::*;
     fn retained_name(smiles: &str) -> Option<String> {
         let mol = read_smiles(smiles).unwrap();
-        let ring = find_ring_systems(&mol, &AtomSet::new());
+        let ring = find_ring_systems(&mol, &AtomSet::new()).unwrap();
         get_retained_ring(&mol, &ring[0].paths[0]).map(|r| r.name)
     }
     #[test]
@@ -957,7 +806,7 @@ mod tests {
     #[test]
     fn partly_saturated_parent_reports_hydro_positions() {
         let mol = read_smiles("N1CCC=CC1").unwrap();
-        let ring = find_ring_systems(&mol, &AtomSet::new());
+        let ring = find_ring_systems(&mol, &AtomSet::new()).unwrap();
         let path = &ring[0].paths[0];
         assert_eq!(get_retained_ring(&mol, path).unwrap().name, "pyridine");
         let plan = mancude_monocycle_hydro_plan(&mol, path, Some("pyridine")).unwrap();
@@ -968,7 +817,7 @@ mod tests {
         // Upstream HW specs for these rings are azepine (3 double bonds,
         // indicated H) and oxepine (3 double bonds, fixed saturated O).
         let mol = read_smiles("N1CCC=CC=C1").unwrap();
-        let rings = find_ring_systems(&mol, &AtomSet::new());
+        let rings = find_ring_systems(&mol, &AtomSet::new()).unwrap();
         let path = &rings[0].paths[0];
         let plan = mancude_monocycle_hydro_plan(&mol, path, Some("azepine")).unwrap();
         assert_eq!(
@@ -979,7 +828,7 @@ mod tests {
         assert!(mancude_monocycle_hydro_plan(&mol, path, Some("oxepine")).is_none());
 
         let oxygen = read_smiles("O1C=CC=CC=C1").unwrap();
-        let oxygen_rings = find_ring_systems(&oxygen, &AtomSet::new());
+        let oxygen_rings = find_ring_systems(&oxygen, &AtomSet::new()).unwrap();
         let oxygen_path = &oxygen_rings[0].paths[0];
         assert!(!cites_indicated_hydrogen(
             &oxygen,

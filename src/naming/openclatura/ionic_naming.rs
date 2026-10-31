@@ -1,6 +1,6 @@
 //! Graph-backed ionic spelling changes from upstream `ionic_naming.py`.
 use super::{
-    assembly_utils::needs_hyphen,
+    assembly_utils::{is_fully_enclosed, needs_hyphen},
     molecule::{AtomSet, Molecule},
     nomenclature::RULES,
 };
@@ -592,6 +592,29 @@ fn nitrogen_has_carbon_double(mol: &Molecule, idx: usize) -> Option<usize> {
     })
 }
 
+fn belongs_to_parent_scope(name: &str, position: usize) -> bool {
+    let mut scope = name;
+    let mut scope_start = 0;
+    while is_fully_enclosed(scope) {
+        scope = &scope[1..scope.len() - 1];
+        scope_start += 1;
+    }
+    let Some(prefix) = position
+        .checked_sub(scope_start)
+        .and_then(|relative| scope.get(..relative))
+    else {
+        return false;
+    };
+    let depth = prefix
+        .chars()
+        .fold(0_i32, |depth, character| match character {
+            '(' => depth + 1,
+            ')' => depth - 1,
+            _ => depth,
+        });
+    depth == 0
+}
+
 pub fn apply_cationic_imino_parent_prefixes(
     name: &str,
     mol: &Molecule,
@@ -620,7 +643,13 @@ pub fn apply_cationic_imino_parent_prefixes(
             let mut consumed = 0;
             for (start, _) in updated.match_indices(&pattern) {
                 let end = start + pattern.len();
-                if ascii_left_boundary(&updated, start) && word_boundary(&updated, end) {
+                // Upstream divergence: equal numeric locants in nested branches
+                // belong to different atoms. Each branch handles its own imino
+                // charge before it is inserted into the enclosing parent name.
+                if ascii_left_boundary(&updated, start)
+                    && word_boundary(&updated, end)
+                    && belongs_to_parent_scope(&updated, start)
+                {
                     output.push_str(updated.get(consumed..start).unwrap_or_default());
                     output.push_str(&replacement);
                     consumed = end;
@@ -841,10 +870,42 @@ mod tests {
             .unwrap(),
             "2-iminio-3-hydroxybutanoate"
         );
+        for (name, expected) in [
+            (
+                "2-imino-3-(2-iminoethyl)butanoate",
+                "2-iminio-3-(2-iminoethyl)butanoate",
+            ),
+            (
+                "(2-imino-3-(2-iminoethyl)butan-1-yl)",
+                "(2-iminio-3-(2-iminoethyl)butan-1-yl)",
+            ),
+        ] {
+            assert_eq!(
+                apply_cationic_imino_parent_prefixes(
+                    name,
+                    &mol,
+                    &[1],
+                    &BTreeMap::from([(1, "2".into())]),
+                )
+                .unwrap(),
+                expected,
+            );
+        }
         mol.set_bond_order(2, 2).unwrap();
         assert_eq!(
             apply_cationic_imino_names("(imino)methyl", &mol).unwrap(),
             "(imino)methyl"
+        );
+    }
+
+    #[test]
+    fn parent_imino_charge_preserves_the_nested_neutral_imine() {
+        assert_eq!(
+            super::super::name_smiles(
+                "CC(=[NH2+])[N+](=CC1C[C@H]2CC(C1)(CCCN2)C)C(=N)C3=CC=CC=C3",
+            )
+            .as_deref(),
+            Ok("1-((1-imino-1-phenylmethyl)(((1S)-6-methyl-2-azabicyclo[4.3.1]decan-8-yl)methylidene)ammonio)ethan-1-iminium"),
         );
     }
 

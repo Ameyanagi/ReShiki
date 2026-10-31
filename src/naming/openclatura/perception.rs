@@ -2370,8 +2370,21 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             }
         }
         if let Some(n) = ns.iter().copied().find(|&n| order(m, c, n) == 3) {
-            let single_s = ss.iter().copied().find(|&x| order(m, c, x) == 1);
-            let single_o = os.iter().copied().find(|&x| order(m, c, x) == 1);
+            // Upstream divergence: cyanato/thiocyanato consumes a neutral
+            // divalent linker, never a skeletal ring atom or an H-bearing
+            // hypervalent chalcogen carrying an additional cyano branch.
+            let is_cyano_linker = |&x: &usize| {
+                order(m, c, x) == 1
+                    && !cyclic.contains(&x)
+                    && m.degree(x) == 2
+                    && m.atoms[&x].charge == 0
+                    && m.atoms[&x].total_h_count == 0
+                    && m.get_neighbors(x)
+                        .iter()
+                        .all(|&neighbor| order(m, x, neighbor) == 1)
+            };
+            let single_s = ss.iter().copied().find(is_cyano_linker);
+            let single_o = os.iter().copied().find(is_cyano_linker);
             if let Some(e) = single_s.or(single_o)
                 && let Some(attach) = m.get_neighbors(e).iter().copied().find(|x| *x != c)
             {
@@ -2801,6 +2814,17 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
 mod tests {
     use super::super::graph_io::read_smiles;
     use super::*;
+
+    #[test]
+    fn cyano_chalcogen_ligands_do_not_consume_a_ring_skeleton() {
+        for (smiles, expected) in [("CSC#N", "thiocyanato"), ("COC#N", "cyanato")] {
+            let groups = perceive_groups(&read_smiles(smiles).unwrap());
+            assert!(groups.iter().any(|group| group.key == expected), "{smiles}");
+        }
+        let groups = perceive_groups(&read_smiles("N#C[SH]1C=CC=CN2C=CNN21").unwrap());
+        assert!(groups.iter().all(|group| group.key != "thiocyanato"));
+    }
+
     #[test]
     fn detects_group_priority_and_exocyclic_attachment() {
         for (smiles, key) in [

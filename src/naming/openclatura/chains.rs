@@ -232,19 +232,22 @@ pub fn find_all_carbon_paths(
                 .then_some(idx)
         })
         .collect();
-    let endpoints: Vec<usize> = valid
+    // Upstream traverses the set comprehension's table when choosing the
+    // first endpoint. Complete numbering ties retain that path orientation,
+    // including N/N' assignments on equivalent terminal principal groups.
+    let traversal: PythonIntSet = valid.iter().copied().collect();
+    let endpoints: Vec<usize> = traversal
         .iter()
-        .filter(|&&idx| {
+        .filter(|&idx| {
             mol.get_neighbors(idx)
                 .iter()
                 .filter(|n| valid.contains(n))
                 .count()
                 <= 1
         })
-        .copied()
         .collect();
     let starts: Vec<usize> = if endpoints.is_empty() {
-        valid.iter().copied().collect()
+        traversal.iter().collect()
     } else {
         endpoints
     };
@@ -291,7 +294,10 @@ struct RingBlock {
 }
 
 /// Ring blocks and spiro merging in upstream `find_ring_systems` order.
-pub fn find_ring_systems(mol: &Molecule, exclude_atoms: &AtomSet) -> Vec<RingSystem> {
+pub fn find_ring_systems(
+    mol: &Molecule,
+    exclude_atoms: &AtomSet,
+) -> Result<Vec<RingSystem>, String> {
     // Upstream divergence: retained pre-descriptor probes never accept the
     // current cage templates, and fusion is excluded at the input boundary.
     // The audited descriptor and retained path engines below own these blocks.
@@ -307,6 +313,22 @@ pub fn find_ring_systems(mol: &Molecule, exclude_atoms: &AtomSet) -> Vec<RingSys
             })
         })
         .collect();
+    for (index, block) in blocks.iter().enumerate() {
+        for other in &blocks[index + 1..] {
+            if !block.atoms.is_disjoint(&other.atoms)
+                && (!block.is_monocycle || !other.is_monocycle)
+            {
+                // Upstream divergence: spiro_subgraph/assembly_spiro fused-side plans
+                // require systematic fusion, even when the side has a retained name.
+                if fusion_eligible(mol, &block.atoms) || fusion_eligible(mol, &other.atoms) {
+                    return Err("openclatura: systematic fusion not ported".into());
+                }
+                return Err(
+                    "openclatura: spiro junction on a polycyclic ring system not ported".into(),
+                );
+            }
+        }
+    }
     let mut changed = true;
     while changed {
         changed = false;
@@ -409,6 +431,75 @@ pub fn find_ring_systems(mol: &Molecule, exclude_atoms: &AtomSet) -> Vec<RingSys
             continue;
         }
         if edges.len() >= atoms.len() + 2 {
+            if let Some(retained) = super::rules::retained::get_pre_descriptor_retained_ring(
+                mol,
+                &atoms.iter().copied().collect::<Vec<_>>(),
+            )
+            .or_else(|| {
+                // Upstream divergence: a retained locant graph can replace the
+                // planner's temporary numbering paths before the later retained
+                // identity handoff. No legacy descriptor is selected here.
+                super::rules::retained::get_retained_ring(
+                    mol,
+                    &atoms.iter().copied().collect::<Vec<_>>(),
+                )
+            })
+            .filter(|retained| !retained.locant_maps.is_empty())
+            {
+                let paths = retained
+                    .locant_maps
+                    .iter()
+                    .map(|map| {
+                        let mut numbered: Vec<_> = map.iter().collect();
+                        numbered.sort_by_key(|(_, locant)| {
+                            super::locants::retained_locant_sort_key(locant)
+                        });
+                        numbered.into_iter().map(|(&atom, _)| atom).collect()
+                    })
+                    .collect();
+                systems.push(RingSystem {
+                    atoms,
+                    paths,
+                    is_polycycle: true,
+                    ..RingSystem::default()
+                });
+                continue;
+            }
+            if fusion_eligible(mol, &atoms) {
+                use super::retained_fused_templates::{
+                    MatchOptions, match_retained_graph_templates_with_options,
+                };
+                let candidate = [(false, false), (true, false), (false, true), (true, true)]
+                    .into_iter()
+                    .any(|(allow_nonaromatic, allow_relocated_indicated_h)| {
+                        !match_retained_graph_templates_with_options(
+                            mol,
+                            &atoms,
+                            MatchOptions {
+                                family: Some("fused"),
+                                allow_nonaromatic,
+                                allow_relocated_indicated_h,
+                                ..Default::default()
+                            },
+                        )
+                        .is_empty()
+                    });
+                if candidate {
+                    // Upstream divergence: the planner normally supplies these
+                    // provisional full-block paths. Keep a retained derivative
+                    // candidate intact until production_retained_fused_parent
+                    // can check its suffix and attachments. No name or legacy
+                    // descriptor is accepted by this topology-only handoff.
+                    systems.push(RingSystem {
+                        paths: vec![atoms.iter().copied().collect()],
+                        atoms,
+                        is_polycycle: true,
+                        ..RingSystem::default()
+                    });
+                    continue;
+                }
+            }
+            confirmed_fusion_numbering_paths(mol, &atoms)?;
             let candidate = polyspiro_or_von_baeyer_candidate(mol, &atoms, &edges);
             if candidate.descriptor.is_some() && candidate.descriptor_allowed() {
                 let paths = if candidate.paths.first().is_some_and(|path| {
@@ -485,7 +576,25 @@ pub fn find_ring_systems(mol: &Molecule, exclude_atoms: &AtomSet) -> Vec<RingSys
             });
         }
     }
-    merge_polyspiro_ring_systems(mol, systems)
+    Ok(merge_polyspiro_ring_systems(mol, systems))
+}
+
+/// Input SSSR evidence is retained across induced subgraphs.
+pub fn fusion_eligible(mol: &Molecule, atoms: &AtomSet) -> bool {
+    mol.fusion_eligible_blocks
+        .iter()
+        .any(|block| block.is_subset(atoms))
+}
+
+fn confirmed_fusion_numbering_paths(mol: &Molecule, atoms: &AtomSet) -> Result<(), String> {
+    // Upstream divergence: replace _confirmed_fusion_numbering_paths until
+    // the systematic planner is ported. Non-fusion von Baeyer blocks abstain.
+    if fusion_eligible(mol, atoms)
+        && !super::fusion::planner::planner_certainly_abstains(mol, atoms)
+    {
+        return Err("openclatura: systematic fusion not ported".into());
+    }
+    Ok(())
 }
 
 fn fallback_bicyclo_paths(
@@ -735,6 +844,21 @@ pub fn canonical_ranks(mol: &Molecule, atom_ids: Option<&AtomSet>) -> BTreeMap<u
 mod tests {
     use super::super::graph_io::read_smiles;
     use super::*;
+
+    #[test]
+    fn symmetric_diamide_prime_ties_keep_upstream_endpoint_order() {
+        let smiles = "C1CCC(CC1)NC(=O)CCC(=O)NC2=NN=C3N2C=CC=C3";
+        let mol = read_smiles(smiles).unwrap();
+        assert_eq!(
+            find_all_carbon_paths(&mol, &AtomSet::new()).unwrap(),
+            vec![vec![11, 10, 9, 7]],
+        );
+        assert_eq!(
+            super::super::name_smiles(smiles).as_deref(),
+            Ok("N-([1,2,4]triazolo[4,3-a]pyridin-3-yl)-N'-cyclohexylbutanediamide"),
+        );
+    }
+
     #[test]
     fn carbon_paths_keep_only_maximal_leaf_to_leaf_walks() {
         let mol = read_smiles("CCC(C)CC").unwrap();
@@ -761,7 +885,10 @@ mod tests {
         let mol = read_smiles("CCC1CCCCC1").unwrap();
         let excluded = AtomSet::new();
         assert_eq!(get_cyclic_atoms(&mol, &excluded).len(), 6);
-        assert_eq!(find_ring_systems(&mol, &excluded)[0].paths[0].len(), 6);
+        assert_eq!(
+            find_ring_systems(&mol, &excluded).unwrap()[0].paths[0].len(),
+            6
+        );
         assert_eq!(
             find_all_carbon_paths(&mol, &excluded)
                 .unwrap()
@@ -780,7 +907,7 @@ mod tests {
     #[test]
     fn separate_ring_systems_follow_upstream_block_and_walk_order() {
         let mol = read_smiles("C1(C2CCC2)CCC1").unwrap();
-        let systems = find_ring_systems(&mol, &AtomSet::new());
+        let systems = find_ring_systems(&mol, &AtomSet::new()).unwrap();
         assert_eq!(
             systems
                 .iter()
@@ -792,7 +919,7 @@ mod tests {
         assert_eq!(systems[0].atoms, AtomSet::from([0, 5, 6, 7]));
         assert_eq!(systems[1].atoms, AtomSet::from([1, 2, 3, 4]));
 
-        let remaining = find_ring_systems(&mol, &AtomSet::from([0]));
+        let remaining = find_ring_systems(&mol, &AtomSet::from([0])).unwrap();
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].paths, vec![vec![1, 2, 3, 4]]);
     }
@@ -813,7 +940,7 @@ mod tests {
     #[test]
     fn pure_spiro_merging_preserves_separate_ring_systems() {
         let mol = read_smiles("C1CC1CC2CC23CC3").unwrap();
-        let systems = find_ring_systems(&mol, &AtomSet::new());
+        let systems = find_ring_systems(&mol, &AtomSet::new()).unwrap();
         assert_eq!(systems.len(), 2);
         assert_eq!(systems[0].atoms, AtomSet::from([0, 1, 2]));
         assert_eq!(systems[0].paths, vec![vec![0, 1, 2]]);
@@ -844,7 +971,7 @@ mod tests {
     #[test]
     fn dispiro_is_one_complete_descriptor_parent() {
         let mol = read_smiles("C1CC2(C1)CCC1(CC2)CC1").unwrap();
-        let systems = find_ring_systems(&mol, &AtomSet::new());
+        let systems = find_ring_systems(&mol, &AtomSet::new()).unwrap();
         assert_eq!(systems.len(), 1);
         assert!(systems[0].is_polycycle);
         assert_eq!(
@@ -859,7 +986,7 @@ mod tests {
     #[test]
     fn unsupported_larger_spiro_retains_its_whole_parent_boundary() {
         let mol = read_smiles("C1CC12CC23CC34CC4").unwrap();
-        let systems = find_ring_systems(&mol, &AtomSet::new());
+        let systems = find_ring_systems(&mol, &AtomSet::new()).unwrap();
         assert_eq!(systems.len(), 1);
         assert!(systems[0].is_polycycle);
         assert!(systems[0].polycycle_descriptor.is_none());
@@ -877,7 +1004,7 @@ mod tests {
             let (smiles, expected) = line.split_once('\t').expect("SMILES and topology JSON");
             let mol = read_smiles(smiles)
                 .unwrap_or_else(|error| panic!("row {index}: {smiles}: {error}"));
-            let systems = find_ring_systems(&mol, &AtomSet::new());
+            let systems = find_ring_systems(&mol, &AtomSet::new()).unwrap();
             let actual = serde_json::Value::Array(
                 systems
                     .iter()

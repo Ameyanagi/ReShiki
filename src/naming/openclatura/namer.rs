@@ -162,7 +162,7 @@ fn select_subgraph_parent(
 ) -> Result<ParentSelection, String> {
     let cyclic = get_cyclic_atoms(mol, exclude);
     if cyclic.contains(&start) {
-        let rings = find_ring_systems(mol, exclude)
+        let rings = find_ring_systems(mol, exclude)?
             .into_iter()
             .filter(|r| r.atoms.contains(&start))
             .collect::<Vec<_>>();
@@ -327,12 +327,27 @@ pub fn name_subgraph_rendered(
         .collect();
     let selection = select_subgraph_parent(mol, start, &component, &sub_exclude)?;
     let retained = resolve_retained_parent(mol, &selection);
-    let (retained_name, maps) = retained
+    let (mut retained_name, mut maps) = retained
         .map(|r| (Some(r.name), r.locant_maps))
         .unwrap_or_default();
     let perceived = perceive_groups(mol);
     let mapping =
         collect_subgraph_substituents(mol, selection.primary_path(), &perceived, &sub_exclude)?;
+    let retained_fused = super::retained_fused_production::production_retained_fused_parent(
+        mol,
+        selection.primary_path(),
+        &component,
+        &perceived,
+        None,
+        &mapping,
+        Some(start),
+    )?;
+    let mut retained_metadata = None;
+    if let Some(retained) = retained_fused {
+        retained_name = Some(retained.name);
+        maps = retained.locant_maps;
+        retained_metadata = Some(retained.metadata);
+    }
     let plan = build_parent_assembly_plan(
         mol,
         &selection,
@@ -344,6 +359,9 @@ pub fn name_subgraph_rendered(
         &maps,
     )?;
     let mut parts = plan.parts;
+    if retained_metadata.is_some() {
+        parts.retained_parent_metadata = retained_metadata;
+    }
     emit_bond_stereo(
         mol,
         &mut parts,
@@ -351,7 +369,7 @@ pub fn name_subgraph_rendered(
         &plan.locant_map,
         upstream,
     );
-    add_indicated_hydrogens(mol, &mut parts, &plan.numbered_path, &plan.locant_map);
+    add_indicated_hydrogens(mol, &mut parts, &plan.numbered_path, &plan.locant_map)?;
     for (&idx, items) in &mapping {
         for item in items {
             let mut item = item.clone();
@@ -525,6 +543,9 @@ fn acylamino_amido_prefix(
     blocked.insert(nitrogen);
     let acid_atoms = subgraph_component(mol, center, &blocked);
     // Only a competing acid reachable without crossing an ether can take the suffix.
+    // Upstream divergence: a sulfonic/sulfinic acid competes as well as a
+    // carboxylic acid. Otherwise acid-name conversion can move the amido
+    // attachment to a different sulfur centre and change connectivity.
     let mut seen = AtomSet::from([center]);
     let mut queue = vec![center];
     while let Some(a) = queue.pop() {
@@ -539,7 +560,7 @@ fn acylamino_amido_prefix(
     }
     if seen.iter().any(|&c| {
         c != center
-            && mol.atoms[&c].is_carbon()
+            && (mol.atoms[&c].is_carbon() || mol.atoms[&c].symbol == "S")
             && mol.get_neighbors(c).iter().any(|&n| {
                 mol.atoms[&n].symbol == "O"
                     && mol.get_bond(c, n).is_some_and(|bond| bond.order == 2)

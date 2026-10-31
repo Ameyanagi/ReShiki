@@ -95,6 +95,8 @@ pub struct Molecule {
     pub accurate_cip: BTreeMap<usize, String>,
     pub legacy_cip: BTreeMap<usize, String>,
     pub substituted_symbols: AtomSet,
+    /// Nonsimple input blocks on which systematic fusion may apply.
+    pub fusion_eligible_blocks: Vec<AtomSet>,
     naming_budget: Rc<NamingBudget>,
 }
 
@@ -204,6 +206,12 @@ impl Molecule {
     ) -> Self {
         let mut fragment = Self::new();
         fragment.naming_budget = Rc::clone(&self.naming_budget);
+        fragment.fusion_eligible_blocks = self
+            .fusion_eligible_blocks
+            .iter()
+            .filter(|block| block.is_subset(atom_ids))
+            .cloned()
+            .collect();
         for idx in atom_ids {
             if let Some(original) = self.atoms.get(idx) {
                 let mut atom = original.clone();

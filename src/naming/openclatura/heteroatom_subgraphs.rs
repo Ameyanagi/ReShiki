@@ -323,6 +323,58 @@ fn carbonyl_like_fragment(
     })
 }
 
+fn is_sulfonamido_oxygen_ligand(mol: &Molecule, oxygen: usize, nitrogen: usize) -> bool {
+    let atom = &mol.atoms[&nitrogen];
+    if mol.atoms[&oxygen].charge != 0
+        || atom.symbol != "N"
+        || atom.charge != 0
+        || atom.is_aromatic
+        || atom.total_h_count != 1
+        || mol.degree(nitrogen) != 2
+        || mol
+            .get_bond(oxygen, nitrogen)
+            .is_none_or(|bond| bond.order != 1)
+    {
+        return false;
+    }
+    let Some(&sulfur) = mol.get_neighbors(nitrogen).iter().find(|&&n| n != oxygen) else {
+        return false;
+    };
+    let center = &mol.atoms[&sulfur];
+    if center.symbol != "S"
+        || center.charge != 0
+        || center.is_aromatic
+        || center.total_h_count != 0
+        || mol.degree(sulfur) != 4
+        || mol
+            .get_bond(nitrogen, sulfur)
+            .is_none_or(|bond| bond.order != 1)
+    {
+        return false;
+    }
+    let oxo = double_bonded_neighbors(mol, sulfur, "O");
+    if oxo.len() != 2
+        || oxo.iter().any(|&idx| {
+            mol.atoms[&idx].charge != 0
+                || mol.atoms[&idx].total_h_count != 0
+                || mol.degree(idx) != 1
+        })
+    {
+        return false;
+    }
+    let ligands: Vec<_> = mol
+        .get_neighbors(sulfur)
+        .iter()
+        .copied()
+        .filter(|&idx| idx != nitrogen && !oxo.contains(&idx))
+        .collect();
+    ligands.len() == 1
+        && mol.atoms[&ligands[0]].is_carbon()
+        && mol
+            .get_bond(sulfur, ligands[0])
+            .is_some_and(|bond| bond.order == 1)
+}
+
 fn name_oxygen(
     mol: &Molecule,
     start: usize,
@@ -434,9 +486,13 @@ fn name_oxygen(
         });
     }
     let b = branch(mol, next, &with_atoms(exclude, [start]), start)?;
-    // Upstream divergence: upstream contracts N-acyl aminooxy ligands to amidooxy, changing their parsed connectivity.
+    // Upstream's sulfonic-acid-to-sulfonamido conversion preserves the O-N-S
+    // linkage when the named nitrogen bears the proved sulfonyl group.
+    // Upstream divergence: other simple amidooxy contractions can change the
+    // parsed connectivity of a carbon-acyl aminooxy ligand.
     if strip_outer_parentheses(&b).ends_with("amido")
         && !is_complex_prefix(&strip_outer_parentheses(&b))
+        && !is_sulfonamido_oxygen_ligand(mol, start, next)
     {
         return Err("openclatura: amidooxy attachment not supported".into());
     }
@@ -1552,6 +1608,26 @@ mod tests {
     use crate::naming::openclatura::{
         graph_io::read_smiles, molecule::AtomSet, namer::name_subgraph_with_upstream,
     };
+
+    #[test]
+    fn sulfonamidooxy_keeps_the_proved_oxygen_nitrogen_sulfur_linkage() -> Result<(), String> {
+        let mol = read_smiles("CONS(=O)(=O)c1ccccc1")?;
+        assert_eq!(
+            name_subgraph_with_upstream(&mol, 1, &AtomSet::from([0]), Some(0))?,
+            "(benzenesulfonamidooxy)"
+        );
+        let carbon_amide = read_smiles("CONC(C)=O")?;
+        assert!(
+            name_subgraph_with_upstream(&carbon_amide, 1, &AtomSet::from([0]), Some(0)).is_err()
+        );
+        assert_eq!(
+            crate::naming::openclatura::name_smiles(
+                "CCC(C1=NOC2=C1C(=C(C=C2)Br)OC)ONS(=O)(=O)C3=CC=CC=C3"
+            )?,
+            "3-(1-(benzenesulfonamidooxy)propyl)-5-bromo-4-methoxy-1,2-benzoxazole"
+        );
+        Ok(())
+    }
 
     #[test]
     fn heteroatom_branches_preserve_acyl_ligands_and_oxo_roles() -> Result<(), String> {

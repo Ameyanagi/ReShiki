@@ -10,6 +10,7 @@ use super::{
     assembly_prefixes::{format_replacement_prefixes, format_substituent_prefixes},
     assembly_utils::{needs_hyphen, parse_locant},
     formatting::format_multiplier,
+    fused_ion_templates::{consume_fused_ion_operation, select_fused_ion_operation},
     name_postprocessing::apply_data_postprocessing,
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -163,6 +164,7 @@ fn normalize_indicated_hydrogen_quota(parts: &mut AssemblyParts, core: &str) -> 
                 key: kind.into(),
                 locants: pending,
                 operation_kind: kind.into(),
+                ..Default::default()
             });
         }
     }
@@ -428,13 +430,22 @@ fn add_front_modifiers(parts: &AssemblyParts, word: &str) -> String {
     format!("{mods} {word}")
 }
 pub fn assemble_name_raw(parts: &mut AssemblyParts) -> Result<String, String> {
+    let fused_ion_candidate = select_fused_ion_operation(parts);
+    if let Some(candidate) = &fused_ion_candidate {
+        consume_fused_ion_operation(parts, candidate);
+    }
     promote_acyl_substituent_name(parts);
     promote_retained_substituent_name(parts);
     promote_benzene_retained_name(parts);
     promote_retained_functional_parent(parts)?;
     let prefix = format_substituent_prefixes(parts);
     let a_prefix = format_replacement_prefixes(parts);
-    let core = if let Some(name) = &parts.retained_substituent_name {
+    let core = if let Some(name) = fused_ion_candidate
+        .as_ref()
+        .and_then(|candidate| candidate.rendered_name())
+    {
+        name.to_owned()
+    } else if let Some(name) = &parts.retained_substituent_name {
         name.clone()
     } else {
         let (stem, terminal) = parent_stem_and_terminal(parts)?;

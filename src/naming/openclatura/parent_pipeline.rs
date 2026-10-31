@@ -38,6 +38,25 @@ pub fn resolve_retained_parent(
     Some(retained)
 }
 
+pub fn resolve_systematic_fusion_parent(
+    mol: &Molecule,
+    selection: &ParentSelection,
+    retained_name: Option<&str>,
+) -> Result<(), String> {
+    if retained_name.is_some() {
+        return Ok(());
+    }
+    // Upstream divergence: systematic, bridged-wrapper and third-component
+    // fusion planning are deferred. Retained identity has upstream precedence.
+    if (selection.is_bicycle || selection.is_polycycle)
+        && super::chains::fusion_eligible(mol, &selection.atom_set())
+        && !super::fusion::planner::planner_certainly_abstains(mol, &selection.atom_set())
+    {
+        return Err("openclatura: systematic fusion not ported".into());
+    }
+    Ok(())
+}
+
 pub struct ParentAssemblyPlan {
     pub parts: AssemblyParts,
     pub numbered_path: Vec<usize>,
@@ -55,6 +74,7 @@ pub fn build_parent_assembly_plan(
     retained_name: Option<String>,
     locant_maps: &[BTreeMap<usize, String>],
 ) -> Result<ParentAssemblyPlan, String> {
+    resolve_systematic_fusion_parent(mol, selection, retained_name.as_deref())?;
     let principal: AtomSet = principal_carbons.iter().copied().collect();
     let names = substituents
         .iter()
@@ -196,6 +216,7 @@ pub fn build_parent_parts(
         }
         if atom.charge != 0 {
             parts.parent_charges.push(ParentChargeItem {
+                atom_id: Some(idx),
                 locant: locant.clone(),
                 symbol: atom.symbol.clone(),
                 charge: atom.charge,
@@ -204,13 +225,7 @@ pub fn build_parent_parts(
         for &neighbor in mol.get_neighbors(idx) {
             if parts.parent_atom_ids.contains(&neighbor) && idx < neighbor {
                 let other = &locants[&neighbor];
-                let key = if super::locants::parse_locant(locant)
-                    <= super::locants::parse_locant(other)
-                {
-                    (locant.clone(), other.clone())
-                } else {
-                    (other.clone(), locant.clone())
-                };
+                let key = super::locants::canonical_locant_pair(locant, other);
                 let bond = mol
                     .get_bond(idx, neighbor)
                     .ok_or("openclatura: missing parent bond")?;

@@ -307,7 +307,7 @@ mod tests {
         let parent = select_principal_parent(
             &mol,
             &find_all_carbon_paths(&mol, &excluded).unwrap(),
-            &find_ring_systems(&mol, &excluded),
+            &find_ring_systems(&mol, &excluded).unwrap(),
             &[],
         )
         .unwrap();
@@ -321,7 +321,7 @@ mod tests {
         let parent = select_principal_parent(
             &mol,
             &find_all_carbon_paths(&mol, &excluded).unwrap(),
-            &find_ring_systems(&mol, &excluded),
+            &find_ring_systems(&mol, &excluded).unwrap(),
             &[1],
         )
         .unwrap();

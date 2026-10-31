@@ -92,17 +92,30 @@ pub fn add_parent_features(
             if atom.is_carbon() || atom.charge != 0 || atom.total_h_count == 0 {
                 continue;
             }
-            let bonding = atom.total_h_count
-                + mol
-                    .get_neighbors(idx)
-                    .iter()
-                    .filter_map(|&n| {
-                        let bond = mol.get_bond(idx, n)?;
-                        (!(bond.order == 2 && mol.atoms[&n].symbol == "O")).then_some(bond.order)
-                    })
-                    .sum::<usize>();
-            // Upstream divergence: retained heterocycles cannot silently absorb nonstandard parent hydrogens.
-            if elements::get(&atom.symbol).is_none_or(|e| bonding != e.standard_valence) {
+            let heavy_bonding = mol
+                .get_neighbors(idx)
+                .iter()
+                .filter_map(|&n| {
+                    let bond = mol.get_bond(idx, n)?;
+                    (!(bond.order == 2 && mol.atoms[&n].symbol == "O")).then_some(bond.order)
+                })
+                .sum::<usize>();
+            // Upstream skips replacement/lambda prefixes for a retained parent.
+            // Its ordinary valence must therefore imply the observed H count:
+            // three heavy single bonds at sulfur imply one H at valence four, while two
+            // heavy bonds do not imply the extra H of a ring [SH2] atom.
+            // Upstream divergence: reject H that would need an unrendered
+            // lambda citation, using the smallest accommodating ordinary valence.
+            let implied_valence = elements::get(&atom.symbol)
+                .and_then(|e| reshiki_chemistry::ELEMENTS.get(e.atomic_number))
+                .and_then(|e| {
+                    e.valences
+                        .iter()
+                        .filter_map(|&v| usize::try_from(v).ok())
+                        .filter(|&v| v >= heavy_bonding)
+                        .min()
+                });
+            if implied_valence != Some(heavy_bonding + atom.total_h_count) {
                 return Err(format!(
                     "openclatura: retained parent hydrogen state for {} is not supported",
                     atom.symbol
@@ -211,135 +224,14 @@ pub fn add_parent_features(
     Ok(())
 }
 
-/// Collect ordinary retained monocycle hydrogen citations and hydro operations.
+/// Collect retained-parent hydrogen citations using the parent bond model.
 pub fn add_indicated_hydrogens(
     mol: &Molecule,
     parts: &mut AssemblyParts,
     numbered_path: &[usize],
     locants: &BTreeMap<usize, String>,
-) {
-    use super::assembly_parts::HydroOperation;
-    use super::rules::{elements, retained};
-    let Some(name) = parts.retained_name.as_deref() else {
-        return;
-    };
-    if let Some(plan) = retained::mancude_monocycle_hydro_plan(mol, numbered_path, Some(name)) {
-        let mut ordered = plan.citable;
-        ordered.sort_by_key(|idx| parse_locant(&locants[idx]));
-        let held = plan.indicated + plan.added;
-        for &idx in ordered.iter().take(held) {
-            let loc = locants[&idx].clone();
-            parts.indicated_hydrogens.push(loc.clone());
-            parts.hydro_operations.push(HydroOperation {
-                key: "indicated_hydrogen".into(),
-                locants: vec![loc],
-                operation_kind: "indicated_hydrogen".into(),
-            });
-        }
-        let hydro: Vec<_> = ordered.into_iter().skip(held).collect();
-        if !hydro.is_empty() {
-            parts.hydro_operations.push(HydroOperation {
-                key: "additive_hydrogen".into(),
-                locants: hydro.iter().map(|idx| locants[idx].clone()).collect(),
-                operation_kind: "additive_hydrogen".into(),
-            });
-        }
-        recast_ring_ketone_hydrogens(parts, locants);
-        return;
-    }
-    if !retained::cites_indicated_hydrogen(mol, numbered_path, Some(name)) {
-        return;
-    }
-    if name == "tetrazole" && numbered_path.iter().any(|idx| mol.atoms[idx].charge != 0) {
-        return;
-    }
-    for &idx in numbered_path {
-        // The retained hydride already states template-inherent saturation.
-        // Counting it again would turn 2-oxopyran into 2-oxo-2H-pyran.
-        if parts
-            .retained_parent_metadata
-            .as_ref()
-            .is_some_and(|metadata| metadata.inherent_saturated_locants.contains(&locants[&idx]))
-        {
-            continue;
-        }
-        let atom = &mol.atoms[&idx];
-        if !matches!(
-            atom.symbol.as_str(),
-            "C" | "N" | "P" | "As" | "Sb" | "Bi" | "B" | "Si" | "Ge" | "Sn" | "Pb"
-        ) {
-            continue;
-        }
-        if elements::get(&atom.symbol).is_some_and(|e| e.mancude_forced_single) {
-            continue;
-        }
-        let ring_order: usize = mol
-            .get_neighbors(idx)
-            .iter()
-            .filter(|n| locants.contains_key(n))
-            .filter_map(|&n| mol.get_bond(idx, n))
-            .map(|b| b.order)
-            .sum();
-        if ring_order == 2 {
-            parts.indicated_hydrogens.push(locants[&idx].clone());
-        }
-    }
-}
-
-/// P-31.1.4.2.4 distinguishes intrinsic ring H from ketone-added H.
-fn recast_ring_ketone_hydrogens(parts: &mut AssemblyParts, locants: &BTreeMap<usize, String>) {
-    use super::assembly_parts::HydroOperation;
-    let Some(group) = parts.principal_group.as_ref().filter(|g| g.key == "ketone") else {
-        return;
-    };
-    let ketone_locs = group.locants.clone();
-    let indicated: Vec<_> = parts
-        .hydro_operations
-        .iter()
-        .filter(|op| op.key == "indicated_hydrogen")
-        .cloned()
-        .collect();
-    if indicated.is_empty()
-        || parts
-            .hydro_operations
-            .iter()
-            .any(|op| op.key == "added_hydrogen")
-    {
-        return;
-    }
-    let nh: Vec<_> = indicated
-        .iter()
-        .filter_map(|op| op.locants.first().cloned())
-        .collect();
-    if nh.iter().any(|loc| ketone_locs.contains(loc)) {
-        return;
-    }
-    if nh.len() == ketone_locs.len() {
-        for op in &mut parts.hydro_operations {
-            if op.key == "indicated_hydrogen" {
-                op.key = "added_hydrogen".into();
-            }
-        }
-    } else if ketone_locs.len() == 1 && nh.len() > 1 {
-        if !locants.values().any(|loc| *loc == ketone_locs[0]) {
-            return;
-        }
-        parts
-            .hydro_operations
-            .retain(|op| op.key != "indicated_hydrogen");
-        parts.indicated_hydrogens.retain(|loc| !nh.contains(loc));
-        parts.indicated_hydrogens.push(ketone_locs[0].clone());
-        parts.hydro_operations.push(HydroOperation {
-            key: "indicated_hydrogen".into(),
-            locants: vec![ketone_locs[0].clone()],
-            operation_kind: "indicated_hydrogen".into(),
-        });
-        parts.hydro_operations.push(HydroOperation {
-            key: "additive_hydrogen".into(),
-            locants: nh,
-            operation_kind: "additive_hydrogen".into(),
-        });
-    }
+) -> Result<(), String> {
+    super::additive::add_indicated_hydrogens(mol, parts, numbered_path, locants)
 }
 
 /// Merge same-name branch citations before parent promotion, as the upstream
@@ -355,5 +247,45 @@ pub fn add_substituent(parts: &mut AssemblyParts, item: super::assembly_parts::S
         existing.charge_atom_ids.extend(item.charge_atom_ids);
     } else {
         parts.substituents.push(item);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::graph_io::read_smiles;
+    use super::*;
+
+    #[test]
+    fn retained_sulfur_uses_the_ordinary_valence_implied_by_its_substituents() {
+        assert_eq!(
+            super::super::name_smiles("Cl[SH]1C=c2ccccc2=C1").as_deref(),
+            Ok("2-chloro-2-benzothiophene")
+        );
+        assert!(super::super::name_smiles("[SH2]1CCCC1").is_err());
+    }
+
+    #[test]
+    fn retained_parent_does_not_absorb_unrepresented_extra_hydrogen() {
+        for (smiles, symbol, name) in [
+            ("S1CCCC1", "S", "thiolane"),
+            ("N1CCCC1", "N", "pyrrolidine"),
+        ] {
+            let mut mol = read_smiles(smiles).unwrap();
+            let atom = mol
+                .atoms
+                .values_mut()
+                .find(|atom| atom.symbol == symbol)
+                .unwrap();
+            atom.total_h_count = 2;
+            let numbered_path: Vec<_> = mol.atoms.keys().copied().collect();
+            let locants: BTreeMap<_, _> = numbered_path
+                .iter()
+                .enumerate()
+                .map(|(i, &idx)| (idx, (i + 1).to_string()))
+                .collect();
+            let mut parts = AssemblyParts::new(numbered_path.len());
+            parts.retained_name = Some(name.into());
+            assert!(add_parent_features(&mol, &mut parts, &numbered_path, &locants).is_err());
+        }
     }
 }
