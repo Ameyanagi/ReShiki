@@ -14,7 +14,6 @@ pub struct ParentSelection {
     pub is_polycycle: bool,
     pub xyz: (usize, usize, usize),
     pub polycycle_descriptor: Option<String>,
-    pub fixed_start_required: bool,
 }
 
 impl ParentSelection {
@@ -24,12 +23,8 @@ impl ParentSelection {
     pub fn atom_set(&self) -> AtomSet {
         self.primary_path().iter().copied().collect()
     }
-    pub fn with_fixed_start(mut self, fixed: bool) -> Self {
-        self.fixed_start_required = fixed;
-        self
-    }
     pub fn requires_fixed_substituent_start(&self) -> bool {
-        self.fixed_start_required || self.is_bicycle || self.is_spiro || self.is_polycycle
+        self.is_bicycle || self.is_spiro || self.is_polycycle
     }
 }
 
@@ -162,7 +157,6 @@ pub fn select_principal_parent(
                     is_polycycle: false,
                     xyz: (0, 0, 0),
                     polycycle_descriptor: None,
-                    fixed_start_required: false,
                 },
             )
         })
@@ -189,7 +183,6 @@ pub fn select_principal_parent(
                         is_polycycle: rs.is_polycycle,
                         xyz: (rs.x, rs.y, if rs.is_bicycle { rs.z } else { 0 }),
                         polycycle_descriptor: rs.polycycle_descriptor.clone(),
-                        fixed_start_required: false,
                     },
                 )
             }),

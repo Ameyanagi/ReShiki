@@ -105,15 +105,13 @@ pub fn add_parent_features(
             // Its ordinary valence must therefore imply the observed H count:
             // three heavy single bonds at sulfur imply one H at valence four, while two
             // heavy bonds do not imply the extra H of a ring [SH2] atom.
-            // Upstream divergence: reject H that would need an unrendered
-            // lambda citation, using the smallest accommodating ordinary valence.
+            // Upstream divergence: reject H requiring an unrendered lambda citation at ordinary valence.
             let implied_valence = elements::get(&atom.symbol)
                 .and_then(|e| reshiki_chemistry::ELEMENTS.get(e.atomic_number))
                 .and_then(|e| {
                     e.valences
                         .iter()
-                        // Upstream divergence: charged retained atoms need
-                        // the same H proof, at their charge-adjusted valence.
+                        // Upstream divergence: prove retained-atom H at the charge-adjusted valence.
                         .filter_map(|&v| usize::try_from(v + atom.charge).ok())
                         .filter(|&v| v >= heavy_bonding)
                         .min()
@@ -141,7 +139,7 @@ pub fn add_parent_features(
         // Upstream divergence: every noncarbon parent atom needs an explicit replacement stem.
         let element = elements::get(&atom.symbol)
             .ok_or_else(|| format!("openclatura: unsupported parent element {}", atom.symbol))?;
-        let stem = element.hw_stem.as_ref().ok_or_else(|| {
+        let stem = element.hw_stem.as_deref().ok_or_else(|| {
             format!(
                 "openclatura: parent replacement for {} is not supported",
                 atom.symbol
@@ -231,9 +229,9 @@ pub fn add_parent_features(
     let mut seen = AtomSet::new();
     for &u in numbered_path {
         for &v in mol.get_neighbors(u) {
-            if !indices.contains_key(&v) {
+            let Some(&vi) = indices.get(&v) else {
                 continue;
-            }
+            };
             let Some(bond) = mol.get_bond(u, v) else {
                 continue;
             };
@@ -244,7 +242,7 @@ pub fn add_parent_features(
                 continue;
             }
             let bond_key = if bond.order == 2 { "double" } else { "triple" };
-            let (ui, vi) = (indices[&u], indices[&v]);
+            let ui = indices[&u];
             let (low_idx, high_idx) = (ui.min(vi), ui.max(vi));
             let (lu, lv) = (&locants[&u], &locants[&v]);
             let (low_loc, high_loc) = if parse_locant(lu) <= parse_locant(lv) {
@@ -307,9 +305,9 @@ pub fn add_substituent(
     if let Some(existing) = parts.substituents.iter_mut().find(|existing| {
         existing.name == item.name
             && existing.outer_parentheses_optional == item.outer_parentheses_optional
-            // Upstream divergence: keep opaque graph-numbered spiro instances
-            // separate rather than merging away their component metadata.
-            && existing.spiro.is_none() && item.spiro.is_none()
+            // Upstream divergence: keep spiro instances separate to preserve their component metadata.
+            && existing.spiro.is_none()
+            && item.spiro.is_none()
     }) {
         existing.locants.extend(item.locants);
         existing.atom_ids.extend(item.atom_ids);

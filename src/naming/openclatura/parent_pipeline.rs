@@ -3,9 +3,7 @@ use std::collections::BTreeMap;
 
 use super::assembly_parts::{AssemblyParts, ParentChargeItem, SubstituentItem};
 use super::molecule::{AtomSet, Molecule, bond_ids_within};
-use super::numbering::{
-    NumberingTopology, ProvenHydrogenLocants, choose_parent_numbering_with_hydrogens,
-};
+use super::numbering::{NumberingTopology, ProvenHydrogenLocants, choose_parent_numbering};
 use super::parent_selection::ParentSelection;
 use super::ring_parent::RingParent;
 
@@ -150,7 +148,7 @@ pub fn build_parent_assembly_plan_with_parent(
                 plan.derivative_state
                     .hydro_operations
                     .iter()
-                    .flat_map(|op| op.locants.clone())
+                    .flat_map(|op| op.locants.iter().cloned())
                     .collect(),
             );
             plan.numbering
@@ -190,7 +188,7 @@ pub fn build_parent_assembly_plan_with_parent(
     } else {
         &proof_maps
     };
-    let (numbered_path, selected_map) = choose_parent_numbering_with_hydrogens(
+    let (numbered_path, selected_map) = choose_parent_numbering(
         mol,
         &selection.paths,
         &principal,
@@ -248,8 +246,8 @@ pub fn build_parent_assembly_plan_with_parent(
         parent.as_ref(),
     )?;
     if let Some(parent) = parent {
-        if parent.hydride_metadata.is_some() {
-            parts.retained_parent_metadata = parent.hydride_metadata.clone();
+        if let Some(metadata) = &parent.hydride_metadata {
+            parts.retained_parent_metadata = Some(metadata.clone());
         }
         parts.parent_bond_model = parent.bond_model().cloned();
         parts.parent_bond_delta = parent
@@ -258,7 +256,7 @@ pub fn build_parent_assembly_plan_with_parent(
         parts.parent_derivative_state = parent.derivative_state().cloned();
         parts.fusion_plan = parent.fusion_plan.clone();
         parts.parent_hydride = Some(parent);
-        parts.locant_map_source = "proof".into();
+        parts.proof_locant_map = true;
     }
     Ok(ParentAssemblyPlan {
         parts,
@@ -268,7 +266,7 @@ pub fn build_parent_assembly_plan_with_parent(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn build_parent_parts(
+fn build_parent_parts(
     mol: &Molecule,
     numbered_path: &[usize],
     locants: &BTreeMap<usize, String>,
@@ -291,8 +289,7 @@ pub fn build_parent_parts(
             ),
         )
     {
-        // Upstream divergence: its secondary-bridge reconstruction can move
-        // atoms and their substituents when the emitted name is read by OPSIN.
+        // Upstream divergence: reject secondary-bridge numbering that moves atoms or substituents in OPSIN.
         return Err("openclatura: secondary-bridge numbering disagrees with OPSIN reading".into());
     }
     let mut parts = AssemblyParts::new(numbered_path.len());
@@ -320,11 +317,9 @@ pub fn build_parent_parts(
     if let Some(root) = root {
         parts.is_substituent = true;
         parts.attachment_locant = locants[&root].clone();
-        let order = upstream
+        parts.attachment_order = upstream
             .and_then(|up| mol.get_bond(root, up))
             .map_or(1, |b| b.order);
-        parts.is_double_attach = order == 2;
-        parts.is_triple_attach = order == 3;
     }
     for &idx in numbered_path {
         let atom = &mol.atoms[&idx];
@@ -374,8 +369,7 @@ fn add_relative_ring_stereo(
     path: &[usize],
     locants: &BTreeMap<usize, String>,
 ) -> Result<(), String> {
-    // Upstream divergence: a multicyclic shortcut can drop unresolved relative
-    // stereotags. Decline these until a ring stereo renderer preserves them.
+    // Upstream divergence: decline multicyclic shortcuts that can drop unresolved relative stereotags.
     if (parts.is_bicycle || parts.is_spiro || parts.is_polycycle)
         && path
             .iter()
@@ -383,8 +377,7 @@ fn add_relative_ring_stereo(
     {
         return Err("openclatura: unresolved multicyclic stereochemistry not ported".into());
     }
-    // Upstream divergence: OPSIN reads no pseudoasymmetric r/s descriptor on a
-    // von Baeyer parent back, and a strained cage can read as another isomer.
+    // Upstream divergence: decline von Baeyer pseudoasymmetry that OPSIN loses or reads as another isomer.
     if (parts.is_bicycle
         || super::ring_renderer::is_von_baeyer_descriptor(parts.polycycle_descriptor.as_deref()))
         && path.iter().any(|idx| {
@@ -396,7 +389,7 @@ fn add_relative_ring_stereo(
     {
         return Err("openclatura: pseudoasymmetric von Baeyer centres are not validated".into());
     }
-    if !parts.is_ring || parts.is_bicycle || parts.is_spiro || parts.is_polycycle {
+    if !parts.is_simple_ring() {
         return Ok(());
     }
     let scoped =

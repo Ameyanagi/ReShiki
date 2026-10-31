@@ -3,10 +3,13 @@
 //! Stage one supports paths and single cycles. Attachment equivalence uses
 //! their complete automorphism groups; optional feature locants use the same
 //! budgeted labeled-graph search and failure boundary as the upstream proof.
-use super::{assembly_parts::AssemblyParts, assembly_utils::parse_locant};
+use super::{
+    assembly_parts::AssemblyParts,
+    assembly_utils::parse_locant,
+    graph_kernel::{Edge, normalize_edge},
+};
 use std::collections::{BTreeMap, BTreeSet};
-pub const MAX_CANDIDATE_PLACEMENTS: usize = 10_000;
-type Edge = (usize, usize);
+const MAX_CANDIDATE_PLACEMENTS: usize = 10_000;
 type NodeLabel = (String, i32, Option<u16>, bool);
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Position {
@@ -25,9 +28,6 @@ struct Graph {
     edges: BTreeMap<Edge, usize>,
     automorphisms: Vec<Vec<usize>>,
 }
-fn edge(a: usize, b: usize) -> Edge {
-    (a.min(b), a.max(b))
-}
 fn graph(parts: &AssemblyParts, include_isotope: bool) -> Option<Graph> {
     let mut locants: Vec<_> = parts
         .parent_atom_symbols_by_locant
@@ -41,7 +41,7 @@ fn graph(parts: &AssemblyParts, include_isotope: bool) -> Option<Graph> {
     let index: BTreeMap<_, _> = locants
         .iter()
         .enumerate()
-        .map(|(i, s)| (s.clone(), i))
+        .map(|(i, s)| (s.as_str(), i))
         .collect();
     let nodes = locants
         .iter()
@@ -69,10 +69,10 @@ fn graph(parts: &AssemblyParts, include_isotope: bool) -> Option<Graph> {
     let mut edges = BTreeMap::new();
     let mut adj = vec![vec![]; locants.len()];
     for ((a, b), order) in &parts.parent_bond_orders_by_locants {
-        let (Some(&i), Some(&j)) = (index.get(a), index.get(b)) else {
+        let (Some(&i), Some(&j)) = (index.get(a.as_str()), index.get(b.as_str())) else {
             return None;
         };
-        edges.insert(edge(i, j), *order);
+        edges.insert(normalize_edge(i, j), *order);
         adj[i].push(j);
         adj[j].push(i);
     }
@@ -124,16 +124,10 @@ fn labels_match(g: &Graph, p: &[usize]) -> bool {
     (0..g.nodes.len()).all(|i| g.nodes[i] == g.nodes[p[i]])
         && g.edges
             .iter()
-            .all(|(&(a, b), &o)| g.edges.get(&edge(p[a], p[b])) == Some(&o))
+            .all(|(&(a, b), &o)| g.edges.get(&normalize_edge(p[a], p[b])) == Some(&o))
 }
 pub fn retained_parent_attachment_is_ambiguous(parts: &AssemblyParts, locs: &[String]) -> bool {
-    if parts.retained_name.is_none()
-        || !parts.is_ring
-        || parts.is_bicycle
-        || parts.is_spiro
-        || parts.is_polycycle
-        || locs.len() != 1
-    {
+    if parts.retained_name.is_none() || !parts.is_simple_ring() || locs.len() != 1 {
         return false;
     }
     if !parts.parent_atom_symbols_by_locant.contains_key(&locs[0]) {
@@ -159,7 +153,7 @@ pub fn substituent_locant_set_is_unique(
     grouped_count: usize,
 ) -> bool {
     if locs.is_empty()
-        || parts.locant_map_source != "generated"
+        || parts.proof_locant_map
         || grouped_count != 1
         || parts.is_substituent
         || parts.is_bicycle
@@ -242,31 +236,27 @@ fn combinations<T: Clone>(items: &[T], k: usize, budget: &mut usize) -> Option<V
     fn recur<T: Clone>(
         items: &[T],
         k: usize,
-        start: usize,
         current: &mut Vec<T>,
         out: &mut Vec<Vec<T>>,
         budget: &mut usize,
     ) -> Option<()> {
-        if current.len() == k {
+        if k == 0 {
             consume(budget)?;
             out.push(current.clone());
             return Some(());
         }
-        if k - current.len() > items.len().saturating_sub(start) {
+        if k > items.len() {
             return Some(());
         }
-        for i in start..=items.len() - (k - current.len()) {
+        for i in 0..=items.len() - k {
             current.push(items[i].clone());
-            recur(items, k, i + 1, current, out, budget)?;
+            recur(&items[i + 1..], k - 1, current, out, budget)?;
             current.pop();
         }
         Some(())
     }
-    if k > items.len() {
-        return Some(vec![]);
-    }
     let mut out = vec![];
-    recur(items, k, 0, &mut vec![], &mut out, budget)?;
+    recur(items, k, &mut vec![], &mut out, budget)?;
     Some(out)
 }
 fn supported(parts: &AssemblyParts) -> bool {
@@ -331,7 +321,7 @@ fn features(parts: &AssemblyParts, g: &Graph) -> Vec<Feature> {
     let bonds: BTreeMap<_, _> = parts
         .parent_bond_ids_by_locants
         .iter()
-        .map(|((a, b), id)| (*id, edge(index[a], index[b])))
+        .map(|((a, b), id)| (*id, normalize_edge(index[a], index[b])))
         .collect();
     let mut unsats: BTreeMap<String, Vec<Position>> = BTreeMap::new();
     for u in &parts.unsaturations {
@@ -384,44 +374,44 @@ fn signature(p: &Position, g: &Graph) -> String {
     match p {
         Position::Node(i) => format!("{:?}", g.nodes[*i]),
         Position::Edge((a, b)) => {
-            let mut labels = [g.nodes[*a].clone(), g.nodes[*b].clone()];
+            let mut labels = [&g.nodes[*a], &g.nodes[*b]];
             labels.sort();
-            format!("{:?}:{:?}", labels, g.edges[&edge(*a, *b)])
+            format!("{:?}:{:?}", labels, g.edges[&normalize_edge(*a, *b)])
         }
     }
 }
-fn isomorphic(
+fn isomorphic<'a>(
     g: &Graph,
-    actual: &Decoration,
-    candidate: &Decoration,
+    actual: &'a Decoration,
+    candidate: &'a Decoration,
     budget: &mut usize,
 ) -> Option<bool> {
-    type EdgeLabel = (usize, Vec<(String, String)>);
+    type EdgeLabel<'a> = (usize, &'a [(String, String)]);
     let n = g.nodes.len();
-    let adjacency = |decoration: &Decoration| {
-        let mut adj = vec![BTreeMap::<usize, EdgeLabel>::new(); n];
+    let adjacency = |decoration: &'a Decoration| {
+        let mut adj = vec![BTreeMap::<usize, EdgeLabel<'a>>::new(); n];
         for (&(a, b), &order) in &g.edges {
-            let label = (order, decoration.1[&(a, b)].clone());
-            adj[a].insert(b, label.clone());
+            let label = (order, decoration.1[&(a, b)].as_slice());
+            adj[a].insert(b, label);
             adj[b].insert(a, label);
         }
         adj
     };
     let source_adj = adjacency(actual);
     let target_adj = adjacency(candidate);
-    let multiset = |neighbors: &BTreeMap<usize, EdgeLabel>| {
-        let mut labels: Vec<_> = neighbors.values().cloned().collect();
+    let multiset = |neighbors: &BTreeMap<usize, EdgeLabel<'a>>| {
+        let mut labels: Vec<_> = neighbors.values().copied().collect();
         labels.sort();
         labels
     };
     let source_signatures: Vec<_> = source_adj.iter().map(multiset).collect();
     let target_signatures: Vec<_> = target_adj.iter().map(multiset).collect();
-    type LabeledAdjacency = [BTreeMap<usize, EdgeLabel>];
-    type EdgeSignatures = [Vec<EdgeLabel>];
+    type LabeledAdjacency<'a> = [BTreeMap<usize, EdgeLabel<'a>>];
+    type EdgeSignatures<'a> = [Vec<EdgeLabel<'a>>];
     fn search(
         graphs: (&Graph, &Decoration, &Decoration),
-        adjacency: (&LabeledAdjacency, &LabeledAdjacency),
-        signatures: (&EdgeSignatures, &EdgeSignatures),
+        adjacency: (&LabeledAdjacency<'_>, &LabeledAdjacency<'_>),
+        signatures: (&EdgeSignatures<'_>, &EdgeSignatures<'_>),
         mapping: &mut [Option<usize>],
         used: &mut [bool],
         depth: usize,
@@ -487,34 +477,21 @@ fn isomorphic(
     )
 }
 fn safe(g: &Graph, all: &[Feature], omitted: &[usize], budget: &mut usize) -> Option<bool> {
-    let mut base = Graph {
-        locants: g.locants.clone(),
-        nodes: g.nodes.clone(),
-        edges: g.edges.clone(),
-        automorphisms: g.automorphisms.clone(),
-    };
-    for f in all.iter().filter(|f| f.category == "unsaturation") {
-        for p in &f.positions {
-            if let Position::Edge(e) = p {
-                base.edges.insert(*e, 1);
-            }
-        }
-    }
-    let actual = decorate(&base, all);
+    let actual = decorate(g, all);
     let mut options = Vec::new();
     for &i in omitted {
         let f = &all[i];
         let universe: Vec<_> = if f.category == "unsaturation" {
-            base.edges.keys().copied().map(Position::Edge).collect()
+            g.edges.keys().copied().map(Position::Edge).collect()
         } else {
-            (0..base.nodes.len()).map(Position::Node).collect()
+            (0..g.nodes.len()).map(Position::Node).collect()
         };
-        let mut actual_sig: Vec<_> = f.positions.iter().map(|p| signature(p, &base)).collect();
+        let mut actual_sig: Vec<_> = f.positions.iter().map(|p| signature(p, g)).collect();
         actual_sig.sort();
         let candidates = combinations(&universe, f.positions.len(), budget)?
             .into_iter()
             .filter(|candidate| {
-                let mut sig: Vec<_> = candidate.iter().map(|p| signature(p, &base)).collect();
+                let mut sig: Vec<_> = candidate.iter().map(|p| signature(p, g)).collect();
                 sig.sort();
                 sig == actual_sig
             })
@@ -543,9 +520,12 @@ fn safe(g: &Graph, all: &[Feature], omitted: &[usize], budget: &mut usize) -> Op
         let (g, actual) = graph;
         if depth < omitted.len() {
             for positions in &options[depth] {
-                let mut f = all[omitted[depth]].clone();
-                f.positions = positions.clone();
-                chosen.push(f);
+                let f = &all[omitted[depth]];
+                chosen.push(Feature {
+                    category: f.category,
+                    key: f.key.clone(),
+                    positions: positions.clone(),
+                });
                 if !visit(graph, all, omitted, options, depth + 1, chosen, budget)? {
                     return Some(false);
                 }
@@ -563,28 +543,26 @@ fn safe(g: &Graph, all: &[Feature], omitted: &[usize], budget: &mut usize) -> Op
         .filter(|(i, _)| !omitted.contains(i))
         .map(|(_, f)| f.clone())
         .collect();
-    visit(
-        (&base, &actual),
-        all,
-        omitted,
-        &options,
-        0,
-        &mut fixed,
-        budget,
-    )
+    visit((g, &actual), all, omitted, &options, 0, &mut fixed, budget)
 }
 pub fn apply_redundant_locant_elision(parts: &mut AssemblyParts) {
-    apply_redundant_locant_elision_with_limit(parts, MAX_CANDIDATE_PLACEMENTS)
-}
-pub fn apply_redundant_locant_elision_with_limit(parts: &mut AssemblyParts, limit: usize) {
     if !parts.omit_redundant_locants || !supported(parts) {
         return;
     }
-    let Some(g) = graph(parts, true) else { return };
+    let Some(mut g) = graph(parts, true) else {
+        return;
+    };
     if parts.is_ring != (g.edges.len() == g.nodes.len()) {
         return;
     }
     let all = features(parts, &g);
+    for f in all.iter().filter(|f| f.category == "unsaturation") {
+        for p in &f.positions {
+            if let Position::Edge(e) = p {
+                g.edges.insert(*e, 1);
+            }
+        }
+    }
     let mut ordered: Vec<_> = all
         .iter()
         .enumerate()
@@ -599,10 +577,10 @@ pub fn apply_redundant_locant_elision_with_limit(parts: &mut AssemblyParts, limi
                 2
             },
             all[i].category,
-            all[i].key.clone(),
+            all[i].key.as_str(),
         )
     });
-    let mut budget = limit;
+    let mut budget = MAX_CANDIDATE_PLACEMENTS;
     let mut selected = vec![];
     'outer: for size in (1..=ordered.len()).rev() {
         let mut subset_budget = usize::MAX;

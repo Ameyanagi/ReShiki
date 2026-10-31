@@ -1,11 +1,12 @@
 //! Parent numbering criteria ported from Python `numbering.py`.
 use super::{
-    locants::{get_atom_locants, get_bond_locants, retained_locant_sort_key},
+    locants::{LocantKey, get_atom_locants, get_bond_locants, retained_locant_sort_key},
     molecule::{AtomSet, Molecule},
     rules::{elements, retained},
 };
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
+use std::sync::LazyLock;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NumberingTopology {
@@ -31,12 +32,55 @@ pub struct NumberingPreference {
     pub stereochemistry: Vec<usize>,
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
-enum Criterion {
-    Flat(Vec<usize>),
-    Nested(Vec<Vec<usize>>),
+#[derive(Clone, Copy)]
+enum NumberingCriterion {
+    Principal,
+    HeteroByPriority,
+    IndicatedHydrogen,
+    Hydro,
+    Unsaturation,
+    SubstituentAndUnsaturation,
+    SubstituentCitation,
+    Stereochemistry,
 }
-impl Criterion {
+
+#[allow(
+    clippy::expect_used,
+    clippy::panic,
+    reason = "The immutable checked-in registry supplies arrays of known criterion names."
+)]
+fn numbering_criteria(parent_kind: &str) -> Vec<NumberingCriterion> {
+    super::nomenclature::section("numbering_criteria")[parent_kind]
+        .as_array()
+        .expect("numbering criteria")
+        .iter()
+        .map(
+            |criterion| match criterion.as_str().expect("numbering criterion") {
+                "principal" => NumberingCriterion::Principal,
+                "hetero_by_priority" => NumberingCriterion::HeteroByPriority,
+                "indicated_hydrogen" => NumberingCriterion::IndicatedHydrogen,
+                "hydro" => NumberingCriterion::Hydro,
+                "unsaturation" => NumberingCriterion::Unsaturation,
+                "substituent_and_unsaturation" => NumberingCriterion::SubstituentAndUnsaturation,
+                "substituent_citation" => NumberingCriterion::SubstituentCitation,
+                "stereochemistry" => NumberingCriterion::Stereochemistry,
+                name => panic!("unknown numbering criterion {name}"),
+            },
+        )
+        .collect()
+}
+
+static CHAIN_CRITERIA: LazyLock<Vec<NumberingCriterion>> =
+    LazyLock::new(|| numbering_criteria("chain"));
+static RING_CRITERIA: LazyLock<Vec<NumberingCriterion>> =
+    LazyLock::new(|| numbering_criteria("ring"));
+
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+enum Criterion<'a> {
+    Flat(&'a [usize]),
+    Nested(&'a [Vec<usize>]),
+}
+impl Criterion<'_> {
     fn is_empty(&self) -> bool {
         match self {
             Self::Flat(v) => v.is_empty(),
@@ -46,78 +90,46 @@ impl Criterion {
 }
 
 impl NumberingPreference {
-    #[allow(
-        clippy::panic,
-        reason = "Criterion names come from the immutable checked-in numbering registry."
-    )]
-    fn criterion(&self, name: &str) -> Criterion {
-        match name {
-            "principal" => Criterion::Flat(self.principal.clone()),
-            "hetero_by_priority" => Criterion::Nested(self.hetero_by_priority.clone()),
-            "indicated_hydrogen" => Criterion::Flat(self.indicated_hydrogen.clone()),
-            "hydro" => Criterion::Flat(self.hydro.clone()),
-            "unsaturation" => Criterion::Flat(self.unsaturation.clone()),
-            "substituent_and_unsaturation" => {
-                Criterion::Flat(self.substituent_and_unsaturation.clone())
+    fn criterion(&self, criterion: NumberingCriterion) -> Criterion<'_> {
+        match criterion {
+            NumberingCriterion::Principal => Criterion::Flat(&self.principal),
+            NumberingCriterion::HeteroByPriority => Criterion::Nested(&self.hetero_by_priority),
+            NumberingCriterion::IndicatedHydrogen => Criterion::Flat(&self.indicated_hydrogen),
+            NumberingCriterion::Hydro => Criterion::Flat(&self.hydro),
+            NumberingCriterion::Unsaturation => Criterion::Flat(&self.unsaturation),
+            NumberingCriterion::SubstituentAndUnsaturation => {
+                Criterion::Flat(&self.substituent_and_unsaturation)
             }
-            "substituent_citation" => Criterion::Flat(self.substituent_citation.clone()),
-            "stereochemistry" => Criterion::Flat(self.stereochemistry.clone()),
-            _ => panic!("unknown numbering criterion {name}"),
+            NumberingCriterion::SubstituentCitation => Criterion::Flat(&self.substituent_citation),
+            NumberingCriterion::Stereochemistry => Criterion::Flat(&self.stereochemistry),
         }
     }
-    #[allow(
-        clippy::expect_used,
-        reason = "The immutable checked-in registry supplies arrays of criterion names."
-    )]
     fn compare(&self, other: &Self, is_ring: bool) -> Ordering {
-        let criteria = super::nomenclature::section("numbering_criteria")
-            [if is_ring { "ring" } else { "chain" }]
-        .as_array()
-        .expect("numbering criteria");
-        for criterion in criteria {
-            let name = criterion.as_str().expect("numbering criterion");
-            let a = self.criterion(name);
-            let b = other.criterion(name);
-            // Python intentionally prefers a nonempty structural criterion to
-            // an empty one, then uses ordinary tuple lexicographic ordering.
-            let order = match (a.is_empty(), b.is_empty()) {
-                (true, true) => Ordering::Equal,
-                (true, false) => Ordering::Greater,
-                (false, true) => Ordering::Less,
-                (false, false) => a.cmp(&b),
-            };
-            if order != Ordering::Equal {
-                return order;
-            }
-        }
-        Ordering::Equal
+        let criteria = if is_ring {
+            &RING_CRITERIA
+        } else {
+            &CHAIN_CRITERIA
+        };
+        criteria
+            .iter()
+            .map(|&criterion| {
+                let (a, b) = (self.criterion(criterion), other.criterion(criterion));
+                // Python intentionally prefers a nonempty structural criterion to
+                // an empty one, then uses ordinary tuple lexicographic ordering.
+                match (a.is_empty(), b.is_empty()) {
+                    (true, true) => Ordering::Equal,
+                    (true, false) => Ordering::Greater,
+                    (false, true) => Ordering::Less,
+                    (false, false) => a.cmp(&b),
+                }
+            })
+            .find(|order| order.is_ne())
+            .unwrap_or(Ordering::Equal)
     }
-}
-
-#[cfg(test)]
-pub fn number_parent(
-    mol: &Molecule,
-    candidate_paths: &[Vec<usize>],
-    principal_carbons: &AtomSet,
-    substituent_mapping: &BTreeMap<usize, Vec<String>>,
-    is_ring: bool,
-    fixed_start: bool,
-    retained_name: Option<&str>,
-) -> Vec<usize> {
-    number_parent_with_topology(
-        mol,
-        candidate_paths,
-        principal_carbons,
-        substituent_mapping,
-        is_ring,
-        fixed_start,
-        retained_name,
-        NumberingTopology::default(),
-    )
 }
 
 #[allow(clippy::too_many_arguments)]
-fn number_parent_with_topology(
+fn number_parent(
     mol: &Molecule,
     candidate_paths: &[Vec<usize>],
     principal_carbons: &AtomSet,
@@ -173,40 +185,10 @@ fn number_parent_with_topology(
     best
 }
 
-#[allow(
-    clippy::too_many_arguments,
-    reason = "Mirrors the shared Python parent-numbering pipeline interface."
-)]
-#[cfg(test)]
-pub fn choose_parent_numbering(
-    mol: &Molecule,
-    candidate_paths: &[Vec<usize>],
-    principal_atoms: &AtomSet,
-    substituent_mapping: &BTreeMap<usize, Vec<String>>,
-    locant_maps: &[BTreeMap<usize, String>],
-    is_ring: bool,
-    retained_name: Option<&str>,
-    fixed_start: bool,
-    topology: NumberingTopology,
-) -> (Vec<usize>, Option<BTreeMap<usize, String>>) {
-    choose_parent_numbering_with_hydrogens(
-        mol,
-        candidate_paths,
-        principal_atoms,
-        substituent_mapping,
-        locant_maps,
-        is_ring,
-        retained_name,
-        fixed_start,
-        topology,
-        None,
-    )
-}
-
 pub type ProvenHydrogenLocants = BTreeMap<Vec<(usize, String)>, (Vec<String>, Vec<String>)>;
 
 #[allow(clippy::too_many_arguments)]
-pub fn choose_parent_numbering_with_hydrogens(
+pub fn choose_parent_numbering(
     mol: &Molecule,
     candidate_paths: &[Vec<usize>],
     principal_atoms: &AtomSet,
@@ -219,14 +201,13 @@ pub fn choose_parent_numbering_with_hydrogens(
     proven_hydrogen_locants: Option<&ProvenHydrogenLocants>,
 ) -> (Vec<usize>, Option<BTreeMap<usize, String>>) {
     if !locant_maps.is_empty() {
-        type L = (usize, u8, String, usize);
         type MapScore = (
-            Vec<Vec<L>>,
-            Vec<L>,
-            Vec<L>,
-            Vec<L>,
-            Vec<L>,
-            Vec<(String, L)>,
+            Vec<Vec<LocantKey>>,
+            Vec<LocantKey>,
+            Vec<LocantKey>,
+            Vec<LocantKey>,
+            Vec<LocantKey>,
+            Vec<(String, LocantKey)>,
         );
         let evaluate = |map: &BTreeMap<usize, String>| -> MapScore {
             let value = |idx: &usize| retained_locant_sort_key(&map[idx]);
@@ -236,7 +217,7 @@ pub fn choose_parent_numbering_with_hydrogens(
                 .map(value)
                 .collect();
             principal.sort();
-            let mut hetero: BTreeMap<usize, Vec<L>> = BTreeMap::new();
+            let mut hetero: BTreeMap<usize, Vec<LocantKey>> = BTreeMap::new();
             for (&idx, atom) in &mol.atoms {
                 if map.contains_key(&idx) && atom.symbol != "C" {
                     hetero
@@ -320,7 +301,7 @@ pub fn choose_parent_numbering_with_hydrogens(
             return (path, Some(chosen));
         }
     }
-    let path = number_parent_with_topology(
+    let path = number_parent(
         mol,
         candidate_paths,
         principal_atoms,
@@ -567,6 +548,7 @@ mod tests {
             false,
             false,
             None,
+            NumberingTopology::default(),
         );
         assert_eq!(numbered[0], 4);
         assert_eq!(
@@ -586,6 +568,7 @@ mod tests {
             true,
             false,
             Some("1,3,4-thiadiazole"),
+            NumberingTopology::default(),
         );
         assert_eq!(mol.atoms[&numbered[0]].symbol, "S");
         assert_eq!(
@@ -602,7 +585,16 @@ mod tests {
         let mol = read_smiles("CCCCCCC").unwrap();
         let path = (0..7).collect::<Vec<_>>();
         let subs = BTreeMap::from([(1, vec!["methyl".into()]), (5, vec!["ethyl".into()])]);
-        let numbered = number_parent(&mol, &[path], &AtomSet::new(), &subs, false, false, None);
+        let numbered = number_parent(
+            &mol,
+            &[path],
+            &AtomSet::new(),
+            &subs,
+            false,
+            false,
+            None,
+            NumberingTopology::default(),
+        );
         assert_eq!(numbered, (0..7).rev().collect::<Vec<_>>());
     }
 
@@ -624,6 +616,7 @@ mod tests {
                 is_spiro: true,
                 ..NumberingTopology::default()
             },
+            None,
         );
         assert!(system.paths.contains(&path));
         assert_eq!(

@@ -12,13 +12,7 @@ pub fn scoped_small_ring_stereo_features(
     numbered_path: &[usize],
     get_loc: impl Fn(usize) -> String,
 ) -> Vec<(String, String)> {
-    if !parts.is_substituent
-        || !parts.is_ring
-        || parts.is_bicycle
-        || parts.is_spiro
-        || parts.is_polycycle
-        || !(3..=7).contains(&numbered_path.len())
-    {
+    if !parts.is_substituent || !parts.is_simple_ring() || !(3..=7).contains(&numbered_path.len()) {
         return Vec::new();
     }
     let raw_atoms = numbered_path

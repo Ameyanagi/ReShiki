@@ -3,26 +3,26 @@ use super::{assembly_parts::AssemblyParts, molecule::AtomSet};
 use serde::Deserialize;
 use std::sync::LazyLock;
 
-#[derive(Clone, Debug, Deserialize)]
-pub struct FusedIonTemplate {
-    pub base_parent_name: String,
+#[derive(Debug, Deserialize)]
+struct FusedIonTemplate {
+    base_parent_name: String,
     #[serde(default)]
-    pub base_parent_aliases: Vec<String>,
-    pub allowed_charge_operation: String,
+    base_parent_aliases: Vec<String>,
+    allowed_charge_operation: String,
     #[serde(default)]
-    pub allowed_locants: Vec<String>,
-    pub suffix_or_prefix_form: String,
-    pub opsin_grammar_name: String,
+    allowed_locants: Vec<String>,
+    suffix_or_prefix_form: String,
+    opsin_grammar_name: String,
     #[serde(default)]
-    pub production_ready: bool,
+    production_ready: bool,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct FusedIonTemplateRegistry {
-    pub templates: Vec<FusedIonTemplate>,
+struct FusedIonTemplateRegistry {
+    templates: Vec<FusedIonTemplate>,
 }
 impl FusedIonTemplateRegistry {
-    pub fn for_operation(
+    fn for_operation(
         &self,
         parent_name: &str,
         operation: &str,
@@ -66,35 +66,27 @@ static REGISTRY: LazyLock<FusedIonTemplateRegistry> = LazyLock::new(|| {
     registry
 });
 
-pub fn fused_ion_template_registry() -> &'static FusedIonTemplateRegistry {
-    &REGISTRY
-}
-
 #[derive(Clone, Debug)]
 pub struct FusedIonOperationCandidate {
-    pub locants: Vec<String>,
-    pub represented_atom_ids: AtomSet,
-    pub template: Option<FusedIonTemplate>,
-    pub consumed_substituent_names: Vec<String>,
+    locants: Vec<String>,
+    represented_atom_ids: AtomSet,
+    template: Option<&'static FusedIonTemplate>,
+    consumed_substituent_names: Vec<String>,
 }
 impl FusedIonOperationCandidate {
-    pub fn production_ready(&self) -> bool {
+    fn production_ready(&self) -> bool {
         self.template
-            .as_ref()
             .is_some_and(|template| template.production_ready)
     }
     pub fn rendered_name(&self) -> Option<&str> {
         self.template
-            .as_ref()
             .filter(|template| template.production_ready)
             .map(|template| template.opsin_grammar_name.as_str())
     }
 }
 
 pub fn select_fused_ion_operation(parts: &AssemblyParts) -> Option<FusedIonOperationCandidate> {
-    fused_ion_operation_candidates(parts)
-        .into_iter()
-        .find(FusedIonOperationCandidate::production_ready)
+    fused_ion_operation_candidates(parts).find(FusedIonOperationCandidate::production_ready)
 }
 
 pub fn consume_fused_ion_operation(
@@ -114,11 +106,15 @@ pub fn consume_fused_ion_operation(
         .retain(|charge| !candidate.locants.contains(&charge.locant));
 }
 
-pub fn fused_ion_operation_candidates(parts: &AssemblyParts) -> Vec<FusedIonOperationCandidate> {
-    retained_fused_n_oxide_operation(parts)
-        .into_iter()
-        .chain(retained_fused_ring_n_charge_operation(parts))
-        .collect()
+fn fused_ion_operation_candidates(
+    parts: &AssemblyParts,
+) -> impl Iterator<Item = FusedIonOperationCandidate> {
+    [
+        retained_fused_n_oxide_operation(parts),
+        retained_fused_ring_n_charge_operation(parts),
+    ]
+    .into_iter()
+    .flatten()
 }
 
 fn eligible_parent(parts: &AssemblyParts) -> Option<&str> {
@@ -159,9 +155,7 @@ fn retained_fused_ring_n_charge_operation(
     };
     let locants = vec![locant.clone()];
     Some(FusedIonOperationCandidate {
-        template: fused_ion_template_registry()
-            .for_operation(parent, operation, &locants)
-            .cloned(),
+        template: REGISTRY.for_operation(parent, operation, &locants),
         locants,
         represented_atom_ids: charge.atom_id.into_iter().collect(),
         consumed_substituent_names: Vec::new(),
@@ -200,9 +194,7 @@ fn retained_fused_n_oxide_operation(parts: &AssemblyParts) -> Option<FusedIonOpe
     let mut atoms = item.atom_ids.clone();
     atoms.extend(charge.atom_id);
     Some(FusedIonOperationCandidate {
-        template: fused_ion_template_registry()
-            .for_operation(parent, "ring_n_oxide", &item.locants)
-            .cloned(),
+        template: REGISTRY.for_operation(parent, "ring_n_oxide", &item.locants),
         locants: item.locants.clone(),
         represented_atom_ids: atoms,
         consumed_substituent_names: vec!["oxido".into()],
@@ -262,7 +254,7 @@ mod tests {
             charge: -1,
             ..Default::default()
         });
-        assert_eq!(fused_ion_operation_candidates(&parts).len(), 1);
+        assert_eq!(fused_ion_operation_candidates(&parts).count(), 1);
         assert!(select_fused_ion_operation(&parts).is_none());
         parts.retained_name = Some("isoquinoline".into());
         parts.parent_charges[0].charge = 1;

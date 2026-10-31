@@ -288,21 +288,17 @@ pub fn promote_retained_functional_parent(parts: &mut AssemblyParts) -> Result<(
     Ok(())
 }
 pub fn substituent_attachment_kind(parts: &AssemblyParts) -> &'static str {
-    if parts.is_triple_attach {
-        "triple"
-    } else if parts.is_double_attach {
-        "double"
-    } else if parts.is_acyl_substituent {
-        "acyl"
-    } else {
-        "single"
+    match parts.attachment_order {
+        3 => "triple",
+        2 => "double",
+        _ if parts.is_acyl_substituent => "acyl",
+        _ => "single",
     }
 }
 pub fn promote_acyl_substituent_name(parts: &mut AssemblyParts) {
     if !parts.is_substituent
         || parts.is_acyl_substituent
-        || parts.is_double_attach
-        || parts.is_triple_attach
+        || matches!(parts.attachment_order, 2 | 3)
         || parts.is_ring
         || parts.retained_name.is_some()
         || parts.retained_substituent_name.is_some()
@@ -337,8 +333,7 @@ pub fn promote_acyl_substituent_name(parts: &mut AssemblyParts) {
 fn promote_carbamimidoyl(parts: &mut AssemblyParts) {
     if !parts.is_substituent
         || parts.retained_substituent_name.is_some()
-        || parts.is_double_attach
-        || parts.is_triple_attach
+        || matches!(parts.attachment_order, 2 | 3)
         || parts.is_ring
         || parts.retained_name.is_some()
         || parts.principal_group.is_some()
@@ -413,8 +408,7 @@ pub fn promote_retained_substituent_name(parts: &mut AssemblyParts) {
     promote_carbamimidoyl(parts);
     if !parts.is_substituent
         || parts.retained_substituent_name.is_some()
-        || parts.is_double_attach
-        || parts.is_triple_attach
+        || matches!(parts.attachment_order, 2 | 3)
         || parts.is_ring
         || parts.retained_name.is_some()
         || parts.principal_group.is_some()

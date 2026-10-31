@@ -156,7 +156,7 @@ fn fold_stem_hydro_prefix(parts: &mut AssemblyParts, locants: &BTreeMap<usize, S
     {
         return;
     }
-    let atom_by_locant: BTreeMap<_, _> = locants.iter().map(|(&i, l)| (l.clone(), i)).collect();
+    let atom_by_locant: BTreeMap<_, _> = locants.iter().map(|(&i, l)| (l.as_str(), i)).collect();
     let Some(stem_sites) = run
         .split(',')
         .map(|l| atom_by_locant.get(l).map(|&i| (l.to_owned(), i)))
@@ -176,8 +176,7 @@ fn fold_stem_hydro_prefix(parts: &mut AssemblyParts, locants: &BTreeMap<usize, S
         .collect();
     let mut merged: Vec<_> = merged.into_iter().collect();
     sort_sites(&mut merged);
-    op.locants = merged.iter().map(|s| s.0.clone()).collect();
-    op.atom_ids = merged.iter().map(|s| s.1).collect();
+    (op.locants, op.atom_ids) = merged.into_iter().unzip();
     parts.retained_name = Some(rest.into());
 }
 fn declared_split(
@@ -273,10 +272,7 @@ fn validate_retained_hydrogen_sites(mol: &Molecule, parts: &AssemblyParts) -> Re
                     .any(|bond| bond.order > 1)
             })
     }) {
-        // Upstream divergence: retained derivative admission and hydrogen-site
-        // counting can leave indicated/added/hydro H on an unsaturated ring
-        // atom (including N=C oxo/imino tautomers). Such a name changes the
-        // tautomer. Check the final cited state for parents and substituents.
+        // Upstream divergence: reject cited H on unsaturated ring atoms to preserve the tautomer.
         return Err("openclatura: retained hydrogen state conflicts with ring bonding".into());
     }
     Ok(())
@@ -315,18 +311,15 @@ fn collect_indicated_hydrogens(
         recast_ring_ketone_hydrogens(parts, locants);
         return Ok(());
     }
-    let metadata = parts.retained_parent_metadata.clone();
+    let metadata = parts.retained_parent_metadata.as_ref();
+    let has_metadata = metadata.is_some();
     let name_states =
         !retained::cites_indicated_hydrogen(mol, numbered_path, parts.retained_name.as_deref())
-            && !metadata.as_ref().is_some_and(|m| m.relocated_indicated_h);
+            && !metadata.is_some_and(|m| m.relocated_indicated_h);
     if name_states && metadata.is_none() {
         return Ok(());
     }
-    if name_states
-        && metadata
-            .as_ref()
-            .is_some_and(|m| m.mancude_double_bonds == 0)
-    {
+    if name_states && metadata.is_some_and(|m| m.mancude_double_bonds == 0) {
         return Ok(());
     }
     if parts.retained_name.as_deref() == Some("tetrazole")
@@ -344,11 +337,9 @@ fn collect_indicated_hydrogens(
         .map(|g| g.atom_ids.intersection(&ring).copied().collect())
         .unwrap_or_default();
     let mut defaults: BTreeSet<_> = metadata
-        .as_ref()
         .map(|m| m.default_indicated_h.iter().cloned().collect())
         .unwrap_or_default();
     let inherent: BTreeSet<_> = metadata
-        .as_ref()
         .map(|m| m.inherent_saturated_locants.iter().cloned().collect())
         .unwrap_or_default();
     let mut declared = if defaults.is_empty() {
@@ -381,8 +372,8 @@ fn collect_indicated_hydrogens(
     if !defaults.is_empty() && observed.len() == defaults.len() && unambiguous {
         defaults = observed;
     }
-    if let Some(name) = parts.retained_name.clone() {
-        let spelled = name_indicated_hydrogen_locants(Some(&name));
+    if let Some(name) = parts.retained_name.as_deref() {
+        let spelled = name_indicated_hydrogen_locants(Some(name));
         let by_loc: BTreeMap<_, _> = locants.iter().map(|(&i, l)| (l.clone(), i)).collect();
         let stranded: BTreeSet<_> = spelled
             .iter()
@@ -412,7 +403,7 @@ fn collect_indicated_hydrogens(
                     .cloned()
                     .chain(free.into_iter().take(stranded.len()))
                     .collect();
-                parts.retained_name = Some(respell_indicated_hydrogen(&name, &relocated));
+                parts.retained_name = Some(respell_indicated_hydrogen(name, &relocated));
                 declared = relocated.clone();
                 if defaults.is_empty() {
                     defaults = relocated;
@@ -420,15 +411,18 @@ fn collect_indicated_hydrogens(
             }
         }
     }
-    if let Some(name) = parts.retained_name.clone().filter(|_| !defaults.is_empty()) {
-        let cited = name_indicated_hydrogen_locants(Some(&name));
+    if let Some(name) = parts
+        .retained_name
+        .as_deref()
+        .filter(|_| !defaults.is_empty())
+    {
+        let cited = name_indicated_hydrogen_locants(Some(name));
         if !cited.is_empty() && cited != defaults && cited.len() == defaults.len() {
-            parts.retained_name = Some(respell_indicated_hydrogen(&name, &defaults));
+            parts.retained_name = Some(respell_indicated_hydrogen(name, &defaults));
             declared = defaults.clone();
         }
     }
     let fusion: BTreeSet<_> = metadata
-        .as_ref()
         .map(|m| m.fusion_locants.iter().cloned().collect())
         .unwrap_or_default();
     let mut candidates = Vec::new();
@@ -439,17 +433,13 @@ fn collect_indicated_hydrogens(
         if inherent.contains(&loc) {
             continue;
         }
-        if !oxo && metadata.is_some() && oxo_ring_site(mol, idx, &ring) {
+        if !oxo && has_metadata && oxo_ring_site(mol, idx, &ring) {
             if !suffix_sites.contains(&idx) {
                 hydro_only.push((loc, idx));
             }
             continue;
         }
-        if metadata.is_some()
-            && !defaults.is_empty()
-            && atom.is_carbon()
-            && !defaults.contains(&loc)
-        {
+        if has_metadata && !defaults.is_empty() && atom.is_carbon() && !defaults.contains(&loc) {
             if saturated_ring_site(mol, idx, &ring) {
                 hydro_only.push((loc, idx));
             }
@@ -467,13 +457,13 @@ fn collect_indicated_hydrogens(
                 && !defaults.contains(&loc)
                 && !(defaults.is_empty() && bonds.len() == 3)
             {
-                if metadata.is_some() && saturated_ring_site(mol, idx, &ring) {
+                if has_metadata && saturated_ring_site(mol, idx, &ring) {
                     hydro_only.push((loc, idx));
                 }
                 continue;
             }
             if !defaults.is_empty() && !defaults.contains(&loc) {
-                if metadata.is_some()
+                if has_metadata
                     && inherent.is_empty()
                     && !atom.is_carbon()
                     && saturated_ring_site(mol, idx, &ring)
@@ -490,7 +480,7 @@ fn collect_indicated_hydrogens(
         {
             continue;
         }
-        let fusion_carbon = metadata.is_some()
+        let fusion_carbon = has_metadata
             && defaults.is_empty()
             && atom.is_carbon()
             && fusion.contains(&loc)
@@ -507,7 +497,6 @@ fn collect_indicated_hydrogens(
         }
     }
     let supported = metadata
-        .as_ref()
         .map_or(candidates.len(), |m| m.indicated_hydrogen_count)
         .saturating_sub(defaults.intersection(&inherent).count());
     let additive = candidates
@@ -534,7 +523,7 @@ fn collect_indicated_hydrogens(
         return Ok(());
     }
     let surplus_count = candidates.len() as isize + hydro_only.len() as isize - supported as isize;
-    if metadata.is_some() && surplus_count > 0 && surplus_count % 2 == 0 {
+    if has_metadata && surplus_count > 0 && surplus_count % 2 == 0 {
         sort_sites(&mut candidates);
         let pool: Vec<_> = candidates.iter().chain(&hydro_only).cloned().collect();
         let (held, surplus) =
@@ -567,12 +556,12 @@ fn collect_indicated_hydrogens(
             .retained_name
             .as_deref()
             .is_some_and(|n| !n.contains("H-"));
-    if metadata.is_some() && oxo && (!name_states || added_needed) && surplus_count % 2 != 0 {
-        candidates.extend(hydro_only.clone());
+    if has_metadata && oxo && (!name_states || added_needed) && surplus_count % 2 != 0 {
+        candidates.extend(hydro_only.iter().cloned());
         sort_sites(&mut candidates);
     }
     if name_states && !added_needed {
-        if metadata.is_some()
+        if has_metadata
             && oxo
             && surplus_count > 0
             && surplus_count % 2 != 0
@@ -719,11 +708,10 @@ fn add_proved_parent_hydrogens(
         .parent_hydride
         .as_ref()
         .and_then(|parent| parent.derivative_state())
-        .or(parts.parent_derivative_state.as_ref())
-        .cloned();
+        .or(parts.parent_derivative_state.as_ref());
     let delta = if let Some(delta) = &parts.parent_bond_delta {
         Some(delta.clone())
-    } else if let Some(state) = &state {
+    } else if let Some(state) = state {
         Some(state.bond_delta.clone())
     } else {
         compare_actual_parent_to_implied_parent(
@@ -765,7 +753,7 @@ fn add_proved_parent_hydrogens(
     if intrinsic || fusion_added_only {
         return Ok(true);
     }
-    if let Some(state) = &state
+    if let Some(state) = state
         && !state.hydro_operations.is_empty()
     {
         for op in &state.hydro_operations {

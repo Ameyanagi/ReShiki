@@ -178,7 +178,6 @@ pub(super) fn select_subgraph_parent(
         })
         .collect::<Vec<_>>();
     select_principal_parent(mol, &paths, &[], &[start])
-        .map(|s| s.with_fixed_start(false))
         .ok_or_else(|| "openclatura: no recursive chain parent".into())
 }
 
@@ -472,12 +471,10 @@ fn simple_rooted_carbanion(
     {
         return None;
     }
-    let kind = if parts.is_triple_attach {
-        "triple"
-    } else if parts.is_double_attach {
-        "double"
-    } else {
-        "single"
+    let kind = match parts.attachment_order {
+        3 => "triple",
+        2 => "double",
+        _ => "single",
     };
     let prefix = RULES
         .charges

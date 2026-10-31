@@ -22,10 +22,7 @@ pub fn has_ionic_retained_parent(parts: &AssemblyParts) -> bool {
 }
 pub fn inferred_ionic_retained_parent(parts: &AssemblyParts) -> Option<String> {
     if parts.retained_name.is_some()
-        || !parts.is_ring
-        || parts.is_bicycle
-        || parts.is_spiro
-        || parts.is_polycycle
+        || !parts.is_simple_ring()
         || !parts.unsaturations.is_empty()
         || positive_parent_n_charges(parts).len() != 1
     {
@@ -56,14 +53,15 @@ pub fn has_retained_like_parent(parts: &AssemblyParts) -> bool {
         || inferred_ionic_retained_parent(parts).is_some()
 }
 fn fusion_plan(parts: &AssemblyParts) -> Option<&super::fusion::model::FusionParentPlan> {
-    if let Some(parent) = &parts.parent_hydride {
-        parent
-            .is_fusion_parent()
-            .then_some(parent.fusion_plan.as_ref())
-            .flatten()
-    } else {
-        parts.fusion_plan.as_ref()
-    }
+    parts
+        .parent_hydride
+        .as_ref()
+        .map_or(parts.fusion_plan.as_ref(), |parent| {
+            parent
+                .fusion_plan
+                .as_ref()
+                .filter(|_| parent.is_fusion_parent())
+        })
 }
 pub fn single_charged_replacement_locants(parts: &AssemblyParts) -> BTreeSet<String> {
     if parts.retained_name.is_some() || inferred_ionic_retained_parent(parts).is_some() {

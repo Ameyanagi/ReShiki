@@ -87,8 +87,7 @@ pub struct AssemblyParts {
     pub spiro_xy: (usize, usize),
     pub polycycle_descriptor: Option<String>,
     pub is_substituent: bool,
-    pub is_double_attach: bool,
-    pub is_triple_attach: bool,
+    pub attachment_order: usize,
     pub is_acyl_substituent: bool,
     pub attachment_locant: String,
     pub principal_citation_mode: Option<String>,
@@ -121,7 +120,7 @@ pub struct AssemblyParts {
     pub parent_atom_isotopes_by_locant: BTreeMap<String, Option<u16>>,
     pub parent_bond_orders_by_locants: BTreeMap<(String, String), usize>,
     pub parent_bond_ids_by_locants: BTreeMap<(String, String), usize>,
-    pub locant_map_source: String,
+    pub proof_locant_map: bool,
     pub omit_redundant_locants: bool,
     pub elided_substituent_locants: BTreeSet<String>,
     pub elided_unsaturation_locants: BTreeSet<String>,
@@ -147,8 +146,7 @@ impl AssemblyParts {
             spiro_xy: (0, 0),
             polycycle_descriptor: None,
             is_substituent: false,
-            is_double_attach: false,
-            is_triple_attach: false,
+            attachment_order: 1,
             is_acyl_substituent: false,
             attachment_locant: "1".into(),
             principal_citation_mode: None,
@@ -181,7 +179,7 @@ impl AssemblyParts {
             parent_atom_isotopes_by_locant: BTreeMap::new(),
             parent_bond_orders_by_locants: BTreeMap::new(),
             parent_bond_ids_by_locants: BTreeMap::new(),
-            locant_map_source: "generated".into(),
+            proof_locant_map: false,
             omit_redundant_locants: true,
             elided_substituent_locants: BTreeSet::new(),
             elided_unsaturation_locants: BTreeSet::new(),
@@ -190,5 +188,9 @@ impl AssemblyParts {
             is_spiro_side_projection: false,
             spiro_prefix_composition: false,
         }
+    }
+
+    pub fn is_simple_ring(&self) -> bool {
+        self.is_ring && !self.is_bicycle && !self.is_spiro && !self.is_polycycle
     }
 }

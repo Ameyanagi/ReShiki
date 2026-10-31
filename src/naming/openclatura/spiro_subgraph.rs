@@ -20,9 +20,7 @@ pub fn require_single_parent_attachment(
         .copied()
         .collect();
     if attachments.len() > 1 {
-        // Upstream divergence: a partial polycyclic parent can expose the same
-        // bridge at two sites. Naming it as two detachable groups duplicates
-        // atoms, so it must have its own complete skeleton proof instead.
+        // Upstream divergence: reject multiple parent attachments to avoid naming the same bridge twice.
         return Err(
             "openclatura: substituent component has multiple parent attachment atoms".into(),
         );
@@ -88,14 +86,14 @@ pub fn polycyclic_side_core(
     side_atoms: &AtomSet,
     junction: usize,
 ) -> Option<AtomSet> {
-    let cores: Vec<_> = biconnected_edge_components(mol, side_atoms)
+    let mut cores: Vec<_> = biconnected_edge_components(mol, side_atoms)
         .into_iter()
         .filter_map(|edges| {
             let atoms: AtomSet = edges.iter().flat_map(|&(a, b)| [a, b]).collect();
             (atoms.contains(&junction) && edges.len() > atoms.len()).then_some(atoms)
         })
         .collect();
-    (cores.len() == 1).then(|| cores[0].clone())
+    if cores.len() == 1 { cores.pop() } else { None }
 }
 fn has_retained_fused_parent(mol: &Molecule, core: &AtomSet) -> bool {
     super::retained_fused_templates::match_retained_graph_templates(mol, core, true)
@@ -147,7 +145,7 @@ pub fn plan_graph_spiro_side(
     }
     let Some(junction_locant) = locants
         .iter()
-        .find_map(|(l, &a)| (a == junction).then_some(l.clone()))
+        .find_map(|(l, &a)| (a == junction).then(|| l.clone()))
     else {
         return Ok(None);
     };
@@ -155,10 +153,13 @@ pub fn plan_graph_spiro_side(
         let Some(side) = item.spiro.as_deref() else {
             continue;
         };
-        if side.side_parts.is_some() || item.locants.len() != 1 {
+        if side.side_parts.is_some() {
             continue;
         }
-        let Some(&nested_junction) = locants.get(&item.locants[0]) else {
+        let [nested_locant] = item.locants.as_slice() else {
+            continue;
+        };
+        let Some(&nested_junction) = locants.get(nested_locant) else {
             return Ok(None);
         };
         let mut nested_atoms = item.atom_ids.clone();
@@ -168,7 +169,7 @@ pub fn plan_graph_spiro_side(
         else {
             return Ok(None);
         };
-        nested.parent_locant = item.locants[0].clone();
+        nested.parent_locant = nested_locant.clone();
         item.spiro = Some(Box::new(nested));
     }
     let mut render = |parts: &mut AssemblyParts| {
@@ -198,9 +199,7 @@ pub fn spiro_subgraph_assembly(
     junction: usize,
     side_atoms: &AtomSet,
 ) -> Result<SpiroAssembly, String> {
-    // Upstream divergence: retained-N-ring and aromatic side-ring shortcut
-    // success paths outside the stage-four coverage use this graph projection.
-    // The accepted covered paths all select the component pipeline below.
+    // Upstream divergence: use graph projection for retained-N-ring and aromatic side-ring shortcuts.
     if let Some(side) = plan_substituted_fusion_spiro_side(mol, side_atoms, junction)? {
         return Ok(side);
     }
