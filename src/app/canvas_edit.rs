@@ -61,9 +61,14 @@ impl App {
             } => {
                 self.tab.arrows.cancel_source();
                 if self.tab.cleanup.is_none() {
+                    let closed_inspector = (!self.inspector_open).then_some(self.inspector_tab);
                     self.tab.selected = selected;
                     self.tool = Tool::Select;
                     self.sync_typography();
+                    if let Some(tab) = closed_inspector {
+                        self.inspector_open = false;
+                        self.inspector_tab = tab;
+                    }
                     let mut menu = context_menu::State::new(position, Default::default());
                     menu.hit = Some(hit);
                     self.context_menu = Some(menu);

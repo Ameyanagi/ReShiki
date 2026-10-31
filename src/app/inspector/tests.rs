@@ -592,13 +592,44 @@ fn a_selection_opens_at_most_one_section() {
     assert_eq!(app.opened_section(), Some(Section::Molecule));
     app.tab.selected = ring.iter().copied().chain([arrow]).collect();
     assert!(app.alignment_count() >= 2);
-    assert_eq!(app.opened_section(), Some(Section::Bonds));
+    assert_eq!(app.opened_section(), Some(Section::Molecule));
     app.tab.selected = vec![ring[0]];
     assert_eq!(app.opened_section(), Some(Section::Atoms));
     app.tab.selected = vec![ring[0], ring[2]];
     assert_eq!(app.opened_section(), None);
     app.tab.selected = vec![arrow];
     assert_eq!(app.opened_section(), None);
+}
+
+#[test]
+fn whole_molecules_open_properties_and_partial_selections_keep_their_section() {
+    let (mut app, _) = App::new();
+    let first = reshiki::editing::ring(
+        &mut app.tab.doc,
+        reshiki::document::Point::default(),
+        6,
+        false,
+        42.,
+    );
+    let second = reshiki::editing::ring(
+        &mut app.tab.doc,
+        reshiki::document::Point::new(200., 0.),
+        6,
+        false,
+        42.,
+    );
+    app.tab.selected = first.clone();
+    assert_eq!(app.opened_section(), Some(Section::Molecule));
+    app.tab.selected = first.iter().chain(&second).copied().collect();
+    assert_eq!(app.opened_section(), Some(Section::Molecule));
+    app.tab.selected = vec![first[0], first[1]];
+    assert_eq!(app.opened_section(), Some(Section::Bonds));
+    app.tab.selected = vec![first[0], first[2]];
+    assert_eq!(app.opened_section(), None);
+    app.tab.selected = vec![first[0]];
+    assert_eq!(app.opened_section(), Some(Section::Atoms));
+    app.tab.selected = first.iter().copied().chain([second[0]]).collect();
+    assert_eq!(app.opened_section(), Some(Section::Bonds));
 }
 
 #[test]

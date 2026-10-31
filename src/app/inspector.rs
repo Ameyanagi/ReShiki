@@ -167,10 +167,28 @@ pub(super) struct State {
     chemical: ChemicalFormat,
     chemical_menu: bool,
     pending: Option<PropertyKey>,
+    pending_revision: u64,
     properties: Option<(PropertyKey, Result<Analysis, String>)>,
     whole_properties: Option<(PropertyKey, Result<Analysis, String>)>,
 }
 impl State {
+    pub(super) fn advance_revision(&mut self, epoch: u64, before: u64, after: u64) {
+        for (key, _) in [&mut self.properties, &mut self.whole_properties]
+            .into_iter()
+            .flatten()
+        {
+            if key.epoch == epoch && key.revision == before {
+                key.revision = after;
+            }
+        }
+        // Keep the original receipt key while carrying its chemistry forward.
+        if self.pending.as_ref().is_some_and(|key| key.epoch == epoch)
+            && self.pending_revision == before
+        {
+            self.pending_revision = after;
+        }
+    }
+
     pub(super) fn seed_molecular(&mut self, expanded: Option<bool>) {
         if let Some(expanded) = expanded {
             self.expanded.insert(Section::Molecule, expanded);
@@ -443,6 +461,7 @@ impl App {
                     return Task::none();
                 }
                 let request = Request::molecule("analyze", self.property_document(&key));
+                self.tab.inspector_ui.pending_revision = key.revision;
                 self.tab.inspector_ui.pending = Some(key.clone());
                 if key == self.whole_property_key() {
                     self.tab.inspector_ui.whole_properties = None;
@@ -467,12 +486,13 @@ impl App {
                     },
                 )
             }
-            Action::PropertiesCalculated(key, result) => {
+            Action::PropertiesCalculated(mut key, result) => {
                 if self.tab.inspector_ui.pending.as_ref() == Some(&key) {
                     self.tab.inspector_ui.pending = None;
+                    key.revision = self.tab.inspector_ui.pending_revision;
                     // Never apply fragment labels or hydrogen counts to the original drawing.
                     // A selection change may keep a whole-drawing receipt useful, but a new
-                    // revision or file epoch makes both kinds of receipt stale.
+                    // chemistry revision or file epoch makes both kinds of receipt stale.
                     if self.whole_property_key() == key {
                         self.tab.inspector_ui.whole_properties =
                             Some((key.clone(), (*result).clone()));
@@ -1077,7 +1097,16 @@ impl App {
             .iter()
             .any(|b| selected.contains(&b.a) && selected.contains(&b.b))
         {
-            return Some(Section::Bonds);
+            // Whole molecules, as a double-click or Select all gives, keep their properties open.
+            let whole = reshiki::reactions::molecules(&self.tab.doc, &self.tab.selected)
+                .iter()
+                .flatten()
+                .all(|id| selected.contains(id));
+            return Some(if whole {
+                Section::Molecule
+            } else {
+                Section::Bonds
+            });
         }
         let atoms: Vec<_> = self
             .tab

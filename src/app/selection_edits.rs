@@ -153,7 +153,12 @@ impl App {
         self.changed(before);
     }
     pub(super) fn select_all_objects(&mut self) {
+        let closed_inspector = (!self.inspector_open).then_some(self.inspector_tab);
         self.tool = Tool::Select;
         self.set_selection(self.tab.doc.all_ids());
+        if let Some(tab) = closed_inspector {
+            self.inspector_open = false;
+            self.inspector_tab = tab;
+        }
     }
 }

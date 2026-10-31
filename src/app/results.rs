@@ -179,18 +179,19 @@ fn admission(completion: Completion) -> Admission {
             optimization: true,
             updates_dialog: true,
         },
-        Completion::AssistantDocument | Completion::AssistantApp => Admission {
-            atom_text: true,
-            preview: false,
-            cleanup: false,
-            optimization: true,
-            updates_dialog: true,
-        },
+        Completion::AssistantDocument | Completion::AssistantApp | Completion::Properties => {
+            Admission {
+                atom_text: true,
+                preview: false,
+                cleanup: false,
+                optimization: true,
+                updates_dialog: true,
+            }
+        }
         Completion::Optimization
         | Completion::DrawingStyle
         | Completion::Labels
         | Completion::Mapping
-        | Completion::Properties
         | Completion::Pasted
         | Completion::ThemeFile => Admission {
             atom_text: false,

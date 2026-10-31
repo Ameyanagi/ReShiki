@@ -30,6 +30,10 @@ impl App {
                 // Same chemistry, same labels: a snapshot taken before the
                 // labels landed gets them, and the layout they need.
                 reshiki::atom_labels::copy_computed(&mut self.tab.doc, &before);
+                let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
+                self.tab
+                    .inspector_ui
+                    .advance_revision(epoch, revision.wrapping_sub(1), revision);
                 self.settle_label_layout();
             }
             let ids = self.tab.doc.all_ids();
