@@ -108,13 +108,11 @@ impl App {
             self.status = format!("Could not insert {title}");
             return;
         };
-        self.tab.selected = selected;
-        self.changed(before);
+        self.commit_structure_insert(before, selected);
         if self.error {
             return;
         }
         self.tool = Tool::Select;
-        self.fit();
         self.tab.naming.notice = omit_caption.then(|| {
             Notice::new(
                 NoticeKind::Info,

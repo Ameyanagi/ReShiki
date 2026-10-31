@@ -214,10 +214,9 @@ async fn native_pointer_hover_workloads() {
     app.inspector_open = false;
     app.guides.crosshair = true;
     app.appearance.mode = crate::appearance::Mode::Light;
-    app.tab.camera = crate::canvas::Camera {
-        center: Point::new(-8631.204, -5557.835),
-        zoom: 1.04,
-    };
+    app.viewport = Size::new(1680., 988.);
+    app.fit();
+    let fit = app.tab.camera;
     app.sync_keyboard_drawing();
     let mut ui = Ui {
         renderer: <iced::Renderer as Headless>::new(
@@ -232,20 +231,53 @@ async fn native_pointer_hover_workloads() {
     };
     println!("native_pointer_renderer,{}", ui.renderer.name());
     println!("workload,median_ms,p95_ms");
-    let mut step = 0;
-    measure("gallery_16x_native_pointer_widget_app_overlay_draw", || {
-        let index = (step * 5) % 151;
-        let angle = std::f64::consts::TAU * index as f64 / 150.;
+    let near = crate::canvas::Camera {
+        center: Point::new(-8631.204, -5557.835),
+        zoom: 1.04,
+    };
+    for (label, camera) in [("104", near), ("fit", fit)] {
+        app.tab.camera = camera;
+        println!("camera,{label},{:?},{}", camera.center, camera.zoom);
         // Native replay is in outer-window points; the client begins 32pt below.
-        let cursor = iced::Point::new(
-            (700. - 400. * angle.cos()) as f32,
-            (368. + 160. * angle.sin()) as f32,
+        let cursor = |step: usize| {
+            let angle = std::f64::consts::TAU * ((step * 5) % 151) as f64 / 150.;
+            iced::Point::new(
+                (700. - 400. * angle.cos()) as f32,
+                (368. + 160. * angle.sin()) as f32,
+            )
+        };
+        let mut step = 0;
+        measure(&format!("gallery_16x_{label}_widget_pointer"), || {
+            black_box(ui.pointer(&app, cursor(step)));
+            step += 1;
+        });
+        let mut step = 0;
+        measure(&format!("gallery_16x_{label}_app_update"), || {
+            let at = cursor(step);
+            let _ = black_box(
+                app.update(Message::Canvas(Edit::PointerHover(Some(Vector::new(
+                    at.x - 840.,
+                    at.y - 494.,
+                ))))),
+            );
+            step += 1;
+        });
+        let mut step = 0;
+        measure(&format!("gallery_16x_{label}_draw"), || {
+            ui.draw(&app, cursor(step));
+            step += 1;
+        });
+        let mut step = 0;
+        measure(
+            &format!("gallery_16x_{label}_native_pointer_widget_app_overlay_draw"),
+            || {
+                let messages = ui.pointer(&app, cursor(step));
+                for message in messages {
+                    let _ = black_box(app.update(message));
+                }
+                ui.draw(&app, cursor(step));
+                step += 1;
+            },
         );
-        let messages = ui.pointer(&app, cursor);
-        for message in messages {
-            let _ = black_box(app.update(message));
-        }
-        ui.draw(&app, cursor);
-        step += 1;
-    });
+    }
 }

@@ -682,10 +682,8 @@ impl App {
             self.status = format!("Could not insert {title}");
             return;
         };
-        self.tab.selected = selected;
-        self.changed(before);
+        self.commit_structure_insert(before, selected);
         self.tool = Tool::Select;
-        self.fit();
         self.status = "Inserted editable name result · Undo removes the insertion".into();
         self.error = false;
     }

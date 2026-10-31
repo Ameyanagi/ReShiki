@@ -263,6 +263,53 @@ impl App {
         (!ids.is_empty()).then_some(ids)
     }
 
+    /// Reveal an insertion together with the drawing that was already in view.
+    pub(super) fn commit_structure_insert(&mut self, before: Document, selected: Vec<u64>) {
+        let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
+        let camera = self.tab.camera;
+        // The on-screen part of the drawing: objects that reach into the view,
+        // clipped to it, so off-screen objects do not widen the reveal.
+        let (w, h) = (paper.width / camera.zoom, paper.height / camera.zoom);
+        let view_lo = camera.center.offset(-w / 2., -h / 2.);
+        let view_hi = camera.center.offset(w / 2., h / 2.);
+        let ids: Vec<_> = before.all_ids().into_iter().map(|id| vec![id]).collect();
+        let visible = reshiki::scene::selections_bounds(&before, &ids)
+            .into_iter()
+            .flatten()
+            .map(|(lo, hi)| {
+                (
+                    Point::new(lo.x.max(view_lo.x), lo.y.max(view_lo.y)),
+                    Point::new(hi.x.min(view_hi.x), hi.y.min(view_hi.y)),
+                )
+            })
+            .filter(|(lo, hi)| lo.x <= hi.x && lo.y <= hi.y)
+            .reduce(|(a, b), (c, d)| {
+                (
+                    Point::new(a.x.min(c.x), a.y.min(c.y)),
+                    Point::new(b.x.max(d.x), b.y.max(d.y)),
+                )
+            });
+        self.tab.selected = selected;
+        self.changed(before);
+        // A rejected edit restores the drawing, leaving nothing to reveal.
+        let Some((mut lo, mut hi)) =
+            reshiki::scene::selection_bounds(&self.tab.doc, &self.tab.selected)
+        else {
+            return;
+        };
+        let viewport = iced::Rectangle::with_size(paper.size());
+        if viewport.contains(camera.screen(lo, paper))
+            && viewport.contains(camera.screen(hi, paper))
+        {
+            return;
+        }
+        if let Some((old_lo, old_hi)) = visible {
+            lo = Point::new(lo.x.min(old_lo.x), lo.y.min(old_lo.y));
+            hi = Point::new(hi.x.max(old_hi.x), hi.y.max(old_hi.y));
+        }
+        self.reveal_bounds(lo, hi);
+    }
+
     fn structure_inserted(&mut self, response: Response) {
         if let Some(document) = response.document {
             let before = self.tab.doc.clone();
@@ -272,9 +319,7 @@ impl App {
                 self.status = INSERT_STRUCTURE_FAILED.into();
                 return;
             };
-            self.tab.selected = selected;
-            self.changed(before);
-            self.fit();
+            self.commit_structure_insert(before, selected);
             self.tool = Tool::Select;
             self.status = "Inserted structure · Drag to position · Delete or Undo to remove".into();
             if !response.warnings.is_empty() {

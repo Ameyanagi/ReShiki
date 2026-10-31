@@ -670,6 +670,111 @@ async fn drawing_preview_matches_fresh_theme_and_size() {
 }
 
 #[tokio::test]
+#[ignore = "Retained paper scene pixels and invalidation; requires a headless renderer"]
+async fn retained_paper_scene_matches_live_layers_and_invalidates_draw_inputs() {
+    let backend = std::env::var("RESHIKI_PERF_RENDERER").ok();
+    let mut renderer = <Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        backend.as_deref(),
+    )
+    .await
+    .expect("Headless renderer");
+    let mut doc = routing_document();
+    let _allocations = load_pictures(&renderer, doc.graphics.iter().cloned());
+    let mut all = doc.all_ids();
+    all.sort_unstable();
+    let mut scene_cache = cache::SceneCache::default();
+    let mut geometry = paper::SceneGeometryCache::default();
+    let text = std::cell::RefCell::default();
+    let mut camera = Camera {
+        center: World::new(320., 200.),
+        zoom: 1.,
+    };
+    let mut bounds = Rectangle::with_size(iced::Size::new(640., 400.));
+    let mut offset = Vector::ZERO;
+    let mut selected = &[][..];
+    let mut nmr_ids = &[][..];
+    let mut reviewing_pair = false;
+    for case in 0..12 {
+        match case {
+            0 => {}
+            1 => selected = &all,
+            2 => nmr_ids = &all,
+            3 => reviewing_pair = true,
+            4 => camera.center.x += 5.,
+            5 => camera.zoom = 1.125,
+            6 => {
+                bounds.x = 20.;
+                bounds.y = 40.;
+            }
+            7 => {
+                bounds.width = 596.5;
+                bounds.height = 361.25;
+            }
+            8 => offset = Vector::new(guides::RULER_WIDTH, guides::RULER_HEIGHT),
+            9 => doc.canvas_theme = CanvasTheme::Dark,
+            10 => doc.atoms[0].position.x += 12.,
+            11 => selected = &[],
+            _ => unreachable!(),
+        }
+        let (markers, scene) = scene_cache.render(&doc, selected);
+        let mut render = |cache: Option<&mut paper::SceneGeometryCache>| {
+            render::DRAWN_PRIMITIVES.with(|n| n.set(0));
+            renderer.reset(Rectangle::with_size(iced::Size::new(760., 480.)));
+            let mut frame = layered::Frame::clipped(
+                &renderer,
+                Rectangle {
+                    x: offset.x,
+                    y: offset.y,
+                    ..Rectangle::with_size(bounds.size())
+                },
+                offset,
+            )
+            .with_canvas(doc.canvas_theme)
+            .with_text_cache(&text);
+            frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
+            if let Some(cache) = cache {
+                cache.draw(
+                    &mut frame,
+                    (markers.clone(), scene.clone()),
+                    camera,
+                    bounds,
+                    nmr_ids,
+                    reviewing_pair,
+                );
+            } else {
+                if !reviewing_pair {
+                    markers.draw_with_nmr(&mut frame, camera, bounds, true, nmr_ids);
+                }
+                render::draw_primitives(&mut frame, &scene, camera, bounds, 0.);
+            }
+            frame.stroke(
+                &Path::line(Point::new(120., 80.), Point::new(560., 220.)),
+                Stroke::default()
+                    .with_color(Color::from_rgba8(190, 50, 90, 0.5))
+                    .with_width(3.),
+            );
+            let drawn = render::DRAWN_PRIMITIVES.with(std::cell::Cell::get);
+            for layer in frame.finish() {
+                renderer.draw_geometry(layer);
+            }
+            (
+                Headless::screenshot(&mut renderer, iced::Size::new(760, 480), 1., Color::WHITE),
+                drawn,
+            )
+        };
+        let (live, _) = render(None);
+        let (cold, drawn) = render(Some(&mut geometry));
+        assert!(drawn > 0, "case {case} must invalidate the retained scene");
+        assert_same_pixels(&format!("case {case}: live/cold retained"), &live, &cold);
+        let (warm, drawn) = render(Some(&mut geometry));
+        assert_eq!(drawn, 0, "case {case} must reuse the retained scene");
+        assert_same_pixels(&format!("case {case}: live/warm retained"), &live, &warm);
+    }
+}
+
+#[tokio::test]
 #[ignore = "Paper layer baseline/candidate pixels; requires a headless renderer and artifact directory"]
 async fn paper_layers_match_captured_baseline() {
     let directory = std::path::PathBuf::from(
