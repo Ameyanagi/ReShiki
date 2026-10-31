@@ -1,7 +1,7 @@
 //! Native Rust port of openclatura 0.4.3 (MIT), plain-name pipeline.
 //! Attribution and license terms are in `licenses/openclatura/`.
 //!
-//! Supports one connected component with monocyclic and pure spiro ring systems.
+//! Supports chains, monocycles, pure spiro and non-fusion von Baeyer ring systems.
 // Graph IDs and numbered parent paths are validated at construction and retain
 // their identity in induced subgraphs. Direct indexing preserves the upstream
 // rule comparisons; immutable JSON Value indexing also returns null for a
@@ -46,6 +46,7 @@ mod rules;
 mod small_ring_stereo;
 mod special_cases;
 mod subgraph_tools;
+mod von_baeyer;
 
 pub fn name_smiles(smiles: &str) -> Result<String, String> {
     let mol = graph_io::read_smiles(smiles)?;

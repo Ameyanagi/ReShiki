@@ -463,9 +463,6 @@ pub fn promote_retained_substituent_name(parts: &mut AssemblyParts) {
     }
 }
 pub fn parent_stem_and_terminal(parts: &AssemblyParts) -> Result<(String, String), String> {
-    if parts.is_bicycle {
-        return Err("openclatura: bicyclo assembly not ported".into());
-    }
     if has_ionic_retained_parent(parts)
         && let Some(name) = parts
             .retained_name
@@ -491,7 +488,13 @@ pub fn parent_stem_and_terminal(parts: &AssemblyParts) -> Result<(String, String
     }
     let stem = stems::stem_for(parts.parent_length);
     Ok((
-        if parts.is_spiro {
+        if parts.is_bicycle {
+            let (x, y, z) = parts.bicycle_xyz;
+            format!(
+                "{}{stem}",
+                super::ring_renderer::render_ring_descriptor("bicyclo", &[x, y, z])
+            )
+        } else if parts.is_spiro {
             let (x, y) = parts.spiro_xy;
             format!(
                 "{}{stem}",

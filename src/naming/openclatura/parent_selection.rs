@@ -177,13 +177,7 @@ pub fn select_principal_parent(
                         mol,
                         &rs.paths[0],
                         true,
-                        if rs.is_polycycle {
-                            3
-                        } else if rs.is_bicycle || rs.is_spiro {
-                            2
-                        } else {
-                            1
-                        },
+                        ring_count_for_system(mol, rs),
                         principal_carbons,
                         &ranks,
                     ),
@@ -200,11 +194,103 @@ pub fn select_principal_parent(
                 )
             }),
     );
+    prefer_spiro_backbone_components(&mut candidates, ring_systems, mol);
     // `min_by_key` keeps the first tied item, as does Python's stable sort.
     candidates
         .into_iter()
         .min_by(|a, b| a.0.cmp(&b.0))
         .map(|(_, selection)| selection)
+}
+
+fn ring_count_for_system(mol: &Molecule, system: &RingSystem) -> usize {
+    if system.is_polycycle {
+        let edges = system
+            .atoms
+            .iter()
+            .map(|&atom| {
+                mol.get_neighbors(atom)
+                    .iter()
+                    .filter(|&&other| atom < other && system.atoms.contains(&other))
+                    .count()
+            })
+            .sum::<usize>();
+        (edges + 1).saturating_sub(system.atoms.len()).max(3)
+    } else if system.is_bicycle || system.is_spiro {
+        2
+    } else {
+        1
+    }
+}
+
+/// Spiro-connected components compete for the shared backbone before their
+/// element seniority is compared. Principal-group coverage still comes first.
+fn prefer_spiro_backbone_components(
+    candidates: &mut Vec<(ParentScore, ParentSelection)>,
+    systems: &[RingSystem],
+    mol: &Molecule,
+) {
+    if systems.len() < 2 {
+        return;
+    }
+    let shared: BTreeMap<Vec<usize>, (usize, usize)> = systems
+        .iter()
+        .enumerate()
+        .flat_map(|(index, system)| {
+            let count = systems
+                .iter()
+                .enumerate()
+                .filter(|(other_index, other)| {
+                    *other_index != index && !system.atoms.is_disjoint(&other.atoms)
+                })
+                .count();
+            let ring_count = ring_count_for_system(mol, system);
+            system
+                .paths
+                .iter()
+                .map(move |path| (path.clone(), (count, ring_count)))
+        })
+        .collect();
+    let Some(best_principal) = candidates
+        .iter()
+        .map(|(score, _)| (score.contains_principal, score.principal_count))
+        .min()
+    else {
+        return;
+    };
+    type BackboneKey = (i64, i64, i64, Vec<usize>);
+    let keys: BTreeMap<Vec<usize>, BackboneKey> = candidates
+        .iter()
+        .filter_map(|(score, selection)| {
+            if !selection.is_ring
+                || (score.contains_principal, score.principal_count) != best_principal
+            {
+                return None;
+            }
+            let path = selection.primary_path();
+            let &(count, ring_count) = shared.get(path)?;
+            (count > 0).then(|| {
+                (
+                    path.to_vec(),
+                    (
+                        -(count as i64),
+                        -(ring_count as i64),
+                        -(path.len() as i64),
+                        score.path_tiebreak.clone(),
+                    ),
+                )
+            })
+        })
+        .collect();
+    if keys.len() < 2 {
+        return;
+    }
+    let Some(best_key) = keys.values().min() else {
+        return;
+    };
+    candidates.retain(|(_, selection)| {
+        keys.get(selection.primary_path())
+            .is_none_or(|key| key == best_key)
+    });
 }
 
 #[cfg(test)]

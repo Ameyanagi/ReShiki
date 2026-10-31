@@ -9,13 +9,12 @@ use super::{
     functional_prefixes::collect_component_prefix_substituents,
     molecule::{AtomSet, Molecule, bond_ids_within},
     namer::name_subgraph_rendered,
-    parent_pipeline::build_parent_assembly_plan,
+    parent_pipeline::{build_parent_assembly_plan, resolve_retained_parent},
     parent_selection::select_principal_parent,
     principal_groups::{
         add_component_principal_group, component_groups, component_principal_key,
         partition_principal_and_prefix_groups,
     },
-    rules::retained,
     special_cases::{
         blocking_suffix_defers_to_chain_parent, single_atom_component_name,
         structural_replacement_parent_result, try_name_anhydride_component,
@@ -106,11 +105,8 @@ pub fn name_component_with_citation(
     key = component_principal_key(&groups, false);
     super::identity_validation::validate_principal_charge_roles(&groups, key.as_deref())?;
     let (principal, prefix_groups) = partition_principal_and_prefix_groups(&groups, key.as_deref());
-    let retained_match = selection
-        .is_ring
-        .then(|| retained::get_retained_ring(mol, path))
-        .flatten();
-    let retained_name = retained_match.as_ref().map(|r| r.name.clone());
+    let retained_match = resolve_retained_parent(mol, &selection);
+    let mut retained_name = retained_match.as_ref().map(|r| r.name.clone());
     let maps = retained_match.map(|r| r.locant_maps).unwrap_or_default();
     let principal_atoms = principal_involved_atoms(mol, &groups, key.as_deref(), path);
     let sub_exclude: AtomSet = base_exclude
@@ -130,6 +126,13 @@ pub fn name_component_with_citation(
         &base_exclude,
         &sub_exclude,
     )?;
+    if retained_name.is_some()
+        && maps.is_empty()
+        && selection.is_polycycle
+        && (!mapping.is_empty() || !groups.is_empty())
+    {
+        retained_name = None;
+    }
     let mut plan = build_parent_assembly_plan(
         mol,
         &selection,

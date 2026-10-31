@@ -1,5 +1,4 @@
-//! Retained monocyclic parents and graph-derived Hantzsch-Widman names.
-//! Polycyclic template engines deliberately have no stage-one match.
+//! Retained monocyclic and cage parents and graph-derived Hantzsch-Widman names.
 use super::super::{
     molecule::{AtomSet, Molecule},
     nomenclature::section,
@@ -60,7 +59,7 @@ fn generated_spec_for_name(mol: &Molecule, path: &[usize], name: &str) -> Option
 
 pub fn get_retained_ring(mol: &Molecule, path: &[usize]) -> Option<RetainedMatch> {
     if !is_monocycle(mol, path) {
-        return None;
+        return match_retained_cage_templates(mol, path);
     }
     let double_bonds = count_double_bonds_in_ring(mol, path);
     let symbols: Vec<String> = path.iter().map(|i| mol.atoms[i].symbol.clone()).collect();
@@ -81,6 +80,171 @@ pub fn get_retained_ring(mol: &Molecule, path: &[usize]) -> Option<RetainedMatch
         name,
         locant_maps: Vec::new(),
     })
+}
+
+/// The saturated cage subset of upstream's retained graph-template matcher.
+fn match_retained_cage_templates(mol: &Molecule, path: &[usize]) -> Option<RetainedMatch> {
+    let ring: AtomSet = path.iter().copied().collect();
+    if ring.len() != path.len()
+        || ring.iter().any(|&idx| {
+            mol.atoms[&idx].symbol != "C"
+                // All-carbon graph templates use upstream's exact charge policy.
+                || mol.atoms[&idx].charge != 0
+                || !is_saturated_ring_site(mol, idx, &ring)
+        })
+    {
+        return None;
+    }
+    // Upstream divergence: only the retained cages admitted by the fusion
+    // boundary are ported here; fused/macrocyclic template providers are deferred.
+    for name in ["adamantane", "cubane"] {
+        let row = GRAPH_PARENTS["parents"]
+            .as_array()?
+            .iter()
+            .find(|row| row["name"].as_str() == Some(name))?;
+        let template = &row["template"];
+        let locants: Vec<_> = template["locants"]
+            .as_array()?
+            .iter()
+            .filter_map(Value::as_str)
+            .collect();
+        if locants.len() != ring.len() {
+            continue;
+        }
+        let mut neighbors = vec![AtomSet::new(); locants.len()];
+        for bond in template["bonds"].as_array()? {
+            let endpoints = bond["locants"].as_array()?;
+            let first = locants
+                .iter()
+                .position(|&locant| Some(locant) == endpoints[0].as_str())?;
+            let second = locants
+                .iter()
+                .position(|&locant| Some(locant) == endpoints[1].as_str())?;
+            neighbors[first].insert(second);
+            neighbors[second].insert(first);
+        }
+        let candidates: Vec<Vec<usize>> = neighbors
+            .iter()
+            .map(|adjacent| {
+                ring.iter()
+                    .copied()
+                    .filter(|&idx| {
+                        mol.get_neighbors(idx)
+                            .iter()
+                            .filter(|n| ring.contains(n))
+                            .count()
+                            == adjacent.len()
+                    })
+                    .collect()
+            })
+            .collect();
+        if candidates.iter().any(Vec::is_empty) {
+            continue;
+        }
+        let mut assignments = Vec::new();
+        collect_cage_locant_matches(
+            mol,
+            &locants,
+            &neighbors,
+            &candidates,
+            &mut vec![None; locants.len()],
+            &mut AtomSet::new(),
+            &mut assignments,
+        );
+        // Upstream's final match rank compares atom IDs in template locant order.
+        assignments.sort();
+        if !assignments.is_empty() {
+            return Some(RetainedMatch {
+                name: name.into(),
+                locant_maps: assignments
+                    .into_iter()
+                    .map(|assignment| {
+                        assignment
+                            .into_iter()
+                            .zip(&locants)
+                            .map(|(atom, &locant)| (atom, locant.to_owned()))
+                            .collect()
+                    })
+                    .collect(),
+            });
+        }
+    }
+    None
+}
+
+#[allow(clippy::too_many_arguments)]
+fn collect_cage_locant_matches(
+    mol: &Molecule,
+    locants: &[&str],
+    neighbors: &[AtomSet],
+    candidates: &[Vec<usize>],
+    assignment: &mut [Option<usize>],
+    used: &mut AtomSet,
+    matches: &mut Vec<Vec<usize>>,
+) {
+    if matches.len() >= 256 {
+        return;
+    }
+    if used.len() == locants.len() {
+        matches.push(assignment.iter().flatten().copied().collect());
+        return;
+    }
+    let remaining: Vec<_> = (0..locants.len())
+        .filter(|&i| assignment[i].is_none())
+        .collect();
+    let frontier: Vec<_> = remaining
+        .iter()
+        .copied()
+        .filter(|&i| neighbors[i].iter().any(|&n| assignment[n].is_some()))
+        .collect();
+    let search = if frontier.is_empty() {
+        &remaining
+    } else {
+        &frontier
+    };
+    let mut options_by_locant = Vec::new();
+    for &locant in search {
+        let options: Vec<_> = candidates[locant]
+            .iter()
+            .copied()
+            .filter(|&atom| {
+                !used.contains(&atom)
+                    && assignment.iter().enumerate().all(|(other, &assigned)| {
+                        assigned.is_none_or(|assigned| {
+                            neighbors[locant].contains(&other)
+                                == mol.get_bond(atom, assigned).is_some()
+                        })
+                    })
+            })
+            .collect();
+        if options.is_empty() {
+            return;
+        }
+        let assigned_count = neighbors[locant]
+            .iter()
+            .filter(|&&n| assignment[n].is_some())
+            .count();
+        options_by_locant.push((
+            options.len(),
+            std::cmp::Reverse(assigned_count),
+            std::cmp::Reverse(neighbors[locant].len()),
+            locants[locant],
+            locant,
+            options,
+        ));
+    }
+    let Some((_, _, _, _, locant, options)) = options_by_locant.into_iter().min() else {
+        return;
+    };
+    for atom in options {
+        assignment[locant] = Some(atom);
+        used.insert(atom);
+        collect_cage_locant_matches(
+            mol, locants, neighbors, candidates, assignment, used, matches,
+        );
+        used.remove(&atom);
+        assignment[locant] = None;
+    }
 }
 
 fn is_monocycle(mol: &Molecule, path: &[usize]) -> bool {
@@ -759,6 +923,35 @@ mod tests {
             ("O1CBCC1", "1,3-oxaborolane"),
         ] {
             assert_eq!(retained_name(smiles).as_deref(), Some(name), "{smiles}");
+        }
+    }
+    #[test]
+    fn retained_cages_match_connectivity_and_all_numberings() {
+        for (smiles, name, numberings) in [
+            ("C1C2CC3CC1CC(C2)C3", "adamantane", 24),
+            ("C12C3C4C1C5C2C3C45", "cubane", 48),
+        ] {
+            let mol = read_smiles(smiles).unwrap();
+            let path: Vec<_> = mol.atoms.keys().copied().collect();
+            let retained = get_retained_ring(&mol, &path).unwrap();
+            assert_eq!(retained.name, name);
+            assert_eq!(retained.locant_maps.len(), numberings);
+        }
+        let mol = read_smiles("C1CC2CCC1CC2").unwrap();
+        let path: Vec<_> = mol.atoms.keys().copied().collect();
+        assert!(get_retained_ring(&mol, &path).is_none());
+    }
+    #[test]
+    fn retained_cages_require_the_exact_neutral_template_charge() {
+        for smiles in [
+            "[C+]12C3C4C1C5C2C3C45",
+            "[C-]12C3C4C1C5C2C3C45",
+            "C1[C+]2CC3CC1CC(C2)C3",
+            "C1[C-]2CC3CC1CC(C2)C3",
+        ] {
+            let mol = read_smiles(smiles).unwrap();
+            let path: Vec<_> = mol.atoms.keys().copied().collect();
+            assert!(get_retained_ring(&mol, &path).is_none(), "{smiles}");
         }
     }
     #[test]

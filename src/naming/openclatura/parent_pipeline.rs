@@ -6,6 +6,38 @@ use super::molecule::{AtomSet, Molecule, bond_ids_within};
 use super::numbering::{NumberingTopology, choose_parent_numbering};
 use super::parent_selection::ParentSelection;
 
+/// Apply the retained-parent eligibility checks before sharing a retained
+/// identity between component and recursive-substituent assembly.
+pub fn resolve_retained_parent(
+    mol: &Molecule,
+    selection: &ParentSelection,
+) -> Option<super::rules::retained::RetainedMatch> {
+    if !selection.is_ring {
+        return None;
+    }
+    let path = selection.primary_path();
+    let retained = super::rules::retained::get_retained_ring(mol, path)?;
+    let allowed = super::nomenclature::section("retained_ring_elements");
+    if path.iter().any(|idx| {
+        !allowed
+            .as_array()
+            .into_iter()
+            .flatten()
+            .any(|value| value.as_str() == Some(mol.atoms[idx].symbol.as_str()))
+    }) {
+        return None;
+    }
+    if retained.locant_maps.is_empty()
+        && (selection.is_bicycle || selection.is_polycycle)
+        && path
+            .iter()
+            .any(|idx| mol.atoms[idx].symbol != "C" || mol.atoms[idx].charge != 0)
+    {
+        return None;
+    }
+    Some(retained)
+}
+
 pub struct ParentAssemblyPlan {
     pub parts: AssemblyParts,
     pub numbered_path: Vec<usize>,
@@ -28,6 +60,30 @@ pub fn build_parent_assembly_plan(
         .iter()
         .map(|(&idx, items)| (idx, items.iter().map(|item| item.name.clone()).collect()))
         .collect();
+    // A von Baeyer descriptor and its accepted numbering paths are one
+    // topology proof. Upstream consumes those paths as locant maps, whose
+    // preference order differs from ordinary ring-path numbering.
+    let proof_maps: Vec<BTreeMap<usize, String>> = if locant_maps.is_empty()
+        && super::ring_renderer::is_von_baeyer_descriptor(selection.polycycle_descriptor.as_deref())
+    {
+        selection
+            .paths
+            .iter()
+            .map(|path| {
+                path.iter()
+                    .enumerate()
+                    .map(|(index, &atom)| (atom, (index + 1).to_string()))
+                    .collect()
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let locant_maps = if proof_maps.is_empty() {
+        locant_maps
+    } else {
+        &proof_maps
+    };
     let (numbered_path, selected_map) = choose_parent_numbering(
         mol,
         &selection.paths,
@@ -78,6 +134,11 @@ pub fn build_parent_parts(
     let mut parts = AssemblyParts::new(numbered_path.len());
     parts.is_ring = selection.is_ring;
     parts.is_bicycle = selection.is_bicycle;
+    parts.bicycle_xyz = if selection.is_bicycle {
+        selection.xyz
+    } else {
+        (0, 0, 0)
+    };
     parts.is_spiro = selection.is_spiro;
     parts.is_polycycle = selection.is_polycycle;
     parts.spiro_xy = if selection.is_spiro {
@@ -154,14 +215,14 @@ fn add_relative_ring_stereo(
     path: &[usize],
     locants: &BTreeMap<usize, String>,
 ) -> Result<(), String> {
-    // Upstream divergence: its polycycle shortcut drops unresolved relative
-    // stereotags. Decline these until a spiro stereo renderer preserves them.
-    if (parts.is_spiro || parts.is_polycycle)
+    // Upstream divergence: a multicyclic shortcut can drop unresolved relative
+    // stereotags. Decline these until a ring stereo renderer preserves them.
+    if (parts.is_bicycle || parts.is_spiro || parts.is_polycycle)
         && path
             .iter()
             .any(|idx| mol.atoms[idx].raw_stereo.is_some() && mol.atoms[idx].stereo.is_none())
     {
-        return Err("openclatura: unresolved spiro stereochemistry not ported".into());
+        return Err("openclatura: unresolved multicyclic stereochemistry not ported".into());
     }
     if !parts.is_ring || parts.is_bicycle || parts.is_spiro || parts.is_polycycle {
         return Ok(());
@@ -290,6 +351,37 @@ mod tests {
             ),
         ] {
             assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
+        }
+    }
+
+    #[test]
+    fn von_baeyer_numbering_preserves_replacements_suffixes_and_substituent_roots() {
+        for (smiles, expected) in [
+            (
+                "NC(=O)C1N2CCCCCP3C(CCC2)CC13F",
+                "1-fluoro-8-aza-2-phosphatricyclo[6.5.1.0^{2,12}]tetradecane-14-carboxamide",
+            ),
+            (
+                "SC12CC3=C1B32",
+                "1-boratricyclo[2.1.0.0^{2,5}]pent-4-ene-2-thiol",
+            ),
+            (
+                "COC12C3CC1(Cl)C32",
+                "2-chloro-1-methoxytricyclo[2.1.0.0^{2,5}]pentane",
+            ),
+            (
+                "CC(=O)NC12C=C1BNC2",
+                "N-(3-aza-2-borabicyclo[3.1.0]hex-1(6)-en-5-yl)acetamide",
+            ),
+        ] {
+            assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
+        }
+    }
+
+    #[test]
+    fn bicyclic_parents_decline_unresolved_relative_stereochemistry() {
+        for smiles in ["C1CC[C@H]2CCCCC[C@H](CC1)OCCC2", "C1C[C@H]2CC[C@@H]12"] {
+            assert!(name_smiles(smiles).is_err(), "{smiles}");
         }
     }
 

@@ -10,10 +10,10 @@ use super::heteroatom_subgraphs::name_heteroatom_subgraph;
 use super::locant_elision::apply_redundant_locant_elision;
 use super::molecule::{Atom, AtomSet, Bond, Molecule, bond_ids_within, charged_atoms};
 use super::nomenclature::RULES;
-use super::parent_pipeline::build_parent_assembly_plan;
+use super::parent_pipeline::{build_parent_assembly_plan, resolve_retained_parent};
 use super::parent_selection::{ParentSelection, select_principal_parent};
 use super::perception::{PerceivedGroup, perceive_groups};
-use super::rules::{multipliers, retained, stems};
+use super::rules::{multipliers, stems};
 use super::subgraph_tools::{
     add_indicated_hydrogens, add_parent_features, add_substituent, emit_bond_stereo,
     subgraph_component,
@@ -326,11 +326,7 @@ pub fn name_subgraph_rendered(
         .filter(|n| !component.contains(n))
         .collect();
     let selection = select_subgraph_parent(mol, start, &component, &sub_exclude)?;
-    let retained = if selection.is_ring {
-        retained::get_retained_ring(mol, selection.primary_path())
-    } else {
-        None
-    };
+    let retained = resolve_retained_parent(mol, &selection);
     let (retained_name, maps) = retained
         .map(|r| (Some(r.name), r.locant_maps))
         .unwrap_or_default();

@@ -428,9 +428,6 @@ fn add_front_modifiers(parts: &AssemblyParts, word: &str) -> String {
     format!("{mods} {word}")
 }
 pub fn assemble_name_raw(parts: &mut AssemblyParts) -> Result<String, String> {
-    if parts.is_bicycle {
-        return Err("Unsupported polycyclic assembly".into());
-    }
     promote_acyl_substituent_name(parts);
     promote_retained_substituent_name(parts);
     promote_benzene_retained_name(parts);

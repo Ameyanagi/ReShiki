@@ -1,12 +1,16 @@
-//! Carbon-chain enumeration and pure spiro ring systems from Python `chains.py`.
+//! Carbon-chain enumeration and audited ring systems from Python `chains.py`.
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::graph_kernel::{EdgeSet, biconnected_edge_components};
+use super::graph_kernel::{
+    EdgeSet, adjacency_from_edges, biconnected_edge_components, connected_components,
+};
 use super::molecule::{AtomSet, Molecule};
 use super::polycycle_topology::{
-    audit_ring_numbering, dedupe_paths, edges_within_atoms, has_multiple_spiro_centers,
+    RingNumbering, audit_ring_numbering, bicyclo_proof, build_ring_numbering,
+    build_von_baeyer_numbering, dedupe_paths, edges_within_atoms, has_multiple_spiro_centers,
     linear_dispiro_descriptor_and_paths, monospiro_proof,
 };
+use super::ring_renderer::is_von_baeyer_descriptor;
 
 #[derive(Clone, Debug, Default)]
 pub struct RingSystem {
@@ -19,6 +23,182 @@ pub struct RingSystem {
     pub y: usize,
     pub z: usize,
     pub polycycle_descriptor: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PolycycleDescriptorCandidate {
+    pub descriptor: Option<String>,
+    pub paths: Vec<Vec<usize>>,
+    pub is_von_baeyer: bool,
+    pub numberings: Vec<RingNumbering>,
+}
+
+impl PolycycleDescriptorCandidate {
+    pub fn descriptor_allowed(&self) -> bool {
+        !self.is_von_baeyer || !self.numberings.is_empty()
+    }
+}
+
+pub fn get_von_baeyer_descriptor_candidates(
+    atoms: &AtomSet,
+    edges: &EdgeSet,
+) -> Vec<super::von_baeyer::DescriptorPaths> {
+    super::von_baeyer::descriptor_candidates(atoms, edges)
+}
+
+fn audited_von_baeyer_numberings(
+    descriptor: &str,
+    paths: &[Vec<usize>],
+    edges: &EdgeSet,
+) -> Vec<RingNumbering> {
+    let mut seen = BTreeSet::new();
+    paths
+        .iter()
+        .map(|path| build_von_baeyer_numbering(descriptor, path, edges))
+        .filter(|numbering| numbering.audit_ok && seen.insert(numbering.path.clone()))
+        .collect()
+}
+
+/// Preserve every reconstructable numbering of the first accepted descriptor,
+/// so heteroatom, unsaturation and substituent rules settle its orientation.
+pub fn polyspiro_or_von_baeyer_candidate(
+    mol: &Molecule,
+    atoms: &AtomSet,
+    edges: &EdgeSet,
+) -> PolycycleDescriptorCandidate {
+    if let Some((descriptor, paths)) = linear_dispiro_descriptor_and_paths(mol, atoms, edges) {
+        return PolycycleDescriptorCandidate {
+            descriptor: Some(descriptor),
+            paths,
+            is_von_baeyer: false,
+            numberings: Vec::new(),
+        };
+    }
+    let ranks = canonical_ranks(mol, None);
+    let mut canonical: Vec<_> = atoms.iter().copied().collect();
+    canonical.sort_by_key(|atom| ranks[atom]);
+    let original: Vec<_> = atoms.iter().copied().collect();
+    let mut legacy_descriptor = None;
+    let mut legacy_paths = vec![original.clone()];
+    for (ordering_index, ordered) in [canonical, original].into_iter().enumerate() {
+        let ids: BTreeMap<_, _> = ordered
+            .iter()
+            .enumerate()
+            .map(|(i, &atom)| (atom, i))
+            .collect();
+        let canonical_atoms = (0..ordered.len()).collect();
+        let canonical_edges: EdgeSet = edges
+            .iter()
+            .map(|&(u, v)| {
+                let u = ids[&u];
+                let v = ids[&v];
+                (u.min(v), u.max(v))
+            })
+            .collect();
+        let mut accepted_descriptor = None;
+        let mut accepted = Vec::new();
+        for (index, (descriptor, paths)) in
+            get_von_baeyer_descriptor_candidates(&canonical_atoms, &canonical_edges)
+                .into_iter()
+                .enumerate()
+        {
+            let restored: Vec<Vec<_>> = paths
+                .iter()
+                .map(|path| path.iter().map(|&i| ordered[i]).collect())
+                .collect();
+            if index == 0 && ordering_index == 0 {
+                legacy_descriptor = descriptor.clone();
+                legacy_paths = restored.clone();
+            }
+            if index >= 256 {
+                break;
+            }
+            let Some(descriptor) =
+                descriptor.filter(|descriptor| is_von_baeyer_descriptor(Some(descriptor)))
+            else {
+                continue;
+            };
+            let numberings = audited_von_baeyer_numberings(&descriptor, &restored, edges);
+            if numberings.is_empty() {
+                continue;
+            }
+            if accepted_descriptor.is_none() {
+                accepted_descriptor = Some(descriptor.clone());
+            }
+            if accepted_descriptor.as_deref() == Some(&descriptor) {
+                accepted.extend(numberings);
+            }
+        }
+        if accepted_descriptor.is_some() {
+            let mut seen = BTreeSet::new();
+            accepted.retain(|numbering| seen.insert(numbering.path.clone()));
+            return PolycycleDescriptorCandidate {
+                descriptor: accepted_descriptor,
+                paths: accepted
+                    .iter()
+                    .map(|numbering| numbering.path.clone())
+                    .collect(),
+                is_von_baeyer: true,
+                numberings: accepted,
+            };
+        }
+    }
+    if !atoms.iter().any(|atom| mol.atoms[atom].symbol == "Si") {
+        let candidates = super::von_baeyer::find_von_baeyer_candidates(mol, atoms, edges);
+        if let Some(first) = candidates.first() {
+            let descriptor = first.descriptor.clone();
+            let mut numberings = if legacy_descriptor.as_deref() == Some(&descriptor) {
+                audited_von_baeyer_numberings(&descriptor, &legacy_paths, edges)
+            } else {
+                Vec::new()
+            };
+            numberings.extend(
+                candidates
+                    .into_iter()
+                    .filter(|candidate| candidate.descriptor == descriptor)
+                    .map(|candidate| candidate.numbering),
+            );
+            let mut seen = BTreeSet::new();
+            numberings.retain(|numbering| seen.insert(numbering.path.clone()));
+            return PolycycleDescriptorCandidate {
+                descriptor: Some(descriptor),
+                paths: numberings
+                    .iter()
+                    .map(|numbering| numbering.path.clone())
+                    .collect(),
+                is_von_baeyer: true,
+                numberings,
+            };
+        }
+    }
+    let is_von_baeyer = is_von_baeyer_descriptor(legacy_descriptor.as_deref());
+    let numberings = legacy_descriptor
+        .as_ref()
+        .filter(|_| is_von_baeyer)
+        .map_or_else(Vec::new, |descriptor| {
+            audited_von_baeyer_numberings(descriptor, &legacy_paths, edges)
+        });
+    let paths = if is_von_baeyer {
+        numberings
+            .iter()
+            .map(|numbering| numbering.path.clone())
+            .collect()
+    } else {
+        legacy_paths
+    };
+    PolycycleDescriptorCandidate {
+        descriptor: legacy_descriptor,
+        paths,
+        is_von_baeyer,
+        numberings,
+    }
+}
+
+fn first_retained_path(mol: &Molecule, paths: &[Vec<usize>]) -> Option<Vec<usize>> {
+    paths
+        .iter()
+        .find(|path| super::rules::retained::get_retained_ring(mol, path).is_some())
+        .cloned()
 }
 
 /// Cycle membership in the induced graph. This deliberately tests membership,
@@ -113,8 +293,9 @@ struct RingBlock {
 
 /// Ring blocks and spiro merging in upstream `find_ring_systems` order.
 pub fn find_ring_systems(mol: &Molecule, exclude_atoms: &AtomSet) -> Vec<RingSystem> {
-    // Upstream divergence: pure spiro blocks cannot match retained/fusion
-    // preflight, so skip it after the input boundary rejects fused/bridged blocks.
+    // Upstream divergence: retained pre-descriptor probes never accept the
+    // current cage templates, and fusion is excluded at the input boundary.
+    // The audited descriptor and retained path engines below own these blocks.
     let cyclic = get_cyclic_atoms(mol, exclude_atoms);
     let mut blocks: Vec<_> = biconnected_edge_components(mol, &cyclic)
         .into_iter()
@@ -172,6 +353,7 @@ pub fn find_ring_systems(mol: &Molecule, exclude_atoms: &AtomSet) -> Vec<RingSys
                         .collect(),
                 );
                 if !paths.is_empty() {
+                    let paths = first_retained_path(mol, &paths).map_or(paths, |path| vec![path]);
                     systems.push(RingSystem {
                         atoms,
                         paths,
@@ -181,26 +363,85 @@ pub fn find_ring_systems(mol: &Molecule, exclude_atoms: &AtomSet) -> Vec<RingSys
                         ..RingSystem::default()
                     });
                 }
+            } else if let Some(proof) = bicyclo_proof(&atoms, &edges) {
+                let mut paths = dedupe_paths(
+                    proof
+                        .numbering_paths
+                        .into_iter()
+                        .filter(|path| {
+                            build_ring_numbering("bicyclo", &proof.descriptor_numbers, path, &edges)
+                                .audit_ok
+                        })
+                        .collect(),
+                );
+                let fallback = fallback_bicyclo_paths(&atoms, &edges, proof.bridgeheads);
+                let fallback: Vec<_> = fallback
+                    .into_iter()
+                    .filter(|path| {
+                        build_ring_numbering("bicyclo", &proof.descriptor_numbers, path, &edges)
+                            .audit_ok
+                    })
+                    .collect();
+                let plain_hydrocarbon = atoms
+                    .iter()
+                    .all(|atom| mol.atoms[atom].symbol == "C" && mol.atoms[atom].charge == 0)
+                    && edges
+                        .iter()
+                        .all(|&(u, v)| mol.get_bond(u, v).is_none_or(|bond| bond.order == 1));
+                if plain_hydrocarbon {
+                    paths.extend(fallback);
+                    paths = dedupe_paths(paths);
+                } else if !fallback.is_empty() {
+                    paths = fallback;
+                }
+                if !paths.is_empty() {
+                    let paths = first_retained_path(mol, &paths).map_or(paths, |path| vec![path]);
+                    systems.push(RingSystem {
+                        atoms,
+                        paths,
+                        is_bicycle: true,
+                        x: proof.descriptor_numbers[0],
+                        y: proof.descriptor_numbers[1],
+                        z: proof.descriptor_numbers[2],
+                        ..RingSystem::default()
+                    });
+                }
             }
             continue;
         }
         if edges.len() >= atoms.len() + 2 {
-            if let Some((descriptor, paths)) =
-                linear_dispiro_descriptor_and_paths(mol, &atoms, &edges)
-            {
+            let candidate = polyspiro_or_von_baeyer_candidate(mol, &atoms, &edges);
+            if candidate.descriptor.is_some() && candidate.descriptor_allowed() {
+                let paths = if candidate.paths.first().is_some_and(|path| {
+                    super::rules::retained::get_retained_ring(mol, path).is_some()
+                }) {
+                    vec![candidate.paths[0].clone()]
+                } else {
+                    candidate.paths
+                };
                 systems.push(RingSystem {
                     atoms,
                     paths,
                     is_polycycle: true,
-                    polycycle_descriptor: Some(descriptor),
+                    polycycle_descriptor: candidate.descriptor,
                     ..RingSystem::default()
                 });
             } else {
-                // Upstream divergence: the general von Baeyer fallback is not
-                // ported. Retain the full boundary so a larger spiro system
-                // without an audited descriptor declines during assembly.
+                // Upstream divergence: an unsupported larger spiro parent
+                // keeps its complete boundary even when legacy discovery only
+                // offers one terminal ring. Assembly then declines the parent.
                 systems.push(RingSystem {
-                    paths: vec![atoms.iter().copied().collect()],
+                    paths: vec![
+                        candidate
+                            .paths
+                            .first()
+                            .filter(|path| {
+                                path.len() == atoms.len()
+                                    && path.iter().copied().collect::<AtomSet>() == atoms
+                            })
+                            .cloned()
+                            .unwrap_or_else(|| atoms.iter().copied().collect()),
+                    ],
                     atoms,
                     is_polycycle: true,
                     ..RingSystem::default()
@@ -246,6 +487,100 @@ pub fn find_ring_systems(mol: &Molecule, exclude_atoms: &AtomSet) -> Vec<RingSys
         }
     }
     merge_polyspiro_ring_systems(mol, systems)
+}
+
+fn fallback_bicyclo_paths(
+    atoms: &AtomSet,
+    edges: &EdgeSet,
+    [first, second]: [usize; 2],
+) -> Vec<Vec<usize>> {
+    // Upstream divergence: bare Python integer-set walks become ascending
+    // BTreeSet walks. Equal-score bridge orders can therefore choose another
+    // audited numbering (and another secondary unsaturation locant spelling).
+    let adj = adjacency_from_edges(atoms, edges);
+    let mut between = Vec::new();
+    if adj[&first].contains(&second) {
+        between.push(Vec::new());
+    }
+    let outside = atoms
+        .difference(&AtomSet::from([first, second]))
+        .copied()
+        .collect();
+    for component in connected_components(&outside, edges) {
+        let Some(&root) = component.first() else {
+            continue;
+        };
+        let mut traversal = Vec::new();
+        let mut queue = std::collections::VecDeque::from([root]);
+        let mut visited = AtomSet::new();
+        while let Some(current) = queue.pop_front() {
+            if !visited.insert(current) {
+                continue;
+            }
+            traversal.push(current);
+            queue.extend(
+                adj[&current]
+                    .iter()
+                    .filter(|neighbor| component.contains(neighbor) && !visited.contains(neighbor))
+                    .copied(),
+            );
+        }
+        let Some(&start) = traversal.iter().find(|atom| adj[atom].contains(&first)) else {
+            continue;
+        };
+        let mut path = vec![start];
+        let mut seen = AtomSet::from([start]);
+        while path.len() < component.len() {
+            let Some(&neighbor) = adj[&path[path.len() - 1]]
+                .iter()
+                .find(|neighbor| component.contains(neighbor) && !seen.contains(neighbor))
+            else {
+                break;
+            };
+            path.push(neighbor);
+            seen.insert(neighbor);
+        }
+        if path.last().is_some_and(|atom| !adj[atom].contains(&second)) {
+            path.reverse();
+        }
+        between.push(path);
+    }
+    between.sort_by_key(|path| std::cmp::Reverse(path.len()));
+    if between.len() != 3 {
+        return Vec::new();
+    }
+    let mut paths = Vec::new();
+    for [a, b, c] in [
+        [0, 1, 2],
+        [0, 2, 1],
+        [1, 0, 2],
+        [1, 2, 0],
+        [2, 0, 1],
+        [2, 1, 0],
+    ] {
+        if [between[a].len(), between[b].len(), between[c].len()]
+            != [between[0].len(), between[1].len(), between[2].len()]
+        {
+            continue;
+        }
+        paths.push(
+            std::iter::once(first)
+                .chain(between[a].iter().copied())
+                .chain(std::iter::once(second))
+                .chain(between[b].iter().rev().copied())
+                .chain(between[c].iter().copied())
+                .collect(),
+        );
+        paths.push(
+            std::iter::once(second)
+                .chain(between[a].iter().rev().copied())
+                .chain(std::iter::once(first))
+                .chain(between[b].iter().copied())
+                .chain(between[c].iter().rev().copied())
+                .collect(),
+        );
+    }
+    dedupe_paths(paths)
 }
 
 /// Keep upstream's final overlap merge for ring systems split around a

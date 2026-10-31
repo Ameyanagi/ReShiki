@@ -1,8 +1,6 @@
 //! Graph proofs and reconstruction audits from Python `polycycle_topology.py`.
 //!
-//! The input boundary admits cyclic blocks that are simple rings. Combining
-//! those blocks at articulation atoms proves pure spiro topology without
-//! searching fused or bridged cycles.
+//! Descriptor numberings are admitted only after rebuilding their ring edges.
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use super::graph_kernel::EdgeSet;
@@ -23,6 +21,96 @@ pub struct LinearDispiroProof {
     pub terminal_components: [AtomSet; 2],
     pub middle_components: Vec<AtomSet>,
     pub has_direct_middle: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BicycloProof {
+    pub descriptor_numbers: [usize; 3],
+    pub bridgeheads: [usize; 2],
+    pub bridge_components: Vec<AtomSet>,
+    pub numbering_paths: Vec<Vec<usize>>,
+}
+
+/// One reconstructed atom/locant map. Source identities remain attached to
+/// locants throughout parent selection and assembly.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RingNumbering {
+    pub kind: String,
+    pub descriptor_numbers: Vec<usize>,
+    pub path: Vec<usize>,
+    pub atom_to_locant: BTreeMap<usize, usize>,
+    pub locant_to_atom: BTreeMap<usize, usize>,
+    pub audit_ok: bool,
+    pub bridgehead_locants: Vec<usize>,
+}
+
+pub fn bridgehead_locants(kind: &str, descriptor_numbers: &[usize]) -> Vec<usize> {
+    if kind == "bicyclo" && !descriptor_numbers.is_empty() {
+        vec![1, descriptor_numbers[0] + 2]
+    } else {
+        Vec::new()
+    }
+}
+
+pub fn build_ring_numbering(
+    kind: &str,
+    numbers: &[usize],
+    path: &[usize],
+    edges: &EdgeSet,
+) -> RingNumbering {
+    RingNumbering {
+        kind: kind.into(),
+        descriptor_numbers: numbers.to_vec(),
+        path: path.to_vec(),
+        atom_to_locant: path
+            .iter()
+            .enumerate()
+            .map(|(i, &atom)| (atom, i + 1))
+            .collect(),
+        locant_to_atom: path
+            .iter()
+            .enumerate()
+            .map(|(i, &atom)| (i + 1, atom))
+            .collect(),
+        audit_ok: audit_ring_numbering(kind, numbers, path, edges),
+        bridgehead_locants: bridgehead_locants(kind, numbers),
+    }
+}
+
+pub fn build_von_baeyer_numbering(
+    descriptor: &str,
+    path: &[usize],
+    edges: &EdgeSet,
+) -> RingNumbering {
+    let parsed = parse_von_baeyer_descriptor(descriptor);
+    let (kind, numbers) = parsed.map_or_else(
+        || ("polycycle".into(), Vec::new()),
+        |(count, base, bridges)| {
+            (
+                super::ring_renderer::von_baeyer_kind(count),
+                base.into_iter()
+                    .chain(bridges.into_iter().map(|(length, _)| length))
+                    .collect(),
+            )
+        },
+    );
+    RingNumbering {
+        kind,
+        bridgehead_locants: bridgehead_locants("bicyclo", &numbers),
+        descriptor_numbers: numbers,
+        path: path.to_vec(),
+        atom_to_locant: path
+            .iter()
+            .enumerate()
+            .map(|(i, &atom)| (atom, i + 1))
+            .collect(),
+        locant_to_atom: path
+            .iter()
+            .enumerate()
+            .map(|(i, &atom)| (i + 1, atom))
+            .collect(),
+        audit_ok: audit_von_baeyer_descriptor(descriptor, path, edges),
+    }
 }
 
 pub fn edges_within_atoms(mol: &Molecule, atoms: &AtomSet) -> EdgeSet {
@@ -54,7 +142,7 @@ pub fn has_multiple_spiro_centers(atoms: &AtomSet, edges: &EdgeSet) -> bool {
         >= 2
 }
 
-fn adjacent_atoms(atom: usize, edges: &EdgeSet) -> AtomSet {
+pub fn adjacent_atoms(atom: usize, edges: &EdgeSet) -> AtomSet {
     edges
         .iter()
         .filter_map(|&(u, v)| {
@@ -67,6 +155,93 @@ fn adjacent_atoms(atom: usize, edges: &EdgeSet) -> AtomSet {
             }
         })
         .collect()
+}
+
+pub fn bicyclo_proof(atoms: &AtomSet, edges: &EdgeSet) -> Option<BicycloProof> {
+    let degrees = internal_degrees(atoms, edges);
+    let bridgeheads: Vec<_> = degrees
+        .iter()
+        .filter_map(|(&atom, &degree)| (degree == 3).then_some(atom))
+        .collect();
+    let &[first, second] = bridgeheads.as_slice() else {
+        return None;
+    };
+    let non_bridgehead = atoms
+        .difference(&AtomSet::from([first, second]))
+        .copied()
+        .collect();
+    let mut components = connected_components(&non_bridgehead, edges);
+    for component in &components {
+        let attachments: AtomSet = component
+            .iter()
+            .flat_map(|&atom| adjacent_atoms(atom, edges))
+            .filter(|atom| bridgeheads.contains(atom))
+            .collect();
+        if attachments != AtomSet::from([first, second]) {
+            return None;
+        }
+    }
+    let direct = edges.contains(&normalized_edge(first, second));
+    if components.len() + usize::from(direct) != 3 {
+        return None;
+    }
+    components.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
+    let mut component_paths: Vec<_> = components
+        .iter()
+        .map(|component| component_path_between_centers(component, first, second, edges))
+        .collect();
+    if direct {
+        component_paths.push(Vec::new());
+    }
+    let descriptor_numbers = [
+        component_paths[0].len(),
+        component_paths[1].len(),
+        component_paths[2].len(),
+    ];
+    if descriptor_numbers.iter().sum::<usize>() + 2 != atoms.len() {
+        return None;
+    }
+    let mut paths = Vec::new();
+    for (start, end) in [(first, second), (second, first)] {
+        let oriented: Vec<_> = component_paths
+            .iter()
+            .map(|path| {
+                if start == first {
+                    path.clone()
+                } else {
+                    reversed(path)
+                }
+            })
+            .collect();
+        for [a, b, c] in [
+            [0, 1, 2],
+            [0, 2, 1],
+            [1, 0, 2],
+            [1, 2, 0],
+            [2, 0, 1],
+            [2, 1, 0],
+        ] {
+            if [oriented[a].len(), oriented[b].len(), oriented[c].len()] != descriptor_numbers {
+                continue;
+            }
+            let path: Vec<_> = std::iter::once(start)
+                .chain(oriented[a].iter().copied())
+                .chain(std::iter::once(end))
+                .chain(oriented[b].iter().rev().copied())
+                .chain(oriented[c].iter().copied())
+                .collect();
+            if path.iter().copied().collect::<AtomSet>() == *atoms {
+                paths.push(path);
+            }
+        }
+    }
+    let numbering_paths = dedupe_paths(paths);
+    (!numbering_paths.is_empty()).then_some(BicycloProof {
+        descriptor_numbers,
+        bridgeheads: [first, second],
+        bridge_components: components,
+        numbering_paths,
+    })
 }
 
 fn connected_components(atoms: &AtomSet, edges: &EdgeSet) -> Vec<AtomSet> {
@@ -410,6 +585,10 @@ pub fn audit_ring_numbering(
         }
     };
     let expected_count = match (kind, numbers) {
+        ("bicyclo", &[first, second, third]) => {
+            append_bicyclo_edges(&mut edge, [first, second, third]);
+            first + second + third + 2
+        }
         ("spiro", &[small, large]) => {
             let center = small + 1;
             append_ring_segment(&mut edge, 1, small, center);
@@ -440,6 +619,99 @@ pub fn audit_ring_numbering(
         _ => return false,
     };
     path.len() == expected_count && expected == *edges
+}
+
+fn append_bicyclo_edges(edge: &mut impl FnMut(usize, usize), [first, second, third]: [usize; 3]) {
+    let other = first + 2;
+    for locant in 1..other {
+        edge(locant, locant + 1);
+    }
+    if second == 0 {
+        edge(other, 1);
+    } else {
+        append_bridge(edge, other, 1, other + 1, second);
+    }
+    if third == 0 {
+        edge(1, other);
+    } else {
+        append_bridge(edge, 1, other, other + second + 1, third);
+    }
+}
+
+type ParsedVonBaeyer = (usize, [usize; 3], Vec<(usize, [usize; 2])>);
+
+fn parse_von_baeyer_descriptor(descriptor: &str) -> Option<ParsedVonBaeyer> {
+    let count = super::ring_renderer::von_baeyer_cycle_count(Some(descriptor))?;
+    if count < 3 {
+        return None;
+    }
+    let body = descriptor.split_once('[')?.1.strip_suffix(']')?;
+    let parts: Vec<_> = body.split('.').collect();
+    if parts.len() < 4 {
+        return None;
+    }
+    let base = [
+        parts[0].parse().ok()?,
+        parts[1].parse().ok()?,
+        parts[2].parse().ok()?,
+    ];
+    let mut bridges = Vec::new();
+    for part in &parts[3..] {
+        let (length, locants) = part.split_once("^{")?;
+        let (first, second) = locants.strip_suffix('}')?.split_once(',')?;
+        let first: usize = first.parse().ok()?;
+        let second: usize = second.parse().ok()?;
+        if first == second {
+            return None;
+        }
+        bridges.push((length.parse().ok()?, [first.min(second), first.max(second)]));
+    }
+    Some((count, base, bridges))
+}
+
+/// Rebuild every primary and secondary bridge from the descriptor's locants.
+pub fn audit_von_baeyer_descriptor(descriptor: &str, path: &[usize], edges: &EdgeSet) -> bool {
+    let Some((count, base, bridges)) = parse_von_baeyer_descriptor(descriptor) else {
+        return false;
+    };
+    let base_count = base.iter().sum::<usize>() + 2;
+    if count != bridges.len() + 2
+        || base_count + bridges.iter().map(|(length, _)| length).sum::<usize>() != path.len()
+    {
+        return false;
+    }
+    let path_atoms: AtomSet = path.iter().copied().collect();
+    if path_atoms.len() != path.len()
+        || path_atoms != edges.iter().flat_map(|&(u, v)| [u, v]).collect()
+    {
+        return false;
+    }
+    let mut expected = EdgeSet::new();
+    let mut valid = true;
+    let mut edge = |first: usize, second: usize| {
+        if let (Some(&u), Some(&v)) = (
+            path.get(first.wrapping_sub(1)),
+            path.get(second.wrapping_sub(1)),
+        ) {
+            expected.insert(normalized_edge(u, v));
+        } else {
+            valid = false;
+        }
+    };
+    append_bicyclo_edges(&mut edge, base);
+    let mut next = base_count + 1;
+    for (length, [first, second]) in bridges {
+        if length == 0 {
+            edge(first, second);
+        } else {
+            if (next..next + length).contains(&first) || (next..next + length).contains(&second) {
+                return false;
+            }
+            append_bridge(&mut edge, first, second, next, length);
+            next += length;
+        }
+    }
+    valid && next == path.len() + 1 && expected == *edges
 }
 
 fn append_ring_segment(
@@ -476,6 +748,80 @@ fn append_bridge(
 mod tests {
     use super::super::graph_io::read_smiles;
     use super::*;
+
+    #[test]
+    fn bicyclo_proof_reconstructs_all_equal_bridge_orders() {
+        let mol = read_smiles("C1CC2CCC1C2").unwrap();
+        let atoms = mol.atoms.keys().copied().collect();
+        let edges = edges_within_atoms(&mol, &atoms);
+        let proof = bicyclo_proof(&atoms, &edges).unwrap();
+        assert_eq!(proof.descriptor_numbers, [2, 2, 1]);
+        assert_eq!(proof.bridgeheads, [2, 5]);
+        assert_eq!(
+            proof.numbering_paths,
+            vec![
+                vec![2, 1, 0, 5, 4, 3, 6],
+                vec![2, 3, 4, 5, 0, 1, 6],
+                vec![5, 0, 1, 2, 3, 4, 6],
+                vec![5, 4, 3, 2, 1, 0, 6],
+            ]
+        );
+        for path in &proof.numbering_paths {
+            let numbering =
+                build_ring_numbering("bicyclo", &proof.descriptor_numbers, path, &edges);
+            assert!(numbering.audit_ok);
+            assert_eq!(numbering.bridgehead_locants, [1, 4]);
+            assert_eq!(numbering.atom_to_locant[&path[3]], 4);
+        }
+        assert!(!audit_ring_numbering(
+            "bicyclo",
+            &[3, 1, 1],
+            &proof.numbering_paths[0],
+            &edges
+        ));
+    }
+
+    #[test]
+    fn von_baeyer_audit_rejects_count_locant_and_coverage_errors() {
+        let path: Vec<_> = (0..9).collect();
+        // bicyclo[3.2.2] with a direct secondary bridge at locants 1,5.
+        let edges = EdgeSet::from([
+            (0, 1),
+            (1, 2),
+            (2, 3),
+            (3, 4),
+            (4, 5),
+            (5, 6),
+            (0, 6),
+            (0, 7),
+            (7, 8),
+            (4, 8),
+            (0, 4),
+        ]);
+        assert!(audit_von_baeyer_descriptor(
+            "tricyclo[3.2.2.0^{1,5}]",
+            &path,
+            &edges
+        ));
+        for descriptor in [
+            "tetracyclo[3.2.2.0^{1,5}]",
+            "tricyclo[3.2.2.0^{1,6}]",
+            "tricyclo[3.2.2.0^{1,10}]",
+            "tricyclo[3.2.2.1^{1,5}]",
+        ] {
+            assert!(
+                !audit_von_baeyer_descriptor(descriptor, &path, &edges),
+                "{descriptor}"
+            );
+        }
+        let mut duplicate = path;
+        duplicate[8] = 7;
+        assert!(!audit_von_baeyer_descriptor(
+            "tricyclo[3.2.2.0^{1,5}]",
+            &duplicate,
+            &edges
+        ));
+    }
 
     #[test]
     fn monospiro_proof_matches_python_paths_and_reconstructs_every_orientation() {

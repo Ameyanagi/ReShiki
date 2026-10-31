@@ -6,8 +6,40 @@ use super::molecule::{AtomSet, Molecule};
 pub type Edge = (usize, usize);
 pub type EdgeSet = BTreeSet<Edge>;
 
-fn normalize_edge(first: usize, second: usize) -> Edge {
+pub fn normalize_edge(first: usize, second: usize) -> Edge {
     (first.min(second), first.max(second))
+}
+
+pub fn adjacency_from_edges(nodes: &AtomSet, edges: &EdgeSet) -> BTreeMap<usize, AtomSet> {
+    let mut adjacency: BTreeMap<_, _> = nodes.iter().map(|&node| (node, AtomSet::new())).collect();
+    for &(first, second) in edges {
+        adjacency.entry(first).or_default().insert(second);
+        adjacency.entry(second).or_default().insert(first);
+    }
+    adjacency
+}
+
+pub fn connected_components(nodes: &AtomSet, edges: &EdgeSet) -> Vec<AtomSet> {
+    let adjacency = adjacency_from_edges(nodes, edges);
+    let mut seen = AtomSet::new();
+    let mut components = Vec::new();
+    for &start in nodes {
+        if !seen.insert(start) {
+            continue;
+        }
+        let mut component = AtomSet::new();
+        let mut pending = std::collections::VecDeque::from([start]);
+        while let Some(current) = pending.pop_front() {
+            component.insert(current);
+            for &neighbor in &adjacency[&current] {
+                if nodes.contains(&neighbor) && seen.insert(neighbor) {
+                    pending.push_back(neighbor);
+                }
+            }
+        }
+        components.push(component);
+    }
+    components
 }
 
 /// Maximal biconnected edge blocks of the selected molecular graph.
