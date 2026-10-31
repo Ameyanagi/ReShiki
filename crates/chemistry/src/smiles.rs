@@ -17,6 +17,9 @@ mod read;
 pub use read::reaction_part;
 pub use read::{Imported, read};
 
+#[cfg(test)]
+mod tests;
+
 use super::{
     graph::{Atom, Bond, Graph},
     kekulize::Direction,
@@ -37,7 +40,7 @@ pub enum Error {
     Hydrogens(#[from] super::hydrogens::Error),
     #[error(transparent)]
     Sanitization(#[from] super::sanitize::Error),
-    #[error("SMILES stereochemistry: {0}")]
+    #[error("{prefix}{0}", prefix = if .0 == super::stereo::CIP_WORK_LIMIT_MESSAGE { "" } else { "SMILES stereochemistry: " })]
     Stereo(String),
     #[error(transparent)]
     Cx(#[from] super::cx::Error),
