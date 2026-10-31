@@ -137,6 +137,23 @@ mod tests {
     }
 
     #[test]
+    fn angular_oxazole_thiazole_acetic_acid_round_trips() {
+        let smiles = "O=C(O)Cc1nc2ccc3ocnc3c2s1";
+        let name = name_smiles(smiles).unwrap();
+        assert_eq!(
+            name,
+            "2-(thiazolo[4',5':1,2]benzo[3,4-d][1,3]oxazol-7-yl)acetic acid"
+        );
+        let request = crate::naming::local::parse_request(&name).unwrap();
+        let reply = crate::naming::worker::respond(&request).unwrap();
+        let parsed = crate::naming::local::parse_result(&name, &reply).unwrap();
+        assert_eq!(
+            crate::naming::canonical_smiles(smiles).unwrap(),
+            crate::naming::canonical_smiles(&parsed.smiles).unwrap()
+        );
+    }
+
+    #[test]
     fn spiro_parents_and_substituents_follow_oracle_names() {
         for (smiles, expected) in [
             ("C1CCC2(CC1)CCCC2", "spiro[4.5]decane"),

@@ -20,6 +20,18 @@ fn source_opposite_direction_cases() {
 }
 
 #[test]
+fn angular_oxazole_thiazole_uses_element_seniority() {
+    let mut graph = Graph::default();
+    let fragment = smiles::build_fragment(&mut graph, "c1nc2ccc3ocnc3c2s1", "", "none").unwrap();
+    let atoms = graph.fragment(fragment).atoms.clone();
+    fused_ring_numberer::number_fused_ring(&mut graph, fragment).unwrap();
+    // Original atom indices: oxazole N, O, then thiazole N, S.
+    for (index, expected) in [(8, "1"), (6, "3"), (1, "6"), (11, "8")] {
+        assert_eq!(graph.atom(atoms[index]).locants, [expected], "atom {index}");
+    }
+}
+
+#[test]
 fn exact_pinned_sssr_and_numbering_oracle() {
     let mut failures = Vec::new();
     let mut count = 0;
