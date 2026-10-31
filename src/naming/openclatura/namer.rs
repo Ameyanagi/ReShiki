@@ -396,14 +396,18 @@ pub fn name_subgraph_rendered(
     }
     let raw = carbanion.unwrap_or(raw);
     let text = finalize_subgraph_name(raw, &parts);
-    let text = super::ionic_naming::apply_anionic_parent_names(
-        &text,
-        mol,
-        &plan.numbered_path,
-        &plan.locant_map,
-        parts.retained_name.as_deref(),
-        &represented,
-    )?;
+    let text = if parts.fusion_plan.is_some() {
+        text
+    } else {
+        super::ionic_naming::apply_anionic_parent_names(
+            &text,
+            mol,
+            &plan.numbered_path,
+            &plan.locant_map,
+            parts.retained_name.as_deref(),
+            &represented,
+        )?
+    };
     let text = super::ionic_naming::apply_cationic_imino_parent_prefixes(
         &text,
         mol,

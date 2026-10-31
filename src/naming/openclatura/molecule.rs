@@ -1,6 +1,9 @@
 //! Plain graph model and helpers ported from openclatura's `molecule.py`.
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
-use std::{cell::Cell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 
 pub type AtomSet = BTreeSet<usize>;
 
@@ -68,6 +71,7 @@ pub struct Bond {
     pub u: usize,
     pub v: usize,
     pub order: usize,
+    pub is_aromatic: bool,
     pub stereo: Option<String>,
     pub in_small_ring: bool,
 }
@@ -79,13 +83,14 @@ impl Bond {
             u,
             v,
             order,
+            is_aromatic: false,
             stereo: None,
             in_small_ring: false,
         }
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct Molecule {
     pub atoms: BTreeMap<usize, Atom>,
     pub bonds: BTreeMap<usize, Bond>,
@@ -95,9 +100,26 @@ pub struct Molecule {
     pub accurate_cip: BTreeMap<usize, String>,
     pub legacy_cip: BTreeMap<usize, String>,
     pub substituted_symbols: AtomSet,
-    /// Nonsimple input blocks on which systematic fusion may apply.
-    pub fusion_eligible_blocks: Vec<AtomSet>,
+    /// A plan is valid only for this molecular graph and its chemical state.
+    pub(crate) fusion_plan_cache:
+        RefCell<BTreeMap<AtomSet, Result<Option<super::fusion::model::FusionParentPlan>, String>>>,
     naming_budget: Rc<NamingBudget>,
+}
+
+impl Clone for Molecule {
+    fn clone(&self) -> Self {
+        Self {
+            atoms: self.atoms.clone(),
+            bonds: self.bonds.clone(),
+            adjacency: self.adjacency.clone(),
+            bond_lookup: self.bond_lookup.clone(),
+            accurate_cip: self.accurate_cip.clone(),
+            legacy_cip: self.legacy_cip.clone(),
+            substituted_symbols: self.substituted_symbols.clone(),
+            fusion_plan_cache: RefCell::default(),
+            naming_budget: Rc::clone(&self.naming_budget),
+        }
+    }
 }
 
 fn pair(u: usize, v: usize) -> (usize, usize) {
@@ -138,6 +160,7 @@ impl Molecule {
             return Err(format!("Atom with idx {} already exists.", atom.idx));
         }
         self.adjacency.insert(atom.idx, Vec::new());
+        self.fusion_plan_cache.get_mut().clear();
         self.atoms.insert(atom.idx, atom);
         Ok(())
     }
@@ -159,6 +182,7 @@ impl Molecule {
             return Err(format!("Bond with idx {} already exists.", bond.idx));
         }
         self.adjacency.entry(bond.u).or_default().push(bond.v);
+        self.fusion_plan_cache.get_mut().clear();
         self.adjacency.entry(bond.v).or_default().push(bond.u);
         self.bond_lookup.insert(pair(bond.u, bond.v), bond.idx);
         self.bonds.insert(bond.idx, bond);
@@ -184,6 +208,7 @@ impl Molecule {
             .get_mut(&atom_idx)
             .ok_or_else(|| format!("Unknown atom index: {atom_idx}"))?
             .charge = charge;
+        self.fusion_plan_cache.get_mut().clear();
         Ok(())
     }
 
@@ -192,6 +217,7 @@ impl Molecule {
             .get_mut(&bond_idx)
             .ok_or_else(|| format!("Unknown bond index: {bond_idx}"))?
             .order = order;
+        self.fusion_plan_cache.get_mut().clear();
         Ok(())
     }
 
@@ -206,12 +232,6 @@ impl Molecule {
     ) -> Self {
         let mut fragment = Self::new();
         fragment.naming_budget = Rc::clone(&self.naming_budget);
-        fragment.fusion_eligible_blocks = self
-            .fusion_eligible_blocks
-            .iter()
-            .filter(|block| block.is_subset(atom_ids))
-            .cloned()
-            .collect();
         for idx in atom_ids {
             if let Some(original) = self.atoms.get(idx) {
                 let mut atom = original.clone();
@@ -302,6 +322,25 @@ pub fn charged_atoms(mol: &Molecule, atom_ids: &AtomSet) -> AtomSet {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fusion_plans_do_not_survive_detached_or_chemically_changed_graphs() {
+        let mut mol = Molecule::new();
+        mol.add_atom(Atom::new(0, "C")).unwrap();
+        mol.add_atom(Atom::new(1, "C")).unwrap();
+        mol.add_bond(Bond::new(0, 0, 1, 1)).unwrap();
+        let atoms = AtomSet::from([0, 1]);
+        mol.fusion_plan_cache
+            .borrow_mut()
+            .insert(atoms.clone(), Ok(None));
+        assert!(mol.clone().fusion_plan_cache.borrow().is_empty());
+        assert!(mol.subgraph(&atoms).fusion_plan_cache.borrow().is_empty());
+        mol.set_atom_charge(0, 1).unwrap();
+        assert!(mol.fusion_plan_cache.borrow().is_empty());
+        mol.fusion_plan_cache.borrow_mut().insert(atoms, Ok(None));
+        mol.set_bond_order(0, 2).unwrap();
+        assert!(mol.fusion_plan_cache.borrow().is_empty());
+    }
 
     #[test]
     fn insertion_order_identity_and_induced_subgraph() {

@@ -298,9 +298,6 @@ pub fn find_ring_systems(
     mol: &Molecule,
     exclude_atoms: &AtomSet,
 ) -> Result<Vec<RingSystem>, String> {
-    // Upstream divergence: retained pre-descriptor probes never accept the
-    // current cage templates, and fusion is excluded at the input boundary.
-    // The audited descriptor and retained path engines below own these blocks.
     let cyclic = get_cyclic_atoms(mol, exclude_atoms);
     let mut blocks: Vec<_> = biconnected_edge_components(mol, &cyclic)
         .into_iter()
@@ -320,7 +317,9 @@ pub fn find_ring_systems(
             {
                 // Upstream divergence: spiro_subgraph/assembly_spiro fused-side plans
                 // require systematic fusion, even when the side has a retained name.
-                if fusion_eligible(mol, &block.atoms) || fusion_eligible(mol, &other.atoms) {
+                if has_fused_side_topology(mol, &block.atoms)
+                    || has_fused_side_topology(mol, &other.atoms)
+                {
                     return Err("openclatura: systematic fusion not ported".into());
                 }
                 return Err(
@@ -465,7 +464,7 @@ pub fn find_ring_systems(
                 });
                 continue;
             }
-            if fusion_eligible(mol, &atoms) {
+            {
                 use super::retained_fused_templates::{
                     MatchOptions, match_retained_graph_templates_with_options,
                 };
@@ -499,7 +498,16 @@ pub fn find_ring_systems(
                     continue;
                 }
             }
-            confirmed_fusion_numbering_paths(mol, &atoms)?;
+            let fusion_paths = confirmed_fusion_numbering_paths(mol, &atoms)?;
+            if !fusion_paths.is_empty() {
+                systems.push(RingSystem {
+                    atoms,
+                    paths: fusion_paths,
+                    is_polycycle: true,
+                    ..RingSystem::default()
+                });
+                continue;
+            }
             let candidate = polyspiro_or_von_baeyer_candidate(mol, &atoms, &edges);
             if candidate.descriptor.is_some() && candidate.descriptor_allowed() {
                 let paths = if candidate.paths.first().is_some_and(|path| {
@@ -579,22 +587,66 @@ pub fn find_ring_systems(
     Ok(merge_polyspiro_ring_systems(mol, systems))
 }
 
-/// Input SSSR evidence is retained across induced subgraphs.
-pub fn fusion_eligible(mol: &Molecule, atoms: &AtomSet) -> bool {
-    mol.fusion_eligible_blocks
-        .iter()
-        .any(|block| block.is_subset(atoms))
+/// A fused side requires the separate spiro/fusion composition handoff.
+fn has_fused_side_topology(mol: &Molecule, atoms: &AtomSet) -> bool {
+    let edges = edges_within_atoms(mol, atoms);
+    if edges.len() <= atoms.len() {
+        return false;
+    }
+    if atoms.iter().any(|id| mol.atoms[id].is_aromatic) {
+        return true;
+    }
+    // A shared bond between two rings leaves two alternate paths between its
+    // endpoints. The bounded planner owns the full component applicability.
+    edges.iter().any(|&(start, end)| {
+        let mut paths = Vec::new();
+        let mut stack = vec![(start, vec![start])];
+        while let Some((current, path)) = stack.pop() {
+            for &next in mol.get_neighbors(current) {
+                if !atoms.contains(&next)
+                    || (current == start && next == end)
+                    || path.contains(&next)
+                {
+                    continue;
+                }
+                if next == end {
+                    if path.len() >= 4 {
+                        paths.push(path[1..].iter().copied().collect::<AtomSet>());
+                    }
+                } else if path.len() < 8 {
+                    let mut next_path = path.clone();
+                    next_path.push(next);
+                    stack.push((next, next_path));
+                }
+            }
+        }
+        paths
+            .iter()
+            .enumerate()
+            .any(|(i, p)| paths[i + 1..].iter().any(|q| p.is_disjoint(q)))
+    })
 }
 
-fn confirmed_fusion_numbering_paths(mol: &Molecule, atoms: &AtomSet) -> Result<(), String> {
-    // Upstream divergence: replace _confirmed_fusion_numbering_paths until
-    // the systematic planner is ported. Non-fusion von Baeyer blocks abstain.
-    if fusion_eligible(mol, atoms)
-        && !super::fusion::planner::planner_certainly_abstains(mol, atoms)
-    {
-        return Err("openclatura: systematic fusion not ported".into());
+fn confirmed_fusion_numbering_paths(
+    mol: &Molecule,
+    atoms: &AtomSet,
+) -> Result<Vec<Vec<usize>>, String> {
+    let Some(plan) = super::fusion::planner::plan_fusion_parent(mol, atoms)? else {
+        return Ok(Vec::new());
+    };
+    if !plan.audit.confirmed() {
+        return Err("openclatura: fusion planner returned an unconfirmed parent".into());
     }
-    Ok(())
+    Ok(plan
+        .numbering
+        .string_input_locant_maps()
+        .iter()
+        .map(|map| {
+            let mut path: Vec<_> = map.keys().copied().collect();
+            path.sort_by_key(|id| super::locants::retained_locant_sort_key(&map[id]));
+            path
+        })
+        .collect())
 }
 
 fn fallback_bicyclo_paths(

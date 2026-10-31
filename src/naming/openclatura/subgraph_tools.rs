@@ -125,6 +125,9 @@ pub fn add_parent_features(
         return Ok(());
     }
     for &idx in numbered_path {
+        if parts.fusion_plan.is_some() {
+            break;
+        }
         let atom = &mol.atoms[&idx];
         if atom.is_carbon() {
             continue;
@@ -181,7 +184,13 @@ pub fn add_parent_features(
             let Some(bond) = mol.get_bond(u, v) else {
                 continue;
             };
-            if bond.order <= 1 || !seen.insert(bond.idx) {
+            if bond.order <= 1
+                || !seen.insert(bond.idx)
+                || parts.fusion_plan.is_some()
+                    && parts.parent_bond_delta.as_ref().is_some_and(|delta| {
+                        delta.compatible && delta.implied_multiple_bond_ids.contains(&bond.idx)
+                    })
+            {
                 continue;
             }
             let bond_key = if bond.order == 2 { "double" } else { "triple" };

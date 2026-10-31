@@ -11,7 +11,7 @@ use super::{
 };
 use std::collections::BTreeMap;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ParentBondDelta {
     pub assignment: BondAssignment,
     // The requested shared delta retains parent-pi identity for a later audit.
@@ -32,7 +32,7 @@ impl ParentBondDelta {
             .collect()
     }
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PiRedistribution {
     pub removed_bond_ids: AtomSet,
     pub added_bond_ids: AtomSet,
@@ -41,7 +41,7 @@ pub struct PiRedistribution {
     #[allow(dead_code)]
     pub final_assignment: BondAssignment,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExternalPiOperation {
     // The shared derivative proof retains typed operation labels and locants;
     // retained assembly currently consumes only their graph identities.
@@ -54,7 +54,7 @@ pub struct ExternalPiOperation {
     pub bond_id: usize,
     pub external_atom_symbol: String,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 // The explicitly requested derivative-state API includes unsaturation evidence.
 // Its detailed graph binding is read by the systematic audit in the next port.
 #[allow(dead_code)]
@@ -65,7 +65,7 @@ pub struct UnsaturationOperation {
     pub bond_id: usize,
     pub bond_order: usize,
 }
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ParentDerivativeState {
     pub bond_delta: ParentBondDelta,
     pub hydro_operations: Vec<HydroOperation>,
@@ -82,6 +82,20 @@ pub struct ParentDerivativeState {
     pub imino_operations: Vec<ExternalPiOperation>,
     #[allow(dead_code)]
     pub alkylidene_operations: Vec<ExternalPiOperation>,
+}
+impl ParentDerivativeState {
+    pub fn external_pi_operations(&self) -> impl Iterator<Item = &ExternalPiOperation> {
+        self.oxo_operations
+            .iter()
+            .chain(&self.imino_operations)
+            .chain(&self.alkylidene_operations)
+    }
+    pub fn added_hydrogen_operations(&self) -> &[HydroOperation] {
+        &self.bond_delta.added_hydrogen_operations
+    }
+    pub fn intrinsic_hydro_operations(&self) -> &[HydroOperation] {
+        &self.bond_delta.intrinsic_hydro_operations
+    }
 }
 static EMPTY_ATOMS: AtomSet = AtomSet::new();
 #[derive(Clone, Debug)]
@@ -227,6 +241,41 @@ pub fn saturated_nitrogen_hydrogen_sites(
         }
     }
     indicated.clone()
+}
+pub fn has_complete_saturated_hydrogenation(
+    mol: &Molecule,
+    atoms: &AtomSet,
+    state: &ParentDerivativeState,
+) -> bool {
+    let nitrogens = atoms
+        .iter()
+        .copied()
+        .filter(|a| mol.atoms[a].symbol == "N")
+        .collect();
+    if saturated_nitrogen_hydrogen_sites(mol, atoms, &nitrogens).is_empty()
+        || state.external_pi_operations().next().is_some()
+        || !state.unsaturation_operations.is_empty()
+        || state.hydro_operations.is_empty()
+    {
+        return false;
+    }
+    let edges: EdgeSet = state
+        .bond_delta
+        .hydrogenated_edges
+        .iter()
+        .copied()
+        .collect();
+    state.bond_delta.compatible
+        && state.added_hydrogen_operations().is_empty()
+        && state.intrinsic_hydro_operations().is_empty()
+        && edges.len() * 2 == atoms.len()
+        && state.bond_delta.hydrogenated_atom_ids() == *atoms
+        && state
+            .bond_delta
+            .assignment
+            .orders
+            .iter()
+            .all(|(e, o)| *o == 1 || (*o == 2 && edges.contains(e)))
 }
 fn single_bonded_parent_nitrogen(mol: &Molecule, atoms: &AtomSet, id: usize) -> bool {
     let atom = &mol.atoms[&id];

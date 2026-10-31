@@ -1,6 +1,27 @@
-//! Bond and hydrogen proofs shared by retained fused-parent routes.
+//! Audited graph decomposition, numbering and bond-state proofs for fused parents.
+pub mod audit;
+pub mod charges;
+pub mod citation_numbering;
+pub mod citation_pi;
+pub mod citation_pi_donor;
+pub mod component_hydrogen;
+pub mod composite_bridges;
+pub mod config;
+pub mod construction_order;
+pub mod cover;
+pub mod deferred;
+pub mod descriptor;
+pub mod entry_geometry;
 pub mod exocyclic;
+pub mod external_pi_consumption;
+pub mod faces;
+pub mod indicated_hydrogen;
+pub mod layout;
 pub mod mancude;
 pub mod model;
 pub mod numbering;
 pub mod planner;
+pub mod registry;
+pub mod replacement_state;
+pub mod rules;
+pub mod valence;

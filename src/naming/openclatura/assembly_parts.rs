@@ -57,7 +57,7 @@ pub struct ParentChargeItem {
     pub charge: i32,
     pub atom_id: Option<usize>,
 }
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct HydroOperation {
     pub key: String,
     pub locants: Vec<String>,
@@ -94,6 +94,7 @@ pub struct AssemblyParts {
     pub retained_absorbs_principal_group: bool,
     pub retained_substituent_name: Option<String>,
     pub retained_parent_metadata: Option<RetainedParentMetadata>,
+    pub fusion_plan: Option<super::fusion::model::FusionParentPlan>,
     pub parent_bond_model: Option<super::fusion::model::ParentBondModel>,
     pub parent_bond_delta: Option<super::fusion::mancude::ParentBondDelta>,
     pub parent_derivative_state: Option<super::fusion::mancude::ParentDerivativeState>,
@@ -150,6 +151,7 @@ impl AssemblyParts {
             retained_absorbs_principal_group: false,
             retained_substituent_name: None,
             retained_parent_metadata: None,
+            fusion_plan: None,
             parent_bond_model: None,
             parent_bond_delta: None,
             parent_derivative_state: None,

@@ -463,6 +463,15 @@ pub fn promote_retained_substituent_name(parts: &mut AssemblyParts) {
     }
 }
 pub fn parent_stem_and_terminal(parts: &AssemblyParts) -> Result<(String, String), String> {
+    if let Some(plan) = &parts.fusion_plan {
+        return Ok(
+            if let Some(stem) = plan.rendered_base_name.strip_suffix('e') {
+                (stem.into(), "e".into())
+            } else {
+                (plan.rendered_base_name.clone(), String::new())
+            },
+        );
+    }
     if has_ionic_retained_parent(parts)
         && let Some(name) = parts
             .retained_name

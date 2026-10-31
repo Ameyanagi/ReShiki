@@ -177,6 +177,7 @@ fn number_parent_with_topology(
     clippy::too_many_arguments,
     reason = "Mirrors the shared Python parent-numbering pipeline interface."
 )]
+#[cfg(test)]
 pub fn choose_parent_numbering(
     mol: &Molecule,
     candidate_paths: &[Vec<usize>],
@@ -187,6 +188,35 @@ pub fn choose_parent_numbering(
     retained_name: Option<&str>,
     fixed_start: bool,
     topology: NumberingTopology,
+) -> (Vec<usize>, Option<BTreeMap<usize, String>>) {
+    choose_parent_numbering_with_hydrogens(
+        mol,
+        candidate_paths,
+        principal_atoms,
+        substituent_mapping,
+        locant_maps,
+        is_ring,
+        retained_name,
+        fixed_start,
+        topology,
+        None,
+    )
+}
+
+pub type ProvenHydrogenLocants = BTreeMap<Vec<(usize, String)>, (Vec<String>, Vec<String>)>;
+
+#[allow(clippy::too_many_arguments)]
+pub fn choose_parent_numbering_with_hydrogens(
+    mol: &Molecule,
+    candidate_paths: &[Vec<usize>],
+    principal_atoms: &AtomSet,
+    substituent_mapping: &BTreeMap<usize, Vec<String>>,
+    locant_maps: &[BTreeMap<usize, String>],
+    is_ring: bool,
+    retained_name: Option<&str>,
+    fixed_start: bool,
+    topology: NumberingTopology,
+    proven_hydrogen_locants: Option<&ProvenHydrogenLocants>,
 ) -> (Vec<usize>, Option<BTreeMap<usize, String>>) {
     if !locant_maps.is_empty() {
         type L = (usize, u8, String, usize);
@@ -254,6 +284,24 @@ pub fn choose_parent_numbering(
                     .map(value)
                     .collect();
             indicated.sort();
+            if let Some(proven) = proven_hydrogen_locants
+                && let Some((indicated_locants, hydro_locants)) = proven.get(
+                    &map.iter()
+                        .map(|(&idx, locant)| (idx, locant.clone()))
+                        .collect::<Vec<_>>(),
+                )
+            {
+                indicated = indicated_locants
+                    .iter()
+                    .map(|l| retained_locant_sort_key(l))
+                    .collect();
+                indicated.sort();
+                hydro = hydro_locants
+                    .iter()
+                    .map(|l| retained_locant_sort_key(l))
+                    .collect();
+                hydro.sort();
+            }
             let mut citation: Vec<_> = substituent_mapping
                 .iter()
                 .filter(|(idx, _)| map.contains_key(idx))

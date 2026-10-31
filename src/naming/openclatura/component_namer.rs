@@ -236,14 +236,18 @@ pub fn name_component_with_citation(
         .iter()
         .flat_map(|prefix| prefix.charge_atom_ids.iter().copied())
         .collect();
-    let name = super::ionic_naming::apply_anionic_parent_names(
-        &name,
-        mol,
-        numbered,
-        locants,
-        parts.retained_name.as_deref(),
-        &represented,
-    )?;
+    let name = if parts.fusion_plan.is_some() {
+        name
+    } else {
+        super::ionic_naming::apply_anionic_parent_names(
+            &name,
+            mol,
+            numbered,
+            locants,
+            parts.retained_name.as_deref(),
+            &represented,
+        )?
+    };
     let name =
         super::ionic_naming::apply_cationic_imino_parent_prefixes(&name, mol, numbered, locants)?;
     let name = super::ionic_naming::apply_cationic_imino_names(&name, mol)?;

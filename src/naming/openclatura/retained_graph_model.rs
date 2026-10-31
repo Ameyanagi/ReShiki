@@ -2,7 +2,7 @@
 use super::{assembly_parts::RetainedParentMetadata, molecule::AtomSet, rules::elements};
 use std::collections::BTreeMap;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RetainedGraphAtomTemplate {
     pub locant: String,
     pub symbol: String,
@@ -26,7 +26,7 @@ impl RetainedGraphAtomTemplate {
         })
     }
 }
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RetainedGraphBondTemplate {
     pub locants: (String, String),
     pub bond_class: String,

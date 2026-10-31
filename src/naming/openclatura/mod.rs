@@ -1,8 +1,8 @@
 //! Native Rust port of openclatura 0.4.3 (MIT), plain-name pipeline.
 //! Attribution and license terms are in `licenses/openclatura/`.
 //!
-//! Supports chains, monocycles, retained fused parents, pure spiro and non-fusion
-//! von Baeyer ring systems. Systematic fusion planning is deferred.
+//! Supports chains, monocycles, retained and systematic fused parents, pure
+//! spiro and von Baeyer ring systems, with independent reconstruction proofs.
 // Graph IDs and numbered parent paths are validated at construction and retain
 // their identity in induced subgraphs. Direct indexing preserves the upstream
 // rule comparisons; immutable JSON Value indexing also returns null for a
@@ -67,6 +67,7 @@ pub fn name_smiles(smiles: &str) -> Result<String, String> {
     if mol.atoms.values().any(|atom| atom.symbol == "Po") {
         return Err("openclatura: polonium nomenclature is not validated".into());
     }
+    ionic_naming::validate_heteroatom_oxo_charge_states(&mol)?;
     // Upstream divergence: nitrogen stereocentres and ring stereocentres with a
     // lone pair (for example three single bonds on P, As, S+) read back through OPSIN as
     // another stereoisomer, or lose their descriptor.
@@ -115,7 +116,7 @@ mod tests {
     use std::io::Write;
 
     #[test]
-    fn retained_fused_parents_precede_unported_fusion_planning() {
+    fn retained_and_systematic_fused_parents_follow_parent_precedence() {
         for (smiles, expected) in [
             ("c1ccc2ccccc2c1", "naphthalene"),
             ("c1ccc2cc3ccccc3cc2c1", "anthracene"),
@@ -123,16 +124,15 @@ mod tests {
             ("c1ccc2c(c1)[nH]c1ccccc12", "9H-carbazole"),
             ("C1CCC2=CC=CC=C2C1", "1,2,3,4-tetrahydronaphthalene"),
             ("c1ccc2c(c1)CCN2", "2,3-dihydro-1H-indole"),
+            ("c1oc2ncccc2c1", "furo[2,3-b]pyridine"),
+            ("C1OCC2COCC12", "tetrahydro-1H,3H-furo[3,4-c]furan"),
         ] {
             assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
         }
-        for smiles in ["c1oc2ncccc2c1", "C1OCC2COCC12", "C1CCC2(C1)Oc1ccccc1O2"] {
-            assert_eq!(
-                name_smiles(smiles).unwrap_err(),
-                "openclatura: systematic fusion not ported",
-                "{smiles}"
-            );
-        }
+        assert_eq!(
+            name_smiles("C1CCC2(C1)Oc1ccccc1O2").unwrap_err(),
+            "openclatura: systematic fusion not ported",
+        );
     }
 
     #[test]

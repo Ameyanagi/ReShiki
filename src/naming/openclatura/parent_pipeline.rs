@@ -2,8 +2,11 @@
 use std::collections::BTreeMap;
 
 use super::assembly_parts::{AssemblyParts, ParentChargeItem, SubstituentItem};
+use super::fusion::model::FusionParentPlan;
 use super::molecule::{AtomSet, Molecule, bond_ids_within};
-use super::numbering::{NumberingTopology, choose_parent_numbering};
+use super::numbering::{
+    NumberingTopology, ProvenHydrogenLocants, choose_parent_numbering_with_hydrogens,
+};
 use super::parent_selection::ParentSelection;
 
 /// Apply the retained-parent eligibility checks before sharing a retained
@@ -42,19 +45,19 @@ pub fn resolve_systematic_fusion_parent(
     mol: &Molecule,
     selection: &ParentSelection,
     retained_name: Option<&str>,
-) -> Result<(), String> {
+) -> Result<Option<FusionParentPlan>, String> {
     if retained_name.is_some() {
-        return Ok(());
+        return Ok(None);
     }
-    // Upstream divergence: systematic, bridged-wrapper and third-component
-    // fusion planning are deferred. Retained identity has upstream precedence.
-    if (selection.is_bicycle || selection.is_polycycle)
-        && super::chains::fusion_eligible(mol, &selection.atom_set())
-        && !super::fusion::planner::planner_certainly_abstains(mol, &selection.atom_set())
-    {
-        return Err("openclatura: systematic fusion not ported".into());
+    if selection.is_bicycle || selection.is_polycycle {
+        let atoms = selection.atom_set();
+        let plan = super::fusion::planner::plan_fusion_parent(mol, &atoms)?;
+        if plan.is_none() {
+            super::fusion::deferred::require_no_deferred_parent(mol, &atoms)?;
+        }
+        return Ok(plan);
     }
-    Ok(())
+    Ok(None)
 }
 
 pub struct ParentAssemblyPlan {
@@ -74,7 +77,35 @@ pub fn build_parent_assembly_plan(
     retained_name: Option<String>,
     locant_maps: &[BTreeMap<usize, String>],
 ) -> Result<ParentAssemblyPlan, String> {
-    resolve_systematic_fusion_parent(mol, selection, retained_name.as_deref())?;
+    let fusion = resolve_systematic_fusion_parent(mol, selection, retained_name.as_deref())?;
+    let variants: Vec<_> = fusion.as_ref().map_or_else(Vec::new, |plan| {
+        if plan.numbering_variants.is_empty() {
+            vec![plan.clone()]
+        } else {
+            plan.numbering_variants.clone()
+        }
+    });
+    let fusion_maps: Vec<_> = variants
+        .iter()
+        .flat_map(|plan| plan.numbering.string_input_locant_maps())
+        .collect();
+    let proven_hydrogens: ProvenHydrogenLocants = variants
+        .iter()
+        .flat_map(|plan| {
+            let hydrogen = (
+                plan.indicated_hydrogens.clone(),
+                plan.derivative_state
+                    .hydro_operations
+                    .iter()
+                    .flat_map(|op| op.locants.clone())
+                    .collect(),
+            );
+            plan.numbering
+                .string_input_locant_maps()
+                .into_iter()
+                .map(move |map| (map.into_iter().collect(), hydrogen.clone()))
+        })
+        .collect();
     let principal: AtomSet = principal_carbons.iter().copied().collect();
     let names = substituents
         .iter()
@@ -99,12 +130,14 @@ pub fn build_parent_assembly_plan(
     } else {
         Vec::new()
     };
-    let locant_maps = if proof_maps.is_empty() {
+    let locant_maps = if !fusion_maps.is_empty() {
+        &fusion_maps
+    } else if proof_maps.is_empty() {
         locant_maps
     } else {
         &proof_maps
     };
-    let (numbered_path, selected_map) = choose_parent_numbering(
+    let (numbered_path, selected_map) = choose_parent_numbering_with_hydrogens(
         mol,
         &selection.paths,
         &principal,
@@ -118,6 +151,7 @@ pub fn build_parent_assembly_plan(
             is_spiro: selection.is_spiro,
             is_polycycle: selection.is_polycycle,
         },
+        fusion.as_ref().map(|_| &proven_hydrogens),
     );
     let locant_map = selected_map.unwrap_or_else(|| {
         numbered_path
@@ -126,7 +160,15 @@ pub fn build_parent_assembly_plan(
             .map(|(i, &idx)| (idx, (i + 1).to_string()))
             .collect()
     });
-    let parts = build_parent_parts(
+    let selected_fusion = variants.into_iter().find(|plan| {
+        plan.numbering
+            .string_input_locant_maps()
+            .contains(&locant_map)
+    });
+    if fusion.is_some() && selected_fusion.is_none() {
+        return Err("openclatura: fusion assembly numbering is not audited".into());
+    }
+    let mut parts = build_parent_parts(
         mol,
         &numbered_path,
         &locant_map,
@@ -134,7 +176,29 @@ pub fn build_parent_assembly_plan(
         selection,
         root,
         upstream,
+        selected_fusion.as_ref(),
     )?;
+    if let Some(plan) = selected_fusion {
+        parts.retained_parent_metadata = Some(super::assembly_parts::RetainedParentMetadata {
+            default_indicated_h: plan.indicated_hydrogens.clone(),
+            indicated_hydrogen_count: plan.indicated_hydrogens.len(),
+            mancude_double_bonds: plan.bond_model.maximum_non_cumulative_double_bonds,
+            fusion_locants: plan
+                .numbering
+                .abstract_atom_to_locant
+                .iter()
+                .map(|(_, l)| l)
+                .filter(|l| l.chars().any(|c| c.is_ascii_lowercase()))
+                .cloned()
+                .collect(),
+            ..Default::default()
+        });
+        parts.parent_bond_model = Some(plan.bond_model.clone());
+        parts.parent_bond_delta = Some(plan.derivative_state.bond_delta.clone());
+        parts.parent_derivative_state = Some(plan.derivative_state.clone());
+        parts.fusion_plan = Some(plan);
+        parts.locant_map_source = "proof".into();
+    }
     Ok(ParentAssemblyPlan {
         parts,
         numbered_path,
@@ -142,6 +206,7 @@ pub fn build_parent_assembly_plan(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_parent_parts(
     mol: &Molecule,
     numbered_path: &[usize],
@@ -150,8 +215,10 @@ pub fn build_parent_parts(
     selection: &ParentSelection,
     root: Option<usize>,
     upstream: Option<usize>,
+    fusion: Option<&FusionParentPlan>,
 ) -> Result<AssemblyParts, String> {
     if retained_name.is_none()
+        && fusion.is_none()
         && let Some(descriptor) = selection.polycycle_descriptor.as_deref()
         && super::ring_renderer::is_von_baeyer_descriptor(Some(descriptor))
         && !super::polycycle_topology::audit_von_baeyer_opsin_reading(

@@ -175,6 +175,12 @@ fn normalize_indicated_hydrogen_quota(parts: &mut AssemblyParts, core: &str) -> 
         && parts
             .retained_name
             .as_deref()
+            .or_else(|| {
+                parts
+                    .fusion_plan
+                    .as_ref()
+                    .map(|plan| plan.rendered_base_name.as_str())
+            })
             .is_some_and(|name| indicated_run(name).is_some())
         && let Some(metadata) = &mut parts.retained_parent_metadata
     {
@@ -264,7 +270,27 @@ fn add_indicated_hydrogen_prefix(parts: &mut AssemblyParts, core: &str) -> Strin
         if cited > 0 && cited < stated {
             stated = cited;
         }
-        if additive.len() + indicated.len().max(stated) == parts.parent_length {
+        let fully_hydrogenated_fusion = parts.fusion_plan.is_some()
+            && parts.parent_bond_delta.as_ref().is_some_and(|delta| {
+                delta.compatible
+                    && delta.implied_multiple_bond_ids.is_empty()
+                    && delta.additional_multiple_bond_ids.is_empty()
+                    && delta
+                        .hydrogenated_edges
+                        .iter()
+                        .copied()
+                        .collect::<BTreeSet<_>>()
+                        == delta
+                            .assignment
+                            .orders
+                            .iter()
+                            .filter(|(_, order)| *order == 2)
+                            .map(|(edge, _)| *edge)
+                            .collect()
+            });
+        if fully_hydrogenated_fusion
+            || additive.len() + indicated.len().max(stated) == parts.parent_length
+        {
             return format!("{hydro}{sep}{core}");
         }
         core = format!("{}-{hydro}{sep}{core}", additive.join(","));
@@ -430,6 +456,7 @@ fn add_front_modifiers(parts: &AssemblyParts, word: &str) -> String {
     format!("{mods} {word}")
 }
 pub fn assemble_name_raw(parts: &mut AssemblyParts) -> Result<String, String> {
+    super::assembly_charge::prepare_fusion_charge_assembly(parts)?;
     let fused_ion_candidate = select_fused_ion_operation(parts);
     if let Some(candidate) = &fused_ion_candidate {
         consume_fused_ion_operation(parts, candidate);
@@ -492,6 +519,30 @@ mod tests {
         nomenclature::{rule_from_value, section},
     };
     use super::*;
+
+    #[test]
+    fn systematic_fusion_suffixes_preserve_intrinsic_added_and_hydro_hydrogen() {
+        for (smiles, expected) in [
+            (
+                "CCCC1=NN(C2=C1N=C(NC2=O)C3=C(C=CC(=C3)S(=O)(=O)N4CCN(CC4)C)OCC)C",
+                "5-(2-ethoxy-5-(4-methylpiperazin-1-ylsulfonyl)phenyl)-1-methyl-3-propyl-6H-pyrazolo[4,3-d]pyrimidin-7(1H)-one",
+            ),
+            (
+                "CCCCCN1C(=O)COC2=C1C=C(C(=C2)F)N3C(=O)C4=CC=CC=C4N=N3",
+                "7-fluoro-6-(4-oxo-3,4-dihydrobenzo[d][1,2,3]triazin-3-yl)-4-pentyl-1,4-benzoxazin-3(4H)-one",
+            ),
+            (
+                "O=C1[CH-]NC2=C1C[NH2+]C2",
+                "3-oxo-1,4,5,6-tetrahydropyrrolo[3,4-b]pyrrol-5-ium-2-ide",
+            ),
+        ] {
+            assert_eq!(
+                super::super::name_smiles(smiles).as_deref(),
+                Ok(expected),
+                "{smiles}"
+            );
+        }
+    }
 
     #[test]
     fn oxo_prefixes_cite_retained_ring_hydrogenation() {

@@ -14,6 +14,31 @@ struct ChargeSite {
     charge: i32,
 }
 
+/// Admit oxo protonation only where the naming grammar preserves its charge.
+pub fn validate_heteroatom_oxo_charge_states(mol: &Molecule) -> Result<(), String> {
+    for (&id, atom) in &mol.atoms {
+        if atom.symbol != "O" || atom.charge != 1 || atom.total_h_count == 0 {
+            continue;
+        }
+        if mol.get_neighbors(id).iter().any(|&neighbor| {
+            mol.atoms
+                .get(&neighbor)
+                .is_some_and(|other| !other.is_carbon())
+                && mol
+                    .get_bond(id, neighbor)
+                    .is_some_and(|bond| bond.order == 2)
+        }) {
+            // Neutral oxo functional-group prefixes do not carry the O-bound
+            // proton or its charge. Those groups need a typed protonation
+            // operation before they can be emitted without losing chemistry.
+            return Err(
+                "openclatura: protonated noncarbon oxo charge state is not supported".into(),
+            );
+        }
+    }
+    Ok(())
+}
+
 fn sites(
     mol: &Molecule,
     path: &[usize],
@@ -47,6 +72,9 @@ pub fn apply_anionic_parent_names(
     represented: &AtomSet,
 ) -> Result<String, String> {
     let sites = sites(mol, path, locants)?;
+    if retained.is_some() {
+        validate_retained_chalcogen_cation_pi_state(mol, path, &sites)?;
+    }
     // Upstream divergence: a parent charge must have an exact supported suffix or replacement operation.
     if let Some(site) = sites.iter().find(|site| {
         site.charge != -1
@@ -84,6 +112,60 @@ pub fn apply_anionic_parent_names(
         updated = next;
     }
     Ok(updated)
+}
+
+fn validate_retained_chalcogen_cation_pi_state(
+    mol: &Molecule,
+    path: &[usize],
+    sites: &[ChargeSite],
+) -> Result<(), String> {
+    let parent: AtomSet = path.iter().copied().collect();
+    for site in sites {
+        if site.charge != 1
+            || !matches!(site.symbol.as_str(), "S" | "Se" | "Te")
+            || mol
+                .atoms
+                .get(&site.atom)
+                .is_none_or(|atom| atom.is_aromatic)
+        {
+            continue;
+        }
+        let neighbors: AtomSet = mol
+            .get_neighbors(site.atom)
+            .iter()
+            .copied()
+            .filter(|neighbor| parent.contains(neighbor))
+            .collect();
+        for &pi_neighbor in &neighbors {
+            if mol
+                .get_bond(site.atom, pi_neighbor)
+                .is_none_or(|bond| bond.order < 2)
+            {
+                continue;
+            }
+            let mut queue = VecDeque::from([pi_neighbor]);
+            let mut visited = AtomSet::from([site.atom, pi_neighbor]);
+            while let Some(atom) = queue.pop_front() {
+                for &next in mol.get_neighbors(atom) {
+                    if !parent.contains(&next) || !visited.insert(next) {
+                        continue;
+                    }
+                    if neighbors.contains(&next) {
+                        // A neutral retained chalcogen parent keeps its ring
+                        // bonds single. An ium suffix alone does not prove the
+                        // changed pi bonds or the corresponding hydrogen sites;
+                        // a parser can otherwise reconstruct another tautomer.
+                        return Err(
+                            "openclatura: retained cyclic chalcogen cation pi state is not supported"
+                                .into(),
+                        );
+                    }
+                    queue.push_back(next);
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn locant_key(locant: &str) -> (usize, String) {
@@ -757,6 +839,91 @@ mod tests {
         atom.charge = -1;
         mol.add_atom(atom).unwrap();
         mol
+    }
+
+    #[test]
+    fn retained_chalcogen_cations_need_a_proved_ring_pi_state() {
+        for symbol in ["S", "Se", "Te"] {
+            let mut mol = Molecule::new();
+            for (id, symbol) in [(0, symbol), (1, "C"), (2, "N"), (3, "C"), (4, "C")] {
+                let mut atom = Atom::new(id, symbol);
+                atom.charge = i32::from(id == 0);
+                mol.add_atom(atom).unwrap();
+            }
+            for (id, (u, v, order)) in [(0, 1, 2), (1, 2, 1), (2, 3, 2), (3, 4, 1), (4, 0, 1)]
+                .into_iter()
+                .enumerate()
+            {
+                mol.add_bond(Bond::new(id, u, v, order)).unwrap();
+            }
+            let path = [0, 1, 2, 3, 4];
+            let locants = path.iter().map(|&id| (id, (id + 1).to_string())).collect();
+            assert!(
+                apply_anionic_parent_names(
+                    "1,3-thiazol-1-ium",
+                    &mol,
+                    &path,
+                    &locants,
+                    Some("1,3-thiazole"),
+                    &AtomSet::new(),
+                )
+                .unwrap_err()
+                .contains("chalcogen cation pi state")
+            );
+            mol.atoms.get_mut(&0).unwrap().is_aromatic = true;
+            assert!(
+                apply_anionic_parent_names(
+                    "1,3-thiazol-1-ium",
+                    &mol,
+                    &path,
+                    &locants,
+                    Some("1,3-thiazole"),
+                    &AtomSet::new(),
+                )
+                .is_ok()
+            );
+            mol.atoms.get_mut(&0).unwrap().is_aromatic = false;
+            mol.set_bond_order(0, 1).unwrap();
+            assert!(
+                apply_anionic_parent_names(
+                    "1,3-thiazolidin-1-ium",
+                    &mol,
+                    &path,
+                    &locants,
+                    Some("1,3-thiazolidine"),
+                    &AtomSet::new(),
+                )
+                .is_ok()
+            );
+        }
+        assert!(
+            super::super::name_smiles("CC1=NC=[S+]C1")
+                .unwrap_err()
+                .contains("chalcogen cation pi state")
+        );
+        assert_eq!(
+            super::super::name_smiles("C[S+](C)[CH-]C").as_deref(),
+            Ok("1-(dimethylsulfaniumyl)ethan-1-ide")
+        );
+    }
+
+    #[test]
+    fn neutral_oxo_prefixes_cannot_consume_protonated_noncarbon_oxo() {
+        use super::super::graph_io::read_smiles;
+        for smiles in ["CS(=[OH+])(=O)C", "OP(O)(O)=[OH+]"] {
+            let mol = read_smiles(smiles).unwrap();
+            assert!(
+                validate_heteroatom_oxo_charge_states(&mol).is_err(),
+                "{smiles}"
+            );
+        }
+        for smiles in ["CS(=O)(=O)C", "C=[OH+]", "C[OH2+]"] {
+            let mol = read_smiles(smiles).unwrap();
+            assert!(
+                validate_heteroatom_oxo_charge_states(&mol).is_ok(),
+                "{smiles}"
+            );
+        }
     }
 
     #[test]

@@ -10,6 +10,16 @@ use std::collections::{BTreeMap, BTreeSet};
 type Site = (String, usize);
 
 pub fn parent_indicated_hydrogen_quota(parts: &AssemblyParts) -> Option<usize> {
+    if let Some(plan) = &parts.fusion_plan {
+        let model =
+            super::fusion::numbering::parent_bond_model(&plan.abstract_parent_graph).ok()?;
+        return Some(
+            super::fusion::numbering::parent_pi_capable_atom_ids(&plan.abstract_parent_graph)
+                .ok()?
+                .len()
+                .saturating_sub(2 * model.maximum_non_cumulative_double_bonds),
+        );
+    }
     parts
         .retained_parent_metadata
         .as_ref()
@@ -278,9 +288,6 @@ fn collect_indicated_hydrogens(
     if add_proved_parent_hydrogens(mol, parts, locants)? {
         return Ok(());
     }
-    let Some(_) = parts.retained_name else {
-        return Ok(());
-    };
     if let Some(plan) =
         retained::mancude_monocycle_hydro_plan(mol, numbered_path, parts.retained_name.as_deref())
     {
@@ -616,6 +623,9 @@ fn collect_indicated_hydrogens(
 }
 
 fn recast_ring_ketone_hydrogens(parts: &mut AssemblyParts, locants: &BTreeMap<usize, String>) {
+    if parts.fusion_plan.is_some() {
+        return;
+    }
     let Some(group) = parts.principal_group.as_ref().filter(|g| g.key == "ketone") else {
         return;
     };
@@ -706,6 +716,18 @@ fn add_proved_parent_hydrogens(
     let Some(delta) = delta.filter(|delta| delta.compatible) else {
         return Ok(false);
     };
+    if parts.fusion_plan.as_ref().is_some_and(|plan| {
+        plan.audit
+            .checks
+            .iter()
+            .any(|check| check == "paired_external_pi_consumption")
+    }) {
+        return Ok(true);
+    }
+    let fusion_added_only = parts.fusion_plan.is_some()
+        && !delta.added_hydrogen_operations.is_empty()
+        && delta.hydrogenated_edges.is_empty()
+        && delta.additional_multiple_bond_ids.is_empty();
     parts
         .hydro_operations
         .extend(delta.added_hydrogen_operations);
@@ -713,7 +735,7 @@ fn add_proved_parent_hydrogens(
     parts
         .hydro_operations
         .extend(delta.intrinsic_hydro_operations);
-    if intrinsic {
+    if intrinsic || fusion_added_only {
         return Ok(true);
     }
     if let Some(state) = &parts.parent_derivative_state

@@ -2,7 +2,7 @@
 //!
 //! Input identity checks remain those of the naming subsystem. In particular,
 //! this adapter does not use upstream's unsanitized fallback to bypass them.
-use super::graph_kernel::{EdgeSet, biconnected_edge_components};
+use super::graph_kernel::biconnected_edge_components;
 use super::molecule::{Atom, AtomSet, Bond, Molecule};
 use reshiki_chemistry::{
     ELEMENTS, kekulize, ranking, smiles,
@@ -20,6 +20,9 @@ pub fn read_smiles(text: &str) -> Result<Molecule, String> {
     }
     let prepared = smiles::prepare(text).map_err(|error| error.to_string())?;
     let mut state = prepared.state;
+    // Upstream divergence: aromatic atom endpoints cannot identify localized
+    // inter-ring bonds; retain bond aromaticity for the final fusion pi audit.
+    let aromatic_bonds: Vec<_> = state.graph.bonds.iter().map(|b| b.aromatic).collect();
     let atom_metadata = state
         .graph
         .atoms
@@ -165,78 +168,31 @@ pub fn read_smiles(text: &str) -> Result<Molecule, String> {
             u: bond.a,
             v: bond.b,
             order: usize::from(bond.order),
+            is_aromatic: aromatic_bonds[idx],
             stereo,
             in_small_ring,
         })?;
     }
-    require_supported_ring_blocks(&mut mol, &state.rings.atoms)?;
+    require_supported_ring_blocks(&mol)?;
     super::identity_validation::validate_input(&mol)?;
     super::identity_validation::validate_mancude_duplicate_ranking(&mol)?;
     Ok(mol)
 }
 
-/// Record fusion eligibility without suppressing retained-parent discovery.
-fn require_supported_ring_blocks(mol: &mut Molecule, rings: &[Vec<usize>]) -> Result<(), String> {
+/// Input checks that do not depend on the selected nomenclature system.
+fn require_supported_ring_blocks(mol: &Molecule) -> Result<(), String> {
     let atoms = mol.atoms.keys().copied().collect();
-    let mut cyclic_blocks = Vec::new();
     let mut ring_blocks = BTreeMap::<usize, usize>::new();
     for block in biconnected_edge_components(mol, &atoms) {
-        let mut degrees = BTreeMap::<usize, usize>::new();
-        for &(u, v) in &block {
-            *degrees.entry(u).or_default() += 1;
-            *degrees.entry(v).or_default() += 1;
-        }
-        if block.len() < degrees.len() {
-            continue;
-        }
-        let nonsimple = block.len() != degrees.len() || degrees.values().any(|&degree| degree != 2);
-        let block_atoms = degrees.into_keys().collect::<AtomSet>();
-        for &atom in &block_atoms {
-            *ring_blocks.entry(atom).or_default() += 1;
-        }
-        cyclic_blocks.push((block, block_atoms, nonsimple));
-    }
-    for &count in ring_blocks.values() {
-        // Upstream divergence: a third ring on one spiro atom needs the
-        // unported spiro side-pair assembly (find_spiro_side_pair).
-        if count > 2 {
-            return Err("openclatura: three rings at one spiro atom are not ported".into());
+        let block_atoms: AtomSet = block.iter().flat_map(|&(u, v)| [u, v]).collect();
+        if block.len() >= block_atoms.len() {
+            for atom in block_atoms {
+                *ring_blocks.entry(atom).or_default() += 1;
+            }
         }
     }
-    for (block, block_atoms, nonsimple) in cyclic_blocks {
-        if !nonsimple {
-            continue;
-        }
-        // Preserve the input SSSR evidence for the later planner boundary.
-        // Sharing a longer path does not prove a fused bond.
-        let block_rings: Vec<_> = rings
-            .iter()
-            .filter(|ring| ring.len() >= 5)
-            .map(|ring| {
-                let atoms = ring.iter().copied().collect::<AtomSet>();
-                let edges = ring
-                    .iter()
-                    .zip(ring.iter().cycle().skip(1))
-                    .map(|(&u, &v)| (u.min(v), u.max(v)))
-                    .collect::<EdgeSet>();
-                (atoms, edges)
-            })
-            .filter(|(_, edges)| edges.is_subset(&block))
-            .collect();
-        let fusion_pair = block_rings
-            .iter()
-            .enumerate()
-            .any(|(index, (atoms, edges))| {
-                block_rings[index + 1..]
-                    .iter()
-                    .any(|(other_atoms, other_edges)| {
-                        atoms.intersection(other_atoms).count() == 2
-                            && edges.intersection(other_edges).count() == 1
-                    })
-            });
-        if block_atoms.iter().any(|atom| mol.atoms[atom].is_aromatic) || fusion_pair {
-            mol.fusion_eligible_blocks.push(block_atoms);
-        }
+    if ring_blocks.values().any(|&count| count > 2) {
+        return Err("openclatura: three rings at one spiro atom are not ported".into());
     }
     Ok(())
 }
@@ -491,7 +447,7 @@ mod tests {
     }
 
     #[test]
-    fn fusion_eligible_blocks_reach_parent_selection() {
+    fn fusion_blocks_are_admitted_for_audited_parent_selection() {
         for text in [
             "C1CCC2CCCCC2C1",  // decalin.
             "C1CC2CCCC2C1",    // bicyclo[3.3.0]octane.
@@ -500,7 +456,10 @@ mod tests {
             "c1ccc2c(c1)CC2",  // Only one SSSR ring has five or more atoms.
         ] {
             let mol = read_smiles(text).unwrap();
-            assert!(!mol.fusion_eligible_blocks.is_empty(), "{text}");
+            assert!(
+                !super::super::chains::get_cyclic_atoms(&mol, &AtomSet::new()).is_empty(),
+                "{text}"
+            );
         }
     }
 

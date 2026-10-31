@@ -25,7 +25,7 @@ pub struct MatchOptions<'a> {
     pub family: Option<&'a str>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct TopologyKey {
+pub(super) struct TopologyKey {
     pub size: usize,
     pub symbols: BTreeMap<String, usize>,
     pub degrees: BTreeMap<usize, usize>,
@@ -245,7 +245,7 @@ fn retained_graph_template_from_data(row: &Value) -> RetainedGraphTemplate {
         atoms,
     }
 }
-fn molecule_graph_topology_key(mol: &Molecule, atoms: &AtomSet) -> TopologyKey {
+pub(super) fn molecule_graph_topology_key(mol: &Molecule, atoms: &AtomSet) -> TopologyKey {
     let degrees: BTreeMap<_, _> = atoms
         .iter()
         .map(|&a| {
@@ -278,7 +278,7 @@ fn molecule_graph_topology_key(mol: &Molecule, atoms: &AtomSet) -> TopologyKey {
     }
     key
 }
-fn retained_graph_template_topology_key(t: &RetainedGraphTemplate) -> TopologyKey {
+pub(super) fn retained_graph_template_topology_key(t: &RetainedGraphTemplate) -> TopologyKey {
     let mut degrees: BTreeMap<_, usize> = t.locants.iter().map(|l| (l, 0)).collect();
     for b in &t.bonds {
         *degrees.entry(&b.locants.0).or_default() += 1;
@@ -508,7 +508,7 @@ fn atom_matches(
     }
     !(fixed_hydrogenation && !a.aromatic && !a.saturated && a.symbol != "C" && doubles > 0)
 }
-fn match_retained_graph_template_maps_with_options(
+pub(super) fn match_retained_graph_template_maps_with_options(
     mol: &Molecule,
     atoms: &AtomSet,
     t: &RetainedGraphTemplate,
@@ -996,12 +996,18 @@ mod tests {
     }
     #[test]
     fn retained_fused_names_do_not_erase_ring_triples_or_cumulated_doubles() {
-        for smiles in [
-            "C1=CC=C2C(=C1)C3=CC#CC=C3C2",
-            "C1=CC=C2C=CC#CC2=C1",
-            "C1=CC=C2NC#CC2=C1",
-            "C1=CC=C2C(=C1)C3=C=CC=CC3C2",
-            "C1=CC=C2C=C=CCC2=C1",
+        for (smiles, legacy_name) in [
+            ("C1=CC=C2C(=C1)C3=CC#CC=C3C2", None),
+            ("C1=CC=C2C=CC#CC2=C1", None),
+            ("C1=CC=C2NC#CC2=C1", None),
+            (
+                "C1=CC=C2C(=C1)C3=C=CC=CC3C2",
+                Some("tricyclo[7.4.0.0^{2,7}]trideca-1(13),2,3,5,9,11-hexaene"),
+            ),
+            (
+                "C1=CC=C2C=C=CCC2=C1",
+                Some("bicyclo[4.4.0]deca-1(10),2,3,6,8-pentaene"),
+            ),
         ] {
             for (allow_nonaromatic, allow_relocated_indicated_h) in
                 [(false, false), (true, false), (false, true), (true, true)]
@@ -1020,7 +1026,12 @@ mod tests {
                     "{smiles}"
                 );
             }
-            assert!(super::super::name_smiles(smiles).is_err(), "{smiles}");
+            let name = super::super::name_smiles(smiles);
+            if let Some(expected) = legacy_name {
+                assert_eq!(name.unwrap(), expected);
+            } else {
+                assert!(name.is_err(), "{smiles}");
+            }
         }
         assert!(super::super::name_smiles("C1=CC=C2C(=C1)C3=CC#CC=C3C2(CCO)CCO").is_err());
 
