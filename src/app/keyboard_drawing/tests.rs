@@ -72,9 +72,99 @@ fn new_and_loaded_tabs_enable_keyboard_drawing_and_keep_other_tabs_opted_out() {
     loaded.sync_keyboard_drawing();
     assert!(loaded.keyboard_drawing_active());
     assert_eq!(loaded.tab.keyboard_drawing.target(), Target::Atom(atom));
+    assert_eq!(
+        loaded.tab.keyboard_drawing.marker_point(&loaded.tab.doc),
+        None
+    );
+    // The canvas still routes a stationary first click to its world point.
+    assert!(loaded.tab.keyboard_drawing.point(&loaded.tab.doc).is_some());
     let _ = loaded.context_key("n");
     assert_eq!(loaded.tab.doc.atom(atom).unwrap().element, "N");
+    assert_eq!(
+        loaded.tab.keyboard_drawing.marker_point(&loaded.tab.doc),
+        Some(loaded.tab.doc.atom(atom).unwrap().position)
+    );
     assert!(loaded.tab.hover.is_none());
+}
+
+#[test]
+fn applying_a_text_label_keeps_the_hotspot_hidden_until_pointer_motion() {
+    use super::super::inline_text::Action as Inline;
+    let mut app = app();
+    app.tab.doc.add_atom("C", app.tab.camera.center);
+    app.tab.file_epoch += 1;
+    app.sync_keyboard_drawing();
+    let point = Point::new(400., 200.);
+    let _ = app.update(Message::Canvas(Edit::Hover(Some(point))));
+    assert_eq!(app.tab.keyboard_drawing.target(), Target::Blank(point));
+    let _ = app.update(Message::Tool(Tool::Text));
+    let _ = app.update(Message::InlineText(Inline::Begin(None, point)));
+    assert!(app.tab.hover.is_none());
+    let _ = app.update(Message::InlineText(Inline::ReplaceText(
+        "Conditions".into(),
+    )));
+    let _ = app.update(Message::InlineText(Inline::Finish(true)));
+    assert_eq!(app.tool, Tool::Select);
+    assert_eq!(app.tab.doc.annotations.len(), 1);
+    assert!(app.keyboard_drawing_active());
+    assert_eq!(app.tab.keyboard_drawing.marker_point(&app.tab.doc), None);
+    let moved = point.offset(1., 0.);
+    let _ = app.update(Message::Canvas(Edit::Hover(Some(moved))));
+    assert_eq!(app.tab.keyboard_drawing.target(), Target::Blank(moved));
+    assert_eq!(
+        app.tab.keyboard_drawing.marker_point(&app.tab.doc),
+        Some(moved)
+    );
+}
+
+#[test]
+fn group_keys_attach_at_toluene_para_ch_in_one_undo_step() {
+    for (key, label, added) in [("N", "NO2", 3), ("M", "MgBr", 2), ("Z", "N3", 3)] {
+        let mut app = app();
+        let _ = app.context_key("3");
+        let Target::Atom(ipso) = app.tab.keyboard_drawing.target() else {
+            panic!("Benzene attachment target");
+        };
+        let origin = app.tab.doc.atom(ipso).unwrap().position;
+        let para = app
+            .tab
+            .doc
+            .atoms
+            .iter()
+            .max_by(|a, b| {
+                a.position
+                    .distance(origin)
+                    .total_cmp(&b.position.distance(origin))
+            })
+            .unwrap()
+            .id;
+        let _ = app.context_key("1");
+        assert_eq!(app.tab.doc.atoms.len(), 7);
+        assert_eq!(app.tab.doc.bonds.len(), 7);
+        let before = app.tab.doc.clone();
+        let history = app.tab.history.undo_frames().len();
+        let point = app.tab.doc.atom(para).unwrap().position;
+        let _ = app.update(Message::Canvas(Edit::Hover(Some(point))));
+        let _ = app.update(Message::ContextKey(key.into()));
+        assert!(!app.error, "{key}: {}", app.status);
+        assert_eq!(app.tab.doc.atoms.len(), 7 + added, "{key}");
+        assert_eq!(app.tab.doc.bonds.len(), 7 + added, "{key}");
+        let group = app.tab.doc.abbreviations.first().unwrap();
+        assert_eq!(group.label, label);
+        assert!(
+            app.tab
+                .doc
+                .bonds
+                .iter()
+                .any(|b| b.connects(para, group.anchor))
+        );
+        assert_eq!(app.tab.history.undo_frames().len(), history + 1, "{key}");
+        let attached = app.tab.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before, "{key}");
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, attached, "{key}");
+    }
 }
 
 #[test]

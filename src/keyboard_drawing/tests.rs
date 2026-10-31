@@ -11,6 +11,79 @@ fn chain() -> (Document, u64, u64, u64) {
 }
 
 #[test]
+fn initial_target_stays_hidden_until_pointer_motion_or_click() {
+    let (doc, a, _, c) = chain();
+    for clicked in [false, true] {
+        let mut state = State::default();
+        state.ensure_target(&doc, &[], Point::default(), 0);
+        assert_eq!(state.target(), Target::Atom(a));
+        assert_eq!(state.marker_point(&doc), None);
+        let point = doc.atom(c).unwrap().position;
+        assert!(state.pointer_target(point, Target::Atom(c), &doc, clicked));
+        assert_eq!(state.marker_point(&doc), Some(point));
+    }
+}
+
+#[test]
+fn arrow_keys_reveal_the_initial_target_even_without_a_neighbor() {
+    let (doc, a, b, _) = chain();
+    for (direction, target, moved) in [
+        (Direction::Right, Target::Bond(a, b), true),
+        (Direction::Left, Target::Atom(a), false),
+    ] {
+        let mut state = State::default();
+        state.ensure_target(&doc, &[], Point::default(), 0);
+        assert_eq!(state.marker_point(&doc), None);
+        assert_eq!(state.move_target(&doc, direction, false), moved);
+        assert_eq!(state.target(), target);
+        assert_eq!(state.marker_point(&doc), target.point(&doc));
+    }
+}
+
+#[test]
+fn initial_atom_or_bond_selection_shows_its_target_immediately() {
+    let (doc, a, b, _) = chain();
+    for (selected, target) in [(vec![a], Target::Atom(a)), (vec![a, b], Target::Bond(a, b))] {
+        let mut state = State::default();
+        state.ensure_target(&doc, &selected, Point::default(), 0);
+        assert_eq!(state.target(), target);
+        assert_eq!(state.marker_point(&doc), target.point(&doc));
+    }
+}
+
+#[test]
+fn drawing_from_a_hidden_target_keeps_the_initial_atom_and_shows_the_result() {
+    let (doc, a, _, _) = chain();
+    let mut state = State::default();
+    state.ensure_target(&doc, &[], Point::default(), 0);
+    assert_eq!(state.target(), Target::Atom(a));
+    assert_eq!(state.marker_point(&doc), None);
+    let (grown, end) = crate::hotkeys::atom_edit(&doc, a, "1", 42.)
+        .unwrap()
+        .unwrap();
+    state.record(&doc, &grown, 0, false);
+    state.set_target(Target::Atom(end), &grown);
+    assert!(grown.bonds.iter().any(|bond| bond.connects(a, end)));
+    assert_eq!(state.marker_point(&grown), Target::Atom(end).point(&grown));
+}
+
+#[test]
+fn resuming_without_an_atom_selection_hides_the_automatic_target() {
+    let (doc, a, _, _) = chain();
+    let point = Point::new(300., 200.);
+    let mut state = State::default();
+    state.ensure_target(&doc, &[], Point::default(), 0);
+    state.pointer_target(point, Target::Blank(point), &doc, false);
+    assert_eq!(state.marker_point(&doc), Some(point));
+    state.suspend();
+    state.ensure_target(&doc, &[], Point::default(), 0);
+    assert_eq!(state.target(), Target::Atom(a));
+    assert_eq!(state.marker_point(&doc), None);
+    state.pointer_target(point, Target::Blank(point), &doc, false);
+    assert_eq!(state.marker_point(&doc), Some(point));
+}
+
+#[test]
 fn arrows_traverse_hotspots_and_shift_skips_without_editing() {
     let (doc, a, b, c) = chain();
     let before = doc.clone();
