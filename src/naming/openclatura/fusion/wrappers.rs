@@ -1274,7 +1274,7 @@ fn wrapper_parent_derivative_state(
     if let Some(plan) = fusion_plan {
         let state = &plan.derivative_state;
         if state.external_pi_operations().next().is_none()
-            || !state.added_hydrogen_operations().is_empty()
+            || !state.bond_delta.added_hydrogen_operations.is_empty()
             || !state.hydro_operations.is_empty()
         {
             return Ok(Some(state.clone()));
@@ -1289,12 +1289,12 @@ fn wrapper_parent_derivative_state(
             model,
             locants,
             &ParentDerivativeOptions {
-                indicated_hydrogen_atom_ids: &indicated,
+                indicated_hydrogen_atom_ids: Some(&indicated),
                 preserve_retained_parent_state: true,
                 allow_pi_redistribution: Some(true),
                 compose_retained_external_pi: true,
             },
-        )? && !composed.added_hydrogen_operations().is_empty()
+        )? && !composed.bond_delta.added_hydrogen_operations.is_empty()
         {
             // Upstream divergence: the alkylidene prefix assembler separately
             // hydrogenates its attachment edge. Combining that operation with
@@ -1479,7 +1479,7 @@ fn audit_bridge_plan(
             model,
             locants,
             &ParentDerivativeOptions {
-                indicated_hydrogen_atom_ids: &indicated,
+                indicated_hydrogen_atom_ids: Some(&indicated),
                 allow_pi_redistribution: retained_redistribution.then_some(true),
                 ..Default::default()
             },
@@ -1572,7 +1572,7 @@ mod tests {
             let atoms = super::super::super::chains::get_cyclic_atoms(&mol, &AtomSet::new());
             let plan = plan_bridged_fusion_wrapper(&mol, &atoms).unwrap().unwrap();
             assert_eq!(
-                plan.derivative_state.added_hydrogen_operations()[0].locants,
+                plan.derivative_state.bond_delta.added_hydrogen_operations[0].locants,
                 ["6"]
             );
             assert_eq!(

@@ -57,7 +57,7 @@ impl ReplacementFusionState {
     }
 }
 pub fn replacement_state_scope(mol: &Molecule, atoms: &AtomSet) -> bool {
-    for &id in atoms {
+    atoms.iter().all(|&id| {
         let a = &mol.atoms[&id];
         let ns = mol.get_neighbors(id);
         let orders: Vec<_> = ns
@@ -75,7 +75,7 @@ pub fn replacement_state_scope(mol: &Molecule, atoms: &AtomSet) -> bool {
             return false;
         }
         if a.is_carbon() {
-            continue;
+            return true;
         }
         if orders.iter().any(|o| *o != 1) {
             return false;
@@ -86,8 +86,8 @@ pub fn replacement_state_scope(mol: &Molecule, atoms: &AtomSet) -> bool {
         {
             return false;
         }
-    }
-    true
+        true
+    })
 }
 pub fn prove_replacement_state(
     mol: &Molecule,
@@ -117,12 +117,7 @@ pub fn prove_replacement_state(
     let initial = parent_bond_model(&graph)?;
     let mut candidates = Vec::new();
     for assignment in &initial.allowed_kekule_assignments {
-        let paired: AtomSet = assignment
-            .orders
-            .iter()
-            .filter(|(_, o)| *o == 2)
-            .flat_map(|(e, _)| [e.0, e.1])
-            .collect();
+        let paired = assignment.paired_atoms();
         let intrinsic: AtomSet = atoms
             .difference(&paired)
             .copied()
@@ -147,7 +142,7 @@ pub fn prove_replacement_state(
             &model,
             &locants,
             &ParentDerivativeOptions {
-                indicated_hydrogen_atom_ids: &intrinsic,
+                indicated_hydrogen_atom_ids: Some(&intrinsic),
                 preserve_retained_parent_state: true,
                 compose_retained_external_pi: true,
                 ..Default::default()
@@ -263,7 +258,8 @@ fn hydrogen_balances(
         .map(|op| op.parent_atom_id)
         .collect();
     let added: Vec<_> = state
-        .added_hydrogen_operations()
+        .bond_delta
+        .added_hydrogen_operations
         .iter()
         .flat_map(|op| op.atom_ids.iter().copied())
         .collect();
@@ -303,32 +299,30 @@ fn hydrogen_balances(
     }) {
         return None;
     }
-    let mut balances = Vec::new();
-    for &id in atoms {
-        let parent_valence: usize = assignment
-            .iter()
-            .filter(|(e, _)| e.0 == id || e.1 == id)
-            .map(|(_, o)| *o)
-            .sum();
-        let external: usize = mol
-            .get_neighbors(id)
-            .iter()
-            .filter(|n| !atoms.contains(n))
-            .filter_map(|&n| mol.get_bond(id, n))
-            .map(|b| b.order)
-            .sum();
-        let balance = ReplacementHydrogenBalance {
-            atom_id: id,
-            parent_hydrogens: mol.atoms[&id].element()?.standard_valence as i32
-                - parent_valence as i32,
-            additive_hydrogens: i32::from(hydro_atoms.contains(&id)),
-            external_bond_order: external as i32,
-            observed_hydrogens: mol.atoms[&id].total_h_count as i32,
-        };
-        if !balance.exact() {
-            return None;
-        }
-        balances.push(balance);
-    }
-    Some(balances)
+    atoms
+        .iter()
+        .map(|&id| {
+            let parent_valence: usize = assignment
+                .iter()
+                .filter(|(e, _)| e.0 == id || e.1 == id)
+                .map(|(_, o)| *o)
+                .sum();
+            let external: usize = mol
+                .get_neighbors(id)
+                .iter()
+                .filter(|n| !atoms.contains(n))
+                .filter_map(|&n| mol.get_bond(id, n))
+                .map(|b| b.order)
+                .sum();
+            let balance = ReplacementHydrogenBalance {
+                atom_id: id,
+                parent_hydrogens: mol.atoms[&id].element()?.standard_valence as i32
+                    - parent_valence as i32,
+                additive_hydrogens: i32::from(hydro_atoms.contains(&id)),
+                external_bond_order: external as i32,
+                observed_hydrogens: mol.atoms[&id].total_h_count as i32,
+            };
+            balance.exact().then_some(balance)
+        })
+        .collect()
 }

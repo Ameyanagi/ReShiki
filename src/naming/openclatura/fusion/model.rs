@@ -1,5 +1,6 @@
 //! Small graph values used by retained-parent bond-state proofs.
 pub use super::super::graph_kernel::{Edge, EdgeSet, normalize_edge};
+use super::super::molecule::AtomSet;
 use super::super::retained_graph_model::RetainedGraphTemplate;
 use super::mancude::ParentDerivativeState;
 use std::collections::{BTreeMap, BTreeSet};
@@ -40,6 +41,15 @@ pub struct FusionGraph {
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct BondAssignment {
     pub orders: Vec<(Edge, usize)>,
+}
+impl BondAssignment {
+    pub(super) fn paired_atoms(&self) -> AtomSet {
+        self.orders
+            .iter()
+            .filter(|(_, order)| *order == 2)
+            .flat_map(|(edge, _)| [edge.0, edge.1])
+            .collect()
+    }
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ParentBondModel {
@@ -446,7 +456,7 @@ impl FusionNumberingProof {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FusionAuditResult {
     pub status: AuditStatus,
-    pub checks: Vec<String>,
+    pub paired_external_pi_consumption: bool,
     pub errors: Vec<String>,
 }
 impl FusionAuditResult {

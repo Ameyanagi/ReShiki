@@ -14,8 +14,6 @@ use std::collections::BTreeMap;
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ParentBondDelta {
     pub assignment: BondAssignment,
-    // The requested shared delta retains parent-pi identity for a later audit.
-    #[allow(dead_code)]
     pub implied_multiple_bond_ids: AtomSet,
     pub hydrogenated_edges: Vec<Edge>,
     pub additional_multiple_bond_ids: AtomSet,
@@ -25,7 +23,7 @@ pub struct ParentBondDelta {
     pub composition_model: Option<ParentBondModel>,
 }
 impl ParentBondDelta {
-    pub fn hydrogenated_atom_ids(&self) -> AtomSet {
+    pub(super) fn hydrogenated_atom_ids(&self) -> AtomSet {
         self.hydrogenated_edges
             .iter()
             .flat_map(|&(u, v)| [u, v])
@@ -43,11 +41,9 @@ pub struct PiRedistribution {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExternalPiOperation {
-    // The shared derivative proof retains typed operation labels and locants;
-    // retained assembly currently consumes only their graph identities.
+    // Retain the typed operation label in the shared derivative proof.
     #[allow(dead_code)]
     pub key: String,
-    #[allow(dead_code)]
     pub locant: String,
     pub parent_atom_id: usize,
     pub external_atom_id: usize,
@@ -55,10 +51,8 @@ pub struct ExternalPiOperation {
     pub external_atom_symbol: String,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
-// The explicitly requested derivative-state API includes unsaturation evidence.
-// Its detailed graph binding is read by the systematic audit in the next port.
-#[allow(dead_code)]
 pub struct UnsaturationOperation {
+    #[allow(dead_code)]
     pub key: String,
     pub locants: Vec<String>,
     pub atom_ids: Vec<usize>,
@@ -70,81 +64,44 @@ pub struct ParentDerivativeState {
     pub bond_delta: ParentBondDelta,
     pub hydro_operations: Vec<HydroOperation>,
     pub unsaturation_operations: Vec<UnsaturationOperation>,
-    // Preserve all exact derivative witnesses even when a retained caller
-    // only needs their hydrogen projection.
-    #[allow(dead_code)]
     pub oxo_operations: Vec<ExternalPiOperation>,
-    #[allow(dead_code)]
     pub pi_redistribution: Option<PiRedistribution>,
-    // Retained assembly currently renders oxo; preserve the other proved
-    // external-pi operations in the requested shared derivative-state value.
-    #[allow(dead_code)]
     pub imino_operations: Vec<ExternalPiOperation>,
-    #[allow(dead_code)]
     pub alkylidene_operations: Vec<ExternalPiOperation>,
 }
 impl ParentDerivativeState {
-    pub fn external_pi_operations(&self) -> impl Iterator<Item = &ExternalPiOperation> {
+    pub(super) fn external_pi_operations(&self) -> impl Iterator<Item = &ExternalPiOperation> {
         self.oxo_operations
             .iter()
             .chain(&self.imino_operations)
             .chain(&self.alkylidene_operations)
     }
-    pub fn added_hydrogen_operations(&self) -> &[HydroOperation] {
-        &self.bond_delta.added_hydrogen_operations
-    }
-    pub fn intrinsic_hydro_operations(&self) -> &[HydroOperation] {
-        &self.bond_delta.intrinsic_hydro_operations
-    }
 }
-static EMPTY_ATOMS: AtomSet = AtomSet::new();
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct CompareOptions<'a> {
-    pub externally_unsaturated_atom_ids: &'a AtomSet,
-    pub indicated_hydrogen_atom_ids: &'a AtomSet,
+    pub externally_unsaturated_atom_ids: Option<&'a AtomSet>,
+    pub indicated_hydrogen_atom_ids: Option<&'a AtomSet>,
     pub atom_to_locant: Option<&'a BTreeMap<usize, String>>,
     pub preserve_retained_parent_state: bool,
     pub compose_retained_external_pi: bool,
 }
-impl Default for CompareOptions<'_> {
-    fn default() -> Self {
-        Self {
-            externally_unsaturated_atom_ids: &EMPTY_ATOMS,
-            indicated_hydrogen_atom_ids: &EMPTY_ATOMS,
-            atom_to_locant: None,
-            preserve_retained_parent_state: false,
-            compose_retained_external_pi: false,
-        }
-    }
-}
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ParentDerivativeOptions<'a> {
-    pub indicated_hydrogen_atom_ids: &'a AtomSet,
+    pub indicated_hydrogen_atom_ids: Option<&'a AtomSet>,
     pub preserve_retained_parent_state: bool,
     pub allow_pi_redistribution: Option<bool>,
     pub compose_retained_external_pi: bool,
 }
-impl Default for ParentDerivativeOptions<'_> {
-    fn default() -> Self {
-        Self {
-            indicated_hydrogen_atom_ids: &EMPTY_ATOMS,
-            preserve_retained_parent_state: false,
-            allow_pi_redistribution: None,
-            compose_retained_external_pi: false,
-        }
-    }
-}
-
 fn touches(edge: Edge, sites: &AtomSet) -> bool {
     sites.contains(&edge.0) || sites.contains(&edge.1)
 }
-fn parent_degree(mol: &Molecule, atoms: &AtomSet, id: usize) -> usize {
+pub(super) fn parent_degree(mol: &Molecule, atoms: &AtomSet, id: usize) -> usize {
     mol.get_neighbors(id)
         .iter()
         .filter(|n| atoms.contains(n))
         .count()
 }
-fn all_single(mol: &Molecule, id: usize) -> bool {
+pub(super) fn all_single(mol: &Molecule, id: usize) -> bool {
     mol.get_neighbors(id)
         .iter()
         .all(|&n| mol.get_bond(id, n).is_some_and(|b| b.order == 1))
@@ -158,7 +115,7 @@ fn bonding_number(mol: &Molecule, id: usize) -> usize {
             .sum::<usize>()
 }
 
-pub fn indicated_hydrogen_parent_bond_model(
+pub(super) fn indicated_hydrogen_parent_bond_model(
     graph: &FusionGraph,
     sites: &AtomSet,
 ) -> Result<ParentBondModel, String> {
@@ -181,7 +138,7 @@ pub fn indicated_hydrogen_parent_bond_model(
     }
     parent_bond_model(&constrained)
 }
-pub fn single_site_parent_model(
+pub(super) fn single_site_parent_model(
     model: &ParentBondModel,
     sites: &AtomSet,
 ) -> Result<ParentBondModel, String> {
@@ -209,7 +166,7 @@ pub fn single_site_parent_model(
     };
     indicated_hydrogen_parent_bond_model(&graph, sites)
 }
-pub fn saturated_nitrogen_hydrogen_sites(
+pub(super) fn saturated_nitrogen_hydrogen_sites(
     mol: &Molecule,
     atoms: &AtomSet,
     indicated: &AtomSet,
@@ -242,7 +199,7 @@ pub fn saturated_nitrogen_hydrogen_sites(
     }
     indicated.clone()
 }
-pub fn has_complete_saturated_hydrogenation(
+pub(super) fn has_complete_saturated_hydrogenation(
     mol: &Molecule,
     atoms: &AtomSet,
     state: &ParentDerivativeState,
@@ -266,8 +223,8 @@ pub fn has_complete_saturated_hydrogenation(
         .copied()
         .collect();
     state.bond_delta.compatible
-        && state.added_hydrogen_operations().is_empty()
-        && state.intrinsic_hydro_operations().is_empty()
+        && state.bond_delta.added_hydrogen_operations.is_empty()
+        && state.bond_delta.intrinsic_hydro_operations.is_empty()
         && edges.len() * 2 == atoms.len()
         && state.bond_delta.hydrogenated_atom_ids() == *atoms
         && state
@@ -278,7 +235,7 @@ pub fn has_complete_saturated_hydrogenation(
             .all(|(e, o)| *o == 1 || (*o == 2 && edges.contains(e)))
 }
 /// A charged sigma N citation must preserve ring pi count and hydrogen sites.
-pub fn protonated_hydrogenation_is_complete(
+pub(super) fn protonated_hydrogenation_is_complete(
     mol: &Molecule,
     atoms: &AtomSet,
     model: &ParentBondModel,
@@ -376,12 +333,12 @@ fn five_membered_single_nitrogen(mol: &Molecule, atoms: &AtomSet, id: usize) -> 
                 .any(|third| mol.get_bond(second, third).is_some())
         })
 }
-pub fn is_added_hydrogen_nitrogen(mol: &Molecule, atoms: &AtomSet, id: usize) -> bool {
+pub(super) fn is_added_hydrogen_nitrogen(mol: &Molecule, atoms: &AtomSet, id: usize) -> bool {
     atoms.contains(&id)
         && !mol.atoms[&id].is_aromatic
         && single_bonded_parent_nitrogen(mol, atoms, id)
 }
-pub fn nitrogen_composition_parent_model(
+pub(super) fn nitrogen_composition_parent_model(
     mol: &Molecule,
     atoms: &AtomSet,
     model: &ParentBondModel,
@@ -452,12 +409,17 @@ pub fn nitrogen_composition_parent_model(
     Ok(constrained)
 }
 
-pub fn compare_actual_parent_to_implied_parent(
+pub(in super::super) fn compare_actual_parent_to_implied_parent(
     mol: &Molecule,
     atoms: &AtomSet,
     model: &ParentBondModel,
     options: &CompareOptions<'_>,
 ) -> Result<Option<ParentBondDelta>, String> {
+    let empty_atoms = AtomSet::new();
+    let indicated = options.indicated_hydrogen_atom_ids.unwrap_or(&empty_atoms);
+    let external = options
+        .externally_unsaturated_atom_ids
+        .unwrap_or(&empty_atoms);
     let observed: BTreeMap<_, _> = mol
         .bonds
         .values()
@@ -471,12 +433,7 @@ pub fn compare_actual_parent_to_implied_parent(
     let model = if options.preserve_retained_parent_state {
         model
     } else {
-        resolved = match nitrogen_composition_parent_model(
-            mol,
-            atoms,
-            model,
-            options.indicated_hydrogen_atom_ids,
-        ) {
+        resolved = match nitrogen_composition_parent_model(mol, atoms, model, indicated) {
             Ok(m) => m,
             Err(e) if super::numbering::mancude_search_budget_exceeded(&e) => return Err(e),
             Err(_) => return Ok(None),
@@ -532,12 +489,12 @@ pub fn compare_actual_parent_to_implied_parent(
         let after: Vec<_> = hydrogenated
             .iter()
             .copied()
-            .filter(|&e| !touches(e, options.indicated_hydrogen_atom_ids))
+            .filter(|&e| !touches(e, indicated))
             .collect();
         let residual: Vec<_> = after
             .iter()
             .copied()
-            .filter(|&e| !touches(e, options.externally_unsaturated_atom_ids))
+            .filter(|&e| !touches(e, external))
             .collect();
         // Without a numbered map the sorted edge domain is common to all assignments.
         let tie = if options.atom_to_locant.is_some() {
@@ -575,33 +532,21 @@ pub fn compare_actual_parent_to_implied_parent(
         return Ok(Some(delta));
     }
     if options.preserve_retained_parent_state {
-        if options.compose_retained_external_pi
-            && !options.externally_unsaturated_atom_ids.is_empty()
-        {
+        if options.compose_retained_external_pi && !external.is_empty() {
             let mut selected = model.clone();
             selected.allowed_kekule_assignments = vec![delta.assignment.clone()];
-            if let Some(composed) = external_pi_parent_delta(
-                mol,
-                atoms,
-                &selected,
-                options.externally_unsaturated_atom_ids,
-                locants,
-                true,
-            )? {
+            if let Some(composed) =
+                external_pi_parent_delta(mol, atoms, &selected, external, locants, true)?
+            {
                 return Ok(Some(composed));
             }
         }
         return Ok(Some(delta));
     }
-    let donor_constrained = !options.indicated_hydrogen_atom_ids.is_empty()
-        && options
-            .indicated_hydrogen_atom_ids
-            .iter()
-            .all(|a| mol.atoms[a].symbol == "N");
+    let donor_constrained =
+        !indicated.is_empty() && indicated.iter().all(|a| mol.atoms[a].symbol == "N");
     let mut consumed = delta.assignment.orders.iter().any(|&(e, o)| {
-        o == 2
-            && observed[&normalize_edge(e.0, e.1)].order == 1
-            && touches(e, options.externally_unsaturated_atom_ids)
+        o == 2 && observed[&normalize_edge(e.0, e.1)].order == 1 && touches(e, external)
     });
     if consumed {
         let pi = model.pi_atoms();
@@ -613,41 +558,26 @@ pub fn compare_actual_parent_to_implied_parent(
         .assignment
         .orders
         .iter()
-        .filter(|&&(e, o)| o == 2 && touches(e, options.indicated_hydrogen_atom_ids))
+        .filter(|&&(e, o)| o == 2 && touches(e, indicated))
         .flat_map(|&(e, _)| [e.0, e.1])
-        .filter(|a| options.externally_unsaturated_atom_ids.contains(a))
+        .filter(|a| external.contains(a))
         .collect();
-    if !options
-        .externally_unsaturated_atom_ids
-        .is_subset(&paired_external)
+    if !external.is_subset(&paired_external)
         && (!delta.additional_multiple_bond_ids.is_empty()
             || !delta.hydrogenated_edges.is_empty()
             || donor_constrained
             || consumed)
-        && let Some(composed) = external_pi_parent_delta(
-            mol,
-            atoms,
-            model,
-            options.externally_unsaturated_atom_ids,
-            locants,
-            false,
-        )?
+        && let Some(composed) =
+            external_pi_parent_delta(mol, atoms, model, external, locants, false)?
     {
         return Ok(Some(composed));
     }
-    delta.intrinsic_hydro_operations = fixed_carbon_hydro_operations(
-        mol,
-        atoms,
-        model,
-        &delta,
-        options.externally_unsaturated_atom_ids,
-        options.indicated_hydrogen_atom_ids,
-        locants,
-    );
+    delta.intrinsic_hydro_operations =
+        fixed_carbon_hydro_operations(mol, atoms, model, &delta, external, indicated, locants);
     Ok(Some(delta))
 }
 
-pub fn prove_pi_redistribution(
+pub(super) fn prove_pi_redistribution(
     mol: &Molecule,
     atoms: &AtomSet,
     model: &ParentBondModel,
@@ -908,12 +838,7 @@ fn external_pi_parent_delta(
     }
     let mut candidates = Vec::new();
     for assignment in assignments {
-        let paired: AtomSet = assignment
-            .orders
-            .iter()
-            .filter(|(_, o)| *o == 2)
-            .flat_map(|&(e, _)| [e.0, e.1])
-            .collect();
+        let paired = assignment.paired_atoms();
         let added: AtomSet = pi_atoms
             .difference(&paired)
             .copied()
@@ -1058,7 +983,7 @@ fn fixed_carbon_hydro_operations(
         ..Default::default()
     }]
 }
-pub fn parent_derivative_state(
+pub(in super::super) fn parent_derivative_state(
     mol: &Molecule,
     atoms: &AtomSet,
     model: &ParentBondModel,
@@ -1068,6 +993,8 @@ pub fn parent_derivative_state(
     if locants.keys().copied().collect::<AtomSet>() != *atoms {
         return Ok(None);
     }
+    let empty_atoms = AtomSet::new();
+    let indicated = options.indicated_hydrogen_atom_ids.unwrap_or(&empty_atoms);
     let mut oxo = Vec::new();
     let mut imino = Vec::new();
     let mut alkylidene = Vec::new();
@@ -1117,7 +1044,7 @@ pub fn parent_derivative_state(
         atoms,
         model,
         &CompareOptions {
-            externally_unsaturated_atom_ids: &external_sites,
+            externally_unsaturated_atom_ids: Some(&external_sites),
             indicated_hydrogen_atom_ids: options.indicated_hydrogen_atom_ids,
             atom_to_locant: Some(locants),
             preserve_retained_parent_state: options.preserve_retained_parent_state,
@@ -1134,14 +1061,7 @@ pub fn parent_derivative_state(
         .allow_pi_redistribution
         .unwrap_or(!options.preserve_retained_parent_state)
     {
-        prove_pi_redistribution(
-            mol,
-            atoms,
-            model,
-            &delta,
-            options.indicated_hydrogen_atom_ids,
-            &external,
-        )?
+        prove_pi_redistribution(mol, atoms, model, &delta, indicated, &external)?
     } else {
         None
     };

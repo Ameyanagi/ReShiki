@@ -362,7 +362,7 @@ fn complete_fusion_plan(
         &bond_model,
         &input_locants,
         &ParentDerivativeOptions {
-            indicated_hydrogen_atom_ids: &indicated_atoms,
+            indicated_hydrogen_atom_ids: Some(&indicated_atoms),
             ..Default::default()
         },
     )?
@@ -447,21 +447,20 @@ fn complete_fusion_plan(
         rendered.push('-');
     }
     rendered.push_str(&rendered_core);
-    let audit = audit_fusion_plan(
-        mol,
-        atoms,
-        ast,
-        graph,
-        &numbering,
-        &bond_model,
-        registry,
-        &indicated_h,
-        &charge_operations,
-        &derivative_state,
-        &lambda_descriptors,
-        &rendered_core,
-    )?;
-    if !audit.confirmed() {
+    let mut plan = FusionParentPlan {
+        ast: ast.clone(),
+        rendered_base_name: rendered,
+        abstract_parent_graph: graph.clone(),
+        numbering,
+        bond_model,
+        indicated_hydrogens: indicated_h,
+        derivative_state,
+        charge_operations,
+        lambda_descriptors,
+        ..Default::default()
+    };
+    plan.audit = audit_fusion_plan(mol, atoms, &plan, registry, &rendered_core)?;
+    if !plan.audit.confirmed() {
         return Ok(None);
     }
     // Upstream divergence: aromatic equivalence can hide ring triples and
@@ -486,25 +485,18 @@ fn complete_fusion_plan(
             "openclatura: fused-parent cumulative and higher bond orders are not ported".into(),
         );
     }
-    if unresolved_localized_pi_cycle(mol, &bond_model, &derivative_state, &indicated_atoms) {
+    if unresolved_localized_pi_cycle(
+        mol,
+        &plan.bond_model,
+        &plan.derivative_state,
+        &indicated_atoms,
+    ) {
         return Err("openclatura: localized nonaromatic fused pi state not ported".into());
     }
-    if !super::layout::parser_numbering_is_supported(&numbering.selected_face_model) {
+    if !super::layout::parser_numbering_is_supported(&plan.numbering.selected_face_model) {
         return Err("openclatura: nonhexagonal fusion parser numbering not ported".into());
     }
-    Ok(Some(FusionParentPlan {
-        ast: ast.clone(),
-        rendered_base_name: rendered,
-        abstract_parent_graph: graph.clone(),
-        numbering,
-        bond_model,
-        indicated_hydrogens: indicated_h,
-        audit,
-        derivative_state,
-        charge_operations,
-        lambda_descriptors,
-        ..Default::default()
-    }))
+    Ok(Some(plan))
 }
 
 fn cited_indicated_hydrogens(
@@ -625,8 +617,8 @@ fn unresolved_localized_pi_cycle(
     for operation in state
         .hydro_operations
         .iter()
-        .chain(state.added_hydrogen_operations())
-        .chain(state.intrinsic_hydro_operations())
+        .chain(&state.bond_delta.added_hydrogen_operations)
+        .chain(&state.bond_delta.intrinsic_hydro_operations)
     {
         protected.extend(operation.atom_ids.iter().copied());
     }

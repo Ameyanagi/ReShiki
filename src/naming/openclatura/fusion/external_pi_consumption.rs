@@ -12,8 +12,8 @@ pub fn has_paired_external_pi_consumption(
     if !state.bond_delta.compatible
         || !state.hydro_operations.is_empty()
         || !state.unsaturation_operations.is_empty()
-        || !state.added_hydrogen_operations().is_empty()
-        || !state.intrinsic_hydro_operations().is_empty()
+        || !state.bond_delta.added_hydrogen_operations.is_empty()
+        || !state.bond_delta.intrinsic_hydro_operations.is_empty()
     {
         return false;
     }

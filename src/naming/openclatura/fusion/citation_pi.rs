@@ -2,13 +2,6 @@
 use super::super::{locants::retained_locant_sort_key as locant_key, molecule::AtomSet};
 use super::model::*;
 use std::collections::BTreeMap;
-fn paired(a: &BondAssignment) -> AtomSet {
-    a.orders
-        .iter()
-        .filter(|(_, o)| *o == 2)
-        .flat_map(|(e, _)| [e.0, e.1])
-        .collect()
-}
 pub fn citation_pi_dead_end(plan: &FusionParentPlan) -> Option<Edge> {
     let ast = &plan.ast;
     let state = &plan.derivative_state;
@@ -22,8 +15,8 @@ pub fn citation_pi_dead_end(plan: &FusionParentPlan) -> Option<Edge> {
         || !state.hydro_operations.is_empty()
         || !state.unsaturation_operations.is_empty()
         || state.external_pi_operations().next().is_some()
-        || !state.added_hydrogen_operations().is_empty()
-        || !state.intrinsic_hydro_operations().is_empty()
+        || !state.bond_delta.added_hydrogen_operations.is_empty()
+        || !state.bond_delta.intrinsic_hydro_operations.is_empty()
         || state.pi_redistribution.is_some()
         || !plan.charge_operations.is_empty()
         || !plan.lambda_descriptors.is_empty()
@@ -71,7 +64,7 @@ pub fn citation_pi_dead_end(plan: &FusionParentPlan) -> Option<Edge> {
         || model
             .allowed_kekule_assignments
             .iter()
-            .any(|a| paired(a) != active)
+            .any(|a| a.paired_atoms() != active)
     {
         return None;
     }

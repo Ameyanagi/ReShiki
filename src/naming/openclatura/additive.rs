@@ -748,12 +748,7 @@ fn add_proved_parent_hydrogens(
     } else {
         parts.fusion_plan.as_ref()
     };
-    if plan.is_some_and(|plan| {
-        plan.audit
-            .checks
-            .iter()
-            .any(|check| check == "paired_external_pi_consumption")
-    }) {
+    if plan.is_some_and(|plan| plan.audit.paired_external_pi_consumption) {
         return Ok(true);
     }
     let fusion_added_only = plan.is_some()

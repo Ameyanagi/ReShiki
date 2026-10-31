@@ -3,7 +3,10 @@ use super::super::{
     locants::retained_locant_sort_key as locant_key,
     molecule::{AtomSet, Molecule},
 };
-use super::model::*;
+use super::{
+    mancude::{all_single, parent_degree},
+    model::*,
+};
 fn require_deprotonation_valence(mol: &Molecule, id: usize) -> Result<(), String> {
     let atom = &mol.atoms[&id];
     let valence = atom.total_h_count
@@ -24,22 +27,27 @@ fn require_deprotonation_valence(mol: &Molecule, id: usize) -> Result<(), String
     }
     Ok(())
 }
-pub fn fusion_component_charge_parent(mol: &Molecule, atoms: &AtomSet) -> Result<Molecule, String> {
+pub(super) fn fusion_component_charge_parent(
+    mol: &Molecule,
+    atoms: &AtomSet,
+) -> Result<Molecule, String> {
     let mut parent = mol.clone();
     for &id in atoms {
         let atom = &mol.atoms[&id];
-        if atom.charge == -1 && matches!(atom.symbol.as_str(), "C" | "N") {
-            require_deprotonation_valence(mol, id)?;
-            if let Some(restored) = parent.atoms.get_mut(&id) {
-                restored.charge = 0;
-                restored.total_h_count += 1;
-                restored.explicit_h_count += 1;
-            }
+        if atom.charge != -1 || !matches!(atom.symbol.as_str(), "C" | "N") {
+            continue;
         }
+        require_deprotonation_valence(mol, id)?;
+        let Some(restored) = parent.atoms.get_mut(&id) else {
+            continue;
+        };
+        restored.charge = 0;
+        restored.total_h_count += 1;
+        restored.explicit_h_count += 1;
     }
     Ok(parent)
 }
-pub fn fusion_charge_lone_pair_sites(mol: &Molecule, graph: &FusionGraph) -> AtomSet {
+pub(super) fn fusion_charge_lone_pair_sites(mol: &Molecule, graph: &FusionGraph) -> AtomSet {
     if !graph.atoms.iter().any(|a| mol.atoms[&a.id].charge == -1) {
         return AtomSet::new();
     }
@@ -52,15 +60,12 @@ pub fn fusion_charge_lone_pair_sites(mol: &Molecule, graph: &FusionGraph) -> Ato
                 && matches!(atom.charge, -1 | 0)
                 && atom.is_aromatic
                 && (mol.degree(a.id) + atom.total_h_count) as i32 == 3 + atom.charge
-                && mol
-                    .get_neighbors(a.id)
-                    .iter()
-                    .all(|&n| mol.get_bond(a.id, n).is_some_and(|b| b.order == 1))
+                && all_single(mol, a.id)
         })
         .map(|a| a.id)
         .collect()
 }
-pub fn protonated_pi_nitrogen_atoms(mol: &Molecule, graph: &FusionGraph) -> AtomSet {
+pub(super) fn protonated_pi_nitrogen_atoms(mol: &Molecule, graph: &FusionGraph) -> AtomSet {
     let atoms: AtomSet = graph.atoms.iter().map(|a| a.id).collect();
     graph
         .atoms
@@ -87,12 +92,6 @@ pub fn protonated_pi_nitrogen_atoms(mol: &Molecule, graph: &FusionGraph) -> Atom
 }
 
 fn has_unproved_protonated_junction_donor(mol: &Molecule, atoms: &AtomSet) -> bool {
-    let degree = |id| {
-        mol.get_neighbors(id)
-            .iter()
-            .filter(|n| atoms.contains(n))
-            .count()
-    };
     if !mol
         .bonds
         .values()
@@ -114,7 +113,7 @@ fn has_unproved_protonated_junction_donor(mol: &Molecule, atoms: &AtomSet) -> bo
             || atom.charge != 1
             || atom.total_h_count == 0
             || neighbors.len() + atom.total_h_count != 4
-            || !matches!(degree(id), 2 | 3)
+            || !matches!(parent_degree(mol, atoms, id), 2 | 3)
             || neighbors
                 .iter()
                 .any(|&n| mol.get_bond(id, n).is_none_or(|b| b.order != 1))
@@ -127,7 +126,11 @@ fn has_unproved_protonated_junction_donor(mol: &Molecule, atoms: &AtomSet) -> bo
         neighbors
             .iter()
             .copied()
-            .filter(|n| atoms.contains(n) && mol.atoms[n].symbol == "C" && degree(*n) == 3)
+            .filter(|n| {
+                atoms.contains(n)
+                    && mol.atoms[n].symbol == "C"
+                    && parent_degree(mol, atoms, *n) == 3
+            })
             .any(|junction| {
                 mol.get_neighbors(junction)
                     .iter()
@@ -137,7 +140,7 @@ fn has_unproved_protonated_junction_donor(mol: &Molecule, atoms: &AtomSet) -> bo
     })
 }
 
-pub fn fusion_charge_operations(
+pub(super) fn fusion_charge_operations(
     mol: &Molecule,
     graph: &FusionGraph,
     numbering: &FusionNumberingProof,

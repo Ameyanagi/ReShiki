@@ -15,26 +15,7 @@ use std::collections::{BTreeMap, BTreeSet};
 fn pi_class(class: &str) -> bool {
     matches!(class, "aromatic" | "mancude" | "fusion")
 }
-fn paired(assignment: &BondAssignment) -> AtomSet {
-    assignment
-        .orders
-        .iter()
-        .filter(|(_, o)| *o == 2)
-        .flat_map(|(e, _)| [e.0, e.1])
-        .collect()
-}
-fn all_single(mol: &Molecule, id: usize) -> bool {
-    mol.get_neighbors(id)
-        .iter()
-        .all(|&n| mol.get_bond(id, n).is_some_and(|b| b.order == 1))
-}
-fn parent_degree(mol: &Molecule, atoms: &AtomSet, id: usize) -> usize {
-    mol.get_neighbors(id)
-        .iter()
-        .filter(|a| atoms.contains(a))
-        .count()
-}
-pub fn component_graph(
+pub(super) fn component_graph(
     spec: &FusionComponentSpec,
     atoms: &[RetainedGraphAtomTemplate],
 ) -> FusionGraph {
@@ -67,7 +48,7 @@ pub fn component_graph(
             .collect(),
     }
 }
-pub fn component_parent_atoms(
+pub(super) fn component_parent_atoms(
     spec: &FusionComponentSpec,
 ) -> Result<Vec<RetainedGraphAtomTemplate>, String> {
     let atoms = spec.atoms();
@@ -122,7 +103,7 @@ pub fn component_parent_atoms(
     }
     Ok(relaxed)
 }
-pub fn component_h_locants(
+pub(super) fn component_h_locants(
     spec: &FusionComponentSpec,
     symbol: &str,
 ) -> Result<BTreeSet<String>, String> {
@@ -138,7 +119,7 @@ pub fn component_h_locants(
     }
     let mut candidates = BTreeSet::new();
     for assignment in &model.allowed_kekule_assignments {
-        let occupied = paired(assignment);
+        let occupied = assignment.paired_atoms();
         for a in &graph.atoms {
             if a.symbol == symbol
                 && a.pi_capacity != 0
@@ -184,7 +165,7 @@ fn has_component_pi_budget(spec: &FusionComponentSpec) -> bool {
                 && !a.forced_single
         }) && spec.bonds().iter().all(|b| pi_class(&b.bond_class)))
 }
-pub fn intrinsic_carbon_fusion_scope(
+pub(super) fn intrinsic_carbon_fusion_scope(
     ast: &FusionNameAst,
     specs: &BTreeMap<usize, FusionComponentSpec>,
 ) -> bool {
@@ -219,7 +200,7 @@ pub fn intrinsic_carbon_fusion_scope(
     }
     seen == occurrences
 }
-pub fn component_carbon_h_relocation_scope(
+pub(super) fn component_carbon_h_relocation_scope(
     ast: &FusionNameAst,
     specs: &BTreeMap<usize, FusionComponentSpec>,
 ) -> bool {
@@ -228,7 +209,7 @@ pub fn component_carbon_h_relocation_scope(
             .values()
             .all(|s| s.atoms().iter().all(|a| a.symbol == "C" && a.charge == 0))
 }
-pub fn component_parent_graph(
+pub(super) fn component_parent_graph(
     ast: &FusionNameAst,
     specs: &BTreeMap<usize, FusionComponentSpec>,
     relocate_carbon_h: bool,
@@ -289,7 +270,7 @@ pub fn component_parent_graph(
             .collect(),
     })
 }
-pub fn intrinsic_carbon_candidate_atoms(
+pub(super) fn intrinsic_carbon_candidate_atoms(
     ast: &FusionNameAst,
     specs: &BTreeMap<usize, FusionComponentSpec>,
     mol: &Molecule,
@@ -366,7 +347,7 @@ pub fn intrinsic_carbon_candidate_atoms(
     junctions.extend(candidates.difference(&blocked).copied());
     Ok(junctions)
 }
-pub fn is_intrinsic_carbon_h_site(mol: &Molecule, id: usize, atoms: &AtomSet) -> bool {
+pub(super) fn is_intrinsic_carbon_h_site(mol: &Molecule, id: usize, atoms: &AtomSet) -> bool {
     let a = &mol.atoms[&id];
     if a.symbol != "C" || a.charge != 0 || a.is_aromatic {
         return false;
@@ -387,7 +368,7 @@ fn is_pi_bearing_carbon_junction(mol: &Molecule, id: usize, atoms: &AtomSet) -> 
                 .iter()
                 .any(|&n| atoms.contains(&n) && mol.get_bond(id, n).is_some_and(|b| b.order == 2)))
 }
-pub fn pi_bearing_fusion_carbon_sites(
+fn pi_bearing_fusion_carbon_sites(
     mol: &Molecule,
     graph: &FusionGraph,
     candidates: &AtomSet,
@@ -431,7 +412,7 @@ fn hydrogenation_junctions(mol: &Molecule, atoms: &AtomSet, candidates: &AtomSet
         })
         .collect()
 }
-pub fn released_fusion_carbon_sites(
+pub(super) fn released_fusion_carbon_sites(
     mol: &Molecule,
     graph: &FusionGraph,
     candidates: &AtomSet,
@@ -449,19 +430,19 @@ pub fn released_fusion_carbon_sites(
     sites.extend(hydrogenation_junctions(mol, &atoms, &movable));
     sites
 }
-pub fn intrinsic_parent_lone_pair_sites(mol: &Molecule, graph: &FusionGraph) -> AtomSet {
+pub(super) fn intrinsic_parent_lone_pair_sites(mol: &Molecule, graph: &FusionGraph) -> AtomSet {
     let mut sites = aromatic_nitrogen_lone_pair_sites(mol, graph);
     sites.extend(fusion_charge_lone_pair_sites(mol, graph));
     sites
 }
 #[cfg(test)]
-pub fn aromatic_nitrogen_hydrogen_atoms(mol: &Molecule, graph: &FusionGraph) -> AtomSet {
+fn aromatic_nitrogen_hydrogen_atoms(mol: &Molecule, graph: &FusionGraph) -> AtomSet {
     aromatic_nitrogen_lone_pair_sites(mol, graph)
         .into_iter()
         .filter(|a| mol.atoms[a].total_h_count == 1)
         .collect()
 }
-pub fn aromatic_nitrogen_lone_pair_sites(mol: &Molecule, graph: &FusionGraph) -> AtomSet {
+fn aromatic_nitrogen_lone_pair_sites(mol: &Molecule, graph: &FusionGraph) -> AtomSet {
     let atoms: AtomSet = graph.atoms.iter().map(|a| a.id).collect();
     let mut external = Vec::new();
     for &a in &atoms {
@@ -506,7 +487,7 @@ pub fn aromatic_nitrogen_lone_pair_sites(mol: &Molecule, graph: &FusionGraph) ->
         .collect()
 }
 /// Choose intrinsic carbon hydrogen sites against one completed maximum matching.
-pub fn intrinsic_carbon_parent_model(
+pub(super) fn intrinsic_carbon_parent_model(
     mol: &Molecule,
     graph: &FusionGraph,
     model: &ParentBondModel,
@@ -622,7 +603,7 @@ pub fn intrinsic_carbon_parent_model(
     });
     let mut groups = BTreeSet::new();
     for assignment in &model.allowed_kekule_assignments {
-        let p = paired(assignment);
+        let p = assignment.paired_atoms();
         let unpaired: AtomSet = carbon.difference(&p).copied().collect();
         if !intrinsic_h.is_empty() && occupied.is_subset(&p) && !unresolved {
             return Ok((no_carbon_model, AtomSet::new()));
@@ -645,8 +626,8 @@ pub fn intrinsic_carbon_parent_model(
             &constrained,
             &CompareOptions {
                 atom_to_locant: Some(locants),
-                indicated_hydrogen_atom_ids: &hydrogen_atoms,
-                externally_unsaturated_atom_ids: &oxo,
+                indicated_hydrogen_atom_ids: Some(&hydrogen_atoms),
+                externally_unsaturated_atom_ids: Some(&oxo),
                 ..Default::default()
             },
         )?
@@ -680,7 +661,7 @@ pub fn intrinsic_carbon_parent_model(
         {
             continue;
         }
-        let p = paired(&delta.assignment);
+        let p = delta.assignment.paired_atoms();
         if carbon.difference(&p).copied().collect::<AtomSet>() != sites
             || !occupied.difference(&sites).all(|a| p.contains(a))
         {
@@ -861,8 +842,11 @@ mod tests {
         .unwrap()
         .unwrap();
         assert!(state.hydro_operations.is_empty());
-        assert!(state.added_hydrogen_operations().is_empty());
-        assert_eq!(state.intrinsic_hydro_operations()[0].atom_ids, [0, 5]);
+        assert!(state.bond_delta.added_hydrogen_operations.is_empty());
+        assert_eq!(
+            state.bond_delta.intrinsic_hydro_operations[0].atom_ids,
+            [0, 5]
+        );
         assert_eq!(state.oxo_operations[0].parent_atom_id, 0);
     }
 }

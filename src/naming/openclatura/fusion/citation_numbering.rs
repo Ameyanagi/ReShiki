@@ -3,7 +3,7 @@ use super::super::molecule::Molecule;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Preserve elements and adjacency while leaving bond state to the parent proof.
-pub fn numbered_parent_graphs_agree<'a>(
+pub(super) fn numbered_parent_graphs_agree<'a>(
     mol: &Molecule,
     maps: impl IntoIterator<Item = &'a BTreeMap<usize, String>>,
 ) -> bool {
@@ -11,13 +11,13 @@ pub fn numbered_parent_graphs_agree<'a>(
     for mapping in maps {
         let vertices: BTreeSet<_> = mapping
             .iter()
-            .map(|(&atom, locant)| (locant.clone(), mol.atoms[&atom].symbol.clone()))
+            .map(|(&atom, locant)| (locant.as_str(), mol.atoms[&atom].symbol.as_str()))
             .collect();
-        let edges: BTreeSet<BTreeSet<String>> = mol
+        let edges: BTreeSet<BTreeSet<&str>> = mol
             .bonds
             .values()
             .filter(|bond| mapping.contains_key(&bond.u) && mapping.contains_key(&bond.v))
-            .map(|bond| BTreeSet::from([mapping[&bond.u].clone(), mapping[&bond.v].clone()]))
+            .map(|bond| BTreeSet::from([mapping[&bond.u].as_str(), mapping[&bond.v].as_str()]))
             .collect();
         let signature = (vertices, edges);
         if let Some(previous) = &reference {

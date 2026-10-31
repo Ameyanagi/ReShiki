@@ -2,13 +2,6 @@
 use super::super::molecule::{AtomSet, Molecule};
 use super::{citation_pi::forced_surviving_child_edge, model::*};
 use std::collections::BTreeMap;
-fn paired(a: &BondAssignment) -> AtomSet {
-    a.orders
-        .iter()
-        .filter(|(_, o)| *o == 2)
-        .flat_map(|(e, _)| [e.0, e.1])
-        .collect()
-}
 pub fn charged_donor_citation_pi_dead_end(mol: &Molecule, plan: &FusionParentPlan) -> Option<Edge> {
     let ast = &plan.ast;
     let state = &plan.derivative_state;
@@ -19,8 +12,8 @@ pub fn charged_donor_citation_pi_dead_end(mol: &Molecule, plan: &FusionParentPla
         || !state.hydro_operations.is_empty()
         || !state.unsaturation_operations.is_empty()
         || state.external_pi_operations().next().is_some()
-        || !state.added_hydrogen_operations().is_empty()
-        || !state.intrinsic_hydro_operations().is_empty()
+        || !state.bond_delta.added_hydrogen_operations.is_empty()
+        || !state.bond_delta.intrinsic_hydro_operations.is_empty()
         || state.pi_redistribution.is_some()
         || ast.parent_occurrences.len() != 1
         || !ast.multiplicative_groups.is_empty()
@@ -58,13 +51,13 @@ pub fn charged_donor_citation_pi_dead_end(mol: &Molecule, plan: &FusionParentPla
             )
         })
         .collect();
-    let active = paired(&model.allowed_kekule_assignments[0]);
+    let active = model.allowed_kekule_assignments[0].paired_atoms();
     let donors: AtomSet = atoms.difference(&active).copied().collect();
     if donors.is_empty()
         || model
             .allowed_kekule_assignments
             .iter()
-            .any(|a| paired(a) != active)
+            .any(|a| a.paired_atoms() != active)
         || model
             .required_single_bonds
             .iter()

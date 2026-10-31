@@ -19,7 +19,10 @@ use super::{
     rules::*,
     valence::FusionLambdaDescriptor,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, BTreeSet},
+};
 
 type Node = (usize, String);
 type Label = (String, i32);
@@ -35,7 +38,11 @@ struct ReconstructedGraph {
 fn issue(errors: &mut Vec<String>, message: &str) {
     errors.push(message.into());
 }
-fn result(status: AuditStatus, checks: Vec<String>, errors: Vec<String>) -> FusionAuditResult {
+fn result(
+    status: AuditStatus,
+    paired_external_pi_consumption: bool,
+    errors: Vec<String>,
+) -> FusionAuditResult {
     let mut unique = Vec::new();
     for error in errors {
         if !unique.contains(&error) {
@@ -44,15 +51,16 @@ fn result(status: AuditStatus, checks: Vec<String>, errors: Vec<String>) -> Fusi
     }
     FusionAuditResult {
         status,
-        checks,
+        paired_external_pi_consumption,
         errors: unique,
     }
 }
-fn check(checks: &mut Vec<String>, name: &str) {
-    checks.push(name.into());
-}
-fn error(message: impl Into<String>, checks: Vec<String>) -> FusionAuditResult {
-    result(AuditStatus::Error, checks, vec![message.into()])
+fn error(message: impl Into<String>, paired_external_pi_consumption: bool) -> FusionAuditResult {
+    result(
+        AuditStatus::Error,
+        paired_external_pi_consumption,
+        vec![message.into()],
+    )
 }
 fn molecular_edges(mol: &Molecule, atoms: &AtomSet) -> EdgeSet {
     mol.bonds
@@ -68,37 +76,43 @@ fn locant_map(numbering: &FusionNumberingProof) -> Result<BTreeMap<usize, String
         .map(|m| m.iter().cloned().collect())
         .ok_or_else(|| "fusion numbering has no input locant map".into())
 }
-fn citation_plan(ast: &FusionNameAst) -> Result<FusionCitationPlan, String> {
-    ast.citation_plan
-        .clone()
-        .or_else(|| {
-            ast.citation_tree
-                .clone()
-                .map(|n| FusionCitationPlan::from_tree(n, &ast.joins))
-        })
-        .ok_or_else(|| "fusion AST has no citation structure".into())
+fn citation_plan(ast: &FusionNameAst) -> Result<Cow<'_, FusionCitationPlan>, String> {
+    if let Some(plan) = &ast.citation_plan {
+        return Ok(Cow::Borrowed(plan));
+    }
+    let tree = ast
+        .citation_tree
+        .as_ref()
+        .ok_or("fusion AST has no citation structure")?;
+    Ok(Cow::Owned(FusionCitationPlan::from_tree(
+        tree.clone(),
+        &ast.joins,
+    )))
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn audit_fusion_plan(
     mol: &Molecule,
     parent_atoms: &AtomSet,
-    ast: &FusionNameAst,
-    abstract_parent_graph: &FusionGraph,
-    numbering: &FusionNumberingProof,
-    bond_model: &ParentBondModel,
+    plan: &FusionParentPlan,
     registry: &FusionComponentRegistry,
-    indicated_hydrogens: &[String],
-    charge_operations: &[FusionChargeOperation],
-    derivative_state: &ParentDerivativeState,
-    lambda_descriptors: &[FusionLambdaDescriptor],
     rendered_core_name: &str,
 ) -> Result<FusionAuditResult, String> {
+    let FusionParentPlan {
+        ast,
+        abstract_parent_graph,
+        numbering,
+        bond_model,
+        indicated_hydrogens,
+        charge_operations,
+        derivative_state,
+        lambda_descriptors,
+        ..
+    } = plan;
     if parent_atoms.iter().any(|id| !mol.atoms.contains_key(id)) {
-        return Ok(error("selected parent references unknown atom ids", vec![]));
+        return Ok(error("selected parent references unknown atom ids", false));
     }
     if parent_atoms.is_empty() {
-        return Ok(error("selected parent graph is empty", vec![]));
+        return Ok(error("selected parent graph is empty", false));
     }
     if !fusion_ring_size_gate(
         &numbering
@@ -110,7 +124,7 @@ pub fn audit_fusion_plan(
     ) {
         return Ok(result(
             AuditStatus::Abstain,
-            vec!["fusion_ring_size_gate".into()],
+            false,
             vec!["fewer than two rings of size at least five".into()],
         ));
     }
@@ -120,14 +134,11 @@ pub fn audit_fusion_plan(
             Ok(spec) => {
                 specs.insert(matched.occurrence_id, spec);
             }
-            Err(e) => return Ok(error(e, vec![])),
+            Err(e) => return Ok(error(e, false)),
         }
     }
     // Production systematic fusion uses the audited preferred-name mode.
-    let mut checks = vec![
-        "fusion_ring_size_gate".into(),
-        "pin_component_policy".into(),
-    ];
+    let mut paired_external_pi_consumption = false;
     let non_pin: Vec<_> = specs
         .iter()
         .filter_map(|(&id, s)| (!s.pin_component).then_some(id))
@@ -135,7 +146,7 @@ pub fn audit_fusion_plan(
     if !non_pin.is_empty() {
         return Ok(result(
             AuditStatus::Abstain,
-            checks,
+            paired_external_pi_consumption,
             vec![format!(
                 "component occurrences are not PIN-eligible: {non_pin:?}"
             )],
@@ -150,10 +161,9 @@ pub fn audit_fusion_plan(
             derivative_state,
         )?;
         if !unresolved.is_empty() {
-            check(&mut checks, "component_indicated_h_composition");
             return Ok(result(
                 AuditStatus::Abstain,
-                checks.clone(),
+                paired_external_pi_consumption,
                 vec![format!(
                     "polycomponent fusion has unrepresented intrinsic indicated-hydrogen sites: {unresolved:?}"
                 )],
@@ -168,21 +178,23 @@ pub fn audit_fusion_plan(
             derivative_state,
         )?;
         if !composition.is_empty() {
-            check(&mut checks, "audited_composition_capability");
-            return Ok(result(AuditStatus::Abstain, checks.clone(), composition));
+            return Ok(result(
+                AuditStatus::Abstain,
+                paired_external_pi_consumption,
+                composition,
+            ));
         }
         let roles = component_role_errors(ast, &specs);
         if !roles.is_empty() {
             return Ok(result(
                 AuditStatus::Abstain,
-                vec!["component_role_policy".into()],
+                paired_external_pi_consumption,
                 roles,
             ));
         }
         let mut errors = Vec::new();
         let reconstructed = reconstruct(ast, &specs, &mut errors)?;
         audit_nomenclature_selection(ast, &specs, &mut errors)?;
-        check(&mut checks, "nomenclature_selection");
         audit_component_and_face_coverage(
             mol,
             parent_atoms,
@@ -192,9 +204,7 @@ pub fn audit_fusion_plan(
             &reconstructed,
             &mut errors,
         )?;
-        check(&mut checks, "component_coverage");
         audit_descriptors(mol, ast, &specs, &reconstructed, numbering, &mut errors)?;
-        check(&mut checks, "descriptor_interfaces");
         audit_reconstructed_graph(
             mol,
             parent_atoms,
@@ -203,8 +213,6 @@ pub fn audit_fusion_plan(
             charge_operations,
             &mut errors,
         );
-        check(&mut checks, "abstract_graph_reconstruction");
-        check(&mut checks, "input_graph_identity");
         audit_component_pi_constraints(ast, &specs, abstract_parent_graph, &mut errors)?;
         audit_numbering(
             mol,
@@ -215,7 +223,6 @@ pub fn audit_fusion_plan(
             ast,
             &mut errors,
         )?;
-        check(&mut checks, "completed_numbering");
         audit_charge_operations(
             mol,
             parent_atoms,
@@ -224,7 +231,6 @@ pub fn audit_fusion_plan(
             charge_operations,
             &mut errors,
         )?;
-        check(&mut checks, "charge_operations");
         let intrinsic_n_h = intrinsic_parent_lone_pair_sites(mol, abstract_parent_graph);
         let locants = locant_map(numbering)?;
         let cited_n_h: AtomSet = locants
@@ -270,7 +276,6 @@ pub fn audit_fusion_plan(
             }
         }
         audit_bond_model(abstract_parent_graph, bond_model, &mut errors);
-        check(&mut checks, "parent_bond_model");
         audit_derivative_state(
             mol,
             parent_atoms,
@@ -280,16 +285,14 @@ pub fn audit_fusion_plan(
             derivative_state,
             &mut errors,
         )?;
-        check(&mut checks, "parent_derivative_state");
-        if super::external_pi_consumption::has_paired_external_pi_consumption(
-            mol,
-            parent_atoms,
-            derivative_state,
-        ) {
-            // The additive handoff consumes this proved capability to avoid
-            // counting the same external-pi saturation as another H operation.
-            check(&mut checks, "paired_external_pi_consumption");
-        }
+        // The additive handoff consumes this proved capability to avoid
+        // counting the same external-pi saturation as another H operation.
+        paired_external_pi_consumption =
+            super::external_pi_consumption::has_paired_external_pi_consumption(
+                mol,
+                parent_atoms,
+                derivative_state,
+            );
         let mut hydro_owned = if indicated_hydrogens.is_empty()
             && mancude::has_complete_saturated_hydrogenation(mol, parent_atoms, derivative_state)
         {
@@ -300,7 +303,7 @@ pub fn audit_fusion_plan(
         for op in derivative_state
             .hydro_operations
             .iter()
-            .chain(derivative_state.added_hydrogen_operations())
+            .chain(&derivative_state.bond_delta.added_hydrogen_operations)
         {
             hydro_owned.extend(op.atom_ids.iter().copied());
         }
@@ -313,7 +316,6 @@ pub fn audit_fusion_plan(
             &hydro_owned,
             &mut errors,
         )?;
-        check(&mut checks, "indicated_hydrogens");
         audit_lambda_descriptors(
             mol,
             parent_atoms,
@@ -321,21 +323,19 @@ pub fn audit_fusion_plan(
             lambda_descriptors,
             &mut errors,
         )?;
-        check(&mut checks, "lambda_descriptors");
         if render_fusion_name(ast, registry)? != rendered_core_name {
             issue(
                 &mut errors,
                 "rendered fusion parent does not reproduce its context-free AST",
             );
         }
-        check(&mut checks, "context_free_rendering");
         Ok(result(
             if errors.is_empty() {
                 AuditStatus::Confirmed
             } else {
                 AuditStatus::Mismatch
             },
-            checks.clone(),
+            paired_external_pi_consumption,
             errors,
         ))
     })();
@@ -344,7 +344,7 @@ pub fn audit_fusion_plan(
         Err(e) if e.starts_with("openclatura:") && e.contains("not ported") => return Err(e),
         Err(e) => error(
             format!("fusion audit could not evaluate candidate: {e}"),
-            checks,
+            paired_external_pi_consumption,
         ),
     })
 }
@@ -365,7 +365,8 @@ fn unrepresented_component_indicated_hydrogens(
         .flat_map(FusionJoin::shared_input_atoms)
         .collect();
     let converted: AtomSet = state
-        .intrinsic_hydro_operations()
+        .bond_delta
+        .intrinsic_hydro_operations
         .iter()
         .flat_map(|o| o.atom_ids.iter().copied())
         .collect();
@@ -415,14 +416,15 @@ fn audit_nomenclature_selection(
     errors: &mut Vec<String>,
 ) -> Result<(), String> {
     let citation = citation_plan(ast)?;
-    if citation.parent_occurrences() != ast.parent_occurrences {
+    let citation_parents = citation.parent_occurrences();
+    if citation_parents != ast.parent_occurrences {
         issue(
             errors,
             "fusion citation roots do not match the declared parent occurrences",
         );
     }
     if let Some(tree) = &ast.citation_tree
-        && citation.roots != vec![tree.clone()]
+        && citation.roots.as_slice() != std::slice::from_ref(tree)
     {
         issue(
             errors,
@@ -434,10 +436,7 @@ fn audit_nomenclature_selection(
             .joins
             .get(i)
             .ok_or("citation primary join index is out of range")?;
-        if citation
-            .parent_occurrences()
-            .contains(&join.attached_occurrence())
-        {
+        if citation_parents.contains(&join.attached_occurrence()) {
             issue(errors, "a citation root is attached by a primary join");
         }
     }
@@ -2032,8 +2031,8 @@ fn audit_derivative_state(
         atoms,
         model,
         &CompareOptions {
-            externally_unsaturated_atom_ids: &external_atoms,
-            indicated_hydrogen_atom_ids: &indicated,
+            externally_unsaturated_atom_ids: Some(&external_atoms),
+            indicated_hydrogen_atom_ids: Some(&indicated),
             atom_to_locant: Some(&locants),
             ..Default::default()
         },
@@ -2327,8 +2326,8 @@ fn has_consistent_derivative_operations(
         .external_pi_operations()
         .map(|o| o.parent_atom_id)
         .collect();
-    let added = operation_atoms(state.added_hydrogen_operations());
-    let intrinsic = operation_atoms(state.intrinsic_hydro_operations());
+    let added = operation_atoms(&state.bond_delta.added_hydrogen_operations);
+    let intrinsic = operation_atoms(&state.bond_delta.intrinsic_hydro_operations);
     let unsaturated: AtomSet = state
         .unsaturation_operations
         .iter()

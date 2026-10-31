@@ -10,7 +10,7 @@ use super::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 #[derive(Clone, Debug)]
-pub struct ComponentHydrogenConsumption {
+pub(super) struct ComponentHydrogenConsumption {
     pub default_sites: BTreeSet<(usize, String)>,
     // Preserve the exact consumed junctions and the completed matching witness;
     // the current composition audit consumes only their default-site projection.
@@ -22,7 +22,7 @@ pub struct ComponentHydrogenConsumption {
 fn paired(edges: &EdgeSet) -> AtomSet {
     edges.iter().flat_map(|&(a, b)| [a, b]).collect()
 }
-pub fn component_hydrogen_consumption(
+pub(super) fn component_hydrogen_consumption(
     ast: &FusionNameAst,
     specs: &BTreeMap<usize, FusionComponentSpec>,
 ) -> Result<Option<ComponentHydrogenConsumption>, String> {
@@ -57,7 +57,7 @@ pub fn component_hydrogen_consumption(
     let junctions: AtomSet = ast
         .joins
         .iter()
-        .flat_map(|j| j.shared_input_atoms())
+        .flat_map(FusionJoin::shared_input_atoms)
         .collect();
     let mut domains = Vec::new();
     let mut defaults = BTreeSet::new();
@@ -117,38 +117,39 @@ pub fn component_hydrogen_consumption(
             .filter(|(_, o)| *o == 2)
             .map(|(e, _)| *e)
             .collect();
-        if paired(&doubles) != pi_atoms {
+        if assignment.paired_atoms() != pi_atoms {
             return Ok(None);
         }
         let mut assignment_consumed = BTreeSet::new();
-        let mut valid = true;
-        for (occurrence, edges, assignments, local_pi, carbon_h) in &domains {
-            let local: EdgeSet = doubles.intersection(edges).copied().collect();
-            let local_paired = paired(&local);
-            let local_witnesses: Vec<_> = assignments
-                .iter()
-                .filter(|candidate| {
-                    local_paired
-                        .symmetric_difference(&paired(candidate))
-                        .all(|a| junctions.contains(a))
-                })
-                .collect();
-            if local_witnesses.is_empty() {
-                valid = false;
-                break;
-            }
-            let unpaired: AtomSet = local_pi.difference(&local_paired).copied().collect();
-            let allowed: AtomSet = carbon_h.intersection(&junctions).copied().collect();
-            if !local_witnesses.iter().any(|candidate| {
-                unpaired
-                    .difference(&paired(candidate))
-                    .all(|a| allowed.contains(a))
-            }) {
-                valid = false;
-                break;
-            }
-            assignment_consumed.extend(unpaired.intersection(carbon_h).map(|&a| (*occurrence, a)));
-        }
+        let valid = domains
+            .iter()
+            .all(|(occurrence, edges, assignments, local_pi, carbon_h)| {
+                let local: EdgeSet = doubles.intersection(edges).copied().collect();
+                let local_paired = paired(&local);
+                let local_witnesses: Vec<_> = assignments
+                    .iter()
+                    .filter(|candidate| {
+                        local_paired
+                            .symmetric_difference(&paired(candidate))
+                            .all(|a| junctions.contains(a))
+                    })
+                    .collect();
+                if local_witnesses.is_empty() {
+                    return false;
+                }
+                let unpaired: AtomSet = local_pi.difference(&local_paired).copied().collect();
+                let allowed: AtomSet = carbon_h.intersection(&junctions).copied().collect();
+                if !local_witnesses.iter().any(|candidate| {
+                    unpaired
+                        .difference(&paired(candidate))
+                        .all(|a| allowed.contains(a))
+                }) {
+                    return false;
+                }
+                assignment_consumed
+                    .extend(unpaired.intersection(carbon_h).map(|&a| (*occurrence, a)));
+                true
+            });
         if valid {
             witnesses.push(assignment.clone());
             consumed.extend(assignment_consumed);
