@@ -342,6 +342,115 @@ async fn alignment_keeps_the_product_plus_between_its_participants() {
     editing::transform(&mut doc, &all, editing::Transform::Rotate(90.));
     assert_product_plus_separates(&doc);
 }
+
+#[tokio::test]
+async fn hydrogen_chloride_alignment_reflows_its_reaction_separator_atomically() {
+    use reshiki::{abbreviations::LabelAlignment, scene, transaction};
+    let mut doc = import("CC(=O)Cl.C[C@H](N)C(=O)OC>>CC(=O)N[C@@H](C)C(=O)OC.Cl").await;
+    let chloride = doc.reactions[0]
+        .products
+        .iter()
+        .find(|part| part.atoms.len() == 1 && doc.atom(part.atoms[0]).unwrap().element == "Cl")
+        .unwrap()
+        .atoms[0];
+    assert_eq!(doc.atom(chloride).unwrap().label_h, 1);
+    let text_x = |doc: &Document, text: &str| {
+        let atom = doc.atom(chloride).unwrap().position;
+        scene::primitives(doc)
+            .into_iter()
+            .filter_map(|primitive| match primitive {
+                scene::Primitive::Text {
+                    position,
+                    text: run,
+                    ..
+                } if run == text => Some(position),
+                _ => None,
+            })
+            .min_by(|a, b| a.distance(atom).total_cmp(&b.distance(atom)))
+            .unwrap()
+            .x
+    };
+    assert!(
+        text_x(&doc, "H") < text_x(&doc, "Cl"),
+        "import must read HCl"
+    );
+
+    // Put H on the far side first, then grow it back towards the product '+'.
+    let before = doc.clone();
+    atom_labels::set_alignment(&mut doc, chloride, LabelAlignment::Left);
+    transaction::apply(&mut doc, &mut History::default(), before, false).unwrap();
+    assert!(text_x(&doc, "H") > text_x(&doc, "Cl"));
+    let before = doc.clone();
+    let plus = doc.reactions[0]
+        .annotations
+        .iter()
+        .filter_map(|id| doc.annotations.iter().find(|a| a.id == *id))
+        .filter(|annotation| annotation.text.trim() == "+")
+        .max_by(|a, b| a.position.x.total_cmp(&b.position.x))
+        .unwrap()
+        .id;
+    atom_labels::set_alignment(&mut doc, chloride, LabelAlignment::Right);
+    let mut history = History::default();
+    transaction::apply(&mut doc, &mut history, before.clone(), false).unwrap();
+    assert!(text_x(&doc, "H") < text_x(&doc, "Cl"));
+
+    let annotation = doc.annotations.iter().find(|a| a.id == plus).unwrap();
+    let layout = reshiki::typography::layout(&annotation.text, &annotation.format);
+    let plus_ink = layout
+        .fragments
+        .iter()
+        .flat_map(|fragment| {
+            reshiki::style::text_ink_boxes(&fragment.text, fragment.style.size(), &fragment.style)
+                .into_iter()
+                .map(move |(lo, hi)| {
+                    (
+                        annotation.position.x + fragment.position.x + lo.x,
+                        annotation.position.x + fragment.position.x + hi.x,
+                    )
+                })
+        })
+        .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), (a, b)| {
+            (lo.min(a), hi.max(b))
+        });
+    let mut extents: Vec<_> = doc.reactions[0]
+        .products
+        .iter()
+        .map(|part| {
+            let atoms = part
+                .atoms
+                .iter()
+                .map(|id| doc.atom(*id).unwrap().position.x);
+            let labels = scene::participant_label_ink_boxes(&doc, &part.atoms)
+                .into_iter()
+                .flat_map(|(lo, hi)| [lo.x, hi.x]);
+            atoms
+                .chain(labels)
+                .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), x| {
+                    (lo.min(x), hi.max(x))
+                })
+        })
+        .collect();
+    extents.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let clearance = doc.drawing_style.world(doc.drawing_style.margin_width_pt);
+    assert!(plus_ink.0 - extents[0].1 >= clearance - 0.01);
+    assert!(extents[1].0 - plus_ink.1 >= clearance - 0.01);
+    assert_ne!(
+        annotation.position,
+        before
+            .annotations
+            .iter()
+            .find(|a| a.id == plus)
+            .unwrap()
+            .position,
+        "the sign follows the changed label ink",
+    );
+    let edited = doc.clone();
+    assert!(history.undo(&mut doc));
+    assert_eq!(doc, before);
+    assert!(!history.can_undo());
+    assert!(history.redo(&mut doc));
+    assert_eq!(doc, edited);
+}
 #[tokio::test]
 #[ignore = "Writes disposable before/after drawings for native GUI verification"]
 async fn write_reaction_mapping_gui_fixtures() {

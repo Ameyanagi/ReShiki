@@ -75,7 +75,7 @@ async fn reaction_is_editable_validated_styled_and_exchangeable() {
     let conditions = doc
         .annotations
         .iter()
-        .find(|a| a.text.contains("H₂SO₄"))
+        .find(|a| a.text.contains("H2SO4"))
         .unwrap();
     assert!(conditions.position.y + conditions.size().1 < arrow.start.y);
     let water_caption = doc.annotations.iter().find(|a| a.text == "Water").unwrap();
@@ -150,7 +150,10 @@ async fn water_names_remain_captions_while_only_duplicate_formulas_are_hidden() 
             .await
             .unwrap();
         assert_eq!(doc.atoms.len(), 1);
-        let caption = doc.annotations.iter().find(|a| a.text == label);
+        let caption = doc
+            .annotations
+            .iter()
+            .find(|a| a.text == label.replace('₂', "2"));
         assert_eq!(caption.is_some(), visible, "{label}");
         if let Some(caption) = caption {
             assert!(caption.position.y > doc.atoms[0].position.y);
@@ -696,7 +699,7 @@ async fn reaction_captions_share_a_baseline_with_multiline_names_and_coefficient
     let conditions = doc
         .annotations
         .iter()
-        .find(|a| a.text.contains("H₂SO₄"))
+        .find(|a| a.text.contains("H2SO4"))
         .unwrap();
     assert!(conditions.position.y + conditions.size().1 < doc.arrows[0].start.y);
     let second = assistant::render(

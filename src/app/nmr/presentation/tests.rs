@@ -69,6 +69,25 @@ fn row_presentation_preserves_proton_and_carbon_text_bytes() {
 }
 
 #[test]
+fn broad_match_notes_preserve_numeric_presentation_and_supported_owners() {
+    let mut report = (*two_sites(Nucleus::H1)).clone();
+    let note = "Broad match · Shell 2 · SD 0.507 ppm";
+    report.rows[0].limitation = Some(note.into());
+    let report = Arc::new(report);
+    let presentation = Presentation::new(&report, &ethyl_acetate_doc());
+    assert_eq!(presentation.rows[0].shift, "1.250");
+    assert!(
+        presentation.rows[0]
+            .description
+            .contains("Predicted 1.250 ppm")
+    );
+    assert!(presentation.rows[0].description.ends_with(note));
+    assert_eq!(presentation.supported_count, 1);
+    assert_eq!(presentation.sorted_ids, [9]);
+    assert_eq!(report.shifts().collect::<Vec<_>>(), [(0, 1.25)]);
+}
+
+#[test]
 fn presentation_distinguishes_supported_rows_from_finite_unique_owners() {
     let source = two_sites(Nucleus::C13);
     let mut report = (*source).clone();

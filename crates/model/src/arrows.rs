@@ -582,6 +582,43 @@ impl Arrow {
         }
         result
     }
+    /// The arriving electron-flow head, using the drawn shaft's geometry.
+    /// Attachment clearance must inspect this shape after moving both the end
+    /// and its neighboring control, rather than reconstructing a tangent head.
+    pub(crate) fn arrival_head_path(&self) -> Option<ArrowPath> {
+        let s = self.appearance();
+        if s.head == Head::None {
+            return None;
+        }
+        let u = unit(self.start, self.end);
+        let n = Point::new(-u.y, u.x);
+        let commands = if let Some((commands, _)) = self.filled_head(&s, n, 0., 1., 0., s.head) {
+            commands
+        } else {
+            let mut commands = Vec::new();
+            self.head_path(
+                &s,
+                self.end,
+                self.shaft_tangent(1., false),
+                s.head,
+                &mut |p, _, _| {
+                    commands = p;
+                },
+            );
+            commands
+        };
+        let filled = s.shape == HeadShape::Solid;
+        Some(ArrowPath {
+            commands,
+            style: GraphicStyle {
+                stroke: s.color,
+                fill: filled.then_some(s.color),
+                width_pt: if filled { 0. } else { s.width_pt },
+                pattern: LinePattern::Solid,
+            },
+            filled,
+        })
+    }
     fn head_path(
         &self,
         s: &ArrowStyle,
@@ -736,6 +773,58 @@ impl Arrow {
         }
         end
     }
+    /// First crossing of a circle centered on the tip, walking into the curve.
+    /// A radial distance puts a straight head's notch on the curved shaft;
+    /// walking that distance along the curve would leave the notch beside it.
+    fn cubic_radial_inset(&self, at: f32, toward: f32, length: f32, offset: f32) -> f32 {
+        let tip = self.offset_point(at, offset);
+        let mut near = at;
+        for i in 1..=64 {
+            let mut far = at + (toward - at) * i as f32 / 64.;
+            if tip.distance(self.offset_point(far, offset)) >= length {
+                for _ in 0..20 {
+                    let mid = (near + far) * 0.5;
+                    if tip.distance(self.offset_point(mid, offset)) < length {
+                        near = mid;
+                    } else {
+                        far = mid;
+                    }
+                }
+                return (near + far) * 0.5;
+            }
+            near = far;
+        }
+        toward
+    }
+    fn filled_head(
+        &self,
+        s: &ArrowStyle,
+        n: Point,
+        from: f32,
+        to: f32,
+        offset: f32,
+        kind: Head,
+    ) -> Option<(Vec<PathCommand>, f32)> {
+        if let Some(head) = self.half_head(s, n, from, to, offset, kind) {
+            return Some(head);
+        }
+        if self.cubic.is_none() || s.shape != HeadShape::Solid || kind != Head::Full {
+            return None;
+        }
+        let length = DEFAULT
+            .world(s.head_length_pt)
+            .min(self.start.distance(self.end) * 0.4);
+        let neck = self.cubic_radial_inset(to, from, length * (1. - s.head_notch), offset);
+        let tip = self.offset_point(to, offset);
+        let direction = unit(self.offset_point(neck, offset), tip);
+        let mut commands = Vec::new();
+        self.head_path(s, tip, direction, kind, &mut |p, _, _| commands = p);
+        let radius = DEFAULT.world(s.width_pt) * 0.5;
+        // The notch is concave, so ending the round-capped shaft there would
+        // expose its cap. Overlap enough to cover the cap and terminal edges.
+        let shaft_end = self.cubic_inset(neck, to, radius * 2.5, 0.5, offset);
+        Some((commands, shaft_end))
+    }
     fn half_head(
         &self,
         s: &ArrowStyle,
@@ -749,7 +838,6 @@ impl Arrow {
         let (side, width) = s.barb(kind)?;
         let sign = (to - from).signum();
         let span = (to - from).abs();
-        let direction = self.shaft_tangent(to, sign < 0.);
         let radius = DEFAULT.world(s.width_pt) * 0.5;
         let length = DEFAULT
             .world(s.head_length_pt)
@@ -759,9 +847,17 @@ impl Arrow {
             .distance(Point::default())
             .max(0.0001);
         let neck = if self.cubic.is_some() {
-            self.cubic_inset(to, from, length * (1. - s.head_notch), 0.4, offset)
+            self.cubic_radial_inset(to, from, length * (1. - s.head_notch), offset)
         } else {
             to - sign * (length * (1. - s.head_notch) / speed).min(span * 0.4)
+        };
+        let direction = if self.cubic.is_some() {
+            unit(
+                self.offset_point(neck, offset),
+                self.offset_point(to, offset),
+            )
+        } else {
+            self.shaft_tangent(to, sign < 0.)
         };
         let inner = offset + side * sign * radius;
         let outer = offset - side * sign * radius;
@@ -822,8 +918,8 @@ impl Arrow {
     ) {
         let mut shaft = |from: f32, to: f32, offset: f32, head_kind: Head, tail_kind: Head| {
             let sign = (to - from).signum();
-            let end_head = self.half_head(s, n, from, to, offset, head_kind);
-            let start_head = self.half_head(s, n, to, from, offset, tail_kind);
+            let end_head = self.filled_head(s, n, from, to, offset, head_kind);
+            let start_head = self.filled_head(s, n, to, from, offset, tail_kind);
             let start = start_head
                 .as_ref()
                 .map(|(_, at)| *at)

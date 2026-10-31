@@ -52,11 +52,14 @@ impl App {
                 }
                 if !self.tab.caption.trim().is_empty() {
                     let id = self.tab.doc.next_id();
+                    let mut text = self.tab.caption.clone();
+                    let mut format = self.tab.caption_format.clone();
+                    reshiki::typography::normalize_subscript_digits(&mut text, &mut format);
                     self.tab.doc.annotations.push(Annotation {
                         id,
                         position: p,
-                        text: self.tab.caption.clone(),
-                        format: self.tab.caption_format.clone(),
+                        text,
+                        format,
                     });
                     self.tab.selected = vec![id];
                     self.tab.caption_target = Some(id);

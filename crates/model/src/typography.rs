@@ -243,6 +243,9 @@ pub struct TextFormat {
     pub alignment: TextAlign,
     pub line_spacing: f32,
     pub width_pt: Option<f32>,
+    /// Allow generated chemical-name captions to wrap after hyphens and commas.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub name_breaks: bool,
 }
 impl Default for TextFormat {
     fn default() -> Self {
@@ -252,6 +255,7 @@ impl Default for TextFormat {
             alignment: TextAlign::Left,
             line_spacing: 1.2,
             width_pt: None,
+            name_breaks: false,
         }
     }
 }
@@ -362,6 +366,9 @@ impl TextFormat {
     /// Preserve spans across an editor replacement. The original range resolves
     /// ambiguous diffs such as replacing or deleting one of several equal letters.
     pub fn edited(&mut self, old: &str, new: &str, replaced: Range<usize>) {
+        if old != new {
+            self.name_breaks = false;
+        }
         let exact = old
             .get(..replaced.start)
             .is_some_and(|prefix| new.starts_with(prefix))
@@ -411,6 +418,29 @@ impl TextFormat {
             .collect();
         self.pack(new, styles);
     }
+}
+
+/// Store Unicode subscript digits as editable ASCII with explicit script styles.
+/// Resolve styles against the original UTF-8 offsets before rebuilding ranges
+/// on the shorter text, preserving every other character's formatting.
+pub fn normalize_subscript_digits(text: &mut String, format: &mut TextFormat) {
+    if !text.chars().any(|c| matches!(c, '₀'..='₉')) {
+        return;
+    }
+    let mut normalized = String::with_capacity(text.len());
+    let mut styles = Vec::new();
+    for (offset, c) in text.char_indices() {
+        let mut style = format.at(offset).clone();
+        if matches!(c, '₀'..='₉') {
+            normalized.push(char::from(b'0' + (c as u32 - '₀' as u32) as u8));
+            StyleChange::Script(Script::Subscript).apply(&mut style);
+        } else {
+            normalized.push(c);
+        }
+        styles.push(style);
+    }
+    *text = normalized;
+    format.pack(text, styles);
 }
 
 #[derive(Debug, Clone)]
@@ -505,10 +535,13 @@ pub fn formula_script(previous: char, c: char, lowered: bool) -> Script {
 
 /// Whether a line may wrap between `before` and `after`: after whitespace, or
 /// next to a CJK character, which needs no spaces between words, but never
-/// before a kana voicing mark.
-fn breaks_between(before: char, after: char) -> bool {
+/// before a kana voicing mark. Name captions also break after '-' and ','.
+fn breaks_between(before: char, after: char, name_breaks: bool) -> bool {
     !matches!(after, '\u{3099}'..='\u{309C}' | '\u{FF9E}' | '\u{FF9F}')
-        && (before.is_whitespace() || cjk(before) || cjk(after))
+        && (before.is_whitespace()
+            || cjk(before)
+            || cjk(after)
+            || (name_breaks && matches!(before, '-' | ',')))
 }
 
 fn cjk(c: char) -> bool {
@@ -547,7 +580,7 @@ pub fn layout(text: &str, format: &TextFormat) -> Layout {
         if let Some(line) = lines.last()
             && line
                 .last()
-                .is_some_and(|(last, _, _)| breaks_between(*last, c))
+                .is_some_and(|(last, _, _)| breaks_between(*last, c, format.name_breaks))
         {
             break_at = Some(line.len());
         }

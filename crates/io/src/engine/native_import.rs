@@ -16,8 +16,8 @@ use crate::{
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use std::sync::Arc;
-mod chain_layout;
-mod template_retry;
+pub(super) mod chain_layout;
+pub(super) mod template_retry;
 #[cfg(test)]
 mod tests;
 
@@ -353,7 +353,7 @@ fn coordinates(
             ..depict::Options::default()
         },
     )?;
-    let positions = template_retry::improve(state, &ranks, conformer.positions);
+    let positions = template_retry::improve(state, &ranks, conformer.positions, 1.5);
     let mut layout = chain_layout::improve(state, &ranks, positions);
     chemistry::layout_refinement::straighten(state, &mut layout.positions, None);
     Ok(layout)

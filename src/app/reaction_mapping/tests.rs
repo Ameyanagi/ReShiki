@@ -298,9 +298,12 @@ fn apply_proposal_action_updates_status_error_and_one_history_frame() {
     let mut app = action_app();
     let (_, _, proposal) = pending_proposal(&mut app);
     app.tab.mapping.proposal = Some(proposal);
+    app.review_pair(0);
     let _ = app.mapping_action(Action::ApplyProposal);
     assert_outcome(&app, "Atom mapping updated", false, 1);
     assert!(app.tab.mapping.proposal.is_none());
+    assert!(app.tab.mapping.review_pair.is_none());
+    assert_eq!(app.tab.selected, vec![1, 2]);
 }
 
 #[test]
@@ -309,9 +312,12 @@ fn dismiss_action_updates_status_and_error_without_changing_document_or_history(
     let before = app.tab.doc.clone();
     let (_, _, proposal) = pending_proposal(&mut app);
     app.tab.mapping.proposal = Some(proposal);
+    app.review_pair(0);
     let _ = app.mapping_action(Action::Dismiss);
     assert_outcome(&app, "Atom-map proposal discarded", false, 0);
     assert!(app.tab.mapping.proposal.is_none());
+    assert!(app.tab.mapping.review_pair.is_none());
+    assert_eq!(app.tab.selected, vec![1, 2]);
     assert_eq!(app.tab.doc, before);
 }
 
@@ -323,7 +329,48 @@ fn review_pair_action_preserves_status_error_and_history() {
     let _ = app.mapping_action(Action::ReviewPair(0));
     assert_outcome(&app, BEFORE_ACTION, true, 0);
     assert_eq!(app.tab.selected, vec![1, 2]);
+    assert_eq!(app.tab.mapping.review_pair, Some((1, 2)));
     assert_eq!(app.tool, Tool::Select);
+}
+
+#[test]
+fn review_pair_highlight_ends_on_a_new_selection() {
+    use crate::canvas::Edit;
+    for selected in [vec![], vec![1], vec![1, 2, 3]] {
+        let mut app = app();
+        let (epoch, serial, proposal) = pending_proposal(&mut app);
+        let _ = app.update(Message::Mapping(Action::Ready(epoch, serial, Ok(proposal))));
+        let _ = app.update(Message::Mapping(Action::ReviewPair(0)));
+        assert_eq!(app.tab.mapping.review_pair, Some((1, 2)));
+        let _ = app.update(Message::Canvas(Edit::Select(vec![2, 1])));
+        assert_eq!(app.tab.mapping.review_pair, Some((1, 2)));
+        let _ = app.update(Message::Canvas(Edit::Select(selected)));
+        assert!(app.tab.mapping.review_pair.is_none());
+        let _ = app.update(Message::Canvas(Edit::Select(vec![1, 2])));
+        assert!(app.tab.mapping.review_pair.is_none());
+        assert!(app.tab.mapping.proposal.is_some());
+    }
+}
+
+#[test]
+fn stale_or_cleared_proposals_end_the_review_pair_highlight() {
+    use crate::canvas::Edit;
+    let mut app = app();
+    let (epoch, serial, proposal) = pending_proposal(&mut app);
+    let _ = app.update(Message::Mapping(Action::Ready(epoch, serial, Ok(proposal))));
+    let _ = app.update(Message::Mapping(Action::ReviewPair(0)));
+    let _ = app.update(Message::Canvas(Edit::Move(vec![1, 2], 10., 0.)));
+    assert_eq!(app.tab.selected, vec![1, 2]);
+    assert!(app.tab.mapping.review_pair.is_none());
+    let _ = app.update(Message::Mapping(Action::ReviewPair(0)));
+    assert!(app.tab.mapping.review_pair.is_none());
+    let _ = app.update(Message::Undo);
+    assert!(app.tab.mapping.review_pair.is_none());
+    let _ = app.update(Message::Mapping(Action::ReviewPair(0)));
+    assert_eq!(app.tab.mapping.review_pair, Some((1, 2)));
+    app.tab.mapping.proposal = None;
+    app.sync_mapping_preview();
+    assert!(app.tab.mapping.review_pair.is_none());
 }
 
 #[test]

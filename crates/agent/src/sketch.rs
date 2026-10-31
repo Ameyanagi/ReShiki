@@ -397,14 +397,16 @@ impl Sketch {
             });
         }
         for c in &self.captions {
+            let mut text = c.text.clone();
             let mut format = settings.format.clone();
             if let Some(color) = c.color {
                 format.style.color = crate::palette::Color::imported(color);
             }
+            crate::typography::normalize_subscript_digits(&mut text, &mut format);
             doc.annotations.push(crate::document::Annotation {
                 id: doc.next_id(),
                 position: point(c.position),
-                text: c.text.clone(),
+                text,
                 format,
             });
         }

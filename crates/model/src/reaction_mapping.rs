@@ -312,15 +312,17 @@ pub fn align(doc: &Document, arrow: u64) -> Result<Document, String> {
     if matched == 0 {
         return Err("Assign matching reactant/product atom maps first".into());
     }
-    reflow_separators(doc, &mut candidate, r);
+    reflow_reaction_separators(doc, &mut candidate, r, &[Role::Product], false);
     candidate.validate()?;
     Ok(candidate)
 }
 
-/// A product's extent along the reading axis, its extent across it and its
+/// A participant's extent along the reading axis, its extent across it and its
 /// mean offset across it.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct Lane {
+    atoms: Vec<u64>,
+    along: f32,
     lo: f32,
     hi: f32,
     across: (f32, f32),
@@ -342,10 +344,10 @@ fn reading_axis(doc: &Document, arrow: u64) -> Point {
 fn project(axis: Point, p: Point) -> (f32, f32) {
     (p.x * axis.x + p.y * axis.y, p.y * axis.x - p.x * axis.y)
 }
-/// Product lanes in reading order.
-fn lanes(doc: &Document, reaction: &Reaction, axis: Point) -> Vec<Lane> {
+/// Participant lanes in reading order.
+fn lanes(doc: &Document, reaction: &Reaction, role: Role, axis: Point) -> Vec<Lane> {
     let mut lanes: Vec<_> = reaction
-        .products
+        .participants(role)
         .iter()
         .filter_map(|part| {
             let points: Vec<_> = part
@@ -371,6 +373,8 @@ fn lanes(doc: &Document, reaction: &Reaction, axis: Point) -> Vec<Lane> {
             let across = range(&mut extents.iter().map(|p| p.1));
             let mean = points.iter().map(|p| p.1).sum::<f32>() / points.len().max(1) as f32;
             (!points.is_empty()).then_some(Lane {
+                atoms: part.atoms.clone(),
+                along: points.iter().map(|p| p.0).sum::<f32>() / points.len().max(1) as f32,
                 lo,
                 hi,
                 across,
@@ -378,30 +382,103 @@ fn lanes(doc: &Document, reaction: &Reaction, axis: Point) -> Vec<Lane> {
             })
         })
         .collect();
-    lanes.sort_by(|a, b| (a.lo + a.hi).total_cmp(&(b.lo + b.hi)));
+    lanes.sort_by(|a, b| a.along.total_cmp(&b.along));
     lanes
 }
 /// Centre and size of a sign's visible `+`. A wide, aligned text frame or
 /// surrounding whitespace can place it anywhere inside the frame.
 fn glyph_box(a: &crate::document::Annotation) -> (Point, (f32, f32)) {
-    let natural = crate::typography::TextFormat {
-        width_pt: None,
-        ..a.format.clone()
-    };
-    let width = |text: &str| crate::typography::layout(text, &natural).width;
     let layout = crate::typography::layout(&a.text, &a.format);
-    let x = layout.fragments.first().map_or(0., |f| f.position.x);
-    let lead = a.text.find('+').map_or("", |i| &a.text[..i]);
-    let sign = width("+");
-    let centre = a
-        .position
-        .offset(x + width(lead) + sign / 2., layout.height / 2.);
-    (centre, (sign, layout.height))
+    let ink = layout
+        .fragments
+        .iter()
+        .flat_map(|fragment| {
+            crate::style::text_ink_boxes(&fragment.text, fragment.style.size(), &fragment.style)
+                .into_iter()
+                .map(move |(lo, hi)| {
+                    (
+                        fragment.position.offset(lo.x, lo.y),
+                        fragment.position.offset(hi.x, hi.y),
+                    )
+                })
+        })
+        .reduce(|(lo, hi), (a, b)| {
+            (
+                Point::new(lo.x.min(a.x), lo.y.min(a.y)),
+                Point::new(hi.x.max(b.x), hi.y.max(b.y)),
+            )
+        });
+    let (lo, hi) = ink.unwrap_or((Point::default(), Point::new(layout.width, layout.height)));
+    (
+        a.position.offset((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.),
+        (hi.x - lo.x, hi.y - lo.y),
+    )
 }
-/// Move each product-side `+` with the gap it separated, so the list still
-/// reads `A + B` after alignment moves, rotates or reorders the participants.
-/// Only separators move; participants keep their fitted positions.
-fn reflow_separators(before: &Document, after: &mut Document, reaction: &Reaction) {
+/// Repair tracked reaction separators after a participant's label changes.
+/// This runs inside edit finalization, so the label and spacing share one Undo
+/// frame. Position-only edits and manual separator drags keep their placement.
+pub(crate) fn reconcile_label_changes(before: &Document, after: &mut Document) {
+    for reaction in &before.reactions {
+        if !after.reactions.iter().any(|r| r == reaction) {
+            continue;
+        }
+        let roles: Vec<_> = Role::ALL
+            .into_iter()
+            .filter(|role| {
+                reaction.participants(*role).iter().any(|part| {
+                    part.atoms.iter().any(|id| {
+                        before.atom(*id).zip(after.atom(*id)).is_some_and(|(a, b)| {
+                            a.element != b.element
+                                || a.isotope != b.isotope
+                                || a.charge != b.charge
+                                || a.radical_electrons != b.radical_electrons
+                                || a.explicit_h != b.explicit_h
+                                || a.no_implicit != b.no_implicit
+                                || a.label_h != b.label_h
+                                || a.map_num != b.map_num
+                                || a.cip_label != b.cip_label
+                                || a.text_style != b.text_style
+                                || a.display != b.display
+                                || a.marks != b.marks
+                                || before.abbreviation(*id) != after.abbreviation(*id)
+                        })
+                    })
+                }) || before.atom_labels != after.atom_labels
+                    || before.drawing_style != after.drawing_style
+                    || before.bonds.iter().zip(&after.bonds).any(|(a, b)| {
+                        (a.indicator != b.indicator || a.cip_label != b.cip_label)
+                            && reaction
+                                .participants(*role)
+                                .iter()
+                                .any(|part| part.atoms.contains(&a.a) && part.atoms.contains(&a.b))
+                    })
+            })
+            .collect();
+        if !roles.is_empty() {
+            reflow_reaction_separators(before, after, reaction, &roles, true);
+        }
+    }
+}
+
+/// Re-measure separators when asynchronously computed H counts or stereo ink
+/// land. Callers retain their normal layout-repair and history bookkeeping.
+pub fn reflow_separators(before: &Document, after: &mut Document) {
+    for reaction in &before.reactions {
+        if after.reactions.iter().any(|r| r == reaction) {
+            reflow_reaction_separators(before, after, reaction, &Role::ALL, true);
+        }
+    }
+}
+
+/// Move each `+` with the gap it separated. Label edits may also translate
+/// downstream participants to make room; rigid map alignment keeps its fits.
+fn reflow_reaction_separators(
+    before: &Document,
+    after: &mut Document,
+    reaction: &Reaction,
+    roles: &[Role],
+    expand_gaps: bool,
+) {
     let axis = reading_axis(before, reaction.arrow);
     // Each separator's id, centre (along, across) and size.
     let mut free: Vec<_> = reaction
@@ -409,52 +486,101 @@ fn reflow_separators(before: &Document, after: &mut Document, reaction: &Reactio
         .iter()
         .filter_map(|id| before.annotations.iter().find(|a| a.id == *id))
         .filter(|a| a.text.trim() == "+")
+        // A moved or edited annotation is an explicit user choice. It also
+        // prevents an already-reflowed candidate from being moved twice.
+        .filter(|a| after.annotations.iter().any(|b| b == *a))
         .map(|a| {
             let (centre, size) = glyph_box(a);
             (a.id, project(axis, centre), size)
         })
         .collect();
     let gap = |a: &Lane, b: &Lane| ((a.hi + b.lo) / 2., (a.mean + b.mean) / 2.);
-    let old = lanes(before, reaction, axis);
-    let new = lanes(after, reaction, axis);
-    for (old, new) in old.windows(2).zip(new.windows(2)) {
-        let ([a, b], [c, d]) = (old, new) else {
-            continue;
-        };
-        // A product separator lies between the neighbours' centres along the
-        // arrow and within their band across it; reagent signs lie outside.
-        let (left, right) = ((a.lo + a.hi) / 2., (b.lo + b.hi) / 2.);
-        let (low, high) = (a.across.0.min(b.across.0), a.across.1.max(b.across.1));
-        let from = gap(a, b);
-        let distance = |p: (f32, f32)| (p.0 - from.0).hypot(p.1 - from.1);
-        let Some(index) = free
-            .iter()
+    let clearance = after
+        .drawing_style
+        .world(after.drawing_style.margin_width_pt);
+    for role in roles {
+        let old = lanes(before, reaction, *role, axis);
+        let mut new = lanes(after, reaction, *role, axis);
+        let mut gaps: Vec<_> = old
+            .windows(2)
             .enumerate()
-            .filter(|(_, (_, (t, n), (w, h)))| {
-                let pad = w.max(*h);
-                (left..=right).contains(t) && (low - pad..=high + pad).contains(n)
-            })
-            .min_by(|(_, (_, p, _)), (_, (_, q, _))| distance(*p).total_cmp(&distance(*q)))
-            .map(|(index, _)| index)
-        else {
-            continue;
-        };
-        let (id, (along, _), (w, _)) = free.swap_remove(index);
-        // Move with the gap, keeping the sign's offset from it, so text frame
-        // width and alignment never shift the visible glyph. If that offset
-        // leaves a narrowed gap, centre the glyph in it instead.
-        let to = gap(c, d);
-        let target = along - from.0 + to.0;
-        let target = if (c.hi + w * 0.5..=d.lo - w * 0.5).contains(&target) {
-            target
-        } else {
-            to.0
-        };
-        let (t, n) = (target - along, to.1 - from.1);
-        if let Some(annotation) = after.annotations.iter_mut().find(|a| a.id == id) {
-            annotation.position = annotation
-                .position
-                .offset(t * axis.x - n * axis.y, t * axis.y + n * axis.x);
+            .take(new.len().saturating_sub(1))
+            .collect();
+        // Reactant gaps open backwards, so place the signs nearest the arrow
+        // first; earlier signs then follow their already-shifted neighbours.
+        if *role == Role::Reactant {
+            gaps.reverse();
+        }
+        for (index, old) in gaps {
+            let [a, b] = old else { continue };
+            // A separator lies between the neighbours' centres along the arrow
+            // and within their band across it; unrelated signs lie outside.
+            let (left, right) = (a.along, b.along);
+            let (low, high) = (a.across.0.min(b.across.0), a.across.1.max(b.across.1));
+            let from = gap(a, b);
+            let distance = |p: (f32, f32)| (p.0 - from.0).hypot(p.1 - from.1);
+            let Some(free_index) = free
+                .iter()
+                .enumerate()
+                .filter(|(_, (_, (t, n), (w, h)))| {
+                    let pad = w.max(*h);
+                    (left..=right).contains(t) && (low - pad..=high + pad).contains(n)
+                })
+                .min_by(|(_, (_, p, _)), (_, (_, q, _))| distance(*p).total_cmp(&distance(*q)))
+                .map(|(index, _)| index)
+            else {
+                continue;
+            };
+            let (id, (along, _), (w, h)) = free.swap_remove(free_index);
+            // Project the sign's box as well: a vertical or oblique reaction
+            // needs its height along the reading direction.
+            let half = (w * axis.x.abs() + h * axis.y.abs()) / 2.;
+            let (Some(c), Some(d)) = (new.get(index), new.get(index + 1)) else {
+                continue;
+            };
+            let missing = (2. * (half + clearance) - (d.lo - c.hi)).max(0.);
+            if expand_gaps && missing > 0.001 {
+                let (upstream, downstream) = new.split_at_mut(index + 1);
+                // Make room away from the arrow: reactants move back,
+                // products and agents move forward.
+                let (moved, shift) = if *role == Role::Reactant {
+                    (upstream, -missing)
+                } else {
+                    (downstream, missing)
+                };
+                for lane in moved {
+                    for atom in after
+                        .atoms
+                        .iter_mut()
+                        .filter(|a| lane.atoms.contains(&a.id))
+                    {
+                        atom.position = atom.position.offset(shift * axis.x, shift * axis.y);
+                    }
+                    lane.lo += shift;
+                    lane.hi += shift;
+                    lane.along += shift;
+                }
+            }
+            let (Some(c), Some(d)) = (new.get(index), new.get(index + 1)) else {
+                continue;
+            };
+            // Move with the gap, keeping the sign's offset from it, so text frame
+            // width and alignment never shift the visible glyph. If that offset
+            // leaves a narrowed gap, centre the glyph in it instead.
+            let to = gap(c, d);
+            let target = along - from.0 + to.0;
+            let margin = if expand_gaps { clearance } else { 0. };
+            let target = if (c.hi + half + margin..=d.lo - half - margin).contains(&target) {
+                target
+            } else {
+                to.0
+            };
+            let (t, n) = (target - along, to.1 - from.1);
+            if let Some(annotation) = after.annotations.iter_mut().find(|a| a.id == id) {
+                annotation.position = annotation
+                    .position
+                    .offset(t * axis.x - n * axis.y, t * axis.y + n * axis.x);
+            }
         }
     }
 }

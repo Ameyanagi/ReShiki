@@ -82,7 +82,11 @@ fn flat_scheme_keeps_variables_colors_arrows_and_ring_curves() {
     let doc = sketch.render(&Default::default()).unwrap();
     assert!(doc.atoms.iter().all(|a| a.depth == 0.));
     assert_eq!(doc.arrows.len(), 1);
-    assert_eq!(doc.annotations[0].text, "Cu(acac)₂");
+    assert_eq!(doc.annotations[0].text, "Cu(acac)2");
+    assert_eq!(
+        doc.annotations[0].format.at(8).script,
+        crate::typography::Script::Subscript
+    );
     assert_eq!(doc.atoms[1].element, "*");
     assert_eq!(doc.atoms[1].display.variable.as_deref(), Some("E"));
     assert_eq!(crate::ring_arcs::render(&doc).bonds.len(), 2);

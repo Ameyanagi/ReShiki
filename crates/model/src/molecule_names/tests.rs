@@ -62,6 +62,7 @@ fn caption_is_centered_below_visual_ink_and_keeps_names_as_plain_text() {
     assert_eq!(caption.text, "ethan-1-ol");
     assert_eq!(caption.format.style.script, Script::Normal);
     assert!(!caption.format.style.formula);
+    assert!(caption.format.name_breaks);
     assert!(
         crate::scene::primitives(&doc)
             .iter()
@@ -198,6 +199,7 @@ fn user_edited_or_independently_dragged_caption_detaches_and_is_preserved() {
         transaction::apply(&mut doc, &mut History::default(), before, false).unwrap();
         assert_eq!(doc.annotations.len(), 1);
         assert!(doc.molecule_names.is_empty());
+        assert_eq!(doc.annotations[0].format.name_breaks, !edit_text);
         let user_caption = doc.annotations[0].clone();
         let before = doc.clone();
         doc.atoms

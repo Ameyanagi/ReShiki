@@ -49,6 +49,20 @@ fn request_copy_frame() -> Task<Message> {
     ))
 }
 
+fn normalize_pasted_captions(doc: &mut Document) {
+    for caption in &mut doc.annotations {
+        let original = caption.text.clone();
+        reshiki::typography::normalize_subscript_digits(&mut caption.text, &mut caption.format);
+        if caption.text != original {
+            for name in &mut doc.molecule_names {
+                if name.annotation == caption.id && name.text == original {
+                    name.text = caption.text.clone();
+                }
+            }
+        }
+    }
+}
+
 impl App {
     pub(super) fn clipboard_working(&self) -> bool {
         self.copy_as_busy
@@ -480,8 +494,9 @@ impl App {
                 "Drawing changed while reading the clipboard · Paste again to insert here".into();
             return;
         }
-        let outcome = match result.and_then(|outcome| {
+        let outcome = match result.and_then(|mut outcome| {
             outcome.document.validate()?;
+            normalize_pasted_captions(&mut outcome.document);
             Ok(outcome)
         }) {
             Ok(doc) => doc,
@@ -592,7 +607,8 @@ impl App {
         if let Some(contents) = contents.filter(|s| !s.trim().is_empty()) {
             if let Some(json) = editing::clipboard_json(&contents) {
                 match Document::from_json(json.as_bytes()) {
-                    Ok(part) => {
+                    Ok(mut part) => {
+                        normalize_pasted_captions(&mut part);
                         let part = reshiki::canvas_theme::for_native_paste(
                             part,
                             self.tab.doc.canvas_theme,

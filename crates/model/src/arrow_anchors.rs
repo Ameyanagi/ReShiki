@@ -695,72 +695,79 @@ impl HeadInk {
         }
         ink
     }
-    /// Samples a head with its tip at `tip`, lying along `d` toward the shaft,
-    /// from the tip back to its widest base; like the drawn head, it is
-    /// shortened on a short arrow from `start` but keeps its width.
-    fn touches(&self, tip: Point, d: Point, start: Point, style: &ArrowStyle) -> bool {
-        let (lines, fills) = (&self.lines, &self.fills);
-        let head_length = DEFAULT.world(style.head_length_pt);
-        let head_width = DEFAULT.world(style.head_width_pt);
-        let pen = DEFAULT.world(style.width_pt) * 0.5;
-        let length = head_length.min(start.distance(tip) * 0.4);
-        // `lateral` follows the offset normal the arrow renderer uses.
-        let at =
-            |s: f32, lateral: f32| tip.offset(d.x * s + d.y * lateral, d.y * s - d.x * lateral);
-        let hits = |p: Point, reach: f32| {
-            lines.iter().any(|(first, last, half)| {
-                let v = delta(*last, *first);
-                let along = (dot(delta(p, *first), v) / dot(v, v)).clamp(0., 1.);
-                p.distance(first.offset(v.x * along, v.y * along)) < reach + half
-            }) || fills.iter().any(|outline| inside(p, outline))
-        };
-        // Neighboring sample disks overlap, so no line slips between them.
-        let samples = (length / pen.max(0.01)).ceil().max(8.) as usize;
-        let axis = (0..=samples).any(|i| {
-            let t = i as f32 / samples as f32;
-            hits(at(length * t, 0.), head_width * t + pen)
-        });
-        // A solid half head fills a barb from the tip on one shaft edge out
-        // to a wing `width` past the other edge, then back to the neck.
-        axis || style.barb(style.head).is_some_and(|(side, width)| {
-            let neck = length * (1. - style.head_notch);
-            let corners = [
-                at(0., side * pen),
-                at(length, -side * width),
-                at(neck, -side * pen),
-            ];
-            let edges = || corners.iter().zip(&corners[1..]);
-            let lines = lines.iter().map(|(a, b, half)| (*a, *b, *half));
-            let fill_edges = fills.iter().flat_map(|outline| {
-                outline
-                    .iter()
-                    .zip(outline.iter().cycle().skip(1))
-                    .map(|(a, b)| (*a, *b, 0.))
-            });
-            lines
-                .chain(fill_edges)
-                .any(|(a, b, half)| edges().any(|(p, q)| segment_gap(*p, *q, a, b) <= half))
-                || corners
-                    .iter()
-                    .any(|p| fills.iter().any(|outline| inside(*p, outline)))
+    /// Check the whole cubic shaft, including its stroke, against bond ink.
+    fn shaft_touches(&self, arrow: &Arrow) -> bool {
+        let pen = DEFAULT.world(arrow.appearance().width_pt) * 0.5;
+        let mut previous = arrow.start;
+        (1..=64).any(|i| {
+            let p = arrow.point(i as f32 / 64.);
+            let hit = self
+                .lines
+                .iter()
+                .any(|(a, b, half)| segment_gap(previous, p, *a, *b) <= pen + half)
+                || self.fills.iter().any(|outline| {
+                    inside(p, outline)
+                        || outline
+                            .iter()
+                            .zip(outline.iter().cycle().skip(1))
+                            .any(|(a, b)| segment_gap(previous, p, *a, *b) <= pen)
+                });
+            previous = p;
+            hit
         })
+    }
+    /// Test the same arrival head the renderer draws, including a fishhook's
+    /// curved unbarbed edge and the notch-based axis of a tight full head.
+    fn touches(&self, arrow: &Arrow) -> bool {
+        let Some(head) = arrow.arrival_head_path() else {
+            return false;
+        };
+        let pen = DEFAULT.world(head.style.width_pt) * 0.5;
+        crate::graphics::flattened(&head.commands)
+            .iter()
+            .any(|outline| {
+                outline.iter().zip(outline.iter().skip(1)).any(|(p, q)| {
+                    self.lines
+                        .iter()
+                        .any(|(a, b, half)| segment_gap(*p, *q, *a, *b) <= pen + half)
+                        || self.fills.iter().any(|fill| {
+                            fill.iter()
+                                .zip(fill.iter().cycle().skip(1))
+                                .any(|(a, b)| segment_gap(*p, *q, *a, *b) <= pen)
+                        })
+                }) || outline
+                    .iter()
+                    .any(|p| self.fills.iter().any(|fill| inside(*p, fill)))
+                    || head.filled
+                        && (self
+                            .lines
+                            .iter()
+                            .any(|(a, b, _)| inside(*a, outline) || inside(*b, outline))
+                            || self
+                                .fills
+                                .iter()
+                                .any(|fill| fill.iter().any(|p| inside(*p, outline))))
+            })
     }
 }
 /// Chooses the arrival direction at an atom, and any extra end gap, so the
 /// arrowhead lying along that direction stays off bond ink. Candidates face
 /// the source within [`OPEN_APPROACH`] and are reached from the default
-/// without turning across a bond, so the shaft keeps its opening. The
-/// smallest extra gap (up to another `gap`) wins, then the widest angle from
-/// the bonds (up to [`OPEN_APPROACH`]), then the default or nearest direction.
+/// without turning across a bond, except to leave a blocked near-bond
+/// default toward the source. Clear heads with clear shafts win over those
+/// with blocked shafts. Then the smallest extra gap (up to another `gap`)
+/// wins, followed by the widest angle from the bonds (up to [`OPEN_APPROACH`]),
+/// then the default or nearest direction.
 fn open_approach(
     doc: &Document,
     atom: u64,
     preferred: Point,
     back: Point,
-    start: Point,
+    source: (Point, Point),
     style: &ArrowStyle,
     gap: f32,
 ) -> (Point, f32) {
+    let (start, departure) = source;
     let Some(center) = doc.atom(atom).map(|a| a.position) else {
         return (preferred, 0.);
     };
@@ -769,23 +776,42 @@ fn open_approach(
     let pen = DEFAULT.world(style.width_pt) * 0.5;
     let touches = |d: Point, extra: f32| {
         let tip = clearance(doc, &Target::Atom { atom }, d).unwrap_or(0.) + gap + pen + extra;
-        ink.touches(center.offset(d.x * tip, d.y * tip), d, start, style)
+        let end = center.offset(d.x * tip, d.y * tip);
+        let bend = (start.distance(end) * 0.45).clamp(DEFAULT.world(3.), DEFAULT.world(12.));
+        let mut arrow = Arrow::new(0, start, end, Preset::Curved, style.clone());
+        arrow.cubic = Some([
+            start.offset(departure.x * bend, departure.y * bend),
+            end.offset(d.x * bend, d.y * bend),
+        ]);
+        (ink.touches(&arrow), ink.shaft_touches(&arrow))
     };
     let score = |d: Point| {
-        let extra = (0..=8)
-            .map(|i| gap * i as f32 / 8.)
-            .find(|e| !touches(d, *e));
+        let mut head_extra = None;
+        let extra = (0..=8).map(|i| gap * i as f32 / 8.).find(|e| {
+            let (head, shaft) = touches(d, *e);
+            if !head {
+                head_extra.get_or_insert(*e);
+            }
+            !head && !shaft
+        });
         let angle = bonds
             .iter()
             .map(|b| dot(d, *b).clamp(-1., 1.).acos())
             .fold(OPEN_APPROACH, f32::min);
-        (extra, angle)
+        // A source can already overlap target bond ink. If no whole route
+        // clears, still choose a clear head rather than discard every gap.
+        (extra.or(head_extra), extra.is_some(), angle)
     };
-    let better = |a: (Option<f32>, f32), b: (Option<f32>, f32)| match (a.0, b.0) {
-        (Some(x), Some(y)) if x != y => x < y,
-        (Some(_), None) => true,
-        (None, Some(_)) => false,
-        _ => a.1 > b.1 + 0.0001,
+    let better = |a: (Option<f32>, bool, f32), b: (Option<f32>, bool, f32)| {
+        if a.1 != b.1 {
+            return a.1;
+        }
+        match (a.0, b.0) {
+            (Some(x), Some(y)) if x != y => x < y,
+            (Some(_), None) => true,
+            (None, Some(_)) => false,
+            _ => a.2 > b.2 + 0.0001,
+        }
     };
     let rotated = |angle: f32| {
         let (sin, cos) = angle.sin_cos();
@@ -795,13 +821,18 @@ fn open_approach(
         )
     };
     let cross = |a: Point, b: Point| a.x * b.y - a.y * b.x;
-    // Turning onto or across a bond would route the shaft over that bond
-    // instead. Only a default lying exactly on a bond may leave it.
+    let (head, shaft) = touches(preferred, 0.);
+    let blocked = head || shaft;
+    // A near-bond default can land just inside the wrong opening. If its
+    // shaft hits ink, allow the search to leave that bond toward the source.
     let crosses = |from: Point, to: Point| {
         bonds.iter().any(|b| {
             let (before, after) = (cross(*b, from), cross(*b, to));
             let on_default = from == preferred && before.abs() <= 0.0001;
-            dot(*b, to) > 0. && !on_default && before * after <= 0.
+            let toward_source = blocked
+                && dot(*b, preferred) > 20f32.to_radians().cos()
+                && cross(*b, preferred) * cross(*b, back) < 0.;
+            dot(*b, to) > 0. && !on_default && !toward_source && before * after <= 0.
         })
     };
     let facing = OPEN_APPROACH.cos() - 0.0001;
@@ -856,6 +887,56 @@ pub fn create(
         return Err("Arrow targets are too close; use free placement".into());
     }
     let chord = unit(delta(b, a));
+    // A bond-to-own-atom chord runs along the bond, so it cannot choose a
+    // departure normal. Use the space left by the neighbouring bonds instead.
+    let own_bond = match (source, destination) {
+        (Pick::Bond { a, b, .. }, Pick::Atom(atom)) if atom == a || atom == b => {
+            let (first, last) = doc
+                .atom(*a)
+                .zip(doc.atom(*b))
+                .ok_or("Missing source bond")?;
+            let (first, last) = (first.position, last.position);
+            let t = unit(delta(last, first));
+            let n = Point::new(-t.y, t.x);
+            let opening = |n: Point| {
+                doc.bonds
+                    .iter()
+                    .filter(|bond| {
+                        !((bond.a == *a && bond.b == *b) || (bond.a == *b && bond.b == *a))
+                    })
+                    .filter_map(|bond| {
+                        let (from, to) = if bond.a == *a || bond.a == *b {
+                            (bond.a, bond.b)
+                        } else if bond.b == *a || bond.b == *b {
+                            (bond.b, bond.a)
+                        } else {
+                            return None;
+                        };
+                        Some(dot(
+                            n,
+                            unit(delta(doc.atom(to)?.position, doc.atom(from)?.position)),
+                        ))
+                    })
+                    .fold(-1., f32::max)
+            };
+            let opposite = Point::new(-n.x, -n.y);
+            let occupied = doc.arrows.iter().rev().find_map(|arrow| {
+                let anchor = arrow.start_anchor.as_ref()?;
+                matches!(anchor.target, Target::Bond { a: x, b: y, .. }
+                    if (x == *a && y == *b) || (x == *b && y == *a))
+                .then_some(anchor.direction)
+            });
+            Some((
+                if occupied.map_or_else(|| opening(opposite) < opening(n), |d| dot(n, d) > 0.) {
+                    opposite
+                } else {
+                    n
+                },
+                first.distance(last),
+            ))
+        }
+        _ => None,
+    };
     let bond_direction = |pick: &Pick, toward: Point| {
         if let Pick::Bond { a, b, .. } = pick {
             let (a, b) = doc.atom(*a).zip(doc.atom(*b))?;
@@ -870,12 +951,16 @@ pub fn create(
             None
         }
     };
-    let source_direction = match source {
-        Pick::Bond { .. } => bond_direction(source, chord).ok_or("Missing source bond")?,
-        Pick::LonePair { mark, .. } if mark.offset.distance(Point::default()) > 0.01 => {
-            unit(mark.offset)
+    let source_direction = if let Some((normal, _)) = own_bond {
+        normal
+    } else {
+        match source {
+            Pick::Bond { .. } => bond_direction(source, chord).ok_or("Missing source bond")?,
+            Pick::LonePair { mark, .. } if mark.offset.distance(Point::default()) > 0.01 => {
+                unit(mark.offset)
+            }
+            _ => unit(Point::new(chord.x - chord.y * 0.7, chord.y + chord.x * 0.7)),
         }
-        _ => unit(Point::new(chord.x - chord.y * 0.7, chord.y + chord.x * 0.7)),
     };
     let gap = end_gap();
     let pen = DEFAULT.world(style.width_pt) * 0.5;
@@ -890,13 +975,25 @@ pub fn create(
         .resolved(&candidate, pen)
         .ok_or("Missing arrow source")?;
     let (preferred, back) = arrival_hints(chord);
-    let (end_direction, end_extra) = match destination {
-        Pick::Bond { .. } => (
-            bond_direction(destination, back).ok_or("Missing destination bond")?,
-            0.,
-        ),
-        Pick::Atom(atom) => open_approach(doc, *atom, preferred, back, start, &style, gap),
-        Pick::LonePair { .. } => (preferred, 0.),
+    let (end_direction, end_extra) = if let Some((normal, _)) = own_bond {
+        (normal, 0.)
+    } else {
+        match destination {
+            Pick::Bond { .. } => (
+                bond_direction(destination, back).ok_or("Missing destination bond")?,
+                0.,
+            ),
+            Pick::Atom(atom) => open_approach(
+                doc,
+                *atom,
+                preferred,
+                back,
+                (start, source_direction),
+                &style,
+                gap,
+            ),
+            Pick::LonePair { .. } => (preferred, 0.),
+        }
     };
     let mut end_anchor = Anchor {
         target: destination.commit(&mut candidate)?,
@@ -927,10 +1024,22 @@ pub fn create(
     let bend = (start.distance(end) * 0.45).clamp(DEFAULT.world(3.), DEFAULT.world(12.));
     let id = candidate.next_id();
     let mut arrow = Arrow::new(id, start, end, preset, style);
-    arrow.cubic = Some([
-        start.offset(source_direction.x * bend, source_direction.y * bend),
-        end.offset(end_direction.x * bend, end_direction.y * bend),
-    ]);
+    arrow.cubic = Some(if let Some((normal, length)) = own_bond {
+        // Reach back along the bond before turning into the atom. Even a
+        // source picked near that atom gets a readable, bond-sized bow.
+        [
+            start.offset(
+                (normal.x * 0.9 - chord.x) * length,
+                (normal.y * 0.9 - chord.y) * length,
+            ),
+            end.offset(normal.x * length * 0.9, normal.y * length * 0.9),
+        ]
+    } else {
+        [
+            start.offset(source_direction.x * bend, source_direction.y * bend),
+            end.offset(end_direction.x * bend, end_direction.y * bend),
+        ]
+    });
     arrow.start_anchor = Some(start_anchor);
     arrow.end_anchor = Some(end_anchor);
     candidate.arrows.push(arrow);
@@ -962,7 +1071,32 @@ fn default_end(doc: &Document, arrow: &Arrow, pen: f32) -> Option<Point> {
             };
             let (preferred, back) = arrival_hints(unit(delta(center, source)));
             let style = arrow.appearance();
-            open_approach(doc, atom, preferred, back, arrow.start, &style, end_gap())
+            let departure = arrow.start_anchor.as_ref().map_or_else(
+                || {
+                    arrow
+                        .bezier_controls()
+                        .map_or(unit(delta(center, source)), |[c, _]| {
+                            unit(delta(c, arrow.start))
+                        })
+                },
+                |anchor| anchor.direction,
+            );
+            if arrow.start_anchor.as_ref().is_some_and(|start| {
+                matches!(start.target,
+                Target::Bond { a, b, .. } if atom == a || atom == b)
+            }) {
+                (departure, 0.)
+            } else {
+                open_approach(
+                    doc,
+                    atom,
+                    preferred,
+                    back,
+                    (arrow.start, departure),
+                    &style,
+                    end_gap(),
+                )
+            }
         }
         _ => (anchor.direction, 0.),
     };
@@ -990,7 +1124,7 @@ pub fn edit_handle(doc: &mut Document, arrow: u64, index: usize, p: Point) {
     }
 }
 /// After the user aims an end attached to an atom or bond, keeps the head,
-/// which lies along the aimed tangent, off that target's bond ink. The aim
+/// using its rendered geometry, off that target's bond ink. The aim
 /// is never rotated: the end backs away by up to another end gap. If that
 /// route follows a bond stroke, it instead shifts sideways by the smallest
 /// clear distance, preferring the side of the default arrival. Each aim starts
@@ -1027,9 +1161,18 @@ pub fn aim_end(doc: &mut Document, arrow: u64) {
         return;
     };
     let ink = HeadInk::around(doc, anchor.target.atoms());
+    let touches = |end: Point| {
+        let mut candidate = a.clone();
+        let shift = delta(end, a.end);
+        candidate.end = end;
+        if let Some([_, control]) = candidate.cubic.as_mut() {
+            *control = control.offset(shift.x, shift.y);
+        }
+        ink.touches(&candidate)
+    };
     let extra = (0..=8)
         .map(|i| gap * i as f32 / 8.)
-        .find(|e| !ink.touches(tip.offset(push.x * e, push.y * e), d, a.start, &style));
+        .find(|e| !touches(tip.offset(push.x * e, push.y * e)));
     let end = if let Some(extra) = extra {
         anchor.gap = gap + extra;
         tip.offset(push.x * extra, push.y * extra)
@@ -1049,7 +1192,7 @@ pub fn aim_end(doc: &mut Document, arrow: u64) {
                     ..anchor.clone()
                 }
                 .resolved(doc, pen)?;
-                (!ink.touches(candidate, d, a.start, &style)).then_some(candidate)
+                (!touches(candidate)).then_some(candidate)
             })
             .next()
             .unwrap_or(tip)

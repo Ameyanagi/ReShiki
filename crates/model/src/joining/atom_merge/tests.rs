@@ -458,7 +458,9 @@ fn named_molecule_merge_detaches_and_preserves_user_edited_caption() {
         .find(|a| a.id == caption)
         .unwrap();
     annotation.text = "My propane sample".into();
-    let expected = annotation.clone();
+    let mut expected = annotation.clone();
+    // A detached caption is ordinary text and loses name-only line breaks.
+    expected.format.name_breaks = false;
     doc.validate().unwrap();
     let before = doc.clone();
     let (joined, _) = merge_atoms(&doc, &selected).unwrap();

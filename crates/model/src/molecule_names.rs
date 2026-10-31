@@ -239,7 +239,9 @@ pub fn show(
         .max(doc.drawing_style.font_size_pt)
         .max(8.);
     format.alignment = TextAlign::Center;
+    format.name_breaks = true;
     // Wrap long names while keeping every line centered below the molecule.
+    format.width_pt = None;
     let natural_width = crate::typography::layout(&text, &format).width;
     let width = (hi.x - lo.x)
         .max(doc.drawing_style.bond_length_world * 3.)
@@ -288,6 +290,9 @@ pub fn reconcile(doc: &mut Document, before: &Document) {
             continue;
         };
         if caption.text != name.text {
+            if let Some(caption) = doc.annotations.iter_mut().find(|a| a.id == name.annotation) {
+                caption.format.name_breaks = false;
+            }
             continue;
         }
         let previous = before.annotations.iter().find(|a| a.id == name.annotation);
