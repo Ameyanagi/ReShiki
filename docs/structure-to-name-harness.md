@@ -15,6 +15,8 @@ S2N_REPORT=s2n-report.tsv cargo test --no-default-features --lib naming::s2n_har
 S2N_UPDATE_BASELINE=1 cargo test --no-default-features --lib naming::s2n_harness::s2n_fast_subset
 ```
 
+`S2N_EXTRA=<file>` with the ignored `s2n_extra_file` test round-trips any extra
+SMILES (first tab-separated column) and prints the wrong and unparseable rows.
 `S2N_DUMP=<dir>` writes every classified row per check (class, category, SMILES,
 name, openclatura text for parity, decline reason) for analysis.
 

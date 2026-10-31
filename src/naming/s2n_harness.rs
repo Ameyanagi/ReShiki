@@ -472,3 +472,27 @@ fn s2n_fast_subset() {
 fn s2n_full_corpus() {
     run(false);
 }
+
+/// Structure round trip of extra SMILES (first column of the `S2N_EXTRA` file),
+/// printing every wrong and unparseable row; for probing beyond the fixtures.
+#[test]
+#[ignore = "needs S2N_EXTRA"]
+fn s2n_extra_file() {
+    let path = std::env::var("S2N_EXTRA").expect("S2N_EXTRA");
+    let text = std::fs::read_to_string(path).expect("read S2N_EXTRA");
+    let mut measurements = Measurements::default();
+    let mut counts = BTreeMap::<_, usize>::new();
+    for smiles in text.lines().filter_map(|line| line.split('\t').next()) {
+        let outcome = measurements.classify(smiles);
+        *counts.entry(format!("{:?}", outcome.class)).or_default() += 1;
+        if matches!(outcome.class, Class::Wrong | Class::Unparseable) {
+            println!(
+                "{:?}\t{smiles}\t{}\t{}",
+                outcome.class,
+                outcome.name,
+                field(&outcome.reason)
+            );
+        }
+    }
+    println!("{counts:?}");
+}
