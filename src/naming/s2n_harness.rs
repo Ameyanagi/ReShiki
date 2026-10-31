@@ -13,7 +13,7 @@ const BAKEOFF: &str = include_str!("../../tests/fixtures/s2n/bakeoff_corpus.tsv"
 const OPENCLATURA: &str = include_str!("../../tests/fixtures/s2n/openclatura_tests.tsv");
 
 fn namer(smiles: &str) -> Result<String, String> {
-    super::rules::generate(smiles)
+    super::openclatura::name_smiles(smiles)
 }
 
 struct Case {

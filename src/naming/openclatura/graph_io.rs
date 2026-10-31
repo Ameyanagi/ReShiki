@@ -1,0 +1,427 @@
+//! Native SMILES adapter for openclatura's plain graph model.
+//!
+//! Input identity checks remain those of the naming subsystem. In particular,
+//! this adapter does not use upstream's unsanitized fallback to bypass them.
+use super::molecule::{Atom, AtomSet, Bond, Molecule};
+use reshiki_chemistry::{
+    ELEMENTS, kekulize, ranking, smiles,
+    stereo::{cip::label, perception},
+};
+use std::collections::{BTreeMap, VecDeque};
+
+/// Read one acyclic or monocyclic molecular graph, retaining source atom order.
+pub fn read_smiles(text: &str) -> Result<Molecule, String> {
+    // This is deliberately checked on the original text, before preparation
+    // can clean winding, remove hydrogen atoms or normalize unsupported input.
+    let canonical = super::super::canonical_smiles(text)?;
+    if canonical.contains('.') {
+        return Err("Openclatura stage 1 requires a single connected molecule".into());
+    }
+    let prepared = smiles::prepare(text).map_err(|error| error.to_string())?;
+    let mut state = prepared.state;
+    if state.graph.bonds.len() >= state.graph.atoms.len().saturating_add(1) {
+        return Err("Openclatura stage 1 supports at most one ring".into());
+    }
+    let atom_metadata = state
+        .graph
+        .atoms
+        .iter()
+        .zip(&state.valences)
+        .map(|(a, v)| {
+            (
+                a.aromatic,
+                usize::from(a.explicit_hydrogens),
+                usize::from(a.explicit_hydrogens) + v.implicit_hydrogens as usize,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    // Preserve the aromatic/H snapshot before asking for the same ordinary
+    // Kekule single/double graph consumed by upstream naming rules.
+    // The upstream environment's Kekulize defaults to canonical atom ranking.
+    let ranks = if state.graph.atoms.iter().any(|a| a.aromatic)
+        || state.graph.bonds.iter().any(|b| b.aromatic)
+    {
+        Some(ranking::rank_cached(
+            &state.graph,
+            &state.rings.atoms,
+            &state.metadata,
+            ranking::Options {
+                fragment: true,
+                ..ranking::Options::default()
+            },
+            &state.valences,
+        )?)
+    } else {
+        None
+    };
+    let kekule = kekulize::assign(
+        &state.graph,
+        &state.rings.atoms,
+        &state.directions,
+        kekulize::Options {
+            ranks: ranks.as_deref(),
+            ..kekulize::Options::default()
+        },
+    )?;
+    state.graph = kekule.graph;
+    state.directions = kekule.directions;
+    state.valences = state.graph.valences()?;
+    let legacy = perception::perceive(
+        &state,
+        perception::Options {
+            clean: true,
+            force: true,
+            flag_possible: true,
+        },
+    )?;
+
+    let has_stereo = legacy.metadata.atoms.iter().any(|a| a.chiral_tag != 0)
+        || legacy.metadata.bonds.iter().any(|b| b.stereo != 0);
+    let accurate = if has_stereo {
+        Some(
+            label::assign(&legacy, &label::Options::default())
+                .map_err(|error| error.to_string())?
+                .state,
+        )
+    } else {
+        None
+    };
+    let mut mol = Molecule::new();
+    mol.legacy_cip = atom_cip(&legacy);
+    mol.accurate_cip = accurate.as_ref().map_or_else(BTreeMap::new, atom_cip);
+
+    for (idx, atom) in legacy.graph.atoms.iter().enumerate() {
+        let (is_aromatic, explicit_h_count, total_h_count) = atom_metadata
+            .get(idx)
+            .copied()
+            .ok_or("Missing naming atom metadata")?;
+        let mut stereo = mol.legacy_cip.get(&idx).cloned();
+        if stereo.is_some() {
+            if let Some(modern) = mol.accurate_cip.get(&idx) {
+                stereo = Some(modern.clone());
+            } else if atom.atomic_number == 16 && total_degree(&legacy, idx, total_h_count) == 3 {
+                stereo = Some(
+                    if stereo.as_deref() == Some("S") {
+                        "R"
+                    } else {
+                        "S"
+                    }
+                    .into(),
+                );
+            }
+        }
+        let raw_stereo = if stereo.is_none() {
+            match legacy.metadata.atoms.get(idx).map(|a| a.chiral_tag) {
+                Some(1) => Some("CW".into()),
+                Some(2) => Some("CCW".into()),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        let symbol = ELEMENTS
+            .get(usize::from(atom.atomic_number))
+            .ok_or("Unknown naming element")?
+            .symbol;
+        mol.add_atom(Atom {
+            idx,
+            symbol: symbol.into(),
+            charge: i32::from(atom.charge),
+            isotope: (atom.isotope != 0).then_some(atom.isotope),
+            stereo,
+            raw_stereo,
+            is_aromatic,
+            explicit_h_count,
+            total_h_count,
+            radical_electrons: usize::from(atom.radical_electrons),
+        })?;
+    }
+    for (idx, bond) in legacy.graph.bonds.iter().enumerate() {
+        let stereo = match legacy.metadata.bonds.get(idx).map(|b| b.stereo) {
+            Some(2) => Some("Z".into()),
+            Some(3) => Some("E".into()),
+            _ => None,
+        };
+        let in_small_ring = legacy.rings.atoms.iter().any(|ring| {
+            (3..=7).contains(&ring.len())
+                && ring
+                    .iter()
+                    .zip(ring.iter().cycle().skip(1))
+                    .any(|(&u, &v)| (u == bond.a && v == bond.b) || (u == bond.b && v == bond.a))
+        });
+        mol.add_bond(Bond {
+            idx: idx + 1,
+            u: bond.a,
+            v: bond.b,
+            order: usize::from(bond.order),
+            stereo,
+            in_small_ring,
+        })?;
+    }
+    Ok(mol)
+}
+
+fn atom_cip(state: &perception::State) -> BTreeMap<usize, String> {
+    state
+        .properties
+        .atoms
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, a)| a.cip_code.as_ref().map(|label| (idx, label.clone())))
+        .collect()
+}
+
+fn total_degree(state: &perception::State, atom: usize, hydrogens: usize) -> usize {
+    hydrogens
+        + state
+            .graph
+            .bonds
+            .iter()
+            .filter(|b| b.a == atom || b.b == atom)
+            .count()
+}
+
+pub fn get_connected_components(mol: &Molecule) -> Vec<AtomSet> {
+    let mut visited = AtomSet::new();
+    let mut components = Vec::new();
+    for &idx in mol.atoms.keys() {
+        if visited.contains(&idx) {
+            continue;
+        }
+        let mut comp = AtomSet::new();
+        let mut queue = VecDeque::from([idx]);
+        while let Some(current) = queue.pop_front() {
+            if visited.insert(current) {
+                comp.insert(current);
+                queue.extend(mol.get_neighbors(current).iter().copied());
+            }
+        }
+        components.push(comp);
+    }
+    components
+}
+
+/// The local isotope-numbering graph used by `small_ring_stereo.py`.
+/// These artificial isotopes exist only in this detached priority calculation.
+pub fn assign_local_cip_with_locant_labels(
+    mol: &Molecule,
+    locants: &BTreeMap<usize, usize>,
+    raw_atoms: &[usize],
+) -> Result<BTreeMap<usize, String>, String> {
+    use reshiki_chemistry::{
+        electronic::Hybridization, graph, kekulize::Direction, ranking, rings,
+    };
+    let mut graph = graph::Graph {
+        atoms: Vec::new(),
+        bonds: Vec::new(),
+    };
+    let mut atom_to_native = BTreeMap::new();
+    let mut tags = Vec::new();
+    for (&idx, atom) in &mol.atoms {
+        let atomic_number = atom
+            .element()
+            .ok_or_else(|| format!("Unknown element: {}", atom.symbol))?
+            .atomic_number;
+        let isotope = locants
+            .get(&idx)
+            .map(|n| {
+                n.checked_add(100)
+                    .and_then(|n| u16::try_from(n).ok())
+                    .ok_or("Local stereo locant exceeds isotope range")
+            })
+            .transpose()?
+            .unwrap_or(0);
+        atom_to_native.insert(idx, graph.atoms.len());
+        graph.atoms.push(graph::Atom {
+            atomic_number: u8::try_from(atomic_number).map_err(|_| "Invalid element number")?,
+            isotope,
+            charge: i8::try_from(atom.charge).map_err(|_| "Invalid local stereo charge")?,
+            ..graph::Atom::default()
+        });
+        tags.push(match atom.raw_stereo.as_deref() {
+            Some("CW") => 1,
+            Some("CCW") => 2,
+            _ => 0,
+        });
+    }
+    for bond in mol.bonds.values() {
+        if !(1..=3).contains(&bond.order) {
+            return Ok(BTreeMap::new());
+        }
+        graph.bonds.push(graph::Bond {
+            a: *atom_to_native
+                .get(&bond.u)
+                .ok_or("Missing local stereo bond atom")?,
+            b: *atom_to_native
+                .get(&bond.v)
+                .ok_or("Missing local stereo bond atom")?,
+            order: bond.order as u8,
+            aromatic: false,
+        });
+    }
+    let mut metadata = ranking::Metadata::unspecified(&graph);
+    for (atom, chiral_tag) in metadata.atoms.iter_mut().zip(tags) {
+        atom.chiral_tag = chiral_tag;
+    }
+    // RWMol::AddAtom/AddBond defaults, as used upstream: no sanitization,
+    // aromaticity, hybridization, explicit H counts or preexisting CIP labels.
+    let state = perception::State {
+        valences: graph.provisional_valences()?,
+        rings: perception::RingCache {
+            kind: perception::RingKind::Fast,
+            atoms: rings::fast(&graph)?.atoms,
+        },
+        properties: perception::Properties::unspecified(&graph),
+        hybridizations: vec![Hybridization::Unspecified; graph.atoms.len()],
+        conjugated: vec![false; graph.bonds.len()],
+        directions: vec![Direction::None; graph.bonds.len()],
+        graph,
+        metadata,
+    };
+    let assigned = perception::perceive(
+        &state,
+        perception::Options {
+            force: true,
+            clean: true,
+            flag_possible: false,
+        },
+    )?;
+    let mut result = BTreeMap::new();
+    for idx in raw_atoms {
+        if let Some(label) = atom_to_native
+            .get(idx)
+            .and_then(|&native| assigned.properties.atoms.get(native))
+            .and_then(|a| a.cip_code.as_ref())
+        {
+            result.insert(*idx, label.clone());
+        }
+    }
+    Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::{Value, json};
+
+    fn graph_snapshot(mol: &Molecule, text: &str) -> Value {
+        let atoms = mol
+            .atoms
+            .values()
+            .map(|a| {
+                json!({
+                    "idx": a.idx, "symbol": a.symbol, "charge": a.charge, "isotope": a.isotope,
+                    "stereo": a.stereo, "raw_stereo": a.raw_stereo, "is_aromatic": a.is_aromatic,
+                    "explicit_h_count": a.explicit_h_count, "total_h_count": a.total_h_count,
+                    "radical_electrons": a.radical_electrons,
+                })
+            })
+            .collect::<Vec<_>>();
+        let bonds = mol
+            .bonds
+            .values()
+            .map(|b| {
+                json!({
+                    "idx": b.idx, "u": b.u, "v": b.v, "order": b.order,
+                    "stereo": b.stereo, "in_small_ring": b.in_small_ring,
+                })
+            })
+            .collect::<Vec<_>>();
+        let adjacency = mol
+            .atoms
+            .keys()
+            .map(|&idx| (idx.to_string(), json!(mol.get_neighbors(idx))))
+            .collect::<serde_json::Map<_, _>>();
+        json!({"smiles": text, "atoms": atoms, "bonds": bonds, "accurate_cip": mol.accurate_cip, "legacy_cip": mol.legacy_cip, "adjacency": adjacency})
+    }
+
+    #[test]
+    fn graph_fields_match_upstream_rdkit_oracle() {
+        // Captured with the pinned upstream read_smiles using isolated Python
+        // (-I -B), outside its source checkout. No runtime Python dependency.
+        let cases: Vec<Value> = serde_json::from_str(include_str!("graph_oracle.json")).unwrap();
+        for expected in cases {
+            let text = expected["smiles"].as_str().unwrap();
+            let mol = read_smiles(text).unwrap_or_else(|error| panic!("{text}: {error}"));
+            let actual = graph_snapshot(&mol, text);
+            assert_eq!(actual, expected, "{text}");
+        }
+    }
+
+    #[test]
+    #[ignore = "development graph parity against external upstream RDKit JSONL"]
+    fn graph_corpus_matches_upstream_oracle() {
+        use std::io::{BufRead, Write};
+        let path =
+            std::env::var("OPENCLATURA_GRAPH_ORACLE").expect("OPENCLATURA_GRAPH_ORACLE JSONL path");
+        let file = std::io::BufReader::new(std::fs::File::open(path).expect("open graph oracle"));
+        let mut differences = std::env::var("OPENCLATURA_GRAPH_DIFF").ok().map(|path| {
+            std::io::BufWriter::new(std::fs::File::create(path).expect("create graph differences"))
+        });
+        let (mut exact, mut different, mut declined) = (0, 0, 0);
+        let mut first_difference = None;
+        for line in file.lines() {
+            let line = line.expect("read graph oracle row");
+            if line.trim().is_empty() {
+                continue;
+            }
+            let expected: Value = serde_json::from_str(&line).expect("decode graph oracle row");
+            let text = expected["smiles"].as_str().expect("graph oracle SMILES");
+            let difference = match read_smiles(text) {
+                Ok(mol) => {
+                    let actual = graph_snapshot(&mol, text);
+                    if actual == expected {
+                        exact += 1;
+                        None
+                    } else {
+                        different += 1;
+                        first_difference.get_or_insert_with(|| text.to_owned());
+                        Some(
+                            json!({"class": "different", "smiles": text, "expected": expected, "actual": actual}),
+                        )
+                    }
+                }
+                Err(reason) => {
+                    declined += 1;
+                    Some(json!({"class": "declined", "smiles": text, "reason": reason}))
+                }
+            };
+            if let (Some(writer), Some(difference)) = (&mut differences, difference) {
+                writeln!(writer, "{difference}").expect("write graph difference");
+            }
+        }
+        if let Some(writer) = &mut differences {
+            writer.flush().expect("flush graph differences");
+        }
+        println!(
+            "Openclatura graph parity: exact={exact} different={different} declined={declined}"
+        );
+        assert!(exact > 0, "No graph oracle inputs were accepted");
+        assert_eq!(
+            different, 0,
+            "Accepted graph differs from source; first mismatch: {first_difference:?}"
+        );
+    }
+
+    #[test]
+    fn identity_and_stage_guards_precede_graph_conversion() {
+        for text in [
+            "",
+            "C.C",
+            "C1CC2CCC1C2",
+            "[CH3]",
+            "[C@H](F)Cl",
+            "FC=[C@AL1]=CF",
+            "C |a:0|",
+            "C>C>C",
+            "c1ccnc1",
+        ] {
+            assert!(
+                read_smiles(text).is_err(),
+                "Unexpected input acceptance: {text}"
+            );
+        }
+        assert!(read_smiles("[13CH3][C@@H](F)Cl").is_ok());
+    }
+}
