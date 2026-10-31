@@ -73,6 +73,77 @@ fn source_picture() -> reshiki::pictures::Picture {
 }
 
 #[test]
+fn retry_resends_the_failed_send_text_and_image_and_clears_its_draft() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let image = source_picture();
+    app.assistant.input = text_editor::Content::with_text("Redraw this esterification");
+    app.assistant.source_image = Some(image.clone());
+    let _ = app.assistant_action(Action::Send);
+    let mut preview = Document::default();
+    preview.add_atom("O", reshiki::document::Point::default());
+    app.assistant.preview = Some(preview.clone());
+    app.assistant.pending_proposal = Some(Proposal {
+        explanation: "Failed draft".into(),
+        ..Default::default()
+    });
+    let _ = app.assistant_action(Action::Done {
+        serial: app.assistant.serial,
+        epoch: app.tab.file_epoch,
+        revision: app.tab.revision,
+        replace: vec![],
+        result: Box::new(Err("The model's reply couldn't be read.".into())),
+    });
+    assert!(app.assistant.retry);
+    assert_eq!(app.assistant.draft.as_ref().unwrap().fragment, preview);
+    app.assistant.input = text_editor::Content::with_text("Unsent follow-up");
+    app.assistant.source_image = None;
+    app.assistant.busy = true;
+    assert_eq!(app.assistant_action(Action::Retry).units(), 0);
+    assert_eq!(app.assistant.input.text(), "Unsent follow-up");
+    assert!(app.assistant.source_image.is_none() && app.assistant.draft.is_some());
+    app.assistant.busy = false;
+    app.assistant.reading_image = true;
+    assert_eq!(app.assistant_action(Action::Retry).units(), 0);
+    assert!(app.assistant.draft.is_some());
+    app.assistant.reading_image = false;
+    assert!(app.assistant_action(Action::Retry).units() > 0);
+    assert!(app.assistant.busy && !app.assistant.retry);
+    let message = app.assistant.messages.last().unwrap();
+    assert_eq!(message.text, "Redraw this esterification");
+    assert_eq!(message.image, Some(image.clone()));
+    assert_eq!(app.assistant.source_image, Some(image));
+    assert!(app.assistant.draft.is_none() && app.assistant.pending_proposal.is_none());
+    assert!(app.assistant.input.text().is_empty());
+}
+
+#[test]
+fn failed_layout_improvements_do_not_offer_retry() {
+    let (mut app, _) = App::new();
+    app.tab
+        .doc
+        .add_atom("O", reshiki::document::Point::default());
+    let _ = app.assistant_action(Action::Improve);
+    assert!(
+        app.assistant
+            .messages
+            .last()
+            .unwrap()
+            .text
+            .starts_with("Improve layout: ")
+    );
+    let _ = app.assistant_action(Action::Done {
+        serial: app.assistant.serial,
+        epoch: app.tab.file_epoch,
+        revision: app.tab.revision,
+        replace: vec![],
+        result: Box::new(Err("The model's reply couldn't be read.".into())),
+    });
+    assert!(!app.assistant.retry);
+    assert_eq!(app.assistant_action(Action::Retry).units(), 0);
+}
+
+#[test]
 fn pasting_image_attaches_until_send_without_mutating_the_canvas() {
     let (mut app, _) = App::new();
     let before = app.tab.doc.clone();

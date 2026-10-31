@@ -132,6 +132,7 @@ impl App {
             self.assistant.guided_example || (improving && self.assistant.requires_apply);
         self.assistant.busy = true;
         self.assistant.error = false;
+        self.assistant.retry = false;
         self.assistant.status = "Preparing your scheme…".into();
         self.assistant.completed = None;
         self.assistant.follow_chat = true;
@@ -268,6 +269,13 @@ impl App {
                     .retain_preview(&format!("Generation or review stopped: {error}"));
                 self.assistant.status = error;
                 self.assistant.error = true;
+                self.assistant.retry = self
+                    .assistant
+                    .messages
+                    .iter()
+                    .rev()
+                    .find(|m| m.role == "You")
+                    .is_some_and(|m| !m.text.starts_with("Improve layout: "));
             }
         }
         super::chat_scroll(scroll)
@@ -330,6 +338,7 @@ impl App {
         self.assistant.messages.clear();
         self.assistant.status.clear();
         self.assistant.error = false;
+        self.assistant.retry = false;
         self.assistant.busy = false;
         self.assistant.serial = serial;
         self.assistant.progress = None;

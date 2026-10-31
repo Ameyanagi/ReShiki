@@ -881,7 +881,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
                     | super::arrow_labels::Action::Auto
                     | super::arrow_labels::Action::Detach
             )
-            | Message::Assistant(super::assistant::Action::Send)
+            | Message::Assistant(super::assistant::Action::Send | super::assistant::Action::Retry)
     ) || matches!(message, Message::Canvas(edit) if !edit.is_camera() && !edit.is_hover() && !matches!(edit, crate::canvas::Edit::BeginTransform(_)))
 }
 

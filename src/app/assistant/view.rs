@@ -139,6 +139,9 @@ impl App {
         if let Some((doc, report)) = &state.completed {
             chat = chat.push(self.assistant_completed_card(doc, report));
         }
+        if !state.busy && state.retry {
+            chat = chat.push(action("Retry", Action::Retry));
+        }
         if !state.busy && state.draft.is_none() && !self.tab.doc.all_ids().is_empty() {
             chat = chat.push(action(
                 if self.tab.selected.is_empty() {
@@ -254,6 +257,13 @@ impl App {
                     .style(crate::appearance::text_color(Color::from_rgb8(151, 86, 24))),
             );
         }
+        for note in &draft.review.notes {
+            proposal = proposal.push(
+                text(note)
+                    .size(11)
+                    .style(super::super::workspace::muted_text),
+            );
+        }
         proposal = proposal.push(self.assistant_preview_controls(&draft.fragment));
         if !current {
             proposal = proposal.push(
@@ -300,6 +310,14 @@ impl App {
         result = result.push(text(&report.summary).size(12).width(Length::Fill));
         for issue in &report.issues {
             result = result.push(text(format!("• {issue}")).size(11).width(Length::Fill));
+        }
+        for note in &report.notes {
+            result = result.push(
+                text(note)
+                    .size(11)
+                    .width(Length::Fill)
+                    .style(super::super::workspace::muted_text),
+            );
         }
         container(result)
             .padding(12)
