@@ -21,7 +21,7 @@ fn structure_naming_failures_do_not_create_name_import_notices() {
             } else {
                 assert!(matches!(pending, Pending::Caption(_)));
             }
-            let detail = "Unsupported fused-ring parent in local organic rules";
+            let detail = "openclatura: isotopic naming not ported";
             let result = if stale {
                 app.tab.revision += 1;
                 Ok(Outcome::Structure(record("CCO")))

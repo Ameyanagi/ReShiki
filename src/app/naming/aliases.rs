@@ -152,7 +152,7 @@ impl App {
         }
         if let Some((ticket, record)) = &self.tab.naming.structure {
             let current = ticket.is_current(self.tab.revision, self.tab.file_epoch);
-            content = content.push(section("GENERATED SYSTEMATIC NAME · LOCAL RULES"));
+            content = content.push(section("GENERATED SYSTEMATIC NAME · OPENCLATURA"));
             if !current {
                 content = content.push(
                     text("Drawing changed · Generate the name again")

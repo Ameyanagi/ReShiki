@@ -162,7 +162,7 @@ async fn actual_parser_rejects_ambiguous_stereo_polymers_and_unknown_names() {
 #[test]
 fn parser_cannot_accept_a_rule_generation_response() {
     let response = serde_json::json!({"operation":"generate", "protocol":worker::PROTOCOL,
-        "profile":super::super::rules::PROFILE,"input":"CCO","result":{"Ok":"ethan-1-ol"}});
+        "profile":super::super::openclatura::PROFILE,"input":"CCO","result":{"Ok":"ethanol"}});
     assert!(
         parse_reply(&serde_json::to_vec(&response).unwrap(), "example")
             .unwrap_err()
@@ -554,7 +554,7 @@ async fn retained_plus_lactic_name_uses_local_parser_and_exact_s_reverse() -> Re
             generated.systematic_name.as_deref(),
             Some(PLUS_LACTIC_PARSER_NAME)
         );
-        assert_eq!(generated.provenance, Provenance::LocalRules);
+        assert_eq!(generated.provenance, Provenance::Openclatura);
     }
     Ok(())
 }

@@ -2,7 +2,7 @@ openclatura structure-to-name source and reference data
 ======================================================
 
 src/naming/openclatura/ is a native Rust adaptation of the openclatura 0.4.3
-plain-name pipeline for acyclic and monocyclic structures. Its embedded
+plain-name pipeline, from chains to fused ring systems. Its embedded
 data/ JSON registries are copied from the same upstream release. The graph
 adapter uses ReShiki's native chemistry implementation in place of RDKit;
 tests/fixtures/openclatura/graph_oracle.json records upstream read_smiles

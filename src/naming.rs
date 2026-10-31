@@ -20,7 +20,6 @@ mod online;
 pub use online::resolve_name_online;
 pub mod openclatura;
 mod reverse;
-mod rules;
 #[cfg(test)]
 mod s2n_harness;
 pub mod worker;
@@ -70,7 +69,7 @@ impl std::error::Error for Error {}
 pub enum Provenance {
     OpsinRust,
     OpsinRustRetainedName { source: &'static str },
-    LocalRules,
+    Openclatura,
     PubChem { cid: u64 },
 }
 impl Provenance {
@@ -89,7 +88,7 @@ impl Provenance {
                 format!("{source} retained name · parsed locally by OPSIN Rust port")
             }
             Self::PubChem { cid } => format!("PubChem database · CID {cid}"),
-            Self::LocalRules => "ReShiki rules 1 · verified by OPSIN Rust port".into(),
+            Self::Openclatura => "openclatura 0.4.3 Rust port · verified by OPSIN Rust port".into(),
         }
     }
 }

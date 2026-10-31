@@ -1,6 +1,6 @@
 //! One bounded native naming request, before GUI/runtime startup. The
 //! browser's naming Web Worker answers the same requests with `respond`.
-use super::rules;
+use super::openclatura;
 use serde::{Deserialize, Serialize};
 #[cfg(not(target_arch = "wasm32"))]
 use std::{
@@ -183,12 +183,18 @@ pub fn respond(bytes: &[u8]) -> Result<Vec<u8>, String> {
             protocol,
             profile,
             smiles,
-        } if protocol == PROTOCOL && profile == rules::PROFILE => {
+        } if protocol == PROTOCOL && profile == openclatura::PROFILE => {
+            let result = openclatura::name_smiles(&smiles)
+                .and_then(|name| {
+                    check_name(&name, "the name exceeds the supported length")?;
+                    Ok(name)
+                })
+                .map_err(|reason| format!("This structure can't be named locally yet: {reason}"));
             Ok(Response::Generate(Generated {
                 protocol: PROTOCOL,
-                profile: rules::PROFILE.into(),
-                input: smiles.clone(),
-                result: rules::generate(&smiles),
+                profile: openclatura::PROFILE.into(),
+                input: smiles,
+                result,
             }))
         }
         _ => Err("Incompatible native naming protocol/profile".into()),

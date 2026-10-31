@@ -43,7 +43,7 @@ The same confirmation flow is available in the Chemical names inspector.
 ### Show a molecule's name
 
 1. Right-click a molecule and choose **Show chemical name**. The name appears
-   centered below the molecule; for ethanol it is `ethan-1-ol`.
+   centered below the molecule; for ethanol it is `ethanol`.
 2. Choose **Hide chemical name** in the same menu to remove it.
 
 Show and Hide are each one Undo step. The clicked molecule is named even when
@@ -66,7 +66,7 @@ or **Insert caption**.
    the next insertion. **Use original name below** switches back to the typed
    name.
 4. To name a drawn molecule, select it and choose **Generate selected name** in
-   the same Details area. **GENERATED SYSTEMATIC NAME · LOCAL RULES** shows the
+   the same Details area. **GENERATED SYSTEMATIC NAME · OPENCLATURA** shows the
    result with **Copy name** and **Insert caption**.
 
 Opening Details does not open the preview or insert anything. Changing the
@@ -100,9 +100,11 @@ Import tab.
   under Import → Structure." rather than as an ambiguous name.
 - Optical rotation signs are not turned into R/S. The one exception is
   `(+)-lactic acid`, which reads as `(2S)-2-hydroxypropanoic acid`.
-- Generated names cover neutral organic molecules with up to 64 heavy atoms.
-  Charged or isotope-labeled molecules and fused, spiro or bicyclic parents
-  give an error.
+- Generated names cover one connected molecule: chains, rings, ring
+  assemblies, spiro, bridged and fused ring systems, with charges and R/S and
+  E/Z stereo. Salts and mixtures, isotope-labeled molecules and a few stereo,
+  charge and ring states that the name could misdescribe give an error
+  instead of a name.
 - Generated names are systematic. They are not always the preferred IUPAC name.
 - The alias catalog matches the exact structure, so stereo, charge and
   isotopes count. **No curated aliases available in the bundled catalog.** only
@@ -132,18 +134,34 @@ outdated results.
 ### Structure to name
 
 Abbreviated groups are expanded for naming. Showing an already named molecule
-reuses its caption. The **ReShiki organic rules 1** profile covers supported
-neutral organic structures with at most 64 heavy atoms. Its declared subset
-includes carbon chains with supported branching and unsaturation, simple
-cycloalkanes, benzene and selected heteroaromatic parents; acids, simple esters,
-primary amides, nitriles, aldehydes, ketones, alcohols, primary amines, ethers
-and halogen substituents; and supported parent R/S and E/Z configurations.
-Carbon stems are limited to 20 atoms and substituent nesting to three levels.
-Unsupported functional groups and stereo contexts return an error. A generated
-name appears only after the local Rust parser reconstructs the same graph and
-specified stereo. Parent selection and naming rules also have independently
-expected tests. Comprehensive IUPAC coverage and preferred IUPAC name (PIN)
-selection are not claimed. Unspecified stereo remains unspecified.
+reuses its caption. Names come from a Rust port of
+[openclatura](https://github.com/lamalab-org/openclatura) 0.4.3 by lamalab-org
+(MIT license; commit `90dc5bcb`), in `src/naming/openclatura/`. The port follows
+the Python modules and rule order, and its JSON rule tables in
+`src/naming/openclatura/data/` are byte-identical to upstream. RDKit's part is
+done by `crates/chemistry`: SMILES parsing, kekulization, ring perception,
+stereo perception and the CIP labeler, including r/s. The copyright and license
+are in `licenses/openclatura/` and `NOTICE`.
+
+The port names one connected molecule of up to 512 atoms: chains, monocycles,
+heterocycles, ring assemblies, spiro systems, von Baeyer (bicyclo, tricyclo)
+systems and fused ring systems, including retained names such as `naphthalene`
+or `1H-indole`, fusion names such as `pyrazolo[3,4-d]pyrimidine`, hydro
+prefixes, indicated hydrogen and bridged fused parents. It covers functional
+groups, charges and ions, and R/S, r/s and E/Z. It declines salts and mixtures,
+isotope labels, and the cases where upstream's own name would describe another
+structure: nitrogen and ring lone-pair stereocentres, some ring stereo, r/s on
+von Baeyer parents, and some charge, hydrogen and localized pi states. Each
+such place is marked `Upstream divergence` in the source. The text matches
+openclatura 0.4.3 exactly for 98.6% of the test corpus; the
+[structure-to-name harness](structure-to-name-harness.md) has the numbers.
+
+The worker generates the name, a second worker parses it with the OPSIN Rust
+port, and the name appears only when that parse gives the same graph, charge
+and specified stereo. Otherwise you see an error and no name. Generation runs
+under the same worker limits as parsing, so a very large ring system can time
+out. Comprehensive IUPAC coverage and preferred IUPAC name (PIN) selection are
+not claimed. Unspecified stereo remains unspecified.
 
 ### Captions
 

@@ -10,7 +10,7 @@ pub(super) fn ethanol() -> Document {
     .unwrap()
 }
 
-/// A local-rules record for `smiles` named "ethan-1-ol", with no aliases or
+/// A generated record for `smiles` named "ethan-1-ol", with no aliases or
 /// warnings. Tests that need another title, name or source override fields.
 pub(super) fn record(smiles: &str) -> Record {
     Record {
@@ -20,6 +20,6 @@ pub(super) fn record(smiles: &str) -> Record {
         smiles: smiles.into(),
         synonyms: vec![],
         warnings: vec![],
-        provenance: Provenance::LocalRules,
+        provenance: Provenance::Openclatura,
     }
 }

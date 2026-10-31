@@ -92,7 +92,7 @@ fn edited_name_can_resolve_current_aliases_without_reopening_details() {
         canonical_smiles: identity.into(),
         synonyms: naming::aliases_for_smiles(identity).unwrap(),
         warnings: vec![],
-        provenance: naming::Provenance::LocalRules,
+        provenance: naming::Provenance::Openclatura,
     };
     let document = Document::from_json(include_bytes!(
         "../../../../tests/fixtures/chemical-naming-rust/r-lactic-rust-native.rsk"

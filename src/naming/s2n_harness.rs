@@ -11,6 +11,7 @@ use std::{
 const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/s2n");
 const BAKEOFF: &str = include_str!("../../tests/fixtures/s2n/bakeoff_corpus.tsv");
 const OPENCLATURA: &str = include_str!("../../tests/fixtures/s2n/openclatura_tests.tsv");
+const RULES_CASES: &str = include_str!("../../tests/fixtures/s2n/rules_cases.tsv");
 
 fn namer(smiles: &str) -> Result<String, String> {
     super::openclatura::name_smiles(smiles)
@@ -500,6 +501,32 @@ fn s2n_fast_subset() {
 #[ignore = "full s2n corpus and 3,000 generated structures"]
 fn s2n_full_corpus() {
     run(false);
+}
+
+/// The cases of the removed "ReShiki organic rules 1" namer (`rules_name`,
+/// empty where it declined): the port gives exactly `name`, which round-trips,
+/// or declines where `name` is empty.
+#[test]
+fn s2n_rules_cases() {
+    let mut measurements = Measurements::default();
+    for line in RULES_CASES.lines().skip(1) {
+        let [smiles, _, name] = line.split('\t').collect::<Vec<_>>()[..] else {
+            panic!("Malformed rules case: {line}");
+        };
+        match namer(smiles) {
+            Ok(actual) => {
+                assert_eq!(actual, name, "{smiles}");
+                let outcome = measurements.classify_given(smiles, name);
+                assert_eq!(
+                    outcome.class,
+                    Class::Correct,
+                    "{smiles}: {}",
+                    outcome.reason
+                );
+            }
+            Err(reason) => assert!(name.is_empty(), "{smiles} declined: {reason}"),
+        }
+    }
 }
 
 /// Structure round trip of extra SMILES (first column of the `S2N_EXTRA` file),

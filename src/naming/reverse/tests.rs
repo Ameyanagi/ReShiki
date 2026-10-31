@@ -3,10 +3,10 @@ use serde_json::json;
 
 #[test]
 fn rule_protocol_checks_profile_input_and_bounded_name() {
-    let reply = json!({"operation":"generate","protocol":worker::PROTOCOL,"profile":rules::PROFILE,"input":"CCO","result":{"Ok":"ethan-1-ol"}});
+    let reply = json!({"operation":"generate","protocol":worker::PROTOCOL,"profile":openclatura::PROFILE,"input":"CCO","result":{"Ok":"ethanol"}});
     assert_eq!(
         parse_response(&serde_json::to_vec(&reply).unwrap(), "CCO").unwrap(),
-        "ethan-1-ol"
+        "ethanol"
     );
     for (key, value) in [
         ("protocol", json!(3)),
@@ -23,16 +23,36 @@ fn rule_protocol_checks_profile_input_and_bounded_name() {
         ));
     }
     let mut rejected = reply;
-    rejected["result"] = json!({"Err":"Unsupported fused-ring parent in local organic rules"});
+    rejected["result"] = json!({"Err":"openclatura: isotopic naming not ported"});
     assert_eq!(
         parse_response(&serde_json::to_vec(&rejected).unwrap(), "CCO").unwrap_err(),
-        Error::Rejected("Unsupported fused-ring parent in local organic rules".into())
+        Error::Rejected("openclatura: isotopic naming not ported".into())
     );
+}
+
+#[test]
+fn worker_names_with_the_port_or_declines() {
+    let generate = |smiles| {
+        let reply = worker::respond(&generate_request(smiles).unwrap()).unwrap();
+        parse_response(&reply, smiles)
+    };
+    assert_eq!(generate("CCO").unwrap(), "ethanol");
+    let Err(Error::Rejected(reason)) = generate("[13CH3]CO") else {
+        panic!("An isotope-labelled molecule received a name");
+    };
+    assert!(reason.starts_with("This structure can't be named locally yet: "));
 }
 
 #[tokio::test]
 async fn native_worker_then_local_opsin_verifies_supported_names() -> Result<(), String> {
-    for &(smiles, expected_name) in rules::tests::CASES {
+    // The removed rules namer's cases, which the harness checks in-process.
+    let cases = include_str!("../../../tests/fixtures/s2n/rules_cases.tsv");
+    for (smiles, expected_name) in cases.lines().skip(1).filter_map(|line| {
+        let mut fields = line.split('\t');
+        let smiles = fields.next()?;
+        let name = fields.nth(1).filter(|name| !name.is_empty())?;
+        Some((smiles, name))
+    }) {
         let expected = super::super::canonical_smiles(smiles)?;
         let record = generate_name(
             &Identity {
@@ -44,7 +64,7 @@ async fn native_worker_then_local_opsin_verifies_supported_names() -> Result<(),
         .await
         .map_err(|e| format!("{smiles} -> {expected_name}: {e}"))?;
         assert_eq!(record.canonical_smiles, expected);
-        assert_eq!(record.provenance, Provenance::LocalRules);
+        assert_eq!(record.provenance, Provenance::Openclatura);
         assert_eq!(record.systematic_name.as_deref(), Some(expected_name));
         // Source-labelled aliases supplement the generated name only after
         // exact graph reconstruction, including the two absolute enantiomers.

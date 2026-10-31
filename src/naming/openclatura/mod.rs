@@ -61,6 +61,9 @@ mod spiro_subgraph;
 mod subgraph_tools;
 mod von_baeyer;
 
+/// The naming profile on the worker wire and in generated-name warnings.
+pub(super) const PROFILE: &str = "openclatura 0.4.3 Rust port";
+
 pub fn name_smiles(smiles: &str) -> Result<String, String> {
     let mol = graph_io::read_smiles(smiles)?;
     if mol.atoms.values().any(|atom| atom.isotope.is_some()) {

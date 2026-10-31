@@ -2,7 +2,10 @@
 
 `src/naming/s2n_harness.rs` (test-only) measures the structure-to-name namer by
 round trip through the in-process OPSIN Rust port. The namer sits behind one
-function, `namer`, so the openclatura port replaces a single line.
+function, `namer`, which calls the openclatura port
+(`naming::openclatura::name_smiles`). The app, through the naming worker's
+`generate` operation, uses the same function, and shows a name only after the
+OPSIN port reads it back to the drawn structure.
 
 ## Run
 
@@ -48,6 +51,7 @@ lists every wrong and unparseable case and the top decline reasons.
 | ----------------------- | ---: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `bakeoff_corpus.tsv`    |  703 | Phase 0 bake-off: 500 random PubChem compounds and 203 curated ones in 14 categories, with PubChem IUPAC names and openclatura 0.4.3 names.                                                                      |
 | `openclatura_tests.tsv` |  894 | SMILES mined from openclatura's tests (commit `90dc5bcb`), named by openclatura 0.4.3. `asserted` is 1 or 0 where the test asserts a name that does or doesn't match the output. Category is the test directory. |
+| `rules_cases.tsv`       |   94 | Cases of the removed rules namer, its name (empty: declined) and the port's name; checked by `s2n_rules_cases`.                                                                                                  |
 | `baseline.tsv`          |  107 | Fast-subset correct counts per check and category; `parity_text` rows hold exact text matches.                                                                                                                   |
 
 openclatura-derived data is MIT; see `licenses/openclatura/`.
@@ -55,6 +59,18 @@ openclatura-derived data is MIT; see `licenses/openclatura/`.
 The fast subset is all 203 curated rows, every 10th random PubChem row, every
 5th openclatura row per category, and the first 500 generated molecules (934
 structures). The full run uses all fixture rows and 3,000 generated molecules.
+
+## Final numbers (openclatura port, 2026-10-31)
+
+Phase 1 is the removed rules namer at `3a0c668f`. Full corpus, correct of
+total; no check has a wrong name.
+
+| Check               | Phase 1 rules namer | openclatura port |
+| ------------------- | ------------------: | ---------------: |
+| structure           |          145 / 1597 |      1536 / 1597 |
+| name                |            31 / 685 |        683 / 685 |
+| parity (exact text) |          105 / 1592 |      1569 / 1592 |
+| generated           |         1717 / 3000 |      3000 / 3000 |
 
 ## Baseline (openclatura port, stage 4, 2026-10-31)
 
@@ -256,5 +272,4 @@ settle in Phase 2:
   bounded.
 - The potential-stereocentre predicate in perception is crate-private.
 - The naming input boundary (`naming::canonical_smiles`) rejects allene and
-  coordination stereo; today's rules namer also refuses r/s and axial
-  descriptors. The port must keep both checks or widen them on purpose.
+  coordination stereo, and the port keeps that check.
