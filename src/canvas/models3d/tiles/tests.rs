@@ -519,6 +519,94 @@ fn a_morphing_model_draws_as_tiles_in_every_style() {
     }
 }
 
+/// Crystal repeats keep the same translucent paint when split into tiles,
+/// including the shared outline contours of flat sticks.
+#[test]
+fn crystal_copies_keep_their_opacity_in_tiles_in_every_style() {
+    use reshiki::models3d::{Adp, Cell, Site};
+    for style in Style::ALL {
+        let mut doc = model(style);
+        let sites = doc.models[0]
+            .linked_ids(&doc)
+            .into_iter()
+            .map(|id| Site {
+                id,
+                label: String::new(),
+                adp: Some(Adp::Iso(0.09)),
+                asymmetric: true,
+            })
+            .collect();
+        let mut crystal = doc.models[0].clone().with_cell(
+            &doc,
+            Some(Cell {
+                vectors: [[8., 0., 0.], [0., 7., 0.], [0., 0., 6.]],
+                crossing: vec![],
+            }),
+            sites,
+        );
+        for atom in &mut crystal.atoms {
+            atom.xyz = atom.xyz.map(|x| x + 2.);
+        }
+        crystal.rotation = [1., 0., 0., 0.];
+        crystal.perspective = 0.;
+        crystal.repeat = [2, 1, 1];
+        doc.models[0] = crystal;
+        let before = doc.clone();
+        let run: Vec<_> = scene::primitives(&doc)
+            .into_iter()
+            .filter(is_model)
+            .collect();
+        assert!(
+            run.iter()
+                .any(|p| matches!(p, Primitive::Opacity { alpha, .. } if *alpha == 0.55)),
+            "{style:?}: the shared scene includes translucent copies"
+        );
+        let opaque: Vec<_> = run
+            .iter()
+            .map(|p| match p {
+                Primitive::Opacity { alpha, primitive } if *alpha == 0.55 => {
+                    primitive.as_ref().clone()
+                }
+                p => p.clone(),
+            })
+            .collect();
+        let (lo, hi) = scene::bounds(&run);
+        let camera = Camera {
+            center: lo.lerp(hi, 0.5),
+            zoom: 4.,
+        };
+        let bounds = Rectangle::with_size(Size::new(2000., 2000.));
+        let tiles = plan(&run, camera, bounds);
+        assert!(tiles.len() > 1, "{style:?}");
+        assert_ne!(
+            tiles.iter().map(|tile| tile.key).collect::<Vec<_>>(),
+            plan(&opaque, camera, bounds)
+                .iter()
+                .map(|tile| tile.key)
+                .collect::<Vec<_>>(),
+            "{style:?}: opacity participates in the tile cache key"
+        );
+        let scale = camera.zoom * OVERSAMPLE;
+        let mut faded = false;
+        for tile in tiles {
+            let [x0, y0, x1, y1] = tile.rect;
+            let origin = World::new(x0 as f32 / scale, y0 as f32 / scale);
+            let (width, height) = ((x1 - x0) as u32, (y1 - y0) as u32);
+            let image =
+                pixels(&primitives(&run, &tile.parts), origin, scale, width, height).unwrap();
+            assert_eq!(
+                image,
+                pixels(&run, origin, scale, width, height).unwrap(),
+                "{style:?} {:?}",
+                tile.rect
+            );
+            faded |= image != pixels(&opaque, origin, scale, width, height).unwrap();
+        }
+        assert!(faded, "{style:?}: the copies visibly retain their opacity");
+        assert_eq!(doc, before, "rendering never stores the copies");
+    }
+}
+
 /// The two halves of a bond meet without a pale anti-aliasing seam: at
 /// 1200 dpi every pixel along the C–C stick across its middle is opaque, in
 /// each style with sticks, whatever the view.

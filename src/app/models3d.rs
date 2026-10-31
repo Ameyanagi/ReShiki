@@ -71,9 +71,11 @@ pub(crate) enum Setting {
     ResetView,
     /// Show a crystal's ion charges in its 2D drawing.
     Charges(bool),
-    /// How many cells along a, b and c a crystal's 2D drawing shows.
+    /// How many cells along a, b and c a crystal shows.
     Repeat([u8; 3]),
-    /// Turn a crystal's 2D drawing to look along a lattice direction.
+    /// The opacity of a crystal's boundary and repeat copies.
+    CopyOpacity(f32),
+    /// Turn a crystal to look along a lattice direction.
     LookAlong(models3d::Along),
 }
 
@@ -479,19 +481,27 @@ impl App {
             Setting::Background(background) => model.background = background,
             Setting::DepthFade(value) => model.depth_fade = value.clamp(0., 1.),
             Setting::Perspective(value) => model.perspective = value.clamp(0., 1.),
+            Setting::CopyOpacity(value) => model.copy_opacity = value.clamp(0., 1.),
             Setting::ResetView => {
                 model.rotation = reset.unwrap_or(model.rotation);
                 model.along = None;
                 model.manual_along = false;
             }
             Setting::Charges(shown) => model.charges = shown,
-            Setting::Repeat(repeat) => model.repeat = repeat,
+            Setting::Repeat(repeat) => {
+                let reach = model.reach(&before);
+                model.repeat = repeat;
+                model.size *= model.reach(&before) / reach;
+            }
             Setting::LookAlong(_) => model.manual_along = true,
         }
-        // Every changed repeat chooses a clear view until a direction is
-        // chosen explicitly; that direction keeps its tilt as the block grows.
+        let display = model.display;
+        // Every changed repeat lays out a visible 2D drawing along a clear
+        // view until a direction is chosen explicitly; that direction keeps
+        // its tilt as the block grows. A 3D-only model keeps its view.
         let repeat_changed = matches!(setting, Setting::Repeat(r)
-            if before.models.get(index).is_some_and(|m| m.repeat != r && !m.manual_along));
+            if before.models.get(index).is_some_and(|m| m.repeat != r && !m.manual_along))
+            && display != Display::ThreeD;
         let along = match setting {
             Setting::LookAlong(along) => Some(along),
             _ if repeat_changed => self
@@ -503,7 +513,21 @@ impl App {
             _ => None,
         };
         if let Some(along) = along {
-            models3d::look_along(&mut self.tab.doc, index, along);
+            if display == Display::ThreeD {
+                if let Some(model) = self.tab.doc.models.get_mut(index)
+                    && let Some(cell) = &model.cell
+                {
+                    model.rotation = along.rotation(cell);
+                    model.along = Some(along);
+                }
+            } else {
+                // Both shares the tilt that keeps the 2D labels apart.
+                models3d::look_along(&mut self.tab.doc, index, along);
+            }
+        }
+        if display == Display::Both && matches!(setting, Setting::Repeat(_) | Setting::LookAlong(_))
+        {
+            models3d::set_display(&mut self.tab.doc, index, Display::Both);
         }
         // An unchanged choice adds no Undo step.
         if self.tab.doc == before {
@@ -512,8 +536,11 @@ impl App {
         models3d::require_version(&mut self.tab.doc);
         // A drag continues only on the same slider while nothing else has
         // been committed.
-        let sliding = matches!(setting, Setting::DepthFade(_) | Setting::Perspective(_))
-            .then(|| (self.tab.revision, index, std::mem::discriminant(&setting)));
+        let sliding = matches!(
+            setting,
+            Setting::DepthFade(_) | Setting::Perspective(_) | Setting::CopyOpacity(_)
+        )
+        .then(|| (self.tab.revision, index, std::mem::discriminant(&setting)));
         let continuing = sliding.is_some() && self.tab.model_sliding == sliding;
         self.commit_model(before, continuing);
         self.tab.model_sliding =
@@ -670,6 +697,7 @@ impl App {
         model.labels = old.labels;
         model.depth_fade = old.depth_fade;
         model.perspective = old.perspective;
+        model.copy_opacity = old.copy_opacity;
         model.background = old.background;
         model.layout = old.layout;
         let atoms = model.linked_ids(&before);
@@ -974,54 +1002,8 @@ impl App {
                 .spacing(4),
             );
         }
-        // A crystal's repeat and view direction, while drawn in 2D.
-        if let Some(model) = model.filter(|m| m.cell.is_some() && m.display == Display::TwoD) {
-            let set = move |setting| {
-                (enabled && !stale).then_some(Message::Models3d(Action::Set(setting)))
-            };
-            body = body.push(text("Repeat").size(12));
-            for (k, axis) in ["a", "b", "c"].into_iter().enumerate() {
-                let counts = (1..=models3d::MAX_REPEAT).map(|n| {
-                    let active = model.repeat.get(k) == Some(&n);
-                    let mut repeat = model.repeat;
-                    if let Some(slot) = repeat.get_mut(k) {
-                        *slot = n;
-                    }
-                    accessible_command(
-                        format!("structure-repeat-{axis}-{n}"),
-                        format!("{n} cells along {axis}"),
-                        n.to_string(),
-                    )
-                    .checked(active)
-                    .style(control(active))
-                    .width(Length::Fill)
-                    .on_press_maybe(set(Setting::Repeat(repeat)))
-                    .into()
-                });
-                body = body.push(
-                    row![text(axis).size(12).width(16)]
-                        .extend(counts)
-                        .spacing(4)
-                        .align_y(Alignment::Center),
-                );
-            }
-            body = body.push(text("Look along").size(12)).push(
-                row(models3d::Along::ALL.map(|along| {
-                    let name = along.name();
-                    let active = model.along == Some(along);
-                    accessible_command(
-                        format!("structure-look-{name}"),
-                        format!("Look along {name}"),
-                        name,
-                    )
-                    .checked(active)
-                    .style(control(active))
-                    .width(Length::Fill)
-                    .on_press_maybe(set(Setting::LookAlong(along)))
-                    .into()
-                }))
-                .spacing(4),
-            );
+        if let Some(model) = model.filter(|m| m.cell.is_some()) {
+            body = body.push(crystal_controls("structure", model, enabled && !stale));
         }
         Some(self.inspector_section(Section::Structure, "Structure", "", true, body))
     }
@@ -1035,6 +1017,7 @@ impl App {
             return None;
         }
         let enabled = !self.tab.busy && self.tab.optimization.is_none();
+        let stale = self.stale_model().is_some();
         let set = move |setting| enabled.then_some(Message::Models3d(Action::Set(setting)));
         let choice = |id: String, name: &str, label: &'static str, active: bool, setting| {
             accessible_command(format!("model-{id}"), name, label)
@@ -1086,23 +1069,6 @@ impl App {
                 }))
             .spacing(4)
             .into()
-        };
-        let slider_field = |label: &'static str, value: f32, setting: fn(f32) -> Setting| {
-            column![
-                row![
-                    text(label).size(12),
-                    Space::new().width(Length::Fill),
-                    text(format!("{:.0}%", value * 100.))
-                        .size(12)
-                        .style(muted_text)
-                ],
-                slider(0_f32..=100., value * 100., move |v| {
-                    Message::Models3d(Action::Set(setting(v / 100.)))
-                })
-                .step(1_f32)
-                .on_release(Message::Models3d(Action::SlideEnd)),
-            ]
-            .spacing(4)
         };
         let look = |look: Look, id: &str, name, label| {
             (
@@ -1170,6 +1136,7 @@ impl App {
             ));
         }
         if model.cell.is_some() {
+            body = body.push(crystal_controls("model", model, enabled && !stale));
             body = body.push(field(
                 "Molecule only",
                 toggle(
@@ -1269,7 +1236,7 @@ impl App {
                 .on_press_maybe(set(Setting::ResetView))
                 .into(),
         ]);
-        if self.stale_model().is_some() {
+        if stale {
             body = column![
                 row![
                     text("Structure changed ·").size(11).style(muted_text),
@@ -1296,6 +1263,87 @@ impl App {
         }
         Some(self.inspector_section(Section::Model3d, "3D model", name(model.style), true, body))
     }
+}
+
+fn slider_field(
+    label: &'static str,
+    value: f32,
+    setting: fn(f32) -> Setting,
+) -> iced::widget::Column<'static, Message> {
+    column![
+        row![
+            text(label).size(12),
+            Space::new().width(Length::Fill),
+            text(format!("{:.0}%", value * 100.))
+                .size(12)
+                .style(muted_text)
+        ],
+        slider(0_f32..=100., value * 100., move |v| {
+            Message::Models3d(Action::Set(setting(v / 100.)))
+        })
+        .step(1_f32)
+        .on_release(Message::Models3d(Action::SlideEnd)),
+    ]
+    .spacing(4)
+}
+
+/// The same crystal repeat, opacity and direction choices in Structure and 3D model.
+fn crystal_controls(
+    prefix: &'static str,
+    model: &models3d::Model3d,
+    enabled: bool,
+) -> Element<'static, Message> {
+    let set = move |setting| enabled.then_some(Message::Models3d(Action::Set(setting)));
+    let mut body = column![text("Repeat").size(12)].spacing(6);
+    for (k, axis) in ["a", "b", "c"].into_iter().enumerate() {
+        let counts = (1..=models3d::MAX_REPEAT).map(|n| {
+            let active = model.repeat.get(k) == Some(&n);
+            let mut repeat = model.repeat;
+            if let Some(slot) = repeat.get_mut(k) {
+                *slot = n;
+            }
+            accessible_command(
+                format!("{prefix}-repeat-{axis}-{n}"),
+                format!("{n} cells along {axis}"),
+                n.to_string(),
+            )
+            .checked(active)
+            .style(control(active))
+            .width(Length::Fill)
+            .on_press_maybe(set(Setting::Repeat(repeat)))
+            .into()
+        });
+        body = body.push(
+            row![text(axis).size(12).width(16)]
+                .extend(counts)
+                .spacing(4)
+                .align_y(Alignment::Center),
+        );
+    }
+    body.push(slider_field(
+        "Copy opacity",
+        model.copy_opacity,
+        Setting::CopyOpacity,
+    ))
+    .push(text("Look along").size(12))
+    .push(
+        row(models3d::Along::ALL.map(|along| {
+            let name = along.name();
+            let active = model.along == Some(along);
+            accessible_command(
+                format!("{prefix}-look-{name}"),
+                format!("Look along {name}"),
+                name,
+            )
+            .checked(active)
+            .style(control(active))
+            .width(Length::Fill)
+            .on_press_maybe(set(Setting::LookAlong(along)))
+            .into()
+        }))
+        .spacing(4),
+    )
+    .into()
 }
 
 /// Least-squares proper rotation from the new conformer onto the old one.
