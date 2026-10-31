@@ -457,6 +457,7 @@ pub struct App {
     last_label: Option<atom_text::RememberedLabel>,
     /// The last Text-tool click on an atom, to recognize a double-click.
     text_click: Option<(iced::time::Instant, u64)>,
+    path_click: Option<(iced::time::Instant, (document_tab::TabId, u64, usize))>,
 }
 /// How often drafts catch up with their drawings. A browser page can be
 /// reloaded or closed at any moment, and cannot write when it unloads, so it
@@ -559,6 +560,7 @@ impl App {
             templates: template_library::State::load(),
             last_label: None,
             text_click: None,
+            path_click: None,
         };
         if let Some(message) = abbreviations::load_user_catalog() {
             if app.recovered.is_empty() {

@@ -219,8 +219,8 @@ fn retained_non_arc_shapes_can_be_constructed_as_one_pen_path() {
             panic!("retained pen outline")
         };
         let mut pen = Graphic::pen_curve(original.id, *start, *end, original.style.clone());
-        let _ = pen.edit_point(1, *a);
-        let _ = pen.edit_point(2, *b);
+        pen.move_path_point_free(1, *a).unwrap();
+        pen.move_path_point_free(2, *b).unwrap();
         for command in rest {
             match *command {
                 PathCommand::Cubic(a, b, end) if original.path_closed() && end == *start => {
@@ -233,15 +233,15 @@ fn retained_non_arc_shapes_can_be_constructed_as_one_pen_path() {
                         .index;
                     pen.set_path_closed(true).unwrap();
                     pen.set_path_segment_curved(last, true).unwrap();
-                    let _ = pen.edit_point(last + 1, a);
-                    let _ = pen.edit_point(last + 2, b);
+                    pen.move_path_point_free(last + 1, a).unwrap();
+                    pen.move_path_point_free(last + 2, b).unwrap();
                 }
                 PathCommand::Cubic(a, b, end) => {
                     let index = pen
                         .append_pen_node(end, Some(Point::new(2. * end.x - b.x, 2. * end.y - b.y)))
                         .unwrap();
-                    let _ = pen.edit_point(index - 2, a);
-                    let _ = pen.edit_point(index - 1, b);
+                    pen.move_path_point_free(index - 2, a).unwrap();
+                    pen.move_path_point_free(index - 1, b).unwrap();
                 }
                 PathCommand::Close => pen.set_path_closed(true).unwrap(),
                 _ => panic!("unexpected retained segment"),

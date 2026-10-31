@@ -3,7 +3,7 @@ mod arc;
 mod path;
 use crate::{document::Point, style};
 pub use arc::ArcGeometry;
-pub use path::{MIN_CLOSED_NODES, MIN_OPEN_NODES, PathHandle, PathSummary};
+pub use path::{MIN_CLOSED_NODES, MIN_OPEN_NODES, PathHandle, PathNodeType, PathSummary};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -219,6 +219,9 @@ pub struct Graphic {
     /// Local commands for a custom editable path; unused by parametric shapes.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub path: Vec<PathCommand>,
+    /// Explicit node behavior in connected-path order; empty uses geometric detection.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub node_types: Vec<PathNodeType>,
 }
 fn back_layer() -> i32 {
     -1
@@ -297,6 +300,7 @@ impl Graphic {
                     -1
                 },
                 path: vec![],
+                node_types: vec![],
             };
         }
         let mut dx = end.x - start.x;
@@ -338,6 +342,7 @@ impl Graphic {
             phase_flipped: false,
             layer: -1,
             path: vec![],
+            node_types: vec![],
         }
     }
     pub fn map_positions(&mut self, f: impl Fn(Point) -> Point) {
@@ -530,6 +535,7 @@ impl Graphic {
         self.kind = GraphicKind::Path;
         self.reset_frame();
         self.path = commands;
+        self.node_types.clear();
         Ok(())
     }
     pub fn validate(&self) -> Result<(), String> {
@@ -559,6 +565,14 @@ impl Graphic {
                 && !matches!(self.path.first(), Some(PathCommand::Move(_))))
         {
             return Err("Invalid graphic path".into());
+        }
+        if !self.node_types.is_empty()
+            && (self.kind != GraphicKind::Path
+                || self
+                    .path_summary()
+                    .is_none_or(|summary| summary.node_count() != self.node_types.len()))
+        {
+            return Err("Path node types do not match the graphic's connected nodes".into());
         }
         if [self.origin, self.axis_x, self.axis_y]
             .into_iter()
@@ -637,5 +651,7 @@ pub fn flattened(commands: &[PathCommand]) -> Vec<Vec<Point>> {
     paths
 }
 
+#[cfg(test)]
+mod node_type_tests;
 #[cfg(test)]
 mod path_tests;

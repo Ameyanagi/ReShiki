@@ -798,6 +798,13 @@ impl App {
                 let label = text_width(super::graphics::SNAP_ORBITALS_LABEL, 11.);
                 lead + chooser + 12. + 15. + CONTEXT_GAP + 22. + label
             }
+            Tool::EditPoints if self.selected_path().is_some() => {
+                lead + ["Corner", "Smooth", "Symmetric", "Done"]
+                    .map(|label| text_width(label, 12.) + 18.)
+                    .into_iter()
+                    .sum::<f32>()
+                    + 3. * CONTEXT_GAP
+            }
             _ if self.moving_bonded_selection() => lead + Self::constraints_width(),
             _ => 0.,
         }
@@ -1222,7 +1229,8 @@ impl App {
             }
             Tool::Graphic(kind) => self.graphic_tool_options(kind),
             Tool::EditPoints => {
-                vec![
+                let mut options = self.edit_points_node_options();
+                options.push(
                     hover_hint(
                         reshiki::accessibility::button(
                             "edit-points-done",
@@ -1236,7 +1244,8 @@ impl App {
                         tooltip::Position::Bottom,
                     )
                     .into(),
-                ]
+                );
+                options
             }
             Tool::Template => {
                 vec![

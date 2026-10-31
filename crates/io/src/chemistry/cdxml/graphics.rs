@@ -133,6 +133,7 @@ impl NativeGraphic {
             phase: self.phase.unwrap_or_default(),
             phase_flipped: self.phase_flipped.unwrap_or(false),
             layer: self.layer.into_document()?,
+            node_types: vec![],
             path: self
                 .path
                 .unwrap_or_default()

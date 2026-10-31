@@ -82,7 +82,22 @@ impl MoleculeCanvas<'_> {
             }
             Gesture::AtomIndicator { owner } => Edit::AtomIndicator(owner, p),
             Gesture::GraphicPoint { id, index } => Edit::GraphicPoint(id, index, p),
-            Gesture::PathPoint(drag) => Edit::GraphicPoint(drag.id, drag.index, drag.target(p)),
+            Gesture::PathPoint(drag) => {
+                if !drag.dragged(p, self.camera) {
+                    if drag.node {
+                        Edit::PathNodeClick(drag.id, drag.index)
+                    } else {
+                        Edit::GraphicPoint(drag.id, drag.index, drag.original)
+                    }
+                } else {
+                    Edit::PathPoint {
+                        id: drag.id,
+                        index: drag.index,
+                        point: drag.target(p),
+                        free: drag.free,
+                    }
+                }
+            }
             Gesture::Transform(drag) => {
                 match self.release_transform(state, *drag, p, position, inside) {
                     ControlFlow::Continue(edit) => edit,
