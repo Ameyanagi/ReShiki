@@ -20,16 +20,18 @@ file…** to insert it into the drawing. These files are read:
 
 A structure with a cell opens as a 2D drawing with depth, in a parallel
 projection so the cell's edges stay parallel. The opening view is chosen so
-the labels read well: of the views that show every axis, keep the origin
-behind the box and keep atom labels, axis labels, bonds and box edges apart
-nearly as well as the best one, the one closest to the cell as
-crystallographers draw it wins (_b_ to the right, _c_ up and _a_ toward you,
+the labels read well: of the views that show every axis and keep the origin
+behind the box, it first keeps atom labels nearly as far apart as the best
+view, then compares clearance from axis labels, bonds and box edges. The
+one closest to the cell as crystallographers draw it wins (_b_ to the right,
+_c_ up and _a_ toward you,
 seen a little from above); otherwise a slight tilt off looking down _c_ or
 down the body diagonal, as for a rhombohedral primitive cell. Rutile's Ti no
 longer sits behind O. The drawing is at the usual scale (1.5 Å per bond
 length) or larger, so the shortest cell edge is at least 8 label heights and
 a bond between two labels, as CO₂'s C=O, at least 2.4. A plain XYZ file
-without a cell opens as a 3D model.
+without a cell opens as a 3D model. If atom labels still overlap in the best
+view, an import note suggests **Look along** or **Show as 3D**; all labels stay.
 
 **Show as 3D** shows the model in that same view: drag inside the frame to turn
 it, double-click to come back to the opening view, and use **Properties → 3D
@@ -51,7 +53,9 @@ other appearance controls remain available in **Properties → 3D model**.
   the cell are dashed, a dot marks the origin, and _a_, _b_ and _c_ label the
   lattice vectors, each just past its axis's end in the widest gap between the
   box edges there. In 3D the box turns with the model, appears in every style
-  and the model's frame always holds it. In 2D it follows the drawing's atoms
+  and the model's frame always holds it. In Space-filling, balls hide front
+  edges and the origin dot behind them; the origin's own atom keeps its dot,
+  and axis labels stay on top. In 2D it follows the drawing's atoms
   wherever they are moved, and atom labels sit on a halo of paper so no edge
   runs through them. Both appear in PNG, SVG and PDF export.
 - **The 2D drawing** shows atom labels and bond lines. Carbons with bonds are
@@ -60,37 +64,44 @@ other appearance controls remain available in **Properties → 3D model**.
   read as O=O. A bond behind another shows a gap where they cross, and a bond
   that leaves the cell is a short, light dashed stub, 40% of the bond.
 - **Atoms sit on the box** where their fractional coordinates put them. The
-  drawing keeps each atom once, inside the cell; as crystallographers draw a
-  cell, an atom on a face, edge or corner at the origin's side is shown again,
+  drawing keeps each atom once, inside the cell; in both 2D and 3D, an atom on
+  a face, edge or corner at the origin's side is shown again,
   as a lighter copy, on the far face, edge or corner, so rock salt shows all 27
   ions and every corner of the box has its atom. A molecule goes by its centre
-  and is copied whole. The copies follow the drawing and are not atoms of
-  their own, so chemistry, IDs, the formula and saving are unchanged; bonds
-  between the cell's atoms and the copies are drawn in full.
+  and is copied whole. The copies default to 55% opacity, follow the drawing and
+  cannot be edited separately, so chemistry, IDs, the formula and saving are
+  unchanged; bonds between the cell's atoms and the copies are drawn in full.
 - **Ion charges** are hidden in 2D, since the formula carries them; choose
   **Properties → Structure → Ion charges → Show** to label each ion, as Na⁺
   and Cl⁻. The choice is kept in the file.
 - **Repeat** in **Properties → Structure** shows 1 to 4 cells along each of
-  _a_, _b_ and _c_ in the 2D drawing, one Undo step each. The model's own cell
-  stays the editable drawing; the other cells are lighter copies (55%) that
+  _a_, _b_ and _c_ in 2D, 3D and Both, one Undo step each. The model's own cell
+  stays the editable drawing; the other cells are lighter copies that
   follow it, not separate atoms. Bonds between cells are drawn in full and the
   dashed stubs only leave the outside of the whole repeat; atoms on the near
   faces are copied onto the far faces of the whole repeat. The box holds every
   cell, thin light lines mark where cells meet on its outside, _a_, _b_ and _c_
   label the ends of the whole repeat, and Fit takes in all of it. The choice is
-  kept in the file.
-- **Look along** _a_, _b_, _c_ or [111] turns the 2D drawing to look down that
-  direction, tilted a little (at most about 15°) where atoms stacked one
-  behind another would hide each other, as rock salt's along _c_. An axis seen
-  end-on has no label. Turning on a repeat looks along whichever of the four
-  keeps the labels of all the cells farthest apart.
+  kept in the file and shared by both halves of Both, including after display
+  changes. **Copy opacity**, below Repeat, sets the opacity of boundary and
+  repeat copies in both 2D and 3D; it defaults to 55% and is kept in the file.
+  At 100% the copies are drawn as ordinary opaque balls.
+  Repeat, Copy opacity and Look along are also in **3D model controls…**.
+- **Look along** _a_, _b_, _c_ or [111] turns the 3D model to look straight
+  down that direction. It turns the 2D drawing too, tilted a little (at most
+  about 15°) where stacked atoms would hide each other, as rock salt's along
+  _c_. An axis seen end-on has no label. Each repeat change lays out a visible
+  2D drawing along whichever of the four keeps the labels of all the cells
+  nearly as far apart as the best view, preferring a lattice axis, until you
+  choose a direction explicitly; that choice stays selected and is kept in the
+  file. A visible 3D model keeps its rotation when the repeat changes.
 - **Molecular crystals** keep whole molecules. Each molecule is made whole
   across the cell boundary and kept once, where its centre lies in the cell, so
   atoms of a molecule on a corner or face stick out of the box.
 - **Extended networks** such as NaCl, rutile or silicon, where bonds link an
   atom to its own copy in the next cell, keep each atom once inside the cell.
-  A bond that leaves the cell is drawn from its atom as a dashed half-bond
-  toward the neighbouring cell.
+  A bond that leaves the whole shown box is drawn from its atom as a dashed
+  half-bond toward the neighbouring cell.
 - **Bonds** come from covalent radii (Cordero et al., 2008): two atoms are
   bonded when they are closer than their radii plus 0.45 Å, across the cell
   boundary too. In whole molecules, uncharged C, N, O and S take double or
@@ -228,8 +239,12 @@ its import provenance.
   Symmetry comes only from `_space_group_symop_operation_xyz` or
   `_symmetry_equiv_pos_as_xyz`; a file that lists none shows its listed atoms
   and says so, unless its space group is P1. Of disordered sites, atoms without
-  a disorder group and those of the lowest group of each disorder assembly are
-  kept. Atoms with an occupancy of 0 and dummy atoms
+  a disorder group and those in group 0 are kept. Each disorder assembly keeps
+  the group with the highest occupancy when every site within each group has
+  the same known occupancy and no other group ties it. If occupancies are mixed,
+  missing or tied, its lowest group number is kept. The import note names the
+  kept and omitted groups and their occupancies when known. Atoms with an
+  occupancy of 0 and dummy atoms
   (`_atom_site_calc_flag dum`) are skipped. Atoms closer than 0.25 Å to one
   already kept, such as the copies of an atom on a symmetry element, are the
   same site.
@@ -274,9 +289,13 @@ The model (`crates/model/src/models3d.rs`) stores the lattice in
 `Model3d::sites`; a model read from a file may hold several whole molecules.
 Model positions are Cartesian ångström with the cell's origin at (0, 0, 0), so
 a copy in another cell is the position plus whole lattice vectors, which later
-repeats and ghost copies use. In 3D the scene draws the hidden cell edges as dashed
-`Wire` primitives before the model, the front edges, origin and labels after
-it, and the half-bonds leaving the cell in depth order with the atoms. Labels
+repeats and ghost copies use. Both views use `shown_sites` and `site_bonds`
+for the same display-only copies and bonds. In 3D the scene draws the hidden
+cell edges and inner cell lines before the model, the front edges, origin and
+labels after it, and the half-bonds leaving the whole repeat in depth order
+with the atoms and copies. In Space-filling, `cell_occlusion` splits front
+edges and hides the origin against every shown ball's drawn disc and front
+surface; the origin's own atom is exempt only for its dot. Labels
 are ordinary text primitives, so the canvas and exports turn them light on a
 dark canvas as they do atom labels.
 

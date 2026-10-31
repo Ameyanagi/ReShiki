@@ -135,8 +135,13 @@ pub fn read(format: &str, text: &str) -> Result<(Document, Vec<String>), Error> 
             if removed == 1 { "" } else { "s" }
         ));
     }
-    let warnings = structure.warnings.clone();
-    Ok((build::document(structure)?, warnings))
+    let doc = build::document(structure)?;
+    let warnings = doc
+        .models
+        .iter()
+        .flat_map(|m| m.notes.iter().cloned())
+        .collect();
+    Ok((doc, warnings))
 }
 
 /// A number as structure files write it, without a standard uncertainty in

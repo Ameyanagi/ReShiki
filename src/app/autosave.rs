@@ -456,7 +456,12 @@ impl App {
         self.tab.styles.editor = None;
         self.theme_library.editor = None;
         self.tab.path = None;
-        self.tab.untitled_name = None;
+        self.tab.untitled_name = candidate
+            .snapshot
+            .source
+            .as_ref()
+            .and_then(|path| path.file_stem())
+            .map(|name| format!("{} (recovered)", name.to_string_lossy()));
         self.tab.mark_saved(Document::default());
         self.begin_file_epoch();
         self.changed(before);

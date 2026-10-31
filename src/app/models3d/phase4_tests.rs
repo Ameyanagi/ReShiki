@@ -97,6 +97,7 @@ fn updating_replaces_only_the_conformer_and_is_one_undo_step() {
     model.labels = Labels::All;
     model.depth_fade = 0.65;
     model.perspective = 0.25;
+    model.copy_opacity = 0.3;
     model.background = Background::Card;
     model.layout = Layout::View;
     model.force_field = models3d::ForceField::Uff;
@@ -128,6 +129,7 @@ fn updating_replaces_only_the_conformer_and_is_one_undo_step() {
     assert_ne!(model.fingerprint, old.fingerprint);
     assert_eq!(model.force_field, models3d::ForceField::Uff);
     assert_eq!(model.seed, old.seed);
+    assert_eq!(model.copy_opacity, old.copy_opacity);
     assert_eq!(
         (
             model.display,

@@ -362,7 +362,10 @@ impl MoleculeCanvas<'_> {
         rejection: Option<reshiki::editing::RingRejection>,
     ) {
         if let Some((content, valid)) = template_notice {
-            let position = Point::new(14., (bounds.height - 30.).max(4.));
+            let position = Point::new(
+                14.,
+                (bounds.height - super::HINT_STRIP_HEIGHT_PX).max(0.) + 4.,
+            );
             frame.fill_rectangle(
                 position - Vector::new(5., 4.),
                 iced::Size::new((bounds.width - 18.).max(1.), 25.),

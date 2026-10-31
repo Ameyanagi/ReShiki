@@ -277,6 +277,33 @@ fn a_tab_closed_during_its_draft_write_removes_the_draft_afterwards() {
 }
 
 #[test]
+fn restored_drafts_keep_distinct_source_names_without_paths() {
+    use reshiki::recovery::Snapshot;
+    let directory = tempfile::tempdir().unwrap();
+    let store = Recovery::in_directory(directory.path()).unwrap();
+    for (name, saved_at) in [("caffeine.rsk", 1), ("ibuprofen.rsk", 2)] {
+        let mut document = Document::default();
+        document.add_atom("O", Point::default());
+        let snapshot = Snapshot {
+            document,
+            source: Some(name.into()),
+            saved_at,
+        };
+        std::fs::write(
+            directory.path().join(format!("4294967294-{name}.json")),
+            serde_json::to_vec(&snapshot).unwrap(),
+        )
+        .unwrap();
+    }
+    let (mut app, _) = App::new();
+    app.recovered = store.candidates();
+    let _ = app.update(Message::Restore);
+    let names: Vec<_> = app.strip().map(DocumentTab::name).collect();
+    assert_eq!(names, ["caffeine (recovered)", "ibuprofen (recovered)"]);
+    assert!(app.strip().all(|tab| tab.path.is_none() && app.edited(tab)));
+}
+
+#[test]
 fn restore_opens_every_draft_as_a_tab_with_the_latest_in_front() {
     use reshiki::recovery::{Candidate, Snapshot};
     let (mut app, directory) = fixture();

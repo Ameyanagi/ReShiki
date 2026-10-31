@@ -9,9 +9,12 @@ use iced::advanced::{
         tree,
     },
 };
+use iced::time::Instant;
 use iced::{Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector, keyboard};
+use std::time::Duration;
 
 const MARGIN: f32 = 6.;
+pub(super) const HOVER_DELAY: Duration = Duration::from_millis(120);
 
 pub(super) fn row_id(level: usize, index: usize) -> Id {
     Id::from(format!("context-menu-{level}-item-{index}"))
@@ -25,6 +28,8 @@ pub(super) struct Panel<'a> {
     pub page: Page,
     pub content: Element<'a, Message>,
     pub items: Vec<usize>,
+    pub pinned: Option<usize>,
+    pub submenus: Vec<usize>,
     pub anchor: Option<usize>,
 }
 
@@ -37,6 +42,13 @@ pub(super) struct Cascade<'a> {
 struct Pages {
     open: bool,
     panels: Vec<Page>,
+    hovered: Option<(usize, usize)>,
+    pending: Option<Hover>,
+}
+
+struct Hover {
+    target: (usize, usize),
+    deadline: Option<Instant>,
 }
 
 fn application_shortcut(event: &Event) -> Option<Message> {
@@ -74,6 +86,8 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
         tree::State::new(Pages {
             open: self.menu.is_some(),
             panels: self.panels.iter().map(|panel| panel.page).collect(),
+            hovered: None,
+            pending: None,
         })
     }
 
@@ -87,6 +101,7 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
     fn diff(&self, tree: &mut Tree) {
         let previous = tree.state.downcast_mut::<Pages>();
         let boundary = previous.open != self.menu.is_some();
+        let pages: Vec<_> = self.panels.iter().map(|panel| panel.page).collect();
         for (level, panel) in self.panels.iter().enumerate() {
             if previous.panels.get(level) != Some(&panel.page)
                 && let Some(child) = tree.children.get_mut(level + 1)
@@ -96,8 +111,12 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
                 *child = Tree::new(&panel.content);
             }
         }
+        if boundary || previous.panels != pages {
+            previous.hovered = None;
+            previous.pending = None;
+        }
         previous.open = self.menu.is_some();
-        previous.panels = self.panels.iter().map(|panel| panel.page).collect();
+        previous.panels = pages;
         let children: Vec<_> = std::iter::once(self.base.as_widget())
             .chain(self.panels.iter().map(|panel| panel.content.as_widget()))
             .collect();
@@ -174,10 +193,26 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
             let Some(panel_state) = tree.children.get_mut(level + 1) else {
                 break;
             };
+            // Measure the natural height, then reserve the footer before the
+            // scrolling body takes the remaining space in a compact panel.
+            let limits = if panel.pinned.is_some() {
+                let natural = panel.content.as_widget_mut().layout(
+                    panel_state,
+                    renderer,
+                    &layout::Limits::new(
+                        Size::ZERO,
+                        Size::new(panel_limits.max().width, f32::INFINITY),
+                    )
+                    .height(Length::Shrink),
+                );
+                panel_limits.height(natural.size().height.min(panel_limits.max().height))
+            } else {
+                panel_limits
+            };
             let node = panel
                 .content
                 .as_widget_mut()
-                .layout(panel_state, renderer, &panel_limits);
+                .layout(panel_state, renderer, &limits);
             if menu.keyboard
                 && let Some((focused_level, index)) = menu.focused
                 && focused_level == level
@@ -320,6 +355,22 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
             }
             return;
         };
+        if matches!(
+            event,
+            Event::Mouse(
+                mouse::Event::ButtonPressed(_)
+                    | mouse::Event::WheelScrolled { .. }
+                    | mouse::Event::CursorLeft
+            ) | Event::Touch(_)
+                | Event::Window(iced::window::Event::Unfocused)
+        ) {
+            let state = tree.state.downcast_mut::<Pages>();
+            state.hovered = None;
+            state.pending = None;
+        }
+        if matches!(event, Event::Keyboard(keyboard::Event::KeyPressed { .. })) {
+            tree.state.downcast_mut::<Pages>().pending = None;
+        }
         if matches!(event, Event::Keyboard(keyboard::Event::ModifiersChanged(_))) {
             // Keep retained canvas modifiers current while the menu owns keys.
             // This event carries no pointer action; the unavailable cursor also
@@ -385,6 +436,7 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
             {
                 // Tab and native Focus change real widget focus without a
                 // model message. Start arrow navigation from that live target.
+                let hovered = tree.state.downcast_mut::<Pages>().hovered.take();
                 let mut focused = None;
                 if matches!(
                     key,
@@ -412,6 +464,8 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
                         }
                     }
                 }
+                // Without a live focused control, start from the pointer row.
+                let focused = focused.or(hovered.filter(|_| !menu.keyboard));
                 shell.publish(Message::ContextMenu(
                     focused.map_or(Action::Key(*key), |(level, index)| {
                         Action::FocusedKey(level, index, *key)
@@ -425,6 +479,10 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
         // Touch events carry their own location even when no mouse cursor is
         // available (or the mouse is still over a different menu panel).
         let cursor = match event {
+            Event::Mouse(mouse::Event::CursorMoved { position }) => {
+                mouse::Cursor::Available(*position)
+            }
+            Event::Mouse(mouse::Event::CursorLeft) => mouse::Cursor::Unavailable,
             Event::Touch(
                 iced::touch::Event::FingerPressed { position, .. }
                 | iced::touch::Event::FingerMoved { position, .. }
@@ -449,26 +507,76 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
             shell.capture_event();
             return;
         }
-        if let Some(level) = hovered {
+        if matches!(
+            event,
+            Event::Mouse(mouse::Event::CursorMoved { .. })
+                | Event::Window(iced::window::Event::RedrawRequested(_))
+        ) {
+            let target = hovered.and_then(|level| {
+                let panel = self.panels.get_mut(level)?;
+                let state = tree.children.get_mut(level + 1)?;
+                let rows = rows(panel, level, state, *layouts.get(level + 1)?, renderer);
+                cursor
+                    .position()
+                    .and_then(|point| rows.at(point))
+                    .map(|index| (level, index))
+            });
+            let state = tree.state.downcast_mut::<Pages>();
             if matches!(event, Event::Mouse(mouse::Event::CursorMoved { .. }))
-                && let Some(((panel, state), panel_layout)) = self
-                    .panels
-                    .get_mut(level)
-                    .zip(tree.children.get_mut(level + 1))
-                    .zip(layouts.get(level + 1))
+                && state.hovered != target
             {
-                let rows = rows(panel, level, state, *panel_layout, renderer);
-                if let Some(index) = cursor.position().and_then(|point| rows.at(point))
-                    && (menu.focused != Some((level, index)) || menu.keyboard)
-                {
-                    shell.publish(Message::ContextMenu(Action::Hover(level, index)));
+                let pointer = menu.keyboard && state.hovered.is_none();
+                state.hovered = target;
+                state.pending = None;
+                if let Some((level, index)) = target {
+                    if pointer {
+                        shell.publish(Message::ContextMenu(Action::Pointer));
+                    }
+                    let open = menu
+                        .children
+                        .get(level)
+                        .is_some_and(|child| child.anchor == index);
+                    if !open
+                        && self
+                            .panels
+                            .get(level)
+                            .is_some_and(|panel| panel.submenus.contains(&index))
+                    {
+                        state.pending = Some(Hover {
+                            target: (level, index),
+                            deadline: None,
+                        });
+                        shell.request_redraw();
+                    } else if !open && menu.children.len() > level {
+                        shell.publish(Message::ContextMenu(Action::Hover(level, index)));
+                    }
                 }
             }
-            if matches!(event, Event::Mouse(mouse::Event::WheelScrolled { .. }))
-                && menu.children.len() > level
-            {
-                shell.publish(Message::ContextMenu(Action::CloseAfter(level)));
+            if let Event::Window(iced::window::Event::RedrawRequested(now)) = event {
+                if state
+                    .pending
+                    .as_ref()
+                    .is_some_and(|hover| Some(hover.target) != target)
+                {
+                    state.pending = None;
+                }
+                if let Some(hover) = &mut state.pending {
+                    let deadline = *hover.deadline.get_or_insert(*now + HOVER_DELAY);
+                    if *now >= deadline {
+                        let (level, index) = hover.target;
+                        shell.publish(Message::ContextMenu(Action::Hover(level, index)));
+                        state.pending = None;
+                    } else {
+                        shell.request_redraw_at(deadline);
+                    }
+                }
             }
+        }
+        if let Some(level) = hovered
+            && matches!(event, Event::Mouse(mouse::Event::WheelScrolled { .. }))
+            && menu.children.len() > level
+        {
+            shell.publish(Message::ContextMenu(Action::CloseAfter(level)));
         }
         for (level, ((panel, state), panel_layout)) in self
             .panels
@@ -607,6 +715,8 @@ pub(super) fn child_position(
 }
 
 struct Rows {
+    pinned: Option<usize>,
+    panel: Rectangle,
     targets: Vec<(usize, Id)>,
     found: Vec<(usize, Rectangle)>,
     viewport: Option<Rectangle>,
@@ -618,19 +728,28 @@ impl Rows {
         self.found
             .iter()
             .find(|(value, _)| *value == index)
-            .map(|(_, bounds)| Rectangle {
-                x: bounds.x - self.translation.x,
-                y: bounds.y - self.translation.y,
-                ..*bounds
+            .map(|(_, bounds)| {
+                if self.pinned.is_some_and(|first| index >= first) {
+                    *bounds
+                } else {
+                    Rectangle {
+                        x: bounds.x - self.translation.x,
+                        y: bounds.y - self.translation.y,
+                        ..*bounds
+                    }
+                }
             })
     }
 
     fn at(&self, point: Point) -> Option<usize> {
-        if !self.viewport.is_some_and(|bounds| bounds.contains(point)) {
-            return None;
-        }
         self.found.iter().find_map(|(index, _)| {
+            let viewport = if self.pinned.is_some_and(|first| *index >= first) {
+                Some(self.panel)
+            } else {
+                self.viewport
+            };
             self.bounds(*index)
+                .filter(|_| viewport.is_some_and(|bounds| bounds.contains(point)))
                 .filter(|bounds| bounds.contains(point))
                 .map(|_| *index)
         })
@@ -667,6 +786,8 @@ fn rows(
     renderer: &Renderer,
 ) -> Rows {
     let mut rows = Rows {
+        pinned: panel.pinned,
+        panel: layout.bounds(),
         targets: panel
             .items
             .iter()
@@ -691,6 +812,9 @@ fn reveal(
     layout: Layout<'_>,
     renderer: &Renderer,
 ) {
+    if panel.pinned.is_some_and(|first| index >= first) {
+        return;
+    }
     let rows = rows(panel, level, tree, layout, renderer);
     let (Some(row), Some(viewport)) = (rows.bounds(index), rows.viewport) else {
         return;

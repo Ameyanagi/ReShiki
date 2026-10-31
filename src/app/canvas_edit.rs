@@ -3,7 +3,7 @@ use crate::app::{App, context_menu};
 use crate::canvas::{Edit, Tool};
 use reshiki::document::{Arrow, Point};
 use reshiki::editing;
-mod click;
+pub(super) mod click;
 mod placement;
 
 const BOND_TEXT_HINT: &str = "Drag to bond; this text becomes an atom label";

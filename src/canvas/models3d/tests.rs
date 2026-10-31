@@ -137,6 +137,71 @@ fn turning_requires_a_shown_model_and_reads_display_changes_without_cached_hits(
     );
 }
 
+#[test]
+fn crystal_copies_select_the_model_without_becoming_editable_atoms() {
+    use crate::canvas::hit::{bond_target, hit_object};
+    use reshiki::models3d::Cell;
+    use reshiki::scene::{self, Primitive};
+
+    let (mut doc, atoms) = drawing();
+    let mut crystal = doc.models[0].clone().with_cell(
+        &doc,
+        Some(Cell {
+            vectors: [[8., 0., 0.], [0., 7., 0.], [0., 0., 6.]],
+            crossing: vec![],
+        }),
+        vec![],
+    );
+    for atom in &mut crystal.atoms {
+        atom.xyz = atom.xyz.map(|x| x + 2.);
+    }
+    crystal.rotation = [1., 0., 0., 0.];
+    crystal.perspective = 0.;
+    crystal.repeat = [2, 1, 1];
+    doc.models[0] = crystal;
+    let before = doc.clone();
+    let run = scene::primitives(&doc);
+    let originals: Vec<_> = run
+        .iter()
+        .filter_map(|p| match p {
+            Primitive::Sphere { center, radius, .. } => Some((*center, *radius)),
+            _ => None,
+        })
+        .collect();
+    let copy = run
+        .iter()
+        .filter_map(|p| match p {
+            Primitive::Opacity { alpha, primitive } if *alpha == 0.55 => match primitive.as_ref() {
+                Primitive::Sphere { center, .. } => Some(*center),
+                _ => None,
+            },
+            _ => None,
+        })
+        .find(|p| originals.iter().all(|(c, r)| c.distance(*p) > r + 3.))
+        .expect("a visible copy away from every original atom");
+    assert!(!originals.is_empty());
+    assert_eq!(doc, before, "copies are only scene geometry");
+    assert_eq!(doc.nearest(copy, 2.), None);
+    assert_eq!(hit_object(&doc, copy, 2.), None);
+    assert_eq!(
+        bond_target(&doc, copy.offset(-30., 0.), copy, None, 2.).1,
+        None,
+        "a copy cannot become a bond endpoint"
+    );
+    assert_eq!(hit_selection(&doc, copy, 2.), atoms);
+    assert_eq!(
+        canvas(&doc, &atoms).turn_target(&State::default(), copy),
+        Some((atoms.clone(), atoms.clone())),
+        "the copied part of the selected model still turns the whole model"
+    );
+    let mut erased = doc.clone();
+    reshiki::erasing::stroke(&mut erased, copy, copy, 0.1);
+    assert_eq!(erased, doc, "a display-only copy is not erasable");
+    let original = originals[0].0;
+    reshiki::erasing::stroke(&mut erased, original, original, 0.1);
+    assert!(atoms.iter().all(|id| erased.atom(*id).is_none()));
+}
+
 /// Press at `from`, move through `path`, release at the last point.
 fn drag(
     canvas: &MoleculeCanvas<'_>,

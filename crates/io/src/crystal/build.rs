@@ -419,6 +419,23 @@ pub(super) fn document(structure: Structure) -> Result<Document, Error> {
     doc.models.push(model);
     models3d::require_version(&mut doc);
     if doc.models.iter().any(|m| m.cell.is_some()) {
+        let drawn = models3d::drawn(&doc);
+        let boxes: Vec<_> = drawn
+            .atoms
+            .iter()
+            .filter_map(|a| crate::scene::atom_label_ink_bounds(a, &drawn))
+            .collect();
+        let overlap = boxes.iter().enumerate().any(|(i, (lo, hi))| {
+            boxes
+                .iter()
+                .skip(i + 1)
+                .any(|(l, h)| hi.x >= l.x && h.x >= lo.x && hi.y >= l.y && h.y >= lo.y)
+        });
+        if overlap && let Some(model) = doc.models.first_mut() {
+            model
+                .notes
+                .push("No view keeps every atom label apart; try Look along or Show as 3D.".into());
+        }
         for bond in &mut doc.bonds {
             bond.distance_derived = true;
         }

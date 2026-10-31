@@ -5,7 +5,9 @@ use iced::{Color, Point, Rectangle, Size, mouse};
 use reshiki::{document::Document, editing, scene};
 
 /// Room between selection bounds and the outline, in screen pixels.
-pub(super) const FRAME_PADDING_PX: f32 = 12.;
+pub(crate) const FRAME_PADDING_PX: f32 = 12.;
+pub(crate) const ROTATION_STEM_PX: f32 = 28.;
+pub(crate) const ROTATION_KNOB_RADIUS_PX: f32 = 6.;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Handle {
@@ -138,7 +140,7 @@ impl SelectionBox {
 
     fn rotation_grip(self) -> Point {
         let p = self.grips();
-        Point::new((p[0].x + p[1].x) / 2.0, p[0].y - 28.0)
+        Point::new((p[0].x + p[1].x) / 2.0, p[0].y - ROTATION_STEM_PX)
     }
 
     fn edge_points(self) -> [World; 4] {
@@ -238,7 +240,7 @@ impl SelectionBox {
         );
         let grip = rotate(self.rotation_grip());
         frame.stroke(&Path::line(top, grip), stroke);
-        let handle = Path::circle(grip, 6.0);
+        let handle = Path::circle(grip, ROTATION_KNOB_RADIUS_PX);
         frame.fill(&handle, Color::WHITE);
         frame.stroke(&handle, stroke.with_width(1.8));
         frame.fill(&Path::circle(grip, 2.0), ACCENT);

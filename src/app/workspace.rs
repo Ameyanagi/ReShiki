@@ -248,6 +248,11 @@ impl App {
             .on_resize(Message::Viewport)
             .into(),
         );
+        #[cfg(target_arch = "wasm32")]
+        // The stack stays when the notice goes, so the canvas keeps its state.
+        let paper: Element<'_, Message> = iced::widget::Stack::with_children([paper])
+            .extend(self.recovery_notice())
+            .into();
         let context: Element<'_, Message> = if let Some(preview) = &self.tab.cleanup {
             self.cleanup_bar(preview)
         } else {
