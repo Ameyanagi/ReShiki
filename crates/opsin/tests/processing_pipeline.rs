@@ -49,6 +49,39 @@ fn locanted_alcohol_suffix_is_attached_to_the_indicated_carbon() {
     assert_eq!(graph.neighbours(oxygen), [carbon]);
 }
 #[test]
+fn greek_cycleformer_locants_follow_the_acid_centre_defined_by_the_suffix() {
+    for (name, gamma) in [
+        ("gamma-decanolactone", "4"),
+        ("gamma-decanolactam", "4"),
+        ("gamma-decanolactim", "4"),
+        ("gamma-decanosultone", "3"),
+        ("gamma-decanosultam", "3"),
+        ("gamma-decanocarbolactone", "3"),
+    ] {
+        let (_tree, state, fragment) = processed(name);
+        assert_eq!(
+            state.graph().atom_by_locant(fragment, "gamma"),
+            Some(state.graph().atom_by_locant(fragment, gamma).unwrap()),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn porphyrin_hydro_prefixes_override_default_indicated_hydrogen_positions() {
+    for (name, expected_spare) in [("porphyrin", false), ("21,23-dihydroporphyrin", true)] {
+        let (_tree, state, fragment) = processed(name);
+        for locant in ["21", "23"] {
+            let atom = state.graph().atom_by_locant(fragment, locant).unwrap();
+            assert_eq!(
+                state.graph().atom(atom).spare_valency,
+                expected_spare,
+                "{name}: {locant}"
+            );
+        }
+    }
+}
+#[test]
 fn multiplied_terminal_acid_suffixes_preserve_both_functional_atoms() {
     let (_tree, state, fragment) = processed("butanedioic acid");
     let graph = state.graph();

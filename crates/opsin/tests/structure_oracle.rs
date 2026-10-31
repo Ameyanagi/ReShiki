@@ -109,6 +109,6 @@ fn complete_upstream_structures_status_warnings_semantic_cxsmiles_and_graph() {
         differences.join("\n")
     );
     if selected_family.is_none() && selected_name.is_none() {
-        assert_eq!(count, 2096);
+        assert_eq!(count, 2624);
     }
 }

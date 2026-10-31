@@ -107,6 +107,11 @@ pub(crate) fn parse_word(
     } else {
         &resources.chemical
     };
+    let transitions = if reverse {
+        &resources.reverse_chemical_transitions
+    } else {
+        &resources.chemical_transitions
+    };
     let mut arena = vec![AnnotationState {
         state: chemical.initial,
         annotation: 0,
@@ -141,11 +146,9 @@ pub(crate) fn parse_word(
         if farther(current.position, arena[longest].position) {
             longest = index;
         }
-        for symbol_tokens in &resources.symbols {
+        for &(symbol_index, state) in transitions.row(current.state) {
+            let symbol_tokens = &resources.symbols[symbol_index];
             let annotation = symbol_tokens.symbol;
-            let Some(state) = chemical.step(current.state, annotation) else {
-                continue;
-            };
             let mut push = |position, case_sensitive| {
                 stack.push(arena.len());
                 arena.push(AnnotationState {

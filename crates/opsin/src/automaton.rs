@@ -17,12 +17,42 @@ pub(crate) struct Automaton {
     states: Vec<u32>,
 }
 
+#[derive(Debug)]
+pub(crate) struct LiveTransitions {
+    row_start: Vec<usize>,
+    transitions: Vec<(usize, usize)>,
+}
+
+impl LiveTransitions {
+    pub fn row(&self, state: usize) -> &[(usize, usize)] {
+        &self.transitions[self.row_start[state]..self.row_start[state + 1]]
+    }
+}
+
 /// A big-endian u32 of `TABLES` that `load` checked.
 fn word(at: usize) -> u32 {
     u32::from_be_bytes(TABLES[at..at + 4].try_into().expect("four bytes"))
 }
 
 impl Automaton {
+    pub fn live_transitions(&self) -> LiveTransitions {
+        let mut row_start = Vec::with_capacity(self.states.len() + 1);
+        let mut transitions = Vec::new();
+        for state in 0..self.states.len() {
+            row_start.push(transitions.len());
+            for (symbol_index, &symbol) in self.symbols.iter().enumerate() {
+                if let Some(next_state) = self.step(state, symbol) {
+                    transitions.push((symbol_index, next_state));
+                }
+            }
+        }
+        row_start.push(transitions.len());
+        LiveTransitions {
+            row_start,
+            transitions,
+        }
+    }
+
     pub fn step(&self, state: usize, symbol: u16) -> Option<usize> {
         let at = *self.states.get(state)? as usize;
         let first = at + 5;

@@ -114,8 +114,12 @@ Import tab.
 ### Name to structure
 
 The Rust OPSIN port handles supported systematic and retained names, including
-substituted functional groups, bicyclic/spiro systems, heterocycles, supported
-absolute R/S and E/Z stereo, isotopes and formal charge. The editor accepts a
+substituted functional groups, bicyclic/spiro systems, heterocycles, phane
+(cyclophane) names such as `1,4(1,4)-dibenzenacyclohexaphane`, supported
+absolute R/S and E/Z stereo, isotopes and formal charge. It follows unreleased
+OPSIN main at commit `42e87ac6` rather than the 2.9.0 release; the
+[commit ledger](../crates/opsin/PORTING.md#upstream-commits-after-290) lists
+what changed. The editor accepts a
 connected graph with at most 512 atoms. ReShiki verifies the editable graph
 before inserting it. The specific retained name `(+)-lactic acid` is normalized
 locally to `(2S)-2-hydroxypropanoic acid`, using

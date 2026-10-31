@@ -1,5 +1,6 @@
 //! Full OPSIN `FusedRingBuilder` fusion-descriptor and graph rewrites.
 //! 2.9.0, b91b610af5ab07560fedb20730d7aef46bb2bca0.
+//! Phane fusion boundary: upstream commit 42e87ac6.
 //! Copyright Daniel Lowe and OPSIN contributors; MIT (LICENSE).
 use crate::{
     build_state::BuildState,
@@ -52,7 +53,9 @@ pub fn process_fused_rings(
                 }
                 previous = arena.previous_sibling(node);
             }
-            if previous != Some(groups[index - 1]) {
+            if previous != Some(groups[index - 1])
+                || arena[group].attribute("subType") == Some("phane")
+            {
                 if fused.len() >= 2 {
                     Builder::new(state, arena, std::mem::take(&mut fused))?.build()?;
                 }

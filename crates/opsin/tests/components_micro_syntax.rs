@@ -46,6 +46,9 @@ fn upstream_locant_normalisation_cases() {
         ("N(alpha)", "Nalpha"),
         ("N^alpha", "Nalpha"),
         ("N*12*", "N12"),
+        ("N^2^3", "N2^3"),
+        ("N~2^3~", "N2^3"),
+        ("N(2^3)", "N2^3"),
         ("2,3-", "2,3"),
         (
             "2,N5,GaMMa,3-N,N^3,N(2),N~10~,4(5H),3-N(S),1(6)-",
@@ -63,6 +66,8 @@ fn upstream_added_hydrogen_and_stereochemical_locants() {
     for (input, expected, hydrogens) in [
         ("3(5'H)", "3", vec!["5'"]),
         ("1,2(2H,7H)", "1,2", vec!["2", "7"]),
+        ("3^1(5^2'H)", "3^1", vec!["5^2'"]),
+        ("1,2(2^3H,7^4aH)", "1,2", vec!["2^3", "7^4a"]),
     ] {
         let (a, sub, loc) = locant(input);
         assert_eq!(a.value(loc), expected);
@@ -133,6 +138,14 @@ fn upstream_stereochemistry_bracket_cases() {
             ],
         ),
         ("(1R)", vec![(Some("1"), "R", R_OR_S_TYPE_VAL, Some("Abs"))]),
+        (
+            "(3'aS)",
+            vec![(Some("3a'"), "S", R_OR_S_TYPE_VAL, Some("Abs"))],
+        ),
+        (
+            "(2''aR)",
+            vec![(Some("2a''"), "R", R_OR_S_TYPE_VAL, Some("Abs"))],
+        ),
         (
             "(alphaR,3S,7'S)",
             vec![

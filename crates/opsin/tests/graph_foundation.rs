@@ -456,3 +456,43 @@ fn materialized_hydrogens_preserve_source_atom_defaults() {
         assert_eq!(graph.incoming_valency(*hydrogen), 1);
     }
 }
+
+#[test]
+fn shared_phane_locant_patterns_preserve_the_source_match_boundaries() {
+    for locant in ["1^4", "12^31a''", "0^0", "1^2b"] {
+        assert!(tools::is_numeric_locant(locant), "{locant}");
+    }
+    for locant in ["^1", "1^", "1^^2", "1^2^3", "1^2A", "1^2aa", "1^2'3", "١^٢"] {
+        assert!(!tools::is_numeric_locant(locant), "{locant}");
+    }
+    assert_eq!(
+        tools::parse_amino_acid_style_locant("N'12^31a''"),
+        Some(("N", "'", "12^31a''"))
+    );
+    for (locant, base, compound) in [
+        ("1^2(3^4)", "1^2", "3^4"),
+        ("1[2)", "1", "2"),
+        ("1[bad](2)(3)", "1[bad]", "2"),
+        ("1(2)[3]", "1", "2"),
+    ] {
+        assert_eq!(
+            opsin::tree_tools::split_compound_locant(locant),
+            Some((base.to_string(), compound))
+        );
+    }
+    assert_eq!(opsin::tree_tools::split_compound_locant("1(2^^3)"), None);
+
+    let (mut graph, fragment) = build("NCC", "", "none");
+    let atoms = graph.fragment(fragment).atoms.clone();
+    graph.add_locant(atoms[0], "N");
+    graph.add_locant(atoms[1], "1^4");
+    graph.add_locant(atoms[2], "2");
+    assert_eq!(graph.atom_by_locant(fragment, "N1^4"), Some(atoms[0]));
+    tools::relabel_numeric_locants(&mut graph, &atoms, "'");
+    assert_eq!(graph.atom_by_locant(fragment, "1^4'"), Some(atoms[1]));
+    assert!(graph.atom_by_locant(fragment, "1^4").is_none());
+    assert_eq!(
+        tools::compare_atoms_by_locants(&graph, atoms[1], atoms[2]),
+        std::cmp::Ordering::Equal
+    );
+}

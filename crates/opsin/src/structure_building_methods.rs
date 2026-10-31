@@ -1,5 +1,6 @@
 //! OPSIN's ordered fragment assembly operations.
 //! Port of `StructureBuildingMethods.java`, OPSIN 2.9.0, b91b610af5ab07560fedb20730d7aef46bb2bca0.
+//! Shared phane compound locants: upstream main, 42e87ac6.
 //! Copyright Daniel Lowe and OPSIN contributors; MIT (see LICENSE).
 
 use crate::{
@@ -861,9 +862,9 @@ impl Assembly<'_> {
                 continue;
             }
             if let Some(locant) = self.attr(unsaturator, "locant") {
-                if let Some((base, compound)) = compound_locant(&locant) {
+                if let Some((base, compound)) = crate::tree_tools::split_compound_locant(&locant) {
                     let atom = self.atom_by_locant(fragment, &base)?;
-                    ft::unsaturate_to_locant(self.graph_mut(), atom, &compound, order, fragment)?;
+                    ft::unsaturate_to_locant(self.graph_mut(), atom, compound, order, fragment)?;
                 } else {
                     let atom = self.atom_by_locant(fragment, &locant)?;
                     ft::unsaturate(self.graph_mut(), atom, order, fragment)?;
@@ -2150,18 +2151,6 @@ pub fn bond_order(order: i32) -> Result<u8> {
         .ok()
         .filter(|order| (1..=3).contains(order))
         .ok_or_else(|| error("Assembly bond order must be 1, 2, or 3"))
-}
-fn compound_locant(locant: &str) -> Option<(String, String)> {
-    let start = locant.find(['[', '(', '{'])?;
-    let end = locant[start + 1..].find([']', ')', '}'])? + start + 1;
-    let inner = &locant[start + 1..end];
-    if !ft::is_numeric_locant(inner) {
-        return None;
-    }
-    Some((
-        format!("{}{}", &locant[..start], &locant[end + 1..]),
-        inner.into(),
-    ))
 }
 pub fn lambda_or_hw_or_max_valency(graph: &Graph, atom: AtomId) -> Option<i32> {
     let a = graph.atom(atom);

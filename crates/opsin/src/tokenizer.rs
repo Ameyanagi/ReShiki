@@ -9,6 +9,7 @@ use crate::{
 pub struct ParseWord {
     pub word: String,
     pub alternatives: Vec<ParseTokens>,
+    pub ends_component: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -47,11 +48,15 @@ pub(crate) fn tokenize(
             &unparsed[..unparsed.len() - remaining.len()]
         }
         .to_owned();
+        let full_or_functional = has_full_or_functional_term_parse(&results.parses)?;
+        let spaced_hyphen = remaining.len() > 3 && remaining.starts_with(" - ");
         let at_boundary = remaining.is_empty()
             || if reverse {
                 remaining.ends_with([' ', '-'])
             } else {
-                remaining.starts_with([' ', '-'])
+                (remaining.starts_with([' ', '-'])
+                    || (remaining.starts_with("; ") && full_or_functional))
+                    && (!spaced_hyphen || full_or_functional)
             };
         if !results.parses.is_empty() && at_boundary {
             let mut parsed_words = split_into_words(results.parses, &parsed_name);
@@ -59,6 +64,9 @@ pub(crate) fn tokenize(
                 parsed_words.reverse();
             }
             words.extend(parsed_words);
+            if !reverse && (remaining.starts_with("; ") || spaced_hyphen) {
+                words.last_mut().expect("parsed word exists").ends_component = true;
+            }
             unparsed = remove_delimiter(remaining, reverse);
             saved_error = None;
             continue;
@@ -78,23 +86,21 @@ pub(crate) fn tokenize(
                 .find(|phrase| lower.starts_with(**phrase));
             let last_word_full = words
                 .last()
-                .map(|word: &ParseWord| {
-                    word.alternatives.iter().any(|tokens| {
-                        matches!(
-                            tokens.word_type(),
-                            Ok(WordType::Full | WordType::FunctionalTerm)
-                        )
-                    })
-                })
+                .map(|word: &ParseWord| has_full_or_functional_term_parse(&word.alternatives))
+                .transpose()?
                 .unwrap_or(false);
             if let Some(phrase) = phrase.filter(|_| last_word_full) {
+                words.last_mut().expect("parsed word exists").ends_component = true;
                 unparsed = format!("{parsed_name}{}", &remaining[phrase.len()..]);
                 fixed = true;
             } else if is_cas_collective_index(remaining) {
                 unparsed = parsed_name.to_owned();
                 fixed = true;
             } else if remove_spaces {
-                if let Some(previous) = words.last() {
+                if let Some(suffix) = remaining.strip_prefix(" - ") {
+                    unparsed = format!("{parsed_name}-{suffix}");
+                    fixed = true;
+                } else if let Some(previous) = words.last().filter(|word| !word.ends_component) {
                     let joined = format!("{}{unparsed}", previous.word);
                     let back = parse_rules::parse_word(resources, &joined, false)?;
                     let back_name = &joined[..joined.len() - back.uninterpretable_name.len()];
@@ -167,13 +173,27 @@ fn remove_delimiter(remaining: &str, reverse: bool) -> String {
         };
         remaining[..remaining.len() - length].into()
     } else {
-        let length = if remaining.len() > 3 && remaining.starts_with(" - ") {
+        let length = if remaining.starts_with("; ") {
+            2
+        } else if remaining.len() > 3 && remaining.starts_with(" - ") {
             3
         } else {
             1
         };
         remaining[length..].into()
     }
+}
+
+fn has_full_or_functional_term_parse(parses: &[ParseTokens]) -> Result<bool, ParsingError> {
+    for parse in parses {
+        if matches!(
+            parse.word_type()?,
+            WordType::Full | WordType::FunctionalTerm
+        ) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 pub(crate) fn split_into_words(alternatives: Vec<ParseTokens>, name: &str) -> Vec<ParseWord> {
@@ -237,6 +257,7 @@ pub(crate) fn split_into_words(alternatives: Vec<ParseTokens>, name: &str) -> Ve
         return vec![ParseWord {
             word: name.into(),
             alternatives: well_formed,
+            ends_component: false,
         }];
     }
     (0..least_words.min(splits.first().map_or(0, Vec::len)))
@@ -250,6 +271,7 @@ pub(crate) fn split_into_words(alternatives: Vec<ParseTokens>, name: &str) -> Ve
             ParseWord {
                 word: alternatives[0].text(),
                 alternatives,
+                ends_component: false,
             }
         })
         .collect()

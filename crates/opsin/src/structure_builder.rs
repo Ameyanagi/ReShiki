@@ -1915,6 +1915,12 @@ impl Builder<'_> {
         self.assembly.arena[new_rule].set_attribute("value", value);
         self.assembly.arena.insert_after(rule, new_rule);
         for &word in &words[1..] {
+            // Word-level locants refer to ester formation, not independent components.
+            if let Some(locant) = self.assembly.attr(word, "locant") {
+                return Err(error(format!(
+                    "Unable to assign locant {locant}: alcohol ester formation was not possible"
+                )));
+            }
             self.assembly.arena.detach(word);
             self.assembly.arena.add_child(new_rule, word);
         }

@@ -1,5 +1,5 @@
 //! All active examples from pinned FusedRingNumbererTest (MIT Daniel Lowe).
-use opsin::{fused_ring_numberer, graph::Graph, smiles};
+use opsin::{ParseOptions, Parser, Status, fused_ring_numberer, graph::Graph, smiles};
 use serde_json::{Value, json};
 
 #[test]
@@ -17,6 +17,35 @@ fn source_opposite_direction_cases() {
     ] {
         assert_eq!(fused_ring_numberer::opposite_direction(direction), expected);
     }
+}
+
+#[test]
+fn source_sssr_ring_counts() {
+    let parser = Parser::new().unwrap();
+    for (name, expected) in [("violanthrene", 9), ("aceanthrene", 4)] {
+        let result = parser.parse(name, &ParseOptions::strict());
+        assert_eq!(result.status, Status::Success, "{name}: {}", result.message);
+        let structure = result.structure.unwrap();
+        let rings =
+            fused_ring_numberer::get_set_of_smallest_rings(&structure.graph, structure.fragment)
+                .unwrap();
+        assert_eq!(rings.len(), expected, "{name}");
+    }
+}
+
+#[test]
+fn source_fused_ring_numbering_dependent_on_sssr() {
+    let parser = Parser::new().unwrap();
+    let result = parser.parse("benzo[a]coronen-1-ol", &ParseOptions::strict());
+    assert_eq!(result.status, Status::Success, "{}", result.message);
+    let structure = result.structure.unwrap();
+    let rings =
+        fused_ring_numberer::get_set_of_smallest_rings(&structure.graph, structure.fragment)
+            .unwrap();
+    assert_eq!(rings.len(), 8);
+
+    let result = parser.parse("1H-cyclopenta[bc]coronene", &ParseOptions::strict());
+    assert_eq!(result.status, Status::Success, "{}", result.message);
 }
 
 #[test]

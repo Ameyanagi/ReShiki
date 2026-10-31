@@ -1,0 +1,115 @@
+// Development-only resource SMILES graph oracle; OPSIN MIT Daniel Lowe/contributors.
+// Compile against the reference core (or CLI fat) JAR, then run from an empty directory:
+// java -cp <jar>:<classes> uk.ac.cam.ch.wwmm.opsin.ExportGraphResources \
+//     <xml-directory> <inputs.tsv> <golden.tsv>
+// Inputs are distinct (value, type, labels) triples in lexical tuple order.
+// Golden columns are zero-based index, pre-conversion graph, post-conversion graph/error.
+// Each graph is spare-valency bits/bond orders/cycle bits/indicated-H atom indices.
+package uk.ac.cam.ch.wwmm.opsin;
+
+import java.io.BufferedWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import javax.xml.parsers.DocumentBuilderFactory;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+
+public final class ExportGraphResources {
+    private static String attribute(Element token, Element list, String name, String fallback) {
+        if (token.hasAttribute(name)) return token.getAttribute(name);
+        if (list.hasAttribute(name)) return list.getAttribute(name);
+        return fallback;
+    }
+
+    private static String snapshot(Fragment fragment) {
+        List<Atom> atoms = fragment.getAtomList();
+        StringBuilder spare = new StringBuilder();
+        StringBuilder orders = new StringBuilder();
+        StringBuilder cycles = new StringBuilder();
+        StringBuilder indicated = new StringBuilder();
+        for (Atom atom : atoms) {
+            spare.append(atom.hasSpareValency() ? '1' : '0');
+            cycles.append(atom.getAtomIsInACycle() ? '1' : '0');
+        }
+        for (Bond bond : fragment.getBondSet()) orders.append(bond.getOrder());
+        for (Atom atom : fragment.getIndicatedHydrogen()) {
+            if (indicated.length() > 0) indicated.append(',');
+            indicated.append(atoms.indexOf(atom));
+        }
+        return spare + "/" + orders + "/" + cycles + "/" + indicated;
+    }
+
+    public static void main(String[] args) throws Exception {
+        if (args.length != 3) {
+            throw new IllegalArgumentException("Expected xml-directory inputs.tsv golden.tsv");
+        }
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+        factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+        Set<List<String>> inputs = new TreeSet<>(
+                Comparator.<List<String>, String>comparing(row -> row.get(0))
+                        .thenComparing(row -> row.get(1)).thenComparing(row -> row.get(2)));
+        List<Path> files;
+        try (Stream<Path> paths = Files.list(Paths.get(args[0]))) {
+            files = paths.filter(path -> path.getFileName().toString().endsWith(".xml"))
+                    .sorted().collect(Collectors.toList());
+        }
+        int literals = 0;
+        for (Path file : files) {
+            NodeList lists = factory.newDocumentBuilder().parse(file.toFile())
+                    .getElementsByTagName("tokenList");
+            for (int i = 0; i < lists.getLength(); i++) {
+                Element list = (Element) lists.item(i);
+                if (!"group".equals(list.getAttribute("tagname"))) continue;
+                for (Node node = list.getFirstChild(); node != null; node = node.getNextSibling()) {
+                    if (!(node instanceof Element) || !"token".equals(node.getNodeName())) continue;
+                    Element token = (Element) node;
+                    String value = attribute(token, list, "value", null);
+                    if (value == null) continue;
+                    List<String> input = new ArrayList<>();
+                    input.add(value);
+                    input.add(attribute(token, list, "type", ""));
+                    input.add(attribute(token, list, "labels", "none"));
+                    for (String field : input) {
+                        if (field.indexOf('\t') >= 0 || field.indexOf('\n') >= 0 || field.indexOf('\r') >= 0) {
+                            throw new IllegalArgumentException("Resource field cannot be represented in TSV");
+                        }
+                    }
+                    inputs.add(input);
+                    literals++;
+                }
+            }
+        }
+        try (BufferedWriter inputOut = Files.newBufferedWriter(Paths.get(args[1]), StandardCharsets.UTF_8);
+                BufferedWriter goldenOut = Files.newBufferedWriter(Paths.get(args[2]), StandardCharsets.UTF_8)) {
+            int index = 0;
+            for (List<String> input : inputs) {
+                inputOut.write(String.join("\t", input));
+                inputOut.write('\n');
+                Fragment fragment = new SMILESFragmentBuilder(new IDManager())
+                        .build(input.get(0), input.get(1), input.get(2));
+                String before = snapshot(fragment);
+                String after;
+                try {
+                    FragmentTools.convertSpareValenciesToDoubleBonds(fragment);
+                    after = snapshot(fragment);
+                } catch (Exception error) {
+                    after = "ERROR:" + error.getMessage();
+                }
+                goldenOut.write(index++ + "\t" + before + "\t" + after + "\n");
+            }
+        }
+        System.out.println("literal_groups=" + literals + " distinct_triples=" + inputs.size());
+    }
+}

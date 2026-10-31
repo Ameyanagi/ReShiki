@@ -1,6 +1,7 @@
 //! FragmentTools from OPSIN 2.9.0, b91b610af5ab07560fedb20730d7aef46bb2bca0.
 //! MIT, Daniel Lowe and contributors. Insertion order, progressive substitution
 //! heuristics and indicated-hydrogen tautomer rules are intentionally retained.
+//! Shared OpsinTools phane locant patterns: upstream main, 42e87ac6.
 use crate::graph::{AtomId, BondId, Element, FragmentId, Graph, GraphError, StereoReference};
 use crate::valence;
 use std::cmp::Ordering;
@@ -29,10 +30,8 @@ pub fn intra_fragment_incoming_valency(graph: &Graph, atom: AtomId) -> i32 {
         .bonds
         .iter()
         .filter(|bond| {
-            graph
-                .atom(graph.bond(**bond).other_atom(atom).unwrap())
-                .fragment
-                == graph.atom(atom).fragment
+            let neighbour = graph.atom(graph.bond(**bond).other_atom(atom).unwrap());
+            neighbour.fragment == graph.atom(atom).fragment && neighbour.atom_type != "suffix"
         })
         .map(|bond| i32::from(graph.bond(*bond).order))
         .sum()
@@ -47,7 +46,14 @@ pub fn is_numeric_locant(locant: &str) -> bool {
     let stem = stem
         .strip_suffix(|ch: char| ch.is_ascii_lowercase())
         .unwrap_or(stem);
-    !stem.is_empty() && stem.bytes().all(|byte| byte.is_ascii_digit())
+    if let Some((first, second)) = stem.split_once('^') {
+        !first.is_empty()
+            && first.bytes().all(|byte| byte.is_ascii_digit())
+            && !second.is_empty()
+            && second.bytes().all(|byte| byte.is_ascii_digit())
+    } else {
+        !stem.is_empty() && stem.bytes().all(|byte| byte.is_ascii_digit())
+    }
 }
 pub fn parse_amino_acid_style_locant(locant: &str) -> Option<(&str, &str, &str)> {
     let bytes = locant.as_bytes();
@@ -84,7 +90,9 @@ pub fn compare_atoms_by_locants(graph: &Graph, a: AtomId, b: AtomId) -> Ordering
         _ => {}
     }
     fn split(locant: &str) -> Option<(usize, u64, &str)> {
-        if !is_numeric_locant(locant) {
+        // SortByLocants has its own unchanged locantSegmenter pattern; the
+        // broader MATCH_NUMERIC_LOCANT must not admit phane locants here.
+        if locant.contains('^') || !is_numeric_locant(locant) {
             return None;
         }
         let stem = locant.trim_end_matches('\'');

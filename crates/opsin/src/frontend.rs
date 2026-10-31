@@ -19,18 +19,12 @@ pub(crate) fn parse(
 ) -> Result<Vec<ParseTree>, ParsingError> {
     let (name, ratios) = extract_stoichiometry(name)?;
     let mut tokenized = None;
-    if name.contains(", ") {
-        if let Ok(uninverted) = cas::uninvert(resources, name)
-            && let Ok(tokens) = tokenizer::tokenize(resources, &uninverted, false, false)
-            && tokens.is_successful()
-        {
-            tokenized = Some(tokens);
-        }
-    } else if name.contains("; ") {
-        let tokens = tokenizer::tokenize(resources, &name.replace("; ", " "), false, false)?;
-        if tokens.is_successful() {
-            tokenized = Some(tokens);
-        }
+    if name.contains(", ")
+        && let Ok(uninverted) = cas::uninvert(resources, name)
+        && let Ok(tokens) = tokenizer::tokenize(resources, &uninverted, false, false)
+        && tokens.is_successful()
+    {
+        tokenized = Some(tokens);
     }
     let allow_space_removal = tokenized.is_none();
     let tokenized = if let Some(tokens) = tokenized {
@@ -59,13 +53,23 @@ pub(crate) fn parse(
         let mut arena = Arena::default();
         let molecule = arena.grouping("molecule");
         arena[molecule].add_attribute("name", name);
+        let mut word_groups = Vec::new();
+        let mut word_group = Vec::new();
         for (word, tokens) in words {
             let element = arena.grouping("word");
             arena.add_child(molecule, element);
+            word_group.push(element);
+            if word.ends_component {
+                word_groups.push(std::mem::take(&mut word_group));
+            }
             let word_type = tokens.word_type()?;
             arena[element].add_attribute("type", word_type.as_str());
-            arena[element].add_attribute("value", word.strip_prefix('-').unwrap_or(word));
+            arena[element]
+                .add_attribute("value", word.word.strip_prefix('-').unwrap_or(&word.word));
             write_word_xml(&mut arena, element, tokens)?;
+        }
+        if !word_group.is_empty() {
+            word_groups.push(word_group);
         }
         if word_rules
             .group(
@@ -74,6 +78,7 @@ pub(crate) fn parse(
                 options,
                 allow_space_removal,
                 ratios.as_deref(),
+                word_groups,
             )
             .is_err()
         {
@@ -159,7 +164,7 @@ pub(crate) fn write_word_xml(
 
 fn generate_combinations(
     words: &[ParseWord],
-) -> Result<Vec<Vec<(&str, &ParseTokens)>>, ParsingError> {
+) -> Result<Vec<Vec<(&ParseWord, &ParseTokens)>>, ParsingError> {
     let mut count = 1usize;
     for word in words {
         count = count.saturating_mul(word.alternatives.len());
@@ -171,7 +176,7 @@ fn generate_combinations(
         return Ok(vec![
             words
                 .iter()
-                .map(|word| (word.word.as_str(), &word.alternatives[0]))
+                .map(|word| (word, &word.alternatives[0]))
                 .collect(),
         ]);
     }
@@ -185,7 +190,7 @@ fn generate_combinations(
         let word = &words[current.len()];
         for alternative in word.alternatives.iter().rev() {
             let mut next = current.clone();
-            next.push((word.word.as_str(), alternative));
+            next.push((word, alternative));
             queue.push_back(next);
         }
     }
@@ -216,8 +221,13 @@ pub fn process_stoichiometry_indication(ratio: &str) -> Result<Vec<i32>, Parsing
             1
         } else {
             part.parse::<i32>()
-                .map_err(|_| ParsingError(format!("Invalid component ratio: {part}")))?
+                .map_err(|_| ParsingError(format!("Invalid stoichiometry ratio: {part}")))?
         };
+        if value < 1 {
+            return Err(ParsingError(format!(
+                "Invalid stoichiometry ratio: {part}. Component ratios must be at least 1"
+            )));
+        }
         values.push(value);
     }
     Ok(values)

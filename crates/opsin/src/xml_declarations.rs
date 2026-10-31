@@ -1,5 +1,6 @@
 //! OPSIN XML vocabulary, mechanically transcribed from `XmlDeclarations.java`.
 //! Source: OPSIN 2.9.0, b91b610af5ab07560fedb20730d7aef46bb2bca0.
+//! Phane vocabulary: upstream main, 42e87ac6.
 //! Copyright Daniel Lowe and OPSIN contributors; MIT (see LICENSE).
 
 pub const BRACKET_EL: &str = "bracket";
@@ -13,6 +14,7 @@ pub const ADDEDHYDROGEN_EL: &str = "addedHydrogen";
 pub const ALKANESTEMCOMPONENT: &str = "alkaneStemComponent";
 pub const ALKANESTEMMODIFIER_EL: &str = "alkaneStemModifier";
 pub const ANNULEN_EL: &str = "annulen";
+pub const PHANELOCANTS_EL: &str = "phaneLocants";
 pub const FUSEDRINGBRIDGE_EL: &str = "fusedRingBridge";
 pub const BRIDGEFORMINGO_EL: &str = "bridgeFormingO";
 pub const BIOCHEMICALLINKAGE_EL: &str = "biochemicalLinkage";
@@ -175,6 +177,7 @@ pub const NONE_SUBTYPE_VAL: &str = "none";
 pub const OXIDOLIKE_SUBTYPE_VAL: &str = "oxidoLike";
 pub const OUSICATOM_SUBTYPE_VAL: &str = "ousIcAtom";
 pub const PERHALOGENO_SUBTYPE_VAL: &str = "perhalogeno";
+pub const PHANE_SUBTYPE_VAL: &str = "phane";
 pub const PHOSPHO_SUBTYPE_VAL: &str = "phospho";
 pub const RING_SUBTYPE_VAL: &str = "ring";
 pub const SALTCOMPONENT_SUBTYPE_VAL: &str = "saltComponent";

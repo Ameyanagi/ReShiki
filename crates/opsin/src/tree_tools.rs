@@ -1,8 +1,25 @@
 //! Tree-only OPSIN utilities, transcribed from `OpsinTools.java`.
 //! Source: OPSIN 2.9.0, b91b610af5ab07560fedb20730d7aef46bb2bca0.
+//! Shared compound locants: upstream main, 42e87ac6.
 //! Copyright Daniel Lowe and OPSIN contributors; MIT (see LICENSE).
 
 use crate::parse_tree::{Arena, NodeId};
+use regex::Regex;
+use std::sync::LazyLock;
+
+/// `OpsinTools.MATCH_COMPOUND_LOCANT`: retain the first captured locant and
+/// remove every matched bracketed locant, as Java Matcher.find/replaceAll do.
+pub fn split_compound_locant(locant: &str) -> Option<(String, &str)> {
+    static COMPOUND_LOCANT: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"[\[\(\{]([0-9]+(?:\^[0-9]+)?[a-z]?'*)[\]\)\}]")
+            .expect("upstream compound locant pattern")
+    });
+    let compound = COMPOUND_LOCANT.captures(locant)?.get(1)?.as_str();
+    Some((
+        COMPOUND_LOCANT.replace_all(locant, "").into_owned(),
+        compound,
+    ))
+}
 
 impl Arena {
     pub fn next_sibling_named(&self, id: NodeId, name: &str) -> Option<NodeId> {
