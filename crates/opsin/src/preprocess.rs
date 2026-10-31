@@ -45,21 +45,44 @@ pub fn preprocess(name: &str) -> Result<String, ParsingError> {
         replaced.push(ch);
         i += 1;
     }
-    let mut normalized = String::with_capacity(replaced.len());
-    for ch in replaced.chars() {
+    normalize_representation(&replaced)
+}
+
+fn normalize_representation(input: &str) -> Result<String, ParsingError> {
+    let mut normalized = String::with_capacity(input.len());
+    for (index, ch) in input.char_indices() {
         match ch {
-            '\t' | '\n' | '\u{b}' | '\u{c}' | '\r' => normalized.push(' '),
+            '\t' | '\n' | '\u{b}' | '\u{c}' | '\r' | ' ' => {
+                if !normalized.ends_with(' ') {
+                    normalized.push(' ');
+                }
+            }
             '`' => normalized.push('\''),
             '"' => normalized.push_str("''"),
+            '\u{2014}' => {
+                if index + ch.len_utf8() < input.len() {
+                    if !normalized.ends_with(' ') {
+                        normalized.push(' ');
+                    }
+                    normalized.push_str("- ");
+                } else {
+                    normalized.push('-');
+                }
+            }
             ch if ch.is_ascii() => {
                 if ch > '\u{1f}' {
                     normalized.push(ch);
                 }
             }
-            ch => normalized
-                .push_str(non_ascii(ch).ok_or_else(|| {
-                    ParsingError(format!("Unrecognised unicode character: {ch}"))
-                })?),
+            ch => {
+                let replacement = non_ascii(ch)
+                    .ok_or_else(|| ParsingError(format!("Unrecognised unicode character: {ch}")))?;
+                normalized.push_str(if normalized.ends_with(' ') {
+                    replacement.strip_prefix(' ').unwrap_or(replacement)
+                } else {
+                    replacement
+                });
+            }
         }
     }
     Ok(normalized)
@@ -102,3 +125,11 @@ fn enclosed_greek(text: &str, dot: bool) -> Option<&'static str> {
 }
 
 include!("preprocess_characters.rs");
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn whitespace_normalization_preserves_one_leading_space() {
+        assert_eq!(super::normalize_representation("\t \u{a0}").unwrap(), " ");
+    }
+}
