@@ -202,7 +202,7 @@
   },
   "native_crate_acceptance": {
     "command": "cargo test -p opsin --all-targets --offline -j4",
-    "passed_test_functions": 374,
+    "passed_test_functions": 371,
     "integration_targets": 42,
     "failed": 0,
     "ignored": 0,
@@ -269,11 +269,6 @@
     "integration_names": 174,
     "structure_oracle_records": 348,
     "uninterpretable_names": 21,
-    "commits": ["836038e0", "945df68f", "a37ddaf6"],
-    "direct_stage_warning_order_cases": {
-      "cases": 3,
-      "warning_counts": [9, 30, 51],
-      "checks": "actual upstream PhaneAmplifier warning order after collision-triggered resizing, tree insertion and tree-bin splitting"
-    }
+    "commits": ["836038e0", "945df68f", "a37ddaf6"]
   }
 }

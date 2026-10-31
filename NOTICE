@@ -7,7 +7,7 @@ See LICENSE for scope and LICENSE-MIT and LICENSE-APACHE for the full terms.
 Third-party material retains its own terms. Source attribution, descriptions
 of adaptations, copyright notices, and license texts are recorded in:
 
-  crates/opsin/           OPSIN 2.9 algorithms, resources, and fixtures (MIT)
+  crates/opsin/           OPSIN algorithms, resources, and fixtures, main after 2.9.0 (MIT)
   licenses/rdkit/          Molecular algorithms, data, and reference fixtures
   licenses/cdxml-native/   Molecular interchange parser adaptations
   licenses/inchi/          InChIKey adaptations and the Rust InChI kernel

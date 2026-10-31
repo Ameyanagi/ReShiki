@@ -15,8 +15,11 @@ invalid molecular identity remains an error.
 ## Sources and adaptation
 
 Each alias in [data.json](data.json) cites a source. OPSIN aliases are selected
-from the already bundled OPSIN 2.9.0 MIT resources, pinned to commit
-`b91b610af5ab07560fedb20730d7aef46bb2bca0`. The evidence gives exact resource
+from the bundled OPSIN MIT resources. They were selected from OPSIN 2.9.0
+(commit `b91b610af5ab07560fedb20730d7aef46bb2bca0`, the hashes in
+[provenance.json](provenance.json)); the bundled parser now tracks OPSIN main at
+`42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91`, which keeps every cited token, and
+alias source links point at that commit. The evidence gives exact resource
 files and token spellings. A stem can require the cited suffix or functional
 class to form the complete alias: for example, `ethyl alcohol` combines
 `eth`, `yl` and `alcohol`. These selections do not modify or exhaust the
