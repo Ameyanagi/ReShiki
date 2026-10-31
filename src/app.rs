@@ -351,8 +351,9 @@ pub enum Message {
     Saved(u64, Box<Document>, Result<Option<files::Saved>, String>),
     #[cfg(target_arch = "wasm32")]
     SaveDownload(String),
-    #[cfg(target_arch = "wasm32")]
     DownloadName(String),
+    ExportReady(figure_export::Prepared),
+    SaveExport(String, figure_export::Prepared),
     Exported(Result<Option<figure_export::Saved>, String>),
     FigureExported(Result<Option<figure_export::Saved>, String>),
     Close(iced::window::Id),
@@ -1001,14 +1002,14 @@ impl App {
         if let Message::CopyFrame(action) = message {
             return ControlFlow::Break(self.copy_frame(action));
         }
-        #[cfg(target_arch = "wasm32")]
         match message {
             Message::DownloadName(name) => {
-                if let Some(prompt::Prompt::Download(current)) = &mut self.prompt {
+                if let Some(prompt::Prompt::Download { name: current, .. }) = &mut self.prompt {
                     *current = name;
                 }
                 return ControlFlow::Break(Task::none());
             }
+            #[cfg(target_arch = "wasm32")]
             Message::SaveDownload(name) => {
                 let task = self.save_download(name);
                 return ControlFlow::Break(tagged(task, self.tab.id));
@@ -1363,33 +1364,14 @@ fn export_file(
     stem: Option<String>,
     details: Vec<String>,
 ) -> Task<Message> {
-    Task::perform(
-        async move {
-            Ok(save_export(contents.into_bytes(), format, stem)
-                .await?
-                .map(|path| figure_export::Saved { path, details }))
-        },
-        Message::Exported,
+    figure_export::Prepared::new(
+        contents.into_bytes(),
+        format,
+        stem,
+        details,
+        figure_export::Kind::Structure,
     )
-}
-/// Exports are named after the document, or "Molecule" while it is untitled.
-async fn save_export(
-    bytes: Vec<u8>,
-    format: &'static str,
-    stem: Option<String>,
-) -> Result<Option<PathBuf>, String> {
-    let extension = match format {
-        "svg-office" => "svg",
-        _ => format,
-    };
-    let stem = stem.as_deref().unwrap_or("Molecule");
-    files::save_bytes(
-        &format!("Export {}", export_format_label(format)),
-        &format!("{stem}.{extension}"),
-        extension,
-        &bytes,
-    )
-    .await
+    .start()
 }
 fn export_format_label(format: &str) -> String {
     match format {

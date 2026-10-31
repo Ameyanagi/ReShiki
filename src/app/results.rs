@@ -547,6 +547,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 Action::Refresh => None,
                 Action::Finished(..) => Some(Completion::Naming),
                 Action::Name(..)
+                | Action::ClearName
                 | Action::Cancel
                 | Action::Resolve
                 | Action::Generate
@@ -598,7 +599,7 @@ fn completion(message: &Message) -> Option<Completion> {
             }
         }
         #[cfg(target_arch = "wasm32")]
-        Message::Host(_) | Message::DownloadName(_) | Message::SaveDownload(_) => None,
+        Message::Host(_) | Message::SaveDownload(_) => None,
         #[cfg(target_os = "macos")]
         Message::MacFiles(action) => {
             use super::macos_files::Action;
@@ -609,6 +610,11 @@ fn completion(message: &Message) -> Option<Completion> {
         Message::Saved(..) => Some(Completion::Save),
         Message::Exported(..) => Some(Completion::Export),
         Message::FigureExported(..) => Some(Completion::FigureExport),
+        Message::ExportReady(export) | Message::SaveExport(_, export) => Some(match export.kind {
+            super::figure_export::Kind::Figure => Completion::FigureExport,
+            super::figure_export::Kind::Structure => Completion::Export,
+            super::figure_export::Kind::Nmr => Completion::Nmr,
+        }),
         // Tab wraps a routed message; its inner message is classified where it is delivered.
         Message::Tab(..) => None,
         #[cfg(target_os = "linux")]
@@ -735,6 +741,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Discard
         | Message::Cancel
         | Message::Prompt(_) => None,
+        Message::DownloadName(_) => None,
     }
 }
 

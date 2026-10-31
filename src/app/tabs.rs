@@ -470,7 +470,11 @@ impl App {
                     result,
                     ..
                 } => export_result(*result, format),
-                Message::FigureExported(_) => {
+                Message::FigureExported(_)
+                | Message::ExportReady(super::figure_export::Prepared {
+                    kind: super::figure_export::Kind::Figure,
+                    ..
+                }) => {
                     self.figure_exporting = false;
                     Task::none()
                 }

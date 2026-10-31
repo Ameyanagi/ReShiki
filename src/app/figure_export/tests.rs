@@ -1,6 +1,56 @@
 use super::*;
 
 #[test]
+fn browser_exports_ask_only_for_untitled_names_and_keep_the_chosen_name() {
+    use crate::app::prompt::{Answer, Prompt};
+
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let id = app.tab.id;
+    for (kind, format, extension) in [
+        (Kind::Figure, "png", "png"),
+        (Kind::Figure, "svg-office", "svg"),
+        (Kind::Figure, "pdf", "pdf"),
+        (Kind::Structure, "mol", "mol"),
+        (Kind::Nmr, "tsv", "tsv"),
+    ] {
+        let export = Prepared::new(vec![1, 2, 3], format, None, vec![], kind);
+        let _ = app.export_ready(export.clone(), false);
+        assert!(app.prompt.is_none(), "Desktop keeps the save dialog");
+
+        let _ = app.export_ready(export.clone(), true);
+        assert!(matches!(
+            &app.prompt,
+            Some(Prompt::Download { name, .. }) if name == &format!("Molecule.{extension}")
+        ));
+        let chosen = format!("paracetamol.{extension}");
+        let _ = app.update(Message::DownloadName(chosen.clone()));
+        let Message::Tab(tab, message) = app.prompt.take().unwrap().answer(Answer::Save) else {
+            panic!("An export answer keeps its originating tab");
+        };
+        assert_eq!(tab, id);
+        let Message::SaveExport(name, pending) = *message else {
+            panic!("Confirming starts the prepared export");
+        };
+        assert_eq!(name, chosen);
+        let _ = app.update(pending.completed(Ok(Some(PathBuf::from(name)))));
+        assert!(app.status.contains(&chosen));
+
+        let _ = app.export_ready(export, true);
+        let task = app.update(Message::Prompt(Answer::Cancel));
+        assert!(app.prompt.is_none());
+        assert_eq!(task.units(), 0, "Cancel starts no download");
+        assert!(!app.figure_exporting);
+    }
+
+    app.tab.path = Some("caffeine.rsk".into());
+    let named = Prepared::new(vec![], "png", app.export_stem(), vec![], Kind::Figure);
+    assert_eq!(named.name, "caffeine.png");
+    let _ = app.export_ready(named, true);
+    assert!(app.prompt.is_none(), "Named drawings download directly");
+}
+
+#[test]
 fn switched_and_closed_tabs_keep_export_completions_off_the_front_tab() {
     for closed in [false, true] {
         let (mut app, _) = App::new();

@@ -607,12 +607,15 @@ impl App {
         }
     }
 
-    /// Reopening Structure keeps its draft ready to replace in one paste.
+    /// Reopening Import keeps its draft ready to replace in one paste.
     pub(super) fn focus_import_input(&mut self) -> Task<Message> {
+        let focus = iced::widget::operation::focus(self.import_input_id());
         if self.imports.kind == InputKind::Structure {
             self.imports.input.perform(text_editor::Action::SelectAll);
+            focus
+        } else {
+            focus.chain(iced::widget::operation::select_all("import-name"))
         }
-        iced::widget::operation::focus(self.import_input_id())
     }
 
     fn structure_import_panel(&self) -> Element<'_, Message> {

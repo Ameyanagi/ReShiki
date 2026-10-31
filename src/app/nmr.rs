@@ -1,5 +1,5 @@
 //! Atom-linked offline NMR results; detached work and chemical identity gates.
-use super::{App, InspectorTab, Message, files};
+use super::{App, InspectorTab, Message};
 use crate::canvas::nmr::LabelMode;
 use iced::{Point, Size, Task};
 use reshiki::document::Document;
@@ -310,17 +310,15 @@ impl App {
     fn nmr_export(&mut self) -> Task<Message> {
         if let Some(report) = &self.tab.nmr.job.result {
             let contents = engine::to_tsv(report);
-            return Task::perform(
-                async move {
-                    files::save_bytes(
-                        "Export predicted NMR shifts",
-                        "Predicted NMR shifts.tsv",
-                        "tsv",
-                        contents.as_bytes(),
-                    )
-                    .await
-                },
-                |result| Message::Nmr(Action::Exported(result)),
+            return self.export_ready(
+                super::figure_export::Prepared::new(
+                    contents.into_bytes(),
+                    "tsv",
+                    Some("Predicted NMR shifts".into()),
+                    vec![],
+                    super::figure_export::Kind::Nmr,
+                ),
+                cfg!(target_arch = "wasm32"),
             );
         }
         Task::none()

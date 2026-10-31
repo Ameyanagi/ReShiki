@@ -648,7 +648,10 @@ impl super::App {
         }
         #[cfg(target_arch = "wasm32")]
         if download_name.is_none() && !crate::web::can_save_file() && (save_as || path.is_none()) {
-            self.prompt = Some(super::prompt::Prompt::Download(suggested_name));
+            self.prompt = Some(super::prompt::Prompt::Download {
+                name: suggested_name,
+                action: super::prompt::Download::Drawing,
+            });
             return iced::widget::operation::focus("download-name");
         }
         self.file_io.saving = true;
