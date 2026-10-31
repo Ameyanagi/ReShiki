@@ -73,6 +73,101 @@ fn source_picture() -> reshiki::pictures::Picture {
 }
 
 #[test]
+fn attached_image_can_be_viewed_from_the_attachments_menu() {
+    let (mut app, _) = App::new();
+    let picture = source_picture();
+    app.assistant.source_image = Some(picture.clone());
+    let _ = app.assistant_action(Action::Menu(Some(Menu::Attachments)));
+    let _ = app.assistant_action(Action::ViewImage(app.assistant.source_image.clone()));
+    assert_eq!(app.assistant.viewed_image, Some(picture));
+    assert!(app.assistant.menu.is_none());
+    let _ = app.assistant_action(Action::ViewImage(None));
+    assert!(app.assistant.viewed_image.is_none());
+    assert!(app.assistant.source_image.is_some());
+}
+
+#[test]
+fn preparation_passes_name_revisions_and_hide_restarted_structure_counts() {
+    for (pass, preparing, assembled) in [
+        (codex::Pass::Preview, "Revising the draft…", "Draft revised"),
+        (
+            codex::Pass::Final,
+            "Preparing the final draft…",
+            "Final draft assembled",
+        ),
+    ] {
+        let (mut app, _) = App::new();
+        let (tx, rx) = tokio::sync::mpsc::channel(8);
+        app.assistant.progress = Some(rx);
+        tx.try_send(codex::Progress::Pass(pass)).unwrap();
+        let _ = app.assistant_action(Action::Poll);
+        assert_eq!(app.assistant.status, "Preparing structures…");
+        assert_eq!(app.assistant.preparation, None);
+        for completed in 1..=4 {
+            tx.try_send(codex::Progress::Structures {
+                completed,
+                total: 4,
+            })
+            .unwrap();
+            let _ = app.assistant_action(Action::Poll);
+            assert_eq!(app.assistant.structures, Some((completed, 4)));
+            assert_eq!(app.assistant.status, "Preparing structures…");
+            if completed == 2 {
+                // A panel preview does not start a new preparation pass.
+                tx.try_send(codex::Progress::Preview(Box::default()))
+                    .unwrap();
+                let _ = app.assistant_action(Action::Poll);
+                assert_eq!(app.assistant.status, "Layout assembled");
+                assert_eq!(app.assistant.preparation, None);
+            }
+        }
+        tx.try_send(codex::Progress::Preview(Box::default()))
+            .unwrap();
+        let _ = app.assistant_action(Action::Poll);
+        assert_eq!(app.assistant.status, "Layout assembled");
+        assert_eq!(app.assistant.structures, Some((4, 4)));
+
+        tx.try_send(codex::Progress::Pass(pass)).unwrap();
+        let _ = app.assistant_action(Action::Poll);
+        assert_eq!(app.assistant.status, preparing);
+        assert!(app.assistant.structures.is_none());
+        tx.try_send(codex::Progress::Structures {
+            completed: 1,
+            total: 4,
+        })
+        .unwrap();
+        let _ = app.assistant_action(Action::Poll);
+        assert_eq!(app.assistant.status, preparing);
+        assert!(app.assistant.structures.is_none());
+        tx.try_send(codex::Progress::Preview(Box::default()))
+            .unwrap();
+        let _ = app.assistant_action(Action::Poll);
+        assert_eq!(app.assistant.status, assembled);
+        assert!(app.assistant.structures.is_none());
+
+        // Another panel preview belongs to the same pass.
+        tx.try_send(codex::Progress::Structures {
+            completed: 2,
+            total: 4,
+        })
+        .unwrap();
+        let _ = app.assistant_action(Action::Poll);
+        assert_eq!(app.assistant.status, preparing);
+        assert_eq!(app.assistant.preparation, Some(pass));
+        assert!(app.assistant.structures.is_none());
+        tx.try_send(codex::Progress::Preview(Box::default()))
+            .unwrap();
+        let _ = app.assistant_action(Action::Poll);
+        assert_eq!(app.assistant.status, assembled);
+
+        let _ = app.assistant_action(Action::Example("Draw water"));
+        let _ = app.assistant_action(Action::Send);
+        assert_eq!(app.assistant.preparation, None);
+        assert!(app.assistant.structures.is_none());
+    }
+}
+
+#[test]
 fn pasting_image_attaches_until_send_without_mutating_the_canvas() {
     let (mut app, _) = App::new();
     let before = app.tab.doc.clone();

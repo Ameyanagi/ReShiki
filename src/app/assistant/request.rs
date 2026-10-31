@@ -141,6 +141,7 @@ impl App {
         self.assistant.plan.clear();
         self.assistant.preview_target = None;
         self.assistant.structures = None;
+        self.assistant.preparation = None;
         self.assistant.checking = 0;
         self.assistant.last_activity = Some(std::time::Instant::now());
         self.assistant.pending_scope =

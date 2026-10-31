@@ -61,13 +61,25 @@ impl App {
                     }
                     self.assistant.status = "Composition planned".into();
                 }
+                codex::Progress::Pass(pass) => {
+                    self.assistant.preparation = self.assistant.preview.is_some().then_some(pass);
+                    self.assistant.structures = None;
+                    self.assistant.status = preparing(self.assistant.preparation).into();
+                }
                 codex::Progress::Structures { completed, total } => {
-                    self.assistant.structures = Some((completed, total));
-                    self.assistant.status = "Preparing structures…".into();
+                    if self.assistant.preparation.is_none() {
+                        self.assistant.structures = Some((completed, total));
+                    }
+                    self.assistant.status = preparing(self.assistant.preparation).into();
                 }
                 codex::Progress::Preview(doc) => {
                     self.assistant.preview = Some(*doc);
-                    self.assistant.status = "Layout assembled".into();
+                    self.assistant.status = match self.assistant.preparation {
+                        None => "Layout assembled",
+                        Some(codex::Pass::Preview) => "Draft revised",
+                        Some(codex::Pass::Final) => "Final draft assembled",
+                    }
+                    .into();
                 }
                 codex::Progress::Checking { pass } => {
                     self.assistant.checking = pass;
@@ -102,5 +114,14 @@ impl App {
             );
         }
         super::chat_scroll(scroll)
+    }
+}
+
+/// The status while a pass prepares structures; later passes name what they revise.
+fn preparing(pass: Option<codex::Pass>) -> &'static str {
+    match pass {
+        None => "Preparing structures…",
+        Some(codex::Pass::Preview) => "Revising the draft…",
+        Some(codex::Pass::Final) => "Preparing the final draft…",
     }
 }
