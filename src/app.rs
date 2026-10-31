@@ -969,7 +969,7 @@ impl App {
                     | Edit::PointerHover(_)
                     | Edit::RelaxDragTarget { .. }
                     | Edit::RelaxRotate { .. }
-            )
+            ) | Message::ContextMenu(context_menu::Action::Pointer)
         );
         let task = self.update_routed(message);
         let keyboard_after = (
@@ -977,6 +977,7 @@ impl App {
             self.tab.keyboard_drawing.marked(),
         );
         // Blank motion changes the drawing point, but not its available controls.
+        // Menu pointer ownership likewise leaves the native controls unchanged.
         // Keep that point and ownership current without scheduling another native
         // Collect/Snapshot round trip. Actual target identities and marks remain exact.
         let same_target = keyboard_before.0 == keyboard_after.0
