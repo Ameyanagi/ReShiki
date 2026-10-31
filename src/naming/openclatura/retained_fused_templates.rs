@@ -35,7 +35,7 @@ pub(super) struct TopologyKey {
     clippy::expect_used,
     reason = "Immutable checked-in retained graph registry"
 )]
-static GRAPH_DATA: LazyLock<Value> = LazyLock::new(|| {
+pub(super) static GRAPH_DATA: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!("data/retained_fused_graph_templates.json"))
         .expect("retained graph table")
 });
@@ -44,13 +44,12 @@ static GRAPH_DATA: LazyLock<Value> = LazyLock::new(|| {
     reason = "Immutable checked-in retained graph registry"
 )]
 static ALL_TEMPLATES: LazyLock<Vec<RetainedGraphTemplate>> = LazyLock::new(|| {
-    let mut templates = Vec::new();
-    for row in GRAPH_DATA["parents"]
+    let mut templates: Vec<_> = GRAPH_DATA["parents"]
         .as_array()
         .expect("retained graph rows")
-    {
-        templates.push(retained_graph_template_from_data(row));
-    }
+        .iter()
+        .map(retained_graph_template_from_data)
+        .collect();
     for (data, family) in [
         (
             include_str!("data/retained_fused_hydrocarbon_templates.json"),
@@ -126,11 +125,11 @@ pub fn retained_graph_templates(include_disabled: bool) -> &'static [RetainedGra
     }
 }
 pub fn retained_parent_metadata(name: &str) -> Option<RetainedParentMetadata> {
-    let t = ALL_TEMPLATES
+    ALL_TEMPLATES
         .iter()
         .find(|t| t.name == name)
-        .or_else(|| ALL_TEMPLATES.iter().find(|t| t.output_name() == name))?;
-    Some(t.metadata())
+        .or_else(|| ALL_TEMPLATES.iter().find(|t| t.output_name() == name))
+        .map(RetainedGraphTemplate::metadata)
 }
 fn strings(v: &Value) -> Vec<String> {
     v.as_array()
@@ -202,9 +201,8 @@ fn retained_graph_template_from_data(row: &Value) -> RetainedGraphTemplate {
             required_stereo: boolean(&a["required_stereo"], false),
         })
         .collect();
-    let name = string(&row["name"], "");
     RetainedGraphTemplate {
-        name,
+        name: string(&row["name"], ""),
         priority: row
             .get("priority")
             .unwrap_or(&data["priority"])
@@ -372,8 +370,8 @@ pub fn match_retained_graph_templates_with_options(
             && key.edge_degrees.values().sum::<usize>() + 1 == key.size + count
             && key.degrees.keys().all(|d| matches!(d, 2 | 3))
         {
-            for (family, minimum, eager) in [("acenes", 4, 9), ("polyaphenes", 5, 10)] {
-                if count >= minimum && count > eager {
+            for (family, eager) in [("acenes", 9), ("polyaphenes", 10)] {
+                if count > eager {
                     let t = generated_series_template(family, count);
                     if retained_graph_template_topology_key(&t) == key
                         && !candidates.iter().any(|c| c.name == t.name)
@@ -654,18 +652,17 @@ pub(super) fn match_retained_graph_template_maps_with_options(
     {
         assignments.retain(|assignment| {
             reference.iter().all(|bond| {
-                let Some((left, right, expected)) = bond["locants"][0]
-                    .as_str()
-                    .zip(bond["locants"][1].as_str())
-                    .zip(bond["order"].as_u64())
-                    .map(|((left, right), expected)| (left, right, expected as usize))
-                else {
+                let (Some(left), Some(right), Some(expected)) = (
+                    bond["locants"][0].as_str(),
+                    bond["locants"][1].as_str(),
+                    bond["order"].as_u64(),
+                ) else {
                     return false;
                 };
                 let u = assignment[index[left]];
                 let v = assignment[index[right]];
                 mol.get_bond(u, v)
-                    .is_some_and(|actual| actual.order == expected)
+                    .is_some_and(|actual| actual.order == expected as usize)
             })
         });
     }
@@ -739,10 +736,8 @@ fn has_localized_alternating_4n_cycle(mol: &Molecule, atoms: &AtomSet) -> bool {
                 continue;
             };
             let localized = localized || !bond.is_aromatic;
-            if next == start {
-                if path.len() >= 4 && path.len().is_multiple_of(4) && localized {
-                    return true;
-                }
+            if next == start && path.len() >= 4 && path.len().is_multiple_of(4) && localized {
+                return true;
             } else if !path.contains(&next) {
                 path.push(next);
                 let found = search(mol, atoms, path, 3 - next_order, localized, remaining);
@@ -790,7 +785,7 @@ fn relocated_indicated_h(
     if movable.len() < needed {
         movable = saturated.into_iter().map(|(l, _)| l).collect();
     }
-    if movable.len() < needed || strict && movable.len() != needed {
+    if strict && movable.len() != needed {
         return None;
     }
     movable.sort_by_key(|l| parse_locant(l));
@@ -842,11 +837,9 @@ fn collect_assignments(
                                 && (!expected
                                     || t.aromatic_equivalence_policy != "exact"
                                     || bond.is_some_and(|b| {
+                                        let class = classes.get(&(i.min(j), i.max(j)));
                                         b.order
-                                            == if classes
-                                                .get(&(i.min(j), i.max(j)))
-                                                .is_some_and(|s| s == "double")
-                                            {
+                                            == if class.is_some_and(|s| s == "double") {
                                                 2
                                             } else {
                                                 1
@@ -952,16 +945,10 @@ fn higher_acene_locant_graph(count: usize) -> (Vec<String>, Vec<(String, String)
         .collect();
     let mut locants: Vec<_> = (1..=4).map(|n| n.to_string()).collect();
     locants.push(left[0].clone());
-    for n in 5..count + 3 {
-        locants.push(n.to_string());
-        locants.push(format!("{n}a"));
-    }
+    locants.extend((5..count + 3).flat_map(|n| [n.to_string(), format!("{n}a")]));
     locants.extend((count + 3..=right_start).map(|n| n.to_string()));
     locants.push(right[0].clone());
-    for n in right_start + 1..2 * count + 5 {
-        locants.push(n.to_string());
-        locants.push(format!("{n}a"));
-    }
+    locants.extend((right_start + 1..2 * count + 5).flat_map(|n| [n.to_string(), format!("{n}a")]));
     let mut edges: Vec<_> = (0..locants.len())
         .map(|i| (locants[i].clone(), locants[(i + 1) % locants.len()].clone()))
         .collect();

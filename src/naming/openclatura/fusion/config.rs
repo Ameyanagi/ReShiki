@@ -108,15 +108,14 @@ pub fn fusion_nomenclature_config_from_data(
     }
     let ring_shapes: Vec<RingShapeSpec> =
         serde_json::from_value(data["ring_shapes"].clone()).map_err(|e| e.to_string())?;
-    for s in &ring_shapes {
-        if s.horizontal_axis_class.is_empty()
+    if ring_shapes.iter().any(|s| {
+        s.horizontal_axis_class.is_empty()
             || !(3..=8).contains(&s.ring_size)
             || s.vertices.len() != s.ring_size
             || s.edge_directions.len() != s.ring_size
             || s.vertices.get(..2) != Some(&[(0, 0), (4, 0)][..])
-        {
-            return Err("invalid intrinsic ring shape".into());
-        }
+    }) {
+        return Err("invalid intrinsic ring shape".into());
     }
     Ok(FusionNomenclatureConfig {
         registry_version: data["registry_version"].as_str().unwrap_or_default().into(),

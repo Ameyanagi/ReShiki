@@ -137,75 +137,67 @@ pub fn build_component_cover_graph<T: Ord + Clone>(
         interfaces,
     ))
 }
-fn connected_nodes<T: Ord + Clone>(graph: &CoverGraph<T>, start: T) -> BTreeSet<T> {
+fn connected_nodes<'a, T: Ord>(graph: &'a CoverGraph<T>, start: &'a T) -> BTreeSet<&'a T> {
     let mut seen = BTreeSet::new();
     let mut stack = vec![start];
     while let Some(node) = stack.pop() {
-        if !seen.insert(node.clone()) {
+        if !seen.insert(node) {
             continue;
         }
-        stack.extend(
-            graph.adjacency[&node]
-                .iter()
-                .filter(|n| !seen.contains(*n))
-                .cloned(),
-        );
+        stack.extend(graph.adjacency[node].iter().filter(|n| !seen.contains(*n)));
     }
     seen
 }
-fn connected_components<T: Ord + Clone>(graph: &CoverGraph<T>) -> usize {
-    let mut remaining: BTreeSet<_> = graph.nodes.iter().cloned().collect();
+fn connected_components<T: Ord>(graph: &CoverGraph<T>) -> usize {
+    let mut seen = BTreeSet::new();
     let mut count = 0;
     for node in &graph.nodes {
-        if !remaining.contains(node) {
+        if seen.contains(node) {
             continue;
         }
         count += 1;
-        for node in connected_nodes(graph, node.clone()) {
-            remaining.remove(&node);
-        }
+        seen.extend(connected_nodes(graph, node));
     }
     count
 }
-pub fn is_connected<T: Ord + Clone>(graph: &CoverGraph<T>) -> bool {
-    !graph.nodes.is_empty()
-        && connected_nodes(graph, graph.nodes[0].clone()).len() == graph.nodes.len()
+pub fn is_connected<T: Ord>(graph: &CoverGraph<T>) -> bool {
+    !graph.nodes.is_empty() && connected_nodes(graph, &graph.nodes[0]).len() == graph.nodes.len()
 }
-pub fn cycle_rank<T: Ord + Clone>(graph: &CoverGraph<T>) -> usize {
+pub fn cycle_rank<T: Ord>(graph: &CoverGraph<T>) -> usize {
     graph.interfaces.len() + connected_components(graph) - graph.nodes.len()
 }
-fn is_cactus_graph<T: Ord + Clone>(graph: &CoverGraph<T>) -> bool {
-    struct Walk<T: Ord> {
-        discovery: BTreeMap<T, usize>,
-        low: BTreeMap<T, usize>,
-        stack: Vec<(T, T)>,
-        blocks: Vec<Vec<(T, T)>>,
+fn is_cactus_graph<T: Ord>(graph: &CoverGraph<T>) -> bool {
+    struct Walk<'a, T: Ord> {
+        discovery: BTreeMap<&'a T, usize>,
+        low: BTreeMap<&'a T, usize>,
+        stack: Vec<(&'a T, &'a T)>,
+        blocks: Vec<Vec<(&'a T, &'a T)>>,
         counter: usize,
     }
-    fn visit<T: Ord + Clone>(
-        node: T,
-        parent: Option<T>,
-        graph: &CoverGraph<T>,
-        state: &mut Walk<T>,
+    fn visit<'a, T: Ord>(
+        node: &'a T,
+        parent: Option<&T>,
+        graph: &'a CoverGraph<T>,
+        state: &mut Walk<'a, T>,
     ) {
         state.counter += 1;
-        state.discovery.insert(node.clone(), state.counter);
-        state.low.insert(node.clone(), state.counter);
-        for neighbor in &graph.adjacency[&node] {
-            if Some(neighbor) == parent.as_ref() {
+        state.discovery.insert(node, state.counter);
+        state.low.insert(node, state.counter);
+        for neighbor in &graph.adjacency[node] {
+            if Some(neighbor) == parent {
                 continue;
             }
-            let edge = (node.clone(), neighbor.clone());
+            let edge = (node, neighbor);
             if !state.discovery.contains_key(neighbor) {
-                state.stack.push(edge.clone());
-                visit(neighbor.clone(), Some(node.clone()), graph, state);
+                state.stack.push(edge);
+                visit(neighbor, Some(node), graph, state);
                 state
                     .low
-                    .insert(node.clone(), state.low[&node].min(state.low[neighbor]));
-                if state.low[neighbor] >= state.discovery[&node] {
+                    .insert(node, state.low[node].min(state.low[neighbor]));
+                if state.low[neighbor] >= state.discovery[node] {
                     let mut block = Vec::new();
                     while let Some(stacked) = state.stack.pop() {
-                        block.push(stacked.clone());
+                        block.push(stacked);
                         if stacked == edge {
                             break;
                         }
@@ -214,12 +206,11 @@ fn is_cactus_graph<T: Ord + Clone>(graph: &CoverGraph<T>) -> bool {
                         state.blocks.push(block);
                     }
                 }
-            } else if state.discovery[neighbor] < state.discovery[&node] {
+            } else if state.discovery[neighbor] < state.discovery[node] {
                 state.stack.push(edge);
-                state.low.insert(
-                    node.clone(),
-                    state.low[&node].min(state.discovery[neighbor]),
-                );
+                state
+                    .low
+                    .insert(node, state.low[node].min(state.discovery[neighbor]));
             }
         }
     }
@@ -232,7 +223,7 @@ fn is_cactus_graph<T: Ord + Clone>(graph: &CoverGraph<T>) -> bool {
     };
     for node in &graph.nodes {
         if !state.discovery.contains_key(node) {
-            visit(node.clone(), None, graph, &mut state);
+            visit(node, None, graph, &mut state);
         }
     }
     !state.blocks.is_empty()
@@ -245,7 +236,7 @@ fn is_cactus_graph<T: Ord + Clone>(graph: &CoverGraph<T>) -> bool {
                     .len()
         })
 }
-pub fn build_cover_proof<T: Ord + Clone>(graph: &CoverGraph<T>) -> CoverProof {
+pub fn build_cover_proof<T: Ord>(graph: &CoverGraph<T>) -> CoverProof {
     let cycle_rank = cycle_rank(graph);
     let (kind, topology) = if !is_connected(graph) {
         ("disconnected", "disconnected")

@@ -1,12 +1,11 @@
 //! Pure fusion eligibility, component identity, and chemical seniority.
-use super::super::locants::retained_locant_sort_key as locant_key;
+use super::super::locants::{LocantKey, retained_locant_sort_key as locant_key};
 use super::{config::fusion_nomenclature_config, model::*};
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::LazyLock,
 };
-pub type LocantKey = (usize, u8, String, usize);
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ChemicalComponentSeniorityKey {
     pub earliest_special_heteroatom: usize,
@@ -58,11 +57,15 @@ fn precedence(field: &str) -> Vec<String> {
     rows.sort();
     rows.into_iter().map(|(_, s)| s).collect()
 }
-pub fn earliest_special_heteroatom_precedence() -> Vec<String> {
-    precedence("fusion_special_priority")
+pub fn earliest_special_heteroatom_precedence() -> &'static [String] {
+    static PRECEDENCE: LazyLock<Vec<String>> =
+        LazyLock::new(|| precedence("fusion_special_priority"));
+    &PRECEDENCE
 }
-pub fn general_heteroatom_count_precedence() -> Vec<String> {
-    precedence("fusion_general_priority")
+pub fn general_heteroatom_count_precedence() -> &'static [String] {
+    static PRECEDENCE: LazyLock<Vec<String>> =
+        LazyLock::new(|| precedence("fusion_general_priority"));
+    &PRECEDENCE
 }
 pub fn fusion_supported(symbol: &str) -> bool {
     ELEMENT_DATA["elements"]
@@ -206,7 +209,7 @@ pub fn component_variant_identity(spec: &FusionComponentSpec) -> ComparisonKey {
 pub fn component_canonicalization_key(spec: &FusionComponentSpec) -> ComparisonKey {
     ComparisonKey::tuple([
         text(&spec.parent_name),
-        text(spec.preferred_fusion_prefix()),
+        text(&spec.attached_prefix),
         component_variant_identity(spec),
     ])
 }

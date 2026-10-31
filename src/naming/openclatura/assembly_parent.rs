@@ -611,7 +611,7 @@ pub fn always_print_substituent_locant(parts: &AssemblyParts) -> bool {
         return true;
     }
     if super::retained_specs::retained_parent_spec(parts.retained_name.as_deref())
-        .is_some_and(|spec| spec.attachment_policy.print_substituent_locant)
+        .is_some_and(|spec| spec.print_substituent_locant)
     {
         return true;
     }

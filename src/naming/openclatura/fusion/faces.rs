@@ -35,11 +35,8 @@ pub fn canonical_cycle(atoms: &[usize]) -> Vec<usize> {
             atoms.to_vec()
         };
         for offset in 0..seq.len() {
-            let value = seq[offset..]
-                .iter()
-                .chain(&seq[..offset])
-                .copied()
-                .collect::<Vec<_>>();
+            let mut value = seq.clone();
+            value.rotate_left(offset);
             if best.as_ref().is_none_or(|b| &value < b) {
                 best = Some(value)
             }
@@ -48,9 +45,15 @@ pub fn canonical_cycle(atoms: &[usize]) -> Vec<usize> {
     best.unwrap_or_default()
 }
 pub fn cycle_edges(atoms: &[usize]) -> EdgeSet {
-    (0..atoms.len())
-        .map(|i| normalize_edge(atoms[i], atoms[(i + 1) % atoms.len()]))
-        .collect()
+    cycle_edge_iter(atoms).collect()
+}
+pub(super) fn cycle_edge_iter(cycle: &[usize]) -> impl Iterator<Item = Edge> + '_ {
+    cycle
+        .iter()
+        .copied()
+        .zip(cycle.iter().copied().cycle().skip(1))
+        .take(cycle.len())
+        .map(|(u, v)| normalize_edge(u, v))
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FaceModelAudit {
@@ -417,11 +420,7 @@ pub fn simple_cycle_order(edges: &EdgeSet) -> Option<Vec<usize>> {
         previous = current;
         current = next;
     }
-    if order.len() == atoms.len() {
-        Some(canonical_cycle(&order))
-    } else {
-        None
-    }
+    (order.len() == atoms.len()).then(|| canonical_cycle(&order))
 }
 #[derive(Clone, PartialEq, Eq)]
 struct FaceCacheKey {
@@ -430,7 +429,7 @@ struct FaceCacheKey {
     bonds: Vec<(usize, usize, usize, usize)>,
 }
 thread_local! {
-    static FACE_CACHE: std::cell::RefCell<std::collections::VecDeque<(FaceCacheKey, Option<BoundedFaceModel>)>> = const { std::cell::RefCell::new(std::collections::VecDeque::new()) };
+    static FACE_CACHE: super::ThreadLocalCache<FaceCacheKey, Option<BoundedFaceModel>> = const { super::ThreadLocalCache::new() };
 }
 pub fn cached_bounded_face_model(
     mol: &Molecule,
@@ -458,24 +457,11 @@ pub fn cached_bounded_face_model(
             .map(|b| (b.idx, b.u, b.v, b.order))
             .collect(),
     };
-    if let Some(model) = FACE_CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        let index = cache.iter().position(|(previous, _)| previous == &key)?;
-        let entry = cache.remove(index)?;
-        let model = entry.1.clone();
-        cache.push_back(entry);
-        Some(model)
-    }) {
+    if let Some(model) = FACE_CACHE.with(|cache| cache.get(|previous| previous == &key)) {
         return Ok(model);
     }
     let model = select_bounded_face_model(mol, atoms)?;
-    FACE_CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if cache.len() == 128 {
-            cache.pop_front();
-        }
-        cache.push_back((key, model.clone()));
-    });
+    FACE_CACHE.with(|cache| cache.insert(key, model.clone()));
     Ok(model)
 }
 pub fn select_bounded_face_model(
@@ -801,7 +787,8 @@ fn independent_face_sets(
                 continue;
             };
             let new_twice = twice
-                .union(&once.intersection(mask).copied().collect())
+                .iter()
+                .chain(once.intersection(mask))
                 .copied()
                 .collect();
             let new_once = once.union(mask).copied().collect::<EdgeSet>();

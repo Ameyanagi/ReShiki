@@ -1,11 +1,8 @@
 //! Small graph values used by retained-parent bond-state proofs.
-use std::collections::BTreeSet;
-
-pub type Edge = (usize, usize);
-pub type EdgeSet = BTreeSet<Edge>;
-pub fn normalize_edge(u: usize, v: usize) -> Edge {
-    (u.min(v), u.max(v))
-}
+pub use super::super::graph_kernel::{Edge, EdgeSet, normalize_edge};
+use super::super::retained_graph_model::RetainedGraphTemplate;
+use super::mancude::ParentDerivativeState;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FusionGraphAtom {
@@ -18,7 +15,7 @@ pub struct FusionGraphAtom {
     pub saturated: bool,
 }
 impl FusionGraphAtom {
-    pub fn new(id: usize, symbol: impl Into<String>) -> Self {
+    pub(super) fn new(id: usize, symbol: impl Into<String>) -> Self {
         Self {
             id,
             symbol: symbol.into(),
@@ -53,7 +50,7 @@ pub struct ParentBondModel {
     pub required_double_bonds: EdgeSet,
 }
 impl ParentBondModel {
-    pub fn edges(&self) -> EdgeSet {
+    pub(super) fn edges(&self) -> EdgeSet {
         self.required_single_bonds
             .iter()
             .chain(&self.required_double_bonds)
@@ -61,7 +58,7 @@ impl ParentBondModel {
             .copied()
             .collect()
     }
-    pub fn pi_atoms(&self) -> BTreeSet<usize> {
+    pub(super) fn pi_atoms(&self) -> BTreeSet<usize> {
         self.pi_eligible_edges
             .iter()
             .chain(&self.required_double_bonds)
@@ -71,10 +68,6 @@ impl ParentBondModel {
 }
 
 // Fusion planning records retain Python sequence order explicitly in Vec.
-use super::super::retained_graph_model::RetainedGraphTemplate;
-use super::mancude::ParentDerivativeState;
-use std::collections::BTreeMap;
-
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ComparisonKey {
     Int(i64),
@@ -117,7 +110,7 @@ impl From<Vec<i64>> for ComparisonKey {
     }
 }
 impl ComparisonKey {
-    pub fn tuple(values: impl IntoIterator<Item = ComparisonKey>) -> Self {
+    pub(super) fn tuple(values: impl IntoIterator<Item = ComparisonKey>) -> Self {
         Self::Tuple(values.into_iter().collect())
     }
 }
@@ -137,7 +130,7 @@ pub enum FusionJoinKind {
     HigherOrder,
 }
 impl FusionJoinKind {
-    pub fn as_str(self) -> &'static str {
+    pub(super) fn as_str(self) -> &'static str {
         match self {
             Self::Ortho => "ortho",
             Self::OrthoPeri => "ortho_peri",
@@ -151,14 +144,9 @@ pub struct ComponentLocant {
     pub text: String,
     pub prime_depth: usize,
 }
-impl ComponentLocant {
-    pub fn render(&self) -> String {
-        format!("{}{}", self.text, "'".repeat(self.prime_depth))
-    }
-}
 impl std::fmt::Display for ComponentLocant {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.render())
+        write!(f, "{}{}", self.text, "'".repeat(self.prime_depth))
     }
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -167,14 +155,9 @@ pub struct FusionSide {
     pub letter: String,
     pub prime_depth: usize,
 }
-impl FusionSide {
-    pub fn render(&self) -> String {
-        format!("{}{}", self.letter, "'".repeat(self.prime_depth))
-    }
-}
 impl std::fmt::Display for FusionSide {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.render())
+        write!(f, "{}{}", self.letter, "'".repeat(self.prime_depth))
     }
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -192,10 +175,10 @@ pub struct OrderedFusionInterface {
     pub ordered_input_bonds: Vec<usize>,
 }
 impl OrderedFusionInterface {
-    pub fn shared_input_atoms(&self) -> BTreeSet<usize> {
+    pub(super) fn shared_input_atoms(&self) -> BTreeSet<usize> {
         self.ordered_input_atoms.iter().copied().collect()
     }
-    pub fn shared_input_bonds(&self) -> BTreeSet<usize> {
+    pub(super) fn shared_input_bonds(&self) -> BTreeSet<usize> {
         self.ordered_input_bonds.iter().copied().collect()
     }
 }
@@ -227,22 +210,19 @@ pub struct FusionComponentSpec {
     pub pin_component: bool,
 }
 impl FusionComponentSpec {
-    pub fn locants(&self) -> &[String] {
+    pub(super) fn locants(&self) -> &[String] {
         &self.template.locants
     }
-    pub fn atoms(&self) -> &[super::super::retained_graph_model::RetainedGraphAtomTemplate] {
+    pub(super) fn atoms(&self) -> &[super::super::retained_graph_model::RetainedGraphAtomTemplate] {
         &self.template.atoms
     }
-    pub fn bonds(&self) -> &[super::super::retained_graph_model::RetainedGraphBondTemplate] {
+    pub(super) fn bonds(&self) -> &[super::super::retained_graph_model::RetainedGraphBondTemplate] {
         &self.template.bonds
     }
-    pub fn ring_sizes(&self) -> Vec<usize> {
+    pub(super) fn ring_sizes(&self) -> Vec<usize> {
         self.rings.iter().map(Vec::len).collect()
     }
-    pub fn preferred_fusion_prefix(&self) -> &str {
-        &self.attached_prefix
-    }
-    pub fn fusion_carbon_locants(&self) -> Vec<String> {
+    pub(super) fn fusion_carbon_locants(&self) -> Vec<String> {
         let atoms = self.template.atom_by_locant();
         self.template
             .fusion_atoms
@@ -263,10 +243,10 @@ pub struct FusionComponentMatch {
     pub template_name: String,
 }
 impl FusionComponentMatch {
-    pub fn input_atom_by_locant(&self) -> BTreeMap<String, usize> {
+    pub(super) fn input_atom_by_locant(&self) -> BTreeMap<String, usize> {
         self.local_to_input_atom.iter().cloned().collect()
     }
-    pub fn skeleton_atom_by_locant(&self) -> BTreeMap<String, usize> {
+    pub(super) fn skeleton_atom_by_locant(&self) -> BTreeMap<String, usize> {
         self.local_to_skeleton_atom.iter().cloned().collect()
     }
 }
@@ -276,25 +256,25 @@ pub struct FusionJoin {
     pub interface: OrderedFusionInterface,
 }
 impl FusionJoin {
-    pub fn attached_occurrence(&self) -> usize {
+    pub(super) fn attached_occurrence(&self) -> usize {
         self.interface.attached_occurrence
     }
-    pub fn host_occurrence(&self) -> usize {
+    pub(super) fn host_occurrence(&self) -> usize {
         self.interface.host_occurrence
     }
-    pub fn kind(&self) -> FusionJoinKind {
+    pub(super) fn kind(&self) -> FusionJoinKind {
         self.interface.kind
     }
-    pub fn attached_locants(&self) -> &[ComponentLocant] {
+    pub(super) fn attached_locants(&self) -> &[ComponentLocant] {
         &self.interface.cited_attached_locants
     }
-    pub fn host_sides(&self) -> &[FusionSide] {
+    pub(super) fn host_sides(&self) -> &[FusionSide] {
         &self.interface.host_sides
     }
-    pub fn host_locants(&self) -> &[ComponentLocant] {
+    pub(super) fn host_locants(&self) -> &[ComponentLocant] {
         &self.interface.host_locants
     }
-    pub fn shared_input_atoms(&self) -> BTreeSet<usize> {
+    pub(super) fn shared_input_atoms(&self) -> BTreeSet<usize> {
         self.interface.shared_input_atoms()
     }
 }
@@ -306,7 +286,7 @@ pub struct FusionDescriptor {
     pub kind: FusionJoinKind,
 }
 impl FusionDescriptor {
-    pub fn from_interface(i: &OrderedFusionInterface) -> Self {
+    pub(super) fn from_interface(i: &OrderedFusionInterface) -> Self {
         Self {
             attached_locants: i.cited_attached_locants.clone(),
             parent_sides: i.host_sides.clone(),
@@ -314,7 +294,7 @@ impl FusionDescriptor {
             kind: i.kind,
         }
     }
-    pub fn render(&self) -> String {
+    pub(super) fn render(&self) -> String {
         let a = self
             .attached_locants
             .iter()
@@ -356,10 +336,10 @@ pub struct FusionCitationPlan {
     pub render_order: Vec<usize>,
 }
 impl FusionCitationPlan {
-    pub fn parent_occurrences(&self) -> Vec<usize> {
+    pub(super) fn parent_occurrences(&self) -> Vec<usize> {
         self.roots.iter().map(|r| r.occurrence_id).collect()
     }
-    pub fn from_tree(root: FusionCitationNode, joins: &[FusionJoin]) -> Self {
+    pub(super) fn from_tree(root: FusionCitationNode, joins: &[FusionJoin]) -> Self {
         fn post(n: &FusionCitationNode, out: &mut Vec<usize>) {
             for c in &n.children {
                 post(c, out);
@@ -456,7 +436,7 @@ pub struct FusionNumberingProof {
     pub rejected_numberings: Vec<RejectedNumbering>,
 }
 impl FusionNumberingProof {
-    pub fn string_input_locant_maps(&self) -> Vec<BTreeMap<usize, String>> {
+    pub(in super::super) fn string_input_locant_maps(&self) -> Vec<BTreeMap<usize, String>> {
         self.input_locant_maps
             .iter()
             .map(|m| m.iter().cloned().collect())
@@ -470,7 +450,7 @@ pub struct FusionAuditResult {
     pub errors: Vec<String>,
 }
 impl FusionAuditResult {
-    pub fn confirmed(&self) -> bool {
+    pub(in super::super) fn confirmed(&self) -> bool {
         self.status == AuditStatus::Confirmed
     }
 }

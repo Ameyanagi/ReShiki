@@ -103,7 +103,7 @@ pub fn substituent_locant_string(
         }
     }
     let ambiguous = super::retained_specs::retained_parent_spec(parts.retained_name.as_deref())
-        .is_some_and(|spec| spec.attachment_policy.use_parent_attachment_equivalence)
+        .is_some()
         && retained_parent_attachment_is_ambiguous(parts, locs);
     if locs == ["1"]
         && parts.is_ring

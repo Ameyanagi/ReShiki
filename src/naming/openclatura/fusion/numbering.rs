@@ -11,7 +11,7 @@ use super::super::{
 use super::model::*;
 use super::{
     citation_numbering::numbered_parent_graphs_agree,
-    faces::{BoundedFaceModel, typed_face_model},
+    faces::{BoundedFaceModel, cycle_edge_iter as cycle_edges, typed_face_model},
     layout::preferred_intrinsic_layouts,
 };
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -312,15 +312,6 @@ fn numbering_from_layout(
     numbered.start_face_id = Some(start_face_id);
     numbered.start_atom = Some(start_atom);
     Some(numbered)
-}
-
-fn cycle_edges(cycle: &[usize]) -> impl Iterator<Item = Edge> + '_ {
-    cycle
-        .iter()
-        .copied()
-        .zip(cycle.iter().copied().cycle().skip(1))
-        .take(cycle.len())
-        .map(|(u, v)| normalize_edge(u, v))
 }
 
 fn clockwise_face_order(centers: &BTreeMap<usize, (i64, i64)>) -> Vec<usize> {

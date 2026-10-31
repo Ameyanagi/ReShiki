@@ -5,7 +5,7 @@ use super::{
     perception::PerceivedGroup,
     retained_derivative_hydrogen::prove_retained_oxo_carbon_hydrogen,
     retained_fused_templates::{
-        MatchOptions, is_saturated_site, match_retained_graph_templates_with_options,
+        GRAPH_DATA, MatchOptions, is_saturated_site, match_retained_graph_templates_with_options,
     },
     retained_graph_model::RetainedGraphTemplateMatch,
     retained_name_policy::retained_parent_name_policy,
@@ -178,10 +178,9 @@ fn listed(key: &str, value: &str) -> bool {
 fn eligible(
     mol: &Molecule,
     parent_atoms: &AtomSet,
-    matches: Vec<RetainedGraphTemplateMatch>,
+    mut matches: Vec<RetainedGraphTemplateMatch>,
     principal_key: Option<&str>,
 ) -> Result<Vec<RetainedGraphTemplateMatch>, String> {
-    let mut matches = matches;
     if principal_key == Some("ketone") {
         for m in &mut matches {
             if let Some(proof) =
@@ -233,11 +232,7 @@ pub fn added_hydrogen_is_citable(mol: &Molecule, m: &RetainedGraphTemplateMatch)
 fn indicated_h_retained_name(name: &str) -> bool {
     // The source set combines explicit monocycle names with the declared
     // indicated_hydrogen_name column; no inference from an alias is needed.
-    static DATA: LazyLock<Value> = LazyLock::new(|| {
-        serde_json::from_str(include_str!("data/retained_fused_graph_templates.json"))
-            .unwrap_or(Value::Null)
-    });
-    DATA["parents"].as_array().is_some_and(|rows| {
+    GRAPH_DATA["parents"].as_array().is_some_and(|rows| {
         rows.iter()
             .any(|r| r["indicated_hydrogen_name"].as_str() == Some(name))
     })

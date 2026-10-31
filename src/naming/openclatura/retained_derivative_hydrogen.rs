@@ -5,6 +5,7 @@ use super::{
         exocyclic::is_neutral_external_pi_ligand, model::ParentBondModel,
         numbering::retained_template_parent_bond_model,
     },
+    graph_kernel::normalize_edge as pair,
     locants::retained_locant_sort_key,
     molecule::{AtomSet, Molecule},
     retained_graph_model::RetainedGraphTemplate,
@@ -18,10 +19,6 @@ pub struct RetainedOxoHydrogenProof {
     pub model: ParentBondModel,
     pub added_hydrogen: HydroOperation,
 }
-fn pair(u: usize, v: usize) -> (usize, usize) {
-    (u.min(v), u.max(v))
-}
-
 /// Only reconstruct a retained tautomer when oxo substitution explains every delta.
 pub fn prove_retained_oxo_carbon_hydrogen(
     mol: &Molecule,
@@ -169,9 +166,9 @@ pub fn prove_retained_oxo_carbon_hydrogen(
                 .collect();
             added_locants.sort_by_key(|l| retained_locant_sort_key(l));
             return Ok(Some(RetainedOxoHydrogenProof {
-                indicated_h: indicated.clone(),
+                indicated_h: indicated,
                 oxo_atom_ids: oxo_sites,
-                model: model.clone(),
+                model,
                 added_hydrogen: HydroOperation {
                     key: "added_hydrogen".into(),
                     locants: added_locants.clone(),

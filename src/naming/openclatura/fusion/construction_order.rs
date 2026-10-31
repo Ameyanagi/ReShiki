@@ -2,16 +2,14 @@
 //!
 //! This parser compatibility proof preserves the source's bond, ring and row
 //! enumeration. Exhaustion leaves the numbering ambiguity unresolved.
-use super::super::molecule::AtomSet;
+use super::super::{graph_kernel::Edge, molecule::AtomSet};
 use super::{
     entry_geometry::{absolute_direction, allowed_entry_directions, direction_steps},
-    layout::center_row_orientation_score,
+    faces::cycle_edge_iter,
+    layout::{Point, center_row_orientation_score},
     model::{FaceModel, FusionComponentSpec, FusionNameAst, normalize_edge},
 };
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
-
-type Point = (i64, i64);
-type Edge = (usize, usize);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ConstructionOrder {
@@ -115,14 +113,7 @@ pub fn ordered_hexagonal_construction(
     let expected_edges: BTreeSet<_> = model
         .faces
         .iter()
-        .flat_map(|face| {
-            face.atom_cycle
-                .iter()
-                .copied()
-                .zip(face.atom_cycle.iter().copied().cycle().skip(1))
-                .take(face.atom_cycle.len())
-                .map(|(a, b)| normalize_edge(a, b))
-        })
+        .flat_map(|face| cycle_edge_iter(&face.atom_cycle))
         .collect();
     if atom_order.iter().copied().collect::<AtomSet>() != positions.keys().copied().collect()
         || bond_keys != expected_edges

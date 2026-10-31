@@ -1,15 +1,10 @@
 //! Retained parent attachment spelling and locant policy.
 use super::nomenclature::section;
-#[derive(Clone, Debug, Default)]
-pub struct AttachmentLocantPolicy {
-    pub print_substituent_locant: bool,
-    pub use_parent_attachment_equivalence: bool,
-}
 #[derive(Clone, Debug)]
 pub struct RetainedParentSpec {
     pub substituent_stem: Option<String>,
     pub substituent_terminal: Option<String>,
-    pub attachment_policy: AttachmentLocantPolicy,
+    pub print_substituent_locant: bool,
 }
 pub fn retained_parent_spec(name: Option<&str>) -> Option<RetainedParentSpec> {
     let name = name.filter(|n| !n.is_empty())?;
@@ -27,9 +22,6 @@ pub fn retained_parent_spec(name: Option<&str>) -> Option<RetainedParentSpec> {
     Some(RetainedParentSpec {
         substituent_stem: stem,
         substituent_terminal: terminal,
-        attachment_policy: AttachmentLocantPolicy {
-            print_substituent_locant: needs_locant,
-            use_parent_attachment_equivalence: true,
-        },
+        print_substituent_locant: needs_locant,
     })
 }

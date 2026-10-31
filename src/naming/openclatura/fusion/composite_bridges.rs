@@ -29,14 +29,14 @@ impl CompositeBridgeConstruction {
     }
 }
 #[allow(clippy::expect_used)] // Immutable, checked-in table follows the shared table-loading convention.
-fn data() -> Value {
+static DATA: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../data/fusion_composite_bridges.json"))
         .expect("validated composite bridge data")
-}
+});
 #[allow(clippy::expect_used)] // These shapes and integer values belong to the checked-in table.
 pub fn localized_carbon_bridge_bond_orders() -> &'static BTreeSet<Vec<usize>> {
     static ORDERS: LazyLock<BTreeSet<Vec<usize>>> = LazyLock::new(|| {
-        data()["localized_carbon_bridge_bond_orders"]
+        DATA["localized_carbon_bridge_bond_orders"]
             .as_array()
             .expect("localized bridge rows")
             .iter()
@@ -63,7 +63,7 @@ pub fn composite_bridge_constructions()
 -> &'static BTreeMap<ConstructionKey, CompositeBridgeConstruction> {
     static CONSTRUCTIONS: LazyLock<BTreeMap<ConstructionKey, CompositeBridgeConstruction>> =
         LazyLock::new(|| {
-            composite_bridge_constructions_from_data(&data())
+            composite_bridge_constructions_from_data(&DATA)
                 .expect("validated composite bridge constructions")
         });
     &CONSTRUCTIONS
@@ -96,14 +96,16 @@ pub fn composite_bridge_constructions_from_data(
         let orders = row["carbon_bond_orders"]
             .as_array()
             .ok_or("composite carbon fragment requires single or double path bonds")?;
-        let mut carbon_bond_orders = Vec::new();
-        for order in orders {
-            let value = order
-                .as_u64()
-                .filter(|v| [1, 2].contains(v))
-                .ok_or("composite carbon fragment requires single or double path bonds")?;
-            carbon_bond_orders.push(value as usize);
-        }
+        let carbon_bond_orders = orders
+            .iter()
+            .map(|order| {
+                order
+                    .as_u64()
+                    .filter(|v| [1, 2].contains(v))
+                    .map(|value| value as usize)
+                    .ok_or("composite carbon fragment requires single or double path bonds")
+            })
+            .collect::<Result<_, _>>()?;
         let construction = CompositeBridgeConstruction {
             heteroatom,
             hetero_prefix: text("hetero_prefix")?,

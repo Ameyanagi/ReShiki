@@ -99,12 +99,8 @@ pub fn has_paired_external_pi_consumption(
             if diffs != &[1] || actual_pi[&id] != 0 {
                 return false;
             }
-        } else {
-            let mut sorted = diffs.clone();
-            sorted.sort_unstable();
-            if sorted != [-1, 1] || actual_pi[&id] != 1 {
-                return false;
-            }
+        } else if !matches!(diffs.as_slice(), [-1, 1] | [1, -1]) || actual_pi[&id] != 1 {
+            return false;
         }
     }
     true

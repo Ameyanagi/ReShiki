@@ -1,6 +1,7 @@
 //! OPSIN-compatible relative entry directions on an independently audited layout.
 use super::super::molecule::AtomSet;
 use super::{
+    faces::cycle_edge_iter,
     layout::{
         Budget, Point, opsin_occupied_row_orientation, preferred_intrinsic_layouts_with_budget,
         segments_intersect,
@@ -22,30 +23,24 @@ struct DirectionRow {
 #[derive(Deserialize)]
 struct DirectionData {
     directions: BTreeMap<usize, Vec<DirectionRow>>,
-    steps: BTreeMap<i64, (i64, i64)>,
-}
-struct DirectionTables {
-    directions: BTreeMap<usize, Vec<DirectionRow>>,
     steps: BTreeMap<i64, Point>,
 }
 #[allow(
     clippy::expect_used,
     reason = "the bundled immutable JSON table is checked by geometry tests"
 )]
-fn tables() -> &'static DirectionTables {
-    static TABLES: OnceLock<DirectionTables> = OnceLock::new();
+fn tables() -> &'static DirectionData {
+    static TABLES: OnceLock<DirectionData> = OnceLock::new();
     TABLES.get_or_init(|| {
         let d: DirectionData =
             serde_json::from_str(include_str!("../data/fusion_entry_geometry.json"))
                 .expect("entry direction tables");
-        let directions = d.directions;
-        let steps = d.steps;
-        assert_eq!(steps.len(), 8);
-        for (&n, rows) in &directions {
+        assert_eq!(d.steps.len(), 8);
+        for (&n, rows) in &d.directions {
             assert!(n >= 3 && !rows.is_empty());
             for row in rows {
                 assert_eq!(row.relative.len(), n - 1);
-                assert!(row.relative.iter().all(|r| steps.contains_key(r)));
+                assert!(row.relative.iter().all(|r| d.steps.contains_key(r)));
                 assert!(
                     row.forbidden_ports
                         .iter()
@@ -54,7 +49,7 @@ fn tables() -> &'static DirectionTables {
                 )
             }
         }
-        DirectionTables { directions, steps }
+        d
     })
 }
 pub fn allowed_entry_directions(size: usize, occupied: &AtomSet) -> Vec<Vec<i64>> {
@@ -225,16 +220,14 @@ impl EntrySearch<'_> {
         Ok(())
     }
 }
-#[derive(Clone)]
-struct EntryGeometryCacheEntry {
+struct EntryGeometryCacheKey {
     model: FaceModel,
     budget: usize,
     terminal_cycle: Option<Vec<usize>>,
     allow_distorted: bool,
-    result: Option<(FusedLayout, Vec<EntryDirectionWitness>)>,
 }
 thread_local! {
-    static ENTRY_GEOMETRY_CACHE: std::cell::RefCell<VecDeque<EntryGeometryCacheEntry>> = const { std::cell::RefCell::new(VecDeque::new()) };
+    static ENTRY_GEOMETRY_CACHE: super::ThreadLocalCache<EntryGeometryCacheKey, Option<(FusedLayout, Vec<EntryDirectionWitness>)>> = const { super::ThreadLocalCache::new() };
 }
 pub fn entry_direction_geometry_with_options(
     model: &FaceModel,
@@ -243,34 +236,27 @@ pub fn entry_direction_geometry_with_options(
     allow_distorted: bool,
 ) -> Result<Option<(FusedLayout, Vec<EntryDirectionWitness>)>, String> {
     if let Some(result) = ENTRY_GEOMETRY_CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        let index = cache.iter().position(|entry| {
+        cache.get(|entry| {
             entry.model == *model
                 && entry.budget == search_budget
                 && entry.terminal_cycle.as_deref() == terminal_cycle
                 && entry.allow_distorted == allow_distorted
-        })?;
-        let entry = cache.remove(index)?;
-        let result = entry.result.clone();
-        cache.push_back(entry);
-        Some(result)
+        })
     }) {
         return Ok(result);
     }
     let result =
         entry_direction_geometry_uncached(model, search_budget, terminal_cycle, allow_distorted)?;
     ENTRY_GEOMETRY_CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-        if cache.len() == 128 {
-            cache.pop_front();
-        }
-        cache.push_back(EntryGeometryCacheEntry {
-            model: model.clone(),
-            budget: search_budget,
-            terminal_cycle: terminal_cycle.map(<[usize]>::to_vec),
-            allow_distorted,
-            result: result.clone(),
-        });
+        cache.insert(
+            EntryGeometryCacheKey {
+                model: model.clone(),
+                budget: search_budget,
+                terminal_cycle: terminal_cycle.map(<[usize]>::to_vec),
+                allow_distorted,
+            },
+            result.clone(),
+        );
     });
     Ok(result)
 }
@@ -339,17 +325,7 @@ fn entry_direction_geometry_uncached(
     }
     let edges = cycles
         .iter()
-        .map(|(&f, c)| {
-            (
-                f,
-                (0..c.len())
-                    .map(|i| {
-                        let (a, b) = (c[i], c[(i + 1) % c.len()]);
-                        (a.min(b), a.max(b))
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        })
+        .map(|(&f, c)| (f, cycle_edge_iter(c).collect::<Vec<_>>()))
         .collect::<BTreeMap<_, _>>();
     let mut neighbors: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
     let mut ports = BTreeMap::new();
@@ -442,8 +418,7 @@ fn entry_direction_geometry_uncached(
                 search.visit(vec![(root, 0, entry)], AtomSet::new(), BTreeMap::new())?
             }
         }
-        let direction_tables = std::mem::take(&mut search.tables);
-        drop(search);
+        let direction_tables = search.tables;
         let Some(mut outer) = clockwise_boundary(&model.outer_boundary, &positions) else {
             return Ok(None);
         };
@@ -570,7 +545,7 @@ fn entry_direction_geometry_uncached(
                     } else {
                         outer.iter().rev().copied().collect()
                     };
-                    let eligible = cycles
+                    let Some(top) = cycles
                         .keys()
                         .filter(|f| {
                             cycles[f]
@@ -578,9 +553,6 @@ fn entry_direction_geometry_uncached(
                                 .any(|a| boundary.contains(a) && !fusion.contains(a))
                         })
                         .copied()
-                        .collect::<Vec<_>>();
-                    let Some(top) = eligible
-                        .into_iter()
                         .min_by_key(|f| (-oriented[f].1, -oriented[f].0))
                     else {
                         continue;
@@ -604,11 +576,8 @@ fn entry_direction_geometry_uncached(
                         reason = "starts contains only atoms enumerated from this boundary"
                     )]
                     let offset = boundary.iter().position(|a| *a == starts[0]).unwrap();
-                    let perimeter = boundary[offset..]
-                        .iter()
-                        .chain(&boundary[..offset])
-                        .copied()
-                        .collect::<Vec<_>>();
+                    let mut perimeter = boundary;
+                    perimeter.rotate_left(offset);
                     if best_score.as_ref().is_none_or(|b| &score < b) {
                         best_score = Some(score.clone());
                         candidates.clear()
