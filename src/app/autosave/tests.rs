@@ -253,8 +253,9 @@ fn a_tab_closed_during_its_draft_write_removes_the_draft_afterwards() {
     app.request_autosave();
     let write = app.prepare_autosave().unwrap();
     let _ = app.update(Message::Tabs(super::super::tabs::Action::Close(None)));
+    // The only task is the next tab's inspector scroll reset.
     assert!(
-        app.update(Message::Discard).units() == 0,
+        app.update(Message::Discard).units() == 1,
         "The removal waits for the write"
     );
     assert_ne!(app.tab.id, closed);
