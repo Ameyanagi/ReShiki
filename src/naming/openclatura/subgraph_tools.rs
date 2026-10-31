@@ -82,24 +82,49 @@ pub fn add_parent_features(
     parts: &mut AssemblyParts,
     numbered_path: &[usize],
     locants: &BTreeMap<usize, String>,
-) {
+) -> Result<(), String> {
     use super::assembly_parts::{SubstituentItem, UnsaturationItem};
     use super::nomenclature::section;
     use super::rules::elements;
     if parts.retained_name.is_some() {
-        return;
+        for &idx in numbered_path {
+            let atom = &mol.atoms[&idx];
+            if atom.is_carbon() || atom.charge != 0 || atom.total_h_count == 0 {
+                continue;
+            }
+            let bonding = atom.total_h_count
+                + mol
+                    .get_neighbors(idx)
+                    .iter()
+                    .filter_map(|&n| {
+                        let bond = mol.get_bond(idx, n)?;
+                        (!(bond.order == 2 && mol.atoms[&n].symbol == "O")).then_some(bond.order)
+                    })
+                    .sum::<usize>();
+            // Upstream divergence: retained heterocycles cannot silently absorb nonstandard parent hydrogens.
+            if elements::get(&atom.symbol).is_none_or(|e| bonding != e.standard_valence) {
+                return Err(format!(
+                    "openclatura: retained parent hydrogen state for {} is not supported",
+                    atom.symbol
+                ));
+            }
+        }
+        return Ok(());
     }
     for &idx in numbered_path {
         let atom = &mol.atoms[&idx];
         if atom.is_carbon() {
             continue;
         }
-        let Some(element) = elements::get(&atom.symbol) else {
-            continue;
-        };
-        let Some(stem) = element.hw_stem.as_ref() else {
-            continue;
-        };
+        // Upstream divergence: every noncarbon parent atom needs an explicit replacement stem.
+        let element = elements::get(&atom.symbol)
+            .ok_or_else(|| format!("openclatura: unsupported parent element {}", atom.symbol))?;
+        let stem = element.hw_stem.as_ref().ok_or_else(|| {
+            format!(
+                "openclatura: parent replacement for {} is not supported",
+                atom.symbol
+            )
+        })?;
         let valence: usize = mol
             .get_neighbors(idx)
             .iter()
@@ -117,8 +142,10 @@ pub fn add_parent_features(
             })
             .and_then(|row| row["prefix"].as_str());
         let mut loc = locants[&idx].clone();
-        if atom.charge == 0 && valence > element.standard_valence {
-            loc = format!("{loc}lambda^{valence}");
+        // Upstream divergence: replacement lambda citations include every attached hydrogen in the bonding number.
+        let bonding = valence + atom.total_h_count;
+        if atom.charge == 0 && bonding > element.standard_valence {
+            loc = format!("{loc}lambda^{bonding}");
         }
         let mut item = SubstituentItem::new(charged.unwrap_or(stem), vec![loc]);
         item.atom_ids.insert(idx);
@@ -178,6 +205,7 @@ pub fn add_parent_features(
             }
         }
     }
+    Ok(())
 }
 
 /// Collect ordinary retained monocycle hydrogen citations and hydro operations.

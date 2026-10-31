@@ -28,6 +28,11 @@ fn chalcogen_term(element: &str, field: &str) -> Result<&'static str, String> {
 }
 
 fn element_ligand(branch: &str, element: &str) -> Result<String, String> {
+    // Upstream divergence: amidooxy contractions change the attachment of N-acyl aminooxy ligands.
+    let plain = strip_outer_parentheses(branch);
+    if plain.ends_with("amido") && !super::formatting::is_complex_prefix(&plain) {
+        return Err("openclatura: amido chalcogen-ligand attachment is not supported".into());
+    }
     Ok(super::formatting::format_element_substituent(
         "",
         branch,
@@ -394,6 +399,15 @@ pub fn prefix_from_group(
         });
     }
     if families.contains("peroxy_acid") {
+        // Upstream divergence: hydroperoxycarbonyl duplicates a center already in the parent.
+        if group.descriptor.as_ref().is_none_or(|descriptor| {
+            descriptor
+                .centers
+                .iter()
+                .any(|center| context.parent_path.contains(center))
+        }) {
+            return Err("openclatura: peroxy-acid prefix overlaps its parent carbon".into());
+        }
         return Ok("hydroperoxycarbonyl".into());
     }
     if rule.has_capability("acyl_leaving_group") {

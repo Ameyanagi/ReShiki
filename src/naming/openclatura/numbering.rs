@@ -459,7 +459,7 @@ mod tests {
     #[test]
     fn principal_group_numbering_precedes_unsaturation() {
         let mol = read_smiles("C=CCCCO").unwrap();
-        let paths = find_all_carbon_paths(&mol, &AtomSet::new());
+        let paths = find_all_carbon_paths(&mol, &AtomSet::new()).unwrap();
         let numbered = number_parent(
             &mol,
             &paths,

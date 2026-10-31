@@ -44,12 +44,44 @@ pub fn apply_anionic_parent_names(
     path: &[usize],
     locants: &BTreeMap<usize, String>,
     retained: Option<&str>,
+    represented: &AtomSet,
 ) -> Result<String, String> {
     let sites = sites(mol, path, locants)?;
+    // Upstream divergence: a parent charge must have an exact supported suffix or replacement operation.
+    if let Some(site) = sites.iter().find(|site| {
+        site.charge != -1
+            && (site.charge != 1
+                || !matches!(
+                    site.symbol.as_str(),
+                    "N" | "O" | "S" | "Se" | "Te" | "P" | "As" | "Sb" | "Bi"
+                ))
+    }) {
+        return Err(format!(
+            "openclatura: parent charge {} on {} atom {} is not supported",
+            site.charge, site.symbol, site.atom
+        ));
+    }
     let mut updated = ring_nitrogen_zwitterion_stack(name, mol, path, &sites);
+    let mut covered = represented.clone();
+    if updated != name {
+        covered.extend(
+            sites
+                .iter()
+                .filter(|s| s.symbol == "N" && s.charge == -1)
+                .map(|s| s.atom),
+        );
+    }
     // The wrapper selects negative sites only, retaining numbered-path order.
     for site in sites.iter().filter(|site| site.charge < 0) {
-        updated = apply_parent_anion_rule(&updated, site, retained);
+        let next = apply_parent_anion_rule(&updated, site, retained);
+        // Upstream divergence: atom membership alone cannot credit an anion whose name never changes.
+        if next == updated && !covered.contains(&site.atom) {
+            return Err(format!(
+                "openclatura: anionic {} parent atom {} has no supported charge citation",
+                site.symbol, site.atom
+            ));
+        }
+        updated = next;
     }
     Ok(updated)
 }
@@ -743,7 +775,6 @@ mod tests {
                 "5-(ammoniomethyl)imidazolidine-1-ide-2,4-dione",
             ),
             ("1H-pyrrole", Some("pyrrole"), "1", "pyrrol-1-ide"),
-            ("butane", None, "2", "butane"),
         ] {
             let actual = apply_anionic_parent_names(
                 name,
@@ -751,10 +782,22 @@ mod tests {
                 &[0],
                 &BTreeMap::from([(0, locant.into())]),
                 retained,
+                &AtomSet::new(),
             )
             .unwrap();
             assert_eq!(actual, expected, "{name}");
         }
+        assert!(
+            apply_anionic_parent_names(
+                "butane",
+                &mol,
+                &[0],
+                &BTreeMap::from([(0, "2".into())]),
+                None,
+                &AtomSet::new()
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -844,21 +887,22 @@ mod tests {
                 &mol,
                 &path,
                 &locants,
-                None
+                None,
+                &AtomSet::new(),
             )
             .unwrap(),
             "1,2,4,5-tetrazacyclohexa-1,3,5-trien-1,4-ide-2,5-ium"
         );
-        assert_eq!(
+        assert!(
             apply_anionic_parent_names(
                 "1,2,4,5-tetrazacyclohexa-1,3,5-trien-2,5-ium-3-ol",
                 &mol,
                 &path,
                 &locants,
-                None
+                None,
+                &AtomSet::new(),
             )
-            .unwrap(),
-            "1,2,4,5-tetrazacyclohexa-1,3,5-trien-2,5-ium-3-ol"
+            .is_err()
         );
     }
 }

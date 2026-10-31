@@ -23,6 +23,7 @@ mod functional_prefixes;
 mod graph_io;
 mod group_atom_roles;
 mod heteroatom_subgraphs;
+mod identity_validation;
 mod ionic_naming;
 mod locant_elision;
 mod locants;
@@ -47,6 +48,10 @@ pub fn name_smiles(smiles: &str) -> Result<String, String> {
     if mol.atoms.values().any(|atom| atom.isotope.is_some()) {
         return Err("openclatura: isotopic naming not ported".into());
     }
+    // Match upstream require_validated_chalcogens before any shortcut can consume Po.
+    if mol.atoms.values().any(|atom| atom.symbol == "Po") {
+        return Err("openclatura: polonium nomenclature is not validated".into());
+    }
     let components = graph_io::get_connected_components(&mol);
     if components.len() != 1 {
         return Err("openclatura: expected one connected component".into());
@@ -58,6 +63,21 @@ pub fn name_smiles(smiles: &str) -> Result<String, String> {
 mod tests {
     use super::name_smiles;
     use std::io::Write;
+
+    #[test]
+    fn declines_unrendered_group_and_attachment_features() {
+        for smiles in [
+            "CC(=[Po])[OH]",
+            "C/N=N/c1cccnc1",
+            "C/N=N\\c1cccnc1",
+            "CC(=O)NOC(=O)Cc1nc(C(=O)O)cs1",
+            "O=C(O)[C@H](O)[C@@H](O)C(=O)OO",
+            "CN(C(=O)[O-])C1(B(O)O)CCC1",
+            "COC(=O)NOOC1CCCCC1",
+        ] {
+            assert!(name_smiles(smiles).is_err(), "{smiles}");
+        }
+    }
 
     #[test]
     #[ignore = "development parity against the external openclatura oracle TSV"]

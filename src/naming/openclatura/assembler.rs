@@ -270,7 +270,7 @@ pub fn assemble_name_raw(parts: &mut AssemblyParts) -> Result<String, String> {
     promote_acyl_substituent_name(parts);
     promote_retained_substituent_name(parts);
     promote_benzene_retained_name(parts);
-    promote_retained_functional_parent(parts);
+    promote_retained_functional_parent(parts)?;
     let prefix = format_substituent_prefixes(parts);
     let a_prefix = format_replacement_prefixes(parts);
     let core = if let Some(name) = &parts.retained_substituent_name {
@@ -320,6 +320,15 @@ mod tests {
         nomenclature::{rule_from_value, section},
     };
     use super::*;
+
+    #[test]
+    fn selected_principal_citation_requires_a_suffix_renderer() {
+        let mut parts = AssemblyParts::new(2);
+        let mut group = PrincipalGroupItem::new("unrendered", vec!["1".into()]);
+        group.resolved_rule = Some(rule_from_value("unrendered", &serde_json::json!({})));
+        parts.principal_group = Some(group);
+        assert!(assemble_name(&mut parts).is_err());
+    }
 
     #[test]
     fn element_locanted_dynamic_suffix_keeps_separator_and_parent_vowel() {

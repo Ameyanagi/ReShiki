@@ -136,37 +136,43 @@ pub fn classify_chalcogen_ligand(m: &Molecule, center: usize, a: usize) -> Optio
         return None;
     }
     let b = m.get_bond(center, a)?;
-    let (role, attachment) = if b.order == 2 && m.degree(a) == 1 {
-        ("double_bonded", None)
-    } else if b.order != 1 {
-        return None;
-    } else {
-        let side = m
-            .get_neighbors(a)
-            .iter()
-            .copied()
-            .filter(|n| *n != center)
-            .collect::<Vec<_>>();
-        if atom.charge < 0 && side.is_empty() {
-            ("anionic", None)
-        } else if atom.total_h_count > 0 && side.is_empty() && atom.radical_electrons == 0 {
-            ("hydrogen_bearing", None)
-        } else if side.len() == 1 {
-            let n = side[0];
-            (
-                if is_chalcogen(symbol(m, n)) {
-                    "chalcogen_link"
-                } else if carbon(m, n) {
-                    "carbon_link"
-                } else {
-                    "heteroatom_link"
-                },
-                Some(n),
-            )
-        } else {
+    // Upstream divergence: ordinary chalcogen roles require exact charge and hydrogen states.
+    let (role, attachment) =
+        if b.order == 2 && m.degree(a) == 1 && atom.charge == 0 && atom.total_h_count == 0 {
+            ("double_bonded", None)
+        } else if b.order != 1 {
             return None;
-        }
-    };
+        } else {
+            let side = m
+                .get_neighbors(a)
+                .iter()
+                .copied()
+                .filter(|n| *n != center)
+                .collect::<Vec<_>>();
+            if atom.charge == -1 && atom.total_h_count == 0 && side.is_empty() {
+                ("anionic", None)
+            } else if atom.charge == 0
+                && atom.total_h_count == 1
+                && side.is_empty()
+                && atom.radical_electrons == 0
+            {
+                ("hydrogen_bearing", None)
+            } else if atom.charge == 0 && atom.total_h_count == 0 && side.len() == 1 {
+                let n = side[0];
+                (
+                    if is_chalcogen(symbol(m, n)) {
+                        "chalcogen_link"
+                    } else if carbon(m, n) {
+                        "carbon_link"
+                    } else {
+                        "heteroatom_link"
+                    },
+                    Some(n),
+                )
+            } else {
+                return None;
+            }
+        };
     Some(ChalcogenLigand {
         atom: a,
         element: atom.symbol.clone(),
@@ -2753,7 +2759,13 @@ pub fn perceive_groups(m: &Molecule) -> Vec<PerceivedGroup> {
             "I" => "iodo",
             _ => continue,
         };
-        if !consumed.contains(&h) && !cyclic.contains(&h) && m.degree(h) == 1 {
+        // Upstream divergence: neutral halogen prefixes do not credit formal charges or attached hydrogens.
+        if !consumed.contains(&h)
+            && !cyclic.contains(&h)
+            && m.degree(h) == 1
+            && a.charge == 0
+            && a.total_h_count == 0
+        {
             groups.push(group(key, false, m.get_neighbors(h)[0], [h]));
             consumed.insert(h);
         }

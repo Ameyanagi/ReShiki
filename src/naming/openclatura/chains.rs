@@ -45,7 +45,10 @@ pub fn get_cyclic_atoms(mol: &Molecule, exclude_atoms: &AtomSet) -> AtomSet {
     cyclic
 }
 
-pub fn find_all_carbon_paths(mol: &Molecule, exclude_atoms: &AtomSet) -> Vec<Vec<usize>> {
+pub fn find_all_carbon_paths(
+    mol: &Molecule,
+    exclude_atoms: &AtomSet,
+) -> Result<Vec<Vec<usize>>, String> {
     let cyclic = get_cyclic_atoms(mol, exclude_atoms);
     let valid: AtomSet = mol
         .atoms
@@ -71,10 +74,12 @@ pub fn find_all_carbon_paths(mol: &Molecule, exclude_atoms: &AtomSet) -> Vec<Vec
     } else {
         endpoints
     };
-    let mut all_paths = Vec::new();
+    let mut unique = Vec::new();
+    let mut seen = BTreeSet::new();
     for start in starts {
         let mut stack = vec![(start, vec![start], AtomSet::from([start]))];
         while let Some((current, path, visited)) = stack.pop() {
+            mol.spend_naming_work(path.len())?;
             let neighbors: Vec<usize> = mol
                 .get_neighbors(current)
                 .iter()
@@ -82,7 +87,14 @@ pub fn find_all_carbon_paths(mol: &Molecule, exclude_atoms: &AtomSet) -> Vec<Vec
                 .copied()
                 .collect();
             if neighbors.is_empty() {
-                all_paths.push(path);
+                // Removing cyclic atoms leaves a forest: maximal paths differ only by reversal.
+                let mut key = path.clone();
+                if key.first() > key.last() {
+                    key.reverse();
+                }
+                if seen.insert(key) {
+                    unique.push(path);
+                }
                 continue;
             }
             for neighbor in neighbors.into_iter().rev() {
@@ -94,16 +106,7 @@ pub fn find_all_carbon_paths(mol: &Molecule, exclude_atoms: &AtomSet) -> Vec<Vec
             }
         }
     }
-    let mut unique = Vec::new();
-    let mut seen: Vec<AtomSet> = Vec::new();
-    for path in all_paths {
-        let atoms: AtomSet = path.iter().copied().collect();
-        if !seen.iter().any(|s| atoms.is_subset(s)) {
-            seen.push(atoms);
-            unique.push(path);
-        }
-    }
-    unique
+    Ok(unique)
 }
 
 /// Stage 1 admits exactly one monocycle; fused, bridged, spiro and separate
@@ -252,7 +255,11 @@ mod tests {
     #[test]
     fn carbon_paths_keep_only_maximal_leaf_to_leaf_walks() {
         let mol = read_smiles("CCC(C)CC").unwrap();
-        let paths = find_all_carbon_paths(&mol, &AtomSet::new());
+        let paths = find_all_carbon_paths(&mol, &AtomSet::new()).unwrap();
+        assert_eq!(
+            paths,
+            vec![vec![0, 1, 2, 3], vec![0, 1, 2, 4, 5], vec![3, 2, 4, 5]]
+        );
         assert_eq!(
             paths.iter().map(Vec::len).collect::<Vec<_>>(),
             vec![4, 5, 4]
@@ -274,6 +281,7 @@ mod tests {
         assert_eq!(find_ring_systems(&mol, &excluded)[0].paths[0].len(), 6);
         assert_eq!(
             find_all_carbon_paths(&mol, &excluded)
+                .unwrap()
                 .iter()
                 .map(Vec::len)
                 .collect::<Vec<_>>(),
@@ -295,5 +303,27 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    #[test]
+    fn public_naming_bounds_exhaustive_branched_chain_search() {
+        use super::super::name_smiles;
+        use std::time::{Duration, Instant};
+
+        let mut tree = "C".to_owned();
+        for depth in 1..=8 {
+            tree = format!("C({tree}){tree}");
+            if depth == 3 {
+                assert!(name_smiles(&tree).is_ok(), "supported 15-carbon tree");
+            }
+        }
+        let started = Instant::now();
+        assert_eq!(
+            name_smiles(&tree),
+            Err("openclatura: naming complexity limit exceeded".into())
+        );
+        assert!(started.elapsed() < Duration::from_secs(10));
+        assert!(name_smiles(&"C".repeat(100)).is_ok());
+        assert_eq!(name_smiles("CCC(C)CC"), Ok("3-methylpentane".into()));
     }
 }

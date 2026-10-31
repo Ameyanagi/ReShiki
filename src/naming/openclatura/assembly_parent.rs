@@ -179,12 +179,12 @@ pub fn promote_benzene_retained_name(parts: &mut AssemblyParts) {
         }
     }
 }
-pub fn promote_retained_functional_parent(parts: &mut AssemblyParts) {
+pub fn promote_retained_functional_parent(parts: &mut AssemblyParts) -> Result<(), String> {
     let Some(group) = parts.principal_group.as_ref() else {
-        return;
+        return Ok(());
     };
     if parts.is_substituent || parts.retained_absorbs_principal_group {
-        return;
+        return Ok(());
     }
     let mut retained = if group.locants == ["1"] {
         functional_ring_parent(parts.retained_name.as_deref().unwrap_or(""), &group.key)
@@ -198,7 +198,7 @@ pub fn promote_retained_functional_parent(parts: &mut AssemblyParts) {
             || !parts.a_prefixes.is_empty()
             || parts.parent_charges.iter().any(|c| c.charge < 0)
         {
-            return;
+            return Ok(());
         }
         let mut locs = group.locants.clone();
         locs.sort_by_key(|s| s.parse::<usize>().unwrap_or(usize::MAX));
@@ -208,9 +208,24 @@ pub fn promote_retained_functional_parent(parts: &mut AssemblyParts) {
             vec!["1".into(), parts.parent_length.to_string()]
         };
         if locs != expected {
-            return;
+            return Ok(());
         }
         if let Some((name, index)) = absorbed_chain_branch(parts, &group.key, locs.len()) {
+            // Upstream divergence: unbracketed carbamate N substituents can be parsed as O substituents.
+            if let Some(prefix) = name.strip_suffix("carbamate") {
+                let grouped = super::assembly_utils::is_fully_enclosed(prefix)
+                    || prefix
+                        .strip_prefix("bis")
+                        .is_some_and(super::assembly_utils::is_fully_enclosed);
+                if !prefix.is_empty()
+                    && !grouped
+                    && (group.key == "carboxylate" || prefix.ends_with("peroxy"))
+                {
+                    return Err(
+                        "openclatura: carbamate contraction needs explicit N attachment".into(),
+                    );
+                }
+            }
             retained = Some(name);
             absorbed = Some(index);
         } else {
@@ -228,7 +243,7 @@ pub fn promote_retained_functional_parent(parts: &mut AssemblyParts) {
                 ]
                 .contains(&name)
             {
-                return;
+                return Ok(());
             }
             if [
                 "formaldehyde hydrazone",
@@ -243,11 +258,13 @@ pub fn promote_retained_functional_parent(parts: &mut AssemblyParts) {
                     .flat_map(|s| &s.locants)
                     .any(|s| s.chars().all(|c| c.is_ascii_digit()))
             {
-                return;
+                return Ok(());
             }
         }
     }
-    let Some(mut name) = retained else { return };
+    let Some(mut name) = retained else {
+        return Ok(());
+    };
     if let Some(mode) = &parts.principal_citation_mode
         && let Some(citation) = RULES
             .retained
@@ -268,6 +285,7 @@ pub fn promote_retained_functional_parent(parts: &mut AssemblyParts) {
     if let Some(index) = absorbed {
         parts.substituents.remove(index);
     }
+    Ok(())
 }
 pub fn substituent_attachment_kind(parts: &AssemblyParts) -> &'static str {
     if parts.is_triple_attach {
@@ -686,6 +704,10 @@ pub fn format_principal_suffix(
     group.suffix = group
         .suffix_for_citation(parts.principal_citation_mode.as_deref())
         .map(str::to_owned);
+    // Upstream divergence: a selected group with no citation renderer disappears.
+    if group.suffix.as_ref().is_none_or(String::is_empty) {
+        return Err(format!("openclatura: no suffix renderer for {}", item.key));
+    }
     let mut locs = item.locants.clone();
     locs.sort_by_key(|l| parse_locant(l));
     let mut omit = parts.parent_length == 1;

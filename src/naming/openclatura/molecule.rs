@@ -1,7 +1,34 @@
 //! Plain graph model and helpers ported from openclatura's `molecule.py`.
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::{cell::Cell, rc::Rc};
 
 pub type AtomSet = BTreeSet<usize>;
+
+const NAMING_LIMIT_ERROR: &str = "openclatura: naming complexity limit exceeded";
+
+// Upstream divergence: one shared request budget bounds recursive naming and exhaustive path search.
+#[derive(Debug)]
+struct NamingBudget {
+    remaining: Cell<usize>,
+    depth: Cell<usize>,
+}
+
+impl Default for NamingBudget {
+    fn default() -> Self {
+        Self {
+            remaining: Cell::new(500_000),
+            depth: Cell::new(0),
+        }
+    }
+}
+
+pub(super) struct NamingDepth<'a>(&'a NamingBudget);
+
+impl Drop for NamingDepth<'_> {
+    fn drop(&mut self) {
+        self.0.depth.set(self.0.depth.get() - 1);
+    }
+}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Atom {
@@ -68,6 +95,7 @@ pub struct Molecule {
     pub accurate_cip: BTreeMap<usize, String>,
     pub legacy_cip: BTreeMap<usize, String>,
     pub substituted_symbols: AtomSet,
+    naming_budget: Rc<NamingBudget>,
 }
 
 fn pair(u: usize, v: usize) -> (usize, usize) {
@@ -77,6 +105,27 @@ fn pair(u: usize, v: usize) -> (usize, usize) {
 impl Molecule {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub(super) fn spend_naming_work(&self, amount: usize) -> Result<(), String> {
+        let remaining = self.naming_budget.remaining.get().saturating_sub(amount);
+        self.naming_budget.remaining.set(remaining);
+        if remaining == 0 {
+            return Err(NAMING_LIMIT_ERROR.into());
+        }
+        Ok(())
+    }
+
+    pub(super) fn enter_naming(&self) -> Result<NamingDepth<'_>, String> {
+        if self.naming_budget.depth.get() >= 16 {
+            self.naming_budget.remaining.set(0);
+            return Err(NAMING_LIMIT_ERROR.into());
+        }
+        self.spend_naming_work(self.atoms.len())?;
+        self.naming_budget
+            .depth
+            .set(self.naming_budget.depth.get() + 1);
+        Ok(NamingDepth(&self.naming_budget))
     }
 
     pub fn add_atom(&mut self, atom: Atom) -> Result<(), String> {
@@ -154,6 +203,7 @@ impl Molecule {
         symbols: &BTreeMap<usize, String>,
     ) -> Self {
         let mut fragment = Self::new();
+        fragment.naming_budget = Rc::clone(&self.naming_budget);
         for idx in atom_ids {
             if let Some(original) = self.atoms.get(idx) {
                 let mut atom = original.clone();
@@ -166,21 +216,21 @@ impl Molecule {
                 // Source subgraphs intentionally reset radicals; ordinary input
                 // rejects radicals before graph construction.
                 atom.radical_electrons = 0;
-                fragment.adjacency.insert(*idx, Vec::new());
+                fragment.adjacency.insert(
+                    *idx,
+                    self.get_neighbors(*idx)
+                        .iter()
+                        .copied()
+                        .filter(|n| atom_ids.contains(n))
+                        .collect(),
+                );
                 fragment.atoms.insert(*idx, atom);
             }
         }
-        for &idx in atom_ids {
-            for &neighbor in self.get_neighbors(idx) {
-                if idx < neighbor
-                    && atom_ids.contains(&neighbor)
-                    && let Some(bond) = self.get_bond(idx, neighbor)
-                {
-                    fragment.adjacency.entry(bond.u).or_default().push(bond.v);
-                    fragment.adjacency.entry(bond.v).or_default().push(bond.u);
-                    fragment.bond_lookup.insert(pair(bond.u, bond.v), bond.idx);
-                    fragment.bonds.insert(bond.idx, bond.clone());
-                }
+        for bond in self.bonds.values() {
+            if atom_ids.contains(&bond.u) && atom_ids.contains(&bond.v) {
+                fragment.bond_lookup.insert(pair(bond.u, bond.v), bond.idx);
+                fragment.bonds.insert(bond.idx, bond.clone());
             }
         }
         fragment.accurate_cip = self
@@ -262,6 +312,7 @@ mod tests {
         mol.legacy_cip.insert(2, "S".into());
         let ids = AtomSet::from([2, 5, 9]);
         let fragment = mol.subgraph(&ids);
+        assert_eq!(fragment.get_neighbors(5), &[9, 2]);
         assert_eq!(
             fragment.bonds.keys().copied().collect::<Vec<_>>(),
             vec![1, 4]

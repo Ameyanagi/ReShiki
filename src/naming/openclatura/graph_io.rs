@@ -138,11 +138,23 @@ pub fn read_smiles(text: &str) -> Result<Molecule, String> {
         })?;
     }
     for (idx, bond) in legacy.graph.bonds.iter().enumerate() {
-        let stereo = match legacy.metadata.bonds.get(idx).map(|b| b.stereo) {
+        let legacy_stereo = match legacy.metadata.bonds.get(idx).map(|b| b.stereo) {
             Some(2) => Some("Z".into()),
             Some(3) => Some("E".into()),
             _ => None,
         };
+        // Upstream divergence: modern bond CIP priorities preserve E/Z identity when legacy ranking disagrees.
+        let modern_stereo = accurate
+            .as_ref()
+            .and_then(|state| state.properties.bond_codes.get(idx))
+            .and_then(|code| code.as_ref());
+        // Upstream divergence: pseudoasymmetric e/z bonds must not silently become ordinary E/Z.
+        if modern_stereo.is_some_and(|code| !matches!(code.as_str(), "E" | "Z")) {
+            return Err(
+                "openclatura: pseudoasymmetric bond stereochemistry is not supported".into(),
+            );
+        }
+        let stereo = modern_stereo.cloned().or(legacy_stereo);
         let in_small_ring = legacy.rings.atoms.iter().any(|ring| {
             (3..=7).contains(&ring.len())
                 && ring
@@ -159,6 +171,7 @@ pub fn read_smiles(text: &str) -> Result<Molecule, String> {
             in_small_ring,
         })?;
     }
+    super::identity_validation::validate_input(&mol)?;
     Ok(mol)
 }
 

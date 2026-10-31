@@ -188,7 +188,7 @@ mod tests {
         let excluded = AtomSet::new();
         let parent = select_principal_parent(
             &mol,
-            &find_all_carbon_paths(&mol, &excluded),
+            &find_all_carbon_paths(&mol, &excluded).unwrap(),
             &find_ring_systems(&mol, &excluded),
             &[],
         )
@@ -202,7 +202,7 @@ mod tests {
         let excluded = AtomSet::new();
         let parent = select_principal_parent(
             &mol,
-            &find_all_carbon_paths(&mol, &excluded),
+            &find_all_carbon_paths(&mol, &excluded).unwrap(),
             &find_ring_systems(&mol, &excluded),
             &[1],
         )

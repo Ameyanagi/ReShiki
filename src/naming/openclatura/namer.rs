@@ -169,7 +169,7 @@ fn select_subgraph_parent(
         return select_principal_parent(mol, &[], &rings, &[start])
             .ok_or_else(|| "openclatura: no recursive ring parent".into());
     }
-    let paths = find_all_carbon_paths(mol, exclude)
+    let paths = find_all_carbon_paths(mol, exclude)?
         .into_iter()
         .filter(|p| {
             p.contains(&start)
@@ -290,6 +290,7 @@ pub fn name_subgraph_rendered(
     exclude: &AtomSet,
     upstream: Option<usize>,
 ) -> Result<RenderedSubstituentName, String> {
+    let _depth = mol.enter_naming()?;
     let atom = mol
         .atoms
         .get(&start)
@@ -362,11 +363,24 @@ pub fn name_subgraph_rendered(
             add_substituent(&mut parts, item);
         }
     }
-    add_parent_features(mol, &mut parts, &plan.numbered_path, &plan.locant_map);
+    add_parent_features(mol, &mut parts, &plan.numbered_path, &plan.locant_map)?;
     apply_redundant_locant_elision(&mut parts);
     let raw = super::assembler::assemble_name_raw(&mut parts)?;
-    let raw =
-        simple_rooted_carbanion(mol, &parts, &plan.numbered_path, &plan.locant_map).unwrap_or(raw);
+    let carbanion = simple_rooted_carbanion(mol, &parts, &plan.numbered_path, &plan.locant_map);
+    let mut represented: AtomSet = parts
+        .a_prefixes
+        .iter()
+        .flat_map(|p| p.charge_atom_ids.iter().copied())
+        .collect();
+    if carbanion.is_some() {
+        represented.extend(
+            plan.numbered_path
+                .iter()
+                .copied()
+                .filter(|i| mol.atoms[i].charge == -1),
+        );
+    }
+    let raw = carbanion.unwrap_or(raw);
     let text = finalize_subgraph_name(raw, &parts);
     let text = super::ionic_naming::apply_anionic_parent_names(
         &text,
@@ -374,6 +388,7 @@ pub fn name_subgraph_rendered(
         &plan.numbered_path,
         &plan.locant_map,
         parts.retained_name.as_deref(),
+        &represented,
     )?;
     let text = super::ionic_naming::apply_cationic_imino_parent_prefixes(
         &text,
@@ -565,7 +580,10 @@ fn acylamino_amido_prefix(
     acid_mol.add_bond(Bond::new(bond_id, center, oxygen, 1))?;
     let mut capped = acid_atoms.clone();
     capped.insert(oxygen);
-    let Ok(acid_name) = name_component(&acid_mol, &capped) else {
+    let acid_result = name_component(&acid_mol, &capped);
+    // Upstream divergence: a speculative acid candidate cannot hide exhausted naming resources.
+    mol.spend_naming_work(0)?;
+    let Ok(acid_name) = acid_result else {
         return Ok(None);
     };
     let Some(mut amido) = RULES
@@ -625,6 +643,25 @@ fn acylamino_amido_prefix(
 mod tests {
     use super::name_subgraph_with_upstream;
     use crate::naming::openclatura::{graph_io::read_smiles, molecule::AtomSet};
+
+    #[test]
+    fn public_naming_bounds_recursion_on_a_two_mebibyte_stack() {
+        std::thread::Builder::new()
+            .stack_size(2 * 1024 * 1024)
+            .spawn(|| {
+                use crate::naming::openclatura::name_smiles;
+
+                assert_eq!(
+                    name_smiles(&format!("{}C", "CO".repeat(100))),
+                    Err("openclatura: naming complexity limit exceeded".into())
+                );
+                assert!(name_smiles("COCOCOC").is_ok());
+                assert_eq!(name_smiles("CCO"), Ok("ethanol".into()));
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
 
     #[test]
     fn recursive_substituent_names_preserve_attachment_and_boundary() -> Result<(), String> {

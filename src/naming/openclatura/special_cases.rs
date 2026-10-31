@@ -32,6 +32,18 @@ fn order(mol: &Molecule, u: usize, v: usize) -> usize {
 fn stereo_configured(mol: &Molecule, idx: usize) -> bool {
     mol.atoms[&idx].stereo.is_some() || mol.atoms[&idx].raw_stereo.is_some()
 }
+fn require_stereo_free_core(mol: &Molecule, atoms: &AtomSet) -> Result<(), String> {
+    // Upstream divergence: manually spelled shortcut cores must not discard configured atom or bond stereo.
+    if atoms.iter().any(|&idx| stereo_configured(mol, idx))
+        || mol
+            .bonds
+            .values()
+            .any(|bond| atoms.contains(&bond.u) && atoms.contains(&bond.v) && bond.stereo.is_some())
+    {
+        return Err("openclatura: shortcut cannot preserve configured stereochemistry".into());
+    }
+    Ok(())
+}
 fn center_ligands(names: &[String]) -> String {
     format_center_ligands_by(names, substituent_sort_key)
 }
@@ -52,6 +64,10 @@ pub fn single_atom_component_name(mol: &Molecule, component_atoms: &AtomSet) -> 
         return None;
     }
     let atom = &mol.atoms[component_atoms.first()?];
+    // Upstream divergence: a retained single-atom hydride does not cite atom stereo.
+    if stereo_configured(mol, atom.idx) {
+        return None;
+    }
     if atom.charge > 0 && RULES.ions.single_atom_cations.contains(&atom.symbol) {
         return elements::get(&atom.symbol).map(|e| e.name.clone());
     }
@@ -296,12 +312,19 @@ fn carbon_ligand_atoms(mol: &Molecule, atoms: &AtomSet, root: usize, central: us
     found
 }
 
-fn carbon_path(mol: &Molecule, atoms: &AtomSet, start: usize, end: usize) -> Vec<usize> {
+fn carbon_path(
+    mol: &Molecule,
+    atoms: &AtomSet,
+    start: usize,
+    end: usize,
+) -> Result<Vec<usize>, String> {
     let mut queue = VecDeque::from([(start, vec![start])]);
     let mut visited = AtomSet::new();
     while let Some((idx, path)) = queue.pop_front() {
+        // Upstream divergence: shortcut path searches share the request's exhaustive-work budget.
+        mol.spend_naming_work(path.len())?;
         if idx == end {
-            return path;
+            return Ok(path);
         }
         if !visited.insert(idx) {
             continue;
@@ -319,44 +342,56 @@ fn carbon_path(mol: &Molecule, atoms: &AtomSet, start: usize, end: usize) -> Vec
             queue.push_back((n, p));
         }
     }
-    Vec::new()
+    Ok(Vec::new())
 }
 
-fn alkyl_ligand_name(mol: &Molecule, atoms: &AtomSet, root: usize, central: usize) -> String {
+fn alkyl_ligand_name(
+    mol: &Molecule,
+    atoms: &AtomSet,
+    root: usize,
+    central: usize,
+) -> Result<String, String> {
     let carbons = carbon_ligand_atoms(mol, atoms, root, central);
     if carbons.is_empty() {
-        return String::new();
+        return Ok(String::new());
     }
     let mut degree_sum = 0;
     for &idx in &carbons {
         for &n in mol.get_neighbors(idx) {
             if atoms.contains(&n) && n != central {
                 if order(mol, idx, n) != 1 || !mol.atoms[&n].is_carbon() {
-                    return String::new();
+                    return Ok(String::new());
                 }
                 degree_sum += 1;
             }
         }
     }
     if degree_sum / 2 != carbons.len() - 1 {
-        return String::new();
+        return Ok(String::new());
+    }
+    // Upstream divergence: the direct alkyl spelling cannot represent ligand stereo or formal charge.
+    require_stereo_free_core(mol, &carbons)?;
+    if carbons.iter().any(|idx| mol.atoms[idx].charge != 0) {
+        return Err("openclatura: shortcut cannot preserve charged alkyl ligand".into());
     }
     systematic_alkyl_name(mol, &carbons, root)
 }
 
-fn systematic_alkyl_name(mol: &Molecule, atoms: &AtomSet, root: usize) -> String {
+fn systematic_alkyl_name(mol: &Molecule, atoms: &AtomSet, root: usize) -> Result<String, String> {
+    let _depth = mol.enter_naming()?;
     if atoms.len() == 1 {
-        return "methyl".into();
+        return Ok("methyl".into());
     }
     let atom_list: Vec<_> = atoms.iter().copied().collect();
     let mut choices = Vec::new();
     for (i, &left) in atom_list.iter().enumerate() {
         for &right in &atom_list[i..] {
-            let path = carbon_path(mol, atoms, left, right);
+            let path = carbon_path(mol, atoms, left, right)?;
             if !path.contains(&root) {
                 continue;
             }
             for p in [path.clone(), path.into_iter().rev().collect()] {
+                mol.spend_naming_work(p.len())?;
                 let Some(root_offset) = p.iter().position(|i| *i == root) else {
                     continue;
                 };
@@ -376,7 +411,7 @@ fn systematic_alkyl_name(mol: &Molecule, atoms: &AtomSet, root: usize) -> String
         }
     }
     let Some((_, root_loc, _, path)) = choices.into_iter().min() else {
-        return String::new();
+        return Ok(String::new());
     };
     let path_set: AtomSet = path.iter().copied().collect();
     let mut locants: BTreeMap<String, Vec<usize>> = BTreeMap::new();
@@ -386,9 +421,9 @@ fn systematic_alkyl_name(mol: &Molecule, atoms: &AtomSet, root: usize) -> String
                 continue;
             }
             let branch = carbon_ligand_atoms(mol, atoms, n, idx);
-            let name = alkyl_ligand_name(mol, &branch, n, idx);
+            let name = systematic_alkyl_name(mol, &branch, n)?;
             if name.is_empty() {
-                return String::new();
+                return Ok(String::new());
             }
             locants.entry(name).or_default().push(loc + 1);
         }
@@ -410,7 +445,7 @@ fn systematic_alkyl_name(mol: &Molecule, atoms: &AtomSet, root: usize) -> String
     } else {
         format!("{stem}an-{root_loc}-yl")
     };
-    format!("{prefix}{parent}")
+    Ok(format!("{prefix}{parent}"))
 }
 
 fn ligand_name(
@@ -420,7 +455,7 @@ fn ligand_name(
     central: usize,
     blocked: &AtomSet,
 ) -> Result<String, String> {
-    let alkyl = alkyl_ligand_name(mol, atoms, root, central);
+    let alkyl = alkyl_ligand_name(mol, atoms, root, central)?;
     if !alkyl.is_empty() {
         return Ok(alkyl);
     }
@@ -534,6 +569,7 @@ fn hydrazone_stereo_prefix(mol: &Molecule, carbon: usize, nitrogen: usize, paren
 /// anhydride elsewhere in a ligand can choose the whole-component citation.
 fn simple_azine_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, String> {
     for sides in azine_roles(mol, atoms) {
+        require_stereo_free_core(mol, &set([sides[0].nitrogen, sides[1].nitrogen]))?;
         let parents = [
             carbonyl_equivalent_side_name(mol, &sides[0], false)?,
             carbonyl_equivalent_side_name(mol, &sides[1], false)?,
@@ -635,6 +671,16 @@ fn simple_azine_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<St
         let parent_side =
             usize::from((sides[1].atoms.len(), &parents[1]) > (sides[0].atoms.len(), &parents[0]));
         let side = &sides[parent_side];
+        // Upstream divergence: an asymmetric hydrazone citation does not render the other C=N descriptor.
+        if mol
+            .get_bond(
+                sides[1 - parent_side].carbon,
+                sides[1 - parent_side].nitrogen,
+            )
+            .is_some_and(|bond| bond.stereo.is_some())
+        {
+            return Err("openclatura: shortcut cannot preserve configured stereochemistry".into());
+        }
         let stereo =
             hydrazone_stereo_prefix(mol, side.carbon, side.nitrogen, &parents[parent_side]);
         return Ok(Some(format!(
@@ -778,6 +824,22 @@ fn carbaldehyde_side_ring(mol: &Molecule, side: &AzineSide) -> Option<(AtomSet, 
 }
 
 fn carbonyl_equivalent_side_name(
+    mol: &Molecule,
+    side: &AzineSide,
+    as_ylidene: bool,
+) -> Result<String, String> {
+    let name = carbonyl_equivalent_side_name_unchecked(mol, side, as_ylidene)?;
+    if !name.is_empty() {
+        require_stereo_free_core(mol, &side.atoms)?;
+        // Upstream divergence: carbonyl-equivalent side citations do not render formal charges.
+        if side.atoms.iter().any(|idx| mol.atoms[idx].charge != 0) {
+            return Err("openclatura: shortcut cannot preserve charged carbonyl side".into());
+        }
+    }
+    Ok(name)
+}
+
+fn carbonyl_equivalent_side_name_unchecked(
     mol: &Molecule,
     side: &AzineSide,
     as_ylidene: bool,
@@ -967,7 +1029,7 @@ fn simple_carbonyl_side_name(
     let mut path = Vec::new();
     for &start in &ends {
         for &end in &ends {
-            let candidate = carbon_path(mol, &side.atoms, start, end);
+            let candidate = carbon_path(mol, &side.atoms, start, end)?;
             if candidate.contains(&side.carbon) && candidate.len() > path.len() {
                 path = candidate;
             }
@@ -1032,21 +1094,21 @@ fn simple_carbonyl_side_name(
     })
 }
 
-fn sulfoxide_parent_name(mol: &Molecule, atoms: &AtomSet) -> Option<String> {
+fn sulfoxide_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, String> {
     let sulfurs: Vec<_> = atoms
         .iter()
         .copied()
         .filter(|i| mol.atoms[i].symbol == "S")
         .collect();
     if sulfurs.len() != 1 {
-        return None;
+        return Ok(None);
     }
     let central = sulfurs[0];
     let mut oxygens = Vec::new();
     let mut roots = Vec::new();
     for &n in mol.get_neighbors(central) {
         if !atoms.contains(&n) {
-            return None;
+            return Ok(None);
         }
         if mol.atoms[&n].symbol == "O"
             && (order(mol, central, n) == 2 || mol.atoms[&n].charge == -1)
@@ -1055,23 +1117,44 @@ fn sulfoxide_parent_name(mol: &Molecule, atoms: &AtomSet) -> Option<String> {
         } else if mol.atoms[&n].is_carbon() && order(mol, central, n) == 1 {
             roots.push(n);
         } else {
-            return None;
+            return Ok(None);
         }
     }
     if oxygens.len() != 1 || roots.len() != 2 {
-        return None;
+        return Ok(None);
     }
     let left = carbon_ligand_atoms(mol, atoms, roots[0], central);
     let right = carbon_ligand_atoms(mol, atoms, roots[1], central);
     if left.is_empty() || right.is_empty() || !left.is_disjoint(&right) {
-        return None;
+        return Ok(None);
     }
-    let mut ligands: Vec<_> = roots
+    let ligand_results: Vec<_> = roots
         .iter()
         .map(|r| alkyl_ligand_name(mol, atoms, *r, central))
         .collect();
-    if ligands.iter().any(String::is_empty) {
-        return None;
+    if ligand_results
+        .iter()
+        .any(|result| result.as_ref().is_ok_and(String::is_empty))
+    {
+        return Ok(None);
+    }
+    let mut ligands: Vec<_> = ligand_results.into_iter().collect::<Result<_, _>>()?;
+    // Upstream divergence: neutral sulfoxide class names require a neutral or charge-separated S=O group.
+    let oxygen = oxygens[0];
+    if !matches!(
+        (
+            mol.atoms[&central].charge,
+            mol.atoms[&oxygen].charge,
+            order(mol, central, oxygen)
+        ),
+        (0, 0, 2) | (1, -1, 1)
+    ) {
+        return Err("openclatura: shortcut cannot preserve sulfoxide formal charges".into());
+    }
+    require_stereo_free_core(mol, &oxygens.into_iter().collect())?;
+    // Upstream divergence: an unassigned sulfoxide raw tag is not a rendered absolute descriptor.
+    if mol.atoms[&central].raw_stereo.is_some() {
+        return Err("openclatura: shortcut cannot preserve configured stereochemistry".into());
     }
     ligands.sort();
     let stereo = mol.atoms[&central]
@@ -1079,11 +1162,11 @@ fn sulfoxide_parent_name(mol: &Molecule, atoms: &AtomSet) -> Option<String> {
         .as_ref()
         .map(|s| format!("({s})-"))
         .unwrap_or_default();
-    Some(if ligands[0] == ligands[1] {
+    Ok(Some(if ligands[0] == ligands[1] {
         format!("{stereo}di{} sulfoxide", ligands[0])
     } else {
         format!("{stereo}{} sulfoxide", ligands.join(" "))
-    })
+    }))
 }
 
 fn has_principal_group(mol: &Molecule, atoms: &AtomSet) -> bool {
@@ -1101,6 +1184,10 @@ fn competing_principal_group(mol: &Molecule, atoms: &AtomSet, central: usize) ->
 }
 
 fn terminal_ligand_name(mol: &Molecule, idx: usize) -> String {
+    // Upstream divergence: neutral terminal prefixes do not represent formal charge or atom stereo.
+    if mol.atoms[&idx].charge != 0 || stereo_configured(mol, idx) {
+        return String::new();
+    }
     match mol.atoms[&idx].symbol.as_str() {
         "F" => "fluoro".into(),
         "Cl" => "chloro".into(),
@@ -1111,16 +1198,21 @@ fn terminal_ligand_name(mol: &Molecule, idx: usize) -> String {
     }
 }
 
-fn central_ligand_name(mol: &Molecule, atoms: &AtomSet, central: usize, neighbor: usize) -> String {
+fn central_ligand_name(
+    mol: &Molecule,
+    atoms: &AtomSet,
+    central: usize,
+    neighbor: usize,
+) -> Result<String, String> {
     if order(mol, central, neighbor) != 1 {
-        return String::new();
+        return Ok(String::new());
     }
     let name = terminal_ligand_name(mol, neighbor);
     if !name.is_empty() {
-        return name;
+        return Ok(name);
     }
     if mol.atoms[&neighbor].symbol != "O" || mol.atoms[&neighbor].charge != 0 {
-        return String::new();
+        return Ok(String::new());
     }
     let roots: Vec<_> = mol
         .get_neighbors(neighbor)
@@ -1129,13 +1221,13 @@ fn central_ligand_name(mol: &Molecule, atoms: &AtomSet, central: usize, neighbor
         .filter(|n| atoms.contains(n) && *n != central)
         .collect();
     if roots.len() != 1 {
-        return String::new();
+        return Ok(String::new());
     }
-    let alkyl = alkyl_ligand_name(mol, atoms, roots[0], neighbor);
+    let alkyl = alkyl_ligand_name(mol, atoms, roots[0], neighbor)?;
     if alkyl.is_empty() {
-        String::new()
+        Ok(String::new())
     } else {
-        oxy_prefix_from_branch(&alkyl)
+        Ok(oxy_prefix_from_branch(&alkyl))
     }
 }
 
@@ -1201,7 +1293,7 @@ fn simple_central_parent_hydride_name(
             oxide_oxygen = Some(n);
             continue;
         }
-        let mut name = central_ligand_name(mol, atoms, c, n);
+        let mut name = central_ligand_name(mol, atoms, c, n)?;
         if name.is_empty() && hydrocarbyl && mol.atoms[&n].is_carbon() && order(mol, c, n) == 1 {
             let ligand = component_atoms_until_blocked(mol, atoms, n, &set([c]));
             if !ligand.is_empty()
@@ -1412,7 +1504,7 @@ fn ester_modifier_name(
     if !name.is_empty() {
         return Ok(strip_outer_parentheses(&name));
     }
-    Ok(alkyl_ligand_name(mol, atoms, root, oxygen))
+    alkyl_ligand_name(mol, atoms, root, oxygen)
 }
 fn oxoacid_ester_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, String> {
     let mut matches = Vec::new();
@@ -1462,6 +1554,7 @@ fn oxoacid_ester_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>,
             }
             let modifier = ester_modifier_name(mol, atoms, roots[0], distal, &acid)?;
             if !modifier.is_empty() {
+                require_stereo_free_core(mol, &acid)?;
                 matches.push(format!("{modifier} {suffix}"));
             }
             continue;
@@ -1500,6 +1593,7 @@ fn oxoacid_ester_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>,
         if !valid || covered.union(&core).copied().collect::<AtomSet>() != *atoms {
             continue;
         }
+        require_stereo_free_core(mol, &core)?;
         let hydroxy = role.count("hydroxy");
         let suffix = if hydroxy == 0 || spec.get("charge").is_some() {
             base.to_owned()
@@ -1587,6 +1681,7 @@ fn organophosphorus_acid_name(
         .chain(hydroxy.iter().copied())
         .chain(esters.iter().copied())
         .collect();
+    require_stereo_free_core(mol, &acid)?;
     let mut ligands = Vec::new();
     for root in roots {
         let name = ligand_name(mol, atoms, root, c, &acid)?;
@@ -1677,6 +1772,7 @@ fn organoboronic_acid_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Str
         return Ok(None);
     }
     let acid: AtomSet = std::iter::once(c).chain(hydroxy).collect();
+    require_stereo_free_core(mol, &acid)?;
     let mut names = Vec::new();
     for root in roots {
         let name = ligand_name(mol, atoms, root, c, &acid)?;
@@ -2018,6 +2114,14 @@ fn homonuclear_chain_parent_name(
     let Some((_, parent, placed, oriented)) = best else {
         return Ok(None);
     };
+    // Upstream divergence: homonuclear chain assembly renders bond descriptors but no backbone atom stereo.
+    if chain_set
+        .iter()
+        .chain(&oxide_atoms)
+        .any(|&idx| stereo_configured(mol, idx))
+    {
+        return Err("openclatura: shortcut cannot preserve configured stereochemistry".into());
+    }
     let prefix = locanted_ligand_prefix(&placed);
     let mut name = format!("{prefix}{parent}");
     if !oxide.is_empty() {
@@ -2087,7 +2191,7 @@ fn nitrogen_ligands(
         }
         let mut name = strip_outer_parentheses(&branch_name(mol, atoms, root, core, nitrogen)?);
         if name.is_empty() {
-            name = alkyl_ligand_name(mol, atoms, root, nitrogen);
+            name = alkyl_ligand_name(mol, atoms, root, nitrogen)?;
         }
         if name.is_empty() {
             return Ok(None);
@@ -2175,6 +2279,7 @@ fn hydroxyurea_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Str
         return Ok(None);
     };
     let core = set([c, oxygen, n, n_prime, oh]);
+    require_stereo_free_core(mol, &core)?;
     let Some(first) = nitrogen_ligands(mol, atoms, n, &core, true)? else {
         return Ok(None);
     };
@@ -2259,6 +2364,7 @@ fn sulfamic_acid_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>,
         return Ok(None);
     }
     let core: AtomSet = [c, n].into_iter().chain(oxygens).collect();
+    require_stereo_free_core(mol, &core)?;
     let Some(ligands) = nitrogen_ligands(mol, atoms, n, &core, false)? else {
         return Ok(None);
     };
@@ -2322,6 +2428,7 @@ fn azinic_acid_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, S
         return Ok(None);
     }
     let core: AtomSet = std::iter::once(n).chain(oxygens).collect();
+    require_stereo_free_core(mol, &core)?;
     let name = strip_outer_parentheses(&branch_name(mol, atoms, root, &core, n)?);
     let branch = component_atoms_until_blocked(mol, atoms, root, &core);
     if name.is_empty()
@@ -2378,6 +2485,7 @@ fn phosphane_borane_zwitterion_name(
         return Ok(None);
     }
     let core = set([p, b]);
+    require_stereo_free_core(mol, &core)?;
     let mut seen = AtomSet::new();
     let mut names = Vec::new();
     for root in roots {
@@ -2388,7 +2496,7 @@ fn phosphane_borane_zwitterion_name(
         seen.extend(branch);
         let mut name = strip_outer_parentheses(&branch_name(mol, atoms, root, &core, p)?);
         if name.is_empty() {
-            name = alkyl_ligand_name(mol, atoms, root, p);
+            name = alkyl_ligand_name(mol, atoms, root, p)?;
         }
         if name.is_empty() {
             return Ok(None);
@@ -2435,6 +2543,7 @@ fn sulfonium_ylide_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String
     if roots.len() != 2 {
         return Ok(None);
     }
+    require_stereo_free_core(mol, &set([s, c]))?;
     let mut sulfur_atoms = AtomSet::new();
     let mut names = Vec::new();
     for root in roots {
@@ -2443,7 +2552,7 @@ fn sulfonium_ylide_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String
             return Ok(None);
         }
         sulfur_atoms.extend(branch);
-        let name = alkyl_ligand_name(mol, atoms, root, s);
+        let name = alkyl_ligand_name(mol, atoms, root, s)?;
         if name.is_empty() {
             return Ok(None);
         }
@@ -2468,7 +2577,7 @@ fn sulfonium_ylide_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String
         }
         sub_name = strip_outer_parentheses(&branch_name(mol, atoms, root, &blocked, c)?);
         if sub_name.is_empty() {
-            sub_name = alkyl_ligand_name(mol, atoms, root, c);
+            sub_name = alkyl_ligand_name(mol, atoms, root, c)?;
         }
         if sub_name.is_empty() {
             return Ok(None);
@@ -2559,6 +2668,7 @@ fn nitrogen_chalcogenide_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<
         return Ok(None);
     }
     let (n, ch, imine) = matches[0];
+    require_stereo_free_core(mol, &set([n, ch]))?;
     let reduced_atoms: AtomSet = atoms.iter().copied().filter(|i| *i != ch).collect();
     let mut reduced = mol.subgraph(&reduced_atoms);
     reduced.set_atom_charge(n, 0)?;
@@ -2670,6 +2780,7 @@ fn peroxide_linkage_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Strin
         return Ok(None);
     };
     let blocked = set([l, r]);
+    require_stereo_free_core(mol, &blocked)?;
     let left = strip_outer_parentheses(&branch_name(mol, atoms, la, &blocked, l)?);
     let right = strip_outer_parentheses(&branch_name(mol, atoms, ra, &blocked, r)?);
     if left.is_empty() || right.is_empty() {
@@ -2781,6 +2892,7 @@ pub fn try_name_anhydride_component(
         let Some(class) = anhydride_class_name(mol, path) else {
             continue;
         };
+        require_stereo_free_core(mol, &bridge)?;
         if left == right {
             return Ok(Some(format!("{left} {class}")));
         }
@@ -2861,6 +2973,7 @@ pub fn structural_replacement_parent_result(
     // Keep the Python shortcut precedence. Ring-only routes requiring a
     // multi-ring parent are outside stage one and deliberately do not match.
     if let Some(name) = small_inorganic_parent_name(mol, atoms) {
+        require_stereo_free_core(mol, atoms)?;
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
     if let Some(name) = simple_azine_parent_name(mol, atoms)? {
@@ -2891,6 +3004,7 @@ pub fn structural_replacement_parent_result(
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
     if let Some(name) = oxoacid_parent_name(mol, atoms) {
+        require_stereo_free_core(mol, atoms)?;
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
     if let Some(name) = organophosphorus_acid_name(mol, atoms, true)? {
@@ -2902,7 +3016,7 @@ pub fn structural_replacement_parent_result(
     if let Some(name) = organoboronic_acid_name(mol, atoms)? {
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
-    if let Some(name) = sulfoxide_parent_name(mol, atoms) {
+    if let Some(name) = sulfoxide_parent_name(mol, atoms)? {
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
     if let Some(name) = homonuclear_chain_parent_name(mol, atoms)? {
@@ -2953,6 +3067,68 @@ mod tests {
             Some("methyl dihydrogen phosphate")
         );
         assert_eq!(special("CB(O)O").as_deref(), Some("methylboronic acid"));
+    }
+
+    #[test]
+    fn alkyl_shortcuts_decline_unrendered_ligand_stereo() {
+        for smiles in [
+            "C[C@H](CC)P(=O)(O)O",
+            "C[C@@H](CC)P(=O)(O)O",
+            "C[C@H](CC)B(O)O",
+            "C[C@@H](CC)B(O)O",
+            "C[C@H](CC)S(C)=O",
+            "CCC[C@H](C)[S@@](C)=O",
+        ] {
+            assert_eq!(
+                super::super::name_smiles(smiles).unwrap_err(),
+                "openclatura: shortcut cannot preserve configured stereochemistry",
+                "{smiles}"
+            );
+        }
+        let left = super::super::name_smiles("C[S@](=O)CC").unwrap();
+        let right = super::super::name_smiles("C[S@@](=O)CC").unwrap();
+        assert_ne!(left, right);
+        assert!(left.starts_with("(R)-") || left.starts_with("(S)-"));
+        assert!(right.starts_with("(R)-") || right.starts_with("(S)-"));
+    }
+
+    #[test]
+    fn manual_azine_shortcuts_decline_unrendered_atom_and_bond_stereo() {
+        for smiles in [
+            "C=NN=C[C@H]1CCOC1",
+            "C/C=C/C=NN=C",
+            "CCC/C=N/N=C/C",
+            "C/C=N/N=CCC",
+        ] {
+            assert!(super::super::name_smiles(smiles).is_err(), "{smiles}");
+        }
+    }
+
+    #[test]
+    fn charged_alkyl_ligands_are_not_rendered_as_neutral() {
+        for smiles in ["C[CH-]P(=O)(O)O", "C[CH-]B(O)O", "C[CH-]S(C)=O"] {
+            assert!(super::super::name_smiles(smiles).is_err(), "{smiles}");
+        }
+    }
+
+    #[test]
+    fn public_naming_bounds_shortcut_alkyl_path_search() {
+        use std::time::{Duration, Instant};
+
+        let mut tree = "C".to_owned();
+        for _ in 0..7 {
+            tree = format!("C({tree}){tree}");
+        }
+        let started = Instant::now();
+        assert_eq!(
+            super::super::name_smiles(&format!("P(=O)(O)(O){tree}")),
+            Err("openclatura: naming complexity limit exceeded".into())
+        );
+        assert!(started.elapsed() < Duration::from_secs(10));
+        assert_eq!(
+            super::super::name_smiles("CCC(CC)P(=O)(O)O").as_deref(),
+            Ok("pentan-3-ylphosphonic acid")
+        );
     }
 
     #[test]

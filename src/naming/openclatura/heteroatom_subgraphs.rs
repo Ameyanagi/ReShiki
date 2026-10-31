@@ -102,6 +102,20 @@ fn charged_prefix(symbol: &str, charge: i32, kind: &str) -> Option<String> {
     .as_str()
     .map(str::to_owned)
 }
+fn has_balanced_oxo_charges(mol: &Molecule, center: usize) -> bool {
+    let atom = &mol.atoms[&center];
+    atom.charge > 0
+        && atom.total_h_count == 0
+        && mol
+            .get_neighbors(center)
+            .iter()
+            .filter(|&&n| {
+                matches!(mol.atoms[&n].symbol.as_str(), "O" | "S" | "Se" | "Te")
+                    && charge_normalized_chalcogenido(mol, Some(center), n)
+            })
+            .count() as i32
+            == atom.charge
+}
 pub fn substituent_bonding_number(mol: &Molecule, idx: usize) -> usize {
     let atom = &mol.atoms[&idx];
     let sulfur_ylide = atom.symbol == "S"
@@ -318,6 +332,16 @@ fn name_oxygen(
     let order = upstream_bond_order(mol, start, upstream);
     let roots = subgraph_neighbors(mol, start, exclude, upstream);
     let atom = &mol.atoms[&start];
+    // Upstream divergence: oxygen prefixes preserve the complete charge and hydrogen bonding state.
+    let expected_bonding = match atom.charge {
+        -1 => 1,
+        0 => 2,
+        1 => 3,
+        _ => return Err(unsupported("oxygen charge")),
+    };
+    if substituent_bonding_number(mol, start) != expected_bonding {
+        return Err(unsupported("oxygen bonding state"));
+    }
     if atom.charge == 1 && matches!(order, 1 | 2) {
         let suffix = charged_prefix("O", 1, if order == 2 { "double" } else { "single" })
             .ok_or_else(|| unsupported("O"))?;
@@ -410,6 +434,12 @@ fn name_oxygen(
         });
     }
     let b = branch(mol, next, &with_atoms(exclude, [start]), start)?;
+    // Upstream divergence: upstream contracts N-acyl aminooxy ligands to amidooxy, changing their parsed connectivity.
+    if strip_outer_parentheses(&b).ends_with("amido")
+        && !is_complex_prefix(&strip_outer_parentheses(&b))
+    {
+        return Err("openclatura: amidooxy attachment not supported".into());
+    }
     Ok(oxy_prefix_from_branch(&b))
 }
 
@@ -420,6 +450,24 @@ fn name_nitrogen(
     upstream: Option<usize>,
 ) -> Result<String, String> {
     let order = upstream_bond_order(mol, start, upstream);
+    // Upstream divergence: nitrogen charge prefixes require the exact charged bonding state.
+    if matches!(mol.atoms[&start].charge, -1 | 1)
+        && substituent_bonding_number(mol, start)
+            != if mol.atoms[&start].charge > 0 { 4 } else { 2 }
+    {
+        return Err(unsupported("nitrogen charge bonding state"));
+    }
+    // Upstream divergence: azo imino-prefix contractions cannot preserve specified N=N geometry.
+    if order == 2
+        && upstream.is_some_and(|up| {
+            mol.atoms[&up].symbol == "N"
+                && mol
+                    .get_bond(start, up)
+                    .is_some_and(|bond| bond.stereo.is_some())
+        })
+    {
+        return Err("openclatura: specified azo imino-prefix geometry is not supported".into());
+    }
     let roots = subgraph_neighbors(mol, start, exclude, upstream);
     let atom = &mol.atoms[&start];
     if order == 3
@@ -792,11 +840,26 @@ fn name_sulfur(
     upstream: Option<usize>,
 ) -> Result<String, String> {
     let order = upstream_bond_order(mol, start, upstream);
+    let atom = &mol.atoms[&start];
+    // Upstream divergence: sulfur charge names require the exact bonding state or complete oxo charge normalization.
+    if atom.charge != 0
+        && !has_balanced_oxo_charges(mol, start)
+        && substituent_bonding_number(mol, start) != if atom.charge > 0 { 3 } else { 1 }
+    {
+        return Err(unsupported("sulfur charge bonding state"));
+    }
     let (oxo, class) = central_oxo(mol, start, exclude)?;
     let nitrogens: Vec<_> = double_bonded_neighbors(mol, start, "N")
         .into_iter()
         .filter(|n| Some(*n) != upstream)
         .collect();
+    // Upstream divergence: neutral sulfur oxo/imino and multiple-attachment prefixes cannot cite a residual formal charge.
+    if atom.charge != 0
+        && !has_balanced_oxo_charges(mol, start)
+        && (order != 1 || !oxo.is_empty() || !nitrogens.is_empty())
+    {
+        return Err(unsupported("charged sulfur oxo/imino attachment"));
+    }
     let blocked = with_atoms(
         exclude,
         oxo.iter()
@@ -937,6 +1000,22 @@ fn name_sulfur(
         if mol.atoms[&start].charge > 0 && order != 2 {
             return Ok(format!("({sp}{}sulfaniumyl)", ns[0]));
         }
+        // Upstream divergence: a nonstandard sulfur hydride needs its full bonding number in the prefix.
+        if mol.atoms[&start].charge == 0
+            && mol.atoms[&start].total_h_count > 0
+            && substituent_bonding_number(mol, start) != 2
+        {
+            return Ok(lambda(
+                mol,
+                start,
+                &ns,
+                if order == 2 {
+                    "sulfanylidene"
+                } else {
+                    "sulfanyl"
+                },
+            ));
+        }
         if super::nomenclature::RULES
             .heteroatoms
             .simple_sulfanyl_prefixes
@@ -979,6 +1058,10 @@ pub fn name_heteroatom_subgraph(
         "N" => name_nitrogen(mol, start, exclude, upstream)?,
         "S" => name_sulfur(mol, start, exclude, upstream)?,
         "F" | "Cl" | "Br" | "I" => {
+            // Upstream divergence: neutral halogen prefixes require explicit charge-balanced oxo normalization for charged centers.
+            if mol.atoms[&start].charge != 0 && !has_balanced_oxo_charges(mol, start) {
+                return Err(unsupported("halogen charge"));
+            }
             let roots = subgraph_neighbors(mol, start, exclude, upstream);
             if roots.is_empty() {
                 section("halogen_prefixes")[symbol]
@@ -1021,6 +1104,12 @@ pub fn name_heteroatom_subgraph(
             }
         }
         "B" | "Si" => {
+            // Upstream divergence: neutral boryl/silyl prefixes do not represent charged substituents.
+            if mol.atoms[&start].charge != 0 {
+                return Err(format!(
+                    "openclatura: charged {symbol} substituent is not supported"
+                ));
+            }
             let suffix = format!(
                 "{}{}",
                 prefix(symbol, 0).ok_or_else(|| unsupported(symbol))?,
@@ -1042,7 +1131,32 @@ pub fn name_heteroatom_subgraph(
             }
         }
         "P" | "As" | "Sb" => {
+            let atom = &mol.atoms[&start];
+            let charged = if atom.charge != 0 && !has_balanced_oxo_charges(mol, start) {
+                // Upstream divergence: charged pnictogen branches need an available prefix for their exact bonding state.
+                if atom.charge != 1 || substituent_bonding_number(mol, start) != 4 {
+                    return Err(unsupported("pnictogen charge bonding state"));
+                }
+                Some(
+                    charged_prefix(
+                        symbol,
+                        atom.charge,
+                        match order {
+                            2 => "double",
+                            3 => "triple",
+                            _ => "single",
+                        },
+                    )
+                    .ok_or_else(|| unsupported("pnictogen charge prefix"))?,
+                )
+            } else {
+                None
+            };
             let (oxo, class) = central_oxo(mol, start, exclude)?;
+            // Upstream divergence: a charged pnictogen prefix cannot absorb unrendered oxo ligands.
+            if charged.is_some() && !oxo.is_empty() {
+                return Err(unsupported("charged pnictogen oxo attachment"));
+            }
             let roots: Vec<_> = subgraph_neighbors(mol, start, exclude, upstream)
                 .into_iter()
                 .filter(|n| !oxo.contains(n))
@@ -1074,6 +1188,9 @@ pub fn name_heteroatom_subgraph(
                 3 => "idyne",
                 _ => "",
             });
+            if let Some(charged) = charged {
+                suffix = charged;
+            }
             let sp = stereo(mol, start);
             if roots.is_empty() {
                 format!("{sp}{suffix}")
@@ -1119,6 +1236,17 @@ pub fn name_heteroatom_subgraph(
             }
         }
         "Se" | "Te" => {
+            let atom = &mol.atoms[&start];
+            // Upstream divergence: selanyl/tellanyl prefixes preserve only terminal unit anions or fully normalized oxo charges.
+            if atom.charge != 0
+                && !has_balanced_oxo_charges(mol, start)
+                && !(atom.charge == -1
+                    && order == 1
+                    && mol.degree(start) == 1
+                    && substituent_bonding_number(mol, start) == 1)
+            {
+                return Err(unsupported("chalcogen charge bonding state"));
+            }
             let (oxo, class) = central_oxo(mol, start, exclude)?;
             let suffix = prefix(symbol, 0).ok_or_else(|| unsupported(symbol))?;
             let roots: Vec<_> = subgraph_neighbors(mol, start, exclude, upstream)

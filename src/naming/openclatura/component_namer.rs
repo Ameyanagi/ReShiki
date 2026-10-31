@@ -35,6 +35,7 @@ pub fn name_component_with_citation(
     component_atoms: &AtomSet,
     citation: Option<&str>,
 ) -> Result<String, String> {
+    let _depth = mol.enter_naming()?;
     if component_atoms.is_empty() {
         return Err("openclatura: empty component".into());
     }
@@ -95,7 +96,7 @@ pub fn name_component_with_citation(
     retarget_external_carbonyl_groups(mol, &mut groups, key.as_deref(), &mut exclude, &cyclic);
     let (principal, _) = partition_principal_and_prefix_groups(&groups, key.as_deref());
     exclude_nonparent_group_atoms(mol, &groups, &mut exclude, &cyclic);
-    let chains = find_all_carbon_paths(mol, &exclude);
+    let chains = find_all_carbon_paths(mol, &exclude)?;
     let rings = find_ring_systems(mol, &exclude);
     let selection = select_principal_parent(mol, &chains, &rings, &principal)
         .ok_or("openclatura: no supported parent skeleton")?;
@@ -103,6 +104,7 @@ pub fn name_component_with_citation(
     let parent = selection.atom_set();
     groups.retain(|g| parent.contains(&g.attachment_carbon));
     key = component_principal_key(&groups, false);
+    super::identity_validation::validate_principal_charge_roles(&groups, key.as_deref())?;
     let (principal, prefix_groups) = partition_principal_and_prefix_groups(&groups, key.as_deref());
     let retained_match = selection
         .is_ring
@@ -154,7 +156,7 @@ pub fn name_component_with_citation(
         locants,
         &sub_exclude,
     )?;
-    add_parent_features(mol, parts, numbered, locants);
+    add_parent_features(mol, parts, numbered, locants)?;
     add_component_principal_group(
         mol,
         parts,
@@ -196,12 +198,18 @@ pub fn name_component_with_citation(
         ));
     }
     let name = super::assembler::assemble_name_raw(parts)?;
+    let represented: AtomSet = parts
+        .a_prefixes
+        .iter()
+        .flat_map(|prefix| prefix.charge_atom_ids.iter().copied())
+        .collect();
     let name = super::ionic_naming::apply_anionic_parent_names(
         &name,
         mol,
         numbered,
         locants,
         parts.retained_name.as_deref(),
+        &represented,
     )?;
     let name =
         super::ionic_naming::apply_cationic_imino_parent_prefixes(&name, mol, numbered, locants)?;

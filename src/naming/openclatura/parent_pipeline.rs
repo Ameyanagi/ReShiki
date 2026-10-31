@@ -169,7 +169,9 @@ fn add_relative_ring_stereo(
             .count()
             == 1
     }) {
-        let term = if mol.atoms[&raw[0]].raw_stereo == mol.atoms[&raw[1]].raw_stereo {
+        // Upstream divergence: normalize traversal-dependent tetrahedral tags before comparing ring faces.
+        let face = |idx| relative_ring_face(mol, parts, path, idx);
+        let term = if face(raw[0])? == face(raw[1])? {
             "cis"
         } else {
             "trans"
@@ -187,4 +189,83 @@ fn add_relative_ring_stereo(
         }
     }
     Ok(())
+}
+
+fn relative_ring_face(
+    mol: &Molecule,
+    parts: &AssemblyParts,
+    path: &[usize],
+    idx: usize,
+) -> Result<bool, String> {
+    let fail = || "openclatura: unsupported relative ring stereochemistry".to_owned();
+    let offset = path.iter().position(|&atom| atom == idx).ok_or_else(fail)?;
+    if path.len() < 3 || mol.degree(idx) != 3 || mol.atoms[&idx].total_h_count != 1 {
+        return Err(fail());
+    }
+    let previous = path[(offset + path.len() - 1) % path.len()];
+    let next = path[(offset + 1) % path.len()];
+    let outside = mol
+        .get_neighbors(idx)
+        .iter()
+        .copied()
+        .find(|atom| !parts.parent_atom_ids.contains(atom))
+        .ok_or_else(fail)?;
+    let target = [previous, next, outside];
+    let permutation: Vec<_> = target
+        .iter()
+        .map(|atom| {
+            mol.get_neighbors(idx)
+                .iter()
+                .position(|neighbor| neighbor == atom)
+                .ok_or_else(fail)
+        })
+        .collect::<Result<_, _>>()?;
+    let inversions = permutation
+        .iter()
+        .enumerate()
+        .map(|(i, rank)| {
+            permutation[i + 1..]
+                .iter()
+                .filter(|other| *other < rank)
+                .count()
+        })
+        .sum::<usize>();
+    // The implicit or bracket hydrogen stays last in both tetrahedral orders.
+    let clockwise = match mol.atoms[&idx].raw_stereo.as_deref() {
+        Some("CW") => true,
+        Some("CCW") => false,
+        _ => return Err(fail()),
+    };
+    Ok(clockwise ^ (inversions % 2 != 0))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::name_smiles;
+
+    #[test]
+    fn relative_ring_stereo_is_independent_of_smiles_neighbor_order() {
+        for (smiles, expected) in [
+            ("C[C@H]1C[C@@H](C)C1", "cis-1,3-dimethylcyclobutane"),
+            ("C[C@H]1C[C@H](C1)C", "cis-1,3-dimethylcyclobutane"),
+            ("C[C@H]1C[C@H](C)C1", "trans-1,3-dimethylcyclobutane"),
+            ("C[C@H]1C[C@@H](C1)C", "trans-1,3-dimethylcyclobutane"),
+        ] {
+            assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
+        }
+    }
+
+    #[test]
+    fn external_double_bond_uses_modern_cip_priority() {
+        let smiles = "C/C=C\\C(=C/C)[C@H](C)/C=C\\C";
+        let name = name_smiles(smiles).unwrap();
+        assert_eq!(name, "(2Z,4E,5R,6Z)-4-ethylidene-5-methylocta-2,6-diene");
+        let request = crate::naming::local::parse_request(&name).unwrap();
+        let reply = crate::naming::worker::respond(&request).unwrap();
+        let parsed = crate::naming::local::parse_result(&name, &reply).unwrap();
+        assert_eq!(
+            crate::naming::canonical_smiles(smiles).unwrap(),
+            crate::naming::canonical_smiles(&parsed.smiles).unwrap()
+        );
+    }
 }
