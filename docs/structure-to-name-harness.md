@@ -15,6 +15,9 @@ S2N_REPORT=s2n-report.tsv cargo test --no-default-features --lib naming::s2n_har
 S2N_UPDATE_BASELINE=1 cargo test --no-default-features --lib naming::s2n_harness::s2n_fast_subset
 ```
 
+`S2N_DUMP=<dir>` writes every classified row per check (class, category, SMILES,
+name, openclatura text for parity, decline reason) for analysis.
+
 The fast test fails on any Wrong name and when a correct count in
 `tests/fixtures/s2n/baseline.tsv` drops; it prints a reminder when one rises.
 The full test fails on any Wrong name. The workflow runs nightly, on manual

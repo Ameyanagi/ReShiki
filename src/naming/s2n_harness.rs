@@ -197,6 +197,7 @@ struct Report {
     total: Counts,
     declines: BTreeMap<String, usize>,
     details: Vec<String>,
+    rows: Vec<String>,
     missing_golden: usize,
 }
 
@@ -213,6 +214,15 @@ impl Report {
             .or_default()
             .add(outcome, golden);
         self.total.add(outcome, golden);
+        self.rows.push(format!(
+            "{:?}\t{}\t{}\t{}\t{}\t{}",
+            outcome.class,
+            case.category,
+            field(&case.smiles),
+            field(&outcome.name),
+            field(golden.unwrap_or_default()),
+            field(&outcome.reason),
+        ));
         if outcome.class == Class::Declined {
             *self.declines.entry(outcome.reason.clone()).or_default() += 1;
         }
@@ -430,6 +440,16 @@ fn run(fast: bool) {
     // Only full writes this path: CI may run both tests concurrently.
     if !fast && let Some(path) = std::env::var_os("S2N_REPORT") {
         std::fs::write(path, &text).expect("write S2N_REPORT");
+    }
+    // Every classified row, for parity and decline analysis.
+    if let Some(dir) = std::env::var_os("S2N_DUMP") {
+        for (check, report) in &reports {
+            let path = Path::new(&dir).join(format!(
+                "{}-{check}.tsv",
+                if fast { "fast" } else { "full" }
+            ));
+            std::fs::write(path, report.rows.join("\n")).expect("write S2N_DUMP");
+        }
     }
     if fast {
         ratchet(&reports);
