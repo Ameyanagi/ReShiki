@@ -73,6 +73,8 @@ pub(crate) enum Setting {
     Charges(bool),
     /// How many cells along a, b and c a crystal shows.
     Repeat([u8; 3]),
+    /// The opacity of a crystal's boundary and repeat copies.
+    CopyOpacity(f32),
     /// Turn a crystal to look along a lattice direction.
     LookAlong(models3d::Along),
 }
@@ -479,6 +481,7 @@ impl App {
             Setting::Background(background) => model.background = background,
             Setting::DepthFade(value) => model.depth_fade = value.clamp(0., 1.),
             Setting::Perspective(value) => model.perspective = value.clamp(0., 1.),
+            Setting::CopyOpacity(value) => model.copy_opacity = value.clamp(0., 1.),
             Setting::ResetView => model.rotation = reset.unwrap_or(model.rotation),
             Setting::Charges(shown) => model.charges = shown,
             Setting::Repeat(repeat) => {
@@ -527,8 +530,11 @@ impl App {
         models3d::require_version(&mut self.tab.doc);
         // A drag continues only on the same slider while nothing else has
         // been committed.
-        let sliding = matches!(setting, Setting::DepthFade(_) | Setting::Perspective(_))
-            .then(|| (self.tab.revision, index, std::mem::discriminant(&setting)));
+        let sliding = matches!(
+            setting,
+            Setting::DepthFade(_) | Setting::Perspective(_) | Setting::CopyOpacity(_)
+        )
+        .then(|| (self.tab.revision, index, std::mem::discriminant(&setting)));
         let continuing = sliding.is_some() && self.tab.model_sliding == sliding;
         self.commit_model(before, continuing);
         self.tab.model_sliding =
@@ -685,6 +691,7 @@ impl App {
         model.labels = old.labels;
         model.depth_fade = old.depth_fade;
         model.perspective = old.perspective;
+        model.copy_opacity = old.copy_opacity;
         model.background = old.background;
         model.layout = old.layout;
         let atoms = model.linked_ids(&before);
@@ -1040,23 +1047,6 @@ impl App {
             .spacing(4)
             .into()
         };
-        let slider_field = |label: &'static str, value: f32, setting: fn(f32) -> Setting| {
-            column![
-                row![
-                    text(label).size(12),
-                    Space::new().width(Length::Fill),
-                    text(format!("{:.0}%", value * 100.))
-                        .size(12)
-                        .style(muted_text)
-                ],
-                slider(0_f32..=100., value * 100., move |v| {
-                    Message::Models3d(Action::Set(setting(v / 100.)))
-                })
-                .step(1_f32)
-                .on_release(Message::Models3d(Action::SlideEnd)),
-            ]
-            .spacing(4)
-        };
         let look = |look: Look, id: &str, name, label| {
             (
                 format!("look-{id}"),
@@ -1252,7 +1242,29 @@ impl App {
     }
 }
 
-/// The same crystal repeat and direction choices in Structure and 3D model.
+fn slider_field(
+    label: &'static str,
+    value: f32,
+    setting: fn(f32) -> Setting,
+) -> iced::widget::Column<'static, Message> {
+    column![
+        row![
+            text(label).size(12),
+            Space::new().width(Length::Fill),
+            text(format!("{:.0}%", value * 100.))
+                .size(12)
+                .style(muted_text)
+        ],
+        slider(0_f32..=100., value * 100., move |v| {
+            Message::Models3d(Action::Set(setting(v / 100.)))
+        })
+        .step(1_f32)
+        .on_release(Message::Models3d(Action::SlideEnd)),
+    ]
+    .spacing(4)
+}
+
+/// The same crystal repeat, opacity and direction choices in Structure and 3D model.
 fn crystal_controls(
     prefix: &'static str,
     model: &models3d::Model3d,
@@ -1285,22 +1297,27 @@ fn crystal_controls(
                 .align_y(Alignment::Center),
         );
     }
-    body.push(text("Look along").size(12))
-        .push(
-            row(models3d::Along::ALL.map(|along| {
-                let name = along.name();
-                accessible_command(
-                    format!("{prefix}-look-{name}"),
-                    format!("Look along {name}"),
-                    name,
-                )
-                .width(Length::Fill)
-                .on_press_maybe(set(Setting::LookAlong(along)))
-                .into()
-            }))
-            .spacing(4),
-        )
-        .into()
+    body.push(slider_field(
+        "Copy opacity",
+        model.copy_opacity,
+        Setting::CopyOpacity,
+    ))
+    .push(text("Look along").size(12))
+    .push(
+        row(models3d::Along::ALL.map(|along| {
+            let name = along.name();
+            accessible_command(
+                format!("{prefix}-look-{name}"),
+                format!("Look along {name}"),
+                name,
+            )
+            .width(Length::Fill)
+            .on_press_maybe(set(Setting::LookAlong(along)))
+            .into()
+        }))
+        .spacing(4),
+    )
+    .into()
 }
 
 /// Least-squares proper rotation from the new conformer onto the old one.

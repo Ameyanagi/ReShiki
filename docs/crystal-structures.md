@@ -66,7 +66,7 @@ other appearance controls remain available in **Properties → 3D model**.
   a face, edge or corner at the origin's side is shown again,
   as a lighter copy, on the far face, edge or corner, so rock salt shows all 27
   ions and every corner of the box has its atom. A molecule goes by its centre
-  and is copied whole. The copies have 55% opacity, follow the drawing and
+  and is copied whole. The copies default to 55% opacity, follow the drawing and
   cannot be edited separately, so chemistry, IDs, the formula and saving are
   unchanged; bonds between the cell's atoms and the copies are drawn in full.
 - **Ion charges** are hidden in 2D, since the formula carries them; choose
@@ -74,14 +74,17 @@ other appearance controls remain available in **Properties → 3D model**.
   and Cl⁻. The choice is kept in the file.
 - **Repeat** in **Properties → Structure** shows 1 to 4 cells along each of
   _a_, _b_ and _c_ in 2D, 3D and Both, one Undo step each. The model's own cell
-  stays the editable drawing; the other cells are lighter copies (55%) that
+  stays the editable drawing; the other cells are lighter copies that
   follow it, not separate atoms. Bonds between cells are drawn in full and the
   dashed stubs only leave the outside of the whole repeat; atoms on the near
   faces are copied onto the far faces of the whole repeat. The box holds every
   cell, thin light lines mark where cells meet on its outside, _a_, _b_ and _c_
   label the ends of the whole repeat, and Fit takes in all of it. The choice is
   kept in the file and shared by both halves of Both, including after display
-  changes. Repeat and Look along are also in **3D model controls…**.
+  changes. **Copy opacity**, below Repeat, sets the opacity of boundary and
+  repeat copies in both 2D and 3D; it defaults to 55% and is kept in the file.
+  At 100% the copies are drawn as ordinary opaque balls.
+  Repeat, Copy opacity and Look along are also in **3D model controls…**.
 - **Look along** _a_, _b_, _c_ or [111] turns the 3D model to look straight
   down that direction. It turns the 2D drawing too, tilted a little (at most
   about 15°) where stacked atoms would hide each other, as rock salt's along

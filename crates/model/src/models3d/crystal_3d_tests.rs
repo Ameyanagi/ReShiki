@@ -50,6 +50,116 @@ fn salt() -> Document {
 }
 
 #[test]
+fn copy_opacity_round_trips_without_changing_default_files_or_versions() {
+    let mut doc = salt();
+    crystal::mark_distance_bonds(&mut doc);
+    let version = doc.file_version();
+    assert_eq!(doc.models[0].copy_opacity, 0.55);
+    for opacity in [0.55, 0.25, 0., 1.] {
+        doc.models[0].copy_opacity = opacity;
+        let saved = doc.file_json().unwrap();
+        let value: serde_json::Value = serde_json::from_slice(&saved).unwrap();
+        assert_eq!(
+            value["models"][0].get("copy_opacity").is_none(),
+            opacity == 0.55
+        );
+        let reopened = Document::from_json(&saved).unwrap();
+        assert_eq!(reopened.models, doc.models);
+        assert_eq!(reopened.file_json().unwrap(), saved);
+        assert_eq!(doc.file_version(), version);
+    }
+    for opacity in [f32::NAN, f32::INFINITY, -0.1, 1.1] {
+        doc.models[0].copy_opacity = opacity;
+        assert!(validate(&doc).is_err(), "{opacity}");
+    }
+}
+
+#[test]
+fn boundary_and_repeat_copies_use_the_models_opacity_in_2d_and_3d() {
+    let mut doc = salt();
+    let alphas = |parts: &[Primitive]| {
+        parts
+            .iter()
+            .filter_map(|p| match p {
+                Primitive::Opacity { alpha, .. } => Some(*alpha),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    for repeat in [[1; 3], [2, 1, 1]] {
+        doc.models[0].repeat = repeat;
+        // Revisit an earlier opacity with otherwise identical drawings to
+        // exercise the 2D copies cache as well as changes to the setting.
+        for opacity in [0.55, 0.25, 0.8, 0.25, 0., 1.] {
+            doc.models[0].copy_opacity = opacity;
+            doc.models[0].display = Display::ThreeD;
+            for style in [
+                Style::BallStick,
+                Style::Stick,
+                Style::Wireframe,
+                Style::SpaceFilling,
+                Style::Ellipsoids,
+            ] {
+                doc.models[0].style = style;
+                let faded = alphas(&primitives(&doc));
+                // Opaque copies need no opacity; invisible ones are not drawn.
+                assert_eq!(
+                    faded.is_empty(),
+                    opacity == 1. || opacity == 0.,
+                    "{style:?}"
+                );
+                assert!(faded.iter().all(|&alpha| alpha == opacity), "{style:?}");
+            }
+            doc.models[0].display = Display::TwoD;
+            let flat = flat_cells(&doc.models, &doc);
+            let behind = alphas(&flat.behind);
+            assert!(!behind.is_empty());
+            assert!(behind.iter().all(|&alpha| alpha == opacity));
+            let labels = alphas(&flat.front);
+            assert_eq!(labels.is_empty(), opacity == 0.);
+            assert!(labels.iter().all(|&alpha| alpha == opacity));
+            if opacity == 0. {
+                assert!(
+                    !flat
+                        .front
+                        .iter()
+                        .any(|p| matches!(p, Primitive::Halo { .. }))
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn opaque_copies_cut_the_space_filling_balls_they_meet() {
+    let mut doc = salt();
+    doc.models[0].style = Style::SpaceFilling;
+    // The balls not wrapped in an opacity: at 55% only the originals.
+    let solid = |doc: &Document| {
+        primitives(doc)
+            .into_iter()
+            .filter_map(|p| match p {
+                Primitive::Sphere {
+                    center, contact, ..
+                } => Some((center, contact)),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let originals = solid(&doc);
+    assert_eq!(originals.len(), 8);
+    doc.models[0].copy_opacity = 1.;
+    let opaque = solid(&doc);
+    assert_eq!(opaque.len(), 27);
+    // The copies in front now cut the originals they meet.
+    assert!(originals.iter().any(|ball| {
+        opaque
+            .iter()
+            .all(|other| other.0 != ball.0 || other.1 != ball.1)
+    }));
+}
+
+#[test]
 fn nacl_3d_sites_and_bonds_match_the_2d_rule_for_the_whole_repeat() {
     let mut doc = salt();
     for (repeat, count, bonds) in [([1; 3], 27, 54), ([2; 3], 125, 300)] {
@@ -226,7 +336,7 @@ fn translucent_copies_leave_the_original_surface_and_contacts_cache_intact() {
     let atoms = [0, copy];
     assert!(!view.contacts(&atoms, 1.).contains_key(&0));
     // The exact same pose must recalculate contacts when the front ball is opaque.
-    view.originals = view.symbols.len();
+    view.solid = view.symbols.len();
     assert!(view.contacts(&atoms, 1.).contains_key(&0));
 }
 

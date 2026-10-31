@@ -215,6 +215,9 @@ pub struct Model3d {
     /// [`MAX_REPEAT`] each): the model's own cell and lighter copies of it.
     #[serde(default = "one_cell", skip_serializing_if = "is_one_cell")]
     pub repeat: [u8; 3],
+    /// The opacity of a crystal's boundary and repeat copies, from 0 to 1.
+    #[serde(default = "copy_opacity", skip_serializing_if = "is_copy_opacity")]
+    pub copy_opacity: f32,
     #[serde(default)]
     pub background: Background,
     pub force_field: ForceField,
@@ -249,10 +252,14 @@ fn is_included(included: &bool) -> bool {
 fn is_one_cell(repeat: &[u8; 3]) -> bool {
     *repeat == one_cell()
 }
+fn copy_opacity() -> f32 {
+    0.55
+}
+fn is_copy_opacity(opacity: &f32) -> bool {
+    *opacity == copy_opacity()
+}
 /// The most cells a crystal repeats along each axis.
 pub const MAX_REPEAT: u8 = 4;
-/// The opacity of a crystal's boundary and repeat copies.
-const GHOST: f32 = 0.55;
 
 fn is_original(layout: &Layout) -> bool {
     *layout == Layout::Original
@@ -607,6 +614,7 @@ impl Model3d {
             show_hydrogens: Hydrogens::default(),
             charges: false,
             repeat: one_cell(),
+            copy_opacity: copy_opacity(),
             background: Background::default(),
             force_field,
             layout: Layout::Original,
@@ -1004,6 +1012,10 @@ struct View<'a> {
     shown: Vec<bool>,
     /// Display-only copies follow the original geometry points.
     originals: usize,
+    /// The points that cut the balls they meet: all of them when the copies
+    /// are opaque, else only the originals, so see-through copies leave the
+    /// balls behind them whole. Copies fading in never cut.
+    solid: usize,
     copies: HashMap<(u64, [i32; 3]), usize>,
     bonds: Vec<(usize, usize)>,
     style: Style,
@@ -1070,7 +1082,8 @@ impl View<'_> {
                         symbol,
                         zip3(p, cell.at(image.map(|v| v as f32)), |p, t| p + t),
                     ));
-                    shown.push(*shown.get(source)?);
+                    // Invisible copies neither show nor hide the cell's edges.
+                    shown.push(*shown.get(source)? && model.copy_opacity > 0.);
                     ellipsoids.push(*ellipsoids.get(source)?);
                     i
                 };
@@ -1128,6 +1141,11 @@ impl View<'_> {
             symbols: points.into_iter().map(|(s, _)| s).collect(),
             shown,
             originals,
+            solid: if model.copy_opacity < 1. {
+                originals
+            } else {
+                usize::MAX
+            },
             copies,
             bonds,
             style: model.style,
@@ -1683,6 +1701,7 @@ pub fn validate(doc: &Document) -> Result<(), String> {
             })
             || !m.repeat.iter().all(|n| (1..=MAX_REPEAT).contains(n))
             || (m.cell.is_none() && !is_one_cell(&m.repeat))
+            || !(0. ..=1.).contains(&m.copy_opacity)
             || m.drawn.as_ref().is_some_and(|d| {
                 d.atoms.len() > linked.len()
                     || d.atoms.iter().map(|a| a.0).collect::<HashSet<_>>().len() != d.atoms.len()
@@ -2782,7 +2801,8 @@ impl View<'_> {
     /// Where the balls `atoms`, in drawing order, overlap: for each ball cut
     /// by others its visible part, `None` when nothing of it shows. Each seam
     /// goes with the later ball of its pair. Lighter copies and hydrogens
-    /// fading in after `grown` do not cut the opaque atoms behind them.
+    /// fading in after `grown` do not cut the opaque atoms behind them;
+    /// opaque copies cut like the atoms they copy.
     /// The last few views are kept, so an edit
     /// elsewhere in the drawing does not work them out again.
     fn contacts(&self, atoms: &[usize], grown: f32) -> Contacts {
@@ -2803,7 +2823,7 @@ impl View<'_> {
             );
             key.push(self.style.atom_radius(symbol).to_bits());
             key.push(u32::from(
-                i >= self.originals || symbol == "H" && grown < 1.,
+                i >= self.solid || (i >= self.originals || symbol == "H") && grown < 1.,
             ));
         }
         let kept = CONTACTS.with_borrow(|kept| {
@@ -2831,7 +2851,7 @@ impl View<'_> {
                 Some(contact::Ball {
                     p: *self.rotated.get(i)?,
                     r: self.style.atom_radius(symbol),
-                    fading: i >= self.originals || symbol == "H" && grown < 1.,
+                    fading: i >= self.solid || (i >= self.originals || symbol == "H") && grown < 1.,
                 })
             })
             .collect();
@@ -3090,7 +3110,8 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
             Item::Bond(a, b) => a >= view.originals || b >= view.originals,
             _ => i >= view.originals,
         };
-        let alpha = if ghost { GHOST } else { 1. } * if fading || ghost { grown } else { 1. };
+        let alpha =
+            if ghost { model.copy_opacity } else { 1. } * if fading || ghost { grown } else { 1. };
         let symbol = *view.symbols.get(i)?;
         let base = mix(
             float(*colors.get(symbol).unwrap_or(&GREY)),
@@ -3353,10 +3374,12 @@ fn push_model(doc: &Document, model: &Model3d, out: &mut Vec<Primitive>) -> Opti
     let cell_fading = grown < 1.;
     out.extend(behind.into_iter().map(|p| fade_in(cell_fading, p)));
     if let Some(outline) = outline(line * 2.) {
-        for (polygons, alpha) in rims
-            .into_iter()
-            .zip([1., grown, GHOST * grown, GHOST * grown])
-        {
+        for (polygons, alpha) in rims.into_iter().zip([
+            1.,
+            grown,
+            model.copy_opacity * grown,
+            model.copy_opacity * grown,
+        ]) {
             if !polygons.is_empty() {
                 let primitive = Primitive::Contour { polygons, outline };
                 out.push(if alpha < 1. {
@@ -3692,7 +3715,7 @@ pub(crate) fn flat_cells(models: &[Model3d], doc: &Document) -> FlatCells {
         if sites.len() > model.atoms.len()
             && let Some((ghost, index)) = ghosts(doc, model, cell, &fit, &sites)
         {
-            let copied = drawn_copies(ghost);
+            let copied = drawn_copies(ghost, model.copy_opacity);
             out.behind.extend(copied.behind.iter().cloned());
             ghost_labels.extend(copied.labels.iter().cloned());
             copies = Some((copied, index));
@@ -3728,7 +3751,7 @@ pub(crate) fn flat_cells(models: &[Model3d], doc: &Document) -> FlatCells {
                         };
                         let ghost = &copied.ghost;
                         let copy = index.get(&(id, from)).and_then(|i| ghost.atom(*i));
-                        (ghost, copy, GHOST)
+                        (ghost, copy, model.copy_opacity)
                     };
                     let Some(atom) = atom.filter(|a| label_doc.atom_visible(a.id)) else {
                         continue;
@@ -3759,6 +3782,7 @@ pub(crate) fn flat_cells(models: &[Model3d], doc: &Document) -> FlatCells {
 /// and its labels lighter on their halo.
 struct Copied {
     ghost: Document,
+    opacity: f32,
     /// The fonts it was laid out with, see [`crate::style::font_generation`].
     fonts: usize,
     behind: Vec<Primitive>,
@@ -3767,11 +3791,11 @@ struct Copied {
 
 /// `ghost` drawn, or as it was the last few times it was the same, so an
 /// edit elsewhere does not draw every copy again.
-fn drawn_copies(ghost: Document) -> std::rc::Rc<Copied> {
+fn drawn_copies(ghost: Document, opacity: f32) -> std::rc::Rc<Copied> {
     let fonts = crate::style::font_generation();
     let kept = COPIES.with_borrow(|kept| {
         kept.iter()
-            .find(|c| c.fonts == fonts && c.ghost == ghost)
+            .find(|c| c.fonts == fonts && c.opacity == opacity && c.ghost == ghost)
             .cloned()
     });
     if let Some(copied) = kept {
@@ -3785,12 +3809,12 @@ fn drawn_copies(ghost: Document) -> std::rc::Rc<Copied> {
         .filter(|p| !matches!(p, Primitive::Halo { .. }))
         .partition(is_text);
     let lighter = |p| Primitive::Opacity {
-        alpha: GHOST,
+        alpha: opacity,
         primitive: Box::new(p),
     };
     let behind = rest.into_iter().map(lighter).collect();
     let mut ghost_labels = vec![];
-    if !labels.is_empty() {
+    if !labels.is_empty() && opacity > 0. {
         // As for the drawing's labels, the middle of each glyph's
         // box is covered too, so no edge shows through a counter.
         let plain: Vec<_> = labels.iter().map(without_opacity).collect();
@@ -3809,6 +3833,7 @@ fn drawn_copies(ghost: Document) -> std::rc::Rc<Copied> {
     }
     let copied = std::rc::Rc::new(Copied {
         ghost,
+        opacity,
         fonts,
         behind,
         labels: ghost_labels,

@@ -1275,6 +1275,34 @@ fn crystal_repeat_is_shared_by_2d_3d_and_both() {
 }
 
 #[test]
+fn crystal_copy_opacity_is_shared_and_each_drag_is_one_undo_step() {
+    for display in [Display::TwoD, Display::ThreeD, Display::Both] {
+        let mut app = crystal();
+        show(&mut app, display);
+        let before = app.tab.doc.clone();
+        let start = frames(&app);
+        for opacity in [0.4, 0.3, 0.25] {
+            set(&mut app, Setting::CopyOpacity(opacity));
+        }
+        let _ = app.update(Message::Models3d(Action::SlideEnd));
+        assert_eq!(app.tab.doc.models[0].copy_opacity, 0.25);
+        assert_eq!(frames(&app), start + 1);
+        set(&mut app, Setting::CopyOpacity(2.));
+        assert_eq!(app.tab.doc.models[0].copy_opacity, 1.);
+        set(&mut app, Setting::CopyOpacity(-1.));
+        let _ = app.update(Message::Models3d(Action::SlideEnd));
+        assert_eq!(app.tab.doc.models[0].copy_opacity, 0.);
+        assert_eq!(frames(&app), start + 2);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc.models[0].copy_opacity, 0.25);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc.models[0].copy_opacity, 0.25);
+    }
+}
+
+#[test]
 fn a_first_repeat_keeps_a_visible_3d_models_rotation() {
     let mut app = crystal();
     show(&mut app, Display::ThreeD);
@@ -1422,8 +1450,9 @@ fn nacl_3d_repeats_complete_the_cells_without_changing_the_composition_or_saved_
     doc.models[0].turning = true;
     let atoms = doc.atoms.clone();
     let geometry = doc.models[0].atoms.clone();
-    for (repeat, count) in [([1; 3], 27), ([2; 3], 125)] {
+    for (repeat, count, opacity) in [([1; 3], 27, 0.25), ([2; 3], 125, 0.8)] {
         doc.models[0].repeat = repeat;
+        doc.models[0].copy_opacity = opacity;
         let saved = doc.file_json().unwrap();
         let before = doc.clone();
         let balls = model_spheres(&doc);
@@ -1432,7 +1461,7 @@ fn nacl_3d_repeats_complete_the_cells_without_changing_the_composition_or_saved_
         assert_eq!(
             balls
                 .iter()
-                .filter(|(_, _, alpha)| (*alpha - 0.55).abs() < 1e-6)
+                .filter(|(_, _, alpha)| (*alpha - opacity).abs() < 1e-6)
                 .count(),
             count - 8,
         );

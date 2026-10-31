@@ -77,6 +77,7 @@ mod tests {
             rotated: centers.to_vec(),
             shown: vec![true; centers.len()],
             originals: centers.len(),
+            solid: centers.len(),
             copies: Default::default(),
             bonds: vec![],
             style: Style::SpaceFilling,
