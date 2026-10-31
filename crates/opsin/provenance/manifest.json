@@ -1,21 +1,24 @@
 {
   "source": {
     "repository": "https://github.com/dan2097/opsin",
-    "version": "2.9.0",
-    "commit": "b91b610af5ab07560fedb20730d7aef46bb2bca0",
+    "version": "main (non-phane)",
+    "commit": "42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91",
     "license": "MIT",
-    "copyright": "Copyright 2017 Daniel Lowe"
+    "copyright": "Copyright 2017 Daniel Lowe",
+    "base_commit": "b91b610af5ab07560fedb20730d7aef46bb2bca0",
+    "excluded_commits": ["836038e0", "945df68f", "a37ddaf6"],
+    "reference_tree_commit": "496bde378b0b4b2f8c97a726c7aa6ce99af893a7"
   },
   "oracle": {
-    "filename": "opsin-core-2.9.0-jar-with-dependencies.jar",
-    "sha256": "627ee5da4af551f9c4d1d766f545eb7cf519a344776e0bb677247a47abac0252",
+    "filename": "opsin-core-nophane.jar",
+    "sha256": "20c0e6cdeca4dae39029ab67a67129a8e5d88c0238a23484991f2d49d855d10b",
     "purpose": "development-only DFA migration and differential verification"
   },
   "resources": {
     "resources/xml/alkanes.xml": "2b047195ac805959da5410d3b96f896abb98ec51e502714f8cb6dbed08241fb8",
     "resources/xml/aminoAcids.xml": "2829fc6ba1562f090f38c2f89488255fc6d0a709251a502005759121462880fd",
-    "resources/xml/arylGroups.xml": "f6fff80ed347fde1d499aa7145b39387c38b8b8845992f27321123a7778a21db",
-    "resources/xml/arylSubstituents.xml": "50339ba0fbdbdc28562072f17c40b3569e5a78c9d116c30f38efcd5db97590c7",
+    "resources/xml/arylGroups.xml": "16b7b7c03673499fcfd6ee0bee17c7bd1583224cebf2fd9e409e6610e840a7e8",
+    "resources/xml/arylSubstituents.xml": "a6c26a40a518e770d5bd443d6f705c9d98bf78c302b0dacc2f7a94795d0e412f",
     "resources/xml/atomHydrides.xml": "84113f4d42b556f46b06b5aa9b24a722f40fb3298d4b2b5c8aca19fc8bb148c0",
     "resources/xml/carbohydrateSuffixes.xml": "8f6a0d37c0b2cc608a416fd6557937c6538326eaa9263c8eb2285093769c3df5",
     "resources/xml/carbohydrates.xml": "7d015e7f3480f4f84612251bb5a6f0734253cf7ed4d383983f97637ac897d86d",
@@ -23,8 +26,8 @@
     "resources/xml/chargeAndOxidationNumberSpecifiers.xml": "e49d54a32e4aa889285b6ef2167c2dde1ab6936f50b6f0896e6b045ab1e901cc",
     "resources/xml/cyclicUnsaturableHydrocarbon.xml": "1cf6419d2bd7503a2b6818259ea9e6335c09d214ad6b0523da47b25e84411c25",
     "resources/xml/elementaryAtoms.xml": "f60303cda7b23b65b1e1e88d09bb2f02ce48298ad6b9bd567ec3c8f21180c1e0",
-    "resources/xml/functionalTerms.xml": "c2982e6d2e3ba12e6c1898367f86466fc5c6716f53b48f971fc55b3a2df087b3",
-    "resources/xml/fusionComponents.xml": "aaffbcb692fd3786274d32df9385e34cca42f706f2b22febaf76bb5b6061ec59",
+    "resources/xml/functionalTerms.xml": "1aff14ca9925c609780c50e82d8c6b4b555848155504972c96a5c50ab1451257",
+    "resources/xml/fusionComponents.xml": "bd9b4caa09b9c60a6d087b01f6063613a8af0cab681d6cdffea005ac57509938",
     "resources/xml/germanTokens.xml": "9cf7c50f974503858ff8da31772410573f7577e91530fc8e696558ad15513d62",
     "resources/xml/groupStemsAllowingAllSuffixes.xml": "9b12769c19e6c41a542410d288e04c16caa6d95213a59a042046bb299bd3737b",
     "resources/xml/groupStemsAllowingInlineSuffixes.xml": "573b2dbb02ea17e90f22a8f432233507d38713f368aa5f9ee4f5cd3ee7adaac1",
@@ -45,15 +48,15 @@
     "resources/xml/regexes.dtd": "ca576a00c60ba99c54954294999528c73ef8c190b6f64c8fa03e983be9c3d02e",
     "resources/xml/regexes.xml": "95c69046287d2644e2eb1bb9da32ac1e13f5f8d089cfb26d425930340fd33abe",
     "resources/xml/simpleCyclicGroups.xml": "9d2529668f7c1e59ba3d0b2ac276b4b9f11f31467f26295362729aec608e586d",
-    "resources/xml/simpleGroups.xml": "c9edef1f9d068c7591e3d72038e40e186e81d693bd62452702548e04bb3d6ff5",
+    "resources/xml/simpleGroups.xml": "1c776c51de9fe2e2114042e1ee4fc7afe8906b685346d88c2a94c33fd106bd61",
     "resources/xml/simpleSubstituents.xml": "41348a77f2135ad2047f836b52ca2c5db983bcb26c44e04e1694818d24066876",
     "resources/xml/substituents.xml": "41a7f584e7d532dd21526bacd4078d34f8b8ec2df6b833b6f5347b63e3164a35",
     "resources/xml/suffixApplicability.dtd": "50e57c6484ac2ec522cb6ca30e33d25288a74a036ad03432a40db1bb59787c16",
-    "resources/xml/suffixApplicability.xml": "ec785a5431dc4e3a6709b78708b835cb1c963a48a076a2925a9c4596073dde0b",
+    "resources/xml/suffixApplicability.xml": "86d39f1a16a695a35568bd2778576e0c3b8ac7e2612fcb718beeb785b19bb315",
     "resources/xml/suffixPrefix.xml": "5428dbc34ce8e458f81e36ccf456023284bcf8b822d2ada7de5b41e248a7d1c5",
-    "resources/xml/suffixRules.dtd": "1c29d00c322f8c9a2571bc09bba7b61e063407c0d347e14ccca7f8f8fa835907",
-    "resources/xml/suffixRules.xml": "e40de7b127089a68a081252e02c5ac1163f74beec758707938bf2338840a9fbc",
-    "resources/xml/suffixes.xml": "99a599e58c3dd6c244fa4d8f27ba4583d07ccc943d4a62b3a6cc9855e59ecd82",
+    "resources/xml/suffixRules.dtd": "307af66d255095c9d117493c8bddf5e2b9dcc4741e998e7dd7fdcb38304d4daf",
+    "resources/xml/suffixRules.xml": "57e1aff341ad43911536a00283651ec468a70b1b09eadb9ab6d6f359f3a7ca21",
+    "resources/xml/suffixes.xml": "6a76924255cceee29e99917d5808c4ae904d071243cf367d387f977992634b08",
     "resources/xml/tokenFiles.dtd": "3acb49df364b02a65ea20aef8d33758b047fa1426289be3811386a7450e57355",
     "resources/xml/tokenLists.dtd": "66e317f81a885bf306a638e8bdb8433d792e69ff5349bb21e758d7ba24973d7f",
     "resources/xml/unsaturators.xml": "d528b967c52d64a434563dc237d0a28e0784d1916784772381fe545c9bdf6bc1",
@@ -63,7 +66,7 @@
   },
   "resource_fingerprint": {
     "algorithm": "SHA256 of sorted resource UTF8 path, NUL, raw bytes, NUL for every resources entry",
-    "sha256": "4269b61bf110f01d9fab808a13bac1aa4e29ec34800a7ff7cac5925d3774b9a4"
+    "sha256": "3c543268d173cc89b50d68be6ea967f22fc80e6d7384511612a32e4844ae4af5"
   },
   "development_export_sources": {
     "provenance/ExportComponents.java.txt": "8012e1f6090e0d3f594457f5d248193844dbc225d92437a3371c23af1169aae2",
@@ -72,33 +75,37 @@
     "provenance/ExportFrontend.java.txt": "b9ace31c466c52e97f3cb2eea0d3492dd17a9ea10f4c733155ab8dc4383bdf6d",
     "provenance/ExportFusedBuilding.java.txt": "07a21e1ead74783b56530a476eae8886dc322317de4c80f304a8e6756580c647",
     "provenance/ExportFusedNumbering.java.txt": "d3d44dc0dcab023f4dffaaec34f02a2eef0dda443cf94d868cbe58c95dc3dc9e",
+    "provenance/ExportGraphResources.java.txt": "0a16a73239c709b0e1e61b38ec287ee5981f010c2d23a3dce04460cf472e8d1e",
     "provenance/ExportParseTrees.java.txt": "50415280c70873cb095abcdb2dfc001f48101d7ce5bcdea2ab92740587987043",
     "provenance/ExportStructures.java.txt": "b24d380b0d2089e896d1af241821071cb41838e566467482258499742203764d",
     "provenance/ExportSuffixRules.java.txt": "825a7a1caaaebe070c483932e481a3ac937f353712178f433b2430aa6330e3d5"
   },
   "fixtures": {
     "tests/fixtures/ambiguous.txt": "83b06661cefd182369f6d3991c017b067e0c09b063737dd3aee558852356705e",
-    "tests/fixtures/component-golden.jsonl.gz": "159b386ecbcf60e3b649e4cd1d5ab79166595dddd9a0fc1d8f13d0f21538d347",
+    "tests/fixtures/chalcogenAcidLocants.txt": "321a40bb91213b72bc7415cc81a305578736001ec977c507c68157f8a273ee98",
+    "tests/fixtures/component-golden.jsonl.gz": "de73246413f8d9ab829f9c1698b778a8244e67ce6246c9edd02d3b8d8e75ee7a",
     "tests/fixtures/configuration-golden.jsonl.gz": "e04551bd126b9ac1d895340fed519ec5eab1d950146516780c111cf75728e17e",
     "tests/fixtures/configuration-inputs.txt": "1b63073e7506bab7f9d75189c7ce1f17f83844ae8c9814778c3c0dd14019252a",
-    "tests/fixtures/frontend-golden.jsonl": "ecd38bdcc5aba156ed6ca1da4698e194c8bc1b965d9678279d73644e7883d2d0",
-    "tests/fixtures/frontend-inputs.txt": "631a4c362fa6b731ab8c5d58462cfae0625e9e1a72d111f0618a72b3daa66bf7",
+    "tests/fixtures/frontend-golden.jsonl": "807d8f9f765e187840c3af613803d3525ae8d197539d909685b7854923d70a5c",
+    "tests/fixtures/frontend-inputs.txt": "3848112184415b237d23292f52fb04933aee9b5fef6933ce7f51f13b5f596386",
     "tests/fixtures/fused-building-golden.jsonl": "bfa5f48c45cd91ff7b06ee88b02b4e15605006952a34ee965d0fbeeb1d9bd692",
     "tests/fixtures/fused-building-inputs.tsv": "342d280434600ee0d594e732576390f46ae09c3b80db97890303e0286ec3e2e8",
     "tests/fixtures/fused-numbering-golden.jsonl": "0c36636cc8a970b504bee2729f1c009ec1ed4e890a74ddae6b4cf7a2a187d377",
     "tests/fixtures/fused-numbering-inputs.tsv": "782eefd0eb2595d1f0c7f4ed9e2a3d45bc4bbb3391da46220fe8298aafbf5abd",
-    "tests/fixtures/parse-tree-golden.jsonl.gz": "7c52b398f3bbaa8f579b741e0feed5c42c6603171bdb6deac933a650261876a5",
-    "tests/fixtures/parse-tree-inputs.tsv": "56a3bcb2c9636d13ac6d4065d4ba0d8be9c9e025505d51361083de22c9375826",
-    "tests/fixtures/structure-golden.jsonl.gz": "98d7c852bf0b956e9f9ca2b7d9be86245bf18265bd1c0f1b84a4e4c22118c17e",
-    "tests/fixtures/structure-inputs.tsv": "c4816f6a9223f0bd1fa394ad3ef41320a974ceff5da644ca17c7053fce7fe6ae",
+    "tests/fixtures/graph-resource-golden.tsv": "325b6689213e5455a4e34cf35e344fdd43a3380b9a9eea22db7ba2019b4e6241",
+    "tests/fixtures/graph-resource-inputs.tsv": "f0de6cd1561770ca8f9943e07af0bd8f7f2595d02aa1b955a6c137a6f22a6111",
+    "tests/fixtures/parse-tree-golden.jsonl.gz": "5da0fc023c95a09229c30f5cc7c7a418c215eca74e47480f377148d3ca881004",
+    "tests/fixtures/parse-tree-inputs.tsv": "801121ad871c4a23a5a5b8063187f0efe16b00484f99b62801947e48a399af29",
+    "tests/fixtures/structure-golden.jsonl.gz": "298a0247376edecf9a6a056a46bdfd9980afe1a944f8fef62bb3676e0e056754",
+    "tests/fixtures/structure-inputs.tsv": "65352724fdc92c3252e47f3d604bc32ec3e356cad9cc5dea3b52d1d53ea2f6c3",
     "tests/fixtures/suffix-rule-golden.jsonl": "4a467a4507da52f4bdc5b045f4f856d19a15b6f4c0f4d6c37b54be00ef0b7250",
     "tests/fixtures/suffix-rule-inputs.tsv": "57a327a8c8c39991a5b8b9e2498956757cc44a6793d8f9a984c983855270d027",
     "tests/fixtures/unambiguous.txt": "a1667bf5d7a7f23bd69045ab44763fac4df2dbd0c350348f496f964dff9a6406",
-    "tests/fixtures/uninterpretable.txt": "543322e505ea6b934fbd1ca477769c4552ffcf79db27bd68603207aa62eb5da0",
+    "tests/fixtures/uninterpretable.txt": "5476311d88598d5d9e7964b4031afc54a439b10386053d976559c7d0a40592e1",
     "tests/fixtures/upstream-inchi/acetals.txt": "2afa9f593bca9b7ee296c9ff774b914e217615b9a79ae1fd7744d3b1349cf321",
     "tests/fixtures/upstream-inchi/additiveNomenclature.txt": "063f852008dc6b1f2f82f14dff9ca3a40caa96e22d39a0b0d72dbfe03c65d9d1",
-    "tests/fixtures/upstream-inchi/alcoholEsters.txt": "70226bc572a754bf8fedef29b5738ceedfdd8423b37ec74b3c8ae9b3a9a26d28",
-    "tests/fixtures/upstream-inchi/aminoAcids.txt": "20b6732cd856d9e5bc78cb5d04359426a1057360cd0a55ed4b1088e781573d72",
+    "tests/fixtures/upstream-inchi/alcoholEsters.txt": "ba90f011105583a18ba421238f059bc65fcb63a4dde0b3faf7e24c38a8a1128c",
+    "tests/fixtures/upstream-inchi/aminoAcids.txt": "857b5cb4907288bf955dbcfeb8fe11e17a8a8783582dff82a526992e60ce1388",
     "tests/fixtures/upstream-inchi/carbohydrates.txt": "e01db12235cc7e811d1e9ed033a782654ddc143110658a612ffb798837e2fc3e",
     "tests/fixtures/upstream-inchi/chargeBalancing.txt": "8fc5177b4df2808e82cf083dd94457d339f7441b5019b55656dda4fb3466c36b",
     "tests/fixtures/upstream-inchi/conjunctiveNomenclature.txt": "b9ec1303f490b1628e3fcbd7618830dd5870375df8c26d4f87f6085686eabe28",
@@ -106,27 +113,30 @@
     "tests/fixtures/upstream-inchi/detachablePrefixes.txt": "e1b2b5c48b9620b07bc376cc8c1b3fe7aed00ee3e394447b3f7158332ea28081",
     "tests/fixtures/upstream-inchi/epoxyLike.txt": "503109bd95cc1ff867e3c3d94ab56a274438a891c79f2f99922c875c82df9a6a",
     "tests/fixtures/upstream-inchi/flavonoids.txt": "fed97e64bf7a0cf02f0e15362f2d22023290d0ee6c69f22121605d45889721a7",
-    "tests/fixtures/upstream-inchi/functionalClasses.txt": "52521edc1614fe654ba75742bb5f6f3fc0731f83f9d940d9ae10dbad4518bc86",
-    "tests/fixtures/upstream-inchi/functionalReplacement.txt": "f619ea2392d1867cc3869b18c2c8ad2c215d76108aec7c9cf2aebf8767e9d3da",
-    "tests/fixtures/upstream-inchi/fusedRings.txt": "edfa220db5619f95a03878381762e7899f6e0024129496685ca08b0f6ea8a495",
+    "tests/fixtures/upstream-inchi/functionalClasses.txt": "67643550f2fe37a9824ea342b4c208aa609924dd5ce188abd71cbe7ad9ed0ef3",
+    "tests/fixtures/upstream-inchi/functionalReplacement.txt": "aee90228a94d3d4ee026f9e4e72ea3f41e3a08a6f5628e4d57b55ee455c3e82f",
+    "tests/fixtures/upstream-inchi/fusedRings.txt": "3bf295f6eeaf9a2a638354c5290315f44bcd97ec913161adec9c47088b23ca7a",
+    "tests/fixtures/upstream-inchi/greekLactones.txt": "2b54ebb8354d21f36c5bba0d95993b9a24bd441cc41c20ee963a5529c81f20fb",
     "tests/fixtures/upstream-inchi/hwRings.txt": "e4e7f7b71431dbb61bbfb1455ad21193f0618136bdd88f7c2f17a9d16ab1441d",
     "tests/fixtures/upstream-inchi/implicitBracketting.txt": "d5cfdc7e9a1c5b490129ec5c4e11eb1fdc8901d0fa49b7b0fe80aaf38f68c327",
+    "tests/fixtures/upstream-inchi/indirectLocants.txt": "1ab43102a53118e82864aed441ac6ac342ae3eb0a1e298492dfa57ba4557562c",
     "tests/fixtures/upstream-inchi/inorganics.txt": "dff6883925bca1d942763b316748fca899ecc4d280438df3a78d9c6cdbe9be75",
-    "tests/fixtures/upstream-inchi/ions.txt": "ac90dfb4830291fed54c9f64f82903bb7dddfaf67dc9de611aea3b8e7d388570",
-    "tests/fixtures/upstream-inchi/isotopes.txt": "853a31a3ab4ee935d05d689f67b498813470ba358e0c4f13515ac7f2ad003d56",
+    "tests/fixtures/upstream-inchi/ions.txt": "5a717d11b32bfbba9fe07d8bfddfa0c7350f9f7623d6b014738b935d34fb07f5",
+    "tests/fixtures/upstream-inchi/isotopes.txt": "a9f6457bb826d9ab88c8418efe53163b31579cf249e9ffbb819a70dd7fee9dfc",
     "tests/fixtures/upstream-inchi/lettercasing.txt": "14a5e9d8b51bd5540e11452d33892868b8a75d93d50b22be1d4846ee14221d3a",
-    "tests/fixtures/upstream-inchi/miscellany.txt": "241465a9d940d275ce12cbc6e7003868cb159340f6725baafbebddc340dfe614",
+    "tests/fixtures/upstream-inchi/miscellany.txt": "f4cd2a5f0510663c6d5c0567f86357a9c0b7d41d6bf5f2dce0107776c24ee97f",
     "tests/fixtures/upstream-inchi/multiplicativeNomenclature.txt": "79add59e21fa6f7145f67af3c5d9e18ae1b6c5789912825b979355f4b2f3d4f1",
     "tests/fixtures/upstream-inchi/omittedSpaces.txt": "c04c4414e7929aa8a90556d7a7f53b0668aaa2b359333c159b895b47e648874f",
     "tests/fixtures/upstream-inchi/organometallics.txt": "f57c28de4b03be274bacf705f7f817977e5f3d7a77af520903cc7527f694a2d0",
     "tests/fixtures/upstream-inchi/radicals.txt": "d4f5b1df7816701539ff412578ee0d61eafa4e5ca14d5941c3f69967222aac11",
-    "tests/fixtures/upstream-inchi/spiro.txt": "6236313f41b1f42cbe6ecd30db15974afa607344ca7597694757497cb12e0d5d",
-    "tests/fixtures/upstream-inchi/stereochemistry.txt": "cbe76f3bbedda55cccdf8571cdfa6acfdb671c97052f94c8074b498967ee96d7"
+    "tests/fixtures/upstream-inchi/spiro.txt": "e5bb43b2395df431fad2d25fd32926bbb90f5c13aee03c91e3c7669e562d8d1d",
+    "tests/fixtures/upstream-inchi/stereochemistry.txt": "cbe76f3bbedda55cccdf8571cdfa6acfdb671c97052f94c8074b498967ee96d7",
+    "tests/fixtures/upstream-inchi/superfluousSpaces.txt": "6bff172b51a40b9096929570f32f292a43fb25b93e3eda9aa2fd18b3dc3d00ea"
   },
   "structure_oracle": {
-    "rows": 2096,
-    "source_rows": 1048,
-    "families": 27,
+    "rows": 2274,
+    "source_rows": 1137,
+    "families": 30,
     "configurations": [
       {
         "allow_radicals": false
@@ -137,27 +147,28 @@
     ],
     "all_other_config_flags": false,
     "semantic_cxsmiles_mask": 13,
-    "uncompressed_sha256": "31c1e34d513b925f73d08fda6d9449c955fcbdc7f4f3bd1147332d716a172b59",
+    "uncompressed_sha256": "ef7d25a626bbcb136e4d588161a5ee95801d35cdaadb0649d19881dd5aea1f1c",
     "gzip_mtime": 0,
-    "native_compatibility_status": "all 2,096 records exact across all 27 families: status, message, warnings, semantic CXSMILES and ordered complete graph; 7.13 seconds debug test process"
+    "native_compatibility_status": "all 2,274 records exact across all 30 families: status, message, warnings, semantic CXSMILES and ordered complete graph"
   },
   "parse_tree_oracle": {
-    "rows": 4320,
-    "source_rows": 1080,
+    "rows": 4736,
+    "source_rows": 1184,
     "configurations": "allow_radicals false/true crossed with detailed_failure_analysis false/true; other flags false",
     "checks": "exact raw and ranked XML, token attribute order, normalized input and errors",
-    "native_compatibility_status": "4,320 exact comparisons pass"
+    "native_compatibility_status": "4,736 exact comparisons pass",
+    "uncompressed_sha256": "6170e9ad00ff7a72e59c715adc4715d8752197e31172c880fb275ce1c406180b"
   },
   "component_oracle": {
-    "rows": 4320,
-    "ranked_candidates": 4736,
-    "successes": 4572,
-    "component_errors": 164,
-    "frontend_failures": 82,
+    "rows": 4736,
+    "ranked_candidates": 5232,
+    "successes": 5052,
+    "component_errors": 180,
+    "frontend_failures": 90,
     "checks": "each ranked candidate exact before XML, successful after XML, error and warnings; independent of Rust frontend",
     "gzip_mtime": 0,
-    "uncompressed_sha256": "7ec3f27d61e38964a161428d66614175c94a76538f42bc401bd5777b3234f3a3",
-    "native_compatibility_status": "all 4,736 ranked candidates exact over all 4,320 rows; 25 additional focused tests pass"
+    "uncompressed_sha256": "2c857607fc57e6cd88d3d9396f8213f65c9f5c86f2f0d946c715376150ad685b",
+    "native_compatibility_status": "all 5,232 ranked candidates exact over all 4,736 rows"
   },
   "fused_numbering_oracle": {
     "rows": 81,
@@ -185,18 +196,71 @@
     "configurations": 32,
     "inputs": "source NameToStructureConfigurationsTest examples plus polymer/radical/stereo/failure edges",
     "checks": "all five configuration flags crossed; exact status, message, warnings, semantic CXSMILES and ordered graph",
-    "native_compatibility_status": "all 640 complete records exact; all five flags crossed in all 32 combinations; 0.90 seconds debug test process"
+    "native_compatibility_status": "all 640 complete records exact; all five flags crossed in all 32 combinations"
   },
   "native_crate_acceptance": {
     "command": "cargo test -p opsin --all-targets --offline -j4",
-    "passed_test_functions": 318,
-    "integration_targets": 38,
+    "passed_test_functions": 351,
+    "integration_targets": 40,
     "failed": 0,
     "ignored": 0,
     "runtime_java_required": false,
-    "strict_lint_command": "cargo clippy -p opsin --all-targets --offline -j4 -- -D warnings",
+    "strict_lint_command": "cargo clippy -p opsin --all-targets --offline -- -D warnings",
     "strict_clippy": "pass",
     "format_command": "cargo fmt -p opsin -- --check",
-    "format_check": "pass"
+    "format_check": "pass",
+    "unit_test_functions": 8
+  },
+  "frontend_oracle": {
+    "rows": 7050,
+    "source_names": 1175,
+    "modes": 6,
+    "native_compatibility_status": "all 7,050 records exact over all 1,175 names and six modes"
+  },
+  "graph_resource_oracle": {
+    "literal_groups": 3182,
+    "distinct_triples": 2642,
+    "checks": "sorted resource (value, type, labels) input identity; ordered spare valencies, bond orders, cycle membership and indicated hydrogens before/after kekulization; exact conversion errors",
+    "baseline_reproduction_sha256": "d8d463bc53aa27d99c0064671b862d1f911bf6f5bbe129b95b68d5a3c01f5758",
+    "baseline_jar_sha256": "c2e29326c281f87b59a05d934d8589adac6e9d17b95b984931b3e739111b360f",
+    "native_compatibility_status": "all 2,642 snapshots exact; all 3,182 literal groups build"
+  },
+  "chalcogen_acid_locants": {
+    "rows": 26,
+    "checks": "success status and exact sorted terminal chalcogen bond orders/elements"
+  },
+  "broader_parity": {
+    "comparison": "canonical core SMILES and verbatim semantic CXSMILES extension against frozen nophane jar outputs",
+    "corpora": {
+      "a-upstream": {
+        "total": 1486,
+        "same": 1242,
+        "both_fail": 244,
+        "mismatch": 0,
+        "reference_sha256": "c482153d25de5eec22cc5c00ad8d59d673d9b6c7af434566c0b35dd95ecce070"
+      },
+      "b-repo": {
+        "total": 1209,
+        "same": 1157,
+        "both_fail": 52,
+        "mismatch": 0,
+        "reference_sha256": "666c97135904a38cc0fddb8e20fc5283cc0600344dbf58a6b44ced25a5128e98"
+      },
+      "c-bakeoff": {
+        "total": 702,
+        "same": 689,
+        "both_fail": 13,
+        "mismatch": 0,
+        "reference_sha256": "42c08d6244aa83343b2e73defce122d93f640a17bb510cecc21421e443fc4b8b"
+      },
+      "d-phane": {
+        "total": 261,
+        "same": 0,
+        "both_fail": 261,
+        "mismatch": 0,
+        "reference_sha256": "86010478adeff8ea8bde4baf90bad6f25f52559b8e1ef5475ea8ca76228c4501"
+      }
+    },
+    "mismatches": 0
   }
 }

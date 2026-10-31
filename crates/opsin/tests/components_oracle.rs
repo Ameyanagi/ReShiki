@@ -207,8 +207,8 @@ fn component_generation_matches_all_frozen_ranked_candidates() {
             }
         }
     }
-    assert_eq!(rows, 4320);
-    assert_eq!(candidates, 4736);
+    assert_eq!(rows, 4736);
+    assert_eq!(candidates, 5232);
     assert_eq!(
         failure_count,
         0,

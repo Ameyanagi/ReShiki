@@ -371,6 +371,42 @@ fn suffix_prefix_and_structurally_multiplied_infixes() {
     }
 }
 #[test]
+fn amido_and_hydrazido_before_oxy_require_the_suffix_interpretation() {
+    for infix in ["amid", "hydrazid"] {
+        let (mut t, r) = tree();
+        token(
+            &mut t.arena,
+            r,
+            GROUP_EL,
+            "acet",
+            &[
+                (TYPE_ATR, ACIDSTEM_TYPE_VAL),
+                (SUBTYPE_ATR, ENDINIC_SUBTYPE_VAL),
+            ],
+        );
+        token(
+            &mut t.arena,
+            r,
+            INFIX_EL,
+            infix,
+            &[(VALUE_ATR, "O:N"), (SUBSEQUENTUNSEMANTICTOKEN_ATR, "o")],
+        );
+        token(
+            &mut t.arena,
+            r,
+            SUFFIX_EL,
+            "oxy",
+            &[(TYPE_ATR, INLINE_TYPE_VAL), (VALUE_ATR, "oxy")],
+        );
+        let error =
+            process_components(&mut t, &mut ComponentGenerationContext::default()).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            format!("{infix}o in this context is a suffix, not an infix")
+        );
+    }
+}
+#[test]
 fn lambda_values_are_assigned_to_multiplied_heteroatoms() {
     let (mut t, r) = tree();
     token(

@@ -1047,6 +1047,31 @@ pub fn process_infix_functional_replacement_nomenclature(
                 .fragment_manager
                 .replace_atom_preserving_connectivity(atom, new_atom)
                 .map_err(|e| error(e.to_string()))?;
+            // An earlier infix may already include this oxygen in a shared
+            // candidate set, as in the second infix of selenothioic.
+            let graph = &mut state.fragment_manager.graph;
+            if graph
+                .atom(atom)
+                .properties
+                .ambiguous_element_assignment_id
+                .is_some()
+                || !graph
+                    .atom(atom)
+                    .properties
+                    .ambiguous_element_assignment
+                    .is_empty()
+            {
+                graph.replace_ambiguous_element_assignment_member(atom, atom, new_atom);
+                let assignment = graph
+                    .atom(atom)
+                    .properties
+                    .ambiguous_element_assignment
+                    .clone();
+                let assignment_id = graph.atom(atom).properties.ambiguous_element_assignment_id;
+                let properties = &mut graph.atom_mut(new_atom).properties;
+                properties.ambiguous_element_assignment = assignment;
+                properties.ambiguous_element_assignment_id = assignment_id;
+            }
             if ambiguous {
                 let mut candidates = vec![new_atom];
                 candidates.extend(&double);

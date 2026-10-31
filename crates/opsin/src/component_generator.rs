@@ -840,7 +840,13 @@ impl<'a> ComponentGenerator<'a> {
             };
             let n = self.token(STEREOCHEMISTRY_EL, descriptor.clone(), &[]);
             if !c[1].is_empty() {
-                self.add(n, LOCANT_ATR, fix_locant_capitalisation(remove_dash(&c[1])))
+                self.add(
+                    n,
+                    LOCANT_ATR,
+                    fix_locant_capitalisation(&standardize_locant_prime_position(remove_dash(
+                        &c[1],
+                    ))),
+                )
             }
             self.arena.insert_before(id, n);
             let symbol = &c[2];
@@ -1007,6 +1013,15 @@ impl<'a> ComponentGenerator<'a> {
                 self.arena.detach(id);
             } else if multiplier.is_some_and(|m| self.attr_is(m, TYPE_ATR, GROUP_TYPE_VAL)) {
                 self.arena.detach(id)
+            }
+            let infix_name = self.val(id);
+            if ["amid", "hydrazid"].contains(&infix_name.as_str())
+                && self.attr_is(id, SUBSEQUENTUNSEMANTICTOKEN_ATR, "o")
+                && self.val(s) == "oxy"
+            {
+                return err(format!(
+                    "{infix_name}o in this context is a suffix, not an infix"
+                ));
             }
             self.set(s, INFIX_ATR, infos.join(";"));
         }
@@ -2078,14 +2093,27 @@ impl<'a> ComponentGenerator<'a> {
                 let hyphen = self.token(HYPHEN_EL, "", &[]);
                 self.arena.insert_after(sub, hyphen)
             }
-        } else if subtype == ENDINIC_SUBTYPE_VAL && kind == AMINOACID_TYPE_VAL {
-            if self.attr(g, SUFFIXAPPLIESTO_ATR).split(',').count() == 2
+        } else if kind == AMINOACID_TYPE_VAL {
+            if subtype == ENDINIC_SUBTYPE_VAL
+                && self.attr(g, SUFFIXAPPLIESTO_ATR).split(',').count() == 2
                 && let Some(yl) = self.arena.next_sibling(g).filter(|&s| {
                     self.attr_is(s, VALUE_ATR, "yl")
                         && self.arena[s].attribute(ADDITIONALVALUE_ATR).is_none()
                 })
             {
                 self.add(yl, ADDITIONALVALUE_ATR, "ic")
+            } else if subtype != ENDINIC_SUBTYPE_VAL
+                && value == "asparag"
+                && let Some(ine) = self
+                    .arena
+                    .next_sibling(g)
+                    .filter(|&s| self.arena[s].name == INE_EL)
+                && self
+                    .arena
+                    .next_sibling(ine)
+                    .is_some_and(|s| self.arena[s].name == SUFFIX_EL && self.val(s) == "ic acid")
+            {
+                self.set(g, VALUE_ATR, "N[C@@H](CC(O)=O)C")
             }
         } else if subtype == SALTCOMPONENT_SUBTYPE_VAL {
             let mut parse = g;
@@ -2458,11 +2486,7 @@ pub fn standardize_locant_variants(text: &str) -> String {
             text = format!("{}{}{}", &c[2], &c[1], &c[3])
         }
     }
-    if text.contains('\'')
-        && let Some(c) = rx(r"^(\d+)('+)([a-z])$").captures(&text)
-    {
-        text = format!("{}{}{}", &c[1], &c[3], &c[2])
-    }
+    text = standardize_locant_prime_position(&text);
     if text.chars().next().is_some_and(char::is_alphabetic) {
         let pattern = rx(&format!(
             "^({ELEMENT_SYMBOLS}'*)[\\^\\[\\(\\{{~\\*<]*(?:[sS][uU][pP][ ]?)?([^\\^\\[\\(\\{{~\\*<\\]\\)\\}}>]+)[^\\[\\(\\{{]*"
@@ -2478,6 +2502,14 @@ pub fn standardize_locant_variants(text: &str) -> String {
         }
     }
     fix_locant_capitalisation(&text)
+}
+fn standardize_locant_prime_position(text: &str) -> String {
+    if text.contains('\'')
+        && let Some(c) = rx(r"^(\d+)('+)([a-z])$").captures(text)
+    {
+        return format!("{}{}{}", &c[1], &c[3], &c[2]);
+    }
+    text.to_string()
 }
 pub fn split_into_individual_locants(text: &str) -> Vec<String> {
     let mut result = Vec::new();

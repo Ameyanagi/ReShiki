@@ -5,7 +5,7 @@
 //! Hydroxy conversion rules are deliberately handled in ComponentProcessor,
 //! before this phase, exactly as in the source.
 
-use std::sync::LazyLock;
+use std::{collections::HashSet, sync::LazyLock};
 
 use regex::Regex;
 
@@ -373,18 +373,14 @@ impl<'a> SuffixApplier<'a> {
                             }
                         }
                         SuffixRuleType::SetAcidicElement => {
-                            let element = rule
-                                .attribute(SUFFIXRULES_ELEMENT_ATR)
-                                .and_then(Element::from_symbol)
-                                .ok_or_else(|| {
-                                    ParsingError(
-                                        "OPSIN Bug: Invalid acidic element in suffix rule".into(),
-                                    )
-                                })?;
-                            let sf = suffix_fragment.ok_or_else(|| ParsingError(
-                                "OPSIN Bug: setAcidicElement requires an associated suffix fragment".into()
-                            ))?;
-                            self.swap_elements_such_that_this_element_is_acidic(sf, element)?;
+                            let mut acidic_atoms = HashSet::new();
+                            for element in Self::get_acidic_elements(rule, &arena.value(suffix))? {
+                                self.swap_elements_such_that_this_element_is_acidic(
+                                    suffix_fragment.unwrap_or(fragment),
+                                    element,
+                                    &mut acidic_atoms,
+                                )?;
+                            }
                         }
                         SuffixRuleType::AddSuffixPrefixIfNonePresentAndCyclic
                         | SuffixRuleType::AddFunctionalAtomsToHydroxyGroups
@@ -846,13 +842,51 @@ impl<'a> SuffixApplier<'a> {
         Ok(())
     }
 
+    /// The rule's element, or the symbols before "acid" in the suffix text.
+    fn get_acidic_elements(
+        rule: &SuffixRule,
+        suffix_text: &str,
+    ) -> Result<Vec<Element>, ParsingError> {
+        let symbols = if let Some(element) = rule.attribute(SUFFIXRULES_ELEMENT_ATR) {
+            element
+        } else {
+            let start = suffix_text.find(' ').map_or(0, |index| index + 1);
+            let end = suffix_text.rfind('-').ok_or_else(|| {
+                ParsingError("OPSIN Bug: Invalid acidic element in suffix rule".into())
+            })?;
+            &suffix_text[start..end]
+        };
+        symbols
+            .split(',')
+            .map(|symbol| {
+                let mut symbol = symbol.to_owned();
+                if let Some(first) = symbol.get_mut(..1) {
+                    first.make_ascii_uppercase();
+                }
+                Element::from_symbol(&symbol).ok_or_else(|| {
+                    ParsingError("OPSIN Bug: Invalid acidic element in suffix rule".into())
+                })
+            })
+            .collect()
+    }
+
     fn swap_elements_such_that_this_element_is_acidic(
         &mut self,
         fragment: FragmentId,
         element: Element,
+        acidic_atoms: &mut HashSet<AtomId>,
     ) -> Result<(), ParsingError> {
         let graph = &mut self.state.fragment_manager.graph;
         for atom in graph.fragment(fragment).functional_atoms.clone() {
+            if graph.atom(atom).element == element && acidic_atoms.insert(atom) {
+                graph.remove_ambiguous_element_assignment_members(atom, &[atom]);
+                return Ok(());
+            }
+        }
+        for atom in graph.fragment(fragment).functional_atoms.clone() {
+            if acidic_atoms.contains(&atom) {
+                continue;
+            }
             let assignment = graph
                 .atom(atom)
                 .properties
@@ -882,6 +916,7 @@ impl<'a> SuffixApplier<'a> {
                 // replacements share it; copied fragments hold independent
                 // sets even when their members are equal.
                 graph.remove_ambiguous_element_assignment_members(atom, &[other, atom]);
+                acidic_atoms.insert(atom);
                 return Ok(());
             }
         }

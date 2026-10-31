@@ -56,7 +56,7 @@ use std::sync::{Arc, OnceLock};
 pub const UPSTREAM_VERSION: &str = "2.9.0";
 pub const UPSTREAM_COMMIT: &str = "b91b610af5ab07560fedb20730d7aef46bb2bca0";
 pub const RESOURCE_FINGERPRINT: &str =
-    "4269b61bf110f01d9fab808a13bac1aa4e29ec34800a7ff7cac5925d3774b9a4";
+    "3c543268d173cc89b50d68be6ea967f22fc80e6d7384511612a32e4844ae4af5";
 pub const PORT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Debug, Clone)]

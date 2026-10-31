@@ -425,6 +425,25 @@ impl<'a> ComponentProcessor<'a> {
         fragment: FragmentId,
     ) -> Result<()> {
         let names = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"];
+        let terminal = if arena[group].attribute(TYPE_ATR) == Some(CHAIN_TYPE_VAL)
+            && arena[group].attribute(SUBTYPE_ATR) == Some(ALKANESTEM_SUBTYPE_VAL)
+            && self
+                .state
+                .fragment_manager
+                .graph
+                .fragment(fragment)
+                .atoms
+                .len()
+                > 1
+            && let Some(suffix) = arena.next_sibling_named(group, SUFFIX_EL)
+            && arena[suffix].attribute(SUFFIXPREFIX_ATR).is_none()
+        {
+            arena[suffix].attribute(SUBTYPE_ATR) == Some(TERMINAL_SUBTYPE_VAL)
+                || (arena[suffix].attribute(SUBTYPE_ATR) == Some(CYCLEFORMER_SUBTYPE_VAL)
+                    && self.suffix_places_acid_group_on_attached_atom(arena, suffix, fragment))
+        } else {
+            false
+        };
         let graph = &mut self.state.fragment_manager.graph;
         if arena[group].attribute(TYPE_ATR) == Some(ACIDSTEM_TYPE_VAL) {
             let mut starting = graph.fragment(fragment).atoms[0];
@@ -472,10 +491,6 @@ impl<'a> ComponentProcessor<'a> {
             if graph.fragment(fragment).atoms.len() == 1 {
                 return Ok(());
             }
-            let terminal = arena.next_sibling_named(group, SUFFIX_EL).is_some_and(|s| {
-                arena[s].attribute(SUBTYPE_ATR) == Some(TERMINAL_SUBTYPE_VAL)
-                    && arena[s].attribute(SUFFIXPREFIX_ATR).is_none()
-            });
             for atom in graph.fragment(fragment).atoms.clone() {
                 if graph.atom(atom).in_cycle {
                     continue;
@@ -496,6 +511,54 @@ impl<'a> ComponentProcessor<'a> {
             }
         }
         Ok(())
+    }
+
+    fn suffix_places_acid_group_on_attached_atom(
+        &mut self,
+        arena: &Arena,
+        suffix: NodeId,
+        fragment: FragmentId,
+    ) -> bool {
+        let parent = self.state.fragment_manager.graph.fragment(fragment);
+        let group_type = if self
+            .suffix_rules
+            .is_group_type_with_specific_suffix_rules(&parent.fragment_type)
+        {
+            parent.fragment_type.as_str()
+        } else {
+            STANDARDGROUP_TYPE_VAL
+        };
+        let Ok(rules) =
+            self.suffix_rules
+                .rule_tags(group_type, &arena.value(suffix), Some(&parent.sub_type))
+        else {
+            return false;
+        };
+        let Some(rule) = rules
+            .iter()
+            .find(|rule| rule.kind == SuffixRuleType::AddGroup)
+        else {
+            return false;
+        };
+        let Some(smiles) = rule.attribute(SUFFIXRULES_SMILES_ATR) else {
+            return false;
+        };
+        let Ok(suffix_fragment) =
+            self.state
+                .fragment_manager
+                .build_smiles(smiles, SUFFIX_TYPE_VAL, NONE_LABELS_VAL)
+        else {
+            return false;
+        };
+        let graph = &self.state.fragment_manager.graph;
+        let attached_atom = graph.fragment(suffix_fragment).atoms[0];
+        let acid_on_parent = graph.atom(attached_atom).bonds.iter().any(|&bond| {
+            let bond = graph.bond(bond);
+            bond.order > 1
+                && graph.atom(bond.other_atom(attached_atom).unwrap()).element != ChemEl::C
+        });
+        let _ = self.state.fragment_manager.remove_fragment(suffix_fragment);
+        acid_on_parent
     }
 
     pub fn process_charge_and_oxidation_number_specification(
@@ -1964,9 +2027,15 @@ impl<'a> ComponentProcessor<'a> {
         }
         message
     }
-    fn word_level_locants_allowed(&self, arena: &Arena, element: NodeId, count: usize) -> bool {
+    fn word_level_locants_allowed(
+        &self,
+        arena: &Arena,
+        element: NodeId,
+        locants: &[NodeId],
+    ) -> Result<bool> {
+        let count = locants.len();
         let Some(parent) = arena[element].parent else {
-            return false;
+            return Ok(false);
         };
         let rule = self.state.current_word_rule.as_deref().unwrap_or("");
         let at_end_or_two = arena.next_sibling(element).is_none() || count >= 2;
@@ -1977,24 +2046,53 @@ impl<'a> ComponentProcessor<'a> {
                 "ester" | "functionalClassEster" | "multiEster" | "acetal"
             )
         {
-            return true;
+            return Ok(true);
         }
-        if (matches!(rule, "potentialAlcoholEster" | "amineDiConjunctiveSuffix")
-            || (rule == "ester" && at_end_or_two))
+        if matches!(
+            rule,
+            "ester" | "potentialAlcoholEster" | "amineDiConjunctiveSuffix"
+        ) && (at_end_or_two
+            || (rule == "potentialAlcoholEster"
+                && count == 1
+                && !Self::check_locant_present_on_potential_root(
+                    self.state,
+                    arena,
+                    element,
+                    &arena.value(locants[0]),
+                )?)
+            || (rule == "potentialAlcoholEster"
+                && Self::has_biochemical_linkage_descriptor(arena, element)))
             && arena[parent].name == WORD_EL
             && let Some(word_rule) = arena[parent].parent
             && arena.children_named(word_rule, WORD_EL).last() == Some(&parent)
         {
-            return true;
+            return Ok(true);
         }
         if rule == "acidReplacingFunctionalGroup"
             && arena[parent].name == WORD_EL
             && at_end_or_two
             && let Some(word_rule) = arena[parent].parent
         {
-            return arena.index_of(word_rule, parent).is_some_and(|i| i > 0);
+            return Ok(arena.index_of(word_rule, parent).is_some_and(|i| i > 0));
         }
-        false
+        Ok(false)
+    }
+    fn has_biochemical_linkage_descriptor(arena: &Arena, element: NodeId) -> bool {
+        if arena
+            .first_child_named(element, BIOCHEMICALLINKAGE_EL)
+            .is_some()
+        {
+            return true;
+        }
+        arena[element].name == BRACKET_EL
+            && arena[element]
+                .children
+                .iter()
+                .rev()
+                .find(|&&child| {
+                    [SUBSTITUENT_EL, BRACKET_EL, ROOT_EL].contains(&arena[child].name.as_str())
+                })
+                .is_some_and(|&child| Self::has_biochemical_linkage_descriptor(arena, child))
     }
     pub fn assign_locants_and_multipliers(
         &mut self,
@@ -2040,7 +2138,7 @@ impl<'a> ComponentProcessor<'a> {
         if count == 1
             && word_level
             && arena.previous_sibling(element).is_none()
-            && self.word_level_locants_allowed(arena, element, locants.len())
+            && self.word_level_locants_allowed(arena, element, &locants)?
         {
             let locant = locants.remove(0);
             let value = arena.value(locant);
@@ -2103,6 +2201,7 @@ impl<'a> ComponentProcessor<'a> {
             };
             let count = parse_num(arena[multiplier].attribute(VALUE_ATR).unwrap_or(""))?;
             let locants = arena.children_named(first, LOCANT_EL);
+            let word_level_locants = self.word_level_locants_allowed(arena, first, &locants)?;
             let mut assigned = None;
             if locants.len() > 1 {
                 return Err(error("Unable to assign all locants"));
@@ -2113,7 +2212,7 @@ impl<'a> ComponentProcessor<'a> {
                     return Err(error("Unable to assign all locants"));
                 }
                 arena.detach(locant);
-                if !self.word_level_locants_allowed(arena, first, locants.len()) {
+                if !word_level_locants {
                     return Err(error(Self::locants_debug(arena, &locants)));
                 }
                 arena[word].set_attribute(LOCANT_ATR, &values[0]);
@@ -2637,6 +2736,7 @@ impl ComponentProcessor<'_> {
         {
             return Ok(());
         }
+        let missing = find_elements_missing_indirect_locants(arena, sub_or_root, last);
         if arena[last].attribute(TYPE_ATR) != Some(ADDEDHYDROGENLOCANT_TYPE_VAL)
             && locants.len() == 1
             && arena[group].attribute(ISAMULTIRADICAL_ATR).is_none()
@@ -2648,10 +2748,12 @@ impl ComponentProcessor<'_> {
                 &values[0],
             )?
             && arena.previous_sibling_named(last, LOCANT_EL).is_none()
+            && (missing.is_empty()
+                || arena[missing[0]].attribute(DEFAULTLOCANTID_ATR).is_some()
+                || !self.is_lone_substituent_on_unsuffixed_symmetric_parent(arena, sub_or_root)?)
         {
             return Ok(());
         }
-        let missing = find_elements_missing_indirect_locants(arena, sub_or_root, last);
         let assignable = missing.len() >= values.len()
             && values.iter().all(|l| {
                 self.state
@@ -2720,6 +2822,41 @@ impl ComponentProcessor<'_> {
             }
         }
         Ok(())
+    }
+    fn is_lone_substituent_on_unsuffixed_symmetric_parent(
+        &self,
+        arena: &Arena,
+        substituent: NodeId,
+    ) -> Result<bool> {
+        let Some(word) = arena[substituent].parent else {
+            return Ok(false);
+        };
+        if arena[substituent].name != SUBSTITUENT_EL
+            || arena[word].name != WORD_EL
+            || arena[word].children.len() != 2
+            || arena[word].children[0] != substituent
+            || arena
+                .first_child_named(substituent, MULTIPLIER_EL)
+                .is_some()
+        {
+            return Ok(false);
+        }
+        let root = arena[word].children[1];
+        if arena[root].name != ROOT_EL
+            || arena[root].children.iter().any(|&child| {
+                ![GROUP_EL, HYPHEN_EL].contains(&arena[child].name.as_str())
+                    && !(arena[child].name == UNSATURATOR_EL
+                        && arena[child].attribute(VALUE_ATR) == Some("1"))
+            })
+        {
+            return Ok(false);
+        }
+        let Some(group) = arena.first_child_named(root, GROUP_EL) else {
+            return Ok(false);
+        };
+        let graph = self.state.graph();
+        crate::ambiguity::all_atoms_equivalent(graph, &graph.fragment(frag(arena, group)?).atoms)
+            .map_err(|e| error(e.to_string()))
     }
     pub fn assign_implicit_locants_to_di_terminal_suffixes(
         &mut self,
@@ -3370,9 +3507,12 @@ impl ComponentProcessor<'_> {
             let fragment = frag(arena, group)?;
             if matches!(value.as_str(), "porphyrin" | "porphin") {
                 let parent = arena[group].parent.unwrap();
-                let explicitly_set = arena
-                    .children_named(parent, INDICATEDHYDROGEN_EL)
+                let explicitly_set = arena[parent]
+                    .children
                     .iter()
+                    .filter(|&&h| {
+                        [INDICATEDHYDROGEN_EL, HYDRO_EL].contains(&arena[h].name.as_str())
+                    })
                     .any(|&h| {
                         matches!(
                             arena[h].attribute(LOCANT_ATR),
@@ -3622,6 +3762,7 @@ impl ComponentProcessor<'_> {
                     self.suffix_rules,
                     sub,
                 )?;
+                crate::component_processor_rings::check_ring_components_were_combined(arena, sub)?;
             }
             for &sub in &sub_and_root {
                 self.apply_lambda_convention(arena, sub)?;
@@ -3722,6 +3863,10 @@ pub const SOURCE_METHOD_COVERAGE: &[(&str, &str)] = &[
     (
         "applyTraditionalAlkaneNumberingIfAppropriate",
         "component_processor::apply_traditional_alkane_numbering",
+    ),
+    (
+        "suffixPlacesAcidGroupOnAttachedAtom",
+        "component_processor::suffix_places_acid_group_on_attached_atom",
     ),
     (
         "applyHomologyGroupLabelsIfSpecified",
@@ -3894,6 +4039,10 @@ pub const SOURCE_METHOD_COVERAGE: &[(&str, &str)] = &[
         "component_processor_rings::process_poly_cyclic_spiro_nomenclature",
     ),
     (
+        "checkRingComponentsWereCombined",
+        "component_processor_rings::check_ring_components_were_combined",
+    ),
+    (
         "processNonIdenticalPolyCyclicSpiro",
         "component_processor_rings::process_non_identical_poly_cyclic_spiro",
     ),
@@ -3998,6 +4147,10 @@ pub const SOURCE_METHOD_COVERAGE: &[(&str, &str)] = &[
         "component_processor::match_locants_to_indirect_features",
     ),
     (
+        "isLoneSubstituentOnUnsuffixedSymmetricParent",
+        "component_processor::is_lone_substituent_on_unsuffixed_symmetric_parent",
+    ),
+    (
         "findLocantsThatCouldBeIndirectLocants",
         "component_processor::match_locants_to_indirect_features: prefix selector",
     ),
@@ -4065,6 +4218,10 @@ pub const SOURCE_METHOD_COVERAGE: &[(&str, &str)] = &[
     (
         "wordLevelLocantsAllowed",
         "component_processor::wordlevel_locants_allowed",
+    ),
+    (
+        "hasBiochemicalLinkageDescriptor",
+        "component_processor::has_biochemical_linkage_descriptor",
     ),
     (
         "processWordLevelMultiplierIfApplicable",

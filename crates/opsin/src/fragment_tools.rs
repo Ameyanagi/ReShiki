@@ -29,10 +29,8 @@ pub fn intra_fragment_incoming_valency(graph: &Graph, atom: AtomId) -> i32 {
         .bonds
         .iter()
         .filter(|bond| {
-            graph
-                .atom(graph.bond(**bond).other_atom(atom).unwrap())
-                .fragment
-                == graph.atom(atom).fragment
+            let neighbour = graph.atom(graph.bond(**bond).other_atom(atom).unwrap());
+            neighbour.fragment == graph.atom(atom).fragment && neighbour.atom_type != "suffix"
         })
         .map(|bond| i32::from(graph.bond(*bond).order))
         .sum()

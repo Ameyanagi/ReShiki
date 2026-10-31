@@ -26,6 +26,29 @@ type Result<T> = std::result::Result<T, ParsingError>;
 fn error(message: impl Into<String>) -> ParsingError {
     ParsingError(message.into())
 }
+pub fn check_ring_components_were_combined(arena: &Arena, sub_or_root: NodeId) -> Result<()> {
+    let groups = arena.children_named(sub_or_root, GROUP_EL);
+    if groups.len() > 1 {
+        let first = groups[0];
+        let last = groups[groups.len() - 1];
+        let mut message = format!(
+            "Unable to combine ring components: {} and {}",
+            arena.value(first),
+            arena.value(last)
+        );
+        if let Some(unexpected) = arena.next_sibling_ignoring(first, &[MULTIPLIER_EL, FUSION_EL])
+            && arena[unexpected].name != GROUP_EL
+        {
+            message.push_str(&format!(
+                ", unexpected {}: {} was found between them",
+                arena[unexpected].name,
+                arena.value(unexpected)
+            ));
+        }
+        return Err(error(message));
+    }
+    Ok(())
+}
 fn graph_error(error: GraphError) -> ParsingError {
     ParsingError(error.to_string())
 }

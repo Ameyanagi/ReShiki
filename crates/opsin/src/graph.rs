@@ -647,9 +647,9 @@ impl Graph {
                 let members = &mut atom.properties.ambiguous_element_assignment;
                 if let Some(index) = members.iter().position(|member| *member == old) {
                     members.remove(index);
-                    if !members.contains(&new) {
-                        members.push(new);
-                    }
+                }
+                if !members.contains(&new) {
+                    members.push(new);
                 }
             }
         }

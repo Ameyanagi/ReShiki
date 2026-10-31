@@ -134,6 +134,14 @@ fn upstream_stereochemistry_bracket_cases() {
         ),
         ("(1R)", vec![(Some("1"), "R", R_OR_S_TYPE_VAL, Some("Abs"))]),
         (
+            "(3'aS)",
+            vec![(Some("3a'"), "S", R_OR_S_TYPE_VAL, Some("Abs"))],
+        ),
+        (
+            "(2''aR)",
+            vec![(Some("2a''"), "R", R_OR_S_TYPE_VAL, Some("Abs"))],
+        ),
+        (
             "(alphaR,3S,7'S)",
             vec![
                 (Some("alpha"), "R", R_OR_S_TYPE_VAL, Some("Abs")),

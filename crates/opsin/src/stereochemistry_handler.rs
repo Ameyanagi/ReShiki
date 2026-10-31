@@ -876,19 +876,36 @@ impl<'a> StereochemistryHandler<'a> {
                 let mut amine = None;
                 let mut chain = None;
                 let mut hydrogen = None;
+                let mut acid_score = 0;
+                let mut chain_score = 0;
                 for neighbour in self.graph().neighbours(atom) {
                     match self.graph().atom(neighbour).element {
                         Element::H => hydrogen = Some(neighbour),
                         Element::C => {
-                            if self
+                            let chalcogen_bond_order_sum: u32 = self
                                 .graph()
-                                .neighbours(neighbour)
+                                .atom(neighbour)
+                                .bonds
                                 .iter()
-                                .any(|&a| self.graph().atom(a).element.is_chalcogen())
-                            {
-                                acid = Some(neighbour)
+                                .map(|&bond| self.graph().bond(bond))
+                                .filter(|bond| {
+                                    bond.other_atom(neighbour).is_some_and(|other| {
+                                        other != atom
+                                            && self.graph().atom(other).element.is_chalcogen()
+                                    })
+                                })
+                                .map(|bond| u32::from(bond.order))
+                                .sum();
+                            if chalcogen_bond_order_sum > acid_score {
+                                if acid.is_some() {
+                                    chain = acid;
+                                    chain_score = acid_score;
+                                }
+                                acid = Some(neighbour);
+                                acid_score = chalcogen_bond_order_sum;
                             } else {
-                                chain = Some(neighbour)
+                                chain = Some(neighbour);
+                                chain_score = chalcogen_bond_order_sum;
                             }
                         }
                         Element::O | Element::N => amine = Some(neighbour),
@@ -897,6 +914,7 @@ impl<'a> StereochemistryHandler<'a> {
                 }
                 if let (Some(acid), Some(chain), Some(amine), Some(hydrogen)) =
                     (acid, chain, amine, hydrogen)
+                    && acid_score > chain_score
                 {
                     let parity = match value {
                         "l" | "ls" => -1,
