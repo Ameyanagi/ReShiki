@@ -126,12 +126,14 @@ fn atom_menu_groups_editing_naming_connecting_and_clipboard_commands() -> Result
             "Arrange & transform",
             "—",
             "Cut",
-            "Copy",
             "Copy as",
             "Paste",
             "Duplicate",
             "—",
             "Properties…",
+            "—",
+            "Copy",
+            "—",
             "Delete"
         ]
     );

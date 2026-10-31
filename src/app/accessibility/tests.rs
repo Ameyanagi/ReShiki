@@ -439,6 +439,40 @@ mod hover_controls {
     }
 
     #[tokio::test]
+    async fn menu_pointer_handoff_skips_refresh_but_submenu_hover_still_collects() {
+        use super::super::super::context_menu::{Action as MenuAction, Page};
+
+        let mut app = app(Document::default());
+        let _ = work(app.update(Message::ContextMenu(MenuAction::Open(Page::Main, 10.)))).await;
+        let _ = work(app.update(Message::ContextMenu(MenuAction::Key(
+            iced::keyboard::key::Named::Home,
+        ))))
+        .await;
+        let sequence = app.accessibility.sequence;
+        let version = app.accessibility.context_version;
+        assert_eq!(
+            work(app.update(Message::ContextMenu(MenuAction::Pointer))).await,
+            (0, 0)
+        );
+        assert_eq!(app.accessibility.sequence, sequence);
+        assert_eq!(app.accessibility.context_version, version);
+
+        // The empty-selection Main menu's Copy as row opens a child; Paste
+        // closes it. Both alter the native controls, unlike pointer ownership.
+        for index in [4, 3] {
+            let sequence = app.accessibility.sequence;
+            assert_eq!(
+                work(app.update(Message::ContextMenu(MenuAction::Hover(0, index)))).await,
+                (1, 1)
+            );
+            assert_eq!(app.accessibility.sequence, sequence + 1);
+        }
+        assert!(app.context_menu.is_some());
+        assert!(app.tab.doc.atoms.is_empty());
+        assert!(!app.tab.history.can_undo());
+    }
+
+    #[tokio::test]
     async fn queued_blank_action_uses_latest_point_and_popup_boundaries_still_reject_stale_actions()
     {
         let mut app = app(Document::default());
