@@ -18,7 +18,7 @@ impl Work {
         self.0 = self
             .0
             .checked_sub(amount)
-            .ok_or("CIP ranking work limit exceeded")?;
+            .ok_or(super::CIP_WORK_LIMIT_MESSAGE)?;
         Ok(())
     }
 }
