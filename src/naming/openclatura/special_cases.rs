@@ -1390,6 +1390,14 @@ fn simple_central_parent_hydride_name(
     if oxide_oxygen.is_some() {
         mol.mark_name(NameStatus::NotPreferred(NameReason::FunctionalClass));
     } else if a.symbol == "N" || a.symbol == "S" && !onium && lambda.is_empty() {
+        // Methyl-only amines and sulfides take substitutive names (P-62.2.2.1, P-63.2.5).
+        if mol
+            .get_neighbors(c)
+            .iter()
+            .all(|n| mol.atoms[n].is_carbon())
+        {
+            return Ok(None);
+        }
         mol.mark_name(NameStatus::NotPreferred(NameReason::HydrideParent));
     }
     Ok(Some(if !prefix.is_empty() && !lambda.is_empty() {
@@ -2256,6 +2264,18 @@ fn homonuclear_chain_parent_name(
         name = format!("({})-{name}", stereo.join(","));
     }
     if symbol == "S" && chain.len() <= 2 && !placed.is_empty() {
+        // R-SSH with a carbon R takes the dithioperoxol suffix (P-63.4.2.1), unless a
+        // phosphorus acid, which the generic path cites as a prefix, outranks it.
+        if ligands.len() == 1
+            && oxide.is_empty()
+            && mol
+                .get_neighbors(ligands[0].0)
+                .iter()
+                .any(|n| !chain_set.contains(n) && mol.atoms[n].is_carbon())
+            && !atoms.iter().any(|i| mol.atoms[i].symbol == "P")
+        {
+            return Ok(None);
+        }
         mol.mark_name(NameStatus::NotPreferred(NameReason::HydrideParent));
     }
     Ok(Some(name))
@@ -3428,7 +3448,12 @@ mod tests {
             ("CS[SH]", "methanedithioperoxol", false),
             ("C[Se][SeH]", "methanediselenoperoxol", false),
             ("C[Te][TeH]", "methaneditelluroperoxol", false),
-            ("SSCCOC", "1-(2-methoxyethyl)disulfane", true),
+            ("SSCCOC", "2-methoxyethane-1-dithioperoxol", false),
+            (
+                "O=P(O)(O)c1ccccc1SS",
+                "1-(2-(dihydroxyphosphoryl)phenyl)disulfane",
+                true,
+            ),
         ] {
             let mol = read_smiles(smiles).unwrap();
             let atoms = all_atoms(&mol);

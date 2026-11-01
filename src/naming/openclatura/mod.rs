@@ -347,6 +347,13 @@ mod tests {
             ("O=C(O)c1ccc(C=S)cc1", "4-(methanethioyl)benzoic acid"),
             ("O=C(O)c1ccc(C=[Se])cc1", "4-(methaneselenoyl)benzoic acid"),
             ("O=C(O)c1ccc(C=[Te])cc1", "4-(methanetelluroyl)benzoic acid"),
+            // Amines, sulfides and hydrodisulfides are named substitutively
+            // (P-62.2.2.1, P-63.2.5, P-63.4.2.1).
+            ("CNC", "N-methylmethanamine"),
+            ("CN(C)C", "N,N-dimethylmethanamine"),
+            ("CSC", "(methylsulfanyl)methane"),
+            ("SSCCOC", "2-methoxyethane-1-dithioperoxol"),
+            ("SSc1ccccn1", "pyridine-2-dithioperoxol"),
             // Alkoxy prefixes other than the retained contractions (P-63.2.2.2).
             ("CC(C)Oc1ccccc1", "[(propan-2-yl)oxy]benzene"),
             ("CCC(C)Oc1ccccc1", "[(butan-2-yl)oxy]benzene"),
@@ -417,7 +424,7 @@ mod tests {
                 R::AminoPrefix,
             ),
             ("CS(C)=O", "dimethyl sulfoxide", R::FunctionalClass),
-            ("CN(C)C", "trimethylazane", R::HydrideParent),
+            ("CN(C)Cl", "chlorodimethylazane", R::HydrideParent),
             ("CP(C)(C)=O", "trimethylphosphane oxide", R::FunctionalClass),
             (
                 "ClC#[N+][O-]",
@@ -430,8 +437,9 @@ mod tests {
                 R::FunctionalClass,
             ),
             ("CO[Se]C", "dimethyl selenoperoxide", R::FunctionalClass),
-            ("CSC", "dimethylsulfane", R::HydrideParent),
             ("CSSC", "1,2-dimethyldisulfane", R::HydrideParent),
+            ("CCOSC", "ethoxy(methyl)sulfane", R::HydrideParent),
+            ("CCCOSS", "1-propoxydisulfane", R::HydrideParent),
             (
                 "CNC(=O)C(N)=O",
                 "N-methylethanediamide",

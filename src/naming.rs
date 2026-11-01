@@ -127,7 +127,7 @@ impl NameReason {
                 "Uses a functional-class form such as sulfoxide, hydrazone or phosphane oxide; preferred IUPAC names use substitutive forms such as (methanesulfinyl)methane, ylidenehydrazine or λ5-phosphanone."
             }
             Self::HydrideParent => {
-                "Uses a substituted parent hydride such as dimethylsulfane or trimethylazane; preferred IUPAC names use (methylsulfanyl)methane or N,N-dimethylmethanamine (P-63.2.5, P-62.2.1)."
+                "Uses a substituted parent hydride such as chloro(methyl)azane, 1,2-dimethyldisulfane or ethoxy(methyl)sulfane; preferred IUPAC names use methylhypochlorous amide, (methyldisulfanyl)methane or [(methylsulfanyl)oxy]ethane (P-68.5.3, P-63.3.1, P-63.3.2)."
             }
             Self::UnretainedParent => {
                 "Uses a substituted methanal or methanenitrile oxide, an N-substituted ethanediamide, or a formic acid, formyl halide or formamide substituted on carbon; preferred IUPAC names use N-substituted oxamide (P-66.1.1.1.2.1) or carbonic and carbamic acid derivatives such as carbonochloridic acid (P-65.1.8.1)."

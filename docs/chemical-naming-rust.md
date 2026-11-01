@@ -181,16 +181,16 @@ The engine marks the status where it makes the choice, so the name text is
 unchanged. A naming attempt it discards leaves no mark. Reasons for a name
 that is not the PIN:
 
-| Reason                    | Example the engine writes                                                  | Preferred form                                            |
-| ------------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `sulfonyl_prefix`         | `N-methyltosylamino`, `(methylsulfinyl)amino`                              | `N,4-dimethylbenzene-1-sulfonamido`, `methanesulfinamido` |
-| `amino_prefix`            | `3-methylguanidino`                                                        | `(N-methylcarbamimidoyl)amino`                            |
-| `functional_class`        | `dimethyl sulfoxide`, `acetaldehyde hydrazone`, `trimethylphosphane oxide` | substitutive names                                        |
-| `hydride_parent`          | `dimethylsulfane`, `trimethylazane`                                        | `(methylsulfanyl)methane`, `N,N-dimethylmethanamine`      |
-| `unretained_parent`       | `N-methylethanediamide`, `hydroxyformyl chloride`                          | `N1-methyloxamide`, `carbonochloridic acid`               |
-| `fusion_prefix`           | `oxazolo[4,5-b]pyridine`, `isoxazolo`                                      | `[1,3]oxazolo[4,5-b]pyridine`, `[1,2]oxazolo`             |
-| `diamide_locants`         | `N,N'-diethylpropanediamide`                                               | `N1,N3-diethylpropanediamide`                             |
-| `multiple_bond_numbering` | `pent-4-en-1-yne`                                                          | `pent-1-en-4-yne`                                         |
+| Reason                    | Example the engine writes                                                  | Preferred form                                                                         |
+| ------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `sulfonyl_prefix`         | `N-methyltosylamino`, `(methylsulfinyl)amino`                              | `N,4-dimethylbenzene-1-sulfonamido`, `methanesulfinamido`                              |
+| `amino_prefix`            | `3-methylguanidino`                                                        | `(N-methylcarbamimidoyl)amino`                                                         |
+| `functional_class`        | `dimethyl sulfoxide`, `acetaldehyde hydrazone`, `trimethylphosphane oxide` | substitutive names                                                                     |
+| `hydride_parent`          | `chloro(methyl)azane`, `1,2-dimethyldisulfane`, `ethoxy(methyl)sulfane`    | `methylhypochlorous amide`, `(methyldisulfanyl)methane`, `[(methylsulfanyl)oxy]ethane` |
+| `unretained_parent`       | `N-methylethanediamide`, `hydroxyformyl chloride`                          | `N1-methyloxamide`, `carbonochloridic acid`                                            |
+| `fusion_prefix`           | `oxazolo[4,5-b]pyridine`, `isoxazolo`                                      | `[1,3]oxazolo[4,5-b]pyridine`, `[1,2]oxazolo`                                          |
+| `diamide_locants`         | `N,N'-diethylpropanediamide`                                               | `N1,N3-diethylpropanediamide`                                                          |
+| `multiple_bond_numbering` | `pent-4-en-1-yne`                                                          | `pent-1-en-4-yne`                                                                      |
 
 Reasons for an unverified name: `opsin_fusion_layout` (fusion numbering chosen
 for OPSIN compatibility), `bridged_fused_parent`, `unaudited_parent`
@@ -245,6 +245,16 @@ N-substituted ethanediamides, and formic acids, formyl halides and formamides
 substituted on carbon, which are carbamic or carbonic acid derivatives
 (P-65.1.8.1): the engine writes `methyl (thiophene-2-carboxamido)formate`
 for methyl (thiophene-2-carbonyl)carbamate.
+
+Amines with only methyl groups on nitrogen, sulfides and hydrodisulfides
+(R-SSH) are named substitutively (P-62.2.2.1, P-63.2.5, P-63.4.2.1):
+`N,N-dimethylmethanamine`, `(methylsulfanyl)methane`,
+`2-methoxyethane-1-dithioperoxol`, `pyridine-2-dithioperoxol`. `hydride_parent`
+stays on halogenated azanes, which are hypohalous amides (P-68.5.3), on
+disulfides and mixed chalcogen chains such as `1,2-dimethyldisulfane` and
+`ethoxy(methyl)sulfane` (P-63.3.1, P-63.3.2), on disulfanes bonded to oxygen
+or nitrogen, and on hydrodisulfides with a phosphorus acid, which the engine
+cites as a prefix.
 
 Enclosing marks nest in the P-16.5.4 order `{[({[( )]})]}`:
 `2-[4-(2-methylpropyl)phenyl]propanoic acid`,
