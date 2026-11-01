@@ -142,7 +142,7 @@ fn old_overlapping_whole_molecule_keeps_the_visible_stereo_guard() -> anyhow::Re
 }
 
 #[test]
-fn clear_bridged_and_disjoint_ring_imports_keep_native_coordinates() -> anyhow::Result<()> {
+fn clear_bridged_and_disjoint_ring_imports_keep_native_shape() -> anyhow::Result<()> {
     for text in ["C1C2CC3CC1CC(C2)C3", "CC(c1ccccc1)CC(c1ccccc1)"] {
         let input = smiles::read(text)?;
         let state = &input.prepared.state;
@@ -153,10 +153,8 @@ fn clear_bridged_and_disjoint_ring_imports_keep_native_coordinates() -> anyhow::
             Default::default(),
         )?
         .positions;
-        assert_eq!(
-            super::super::coordinates(state, &input.reaction_properties)?.positions,
-            original
-        );
+        let positions = super::super::coordinates(state, &input.reaction_properties)?.positions;
+        super::super::tests::assert_rigid_rotation(&original, &positions);
     }
     Ok(())
 }
@@ -180,10 +178,8 @@ fn a_template_that_increases_collisions_is_not_published() -> anyhow::Result<()>
     .positions;
     assert_eq!(collisions(state, &original, 4096, 1.5), 4);
     assert_eq!(collisions(state, &candidate, 4096, 1.5), 9);
-    assert_eq!(
-        super::super::coordinates(state, &input.reaction_properties)?.positions,
-        original
-    );
+    let positions = super::super::coordinates(state, &input.reaction_properties)?.positions;
+    super::super::tests::assert_rigid_rotation(&original, &positions);
     Ok(())
 }
 
@@ -314,6 +310,56 @@ fn cleanup_repairs_the_previous_inward_template_without_changing_visible_identit
 }
 
 const CODEINE: &str = "COc1ccc2c3c1O[C@H]1[C@@H](O)C=C[C@H]4[C@@H](C2)N(C)CC[C@@]341";
+
+/// The morphinan bridge cannot avoid crossing C7=C8, so it is drawn textbook
+/// style: the bridge stays whole and the double bond under it gets a gap.
+#[test]
+fn morphinan_bridge_crosses_over_a_gapped_double_bond() -> anyhow::Result<()> {
+    let morphine = "Oc1ccc2c3c1O[C@H]1[C@@H](O)C=C[C@H]4[C@@H](C2)N(C)CC[C@@]341";
+    for text in [CODEINE, morphine] {
+        let document = imported(text, true)?;
+        let position = |id| document.atom(id).unwrap().position;
+        let cross =
+            |a: crate::document::Point, b: crate::document::Point, c: crate::document::Point| {
+                (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+            };
+        let mut crossings = vec![];
+        for (i, first) in document.bonds.iter().enumerate() {
+            for (j, second) in document.bonds.iter().enumerate().skip(i + 1) {
+                let [a, b, c, d] = [first.a, first.b, second.a, second.b].map(position);
+                if cross(a, b, c) * cross(a, b, d) < 0. && cross(c, d, a) * cross(c, d, b) < 0. {
+                    crossings.push((i, j));
+                }
+            }
+        }
+        let [(i, j)] = crossings[..] else {
+            panic!("{text}: expected one crossing, found {crossings:?}");
+        };
+        let (over, under) = if document.bonds[i].order == 1 {
+            (i, j)
+        } else {
+            (j, i)
+        };
+        let (top, bottom) = (&document.bonds[over], &document.bonds[under]);
+        assert_eq!((top.order, bottom.order), (1, 2), "{text}");
+        let methylene = |id| {
+            let degree = (document.bonds.iter())
+                .filter(|b| b.a == id || b.b == id)
+                .count();
+            document.atom(id).unwrap().element == "C" && degree == 2
+        };
+        assert!(
+            methylene(top.a) && methylene(top.b),
+            "{text}: the CH2–CH2 bridge is drawn on top"
+        );
+        let gaps = crate::crossings::gaps(&document);
+        assert!(gaps[over].is_empty() && !gaps[under].is_empty(), "{text}");
+        assert_eq!(gaps.iter().filter(|g| !g.is_empty()).count(), 1, "{text}");
+    }
+    let aspirin = imported("CC(=O)Oc1ccccc1C(=O)O", true)?;
+    assert!(crate::crossings::gaps(&aspirin).iter().all(Vec::is_empty));
+    Ok(())
+}
 
 /// Smallest distance, in bond lengths, from an atom to a bond it is not part of.
 fn atom_bond_clearance(state: &State, positions: &[Point3]) -> f64 {

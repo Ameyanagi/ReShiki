@@ -158,6 +158,7 @@ pub enum InspectorTab {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    ModifiersChanged(iced::keyboard::Modifiers),
     #[cfg(target_os = "linux")]
     LinuxClipboardWindow(iced::window::Id),
     Accessibility(accessibility::Action),
@@ -266,6 +267,7 @@ pub enum Message {
     Save,
     Export(&'static str),
     CopySmiles,
+    CopyChemicalText,
     Copy(bool),
     CopyImage,
     CopyAs(reshiki::clipboard::CopyFormat),
@@ -350,8 +352,9 @@ pub enum Message {
     Saved(u64, Box<Document>, Result<Option<files::Saved>, String>),
     #[cfg(target_arch = "wasm32")]
     SaveDownload(String),
-    #[cfg(target_arch = "wasm32")]
     DownloadName(String),
+    ExportReady(figure_export::Prepared),
+    SaveExport(String, figure_export::Prepared),
     Exported(Result<Option<figure_export::Saved>, String>),
     FigureExported(Result<Option<figure_export::Saved>, String>),
     Close(iced::window::Id),
@@ -455,6 +458,8 @@ pub struct App {
     last_label: Option<atom_text::RememberedLabel>,
     /// The last Text-tool click on an atom, to recognize a double-click.
     text_click: Option<(iced::time::Instant, u64)>,
+    path_click: Option<(iced::time::Instant, (document_tab::TabId, u64, usize))>,
+    shift_held: bool,
 }
 /// How often drafts catch up with their drawings. A browser page can be
 /// reloaded or closed at any moment, and cannot write when it unloads, so it
@@ -557,6 +562,8 @@ impl App {
             templates: template_library::State::load(),
             last_label: None,
             text_click: None,
+            path_click: None,
+            shift_held: false,
         };
         if let Some(message) = abbreviations::load_user_catalog() {
             if app.recovered.is_empty() {
@@ -638,6 +645,11 @@ impl App {
             },
             iced::window::close_requests().map(Message::Close),
             iced::event::listen_with(|event, status, _window| {
+                if let iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(modifiers)) =
+                    event
+                {
+                    return Some(Message::ModifiersChanged(modifiers));
+                }
                 if let iced::Event::Window(event) = &event {
                     return import::drag_event(event);
                 }
@@ -783,9 +795,15 @@ impl App {
             self.tab.chemistry_notice = None;
         }
         if committed.recorded {
+            let previous = self.tab.revision;
             self.tab.revision = self.tab.revision.wrapping_add(1);
             if committed.chemistry_changed {
                 self.tab.analysis = None;
+            } else {
+                let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
+                self.tab
+                    .inspector_ui
+                    .advance_revision(epoch, previous, revision);
             }
             self.error = false;
             self.status = if unit_cell_removed {
@@ -897,6 +915,11 @@ impl App {
             .unwrap_or(&self.tab.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        // Modifier releases must reach buttons even when a widget or modal captures input.
+        if let Message::ModifiersChanged(modifiers) = message {
+            self.shift_held = modifiers.shift();
+            return Task::none();
+        }
         // A touch can confirm its mouse press and move/release together. Each
         // edit still passes through the same focus and preview gates as a mouse.
         let message =
@@ -921,12 +944,25 @@ impl App {
             return Task::none();
         }
         self.sync_drawing_panel_context();
-        let task = self.handle(message);
+        let document = (self.tab.id, self.tab.file_epoch);
+        let mut task = self.handle(message);
         self.sync_drawing_panel_context();
         self.settle_deferred_label_layout();
         // Any message may change the drawing, some (previews, background
         // labels) without a new revision, so the next view compares afresh.
         self.tab.forget_unsaved();
+        // All Properties pages share one scrollable, which keeps its offset
+        // even while a short page hides it. Another tab or a newly opened
+        // drawing starts from the top, whichever path brought it forward.
+        if document != (self.tab.id, self.tab.file_epoch) {
+            task = Task::batch([
+                task,
+                iced::widget::operation::snap_to(
+                    "inspector-content",
+                    iced::widget::operation::RelativeOffset::START,
+                ),
+            ]);
+        }
         task
     }
     fn handle(&mut self, message: Message) -> Task<Message> {
@@ -949,7 +985,7 @@ impl App {
                     | Edit::PointerHover(_)
                     | Edit::RelaxDragTarget { .. }
                     | Edit::RelaxRotate { .. }
-            )
+            ) | Message::ContextMenu(context_menu::Action::Pointer)
         );
         let task = self.update_routed(message);
         let keyboard_after = (
@@ -957,6 +993,7 @@ impl App {
             self.tab.keyboard_drawing.marked(),
         );
         // Blank motion changes the drawing point, but not its available controls.
+        // Menu pointer ownership likewise leaves the native controls unchanged.
         // Keep that point and ownership current without scheduling another native
         // Collect/Snapshot round trip. Actual target identities and marks remain exact.
         let same_target = keyboard_before.0 == keyboard_after.0
@@ -1000,14 +1037,14 @@ impl App {
         if let Message::CopyFrame(action) = message {
             return ControlFlow::Break(self.copy_frame(action));
         }
-        #[cfg(target_arch = "wasm32")]
         match message {
             Message::DownloadName(name) => {
-                if let Some(prompt::Prompt::Download(current)) = &mut self.prompt {
+                if let Some(prompt::Prompt::Download { name: current, .. }) = &mut self.prompt {
                     *current = name;
                 }
                 return ControlFlow::Break(Task::none());
             }
+            #[cfg(target_arch = "wasm32")]
             Message::SaveDownload(name) => {
                 let task = self.save_download(name);
                 return ControlFlow::Break(tagged(task, self.tab.id));
@@ -1080,6 +1117,10 @@ impl App {
             self.inspector_width(),
             self.viewport,
         );
+        let (message, release_point) = match message {
+            Message::Canvas(Edit::Release(edit, point)) => (Message::Canvas(*edit), Some(point)),
+            message => (message, None),
+        };
         let pointer_selection = match &message {
             Message::Canvas(Edit::Select(_)) => Some(
                 self.tab
@@ -1099,6 +1140,9 @@ impl App {
             &message,
             Message::Canvas(Edit::BeginTransform(_))
                 | Message::Mapping(reaction_mapping::Action::Open)
+        ) || matches!(
+            &message,
+            Message::Commands(action) if self.commands.reveals_section(action)
         );
         let refresh_dimensions = matches!(
             &message,
@@ -1120,6 +1164,9 @@ impl App {
         }
         if let Some(point) = pointer_selection {
             self.keyboard_pointer_selection(point);
+        }
+        if let Some(point) = release_point {
+            self.keyboard_pointer_target(Some(point), true);
         }
         let task = Task::batch([task, self.start_label_refresh(), self.start_autosave()]);
         self.tab.nmr.invalidate_if_changed_cached(
@@ -1362,33 +1409,14 @@ fn export_file(
     stem: Option<String>,
     details: Vec<String>,
 ) -> Task<Message> {
-    Task::perform(
-        async move {
-            Ok(save_export(contents.into_bytes(), format, stem)
-                .await?
-                .map(|path| figure_export::Saved { path, details }))
-        },
-        Message::Exported,
+    figure_export::Prepared::new(
+        contents.into_bytes(),
+        format,
+        stem,
+        details,
+        figure_export::Kind::Structure,
     )
-}
-/// Exports are named after the document, or "Molecule" while it is untitled.
-async fn save_export(
-    bytes: Vec<u8>,
-    format: &'static str,
-    stem: Option<String>,
-) -> Result<Option<PathBuf>, String> {
-    let extension = match format {
-        "svg-office" => "svg",
-        _ => format,
-    };
-    let stem = stem.as_deref().unwrap_or("Molecule");
-    files::save_bytes(
-        &format!("Export {}", export_format_label(format)),
-        &format!("{stem}.{extension}"),
-        extension,
-        &bytes,
-    )
-    .await
+    .start()
 }
 fn export_format_label(format: &str) -> String {
     match format {

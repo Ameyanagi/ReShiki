@@ -2,6 +2,7 @@
 //!
 //! Faithful translation of `ComponentProcessor.java` lines 4191–4650 at
 //! OPSIN 2.9.0 commit b91b610af5ab07560fedb20730d7aef46bb2bca0.
+//! Superscript amino-acid locants: upstream commit 42e87ac6.
 //! Copyright Daniel Lowe and contributors, MIT (see the retained license).
 
 use std::sync::LazyLock;
@@ -17,7 +18,7 @@ use crate::parse_tree::{Arena, NodeId};
 use crate::xml_declarations::*;
 
 static ELEMENT_SYMBOL_OR_AMINO_ACID_LOCANT: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"[A-Z][a-z]?'*([0-9]+[a-z]?'*)?")
+    Regex::new(r"[A-Z][a-z]?'*([0-9]+(?:\^[0-9]+)?[a-z]?'*)?")
         .expect("OPSIN element or amino-acid locant pattern")
 });
 

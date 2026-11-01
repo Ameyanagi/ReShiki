@@ -63,6 +63,7 @@ pub enum Action {
     Replace(bool),
     AutoApply(bool),
     Send,
+    Retry,
     Improve,
     PreviewTarget(String),
     PreviewEdit(assistant::review::Edit),
@@ -132,6 +133,8 @@ pub struct State {
     preview: Option<Document>,
     preview_target: Option<String>,
     structures: Option<(usize, usize)>,
+    // Later preparation passes hide their restarting structure counts.
+    preparation: Option<codex::Pass>,
     checking: usize,
     last_activity: Option<std::time::Instant>,
     elapsed: u64,
@@ -143,6 +146,7 @@ pub struct State {
     pub busy: bool,
     status: String,
     error: bool,
+    retry: bool,
     serial: u64,
     cancel: codex::Cancel,
     progress: Option<tokio::sync::mpsc::Receiver<codex::Progress>>,
@@ -245,7 +249,9 @@ impl App {
                     let task = self.background_result(id, Message::Assistant(action));
                     return super::tagged(task, id);
                 }
-                Action::Send | Action::Improve | Action::Apply => return Task::none(),
+                Action::Send | Action::Retry | Action::Improve | Action::Apply => {
+                    return Task::none();
+                }
                 _ => {}
             }
         }
@@ -258,7 +264,10 @@ impl App {
                 | Action::ImageExample
         );
         match action {
-            Action::ViewImage(image) => self.assistant.viewed_image = image,
+            Action::ViewImage(image) => {
+                self.assistant.menu = None;
+                self.assistant.viewed_image = image;
+            }
             Action::Open => return self.assistant_open(),
             Action::SetupHelp(help) => return self.assistant_setup_help(help),
             Action::SetupHelpOpened(help, result) => {
@@ -311,6 +320,27 @@ impl App {
             Action::PreviewEdit(edit) => self.assistant_preview_edit(edit),
             action @ (Action::Send | Action::Improve) => {
                 return self.assistant_request(matches!(action, Action::Improve));
+            }
+            Action::Retry => {
+                if self.assistant.retry
+                    && !self.assistant.busy
+                    && let Some(message) = self
+                        .assistant
+                        .messages
+                        .iter()
+                        .rev()
+                        .find(|m| m.role == "You")
+                {
+                    self.assistant.input = text_editor::Content::with_text(&message.text);
+                    self.assistant.source_image = message.image.clone();
+                    // Keep the retained draft when the request cannot start.
+                    let draft = self.assistant.draft.take();
+                    let task = self.assistant_request(false);
+                    if !self.assistant.busy {
+                        self.assistant.draft = draft;
+                    }
+                    return task;
+                }
             }
             Action::Done {
                 serial,

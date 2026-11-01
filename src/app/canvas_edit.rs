@@ -3,7 +3,7 @@ use crate::app::{App, context_menu};
 use crate::canvas::{Edit, Tool};
 use reshiki::document::{Arrow, Point};
 use reshiki::editing;
-mod click;
+pub(super) mod click;
 mod placement;
 
 const BOND_TEXT_HINT: &str = "Drag to bond; this text becomes an atom label";
@@ -43,6 +43,9 @@ impl App {
             Edit::PointerHover(offset) => Edit::Hover(offset.map(|p| self.tab.camera.pointer(p))),
             edit => edit,
         };
+        if !matches!(edit, Edit::PathNodeClick(..) | Edit::Hover(_)) {
+            self.path_click = None;
+        }
         match edit {
             Edit::ArrowTarget(p, bypass) => {
                 self.arrow_target_click(p, bypass);
@@ -61,9 +64,14 @@ impl App {
             } => {
                 self.tab.arrows.cancel_source();
                 if self.tab.cleanup.is_none() {
+                    let closed_inspector = (!self.inspector_open).then_some(self.inspector_tab);
                     self.tab.selected = selected;
                     self.tool = Tool::Select;
                     self.sync_typography();
+                    if let Some(tab) = closed_inspector {
+                        self.inspector_open = false;
+                        self.inspector_tab = tab;
+                    }
                     let mut menu = context_menu::State::new(position, Default::default());
                     menu.hit = Some(hit);
                     self.context_menu = Some(menu);
@@ -100,7 +108,7 @@ impl App {
         }
         if let Edit::Hover(point) = edit {
             self.tab.hover = point.map(|p| (p, self.tab.file_epoch));
-            self.keyboard_pointer_hover(point);
+            self.keyboard_pointer_target(point, false);
             self.hover_bond_text(point);
             return;
         }
@@ -144,6 +152,7 @@ impl App {
             // These edits are handled by the leading match, before preview gates.
             Edit::ContextMenu { .. } | Edit::ArrowTarget(..) | Edit::CancelArrowSource => return,
             Edit::Touch(_)
+            | Edit::Release(..)
             | Edit::Hover(_)
             | Edit::PointerHover(_)
             | Edit::RelaxDragStart { .. }
@@ -217,6 +226,30 @@ impl App {
                     return;
                 }
                 self.sync_arc();
+            }
+            Edit::PathNodeClick(id, index) => {
+                self.path_node_click(id, index, iced::time::Instant::now());
+                return;
+            }
+            Edit::PathPoint {
+                id,
+                index,
+                point,
+                free,
+            } => {
+                self.tab.path_point = Some((id, index));
+                if let Some(graphic) = self.tab.doc.graphics.iter_mut().find(|g| g.id == id) {
+                    let result = if free {
+                        graphic.move_path_point_free(index, point)
+                    } else {
+                        graphic.move_path_point(index, point)
+                    };
+                    if let Err(error) = result {
+                        self.status = error;
+                        self.error = true;
+                        return;
+                    }
+                }
             }
             Edit::Template(anchor, direction) => {
                 return self.place_template(anchor, direction, before);

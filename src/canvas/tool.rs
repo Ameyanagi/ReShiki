@@ -125,7 +125,7 @@ impl Tool {
                 "Drag to draw · Shift constrains proportions or angle · Escape cancels"
             }
             Self::EditPoints => {
-                "Drag anchors or control points · Atom marks orbit in 15° steps; Option/Alt or Shift frees · Escape returns to Select"
+                "Drag anchors or control points · Double-click nodes to change type · Option/Alt-drag a handle makes a corner · Atom marks orbit in 15° steps; Option/Alt or Shift frees · Escape returns to Select"
             }
         }
     }

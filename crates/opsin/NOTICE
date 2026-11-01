@@ -1,8 +1,10 @@
 This package contains Rust translations of algorithms, nomenclature resource
-files, and verification fixtures from OPSIN 2.9.0:
+files, and verification fixtures from OPSIN. The port began from OPSIN 2.9.0
+(commit b91b610af5ab07560fedb20730d7aef46bb2bca0) and tracks the unreleased
+upstream main branch at:
 
 https://github.com/dan2097/opsin
-Commit: b91b610af5ab07560fedb20730d7aef46bb2bca0
+Commit: 42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91 (version 3.0-SNAPSHOT, after 2.9.0)
 
 Copyright 2017 Daniel Lowe
 

@@ -56,7 +56,7 @@ fn a_first_report_of_zero_is_forwarded() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn forward_maps_structure_counts_and_ignores_proposals_and_previews() {
+async fn forward_maps_structure_counts_and_ignores_other_events() {
     let (sink, seen) = recorder();
     let (tx, rx) = tokio::sync::mpsc::channel(8);
     let forwarder = tokio::spawn(forward(rx, Arc::new(Monotonic::new(sink))));
@@ -69,12 +69,14 @@ async fn forward_maps_structure_counts_and_ignores_proposals_and_previews() {
         sketch: None,
     };
     for event in [
+        Event::Pass(crate::progress::Pass::Preview),
         Event::Proposal(Box::new(proposal)),
         Event::Structures {
             completed: 1,
             total: 3,
         },
         Event::Preview(Box::default()),
+        Event::Pass(crate::progress::Pass::Final),
         Event::Structures {
             completed: 1,
             total: 3,

@@ -1,7 +1,7 @@
 //! Token dictionaries and immutable OPSIN resource metadata.
 use crate::{
     InitializationError,
-    automaton::{self, Automaton},
+    automaton::{self, Automaton, LiveTransitions},
     trie::Trie,
 };
 use std::{collections::BTreeMap, sync::Arc};
@@ -27,6 +27,8 @@ pub(crate) struct SymbolTokens {
 pub(crate) struct Resources {
     pub chemical: Automaton,
     pub reverse_chemical: Automaton,
+    pub chemical_transitions: LiveTransitions,
+    pub reverse_chemical_transitions: LiveTransitions,
     pub symbols: Vec<SymbolTokens>,
     /// One shared definition for all of a token's spellings.
     pub definitions: BTreeMap<(String, u16), Arc<TokenDefinition>>,
@@ -131,9 +133,13 @@ impl Resources {
             }
         }
         let suffix_rules = crate::suffix_rules::SuffixRules::new()?;
+        let chemical_transitions = chemical.live_transitions();
+        let reverse_chemical_transitions = reverse_chemical.live_transitions();
         Ok(Self {
             chemical,
             reverse_chemical,
+            chemical_transitions,
+            reverse_chemical_transitions,
             symbols,
             definitions,
             regex_definitions,

@@ -12,7 +12,7 @@ use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Color, Point, Rectangle, Vector, keyboard, mouse};
 use reshiki::arrows::ArrowHandle;
 use reshiki::document::{Atom, Bond, Document};
-use reshiki::graphics::{Graphic, GraphicKind, PathCommand, PathHandle};
+use reshiki::graphics::{Graphic, GraphicKind, PathCommand, PathHandle, PathNodeType};
 use reshiki::scientific::{AtomMark, MarkKind};
 use reshiki::style::DrawingStyle;
 use std::cell::RefCell;
@@ -362,7 +362,10 @@ impl MoleculeCanvas<'_> {
         rejection: Option<reshiki::editing::RingRejection>,
     ) {
         if let Some((content, valid)) = template_notice {
-            let position = Point::new(14., (bounds.height - 30.).max(4.));
+            let position = Point::new(
+                14.,
+                (bounds.height - super::HINT_STRIP_HEIGHT_PX).max(0.) + 4.,
+            );
             frame.fill_rectangle(
                 position - Vector::new(5., 4.),
                 iced::Size::new((bounds.width - 18.).max(1.), 25.),
@@ -501,15 +504,25 @@ impl MoleculeCanvas<'_> {
                 }
             }
         }
+        let mut node_types = graphic.path_node_types().unwrap_or_default().into_iter();
         for handle in handles.into_iter().filter(|h| controls || h.node) {
             let point = self.camera.screen(handle.point, bounds);
-            let shape = if handle.node {
-                HandleShape::Circle(4.5)
-            } else {
-                HandleShape::Square
+            let node_type = handle
+                .node
+                .then(|| node_types.next().unwrap_or(PathNodeType::Corner));
+            let shape = match node_type {
+                Some(PathNodeType::Corner) => HandleShape::Diamond,
+                Some(_) => HandleShape::Circle(4.5),
+                None => HandleShape::Square,
             };
             let chosen = self.graphics.point == Some((graphic.id, handle.index));
             draw_handle(frame, point, shape, chosen);
+            if node_type == Some(PathNodeType::Symmetric) {
+                frame.fill(
+                    &Path::circle(point, 1.5),
+                    if chosen { Color::WHITE } else { ACCENT },
+                );
+            }
         }
     }
 

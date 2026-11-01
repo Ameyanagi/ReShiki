@@ -36,6 +36,7 @@ DEFAULT_SECONDS = 20
 # Shard 0 exists for every --count, so an assignment can never fall outside it.
 WORKSPACE_TARGET_SHARDS = {
     ("reshiki-io", "pdf_gradients"): 0,
+    ("reshiki-io", "spacefill_seams"): 0,
     ("reshiki-macos", "native_print"): 0,
     ("reshiki-geometry", "c60"): 0,
     ("reshiki-geometry", "embedding"): 0,
@@ -48,6 +49,7 @@ WORKSPACE_TARGET_SHARDS = {
     ("opsin", "assembly_methods"): 0,
     ("opsin", "carbohydrates"): 0,
     ("opsin", "carbohydrates_configuration"): 0,
+    ("opsin", "chalcogen_acid_locants"): 0,
     ("opsin", "cip_ordering"): 0,
     ("opsin", "components_micro_syntax"): 0,
     ("opsin", "components_oracle"): 0,
@@ -70,9 +72,12 @@ WORKSPACE_TARGET_SHARDS = {
     ("opsin", "graph_substitution_oracle"): 0,
     ("opsin", "graph_upstream_parser"): 0,
     ("opsin", "graph_upstream_writer"): 0,
+    ("opsin", "name_to_structure"): 0,
+    ("opsin", "phanes"): 0,
     ("opsin", "preprocessing"): 0,
     ("opsin", "processing_brackets"): 0,
     ("opsin", "processing_functional_replacement"): 0,
+    ("opsin", "processing_phane_rings"): 0,
     ("opsin", "processing_pipeline"): 0,
     ("opsin", "processing_rings"): 0,
     ("opsin", "processing_rings_topology"): 0,

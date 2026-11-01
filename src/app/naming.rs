@@ -64,6 +64,7 @@ pub enum Action {
     #[cfg(target_arch = "wasm32")]
     Refresh,
     Name(String),
+    ClearName,
     Cancel,
     Resolve,
     AskOnline,
@@ -451,6 +452,12 @@ impl App {
                 self.tab.naming.invalidate_name();
                 self.tab.naming.name = name;
             }
+            Action::ClearName => {
+                self.tab.naming.invalidate_name();
+                self.tab.naming.name.clear();
+                self.tab.naming.preview_open = false;
+                return iced::widget::operation::focus("import-name");
+            }
             Action::Cancel => {
                 let pending = self.tab.naming.pending;
                 self.tab.naming.stop_request();
@@ -675,10 +682,8 @@ impl App {
             self.status = format!("Could not insert {title}");
             return;
         };
-        self.tab.selected = selected;
-        self.changed(before);
+        self.commit_structure_insert(before, selected);
         self.tool = Tool::Select;
-        self.fit();
         self.status = "Inserted editable name result · Undo removes the insertion".into();
         self.error = false;
     }

@@ -46,7 +46,7 @@ The library is split into workspace crates. Each crate depends only on the crate
 Leaf crates depend on no layer crate; only `reshiki-windows` uses another leaf, `reshiki-metafile`. The crates above use them:
 
 - `reshiki-metafile` (`crates/metafile/`): bounded EMF framing checks and the physical picture size, plus the picture size limits for every format. `reshiki-model` and `native/windows` use it.
-- `opsin` (`crates/opsin/`): a native Rust port of the OPSIN 2.9.0 name parser, under OPSIN's MIT license (`crates/opsin/LICENSE`). Its internals follow upstream (`crates/opsin/PORTING.md`). ReShiki code meets it only in `src/naming/worker.rs` and `src/naming/catalog.rs`.
+- `opsin` (`crates/opsin/`): a native Rust port of the OPSIN name parser, tracking upstream main after 2.9.0 (commit `42e87ac6`; phane nomenclature included), under OPSIN's MIT license (`crates/opsin/LICENSE`). Its internals follow upstream (`crates/opsin/PORTING.md`). ReShiki code meets it only in `src/naming/worker.rs` and `src/naming/catalog.rs`.
 - `reshiki-process` (`native/process/`): platform limits for the naming worker's child process. All of its platform FFI stays in this crate.
 - `reshiki-process-heap` (`crates/process-heap/`): the bounded allocator of worker processes and the adaptive [calculation resource policy](chemistry-resource-policy.md).
 - `reshiki-depict-math` (`crates/depict-math/`): the paired math call for the pinned depiction ABI, used by `reshiki-chemistry`.

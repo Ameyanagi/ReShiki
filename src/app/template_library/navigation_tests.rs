@@ -465,6 +465,181 @@ fn library_completion_during_inline_edit_does_not_discard_draft() {
 }
 
 #[test]
+fn aromatic_heterocycles_belong_to_both_collections_without_duplicate_results() {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    let mut state = State::default();
+    for (name, expected) in [
+        ("Indole", &["Aromatics", "Heterocycles"][..]),
+        ("Pyridine", &["Aromatics", "Heterocycles"][..]),
+        ("Benzene", &["Aromatics"][..]),
+        ("Cyclohexane", &["Cycloalkanes"][..]),
+        ("Pyrrolidine", &["Heterocycles"][..]),
+        ("Piperidine", &["Heterocycles"][..]),
+        ("Piperazine", &["Heterocycles"][..]),
+        ("Morpholine", &["Heterocycles"][..]),
+        ("Tetrahydrofuran", &["Heterocycles"][..]),
+        ("Tetrahydropyran", &["Heterocycles"][..]),
+        ("1,4-Dioxane", &["Heterocycles"][..]),
+    ] {
+        let (index, template) = state
+            .library
+            .iter()
+            .enumerate()
+            .find(|(_, t)| t.name == name)
+            .unwrap();
+        assert_eq!(categories(template).collect::<Vec<_>>(), expected, "{name}");
+        for collection in ["Aromatics", "Heterocycles", "Cycloalkanes"] {
+            state.collection = collection.into();
+            assert_eq!(
+                state.matches(index, template),
+                expected.contains(&collection),
+                "{name} in {collection}"
+            );
+        }
+    }
+
+    state.collection = "All collections".into();
+    let results: Vec<_> = state
+        .library
+        .iter()
+        .enumerate()
+        .filter(|(i, t)| state.matches(*i, t))
+        .map(|(_, t)| &t.id)
+        .collect();
+    assert_eq!(results.len(), LIBRARY.len());
+    assert_eq!(results.iter().collect::<BTreeSet<_>>().len(), results.len());
+
+    let mut counts = BTreeMap::new();
+    for template in state.library.iter() {
+        for collection in categories(template) {
+            *counts.entry(collection.to_owned()).or_insert(0) += 1;
+        }
+    }
+    for (collection, count) in counts {
+        state.collection = collection;
+        assert_eq!(
+            state
+                .library
+                .iter()
+                .enumerate()
+                .filter(|(i, t)| state.matches(*i, t))
+                .count(),
+            count,
+            "{} count agrees with collection membership",
+            state.collection
+        );
+    }
+
+    state.collection = "All collections".into();
+    let index = state
+        .library
+        .iter()
+        .position(|t| t.name == "Pyridine")
+        .unwrap();
+    for query in ["aromatics pyridine", "heterocycles pyridine"] {
+        state.query = query.into();
+        assert!(state.matches(index, state.library.get(index).unwrap()));
+    }
+}
+
+#[test]
+fn aromatic_membership_preserves_halogens_and_user_collections() {
+    let mut template = LIBRARY
+        .iter()
+        .find(|t| t.name == "Benzene")
+        .unwrap()
+        .clone();
+    for smiles in ["Clc1ccccc1", "Brc1ccccc1"] {
+        template.smiles = smiles.into();
+        assert_eq!(categories(&template).collect::<Vec<_>>(), ["Aromatics"]);
+    }
+    for smiles in ["c1ccncc1", "c1ccoc1", "c1ccsc1", "c1ccpc1", "[b-]1ccccc1"] {
+        template.smiles = smiles.into();
+        assert_eq!(
+            categories(&template).collect::<Vec<_>>(),
+            ["Aromatics", "Heterocycles"]
+        );
+    }
+    template.id = "user:aromatic-ring".into();
+    assert_eq!(categories(&template).collect::<Vec<_>>(), ["Rings"]);
+}
+
+#[test]
+fn search_all_preserves_query_filter_and_browse_history() {
+    use std::collections::BTreeSet;
+
+    let matches = |state: &State| {
+        state
+            .library
+            .iter()
+            .enumerate()
+            .filter(|(i, t)| state.matches(*i, t))
+            .map(|(_, t)| t.name.clone())
+            .collect::<BTreeSet<_>>()
+    };
+    for filter in [Filter::All, Filter::Favorites] {
+        let (mut app, _) = App::new();
+        let index = app
+            .templates
+            .library
+            .iter()
+            .position(|t| t.name == "Thiophene")
+            .unwrap();
+        app.insert_template(index);
+        app.templates.library.favorites = app
+            .templates
+            .library
+            .iter()
+            .filter(|t| matches!(t.name.as_str(), "Thiophene" | "L-Phenylalanine"))
+            .map(|t| t.id.clone())
+            .collect();
+        app.templates.query = "Phe".into();
+        app.templates.collection = "Aromatics".into();
+        app.templates.filter = filter;
+        app.templates.scroll = 70.;
+        let scoped = matches(&app.templates);
+        assert!(scoped.contains("Thiophene"));
+        assert!(!scoped.contains("L-Phenylalanine"));
+        let expected = matches(&State {
+            library: app.templates.library.clone(),
+            query: "Phe".into(),
+            filter,
+            ..State::default()
+        });
+        assert_eq!(expected.len(), if filter == Filter::All { 7 } else { 2 });
+        assert!(expected.contains("L-Phenylalanine"));
+        assert!(scoped.is_subset(&expected));
+
+        let _ = app.template_action(Action::SearchAll);
+        assert_eq!(app.templates.collection, "All collections");
+        assert_eq!(app.templates.query, "Phe");
+        assert_eq!(app.templates.filter, filter);
+        assert_eq!(app.templates.scroll, 0.);
+        assert!(!app.templates.active);
+        assert_eq!(app.tool, Tool::Select);
+        assert_eq!(matches(&app.templates), expected);
+
+        let _ = app.template_action(Action::Browse);
+        assert_eq!(app.templates.collection, "Aromatics");
+        assert_eq!(app.templates.query, "Phe");
+        assert_eq!(app.templates.filter, filter);
+        assert_eq!(app.templates.scroll, 70.);
+        assert!(app.templates.active);
+        assert_eq!(app.template_index, index);
+        assert_eq!(app.tool, Tool::Template);
+        assert_eq!(matches(&app.templates), scoped);
+
+        let _ = app.template_action(Action::Forward);
+        assert_eq!(app.templates.collection, "All collections");
+        assert_eq!(matches(&app.templates), expected);
+        let _ = app.template_action(Action::Browse);
+        let _ = app.template_action(Action::SearchAll);
+        assert!(!app.templates.can_forward());
+    }
+}
+
+#[test]
 fn browsing_back_and_forward_restores_category_scroll_and_anchor() {
     let (mut app, _) = App::new();
     app.templates.scroll = 25.;

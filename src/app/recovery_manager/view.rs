@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::{
-    help::modal,
+    help::{Placement, modal},
     workspace::{control, hover_hint, muted_text},
 };
 use iced::widget::{Space, column, container, row, scrollable, text, tooltip};
@@ -22,6 +22,42 @@ fn action(
 }
 
 impl App {
+    #[cfg(any(target_arch = "wasm32", test))]
+    pub(in crate::app) fn recovery_notice(&self) -> Option<Element<'_, Message>> {
+        if self.recovered.is_empty() || !self.tab.reusable() {
+            return None;
+        }
+        let count = self.recovered.len();
+        Some(
+            container(
+                container(
+                    row![
+                        text(format!(
+                            "{count} unsaved {} from before the reload ·",
+                            plural(count, "drawing", "drawings")
+                        ))
+                        .size(12)
+                        .style(muted_text),
+                        action(
+                            "Review…",
+                            "recovery-canvas-review",
+                            Action::Show,
+                            true,
+                            self.recovery_manager.pending.is_none()
+                        ),
+                    ]
+                    .spacing(6)
+                    .align_y(Alignment::Center),
+                )
+                .padding([8, 12])
+                .style(crate::app::workspace::panel),
+            )
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .into(),
+        )
+    }
+
     pub(in crate::app) fn recovery_banner(&self) -> Element<'_, Message> {
         let count = self.recovered.len();
         let newest = self.recovered.first();
@@ -287,6 +323,7 @@ impl App {
             content,
             640.,
             if dialog == Dialog::Picker { 490. } else { 250. },
+            Placement::Center,
             Message::Recovery(Action::Close),
         )
     }

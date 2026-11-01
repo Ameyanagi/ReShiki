@@ -253,8 +253,9 @@ fn a_tab_closed_during_its_draft_write_removes_the_draft_afterwards() {
     app.request_autosave();
     let write = app.prepare_autosave().unwrap();
     let _ = app.update(Message::Tabs(super::super::tabs::Action::Close(None)));
+    // The only task is the next tab's inspector scroll reset.
     assert!(
-        app.update(Message::Discard).units() == 0,
+        app.update(Message::Discard).units() == 1,
         "The removal waits for the write"
     );
     assert_ne!(app.tab.id, closed);
@@ -273,6 +274,33 @@ fn a_tab_closed_during_its_draft_write_removes_the_draft_afterwards() {
         Box::new(Message::Autosaved(key, result)),
     ));
     assert!(!path.exists() && app.tabs.retiring.is_empty());
+}
+
+#[test]
+fn restored_drafts_keep_distinct_source_names_without_paths() {
+    use reshiki::recovery::Snapshot;
+    let directory = tempfile::tempdir().unwrap();
+    let store = Recovery::in_directory(directory.path()).unwrap();
+    for (name, saved_at) in [("caffeine.rsk", 1), ("ibuprofen.rsk", 2)] {
+        let mut document = Document::default();
+        document.add_atom("O", Point::default());
+        let snapshot = Snapshot {
+            document,
+            source: Some(name.into()),
+            saved_at,
+        };
+        std::fs::write(
+            directory.path().join(format!("4294967294-{name}.json")),
+            serde_json::to_vec(&snapshot).unwrap(),
+        )
+        .unwrap();
+    }
+    let (mut app, _) = App::new();
+    app.recovered = store.candidates();
+    let _ = app.update(Message::Restore);
+    let names: Vec<_> = app.strip().map(DocumentTab::name).collect();
+    assert_eq!(names, ["caffeine (recovered)", "ibuprofen (recovered)"]);
+    assert!(app.strip().all(|tab| tab.path.is_none() && app.edited(tab)));
 }
 
 #[test]

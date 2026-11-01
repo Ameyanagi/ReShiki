@@ -17,9 +17,12 @@ pub struct Report {
     #[serde(default)]
     pub changes: Vec<String>,
     pub issues: Vec<String>,
+    #[serde(default)]
+    pub notes: Vec<String>,
     pub verified: bool,
 }
 impl Report {
+    /// Review notes never block automatic application.
     pub fn can_auto_apply(&self) -> bool {
         self.verified && self.issues.is_empty()
     }
@@ -37,6 +40,8 @@ pub struct Outcome {
 pub struct Critique {
     pub summary: String,
     pub issues: Vec<String>,
+    #[serde(default)]
+    pub notes: Vec<String>,
     pub edits: Vec<Edit>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,6 +86,7 @@ pub fn schema() -> Value {
     json!({"type":"object","additionalProperties":false,"properties":{
         "summary":{"type":"string","description":"Brief visible explanation of improvements or why the exact image is ready."},
         "issues":{"type":"array","items":{"type":"string"},"description":"Unresolved visual or chemistry problems in this exact image. Empty only when ready. Do not claim chemistry correctness solely from visual appearance."},
+        "notes":{"type":"array","items":{"type":"string"},"description":"Non-blocking style differences, such as label colours, that do not prevent applying the draft."},
         "edits":{"type":"array","items":{"anyOf":[
             {"type":"object","additionalProperties":false,"properties":{"action":{"const":"contact_layer","type":"string"},"target":target,"in_front":{"type":"boolean"}},"required":["action","target","in_front"]},
             {"type":"object","additionalProperties":false,"properties":{"action":{"const":"tilt_ligand","type":"string"},"target":target,"x_degrees":{"type":"number","minimum":-85,"maximum":85},"y_degrees":{"type":"number","minimum":-85,"maximum":85},"rotation_degrees":{"type":"number","minimum":-360,"maximum":360},"depth_bonds":{"type":"boolean"},"show_charge":{"type":"boolean"}},"required":["action","target","x_degrees","y_degrees","rotation_degrees","depth_bonds","show_charge"]},
@@ -90,7 +96,7 @@ pub fn schema() -> Value {
             {"type":"object","additionalProperties":false,"properties":{"action":{"const":"compact","type":"string"},"target":target},"required":["action","target"]},
             {"type":"object","additionalProperties":false,"properties":{"action":{"const":"arrange","type":"string"},"composition":composition::schema(),"main_reaction":{"type":"integer","minimum":0,"maximum":7}},"required":["action","composition","main_reaction"]}
         ]}}
-    },"required":["summary","issues","edits"]})
+    },"required":["summary","issues","notes","edits"]})
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -639,3 +645,29 @@ pub fn images(doc: &Document) -> Result<Vec<(String, Vec<u8>)>, String> {
 
 #[cfg(test)]
 mod overlap_tests;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn verified_report_with_notes_can_auto_apply() {
+        let report = Report {
+            verified: true,
+            notes: vec!["Label colours follow the drawing style.".into()],
+            ..Default::default()
+        };
+        assert!(report.can_auto_apply());
+    }
+
+    #[test]
+    fn critique_without_notes_deserializes() {
+        let critique: Critique = serde_json::from_value(json!({
+            "summary": "Ready",
+            "issues": [],
+            "edits": []
+        }))
+        .unwrap();
+        assert!(critique.notes.is_empty());
+    }
+}

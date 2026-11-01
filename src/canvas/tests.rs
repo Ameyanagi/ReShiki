@@ -958,6 +958,7 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
         reviewing_pair: false,
         optimizer: None,
         keyboard_target: None,
+        keyboard_marker: false,
         morph: None,
         model_generation: None,
         element: "C",
@@ -2089,7 +2090,11 @@ fn graphic_and_curve_point_drags_publish_one_edit_and_do_not_mutate_preview() {
     let original = with_curve.clone();
     assert!(matches!(
         pointer_gesture(&canvas, Point::new(183., 100.), Point::new(200., 80.)),
-        Edit::GraphicPoint(1, 1, _)
+        Edit::PathPoint {
+            id: 1,
+            index: 1,
+            ..
+        }
     ));
     assert_eq!(with_curve, original);
 
@@ -3357,6 +3362,71 @@ fn readable_foreground_orbital_labels_select_the_atom_and_other_filled_graphics_
     for probe in probes {
         assert_eq!(hit::hit_object(&doc, probe, 1.), Some(circle));
     }
+}
+
+/// #668: at Fit the whole drawing is on screen. A hover that only moves the
+/// pointer must reuse the scene's tessellated geometry instead of rebuilding
+/// every bond and label path on each frame.
+#[tokio::test]
+#[ignore = "Scene geometry reuse; requires a headless renderer"]
+async fn pointer_hover_redraw_reuses_scene_geometry_at_fit() {
+    let renderer = <Renderer as iced::advanced::renderer::Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .expect("Headless renderer");
+    let gallery: Document =
+        serde_json::from_str(include_str!("../../assets/examples/shortcut-examples.rsk")).unwrap();
+    let mut doc = Document::default();
+    for copy in 0..4 {
+        reshiki::editing::append(&mut doc, &gallery, World::new(copy as f32 * 1800., 0.));
+    }
+    let (lo, hi) = doc.bounds();
+    let bounds = Rectangle::with_size(iced::Size::new(1600., 968.));
+    let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+    canvas.tool = Tool::Select;
+    canvas.camera = Camera {
+        center: World::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.),
+        zoom: ((bounds.width - 40.) / (hi.x - lo.x)).min((bounds.height - 40.) / (hi.y - lo.y)),
+    };
+    let mut state = State::default();
+    let tessellated = |canvas: &MoleculeCanvas<'_>, state: &State, point: Point| {
+        render::DRAWN_PRIMITIVES.with(|n| n.set(0));
+        canvas.draw(
+            state,
+            &renderer,
+            &Theme::Light,
+            bounds,
+            mouse::Cursor::Available(point),
+        );
+        render::DRAWN_PRIMITIVES.with(std::cell::Cell::get)
+    };
+    let first = Point::new(400., 400.);
+    state.cursor = Some(first);
+    let built = tessellated(&canvas, &state, first);
+    assert!(built > 1000, "the first draw builds the scene: {built}");
+    let moved = Point::new(900., 500.);
+    state.cursor = Some(moved);
+    assert_eq!(
+        tessellated(&canvas, &state, moved),
+        0,
+        "hover redrew the scene primitives"
+    );
+    canvas.camera.center.x += 1.;
+    assert!(
+        tessellated(&canvas, &state, moved) > 0,
+        "moving the camera must rebuild the scene geometry"
+    );
+    assert_eq!(tessellated(&canvas, &state, moved), 0);
+    let selected = doc.all_ids();
+    canvas.selected = &selected;
+    assert!(
+        tessellated(&canvas, &state, moved) > 0,
+        "changing the selection must rebuild its scene layer"
+    );
+    assert_eq!(tessellated(&canvas, &state, moved), 0);
 }
 
 mod hover_performance;

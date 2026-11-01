@@ -46,10 +46,7 @@ fn upstream_component_ratio_examples_and_precise_mismatch() {
         process_stoichiometry_indication("(1:2:?)").unwrap(),
         [1, 2, 1]
     );
-    assert_eq!(
-        process_stoichiometry_indication("(-1:+2)").unwrap(),
-        [-1, 2]
-    );
+    assert_eq!(process_stoichiometry_indication("(+1:+2)").unwrap(), [1, 2]);
     assert!(
         process_stoichiometry_indication("(1:2/3)")
             .unwrap_err()
@@ -71,6 +68,151 @@ fn upstream_component_ratio_examples_and_precise_mismatch() {
             .to_string()
             .contains("1 components but 2 ratios")
     );
+}
+
+#[test]
+fn compound_with_separates_word_rules() {
+    let parser = Parser::new().unwrap();
+    for delimiter in ["compound with", "compd. with", "and", "COMPOUND WITH"] {
+        let name = format!("methanol {delimiter} acetate");
+        let trees = parser.parse_trees(&name, &ParseOptions::default()).unwrap();
+        assert!(!trees.is_empty());
+        for tree in trees {
+            assert_eq!(
+                tree.arena.children_named(tree.root, "wordRule").len(),
+                2,
+                "{name}"
+            );
+        }
+    }
+}
+
+#[test]
+fn compound_with_allows_multiword_components() {
+    let parser = Parser::new().unwrap();
+    let name = "ethyl acetate compound with methyl acetate compound with methanol";
+    for tree in parser.parse_trees(name, &ParseOptions::default()).unwrap() {
+        assert_eq!(tree.arena.children_named(tree.root, "wordRule").len(), 3);
+    }
+    let tree = parser
+        .parse_trees("methanol acetate", &ParseOptions::default())
+        .unwrap()
+        .remove(0);
+    assert_eq!(tree.arena.children_named(tree.root, "wordRule").len(), 1);
+}
+
+#[test]
+fn semicolon_separates_word_rules() {
+    let parser = Parser::new().unwrap();
+    for name in [
+        "methanol; acetate",
+        "ethyl acetate; methyl acetate; methanol",
+    ] {
+        for tree in parser.parse_trees(name, &ParseOptions::default()).unwrap() {
+            assert_eq!(
+                tree.arena.children_named(tree.root, "wordRule").len(),
+                name.split("; ").count()
+            );
+        }
+    }
+}
+
+#[test]
+fn non_positive_component_ratios_are_rejected() {
+    for ratio in ["(0:1)", "(1:0)", "[1/0]", "(-1:1)", "(1:-2)"] {
+        let error = process_stoichiometry_indication(ratio).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("Component ratios must be at least 1"),
+            "{ratio}: {error}"
+        );
+    }
+}
+
+#[test]
+fn invalid_integer_component_ratios_are_rejected() {
+    for ratio in [
+        "(1:2147483648)",
+        "(1:99999999999999999999)",
+        "(1:1.5)",
+        "(1:abc)",
+    ] {
+        let error = process_stoichiometry_indication(ratio).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .starts_with("Invalid stoichiometry ratio:"),
+            "{ratio}: {error}"
+        );
+    }
+}
+
+#[test]
+fn parser_rejects_invalid_stoichiometry() {
+    let parser = Parser::new().unwrap();
+    for ratio in ["(1:0)", "(1:2147483648)"] {
+        let name = format!("methanol compound with ethanol {ratio}");
+        assert!(
+            parser.parse_trees(&name, &ParseOptions::default()).is_err(),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn tokenizer_rejects_semicolon_after_substituent() {
+    let parser = Parser::new().unwrap();
+    for remove_spaces in [false, true] {
+        assert!(
+            !parser
+                .tokenize("ethyl; benzene", remove_spaces)
+                .unwrap()
+                .is_successful()
+        );
+    }
+}
+
+#[test]
+fn spaced_hyphen_after_substituent_requires_space_removal() {
+    let parser = Parser::new().unwrap();
+    let result = parser.tokenize("ethyl - benzene", false).unwrap();
+    assert!(!result.is_successful());
+    assert_eq!(result.unparsed_name, "ethyl - benzene");
+    assert!(result.words.is_empty());
+}
+
+#[test]
+fn spaced_hyphen_after_substituent_does_not_end_a_component() {
+    let parser = Parser::new().unwrap();
+    let result = parser.tokenize("ethyl - benzene", true).unwrap();
+    assert!(result.is_successful());
+    assert_eq!(result.words.len(), 1);
+    assert_eq!(result.words[0].word, "ethyl-benzene");
+    assert!(!result.words[0].ends_component);
+}
+
+#[test]
+fn semicolon_after_full_word_ends_a_component() {
+    assert_methanol_benzene_component_boundary("methanol; benzene");
+}
+
+#[test]
+fn spaced_hyphen_after_full_word_ends_a_component() {
+    assert_methanol_benzene_component_boundary("methanol - benzene");
+}
+
+fn assert_methanol_benzene_component_boundary(name: &str) {
+    let parser = Parser::new().unwrap();
+    for remove_spaces in [false, true] {
+        let result = parser.tokenize(name, remove_spaces).unwrap();
+        assert!(result.is_successful());
+        assert_eq!(result.words.len(), 2);
+        assert_eq!(result.words[0].word, "methanol");
+        assert_eq!(result.words[1].word, "benzene");
+        assert!(result.words[0].ends_component);
+        assert!(!result.words[1].ends_component);
+    }
 }
 
 #[test]

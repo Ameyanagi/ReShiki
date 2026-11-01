@@ -72,6 +72,11 @@ impl State {
     pub(super) fn clear_pending(&mut self) {
         self.pending = None;
     }
+
+    #[cfg(test)]
+    pub(super) fn proposal(&self) -> Option<&Proposal> {
+        self.proposal.as_deref()
+    }
 }
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -149,7 +154,9 @@ impl App {
     }
     pub(super) fn mapping_action(&mut self, action: Action) -> Task<Message> {
         match action {
-            Action::Ready(epoch, serial, result) => self.mapping_ready(epoch, serial, result),
+            Action::Ready(epoch, serial, result) => {
+                return self.mapping_ready(epoch, serial, result);
+            }
             Action::Open => return self.open_mapping(),
             Action::Text(value) => {
                 self.tab.mapping.atom = self.mapping_atom();
@@ -224,13 +231,18 @@ impl App {
         }
         Task::none()
     }
-    fn mapping_ready(&mut self, epoch: u64, serial: u64, result: Result<Arc<Proposal>, String>) {
+    fn mapping_ready(
+        &mut self,
+        epoch: u64,
+        serial: u64,
+        result: Result<Arc<Proposal>, String>,
+    ) -> Task<Message> {
         if self.tab.mapping.pending != Some((epoch, serial)) {
-            return;
+            return Task::none();
         }
         self.tab.mapping.pending = None;
         if epoch != self.tab.file_epoch {
-            return;
+            return Task::none();
         }
         match result {
             Ok(proposal) if proposal.current(&self.tab.doc) => {
@@ -242,6 +254,19 @@ impl App {
                 .into();
                 self.error = false;
                 self.tab.mapping.set_proposal(Some(proposal));
+                self.tab
+                    .inspector_ui
+                    .update(super::inspector::Action::Section(Section::AtomMaps, true));
+                if self.tabs.temporary_depth == 0
+                    && self.inspector_open
+                    && self.inspector_tab == InspectorTab::Reactions
+                {
+                    // The proposal ends the section; keep Apply and Discard in view.
+                    return iced::widget::operation::snap_to(
+                        "inspector-content",
+                        iced::widget::operation::RelativeOffset::END,
+                    );
+                }
             }
             Ok(_) => {
                 self.status = "The drawing changed; run Auto-map again".into();
@@ -251,6 +276,7 @@ impl App {
                 self.error = true;
             }
         }
+        Task::none()
     }
     fn open_mapping(&mut self) -> Task<Message> {
         self.inspector_open = true;

@@ -14,7 +14,7 @@ The normal **Review edits** / **Accept all edits** preference still controls app
 
 ## Activity and drafts
 
-Sending a request immediately shows **Preparing your scheme…**, an elapsed timer and **Stop** in the conversation. A short composition outline appears before structures are prepared. Structure counts report completed local preparation work. Rendered drafts appear as panels become available, followed by the visual review stage. Quiet responses keep the timer and a waiting message visible; there are no estimated completion percentages.
+Sending a request immediately shows **Preparing your scheme…**, an elapsed timer and **Stop** in the conversation. A short composition outline appears before structures are prepared. Structure counts report completed local preparation work. Rendered drafts appear as panels become available, followed by the visual review stage. Once a draft is showing, a later preview reads **Revising the draft…** and the final local rebuild reads **Preparing the final draft…**; their structure counts are hidden. Quiet responses keep the timer and a waiting message visible; there are no estimated completion percentages.
 
 The footer keeps the elapsed timer visible when you scroll through a large preview. The canvas and prompt remain usable throughout generation, local chemistry preparation and image review. Closing the panel lets the job continue; **Assistant · Working** remains in the toolbar. Draft previews stay in the conversation and do not repeatedly change the drawing. The preview caches its rendered geometry so typing, dragging and the activity timer do not rebuild it.
 
@@ -41,7 +41,7 @@ Long terminal carbon chains can use compact formula labels while retaining all u
 
 Every generated drawing is rendered for a separate review turn before automatic application. The reviewer receives the original request, editable object data, an overview and reaction close-ups. Close-ups retain the exact atom labels and chemical data shown in the overview. Rendering uses drawing data, never a desktop screenshot.
 
-The reviewer checks spacing, alignment, captions, coefficients, large structures, clipped labels and possible chemistry issues. It can propose bounded editable changes: move an object or reaction panel, rotate a whole molecule, adjust arrow length, compact a chain or recompose panels. These operations cannot change atoms, bonds, reaction membership, coefficients or caption text. Chemistry problems are reported for correction instead of being disguised by a layout edit.
+The reviewer checks spacing, alignment, captions, coefficients, large structures, clipped labels and possible chemistry issues. Label colours follow the drawing style unless the request asks to preserve the source colours; these differences appear as review notes. It can propose bounded editable changes: move an object or reaction panel, rotate a whole molecule, adjust arrow length, compact a chain or recompose panels. These operations cannot change atoms, bonds, reaction membership, coefficients or caption text. Chemistry problems are reported for correction instead of being disguised by a layout edit.
 
 Local checks validate molecular graphs, detect overlaps and distant captions, check figure width, and compare element/charge totals using explicit reaction participants and coefficients. Consumed reagents should be included as reactants. Reagents written only as conditions may explain a balance warning, but are not assumed to be encoded participants. These checks do not establish that a reaction mechanism, identity or stereochemical assignment is correct.
 
@@ -101,7 +101,7 @@ Attachment-containing drafts check their defined atoms and ligand bonds separate
 
 Native/figure output retains front-bond emphasis. CDXML/CDX supports the checked [Haworth convention](haworth-projections.md); other projection-only emphasis is rejected until it can be preserved without being interpreted as stereochemistry. Restore plain bond appearance for other editable projection exports.
 
-The compact composer keeps the image thumbnail beside the prompt. Use **＋** for attachments, the model menu to change models, and **Review** for replacement and automatic-application settings.
+The prompt shows about six lines before it scrolls. An attached image's thumbnail appears below it, sized to the picture's shape so wide schemes stay legible; click it and choose **View image** to enlarge it. Use **＋** for attachments, the model menu to change models, and **Review** for replacement and automatic-application settings.
 
 ## Ring shortcut
 

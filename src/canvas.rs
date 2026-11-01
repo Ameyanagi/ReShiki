@@ -76,6 +76,7 @@ use grid::GridCache;
 pub use hit::{bond_text_at, distance_to_segment, hit_object};
 use iced::widget::canvas::{self, Action, Geometry, Path, Stroke};
 use iced::{Color, Event, Point, Rectangle, Renderer, Theme, Vector, mouse};
+pub(crate) use paper::HINT_STRIP_HEIGHT_PX;
 #[cfg_attr(
     target_arch = "wasm32",
     expect(
@@ -95,7 +96,7 @@ use reshiki::{
     graphics::{ArcGeometry, BracketSides, GraphicStyle},
     scientific::Phase,
 };
-pub(crate) use selection::rotate;
+pub(crate) use selection::{FRAME_PADDING_PX, ROTATION_KNOB_RADIUS_PX, ROTATION_STEM_PX, rotate};
 use selection::{Handle, SelectionBox, TransformDrag};
 use std::sync::LazyLock;
 pub(crate) use text_cache::prepare_fonts;
@@ -164,6 +165,15 @@ pub enum Edit {
     /// as the live preview uses them; a chemical symbol's attachment is separate.
     Orbital(World, World, bool, bool),
     GraphicPoint(u64, usize, World),
+    /// Move a connected path handle, optionally breaking its node's tangency.
+    PathPoint {
+        id: u64,
+        index: usize,
+        point: World,
+        free: bool,
+    },
+    /// The app counts consecutive node clicks before cycling the node type.
+    PathNodeClick(u64, usize),
     /// The pointer and whether Option/Alt or Shift freed the orbit.
     AtomMark(u64, usize, World, bool),
     AtomIndicator(reshiki::atom_labels::Owner, World),
@@ -174,6 +184,8 @@ pub enum Edit {
     Select(Vec<u64>),
     /// Preserve the exact mouse position for a keyboard hotspot handoff.
     SelectAt(Vec<u64>, World),
+    /// Retarget the keyboard hotspot after committing a pointer drag.
+    Release(Box<Edit>, World),
     RelaxDragStart {
         session: u64,
         atom: u64,
@@ -348,6 +360,7 @@ impl Camera {
 #[derive(Default)]
 pub struct State {
     scene: std::cell::RefCell<cache::SceneCache>,
+    geometry: std::cell::RefCell<paper::SceneGeometryCache>,
     grid: std::cell::RefCell<GridCache>,
     text: std::cell::RefCell<text_cache::TextCache>,
     /// The runtime font count the caches were laid out with.
@@ -570,7 +583,9 @@ pub struct PreviewStyles<'a> {
 pub struct MoleculeCanvas<'a> {
     pub(crate) nmr: Option<nmr::Context<'a>>,
     pub(crate) optimizer: Option<optimization::Context<'a>>,
+    /// Keyboard input routing; the marker waits for pointer or key interaction.
     pub(crate) keyboard_target: Option<World>,
+    pub(crate) keyboard_marker: bool,
     /// The model (by an atom) that started its 2D → 3D morph, and when.
     pub(crate) morph: Option<(u64, iced::time::Instant)>,
     pub(crate) model_generation: Option<ModelGeneration<'a>>,
@@ -618,6 +633,7 @@ impl<'a> MoleculeCanvas<'a> {
             nmr: None,
             optimizer: None,
             keyboard_target: None,
+            keyboard_marker: false,
             morph: None,
             model_generation: None,
             joining: None,
@@ -701,6 +717,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
         let fonts = reshiki::style::font_generation();
         if state.fonts.replace(fonts) != fonts {
             state.scene.take();
+            state.geometry.take();
             state.text.take();
         }
         let paper = self.guides.paper(bounds);
@@ -720,7 +737,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
         if let Some(context) = self.optimizer {
             optimization::draw_pins(self, context, &mut frame, paper);
         }
-        if let Some(target) = self.keyboard_target {
+        if let Some(target) = self.keyboard_target.filter(|_| self.keyboard_marker) {
             let point = self.camera.screen(target, paper);
             let ink = rgb([192, 112, 32]);
             frame.stroke(

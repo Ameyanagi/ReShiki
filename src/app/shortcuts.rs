@@ -674,6 +674,20 @@ impl App {
             let focus = result.as_ref().ok().map(|(_, focus)| *focus);
             let result = result.map(|(doc, focus)| (doc, vec![focus]));
             if self.commit_hotkey(result, "Atom shortcut applied") {
+                if hotkeys::atom_label(key)
+                    .is_some_and(|(_, mode)| mode == reshiki::atom_text::Mode::Auto)
+                    && self
+                        .tab
+                        .doc
+                        .models
+                        .iter()
+                        .any(|m| m.cell.is_some() && m.contains(id))
+                    && let Some(atom) = self.tab.doc.atom(id)
+                    && atom.charge != 0
+                {
+                    self.status =
+                        super::canvas_edit::click::charge_kept_status(&atom.element, atom.charge);
+                }
                 self.tab.labels_dirty = true;
                 if explicit {
                     if let Some(focus) = focus {

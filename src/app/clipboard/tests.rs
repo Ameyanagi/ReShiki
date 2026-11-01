@@ -493,6 +493,39 @@ fn paste_is_atomic_and_stale_data_does_not_replace_newer_work() {
 }
 
 #[test]
+fn native_path_paste_keeps_explicit_node_types() {
+    use reshiki::graphics::{Graphic, PathNodeType};
+    let (mut app, _) = App::new();
+    let mut graphic = Graphic::pen_curve(
+        1,
+        Point::default(),
+        Point::new(80., 20.),
+        Default::default(),
+    );
+    graphic
+        .append_pen_node(Point::new(160., 0.), Some(Point::new(180., 30.)))
+        .unwrap();
+    graphic.set_path_node_type(3, PathNodeType::Corner).unwrap();
+    app.tab.doc.graphics.push(graphic);
+    let part = editing::selection(&app.tab.doc, &[1]);
+    let part = Document::from_native_file(&part.file_json().unwrap()).unwrap();
+    let before = app.tab.doc.clone();
+    app.clipboard_read(
+        app.tab.file_epoch,
+        app.tab.revision,
+        Ok(PasteOutcome::native(part)),
+    );
+    assert_eq!(app.tab.doc.graphics.len(), 2);
+    assert_eq!(
+        app.tab.doc.graphics[1].node_types,
+        before.graphics[0].node_types
+    );
+    assert_eq!(app.tab.doc.graphics[1].node_types[1], PathNodeType::Corner);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+}
+
+#[test]
 fn reshiki_pastes_keep_palette_colors_and_other_sources_stay_exact() {
     use reshiki::palette::{Color, Hue, Row};
     let (mut app, _) = App::new();

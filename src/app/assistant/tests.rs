@@ -73,6 +73,172 @@ fn source_picture() -> reshiki::pictures::Picture {
 }
 
 #[test]
+fn retry_resends_the_failed_send_text_and_image_and_clears_its_draft() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let image = source_picture();
+    app.assistant.input = text_editor::Content::with_text("Redraw this esterification");
+    app.assistant.source_image = Some(image.clone());
+    let _ = app.assistant_action(Action::Send);
+    let mut preview = Document::default();
+    preview.add_atom("O", reshiki::document::Point::default());
+    app.assistant.preview = Some(preview.clone());
+    app.assistant.pending_proposal = Some(Proposal {
+        explanation: "Failed draft".into(),
+        ..Default::default()
+    });
+    let _ = app.assistant_action(Action::Done {
+        serial: app.assistant.serial,
+        epoch: app.tab.file_epoch,
+        revision: app.tab.revision,
+        replace: vec![],
+        result: Box::new(Err("The model's reply couldn't be read.".into())),
+    });
+    assert!(app.assistant.retry);
+    assert_eq!(app.assistant.draft.as_ref().unwrap().fragment, preview);
+    app.assistant.input = text_editor::Content::with_text("Unsent follow-up");
+    app.assistant.source_image = None;
+    app.assistant.busy = true;
+    assert_eq!(app.assistant_action(Action::Retry).units(), 0);
+    assert_eq!(app.assistant.input.text(), "Unsent follow-up");
+    assert!(app.assistant.source_image.is_none() && app.assistant.draft.is_some());
+    app.assistant.busy = false;
+    app.assistant.reading_image = true;
+    assert_eq!(app.assistant_action(Action::Retry).units(), 0);
+    assert!(app.assistant.draft.is_some());
+    app.assistant.reading_image = false;
+    assert!(app.assistant_action(Action::Retry).units() > 0);
+    assert!(app.assistant.busy && !app.assistant.retry);
+    let message = app.assistant.messages.last().unwrap();
+    assert_eq!(message.text, "Redraw this esterification");
+    assert_eq!(message.image, Some(image.clone()));
+    assert_eq!(app.assistant.source_image, Some(image));
+    assert!(app.assistant.draft.is_none() && app.assistant.pending_proposal.is_none());
+    assert!(app.assistant.input.text().is_empty());
+}
+
+#[test]
+fn failed_layout_improvements_do_not_offer_retry() {
+    let (mut app, _) = App::new();
+    app.tab
+        .doc
+        .add_atom("O", reshiki::document::Point::default());
+    let _ = app.assistant_action(Action::Improve);
+    assert!(
+        app.assistant
+            .messages
+            .last()
+            .unwrap()
+            .text
+            .starts_with("Improve layout: ")
+    );
+    let _ = app.assistant_action(Action::Done {
+        serial: app.assistant.serial,
+        epoch: app.tab.file_epoch,
+        revision: app.tab.revision,
+        replace: vec![],
+        result: Box::new(Err("The model's reply couldn't be read.".into())),
+    });
+    assert!(!app.assistant.retry);
+    assert_eq!(app.assistant_action(Action::Retry).units(), 0);
+}
+
+#[test]
+fn attached_image_can_be_viewed_from_the_attachments_menu() {
+    let (mut app, _) = App::new();
+    let picture = source_picture();
+    app.assistant.source_image = Some(picture.clone());
+    let _ = app.assistant_action(Action::Menu(Some(Menu::Attachments)));
+    let _ = app.assistant_action(Action::ViewImage(app.assistant.source_image.clone()));
+    assert_eq!(app.assistant.viewed_image, Some(picture));
+    assert!(app.assistant.menu.is_none());
+    let _ = app.assistant_action(Action::ViewImage(None));
+    assert!(app.assistant.viewed_image.is_none());
+    assert!(app.assistant.source_image.is_some());
+}
+
+#[test]
+fn preparation_passes_name_revisions_and_hide_restarted_structure_counts() {
+    for (pass, preparing, assembled) in [
+        (codex::Pass::Preview, "Revising the draft…", "Draft revised"),
+        (
+            codex::Pass::Final,
+            "Preparing the final draft…",
+            "Final draft assembled",
+        ),
+    ] {
+        let (mut app, _) = App::new();
+        let (tx, rx) = tokio::sync::mpsc::channel(8);
+        app.assistant.progress = Some(rx);
+        tx.try_send(codex::Progress::Pass(pass)).unwrap();
+        let _ = app.assistant_action(Action::Poll);
+        assert_eq!(app.assistant.status, "Preparing structures…");
+        assert_eq!(app.assistant.preparation, None);
+        for completed in 1..=4 {
+            tx.try_send(codex::Progress::Structures {
+                completed,
+                total: 4,
+            })
+            .unwrap();
+            let _ = app.assistant_action(Action::Poll);
+            assert_eq!(app.assistant.structures, Some((completed, 4)));
+            assert_eq!(app.assistant.status, "Preparing structures…");
+            if completed == 2 {
+                // A panel preview does not start a new preparation pass.
+                tx.try_send(codex::Progress::Preview(Box::default()))
+                    .unwrap();
+                let _ = app.assistant_action(Action::Poll);
+                assert_eq!(app.assistant.status, "Layout assembled");
+                assert_eq!(app.assistant.preparation, None);
+            }
+        }
+        tx.try_send(codex::Progress::Preview(Box::default()))
+            .unwrap();
+        let _ = app.assistant_action(Action::Poll);
+        assert_eq!(app.assistant.status, "Layout assembled");
+        assert_eq!(app.assistant.structures, Some((4, 4)));
+
+        tx.try_send(codex::Progress::Pass(pass)).unwrap();
+        let _ = app.assistant_action(Action::Poll);
+        assert_eq!(app.assistant.status, preparing);
+        assert!(app.assistant.structures.is_none());
+        tx.try_send(codex::Progress::Structures {
+            completed: 1,
+            total: 4,
+        })
+        .unwrap();
+        let _ = app.assistant_action(Action::Poll);
+        assert_eq!(app.assistant.status, preparing);
+        assert!(app.assistant.structures.is_none());
+        tx.try_send(codex::Progress::Preview(Box::default()))
+            .unwrap();
+        let _ = app.assistant_action(Action::Poll);
+        assert_eq!(app.assistant.status, assembled);
+        assert!(app.assistant.structures.is_none());
+
+        // Another panel preview belongs to the same pass.
+        tx.try_send(codex::Progress::Structures {
+            completed: 2,
+            total: 4,
+        })
+        .unwrap();
+        let _ = app.assistant_action(Action::Poll);
+        assert_eq!(app.assistant.status, preparing);
+        assert_eq!(app.assistant.preparation, Some(pass));
+        assert!(app.assistant.structures.is_none());
+        tx.try_send(codex::Progress::Preview(Box::default()))
+            .unwrap();
+        let _ = app.assistant_action(Action::Poll);
+        assert_eq!(app.assistant.status, assembled);
+
+        let _ = app.assistant_action(Action::Example("Draw water"));
+        let _ = app.assistant_action(Action::Send);
+        assert_eq!(app.assistant.preparation, None);
+        assert!(app.assistant.structures.is_none());
+    }
+}
+
+#[test]
 fn pasting_image_attaches_until_send_without_mutating_the_canvas() {
     let (mut app, _) = App::new();
     let before = app.tab.doc.clone();

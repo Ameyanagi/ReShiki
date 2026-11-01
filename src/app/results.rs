@@ -179,18 +179,19 @@ fn admission(completion: Completion) -> Admission {
             optimization: true,
             updates_dialog: true,
         },
-        Completion::AssistantDocument | Completion::AssistantApp => Admission {
-            atom_text: true,
-            preview: false,
-            cleanup: false,
-            optimization: true,
-            updates_dialog: true,
-        },
+        Completion::AssistantDocument | Completion::AssistantApp | Completion::Properties => {
+            Admission {
+                atom_text: true,
+                preview: false,
+                cleanup: false,
+                optimization: true,
+                updates_dialog: true,
+            }
+        }
         Completion::Optimization
         | Completion::DrawingStyle
         | Completion::Labels
         | Completion::Mapping
-        | Completion::Properties
         | Completion::Pasted
         | Completion::ThemeFile => Admission {
             atom_text: false,
@@ -482,6 +483,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Replace(..)
                 | Action::AutoApply(..)
                 | Action::Send
+                | Action::Retry
                 | Action::Improve
                 | Action::PreviewTarget(..)
                 | Action::PreviewEdit(..)
@@ -501,6 +503,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 Action::Browse
                 | Action::Forward
                 | Action::Search(..)
+                | Action::SearchAll
                 | Action::Filter(..)
                 | Action::Collection(..)
                 | Action::Name(..)
@@ -547,6 +550,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 Action::Refresh => None,
                 Action::Finished(..) => Some(Completion::Naming),
                 Action::Name(..)
+                | Action::ClearName
                 | Action::Cancel
                 | Action::Resolve
                 | Action::Generate
@@ -598,7 +602,7 @@ fn completion(message: &Message) -> Option<Completion> {
             }
         }
         #[cfg(target_arch = "wasm32")]
-        Message::Host(_) | Message::DownloadName(_) | Message::SaveDownload(_) => None,
+        Message::Host(_) | Message::SaveDownload(_) => None,
         #[cfg(target_os = "macos")]
         Message::MacFiles(action) => {
             use super::macos_files::Action;
@@ -609,12 +613,18 @@ fn completion(message: &Message) -> Option<Completion> {
         Message::Saved(..) => Some(Completion::Save),
         Message::Exported(..) => Some(Completion::Export),
         Message::FigureExported(..) => Some(Completion::FigureExport),
+        Message::ExportReady(export) | Message::SaveExport(_, export) => Some(match export.kind {
+            super::figure_export::Kind::Figure => Completion::FigureExport,
+            super::figure_export::Kind::Structure => Completion::Export,
+            super::figure_export::Kind::Nmr => Completion::Nmr,
+        }),
         // Tab wraps a routed message; its inner message is classified where it is delivered.
         Message::Tab(..) => None,
         #[cfg(target_os = "linux")]
         Message::LinuxClipboardWindow(_) => None,
         // Controls, view/window lifecycle and sub-enums without completion variants.
         Message::ContextMenu(..)
+        | Message::ModifiersChanged(..)
         | Message::CopyFrame(..)
         | Message::StyleMenu(..)
         | Message::ObjectToolbar(..)
@@ -702,6 +712,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Save
         | Message::Export(..)
         | Message::CopySmiles
+        | Message::CopyChemicalText
         | Message::Copy(..)
         | Message::CopyImage
         | Message::CopyAs(..)
@@ -734,6 +745,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Discard
         | Message::Cancel
         | Message::Prompt(_) => None,
+        Message::DownloadName(_) => None,
     }
 }
 

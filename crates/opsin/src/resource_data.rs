@@ -103,6 +103,7 @@ pub(crate) const XML_RESOURCES: &[(&str, &str)] = &[
         "nonCarboxylicAcids.xml",
         include_str!("../resources/xml/nonCarboxylicAcids.xml"),
     ),
+    ("phanes.xml", include_str!("../resources/xml/phanes.xml")),
     (
         "regexTokens.xml",
         include_str!("../resources/xml/regexTokens.xml"),

@@ -323,7 +323,7 @@ async fn predicate_cases(key: optimization::Key) -> Vec<(&'static str, Message, 
                 app.property_request_key(),
                 Box::new(Err(FAILURE.into())),
             )),
-            [true, true, false, false, true],
+            [true, true, true, false, true],
         ),
         (
             "Imports Loaded",

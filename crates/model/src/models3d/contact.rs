@@ -11,7 +11,7 @@
 use crate::document::Point;
 use i_overlay::core::fill_rule::FillRule;
 use i_overlay::core::overlay_rule::OverlayRule;
-use i_overlay::float::single::SingleFloatOverlay;
+use i_overlay::float::overlay::FloatOverlay;
 use std::collections::HashMap;
 use std::f32::consts::{PI, TAU};
 
@@ -44,7 +44,9 @@ fn unit(a: V) -> V {
 }
 
 /// Samples per full turn of a rim or a meeting circle.
-const STEPS: f32 = 64.;
+pub(super) const STEPS: f32 = 64.;
+/// Fewer chords while turning; the arc ends still meet exactly.
+pub(super) const TURNING_STEPS: f32 = 24.;
 /// Samples per full turn of a polygon's rim outside the disc: coarse, as the
 /// polygon there is cut away.
 const PAST_STEPS: f32 = 16.;
@@ -359,15 +361,43 @@ fn neighbours(balls: &[Ball]) -> Vec<Vec<usize>> {
 /// What shows of every ball and the seams between them, seen from `eye`
 /// (the camera's distance along z, `None` from infinitely far), with
 /// `project` taking a rotated point to the drawing.
-pub(super) fn contacts(balls: &[Ball], eye: Option<f32>, project: impl Fn(V) -> Point) -> Contacts {
+pub(super) fn contacts(
+    balls: &[Ball],
+    eye: Option<f32>,
+    steps: f32,
+    project: impl Fn(V) -> Point + Sync,
+) -> Contacts {
     let near = neighbours(balls);
     let facing: Vec<Facing> = balls.iter().map(|&b| Facing::new(b, eye)).collect();
-    let seen = balls
-        .iter()
-        .zip(&facing)
-        .zip(&near)
-        .map(|((&a, f), near)| (!near.is_empty()).then(|| seen(a, f, near, balls, &project)))
-        .collect();
+    let mut visible = vec![None; balls.len()];
+    let draw = |start: usize, chunk: &mut [Option<Seen>]| {
+        // Keep the overlay's working buffers between balls.
+        let mut overlay = FloatOverlay::new_empty(Default::default(), Default::default(), 0);
+        for (((&a, f), near), out) in balls.iter().zip(&facing).zip(&near).skip(start).zip(chunk) {
+            *out =
+                (!near.is_empty()).then(|| seen(a, f, near, balls, steps, &project, &mut overlay));
+        }
+    };
+    // Independent overlays write back in ball order, with enough work per
+    // worker to pay for starting it. Browser builds stay on one thread.
+    let workers = if cfg!(target_arch = "wasm32") {
+        1
+    } else {
+        std::thread::available_parallelism()
+            .map_or(1, usize::from)
+            .min(near.iter().filter(|list| !list.is_empty()).count() / 8)
+    };
+    if workers > 1 {
+        let size = balls.len().div_ceil(workers);
+        std::thread::scope(|scope| {
+            for (i, chunk) in visible.chunks_mut(size).enumerate() {
+                let draw = &draw;
+                scope.spawn(move || draw(i * size, chunk));
+            }
+        });
+    } else {
+        draw(0, &mut visible);
+    }
     let mut seams = vec![];
     for (i, list) in near.iter().enumerate() {
         for &j in list.iter().filter(|&&j| j > i) {
@@ -375,13 +405,16 @@ pub(super) fn contacts(balls: &[Ball], eye: Option<f32>, project: impl Fn(V) -> 
             if !near.get(j).is_some_and(|other| other.contains(&i)) {
                 continue;
             }
-            let runs = seam(balls, &facing, (i, j), list, &project);
+            let runs = seam(balls, &facing, (i, j), list, steps, &project);
             if !runs.is_empty() {
                 seams.push(((i, j), runs));
             }
         }
     }
-    Contacts { seen, seams }
+    Contacts {
+        seen: visible,
+        seams,
+    }
 }
 
 /// A closed polygon's signed area, positive counterclockwise with y down.
@@ -408,6 +441,7 @@ struct Disc<'a, P> {
     ball: Ball,
     facing: &'a Facing,
     project: &'a P,
+    steps: f32,
 }
 
 impl<P: Fn(V) -> Point> Disc<'_, P> {
@@ -432,7 +466,7 @@ impl<P: Fn(V) -> Point> Disc<'_, P> {
     /// The whole disc.
     fn whole(&self) -> Vec<[f64; 2]> {
         Self::counterclockwise(
-            sample(0., TAU, STEPS)
+            sample(0., TAU, self.steps)
                 .skip(1)
                 .map(|s| flat((self.project)(self.facing.rim.at(s))))
                 .collect(),
@@ -450,7 +484,7 @@ impl<P: Fn(V) -> Point> Disc<'_, P> {
                     sample(0., TAU, PAST_STEPS).map(|s| self.past(s)).collect(),
                 );
                 let mut hole = Self::counterclockwise(
-                    sample(0., TAU, STEPS)
+                    sample(0., TAU, self.steps)
                         .map(|t| flat((self.project)(ring.at(t))))
                         .collect(),
                 );
@@ -461,7 +495,7 @@ impl<P: Fn(V) -> Point> Disc<'_, P> {
                 Ok(vec![outer, hole])
             }
             Cover::Part(ring, (t0, t1), closing) => {
-                let mut polygon: Vec<[f64; 2]> = sample(t0, t1, STEPS)
+                let mut polygon: Vec<[f64; 2]> = sample(t0, t1, self.steps)
                     .map(|t| flat((self.project)(ring.at(t))))
                     .collect();
                 if let Some((s0, s1)) = closing {
@@ -478,13 +512,16 @@ fn seen(
     f: &Facing,
     near: &[usize],
     balls: &[Ball],
+    steps: f32,
     project: &impl Fn(V) -> Point,
+    overlay: &mut FloatOverlay<[f64; 2]>,
 ) -> Seen {
     let near: Vec<Ball> = near.iter().filter_map(|&j| balls.get(j).copied()).collect();
     let disc = Disc {
         ball: a,
         facing: f,
         project,
+        steps,
     };
     let mut cuts = vec![];
     for &b in &near {
@@ -497,8 +534,9 @@ fn seen(
     let region: Vec<Vec<Point>> = if cuts.is_empty() {
         vec![whole.into_iter().map(point).collect()]
     } else {
-        whole
-            .overlay(&cuts, OverlayRule::Difference, FillRule::NonZero)
+        overlay.reinit_with_subj_and_clip(&whole, &cuts);
+        overlay
+            .overlay(OverlayRule::Difference, FillRule::NonZero)
             .into_iter()
             .flatten()
             .filter(|contour| area(contour).abs() > 1e-9)
@@ -522,7 +560,7 @@ fn seen(
         .free()
         .into_iter()
         .map(|(s0, s1)| {
-            sample(s0, s1, STEPS)
+            sample(s0, s1, steps)
                 .map(|s| project(f.rim.at(s)))
                 .collect()
         })
@@ -537,6 +575,7 @@ fn seam(
     facing: &[Facing],
     (i, j): (usize, usize),
     near: &[usize],
+    steps: f32,
     project: &impl Fn(V) -> Point,
 ) -> Runs {
     let (Some(&a), Some(&b), Some(fa), Some(fb)) =
@@ -574,7 +613,7 @@ fn seam(
         .into_iter()
         .filter(|(t0, t1)| t1 - t0 > 1e-3)
         .map(|(t0, t1)| {
-            sample(t0, t1, STEPS)
+            sample(t0, t1, steps)
                 .map(|t| project(m.ring.at(t)))
                 .collect()
         })

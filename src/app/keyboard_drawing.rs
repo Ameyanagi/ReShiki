@@ -66,7 +66,7 @@ impl App {
             })
     }
 
-    pub(super) fn keyboard_pointer_hover(&mut self, point: Option<Point>) {
+    pub(super) fn keyboard_pointer_target(&mut self, point: Option<Point>, force: bool) {
         if !self.keyboard_drawing_active() {
             return;
         }
@@ -74,7 +74,7 @@ impl App {
             let target = self.keyboard_target_at(point);
             self.tab
                 .keyboard_drawing
-                .pointer_target(point, target, &self.tab.doc, false);
+                .pointer_target(point, target, &self.tab.doc, force);
         } else {
             self.tab.keyboard_drawing.pointer_left();
         }
@@ -101,7 +101,10 @@ impl App {
         let pointed = point
             .map(|point| (point, self.keyboard_target_at(point)))
             .filter(|(_, target)| match target {
-                Target::Blank(_) => self.tab.selected.is_empty(),
+                Target::Blank(_) => {
+                    self.tab.selected.is_empty()
+                        || reshiki::models3d::shows_3d(&self.tab.doc, &self.tab.selected)
+                }
                 _ => target
                     .atoms()
                     .iter()
@@ -261,6 +264,7 @@ impl App {
         if !self.keyboard_drawing_active() {
             return Task::none();
         }
+        self.tab.keyboard_drawing.show_target();
         match key {
             "[" => return self.keyboard_drawing_action(Action::Mark),
             "]" => return self.keyboard_drawing_action(Action::Connect),

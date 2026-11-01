@@ -59,6 +59,11 @@ impl Ring {
             .find(|(b, _)| *b == bond)
             .map(|(_, ring)| *ring)
     }
+    pub fn is_neighbour(&self, ring: usize) -> bool {
+        self.neighbours
+            .iter()
+            .any(|(_, neighbour)| *neighbour == ring)
+    }
     fn add_neighbour(&mut self, bond: BondId, ring: usize) {
         if let Some((_, existing)) = self.neighbours.iter_mut().find(|(b, _)| *b == bond) {
             *existing = ring;
@@ -177,10 +182,8 @@ pub fn get_set_of_smallest_rings(
     if rings.len() > 1 {
         let mut change = true;
         while change {
+            change = false;
             for index in 0..rings.len() {
-                // Upstream assigns (rather than ORs) each reducer result to
-                // change. Keep its termination and replacement ordering.
-                change = false;
                 let source = rings[index].bonds.clone();
                 for (target, ring) in rings.iter_mut().enumerate() {
                     if target == index {
@@ -238,6 +241,17 @@ struct ConnectionTable {
     used: Vec<usize>,
 }
 type RingMap = Vec<Vec<Option<usize>>>;
+
+#[derive(Debug, Clone)]
+struct HorizontalChain {
+    direction: i32,
+    rings: Vec<usize>,
+}
+
+struct LongestChainDirections {
+    chains: Vec<(usize, Vec<HorizontalChain>)>,
+    length: usize,
+}
 
 pub fn opposite_direction(direction: i32) -> i32 {
     match direction.abs() {
@@ -587,8 +601,8 @@ fn remove_distorted_tables(rings: &[Ring], tables: &[ConnectionTable], active: &
 fn longest_chain_directions(
     tables: &[ConnectionTable],
     active: &[usize],
-) -> Result<Vec<(usize, Vec<i32>)>, GraphError> {
-    let mut result: Vec<(usize, Vec<i32>)> = Vec::new();
+) -> Result<LongestChainDirections, GraphError> {
+    let mut result: Vec<(usize, Vec<HorizontalChain>)> = Vec::new();
     let mut max_chain = 0;
     for &id in active {
         let table = &tables[id];
@@ -602,8 +616,9 @@ fn longest_chain_directions(
         }
         for index in 0..table.shapes.len() {
             let mut neighbour = table.neighbours[index];
-            let mut chain = 1;
+            let mut chain = 2;
             let direction = table.directions[index];
+            let mut chain_rings = vec![table.shapes[index].ring, neighbour];
             for _ in 0..=table.used.len() {
                 let first = table
                     .shapes
@@ -617,21 +632,24 @@ fn longest_chain_directions(
                 }) {
                     chain += 1;
                     neighbour = table.neighbours[next];
+                    chain_rings.push(neighbour);
                     continue;
                 }
                 if chain >= max_chain {
                     let greater = chain > max_chain;
                     if greater {
-                        for (_, directions) in &mut result {
-                            directions.clear();
+                        for (_, chains) in &mut result {
+                            chains.clear();
                         }
                     }
-                    let directions = &mut result.last_mut().unwrap().1;
+                    let chains = &mut result.last_mut().unwrap().1;
                     if greater
-                        || !directions.contains(&direction)
-                            && !directions.contains(&opposite_direction(direction))
+                        || !contains_equivalent_horizontal_chain(chains, direction, &chain_rings)
                     {
-                        directions.push(direction);
+                        chains.push(HorizontalChain {
+                            direction,
+                            rings: chain_rings.clone(),
+                        });
                     }
                     max_chain = chain;
                 }
@@ -644,7 +662,22 @@ fn longest_chain_directions(
             }
         }
     }
-    Ok(result)
+    Ok(LongestChainDirections {
+        chains: result,
+        length: max_chain,
+    })
+}
+
+fn contains_equivalent_horizontal_chain(
+    chains: &[HorizontalChain],
+    direction: i32,
+    rings: &[usize],
+) -> bool {
+    chains.iter().any(|chain| {
+        chain.direction == direction && chain.rings == rings
+            || chain.direction == opposite_direction(direction)
+                && chain.rings.iter().eq(rings.iter().rev())
+    })
 }
 
 fn delta_x(direction: i32) -> i32 {
@@ -666,10 +699,28 @@ fn delta_y(direction: i32) -> i32 {
 fn generate_ring_map(
     table: &ConnectionTable,
     directions: &[i32],
+    horizontal_chain: &[usize],
 ) -> Result<Option<RingMap>, GraphError> {
-    let mut taken = vec![table.shapes[0].ring];
-    let mut coordinates = vec![(0i32, 0i32)];
-    let (mut min_x, mut max_x, mut min_y, mut max_y) = (0, 0, 0, 0);
+    if horizontal_chain.len() < 2 || horizontal_chain.len() > table.used.len() {
+        return Err(error(
+            "OPSIN Bug: Invalid horizontal chain supplied for fused ring map generation",
+        ));
+    }
+    let mut taken = Vec::new();
+    let mut coordinates = Vec::new();
+    let (mut min_x, mut max_x, mut min_y, mut max_y) =
+        (0, 2 * (horizontal_chain.len() as i32 - 1), 0, 0);
+    // The chain that survived FR-5.2a determines these coordinates, even
+    // when reverse directions from an odd or distorted ring disagree.
+    for (index, &ring) in horizontal_chain.iter().enumerate() {
+        if taken.contains(&ring) {
+            return Err(error(
+                "OPSIN bug: Longest horizontal chain contained the same ring more than once",
+            ));
+        }
+        taken.push(ring);
+        coordinates.push((2 * index as i32, 0));
+    }
     for index in 0..table.used.len() - 1 {
         let current = *taken
             .get(index)
@@ -687,7 +738,7 @@ fn generate_ring_map(
                 continue;
             }
             let coordinate = (x + delta_x(directions[next]), y + delta_y(directions[next]));
-            if taken.len() > table.used.len() {
+            if taken.len() >= table.used.len() {
                 return Err(error("OPSIN Bug: Fused ring numbering bug"));
             }
             taken.push(table.neighbours[next]);
@@ -700,11 +751,16 @@ fn generate_ring_map(
     }
     if taken.len() != table.used.len() {
         return Err(error(
-            "OPSIN Bug: Fused ring numbering bug, Coordinates have been calculated wrongly",
+            "OPSIN bug: Not all rings were positioned while generating fused ring map",
         ));
     }
     let mut map = vec![vec![None; (max_y - min_y + 1) as usize]; (max_x - min_x + 1) as usize];
     for (ring, (x, y)) in taken.into_iter().zip(coordinates) {
+        if x < min_x || x > max_x || y < min_y || y > max_y {
+            return Err(error(
+                "OPSIN Bug: Fused ring numbering bug, Coordinates have been calculated wrongly",
+            ));
+        }
         let cell = &mut map[(x - min_x) as usize][(y - min_y) as usize];
         if cell.is_some() {
             return Ok(None);
@@ -720,34 +776,37 @@ struct Chain {
     start_x: usize,
     y: usize,
 }
-fn maximum_horizontal_chains(map: &RingMap) -> Vec<Chain> {
+fn maximum_horizontal_chains(map: &RingMap, rings: &[Ring]) -> Vec<Chain> {
     let mut chains = Vec::new();
     let mut maximum = 0;
     let width = map.len();
-    // Maps are x-major; scan y in the first column's order while retaining
-    // the source's x stride and its extra increment after each chain.
     for (y, _) in map[0].iter().enumerate() {
-        let mut x = 0;
-        while x < width {
-            if map[x][y].is_some() {
-                let mut length = 1;
-                while x + 2 * length < width && map[x + 2 * length][y].is_some() {
-                    length += 1;
+        for x in 0..width {
+            let Some(mut current) = map[x][y] else {
+                continue;
+            };
+            let mut length = 1;
+            while x + 2 * length < width {
+                let Some(next) = map[x + 2 * length][y] else {
+                    break;
+                };
+                if !rings[current].is_neighbour(next) {
+                    break;
                 }
-                if length > maximum {
-                    chains.clear();
-                    maximum = length;
-                }
-                if length >= maximum {
-                    chains.push(Chain {
-                        length,
-                        start_x: x,
-                        y,
-                    });
-                }
-                x += 2 * length;
+                current = next;
+                length += 1;
             }
-            x += 1;
+            if length > maximum {
+                chains.clear();
+                maximum = length;
+            }
+            if length == maximum {
+                chains.push(Chain {
+                    length,
+                    start_x: x,
+                    y,
+                });
+            }
         }
     }
     chains
@@ -1011,9 +1070,9 @@ fn possible_periphery_orders(
         &mut active,
     )?;
     remove_distorted_tables(rings, &tables, &mut active);
-    let directions = longest_chain_directions(&tables, &active)?;
+    let longest_chains = longest_chain_directions(&tables, &active)?;
     let mut maps = Vec::new();
-    for (id, horizontal_directions) in directions {
+    for (id, horizontal_chains) in longest_chains.chains {
         let table = &tables[id];
         if table.shapes.is_empty()
             || table.shapes.len() != table.neighbours.len()
@@ -1023,7 +1082,7 @@ fn possible_periphery_orders(
                 "OPSIN Bug: Sizes of arrays in fused ring numbering connection table are not equal",
             ));
         }
-        for horizontal in horizontal_directions {
+        for horizontal in horizontal_chains {
             let directions: Vec<_> = table
                 .shapes
                 .iter()
@@ -1033,11 +1092,11 @@ fn possible_periphery_orders(
                         shape.shape,
                         rings[shape.ring].size(),
                         direction,
-                        -horizontal,
+                        -horizontal.direction,
                     )
                 })
                 .collect();
-            if let Some(map) = generate_ring_map(table, &directions)? {
+            if let Some(map) = generate_ring_map(table, &directions, &horizontal.rings)? {
                 maps.push(map);
             }
         }
@@ -1050,7 +1109,17 @@ fn possible_periphery_orders(
     let mut quadrants = Vec::new();
     let mut corresponding_maps = Vec::new();
     for (index, map) in maps.iter().enumerate() {
-        for chain in maximum_horizontal_chains(map) {
+        let chains = maximum_horizontal_chains(map, rings);
+        let actual_longest_chain = chains.first().ok_or_else(|| {
+            error("OPSIN bug: Unable to find a horizontal ring chain in generated ring map")
+        })?;
+        if actual_longest_chain.length != longest_chains.length {
+            return Err(error(format!(
+                "OPSIN bug: Expected longest horizontal ring chain of {} rings but generated ring map had {}",
+                longest_chains.length, actual_longest_chain.length
+            )));
+        }
+        for chain in chains {
             quadrants.push(count_quadrants(
                 map,
                 chain.length + chain.start_x - 1,
@@ -1128,9 +1197,9 @@ fn compare_sequences(graph: &Graph, first: &[AtomId], second: &[AtomId]) -> Orde
             return second_hetero.cmp(&first_hetero);
         }
     }
-    // Upstream divergence: OPSIN 2.9.0 compares seniority position by position;
-    // FR-5.4(b) gives low locants to O first, then S, and so on, as in the angular
-    // oxazole/thiazole system c1nc2ccc3ocnc3c2s1.
+    // Upstream divergence: OPSIN (2.9.0 to main) compares seniority position by
+    // position; FR-5.4(b) gives low locants to O first, then S, and so on, as in
+    // the angular oxazole/thiazole system c1nc2ccc3ocnc3c2s1.
     for priority in (2..=24).rev() {
         for (&first, &second) in non_fusion_first.iter().zip(&non_fusion_second) {
             let result = (heteroatom_priority(graph.atom(second).element) == priority)
@@ -1197,4 +1266,128 @@ pub fn number_fused_ring(graph: &mut Graph, fragment: FragmentId) -> Result<(), 
     fragment_tools::relabel_locants_as_fused_ring_system(graph, &paths[0]);
     graph.fragment_mut(fragment).atoms = paths.remove(0);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ring_with_neighbours(neighbours: &[usize]) -> Ring {
+        Ring {
+            atoms: Vec::new(),
+            bonds: Vec::new(),
+            neighbours: neighbours
+                .iter()
+                .enumerate()
+                .map(|(bond, &ring)| (BondId(bond), ring))
+                .collect(),
+            cyclic_atoms: None,
+            cyclic_bonds: None,
+        }
+    }
+
+    fn table(edges: &[(usize, usize, i32)], ring_count: usize) -> ConnectionTable {
+        ConnectionTable {
+            shapes: edges
+                .iter()
+                .map(|&(ring, _, _)| RingShape {
+                    ring,
+                    shape: FusionRingShape::Standard,
+                })
+                .collect(),
+            neighbours: edges.iter().map(|&(_, ring, _)| ring).collect(),
+            directions: edges.iter().map(|&(_, _, direction)| direction).collect(),
+            used: (0..ring_count).collect(),
+        }
+    }
+
+    #[test]
+    fn horizontal_chains_scan_each_possible_start() {
+        let rings = vec![
+            ring_with_neighbours(&[]),
+            ring_with_neighbours(&[2]),
+            ring_with_neighbours(&[1, 3]),
+            ring_with_neighbours(&[2]),
+        ];
+        let map = vec![
+            vec![Some(0)],
+            vec![Some(1)],
+            vec![None],
+            vec![Some(2)],
+            vec![None],
+            vec![Some(3)],
+        ];
+        let chains = maximum_horizontal_chains(&map, &rings);
+        assert_eq!(chains.len(), 1);
+        assert_eq!(chains[0].length, 3);
+        assert_eq!(chains[0].start_x, 1);
+    }
+
+    #[test]
+    fn horizontal_chains_require_fused_neighbours() {
+        let rings = vec![
+            ring_with_neighbours(&[1]),
+            ring_with_neighbours(&[0]),
+            ring_with_neighbours(&[]),
+        ];
+        let map = vec![
+            vec![Some(0)],
+            vec![None],
+            vec![Some(1)],
+            vec![None],
+            vec![Some(2)],
+        ];
+        let chains = maximum_horizontal_chains(&map, &rings);
+        assert_eq!(chains.len(), 1);
+        assert_eq!(chains[0].length, 2);
+        assert_eq!(chains[0].start_x, 0);
+    }
+
+    #[test]
+    fn longest_chains_retain_distinct_sequences_in_the_same_direction() {
+        let table = table(
+            &[
+                (0, 1, 0),
+                (1, 0, 4),
+                (1, 2, 0),
+                (2, 1, 4),
+                (3, 4, 0),
+                (4, 3, 4),
+                (4, 5, 0),
+                (5, 4, 4),
+            ],
+            6,
+        );
+        let result = longest_chain_directions(&[table], &[0]).unwrap();
+        assert_eq!(result.length, 3);
+        let chains = &result.chains[0].1;
+        assert_eq!(chains.len(), 2);
+        assert_eq!(chains[0].rings, [0, 1, 2]);
+        assert_eq!(chains[1].rings, [3, 4, 5]);
+        assert!(contains_equivalent_horizontal_chain(chains, 4, &[2, 1, 0]));
+        assert!(!contains_equivalent_horizontal_chain(chains, 0, &[2, 1, 0]));
+    }
+
+    #[test]
+    fn ring_map_places_the_selected_horizontal_chain_first() {
+        let table = table(
+            &[
+                (0, 1, 0),
+                (1, 0, 4),
+                (1, 2, 1),
+                (2, 1, -3),
+                (2, 3, 0),
+                (3, 2, 4),
+            ],
+            4,
+        );
+        let map = generate_ring_map(&table, &table.directions, &[1, 2, 3])
+            .unwrap()
+            .unwrap();
+        assert_eq!(map.len(), 7);
+        assert_eq!(map[0], [Some(0)]);
+        assert_eq!(map[2], [Some(1)]);
+        assert_eq!(map[4], [Some(2)]);
+        assert_eq!(map[6], [Some(3)]);
+    }
 }

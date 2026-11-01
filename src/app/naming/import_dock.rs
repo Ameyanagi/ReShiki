@@ -1,8 +1,8 @@
 //! Chemical names share the ordinary Import dock. Insertion resolves and
 //! verifies locally in one action; opening the editable preview is optional.
-use super::super::workspace::{accessible_checkbox, accessible_command, muted_text};
+use super::super::workspace::{accessible_checkbox, accessible_command, hover_hint, muted_text};
 use super::*;
-use iced::widget::{Space, column};
+use iced::widget::{Space, column, stack, tooltip};
 
 const DETAILS: &str = "Names are parsed locally by default. Online lookup sends a name to PubChem only after you confirm. Ambiguous results and unsupported chemistry are rejected.";
 
@@ -108,13 +108,11 @@ impl App {
             self.status = format!("Could not insert {title}");
             return;
         };
-        self.tab.selected = selected;
-        self.changed(before);
+        self.commit_structure_insert(before, selected);
         if self.error {
             return;
         }
         self.tool = Tool::Select;
-        self.fit();
         self.tab.naming.notice = omit_caption.then(|| {
             Notice::new(
                 NoticeKind::Info,
@@ -144,17 +142,37 @@ impl App {
             .as_ref()
             .is_some_and(|preview| preview.modified);
         let caption = state.add_name_below && !changed;
+        let input = text_input(
+            "import-name",
+            "Chemical name",
+            "Chemical name, e.g. ethanol",
+            &state.name,
+        )
+        .size(13)
+        .padding(iced::Padding {
+            right: 32.,
+            ..iced::Padding::new(8.)
+        })
+        .on_input(|value| Message::Naming(Action::Name(value)))
+        .on_submit_maybe(ready.then_some(Message::Naming(Action::InsertName)));
+        let clear = accessible_command("import-clear", "Clear chemical name input", "×")
+            .padding(0)
+            .width(24)
+            .height(24)
+            .on_press_maybe((!state.name.is_empty()).then_some(Message::Naming(Action::ClearName)));
+        let input = stack![
+            input,
+            container(hover_hint(
+                clear,
+                "Clear chemical name input",
+                tooltip::Position::Left,
+            ))
+            .padding(4)
+            .width(Length::Fill)
+            .align_right(Length::Fill),
+        ];
         let mut content = column![
-            text_input(
-                "import-name",
-                "Chemical name",
-                "Chemical name, e.g. ethanol",
-                &state.name
-            )
-            .size(13)
-            .padding(8)
-            .on_input(|value| Message::Naming(Action::Name(value)))
-            .on_submit_maybe(ready.then_some(Message::Naming(Action::InsertName))),
+            input,
             accessible_checkbox(
                 "import-name-caption",
                 "Add name below",

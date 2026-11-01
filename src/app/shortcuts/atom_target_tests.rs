@@ -113,6 +113,59 @@ fn assert_one_undo(app: &mut App, before: &Document) {
 }
 
 #[test]
+fn element_hotkey_keeps_crystal_charge_but_resets_ordinary_charge() {
+    for crystal in [true, false] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.doc = if crystal {
+            reshiki::crystal::read(
+                "cif",
+                include_str!("../../../tests/fixtures/crystal/nacl.cif"),
+            )
+            .unwrap()
+            .0
+        } else {
+            let mut doc = Document::default();
+            let id = doc.add_atom("Cl", Point::default());
+            doc.atom_mut(id).unwrap().charge = -1;
+            doc
+        };
+        let atom = app
+            .tab
+            .doc
+            .atoms
+            .iter()
+            .find(|atom| atom.element == "Cl")
+            .unwrap()
+            .clone();
+        let before = app.tab.doc.clone();
+        hover(&mut app, atom.position);
+        key(&mut app, "b");
+        assert!(!app.error, "{}", app.status);
+        let replaced = app.tab.doc.atom(atom.id).unwrap();
+        assert_eq!(replaced.element, "Br");
+        assert_eq!(replaced.charge, if crystal { -1 } else { 0 });
+        assert_eq!(replaced.no_implicit, crystal);
+        assert_eq!(app.tab.doc.models, before.models);
+        if crystal {
+            assert_eq!(
+                app.status,
+                "Br−: charge kept · Edit atom label to change it"
+            );
+            assert_eq!(
+                reshiki::models3d::crystal::composition(&app.tab.doc, &[])
+                    .unwrap()
+                    .formula,
+                "BrCl3Na4"
+            );
+        } else {
+            assert_eq!(app.status, "Atom shortcut applied");
+        }
+        assert_one_undo(&mut app, &before);
+    }
+}
+
+#[test]
 fn aniline_and_toluene_dimethyl_shortcut_grows_on_the_hovered_center() {
     for element in ["C", "N"] {
         let (mut app, target, unrelated) = fixture(element);

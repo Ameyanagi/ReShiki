@@ -273,6 +273,40 @@ fn locanted_unsaturation_and_isotope_are_applied_before_unlocanted_radicals() {
 }
 
 #[test]
+fn compound_phane_locants_select_both_unsaturation_atoms() {
+    for locant in ["1^1(1^4)", "1^1[1^4]", "1^1{1^4}"] {
+        let mut arena = Arena::default();
+        let mut state = state();
+        let root = arena.grouping("root");
+        let (_, fragment) = group(
+            &mut arena,
+            &mut state,
+            root,
+            "ring",
+            "C1CCC1",
+            "1^1/1^2/1^3/1^4",
+        );
+        let unsaturation = arena.token("unsaturator", "en");
+        arena[unsaturation].set_attribute("locant", locant);
+        arena[unsaturation].set_attribute("value", "2");
+        arena.add_child(root, unsaturation);
+        structure_building_methods::resolve_locanted_features(&mut state, &mut arena, root)
+            .unwrap();
+        let atoms = &state.graph().fragment(fragment).atoms;
+        let selected = state.graph().bond_between(atoms[0], atoms[3]).unwrap();
+        assert_eq!(state.graph().bond(selected).order, 2);
+        assert_eq!(
+            state
+                .graph()
+                .bond(state.graph().bond_between(atoms[0], atoms[1]).unwrap())
+                .order,
+            1
+        );
+        assert!(arena[unsaturation].parent.is_none());
+    }
+}
+
+#[test]
 fn build_results_out_atom_removal_updates_owner_and_retains_order() {
     let mut arena = Arena::default();
     let mut state = state();

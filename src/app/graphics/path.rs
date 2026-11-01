@@ -1,8 +1,8 @@
 //! Contextual pen authoring and node edits.
 use super::super::workspace::{accessible_command, text_width};
 use super::*;
-use iced::widget::{Column, column, row, text};
-use reshiki::graphics::{Graphic, PathHandle, PathSummary};
+use iced::widget::{Column, column, row, text, tooltip};
+use reshiki::graphics::{Graphic, PathHandle, PathNodeType, PathSummary};
 
 /// The block's one line of help; the full gestures are in the guide.
 const DRAWING_HINT: &str = "Click adds a line · Drag adds a curve · Click the first node to close";
@@ -21,6 +21,7 @@ pub enum Action {
     Curved,
     Open,
     Close,
+    NodeType(PathNodeType),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,12 +56,87 @@ impl std::fmt::Display for Choice {
     }
 }
 impl App {
-    fn selected_path(&self) -> Option<(&Graphic, PathSummary)> {
+    pub(in crate::app) fn selected_path(&self) -> Option<(&Graphic, PathSummary)> {
         let [id] = self.tab.selected.as_slice() else {
             return None;
         };
         let graphic = self.tab.doc.graphics.iter().find(|g| g.id == *id)?;
         Some((graphic, graphic.path_summary()?))
+    }
+    fn edit_points_node(&self) -> Option<(u64, usize, PathNodeType)> {
+        let (graphic, summary) = self.selected_path()?;
+        let (id, index) = self.tab.path_point.filter(|(id, _)| *id == graphic.id)?;
+        let index = graphic.path_node_index(index)?;
+        let ordinal = summary.nodes().position(|node| node.index == index)?;
+        Some((id, index, *graphic.path_node_types()?.get(ordinal)?))
+    }
+    pub(in crate::app) fn edit_points_node_options(&self) -> Vec<Element<'_, Message>> {
+        if self.selected_path().is_none() {
+            return vec![];
+        }
+        let selected = self.edit_points_node();
+        [
+            (
+                "edit-points-corner",
+                "Corner",
+                PathNodeType::Corner,
+                "Move directions independently",
+            ),
+            (
+                "edit-points-smooth",
+                "Smooth",
+                PathNodeType::Smooth,
+                "Keep directions in line",
+            ),
+            (
+                "edit-points-symmetric",
+                "Symmetric",
+                PathNodeType::Symmetric,
+                "Keep directions equal and opposite",
+            ),
+        ]
+        .into_iter()
+        .map(|(id, label, kind, hint)| {
+            hover_hint(
+                accessible_command(id, label, label)
+                    .on_press_maybe(
+                        selected.map(|_| {
+                            Message::Graphics(super::Action::Path(Action::NodeType(kind)))
+                        }),
+                    )
+                    .style(control(
+                        selected.is_some_and(|(_, _, current)| current == kind),
+                    )),
+                hint,
+                tooltip::Position::Bottom,
+            )
+            .into()
+        })
+        .collect()
+    }
+    /// The canvas sends individual releases because rebuilding it resets its click state.
+    pub(in crate::app) fn path_node_click(
+        &mut self,
+        id: u64,
+        index: usize,
+        now: iced::time::Instant,
+    ) {
+        self.tab.path_point = Some((id, index));
+        let Some((id, index, kind)) = self.edit_points_node() else {
+            return;
+        };
+        let target = (self.tab.id, id, index);
+        let double = self.path_click.is_some_and(|(time, last)| {
+            last == target && now.duration_since(time) < std::time::Duration::from_millis(450)
+        });
+        self.path_click = (!double).then_some((now, target));
+        if double {
+            self.path_action(Action::NodeType(match kind {
+                PathNodeType::Corner => PathNodeType::Smooth,
+                PathNodeType::Smooth => PathNodeType::Symmetric,
+                PathNodeType::Symmetric => PathNodeType::Corner,
+            }));
+        }
     }
     fn path_point(&self, graphic: &Graphic, handles: &[PathHandle]) -> Option<usize> {
         self.tab
@@ -110,6 +186,7 @@ impl App {
         summary: &PathSummary,
     ) -> Column<'a, Message> {
         let send = |a| Message::Graphics(super::Action::Path(a));
+        let cleanup = |c| Message::Graphics(super::Action::Cleanup(c));
         let choices: Vec<_> = summary
             .nodes()
             .enumerate()
@@ -178,6 +255,21 @@ impl App {
                             .on_press_maybe((!closed).then(|| send(Action::Continue)))
                     ]
                     .spacing(4),
+                    row![
+                        hover_hint(
+                            path_button("pen-smooth", "Smooth path")
+                                .on_press(cleanup(super::Cleanup::Smooth)),
+                            "Align gentle joints and remove redundant nodes",
+                            tooltip::Position::Bottom,
+                        ),
+                        hover_hint(
+                            path_button("pen-symmetrise", "Symmetrise")
+                                .on_press(cleanup(super::Cleanup::Symmetrise { upright: false })),
+                            super::SYMMETRISE_HINT,
+                            tooltip::Position::Bottom,
+                        )
+                    ]
+                    .spacing(4),
                 ]
                 .spacing(2),
             )
@@ -235,6 +327,7 @@ impl App {
             Action::Curved => graphic.set_path_segment_curved(index, true),
             Action::Open => graphic.set_path_closed(false).map(|()| 0),
             Action::Close => graphic.set_path_closed(true).map(|()| 0),
+            Action::NodeType(kind) => graphic.set_path_node_type(index, kind).map(|()| index),
             _ => return,
         };
         match result {

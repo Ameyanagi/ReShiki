@@ -7,7 +7,7 @@ use iced::widget::{
     text_editor, tooltip,
 };
 use iced::{Alignment, Border, Color, Element, Length};
-use reshiki::assistant::{self, settings::effort_label};
+use reshiki::assistant::{self, codex, settings::effort_label};
 use reshiki::document::Document;
 
 impl App {
@@ -139,6 +139,9 @@ impl App {
         if let Some((doc, report)) = &state.completed {
             chat = chat.push(self.assistant_completed_card(doc, report));
         }
+        if !state.busy && state.retry {
+            chat = chat.push(action("Retry", Action::Retry));
+        }
         if !state.busy && state.draft.is_none() && !self.tab.doc.all_ids().is_empty() {
             chat = chat.push(action(
                 if self.tab.selected.is_empty() {
@@ -254,6 +257,13 @@ impl App {
                     .style(crate::appearance::text_color(Color::from_rgb8(151, 86, 24))),
             );
         }
+        for note in &draft.review.notes {
+            proposal = proposal.push(
+                text(note)
+                    .size(11)
+                    .style(super::super::workspace::muted_text),
+            );
+        }
         proposal = proposal.push(self.assistant_preview_controls(&draft.fragment));
         if !current {
             proposal = proposal.push(
@@ -300,6 +310,14 @@ impl App {
         result = result.push(text(&report.summary).size(12).width(Length::Fill));
         for issue in &report.issues {
             result = result.push(text(format!("• {issue}")).size(11).width(Length::Fill));
+        }
+        for note in &report.notes {
+            result = result.push(
+                text(note)
+                    .size(11)
+                    .width(Length::Fill)
+                    .style(super::super::workspace::muted_text),
+            );
         }
         container(result)
             .padding(12)
@@ -371,6 +389,11 @@ impl App {
                         "Checking connection"
                     } else if state.checking > 0 {
                         "Checking draft"
+                    } else if let Some(pass) = state.preparation {
+                        match pass {
+                            codex::Pass::Preview => "Revising draft",
+                            codex::Pass::Final => "Preparing final draft",
+                        }
                     } else if state.structures.is_some() {
                         "Preparing structures"
                     } else {
@@ -427,7 +450,7 @@ impl App {
                 }
             })
             .size(13)
-            .height(64)
+            .height(112)
             .padding(4)
             .style(|theme, _| text_editor::Style {
                 background: Color::TRANSPARENT.into(),
@@ -436,14 +459,15 @@ impl App {
                 value: crate::appearance::themed(theme, Color::from_rgb8(37, 46, 48)),
                 selection: crate::appearance::themed(theme, Color::from_rgb8(198, 223, 215)),
             });
-        let mut input_row = row![editor].spacing(8).align_y(Alignment::Center);
+        let mut input = column![editor].spacing(8);
         if let Some(source) = &state.source_image
             && let Some(handle) = source.handle(false)
         {
-            input_row = input_row.push(super::super::workspace::hover_hint(
+            let width = (46. * source.width() as f32 / source.height() as f32).clamp(46., 160.);
+            input = input.push(super::super::workspace::hover_hint(
                 button(
                     iced::widget::image(handle)
-                        .width(46)
+                        .width(width)
                         .height(46)
                         .content_fit(iced::ContentFit::Contain),
                 )
@@ -479,7 +503,7 @@ impl App {
         );
         container(
             column![
-                input_row,
+                input,
                 row![
                     attach,
                     action(format!("{model_label} ⌄"), Action::Menu(Some(Menu::Models)))

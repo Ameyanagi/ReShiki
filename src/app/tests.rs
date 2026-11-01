@@ -2514,6 +2514,38 @@ fn fit_uses_available_canvas_and_respects_manual_pan() {
     assert_eq!(app.tab.doc, document);
 }
 
+#[tokio::test]
+async fn smiles_insert_keeps_the_camera_when_the_structure_fits() -> Result<(), String> {
+    for rulers in [false, true] {
+        let (mut app, _) = App::new();
+        app.tab.doc = Document::default();
+        app.viewport = iced::Size::new(1200., 800.);
+        app.guides.rulers = rulers;
+        app.tab.camera = Camera {
+            center: Point::new(140., -80.),
+            zoom: 1.5,
+        };
+        let camera = app.tab.camera;
+        let response = reshiki::engine::LocalEngine::in_process()
+            .request(Request::import_smiles("CC(=O)Nc1ccc(O)cc1"))
+            .await?;
+        let revision = app.tab.revision;
+
+        let _ = app.engine_done(revision, Job::Insert, Ok(response));
+
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(app.tab.doc.atoms.len(), 11);
+        assert_eq!(app.tab.camera.center, camera.center);
+        assert_eq!(app.tab.camera.zoom, camera.zoom);
+        let paper = app.guides.paper(iced::Rectangle::with_size(app.viewport));
+        let visible = iced::Rectangle::with_size(paper.size());
+        let (lo, hi) = reshiki::scene::selection_bounds(&app.tab.doc, &app.tab.selected).unwrap();
+        assert!(visible.contains(app.tab.camera.screen(lo, paper)));
+        assert!(visible.contains(app.tab.camera.screen(hi, paper)));
+    }
+    Ok(())
+}
+
 #[test]
 fn pan_and_zoom_move_only_the_camera() {
     let (mut app, _) = App::new();

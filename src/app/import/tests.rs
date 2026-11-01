@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::InspectorTab;
+use crate::app::{InspectorTab, Job};
 use crate::canvas::Edit;
 
 fn paths(names: &[&str]) -> Vec<PathBuf> {
@@ -46,6 +46,38 @@ fn clearing_structure_input_resets_detection_without_editing_the_drawing() {
     assert_eq!(app.tab.doc, before);
     assert_eq!(app.tab.revision, revision);
     assert_eq!(app.tab.history.frames(), frames);
+}
+
+#[test]
+fn stereochemistry_limit_retains_structure_input_and_drawing_for_retry() {
+    const MESSAGE: &str = "This structure has too much stereochemistry to process · Try a shorter chain or a fragment";
+    let input = format!("{}O", "N[C@@H](C)C(=O)".repeat(400));
+    for kind in [Job::Insert, Job::Import] {
+        let mut app = ready();
+        let before = app.tab.doc.clone();
+        let atom = app.tab.doc.add_atom("O", Point::default());
+        app.changed(before);
+        app.tab.selected = vec![atom];
+        app.imports.set_text(&input);
+        let drawing = app.tab.doc.clone();
+        let revision = app.tab.revision;
+        let frames = app.tab.history.frames();
+        app.tab.busy = true;
+        let error = reshiki::chemistry::smiles::Error::Stereo(MESSAGE.into()).to_string();
+        let _ = app.update(Message::EngineDone {
+            revision,
+            kind,
+            result: Box::new(Err(error)),
+        });
+        assert!(app.error && !app.tab.busy);
+        assert_eq!(app.status, MESSAGE);
+        assert_eq!(app.imports.input.text(), input);
+        assert_eq!(app.imports.format, Some("smiles"));
+        assert_eq!(app.tab.doc, drawing);
+        assert_eq!(app.tab.selected, vec![atom]);
+        assert_eq!(app.tab.revision, revision);
+        assert_eq!(app.tab.history.frames(), frames);
+    }
 }
 
 #[test]

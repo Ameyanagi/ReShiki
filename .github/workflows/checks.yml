@@ -336,6 +336,9 @@ jobs:
         # Keep the renderer-dependent AX check explicit; ordinary menu state
         # regressions run on all hosts without requiring a graphics adapter.
         run: cargo test --locked --no-default-features --bin reshiki app::inspector::tests::figure_export_buttons_publish_readable_labels -- --exact --ignored
+      - name: Test rendered new drawing inspector scroll on Windows
+        if: runner.os == 'Windows'
+        run: cargo test --locked --no-default-features --bin reshiki app::workspace::inspector_motion_qa::a_new_drawing_shows_selected_properties_from_the_top -- --exact --ignored
       - name: Test rendered hybrid NMR controls on Windows
         if: runner.os == 'Windows'
         # Actual shared widgets, plot/atom linkage, docking camera and owned

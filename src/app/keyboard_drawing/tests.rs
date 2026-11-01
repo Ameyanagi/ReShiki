@@ -72,9 +72,99 @@ fn new_and_loaded_tabs_enable_keyboard_drawing_and_keep_other_tabs_opted_out() {
     loaded.sync_keyboard_drawing();
     assert!(loaded.keyboard_drawing_active());
     assert_eq!(loaded.tab.keyboard_drawing.target(), Target::Atom(atom));
+    assert_eq!(
+        loaded.tab.keyboard_drawing.marker_point(&loaded.tab.doc),
+        None
+    );
+    // The canvas still routes a stationary first click to its world point.
+    assert!(loaded.tab.keyboard_drawing.point(&loaded.tab.doc).is_some());
     let _ = loaded.context_key("n");
     assert_eq!(loaded.tab.doc.atom(atom).unwrap().element, "N");
+    assert_eq!(
+        loaded.tab.keyboard_drawing.marker_point(&loaded.tab.doc),
+        Some(loaded.tab.doc.atom(atom).unwrap().position)
+    );
     assert!(loaded.tab.hover.is_none());
+}
+
+#[test]
+fn applying_a_text_label_keeps_the_hotspot_hidden_until_pointer_motion() {
+    use super::super::inline_text::Action as Inline;
+    let mut app = app();
+    app.tab.doc.add_atom("C", app.tab.camera.center);
+    app.tab.file_epoch += 1;
+    app.sync_keyboard_drawing();
+    let point = Point::new(400., 200.);
+    let _ = app.update(Message::Canvas(Edit::Hover(Some(point))));
+    assert_eq!(app.tab.keyboard_drawing.target(), Target::Blank(point));
+    let _ = app.update(Message::Tool(Tool::Text));
+    let _ = app.update(Message::InlineText(Inline::Begin(None, point)));
+    assert!(app.tab.hover.is_none());
+    let _ = app.update(Message::InlineText(Inline::ReplaceText(
+        "Conditions".into(),
+    )));
+    let _ = app.update(Message::InlineText(Inline::Finish(true)));
+    assert_eq!(app.tool, Tool::Select);
+    assert_eq!(app.tab.doc.annotations.len(), 1);
+    assert!(app.keyboard_drawing_active());
+    assert_eq!(app.tab.keyboard_drawing.marker_point(&app.tab.doc), None);
+    let moved = point.offset(1., 0.);
+    let _ = app.update(Message::Canvas(Edit::Hover(Some(moved))));
+    assert_eq!(app.tab.keyboard_drawing.target(), Target::Blank(moved));
+    assert_eq!(
+        app.tab.keyboard_drawing.marker_point(&app.tab.doc),
+        Some(moved)
+    );
+}
+
+#[test]
+fn group_keys_attach_at_toluene_para_ch_in_one_undo_step() {
+    for (key, label, added) in [("N", "NO2", 3), ("M", "MgBr", 2), ("Z", "N3", 3)] {
+        let mut app = app();
+        let _ = app.context_key("3");
+        let Target::Atom(ipso) = app.tab.keyboard_drawing.target() else {
+            panic!("Benzene attachment target");
+        };
+        let origin = app.tab.doc.atom(ipso).unwrap().position;
+        let para = app
+            .tab
+            .doc
+            .atoms
+            .iter()
+            .max_by(|a, b| {
+                a.position
+                    .distance(origin)
+                    .total_cmp(&b.position.distance(origin))
+            })
+            .unwrap()
+            .id;
+        let _ = app.context_key("1");
+        assert_eq!(app.tab.doc.atoms.len(), 7);
+        assert_eq!(app.tab.doc.bonds.len(), 7);
+        let before = app.tab.doc.clone();
+        let history = app.tab.history.undo_frames().len();
+        let point = app.tab.doc.atom(para).unwrap().position;
+        let _ = app.update(Message::Canvas(Edit::Hover(Some(point))));
+        let _ = app.update(Message::ContextKey(key.into()));
+        assert!(!app.error, "{key}: {}", app.status);
+        assert_eq!(app.tab.doc.atoms.len(), 7 + added, "{key}");
+        assert_eq!(app.tab.doc.bonds.len(), 7 + added, "{key}");
+        let group = app.tab.doc.abbreviations.first().unwrap();
+        assert_eq!(group.label, label);
+        assert!(
+            app.tab
+                .doc
+                .bonds
+                .iter()
+                .any(|b| b.connects(para, group.anchor))
+        );
+        assert_eq!(app.tab.history.undo_frames().len(), history + 1, "{key}");
+        let attached = app.tab.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before, "{key}");
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, attached, "{key}");
+    }
 }
 
 #[test]
@@ -373,6 +463,139 @@ fn exact_pointer_selection_targets_bond_and_blank_after_gesture_clears_hover() {
     };
     assert_eq!(app.tab.doc.atom(nitrogen).unwrap().position, blank);
     assert_eq!(app.tab.doc.atom(nitrogen).unwrap().element, "N");
+}
+
+#[test]
+fn clicking_a_shown_crystal_keeps_the_hotspot_at_the_pointer() {
+    use reshiki::models3d::{self, Display};
+    for display in [Display::Both, Display::ThreeD] {
+        let mut app = app();
+        app.tab.doc = reshiki::crystal::read(
+            "cif",
+            include_str!("../../../tests/fixtures/crystal/nacl.cif"),
+        )
+        .unwrap()
+        .0;
+        models3d::set_display(&mut app.tab.doc, 0, display);
+        let model = &app.tab.doc.models[0];
+        let ids = model.linked_ids(&app.tab.doc);
+        let point = models3d::frame_origin(&app.tab.doc, model).unwrap();
+        assert_eq!(app.keyboard_target_at(point), Target::Blank(point));
+        let _ = app.update(Message::Canvas(Edit::SelectAt(ids.clone(), point)));
+        assert_eq!(app.tab.selected, ids);
+        assert_eq!(app.tab.keyboard_drawing.target(), Target::Blank(point));
+        assert!(app.tab.keyboard_drawing.camera_pointer(point));
+    }
+}
+
+#[test]
+fn blank_pointer_selection_keeps_the_ordinary_2d_atom_fallback() {
+    let mut app = app();
+    let atom = app.tab.doc.add_atom("Na", Point::default());
+    let point = Point::new(200., 100.);
+    let _ = app.update(Message::Canvas(Edit::SelectAt(vec![atom], point)));
+    assert_eq!(app.tab.keyboard_drawing.target(), Target::Atom(atom));
+}
+
+#[test]
+fn model_drag_releases_return_the_hotspot_to_the_pointer_after_recording() {
+    use crate::canvas::{MoleculeCanvas, PreviewStyles, State};
+    use iced::{Event, Rectangle, Size, mouse, widget::canvas::Program};
+    use reshiki::models3d::{self, Display};
+
+    for display in [Display::Both, Display::ThreeD] {
+        for gesture in ["turn", "move", "resize"] {
+            let mut app = app();
+            app.tab.doc = reshiki::crystal::read(
+                "cif",
+                include_str!("../../../tests/fixtures/crystal/nacl.cif"),
+            )
+            .unwrap()
+            .0;
+            models3d::set_display(&mut app.tab.doc, 0, display);
+            let model = &app.tab.doc.models[0];
+            app.tab.selected = model.linked_ids(&app.tab.doc);
+            let (lo, hi) = models3d::frame(&app.tab.doc, model).unwrap();
+            let center = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+            let (selection_lo, selection_hi) =
+                reshiki::scene::selection_bounds(&app.tab.doc, &app.tab.selected).unwrap();
+            app.tab.camera.center = center;
+            app.tab.camera.zoom = 1.;
+            let from = match gesture {
+                "turn" => center,
+                "move" => Point::new(selection_hi.x + 12., (selection_lo.y + selection_hi.y) / 2.),
+                "resize" => selection_hi.offset(12., 12.),
+                _ => unreachable!(),
+            };
+            let point = from.offset(30., 20.);
+            let _ = app.update(Message::Canvas(Edit::Hover(Some(from))));
+            assert_eq!(app.tab.keyboard_drawing.target(), Target::Blank(from));
+            assert!(app.tab.keyboard_drawing.camera_pointer(from));
+            let before = app.tab.doc.clone();
+            let history = app.tab.history.undo_frames().len();
+            let edits: Vec<_> = {
+                let camera = app.tab.camera;
+                let bounds = Rectangle::with_size(Size::new(800., 600.));
+                let mut canvas = MoleculeCanvas::preview(
+                    &app.tab.doc,
+                    &app.tab.selected,
+                    camera,
+                    PreviewStyles {
+                        bond_drawing: app.tab.bond_drawing,
+                        chain_drawing: app.tab.chain_drawing,
+                        arrow_preset: app.tab.arrow_style,
+                        arrow_style: &app.tab.arrows.style,
+                        orbital_phase: app.tab.orbital_phase,
+                        graphic_style: &app.tab.graphic_style,
+                        bracket_sides: app.tab.bracket_sides,
+                    },
+                );
+                canvas.keyboard_target = Some(from);
+                let mut state = State::default();
+                [
+                    mouse::Event::CursorMoved {
+                        position: camera.screen(from, bounds),
+                    },
+                    mouse::Event::ButtonPressed(mouse::Button::Left),
+                    mouse::Event::CursorMoved {
+                        position: camera.screen(point, bounds),
+                    },
+                    mouse::Event::ButtonReleased(mouse::Button::Left),
+                ]
+                .into_iter()
+                .filter_map(|event| {
+                    canvas
+                        .update(
+                            &mut state,
+                            &Event::Mouse(event),
+                            bounds,
+                            mouse::Cursor::Unavailable,
+                        )
+                        .and_then(|action| action.into_inner().0)
+                })
+                .collect()
+            };
+            let Some(Edit::Release(edit, release)) = edits.last() else {
+                panic!("{display:?} {gesture}: {edits:?}");
+            };
+            assert!(release.distance(point) < 1e-4);
+            assert!(matches!(
+                (gesture, edit.as_ref()),
+                ("turn", Edit::ModelView { .. })
+                    | ("move", Edit::Move(..))
+                    | ("resize", Edit::ResizeModels { .. })
+            ));
+            let release = *release;
+            for edit in edits {
+                let _ = app.update(Message::Canvas(edit));
+            }
+            assert!(!app.error, "{}", app.status);
+            assert_ne!(app.tab.doc, before, "{display:?} {gesture}");
+            assert_eq!(app.tab.history.undo_frames().len(), history + 1);
+            assert_eq!(app.tab.keyboard_drawing.target(), Target::Blank(release));
+            assert!(app.tab.keyboard_drawing.camera_pointer(release));
+        }
+    }
 }
 
 #[test]

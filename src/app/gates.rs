@@ -46,6 +46,11 @@ impl App {
         let message = self.overlay_escape_gate(message)?;
         self.close_transient_menus(&message);
         let message = self.panel_routing_gate(message)?;
+        if let Message::Commands(action) = &message
+            && self.command_action_unavailable(action)
+        {
+            return Break(self.commands_action(action.clone()));
+        }
         let message = self.joining_gate(message)?;
         let message = self.inline_text_routing_gate(message)?;
         let message = self.escape_gate(message)?;

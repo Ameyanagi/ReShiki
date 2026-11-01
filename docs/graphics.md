@@ -31,17 +31,46 @@ Select a graphic to move, copy, duplicate, rotate, reflect or resize it.
 **New path** and **Finish** show while the **Pen path** tool is active. Each
 segment is one Undo step; Escape cancels the segment you are drawing.
 
+Select pen paths, Bézier curves or curved arrows and choose **Smooth** or
+**Symmetrise** from the canvas menu or command palette. Both commands apply to
+the whole selection in one Undo step. They are also buttons in the
+inspector's Pen path panel (as **Smooth path** and **Symmetrise**) and the
+curved arrow panel.
+
+**Smooth** aligns cubic handles at joints bent less than 20°, following the
+straight segment at mixed joints and preserving intended corners. It removes
+redundant nodes within a quarter of the line width of the original path.
+It runs only when commanded. For curved arrows it evens the
+angle and length of a lopsided bow when the end angles differ by less than 20°.
+
+**Symmetrise** finds the best mirror axis, including tilted axes, and averages
+both sides. Hold Shift when clicking it to use a vertical or horizontal axis;
+the palette also has **Symmetrise upright**. Shapes too far from symmetric are
+left unchanged with a reason in the status bar. Curved arrows use the
+perpendicular bisector of their endpoints; Shift has no effect on them. Arrow
+endpoints, attachments and arrowheads stay in place.
+
 ### Edit points
 
 1. Select a curve or path and choose **Edit curve points**.
-2. Drag a round node to move it with its direction controls, or drag a square
-   control to change one direction.
+2. Drag a node to move it with its direction controls, or drag a square
+   control to change a direction. **Corner** nodes (diamonds) have independent
+   directions. **Smooth** nodes (circles) keep directions in line, with separate
+   lengths. **Symmetric** nodes (circles with a dot) keep equal, opposite
+   directions. These constraints apply when both adjacent segments are curved.
+   Dragged pen nodes start Symmetric; clicked nodes start Corner.
 3. In **Properties**, choose the node under **Selected node**. **Next segment**
    switches the following segment between **Straight** and **Curved**.
    **Insert after** and **Delete node** add and remove nodes. **Close path** or
    **Open path** closes or opens the path, and **Continue drawing** extends an
    open path.
-4. Choose **Done** in the context row to finish.
+4. Double-click a node to cycle Corner → Smooth → Symmetric → Corner, or use
+   **Corner**, **Smooth** and **Symmetric** in the context row for the selected
+   node (including the owner of a selected direction control). Switching to
+   Smooth or Symmetric aligns the directions. Option/Alt-drag a direction
+   control to make its node Corner and move that direction independently.
+   Each type change or drag is one Undo step.
+5. Choose **Done** in the context row to finish.
 
 ## Limits
 
@@ -71,8 +100,9 @@ edge. Inserting a cubic node exactly splits the segment without reshaping it;
 deletion joins its neighbors while keeping their outer tangent controls.
 Undo/Redo keeps the selected object. Imported compound paths keep their generic
 point editor and geometry, while node insertion/deletion and pen continuation
-require a single connected path. Pen paths reuse the existing path commands and
-need no additional serialized fields.
+require a single connected path. Pen paths store an optional `node_types` entry
+for each node. Older drawings detect types from their direction controls until
+the path is next edited; saved types survive reopening, copying and pasting.
 
 Document format version 4 adds graphics with an affine coordinate frame, so
 transformations preserve editable shapes. Versions 1–3 still open with no

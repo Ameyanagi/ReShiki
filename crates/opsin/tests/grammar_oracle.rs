@@ -69,7 +69,7 @@ fn native_annotation_and_tokenization_match_pinned_opsin() {
         }
         cases += 1;
     }
-    assert_eq!(cases, 6_438, "all 1,073 names in all six oracle modes");
+    assert_eq!(cases, 8_100, "all 1,350 names in all six oracle modes");
     assert!(
         failures.is_empty(),
         "Native frontend differences:\n{}",
@@ -80,6 +80,8 @@ fn native_annotation_and_tokenization_match_pinned_opsin() {
 #[test]
 fn resource_token_metadata_and_case_sensitivity_are_preserved() {
     let parser = Parser::new().unwrap();
+    let reverse = parser.parse_word_reverse("ethane").unwrap();
+    assert!(!reverse.parses.is_empty());
     let result = parser.parse_word("ethane").unwrap();
     let eth = &result.parses[0].tokens[0];
     assert_eq!(eth.tag_name, "group");

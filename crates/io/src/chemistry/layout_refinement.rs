@@ -1,13 +1,112 @@
-//! Optional readability repair for native bridged-template layouts.
+//! ReShiki readability refinements after native depiction.
 //!
-//! The native coordinate-map attachment rules can put a terminal substituent
-//! inside the occupied sector of a bridged ring junction. Move only that leaf
-//! into the exterior sector; ring coordinates and chemical state stay intact.
+//! Align bond directions and repair inward terminal substituents without
+//! changing chemical state or the reference depictor stages.
 use super::{depict::geometry::Coordinates, stereo::Point3, stereo::perception::State};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     f64::consts::{PI, TAU},
 };
+
+/// Rotate a fresh layout by at most 15 degrees so most of its acyclic and
+/// six-ring bonds lie on the 30-degree grid (#740). Candidate directions and
+/// cluster midpoints keep the fit on bond directions, rather than stopping at
+/// the edge of the 1.5-degree tolerance. The layout turns as one rigid body,
+/// so packed components keep their spacing, about its centroid or about
+/// `pivot` (cleanup's single fixed atom).
+pub(crate) fn straighten(state: &State, points: &mut [Point3], pivot: Option<usize>) {
+    let step = PI / 6.;
+    let tolerance = 1.5_f64.to_radians();
+    let epsilon = 1e-9;
+    let sides = |ring: &Vec<usize>| {
+        ring.iter()
+            .zip(ring.iter().cycle().skip(1))
+            .take(ring.len())
+            .map(|(&a, &b)| (a.min(b), a.max(b)))
+            .collect::<Vec<_>>()
+    };
+    let excluded: HashSet<_> = state
+        .rings
+        .atoms
+        .iter()
+        .filter(|ring| ring.len() != 6)
+        .flat_map(sides)
+        .collect();
+    let direction = |(a, b): (usize, usize)| {
+        points
+            .get(a)
+            .zip(points.get(b))
+            .map(|(a, b)| (b.y - a.y).atan2(b.x - a.x))
+    };
+    let vertical: Vec<_> = state
+        .rings
+        .atoms
+        .iter()
+        .find(|ring| ring.len() == 6)
+        .into_iter()
+        .flat_map(sides)
+        .filter_map(direction)
+        .collect();
+    let mut phases: Vec<_> = state
+        .graph
+        .bonds
+        .iter()
+        .map(|bond| (bond.a.min(bond.b), bond.a.max(bond.b)))
+        .filter(|bond| !excluded.contains(bond))
+        .filter_map(direction)
+        .map(|angle| angle.rem_euclid(step))
+        .collect();
+    let count = phases.len();
+    phases.sort_by(f64::total_cmp);
+    phases.extend(phases.clone().into_iter().map(|angle| angle + step));
+    let candidates =
+        [0., -step / 2., step / 2.]
+            .into_iter()
+            .chain(phases.iter().take(count).flat_map(|&first| {
+                let end =
+                    phases.partition_point(|&angle| angle <= first + 2. * tolerance + epsilon);
+                let last = phases.get(end - 1).copied().unwrap_or(first);
+                [first, (first + last) / 2.]
+                    .map(|angle| (step / 2. - angle).rem_euclid(step) - step / 2.)
+            }));
+    let (mut best_count, mut best_angle, mut best_vertical) = (0, 0_f64, 0_f64);
+    for angle in candidates {
+        let target = (-angle - tolerance).rem_euclid(step) + tolerance;
+        let on_grid = phases.partition_point(|&p| p <= target + tolerance + epsilon)
+            - phases.partition_point(|&p| p < target - tolerance - epsilon);
+        // Six-ring sides at 90 degrees have cos(6 * direction) == -1;
+        // horizontal-sided rings have +1. Only use this for equal rotations.
+        let sides: f64 = vertical
+            .iter()
+            .map(|side| (6. * (side + angle)).cos())
+            .sum();
+        if on_grid > best_count
+            || on_grid == best_count
+                && (angle.abs() < best_angle.abs() - epsilon
+                    || (angle.abs() - best_angle.abs()).abs() <= epsilon
+                        && sides < best_vertical - epsilon)
+        {
+            (best_count, best_angle, best_vertical) = (on_grid, angle, sides);
+        }
+    }
+    if best_count * 2 <= count || best_angle.abs() < epsilon {
+        return;
+    }
+    let n = points.len() as f64;
+    let center = pivot
+        .and_then(|p| points.get(p).copied())
+        .unwrap_or(Point3 {
+            x: points.iter().map(|p| p.x).sum::<f64>() / n,
+            y: points.iter().map(|p| p.y).sum::<f64>() / n,
+            z: 0.,
+        });
+    let (sin, cos) = best_angle.sin_cos();
+    for point in points {
+        let (x, y) = (point.x - center.x, point.y - center.y);
+        point.x = center.x + cos * x - sin * y;
+        point.y = center.y + sin * x + cos * y;
+    }
+}
 
 pub(crate) fn bridged(state: &State) -> bool {
     let mut remaining = 1_000_000usize;
@@ -256,6 +355,56 @@ mod tests {
         )?
         .positions;
         Ok((state, positions))
+    }
+
+    #[test]
+    fn straightening_fits_noisy_bond_clusters_and_requires_a_strict_majority() -> anyhow::Result<()>
+    {
+        for (angles, should_rotate) in [
+            (vec![5_f64, 7., 20.], true),
+            (vec![5_f64, 5., 20., 20.], false),
+        ] {
+            let state = smiles::read(&"C".repeat(angles.len() + 1))?.prepared.state;
+            let mut points = vec![Point3::default()];
+            for angle in angles {
+                let previous = *points.last().unwrap();
+                let (sin, cos) = angle.to_radians().sin_cos();
+                points.push(Point3 {
+                    x: previous.x + cos,
+                    y: previous.y + sin,
+                    z: 0.,
+                });
+            }
+            let original = points.clone();
+            straighten(&state, &mut points, None);
+            if should_rotate {
+                assert_ne!(points, original);
+                let angles: Vec<_> = points
+                    .windows(2)
+                    .map(|pair| {
+                        (pair[1].y - pair[0].y)
+                            .atan2(pair[1].x - pair[0].x)
+                            .to_degrees()
+                    })
+                    .collect();
+                assert!((angles[0] + 1.).abs() < 1e-7);
+                assert!((angles[1] - 1.).abs() < 1e-7);
+            } else {
+                assert_eq!(points, original);
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn straightening_ignores_non_six_ring_bonds() -> anyhow::Result<()> {
+        for text in ["C1CC1", "C1CCC1", "C1CCCC1", "C1CCCCCC1"] {
+            let (state, mut points) = layout(text)?;
+            let original = points.clone();
+            straighten(&state, &mut points, None);
+            assert_eq!(points, original, "{text}");
+        }
+        Ok(())
     }
 
     #[test]

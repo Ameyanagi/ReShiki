@@ -201,7 +201,10 @@ fn cleanup(app: &mut App) {
 
 fn first_collection(app: &App) -> String {
     let template = app.templates.library.get(0).expect("A built-in template");
-    crate::app::template_library::category(template).to_owned()
+    crate::app::template_library::categories(template)
+        .next()
+        .unwrap()
+        .to_owned()
 }
 
 /// The first built-in template, chosen for placing.

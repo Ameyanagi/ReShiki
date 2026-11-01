@@ -1,9 +1,22 @@
-//! Connected path nodes and their independent Bézier directions.
+//! Connected path nodes and their editable Bézier constraints.
 use super::{BracketSides, Graphic, GraphicKind, GraphicStyle, PathCommand};
 use crate::document::Point;
+use serde::{Deserialize, Serialize};
+
+mod smooth;
+mod symmetry;
 
 pub const MIN_OPEN_NODES: usize = 2;
 pub const MIN_CLOSED_NODES: usize = 3;
+
+/// Ordered from least to most constrained.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PathNodeType {
+    Corner,
+    Smooth,
+    Symmetric,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PathHandle {
@@ -58,6 +71,7 @@ struct Path {
     segments: Vec<Segment>,
     closed: bool,
     closing_alias: Option<usize>,
+    node_types: Vec<PathNodeType>,
 }
 impl Path {
     fn read(graphic: &Graphic) -> Option<Self> {
@@ -76,6 +90,7 @@ impl Path {
             segments: vec![],
             closed: false,
             closing_alias: None,
+            node_types: vec![],
         };
         let mut index = 1;
         for command in commands.iter().skip(1) {
@@ -116,13 +131,124 @@ impl Path {
                 });
             }
         }
-        (path.nodes.len() >= MIN_OPEN_NODES).then_some(path)
+        if path.nodes.len() < MIN_OPEN_NODES {
+            return None;
+        }
+        path.node_types = if graphic.node_types.len() == path.nodes.len() {
+            graphic.node_types.clone()
+        } else {
+            (0..path.nodes.len())
+                .map(|node| path.detect_node_type(node))
+                .collect()
+        };
+        Some(path)
     }
     fn node(&self, index: usize) -> Option<usize> {
         self.nodes
             .iter()
             .position(|n| n.index == index)
             .or_else(|| (self.closing_alias == Some(index)).then_some(0))
+    }
+    fn owner(&self, index: usize) -> Option<usize> {
+        self.node(index).or_else(|| {
+            self.segments
+                .iter()
+                .enumerate()
+                .find_map(|(node, segment)| {
+                    let [outgoing, incoming] = segment.indices?;
+                    if outgoing == index {
+                        Some(node)
+                    } else if incoming == index {
+                        Some((node + 1) % self.nodes.len())
+                    } else {
+                        None
+                    }
+                })
+        })
+    }
+    fn previous_segment(&self, node: usize) -> Option<usize> {
+        if node > 0 {
+            Some(node - 1)
+        } else if self.closed {
+            self.segments.len().checked_sub(1)
+        } else {
+            None
+        }
+    }
+    /// Incoming control, node and outgoing control, when both adjacent
+    /// segments are cubic.
+    fn controls(&self, node: usize) -> Option<[Point; 3]> {
+        let incoming = self.segments.get(self.previous_segment(node)?)?.controls?[1];
+        let outgoing = self.segments.get(node)?.controls?[0];
+        Some([incoming, self.nodes.get(node)?.point, outgoing])
+    }
+    fn set_controls(&mut self, node: usize, [incoming, outgoing]: [Point; 2]) {
+        if let Some(previous) = self.previous_segment(node)
+            && let Some(controls) = self
+                .segments
+                .get_mut(previous)
+                .and_then(|segment| segment.controls.as_mut())
+        {
+            controls[1] = incoming;
+        }
+        if let Some(segment) = self.segments.get_mut(node)
+            && let Some(controls) = segment.controls.as_mut()
+        {
+            controls[0] = outgoing;
+        }
+    }
+    fn detect_node_type(&self, node: usize) -> PathNodeType {
+        let Some([incoming, anchor, outgoing]) = self.controls(node) else {
+            return PathNodeType::Corner;
+        };
+        let a = vector(anchor, outgoing);
+        let b = vector(incoming, anchor);
+        let (Some((a, out_length)), Some((b, in_length))) = (unit(a), unit(b)) else {
+            return PathNodeType::Corner;
+        };
+        if (a.0 * b.0 + a.1 * b.1) < 1_f64.to_radians().cos() {
+            PathNodeType::Corner
+        } else if (out_length - in_length).abs() <= out_length.max(in_length) * 0.01 {
+            PathNodeType::Symmetric
+        } else {
+            PathNodeType::Smooth
+        }
+    }
+    fn align_node(&mut self, node: usize, kind: PathNodeType) {
+        if kind == PathNodeType::Corner {
+            return;
+        }
+        let Some([incoming, anchor, outgoing]) = self.controls(node) else {
+            return;
+        };
+        let outgoing_vector = unit(vector(anchor, outgoing));
+        let incoming_vector = unit(vector(incoming, anchor));
+        let out_length = outgoing_vector.map_or(0., |(_, length)| length);
+        let in_length = incoming_vector.map_or(0., |(_, length)| length);
+        // Average the two tangent directions. Opposed or collapsed handles
+        // use the outgoing direction, then the reversed incoming direction.
+        let direction = outgoing_vector
+            .zip(incoming_vector)
+            .and_then(|((a, _), (b, _))| unit((a.0 + b.0, a.1 + b.1)))
+            .map(|(direction, _)| direction)
+            .or_else(|| outgoing_vector.map(|(direction, _)| direction))
+            .or_else(|| incoming_vector.map(|(direction, _)| direction));
+        let Some(direction) = direction else {
+            return;
+        };
+        let (out_length, in_length) = if kind == PathNodeType::Symmetric {
+            let average = (out_length + in_length) * 0.5;
+            (average, average)
+        } else {
+            (out_length, in_length)
+        };
+        self.set_controls(
+            node,
+            [
+                along(anchor, direction, -in_length),
+                along(anchor, direction, out_length),
+            ],
+        );
     }
     fn handle_point(&self, index: usize) -> Option<Point> {
         self.node(index)
@@ -197,7 +323,17 @@ impl Path {
             .map(|n| n.index)
             .ok_or_else(|| "Invalid path node".into())
     }
-    fn store(self, graphic: &mut Graphic) -> Result<(), String> {
+    fn store(mut self, graphic: &mut Graphic) -> Result<(), String> {
+        // Edits store every node's type, relaxing a constraint whose handles
+        // no longer satisfy it (a split or newly curved neighbour).
+        for node in 0..self.nodes.len() {
+            if self.controls(node).is_some() {
+                let detected = self.detect_node_type(node);
+                if let Some(kind) = self.node_types.get_mut(node) {
+                    *kind = (*kind).min(detected);
+                }
+            }
+        }
         let commands = self.commands();
         if commands
             .iter()
@@ -232,10 +368,47 @@ impl Path {
             );
         }
         graphic.kind = GraphicKind::Path;
+        graphic.node_types = self.node_types;
         Ok(())
     }
 }
+
+fn vector(from: Point, to: Point) -> (f64, f64) {
+    (
+        f64::from(to.x) - f64::from(from.x),
+        f64::from(to.y) - f64::from(from.y),
+    )
+}
+fn unit(vector: (f64, f64)) -> Option<((f64, f64), f64)> {
+    let length = vector.0.hypot(vector.1);
+    (length > 1e-9).then(|| ((vector.0 / length, vector.1 / length), length))
+}
+fn along(anchor: Point, direction: (f64, f64), length: f64) -> Point {
+    Point::new(
+        (f64::from(anchor.x) + direction.0 * length) as f32,
+        (f64::from(anchor.y) + direction.1 * length) as f32,
+    )
+}
 impl Graphic {
+    /// Node behavior in path order, detecting legacy paths without stored types.
+    pub fn path_node_types(&self) -> Option<Vec<PathNodeType>> {
+        Some(Path::read(self)?.node_types)
+    }
+    /// Resolve a node or control handle to its owning node's point index.
+    pub fn path_node_index(&self, index: usize) -> Option<usize> {
+        let path = Path::read(self)?;
+        path.index(path.owner(index)?).ok()
+    }
+    /// Set a node's behavior, aligning its two cubic controls where available.
+    pub fn set_path_node_type(&mut self, index: usize, kind: PathNodeType) -> Result<(), String> {
+        let mut path = Path::read(self).ok_or("Select one continuous path")?;
+        let node = path.owner(index).ok_or("Select a path node or control")?;
+        path.align_node(node, kind);
+        if let Some(node_type) = path.node_types.get_mut(node) {
+            *node_type = kind;
+        }
+        path.store(self)
+    }
     /// Handles for a single connected path. A closed seam has only one node.
     /// Imported compound paths retain the existing generic point editor.
     pub fn path_handles(&self) -> Option<Vec<PathHandle>> {
@@ -282,7 +455,12 @@ impl Graphic {
     /// Failed edits leave the graphic unchanged.
     pub fn move_path_point(&mut self, index: usize, point: Point) -> Result<(), String> {
         let path = Path::read(self).ok_or("Select one continuous path")?;
-        self.move_parsed_path_point(path, index, point)
+        self.move_parsed_path_point(path, index, point, false)
+    }
+    /// Move a control independently and persist its owning node as a corner.
+    pub fn move_path_point_free(&mut self, index: usize, point: Point) -> Result<(), String> {
+        let path = Path::read(self).ok_or("Select one continuous path")?;
+        self.move_parsed_path_point(path, index, point, true)
     }
     pub(super) fn edit_connected_path_point(
         &mut self,
@@ -290,18 +468,23 @@ impl Graphic {
         point: Point,
     ) -> Option<Result<(), String>> {
         let path = Path::read(self)?;
-        Some(self.move_parsed_path_point(path, index, point))
+        Some(self.move_parsed_path_point(path, index, point, false))
     }
     fn move_parsed_path_point(
         &mut self,
         mut path: Path,
         index: usize,
         point: Point,
+        free: bool,
     ) -> Result<(), String> {
         if !point.is_finite() {
             return Ok(());
         }
-        if path.handle_point(index).is_none_or(|old| old == point) {
+        let Some(old) = path.handle_point(index) else {
+            return Ok(());
+        };
+        let free_control = free && path.node(index).is_none();
+        if old == point && !free_control {
             return Ok(());
         }
         if let Some(node) = path.node(index) {
@@ -314,13 +497,7 @@ impl Graphic {
             {
                 *a = move_control(*a);
             }
-            let previous = if node > 0 {
-                Some(node - 1)
-            } else if path.closed {
-                path.segments.len().checked_sub(1)
-            } else {
-                None
-            };
+            let previous = path.previous_segment(node);
             if let Some(previous) = previous
                 && let Some(segment) = path.segments.get_mut(previous)
                 && let Some([_, b]) = segment.controls.as_mut()
@@ -331,6 +508,19 @@ impl Graphic {
                 node.point = point;
             }
         } else {
+            let node = path.owner(index).ok_or("Invalid path control")?;
+            let opposite = path.controls(node).map(|[incoming, anchor, outgoing]| {
+                let is_outgoing = path
+                    .segments
+                    .get(node)
+                    .and_then(|segment| segment.indices)
+                    .is_some_and(|[first, _]| first == index);
+                (
+                    is_outgoing,
+                    anchor,
+                    if is_outgoing { incoming } else { outgoing },
+                )
+            });
             for segment in &mut path.segments {
                 if let (Some([first, second]), Some([a, b])) =
                     (segment.indices, segment.controls.as_mut())
@@ -341,6 +531,34 @@ impl Graphic {
                     if second == index {
                         *b = point;
                     }
+                }
+            }
+            if free_control {
+                if let Some(kind) = path.node_types.get_mut(node) {
+                    *kind = PathNodeType::Corner;
+                }
+            } else if let Some((is_outgoing, anchor, opposite)) = opposite {
+                let direction = unit(vector(anchor, point));
+                let opposite = match path.node_types.get(node) {
+                    None | Some(PathNodeType::Corner) => None,
+                    Some(PathNodeType::Smooth) => direction.map(|(direction, _)| {
+                        let (dx, dy) = vector(anchor, opposite);
+                        along(anchor, direction, -dx.hypot(dy))
+                    }),
+                    Some(PathNodeType::Symmetric) => Some(match direction {
+                        Some((direction, length)) => along(anchor, direction, -length),
+                        None => anchor,
+                    }),
+                };
+                if let Some(opposite) = opposite {
+                    path.set_controls(
+                        node,
+                        if is_outgoing {
+                            [opposite, point]
+                        } else {
+                            [point, opposite]
+                        },
+                    );
                 }
             }
         }
@@ -367,6 +585,14 @@ impl Graphic {
             (a.lerp(b, 0.5), None, None)
         };
         path.nodes.insert(node + 1, Node { point, index: 0 });
+        path.node_types.insert(
+            node + 1,
+            if segment.controls.is_some() {
+                PathNodeType::Smooth
+            } else {
+                PathNodeType::Corner
+            },
+        );
         path.segments
             .get_mut(node)
             .ok_or("Invalid path segment")?
@@ -433,6 +659,7 @@ impl Graphic {
             path.segments.remove(node);
             path.nodes.remove(node);
         }
+        path.node_types.remove(node);
         path.reindex();
         let index = path.index(node.min(path.nodes.len() - 1))?;
         path.store(self)?;
@@ -475,6 +702,7 @@ impl Graphic {
             }
             if path.nodes.last().map(|n| n.point) == path.nodes.first().map(|n| n.point) {
                 path.nodes.pop();
+                path.node_types.pop();
                 if path.nodes.len() < MIN_CLOSED_NODES {
                     return Err("A closed path needs at least three distinct nodes".into());
                 }
@@ -503,6 +731,7 @@ impl Graphic {
         graphic.path = graphic.commands();
         graphic.kind = GraphicKind::Path;
         graphic.reset_frame();
+        graphic.node_types = vec![PathNodeType::Corner, PathNodeType::Symmetric];
         graphic
     }
     /// A click appends a line. Dragging a new node establishes its outgoing
@@ -537,6 +766,11 @@ impl Graphic {
             ]
         });
         path.nodes.push(Node { point, index: 0 });
+        path.node_types.push(if direction.is_some() {
+            PathNodeType::Symmetric
+        } else {
+            PathNodeType::Corner
+        });
         path.segments.push(Segment {
             controls,
             indices: None,

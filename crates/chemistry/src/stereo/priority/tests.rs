@@ -81,8 +81,6 @@ fn invalid_input_and_resource_limits_leave_inputs_unchanged() -> TestResult {
         bad.atoms[0].map_number = value;
         assert!(atom_priorities(&graph, &bad).is_err());
     }
-    assert!(priorities(&graph, &meta, None, None, &mut Work(0)).is_err());
-    assert!(priorities(&graph, &meta, None, None, &mut Work(50)).is_err());
     assert!(atom_priorities_cached(&graph, &meta, Some(&[])).is_err());
     let mut bad = meta.clone();
     bad.atoms.pop();
@@ -101,6 +99,22 @@ fn invalid_input_and_resource_limits_leave_inputs_unchanged() -> TestResult {
     ];
     let error = atom_priorities_cached(&huge, &Metadata::unspecified(&huge), Some(&cache));
     assert!(error.is_err_and(|e| e.contains("storage limit")));
+    Ok(())
+}
+
+#[test]
+fn exhausted_ranking_budget_explains_how_to_simplify_the_structure() -> TestResult {
+    let graph = carbons(6);
+    let meta = Metadata::unspecified(&graph);
+    let before = serde_json::to_value((&graph, &meta))?;
+    for budget in [0, 50] {
+        let error = priorities(&graph, &meta, None, None, &mut Work(budget)).unwrap_err();
+        assert_eq!(
+            error,
+            "This structure has too much stereochemistry to process · Try a shorter chain or a fragment"
+        );
+        assert_eq!(serde_json::to_value((&graph, &meta))?, before);
+    }
     Ok(())
 }
 

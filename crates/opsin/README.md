@@ -1,13 +1,14 @@
 # OPSIN Rust migration
 
-This independent crate ports the algorithms and resources of OPSIN 2.9.0,
-commit `b91b610af5ab07560fedb20730d7aef46bb2bca0`, into native Rust.
+This independent crate ports the algorithms and resources of OPSIN main (3.0-SNAPSHOT),
+commit `42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91`, into native Rust.
 It has no Java, JAR, subprocess, Python, network service, or ReShiki dependency
 at build time or runtime. The original MIT license is included in `LICENSE`.
 
 The complete upstream stage chain is connected to `Parser::parse`, including
-component processing, suffixes, fragment assembly, fused rings and stereo.
-The native differential gates match all 2,096 strict/radical corpus records and
+component processing, phane amplification, suffixes, fragment assembly, fused
+rings and stereo.
+The native differential gates match all 2,624 strict/radical corpus records and
 640 configuration records exactly, including status, warnings, semantic
 CXSMILES and ordered graph/stereo metadata. See
 [the source/module ledger and acceptance gates](PORTING.md).
@@ -38,7 +39,7 @@ Regular Cargo tests read frozen oracle fixtures and require no Java. Pinned
 upstream source/resource hashes and the development-only export procedure are
 recorded in [provenance](provenance/README.md).
 
-This port preserves OPSIN 2.9.0's interpretation choices and limitations,
+This port preserves the pinned upstream revision’s interpretation choices and limitations,
 including its CIP rules 1–2 and unsupported stereochemistry behavior. The
 frozen gates establish the checked corpus and configurations; they do not
 promise interpretation of every possible chemical name or newer OPSIN behavior.

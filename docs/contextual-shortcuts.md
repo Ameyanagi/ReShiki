@@ -12,7 +12,13 @@ The preview pane labels its drawings **Example: before** and **Example: after**.
 
 Press **:** to open the **command palette**. Over an atom or bond **:** opens it too, since it has no drawing meaning there; inside a text field, **:** is typed as usual. Type part of a command and press **Enter** (or click a row) to run it; unlike Help, the palette runs the command and closes. **Up/Down** move, **Page Up/Page Down** move a screenful, **Home/End** go to the first and last result, and **Escape** closes. Each one-line row shows its category and its shortcut, if it has one, so the palette also teaches the keys; the selected row's description is shown below the list. The chips under the search field (**All**, **Insert**, **Bond**…) show how many results each category has: click one, or press **Tab** / **Shift+Tab**, to show only that category.
 
-The palette searches the same way as Help. Each word you type may start any word of a command's name, keywords or shortcut, in any order (**ben to** finds **Benzene tool**). A word that matches nothing more directly may be the initials of the name's words (**bt**), letters in order (**bnz**), or, in five or more letters, carry one typo (**benzne**). An exact name ranks first, then names whose words all start with what you typed, then keyword and description matches. It lists:
+Commands opens near the top of the window, horizontally centered, and shrinks
+to fit its results up to its maximum height. Its hint names the pointed target
+or counts the selected objects. Keyboard navigation scrolls only far enough
+to keep the highlighted row fully visible; a new query or filter returns the
+list to the top. Help keeps its centered dialog.
+
+The palette searches the same way as Help. Each word you type may start any word of a command's name, keywords or shortcut, in any order (**ben to** finds **Benzene tool**). A word that matches nothing more directly may be the initials of the name's words (**bt**), letters in order (**bnz**), or, in five or more letters, carry one typo (**benzne**). An exact name ranks first; stored template keywords of two or more letters, such as **Phe**, rank the same way. Then come names whose words all start with what you typed, then keyword and description matches. It lists:
 
 - **Insert**: rings (cyclopropane to cyclooctane, benzene, chairs, cyclopentadiene, Haworth rings), the template library, the import examples, every abbreviation preset (OMe, Boc, Ph, Ts, TBS…, also found by name such as **methoxy** or **tosyl**) and every element (by symbol or name, such as **bromine**).
 - **Bond** and **Atom** edits: every bond style (single, double, triple, wedges, wavy, bold, dashed, dative, hydrogen bond…), double-bond line position, bond direction and depth, charge, radicals and the contextual atom keys (extend chain, carbonyl, tert-butyl, Cp ligand…).
@@ -20,23 +26,32 @@ The palette searches the same way as Help. Each word you type may start any word
 
 Commands act on the **selection**; with nothing selected, on the atom or bond under the pointer (or the keyboard-drawing hotspot). **double bond** makes the selected bonds double; with no bond, it chooses the double-bond tool. **benzene** attaches a ring to the selected atom or fuses it to the selected bond the same way the **a** key does, and otherwise adds it at the center of the view and selects it. Every edit is one Undo step. Commands whose name or shortcut key matches rank above those matched only by keyword or description. A command that needs a target it does not have stays listed, greyed and below the commands that can run, with the reason under the list. With an empty search, recently run commands come first; commands for the current target rank higher. Recent commands that cannot run come after those that can.
 
-Some commands take a value after their word: **rotate 30** (or **rotate ccw 30**), **tilt up 20** (also **down**, **left**, **right**, or **tilt x -15** and **tilt y 15**, in degrees as the Tilt X/Y fields take them), **scale 150** (percent, relative and uniform, as the Scale field), **zoom 150**, **charge -1**, **element Pd**, **font size 12**, **bond length 14** (for new bonds), **ring 7** and **chain 5**. Any prefix of two or more letters works for the word, as in **rot 30**, **zo 150**, **ch -1** or **bond len 14**; the row with the value ranks first, greyed with the reason when it cannot run yet, and the chemical-name row below is not offered. Tilt turns a molecule shown as a 3D model, as the Tilt X/Y fields do; scale follows the Scale field, which asks you to switch such a molecule to 2D first. Each command is one Undo step. When nothing matches well, the palette offers to insert the text as a chemical name (**ibuprofen**) or, if it is valid SMILES, as SMILES (**c1ccccc1O**).
+A template command places once and returns to Select, including when placement
+is refused. It keeps the Templates tool's **Keep placing** preference unchanged.
+
+Some commands take a value after their word: **rotate 30** (or **rotate ccw 30**), **tilt up 20** (also **down**, **left**, **right**, or **tilt x -15** and **tilt y 15**, in degrees as the Tilt X/Y fields take them), **scale 150** (percent, relative and uniform, as the Scale field), **zoom 150**, **charge -1**, **element Pd**, **font size 12**, **bond length 14** (for new bonds), **ring 7** and **chain 5**. Any prefix of two or more letters works for the word, as in **rot 30**, **zo 150**, **ch -1** or **bond len 14**; the row with the value ranks first, greyed with the reason when it cannot run yet, and the chemical-name row below is not offered. Font sizes accept **4–144 pt**, rings **3–8 atoms** and chains **1–512 atoms**; values outside those ranges stay first, greyed with the allowed range. Tilt turns a molecule shown as a 3D model, as the Tilt X/Y fields do; scale follows the Scale field, which asks you to switch such a molecule to 2D first. A flip of a selection shown only as 3D models is also greyed; for one whole model, scale and flip offer **Show as 2D drawing** immediately below. Each command is one Undo step. When nothing matches well, the palette offers to insert the text as a chemical name (**ibuprofen**) or, if it is valid SMILES, as SMILES (**c1ccccc1O**).
 
 Vim-style commands rank first when typed exactly:
 
-| Command                    | Action                                          |
-| -------------------------- | ----------------------------------------------- |
-| :w                         | Save                                            |
-| :w _name_ / :sav / :saveas | Save as (the location is chosen in the dialog)  |
-| :q                         | Close the tab, asking to save changes           |
-| :q!                        | Close the tab without saving                    |
-| :wq / :x                   | Save, then close the tab                        |
-| :qa                        | Close the window, asking about each unsaved tab |
-| :e / :e _name_             | Open (the file is chosen in the dialog)         |
-| :tabnew / :new / :enew     | New drawing                                     |
-| :tabn / :tabp              | Next / previous tab                             |
-| :u / :red                  | Undo / redo                                     |
-| :noh                       | Clear highlight colors from the selection       |
+| Command                                  | Action                                                          |
+| ---------------------------------------- | --------------------------------------------------------------- |
+| :w                                       | Save                                                            |
+| :sav / :saveas                           | Save as, suggesting the current drawing's name                  |
+| :w _name_ / :sav _name_ / :saveas _name_ | Save as, suggesting _name_.rsk in the location dialog           |
+| :q                                       | Close the tab, asking to save changes                           |
+| :q!                                      | Close the tab without saving                                    |
+| :wq / :x                                 | Save, then close the tab                                        |
+| :qa                                      | Close the window, asking about each unsaved tab                 |
+| :e                                       | Open a file chosen in the dialog                                |
+| :e _name_ / :edit _name_                 | Open _name_.rsk next to the current saved drawing, if it exists |
+| :tabnew / :new / :enew                   | New drawing                                                     |
+| :tabn / :tabp                            | Next / previous tab                                             |
+| :u / :red                                | Undo / redo                                                     |
+| :noh                                     | Clear highlight colors from the selection                       |
+
+A file name that already has a native extension (**.rsk**, **.reshiki** or
+**.moruno**) keeps it. A named **:e** that cannot find its file shows a status
+message and keeps the current drawing open.
 
 ## Editable examples
 
@@ -74,12 +89,15 @@ Text fields keep ordinary typing, and Cmd/Ctrl shortcuts never type their letter
 
 ## Mouse and keyboard drawing by default
 
-In Select/Lasso, the marker and context row show the active hotspot without
-requiring F8. A single selected atom or bond's two selected endpoints provide
-an initial target; otherwise the nearest visible atom or bond to the view
-centre is used. Blank drawings initially start at the view centre. Move the
-pointer or click to transfer the hotspot to an atom, bond, or empty position.
-After a keyboard step, a stationary pointer does not steal its new target.
+In Select/Lasso, keyboard drawing works without requiring F8. A single selected
+atom or bond's two selected endpoints provide a visible initial target;
+otherwise the nearest visible atom or bond to the view centre is used, with
+the marker and target text hidden. Blank drawings initially target the view
+centre, also hidden. The first actual pointer motion over the canvas, canvas
+click, or arrow or drawing key reveals the hotspot. A drawing key uses that
+initial target immediately. Move the pointer or click to transfer the hotspot
+to an atom, bond, or empty position. After a keyboard step, a stationary pointer
+does not steal its new target.
 
 | Key                           | Result with keyboard drawing on                                              |
 | ----------------------------- | ---------------------------------------------------------------------------- |
@@ -122,10 +140,12 @@ Undo/Redo restore their hotspot and mark.
 
 F8/Off is a per-tab opt-out that survives tool and tab changes; new tabs start
 on. Other drawing tools suspend the hotspot and clear a pending mark. Returning
-to Select/Lasso resumes it automatically unless opted out. Text fields, label
-drafts, and dialogs retain their typing and caret keys. Cmd/Ctrl and Alt keep
-their modified commands, and **Shift+3–8** still chooses ring tools. Escape
-preserves the on/off preference.
+to Select/Lasso resumes it automatically unless opted out. Without a selected
+atom or bond, the resumed target stays hidden until pointer motion, a canvas
+click, or an arrow or drawing key, including after applying a text label.
+Text fields, label drafts, and dialogs retain their typing and caret keys.
+Cmd/Ctrl and Alt keep their modified commands, and **Shift+3–8** still chooses
+ring tools. Escape preserves the on/off preference.
 
 With keyboard drawing off, classic contextual keys use hover or selection,
 and arrows nudge the selection by 1 / 10 drawing units. Clear the selection
@@ -175,6 +195,11 @@ Choose an element in **Atoms**, then drag from an existing atom to add it with a
 | 6 / 7 / v / u             | Attach a 6 / 5 / 3 / 4 member ring                          |
 | Enter or =                | Edit atom label                                             |
 | g / ?                     | Select target / open its properties                         |
+
+Group keys replace endpoints and isolated atoms. At other atoms with an implicit
+H to spare, they add a single bond and the group in one Undo step, using the same
+placement as **1** followed by the group key. Non-endpoints without a free H and
+atoms inside a group refuse the edit.
 
 Defined groups keep their underlying atoms and bonds, so molecular properties include their composition. Variable R/X labels do not define a complete molecular formula. **j** and **J** retain the metal as the target for repeated ligand insertion; chemical charges are retained. The initial ligand uses a 60° perspective tilt with tapered front edges and the metal contact behind the ring. Its X/Y/Z coordinates are retained, so the 3D Tilt tool can rotate it further and update the thick/tapered perspective edges. Crossing clearance is recalculated from depth as you drag or tilt the ligand; the contact can pass in front of the far ring edge and ellipse. Cp carries −1 in the chemical data; arene is neutral. Cp’s minus sign is hidden by default in the drawing. Charge display can be changed in Atoms → Show charge without changing that data. Native documents retain the 3D model. Tested Cp/arene ligands also copy as editable CDX, including aromatic ellipses, perspective edges, hidden ligand charges and multi-center targets. Other unsupported appearances are converted only in the external copy, or use a reported picture fallback; see the [compatibility table](clipboard.md#changes-made-for-an-external-copy).
 

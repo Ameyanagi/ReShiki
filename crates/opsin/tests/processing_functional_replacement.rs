@@ -95,6 +95,53 @@ fn specific_imid_infix_is_applied_before_ambiguous_thio() {
     assert_eq!(graph.incoming_valency(sulfur), 1);
     assert_eq!(graph.fragment(fragment).functional_atoms, [sulfur]);
 }
+
+#[test]
+fn later_infix_retains_the_removed_oxygens_set_after_singleton_cleanup() {
+    let (mut state, mut arena, suffix, fragment) = acid_suffix("[R]C(=O)O", "=O,-O:[Se]");
+    let mut suffixes = vec![suffix];
+    let mut fragments = vec![fragment];
+    infix(&mut state, &mut arena, &mut suffixes, &mut fragments).unwrap();
+    arena[suffix].set_attribute("infix", "-O:S");
+    infix(&mut state, &mut arena, &mut suffixes, &mut fragments).unwrap();
+    let graph = state.graph();
+    let atoms = &graph.fragment(fragment).atoms;
+    let selenium = *atoms
+        .iter()
+        .find(|&&a| graph.atom(a).element == Element::Se)
+        .unwrap();
+    let sulfur = *atoms
+        .iter()
+        .find(|&&a| graph.atom(a).element == Element::S)
+        .unwrap();
+    // Removing oxygen from the first infix's two-member set clears the
+    // surviving selenium's property before the second infix attaches its set.
+    assert!(
+        graph
+            .atom(selenium)
+            .properties
+            .ambiguous_element_assignment
+            .is_empty()
+    );
+    assert_eq!(
+        graph
+            .atom(selenium)
+            .properties
+            .ambiguous_element_assignment_id,
+        None
+    );
+    assert_eq!(
+        graph.atom(sulfur).properties.ambiguous_element_assignment,
+        [selenium, sulfur]
+    );
+    assert!(
+        graph
+            .atom(sulfur)
+            .properties
+            .ambiguous_element_assignment_id
+            .is_some()
+    );
+}
 #[test]
 fn nitrido_infix_removes_acidic_hydroxy_and_raises_bond_order() {
     let (mut state, mut arena, suffix, fragment) = acid_suffix("[R]P(=O)O", "#O:#N");

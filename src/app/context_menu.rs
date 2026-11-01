@@ -70,6 +70,7 @@ pub enum Action {
     Open(Page, f32),
     Page(Page),
     Hover(usize, usize),
+    Pointer,
     Activate(usize, usize),
     CloseAfter(usize),
     Key(Named),
@@ -239,7 +240,7 @@ impl App {
 
     /// The selection menu, in groups: edit the clicked atom, name or select
     /// its molecule, connect and reshape, generic structures, the clipboard,
-    /// then Properties and Delete.
+    /// then Properties and the pinned Copy/Delete footer.
     fn main_entries(&self, atoms: bool, bonds: bool, tilt: bool) -> Vec<Entry> {
         let command = Entry::command;
         [
@@ -249,19 +250,17 @@ impl App {
             self.generic_entries(),
             vec![
                 command("Cut", Message::Copy(true), true),
-                command("Copy", Message::Copy(false), true),
                 Entry::page("Copy as", Page::CopyAs),
                 command("Paste", Message::Paste, !self.tab.clipboard_busy),
                 command("Duplicate", Message::Duplicate, true),
             ],
-            vec![
-                Entry::Item {
-                    label: "Properties…",
-                    action: Action::Properties(false),
-                    enabled: true,
-                },
-                command("Delete", Message::Delete, true),
-            ],
+            vec![Entry::Item {
+                label: "Properties…",
+                action: Action::Properties(false),
+                enabled: true,
+            }],
+            vec![command("Copy", Message::Copy(false), true)],
+            vec![command("Delete", Message::Delete, true)],
         ]
         .into_iter()
         .filter(|group| !group.is_empty())
@@ -472,6 +471,22 @@ impl App {
             entries.push(command(
                 "Straighten arrow",
                 Message::ArrowAction(super::arrows::Action::Straighten),
+                true,
+            ));
+        }
+        if self.has_cleanup_selection() {
+            entries.push(command(
+                "Smooth",
+                Message::Graphics(super::graphics::Action::Cleanup(
+                    super::graphics::Cleanup::Smooth,
+                )),
+                true,
+            ));
+            entries.push(command(
+                "Symmetrise",
+                Message::Graphics(super::graphics::Action::Cleanup(
+                    super::graphics::Cleanup::Symmetrise { upright: false },
+                )),
                 true,
             ));
         }
@@ -718,6 +733,12 @@ impl App {
                 }
             }
             Action::Hover(level, index) => self.context_hover(level, index, true),
+            Action::Pointer => {
+                if let Some(menu) = &mut self.context_menu {
+                    menu.keyboard = false;
+                    menu.focused = None;
+                }
+            }
             Action::Activate(level, index) => {
                 let entry = self
                     .context_menu
@@ -936,7 +957,9 @@ impl App {
 
     fn context_panel(&self, menu: &State, page: Page, level: usize) -> cascade::Panel<'_> {
         let mut entries = column![].spacing(1);
+        let mut footer = column![].spacing(1);
         let mut items = Vec::new();
+        let mut submenus = Vec::new();
         let keyboard_commands = if matches!(page, Page::More(_)) {
             self.context_commands()
         } else {
@@ -952,8 +975,20 @@ impl App {
                 .padding([5, 10]),
             );
         }
-        for (index, entry) in self.context_entries(page).into_iter().enumerate() {
-            entries = match entry {
+        let all_entries = self.context_entries(page);
+        let pinned = if page == Page::Main {
+            all_entries
+                .iter()
+                .position(|entry| {
+                    matches!(entry, Entry::Item { action: Action::Run(message), .. }
+                    if matches!(message.as_ref(), Message::Copy(false)))
+                })
+                .map(|index| index - 1) // Include the separator above Copy.
+        } else {
+            None
+        };
+        for (index, entry) in all_entries.into_iter().enumerate() {
+            let row: Element<'_, Message> = match entry {
                 Entry::Item {
                     label,
                     action,
@@ -972,6 +1007,16 @@ impl App {
                         _ => None,
                     };
                     let accessible_name = keyboard_hint.unwrap_or(label);
+                    let hint = if matches!(&action, Action::Run(message) if matches!(
+                        message.as_ref(),
+                        Message::Graphics(super::graphics::Action::Cleanup(
+                            super::graphics::Cleanup::Symmetrise { .. }
+                        ))
+                    )) {
+                        Some(super::graphics::SYMMETRISE_HINT)
+                    } else {
+                        keyboard_hint
+                    };
                     let label = text(label).size(12).width(Length::Fill);
                     let label = if destructive {
                         label.style(crate::appearance::text_color(Color::from_rgb8(167, 59, 51)))
@@ -991,18 +1036,28 @@ impl App {
                         );
                     }
                     let active = enabled
-                        && (menu.focused == Some((level, index))
+                        && ((menu.keyboard && menu.focused == Some((level, index)))
                             || menu
                                 .children
                                 .get(level)
                                 .is_some_and(|child| child.anchor == index));
+                    if enabled && matches!(action, Action::Page(_)) {
+                        submenus.push(index);
+                    }
+                    let pointer = !menu.keyboard;
                     let id = item_id(page, index, &action);
                     let item = reshiki::accessibility::button(id, accessible_name, content)
                         .padding([6, 10])
                         .width(Length::Fill)
                         .style(move |theme: &iced::Theme, status| {
                             let mut style = button::text(theme, status);
-                            if active {
+                            if active
+                                || (pointer
+                                    && matches!(
+                                        status,
+                                        button::Status::Hovered | button::Status::Pressed
+                                    ))
+                            {
                                 style.background = Some(
                                     Color {
                                         a: 0.12,
@@ -1017,7 +1072,7 @@ impl App {
                             enabled.then_some(Message::ContextMenu(Action::Activate(level, index))),
                         );
                     items.push(index);
-                    let item: Element<'_, Message> = if let Some(hint) = keyboard_hint {
+                    let item: Element<'_, Message> = if let Some(hint) = hint {
                         super::workspace::hover_hint(
                             item,
                             hint.to_owned(),
@@ -1027,52 +1082,68 @@ impl App {
                     } else {
                         item.into()
                     };
-                    entries.push(container(item).id(cascade::row_id(level, index)))
+                    container(item).id(cascade::row_id(level, index)).into()
                 }
-                Entry::Separator => entries.push(horizontal_line()),
-                Entry::Hint(label) => entries.push(
+                Entry::Separator => horizontal_line(),
+                Entry::Hint(label) => {
                     container(text(label).size(11).style(super::workspace::muted_text))
-                        .padding([5, 10]),
-                ),
+                        .padding([5, 10])
+                        .into()
+                }
             };
+            if pinned.is_some_and(|first| index >= first) {
+                footer = footer.push(row);
+            } else {
+                entries = entries.push(row);
+            }
         }
-        let content = container(
-            scrollable(entries)
-                .id(cascade::scroll_id(level))
-                .direction(scrollable::Direction::Vertical(
-                    scrollable::Scrollbar::new()
-                        .width(SCROLLBAR_WIDTH)
-                        .scroller_width(SCROLLBAR_WIDTH)
-                        .spacing(SCROLLBAR_GAP),
-                ))
-                .height(Length::Shrink),
-        )
-        .padding(5)
-        .width(self.context_width(page))
-        .style(|theme| {
-            crate::appearance::container(
-                theme,
-                container::Style {
-                    background: Some(Color::WHITE.into()),
-                    border: Border {
-                        color: Color::from_rgb8(192, 204, 201),
-                        width: 1.,
-                        radius: 7.into(),
+        let scrolling = scrollable(entries)
+            .id(cascade::scroll_id(level))
+            .direction(scrollable::Direction::Vertical(
+                scrollable::Scrollbar::new()
+                    .width(SCROLLBAR_WIDTH)
+                    .scroller_width(SCROLLBAR_WIDTH)
+                    .spacing(SCROLLBAR_GAP),
+            ))
+            .height(if pinned.is_some() {
+                Length::Fill
+            } else {
+                Length::Shrink
+            });
+        let body: Element<'_, Message> = if pinned.is_some() {
+            column![scrolling, footer].spacing(1).into()
+        } else {
+            scrolling.into()
+        };
+        let content = container(body)
+            .padding(5)
+            .width(self.context_width(page))
+            .style(|theme| {
+                crate::appearance::container(
+                    theme,
+                    container::Style {
+                        background: Some(Color::WHITE.into()),
+                        border: Border {
+                            color: Color::from_rgb8(192, 204, 201),
+                            width: 1.,
+                            radius: 7.into(),
+                        },
+                        shadow: crate::appearance::surface_shadow(iced::Shadow {
+                            color: Color::from_rgba8(20, 40, 35, 0.18),
+                            offset: iced::Vector::new(0., 4.),
+                            blur_radius: 12.,
+                        }),
+                        ..Default::default()
                     },
-                    shadow: crate::appearance::surface_shadow(iced::Shadow {
-                        color: Color::from_rgba8(20, 40, 35, 0.18),
-                        offset: iced::Vector::new(0., 4.),
-                        blur_radius: 12.,
-                    }),
-                    ..Default::default()
-                },
-            )
-        })
-        .into();
+                )
+            })
+            .into();
         cascade::Panel {
             page,
             content,
             items,
+            pinned,
+            submenus,
             anchor: level
                 .checked_sub(1)
                 .and_then(|at| menu.children.get(at))

@@ -252,24 +252,40 @@ impl App {
                 .align_y(Alignment::Center),
             ]
             .spacing(16);
-        modal(base, popup.into(), 900., 650., Message::ToggleHelp)
+        modal(
+            base,
+            popup.into(),
+            900.,
+            650.,
+            Placement::Center,
+            Message::ToggleHelp,
+        )
     }
 }
 
-/// A centered dialog over a dimmed, inert workspace; clicking outside it
-/// sends `dismiss`. Help and the command palette share it.
+pub(super) enum Placement {
+    Center,
+    Top,
+}
+
+/// A dialog over a dimmed, inert workspace; clicking outside it sends
+/// `dismiss`. Top placement also lets the dialog shrink to its content.
 pub(super) fn modal<'a>(
     base: Element<'a, Message>,
     content: Element<'a, Message>,
     width: f32,
     height: f32,
+    placement: Placement,
     dismiss: Message,
 ) -> Element<'a, Message> {
     let base = reshiki::accessibility::inert(base);
     let popup = container(content)
         .padding(24)
         .width(width)
-        .height(height)
+        .height(match placement {
+            Placement::Center => Length::Fixed(height),
+            Placement::Top => Length::Shrink,
+        })
         .max_height(height)
         .style(|theme| {
             crate::appearance::container(
@@ -290,6 +306,14 @@ pub(super) fn modal<'a>(
                 },
             )
         });
+    let popup = container(opaque(popup))
+        .padding(24)
+        .center_x(Length::Fill)
+        .height(Length::Fill);
+    let popup = match placement {
+        Placement::Center => popup.align_y(Alignment::Center),
+        Placement::Top => popup.align_y(Alignment::Start),
+    };
     stack![
         base,
         opaque(
@@ -307,10 +331,7 @@ pub(super) fn modal<'a>(
             )
             .on_press(dismiss)
         ),
-        container(opaque(popup))
-            .padding(24)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill),
+        popup,
     ]
     .into()
 }
@@ -388,7 +409,7 @@ fn list_row(
         .align_y(Alignment::Center),
     )
     .padding([6, 8]);
-    row_button(id, label, body, selected, on_press)
+    row_button(id, label, body, selected, on_press).into()
 }
 
 /// A result row's selection highlight and named button, shared with the
@@ -399,7 +420,7 @@ pub(super) fn row_button(
     body: iced::widget::Container<'static, Message>,
     selected: bool,
     on_press: Message,
-) -> Element<'static, Message> {
+) -> reshiki::accessibility::Button<'static, Message> {
     let body = body.width(Length::Fill).style(move |theme| {
         crate::appearance::container(
             theme,
@@ -425,7 +446,6 @@ pub(super) fn row_button(
         })
         .on_press(on_press)
         .tab_stop(false)
-        .into()
 }
 
 fn drawing(label: &'static str, doc: reshiki::document::Document) -> Element<'static, Message> {

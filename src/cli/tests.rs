@@ -1366,6 +1366,18 @@ async fn compose_input_errors_exit_1() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn stereochemistry_limit_reaches_stderr_with_the_shared_message() {
+    let smiles = format!("{}O", "N[C@@H](C)C(=O)".repeat(400));
+    let (code, out, err) = call(&["analyze", "--smiles", &smiles]).await;
+    assert_eq!(code, FAILURE, "{err}");
+    assert!(out.is_empty(), "{out}");
+    assert_eq!(
+        err,
+        "reshiki: error: This structure has too much stereochemistry to process · Try a shorter chain or a fragment\n"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn binary_output_never_goes_to_a_terminal() {
     for tokens in [
         &["render", "--smiles", "C", "--to", "png"][..],

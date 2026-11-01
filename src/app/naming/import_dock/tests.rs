@@ -26,6 +26,74 @@ async fn preview(app: &App, smiles: &str) -> Result<Preview, String> {
         .map_err(|error| error.to_string())
 }
 
+#[tokio::test]
+async fn name_insert_keeps_the_camera_when_structure_and_caption_fit() -> Result<(), String> {
+    for rulers in [false, true] {
+        let mut app = ready();
+        app.engine = LocalEngine::in_process();
+        app.tab.doc = Document::default();
+        app.viewport = iced::Size::new(1200., 800.);
+        app.guides.rulers = rulers;
+        app.tab.camera = Camera {
+            center: Point::new(140., -80.),
+            zoom: 1.5,
+        };
+        let camera = app.tab.camera;
+        let result = preview(&app, "CCO").await?;
+        app.tab.naming.set_preview(result);
+
+        app.insert_import_preview(true);
+
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(app.tab.doc.annotations.len(), 1);
+        assert_eq!(app.tab.camera.center, camera.center);
+        assert_eq!(app.tab.camera.zoom, camera.zoom);
+        let paper = app.guides.paper(iced::Rectangle::with_size(app.viewport));
+        let visible = iced::Rectangle::with_size(paper.size());
+        let (lo, hi) = reshiki::scene::selection_bounds(&app.tab.doc, &app.tab.selected).unwrap();
+        assert!(visible.contains(app.tab.camera.screen(lo, paper)));
+        assert!(visible.contains(app.tab.camera.screen(hi, paper)));
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn name_insert_reveals_both_structures_and_captions_without_zooming_in() -> Result<(), String>
+{
+    let mut app = ready();
+    app.engine = LocalEngine::in_process();
+    app.tab.doc = Document::default();
+    app.viewport = iced::Size::new(1200., 800.);
+    app.tab.camera = Camera {
+        center: Point::new(300., 0.),
+        zoom: 1.25,
+    };
+    let result = preview(&app, "CCO").await?;
+    app.tab.naming.set_preview(result.clone());
+    app.insert_import_preview(true);
+    assert!(!app.error, "{}", app.status);
+    app.tab.camera.center = Point::default();
+    let camera = app.tab.camera;
+    let paper = app.guides.paper(iced::Rectangle::with_size(app.viewport));
+    let visible = iced::Rectangle::with_size(paper.size());
+    let (lo, hi) = reshiki::scene::selection_bounds(&app.tab.doc, &app.tab.doc.all_ids()).unwrap();
+    assert!(camera.screen(lo, paper).x > paper.width * 2. / 3.);
+    assert!(visible.contains(camera.screen(hi, paper)));
+    app.tab.naming.set_preview(result);
+
+    app.insert_import_preview(true);
+
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.atoms.len(), 6);
+    assert_eq!(app.tab.doc.annotations.len(), 2);
+    assert_eq!(app.tab.doc.molecule_names.len(), 2);
+    assert!(app.tab.camera.zoom <= camera.zoom);
+    let (lo, hi) = reshiki::scene::selection_bounds(&app.tab.doc, &app.tab.doc.all_ids()).unwrap();
+    assert!(visible.contains(app.tab.camera.screen(lo, paper)));
+    assert!(visible.contains(app.tab.camera.screen(hi, paper)));
+    Ok(())
+}
+
 fn complete(app: &mut App, ticket: Ticket, preview: Preview) {
     let _ = app.naming_action(Action::Finished(
         ticket,
@@ -34,6 +102,72 @@ fn complete(app: &mut App, ticket: Ticket, preview: Preview) {
             Some(Box::new(preview)),
         ))),
     ));
+}
+
+#[tokio::test]
+async fn clearing_name_input_closes_preview_and_reopening_selects_the_retained_name() {
+    use iced::advanced::widget::{Id, operation::Outcome};
+    use iced::futures::StreamExt;
+    use iced::widget::text_input::{State, Value};
+    type InputState = State<<iced::Renderer as iced::advanced::text::Renderer>::Paragraph>;
+
+    async fn input_state(task: Task<Message>) -> InputState {
+        let mut state = InputState::new();
+        let id = Id::new("import-name");
+        let mut actions = iced_runtime::task::into_stream(task).expect("Name input widget task");
+        while let Some(action) = actions.next().await {
+            let iced_runtime::Action::Widget(mut operation) = action else {
+                continue;
+            };
+            loop {
+                operation.focusable(Some(&id), iced::Rectangle::default(), &mut state);
+                operation.text_input(Some(&id), iced::Rectangle::default(), &mut state);
+                if let Outcome::Chain(next) = operation.finish() {
+                    operation = next;
+                } else {
+                    break;
+                }
+            }
+        }
+        state
+    }
+
+    let mut app = ready();
+    for message in [
+        Message::Inspector(InspectorTab::Import),
+        Message::Imports(import::Action::InputKind(InputKind::Name)),
+    ] {
+        let state = input_state(app.update(message)).await;
+        assert!(state.is_focused());
+        assert_eq!(
+            state.cursor().selection(&Value::new(&app.tab.naming.name)),
+            Some((0, "ethanol".len())),
+        );
+    }
+    app.tab.naming.set_preview(Preview::new(
+        record(),
+        super::super::test_support::ethanol(),
+        vec![],
+        "CCO".into(),
+    ));
+    app.tab.naming.preview_open = true;
+    app.tab.naming.notice = Some(Notice::new(NoticeKind::Info, "Preview ready"));
+    app.tab.naming.import_alias = Some(0);
+    let before = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    let frames = app.tab.history.frames();
+
+    let state = input_state(app.update(Message::Naming(Action::ClearName))).await;
+
+    assert!(app.tab.naming.name.is_empty());
+    assert!(app.tab.naming.preview.is_none());
+    assert!(!app.tab.naming.preview_open);
+    assert!(app.tab.naming.notice.is_none());
+    assert!(app.tab.naming.import_alias.is_none());
+    assert!(state.is_focused(), "Clear returns focus to the Name box");
+    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(app.tab.history.frames(), frames);
 }
 
 #[tokio::test]
@@ -562,6 +696,7 @@ async fn default_dock_exposes_one_insert_and_collapses_preview_and_details() -> 
         "import-kind-structure",
         "import-kind-name",
         "import-name",
+        "import-clear",
         "import-name-caption",
         "import-name-preview",
         "import-name-insert",
@@ -597,6 +732,15 @@ async fn default_dock_exposes_one_insert_and_collapses_preview_and_details() -> 
         &mut iced::advanced::widget::operation::black_box(&mut activate),
     );
     assert!(matches!(activate.message(), Some(Message::InsertInput)));
+    let mut activate = Activate::<Message>::new("import-clear");
+    ui.operate(
+        &renderer,
+        &mut iced::advanced::widget::operation::black_box(&mut activate),
+    );
+    assert!(matches!(
+        activate.message(),
+        Some(Message::Naming(Action::ClearName))
+    ));
     Ok(())
 }
 

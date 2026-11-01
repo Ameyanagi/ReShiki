@@ -186,6 +186,15 @@ pub fn label_edit(
         if mode == Mode::Auto
             && let Some(atom) = candidate.atom_mut(id)
         {
+            if editing::ELEMENTS.contains(&label)
+                && doc
+                    .models
+                    .iter()
+                    .any(|m| m.cell.is_some() && m.contains(id))
+                && let Some(source) = doc.atom(id)
+            {
+                atom.charge = source.charge;
+            }
             atom.display.hydrogens = Some(true);
         }
         (candidate, id)
@@ -208,6 +217,28 @@ pub fn atom_edit(
         ));
     }
     if let Some((label, mode)) = atom_label(key) {
+        if mode == Mode::Group
+            && doc.abbreviation_containing(id).is_none()
+            && doc.bonds.iter().filter(|b| b.a == id || b.b == id).count() > 1
+        {
+            let free_h = doc.atom(id).is_some_and(|atom| {
+                !atom.no_implicit
+                    && atom.explicit_h == 0
+                    && templates::valence(doc, id) + 2 * u32::from(atom.radical_electrons) + 2
+                        <= templates::capacity(atom)
+            });
+            if !free_h {
+                return Some(Err(
+                    "Group keys replace an endpoint or attach at an atom with a free H".into(),
+                ));
+            }
+            // Grow the same bond as `1`, then replace its endpoint. Only the
+            // final document reaches the caller's undo transaction.
+            return atom_edit(doc, id, "1", length).map(|result| {
+                let (candidate, focus) = result?;
+                label_edit(&candidate, focus, label, mode)
+            });
+        }
         return Some(
             label_edit(doc, id, label, mode).map(|(mut candidate, focus)| {
                 if key == "c"
@@ -597,3 +628,6 @@ mod ring_angle_tests;
 
 #[cfg(test)]
 mod drawing_quality_tests;
+
+#[cfg(test)]
+mod group_tests;

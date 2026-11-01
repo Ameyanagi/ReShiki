@@ -86,22 +86,24 @@ impl WordRules {
         options: &ParseOptions,
         allow_space_removal: bool,
         component_ratios: Option<&[i32]>,
+        word_groups: Vec<Vec<NodeId>>,
     ) -> Result<(), ParsingError> {
-        let mut words = arena.children_named(molecule, "word");
-        let mut index = 0;
-        while index < words.len() {
-            if self.match_rule(
-                arena,
-                molecule,
-                &mut words,
-                index,
-                options.allow_radicals,
-                allow_space_removal,
-                component_ratios.map(<[i32]>::len),
-            )? {
-                index = 0;
-            } else {
-                index += 1;
+        for mut words in word_groups {
+            let mut index = 0;
+            while index < words.len() {
+                if self.match_rule(
+                    arena,
+                    molecule,
+                    &mut words,
+                    index,
+                    options.allow_radicals,
+                    allow_space_removal,
+                    component_ratios.map(<[i32]>::len),
+                )? {
+                    index = 0;
+                } else {
+                    index += 1;
+                }
             }
         }
         for &child in &arena[molecule].children {
@@ -492,7 +494,7 @@ fn ends_with_group(arena: &Arena, word: NodeId, predicate: &str) -> bool {
         while arena[id].name == "suffix" {
             if arena[id]
                 .attribute("value")
-                .is_some_and(|v| ate_ending(v) || v == "glycoside")
+                .is_some_and(|v| (ate_ending(v) && v != "olate") || v == "glycoside")
             {
                 return true;
             }
@@ -798,5 +800,86 @@ fn ending_pattern_matches(pattern: &str, value: &str) -> bool {
         .contains(&lower.as_str()),
         "ol[\\]\\)\\}]*" => stripped.ends_with("ol"),
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn group_with_alcohol(tag: &str, spelling: &str, value: Option<&str>) -> Vec<String> {
+        let mut arena = Arena::default();
+        let molecule = arena.grouping("molecule");
+        let mut words = Vec::new();
+        for (word_value, token_name, token_value) in [
+            ("methanol", "group", "methanol"),
+            ("example", tag, spelling),
+        ] {
+            let word = arena.grouping("word");
+            arena[word].add_attribute("type", "full");
+            arena[word].add_attribute("value", word_value);
+            let root = arena.grouping("root");
+            let token = arena.token(token_name, token_value);
+            if word_value == "example" {
+                if let Some(value) = value {
+                    arena[token].add_attribute("value", value);
+                } else {
+                    arena[token].add_attribute("functionalIDs", "9");
+                }
+            }
+            arena.add_child(root, token);
+            arena.add_child(word, root);
+            arena.add_child(molecule, word);
+            words.push(word);
+        }
+        WordRules::new()
+            .unwrap()
+            .group(
+                &mut arena,
+                molecule,
+                &ParseOptions::default(),
+                false,
+                None,
+                vec![words],
+            )
+            .unwrap();
+        arena
+            .children_named(molecule, "wordRule")
+            .iter()
+            .map(|&id| arena[id].attribute("wordRule").unwrap().to_owned())
+            .collect()
+    }
+
+    #[test]
+    fn olate_suffix_does_not_match_ate_group() {
+        for spelling in ["olate", "olat"] {
+            assert_eq!(
+                group_with_alcohol("suffix", spelling, Some("olate")),
+                ["simple", "simple"],
+                "{spelling}"
+            );
+        }
+    }
+
+    #[test]
+    fn ester_forming_suffixes_match_ate_group() {
+        for value in ["ate", "carboxylate", "ite", "amide", "glycoside"] {
+            assert_eq!(
+                group_with_alcohol("suffix", value, Some(value)),
+                ["potentialAlcoholEster"],
+                "{value}"
+            );
+        }
+    }
+
+    #[test]
+    fn pidolate_group_still_matches_ate_group() {
+        for spelling in ["pidolate", "pidolat"] {
+            assert_eq!(
+                group_with_alcohol("group", spelling, None),
+                ["potentialAlcoholEster"],
+                "{spelling}"
+            );
+        }
     }
 }

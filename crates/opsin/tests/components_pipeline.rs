@@ -246,6 +246,78 @@ fn incompatible_ring_counts_are_rejected() {
         )
     }
 }
+
+#[test]
+fn phane_skeleton_multiplier_is_consumed_before_ring_processing() {
+    for (cyclic, nodes, expected, failure) in [
+        (false, Some("2"), "CC", None),
+        (true, Some("3"), "C1CC1", None),
+        (true, Some("6"), "C1CCCCC1", None),
+        (
+            false,
+            None,
+            "C",
+            Some("Expected a multiplier indicating the number of nodes before phane"),
+        ),
+        (
+            false,
+            Some("0"),
+            "C",
+            Some("Phane skeleton has too few nodes: 0"),
+        ),
+        (
+            false,
+            Some("1"),
+            "C",
+            Some("Phane skeleton has too few nodes: 1"),
+        ),
+        (
+            true,
+            Some("2"),
+            "C",
+            Some("Phane skeleton has too few nodes: 2"),
+        ),
+    ] {
+        let (mut t, r) = tree();
+        if cyclic {
+            token(&mut t.arena, r, CYCLO_EL, "cyclo", &[]);
+        }
+        let multiplier = nodes.map(|nodes| {
+            token(
+                &mut t.arena,
+                r,
+                MULTIPLIER_EL,
+                "multiplier",
+                &[(VALUE_ATR, nodes), (TYPE_ATR, BASIC_TYPE_VAL)],
+            )
+        });
+        let g = token(
+            &mut t.arena,
+            r,
+            GROUP_EL,
+            "phan",
+            &[
+                (VALUE_ATR, "C"),
+                (TYPE_ATR, RING_TYPE_VAL),
+                (SUBTYPE_ATR, PHANE_SUBTYPE_VAL),
+                (LABELS_ATR, NUMERIC_LABELS_VAL),
+            ],
+        );
+        let result = process_components(&mut t, &mut ComponentGenerationContext::default());
+        if let Some(failure) = failure {
+            assert_eq!(result.unwrap_err().to_string(), failure);
+            if let Some(multiplier) = multiplier {
+                assert_eq!(t.arena[multiplier].parent, Some(r));
+            }
+        } else {
+            result.unwrap();
+            assert!(t.arena[multiplier.unwrap()].parent.is_none());
+            assert!(t.arena.children_named(r, CYCLO_EL).is_empty());
+        }
+        assert_eq!(t.arena[g].attribute(VALUE_ATR), Some(expected));
+        assert_eq!(t.arena[g].attribute(SUBTYPE_ATR), Some(PHANE_SUBTYPE_VAL));
+    }
+}
 #[test]
 fn heteroatom_chains_and_alternating_hydrides() {
     let (mut t, r) = tree();
@@ -368,6 +440,42 @@ fn suffix_prefix_and_structurally_multiplied_infixes() {
         }
         assert!(t.arena.children_named(r, INFIX_EL).is_empty());
         assert!(t.arena.children_named(r, MULTIPLIER_EL).is_empty());
+    }
+}
+#[test]
+fn amido_and_hydrazido_before_oxy_require_the_suffix_interpretation() {
+    for infix in ["amid", "hydrazid"] {
+        let (mut t, r) = tree();
+        token(
+            &mut t.arena,
+            r,
+            GROUP_EL,
+            "acet",
+            &[
+                (TYPE_ATR, ACIDSTEM_TYPE_VAL),
+                (SUBTYPE_ATR, ENDINIC_SUBTYPE_VAL),
+            ],
+        );
+        token(
+            &mut t.arena,
+            r,
+            INFIX_EL,
+            infix,
+            &[(VALUE_ATR, "O:N"), (SUBSEQUENTUNSEMANTICTOKEN_ATR, "o")],
+        );
+        token(
+            &mut t.arena,
+            r,
+            SUFFIX_EL,
+            "oxy",
+            &[(TYPE_ATR, INLINE_TYPE_VAL), (VALUE_ATR, "oxy")],
+        );
+        let error =
+            process_components(&mut t, &mut ComponentGenerationContext::default()).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            format!("{infix}o in this context is a suffix, not an infix")
+        );
     }
 }
 #[test]

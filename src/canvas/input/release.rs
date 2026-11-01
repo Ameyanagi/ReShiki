@@ -82,7 +82,22 @@ impl MoleculeCanvas<'_> {
             }
             Gesture::AtomIndicator { owner } => Edit::AtomIndicator(owner, p),
             Gesture::GraphicPoint { id, index } => Edit::GraphicPoint(id, index, p),
-            Gesture::PathPoint(drag) => Edit::GraphicPoint(drag.id, drag.index, drag.target(p)),
+            Gesture::PathPoint(drag) => {
+                if !drag.dragged(p, self.camera) {
+                    if drag.node {
+                        Edit::PathNodeClick(drag.id, drag.index)
+                    } else {
+                        Edit::GraphicPoint(drag.id, drag.index, drag.original)
+                    }
+                } else {
+                    Edit::PathPoint {
+                        id: drag.id,
+                        index: drag.index,
+                        point: drag.target(p),
+                        free: drag.free,
+                    }
+                }
+            }
             Gesture::Transform(drag) => {
                 match self.release_transform(state, *drag, p, position, inside) {
                     ControlFlow::Continue(edit) => edit,
@@ -151,6 +166,18 @@ impl MoleculeCanvas<'_> {
         let edit = match edit {
             Edit::Select(ids) => self.pointer_selection(ids, p),
             edit => edit,
+        };
+        let model_drag = match &edit {
+            Edit::ModelView { .. } | Edit::ResizeModels { .. } => true,
+            Edit::Move(ids, ..) | Edit::Transform { ids, .. } => {
+                reshiki::models3d::shows_3d(self.doc, ids)
+            }
+            _ => false,
+        };
+        let edit = if self.keyboard_target.is_some() && model_drag {
+            Edit::Release(Box::new(edit), p)
+        } else {
+            edit
         };
         Some(Action::publish(edit).and_capture())
     }

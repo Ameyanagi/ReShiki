@@ -929,6 +929,7 @@ pub(super) fn background(message: &Message) -> bool {
             | Message::Close(_)
             | Message::Cancel
             | Message::Discard
+            | Message::InspectorAction(super::inspector::Action::RefreshPropertiesFor(_))
     ) || super::results::admitted(super::results::Modal::AtomText, message)
 }
 
