@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 200" width="360" height="200">
+<rect x="0" y="0" width="360" height="200" fill="#ffffff"/>
+<g transform="translate(50.00 120.00) scale(1.2500)">
+<line x1="0" y1="0" x2="36.372" y2="-21" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><line x1="38.262043" y1="-24.273552" x2="70.85396" y2="3.2735522" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><line x1="34.48196" y1="-17.726448" x2="74.63405" y2="-3.2735522" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><path d="M73.18151 0.7577666 L109.116 -19.989632 L109.116 -22.010368 L72.306496 -0.7577666 Z M109.116 -19.989632 L145.05049 0.7577667 L145.92552 -0.7577667 L109.116 -22.010368 Z " fill="rgb(0,0,0)" stroke="rgb(0,0,0)" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/></g>
+<circle cx="118.2" cy="106.9" r="24" fill="none" stroke="#d0342c" stroke-width="2.2"/>
+<text x="12.0" y="172.0" font-family="-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" fill="#444" text-anchor="start" font-weight="normal">Unknown E/Z drawn as a crossed double bond</text>
+<text x="12.0" y="191.0" font-family="-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" fill="#444" text-anchor="start" font-weight="normal">(the default ReShiki generates today)</text>
+<text x="10" y="20" font-family="-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#777">ReShiki render</text>
+</svg>

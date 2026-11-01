@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 258" width="360" height="258" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif">
+<rect width="360" height="258" fill="#fff"/>
+<text x="12" y="20" font-size="14" font-weight="600" fill="#7a4b00">Proposed warning (sketch)</text>
+<svg x="114.81" y="34.00" width="130.37" height="110.00" viewBox="-72.000 -56.000 128.000 108.000" overflow="visible">
+
+<path d="M-19.736595 12.405633 L-12.539094 8.250031 L-13.414113 6.734498 L-20.611614 10.8901 Z M12.368196 8.15136 L35.93449 21.757767 L36.809513 20.242233 L13.243215 6.6358266 Z " fill="rgb(0,0,0)" stroke="rgb(0,0,0)" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/><text xml:space="preserve" x="-53.39064" y="5.0352364" font-family="Arial, Helvetica, sans-serif" font-size="29.166668" font-weight="normal" font-style="normal" text-decoration="none" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">Bz</text><text xml:space="preserve" x="-10.531616" y="-15.964764" font-family="Arial, Helvetica, sans-serif" font-size="29.166668" font-weight="normal" font-style="normal" text-decoration="none" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">N</text><text xml:space="preserve" x="-10.531616" y="-40.342857" font-family="Arial, Helvetica, sans-serif" font-size="29.166668" font-weight="normal" font-style="normal" text-decoration="none" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">H</text>
+<ellipse cx="-38.00" cy="21.00" rx="24.00" ry="18.00" transform="rotate(0.0 -38.00 21.00)" fill="none" stroke="#d0342c" stroke-width="1.964"/>
+</svg>
+<rect x="16" y="152.0" width="328" height="74" rx="6" fill="#f4f4f5" stroke="#c9c9cf"/><text x="28" y="176.0" font-size="14" font-weight="normal" fill="#222">Contract selection, label: Bz</text><text x="28" y="196.0" font-size="14" font-weight="normal" fill="#6b4e00">⚠ 'Bz' is benzoyl in the catalog, a different</text><text x="28" y="216.0" font-size="14" font-weight="normal" fill="#6b4e00">group; use Bn for benzyl or spell it out</text>
+<text x="180.0" y="246.0" font-size="14" text-anchor="middle" fill="#666">(mock-up of the proposed note; never blocks)</text>
+
+</svg>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 228" width="360" height="228" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif">
+<rect width="360" height="228" fill="#fff"/>
+<text x="12" y="20" font-size="14" font-weight="600" fill="#555">ReShiki today</text>
+<svg x="15.94" y="34.00" width="328.12" height="120.00" viewBox="-34.000 -50.000 175.000 64.000" overflow="visible">
+
+<line x1="-15.33" y1="-7.5600004" x2="15.33" y2="-7.5600004" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><line x1="72.869995" y1="-7.5600004" x2="103.53" y2="-7.5600004" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><path d="M-22.515547 0.87500006 L22.515547 0.87500006 L19.484453 -0.87500006 L-19.484453 -0.87500006 Z M22.515547 0.8750001 L0 -38.122997 L0 -34.623005 L19.484453 -0.8750001 Z M0 -38.122997 L-22.515547 0.8750001 L-19.484453 -0.8750001 L0 -34.623005 Z M67.2 0.87500006 L109.70518 0.87500006 L108.69482 -0.87500006 L67.2 -0.87500006 Z M109.70518 0.875 L130.95776 -35.9355 L129.44223 -36.8105 L108.69482 -0.875 Z " fill="rgb(0,0,0)" stroke="rgb(0,0,0)" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/>
+<ellipse cx="0.00" cy="-7.50" rx="27.00" ry="9.00" transform="rotate(0.0 0.00 -7.50)" fill="none" stroke="#d0342c" stroke-width="1.067"/><circle cx="69.00" cy="-7.50" r="8.00" fill="none" stroke="#d0342c" stroke-width="1.067"/>
+</svg>
+<text x="180.0" y="176.0" font-size="14" text-anchor="middle" fill="#222">Cyclopropene: the inner line nearly touches</text>
+<text x="180.0" y="196.0" font-size="14" text-anchor="middle" fill="#222">the ring sides; forced-offset propene:</text>
+<text x="180.0" y="216.0" font-size="14" text-anchor="middle" fill="#222">the bare left end is cut short</text>
+
+</svg>

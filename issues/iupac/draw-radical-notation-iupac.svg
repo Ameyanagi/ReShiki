@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 228" width="360" height="228" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif">
+<rect width="360" height="228" fill="#fff"/>
+<text x="12" y="20" font-size="14" font-weight="600" fill="#7a4b00">IUPAC recommends (sketch)</text>
+<svg x="55.24" y="34.00" width="249.51" height="120.00" viewBox="-60.476 -65.667 230.988 111.091" overflow="visible">
+
+<path d="M-35.93449 21.757767 L-12.539094 8.250031 L-13.414113 6.734498 L-36.809513 20.242233 Z M12.368196 8.15136 L35.93449 21.757767 L36.809513 20.242233 L13.243215 6.6358266 Z M0.87500006 -15.105714 L0.87500006 -42 L-0.87500006 -42 L-0.87500006 -15.105714 Z " fill="rgb(0,0,0)" stroke="rgb(0,0,0)" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/><text xml:space="preserve" x="-10.531616" y="-15.964764" font-family="Arial, Helvetica, sans-serif" font-size="29.166668" font-weight="normal" font-style="normal" text-decoration="none" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">N</text><text xml:space="preserve" x="10.531616" y="-23.256432" font-family="Arial, Helvetica, sans-serif" font-size="20.416668" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">•+</text><text xml:space="preserve" x="79.06838" y="-15.964763" font-family="Arial, Helvetica, sans-serif" font-size="29.166668" font-weight="normal" font-style="normal" text-decoration="none" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">C</text><text xml:space="preserve" x="100.131615" y="-15.964763" font-family="Arial, Helvetica, sans-serif" font-size="29.166668" font-weight="normal" font-style="normal" text-decoration="none" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">H</text><text xml:space="preserve" x="121.19485" y="-4.2980957" font-family="Arial, Helvetica, sans-serif" font-size="20.416668" font-weight="normal" font-style="normal" text-decoration="none" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">2</text><text xml:space="preserve" x="132.54962" y="-23.256432" font-family="Arial, Helvetica, sans-serif" font-size="20.416668" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">2•</text>
+<circle cx="22.00" cy="-11.00" r="16.00" fill="none" stroke="#d0342c" stroke-width="1.852"/><circle cx="141.00" cy="-11.00" r="16.00" fill="none" stroke="#d0342c" stroke-width="1.852"/>
+</svg>
+<text x="180.0" y="176.0" font-size="14" text-anchor="middle" fill="#222">Dot first, then charge: N•+;</text>
+<text x="180.0" y="196.0" font-size="14" text-anchor="middle" fill="#222">two unpaired electrons as a count: CH₂ 2•</text>
+<text x="180.0" y="216.0" font-size="14" text-anchor="middle" fill="#666">(ReShiki output with the label text edited)</text>
+
+</svg>

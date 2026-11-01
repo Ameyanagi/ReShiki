@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 318" width="360" height="318" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif">
+<rect width="360" height="318" fill="#fff"/>
+<text x="12" y="20" font-size="14" font-weight="600" fill="#555">ReShiki today</text>
+<svg x="69.75" y="34.00" width="220.50" height="210.00" viewBox="-60.000 -100.000 210.000 200.000" overflow="visible">
+
+<line x1="1.1303566" y1="-9.3821535" x2="27.682634" y2="-24.712147" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><line x1="27.682634" y1="-59.287853" x2="1.1303566" y2="-74.61784" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><line x1="-28.813" y1="-57.33" x2="-28.813" y2="-26.67" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><path d="M0.875 0.5051811 L37.248 -20.49482 L35.498 -21.50518 L0 -1.0103636 L0 0 Z M37.248 -20.49482 L37.248 -63.50518 L35.498 -62.49482 L35.498 -21.50518 Z M37.248 -63.50518 L0 -85.01037 L-0.000000029802322 -82.98963 L35.498 -62.49482 Z M0 -85.01037 L-37.248 -63.50518 L-35.498 -62.49482 L0.000000029802322 -82.98963 Z M-37.248 -63.50518 L-37.248 -20.49482 L-35.498 -21.50518 L-35.498 -62.49482 Z M-37.248 -20.49482 L-0.875 0.5051811 L0 -0 L0 -1.0103636 L-35.498 -21.50518 Z M-0.87500006 0.5051811 L-0.87500006 42 L0.87500006 42 L0.87500006 0.5051811 L0 -0 Z " fill="rgb(0,0,0)" stroke="rgb(0,0,0)" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/><text xml:space="preserve" x="-45" y="56.58" font-family="Arial, Helvetica, sans-serif" font-size="29.166668" font-weight="normal" font-style="normal" text-decoration="none" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">toluene</text>
+<line x1="52" y1="42.0" x2="64" y2="42.0" stroke="#d0342c" stroke-width="1.905"/><line x1="52" y1="56.58" x2="64" y2="56.58" stroke="#d0342c" stroke-width="1.905"/><line x1="58" y1="42.0" x2="58" y2="56.58" stroke="#d0342c" stroke-width="1.905"/><text x="68" y="55.29" font-size="13.33" fill="#d0342c" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif">0.35 bond</text>
+</svg>
+
+<text x="180.0" y="266.0" font-size="14" text-anchor="middle" fill="#222">Toluene with a name caption placed by</text>
+<text x="180.0" y="286.0" font-size="14" text-anchor="middle" fill="#222">today's rule: 0.35 bond length below the</text>
+<text x="180.0" y="306.0" font-size="14" text-anchor="middle" fill="#222">lowest atom (the methyl end)</text>
+
+</svg>

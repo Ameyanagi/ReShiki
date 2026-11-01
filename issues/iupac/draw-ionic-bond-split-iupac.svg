@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 238" width="360" height="238" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif">
+<rect width="360" height="238" fill="#fff"/>
+<text x="12" y="20" font-size="14" font-weight="600" fill="#7a4b00">IUPAC recommends (sketch)</text>
+<svg x="72.39" y="34.00" width="215.22" height="150.00" viewBox="-50.000 -74.000 165.000 115.000" overflow="visible">
+
+<line x1="-36.372" y1="21" x2="-14.60014" y2="8.429642" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><text xml:space="preserve" x="-11.343385" y="-15.957642" font-family="Arial, Helvetica, sans-serif" font-size="29.166668" font-weight="normal" font-style="normal" text-decoration="none" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">O</text><text xml:space="preserve" x="11.343385" y="-23.24931" font-family="Arial, Helvetica, sans-serif" font-size="20.416668" font-weight="normal" font-style="normal" text-decoration="none" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">−</text><text xml:space="preserve" x="54.15783" y="-16.135662" font-family="Arial, Helvetica, sans-serif" font-size="29.166668" font-weight="normal" font-style="normal" text-decoration="none" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">Na</text><text xml:space="preserve" x="91.44217" y="-23.42733" font-family="Arial, Helvetica, sans-serif" font-size="20.416668" font-weight="normal" font-style="normal" text-decoration="none" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">+</text>
+<line x1="41" y1="34" x2="41" y2="10" stroke="#d0342c" stroke-width="1.533"/><path d="M44.04 16.30 L41 10 L37.96 16.30" fill="none" stroke="#d0342c" stroke-width="1.533"/>
+</svg>
+<text x="180.0" y="206.0" font-size="14" text-anchor="middle" fill="#222">No bond: O⁻ and Na⁺ with a space between</text>
+<text x="180.0" y="226.0" font-size="14" text-anchor="middle" fill="#666">(ReShiki with the bond removed by hand)</text>
+
+</svg>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 238" width="360" height="238" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif">
+<rect width="360" height="238" fill="#fff"/>
+<text x="12" y="20" font-size="14" font-weight="600" fill="#555">ReShiki today</text>
+<svg x="76.21" y="34.00" width="207.58" height="150.00" viewBox="-79.865 -46.813 152.893 110.480" overflow="visible">
+
+<line x1="-58.198" y1="0" x2="-21.823" y2="-21" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><path d="M18.329056 -1.17195 L20.079088 -2.1822786 L-19.49545 -25.031319 L-19.651688 -25.102112 L-19.818737 -25.141066 L-19.990175 -25.146679 L-20.159414 -25.11874 L-20.319952 -25.058321 L-20.465616 -24.967743 L-20.59081 -24.850489 L-20.690725 -24.711061 L-20.761518 -24.554823 L-20.800472 -24.387774 L-20.806086 -24.216335 L-20.778147 -24.047096 L-20.717728 -23.886559 L-20.62715 -23.740894 L-20.509895 -23.6157 L-20.370468 -23.515785 Z M-27.353088 -18.817722 L15.424 5.8803663 L15.424 3.8596258 L-25.603054 -19.82805 Z M15.424 0.50519514 L51.36148 -20.242218 L50.48652 -21.757782 L13.674 -0.50519514 Z M13.674 -0.5051951 L13.674 42 L15.424 42 L15.424 0.5051951 Z " fill="rgb(0,0,0)" stroke="rgb(0,0,0)" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/>
+<ellipse cx="-3.64" cy="-10.50" rx="34.00" ry="15.00" transform="rotate(30.0 -3.64 -10.50)" fill="none" stroke="#d0342c" stroke-width="1.473"/>
+</svg>
+<text x="180.0" y="206.0" font-size="14" text-anchor="middle" fill="#222">2-Methylbut-2-ene: the C=C is drawn</text>
+<text x="180.0" y="226.0" font-size="14" text-anchor="middle" fill="#222">centred on the bond axis</text>
+
+</svg>

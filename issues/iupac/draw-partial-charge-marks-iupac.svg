@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 258" width="360" height="258" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif">
+<rect width="360" height="258" fill="#fff"/>
+<text x="12" y="20" font-size="14" font-weight="600" fill="#7a4b00">IUPAC allows (sketch)</text>
+<svg x="113.47" y="34.00" width="133.06" height="150.00" viewBox="-55.000 -74.000 110.000 124.000" overflow="visible">
+
+<path d="M-35.935566 21.757772 L0 1.0103631 L0 -1.0103631 L-36.810566 20.242228 Z M-4.655 3.6979287 L-2.9050002 2.6875658 L-2.9050002 -26.531128 L-2.921813 -26.701832 L-2.9716055 -26.865976 L-3.0524642 -27.017252 L-3.1612818 -27.149847 L-3.2938762 -27.258663 L-3.4451523 -27.339523 L-3.6092963 -27.389315 L-3.7800002 -27.406128 L-3.9507043 -27.389315 L-4.114848 -27.339523 L-4.2661242 -27.258663 L-4.398719 -27.149847 L-4.5075364 -27.017252 L-4.588395 -26.865976 L-4.6381874 -26.701832 L-4.655 -26.531128 Z M2.9050002 2.6875658 L4.655 3.6979287 L4.655 -26.531128 L4.6381874 -26.701832 L4.588395 -26.865976 L4.507536 -27.017252 L4.398719 -27.149847 L4.2661242 -27.258663 L4.114848 -27.339523 L3.950704 -27.389315 L3.7800002 -27.406128 L3.609296 -27.389315 L3.445152 -27.339523 L3.2938762 -27.258663 L3.1612818 -27.149847 L3.0524642 -27.017252 L2.9716055 -26.865976 L2.921813 -26.701832 L2.9050002 -26.531128 Z M0 1.0103631 L35.935566 21.757772 L36.810566 20.242228 L0 -1.0103631 Z " fill="rgb(0,0,0)" stroke="rgb(0,0,0)" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/><text xml:space="preserve" x="-11.343385" y="-57.95764" font-family="Arial, Helvetica, sans-serif" font-size="29.166668" font-weight="normal" font-style="normal" text-decoration="none" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">O</text>
+<text x="16" y="-46" font-family="Arial, Helvetica, sans-serif" font-size="20.4" fill="#000">δ−</text><text x="0" y="36" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20.4" fill="#000">δ+</text><circle cx="28.00" cy="-53.00" r="15.00" fill="none" stroke="#d0342c" stroke-width="1.653"/><circle cx="0.00" cy="29.00" r="15.00" fill="none" stroke="#d0342c" stroke-width="1.653"/>
+</svg>
+
+<text x="180.0" y="206.0" font-size="14" text-anchor="middle" fill="#222">δ+ on C and δ− on O as atom marks, only when</text>
+<text x="180.0" y="226.0" font-size="14" text-anchor="middle" fill="#222">the polarity is the point of the figure</text>
+<text x="180.0" y="246.0" font-size="14" text-anchor="middle" fill="#666">(ReShiki drawing; δ marks added by hand)</text>
+
+</svg>

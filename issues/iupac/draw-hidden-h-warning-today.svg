@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 218" width="360" height="218" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif">
+<rect width="360" height="218" fill="#fff"/>
+<text x="12" y="20" font-size="14" font-weight="600" fill="#555">ReShiki today</text>
+<svg x="63.65" y="34.00" width="232.69" height="110.00" viewBox="-110.000 -52.000 220.000 104.000" overflow="visible">
+
+<line x1="15.33" y1="28.812" x2="-15.33" y2="28.812" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><line x1="-32.617832" y1="-1.1302452" x2="-17.287958" y2="-27.681591" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><line x1="17.287958" y1="-27.681591" x2="32.617832" y2="-1.1302452" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><path d="M69.399864 -0.87500006 L42.505173 -0.87500006 L42 0 L42.505173 0.87500006 L69.399864 0.87500006 Z M40.989628 0.000000029802322 L20.494825 35.497 L21.505175 37.247 L42.505173 0.87500006 L42 0 Z M20.494825 35.497 L-20.494825 35.497 L-21.505175 37.247 L21.505175 37.247 Z M-20.494825 35.497 L-40.989628 0.000000029802322 L-42 -0 L-42.505173 0.87500006 L-21.505175 37.247 Z M-42.505173 -0.87500006 L-71.1943 -0.87500006 L-71.1943 0.87500006 L-42.505173 0.87500006 L-42 -0 Z M-40.989628 -0.000000029802322 L-20.494825 -35.497 L-21.505175 -37.247 L-42.505173 -0.87500006 L-42 0 Z M-20.494825 -35.497 L20.494825 -35.497 L21.505175 -37.247 L-21.505175 -37.247 Z M20.494825 -35.497 L40.989628 -0.000000029802322 L42 0 L42.505173 -0.87500006 L21.505175 -37.247 Z " fill="rgb(0,0,0)" stroke="rgb(0,0,0)" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/><text xml:space="preserve" x="72.65662" y="-15.957642" font-family="Arial, Helvetica, sans-serif" font-size="29.166668" font-weight="normal" font-style="normal" text-decoration="none" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">O</text><text xml:space="preserve" x="-94.53162" y="-15.964764" font-family="Arial, Helvetica, sans-serif" font-size="29.166668" font-weight="normal" font-style="normal" text-decoration="none" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">N</text>
+<circle cx="83.00" cy="0.00" r="20.00" fill="none" stroke="#d0342c" stroke-width="1.891"/><circle cx="-84.00" cy="0.00" r="20.00" fill="none" stroke="#d0342c" stroke-width="1.891"/>
+</svg>
+
+<text x="180.0" y="166.0" font-size="14" text-anchor="middle" fill="#222">4-Aminophenol with 'Show implied hydrogens'</text>
+<text x="180.0" y="186.0" font-size="14" text-anchor="middle" fill="#222">unchecked prints O and N, with no warning;</text>
+<text x="180.0" y="206.0" font-size="14" text-anchor="middle" fill="#222">IUPAC reads a bare O or N as having no H</text>
+
+</svg>

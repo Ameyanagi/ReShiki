@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 276" width="360" height="276" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif">
+<rect width="360" height="276" fill="#fff"/>
+<text x="12" y="20" font-size="14" font-weight="600" fill="#7a4b00">Proposed, following IUPAC (sketch)</text>
+<text x="12" y="39" font-size="13" fill="#666">Bracket Superscript: •+ (also ‡, +, −, •−)</text>
+<svg x="79.43" y="52.00" width="201.14" height="150.00" viewBox="-106.000 -90.000 236.000 176.000" overflow="visible">
+
+<line x1="15.33" y1="28.812" x2="-15.33" y2="28.812" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><line x1="-32.617832" y1="-1.1302452" x2="-17.287958" y2="-27.681591" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><line x1="17.287958" y1="-27.681591" x2="32.617832" y2="-1.1302452" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><path d="M40.989628 0.000000029802322 L20.494825 35.497 L21.505175 37.247 L43.010372 -0.000000029802322 Z M20.494825 35.497 L-20.494825 35.497 L-21.505175 37.247 L21.505175 37.247 Z M-20.494825 35.497 L-40.989628 0.000000029802322 L-43.010372 -0.000000029802322 L-21.505175 37.247 Z M-40.989628 -0.000000029802322 L-20.494825 -35.497 L-21.505175 -37.247 L-43.010372 0.000000029802322 Z M-20.494825 -35.497 L20.494825 -35.497 L21.505175 -37.247 L-21.505175 -37.247 Z M20.494825 -35.497 L40.989628 -0.000000029802322 L43.010372 0.000000029802322 L21.505175 -37.247 Z " fill="rgb(0,0,0)" stroke="rgb(0,0,0)" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/><path d="M-78 -70 L-92 -70 L-92 70 L-78 70 M78 -70 L92 -70 L92 70 L78 70 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/><path d="M110.4 -74 L122.4 -74 M116.4 -80 L116.4 -68 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/><path d="M104.9 -74 C104.9 -72.95066 104.04934 -72.1 103 -72.1 C101.95066 -72.1 101.1 -72.95066 101.1 -74 C101.1 -75.04934 101.95066 -75.9 103 -75.9 C104.04934 -75.9 104.9 -75.04934 104.9 -74 Z " fill="rgb(0,0,0)" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="112.00" cy="-74.00" r="18.00" fill="none" stroke="#d0342c" stroke-width="2.347"/>
+</svg>
+
+<text x="180.0" y="224.0" font-size="14" text-anchor="middle" fill="#222">The sign sits at the outer top right of the</text>
+<text x="180.0" y="244.0" font-size="14" text-anchor="middle" fill="#222">closing bracket and follows move and resize</text>
+<text x="180.0" y="264.0" font-size="14" text-anchor="middle" fill="#666">(ReShiki drawing; symbol moved by hand)</text>
+</svg>

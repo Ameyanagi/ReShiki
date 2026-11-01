@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 250" width="360" height="250" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif">
+<rect width="360" height="250" fill="#fff"/>
+<text x="12" y="22" font-size="14" font-weight="600" fill="#555">ReShiki today</text>
+<text x="16" y="54" font-size="13" font-weight="600" fill="#555">Save a ReShiki retrosynthesis arrow as CDXML</text>
+<svg x="16" y="67.7" width="66" height="24.5" viewBox="-12.541667 -19.541668 105.08333 39.083336">
+<path d="M0 -2.0416667 L74.895836 -2.0416667 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/><path d="M0 2.0416667 L74.895836 2.0416667 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/><path d="M62.5 -7.0000005 L80 0 L62.5 7.0000005 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<text x="90" y="85" font-size="16" fill="#222">→</text>
+<text x="116" y="76.0" font-size="14" fill="#d0342c">Error: "retrosynthesis arrows</text>
+<text x="116" y="94.0" font-size="14" fill="#d0342c">require native or image export"</text>
+<rect x="108" y="57.0" width="244" height="46" rx="6" fill="none" stroke="#d0342c" stroke-width="1.6"/>
+<text x="16" y="129.0" font-size="13" font-weight="600" fill="#555">Open a ChemDraw retrosynthetic arrow (CDXML)</text>
+<text x="16" y="160.0" font-size="14" fill="#222">ChemDraw ⇒</text>
+<text x="112" y="160.0" font-size="16" fill="#222">→</text>
+<svg x="138" y="143.8" width="66" height="22.4" viewBox="174.97083 165.6375 118.41666 40.25">
+<path d="M187.5125 181.67917 L280.84583 181.67917 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/><path d="M272.09583 178.17917 L280.84583 181.67917 L272.09583 185.17917 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/><path d="M280.84583 193.34583 L187.5125 193.34583 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<text x="212" y="151.0" font-size="14" fill="#222">opens as an</text>
+<text x="212" y="169.0" font-size="14" fill="#d0342c">Equilibrium arrow</text>
+<rect x="130" y="132.0" width="222" height="46" rx="6" fill="none" stroke="#d0342c" stroke-width="1.6"/>
+<text x="180.0" y="204.0" font-size="13" text-anchor="middle" fill="#666">(ReShiki output; the CDXML input is a test file</text>
+<text x="180.0" y="224.0" font-size="13" text-anchor="middle" fill="#666">modelled on ChemDraw, not a ChemDraw save)</text>
+</svg>

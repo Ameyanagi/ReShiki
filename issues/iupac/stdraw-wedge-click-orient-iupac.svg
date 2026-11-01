@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 215" width="360" height="215">
+<rect x="0" y="0" width="360" height="215" fill="#ffffff"/>
+<g transform="translate(100.00 140.00) scale(1.1500)">
+
+<path d="M-22.698 -21.532776 L-59.656277 -2.525941 L-56.739727 2.525941 L-21.799133 -19.97585 L-21.823 -21 Z M-21.799133 -19.97585 L14.548982 1.01036 L14.549018 -1.01036 L-20.948 -21.505175 L-21.823 -21 Z M14.548982 1.01036 L51.36148 -20.242218 L50.48652 -21.757782 L14.549018 -1.01036 Z M-20.948 -21.505175 L-20.948 -47.531124 L-22.698 -47.531124 L-22.698 -21.532776 L-21.823 -21 Z " fill="rgb(0,0,0)" stroke="rgb(0,0,0)" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/><text xml:space="preserve" x="-33.166386" y="-78.95764" font-family="Arial, Helvetica, sans-serif" font-size="29.166668" font-weight="normal" font-style="normal" text-decoration="none" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">O</text><text xml:space="preserve" x="-10.479616" y="-78.95764" font-family="Arial, Helvetica, sans-serif" font-size="29.166668" font-weight="normal" font-style="normal" text-decoration="none" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">H</text><text xml:space="preserve" x="-37.006493" y="3.5937529" font-family="Arial, Helvetica, sans-serif" font-size="21.875002" font-weight="normal" font-style="italic" text-decoration="none" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">(R)</text></g>
+<text x="33.1" y="170.0" font-family="-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#888" text-anchor="middle" font-weight="normal">C1</text>
+<text x="96.9" y="105.8" font-family="-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#888" text-anchor="middle" font-weight="normal">C2</text>
+<circle cx="74.9" cy="117.8" r="14" fill="none" stroke="#d0342c" stroke-width="2.2"/>
+<text x="190.0" y="96.0" font-family="-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#d0342c" text-anchor="start" font-weight="normal">narrow end at the</text>
+<text x="190.0" y="116.0" font-family="-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#d0342c" text-anchor="start" font-weight="normal">stereocentre C2</text>
+<text x="190.0" y="160.0" font-family="-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" fill="#444" text-anchor="start" font-weight="normal">C2 is defined (R)</text>
+<text x="12.0" y="203.0" font-family="-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" fill="#444" text-anchor="start" font-weight="normal">First click points the narrow end at C2</text>
+<text x="10" y="20" font-family="-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#777">Sketch, not ReShiki output</text>
+</svg>

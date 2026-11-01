@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 215" width="360" height="215">
+<rect x="0" y="0" width="360" height="215" fill="#ffffff"/>
+<g transform="translate(100.00 140.00) scale(1.1500)">
+
+<path d="M-57.76052 0.75778234 L-19.747665 -18.7914 L-21.823 -21 L-22.698 -23.90157 L-58.635483 -0.75778234 Z M-19.747665 -18.7914 L14.548982 1.01036 L14.549018 -1.01036 L-20.948 -21.505175 L-21.823 -21 Z M14.548982 1.01036 L51.36148 -20.242218 L50.48652 -21.757782 L14.549018 -1.01036 Z M-20.948 -21.505175 L-20.948 -47.531124 L-22.698 -47.531124 L-22.698 -23.90157 L-21.823 -21 Z " fill="rgb(0,0,0)" stroke="rgb(0,0,0)" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/><text xml:space="preserve" x="-33.166386" y="-78.95764" font-family="Arial, Helvetica, sans-serif" font-size="29.166668" font-weight="normal" font-style="normal" text-decoration="none" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">O</text><text xml:space="preserve" x="-10.479616" y="-78.95764" font-family="Arial, Helvetica, sans-serif" font-size="29.166668" font-weight="normal" font-style="normal" text-decoration="none" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">H</text></g>
+<text x="33.1" y="170.0" font-family="-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#888" text-anchor="middle" font-weight="normal">C1</text>
+<text x="96.9" y="105.8" font-family="-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#888" text-anchor="middle" font-weight="normal">C2</text>
+<circle cx="33.1" cy="140.0" r="14" fill="none" stroke="#d0342c" stroke-width="2.2"/>
+<text x="190.0" y="96.0" font-family="-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" fill="#d0342c" text-anchor="start" font-weight="normal">narrow end on CH₃</text>
+<text x="190.0" y="116.0" font-family="-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" fill="#444" text-anchor="start" font-weight="normal">(where the bond</text>
+<text x="190.0" y="134.0" font-family="-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" fill="#444" text-anchor="start" font-weight="normal">was drawn from)</text>
+<text x="190.0" y="160.0" font-family="-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" fill="#d0342c" text-anchor="start" font-weight="normal">C2: no configuration,</text>
+<text x="190.0" y="178.0" font-family="-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" fill="#d0342c" text-anchor="start" font-weight="normal">no warning</text>
+<text x="12.0" y="203.0" font-family="-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" fill="#444" text-anchor="start" font-weight="normal">First click with the wedge tool on bond C1–C2</text>
+<text x="10" y="20" font-family="-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#777">ReShiki render</text>
+</svg>

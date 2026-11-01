@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 258" width="360" height="258" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif">
+<rect width="360" height="258" fill="#fff"/>
+<text x="12" y="20" font-size="14" font-weight="600" fill="#7a4b00">IUPAC recommends (sketch)</text>
+<svg x="72.87" y="34.00" width="214.26" height="150.00" viewBox="-80.302 -43.677 153.330 107.344" overflow="visible">
+
+<line x1="-20.692755" y1="-11.617833" x2="5.858588" y2="3.712042" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><path d="M-57.76052 0.75778234 L-21.823019 -19.98964 L-21.82298 -22.01036 L-58.635483 -0.75778234 Z M-21.823019 -19.98964 L13.674 0.50517404 L14.549 0 L14.549018 -1.01036 L-21.82298 -22.01036 Z M15.424 0.50519514 L51.36148 -20.242218 L50.48652 -21.757782 L14.549018 -1.01036 L14.549 0 Z M13.674 0.5051741 L13.674 42 L15.424 42 L15.424 0.5051951 L14.549 0 Z " fill="rgb(0,0,0)" stroke="rgb(0,0,0)" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/>
+<ellipse cx="-3.64" cy="-10.50" rx="34.00" ry="15.00" transform="rotate(30.0 -3.64 -10.50)" fill="none" stroke="#d0342c" stroke-width="1.431"/>
+</svg>
+<text x="180.0" y="206.0" font-size="14" text-anchor="middle" fill="#222">Second line offset toward the side with</text>
+<text x="180.0" y="226.0" font-size="14" text-anchor="middle" fill="#222">more substituents (2 vs 1)</text>
+<text x="180.0" y="246.0" font-size="14" text-anchor="middle" fill="#666">(ReShiki with the side set by hand)</text>
+
+</svg>

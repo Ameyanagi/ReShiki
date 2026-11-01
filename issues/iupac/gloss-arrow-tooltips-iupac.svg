@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 368" width="360" height="368" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif">
+<rect width="360" height="368" fill="#fff"/>
+<text x="12" y="20" font-size="14" font-weight="600" fill="#7a4b00">Proposed, following IUPAC (sketch)</text>
+<text x="12" y="40" font-size="13" fill="#666">Tooltip, Help and docs add what each arrow means</text>
+<svg x="8.6" y="58.0" width="60.2" height="24.1" viewBox="-12.541667 -16.041668 80.20833 32.083336">
+<path d="M0 0 L51.625 0 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/><path d="M56 0 L38.5 -4.3750005 L40.6875 0 L38.5 4.3750005 Z " fill="rgb(0,0,0)" stroke="rgb(0,0,0)" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<text x="84" y="68.0" font-size="14" font-weight="600" fill="#222">Forward</text>
+<text x="84" y="84.0" font-size="13" fill="#333">net reaction</text>
+<svg x="8.6" y="91.8" width="60.8" height="28.4" viewBox="-12.541667 -18.958334 81.08333 37.916668">
+<path d="M0 -2.9166667 L41.78125 -2.9166667 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/><path d="M56 -2.0416667 L38.5 -7.291667 L40.6875 -3.7916667 L40.6875 -2.0416667 L56 -2.0416667 Z " fill="rgb(0,0,0)" stroke="rgb(0,0,0)" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/><path d="M56 2.9166667 L14.218752 2.9166667 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/><path d="M0 2.0416667 L17.500002 7.291667 L15.312502 3.7916667 L15.312502 2.0416667 L0 2.0416667 Z " fill="rgb(0,0,0)" stroke="rgb(0,0,0)" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<text x="84" y="104.0" font-size="14" font-weight="600" fill="#222">Equilibrium</text>
+<text x="84" y="120.0" font-size="13" fill="#333">reversible reaction or tautomers</text>
+<svg x="8.6" y="129.3" width="60.8" height="25.4" viewBox="-12.541667 -16.916668 81.08333 33.833336">
+<path d="M0 0 L56 0 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/><path d="M38.5 -4.3750005 L56 0 L38.5 4.3750005 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/><path d="M17.500002 4.3750005 L0 0 L17.500002 -4.3750005 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<text x="84" y="140.0" font-size="14" font-weight="600" fill="#222">Resonance</text>
+<text x="84" y="156.0" font-size="13" fill="#333">forms of one species, not an equilibrium</text>
+<svg x="8.6" y="163.3" width="60.8" height="29.3" viewBox="-12.541667 -19.541668 81.08333 39.083336">
+<path d="M0 -2.0416667 L50.895836 -2.0416667 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/><path d="M0 2.0416667 L50.895836 2.0416667 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/><path d="M38.5 -7.0000005 L56 0 L38.5 7.0000005 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<text x="84" y="176.0" font-size="14" font-weight="600" fill="#222">Retrosynthesis</text>
+<text x="84" y="192.0" font-size="13" fill="#333">the target is made from …</text>
+<svg x="8.6" y="199.6" width="60.2" height="28.8" viewBox="-12.541667 -25.821114 80.20833 38.36278">
+<path d="M0 0 C17.47997 -12.485694 34.959938 -13.279447 52.43991 -2.381258 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/><path d="M56 0 L44.30258 -13.731754 L43.539703 -8.900211 L39.216743 -6.6115856 Z " fill="rgb(0,0,0)" stroke="rgb(0,0,0)" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<text x="84" y="212.0" font-size="14" font-weight="600" fill="#222">Curved / electron pair</text>
+<text x="84" y="228.0" font-size="13" fill="#333">an electron pair moves</text>
+<svg x="8.6" y="236.0" width="59.8" height="28.5" viewBox="-12.541667 -25.398422 79.699745 37.94009">
+<path d="M0 0 C14.809908 -10.578506 29.619818 -12.764153 44.429726 -6.556941 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/><path d="M55.491417 0.7120168 L44.30258 -13.731754 L43.86216 -7.7332845 L43.217247 -6.1064506 C43.472183 -6.005389 43.727165 -5.9017754 43.982197 -5.7956095 C44.23723 -5.6894436 44.492306 -5.5807257 44.747433 -5.469451 C45.00256 -5.358176 45.25773 -5.2443457 45.512955 -5.127958 C45.76818 -5.01157 46.023457 -4.892623 46.27878 -4.7711177 C46.534107 -4.6496124 46.789482 -4.5255475 47.044903 -4.398921 C47.300323 -4.2722945 47.55579 -4.1431084 47.81131 -4.0113564 C48.06683 -3.8796046 48.32241 -3.745287 48.57803 -3.608406 C48.83365 -3.4715252 49.089314 -3.3320813 49.34503 -3.1900675 C49.60075 -3.0480537 49.85652 -2.9034724 50.112335 -2.7563224 C50.36815 -2.6091723 50.624016 -2.459451 50.87993 -2.307161 C51.13584 -2.1548712 51.391796 -2.0000095 51.647804 -1.8425765 C51.903812 -1.6851436 52.15987 -1.5251392 52.415974 -1.3625602 C52.672077 -1.1999811 52.928226 -1.0348282 53.18442 -0.8671002 C53.440617 -0.6993722 53.696857 -0.5290716 53.953144 -0.35619187 C54.20943 -0.1833121 54.465767 -0.007855535 54.722145 0.17017859 C54.978523 0.34821272 55.23495 0.5288259 55.491417 0.7120168 Z " fill="rgb(0,0,0)" stroke="rgb(0,0,0)" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<text x="84" y="248.0" font-size="14" font-weight="600" fill="#222">Single electron</text>
+<text x="84" y="264.0" font-size="13" fill="#333">one electron moves</text>
+<svg x="8.6" y="273.3" width="60.2" height="25.4" viewBox="-12.541667 -16.916668 80.20833 33.833336">
+<path d="M0 0 L51.625 0 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/><path d="M56 0 L38.5 -4.3750005 L40.6875 0 L38.5 4.3750005 Z " fill="rgb(0,0,0)" stroke="rgb(0,0,0)" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/><path d="M0 4.3750005 L0 -4.3750005 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<text x="84" y="284.0" font-size="14" font-weight="600" fill="#222">Dipole</text>
+<text x="84" y="300.0" font-size="13" fill="#333">bond dipole</text>
+<svg x="8.6" y="308.2" width="60.2" height="27.6" viewBox="-12.541667 -18.375 80.20833 36.75">
+<path d="M0 0 L51.625 0 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/><path d="M56 0 L38.5 -4.3750005 L40.6875 0 L38.5 4.3750005 Z " fill="rgb(0,0,0)" stroke="rgb(0,0,0)" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/><path d="M22.166666 5.8333335 L33.833332 -5.8333335 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/><path d="M22.166666 -5.8333335 L33.833332 5.8333335 " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<text x="84" y="320.0" font-size="14" font-weight="600" fill="#222">No reaction</text>
+<text x="84" y="336.0" font-size="13" fill="#333">the reaction does not occur</text>
+<rect x="6" y="125.0" width="348" height="34" rx="5" fill="none" stroke="#d0342c" stroke-width="1.6"/>
+<text x="180.0" y="360" font-size="13" text-anchor="middle" fill="#666">(ReShiki arrows; meanings are the proposal)</text>
+</svg>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 190" width="360" height="190" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif">
+<rect width="360" height="190" fill="#fff"/>
+<text x="12" y="20" font-size="14" font-weight="600" fill="#555">ReShiki today</text>
+<svg x="12.00" y="34.00" width="336.00" height="101.74" viewBox="-79.010 -41.624 275.477 83.417" overflow="visible">
+
+<line x1="-27.30017" y1="-3.7800002" x2="0" y2="-3.7800002" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><line x1="-27.30017" y1="3.7800002" x2="0" y2="3.7800002" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><line x1="0" y1="-3.7800002" x2="27.39986" y2="-3.7800002" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><line x1="0" y1="3.7800002" x2="27.39986" y2="3.7800002" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><line x1="128.8" y1="0" x2="170.8" y2="0" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><text xml:space="preserve" x="-53.343384" y="-15.957642" font-family="Arial, Helvetica, sans-serif" font-size="29.166668" font-weight="normal" font-style="normal" text-decoration="none" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">O</text><text xml:space="preserve" x="30.656616" y="-15.957642" font-family="Arial, Helvetica, sans-serif" font-size="29.166668" font-weight="normal" font-style="normal" text-decoration="none" fill="rgb(0,0,0)" dominant-baseline="text-before-edge">O</text>
+<circle cx="0.00" cy="0.00" r="17.00" fill="none" stroke="#d0342c" stroke-width="1.640"/><ellipse cx="149.80" cy="0.00" rx="50.00" ry="20.00" transform="rotate(0.0 149.80 0.00)" fill="none" stroke="#d0342c" stroke-width="1.640"/>
+</svg>
+<text x="180.0" y="157.7" font-size="14" text-anchor="middle" fill="#222">CO₂ reads as O=O, ethane as a bare line:</text>
+<text x="180.0" y="177.7" font-size="14" text-anchor="middle" fill="#222">the carbons are invisible</text>
+
+</svg>

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 266" width="360" height="266" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif">
+<rect width="360" height="266" fill="#fff"/>
+<text x="12" y="20" font-size="14" font-weight="600" fill="#7a4b00">IUPAC allows (sketch)</text>
+<text x="12" y="39" font-size="13" fill="#666">Same ring after "Centre charge in ring"</text>
+<svg x="82.00" y="52.00" width="196.00" height="140.00" viewBox="-52.000 -50.000 140.000 100.000" overflow="visible">
+
+<path d="M21.343773 0 C21.343773 11.787838 11.787838 21.343773 0 21.343773 C-11.787841 21.343773 -21.343773 11.787838 -21.343773 0 C-21.343773 -11.787841 -11.787841 -21.343773 0 -21.343773 C11.787838 -21.343773 21.343773 -11.787841 21.343773 0 Z " fill="none" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round" stroke-linejoin="round"/><line x1="35.728" y1="0" x2="11.04" y2="-33.978" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><line x1="11.04" y1="-33.978" x2="-28.904" y2="-21" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><line x1="-28.904" y1="-21" x2="-28.904" y2="21" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><line x1="-28.904" y1="21" x2="11.04" y2="33.978" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><line x1="11.04" y1="33.978" x2="35.728" y2="0" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/>
+<text x="0" y="8" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="24" fill="#000">−</text><line x1="62" y1="40" x2="10" y2="8" stroke="#d0342c" stroke-width="1.429"/><path d="M15.97 8.61 L10 8 L13.23 13.05" fill="none" stroke="#d0342c" stroke-width="1.429"/>
+</svg>
+
+<text x="180.0" y="214.0" font-size="14" text-anchor="middle" fill="#222">Monocyclic aromatic ion: full circle with the</text>
+<text x="180.0" y="234.0" font-size="14" text-anchor="middle" fill="#222">net charge centred inside it</text>
+<text x="180.0" y="254.0" font-size="14" text-anchor="middle" fill="#666">(ReShiki ring; atom charge hidden, − added by hand)</text>
+</svg>

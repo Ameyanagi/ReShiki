@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 230" width="360" height="230">
+<rect x="0" y="0" width="360" height="230" fill="#ffffff"/>
+<g transform="translate(110.00 112.00) scale(1.2000)">
+
+<line x1="0" y1="-3.7800002" x2="42" y2="-3.7800002" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><line x1="0" y1="3.7800002" x2="42" y2="3.7800002" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><line x1="42" y1="3.7800002" x2="84" y2="3.7800002" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><line x1="84" y1="0" x2="105" y2="-36.4" stroke="rgb(0,0,0)" stroke-width="1.7500001" stroke-linecap="round"/><path d="M0.75791246 -0.43725717 L-18.473625 -37.857525 L-23.526375 -34.94248 L-0.75791246 0.43725717 Z M86.686134 -2.9050002 L87.695755 -4.655 L42 -4.655 L41.829296 -4.6381874 L41.665154 -4.588395 L41.513878 -4.5075364 L41.381283 -4.398719 L41.272465 -4.2661242 L41.191605 -4.114848 L41.14181 -3.950704 L41.125 -3.7800002 L41.14181 -3.6092963 L41.191605 -3.4451523 L41.272465 -3.2938762 L41.381283 -3.1612818 L41.513878 -3.0524642 L41.665154 -2.9716055 L41.829296 -2.921813 L42 -2.9050002 Z " fill="rgb(0,0,0)" stroke="rgb(0,0,0)" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/></g>
+<circle cx="160.4" cy="112.0" r="22" fill="none" stroke="#d0342c" stroke-width="2.2"/>
+<text x="12.0" y="186.0" font-family="-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" fill="#444" text-anchor="start" font-weight="normal">Wedged allene: no axis perceived, no label</text>
+<text x="12.0" y="205.0" font-family="-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" fill="#444" text-anchor="start" font-weight="normal">(stereo labels on); SMILES out: CC=C=CC</text>
+<text x="10" y="20" font-family="-apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#777">ReShiki render</text>
+</svg>
