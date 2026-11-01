@@ -3,6 +3,7 @@
 mod integer;
 mod picture;
 mod shapes;
+pub use super::arrows::NativePathHeads;
 use super::{numeric, presentation};
 use crate::{
     graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle, LinePattern, PathCommand},
@@ -20,6 +21,8 @@ pub enum Error {
     Numeric(#[from] super::numeric::Error),
     #[error(transparent)]
     Presentation(#[from] presentation::Error),
+    #[error(transparent)]
+    Arrow(#[from] super::arrows::ArrowError),
     #[error("{0}")]
     Native(&'static str),
     #[error("{0}")]
@@ -97,6 +100,8 @@ pub struct NativeGraphic {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<Vec<NativeCommand>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub heads: Option<NativePathHeads>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub picture_source: Option<PictureSource>,
 }
 impl NativeGraphic {
@@ -134,6 +139,7 @@ impl NativeGraphic {
             phase_flipped: self.phase_flipped.unwrap_or(false),
             layer: self.layer.into_document()?,
             node_types: vec![],
+            heads: self.heads.map(NativePathHeads::into_document),
             path: self
                 .path
                 .unwrap_or_default()
@@ -284,6 +290,7 @@ impl Reader<'_, '_> {
             phase_flipped: None,
             layer: self.layer(el)?,
             path: Some(path),
+            heads: None,
             picture_source: None,
         })
     }

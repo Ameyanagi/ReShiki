@@ -9,7 +9,7 @@ use super::{
 use crate::{
     arrows::{ArrowStyle, Head, HeadShape, NoGo, Preset},
     document::{Arrow, Point},
-    graphics::LinePattern,
+    graphics::{LinePattern, PathHeads},
 };
 use serde::Serialize;
 
@@ -34,6 +34,27 @@ pub enum ArrowError {
     DocumentPoint,
 }
 type Result<T> = std::result::Result<T, ArrowError>;
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct NativePathHeads {
+    pub head: Head,
+    pub tail: Head,
+    pub shape: HeadShape,
+    pub head_length_pt: f64,
+    pub head_width_pt: f64,
+    pub head_notch: f64,
+}
+impl NativePathHeads {
+    pub(super) fn into_document(self) -> PathHeads {
+        PathHeads {
+            head: self.head,
+            tail: self.tail,
+            shape: self.shape,
+            head_length_pt: self.head_length_pt as f32,
+            head_width_pt: self.head_width_pt as f32,
+            head_notch: self.head_notch as f32,
+        }
+    }
+}
 #[derive(Clone, Debug, Serialize)]
 pub struct NativeArrowStyle {
     pub head: Head,
@@ -119,6 +140,47 @@ fn head(value: &str) -> Result<Head> {
         _ => Err(ArrowError::Invalid("Unsupported CDXML arrowhead")),
     }
 }
+pub(super) fn path_heads<'a>(
+    attribute: impl Fn(&str) -> Option<&'a str>,
+) -> Result<NativePathHeads> {
+    let head = head(attribute("ArrowheadHead").unwrap_or("None"))?;
+    let tail = self::head(attribute("ArrowheadTail").unwrap_or("None"))?;
+    let shape = match attribute("ArrowheadType").unwrap_or("Solid") {
+        "Solid" => HeadShape::Solid,
+        "Hollow" => HeadShape::Hollow,
+        "Angle" => HeadShape::Open,
+        _ => return Err(ArrowError::Invalid("Unsupported CDXML arrowhead")),
+    };
+    let length = numeric::float(attribute("HeadSize").unwrap_or("1000"))? / 100.;
+    let width = numeric::float(attribute("ArrowheadWidth").unwrap_or("250"))? / 100.;
+    // Preserve the original default's multiply/string-roundtrip/divide order.
+    let center = if let Some(value) = attribute("ArrowheadCenterSize") {
+        numeric::float(value)?
+    } else {
+        length * 100.
+    } / 100.;
+    if length <= 0. || !(0. <= center && center <= length) {
+        return Err(ArrowError::Invalid("Unsupported arrowhead center size"));
+    }
+    let notch = 1. - center / length;
+    for (key, value, lo, hi) in [
+        ("head_length_pt", length, 0.5, 24.),
+        ("head_width_pt", width, 0.25, 16.),
+        ("head_notch", notch, 0., 0.9),
+    ] {
+        if !value.is_finite() || !(lo..=hi).contains(&value) {
+            return Err(ArrowError::Range(key));
+        }
+    }
+    Ok(NativePathHeads {
+        head,
+        tail,
+        shape,
+        head_length_pt: length,
+        head_width_pt: width,
+        head_notch: notch,
+    })
+}
 struct Flags {
     bold: bool,
     dashed: bool,
@@ -183,6 +245,35 @@ impl ArrowReader {
         let order = tree.descendants(0)?;
         Ok(Self { tree, order })
     }
+    /// Legacy arrows retain the existing single cubic and straight elbow model.
+    /// Other splines keep their complete geometry as native graphic paths.
+    pub(super) fn legacy_curve(&self, source: usize, source_scale: f64) -> Result<bool> {
+        let node = self
+            .tree
+            .node(*self.order.get(source).ok_or(ArrowError::Invalid(
+                "Arrow source ordinal is outside the source document",
+            ))?)?;
+        // Curved arrows exchange only solid heads; other shapes stay paths.
+        if !matches!(node.attr("ArrowheadType"), None | Some("Solid")) {
+            return Ok(false);
+        }
+        let text = node.attr("CurvePoints").unwrap_or("");
+        self.tree.spend(text.len())?;
+        let values: Vec<_> = text.split_whitespace().take(19).collect();
+        match values.len() {
+            12 => Ok(true),
+            18 => {
+                let points = values
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|pair| point(&pair.join(" "), source_scale))
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(elbow(&points))
+            }
+            _ => Ok(false),
+        }
+    }
     pub fn read(
         &self,
         source: usize,
@@ -223,14 +314,8 @@ impl ArrowReader {
         if !matches!(line_type, "Solid" | "Dashed" | "Bold") {
             return Err(ArrowError::Invalid("Unsupported CDXML arrow stroke"));
         }
-        let head = head(node.attr("ArrowheadHead").unwrap_or("None"))?;
-        let tail = self::head(node.attr("ArrowheadTail").unwrap_or("None"))?;
-        let shape = match node.attr("ArrowheadType").unwrap_or("Solid") {
-            "Solid" => HeadShape::Solid,
-            "Hollow" => HeadShape::Hollow,
-            "Angle" => HeadShape::Open,
-            _ => return Err(ArrowError::Invalid("Unsupported CDXML arrowhead")),
-        };
+        let heads = path_heads(|key| node.attr(key))?;
+        let (head, tail, shape) = (heads.head, heads.tail, heads.shape);
         let color = numeric::integer(
             node.attr("color")
                 .or_else(|| root.attr("color"))
@@ -240,14 +325,6 @@ impl ArrowReader {
         .and_then(|i| colors.get(i))
         .copied()
         .ok_or(ArrowError::Invalid("Invalid arrow color"))?;
-        let length = scalar(node, "HeadSize", "1000")? / 100.;
-        let width = scalar(node, "ArrowheadWidth", "250")? / 100.;
-        // Preserve the original default's multiply/string-roundtrip/divide order.
-        let center = if let Some(value) = node.attr("ArrowheadCenterSize") {
-            numeric::float(value)?
-        } else {
-            length * 100.
-        } / 100.;
         let bold = line_type == "Bold" || flags(node.attr("CurveType").unwrap_or("0"))?.bold;
         let width_key = if bold { "BoldWidth" } else { "LineWidth" };
         let line = numeric::float(
@@ -262,9 +339,6 @@ impl ArrowReader {
             "hash" => NoGo::Hash,
             _ => return Err(ArrowError::Invalid("Unsupported CDXML no-go mark")),
         };
-        if length <= 0. || !(0. <= center && center <= length) {
-            return Err(ArrowError::Invalid("Unsupported arrowhead center size"));
-        }
         let mut style = NativeArrowStyle {
             head,
             tail,
@@ -276,9 +350,9 @@ impl ArrowReader {
             } else {
                 LinePattern::Solid
             },
-            head_length_pt: length,
-            head_width_pt: width,
-            head_notch: 1. - center / length,
+            head_length_pt: heads.head_length_pt,
+            head_width_pt: heads.head_width_pt,
+            head_notch: heads.head_notch,
             equilibrium_ratio: 1.,
             gap_pt: if gap == 0. { 2. } else { gap },
             no_go,
@@ -286,9 +360,6 @@ impl ArrowReader {
         };
         for (key, value, lo, hi) in [
             ("width_pt", style.width_pt, 0.1, 12.),
-            ("head_length_pt", length, 0.5, 24.),
-            ("head_width_pt", width, 0.25, 16.),
-            ("head_notch", style.head_notch, 0., 0.9),
             ("gap_pt", style.gap_pt, 0.5, 16.),
         ] {
             if !value.is_finite() || !(lo..=hi).contains(&value) {
@@ -344,16 +415,8 @@ impl ArrowReader {
         if flags.dashed {
             style.pattern = LinePattern::Dashed;
         }
-        if let [_, start, p1, p2, corner, p3, p4, end, _] = points.as_slice() {
-            if ![
-                (p1, start, corner),
-                (p2, start, corner),
-                (p3, corner, end),
-                (p4, corner, end),
-            ]
-            .into_iter()
-            .all(|(p, a, b)| on_segment(*p, *a, *b))
-            {
+        if let [_, start, _, _, corner, _, _, end, _] = points.as_slice() {
+            if !elbow(&points) {
                 return Err(ArrowError::Invalid(
                     "This multi-segment curved arrow cannot be represented by an elbow",
                 ));
@@ -402,6 +465,19 @@ impl ArrowReader {
             cubic: (!quadratic).then_some([*a, *b]),
         })
     }
+}
+fn elbow(points: &[ImportPoint]) -> bool {
+    let [_, start, p1, p2, corner, p3, p4, end, _] = points else {
+        return false;
+    };
+    [
+        (p1, start, corner),
+        (p2, start, corner),
+        (p3, corner, end),
+        (p4, corner, end),
+    ]
+    .into_iter()
+    .all(|(p, a, b)| on_segment(*p, *a, *b))
 }
 fn on_segment(p: ImportPoint, a: ImportPoint, b: ImportPoint) -> bool {
     let (dx, dy) = (b.x - a.x, b.y - a.y);

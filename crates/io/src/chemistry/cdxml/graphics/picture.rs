@@ -103,6 +103,7 @@ impl Reader<'_, '_> {
             phase_flipped: None,
             layer: self.layer(el)?,
             path: None,
+            heads: None,
             picture_source: Some(PictureSource {
                 data,
                 format: format.into(),
