@@ -6,6 +6,7 @@ use crate::canvas::Tool;
 use iced::widget::canvas::{self, Geometry, Path as Outline, Stroke};
 use iced::widget::{column, container, row, stack, text, text_editor, tooltip};
 use iced::{Alignment, Border, Color, Element, Length, Rectangle, Renderer, Task, Theme, mouse};
+use reshiki::chemistry::document::DrawingOptions;
 use reshiki::document::{Document, Point};
 use reshiki::engine::{ChemistryEngine, LocalEngine, Request};
 use reshiki::metafile::PICTURE_EXTENSIONS as PICTURES;
@@ -226,7 +227,11 @@ fn picture_drawing(picture: &Picture) -> Document {
     drawing
 }
 
-async fn read(engine: &LocalEngine, file: Picked) -> Result<(Document, Vec<String>), String> {
+async fn read(
+    engine: &LocalEngine,
+    file: Picked,
+    options: DrawingOptions,
+) -> Result<(Document, Vec<String>), String> {
     match kind(&file.path) {
         Kind::Picture => {
             let picture = reshiki::metafile::open_bytes(&file.path, file.contents).await?;
@@ -238,9 +243,9 @@ async fn read(engine: &LocalEngine, file: Picked) -> Result<(Document, Vec<Strin
             Ok((picture_drawing(&picture), warnings))
         }
         Kind::Structure(format) => {
-            let response = engine
-                .execute(Request::import(format, &contents(format, file.contents)?))
-                .await?;
+            let mut request = Request::import(format, &contents(format, file.contents)?);
+            request.drawing_options = Some(options);
+            let response = engine.execute(request).await?;
             let drawing = response.document.ok_or("The file contains no drawing")?;
             if reshiki::scene::selection_bounds(&drawing, &drawing.all_ids()).is_none() {
                 return Err("The file contains no drawing".into());
@@ -250,14 +255,18 @@ async fn read(engine: &LocalEngine, file: Picked) -> Result<(Document, Vec<Strin
         Kind::Document | Kind::Unsupported => Err("Unsupported file type".into()),
     }
 }
-async fn load(engine: LocalEngine, files: Vec<Picked>) -> Result<Batch, String> {
+async fn load(
+    engine: LocalEngine,
+    files: Vec<Picked>,
+    options: DrawingOptions,
+) -> Result<Batch, String> {
     let paths: Vec<_> = files.iter().map(|file| file.path.clone()).collect();
     let mut batch = Batch {
         label: describe(&paths),
         ..Default::default()
     };
     for (file, path) in files.into_iter().zip(&paths) {
-        let (drawing, warnings) = read(&engine, file)
+        let (drawing, warnings) = read(&engine, file, options)
             .await
             .map_err(|e| format!("Could not import {}: {e}", name(path)))?;
         batch.drawings.push(drawing);
@@ -396,8 +405,14 @@ impl App {
                         return Task::none();
                     }
                     let engine = self.engine.clone();
+                    let options = (&self.tab.doc.drawing_style).into();
                     let load = async move {
-                        load(engine, super::files::read_paths(paths, limit).await?).await
+                        load(
+                            engine,
+                            super::files::read_paths(paths, limit).await?,
+                            options,
+                        )
+                        .await
                     };
                     return Task::perform(load, move |result| {
                         Message::Imports(Action::Loaded(ticket, Box::new(result)))
@@ -432,9 +447,13 @@ impl App {
                             return Task::none();
                         }
                         let ticket = self.import_ticket();
-                        return Task::perform(load(self.engine.clone(), files), move |result| {
-                            Message::Imports(Action::Loaded(ticket, Box::new(result)))
-                        });
+                        let options = (&self.tab.doc.drawing_style).into();
+                        return Task::perform(
+                            load(self.engine.clone(), files, options),
+                            move |result| {
+                                Message::Imports(Action::Loaded(ticket, Box::new(result)))
+                            },
+                        );
                     }
                 }
             }

@@ -16,6 +16,101 @@ fn journal_presets_use_publisher_settings() {
     assert_eq!(Preset::Rsc.style().line_width_pt, 0.5);
 }
 
+#[test]
+fn stereochemistry_options_survive_native_and_cdxml_style_roundtrips() {
+    use crate::chemistry::cdxml::{import_cdxml, presentation};
+    let directory = tempfile::tempdir().unwrap();
+    for two_wedge in [false, true] {
+        for fusion_h in [false, true] {
+            for wavy in [false, true] {
+                let style = DrawingStyle {
+                    two_wedge_stereocentres: two_wedge,
+                    ring_fusion_hydrogens: fusion_h,
+                    wavy_unknown_alkenes: wavy,
+                    ..Default::default()
+                };
+                let path = directory.path().join("stereo.reshiki-style");
+                save(&path, &style).unwrap();
+                assert_eq!(load(&path).unwrap(), style);
+                let mut doc = Document {
+                    drawing_style: style,
+                    ..Default::default()
+                };
+                let a = doc.add_atom("C", Point::new(0., 0.));
+                let b = doc.add_atom("C", Point::new(42., 0.));
+                doc.add_bond(a, b, 1, "plain");
+                let xml = crate::exchange::drawing::write(&doc, Default::default()).unwrap();
+                // Binary CDX/CDS have no tag for these and simply omit them.
+                crate::exchange::to_cdx(&xml).unwrap();
+                crate::exchange::to_cds(&xml).unwrap();
+                let tree = presentation::parse(&xml).unwrap();
+                let native = presentation::drawing_style(tree.root_element()).unwrap();
+                let native_back: presentation::NativeDrawingStyle =
+                    serde_json::from_slice(&serde_json::to_vec(&native).unwrap()).unwrap();
+                assert_eq!(native_back, native);
+                let imported = import_cdxml(&xml).unwrap().document;
+                let stationery = from_chemdraw_xml(&xml, "Stereo").unwrap();
+                for imported in [
+                    native.into_document().unwrap(),
+                    imported.drawing_style,
+                    stationery,
+                ] {
+                    assert_eq!(imported.two_wedge_stereocentres, two_wedge);
+                    assert_eq!(imported.ring_fusion_hydrogens, fusion_h);
+                    assert_eq!(imported.wavy_unknown_alkenes, wavy);
+                }
+                for (attribute, present) in [
+                    ("ReShikiTwoWedgeStereocentres", two_wedge),
+                    ("ReShikiRingFusionHydrogens", !fusion_h),
+                    ("ReShikiWavyUnknownAlkenes", wavy),
+                ] {
+                    assert_eq!(tree.root_element().attribute(attribute).is_some(), present);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn absent_stereochemistry_style_fields_keep_native_defaults_and_old_assets() {
+    use crate::chemistry::cdxml::presentation::{self, NativeDrawingStyle};
+    let source = include_str!("../../../../assets/drawing_style.json");
+    let defaults = NativeDrawingStyle::defaults().unwrap();
+    assert_eq!(
+        serde_json::to_string_pretty(&defaults).unwrap(),
+        source.trim_end()
+    );
+    let xml = presentation::parse("<CDXML BondLength=\"14.4\"/>").unwrap();
+    assert_eq!(
+        presentation::drawing_style(xml.root_element()).unwrap(),
+        defaults
+    );
+    assert!(defaults.into_document().unwrap().is_default());
+    for preset in Preset::ALL.into_iter().chain([Preset::Presentation]) {
+        let style = preset.style();
+        assert!(!style.two_wedge_stereocentres);
+        assert!(style.ring_fusion_hydrogens);
+        assert!(!style.wavy_unknown_alkenes);
+        let encoded = serde_json::to_string(&style).unwrap();
+        assert!(!encoded.contains("two_wedge_stereocentres"));
+        assert!(!encoded.contains("ring_fusion_hydrogens"));
+        assert!(!encoded.contains("wavy_unknown_alkenes"));
+        assert_eq!(
+            serde_json::from_str::<DrawingStyle>(&encoded).unwrap(),
+            style
+        );
+    }
+    for attribute in [
+        "ReShikiTwoWedgeStereocentres",
+        "ReShikiRingFusionHydrogens",
+        "ReShikiWavyUnknownAlkenes",
+    ] {
+        let source = format!("<CDXML BondLength=\"14.4\" {attribute}=\"perhaps\"/>");
+        let xml = presentation::parse(&source).unwrap();
+        assert!(presentation::drawing_style(xml.root_element()).is_err());
+    }
+}
+
 fn stationery() -> Vec<u8> {
     // Deliberately different from ReShiki defaults, with a nonstandard font ID.
     crate::exchange::to_cdx(

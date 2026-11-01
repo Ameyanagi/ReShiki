@@ -5,6 +5,7 @@ use super::{
     ELEMENTS, ISOTOPES, RDKIT_VERSION,
     document::{self, Molecule},
     graph::{Atom, Graph, Valence},
+    kekulize::Direction,
     stereo::{perception::RingKind, wedging},
 };
 use std::collections::{HashMap, HashSet};
@@ -336,7 +337,20 @@ fn write_part(
         &wedging::WedgeState {
             graph: graph.clone(),
             metadata: source.metadata.clone(),
-            directions: directions.clone(),
+            // Drawing perception uses Unknown for both wavy singles and
+            // crossed doubles; MOL's chooser distinguishes those directions.
+            directions: graph
+                .bonds
+                .iter()
+                .zip(directions)
+                .map(|(bond, &direction)| {
+                    if bond.order == 2 && direction == Direction::Unknown {
+                        Direction::EitherDouble
+                    } else {
+                        direction
+                    }
+                })
+                .collect(),
             rings: source.rings.clone(),
         },
         &wedging::WedgeProperties {

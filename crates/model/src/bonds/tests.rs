@@ -265,3 +265,205 @@ fn reverse_drawn_swaps_plain_datives_and_flips_projected_tips() {
         assert_eq!(ordinary, expected);
     }
 }
+
+fn first_wedge_chain() -> (Document, u64, u64) {
+    let mut doc = Document::default();
+    let left = doc.add_atom("C", Point::default());
+    let center = doc.add_atom("C", Point::new(84., 0.));
+    let tail = doc.add_atom("C", Point::new(-84., 0.));
+    let above = doc.add_atom("F", Point::new(84., -84.));
+    let below = doc.add_atom("Cl", Point::new(84., 84.));
+    // The chain was drawn toward the center, so its stored direction starts
+    // at the degree-two atom. Only the degree-three center is tetrahedral.
+    doc.add_bond(left, center, 1, "plain");
+    doc.add_bond(left, tail, 1, "plain");
+    doc.add_bond(center, above, 1, "plain");
+    doc.add_bond(center, below, 1, "plain");
+    (doc, left, center)
+}
+
+#[test]
+fn first_wedge_narrows_at_the_only_tetrahedral_endpoint_in_either_gesture_direction() {
+    for preset in [
+        BondPreset::Wedge,
+        BondPreset::HashedWedge,
+        BondPreset::HollowWedge,
+    ] {
+        for reversed_gesture in [false, true] {
+            let (mut doc, left, center) = first_wedge_chain();
+            let (a, b) = if reversed_gesture {
+                (center, left)
+            } else {
+                (left, center)
+            };
+            preset.place(&mut doc, a, b);
+            assert_eq!((doc.bonds[0].a, doc.bonds[0].b), (center, left));
+            assert_eq!(doc.bonds[0].display, preset.parts().1);
+            assert_eq!(doc.bonds[0].order, 1);
+        }
+    }
+}
+
+#[test]
+fn first_wedge_uses_local_valence_and_explicit_hydrogens_including_simple_p_s() {
+    for (element, charge, no_implicit, explicit_h, expected) in [
+        ("C", 0, false, 0, true),
+        ("C", 0, true, 1, true),
+        ("C", 0, true, 0, false),
+        ("N", 0, false, 0, false),
+        ("N", 1, false, 0, true),
+        ("P", 0, true, 0, true),
+        ("S", 1, true, 0, true),
+    ] {
+        let (mut doc, left, center) = first_wedge_chain();
+        let atom = doc.atom_mut(center).unwrap();
+        atom.element = element.into();
+        atom.charge = charge;
+        atom.no_implicit = no_implicit;
+        atom.explicit_h = explicit_h;
+        atom.label_h = 9; // Computed display labels must not drive the choice.
+        BondPreset::Wedge.place(&mut doc, left, center);
+        assert_eq!(
+            doc.bonds[0].a == center,
+            expected,
+            "{element}, charge {charge}"
+        );
+    }
+    for (element, neighbors) in [("C", 4), ("P", 5), ("S", 6)] {
+        let (mut doc, left, center) = first_wedge_chain();
+        let atom = doc.atom_mut(center).unwrap();
+        atom.element = element.into();
+        atom.no_implicit = true;
+        for n in 3..neighbors {
+            let added = doc.add_atom("F", Point::new(168., n as f32 * 42.));
+            doc.add_bond(center, added, 1, "plain");
+        }
+        BondPreset::Wedge.place(&mut doc, left, center);
+        assert_eq!(doc.bonds[0].a, center, "{element}, degree {neighbors}");
+    }
+}
+
+#[test]
+fn first_wedge_preserves_stored_direction_when_both_or_neither_endpoint_qualifies() {
+    for both_qualify in [false, true] {
+        let (mut doc, left, center) = first_wedge_chain();
+        if both_qualify {
+            let extra = doc.add_atom("F", Point::new(0., 84.));
+            doc.add_bond(left, extra, 1, "plain");
+        } else {
+            doc.bonds.pop(); // Both endpoints now have degree two.
+        }
+        BondPreset::Wedge.place(&mut doc, center, left);
+        assert_eq!((doc.bonds[0].a, doc.bonds[0].b), (left, center));
+    }
+    let (mut doc, left, center) = first_wedge_chain();
+    doc.bonds.truncate(1); // Both terminal endpoints also remain ambiguous.
+    BondPreset::Wedge.place(&mut doc, center, left);
+    assert_eq!((doc.bonds[0].a, doc.bonds[0].b), (left, center));
+}
+
+#[test]
+fn first_wedge_prefers_nonterminal_end_but_never_an_endpoint_with_multiple_bonds() {
+    for neighbor_order in [1, 2, 3, 4, 6, 7] {
+        let (mut doc, left, center) = first_wedge_chain();
+        doc.bonds.remove(1); // Left is terminal; center remains degree three.
+        doc.bonds[1].order = neighbor_order;
+        // Fixed hydrogens keep this center from passing the tetrahedral rule,
+        // so the single-bond case exercises only the nonterminal fallback.
+        doc.atom_mut(center).unwrap().no_implicit = true;
+        BondPreset::Wedge.place(&mut doc, left, center);
+        let expected = if neighbor_order == 1 { center } else { left };
+        assert_eq!(doc.bonds[0].a, expected, "neighbor order {neighbor_order}");
+    }
+    let (mut doc, left, center) = first_wedge_chain();
+    doc.bonds[2].order = 2;
+    BondPreset::Wedge.place(&mut doc, left, center);
+    assert_eq!(
+        doc.bonds[0].a, left,
+        "Multiple bonds also exclude tetrahedral candidates"
+    );
+}
+
+#[test]
+fn first_wedge_terminal_fallback_ignores_drawn_hydrogens() {
+    for preset in [
+        BondPreset::Wedge,
+        BondPreset::HashedWedge,
+        BondPreset::HollowWedge,
+    ] {
+        for drawn_hydrogens in [0, 1, 3] {
+            for reversed_gesture in [false, true] {
+                let mut doc = Document::default();
+                let terminal = doc.add_atom("C", Point::default());
+                let middle = doc.add_atom("C", Point::new(84., 0.));
+                let tail = doc.add_atom("C", Point::new(168., 0.));
+                doc.add_bond(terminal, middle, 1, "plain");
+                doc.add_bond(middle, tail, 1, "plain");
+                for n in 0..drawn_hydrogens {
+                    let h = doc.add_atom("H", Point::new(-84., n as f32 * 42.));
+                    doc.add_bond(terminal, h, 1, "plain");
+                }
+                let (a, b) = if reversed_gesture {
+                    (middle, terminal)
+                } else {
+                    (terminal, middle)
+                };
+                preset.place(&mut doc, a, b);
+                assert_eq!(
+                    (doc.bonds[0].a, doc.bonds[0].b),
+                    (middle, terminal),
+                    "{preset}, {drawn_hydrogens} drawn H, reversed gesture {reversed_gesture}"
+                );
+                assert_eq!(doc.bonds[0].display, preset.parts().1);
+            }
+        }
+    }
+}
+
+#[test]
+fn first_wedge_endpoint_choice_excludes_existing_styles_projection_and_new_bonds() {
+    for (order, display, projection) in [
+        (1, "wedge", false),
+        (1, "hash", false),
+        (1, "hollow_wedge", false),
+        (1, "bold", false),
+        (1, "hashed", false),
+        (1, "wavy", false),
+        (1, "plain", true),
+        (2, "plain", false),
+        (4, "plain", false),
+        (4, "plain", true),
+        (DATIVE, "plain", false),
+        (DATIVE, "plain", true),
+    ] {
+        let (mut doc, left, center) = first_wedge_chain();
+        doc.bonds[0].order = order;
+        doc.bonds[0].display = display.into();
+        doc.bonds[0].projection = projection;
+        BondPreset::Wedge.place(&mut doc, left, center);
+        assert_eq!(
+            (doc.bonds[0].a, doc.bonds[0].b),
+            (left, center),
+            "{order}, {display}, projection {projection}"
+        );
+    }
+    for preset in [BondPreset::Bold, BondPreset::Hashed, BondPreset::Wavy] {
+        let (mut doc, left, center) = first_wedge_chain();
+        preset.place(&mut doc, left, center);
+        assert_eq!(doc.bonds[0].a, left);
+    }
+    let (mut doc, left, center) = first_wedge_chain();
+    doc.bonds.remove(0);
+    BondPreset::Wedge.place(&mut doc, left, center);
+    let added = doc.bonds.last().unwrap();
+    assert_eq!((added.a, added.b), (left, center));
+}
+
+#[test]
+fn first_wedge_ignores_drawn_hydrogens_when_counting_substituents() {
+    let (mut doc, left, center) = first_wedge_chain();
+    let h = doc.add_atom("H", Point::new(0., 84.));
+    doc.add_bond(left, h, 1, "plain");
+    BondPreset::Wedge.place(&mut doc, left, center);
+    assert_eq!((doc.bonds[0].a, doc.bonds[0].b), (center, left));
+}

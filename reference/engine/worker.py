@@ -714,6 +714,9 @@ def export_cdxml(
         BondSpacing=str(style["bond_spacing_ratio"] * 100),
         ChainAngle="120",
     )
+    for field, attribute, default in drawing_styles.STEREO_OPTIONS:
+        if style.get(field, default) != default:
+            root.set(attribute, "yes" if style[field] else "no")
     fonts = ET.SubElement(root, "fonttable")
     colors = ET.SubElement(root, "colortable")
     font_ids, color_ids = {}, {}

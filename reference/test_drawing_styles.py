@@ -12,6 +12,24 @@ def request(operation, **kwargs):
 
 
 class DrawingStyleTests(unittest.TestCase):
+    def test_stereochemistry_options_keep_legacy_defaults_and_roundtrip_cdxml(self):
+        self.assertEqual(drawing_styles.checked(), drawing_styles.DEFAULT)
+        explicit = {field: default for field, _, default in drawing_styles.STEREO_OPTIONS}
+        self.assertEqual(drawing_styles.checked(explicit), drawing_styles.DEFAULT)
+        doc, _ = self.styled()
+        for field, _, default in drawing_styles.STEREO_OPTIONS:
+            doc["drawing_style"][field] = not default
+        output = request("export", format="cdxml", document=doc)["output"]
+        root = ET.fromstring(output)
+        for field, attribute, default in drawing_styles.STEREO_OPTIONS:
+            self.assertEqual(root.get(attribute), "no" if default else "yes")
+        back = request("import", format="cdxml", text=output)["document"]
+        for field, _, default in drawing_styles.STEREO_OPTIONS:
+            self.assertEqual(back["drawing_style"][field], not default)
+            for invalid in (1, "yes", None):
+                with self.assertRaises(ValueError):
+                    drawing_styles.checked({field: invalid})
+
     def styled(self):
         result = request("import", format="smiles", text="c1ccccc1O")
         doc = result["document"]

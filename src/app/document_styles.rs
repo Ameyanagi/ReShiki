@@ -168,6 +168,32 @@ impl std::fmt::Display for SaveFormat {
         })
     }
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WedgeChoice {
+    One,
+    Pair,
+}
+impl std::fmt::Display for WedgeChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::One => "one wedge",
+            Self::Pair => "wedge + hash pair",
+        })
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnknownAlkeneChoice {
+    Crossed,
+    Wavy,
+}
+impl std::fmt::Display for UnknownAlkeneChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Crossed => "Crossed",
+            Self::Wavy => "Wavy substituent bond (IUPAC)",
+        })
+    }
+}
 #[derive(Debug, Clone)]
 pub enum Action {
     Open,
@@ -183,6 +209,9 @@ pub enum Action {
     CommitField(Field),
     DisplayUnit(Unit),
     Advanced(bool),
+    TwoWedgeStereocentres(bool),
+    RingFusionHydrogens(bool),
+    WavyUnknownAlkenes(bool),
     Matching(bool),
     Scale(bool),
     Load,
@@ -211,6 +240,9 @@ pub struct Editor {
     /// original (matching overrides can still be normalized).
     apply_semantics_requested: bool,
     advanced: bool,
+    two_wedge_stereocentres: bool,
+    ring_fusion_hydrogens: bool,
+    wavy_unknown_alkenes: bool,
     export_menu: bool,
     matching: bool,
     scale: bool,
@@ -235,6 +267,9 @@ impl Editor {
             unit_notice: None,
             apply_semantics_requested: false,
             advanced: false,
+            two_wedge_stereocentres: style.two_wedge_stereocentres,
+            ring_fusion_hydrogens: style.ring_fusion_hydrogens,
+            wavy_unknown_alkenes: style.wavy_unknown_alkenes,
             export_menu: false,
             matching: true,
             scale: false,
@@ -246,6 +281,9 @@ impl Editor {
         self.base = style.clone();
         self.name = style.name.clone();
         self.font = style.font_family.clone();
+        self.two_wedge_stereocentres = style.two_wedge_stereocentres;
+        self.ring_fusion_hydrogens = style.ring_fusion_hydrogens;
+        self.wavy_unknown_alkenes = style.wavy_unknown_alkenes;
         self.charge_before_radical = style.charge_before_radical;
         self.unit_notice = None;
         self.inputs = [
@@ -263,6 +301,9 @@ impl Editor {
     }
     fn candidate(&self) -> Result<DrawingStyle, String> {
         let mut style = self.base.clone();
+        style.two_wedge_stereocentres = self.two_wedge_stereocentres;
+        style.ring_fusion_hydrogens = self.ring_fusion_hydrogens;
+        style.wavy_unknown_alkenes = self.wavy_unknown_alkenes;
         // Imported styles can contain surrounding whitespace. Preserve an
         // untouched string exactly, just as we preserve untouched dimensions.
         if self.name != self.base.name {
@@ -662,6 +703,24 @@ impl App {
                             }
                         }
                         Action::Advanced(value) => editor.advanced = value,
+                        Action::TwoWedgeStereocentres(value) => {
+                            if editor.two_wedge_stereocentres != value {
+                                editor.two_wedge_stereocentres = value;
+                                editor.mark_custom();
+                            }
+                        }
+                        Action::RingFusionHydrogens(value) => {
+                            if editor.ring_fusion_hydrogens != value {
+                                editor.ring_fusion_hydrogens = value;
+                                editor.mark_custom();
+                            }
+                        }
+                        Action::WavyUnknownAlkenes(value) => {
+                            if editor.wavy_unknown_alkenes != value {
+                                editor.wavy_unknown_alkenes = value;
+                                editor.mark_custom();
+                            }
+                        }
                         Action::ExportMenu(value) => editor.export_menu = value,
                         Action::Matching(value) => {
                             editor.apply_semantics_requested = true;
@@ -840,6 +899,49 @@ impl App {
                 text("Default: radical before charge (M•+, IUPAC).")
                     .size(11)
                     .style(super::workspace::muted_text),
+            )
+            .push(super::workspace::horizontal_line())
+            .push(text("Four-substituent stereocentres").size(12))
+            .push(
+                crate::appearance::pick_list(
+                    [WedgeChoice::One, WedgeChoice::Pair],
+                    Some(if editor.two_wedge_stereocentres {
+                        WedgeChoice::Pair
+                    } else {
+                        WedgeChoice::One
+                    }),
+                    move |choice| {
+                        action(Action::TwoWedgeStereocentres(choice == WedgeChoice::Pair))
+                    },
+                )
+                .text_size(12)
+                .padding(6)
+                .width(Length::Fill),
+            )
+            .push(
+                checkbox(editor.ring_fusion_hydrogens)
+                    .label("Show H at ring-fusion stereocentres")
+                    .on_toggle(move |v| action(Action::RingFusionHydrogens(v)))
+                    .text_size(12),
+            )
+            .push(text("Unknown double-bond geometry").size(12))
+            .push(
+                crate::appearance::pick_list(
+                    [UnknownAlkeneChoice::Crossed, UnknownAlkeneChoice::Wavy],
+                    Some(if editor.wavy_unknown_alkenes {
+                        UnknownAlkeneChoice::Wavy
+                    } else {
+                        UnknownAlkeneChoice::Crossed
+                    }),
+                    move |choice| {
+                        action(Action::WavyUnknownAlkenes(
+                            choice == UnknownAlkeneChoice::Wavy,
+                        ))
+                    },
+                )
+                .text_size(12)
+                .padding(6)
+                .width(Length::Fill),
             )
             .push(super::workspace::horizontal_line())
             .push(

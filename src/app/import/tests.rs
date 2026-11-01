@@ -11,6 +11,33 @@ fn ready() -> App {
     app
 }
 
+#[tokio::test]
+async fn structure_file_insert_uses_the_documents_depiction_options() -> Result<(), String> {
+    let file = Picked {
+        path: PathBuf::from("chiral.smi"),
+        contents: b"CC[C@](C)(Br)Cl".to_vec(),
+    };
+    let batch = load(
+        LocalEngine::in_process(),
+        vec![file],
+        DrawingOptions {
+            two_wedge_stereocentres: true,
+            ..Default::default()
+        },
+    )
+    .await?;
+    assert_eq!(batch.drawings.len(), 1);
+    assert_eq!(
+        batch.drawings[0]
+            .bonds
+            .iter()
+            .filter(|bond| matches!(bond.display.as_str(), "wedge" | "hash"))
+            .count(),
+        2
+    );
+    Ok(())
+}
+
 #[test]
 fn reopening_structure_or_switching_from_name_selects_the_retained_draft() {
     const CAFFEINE: &str = "Cn1cnc2c1c(=O)n(C)c(=O)n2C";
@@ -366,7 +393,7 @@ async fn files_insert_side_by_side_at_the_pointer_as_one_undo_step() -> Result<(
         png,
     ];
     let files = super::super::files::read_paths(files, limit).await?;
-    let batch = load(LocalEngine::default(), files).await?;
+    let batch = load(LocalEngine::default(), files, Default::default()).await?;
     assert_eq!(batch.label, "3 files");
     assert_eq!(batch.drawings.len(), 3);
     assert_eq!(batch.drawings[0].atoms.len(), 3);
@@ -468,7 +495,12 @@ fn browser_file(name: &str, fixture: &str) -> Picked {
 async fn browser_files_insert_and_open_from_their_contents() -> Result<(), String> {
     let mol = browser_file("ethanol.mol", "ethanol.mol");
     assert!(!mol.path.exists());
-    let batch = load(LocalEngine::default(), vec![mol.clone()]).await?;
+    let batch = load(
+        LocalEngine::default(),
+        vec![mol.clone()],
+        Default::default(),
+    )
+    .await?;
     assert_eq!(
         (batch.label.as_str(), batch.drawings.len()),
         ("ethanol.mol", 1)
@@ -541,7 +573,9 @@ async fn oversized_pictures_are_read_only_past_their_limit() -> Result<(), Strin
     std::fs::write(&huge, vec![0; max + 4096]).map_err(|e| e.to_string())?;
     let files = super::super::files::read_paths(vec![huge], limit).await?;
     assert_eq!(files[0].contents.len(), max + 1);
-    let error = load(LocalEngine::default(), files).await.unwrap_err();
+    let error = load(LocalEngine::default(), files, Default::default())
+        .await
+        .unwrap_err();
     assert!(error.contains("exceeds 16 MB"), "{error}");
     Ok(())
 }

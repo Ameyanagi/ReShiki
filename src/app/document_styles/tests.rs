@@ -264,6 +264,54 @@ fn every_preset_survives_editor_fields_without_becoming_custom() {
 }
 
 #[test]
+fn stereochemistry_style_choices_apply_cancel_and_undo_with_the_document() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let original = app.tab.doc.clone();
+    send(&mut app, Action::Open);
+    send(&mut app, Action::TwoWedgeStereocentres(true));
+    send(&mut app, Action::RingFusionHydrogens(false));
+    send(&mut app, Action::WavyUnknownAlkenes(true));
+    let draft = app.tab.styles.editor.as_ref().unwrap().candidate().unwrap();
+    assert_eq!(draft.name, "Custom");
+    assert!(draft.two_wedge_stereocentres);
+    assert!(!draft.ring_fusion_hydrogens);
+    assert!(draft.wavy_unknown_alkenes);
+    assert_eq!(app.tab.doc, original);
+    send(&mut app, Action::Cancel);
+    assert_eq!(app.tab.doc, original);
+
+    send(&mut app, Action::Open);
+    send(&mut app, Action::TwoWedgeStereocentres(true));
+    send(&mut app, Action::RingFusionHydrogens(false));
+    send(&mut app, Action::WavyUnknownAlkenes(true));
+    send(&mut app, Action::Apply);
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.drawing_style, draft);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, original);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc.drawing_style, draft);
+
+    send(&mut app, Action::Open);
+    assert_eq!(
+        app.tab.styles.editor.as_ref().unwrap().candidate().unwrap(),
+        draft
+    );
+    send(&mut app, Action::Preset(Preset::Jacs));
+    assert!(
+        app.tab
+            .styles
+            .editor
+            .as_ref()
+            .unwrap()
+            .candidate()
+            .unwrap()
+            .is_default()
+    );
+}
+
+#[test]
 fn preview_cancel_apply_and_history_preserve_the_document() {
     let (mut app, _) = App::new();
     app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);

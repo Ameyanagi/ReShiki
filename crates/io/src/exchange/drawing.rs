@@ -497,6 +497,27 @@ impl<'a> Writer<'a> {
             number(default_real(style.bond_spacing_ratio * 100.)),
         )?;
         tree.set(0, "ChainAngle", "120")?;
+        for (attribute, value, default) in [
+            (
+                "ReShikiTwoWedgeStereocentres",
+                style.two_wedge_stereocentres,
+                false,
+            ),
+            (
+                "ReShikiRingFusionHydrogens",
+                style.ring_fusion_hydrogens,
+                true,
+            ),
+            (
+                "ReShikiWavyUnknownAlkenes",
+                style.wavy_unknown_alkenes,
+                false,
+            ),
+        ] {
+            if value != default {
+                tree.set(0, attribute, if value { "yes" } else { "no" })?;
+            }
+        }
         let fonts = tree.add(Some(0), "fonttable", [])?;
         let colors = tree.add(Some(0), "colortable", [])?;
         let page = tree.add(

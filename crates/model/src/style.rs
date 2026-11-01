@@ -19,10 +19,28 @@ pub struct DrawingStyle {
     pub margin_width_pt: f32,
     pub hash_spacing_pt: f32,
     pub bond_spacing_ratio: f32,
+    /// Draw a wedge and hash pair at stereocentres with four explicit substituents.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub two_wedge_stereocentres: bool,
+    /// Keep explicit hydrogen labels at stereogenic ring junctions during layout.
+    #[serde(default = "yes", skip_serializing_if = "is_true")]
+    pub ring_fusion_hydrogens: bool,
+    /// Mark unknown alkene geometry with a wavy substituent bond.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub wavy_unknown_alkenes: bool,
     pub png_dpi: u32,
     /// Print radical-ion charges first, as commonly used in mass spectrometry.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub charge_before_radical: bool,
+}
+fn yes() -> bool {
+    true
+}
+fn is_true(value: &bool) -> bool {
+    *value
+}
+fn is_false(value: &bool) -> bool {
+    !value
 }
 impl Default for DrawingStyle {
     fn default() -> Self {
@@ -42,6 +60,9 @@ pub static DEFAULT: LazyLock<DrawingStyle> = LazyLock::new(|| {
             margin_width_pt: 1.6,
             hash_spacing_pt: 2.5,
             bond_spacing_ratio: 0.18,
+            two_wedge_stereocentres: false,
+            ring_fusion_hydrogens: true,
+            wavy_unknown_alkenes: false,
             png_dpi: 1200,
             charge_before_radical: false,
         }
@@ -233,6 +254,10 @@ mod added_font_tests;
 #[cfg(test)]
 #[path = "style/serialization_tests.rs"]
 mod serialization_tests;
+
+#[cfg(test)]
+#[path = "style/stereo_options_tests.rs"]
+mod stereo_options_tests;
 
 /// Measure advances in the same font used by the drawing renderers.
 pub fn text_width(text: &str, size: f32) -> f32 {

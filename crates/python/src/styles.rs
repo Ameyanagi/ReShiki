@@ -44,7 +44,12 @@ pub fn merge(base: &DrawingStyle, overrides: &str) -> Result<DrawingStyle, Strin
             "bond_spacing" => "bond_spacing_ratio",
             other => other,
         };
-        if !fields.contains_key(field) {
+        if !fields.contains_key(field)
+            && !matches!(
+                field,
+                "two_wedge_stereocentres" | "ring_fusion_hydrogens" | "wavy_unknown_alkenes"
+            )
+        {
             return Err(format!("Unknown style option {key:?}"));
         }
         if field == "bond_length_pt" {
@@ -68,5 +73,28 @@ pub fn apply(document: Document, overrides: Option<&str>) -> Result<Document, St
             document_styles::apply(&document, style, true, true)
         }
         None => Ok(document),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_omitted_default_stereochemistry_options_and_resets_them() {
+        let custom = merge(
+            &DrawingStyle::default(),
+            r#"{"two_wedge_stereocentres":true,"ring_fusion_hydrogens":false,"wavy_unknown_alkenes":true}"#,
+        ).unwrap();
+        assert!(custom.two_wedge_stereocentres);
+        assert!(!custom.ring_fusion_hydrogens);
+        assert!(custom.wavy_unknown_alkenes);
+        let reset = merge(
+            &custom,
+            r#"{"two_wedge_stereocentres":false,"ring_fusion_hydrogens":true,"wavy_unknown_alkenes":false}"#,
+        ).unwrap();
+        assert!(reset.is_default());
+        assert!(merge(&reset, r#"{"two_wedge_stereocentres":1}"#).is_err());
+        assert!(merge(&reset, r#"{"unknown_style_option":true}"#).is_err());
     }
 }

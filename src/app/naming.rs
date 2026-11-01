@@ -13,6 +13,7 @@ mod preview;
 use iced::{Element, Length, Task};
 use reshiki::accessibility::{button, text_input};
 use reshiki::{
+    chemistry::document::DrawingOptions,
     document::{Document, Point},
     editing,
     engine::{LocalEngine, Request},
@@ -261,10 +262,13 @@ async fn prepare_preview(
     engine: LocalEngine,
     record: Record,
     smiles: String,
+    options: DrawingOptions,
 ) -> Result<Preview, naming::Error> {
     let identity = naming::canonical_smiles(&smiles).map_err(naming::Error::Rejected)?;
+    let mut request = Request::import_smiles(&smiles);
+    request.drawing_options = Some(options);
     let response = engine
-        .request(Request::import_smiles(&smiles))
+        .request(request)
         .await
         .map_err(naming::Error::Worker)?;
     let document = response
@@ -281,9 +285,10 @@ async fn resolve_preview(
     engine: LocalEngine,
     name: String,
     cancel: naming::Cancel,
+    options: DrawingOptions,
 ) -> Result<Outcome, naming::Error> {
     let record = naming::resolve_name(&name, cancel).await?;
-    let preview = prepare_preview(engine, record.clone(), record.smiles.clone()).await?;
+    let preview = prepare_preview(engine, record.clone(), record.smiles.clone(), options).await?;
     Ok(Outcome::Names(vec![record], Some(Box::new(preview))))
 }
 
@@ -495,9 +500,11 @@ impl App {
                 self.tab.naming.preview = None;
                 self.tab.naming.candidates.clear();
                 let engine = self.engine.clone();
-                return Task::perform(resolve_preview(engine, name, cancel), move |result| {
-                    Message::Naming(Action::Finished(ticket, Box::new(result)))
-                });
+                let options = (&self.tab.doc.drawing_style).into();
+                return Task::perform(
+                    resolve_preview(engine, name, cancel, options),
+                    move |result| Message::Naming(Action::Finished(ticket, Box::new(result))),
+                );
             }
             Action::Generate => {
                 if self.tab.naming.pending.is_some() {
@@ -541,9 +548,10 @@ impl App {
                 };
                 let ticket = self.naming_preview_ticket();
                 let engine = self.engine.clone();
+                let options = (&self.tab.doc.drawing_style).into();
                 return Task::perform(
                     async move {
-                        prepare_preview(engine, record, smiles)
+                        prepare_preview(engine, record, smiles, options)
                             .await
                             .map(|p| Outcome::Preview(Box::new(p)))
                     },

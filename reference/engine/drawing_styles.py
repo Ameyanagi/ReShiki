@@ -8,10 +8,21 @@ DEFAULT = json.loads(
     (Path(__file__).resolve().parents[2] / "assets/drawing_style.json").read_text(encoding="utf-8")
 )
 POINTS_PER_WORLD = 14.4 / 42
+STEREO_OPTIONS = (
+    ("two_wedge_stereocentres", "ReShikiTwoWedgeStereocentres", False),
+    ("ring_fusion_hydrogens", "ReShikiRingFusionHydrogens", True),
+    ("wavy_unknown_alkenes", "ReShikiWavyUnknownAlkenes", False),
+)
 
 
 def checked(value=None):
     style = {**DEFAULT, **(value or {})}
+    for field, _, default in STEREO_OPTIONS:
+        if field in style:
+            if not isinstance(style[field], bool):
+                raise ValueError(f"Invalid drawing style {field}")
+            if style[field] == default:
+                del style[field]
     for name, minimum, maximum in [
         ("bond_length_pt", 5, 100),
         ("font_size_pt", 4, 144),
@@ -59,6 +70,14 @@ def from_cdxml(root):
     style["font_family"] = fonts.get(root.get("LabelFont"), "Arial")
     style["bond_spacing_ratio"] = float(root.get("BondSpacing", "18")) / 100
     style["bond_length_world"] = style["bond_length_pt"] / POINTS_PER_WORLD
+    for field, attribute, default in STEREO_OPTIONS:
+        value = root.get(attribute)
+        if value is not None:
+            if value not in ("yes", "true", "no", "false"):
+                raise ValueError(f"Invalid drawing style {attribute}")
+            value = value in ("yes", "true")
+            if value != default:
+                style[field] = value
     if style != DEFAULT:
         style["name"] = "Imported style"
     return checked(style)

@@ -24,6 +24,286 @@ fn labels(drawing: &Drawing) -> Labels {
     }
 }
 
+fn generated(text: &str, options: DrawingOptions) -> anyhow::Result<Document> {
+    let input = crate::chemistry::smiles::read(text)?;
+    let state = input.prepared.state;
+    let positions = crate::chemistry::depict::compute(
+        &state,
+        &vec![None; state.graph.atoms.len()],
+        None,
+        Default::default(),
+    )?
+    .positions;
+    let molecule = Molecule {
+        rdkit_version: RDKIT_VERSION,
+        ids: (1..=positions.len() as u64).collect(),
+        state,
+        positions,
+    };
+    let draft = for_generated(&molecule, &input.prepared.dummy_labels, options)?;
+    let labels = draft.labels()?;
+    Ok(draft.finish(labels)?)
+}
+
+#[test]
+fn four_substituent_wedge_pair_preserves_configuration() -> anyhow::Result<()> {
+    let one = generated("CC[C@](C)(Br)Cl", DrawingOptions::default())?;
+    let pair = generated(
+        "CC[C@](C)(Br)Cl",
+        DrawingOptions {
+            two_wedge_stereocentres: true,
+            ..Default::default()
+        },
+    )?;
+    let stereo = |doc: &Document| {
+        doc.bonds
+            .iter()
+            .filter(|b| matches!(b.display.as_str(), "wedge" | "hash"))
+            .map(|b| b.display.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(stereo(&one).len(), 1);
+    let directions = stereo(&pair);
+    assert_eq!(directions.len(), 2);
+    assert!(directions.iter().any(|d| d == "wedge"));
+    assert!(directions.iter().any(|d| d == "hash"));
+    let identity = |doc: &Document| -> anyhow::Result<String> {
+        let molecule = prepare(doc)?;
+        Ok(crate::chemistry::smiles::write::write(&molecule.state, Default::default())?.text)
+    };
+    assert_eq!(identity(&one)?, identity(&pair)?);
+    Ok(())
+}
+
+#[test]
+fn generated_norcamphor_uses_both_bonds_to_the_one_atom_bridge() -> anyhow::Result<()> {
+    let text = "O=C1C[C@H]2CC[C@@H]1C2";
+    let drawing = generated(text, DrawingOptions::default())?;
+    let wedges = drawing
+        .bonds
+        .iter()
+        .filter(|bond| matches!(bond.display.as_str(), "wedge" | "hash"))
+        .collect::<Vec<_>>();
+    assert_eq!(wedges.len(), 2);
+    assert!(
+        wedges
+            .iter()
+            .all(|bond| [4, 7].contains(&bond.a) && bond.b == 8)
+    );
+    let state = crate::chemistry::smiles::prepare(text)?.state;
+    let output = prepare(&drawing)?;
+    assert_eq!(
+        crate::chemistry::smiles::write::write(&state, Default::default())?.text,
+        crate::chemistry::smiles::write::write(&output.state, Default::default())?.text,
+    );
+    Ok(())
+}
+
+#[test]
+fn generated_fusion_hydrogens_are_optional_and_cleanup_does_not_add_them() -> anyhow::Result<()> {
+    let text = "C1CC[C@H]2CCCC[C@@H]2C1";
+    let shown = generated(text, DrawingOptions::default())?;
+    let hidden = generated(
+        text,
+        DrawingOptions {
+            ring_fusion_hydrogens: false,
+            ..Default::default()
+        },
+    )?;
+    let hydrogens = shown
+        .atoms
+        .iter()
+        .filter(|a| a.element == "H")
+        .map(|a| a.id)
+        .collect::<Vec<_>>();
+    assert_eq!(hydrogens.len(), 2);
+    for h in hydrogens {
+        assert!(
+            shown
+                .bonds
+                .iter()
+                .any(|b| b.b == h && matches!(b.display.as_str(), "wedge" | "hash"))
+        );
+    }
+    assert_eq!(shown.atoms.len(), hidden.atoms.len() + 2);
+    let molecule = prepare(&hidden)?;
+    let draft = for_drawing(&molecule, &hidden)?;
+    let labels = draft.labels()?;
+    assert_eq!(draft.finish(labels)?.atoms.len(), hidden.atoms.len());
+    Ok(())
+}
+
+#[test]
+fn fusion_hydrogens_clear_atoms_labels_and_bonds_preserving_stereo() -> anyhow::Result<()> {
+    let label_gap = (1.5 * WORLD_PER_DEPICT_UNIT * 0.25) as f32;
+    for (text, expected) in [
+        (
+            "C[C@]12CC[C@H]3[C@H]([C@@H]1CC[C@@H]2O)CCC4=CC(=O)CC[C@H]34",
+            vec!["wedge", "hash", "wedge", "hash"],
+        ),
+        (
+            "C[C@]12CC[C@H]3[C@H]([C@@H]1CC[C@@H]2O)CCC4=CC(=O)CC[C@]34C",
+            vec!["wedge", "hash", "wedge"],
+        ),
+        (
+            "C[C@]12CC[C@H]3[C@H]([C@@H]1CC[C@@H]2O)CCC4=C3C=CC(=C4)O",
+            vec!["hash", "wedge", "hash"],
+        ),
+        (
+            "C[C@H](CCCC(C)C)[C@H]1CC[C@@H]2[C@@]1(CC[C@H]3[C@H]2CC=C4[C@@]3(CCC(C4)O)C)C",
+            vec!["hash", "hash", "wedge"],
+        ),
+        ("C1CC[C@H]2CCCC[C@@H]2C1", vec!["hash", "wedge"]),
+        ("C1CC[C@H]2CCC[C@H]2C1", vec!["hash", "hash"]),
+    ] {
+        let doc = generated(text, DrawingOptions::default())?;
+        let hydrogens = doc
+            .atoms
+            .iter()
+            .filter(|a| a.element == "H")
+            .collect::<Vec<_>>();
+        assert_eq!(hydrogens.len(), expected.len(), "{text}");
+        for (hydrogen, display) in hydrogens.iter().zip(expected) {
+            let bond = doc
+                .bonds
+                .iter()
+                .find(|b| b.b == hydrogen.id)
+                .context("Missing C-H bond")?;
+            assert_eq!(bond.display, display, "{text}: H{}", hydrogen.id);
+        }
+        // Normalize graph H atoms to compare the same representation while
+        // checking the configurations reconstructed from the drawn wedges.
+        let canonical =
+            |state: &crate::chemistry::stereo::perception::State| -> anyhow::Result<String> {
+                let text = crate::chemistry::smiles::write::write(state, Default::default())?.text;
+                let state = crate::chemistry::smiles::prepare(&text)?.state;
+                Ok(crate::chemistry::smiles::write::write(&state, Default::default())?.text)
+            };
+        assert_eq!(
+            canonical(&crate::chemistry::smiles::prepare(text)?.state)?,
+            canonical(&prepare(&doc)?.state)?,
+            "{text}"
+        );
+        for hydrogen in hydrogens {
+            let (lo, hi) =
+                crate::scene::atom_label_ink_bounds(hydrogen, &doc).context("Missing H label")?;
+            for other in doc.atoms.iter().filter(|a| a.id != hydrogen.id) {
+                let p = other.position;
+                assert!(
+                    p.x < lo.x || p.x > hi.x || p.y < lo.y || p.y > hi.y,
+                    "{text}: H{} label covers atom {}",
+                    hydrogen.id,
+                    other.id
+                );
+                for (a, b) in crate::scene::atom_label_ink_boxes(other, &doc) {
+                    let gap = (lo.x - b.x)
+                        .max(a.x - hi.x)
+                        .max(0.)
+                        .hypot((lo.y - b.y).max(a.y - hi.y).max(0.));
+                    assert!(
+                        gap >= label_gap - 1e-4,
+                        "{text}: H{} label gap to label {} is {gap}, expected at least {label_gap}",
+                        hydrogen.id,
+                        other.id
+                    );
+                }
+            }
+            for bond in doc
+                .bonds
+                .iter()
+                .filter(|b| b.a != hydrogen.id && b.b != hydrogen.id)
+            {
+                let a = doc.atom(bond.a).context("Missing bond start")?.position;
+                let b = doc.atom(bond.b).context("Missing bond end")?.position;
+                assert!(
+                    !crate::atom_labels::segment_hits_rect(a, b, lo, hi),
+                    "{text}: H{} label overlaps bond {}-{}",
+                    hydrogen.id,
+                    bond.a,
+                    bond.b
+                );
+            }
+        }
+        for (index, atom) in doc.atoms.iter().enumerate() {
+            for other in &doc.atoms[index + 1..] {
+                let distance =
+                    (atom.position.x - other.position.x).hypot(atom.position.y - other.position.y);
+                assert!(
+                    distance >= 21. - 1e-4,
+                    "{text}: atoms {} and {} at {distance}",
+                    atom.id,
+                    other.id
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn unknown_alkene_uses_wavy_substituent_or_crossed_fallback() -> anyhow::Result<()> {
+    for (text, wavy_count) in [
+        ("CC=CCC", 1),
+        ("C1=CCCCC1", 0),
+        ("C1CCCCC1C=CC2CCCCC2", 0),
+        ("F[C@H](Cl)C=C[C@H](Br)I", 0),
+    ] {
+        let mut source = generated(text, DrawingOptions::default())?;
+        let mut molecule = prepare(&source)?;
+        let double = molecule
+            .state
+            .graph
+            .bonds
+            .iter()
+            .position(|b| b.order == 2)
+            .unwrap();
+        molecule.state.metadata.bonds[double].stereo = 1;
+        molecule.state.metadata.bonds[double].stereo_atoms.clear();
+        let draft = for_import(&molecule, false, &vec![None; molecule.ids.len()])?;
+        let labels = draft.labels()?;
+        source = draft.finish(labels)?;
+        assert!(
+            source
+                .bonds
+                .iter()
+                .any(|b| b.order == 2 && b.display == "wavy")
+        );
+        assert_eq!(
+            depict_unknown_alkene(&molecule, double, &mut source.bonds, true, |_| true)?,
+            wavy_count != 0
+        );
+        assert_eq!(
+            source
+                .bonds
+                .iter()
+                .filter(|b| b.order == 1 && b.display == "wavy")
+                .count(),
+            wavy_count
+        );
+        if wavy_count != 0 {
+            let single = source
+                .bonds
+                .iter()
+                .find(|b| b.order == 1 && b.display == "wavy")
+                .unwrap();
+            let double = source.bonds.iter().find(|b| b.order == 2).unwrap();
+            assert_eq!(double.display, "plain");
+            assert!(single.a == double.a || single.a == double.b);
+            assert_eq!(
+                prepare(&source)?
+                    .state
+                    .metadata
+                    .bonds
+                    .iter()
+                    .filter(|b| b.stereo == 1)
+                    .count(),
+                1
+            );
+        }
+    }
+    Ok(())
+}
+
 #[test]
 fn output_keeps_presentation_and_can_be_undone_as_one_edit() -> anyhow::Result<()> {
     let mut original = Document::default();
