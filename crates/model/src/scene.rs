@@ -615,12 +615,20 @@ fn label_runs(
     if matches!(charge_layout, ChargeLayout::Omitted) {
         return cursor.runs;
     }
+    let suffix_start = cursor.runs.len();
+    if !doc.drawing_style.charge_before_radical {
+        push_radicals(a, frame, &mut cursor);
+    }
     let charge_start = cursor.runs.len();
-    push_charge(a, frame, &mut cursor);
+    if !crate::aromatic::charge_is_centered(doc, a) {
+        push_charge(a, frame, &mut cursor);
+    }
     let automatic_charge = cursor.runs.len() > charge_start;
-    push_radicals(a, frame, &mut cursor);
+    if doc.drawing_style.charge_before_radical {
+        push_radicals(a, frame, &mut cursor);
+    }
     if matches!(charge_layout, ChargeLayout::Automatic) && show_element && automatic_charge {
-        let (core, charge) = cursor.runs.split_at_mut(charge_start);
+        let (core, charge) = cursor.runs.split_at_mut(suffix_start);
         place_automatic_charge(a, doc, frame, core, charge);
     }
     cursor.runs
@@ -1008,7 +1016,7 @@ fn nearby_mark_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, Po
             .iter()
             .filter(|other| !other.marks.is_empty() && nearby(a, other, size))
             .filter(|other| doc.atom_visible(other.id))
-            .flat_map(|other| crate::scientific::styled_mark_parts(other, &doc.drawing_style))
+            .flat_map(|other| crate::scientific::document_mark_parts(other, doc))
             .filter_map(|part| {
                 let pad = part.style.width() * 0.5;
                 part.commands
@@ -1154,7 +1162,7 @@ fn push_charge(a: &Atom, frame: LabelFrame<'_>, cursor: &mut LabelCursor) {
     }
 }
 
-/// Radical dots, unless drawn by an attached radical mark.
+/// Unpaired electrons, with a count to distinguish multiple radicals from a lone pair.
 fn push_radicals(a: &Atom, frame: LabelFrame<'_>, cursor: &mut LabelCursor) {
     let LabelFrame { size, small, .. } = frame;
     if a.radical_electrons > 0
@@ -1162,11 +1170,18 @@ fn push_radicals(a: &Atom, frame: LabelFrame<'_>, cursor: &mut LabelCursor) {
             m.kind.radical() && (m.kind != crate::scientific::MarkKind::RadicalIon || a.charge != 0)
         })
     {
+        let label = if a.radical_electrons == 1 {
+            "•".into()
+        } else {
+            format!("{}•", a.radical_electrons)
+        };
+        let width = frame.text_width(&label, small);
         cursor.runs.push(frame.text(
             Point::new(cursor.right, cursor.mark_y - size * 0.25),
-            "•".repeat(a.radical_electrons as usize),
+            label,
             small,
         ));
+        cursor.right += width;
     }
 }
 
@@ -1387,7 +1402,7 @@ fn selections_bounds_in_axes(
         .filter(|a| owners.contains_key(&a.id) && doc.atom_drawn(a.id))
     {
         grow(atom.id, &mut std::iter::once(atom.position));
-        for part in crate::scientific::styled_mark_parts(atom, &doc.drawing_style) {
+        for part in crate::scientific::document_mark_parts(atom, doc) {
             grow(
                 atom.id,
                 &mut part
@@ -2029,6 +2044,43 @@ fn push_ring_strokes(
             }
         }
     }
+    for (circle, charge) in crate::aromatic::centered_charges(doc) {
+        let style = circle
+            .atoms
+            .iter()
+            .filter_map(|id| doc.atom(*id))
+            .find(|atom| atom.charge != 0 && atom.display.center_charge_in_ring)
+            .and_then(|atom| atom.text_style.clone())
+            .unwrap_or_else(|| doc.drawing_style.text_style());
+        let size = STYLE.world(style.size_pt) * 0.7;
+        let amount = if charge.unsigned_abs() > 1 {
+            charge.unsigned_abs().to_string()
+        } else {
+            String::new()
+        };
+        let text = format!("{amount}{}", if charge > 0 { "+" } else { "−" });
+        let boxes = crate::style::text_ink_boxes(&text, size, &style);
+        let left = boxes
+            .iter()
+            .map(|(lo, _)| lo.x)
+            .fold(f32::INFINITY, f32::min);
+        let right = boxes
+            .iter()
+            .map(|(_, hi)| hi.x)
+            .fold(f32::NEG_INFINITY, f32::max);
+        let position = circle.center.offset(
+            -(left + right) * 0.5,
+            -crate::style::label_vertical_center(&text, size, &style),
+        );
+        let sign = Primitive::Text {
+            position,
+            text,
+            size,
+            color: style.color.rgb(),
+            style,
+        };
+        out.extend(opacity.owned_parts(doc, &circle.atoms, vec![sign]));
+    }
     for (primitive, ids) in arcs.primitives.iter().zip(&arcs.owners) {
         out.extend(opacity.owned_parts(doc, ids, vec![primitive.clone()]));
     }
@@ -2197,7 +2249,7 @@ fn atom_label_parts(
     }
     let mut parts: Vec<_> = labels.get(&a.id).into_iter().flatten().cloned().collect();
     parts.extend(
-        crate::scientific::styled_mark_parts(a, &doc.drawing_style)
+        crate::scientific::document_mark_parts(a, doc)
             .into_iter()
             .map(|p| Primitive::Path {
                 commands: p.commands,
@@ -2207,6 +2259,7 @@ fn atom_label_parts(
     );
     opacity.atom_parts(a.id, parts)
 }
+
 fn push_arrows_and_annotations(out: &mut Vec<Primitive>, doc: &Document) {
     for unit in &doc.generic.repeats {
         if let Some(graphic) = unit
@@ -3013,6 +3066,8 @@ mod label_attachment_tests;
 mod label_parity_tests;
 #[cfg(test)]
 mod primitives_parity_tests;
+#[cfg(test)]
+mod radical_label_tests;
 #[cfg(test)]
 mod round_label_trim_tests;
 #[cfg(test)]

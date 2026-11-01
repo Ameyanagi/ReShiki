@@ -178,6 +178,7 @@ pub enum Action {
     Source(Preset),
     Name(String),
     Font(String),
+    ChargeBeforeRadical(bool),
     Input(Field, String),
     CommitField(Field),
     DisplayUnit(Unit),
@@ -202,6 +203,7 @@ pub struct Editor {
     epoch: u64,
     name: String,
     font: String,
+    charge_before_radical: bool,
     inputs: Vec<(Field, Input)>,
     display_unit: Unit,
     unit_notice: Option<String>,
@@ -227,6 +229,7 @@ impl Editor {
             epoch,
             name: String::new(),
             font: String::new(),
+            charge_before_radical: false,
             inputs: vec![],
             display_unit: unit,
             unit_notice: None,
@@ -243,6 +246,7 @@ impl Editor {
         self.base = style.clone();
         self.name = style.name.clone();
         self.font = style.font_family.clone();
+        self.charge_before_radical = style.charge_before_radical;
         self.unit_notice = None;
         self.inputs = [
             (Field::FontSize, style.font_size_pt),
@@ -267,6 +271,7 @@ impl Editor {
         if self.font != self.base.font_family {
             style.font_family = self.font.trim().into();
         }
+        style.charge_before_radical = self.charge_before_radical;
         for (field, input) in &self.inputs {
             let value = input.value(*field, self.display_unit)?;
             if let Some(dimension) = field.dimension() {
@@ -638,6 +643,12 @@ impl App {
                                 editor.mark_custom();
                             }
                         }
+                        Action::ChargeBeforeRadical(value) => {
+                            if editor.charge_before_radical != value {
+                                editor.charge_before_radical = value;
+                                editor.mark_custom();
+                            }
+                        }
                         Action::Input(field, value) => {
                             if let Some((_, input)) =
                                 editor.inputs.iter_mut().find(|(f, _)| *f == field)
@@ -819,6 +830,17 @@ impl App {
             .style(button::text),
         );
         body = body
+            .push(
+                checkbox(editor.charge_before_radical)
+                    .label("Charge before radical (mass-spectrometry style, M+•)")
+                    .on_toggle(move |v| action(Action::ChargeBeforeRadical(v)))
+                    .text_size(12),
+            )
+            .push(
+                text("Default: radical before charge (M•+, IUPAC).")
+                    .size(11)
+                    .style(super::workspace::muted_text),
+            )
             .push(super::workspace::horizontal_line())
             .push(
                 checkbox(editor.matching)

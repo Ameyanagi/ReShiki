@@ -249,7 +249,7 @@ fn icon_fixtures_cover_every_variant() {
         *counts.entry(family(*icon)).or_insert(0) += 1;
     }
     assert_eq!(counts, expected_counts());
-    assert_eq!(icons.len(), 136);
+    assert_eq!(icons.len(), 138);
 }
 
 fn render(
@@ -432,7 +432,7 @@ async fn icon_glyphs_match_captured_baseline() {
             }
         }
     }
-    assert_eq!(images, 754);
+    assert_eq!(images, icons.len() * 6 + 4);
     assert!(
         mismatches.is_empty(),
         "{} icon images differ:\n{}",

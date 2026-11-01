@@ -60,7 +60,7 @@ pub fn stroke(doc: &mut Document, from: Point, to: Point, radius: f32) {
     for atom in doc.atoms.iter().filter(|a| doc.atom_drawn(a.id)) {
         if crate::scene::atom_label_bounds(atom, doc)
             .is_some_and(|(lo, hi)| box_hit(lo, hi, from, to, radius))
-            || crate::scientific::styled_mark_parts(atom, &doc.drawing_style)
+            || crate::scientific::document_mark_parts(atom, doc)
                 .iter()
                 .any(|part| path_hit(&part.commands, from, to, radius))
         {

@@ -389,6 +389,7 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::Source(..)
                 | Action::Name(..)
                 | Action::Font(..)
+                | Action::ChargeBeforeRadical(..)
                 | Action::Input(..)
                 | Action::CommitField(..)
                 | Action::DisplayUnit(..)
@@ -642,6 +643,8 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::ContextKey(..)
         | Message::Shortcut(..)
         | Message::AromaticDisplay
+        | Message::MakeIonic
+        | Message::CenterRingCharge
         | Message::Abbreviations(..)
         | Message::Labels(..)
         | Message::TemplateNavigate(..)

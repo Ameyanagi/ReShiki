@@ -70,6 +70,8 @@ pub(crate) enum Need {
     Flippable,
     Molecule,
     Bond,
+    IonicBond,
+    ChargedRing,
     Atom,
     OneAtom,
     NmrReport,
@@ -575,6 +577,26 @@ fn bonds() -> Vec<Command> {
             Run::OnBonds(Message::ReverseBonds),
         )
         .need(Need::Bond),
+    );
+    list.push(
+        send(
+            "Make ionic",
+            Bond,
+            "Separate selected metal–heteroatom single bonds into charged ions",
+            "disconnect salt sodium potassium calcium ionic bond",
+            Message::MakeIonic,
+        )
+        .need(Need::IonicBond),
+    );
+    list.push(
+        send(
+            "Centre charge in ring",
+            Bond,
+            "Toggle the net charge at the centre of a selected aromatic ion circle",
+            "center charge cyclopentadienide tropylium delocalized",
+            Message::CenterRingCharge,
+        )
+        .need(Need::ChargedRing),
     );
     list.push(
         Command::new(
@@ -1492,9 +1514,16 @@ fn tools() -> Vec<Command> {
         }
     }
     for kind in reshiki::scientific::SymbolKind::ALL {
+        let synonyms = match kind {
+            reshiki::scientific::SymbolKind::PartialPositive
+            | reshiki::scientific::SymbolKind::PartialNegative => {
+                "symbol graphic partial charge delta δ"
+            }
+            _ => "symbol graphic",
+        };
         list.push(tool(
             &GraphicKind::Symbol(*kind).to_string(),
-            "symbol graphic",
+            synonyms,
             Tool::Graphic(GraphicKind::Symbol(*kind)),
         ));
     }

@@ -566,7 +566,7 @@ fn hidden_charges_keep_their_offset_when_dragged() {
     atom.display.hide_charge = true;
     let atom = doc.atom(id).unwrap();
     let mark = &atom.marks[0];
-    assert!(!mark_drawn(atom, mark));
+    assert!(!mark_drawn(&doc, atom, mark));
     for free in [false, true] {
         assert_eq!(orbit_mark(&doc, atom, mark, p(-30., 5.), free), *mark);
     }
