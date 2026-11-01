@@ -121,26 +121,13 @@ pub fn substituted_alkoxy_prefix(branch: &str) -> Option<String> {
         format!("({prefix}{stem}oxy)")
     })
 }
-pub fn oxy_prefix_from_branch(mol: &super::molecule::Molecule, branch: &str) -> String {
+pub fn oxy_prefix_from_branch(branch: &str) -> String {
     let branch = strip_outer_parentheses(branch);
     if let Some(name) = super::nomenclature::RULES
         .heteroatoms
         .alkyl_oxy_prefixes
         .get(&branch)
     {
-        if matches!(
-            branch.as_str(),
-            "propan-2-yl"
-                | "isopropyl"
-                | "2-methylpropyl"
-                | "isobutyl"
-                | "butan-2-yl"
-                | "sec-butyl"
-        ) {
-            mol.mark_name(crate::naming::NameStatus::NotPreferred(
-                crate::naming::NameReason::AlkoxyPrefix,
-            ));
-        }
         return name.clone();
     }
     if let Some(name) = substituted_alkoxy_prefix(&branch) {

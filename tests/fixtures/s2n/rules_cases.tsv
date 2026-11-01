@@ -30,8 +30,8 @@ CCC(OC)CC	3-methoxypentane	3-methoxypentane
 CCOCCC	1-ethoxypropane	1-ethoxypropane
 CCCOCCCC	1-propoxybutane	1-propoxybutane
 CCCCOCCCCC	1-butoxypentane	1-butoxypentane
-CC(C)OCCCC	1-(propan-2-yloxy)butane	1-isopropoxybutane
-CC(C)COCCCC	1-(2-methylpropoxy)butane	1-isobutoxybutane
+CC(C)OCCCC	1-(propan-2-yloxy)butane	1-[(propan-2-yl)oxy]butane
+CC(C)COCCCC	1-(2-methylpropoxy)butane	1-(2-methylpropoxy)butane
 CCCCCOCCCCCC	1-(pentyloxy)hexane	1-(pentyloxy)hexane
 C1CCCCC1	cyclohexane	cyclohexane
 CC1CCCCC1	1-methylcyclohexane	methylcyclohexane

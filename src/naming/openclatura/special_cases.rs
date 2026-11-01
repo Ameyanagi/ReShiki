@@ -1271,7 +1271,7 @@ fn central_ligand_name(
     if alkyl.is_empty() {
         Ok(String::new())
     } else {
-        Ok(oxy_prefix_from_branch(mol, &alkyl))
+        Ok(oxy_prefix_from_branch(&alkyl))
     }
 }
 

@@ -519,7 +519,7 @@ fn name_oxygen(
         return Ok(if acyl.is_empty() {
             "formyloxy".into()
         } else {
-            oxy_prefix_from_branch(mol, &acyl)
+            oxy_prefix_from_branch(&acyl)
         });
     }
     if mol.atoms[&next].is_carbon() && ns.len() == 1 {
@@ -564,7 +564,7 @@ fn name_oxygen(
     {
         return Err("openclatura: amidooxy attachment not supported".into());
     }
-    Ok(oxy_prefix_from_branch(mol, &b))
+    Ok(oxy_prefix_from_branch(&b))
 }
 
 fn name_nitrogen(

@@ -395,12 +395,12 @@ mod tests {
             mol.name_status(),
             NameStatus::Unverified(NameReason::UnauditedParent)
         );
-        mol.mark_name(NameStatus::NotPreferred(NameReason::AlkoxyPrefix));
+        mol.mark_name(NameStatus::NotPreferred(NameReason::AminoPrefix));
         fragment.mark_name(NameStatus::NotPreferred(NameReason::FunctionalClass));
         mol.mark_name(NameStatus::Preferred);
         assert_eq!(
             fragment.name_status(),
-            NameStatus::NotPreferred(NameReason::AlkoxyPrefix)
+            NameStatus::NotPreferred(NameReason::AminoPrefix)
         );
         fragment.set_name_status(NameStatus::Preferred);
         assert_eq!(mol.name_status(), NameStatus::Preferred);

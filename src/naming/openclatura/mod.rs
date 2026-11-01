@@ -347,6 +347,14 @@ mod tests {
             ("O=C(O)c1ccc(C=S)cc1", "4-(methanethioyl)benzoic acid"),
             ("O=C(O)c1ccc(C=[Se])cc1", "4-(methaneselenoyl)benzoic acid"),
             ("O=C(O)c1ccc(C=[Te])cc1", "4-(methanetelluroyl)benzoic acid"),
+            // Alkoxy prefixes other than the retained contractions (P-63.2.2.2).
+            ("CC(C)Oc1ccccc1", "[(propan-2-yl)oxy]benzene"),
+            ("CCC(C)Oc1ccccc1", "[(butan-2-yl)oxy]benzene"),
+            ("CC(C)COc1ccccc1", "(2-methylpropoxy)benzene"),
+            ("CC(C)(C)Oc1ccccc1", "tert-butoxybenzene"),
+            ("CC(C)Oc1ccccc1OC(C)C", "1,2-bis[(propan-2-yl)oxy]benzene"),
+            ("CC(C)COc1ccccc1OCC(C)C", "1,2-bis(2-methylpropoxy)benzene"),
+            ("CC(C)OC(=O)c1ccccc1", "propan-2-yl benzoate"),
             // Retained names for general nomenclature only (P-65.1.1.2.2,
             // P-66.5.1.2.3); HCN is formonitrile (P-66.5.1.2.1).
             ("CCC#N", "propanenitrile"),
@@ -368,7 +376,6 @@ mod tests {
     fn known_departures_keep_their_names_and_report_the_rule_family() {
         use crate::naming::{NameReason as R, NameStatus};
         for (smiles, expected, reason) in [
-            ("CC(C)Oc1ccccc1", "isopropoxybenzene", R::AlkoxyPrefix),
             (
                 "CN(C(C)C(=O)O)S(=O)(=O)c1ccc(C)cc1",
                 "2-(N-methyltosylamino)propanoic acid",

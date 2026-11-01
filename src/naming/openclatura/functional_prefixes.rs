@@ -280,10 +280,7 @@ pub fn ester_prefix_from_group(
             format_multiplier(&strip_outer_parentheses(&branch), 1, false)
         ));
     }
-    Ok(format!(
-        "({}{suffix})",
-        oxy_prefix_from_branch(mol, &branch)
-    ))
+    Ok(format!("({}{suffix})", oxy_prefix_from_branch(&branch)))
 }
 
 pub fn amide_prefix_from_group(

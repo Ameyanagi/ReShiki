@@ -98,7 +98,6 @@ impl NameStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NameReason {
-    AlkoxyPrefix,
     SulfonylPrefix,
     AminoPrefix,
     FunctionalClass,
@@ -118,9 +117,6 @@ pub enum NameReason {
 impl NameReason {
     pub fn detail(self) -> &'static str {
         match self {
-            Self::AlkoxyPrefix => {
-                "Uses a general alkoxy prefix such as isopropoxy; preferred IUPAC names use forms such as (propan-2-yl)oxy (P-63.2.2.2)."
-            }
             Self::SulfonylPrefix => {
                 "Uses a concatenated sulfonyl or sulfinyl prefix such as N-methyltosylamino or (methylsulfinyl)amino; preferred IUPAC names use acid-derived forms such as N,4-dimethylbenzene-1-sulfonamido or methanesulfinamido (P-65.3.2.2.2, P-66.1.1.4.3)."
             }

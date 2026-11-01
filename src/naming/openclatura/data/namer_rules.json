@@ -461,19 +461,14 @@
     ]
   },
   "alkyl_oxy_prefixes": {
-    "bluebook_rule": "P-61.2.2.1; alkoxy and aryloxy prefixes",
+    "bluebook_rule": "P-63.2.2.2; alkoxy and aryloxy prefixes",
     "values": {
       "methyl": "methoxy",
       "ethyl": "ethoxy",
       "propyl": "propoxy",
-      "propan-2-yl": "isopropoxy",
-      "isopropyl": "isopropoxy",
       "butyl": "butoxy",
-      "butan-2-yl": "sec-butoxy",
-      "2-methylpropyl": "isobutoxy",
+      "2-methylpropyl": "(2-methylpropoxy)",
       "2-methylpropan-2-yl": "tert-butoxy",
-      "isobutyl": "isobutoxy",
-      "sec-butyl": "sec-butoxy",
       "tert-butyl": "tert-butoxy",
       "phenyl": "phenoxy"
     }
