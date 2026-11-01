@@ -146,7 +146,8 @@ fn double_bond_side_reflects_and_reverses_without_changing_order() {
         };
         assert_eq!(a.y.signum(), expected);
         assert_eq!(a.y, b.y);
-        assert!(a.x > 0. && b.x < 84.);
+        // Neither bare endpoint has an adjoining angle to shorten this rail.
+        assert_eq!((a.x, b.x), (0., 84.));
         let before = d.clone();
         d.bonds[0].reverse();
         assert_eq!(d.bonds[0].double_position, position.reversed());

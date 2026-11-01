@@ -1080,7 +1080,7 @@ fn terminal_ring_shortcut_keeps_the_smallest_ring_and_exocyclic_rails() {
     doc.add_bond(c, a, 1, "plain");
     doc.add_bond(c, oxygen, 2, "plain");
     let faces = FaceIndex::new(&doc);
-    assert_eq!(ring_center(&faces, a, b), Some(Point::new(21., 14.)));
+    assert_eq!(faces.ring_center(a, b), Some(Point::new(21., 14.)));
     assert_eq!(
         double_position(&faces, &doc.bonds[0]),
         DoublePosition::Right

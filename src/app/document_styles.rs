@@ -209,6 +209,7 @@ pub enum Action {
     CommitField(Field),
     DisplayUnit(Unit),
     Advanced(bool),
+    CenterChainDoubleBonds(bool),
     TwoWedgeStereocentres(bool),
     RingFusionHydrogens(bool),
     WavyUnknownAlkenes(bool),
@@ -240,6 +241,7 @@ pub struct Editor {
     /// original (matching overrides can still be normalized).
     apply_semantics_requested: bool,
     advanced: bool,
+    center_chain_double_bonds: bool,
     two_wedge_stereocentres: bool,
     ring_fusion_hydrogens: bool,
     wavy_unknown_alkenes: bool,
@@ -267,6 +269,7 @@ impl Editor {
             unit_notice: None,
             apply_semantics_requested: false,
             advanced: false,
+            center_chain_double_bonds: style.center_chain_double_bonds,
             two_wedge_stereocentres: style.two_wedge_stereocentres,
             ring_fusion_hydrogens: style.ring_fusion_hydrogens,
             wavy_unknown_alkenes: style.wavy_unknown_alkenes,
@@ -281,6 +284,7 @@ impl Editor {
         self.base = style.clone();
         self.name = style.name.clone();
         self.font = style.font_family.clone();
+        self.center_chain_double_bonds = style.center_chain_double_bonds;
         self.two_wedge_stereocentres = style.two_wedge_stereocentres;
         self.ring_fusion_hydrogens = style.ring_fusion_hydrogens;
         self.wavy_unknown_alkenes = style.wavy_unknown_alkenes;
@@ -312,6 +316,7 @@ impl Editor {
         if self.font != self.base.font_family {
             style.font_family = self.font.trim().into();
         }
+        style.center_chain_double_bonds = self.center_chain_double_bonds;
         style.charge_before_radical = self.charge_before_radical;
         for (field, input) in &self.inputs {
             let value = input.value(*field, self.display_unit)?;
@@ -703,6 +708,12 @@ impl App {
                             }
                         }
                         Action::Advanced(value) => editor.advanced = value,
+                        Action::CenterChainDoubleBonds(value) => {
+                            if editor.center_chain_double_bonds != value {
+                                editor.center_chain_double_bonds = value;
+                                editor.mark_custom();
+                            }
+                        }
                         Action::TwoWedgeStereocentres(value) => {
                             if editor.two_wedge_stereocentres != value {
                                 editor.two_wedge_stereocentres = value;
@@ -889,6 +900,12 @@ impl App {
             .style(button::text),
         );
         body = body
+            .push(
+                checkbox(editor.center_chain_double_bonds)
+                    .label("Center chain double bonds")
+                    .on_toggle(move |v| action(Action::CenterChainDoubleBonds(v)))
+                    .text_size(12),
+            )
             .push(
                 checkbox(editor.charge_before_radical)
                     .label("Charge before radical (mass-spectrometry style, M+•)")

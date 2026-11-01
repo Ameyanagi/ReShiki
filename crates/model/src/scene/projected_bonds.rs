@@ -11,7 +11,7 @@ use std::{
     rc::Rc,
 };
 
-const MAX_RING: usize = 24;
+pub(super) const MAX_RING: usize = 24;
 const SEARCH_BUDGET: usize = 4096;
 
 fn xy([x, y, _]: V) -> Point {
@@ -49,6 +49,7 @@ pub(crate) struct FaceIndex<'d> {
     neighbors: OnceCell<BTreeMap<u64, Vec<u64>>>,
     graph: OnceCell<super::graph::Graph<'d>>,
     memo: RefCell<FaceMemo>,
+    ring_centers: RefCell<HashMap<(u64, u64), Option<Point>>>,
 }
 
 fn adjacency(doc: &Document) -> BTreeMap<u64, Vec<u64>> {
@@ -160,6 +161,7 @@ impl<'d> FaceIndex<'d> {
             neighbors: OnceCell::new(),
             graph: OnceCell::new(),
             memo: RefCell::new(HashMap::new()),
+            ring_centers: RefCell::new(HashMap::new()),
         }
     }
 
@@ -176,6 +178,16 @@ impl<'d> FaceIndex<'d> {
     /// The first atom with this ID, like [`Document::atom`].
     pub(crate) fn atom(&self, id: u64) -> Option<&'d crate::document::Atom> {
         self.graph().atom(id)
+    }
+
+    pub(super) fn ring_center(&self, from: u64, to: u64) -> Option<Point> {
+        let key = (from, to);
+        if let Some(center) = self.ring_centers.borrow().get(&key) {
+            return *center;
+        }
+        let center = super::find_ring_center(self, from, to);
+        self.ring_centers.borrow_mut().insert(key, center);
+        center
     }
 
     fn paths(&self, bond: &Bond) -> Vec<Vec<u64>> {
@@ -346,7 +358,7 @@ pub(super) fn rail(
     start: Point,
     end: Point,
     offset: f32,
-    trim: f32,
+    trim: (f32, f32),
     half_width: f32,
 ) -> Option<Option<(Point, Point)>> {
     rail_depth(doc, bond, start, end, offset, trim, half_width)
@@ -368,7 +380,7 @@ pub(crate) fn rail_depth(
     start: Point,
     end: Point,
     offset: f32,
-    trim: f32,
+    trim: (f32, f32),
     half_width: f32,
 ) -> Option<Option<RailDepth>> {
     FaceIndex::new(doc).rail_depth(bond, start, end, offset, trim, half_width)
@@ -383,7 +395,7 @@ impl FaceIndex<'_> {
         start: Point,
         end: Point,
         offset: f32,
-        trim: f32,
+        trim: (f32, f32),
         half_width: f32,
     ) -> Option<Option<RailDepth>> {
         let doc = self.doc;
@@ -395,16 +407,16 @@ impl FaceIndex<'_> {
             return Some(None);
         }
         let first = start.offset(
-            face.inward.x * d + face.tangent.x * trim,
-            face.inward.y * d + face.tangent.y * trim,
+            face.inward.x * d + face.tangent.x * trim.0,
+            face.inward.y * d + face.tangent.y * trim.0,
         );
         let last = end.offset(
-            face.inward.x * d - face.tangent.x * trim,
-            face.inward.y * d - face.tangent.y * trim,
+            face.inward.x * d - face.tangent.x * trim.1,
+            face.inward.y * d - face.tangent.y * trim.1,
         );
         // Inward offset rails are shortened against the actual projected face.
         // Explicit outward or centered rails retain their chosen arrangement.
-        let points = if d > 0. && trim > 0. {
+        let points = if d > 0. && (trim.0 > 0. || trim.1 > 0.) {
             clip(first, last, &face.points, half_width)
         } else {
             Some((first, last))
@@ -414,13 +426,19 @@ impl FaceIndex<'_> {
         if length <= 0.000001 || !length.is_finite() {
             return Some(None);
         }
+        if let Some((first, last)) = points {
+            let (ux, uy) = (axis.x / length.sqrt(), axis.y / length.sqrt());
+            if (last.x - first.x) * ux + (last.y - first.y) * uy <= 0.1 {
+                return Some(None);
+            }
+        }
         let lift = |p: Point| {
             let delta = minus(p, xy(face.origin));
             let t = (delta.x * axis.x + delta.y * axis.y) / length;
             face.origin[2] + t * (face.end[2] - face.origin[2])
         };
-        let first_z = lift(start) + d * face.inward_xyz[2] + trim * face.tangent_xyz[2];
-        let last_z = lift(end) + d * face.inward_xyz[2] - trim * face.tangent_xyz[2];
+        let first_z = lift(start) + d * face.inward_xyz[2] + trim.0 * face.tangent_xyz[2];
+        let last_z = lift(end) + d * face.inward_xyz[2] - trim.1 * face.tangent_xyz[2];
         if !first_z.is_finite() || !last_z.is_finite() {
             return Some(None);
         }
