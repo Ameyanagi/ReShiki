@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE_SHA256 = "7da195a74c55bef988d0d48f9508bd5d849425c1770dba5d7bfc6ce9ed848954"
 # The symbols the interface draws that Liberation Sans lacks. The src/app
 # test `browser_fonts_draw_every_interface_symbol` keeps this list complete.
-SYMBOLS = " ⌘⇧⌥⌃⌫↩↵↗↶↷↺⌄▴▸▾◂▶△◢★☆✓⠿"
+SYMBOLS = " ⌘⇧⌥⌃⌫↩↵↗↶↷↺⇌⌄▴▸▾◂▶△◢★☆✓⠿⁰"
 # DejaVu Sans has no full-width plus; the ASCII plus stands in for it.
 ALIASES = {"＋": "+"}
 NAME = "ReShiki Keys"

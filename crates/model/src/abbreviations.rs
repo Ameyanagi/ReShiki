@@ -318,6 +318,61 @@ pub const NICKNAMES: &[&str] = &[
     "TBS", "tBu", "TES", "Tf", "THP", "TIPS", "TMS", "Tol", "Tr", "Ts",
 ];
 
+/// Bz is used for both benzoyl and benzyl in the literature; the bundled
+/// catalog consistently uses Bz for benzoyl and Bn for benzyl.
+pub const BZ_LABEL_HINT: &str = "benzoyl here; spell out or use Bn for benzyl";
+
+/// Canonicalize just the selected fragment, replacing each outside neighbor
+/// with an attachment dummy. Display labels never affect this comparison.
+fn fragment_smiles(doc: &Document, selection: &[u64]) -> Option<String> {
+    use crate::chemistry::{document, smiles};
+
+    let members: HashSet<_> = doc
+        .expand_abbreviation_selection(selection)
+        .into_iter()
+        .filter(|id| doc.atom(*id).is_some())
+        .collect();
+    if members.is_empty() {
+        return None;
+    }
+    let mut part = Document {
+        atoms: doc
+            .atoms
+            .iter()
+            .filter(|atom| members.contains(&atom.id))
+            .map(|atom| {
+                let mut atom = atom.clone();
+                atom.map_num = 0;
+                atom
+            })
+            .collect(),
+        ..Default::default()
+    };
+    for bond in &doc.bonds {
+        if !members.contains(&bond.a) && !members.contains(&bond.b) {
+            continue;
+        }
+        for id in [bond.a, bond.b] {
+            if part.atom(id).is_none() {
+                let dummy = part.add_atom("*", doc.atom(id)?.position);
+                part.atom_mut(dummy)?.id = id;
+            }
+        }
+        part.bonds.push(bond.clone());
+    }
+    let molecule = document::prepare(&part).ok()?;
+    let options = smiles::write::Options {
+        ignore_maps: true,
+        ..Default::default()
+    };
+    let written = smiles::write::write(&molecule.state, options).ok()?;
+    // Catalog SMILES fold ordinary drawn H atoms into their neighbor's count.
+    let prepared = smiles::prepare(&written.text).ok()?;
+    smiles::write::write(&prepared.state, options)
+        .ok()
+        .map(|written| written.text)
+}
+
 /// Element glyphs a bond can meet, in reading order: nicknames, H, counts,
 /// brackets, charge signs and a charge separator space are skipped. None when the text is not a formula.
 fn atom_glyphs(text: &str) -> Option<Vec<std::ops::Range<usize>>> {
@@ -436,6 +491,60 @@ impl Document {
         }
         Ok(())
     }
+
+    /// Non-blocking naming advice for a proposed contraction. This never
+    /// changes the drawing or the validation rules for existing documents.
+    pub fn contract_label_warnings(
+        &self,
+        ids: &[u64],
+        label: &str,
+        reverse_label: &str,
+    ) -> Vec<String> {
+        let mut warnings = Vec::new();
+        let labels = [label.trim(), reverse_label.trim()];
+        let mut bundled = Vec::new();
+        for (index, text) in labels.into_iter().enumerate() {
+            if text.is_empty() || index > 0 && text == label.trim() {
+                continue;
+            }
+            if crate::editing::ELEMENTS.contains(&text)
+                && !["Ac", "Cm", "Nb", "Np", "Pr", "Ts"].contains(&text)
+            {
+                warnings.push(format!(
+                    "{text} is an element symbol; choose a different abbreviation label."
+                ));
+            }
+            if let Ok(Some((preset, _))) = crate::chemistry::abbreviations::lookup_bundled(text) {
+                bundled.push((text, preset));
+            }
+        }
+        if !bundled.is_empty()
+            && let Some(fragment) = fragment_smiles(self, ids)
+        {
+            for (text, preset) in bundled {
+                if preset
+                    .canonical_smiles()
+                    .is_ok_and(|expected| expected != fragment)
+                {
+                    if text == "Bz" {
+                        warnings.push(
+                            "Bz means benzoyl here; spell it out or use Bn for benzyl".into(),
+                        );
+                        continue;
+                    }
+                    let name = preset
+                        .names
+                        .first()
+                        .map_or(preset.label.as_str(), String::as_str);
+                    warnings.push(format!(
+                        "{text} means {name} in the bundled catalog, which differs from the selected fragment."
+                    ));
+                }
+            }
+        }
+        warnings
+    }
+
     pub fn contract(
         &mut self,
         ids: &[u64],

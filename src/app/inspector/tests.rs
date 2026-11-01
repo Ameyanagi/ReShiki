@@ -2,6 +2,46 @@ use super::*;
 use reshiki::editing::Transform;
 
 #[tokio::test]
+async fn arrow_hints_require_an_explicit_check_and_expire_with_the_drawing() {
+    use reshiki::document::{Arrow, Point};
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let left = app.tab.doc.add_atom("O", Point::new(-40., 0.));
+    app.tab.doc.add_atom("C", Point::new(140., 0.));
+    let mut arrow = Arrow::new(
+        app.tab.doc.next_id(),
+        Point::default(),
+        Point::new(100., 0.),
+        Default::default(),
+        Default::default(),
+    );
+    arrow.kind = "resonance".into();
+    app.tab.doc.arrows.push(arrow);
+    let before = app.tab.doc.clone();
+    let key = app.property_request_key();
+    let _ = app.inspector_action(Action::RefreshPropertiesFor(key));
+    assert!(app.checked_arrow_hints().is_empty());
+    app.tab.inspector_ui.pending = None;
+    let _ = app.inspector_action(Action::RefreshProperties);
+    assert_eq!(app.checked_arrow_hints().len(), 1);
+    assert_eq!(app.tab.doc, before, "Hints must never edit the drawing");
+    app.tab.selected = vec![left];
+    assert_eq!(app.checked_arrow_hints().len(), 1);
+    app.tab.revision += 1;
+    app.tab.inspector_ui.advance_revision(
+        app.tab.file_epoch,
+        app.tab.revision - 1,
+        app.tab.revision,
+    );
+    assert!(app.checked_arrow_hints().is_empty());
+    app.tab.inspector_ui.pending = None;
+    let _ = app.inspector_action(Action::RefreshProperties);
+    assert_eq!(app.checked_arrow_hints().len(), 1);
+    app.tab.file_epoch += 1;
+    assert!(app.checked_arrow_hints().is_empty());
+}
+
+#[tokio::test]
 #[ignore = "Opt-in actual-widget crystal and disconnected ordinary Properties regression"]
 async fn lazy_crystal_properties_keep_scope_and_ordinary_analysis() {
     use iced::advanced::{renderer::Headless, widget::operation};
