@@ -83,13 +83,14 @@ pub fn toggle_center_charge(doc: &mut Document, selection: &[u64]) -> Result<boo
     Ok(center)
 }
 
-/// Aromatic circles sharing no atom with any other drawn ring, Kekulé ones included.
+/// Aromatic circles sharing no atom with any other visible ring.
 fn isolated_circles(doc: &Document) -> Vec<Circle> {
     let mut rings = circles(doc);
     let mut memberships = HashMap::<u64, usize>::new();
-    for ring in &ring_circles(doc, false) {
-        for id in &ring.atoms {
-            *memberships.entry(*id).or_default() += 1;
+    let atoms = doc.atoms.iter().map(|atom| atom.id).collect::<Vec<_>>();
+    for ring in crate::ring_fills::selected_cycles(doc, &atoms) {
+        for id in ring {
+            *memberships.entry(id).or_default() += 1;
         }
     }
     rings.retain(|ring| {

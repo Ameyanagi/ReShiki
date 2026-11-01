@@ -1,23 +1,17 @@
 use super::*;
 
 impl Writer<'_> {
-    /// Partial charges are caption text, never ChemDraw formal-charge symbols.
-    /// Text cannot stretch or mirror, so `x` alone sets its size and angle.
+    /// Partial charges are upright caption text, never ChemDraw formal-charge symbols.
     pub(super) fn partial_charge_text(
         &mut self,
         text: &str,
         center: P,
-        x: P,
-        y: P,
+        size: f64,
         color: crate::palette::Color,
         z: usize,
     ) -> Result<Key> {
-        let size = x.x.hypot(x.y);
         let width = real(crate::style::text_width(text, 0.85));
-        let baseline = center.add(
-            -x.x * width * 0.5 + y.x * 0.3,
-            -x.y * width * 0.5 + y.y * 0.3,
-        );
+        let baseline = center.add(-size * width * 0.5, size * 0.3);
         let id = self.id()?;
         self.text(
             self.page,
@@ -36,13 +30,6 @@ impl Writer<'_> {
                 ("InterpretChemically", "no".into()),
                 ("p", self.position(baseline)),
                 ("CaptionJustification", "Left".into()),
-                (
-                    "RotationAngle",
-                    format!(
-                        "{:.0}",
-                        (x.y.atan2(x.x).to_degrees() * 65536.).round_ties_even()
-                    ),
-                ),
             ],
         )
     }
@@ -52,6 +39,7 @@ impl Writer<'_> {
 mod tests {
     use super::*;
     use crate::{
+        chemistry::cdxml,
         graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle},
         scientific::{SymbolKind, attach},
     };
@@ -109,5 +97,66 @@ mod tests {
             );
         }
         assert_eq!(doc, before);
+    }
+
+    #[test]
+    fn transformed_partial_charges_roundtrip_as_upright_cdxml_and_cdx_captions() {
+        let mut doc = Document::default();
+        doc.add_atom("O", Point::default());
+        let frames = [
+            (Point::new(18., 24.), Point::new(-24., 18.)),
+            (Point::new(-30., 0.), Point::new(0., 30.)),
+            (Point::new(30., 0.), Point::new(0., 90.)),
+            (Point::new(30., 0.), Point::new(0., -30.)),
+        ];
+        for (i, (x, y)) in frames.into_iter().enumerate() {
+            let center = Point::new(80. + i as f32 * 60., 0.);
+            let mut graphic = Graphic::dragged(
+                doc.next_id(),
+                GraphicKind::Symbol(SymbolKind::PartialPositive),
+                center,
+                center,
+                GraphicStyle::default(),
+                BracketSides::Both,
+                false,
+            );
+            graphic.axis_x = x;
+            graphic.axis_y = y;
+            doc.graphics.push(graphic);
+        }
+        let xml = write(&doc, Options::default()).unwrap();
+        let decoded = crate::exchange::from_cdx(&crate::exchange::to_cdx(&xml).unwrap()).unwrap();
+        let scale = f64::from(doc.drawing_style.bond_length_pt)
+            / f64::from(doc.drawing_style.bond_length_world);
+        let width = real(crate::style::text_width("δ+", 0.85));
+        for xml in [&xml, &decoded] {
+            let tree = roxmltree::Document::parse(xml).unwrap();
+            let captions: Vec<_> = tree
+                .descendants()
+                .filter(|node| {
+                    node.has_tag_name("t") && node.attribute("InterpretChemically") == Some("no")
+                })
+                .collect();
+            assert_eq!(captions.len(), frames.len());
+            for (caption, graphic) in captions.iter().zip(&doc.graphics) {
+                assert_eq!(caption.attribute("RotationAngle").unwrap_or("0"), "0");
+                let position: Vec<f64> = caption
+                    .attribute("p")
+                    .unwrap()
+                    .split_whitespace()
+                    .map(|v| v.parse().unwrap())
+                    .collect();
+                let expected = [
+                    30. + (real(graphic.origin.x) - 30. * width * 0.5) * scale,
+                    30. + 30. * 0.3 * scale,
+                ];
+                for (actual, expected) in position.iter().zip(expected) {
+                    assert!((actual - expected).abs() < 0.001, "{position:?}");
+                }
+            }
+            let imported = cdxml::import_cdxml(xml).unwrap().document;
+            assert_eq!(imported.annotations.len(), frames.len());
+            assert!(imported.annotations.iter().all(|text| text.text == "δ+"));
+        }
     }
 }

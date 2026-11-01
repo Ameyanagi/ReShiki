@@ -219,12 +219,10 @@ impl Writer<'_> {
                             .map_or(doc.drawing_style.font_size_pt, |s| s.size_pt)
                             * 0.75
                     }));
-                    let (sin, cos) = mark.angle.to_radians().sin_cos();
                     self.partial_charge_text(
                         text,
                         P::from(atom.position.offset(mark.offset.x, mark.offset.y)),
-                        P::from(Point::new(cos * size, sin * size)),
-                        P::from(Point::new(-sin * size, cos * size)),
+                        real(size),
                         atom.text_style
                             .as_ref()
                             .map_or(Default::default(), |s| s.color),
@@ -419,11 +417,11 @@ impl Writer<'_> {
             if let GraphicKind::Symbol(kind) = g.kind
                 && let Some(text) = kind.partial_charge_text()
             {
+                let x = P::from(g.axis_x);
                 let n = self.partial_charge_text(
                     text,
                     P::from(g.origin),
-                    P::from(g.axis_x),
-                    P::from(g.axis_y),
+                    x.x.hypot(x.y),
                     g.style.stroke,
                     z,
                 )?;

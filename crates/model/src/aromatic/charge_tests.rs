@@ -118,6 +118,30 @@ fn centre_charge_is_not_offered_for_neutral_partial_multiple_or_fused_rings() {
 }
 
 #[test]
+fn centre_charge_is_not_offered_for_a_ring_fused_to_a_shallow_triangle() {
+    let mut doc = Document::default();
+    let ids = editing::ring(&mut doc, Point::default(), 6, true, 5.);
+    doc.atom_mut(ids[0]).unwrap().charge = 1;
+    let center = circles(&doc)[0].center;
+    let midpoint = doc
+        .atom(ids[0])
+        .unwrap()
+        .position
+        .lerp(doc.atom(ids[1]).unwrap().position, 0.5);
+    let tip = doc.add_atom("C", midpoint.lerp(center, -0.01));
+    doc.add_bond(ids[0], tip, 1, "plain");
+    doc.add_bond(tip, ids[1], 1, "plain");
+
+    // The fused triangle has no room for a circle, but remains a ring.
+    assert_eq!(circles(&doc).len(), 1);
+    assert_eq!(ring_circles(&doc, false).len(), 1);
+    assert!(charge_circle(&doc, &ids).is_none());
+    assert!(toggle_center_charge(&mut doc, &ids).is_err());
+    doc.atom_mut(ids[0]).unwrap().display.center_charge_in_ring = true;
+    assert!(!charge_is_centered(&doc, doc.atom(ids[0]).unwrap()));
+}
+
+#[test]
 fn centered_ring_charge_sums_flagged_atoms_and_preserves_legacy_serialization() -> anyhow::Result<()>
 {
     let (doc, ids) = ion(7, 1);
