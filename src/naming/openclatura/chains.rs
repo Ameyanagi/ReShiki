@@ -837,7 +837,7 @@ mod tests {
             super::super::name_smiles(smiles)
                 .map(|name| name.text)
                 .as_deref(),
-            Ok("N-([1,2,4]triazolo[4,3-a]pyridin-3-yl)-N'-cyclohexylbutanediamide"),
+            Ok("N'-cyclohexyl-N-([1,2,4]triazolo[4,3-a]pyridin-3-yl)butanediamide"),
         );
     }
 

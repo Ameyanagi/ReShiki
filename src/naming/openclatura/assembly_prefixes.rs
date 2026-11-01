@@ -42,6 +42,16 @@ pub fn substituent_sort_key(name: &str) -> String {
     let mut text = lowercase.as_str();
     loop {
         text = text.trim_start_matches(['(', '[', '{', ')']);
+        // Roman letters come first (P-14.5), so the bracketed heteroatom
+        // locants of a fusion prefix such as [1,3]thiazolo are skipped.
+        if let Some((locants, rest)) = text.split_once(']')
+            && locants
+                .split(',')
+                .all(|l| !l.is_empty() && l.bytes().all(|b| b.is_ascii_digit()))
+        {
+            text = rest;
+            continue;
+        }
         let n = ignored_prefix_len(text);
         if n == 0 {
             return text.to_owned();

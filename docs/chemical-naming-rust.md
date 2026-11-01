@@ -276,6 +276,12 @@ chiral sulfoxides, whose PIN cites the descriptor before the whole name as in
 `(S)-(methanesulfinyl)ethane` (P-93.3.4.1), and on mixed chalcogen peroxides
 such as `dimethyl selenoperoxide` (P-63.3.2).
 
+Prefixes are cited in alphanumerical order of their first nonitalic Roman
+letter (P-14.5), so the bracketed heteroatom locants that lead a fusion prefix
+do not count:
+`1-(1-benzyl-3-phenyl-1H-pyrazol-4-yl)-N-[([1,2,4]triazolo[4,3-a]pyridin-3-yl)methyl]methanamine`,
+`(1R,3S)-N-methyl-3-(6H-[1,2,4]triazolo[4,3-a]pyrrolo[2,3-e]pyrazin-1-yl)cyclopentanamine`.
+
 Enclosing marks nest in the P-16.5.4 order `{[({[( )]})]}`:
 `2-[4-(2-methylpropyl)phenyl]propanoic acid`,
 `2-(2-{2-[2-(2-hydroxyethoxy)ethoxy]ethoxy}ethoxy)ethan-1-ol`. Brackets that
