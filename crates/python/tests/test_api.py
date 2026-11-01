@@ -170,6 +170,18 @@ def test_styles_share_app_presets_and_accept_overrides() -> None:
         reshiki.Style("JACS / ACS", mystery_setting=3)
 
 
+def test_chain_double_bond_centering_style_overrides() -> None:
+    centered = reshiki.Style("JACS / ACS", center_chain_double_bonds=True)
+    assert centered.values["center_chain_double_bonds"] is True
+    uncentered = reshiki.Style("JACS / ACS", center_chain_double_bonds=False)
+    assert "center_chain_double_bonds" not in uncentered.values
+    molecule = reshiki.Molecule.from_smiles("CC=CC").with_style(centered)
+    assert molecule.properties().formula == "C4H8"
+    assert "<svg" in molecule.svg()
+    with pytest.raises(ValueError):
+        reshiki.Style("JACS / ACS", center_chain_double_bonds="yes")
+
+
 def test_binary_and_text_outputs_and_save(tmp_path: Path) -> None:
     molecule = reshiki.Molecule.from_smiles(ASPIRIN).clean()
     assert png_size(molecule.png(width=300))[0] <= 300

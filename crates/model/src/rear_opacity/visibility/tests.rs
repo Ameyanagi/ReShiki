@@ -704,7 +704,7 @@ fn view_visibility_rim_backbone_and_inward_rail_have_independent_depth() {
                 a,
                 z,
                 spacing * side,
-                spacing * 0.75,
+                scene::bond_rails(&scene::projected_bonds::FaceIndex::new(&doc), &b)[1].trim,
                 doc.drawing_style.line_width() / 2.,
             ) else {
                 continue;

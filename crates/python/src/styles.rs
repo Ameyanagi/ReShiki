@@ -32,6 +32,10 @@ pub fn merge(base: &DrawingStyle, overrides: &str) -> Result<DrawingStyle, Strin
         .ok_or("Style overrides must be an object")?;
     let mut value = serde_json::to_value(base).map_err(|error| error.to_string())?;
     let fields = value.as_object_mut().ok_or("Invalid drawing style")?;
+    // Omitted from serialized styles while false.
+    fields
+        .entry("center_chain_double_bonds")
+        .or_insert(false.into());
     let mut bond_length_changed = false;
     for (key, value) in overrides {
         let field = match key.as_str() {

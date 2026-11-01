@@ -1,5 +1,13 @@
 # Unreleased changes
 
+Automatic fusion double bonds now favour the ring with more other double or
+aromatic bonds, preferring six-membered rings on a tie. Substituted chain double
+bonds offset automatically; **Center chain double bonds** in Document Style
+restores centered chains. Inner-line endpoints follow adjoining angle bisectors
+in small rings and stay untrimmed at bare ends. Shared geometry keeps drawing,
+crossings, arrow attachments and exports aligned.
+([#778](https://github.com/Ameyanagi/ReShiki/issues/778), [#779](https://github.com/Ameyanagi/ReShiki/issues/779), [#780](https://github.com/Ameyanagi/ReShiki/issues/780)).
+
 Pen paths, Bézier curves and curved arrows gain **Smooth** and
 **Symmetrise** commands in the canvas menu and command palette, with buttons
 in the Pen path and curved arrow panels. Smooth aligns gentle joints and

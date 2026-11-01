@@ -27,7 +27,7 @@ fn secondary(doc: &Document, bond: &Bond) -> Option<(Point, Point)> {
         doc.atom(bond.a).unwrap().position,
         doc.atom(bond.b).unwrap().position,
         spacing * side,
-        spacing * 0.75,
+        scene::bond_rails(&FaceIndex::new(doc), bond)[1].trim,
         doc.drawing_style.line_width() / 2.,
     )
     .expect("Valid retained face")
@@ -301,8 +301,8 @@ fn an_unusable_warped_shortest_face_keeps_the_established_fallback() {
     );
     let spacing = doc.drawing_style.bond_length_world * doc.drawing_style.bond_spacing_ratio;
     let expected = (
-        Point::new(spacing * 0.75, spacing),
-        Point::new(42. - spacing * 0.75, spacing),
+        Point::new(spacing, spacing),
+        Point::new(42. - spacing, spacing),
     );
     assert!(scene::primitives(&doc).iter().any(|primitive| matches!(primitive,
         scene::Primitive::Line(a,b,_) if a.distance(expected.0) <0.001 && b.distance(expected.1)<0.001)));
@@ -397,7 +397,7 @@ fn indexed_secondary(index: &FaceIndex<'_>, bond: &Bond) -> Option<Option<RailDe
         doc.atom(bond.a).unwrap().position,
         doc.atom(bond.b).unwrap().position,
         spacing * side,
-        spacing * 0.75,
+        scene::bond_rails(index, bond)[1].trim,
         doc.drawing_style.line_width() / 2.,
     )
 }
@@ -452,7 +452,7 @@ fn memoized_faces_and_rails_agree_with_single_queries() {
                             doc.atom(query.a).unwrap().position,
                             doc.atom(query.b).unwrap().position,
                             spacing * side,
-                            spacing * 0.75,
+                            scene::bond_rails(&index, query)[1].trim,
                             doc.drawing_style.line_width() / 2.,
                         );
                         assert_same_rail(actual, expected);

@@ -1621,8 +1621,9 @@ fn nearby_bonds_rank_by_their_drawn_ink() {
     };
     let style = Document::default().drawing_style;
     let spacing = style.bond_length_world * style.bond_spacing_ratio;
-    // Beyond the shortened end of a one-sided double's inner rail.
-    assert!(single_wins(2, "plain", -spacing, Point::new(3., -spacing)));
+    // With no adjoining bonds the offset rail reaches the bare end, so the
+    // later double bond wins the tie with the overlapping single bond.
+    assert!(!single_wins(2, "plain", -spacing, Point::new(3., -spacing)));
     // Beside the narrow end of a wedge.
     assert!(single_wins(1, "wedge", 2.6, Point::new(10., 2.6)));
     // Beside a wave's trough the single bond wins; on its crest the wave does.

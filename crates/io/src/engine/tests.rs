@@ -258,6 +258,129 @@ async fn labels_match_full_analysis_for_aromatic_charged_radical_and_stereo_inpu
     }
 }
 
+#[tokio::test]
+async fn imported_kekule_fused_doubles_prefer_the_benzene_ring() {
+    use crate::{bonds::DoublePosition, document::Point};
+
+    let engine = LocalEngine::in_process();
+    for (name, smiles, ring_sizes) in [
+        ("indole", "C1=CC2=C(C=C1)NC=C2", [5, 6]),
+        ("indene", "C1=CC2=C(C=C1)CC=C2", [5, 6]),
+        ("naphthalene", "C1=CC2=C(C=C1)C=CC=C2", [6, 6]),
+    ] {
+        let mut doc = engine
+            .request(Request::import_smiles(smiles))
+            .await
+            .unwrap()
+            .document
+            .unwrap();
+        // Import canonically reassigns aromatic bonds. Restore this valid
+        // Kekulé spelling, retaining the imported topology and coordinates.
+        let source = crate::chemistry::smiles::parse(smiles).unwrap();
+        assert_eq!(source.graph.atoms.len(), doc.atoms.len());
+        assert_eq!(source.graph.bonds.len(), doc.bonds.len());
+        for bond in source.graph.bonds {
+            let (a, b) = (doc.atoms[bond.a].id, doc.atoms[bond.b].id);
+            doc.bonds
+                .iter_mut()
+                .find(|drawn| drawn.connects(a, b))
+                .unwrap()
+                .order = bond.order;
+        }
+        let molecule = crate::chemistry::document::prepare(&doc).unwrap();
+        let rings: Vec<Vec<_>> = molecule
+            .state
+            .rings
+            .atoms
+            .iter()
+            .map(|ring| ring.iter().map(|&i| molecule.ids[i]).collect())
+            .collect();
+        let mut sizes: Vec<_> = rings.iter().map(Vec::len).collect();
+        sizes.sort_unstable();
+        assert_eq!(sizes, ring_sizes, "{name}");
+        let fusion: Vec<_> = doc
+            .bonds
+            .iter()
+            .filter(|bond| {
+                rings
+                    .iter()
+                    .filter(|ring| ring.contains(&bond.a) && ring.contains(&bond.b))
+                    .count()
+                    == 2
+            })
+            .collect();
+        assert_eq!(fusion.len(), 1, "{name}");
+        let fusion = fusion[0];
+        assert_eq!(
+            fusion.order, 2,
+            "{name}: exercise a real Kekulé fusion double"
+        );
+        assert_eq!(fusion.double_position, DoublePosition::Auto, "{name}");
+        let mut other_doubles: Vec<_> = rings
+            .iter()
+            .map(|ring| {
+                doc.bonds
+                    .iter()
+                    .filter(|bond| {
+                        !(bond.a == fusion.a && bond.b == fusion.b)
+                            && matches!(bond.order, 2 | 4)
+                            && ring.contains(&bond.a)
+                            && ring.contains(&bond.b)
+                    })
+                    .count()
+            })
+            .collect();
+        other_doubles.sort_unstable();
+        assert_eq!(
+            other_doubles,
+            if name == "naphthalene" {
+                [2, 2]
+            } else {
+                [1, 2]
+            },
+            "{name}: candidate rings must exercise unsaturation ranking"
+        );
+
+        let ring_side = |ring: &[u64]| {
+            let center = Point::new(
+                ring.iter()
+                    .map(|&id| doc.atom(id).unwrap().position.x)
+                    .sum::<f32>()
+                    / ring.len() as f32,
+                ring.iter()
+                    .map(|&id| doc.atom(id).unwrap().position.y)
+                    .sum::<f32>()
+                    / ring.len() as f32,
+            );
+            let a = doc.atom(fusion.a).unwrap().position;
+            let b = doc.atom(fusion.b).unwrap().position;
+            let cross = (b.x - a.x) * (center.y - a.y) - (b.y - a.y) * (center.x - a.x);
+            assert!(cross.abs() > 1., "{name}: ring must have visible area");
+            if cross < 0. {
+                DoublePosition::Left
+            } else {
+                DoublePosition::Right
+            }
+        };
+        let side = crate::scene::effective_double_position(&doc, fusion);
+        if name == "naphthalene" {
+            // Equal six-membered candidates keep the established first-ring
+            // choice rather than changing side with the new unsaturation rank.
+            assert_eq!(side, ring_side(&rings[0]), "{name}");
+        } else {
+            let benzene = rings.iter().find(|ring| ring.len() == 6).unwrap();
+            assert_eq!(side, ring_side(benzene), "{name}");
+        }
+        let mut reversed = fusion.clone();
+        reversed.reverse();
+        assert_eq!(
+            crate::scene::effective_double_position(&doc, &reversed),
+            side.reversed(),
+            "{name}: reversing endpoints preserves the physical ring side"
+        );
+    }
+}
+
 /// Mirrors the app's clipboard table (src/clipboard/tests.rs).
 #[test]
 fn typed_text_formats_follow_cheap_markers() {

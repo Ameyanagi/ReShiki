@@ -407,7 +407,6 @@ fn bond_ink_distance(
     drawn: f32,
     tolerance: f32,
 ) -> Option<f32> {
-    use crate::bonds::DoublePosition;
     let style = &doc.drawing_style;
     let s = style.bond_length_world * style.bond_spacing_ratio;
     let (line, bold) = (
@@ -438,16 +437,6 @@ fn bond_ink_distance(
                 .fold(f32::INFINITY, f32::min)
         })
     };
-    // A one-sided double's inner rail is shortened at both ends.
-    let trim = s * 0.75;
-    let inner = |side: f32| {
-        let rails = [(0., p), (s * side, q)];
-        distance(if (trim..=drawn - trim).contains(&(along * drawn)) {
-            &rails
-        } else {
-            &rails[..1]
-        })
-    };
     let order = if arc { 1 } else { bond.order };
     match (order, bond.display.as_str()) {
         // Crossed double: two straight strokes swap sides along the bond.
@@ -468,13 +457,15 @@ fn bond_ink_distance(
         // Resolve an automatic side only near either possible rail.
         (2 | 7, _) => {
             distance(&[(-s, p.max(q)), (s, p.max(q))])?;
-            match crate::scene::effective_double_position(doc, bond) {
-                DoublePosition::Left => inner(-1.),
-                DoublePosition::Right => inner(1.),
-                DoublePosition::Auto | DoublePosition::Center => {
-                    distance(&[(-s / 2., p), (s / 2., q)])
-                }
-            }
+            let rails =
+                crate::scene::bond_rails(&crate::scene::projected_bonds::FaceIndex::new(doc), bond);
+            let active: Vec<_> = rails
+                .iter()
+                .enumerate()
+                .filter(|(_, rail)| (rail.trim.0..=drawn - rail.trim.1).contains(&(along * drawn)))
+                .map(|(index, rail)| (rail.offset.0, if index == 0 { p } else { q }))
+                .collect();
+            distance(&active)
         }
         (3, _) => distance(&[(-s, p), (0., q), (s, p)]),
         (6, _) => distance(&[(-s * 1.5, p), (-s / 2., q), (s / 2., p), (s * 1.5, p)]),
@@ -513,9 +504,8 @@ fn bond_ink(
     atom: u64,
     center: Point,
 ) -> (Vec<Point>, Vec<InkLine>, Vec<Vec<Point>>) {
-    use crate::bonds::DoublePosition;
+    let faces = crate::scene::projected_bonds::FaceIndex::new(doc);
     let style = &doc.drawing_style;
-    let spacing = style.bond_length_world * style.bond_spacing_ratio;
     let joins = crate::bond_joins::Joins::new(doc);
     let mut bonds = Vec::new();
     let mut lines = Vec::new();
@@ -537,45 +527,11 @@ fn bond_ink(
         // A projected "_end" display is drawn as its reversed base style.
         let display = bond.display.trim_end_matches("_end");
         let wavy = display == "wavy";
-        // (normal offset at a, at z, setback from each end) as drawn by the
-        // bond scene, along the stored a -> b normal.
-        let rails: Vec<(f32, f32, f32)> = match bond.order {
-            2 if wavy => vec![
-                (-spacing / 2., spacing / 2., 0.),
-                (spacing / 2., -spacing / 2., 0.),
-            ],
-            2 | 7 => match crate::scene::effective_double_position(doc, bond) {
-                DoublePosition::Left => vec![(0., 0., 0.), (-spacing, -spacing, spacing * 0.75)],
-                DoublePosition::Right => vec![(0., 0., 0.), (spacing, spacing, spacing * 0.75)],
-                _ => vec![
-                    (-spacing / 2., -spacing / 2., 0.),
-                    (spacing / 2., spacing / 2., 0.),
-                ],
-            },
-            // The dashed aromatic rail lies on the automatic inner side, even
-            // when a stale explicit position was saved on the bond.
-            4 => match crate::scene::effective_double_position(
-                doc,
-                &crate::document::Bond {
-                    double_position: DoublePosition::Auto,
-                    ..bond.clone()
-                },
-            ) {
-                DoublePosition::Left => vec![(0., 0., 0.), (-spacing, -spacing, 0.)],
-                _ => vec![(0., 0., 0.), (spacing, spacing, 0.)],
-            },
-            3 => [-1., 0., 1.]
-                .map(|k| (spacing * k, spacing * k, 0.))
-                .to_vec(),
-            6 => [-1.5, -0.5, 0.5, 1.5]
-                .map(|k| (spacing * k, spacing * k, 0.))
-                .to_vec(),
-            _ => vec![(0., 0., 0.)],
-        };
+        let rails = crate::scene::bond_rails(&faces, bond);
         // A side double bond's backbone is joined like a single bond.
-        let joinable = !matches!(bond.order, 2 | 7) || rails.first() == Some(&(0., 0., 0.));
+        let joinable = !matches!(bond.order, 2 | 7)
+            || rails.first().is_some_and(|rail| rail.offset == (0., 0.));
         let u = unit(delta(z, a));
-        let n = Point::new(-u.y, u.x);
         let wave = if wavy && bond.order != 2 {
             style.line_width() * 1.25
         } else {
@@ -586,18 +542,15 @@ fn bond_ink(
             rails
                 .into_iter()
                 .enumerate()
-                .filter(|(_, (_, _, setback))| length > setback * 2.)
-                .map(|(index, (from, to, setback))| {
+                .filter(|(_, rail)| length - rail.trim.0 - rail.trim.1 > 0.1)
+                .map(|(index, rail)| {
                     // As in the scene, a second rail may have its own display.
                     let display = match &bond.secondary_display {
                         Some(secondary) if index == 1 && !wavy => secondary,
                         _ => display,
                     };
-                    (
-                        a.offset(n.x * from + u.x * setback, n.y * from + u.y * setback),
-                        z.offset(n.x * to - u.x * setback, n.y * to - u.y * setback),
-                        half_stroke(doc, display) + wave,
-                    )
+                    let (first, last) = rail.points(a, z);
+                    (first, last, half_stroke(doc, display) + wave)
                 }),
         );
         // A joined bond is filled as a mitered outline, which can reach past

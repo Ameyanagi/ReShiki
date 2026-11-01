@@ -1204,10 +1204,15 @@ fn an_omitted_inner_rail_hides_nothing() {
             (Point::new(4., 0.), 20.),
             (Point::new(-20., spacing), -20.),
             (Point::new(20., spacing), -20.),
+            (Point::new(-100., 10.), 20.),
+            (Point::new(100., 10.), 20.),
         ],
     );
     doc.add_bond(atoms[0], atoms[1], 2, "plain");
     doc.add_bond(atoms[2], atoms[3], 1, "plain");
+    // Neighbours on the offset side shorten the short inner rail away.
+    doc.add_bond(atoms[0], atoms[4], 1, "plain");
+    doc.add_bond(atoms[1], atoms[5], 1, "plain");
     doc.bonds[0].double_position = crate::bonds::DoublePosition::Right;
     assert!(super::gaps(&doc)[1].is_empty());
 }

@@ -182,6 +182,7 @@ pub enum Action {
     CommitField(Field),
     DisplayUnit(Unit),
     Advanced(bool),
+    CenterChainDoubleBonds(bool),
     Matching(bool),
     Scale(bool),
     Load,
@@ -209,6 +210,7 @@ pub struct Editor {
     /// original (matching overrides can still be normalized).
     apply_semantics_requested: bool,
     advanced: bool,
+    center_chain_double_bonds: bool,
     export_menu: bool,
     matching: bool,
     scale: bool,
@@ -232,6 +234,7 @@ impl Editor {
             unit_notice: None,
             apply_semantics_requested: false,
             advanced: false,
+            center_chain_double_bonds: style.center_chain_double_bonds,
             export_menu: false,
             matching: true,
             scale: false,
@@ -243,6 +246,7 @@ impl Editor {
         self.base = style.clone();
         self.name = style.name.clone();
         self.font = style.font_family.clone();
+        self.center_chain_double_bonds = style.center_chain_double_bonds;
         self.unit_notice = None;
         self.inputs = [
             (Field::FontSize, style.font_size_pt),
@@ -267,6 +271,7 @@ impl Editor {
         if self.font != self.base.font_family {
             style.font_family = self.font.trim().into();
         }
+        style.center_chain_double_bonds = self.center_chain_double_bonds;
         for (field, input) in &self.inputs {
             let value = input.value(*field, self.display_unit)?;
             if let Some(dimension) = field.dimension() {
@@ -651,6 +656,12 @@ impl App {
                             }
                         }
                         Action::Advanced(value) => editor.advanced = value,
+                        Action::CenterChainDoubleBonds(value) => {
+                            if editor.center_chain_double_bonds != value {
+                                editor.center_chain_double_bonds = value;
+                                editor.mark_custom();
+                            }
+                        }
                         Action::ExportMenu(value) => editor.export_menu = value,
                         Action::Matching(value) => {
                             editor.apply_semantics_requested = true;
@@ -819,6 +830,12 @@ impl App {
             .style(button::text),
         );
         body = body
+            .push(
+                checkbox(editor.center_chain_double_bonds)
+                    .label("Center chain double bonds")
+                    .on_toggle(move |v| action(Action::CenterChainDoubleBonds(v)))
+                    .text_size(12),
+            )
             .push(super::workspace::horizontal_line())
             .push(
                 checkbox(editor.matching)

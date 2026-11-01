@@ -19,6 +19,8 @@ pub struct DrawingStyle {
     pub margin_width_pt: f32,
     pub hash_spacing_pt: f32,
     pub bond_spacing_ratio: f32,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub center_chain_double_bonds: bool,
     pub png_dpi: u32,
 }
 impl Default for DrawingStyle {
@@ -39,6 +41,7 @@ pub static DEFAULT: LazyLock<DrawingStyle> = LazyLock::new(|| {
             margin_width_pt: 1.6,
             hash_spacing_pt: 2.5,
             bond_spacing_ratio: 0.18,
+            center_chain_double_bonds: false,
             png_dpi: 1200,
         }
     })
@@ -226,6 +229,10 @@ mod font;
 #[cfg(test)]
 #[path = "style/added_font_tests.rs"]
 mod added_font_tests;
+
+#[cfg(test)]
+#[path = "style/tests.rs"]
+mod tests;
 
 /// Measure advances in the same font used by the drawing renderers.
 pub fn text_width(text: &str, size: f32) -> f32 {

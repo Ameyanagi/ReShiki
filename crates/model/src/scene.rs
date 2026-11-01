@@ -1,12 +1,14 @@
 use crate::document::{Atom, Bond, Document, Point};
 use crate::style::DEFAULT as STYLE;
 use bond_pass::{BondInputs, BondPass, Resolve};
+pub(crate) use bond_rails::bond_rails;
 use charge_placement::{ChargeLayout, place_automatic_charge};
 use depth_field::{DepthField, bond_depth_field_with_faces};
 pub(crate) use occlusion::{OcclusionSource, occlusion_ink};
 use projected_bonds::FaceIndex;
 pub(crate) mod attachment_ink;
 mod bond_pass;
+mod bond_rails;
 mod charge_placement;
 pub(crate) mod depth_field;
 pub(crate) mod graph;
@@ -1030,9 +1032,7 @@ fn nearby_mark_ink(a: &Atom, doc: &Document, size: f32) -> Option<Vec<(Point, Po
 /// The drawn strokes of visible bonds that do not end at `a`, each with how
 /// far its ink reaches beyond the stroke's center line.
 fn unrelated_bonds(a: &Atom, doc: &Document) -> Vec<(Point, Point, f32)> {
-    use crate::bonds::DoublePosition as P;
     let style = &doc.drawing_style;
-    let spacing = style.bond_length_world * style.bond_spacing_ratio;
     let positions: std::collections::HashMap<_, _> = doc
         .atoms
         .iter()
@@ -1048,23 +1048,7 @@ fn unrelated_bonds(a: &Atom, doc: &Document) -> Vec<(Point, Point, f32)> {
             // Each stroke's start and end offsets along the normal, as
             // `push_bond` and `push_bond_rails` draw them.
             let wavy = b.display == "wavy";
-            let rails = |offsets: &[f32]| offsets.iter().map(|o| (*o, *o)).collect::<Vec<_>>();
-            let strokes = match b.order {
-                // A wavy double bond is two strokes crossing at the middle.
-                2 if wavy => vec![(spacing / 2., -spacing / 2.), (-spacing / 2., spacing / 2.)],
-                2 | 7 => match double_position(faces(), b) {
-                    P::Left => rails(&[0., -spacing]),
-                    P::Right => rails(&[0., spacing]),
-                    _ => rails(&[-spacing / 2., spacing / 2.]),
-                },
-                3 => rails(&[-spacing, 0., spacing]),
-                4 => rails(&[
-                    0.,
-                    spacing * automatic_double_side(faces(), b).unwrap_or(1.),
-                ]),
-                6 => rails(&[-spacing * 1.5, -spacing * 0.5, spacing * 0.5, spacing * 1.5]),
-                _ => rails(&[0.]),
-            };
+            let strokes = bond_rails(faces(), b);
             let bold = matches!(
                 b.display.as_str(),
                 "bold" | "wedge" | "hash" | "hashed" | "hollow_wedge"
@@ -1077,14 +1061,10 @@ fn unrelated_bonds(a: &Atom, doc: &Document) -> Vec<(Point, Point, f32)> {
             } else {
                 style.line_width() / 2.
             };
-            let length = p.distance(q).max(0.001);
-            let (nx, ny) = (-(q.y - p.y) / length, (q.x - p.x) / length);
-            strokes.into_iter().map(move |(from, to)| {
-                (
-                    p.offset(nx * from, ny * from),
-                    q.offset(nx * to, ny * to),
-                    ink,
-                )
+            strokes.into_iter().filter_map(move |rail| {
+                let (first, last) = rail.points(p, q);
+                ((last.x - first.x) * (q.x - p.x) + (last.y - first.y) * (q.y - p.y) > 0.)
+                    .then_some((first, last, ink))
             })
         })
         .collect()
@@ -1715,13 +1695,81 @@ pub(crate) fn automatic_double_side(faces: &FaceIndex<'_>, bond: &Bond) -> Optio
     {
         return Some(side);
     }
-    let center = ring_center(faces, bond.a, bond.b)?;
+    let center = faces.ring_center(bond.a, bond.b);
     let a = faces.atom(bond.a)?.position;
     let b = faces.atom(bond.b)?.position;
+    let Some(center) = center else {
+        return chain_double_side(faces, bond, a, b);
+    };
     let dx = b.x - a.x;
     let dy = b.y - a.y;
     let cross = (center.x - (a.x + b.x) * 0.5) * (-dy) + (center.y - (a.y + b.y) * 0.5) * dx;
     Some(if cross >= 0. { 1. } else { -1. })
+}
+
+fn chain_double_side(faces: &FaceIndex<'_>, bond: &Bond, a: Point, b: Point) -> Option<f32> {
+    if !matches!(bond.order, 2 | 7)
+        || bond.display == "bold"
+        || faces.doc().drawing_style.center_chain_double_bonds
+        || faces.graph().degree(bond.a) < 2
+        || faces.graph().degree(bond.b) < 2
+    {
+        return None;
+    }
+    let side =
+        |p: Point, origin: Point| (b.x - a.x) * (p.y - origin.y) - (b.y - a.y) * (p.x - origin.x);
+    let mut count: i32 = 0;
+    let mut ring_side = 0.;
+    for (id, other, origin) in [(bond.a, bond.b, a), (bond.b, bond.a, b)] {
+        let mut substituted = false;
+        for (_, neighbor) in faces.graph().bonds(id) {
+            let next = if neighbor.a == id {
+                neighbor.b
+            } else {
+                neighbor.a
+            };
+            if next == other || !faces.doc().bond_visible(id, next) {
+                continue;
+            }
+            let Some(atom) = faces.atom(next) else {
+                continue;
+            };
+            substituted = true;
+            let cross = side(atom.position, origin);
+            if cross.abs() > 0.001 {
+                count += if cross > 0. { 1 } else { -1 };
+            }
+            // A ring attached at either alkene endpoint takes precedence over
+            // the substituent count, including an exocyclic double bond.
+            let ring = faces.ring_center(id, next).or_else(|| {
+                faces.graph().bonds(next).find_map(|(_, edge)| {
+                    let adjacent = if edge.a == next { edge.b } else { edge.a };
+                    (adjacent != id)
+                        .then(|| faces.ring_center(next, adjacent))
+                        .flatten()
+                })
+            });
+            if let Some(center) = ring {
+                let cross = side(center, origin);
+                if cross.abs() > 0.001 {
+                    ring_side += cross.signum();
+                }
+            }
+        }
+        if !substituted {
+            return None;
+        }
+    }
+    Some(if ring_side != 0. {
+        ring_side.signum()
+    } else if count != 0 {
+        count.signum() as f32
+    } else if bond.a < bond.b {
+        // A trans tie may use either side; keep the choice deterministic.
+        1.
+    } else {
+        -1.
+    })
 }
 
 #[cfg(test)]
@@ -1729,8 +1777,9 @@ thread_local! {
     static RING_SEARCH_VISITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// Find the smallest ring containing this edge, using the alternate path.
-fn ring_center(faces: &FaceIndex<'_>, from: u64, to: u64) -> Option<Point> {
+/// Centre of the smallest ring through this edge. A fusion double prefers the
+/// richer of the smallest rings on either side.
+fn find_ring_center(faces: &FaceIndex<'_>, from: u64, to: u64) -> Option<Point> {
     use std::collections::{HashMap, VecDeque};
     // A terminal endpoint has no alternate path. Carbonyl bonds are queried
     // repeatedly while crowded hydrogen labels avoid nearby bond strokes;
@@ -1738,46 +1787,102 @@ fn ring_center(faces: &FaceIndex<'_>, from: u64, to: u64) -> Option<Point> {
     if faces.graph().degree(from) < 2 || faces.graph().degree(to) < 2 {
         return None;
     }
-    let mut previous = HashMap::from([(from, from)]);
-    let mut queue = VecDeque::from([from]);
-    while let Some(id) = queue.pop_front() {
-        #[cfg(test)]
-        RING_SEARCH_VISITS.with(|count| count.set(count.get() + 1));
-        for (_, b) in faces.graph().bonds(id) {
-            if (b.a == from && b.b == to) || (b.a == to && b.b == from) {
+    let a = faces.atom(from)?.position;
+    let b = faces.atom(to)?.position;
+    let cross = |p: Point| (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+    let search = |side: Option<f32>| {
+        let mut previous = HashMap::from([(from, from)]);
+        let mut queue = VecDeque::from([(from, 0)]);
+        while let Some((id, depth)) = queue.pop_front() {
+            #[cfg(test)]
+            RING_SEARCH_VISITS.with(|count| count.set(count.get() + 1));
+            // The opposite-ring search must not walk long acyclic substituents.
+            if side.is_some() && depth + 1 >= projected_bonds::MAX_RING {
                 continue;
             }
-            let next = if b.a == id {
-                b.b
-            } else if b.b == id {
-                b.a
-            } else {
-                continue;
-            };
-            if previous.contains_key(&next) {
-                continue;
-            }
-            previous.insert(next, id);
-            if next == to {
-                let mut path = vec![to];
-                let mut current = to;
-                while current != from {
-                    current = *previous.get(&current)?;
-                    path.push(current);
+            for (_, b) in faces.graph().bonds(id) {
+                if (b.a == from && b.b == to) || (b.a == to && b.b == from) {
+                    continue;
                 }
-                let points: Vec<_> = path
-                    .iter()
-                    .filter_map(|id| faces.atom(*id).map(|a| a.position))
-                    .collect();
-                return Some(Point::new(
-                    points.iter().map(|p| p.x).sum::<f32>() / points.len() as f32,
-                    points.iter().map(|p| p.y).sum::<f32>() / points.len() as f32,
-                ));
+                let next = if b.a == id {
+                    b.b
+                } else if b.b == id {
+                    b.a
+                } else {
+                    continue;
+                };
+                if previous.contains_key(&next) {
+                    continue;
+                }
+                if next != to
+                    && side.is_some_and(|side| {
+                        faces
+                            .atom(next)
+                            .is_none_or(|a| cross(a.position) * side < -0.001)
+                    })
+                {
+                    continue;
+                }
+                previous.insert(next, id);
+                if next == to {
+                    let mut path = vec![to];
+                    let mut current = to;
+                    while current != from {
+                        current = *previous.get(&current)?;
+                        path.push(current);
+                    }
+                    return Some(path);
+                }
+                queue.push_back((next, depth + 1));
             }
-            queue.push_back(next);
         }
+        None
+    };
+    let center = |path: &[u64]| {
+        let points: Vec<_> = path
+            .iter()
+            .filter_map(|id| faces.atom(*id).map(|a| a.position))
+            .collect();
+        Point::new(
+            points.iter().map(|p| p.x).sum::<f32>() / points.len() as f32,
+            points.iter().map(|p| p.y).sum::<f32>() / points.len() as f32,
+        )
+    };
+    let path = search(None)?;
+    let first = center(&path);
+    // Only a fusion double needs the second search. Preserve the old BFS tie
+    // order, particularly for two six-membered naphthalene faces.
+    if faces.graph().degree(from) < 3
+        || faces.graph().degree(to) < 3
+        || !faces
+            .graph()
+            .bonds(from)
+            .any(|(_, b)| (b.a == to || b.b == to) && b.order == 2)
+    {
+        return Some(first);
     }
-    None
+    let opposite = search(Some(-cross(first).signum()));
+    let Some(opposite) = opposite else {
+        return Some(first);
+    };
+    let rank = |path: &[u64]| {
+        let doubles = path
+            .iter()
+            .zip(path.iter().skip(1))
+            .filter(|&(from, to)| {
+                faces
+                    .graph()
+                    .bonds(*from)
+                    .any(|(_, b)| (b.a == *to || b.b == *to) && matches!(b.order, 2 | 4))
+            })
+            .count();
+        (doubles, path.len() == 6, std::cmp::Reverse(path.len()))
+    };
+    Some(if rank(&opposite) > rank(&path) {
+        center(&opposite)
+    } else {
+        first
+    })
 }
 
 /// Drawing primitives with colors in canonical light-canvas bytes; renderers
@@ -2575,60 +2680,47 @@ fn push_bond_rails(
         1.
     };
     use crate::bonds::DoublePosition;
-    let position = if matches!(b.order, 2 | 7) {
-        double_position(faces, b)
-    } else {
-        DoublePosition::Center
-    };
-    let side = match position {
-        DoublePosition::Left => Some(-1.),
-        DoublePosition::Right => Some(1.),
-        DoublePosition::Auto | DoublePosition::Center => None,
-    };
     let order = if arcs.contains(b.a, b.b) { 1 } else { b.order };
-    let offsets: &[f32] = match (order, side) {
-        (2 | 7, Some(side)) => &[0.0, spacing * side],
-        (2 | 7, None) => &[-spacing / 2.0, spacing / 2.0],
-        (6, _) => &[-spacing * 1.5, -spacing * 0.5, spacing * 0.5, spacing * 1.5],
-        (3, _) => &[-spacing, 0.0, spacing],
-        _ => &[0.0],
+    // Arcs and aromatic dashes draw their extra rails elsewhere.
+    let rails = if order == b.order && order != 4 {
+        bond_rails(faces, b)
+    } else {
+        vec![bond_rails::BondRail {
+            offset: (0., 0.),
+            trim: (0., 0.),
+        }]
     };
-    for (index, offset) in offsets.iter().enumerate() {
-        let trim = if side.is_some() && [2, 7].contains(&b.order) && *offset != 0.0 {
-            spacing * 0.75
-        } else {
-            0.0
-        };
+    for (index, rail) in rails.iter().enumerate() {
+        let offset = rail.offset.0;
+        let trim = rail.trim;
         let display = if index == 1 {
             b.secondary_display.as_deref().unwrap_or(&b.display)
         } else {
             &b.display
         };
-        let projected =
-            if matches!(order, 2 | 7) && b.double_position == DoublePosition::Auto && *offset != 0.
-            {
-                faces.rail_depth(
-                    b,
-                    start,
-                    end,
-                    *offset,
-                    trim,
-                    style.world(if display == "bold" {
-                        style.bold_width_pt
-                    } else {
-                        style.line_width_pt
-                    }) / 2.,
-                )
-            } else {
-                None
-            };
+        let projected = if matches!(order, 2 | 7)
+            && b.double_position == DoublePosition::Auto
+            && offset != 0.
+        {
+            faces.rail_depth(
+                b,
+                start,
+                end,
+                offset,
+                trim,
+                style.world(if display == "bold" {
+                    style.bold_width_pt
+                } else {
+                    style.line_width_pt
+                }) / 2.,
+            )
+        } else {
+            None
+        };
         let (first, last) = match projected.as_ref() {
             Some(Some(rail)) => rail.points,
             Some(None) => continue,
-            None => (
-                start.offset(nx * offset + ux * trim, ny * offset + uy * trim),
-                end.offset(nx * offset - ux * trim, ny * offset - uy * trim),
-            ),
+            None => rail.points(start, end),
         };
         let available = (last.x - first.x) * ux + (last.y - first.y) * uy;
         if available <= 0.1 {
@@ -2697,9 +2789,9 @@ fn push_bond_rails(
                 support: vec![],
             },
         });
-        let primitive = if let Some(points) = joins.centered_polygon(b, first, last, *offset) {
+        let primitive = if let Some(points) = joins.centered_polygon(b, first, last, offset) {
             Primitive::Polygon(points)
-        } else if index == 0 && *offset == 0. && joins.needed(b) {
+        } else if index == 0 && offset == 0. && joins.needed(b) {
             Primitive::Polygon(joins.polygon(b, first, last))
         } else if display == "bold" {
             // An explicitly centered bold rail still needs flat
@@ -3007,6 +3099,8 @@ pub fn svg_with_background(doc: &Document) -> String {
 
 #[cfg(test)]
 mod charge_placement_tests;
+#[cfg(test)]
+mod double_bond_tests;
 #[cfg(test)]
 mod label_attachment_tests;
 #[cfg(test)]

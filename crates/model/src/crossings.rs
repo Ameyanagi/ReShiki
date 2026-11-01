@@ -115,7 +115,7 @@ impl<'d> Sides<'d> {
     /// strokes diagonally, and an aromatic bond without a ring circle draws
     /// its inner line toward the ring.
     fn rails(&self, bond: &crate::document::Bond) -> Rails {
-        use crate::bonds::DoublePosition::{Auto, Left, Right};
+        use crate::bonds::DoublePosition::Auto;
         let style = &self.doc.drawing_style;
         let display = bond.base_display();
         let width_of = |display: &str| {
@@ -158,25 +158,28 @@ impl<'d> Sides<'d> {
                     })
                     .to_vec()
             }
-            2 | 7 => match crate::scene::double_position(self.faces(), bond) {
-                side @ (Left | Right) => {
-                    let offset = if side == Left { -spacing } else { spacing };
-                    let trim = spacing * 0.75;
-                    let projected = if bond.double_position == Auto {
-                        self.projected(bond, offset, trim, second)
-                    } else {
-                        None
-                    };
-                    let inner = projected.unwrap_or_else(|| {
-                        (length - 2. * trim > 0.1).then_some(Rail {
-                            span: (trim, length - trim),
-                            ..rail(offset, second)
+            2 | 7 => {
+                let rails = crate::scene::bond_rails(self.faces(), bond);
+                let sided = rails.first().is_some_and(|rail| rail.offset.0 == 0.);
+                rails
+                    .into_iter()
+                    .enumerate()
+                    .filter_map(|(index, r)| {
+                        let width = if index == 0 { width } else { second };
+                        if bond.double_position == Auto
+                            && sided
+                            && index == 1
+                            && let Some(projected) = self.projected(bond, r.offset.0, r.trim, width)
+                        {
+                            return projected;
+                        }
+                        (length - r.trim.0 - r.trim.1 > 0.1).then_some(Rail {
+                            span: (r.trim.0, length - r.trim.1),
+                            ..rail(r.offset.0, width)
                         })
-                    });
-                    std::iter::once(rail(0., width)).chain(inner).collect()
-                }
-                _ => vec![rail(-spacing / 2., width), rail(spacing / 2., second)],
-            },
+                    })
+                    .collect()
+            }
             4 if self
                 .circles
                 .get_or_init(|| crate::aromatic::circles(self.doc))
@@ -206,7 +209,7 @@ impl<'d> Sides<'d> {
         &self,
         bond: &crate::document::Bond,
         offset: f32,
-        trim: f32,
+        trim: (f32, f32),
         width: f32,
     ) -> Option<Option<Rail>> {
         let a = self.faces().atom(bond.a)?.position;
