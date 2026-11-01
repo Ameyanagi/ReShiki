@@ -11,15 +11,15 @@
     "analysis": {
       "acceptors": 3,
       "donors": 1,
-      "exact_mass": 180.042258736,
+      "exact_mass": 180.04226,
       "formula": "C9H8O4",
       "inchi": "InChI=1S/C9H8O4/c1-6(10)13-8-5-3-2-4-7(8)9(11)12/h2-5H,1H3,(H,11,12)",
       "inchikey": "BSYNRYMUTXBXSQ-UHFFFAOYSA-N",
-      "logp": 1.3101,
-      "mass": 180.15899999999996,
+      "logp": 1.31,
+      "mass": 180.159,
       "rings": 1,
       "smiles": "CC(=O)Oc1ccccc1C(=O)O",
-      "tpsa": 63.60000000000001,
+      "tpsa": 63.6,
       "unpaired_electrons": 0
     },
     "analyzed_atoms": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"]

@@ -138,6 +138,50 @@ async fn the_whole_drawing_is_analyzed_without_changing_it() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn analysis_numbers_use_inspector_precision() {
+    let host = HeadlessHost::new("9.8.7", Budgets::default());
+    for (smiles, expected) in [
+        (
+            "CNCCC(Oc1ccc(cc1)C(F)(F)F)c1ccccc1",
+            [("mass", "309.331"), ("logp", "4.44"), ("tpsa", "21.26")].as_slice(),
+        ),
+        (
+            "c1ccccc1O",
+            [
+                ("mass", "94.113"),
+                ("exact_mass", "94.04186"),
+                ("logp", "1.39"),
+                ("tpsa", "20.23"),
+            ]
+            .as_slice(),
+        ),
+        ("CCO", [("logp", "0.0")].as_slice()),
+        // 0.855 is stored just below the tie, so it rounds down like `{:.2}`.
+        ("CCl", [("logp", "0.85")].as_slice()),
+    ] {
+        let imported = host
+            .call(call("import", json!({"format": "smiles", "text": smiles})))
+            .await
+            .unwrap();
+        assert!(!imported.is_error, "{:?}", imported.value);
+        let handle = DocHandle::new(imported.value["value"]["document"].as_str().unwrap()).unwrap();
+        let analyzed = analyze_ok(&host, &handle, Value::Null).await;
+        for analysis in [
+            &imported.value["value"]["analysis"],
+            &analyzed["value"]["analysis"],
+        ] {
+            for &(field, expected) in expected {
+                assert_eq!(
+                    serde_json::to_string(&analysis[field]).unwrap(),
+                    expected,
+                    "{smiles}: {field}"
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_selection_inside_an_abbreviation_analyzes_the_whole_abbreviation() {
     let (doc, [member, anchor, outside, caption]) = methoxy();
     let (host, handle) = hosting(doc.clone());
