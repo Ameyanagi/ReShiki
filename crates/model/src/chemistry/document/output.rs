@@ -11,6 +11,8 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
+mod fusion_hydrogens;
+
 #[cfg(test)]
 mod reconstruct_parity_tests;
 #[cfg(test)]
@@ -420,7 +422,7 @@ pub fn for_generated(
             wedging::generated::add_fusion_hydrogens(&molecule.state, &molecule.positions, 1.5)
                 .map_err(Error::WedgeAssignment)?;
         let mut next = molecule.ids.iter().copied().max().unwrap_or(0);
-        for _ in expanded.parents {
+        for _ in &expanded.parents {
             next = next
                 .checked_add(1)
                 .ok_or_else(|| invalid("Atom ID overflow"))?;
@@ -429,6 +431,9 @@ pub fn for_generated(
         }
         molecule.state = expanded.state;
         molecule.positions = expanded.positions;
+        if !expanded.parents.is_empty() {
+            fusion_hydrogens::place(&mut molecule, &expanded.parents, &dummy_labels, options)?;
+        }
     }
     let work = wedge(
         &molecule,

@@ -134,6 +134,108 @@ fn generated_fusion_hydrogens_are_optional_and_cleanup_does_not_add_them() -> an
 }
 
 #[test]
+fn fusion_hydrogens_clear_atoms_labels_and_bonds_preserving_stereo() -> anyhow::Result<()> {
+    for (text, expected) in [
+        (
+            "C[C@]12CC[C@H]3[C@H]([C@@H]1CC[C@@H]2O)CCC4=CC(=O)CC[C@H]34",
+            vec!["wedge", "hash", "wedge", "hash"],
+        ),
+        (
+            "C[C@]12CC[C@H]3[C@H]([C@@H]1CC[C@@H]2O)CCC4=CC(=O)CC[C@]34C",
+            vec!["wedge", "hash", "wedge"],
+        ),
+        (
+            "C[C@]12CC[C@H]3[C@H]([C@@H]1CC[C@@H]2O)CCC4=C3C=CC(=C4)O",
+            vec!["hash", "wedge", "hash"],
+        ),
+        (
+            "C[C@H](CCCC(C)C)[C@H]1CC[C@@H]2[C@@]1(CC[C@H]3[C@H]2CC=C4[C@@]3(CCC(C4)O)C)C",
+            vec!["hash", "hash", "wedge"],
+        ),
+        ("C1CC[C@H]2CCCC[C@@H]2C1", vec!["hash", "wedge"]),
+        ("C1CC[C@H]2CCC[C@H]2C1", vec!["hash", "hash"]),
+    ] {
+        let doc = generated(text, DrawingOptions::default())?;
+        for (index, atom) in doc.atoms.iter().enumerate() {
+            for other in &doc.atoms[index + 1..] {
+                let distance =
+                    (atom.position.x - other.position.x).hypot(atom.position.y - other.position.y);
+                assert!(
+                    distance >= 21. - 1e-4,
+                    "{text}: atoms {} and {} at {distance}",
+                    atom.id,
+                    other.id
+                );
+            }
+        }
+        let hydrogens = doc
+            .atoms
+            .iter()
+            .filter(|a| a.element == "H")
+            .collect::<Vec<_>>();
+        assert_eq!(hydrogens.len(), expected.len(), "{text}");
+        for (hydrogen, display) in hydrogens.iter().zip(expected) {
+            let bond = doc
+                .bonds
+                .iter()
+                .find(|b| b.b == hydrogen.id)
+                .context("Missing C-H bond")?;
+            assert_eq!(bond.display, display, "{text}: H{}", hydrogen.id);
+        }
+        // Normalize graph H atoms to compare the same representation while
+        // checking the configurations reconstructed from the drawn wedges.
+        let canonical =
+            |state: &crate::chemistry::stereo::perception::State| -> anyhow::Result<String> {
+                let text = crate::chemistry::smiles::write::write(state, Default::default())?.text;
+                let state = crate::chemistry::smiles::prepare(&text)?.state;
+                Ok(crate::chemistry::smiles::write::write(&state, Default::default())?.text)
+            };
+        assert_eq!(
+            canonical(&crate::chemistry::smiles::prepare(text)?.state)?,
+            canonical(&prepare(&doc)?.state)?,
+            "{text}"
+        );
+        for hydrogen in hydrogens {
+            let (lo, hi) =
+                crate::scene::atom_label_ink_bounds(hydrogen, &doc).context("Missing H label")?;
+            for other in doc.atoms.iter().filter(|a| a.id != hydrogen.id) {
+                let p = other.position;
+                assert!(
+                    p.x < lo.x || p.x > hi.x || p.y < lo.y || p.y > hi.y,
+                    "{text}: H{} label covers atom {}",
+                    hydrogen.id,
+                    other.id
+                );
+                for (a, b) in crate::scene::atom_label_ink_boxes(other, &doc) {
+                    assert!(
+                        hi.x <= a.x || lo.x >= b.x || hi.y <= a.y || lo.y >= b.y,
+                        "{text}: H{} label overlaps label {}",
+                        hydrogen.id,
+                        other.id
+                    );
+                }
+            }
+            for bond in doc
+                .bonds
+                .iter()
+                .filter(|b| b.a != hydrogen.id && b.b != hydrogen.id)
+            {
+                let a = doc.atom(bond.a).context("Missing bond start")?.position;
+                let b = doc.atom(bond.b).context("Missing bond end")?.position;
+                assert!(
+                    !crate::atom_labels::segment_hits_rect(a, b, lo, hi),
+                    "{text}: H{} label overlaps bond {}-{}",
+                    hydrogen.id,
+                    bond.a,
+                    bond.b
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn unknown_alkene_uses_wavy_substituent_or_crossed_fallback() -> anyhow::Result<()> {
     for (text, wavy_count) in [
         ("CC=CCC", 1),
