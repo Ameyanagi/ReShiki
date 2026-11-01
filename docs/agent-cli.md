@@ -339,12 +339,12 @@ stdout stays empty.
 
 ```text
 $ reshiki --cli name --smiles 'CCC#N'
-propionitrile
+propanenitrile
 ```
 
 `--json` prints one JSON line with the name and its
 [preferred IUPAC name status](chemical-naming-rust.md#preferred-iupac-name-status).
-This is `name --smiles 'CCC#N' --json`, shown on several lines:
+This is `name --smiles 'CS(C)=O' --json`, shown on several lines:
 
 ```json
 {
@@ -354,22 +354,22 @@ This is `name --smiles 'CCC#N' --json`, shown on several lines:
   },
   "experimental": true,
   "value": {
-    "detail": "Uses a retained general name such as propionitrile or succinic acid; preferred IUPAC names use propanenitrile or butanedioic acid (P-66.5.1; P-65.1.1.2).",
-    "name": "propionitrile",
+    "detail": "Uses a functional-class form such as sulfoxide, hydrazone or phosphane oxide; preferred IUPAC names use substitutive forms such as (methanesulfinyl)methane, ylidenehydrazine or λ5-phosphanone.",
+    "name": "dimethyl sulfoxide",
     "preferred": false,
-    "reason": "retained_general_name",
+    "reason": "functional_class",
     "status": "not_preferred"
   }
 }
 ```
 
-| Field       | Meaning                                                                                                         |
-| ----------- | --------------------------------------------------------------------------------------------------------------- |
-| `name`      | The name, exactly as plain output prints it                                                                     |
-| `preferred` | `true` only when `status` is `preferred`                                                                        |
-| `status`    | `preferred`, `not_preferred` (known not to be the preferred IUPAC name) or `unverified`                         |
-| `reason`    | The rule family behind `not_preferred` or `unverified`, such as `retained_general_name`; `null` for `preferred` |
-| `detail`    | One sentence that explains the status                                                                           |
+| Field       | Meaning                                                                                                    |
+| ----------- | ---------------------------------------------------------------------------------------------------------- |
+| `name`      | The name, exactly as plain output prints it                                                                |
+| `preferred` | `true` only when `status` is `preferred`                                                                   |
+| `status`    | `preferred`, `not_preferred` (known not to be the preferred IUPAC name) or `unverified`                    |
+| `reason`    | The rule family behind `not_preferred` or `unverified`, such as `functional_class`; `null` for `preferred` |
+| `detail`    | One sentence that explains the status                                                                      |
 
 ## info
 

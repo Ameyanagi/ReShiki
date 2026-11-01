@@ -96,7 +96,7 @@ CC(=O)C	propan-2-one	fixtures/diverse_corpus.golden.json	1
 CCC(=O)CC	pentan-3-one	fixtures/diverse_corpus.golden.json	1
 CC(=O)O	acetic acid	fixtures/diverse_corpus.golden.json	1
 CCC(=O)O	propanoic acid	fixtures/diverse_corpus.golden.json	1
-OC(=O)CC(=O)O	malonic acid	fixtures/diverse_corpus.golden.json	1
+OC(=O)CC(=O)O	propanedioic acid	fixtures/diverse_corpus.golden.json	1
 OC(=O)C(O)C(O)C(=O)O	2,3-dihydroxybutanedioic acid	fixtures/diverse_corpus.golden.json	1
 OC(=O)c1ccccc1	benzoic acid	fixtures/diverse_corpus.golden.json	1
 CC(=O)OC	methyl acetate	fixtures/diverse_corpus.golden.json	1

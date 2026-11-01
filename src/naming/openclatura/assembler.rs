@@ -22,20 +22,6 @@ pub(super) fn mark_assembled_name(
     parts: &AssemblyParts,
     name: &str,
 ) {
-    if matches!(
-        parts.retained_name.as_deref(),
-        Some(
-            "malonic acid"
-                | "succinic acid"
-                | "glutaric acid"
-                | "adipic acid"
-                | "hydrogen cyanide"
-                | "propionitrile"
-                | "butyronitrile"
-        )
-    ) {
-        mol.mark_name(NameStatus::NotPreferred(NameReason::RetainedGeneralName));
-    }
     if let Some(group) = &parts.principal_group {
         let rule = group
             .resolved_rule

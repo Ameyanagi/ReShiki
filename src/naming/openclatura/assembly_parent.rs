@@ -77,17 +77,11 @@ fn retained_chain_name(length: usize, key: &str, count: usize) -> Option<String>
         (1, "urea", 1) => "urea",
         (1, "guanidine", 1) => "guanidine",
         (1, "thiourea", 1) => "thiourea",
-        (1, "nitrile", 1) => "hydrogen cyanide",
+        (1, "nitrile", 1) => "formonitrile",
         (2, "nitrile", 1) => "acetonitrile",
-        (3, "nitrile", 1) => "propionitrile",
-        (4, "nitrile", 1) => "butyronitrile",
         (1, "ester" | "carboxylate", 1) => "formate",
         (2, "ester" | "carboxylate", 1) => "acetate",
         (2, "carboxylic_acid", 2) => "oxalic acid",
-        (3, "carboxylic_acid", 2) => "malonic acid",
-        (4, "carboxylic_acid", 2) => "succinic acid",
-        (5, "carboxylic_acid", 2) => "glutaric acid",
-        (6, "carboxylic_acid", 2) => "adipic acid",
         _ => "",
     };
     if !name.is_empty() {
@@ -232,17 +226,7 @@ pub fn promote_retained_functional_parent(parts: &mut AssemblyParts) -> Result<(
             retained = retained_chain_name(parts.parent_length, &group.key, locs.len());
         }
         if let Some(name) = retained.as_deref() {
-            if !parts.substituents.is_empty()
-                && [
-                    "oxalic acid",
-                    "malonic acid",
-                    "succinic acid",
-                    "glutaric acid",
-                    "adipic acid",
-                    "hydrogen cyanide",
-                ]
-                .contains(&name)
-            {
+            if !parts.substituents.is_empty() && ["oxalic acid", "formonitrile"].contains(&name) {
                 return Ok(());
             }
             if [

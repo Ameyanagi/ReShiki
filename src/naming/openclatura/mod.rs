@@ -347,6 +347,16 @@ mod tests {
             ("O=C(O)c1ccc(C=S)cc1", "4-(methanethioyl)benzoic acid"),
             ("O=C(O)c1ccc(C=[Se])cc1", "4-(methaneselenoyl)benzoic acid"),
             ("O=C(O)c1ccc(C=[Te])cc1", "4-(methanetelluroyl)benzoic acid"),
+            // Retained names for general nomenclature only (P-65.1.1.2.2,
+            // P-66.5.1.2.3); HCN is formonitrile (P-66.5.1.2.1).
+            ("CCC#N", "propanenitrile"),
+            ("CC(C)C#N", "2-methylpropanenitrile"),
+            ("O=CCCC#N", "4-oxobutanenitrile"),
+            ("O=C(O)CC(=O)O", "propanedioic acid"),
+            ("O=C(O)CCC(=O)O", "butanedioic acid"),
+            ("O=C(O)CCCC(=O)O", "pentanedioic acid"),
+            ("O=C(O)CCCCC(=O)O", "hexanedioic acid"),
+            ("C#N", "formonitrile"),
         ] {
             let name = name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
@@ -358,8 +368,6 @@ mod tests {
     fn known_departures_keep_their_names_and_report_the_rule_family() {
         use crate::naming::{NameReason as R, NameStatus};
         for (smiles, expected, reason) in [
-            ("CCC#N", "propionitrile", R::RetainedGeneralName),
-            ("O=C(O)CC(=O)O", "malonic acid", R::RetainedGeneralName),
             ("CC(C)Oc1ccccc1", "isopropoxybenzene", R::AlkoxyPrefix),
             (
                 "CN(C(C)C(=O)O)S(=O)(=O)c1ccc(C)cc1",

@@ -174,7 +174,7 @@ name and Insert caption use the name text alone.
 | Tag                                           | Meaning                                                                                       |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | Preferred IUPAC name                          | No rule on the name's path is known to depart from the PIN rules.                             |
-| Systematic name, not the preferred IUPAC name | The name is correct but uses a form the PIN rules do not, such as `propionitrile`.            |
+| Systematic name, not the preferred IUPAC name | The name is correct but uses a form the PIN rules do not, such as `isopropoxy`.               |
 | Systematic name, preference not verified      | The name took a path whose PIN choice has not been checked, such as an OPSIN-numbered fusion. |
 
 The engine marks the status where it makes the choice, so the name text is
@@ -183,7 +183,6 @@ that is not the PIN:
 
 | Reason                    | Example the engine writes                                                  | Preferred form                                                |
 | ------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `retained_general_name`   | `propionitrile`, `malonic acid`                                            | `propanenitrile`, `propanedioic acid`                         |
 | `alkoxy_prefix`           | `isopropoxy`, `isobutoxy`, `sec-butoxy`                                    | `(propan-2-yl)oxy`, `2-methylpropoxy`                         |
 | `sulfonyl_prefix`         | `N-methyltosylamino`, `(methylsulfinyl)amino`                              | `N,4-dimethylbenzene-1-sulfonamido`, `methanesulfinamido`     |
 | `amino_prefix`            | `phenylamino`, `guanidino`                                                 | `anilino`, `carbamimidoylamino`                               |
@@ -219,6 +218,12 @@ Chalcogen analogues of oxo and formyl take the preferred prefixes
 `bis` (P-16.3.6), and `methanethioyl`, `methaneselenoyl` and `methanetelluroyl`
 (P-66.6.3): `3-sulfanylidenebutanoic acid`,
 `3,5-bis(sulfanylidene)hexanoic acid`, `4-(methanethioyl)benzoic acid`.
+
+Chains take systematic names where the retained names are only for general
+nomenclature (P-65.1.1.2.2, P-66.5.1.2.3): `propanenitrile`, `butanenitrile`,
+`propanedioic acid`, `butanedioic acid`, `pentanedioic acid` and
+`hexanedioic acid`, not propionitrile, butyronitrile, malonic, succinic,
+glutaric or adipic acid. HCN is `formonitrile` (P-66.5.1.2.1).
 
 `unretained_parent` also covers formic acids, formyl halides and formamides
 substituted on carbon, which are carbamic or carbonic acid derivatives

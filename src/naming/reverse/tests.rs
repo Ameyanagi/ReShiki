@@ -58,11 +58,11 @@ fn worker_names_with_the_port_or_declines() {
     let preferred = generate("CCO").unwrap();
     assert_eq!(preferred.text, "ethanol");
     assert_eq!(preferred.status, NameStatus::Preferred);
-    let general = generate("CCC#N").unwrap();
-    assert_eq!(general.text, "propionitrile");
+    let general = generate("CS(C)=O").unwrap();
+    assert_eq!(general.text, "dimethyl sulfoxide");
     assert_eq!(
         general.status,
-        NameStatus::NotPreferred(super::super::NameReason::RetainedGeneralName)
+        NameStatus::NotPreferred(super::super::NameReason::FunctionalClass)
     );
     let Err(Error::Rejected(reason)) = generate("[13CH3]CO") else {
         panic!("An isotope-labelled molecule received a name");

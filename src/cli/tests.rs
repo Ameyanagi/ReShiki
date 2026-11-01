@@ -775,10 +775,10 @@ async fn name_json_reports_preferred_and_nonpreferred_rule_paths() {
     for (smiles, expected, status, reason) in [
         ("CCO", "ethanol", NameStatus::Preferred, Value::Null),
         (
-            "CCC#N",
-            "propionitrile",
-            NameStatus::NotPreferred(NameReason::RetainedGeneralName),
-            json!("retained_general_name"),
+            "CS(C)=O",
+            "dimethyl sulfoxide",
+            NameStatus::NotPreferred(NameReason::FunctionalClass),
+            json!("functional_class"),
         ),
     ] {
         let (code, out, err) = call(&["name", "--smiles", smiles, "--json"]).await;

@@ -98,7 +98,6 @@ impl NameStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NameReason {
-    RetainedGeneralName,
     AlkoxyPrefix,
     SulfonylPrefix,
     AminoPrefix,
@@ -119,9 +118,6 @@ pub enum NameReason {
 impl NameReason {
     pub fn detail(self) -> &'static str {
         match self {
-            Self::RetainedGeneralName => {
-                "Uses a retained general name such as propionitrile or succinic acid; preferred IUPAC names use propanenitrile or butanedioic acid (P-66.5.1; P-65.1.1.2)."
-            }
             Self::AlkoxyPrefix => {
                 "Uses a general alkoxy prefix such as isopropoxy; preferred IUPAC names use forms such as (propan-2-yl)oxy (P-63.2.2.2)."
             }
