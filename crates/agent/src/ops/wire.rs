@@ -300,7 +300,8 @@ pub struct AnalysisJson {
 
 impl From<Analysis> for AnalysisJson {
     fn from(analysis: Analysis) -> Self {
-        let round = |value: f64| (value * 1e9).round() / 1e9;
+        // Adding 0.0 normalizes negative zero after rounding.
+        let round = |value: f64| (value * 1e9).round() / 1e9 + 0.0;
         let Analysis {
             smiles,
             formula,

@@ -277,7 +277,7 @@ Prints the molecular properties of a structure or drawing as one JSON line.
 The properties are under `value.analysis`, and `value.analyzed_atoms` lists the
 IDs of the atoms analyzed. `mass`, `exact_mass`, `logp` and `tpsa` are rounded
 to 9 decimal places to remove floating-point noise. This is
-`analyze --smiles 'c1ccccc1O'`, shown on several lines:
+`reshiki --cli analyze --smiles 'c1ccccc1O'`, shown on several lines:
 
 ```json
 {

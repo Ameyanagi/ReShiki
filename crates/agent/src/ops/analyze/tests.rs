@@ -146,6 +146,10 @@ async fn analysis_numbers_drop_float_noise() {
             [("mass", "309.331"), ("logp", "4.435"), ("tpsa", "21.26")].as_slice(),
         ),
         (
+            "CCN(CC)CC(=O)Nc1c(C)cccc1C",
+            [("logp", "2.58374")].as_slice(),
+        ),
+        (
             "c1ccccc1O",
             [
                 ("mass", "94.113"),
@@ -159,6 +163,7 @@ async fn analysis_numbers_drop_float_noise() {
             "[13CH4]",
             [("mass", "17.03535484"), ("exact_mass", "17.034654968")].as_slice(),
         ),
+        ("CCO", [("logp", "-0.0014")].as_slice()),
     ] {
         let imported = host
             .call(call("import", json!({"format": "smiles", "text": smiles})))
