@@ -92,10 +92,7 @@ fn direct_subgraph_prefix(
             })
             .collect();
         if terminal.len() == 1 && component == &AtomSet::from([start, terminal[0]]) {
-            mol.mark_name(crate::naming::NameStatus::NotPreferred(
-                crate::naming::NameReason::ChalcogenPrefix,
-            ));
-            return Ok(Some("thioformyl".into()));
+            return Ok(Some("(methanethioyl)".into()));
         }
         let phosphorus: Vec<_> = mol
             .get_neighbors(start)
@@ -148,7 +145,6 @@ fn direct_subgraph_prefix(
             .functional_groups
             .direct_subgraph_prefix_for(&group.key)
         {
-            super::functional_prefixes::mark_prefix_status(mol, &group.key);
             return Ok(Some(prefix.into()));
         }
     }
@@ -213,7 +209,6 @@ fn collect_subgraph_substituents(
             };
             super::functional_prefixes::prefix_from_group(&context, group)?
         } else {
-            super::functional_prefixes::mark_prefix_status(mol, &group.key);
             name.clone()
         };
         let mut item = SubstituentItem::new(name, Vec::new());
@@ -757,7 +752,7 @@ mod tests {
             ("CC#N", 1, "cyano"),
             ("CC(=O)O", 1, "carboxy"),
             ("CC(=O)N(C)C", 1, "(dimethylcarbamoyl)"),
-            ("NC=S", 1, "thioformyl"),
+            ("NC=S", 1, "(methanethioyl)"),
             ("NC(=O)CCC(=O)O", 1, "(4-hydroxy-1,4-dioxobutyl)"),
             ("COC", 1, "methoxy"),
             ("CN(C)C", 1, "(dimethylamino)"),

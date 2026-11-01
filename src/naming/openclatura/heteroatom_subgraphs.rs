@@ -1109,8 +1109,7 @@ fn name_sulfur(
     if roots.is_empty() {
         return Ok(
             if order == 2 || charge_normalized_chalcogenido(mol, upstream, start) {
-                mol.mark_name(NameStatus::NotPreferred(NameReason::ChalcogenPrefix));
-                "thioxo".into()
+                "sulfanylidene".into()
             } else if mol.atoms[&start].charge > 0 {
                 format!("{sp}sulfaniumyl")
             } else if mol.atoms[&start].charge < 0 {
@@ -1375,11 +1374,10 @@ pub fn name_heteroatom_subgraph(
                 }
             } else if roots.is_empty() {
                 if order == 2 {
-                    mol.mark_name(NameStatus::NotPreferred(NameReason::ChalcogenPrefix));
                     if symbol == "Se" {
-                        "selenoxo".into()
+                        "selanylidene".into()
                     } else {
-                        "telluroxo".into()
+                        "tellanylidene".into()
                     }
                 } else if mol.atoms[&start].charge < 0 {
                     format!(

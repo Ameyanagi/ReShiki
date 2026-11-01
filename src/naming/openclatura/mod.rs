@@ -334,6 +334,19 @@ mod tests {
             ("O=CCl", "formyl chloride"),
             ("CNC=O", "N-methylformamide"),
             ("COC=O", "methyl formate"),
+            // Chalcogen analogues of oxo and formyl (P-64.6.1, P-66.6.3),
+            // multiplied with bis to avoid ambiguity (P-16.3.6).
+            ("O=C(O)CC(=S)C", "3-sulfanylidenebutanoic acid"),
+            ("O=C1CSC(=S)N1", "2-sulfanylidene-1,3-thiazolidin-4-one"),
+            ("CC(=[Te])CC(=[Se])C", "4-tellanylidenepentane-2-selone"),
+            (
+                "CC(=[Se])CCc1ccc(cc1)C(=O)O",
+                "4-(3-selanylidenebutyl)benzoic acid",
+            ),
+            ("OC(=O)CC(=S)CC(=S)C", "3,5-bis(sulfanylidene)hexanoic acid"),
+            ("O=C(O)c1ccc(C=S)cc1", "4-(methanethioyl)benzoic acid"),
+            ("O=C(O)c1ccc(C=[Se])cc1", "4-(methaneselenoyl)benzoic acid"),
+            ("O=C(O)c1ccc(C=[Te])cc1", "4-(methanetelluroyl)benzoic acid"),
         ] {
             let name = name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
@@ -358,7 +371,6 @@ mod tests {
                 "2-(sulfomethylsulfonyl)acetic acid",
                 R::SulfonylPrefix,
             ),
-            ("O=C(O)CC(=S)C", "3-thioxobutanoic acid", R::ChalcogenPrefix),
             (
                 "O=C(O)CNc1ccccc1",
                 "2-(phenylamino)acetic acid",
@@ -393,16 +405,6 @@ mod tests {
             ),
             ("c1cnc2scnc2c1", "thiazolo[5,4-b]pyridine", R::FusionPrefix),
             ("c1cnc2oncc2c1", "isoxazolo[5,4-b]pyridine", R::FusionPrefix),
-            (
-                "O=C(O)c1ccc(C=[Se])cc1",
-                "4-selenoformylbenzoic acid",
-                R::ChalcogenPrefix,
-            ),
-            (
-                "O=C(O)c1ccc(C=[Te])cc1",
-                "4-telluroformylbenzoic acid",
-                R::ChalcogenPrefix,
-            ),
             ("O=C(O)Cl", "hydroxyformyl chloride", R::UnretainedParent),
             ("O=C(OC)Cl", "methoxyformyl chloride", R::UnretainedParent),
             (

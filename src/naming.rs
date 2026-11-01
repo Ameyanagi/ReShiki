@@ -101,7 +101,6 @@ pub enum NameReason {
     RetainedGeneralName,
     AlkoxyPrefix,
     SulfonylPrefix,
-    ChalcogenPrefix,
     AminoPrefix,
     FunctionalClass,
     HydrideParent,
@@ -128,9 +127,6 @@ impl NameReason {
             }
             Self::SulfonylPrefix => {
                 "Uses a concatenated sulfonyl or sulfinyl prefix such as N-methyltosylamino or (methylsulfinyl)amino; preferred IUPAC names use acid-derived forms such as N,4-dimethylbenzene-1-sulfonamido or methanesulfinamido (P-65.3.2.2.2, P-66.1.1.4.3)."
-            }
-            Self::ChalcogenPrefix => {
-                "Uses a general chalcogen prefix such as thioxo or thioformyl; preferred IUPAC names use forms such as sulfanylidene or methanethioyl (P-64.6.1)."
             }
             Self::AminoPrefix => {
                 "Uses phenylamino or guanidino; preferred IUPAC names use anilino or carbamimidoylamino, respectively."

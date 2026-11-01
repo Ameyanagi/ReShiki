@@ -186,7 +186,6 @@ that is not the PIN:
 | `retained_general_name`   | `propionitrile`, `malonic acid`                                            | `propanenitrile`, `propanedioic acid`                         |
 | `alkoxy_prefix`           | `isopropoxy`, `isobutoxy`, `sec-butoxy`                                    | `(propan-2-yl)oxy`, `2-methylpropoxy`                         |
 | `sulfonyl_prefix`         | `N-methyltosylamino`, `(methylsulfinyl)amino`                              | `N,4-dimethylbenzene-1-sulfonamido`, `methanesulfinamido`     |
-| `chalcogen_prefix`        | `thioxo`, `selenoxo`, `thioformyl`, `selenoformyl`                         | `sulfanylidene`, `methanethioyl`, `methaneselenoyl`           |
 | `amino_prefix`            | `phenylamino`, `guanidino`                                                 | `anilino`, `carbamimidoylamino`                               |
 | `functional_class`        | `dimethyl sulfoxide`, `acetaldehyde hydrazone`, `trimethylphosphane oxide` | substitutive names                                            |
 | `hydride_parent`          | `dimethylsulfane`, `trimethylazane`                                        | `(methylsulfanyl)methane`, `N,N-dimethylmethanamine`          |
@@ -214,6 +213,12 @@ enclosed although simple (P-16.5.1.4): `(methanesulfonyl)benzene`,
 that the PIN names as sulfonamido or sulfinamido (P-66.1.1.4.3), on an imino
 nitrogen, and where another acid group in the substituent would take the acid
 suffix.
+
+Chalcogen analogues of oxo and formyl take the preferred prefixes
+`sulfanylidene`, `selanylidene` and `tellanylidene` (P-64.6.1), multiplied with
+`bis` (P-16.3.6), and `methanethioyl`, `methaneselenoyl` and `methanetelluroyl`
+(P-66.6.3): `3-sulfanylidenebutanoic acid`,
+`3,5-bis(sulfanylidene)hexanoic acid`, `4-(methanethioyl)benzoic acid`.
 
 `unretained_parent` also covers formic acids, formyl halides and formamides
 substituted on carbon, which are carbamic or carbonic acid derivatives

@@ -13,25 +13,7 @@ use super::{
     perception::{LigandRole, PerceivedGroup},
     subgraph_tools::subgraph_component,
 };
-use crate::naming::{NameReason, NameStatus};
 use std::collections::BTreeMap;
-
-pub(super) fn mark_prefix_status(mol: &Molecule, key: &str) {
-    if matches!(
-        key,
-        "thioaldehyde"
-            | "ring_thioaldehyde"
-            | "selenoaldehyde"
-            | "ring_selenoaldehyde"
-            | "telluroaldehyde"
-            | "ring_telluroaldehyde"
-            | "thioketone"
-            | "selenoketone"
-            | "telluroketone"
-    ) {
-        mol.mark_name(NameStatus::NotPreferred(NameReason::ChalcogenPrefix));
-    }
-}
 
 pub struct PrefixContext<'a> {
     pub mol: &'a Molecule,
@@ -369,7 +351,6 @@ pub fn prefix_from_group(
         }
     }
     if families.contains("direct_prefix") {
-        mark_prefix_status(context.mol, &group.key);
         return Ok(RULES
             .functional_groups
             .cited_prefix_for(&group.key)
@@ -460,7 +441,6 @@ pub fn prefix_from_group(
         return ester_prefix_from_group(context.mol, group, context.sub_exclude, "carbonyl");
     }
     Ok(if context.parent_path.contains(&group.attachment_carbon) {
-        mark_prefix_status(context.mol, &group.key);
         rule.prefix.clone().unwrap_or_default()
     } else {
         String::new()

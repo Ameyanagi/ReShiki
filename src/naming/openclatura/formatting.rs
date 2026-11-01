@@ -36,7 +36,17 @@ pub fn is_composite_prefix(name: &str) -> bool {
 pub fn needs_complex_multiplier(name: &str) -> bool {
     is_composite_prefix(name)
         || (name.ends_with("yl") && name.contains("oxy"))
-        || ["sulfanyl", "selanyl", "tellanyl", "phosphanyl", "arsanyl"].contains(&name)
+        || [
+            "sulfanyl",
+            "selanyl",
+            "tellanyl",
+            "phosphanyl",
+            "arsanyl",
+            "sulfanylidene",
+            "selanylidene",
+            "tellanylidene",
+        ]
+        .contains(&name)
 }
 pub fn format_multiplier(name: &str, count: usize, safe_enclose: bool) -> String {
     let complex = is_complex_prefix(name) || (count > 1 && needs_complex_multiplier(name));

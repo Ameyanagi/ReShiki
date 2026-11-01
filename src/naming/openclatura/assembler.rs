@@ -213,8 +213,7 @@ fn normalize_indicated_hydrogen_quota(parts: &mut AssemblyParts, core: &str) -> 
         .iter()
         .filter(|item| {
             parts.parent_charges.is_empty()
-                && (["oxo", "thioxo", "sulfanylidene", "selanylidene", "imino"]
-                    .contains(&item.name.as_str())
+                && (["oxo", "sulfanylidene", "selanylidene", "imino"].contains(&item.name.as_str())
                     || item.name.ends_with("ylidene"))
         })
         .flat_map(|item| item.locants.iter())
