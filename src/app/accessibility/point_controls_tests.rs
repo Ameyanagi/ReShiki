@@ -11,7 +11,9 @@ use iced::keyboard::{
 };
 use iced::{Event, Rectangle, Size, mouse};
 use iced_runtime::{UserInterface, user_interface::Cache};
-use reshiki::accessibility::{Activate, Collect, FocusControl, Role, Snapshot, tree::NativeTree};
+use reshiki::accessibility::{
+    Activate, Collect, FocusControl, Role, SetValue, Snapshot, tree::NativeTree,
+};
 use reshiki::document::Point;
 use reshiki::graphics::GraphicKind;
 
@@ -92,6 +94,19 @@ impl Ui {
         ui.operate(&self.renderer, &mut operation::black_box(&mut activate));
         self.cache = ui.into_cache();
         activate.finish()
+    }
+
+    fn set_value(&mut self, app: &App, id: &str, value: &str) -> operation::Outcome<Message> {
+        let mut ui = UserInterface::build(
+            app.view(),
+            self.size,
+            std::mem::take(&mut self.cache),
+            &mut self.renderer,
+        );
+        let mut edit = SetValue::<Message>::new(id, value.into());
+        ui.operate(&self.renderer, &mut operation::black_box(&mut edit));
+        self.cache = ui.into_cache();
+        edit.finish()
     }
 
     fn event(&mut self, app: &App, event: Event) -> (iced::event::Status, Vec<Message>) {
@@ -812,6 +827,94 @@ async fn selected_width_fields_publish_units_and_apply_one_undo_step() {
         ui.undo(&mut app);
         assert_eq!(app.tab.doc, before);
         assert_eq!(app.tab.selected, selected);
+    }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real path arrowhead input accessibility and edit regression"]
+async fn path_head_fields_publish_ids_and_support_native_edits() {
+    use crate::app::graphics::{Action, HeadField};
+
+    for size in [Size::new(1280., 820.), Size::new(1040., 680.)] {
+        let mut ui = Ui::new(size).await;
+        for kind in [GraphicKind::Curve, GraphicKind::Path] {
+            ui.cache = Cache::new();
+            let mut app = selected_graphic(kind, size);
+            app.tab.history = Default::default();
+            let before = app.tab.doc.clone();
+            let selected = app.tab.selected.clone();
+            for (id, name, field) in [
+                ("graphic-head-length", "Head length (pt)", HeadField::Length),
+                (
+                    "graphic-head-width",
+                    "Head half-width (pt)",
+                    HeadField::Width,
+                ),
+                ("graphic-head-notch", "Head notch (0–0.9)", HeadField::Notch),
+            ] {
+                let snapshot = ui.snapshot(&app);
+                let node = snapshot.nodes.iter().find(|node| node.id == id).expect(id);
+                assert_eq!(node.name, name);
+                assert_eq!(node.role, Role::TextInput);
+                assert!(node.enabled);
+                assert_eq!(
+                    node.value.as_deref(),
+                    Some(app.tab.path_head_inputs[field as usize].as_str())
+                );
+                ui.focus(&app, id);
+                let operation::Outcome::Some(message) = ui.set_value(&app, id, "0.75") else {
+                    panic!("native edit must find {id}");
+                };
+                assert!(matches!(
+                    &message,
+                    Message::Graphics(Action::HeadNumber(actual, value))
+                        if *actual as usize == field as usize && value == "0.75"
+                ));
+                let _ = app.update(message);
+                assert_eq!(app.tab.doc, before, "native edits only update the draft");
+                assert!(!app.tab.history.can_undo());
+                assert_eq!(
+                    ui.snapshot(&app)
+                        .nodes
+                        .iter()
+                        .find(|node| node.id == id)
+                        .unwrap()
+                        .value
+                        .as_deref(),
+                    Some("0.75")
+                );
+
+                let (status, messages) =
+                    ui.event(&app, key(Named::Enter, Modifiers::empty(), false));
+                assert_eq!(status, iced::event::Status::Captured);
+                assert_eq!(messages.len(), 1);
+                assert!(matches!(
+                    messages[0],
+                    Message::Graphics(Action::ApplyHeadNumber(actual))
+                        if actual as usize == field as usize
+                ));
+                for message in messages {
+                    let _ = app.update(message);
+                }
+                assert!(!app.error, "{}", app.status);
+                let mut expected = before.clone();
+                let mut heads = expected.graphics[0].heads.unwrap_or_default();
+                match field {
+                    HeadField::Length => heads.head_length_pt = 0.75,
+                    HeadField::Width => heads.head_width_pt = 0.75,
+                    HeadField::Notch => heads.head_notch = 0.75,
+                }
+                expected.graphics[0].heads = Some(heads);
+                assert_eq!(app.tab.doc, expected);
+                ui.undo(&mut app);
+                assert_eq!(app.tab.doc, before);
+                assert_eq!(app.tab.selected, selected);
+                assert!(
+                    !app.tab.history.can_undo(),
+                    "one Enter creates one Undo step"
+                );
+            }
+        }
     }
 }
 

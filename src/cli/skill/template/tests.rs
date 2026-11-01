@@ -15,11 +15,12 @@ const WINDOWS_SH: &str = r"'C:\Program Files\O'\''Brien & Co; $env\reshiki.exe'"
 const WINDOWS_POWERSHELL: &str = r"& 'C:\Program Files\O''Brien & Co; $env\reshiki.exe'";
 
 /// The recipes after the executable, then the regeneration command.
-const RECIPE_TAILS: [&str; 10] = [
+const RECIPE_TAILS: [&str; 11] = [
     "--cli info",
     "--cli tools",
     "--cli help convert",
     "--cli analyze --smiles 'CC(=O)OCC'",
+    "--cli name --smiles 'CC(=O)O' --json",
     "--cli convert --smiles 'CC(=O)OCC' -o ethyl-acetate.mol",
     "--cli convert reaction.cdxml -o reaction.pdf",
     "--cli render reaction.cdxml -o preview-1.png",

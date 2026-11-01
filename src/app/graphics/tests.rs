@@ -358,3 +358,178 @@ fn click_lone_pairs_and_manual_marks_have_separate_exact_history_steps() {
         app.tab.doc.current()
     );
 }
+
+fn path_heads_app() -> App {
+    use reshiki::graphics::PathCommand;
+    let path = |id| {
+        Graphic::pen_curve(
+            id,
+            Point::new(0., 0.),
+            Point::new(100., 40.),
+            Default::default(),
+        )
+    };
+    let mut closed = path(4);
+    closed
+        .append_pen_node(Point::new(100., 100.), None)
+        .unwrap();
+    closed.set_path_closed(true).unwrap();
+    let mut compound = path(7);
+    compound.path.extend([
+        PathCommand::Move(Point::new(200., 0.)),
+        PathCommand::Line(Point::new(300., 0.)),
+    ]);
+    compound.node_types.clear();
+    let mut app = ready(
+        vec![
+            shape(1, GraphicKind::Rectangle),
+            path(2),
+            shape(3, GraphicKind::Curve),
+            closed,
+            path(5),
+            picture(6),
+            compound,
+        ],
+        vec![1, 2, 3, 4, 6, 7],
+    );
+    app.tool = Tool::Select;
+    app
+}
+
+#[test]
+fn path_heads_context_toggles_each_end_in_one_undo_step() {
+    use reshiki::arrows::Head;
+    for tool in [Tool::Select, Tool::Lasso] {
+        let mut app = path_heads_app();
+        app.tool = tool;
+        for (label, head, tail) in [
+            ("End head", Head::Full, Head::None),
+            ("Start head", Head::Full, Head::Full),
+            ("No end head", Head::None, Head::Full),
+            ("No start head", Head::None, Head::None),
+        ] {
+            let before = app.tab.doc.clone();
+            let revision = app.tab.revision;
+            let command = app
+                .context_commands()
+                .into_iter()
+                .find(|command| command.label == label)
+                .unwrap();
+            assert!(command.enabled);
+            let _ = app.update(command.message);
+            assert_eq!(app.tab.revision, revision + 1);
+            for graphic in &app.tab.doc.graphics[1..=2] {
+                let heads = graphic.heads.unwrap();
+                assert_eq!((heads.head, heads.tail), (head, tail));
+            }
+            assert_undo_redo(&mut app, &before);
+            let _ = app.update(Message::Undo);
+            assert!(!app.tab.history.can_undo(), "each toggle is one undo step");
+            let _ = app.update(Message::Redo);
+            app.tab.history = Default::default();
+        }
+    }
+}
+
+#[test]
+fn path_heads_properties_apply_to_open_selection_with_one_undo_each() {
+    use reshiki::arrows::{Head, HeadShape};
+    use reshiki::graphics::PathHeads;
+    let mut app = path_heads_app();
+    // Each path keeps its own shape and sizes when changing an end.
+    app.tab.doc.graphics[2].heads = Some(PathHeads {
+        head: Head::Right,
+        shape: HeadShape::Open,
+        head_length_pt: 9.,
+        ..Default::default()
+    });
+    for action in [
+        Action::Head(Head::Full),
+        Action::Tail(Head::Left),
+        Action::HeadShape(HeadShape::Hollow),
+        Action::ApplyHeadNumber(HeadField::Length),
+        Action::ApplyHeadNumber(HeadField::Width),
+        Action::ApplyHeadNumber(HeadField::Notch),
+    ] {
+        let before = app.tab.doc.clone();
+        let revision = app.tab.revision;
+        if let Action::ApplyHeadNumber(field) = action {
+            let _ = app.update(Message::Graphics(Action::HeadNumber(field, "0.75".into())));
+            assert_eq!(app.tab.doc, before, "typing only updates the draft");
+            assert_eq!(app.tab.revision, revision);
+        }
+        let _ = app.update(Message::Graphics(action.clone()));
+        assert_eq!(app.tab.revision, revision + 1);
+        for index in [0, 3, 4, 5, 6] {
+            assert_eq!(app.tab.doc.graphics[index], before.graphics[index]);
+        }
+        for (old, graphic) in before.graphics[1..=2]
+            .iter()
+            .zip(&app.tab.doc.graphics[1..=2])
+        {
+            let mut expected = old.heads.unwrap_or_default();
+            match action {
+                Action::Head(value) => expected.head = value,
+                Action::Tail(value) => expected.tail = value,
+                Action::HeadShape(value) => expected.shape = value,
+                Action::ApplyHeadNumber(field) => match field {
+                    HeadField::Length => expected.head_length_pt = 0.75,
+                    HeadField::Width => expected.head_width_pt = 0.75,
+                    HeadField::Notch => expected.head_notch = 0.75,
+                },
+                _ => unreachable!(),
+            }
+            assert_eq!(graphic.heads, Some(expected));
+        }
+        let heads = app.tab.doc.graphics[1].heads.unwrap();
+        assert_eq!(
+            app.tab.path_head_inputs,
+            HeadField::ALL.map(|field| field.get(&heads).to_string())
+        );
+        assert_undo_redo(&mut app, &before);
+        let _ = app.update(Message::Undo);
+        assert!(!app.tab.history.can_undo());
+        let _ = app.update(Message::Redo);
+        app.tab.history = Default::default();
+    }
+    app.tool = Tool::Graphic(GraphicKind::Path);
+    assert!(app.selected_open_paths().next().is_some());
+    let _ = app.graphic_panel();
+    assert!(!app.context_commands().iter().any(|command| matches!(
+        command.message,
+        Message::Graphics(Action::Head(_) | Action::Tail(_))
+    )));
+}
+
+#[test]
+fn path_heads_bad_numbers_preserve_document_drafts_and_history() {
+    use reshiki::arrows::Head;
+    let mut app = path_heads_app();
+    let _ = app.update(Message::Graphics(Action::Head(Head::Full)));
+    let before = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    for (field, value, error) in [
+        (HeadField::Length, "bad", "Type a number, then press Enter"),
+        (HeadField::Length, "0.49", "Arrowhead length must be 0.5–24"),
+        (HeadField::Length, "NaN", "Arrowhead length must be 0.5–24"),
+        (
+            HeadField::Width,
+            "16.1",
+            "Arrowhead half-width must be 0.25–16",
+        ),
+        (HeadField::Notch, "0.91", "Arrowhead notch must be 0–0.9"),
+    ] {
+        let _ = app.update(Message::Graphics(Action::HeadNumber(field, value.into())));
+        let _ = app.update(Message::Graphics(Action::ApplyHeadNumber(field)));
+        assert!(app.error);
+        assert_eq!(app.status, error);
+        assert_eq!(app.tab.path_head_inputs[field as usize], value);
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.revision, revision);
+    }
+    let _ = app.update(Message::Undo);
+    assert!(app.tab.doc.graphics.iter().all(|g| g.heads.is_none()));
+    assert!(!app.tab.history.can_undo());
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, before);
+}

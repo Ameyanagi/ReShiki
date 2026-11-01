@@ -27,8 +27,8 @@ other platforms show the preview. See [pictures](pictures.md).
 
 When ReShiki is running, opening another file adds it as a tab in the existing
 window, and a file that is already open switches to its tab. Each drawing
-opened from Office gets its own tab, and saving it updates only that Office
-document. See
+opened from Office gets its own tab, named after its application (for example
+`Drawing in PowerPoint.rsk`), and saving it updates only that Office document. See
 [the open-in-tab record](changes/windows-linux-open-tabs.md) for the transport
 and its limits.
 

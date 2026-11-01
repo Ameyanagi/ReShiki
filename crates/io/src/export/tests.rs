@@ -1,4 +1,54 @@
 use super::*;
+
+#[test]
+fn missing_named_family_keeps_text_in_svg_tree_and_raster_export() {
+    let mut db = resvg::usvg::fontdb::Database::new();
+    for bytes in [
+        include_bytes!("../../../model/fonts/LiberationSans-Regular.ttf").as_slice(),
+        include_bytes!("../../../model/fonts/LiberationSans-Bold.ttf").as_slice(),
+        include_bytes!("../../../model/fonts/LiberationSans-Italic.ttf").as_slice(),
+        include_bytes!("../../../model/fonts/LiberationSans-BoldItalic.ttf").as_slice(),
+    ] {
+        db.load_font_data(bytes.to_vec());
+    }
+    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
+        <text x="8" y="48" font-family="Arial" font-size="40">N</text>
+    </svg>"#;
+    let db = std::sync::Arc::new(db);
+    let default_tree = resvg::usvg::Tree::from_str(
+        svg,
+        &resvg::usvg::Options {
+            fontdb: db.clone(),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    // With neither Arial nor the generic serif installed, usvg drops the span.
+    assert!(default_tree.root().children().is_empty());
+    let tree = parse_svg_with_fontdb(svg, db).unwrap();
+    let bounds = tree.root().bounding_box();
+    assert!(bounds.width() > 0. && bounds.height() > 0.);
+    assert!(
+        tree.root()
+            .children()
+            .iter()
+            .any(|node| matches!(node, resvg::usvg::Node::Text(_)))
+    );
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(64, 64).unwrap();
+    pixmap.fill(resvg::tiny_skia::Color::WHITE);
+    resvg::render(
+        &tree,
+        resvg::tiny_skia::Transform::identity(),
+        &mut pixmap.as_mut(),
+    );
+    assert!(
+        pixmap
+            .pixels()
+            .iter()
+            .any(|p| p.red() < 128 && p.alpha() > 0)
+    );
+}
+
 #[test]
 fn raster_budget_rejects_invalid_and_extreme_sizes_without_allocating() {
     for (width, height) in [

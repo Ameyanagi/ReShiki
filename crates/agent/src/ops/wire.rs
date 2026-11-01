@@ -280,7 +280,8 @@ pub(crate) fn warnings(messages: Vec<String>) -> Vec<Warning> {
         .collect()
 }
 
-/// Engine [`Analysis`] on the wire.
+/// Engine [`Analysis`] on the wire, with mass, exact_mass, logp and tpsa
+/// rounded to 9 decimal places to remove floating-point noise.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AnalysisJson {
     pub smiles: String,
@@ -299,6 +300,8 @@ pub struct AnalysisJson {
 
 impl From<Analysis> for AnalysisJson {
     fn from(analysis: Analysis) -> Self {
+        // Adding 0.0 normalizes negative zero after rounding.
+        let round = |value: f64| (value * 1e9).round() / 1e9 + 0.0;
         let Analysis {
             smiles,
             formula,
@@ -316,10 +319,10 @@ impl From<Analysis> for AnalysisJson {
         Self {
             smiles,
             formula,
-            mass,
-            exact_mass,
-            logp,
-            tpsa,
+            mass: round(mass),
+            exact_mass: round(exact_mass),
+            logp: round(logp),
+            tpsa: round(tpsa),
             donors,
             acceptors,
             rings,

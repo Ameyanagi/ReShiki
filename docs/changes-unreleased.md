@@ -1,5 +1,14 @@
 # Unreleased changes
 
+On Windows, Office drawing tabs name their application, such as
+`Drawing in PowerPoint.rsk` and `Drawing in Word.rsk`, instead of all reading
+`Office drawing.rsk`. Paste Special names ReShiki drawing as the source of a
+ReShiki copy, and the busy cursor ends once the running window has taken an
+Office drawing.
+([issue #695](https://github.com/Ameyanagi/ReShiki/issues/695),
+[issue #697](https://github.com/Ameyanagi/ReShiki/issues/697),
+[issue #693](https://github.com/Ameyanagi/ReShiki/issues/693)).
+
 Pen paths, Bézier curves and curved arrows gain **Smooth** and
 **Symmetrise** commands in the canvas menu and command palette, with buttons
 in the Pen path and curved arrow panels. Smooth aligns gentle joints and

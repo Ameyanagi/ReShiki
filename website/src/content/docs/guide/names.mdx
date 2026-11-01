@@ -36,11 +36,11 @@ Aliases are not offered after you edit the structure in the preview.
 
 ## Label a molecule with its name
 
-Right-click a molecule and choose **Show chemical name**. ReShiki places the systematic name centered below the molecule; for ethanol it is `ethan-1-ol`. **Hide chemical name** in the same menu removes it. Each is one Undo step.
+Right-click a molecule and choose **Show chemical name**. ReShiki places the systematic name centered below the molecule; for ethanol it is `ethanol`. **Hide chemical name** in the same menu removes it. Each is one Undo step.
 
 The caption moves with the molecule. If you change the molecule's chemistry, ReShiki removes the caption in the same Undo step. Editing or dragging the caption turns it into ordinary text that stays.
 
-To copy a name without placing it, select one whole molecule. In **Import → Name → ▸ Details**, choose **Generate selected name**. **GENERATED SYSTEMATIC NAME · LOCAL RULES** shows the name with **Copy name** and **Insert caption**. Catalog aliases for the molecule appear below it, each with **Copy** and **Insert caption**. An alias caption replaces the molecule's name caption instead of adding a second one. Undo removes an inserted caption in one step.
+To copy a name without placing it, select one whole molecule. In **Import → Name → ▸ Details**, choose **Generate selected name**. **GENERATED SYSTEMATIC NAME · OPENCLATURA** shows the name with **Copy name** and **Insert caption**. Catalog aliases for the molecule appear below it, each with **Copy** and **Insert caption**. An alias caption replaces the molecule's name caption instead of adding a second one. Undo removes an inserted caption in one step.
 
 ### Open the Chemical names inspector
 
@@ -56,7 +56,7 @@ Right-click a molecule and choose **Chemical names…**. ReShiki selects the mol
 - ReShiki rejects an ambiguous name with a reason. It also rejects names with unsupported stereo, relative or racemic descriptors, radicals, polymers, queries and disconnected salts. A rejected name leaves the drawing unchanged.
 - A salt or mixture name such as `sodium chloride` says so: "Salts and mixtures aren't supported yet. Draw the ions, or paste SMILES under Import → Structure." For example, paste `[Na+].[Cl-]` under **Structure**.
 - Optical rotation signs are not turned into R or S. The one exception is `(+)-lactic acid`, which reads as (S)-lactic acid, `(2S)-2-hydroxypropanoic acid`.
-- Generated names cover neutral organic molecules of C, N, O and halogens with up to 64 heavy atoms and at most one ring. Charged and isotope-labeled molecules give an error.
+- Generated names cover one connected molecule, including ring assemblies, spiro, bridged and fused ring systems, charges, and R/S and E/Z stereo. Salts, mixtures and isotope-labeled molecules give an error. They come from a Rust port of openclatura (MIT), and each name is shown only after ReShiki parses it back to the same structure.
 - Generated names are systematic. They are not always the preferred IUPAC name.
 - The alias catalog holds 40 names for 30 molecules. It matches the exact structure, so stereo, charge and isotopes count: `(+)-lactic acid` is listed only for (S)-lactic acid. **No curated aliases available in the bundled catalog.** means only that the catalog has no entry.
 - Only `.rsk` files keep the link between a caption and its molecule. Figures and CDXML/CDX files keep the caption as text.

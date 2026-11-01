@@ -90,7 +90,7 @@ Import structure text as a new session document and return its handle, revision,
 | `format` | `string` | true | false | enum: `["auto","smiles","mol","rxn","rsmi","inchi","cdxml","cdx","reshiki"]` |
 | `text` | `string` | true | false |  |
 
-Result: `{value, warnings, validation, versions}`. value is {document, revision, counts, analysis}: the new session document's handle and revision; counts is {atoms, bonds, arrows, annotations, graphics}. analysis is {smiles, formula, mass, exact_mass, logp, tpsa, donors, acceptors, rings, unpaired_electrons, inchi, inchikey}, or null when the engine returned none. The engine's warnings become the warnings.
+Result: `{value, warnings, validation, versions}`. value is {document, revision, counts, analysis}: the new session document's handle and revision; counts is {atoms, bonds, arrows, annotations, graphics}. analysis is {smiles, formula, mass, exact_mass, logp, tpsa, donors, acceptors, rings, unpaired_electrons, inchi, inchikey}, or null when the engine returned none. mass, exact_mass, logp and tpsa are rounded to 9 decimal places to remove floating-point noise. The engine's warnings become the warnings.
 
 ## inspect
 
@@ -130,7 +130,7 @@ Compute the molecular properties of a session document: SMILES, formula, mass, e
 | `document` | `string` | true | false | pattern: `"^[A-Za-z0-9_-]{1,64}$"` |
 | `ids` | `null or array<string>` | true | true | maxItems: `5000`; items.pattern: `"^[1-9][0-9]{0,19}$"` |
 
-Result: `{value, warnings, validation, versions}`. value is {analysis, analyzed_atoms}. analysis is {smiles, formula, mass, exact_mass, logp, tpsa, donors, acceptors, rings, unpaired_electrons, inchi, inchikey}; analyzed_atoms lists the analyzed atom IDs in document order. When the engine returns no analysis, the whole drawing gets analysis: null and a last warning, "No molecular properties were returned."; a selection fails with that message instead. The engine's warnings become the warnings; an engine error is failed with its message.
+Result: `{value, warnings, validation, versions}`. value is {analysis, analyzed_atoms}. analysis is {smiles, formula, mass, exact_mass, logp, tpsa, donors, acceptors, rings, unpaired_electrons, inchi, inchikey}; analyzed_atoms lists the analyzed atom IDs in document order. mass, exact_mass, logp and tpsa are rounded to 9 decimal places to remove floating-point noise. When the engine returns no analysis, the whole drawing gets analysis: null and a last warning, "No molecular properties were returned."; a selection fails with that message instead. The engine's warnings become the warnings; an engine error is failed with its message.
 
 ## render
 
@@ -194,7 +194,7 @@ Open a structure file or a native ReShiki drawing as a new session document and 
 | `format` | `string` | true | false | enum: `["auto","smiles","mol","rxn","rsmi","inchi","cdxml","cdx","reshiki"]` |
 | `path` | `string` | true | false | maxLength: `4096` |
 
-Result: `{value, warnings, validation, versions}`. value is import's {document, revision, counts, analysis} plus source: {path, bytes}, the requested path and the opened file's size. counts is {atoms, bonds, arrows, annotations, graphics}; analysis is {smiles, formula, mass, exact_mass, logp, tpsa, donors, acceptors, rings, unpaired_electrons, inchi, inchikey}, or null when the engine returned none. The engine's warnings become the warnings.
+Result: `{value, warnings, validation, versions}`. value is import's {document, revision, counts, analysis} plus source: {path, bytes}, the requested path and the opened file's size. counts is {atoms, bonds, arrows, annotations, graphics}; analysis is {smiles, formula, mass, exact_mass, logp, tpsa, donors, acceptors, rings, unpaired_electrons, inchi, inchikey}, or null when the engine returned none. mass, exact_mass, logp and tpsa are rounded to 9 decimal places to remove floating-point noise. The engine's warnings become the warnings.
 
 ## file_save
 

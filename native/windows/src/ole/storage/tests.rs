@@ -83,10 +83,11 @@ fn object_descriptor_getdata_returns_expected_clipboard_bytes() {
 
     // Independent wire fixture: 52-byte header, our COM GUID, 25.4 × 12.7 mm
     // extent, and 16 UTF-16LE code units including the label's terminal NUL.
+    // Both the full user type name and copy source point at this label.
     let expected: [u8; 84] = [
         0x54, 0, 0, 0, 0x7e, 0x2b, 0xac, 0x3b, 0xa2, 0x73, 0x3a, 0x4f, 0x9c, 0xe7, 0x5e, 0x9b,
         0x43, 0x8c, 0x59, 0xb4, 1, 0, 0, 0, 0xec, 9, 0, 0, 0xf6, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0x10, 0, 0, 0, 0x34, 0, 0, 0, 0, 0, 0, 0, b'R', 0, b'e', 0, b'S', 0, b'h', 0, b'i', 0,
+        0x10, 0, 0, 0, 0x34, 0, 0, 0, 0x34, 0, 0, 0, b'R', 0, b'e', 0, b'S', 0, b'h', 0, b'i', 0,
         b'k', 0, b'i', 0, b' ', 0, b'd', 0, b'r', 0, b'a', 0, b'w', 0, b'i', 0, b'n', 0, b'g', 0,
         0, 0,
     ];
@@ -116,6 +117,15 @@ fn object_descriptor_getdata_returns_expected_clipboard_bytes() {
         unsafe { std::slice::from_raw_parts(pointer.cast::<u8>(), expected.len()) }.to_vec()
     };
     assert_eq!(bytes, expected);
+    let source_offset = u32::from_le_bytes(bytes[48..52].try_into().unwrap()) as usize;
+    let source: Vec<_> = bytes[source_offset..]
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|&unit| u16::from_le_bytes(unit))
+        .take_while(|&unit| unit != 0)
+        .collect();
+    assert_eq!(String::from_utf16(&source).unwrap(), "ReShiki drawing");
     // SAFETY: The same live object and valid structure are used on this STA;
     // the unsupported medium must be rejected before allocating any output.
     assert_eq!(

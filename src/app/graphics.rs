@@ -5,7 +5,9 @@ use iced::widget::{checkbox, column, container, row, text, tooltip};
 use iced::{Alignment, Length};
 use reshiki::graphics::GraphicKind;
 use reshiki::palette::{Color as Paint, Palette, Row};
+mod heads;
 pub(super) mod path;
+pub use heads::Field as HeadField;
 mod path_cleanup;
 
 const ATTACH_SYMBOLS_HINT: &str = concat!(
@@ -57,6 +59,11 @@ pub enum Action {
     ApplyStroke,
     Fill(String),
     ApplyFill,
+    Head(reshiki::arrows::Head),
+    Tail(reshiki::arrows::Head),
+    HeadShape(reshiki::arrows::HeadShape),
+    HeadNumber(HeadField, String),
+    ApplyHeadNumber(HeadField),
     Sides(BracketSides),
     Path(path::Action),
     Cleanup(Cleanup),
@@ -88,6 +95,11 @@ impl App {
             Action::ApplyStroke => self.apply_graphic_color(ColorField::Stroke),
             Action::Fill(s) => self.tab.graphic_fill_input = s,
             Action::ApplyFill => self.apply_graphic_color(ColorField::Fill),
+            Action::Head(_)
+            | Action::Tail(_)
+            | Action::HeadShape(_)
+            | Action::HeadNumber(..)
+            | Action::ApplyHeadNumber(_) => self.path_head_action(action),
             Action::ScientificKind(kind) => self.set_scientific_kind(kind),
             Action::OrbitalPhase(phase) => self.set_orbital_phase(phase),
             Action::FlipPhase(value) => self.set_phase_flipped(value),
@@ -316,6 +328,9 @@ impl App {
         if kind == GraphicKind::Arc {
             panel = panel.push(self.arc_controls());
         }
+        if let Some(graphic) = self.selected_open_paths().next() {
+            panel = panel.push(self.path_head_controls(graphic.heads.unwrap_or_default()));
+        }
         if kind == GraphicKind::Path
             || matches!(selected.as_slice(),[g] if matches!(g.kind,GraphicKind::Path|GraphicKind::Curve))
         {
@@ -400,6 +415,12 @@ impl App {
             }
         }
         self.tab.graphic_width_input = self.tab.graphic_style.width_pt.to_string();
+        let heads = self
+            .selected_open_paths()
+            .next()
+            .and_then(|g| g.heads)
+            .unwrap_or_default();
+        self.tab.path_head_inputs = HeadField::ALL.map(|field| field.get(&heads).to_string());
         let palette = reshiki::palette::Palette::of(&self.tab.doc);
         let hex = |c| reshiki::palette::hex(palette.rgb(c));
         self.tab.graphic_stroke_input = hex(self.tab.graphic_style.stroke);
@@ -455,6 +476,14 @@ impl App {
     }
 
     // Selection is shared; each operation retains its own picture and kind filters.
+    pub(super) fn selected_open_paths(&self) -> impl Iterator<Item = &Graphic> {
+        self.tab
+            .doc
+            .graphics
+            .iter()
+            .filter(|g| self.tab.selected.contains(&g.id) && is_open_path(g))
+    }
+
     fn selected_graphics_mut(&mut self) -> impl Iterator<Item = &mut Graphic> {
         let selected = &self.tab.selected;
         self.tab
@@ -506,4 +535,8 @@ impl App {
         }
         self.changed(before);
     }
+}
+
+fn is_open_path(graphic: &Graphic) -> bool {
+    graphic.path_summary().is_some_and(|path| !path.closed)
 }

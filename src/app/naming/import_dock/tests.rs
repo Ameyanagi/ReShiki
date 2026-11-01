@@ -14,6 +14,7 @@ fn record() -> Record {
     Record {
         title: "ethanol".into(),
         systematic_name: None,
+        name_status: None,
         provenance: Provenance::OpsinRust,
         ..super::super::test_support::record("CCO")
     }

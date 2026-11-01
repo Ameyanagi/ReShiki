@@ -410,6 +410,10 @@ class NativeRuntimeTests(unittest.TestCase):
             with (app / "Contents/Info.plist").open("rb") as stream:
                 info = plistlib.load(stream)
             self.assertEqual(info["CFBundleIconFile"], "ReShiki.icns")
+            self.assertEqual(
+                info["NSLocalNetworkUsageDescription"],
+                "ReShiki looks for printers on your network when you print.",
+            )
             document_type = info["CFBundleDocumentTypes"][0]
             self.assertEqual(document_type["CFBundleTypeRole"], "Editor")
             self.assertEqual(document_type["LSItemContentTypes"], ["dev.reshiki.drawing"])

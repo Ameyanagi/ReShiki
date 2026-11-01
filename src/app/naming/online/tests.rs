@@ -86,6 +86,7 @@ async fn online_result_requires_insert_and_keeps_identity_caption_and_history() 
     let smiles = "CC1=CC2=C(S1)NC3=CC=CC=C3N=C2N4CCN(CC4)C";
     let record = Record {
         title: "olanzapine".into(),
+        name_status: None,
         systematic_name: Some(
             "2-methyl-4-(4-methylpiperazin-1-yl)-10H-thieno[2,3-b][1,5]benzodiazepine".into(),
         ),
@@ -165,6 +166,7 @@ async fn stale_online_success_cannot_install_a_preview_or_change_history() -> Re
         let ticket = app.tab.naming.pending.unwrap().ticket();
         let record = Record {
             title: "ethanol".into(),
+            name_status: None,
             provenance: naming::Provenance::PubChem { cid: 702 },
             ..super::super::test_support::record("CCO")
         };

@@ -21,6 +21,55 @@ fn fixture_app() -> App {
 }
 
 #[test]
+fn path_heads_follow_pen_preview_and_survive_node_edits_and_closing() {
+    use reshiki::arrows::Head;
+    use reshiki::graphics::PathHeads;
+    let mut app = fixture_app();
+    let id = app.tab.selected[0];
+    let heads = PathHeads {
+        head: Head::Full,
+        tail: Head::Left,
+        ..Default::default()
+    };
+    app.tab.doc.graphics[0].heads = Some(heads);
+    send(&mut app, PathAction::Continue);
+    let before = app.tab.doc.clone();
+    let stroke = Stroke {
+        start: Point::new(360., 50.),
+        end: Point::new(380., 80.),
+        dragged: true,
+        close: false,
+    };
+    let (preview, _, _) =
+        crate::canvas::pen::apply(&before, &app.tab.selected, &app.tab.graphic_style, stroke)
+            .unwrap();
+    assert_eq!(preview.graphics[0].heads, Some(heads));
+    assert_eq!(preview.graphics[0].parts().len(), 3);
+    let _ = app.update(Message::Canvas(Edit::PenSegment(stroke)));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc, preview);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+
+    let _ = app.update(Message::Tool(Tool::EditPoints));
+    let before = app.tab.doc.clone();
+    let point = before.graphics[0].edit_points()[3].offset(10., -15.);
+    app.edit(Edit::GraphicPoint(id, 3, point));
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.graphics[0].heads, Some(heads));
+    assert_eq!(app.tab.doc.graphics[0].parts().len(), 3);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    send(&mut app, PathAction::Close);
+    assert_eq!(app.tab.doc.graphics[0].heads, Some(heads));
+    assert_eq!(app.tab.doc.graphics[0].parts().len(), 1);
+    send(&mut app, PathAction::Open);
+    assert_eq!(app.tab.doc.graphics[0].heads, Some(heads));
+    assert_eq!(app.tab.doc.graphics[0].parts().len(), 3);
+}
+
+#[test]
 fn compound_path_point_edit_matches_generic_preview_and_has_one_history_step() {
     use reshiki::graphics::PathCommand;
     let mut app = fixture_app();

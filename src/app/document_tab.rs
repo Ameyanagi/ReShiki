@@ -1,9 +1,9 @@
 //! Per-document state. `App` keeps the active tab inline as `App::tab`; everything
 //! else on `App` is app-wide (tool, settings, libraries, chrome, dialogs).
 use super::{
-    CleanupPreview, arcs, arrows, atom_labels, atom_text, autosave, document_styles, inline_text,
-    inspector, joining, label_refresh, molecule_shortcuts, naming, numeric_transforms, pages,
-    pictures, reaction_mapping, reactions, typography,
+    CleanupPreview, arcs, arrows, atom_labels, atom_text, autosave, document_styles, graphics,
+    inline_text, inspector, joining, label_refresh, molecule_shortcuts, naming, numeric_transforms,
+    pages, pictures, reaction_mapping, reactions, typography,
 };
 use crate::canvas::Camera;
 use crate::session::Binding;
@@ -103,6 +103,7 @@ pub(super) struct DocumentTab {
     pub(super) attach_symbols: bool,
     pub(super) snap_orbitals: bool,
     pub(super) graphic_width_input: String,
+    pub(super) path_head_inputs: [String; 3],
     pub(super) graphic_stroke_input: String,
     pub(super) graphic_fill_input: String,
     pub(super) bracket_sides: BracketSides,
@@ -219,6 +220,8 @@ impl DocumentTab {
             attach_symbols: true,
             snap_orbitals: true,
             graphic_width_input: "0.6".into(),
+            path_head_inputs: graphics::HeadField::ALL
+                .map(|field| field.get(&Default::default()).to_string()),
             graphic_stroke_input: "#000000".into(),
             graphic_fill_input: String::new(),
             bracket_sides: BracketSides::Both,

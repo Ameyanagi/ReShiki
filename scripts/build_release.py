@@ -479,6 +479,7 @@ def bundle_metadata(destination):
         CFBundleVersion=numeric_version(version()),
         ReShikiPackageVersion=version(),
         NSHighResolutionCapable=True,
+        NSLocalNetworkUsageDescription="ReShiki looks for printers on your network when you print.",
         LSMinimumSystemVersion=os.environ.get("MACOSX_DEPLOYMENT_TARGET", "14.0"),
         CFBundleIconFile="ReShiki.icns",
         CFBundleDocumentTypes=[
