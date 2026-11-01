@@ -88,7 +88,7 @@ parity_text	alcohol_amine	13	13
 parity_text	alkenyl_benzyl	10	10
 parity_text	chain_ring_prefix	12	12
 parity_text	data	13	13
-parity_text	drug	20	20
+parity_text	drug	18	20
 parity_text	exploratory	1	1
 parity_text	fixtures	22	22
 parity_text	heterocycle	25	25
@@ -99,10 +99,10 @@ parity_text	mr_fused	18	20
 parity_text	mr_macro_other	5	7
 parity_text	mr_spiro	7	7
 parity_text	natural_product	19	19
-parity_text	pubchem_random	46	50
+parity_text	pubchem_random	41	50
 parity_text	ring_ON_ester_amide	10	10
 parity_text	roundtrip	77	77
 parity_text	stereo	16	16
 parity_text	suffix_on_ring	20	20
-parity_text	unit	51	52
-parity_text	total	425	434
+parity_text	unit	49	52
+parity_text	total	416	434

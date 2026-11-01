@@ -286,7 +286,7 @@ mod tests {
 
     #[test]
     fn nitrogen_ranking_discards_provisional_branch_status() {
-        let mol = read_smiles("NC(=O)NS(=O)(=O)C").unwrap();
+        let mol = read_smiles("NC(=O)NS(=O)(=O)CC(=O)O").unwrap();
         let exclude = AtomSet::from([0, 1, 2]);
         let mut blocked = exclude.clone();
         blocked.insert(3);

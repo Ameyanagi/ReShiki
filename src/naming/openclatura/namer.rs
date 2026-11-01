@@ -571,79 +571,22 @@ fn acylamino_amido_prefix(
     let mut blocked = exclude.clone();
     blocked.insert(nitrogen);
     let acid_atoms = subgraph_component(mol, center, &blocked);
-    // Only a competing acid reachable without crossing an ether can take the suffix.
-    // Upstream divergence: a sulfonic/sulfinic acid competes as well as a
-    // carboxylic acid. Otherwise acid-name conversion can move the amido
-    // attachment to a different sulfur centre and change connectivity.
-    let mut seen = AtomSet::from([center]);
-    let mut queue = vec![center];
-    while let Some(a) = queue.pop() {
-        for &n in mol.get_neighbors(a) {
-            if !acid_atoms.contains(&n) || (mol.atoms[&n].symbol == "O" && mol.degree(n) > 1) {
-                continue;
-            }
-            if seen.insert(n) {
-                queue.push(n);
-            }
-        }
-    }
-    if seen.iter().any(|&c| {
-        c != center
-            && (mol.atoms[&c].is_carbon() || mol.atoms[&c].symbol == "S")
-            && mol.get_neighbors(c).iter().any(|&n| {
-                mol.atoms[&n].symbol == "O"
-                    && mol.get_bond(c, n).is_some_and(|bond| bond.order == 2)
-            })
-            && mol.get_neighbors(c).iter().any(|&n| {
-                mol.atoms[&n].symbol == "O"
-                    && mol.degree(n) == 1
-                    && mol.get_bond(c, n).is_some_and(|bond| bond.order == 1)
-            })
-    }) {
-        return Ok(None);
-    }
-    let mut acid_mol = mol.subgraph(&acid_atoms);
-    if acid_mol.atoms[&center].charge > 0
-        && let Some((oxygen, bond_id)) = acid_mol.get_neighbors(center).iter().find_map(|&n| {
-            let bond = acid_mol.get_bond(center, n)?;
-            (acid_mol.atoms[&n].symbol == "O"
-                && acid_mol.atoms[&n].charge == -1
-                && acid_mol.degree(n) == 1
-                && bond.order == 1)
-                .then_some((n, bond.idx))
-        })
-    {
-        let charge = acid_mol.atoms[&center].charge;
-        acid_mol.set_atom_charge(oxygen, 0)?;
-        acid_mol.set_bond_order(bond_id, 2)?;
-        acid_mol.set_atom_charge(center, charge - 1)?;
-    }
-    let oxygen = mol.atoms.keys().next_back().copied().unwrap_or(0) + 1;
-    let mut cap = Atom::new(oxygen, "O");
-    cap.total_h_count = 1;
-    acid_mol.add_atom(cap)?;
-    let bond_id = mol.bonds.keys().next_back().copied().unwrap_or(0) + 1;
-    acid_mol.add_bond(Bond::new(bond_id, center, oxygen, 1))?;
-    let mut capped = acid_atoms.clone();
-    capped.insert(oxygen);
     let status = mol.name_status();
-    let acid_result = name_component(&acid_mol, &capped);
-    // Upstream divergence: a speculative acid candidate cannot hide exhausted naming resources.
-    mol.spend_naming_work(0)?;
-    let Ok(acid_name) = acid_result else {
-        mol.set_name_status(status);
+    let Some(acid_name) = capped_acid_name(mol, center, &acid_atoms)? else {
         return Ok(None);
     };
+    let n_sub: Vec<_> = neighbors.into_iter().filter(|n| *n != center).collect();
+    // N prefixes are not merged into the acid's own (N,4-dimethylbenzene-1-sulfonamido),
+    // so an N-substituted tosyl amide keeps the shorthand and its mark.
     let Some(mut amido) = RULES
         .heteroatoms
         .retained_sulfonyl_group_acids
         .get(&acid_name)
+        .filter(|_| !n_sub.is_empty())
         .map(|s| {
-            if s == "tosyl" {
-                mol.mark_name(crate::naming::NameStatus::NotPreferred(
-                    crate::naming::NameReason::SulfonylPrefix,
-                ));
-            }
+            mol.mark_name(crate::naming::NameStatus::NotPreferred(
+                crate::naming::NameReason::SulfonylPrefix,
+            ));
             format!("{s}amino")
         })
         .or_else(|| acid_name_to_amido(&acid_name))
@@ -651,7 +594,6 @@ fn acylamino_amido_prefix(
         mol.set_name_status(status);
         return Ok(None);
     };
-    let n_sub: Vec<_> = neighbors.into_iter().filter(|n| *n != center).collect();
     if !n_sub.is_empty() {
         let mut ex = exclude.clone();
         ex.insert(nitrogen);
@@ -693,6 +635,83 @@ fn acylamino_amido_prefix(
     } else {
         amido
     }))
+}
+
+/// Names `acid_atoms` with `center` capped by a hydroxy group, or None when
+/// another acid group could take the suffix or the acid cannot be named.
+pub(super) fn capped_acid_name(
+    mol: &Molecule,
+    center: usize,
+    acid_atoms: &AtomSet,
+) -> Result<Option<String>, String> {
+    // Only a competing acid reachable without crossing an ether can take the suffix.
+    // Upstream divergence: a sulfonic/sulfinic acid competes as well as a
+    // carboxylic acid. Otherwise acid-name conversion can move the
+    // attachment to a different sulfur centre and change connectivity.
+    let mut seen = AtomSet::from([center]);
+    let mut queue = vec![center];
+    while let Some(a) = queue.pop() {
+        for &n in mol.get_neighbors(a) {
+            if !acid_atoms.contains(&n) || (mol.atoms[&n].symbol == "O" && mol.degree(n) > 1) {
+                continue;
+            }
+            if seen.insert(n) {
+                queue.push(n);
+            }
+        }
+    }
+    if seen.iter().any(|&c| {
+        c != center
+            && (mol.atoms[&c].is_carbon() || mol.atoms[&c].symbol == "S")
+            && mol.get_neighbors(c).iter().any(|&n| {
+                mol.atoms[&n].symbol == "O"
+                    && mol.get_bond(c, n).is_some_and(|bond| bond.order == 2)
+            })
+            && mol.get_neighbors(c).iter().any(|&n| {
+                mol.atoms[&n].symbol == "O"
+                    && mol.degree(n) == 1
+                    && mol.get_bond(c, n).is_some_and(|bond| bond.order == 1)
+            })
+    }) {
+        return Ok(None);
+    }
+    let mut acid_mol = mol.subgraph(acid_atoms);
+    if acid_mol.atoms[&center].charge > 0
+        && let Some((oxygen, bond_id)) = acid_mol.get_neighbors(center).iter().find_map(|&n| {
+            let bond = acid_mol.get_bond(center, n)?;
+            (acid_mol.atoms[&n].symbol == "O"
+                && acid_mol.atoms[&n].charge == -1
+                && acid_mol.degree(n) == 1
+                && bond.order == 1)
+                .then_some((n, bond.idx))
+        })
+    {
+        let charge = acid_mol.atoms[&center].charge;
+        acid_mol.set_atom_charge(oxygen, 0)?;
+        acid_mol.set_bond_order(bond_id, 2)?;
+        acid_mol.set_atom_charge(center, charge - 1)?;
+    }
+    let oxygen = mol.atoms.keys().next_back().copied().unwrap_or(0) + 1;
+    let mut cap = Atom::new(oxygen, "O");
+    cap.total_h_count = 1;
+    acid_mol.add_atom(cap)?;
+    let bond_id = mol.bonds.keys().next_back().copied().unwrap_or(0) + 1;
+    acid_mol.add_bond(Bond::new(bond_id, center, oxygen, 1))?;
+    // The acid's own centre cites no stereodescriptor; a sulfinyl caller cites it.
+    if let Some(atom) = acid_mol.atoms.get_mut(&center) {
+        atom.stereo = None;
+        atom.raw_stereo = None;
+    }
+    let mut capped = acid_atoms.clone();
+    capped.insert(oxygen);
+    let status = mol.name_status();
+    let acid_result = name_component(&acid_mol, &capped);
+    // Upstream divergence: a speculative acid candidate cannot hide exhausted naming resources.
+    mol.spend_naming_work(0)?;
+    if acid_result.is_err() {
+        mol.set_name_status(status);
+    }
+    Ok(acid_result.ok())
 }
 
 #[cfg(test)]

@@ -127,7 +127,7 @@ impl NameReason {
                 "Uses a general alkoxy prefix such as isopropoxy; preferred IUPAC names use forms such as (propan-2-yl)oxy (P-63.2.2.2)."
             }
             Self::SulfonylPrefix => {
-                "Uses general prefixes such as methylsulfonyl or tosyl; preferred IUPAC names use methanesulfonyl or 4-methylbenzene-1-sulfonyl (P-65.3.2)."
+                "Uses a concatenated sulfonyl or sulfinyl prefix such as N-methyltosylamino or (methylsulfinyl)amino; preferred IUPAC names use acid-derived forms such as N,4-dimethylbenzene-1-sulfonamido or methanesulfinamido (P-65.3.2.2.2, P-66.1.1.4.3)."
             }
             Self::ChalcogenPrefix => {
                 "Uses a general chalcogen prefix such as thioxo or thioformyl; preferred IUPAC names use forms such as sulfanylidene or methanethioyl (P-64.6.1)."

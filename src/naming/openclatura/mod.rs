@@ -220,7 +220,7 @@ mod tests {
             ),
             (
                 "C[S@@](=O)CSCNN",
-                "1-[({[(R)-methylsulfinyl]methyl}sulfanyl)methyl]hydrazine",
+                "1-[({[(R)-methanesulfinyl]methyl}sulfanyl)methyl]hydrazine",
             ),
             // Stereodescriptors and compound locants count as a level; fusion
             // and von Baeyer brackets do not (P-16.5.4.1.2, P-16.5.4.1.3).
@@ -306,6 +306,28 @@ mod tests {
                 "4-(methoxysulfonyl)benzoic acid",
             ),
             ("COS(=O)(=O)NCC(=O)O", "2-methoxysulfonylaminoacetic acid"),
+            // Sulfonyl and sulfinyl prefixes are named from the acid (P-65.3.2.2.2).
+            ("CS(=O)(=O)c1ccccc1", "(methanesulfonyl)benzene"),
+            ("C[S@](=O)c1ccccc1", "[(S)-methanesulfinyl]benzene"),
+            ("CS(=O)(=O)N1CCCC1", "1-(methanesulfonyl)pyrrolidine"),
+            (
+                "O=C(O)c1ccc(cc1)S(=O)(=O)N1CCN(C)CC1",
+                "4-(4-methylpiperazine-1-sulfonyl)benzoic acid",
+            ),
+            (
+                "O=C(O)C1CCN(C1)S(=O)(=O)c1ccc(C)cc1",
+                "1-(4-methylbenzene-1-sulfonyl)pyrrolidine-3-carboxylic acid",
+            ),
+            (
+                "CC(NS(=O)(=O)c1ccc(C)cc1)C(=O)O",
+                "2-(4-methylbenzene-1-sulfonamido)propanoic acid",
+            ),
+            (
+                "CS(=O)(=O)OCCC(=O)O",
+                "3-[(methanesulfonyl)oxy]propanoic acid",
+            ),
+            ("OC(=O)CS(=O)(=O)c1ccccc1", "2-(benzenesulfonyl)acetic acid"),
+            ("OS(=O)(=O)ON=C1CCCCC1", "N-(sulfooxy)cyclohexanimine"),
             // Substituted anisoles take systematic PINs (P-63.2.3).
             ("COc1ccc(Cl)cc1", "1-chloro-4-methoxybenzene"),
             ("COc1ccccc1OC", "1,2-dimethoxybenzene"),
@@ -327,8 +349,13 @@ mod tests {
             ("O=C(O)CC(=O)O", "malonic acid", R::RetainedGeneralName),
             ("CC(C)Oc1ccccc1", "isopropoxybenzene", R::AlkoxyPrefix),
             (
-                "CS(=O)(=O)c1ccccc1",
-                "(methylsulfonyl)benzene",
+                "CN(C(C)C(=O)O)S(=O)(=O)c1ccc(C)cc1",
+                "2-(N-methyltosylamino)propanoic acid",
+                R::SulfonylPrefix,
+            ),
+            (
+                "OC(=O)CS(=O)(=O)CS(=O)(=O)O",
+                "2-(sulfomethylsulfonyl)acetic acid",
                 R::SulfonylPrefix,
             ),
             ("O=C(O)CC(=S)C", "3-thioxobutanoic acid", R::ChalcogenPrefix),

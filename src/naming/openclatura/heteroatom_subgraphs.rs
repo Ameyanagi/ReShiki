@@ -1,13 +1,15 @@
 //! Plain-name rendering for heteroatom-starting recursive substituents.
 use super::assembly_prefixes::substituent_sort_key;
+use super::chains::get_cyclic_atoms;
 use super::formatting::{
     format_center_ligands_by, format_counted_prefixes, format_element_substituent,
     format_multiplier, is_complex_prefix, oxy_prefix_from_branch, strip_outer_parentheses,
 };
 use super::molecule::{AtomSet, Molecule};
-use super::namer::name_subgraph_with_upstream;
+use super::namer::{capped_acid_name, name_subgraph_with_upstream};
 use super::nomenclature::section;
 use super::rules::{elements, multipliers};
+use super::subgraph_tools::subgraph_component;
 use crate::naming::{NameReason, NameStatus};
 use serde_json::Value;
 use std::collections::{BTreeMap, VecDeque};
@@ -233,6 +235,59 @@ pub fn format_amino_from_branches(
     format!("({modifier}amino)")
 }
 
+/// P-65.3.2.2.2: R-SO2- and R-SO- are named from the acid R-SO3H or R-SO2H by
+/// changing "ic acid" to "yl", as in methanesulfonyl or 4-methylbenzene-1-sulfonyl,
+/// and enclosed although simple (P-16.5.1.4). A ring nitrogen takes the suffix
+/// too (pyrrolidine-1-sulfonamide, P-66.1.1.2), so its substituent name only
+/// regains the elided final e: piperidin-1-yl gives piperidine-1-sulfonyl.
+/// `outside` holds every atom beyond the sulfur's upstream bond.
+fn acid_sulfonyl(
+    mol: &Molecule,
+    sulfur: usize,
+    root: usize,
+    branch: &str,
+    outside: &AtomSet,
+    suffix: &str,
+) -> Result<Option<String>, String> {
+    let Some(acid) = suffix
+        .strip_suffix("yl")
+        .filter(|s| matches!(*s, "sulfon" | "sulfin"))
+    else {
+        return Ok(None);
+    };
+    let atom = &mol.atoms[&root];
+    let acyl = if atom.symbol == "N"
+        && atom.charge == 0
+        && get_cyclic_atoms(mol, outside).contains(&root)
+    {
+        branch
+            .strip_suffix("-yl")
+            .and_then(|b| b.rsplit_once('-'))
+            .map(|(parent, locant)| format!("{parent}e-{locant}-{suffix}"))
+    } else if atom.is_carbon() {
+        let atoms = subgraph_component(mol, sulfur, outside);
+        // Another sulfur acid group could take the suffix in the acid's name.
+        if atoms.iter().any(|&s| {
+            s != sulfur
+                && mol.atoms[&s].symbol == "S"
+                && mol.get_neighbors(s).iter().any(|&o| {
+                    mol.atoms[&o].symbol == "O" && mol.degree(o) == 1 && mol.bond_order(s, o) == 1
+                })
+        }) {
+            return Ok(None);
+        }
+        mol.candidate(|| {
+            Ok(capped_acid_name(mol, sulfur, &atoms)?.and_then(|name| {
+                name.strip_suffix(&format!("{acid}ic acid"))
+                    .map(|stem| format!("{stem}{suffix}"))
+            }))
+        })?
+    } else {
+        None
+    };
+    Ok(acyl.map(|acyl| format!("({}{acyl})", stereo(mol, sulfur))))
+}
+
 fn sulfonyl_group(mol: &Molecule, branch: &str, suffix: &str) -> (String, bool) {
     let b = strip_outer_parentheses(branch);
     if let Some(rows) = section("retained_sulfonyl_group_names").as_array() {
@@ -445,6 +500,14 @@ fn name_oxygen(
                     &with_atoms(exclude, [start, next].into_iter().chain(no)),
                     next,
                 )?;
+                // HO-SO2-O- is sulfooxy (P-65.3.2.3).
+                if b == "hydroxy" && suffix == "sulfonyl" {
+                    return Ok("(sulfooxy)".into());
+                }
+                let outside = with_atoms(exclude, [start]);
+                if let Some(acyl) = acid_sulfonyl(mol, next, n, &b, &outside, suffix)? {
+                    return Ok(format!("({acyl}oxy)"));
+                }
                 let (g, _) = sulfonyl_group(mol, &b, suffix);
                 return Ok(format!("({}{g}oxy)", stereo(mol, next)));
             }
@@ -999,6 +1062,10 @@ fn name_sulfur(
             [] => Ok(format!("{sp}{suffix}")),
             [root] => {
                 let b = plain_branch(mol, *root, &blocked, start)?;
+                let outside = with_atoms(exclude, upstream);
+                if let Some(acyl) = acid_sulfonyl(mol, start, *root, &b, &outside, &suffix)? {
+                    return Ok(acyl);
+                }
                 let (g, bare) = sulfonyl_group(mol, &b, &suffix);
                 Ok(if bare {
                     format!("{sp}{g}")

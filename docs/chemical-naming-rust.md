@@ -185,7 +185,7 @@ that is not the PIN:
 | ------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | `retained_general_name`   | `propionitrile`, `malonic acid`                                            | `propanenitrile`, `propanedioic acid`                         |
 | `alkoxy_prefix`           | `isopropoxy`, `isobutoxy`, `sec-butoxy`                                    | `(propan-2-yl)oxy`, `2-methylpropoxy`                         |
-| `sulfonyl_prefix`         | `methylsulfonyl`, `tosyl`                                                  | `methanesulfonyl`, `4-methylbenzene-1-sulfonyl`               |
+| `sulfonyl_prefix`         | `N-methyltosylamino`, `(methylsulfinyl)amino`                              | `N,4-dimethylbenzene-1-sulfonamido`, `methanesulfinamido`     |
 | `chalcogen_prefix`        | `thioxo`, `selenoxo`, `thioformyl`, `selenoformyl`                         | `sulfanylidene`, `methanethioyl`, `methaneselenoyl`           |
 | `amino_prefix`            | `phenylamino`, `guanidino`                                                 | `anilino`, `carbamimidoylamino`                               |
 | `functional_class`        | `dimethyl sulfoxide`, `acetaldehyde hydrazone`, `trimethylphosphane oxide` | substitutive names                                            |
@@ -205,6 +205,15 @@ ring acids of `2-(4-carboxyphenyl)acetic acid`, chosen by atom order rather than
 by P-44.1). The other parent-selection rules that the port does not implement in
 full (heteroatom seniority, skeletal replacement chains, phane names) have no
 mark.
+
+Sulfonyl and sulfinyl prefixes are named from the acid (P-65.3.2.2.2) and
+enclosed although simple (P-16.5.1.4): `(methanesulfonyl)benzene`,
+`4-(4-methylpiperazine-1-sulfonyl)benzoic acid`,
+`3-[(methanesulfonyl)oxy]propanoic acid`, `N-(sulfooxy)cyclohexanimine`. The
+`sulfonyl_prefix` mark stays where the engine still concatenates: on a nitrogen
+that the PIN names as sulfonamido or sulfinamido (P-66.1.1.4.3), on an imino
+nitrogen, and where another acid group in the substituent would take the acid
+suffix.
 
 `unretained_parent` also covers formic acids, formyl halides and formamides
 substituted on carbon, which are carbamic or carbonic acid derivatives
