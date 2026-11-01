@@ -929,7 +929,9 @@ mod tests {
                 .contains("chalcogen cation pi state")
         );
         assert_eq!(
-            super::super::name_smiles("C[S+](C)[CH-]C").as_deref(),
+            super::super::name_smiles("C[S+](C)[CH-]C")
+                .map(|name| name.text)
+                .as_deref(),
             Ok("1-(dimethylsulfaniumyl)ethan-1-ide")
         );
     }
@@ -1122,6 +1124,7 @@ mod tests {
             super::super::name_smiles(
                 "CC(=[NH2+])[N+](=CC1C[C@H]2CC(C1)(CCCN2)C)C(=N)C3=CC=CC=C3",
             )
+            .map(|name| name.text)
             .as_deref(),
             Ok("1-((1-imino-1-phenylmethyl)(((1S)-6-methyl-2-azabicyclo[4.3.1]decan-8-yl)methylidene)ammonio)ethan-1-iminium"),
         );

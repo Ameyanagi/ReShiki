@@ -834,7 +834,9 @@ mod tests {
             vec![vec![11, 10, 9, 7]],
         );
         assert_eq!(
-            super::super::name_smiles(smiles).as_deref(),
+            super::super::name_smiles(smiles)
+                .map(|name| name.text)
+                .as_deref(),
             Ok("N-([1,2,4]triazolo[4,3-a]pyridin-3-yl)-N'-cyclohexylbutanediamide"),
         );
     }
@@ -1051,7 +1053,12 @@ mod tests {
                 "4-(2-fluorobicyclo[1.1.1]penta-1(5),3(5)-dien-2-yl)-2-methylpyridine",
             ),
         ] {
-            assert_eq!(super::super::name_smiles(smiles).as_deref(), Ok(expected));
+            assert_eq!(
+                super::super::name_smiles(smiles)
+                    .map(|name| name.text)
+                    .as_deref(),
+                Ok(expected)
+            );
         }
     }
 
@@ -1069,11 +1076,14 @@ mod tests {
         }
         let started = Instant::now();
         assert_eq!(
-            name_smiles(&tree),
+            name_smiles(&tree).map(|name| name.text),
             Err("openclatura: naming complexity limit exceeded".into())
         );
         assert!(started.elapsed() < Duration::from_secs(10));
         assert!(name_smiles(&"C".repeat(100)).is_ok());
-        assert_eq!(name_smiles("CCC(C)CC"), Ok("3-methylpentane".into()));
+        assert_eq!(
+            name_smiles("CCC(C)CC").map(|name| name.text),
+            Ok("3-methylpentane".into())
+        );
     }
 }

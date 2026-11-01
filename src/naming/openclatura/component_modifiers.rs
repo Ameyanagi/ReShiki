@@ -10,6 +10,7 @@ use super::{
     perception::{LigandRole, PerceivedGroup},
     subgraph_tools::subgraph_component,
 };
+use crate::naming::{NameReason, NameStatus};
 use std::collections::BTreeMap;
 
 pub fn add_component_front_modifiers(
@@ -82,6 +83,7 @@ fn nitrogen_rank(
 ) -> Result<(usize, String, isize), String> {
     let mut blocked = exclude.clone();
     blocked.insert(n);
+    let status = mol.name_status();
     let names = mol
         .get_neighbors(n)
         .iter()
@@ -90,7 +92,10 @@ fn nitrogen_rank(
         .map(|r| {
             name_subgraph_with_upstream(mol, r, &blocked, Some(n)).map(|s| substituent_sort_key(&s))
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>, _>>();
+    // These provisional names only rank the nitrogens; their text is not emitted.
+    mol.set_name_status(status);
+    let names = names?;
     Ok(if let Some(first) = names.iter().min() {
         (0, first.clone(), -(names.len() as isize))
     } else {
@@ -223,6 +228,7 @@ pub fn add_component_n_substituents(
             for root in roots {
                 let mut blocked = exclude.clone();
                 blocked.insert(n);
+                let status = mol.name_status();
                 let mut rendered = name_subgraph_rendered(mol, root, &blocked, Some(n))?;
                 if mol.get_bond(n, root).is_some_and(|b| b.order == 2)
                     && mol.atoms[&root].symbol == "N"
@@ -231,6 +237,7 @@ pub fn add_component_n_substituents(
                         .iter()
                         .all(|&r| r == n || mol.atoms[&r].symbol == "H")
                 {
+                    mol.set_name_status(status);
                     rendered.text = "imino".into();
                 }
                 let atoms = subgraph_component(mol, root, &blocked);
@@ -255,6 +262,14 @@ pub fn add_component_n_substituents(
                     item.locants.clear();
                     parts.principal_suffix_modifiers.push(item);
                 } else {
+                    if selected.len() == 2
+                        && rule.has_capability("amide_like")
+                        && !rule.has_capability("urea")
+                        && !rule.has_capability("hydrazide")
+                        && loc == "N'"
+                    {
+                        mol.mark_name(NameStatus::NotPreferred(NameReason::DiamideLocants));
+                    }
                     super::subgraph_tools::add_substituent(parts, item);
                 }
             }
@@ -262,4 +277,27 @@ pub fn add_component_n_substituents(
         }
     }
     Ok(consumed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::naming::openclatura::graph_io::read_smiles;
+
+    #[test]
+    fn nitrogen_ranking_discards_provisional_branch_status() {
+        let mol = read_smiles("NC(=O)NS(=O)(=O)C").unwrap();
+        let exclude = AtomSet::from([0, 1, 2]);
+        let mut blocked = exclude.clone();
+        blocked.insert(3);
+        name_subgraph_with_upstream(&mol, 4, &blocked, Some(3)).unwrap();
+        assert_eq!(
+            mol.name_status(),
+            NameStatus::NotPreferred(NameReason::SulfonylPrefix)
+        );
+        let previous = NameStatus::Unverified(NameReason::UnauditedParent);
+        mol.set_name_status(previous);
+        nitrogen_rank(&mol, 3, 1, &exclude).unwrap();
+        assert_eq!(mol.name_status(), previous);
+    }
 }

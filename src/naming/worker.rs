@@ -8,7 +8,7 @@ use std::{
     path::PathBuf,
 };
 
-pub(super) const PROTOCOL: u32 = 2;
+pub(super) const PROTOCOL: u32 = 3;
 pub(super) const WIRE_LIMIT: usize = 32_768;
 pub(super) const OUTPUT_LIMIT: usize = 65_536;
 pub(super) const MAX_NAME_BYTES: usize = 2_048;
@@ -68,7 +68,7 @@ pub(super) struct Generated {
     pub protocol: u32,
     pub profile: String,
     pub input: String,
-    pub result: Result<String, String>,
+    pub result: Result<openclatura::Name, String>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
@@ -186,7 +186,7 @@ pub fn respond(bytes: &[u8]) -> Result<Vec<u8>, String> {
         } if protocol == PROTOCOL && profile == openclatura::PROFILE => {
             let result = openclatura::name_smiles(&smiles)
                 .and_then(|name| {
-                    check_name(&name, "the name exceeds the supported length")?;
+                    check_name(&name.text, "the name exceeds the supported length")?;
                     Ok(name)
                 })
                 .map_err(|reason| format!("This structure can't be named locally yet: {reason}"));

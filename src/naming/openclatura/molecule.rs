@@ -1,5 +1,6 @@
 //! Plain graph model and helpers ported from openclatura's `molecule.py`.
 use super::graph_kernel::{Edge, normalize_edge};
+use crate::naming::NameStatus;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::{
     cell::{Cell, RefCell},
@@ -16,6 +17,7 @@ const NAMING_WORK_LIMIT: usize = 500_000;
 struct NamingBudget {
     remaining: Cell<usize>,
     depth: Cell<usize>,
+    status: Cell<NameStatus>,
 }
 
 impl Default for NamingBudget {
@@ -23,6 +25,7 @@ impl Default for NamingBudget {
         Self {
             remaining: Cell::new(NAMING_WORK_LIMIT),
             depth: Cell::new(0),
+            status: Cell::new(NameStatus::Preferred),
         }
     }
 }
@@ -138,6 +141,39 @@ impl Clone for Molecule {
 impl Molecule {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub(super) fn mark_name(&self, status: NameStatus) {
+        let strength = |status| match status {
+            NameStatus::Preferred => 0,
+            NameStatus::Unverified(_) => 1,
+            NameStatus::NotPreferred(_) => 2,
+        };
+        if strength(status) > strength(self.name_status()) {
+            self.set_name_status(status);
+        }
+    }
+
+    pub(super) fn name_status(&self) -> NameStatus {
+        self.naming_budget.status.get()
+    }
+
+    pub(super) fn set_name_status(&self, status: NameStatus) {
+        self.naming_budget.status.set(status);
+    }
+
+    /// Runs a naming attempt whose `None` or error the caller discards, so
+    /// only an attempt that names something keeps its status marks.
+    pub(super) fn candidate<T>(
+        &self,
+        name: impl FnOnce() -> Result<Option<T>, String>,
+    ) -> Result<Option<T>, String> {
+        let status = self.name_status();
+        let result = name();
+        if !matches!(result, Ok(Some(_))) {
+            self.set_name_status(status);
+        }
+        result
     }
 
     pub(super) fn spend_naming_work(&self, amount: usize) -> Result<(), String> {
@@ -345,6 +381,30 @@ pub fn charged_atoms(mol: &Molecule, atom_ids: &AtomSet) -> AtomSet {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn name_status_is_shared_and_keeps_the_first_strongest_reason() {
+        use crate::naming::NameReason;
+        let mol = super::super::graph_io::read_smiles("CCO").unwrap();
+        let fragment = mol.subgraph(&AtomSet::from([0, 1]));
+        assert_eq!(mol.name_status(), NameStatus::Preferred);
+        fragment.mark_name(NameStatus::Unverified(NameReason::UnauditedParent));
+        mol.clone()
+            .mark_name(NameStatus::Unverified(NameReason::AtomOrder));
+        assert_eq!(
+            mol.name_status(),
+            NameStatus::Unverified(NameReason::UnauditedParent)
+        );
+        mol.mark_name(NameStatus::NotPreferred(NameReason::AlkoxyPrefix));
+        fragment.mark_name(NameStatus::NotPreferred(NameReason::FunctionalClass));
+        mol.mark_name(NameStatus::Preferred);
+        assert_eq!(
+            fragment.name_status(),
+            NameStatus::NotPreferred(NameReason::AlkoxyPrefix)
+        );
+        fragment.set_name_status(NameStatus::Preferred);
+        assert_eq!(mol.name_status(), NameStatus::Preferred);
+    }
 
     #[test]
     fn fusion_plans_do_not_survive_detached_or_chemically_changed_graphs() {

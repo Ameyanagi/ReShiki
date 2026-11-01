@@ -16,6 +16,7 @@ pub(super) fn record(smiles: &str) -> Record {
     Record {
         title: "ethan-1-ol".into(),
         systematic_name: Some("ethan-1-ol".into()),
+        name_status: Some(naming::NameStatus::Preferred),
         canonical_smiles: naming::canonical_smiles(smiles).unwrap(),
         smiles: smiles.into(),
         synonyms: vec![],

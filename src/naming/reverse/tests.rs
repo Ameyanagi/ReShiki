@@ -3,17 +3,36 @@ use serde_json::json;
 
 #[test]
 fn rule_protocol_checks_profile_input_and_bounded_name() {
-    let reply = json!({"operation":"generate","protocol":worker::PROTOCOL,"profile":openclatura::PROFILE,"input":"CCO","result":{"Ok":"ethanol"}});
-    assert_eq!(
-        parse_response(&serde_json::to_vec(&reply).unwrap(), "CCO").unwrap(),
-        "ethanol"
-    );
+    let reply = json!({"operation":"generate","protocol":worker::PROTOCOL,"profile":openclatura::PROFILE,"input":"CCO","result":{"Ok":{"text":"ethanol","status":{"status":"preferred"}}}});
+    let generated = parse_response(&serde_json::to_vec(&reply).unwrap(), "CCO").unwrap();
+    assert_eq!(generated.text, "ethanol");
+    assert_eq!(generated.status, NameStatus::Preferred);
     for (key, value) in [
-        ("protocol", json!(3)),
+        ("protocol", json!(worker::PROTOCOL - 1)),
         ("profile", json!("other")),
         ("input", json!("CCC")),
-        ("result", json!({"Ok":""})),
-        ("result", json!({"Ok":"x".repeat(2049)})),
+        (
+            "result",
+            json!({"Ok":{"text":"","status":{"status":"preferred"}}}),
+        ),
+        (
+            "result",
+            json!({"Ok":{"text":"x".repeat(2049),"status":{"status":"preferred"}}}),
+        ),
+        ("result", json!({"Ok":{"text":"ethanol"}})),
+        (
+            "result",
+            json!({"Ok":{"text":"ethanol","status":{"status":"unknown"}}}),
+        ),
+        (
+            "result",
+            json!({"Ok":{"text":"ethanol","status":{"status":"not_preferred"}}}),
+        ),
+        (
+            "result",
+            json!({"Ok":{"text":"ethanol","status":{"status":"preferred"},"unexpected":true}}),
+        ),
+        ("result", json!({"Ok":"ethanol"})),
     ] {
         let mut bad = reply.clone();
         bad[key] = value;
@@ -36,7 +55,15 @@ fn worker_names_with_the_port_or_declines() {
         let reply = worker::respond(&generate_request(smiles).unwrap()).unwrap();
         parse_response(&reply, smiles)
     };
-    assert_eq!(generate("CCO").unwrap(), "ethanol");
+    let preferred = generate("CCO").unwrap();
+    assert_eq!(preferred.text, "ethanol");
+    assert_eq!(preferred.status, NameStatus::Preferred);
+    let general = generate("CCC#N").unwrap();
+    assert_eq!(general.text, "propionitrile");
+    assert_eq!(
+        general.status,
+        NameStatus::NotPreferred(super::super::NameReason::RetainedGeneralName)
+    );
     let Err(Error::Rejected(reason)) = generate("[13CH3]CO") else {
         panic!("An isotope-labelled molecule received a name");
     };
@@ -66,6 +93,7 @@ async fn native_worker_then_local_opsin_verifies_supported_names() -> Result<(),
         assert_eq!(record.canonical_smiles, expected);
         assert_eq!(record.provenance, Provenance::Openclatura);
         assert_eq!(record.systematic_name.as_deref(), Some(expected_name));
+        assert!(record.name_status.is_some());
         // Source-labelled aliases supplement the generated name only after
         // exact graph reconstruction, including the two absolute enantiomers.
         let expected_aliases: Option<&[&str]> = match smiles {

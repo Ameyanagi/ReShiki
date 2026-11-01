@@ -1104,7 +1104,7 @@ mod tests {
             }
             let name = super::super::name_smiles(smiles);
             if let Some(expected) = legacy_name {
-                assert_eq!(name.unwrap(), expected);
+                assert_eq!(name.unwrap().text, expected);
             } else {
                 assert!(name.is_err(), "{smiles}");
             }
@@ -1125,7 +1125,9 @@ mod tests {
             Some("naphthalene")
         );
         assert_eq!(
-            super::super::name_smiles("C#Cc1ccc2ccccc2c1").as_deref(),
+            super::super::name_smiles("C#Cc1ccc2ccccc2c1")
+                .map(|name| name.text)
+                .as_deref(),
             Ok("2-ethynylnaphthalene")
         );
     }
@@ -1166,7 +1168,12 @@ mod tests {
             ("c1ccc2c(c1)-c1ccccc1-2", "biphenylene"),
             ("c1ccc2c(c1)-c1ccccc1-c1ccccc1-c1ccccc1-2", "tetraphenylene"),
         ] {
-            assert_eq!(super::super::name_smiles(smiles).as_deref(), Ok(expected));
+            assert_eq!(
+                super::super::name_smiles(smiles)
+                    .map(|name| name.text)
+                    .as_deref(),
+                Ok(expected)
+            );
         }
         for smiles in [
             "c1ccc2c(c1)=c1ccccc1=2",
@@ -1204,7 +1211,9 @@ mod tests {
         // A numbering that exchanges these localized bonds must not turn a
         // position-3 substituent into position 1 on the cited indacene parent.
         assert_eq!(
-            super::super::name_smiles("ClC1=c2cc3c(cc2C=C1)=CC=C3").as_deref(),
+            super::super::name_smiles("ClC1=c2cc3c(cc2C=C1)=CC=C3")
+                .map(|name| name.text)
+                .as_deref(),
             Ok("3-chloros-indacene")
         );
     }

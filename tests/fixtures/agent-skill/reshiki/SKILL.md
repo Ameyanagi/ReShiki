@@ -1,6 +1,6 @@
 ---
 name: "reshiki"
-description: "Draws, converts, renders and analyzes chemical structures and reaction schemes with the local ReShiki app (experimental agent API). Use when asked to lay out molecules or reactions from SMILES, convert MOL, RXN, CDXML, CDX, SMILES, InChI or ReShiki .rsk files to MOL, CDXML, SMILES, InChI, SVG, PDF or PNG, compute formula, mass, logP or InChIKey, or produce a ReShiki .rsk drawing."
+description: "Draws, converts, renders and analyzes chemical structures and reaction schemes with the local ReShiki app (experimental agent API). Use when asked to lay out molecules or reactions from SMILES, convert MOL, RXN, CDXML, CDX, SMILES, InChI or ReShiki .rsk files to MOL, CDXML, SMILES, InChI, SVG, PDF or PNG, generate systematic names, compute formula, mass, logP or InChIKey, or produce a ReShiki .rsk drawing."
 license: "MIT OR Apache-2.0"
 compatibility: "Requires ReShiki 0.12.0 or later (experimental agent API). Runs offline."
 metadata:
@@ -13,7 +13,7 @@ metadata:
 
 Experimental: ReShiki's agent tools, schemas and results may change between releases.
 
-ReShiki is a chemical drawing app. This skill uses its experimental agent API to lay out molecules and reaction schemes from SMILES, convert structure files, render previews and compute molecular properties, offline on this computer.
+ReShiki is a chemical drawing app. This skill uses its experimental agent API to lay out molecules and reaction schemes from SMILES, convert structure files, render previews, generate systematic names and compute molecular properties, offline on this computer.
 
 ReShiki executable: `/opt/reshiki/reshiki`
 
@@ -50,6 +50,7 @@ convert  Convert a structure or drawing to another file format
 render   Render a preview image of a structure or drawing
 compose  Lay out an assistant Proposal (JSON) and write it as a file
 analyze  Print molecular properties as one JSON line
+name     Print the systematic name of a structure
 info     Print versions, limits and formats as one JSON line
 tools    Print the agent tool catalog as one JSON line
 schema   Print a JSON Schema: reshiki --cli schema proposal
@@ -66,6 +67,7 @@ In a POSIX shell (sh, bash or zsh, and Git Bash on Windows):
 '/opt/reshiki/reshiki' --cli tools
 '/opt/reshiki/reshiki' --cli help convert
 '/opt/reshiki/reshiki' --cli analyze --smiles 'CC(=O)OCC'
+'/opt/reshiki/reshiki' --cli name --smiles 'CC(=O)O' --json
 '/opt/reshiki/reshiki' --cli convert --smiles 'CC(=O)OCC' -o ethyl-acetate.mol
 '/opt/reshiki/reshiki' --cli convert reaction.cdxml -o reaction.pdf
 '/opt/reshiki/reshiki' --cli render reaction.cdxml -o preview-1.png
@@ -80,6 +82,7 @@ Windows release builds have no console, so their output and error messages appea
 & '/opt/reshiki/reshiki' --cli tools 2>&1 | Write-Output
 & '/opt/reshiki/reshiki' --cli help convert 2>&1 | Write-Output
 & '/opt/reshiki/reshiki' --cli analyze --smiles 'CC(=O)OCC' 2>&1 | Write-Output
+& '/opt/reshiki/reshiki' --cli name --smiles 'CC(=O)O' --json 2>&1 | Write-Output
 & '/opt/reshiki/reshiki' --cli convert --smiles 'CC(=O)OCC' -o ethyl-acetate.mol 2>&1 | Write-Output
 & '/opt/reshiki/reshiki' --cli convert reaction.cdxml -o reaction.pdf 2>&1 | Write-Output
 & '/opt/reshiki/reshiki' --cli render reaction.cdxml -o preview-1.png 2>&1 | Write-Output

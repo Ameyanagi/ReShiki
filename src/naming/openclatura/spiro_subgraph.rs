@@ -127,6 +127,17 @@ pub fn plan_graph_spiro_side(
     required_core: Option<&AtomSet>,
     prefix_only: bool,
 ) -> Result<Option<SpiroAssembly>, String> {
+    mol.candidate(|| graph_spiro_side(mol, side_atoms, junction, required_core, prefix_only))
+}
+
+fn graph_spiro_side(
+    mol: &Molecule,
+    side_atoms: &AtomSet,
+    junction: usize,
+    required_core: Option<&AtomSet>,
+    prefix_only: bool,
+) -> Result<Option<SpiroAssembly>, String> {
+    let status = mol.name_status();
     if !side_atoms.contains(&junction) {
         return Ok(None);
     }
@@ -177,6 +188,7 @@ pub fn plan_graph_spiro_side(
     };
     let result = spiro_assembly_from_parts(parts, &junction_locant, Some(&mut render))?;
     if result.is_none() && parts.principal_group.is_some() && !prefix_only {
+        mol.set_name_status(status);
         return plan_graph_spiro_side(mol, side_atoms, junction, required_core, true);
     }
     Ok(result)
@@ -247,7 +259,9 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                super::super::name_smiles(smiles).as_deref(),
+                super::super::name_smiles(smiles)
+                    .map(|name| name.text)
+                    .as_deref(),
                 Ok(expected),
                 "{smiles}"
             );
@@ -264,7 +278,9 @@ mod tests {
     #[test]
     fn fused_parent_can_keep_a_complete_spiro_descriptor_as_its_side() {
         assert_eq!(
-            super::super::name_smiles("C1COC2=CC3=C(C=C21)C=C(C34CCC5(CC4)OCCO5)Br").as_deref(),
+            super::super::name_smiles("C1COC2=CC3=C(C=C21)C=C(C34CCC5(CC4)OCCO5)Br")
+                .map(|name| name.text)
+                .as_deref(),
             Ok(
                 "6-bromo-2,3-dihydro-1',4'-dioxaspiro[cyclopenta[f]1-benzofuran-7,8'-(spiro[4.5]decane)]"
             )
@@ -276,6 +292,7 @@ mod tests {
             super::super::name_smiles(
                 "CC1=CC(=C(C=C1)OCC(=O)N2CCC3(CC2)CC(=O)C4=C(O3)C=C(C(=C4)C)C)C(C)(C)C"
             )
+            .map(|name| name.text)
             .as_deref(),
             Ok(
                 "1'-(2-((2-(tert-butyl)-4-methylphenyl)oxy)acetyl)-6,7-dimethylspiro[benzo[b]pyran-2,4'-piperidine]-4-one"

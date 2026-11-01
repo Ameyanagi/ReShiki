@@ -13,7 +13,90 @@ use super::{
     fused_ion_templates::{consume_fused_ion_operation, select_fused_ion_operation},
     nomenclature::section,
 };
+use crate::naming::{NameReason, NameStatus};
 use std::collections::{BTreeMap, BTreeSet};
+
+/// Record departures only after promotions and final text selection have run.
+pub(super) fn mark_assembled_name(
+    mol: &super::molecule::Molecule,
+    parts: &AssemblyParts,
+    name: &str,
+) {
+    if matches!(
+        parts.retained_name.as_deref(),
+        Some(
+            "malonic acid"
+                | "succinic acid"
+                | "glutaric acid"
+                | "adipic acid"
+                | "hydrogen cyanide"
+                | "propionitrile"
+                | "butyronitrile"
+        )
+    ) {
+        mol.mark_name(NameStatus::NotPreferred(NameReason::RetainedGeneralName));
+    }
+    if let Some(group) = &parts.principal_group {
+        let rule = group
+            .resolved_rule
+            .as_ref()
+            .or_else(|| super::nomenclature::RULES.functional_groups.get(&group.key));
+        if rule.is_some_and(|rule| rule.families.contains("hydrazone")) {
+            mol.mark_name(NameStatus::NotPreferred(NameReason::FunctionalClass));
+        }
+        // Acyl cyanides and nitrile oxides keep these names in preferred names,
+        // but formonitrile and acetonitrile are retained parents.
+        if !parts.is_ring
+            && parts.parent_length <= 2
+            && rule.is_some_and(|rule| rule.suffix.as_deref() == Some("nitrile oxide"))
+        {
+            mol.mark_name(NameStatus::NotPreferred(NameReason::UnretainedParent));
+        }
+        if !parts.is_ring
+            && parts.unsaturations.is_empty()
+            && parts.a_prefixes.is_empty()
+            && !parts.retained_absorbs_principal_group
+        {
+            if group.key == "aldehyde" && group.locants.len() == 1 {
+                if parts.parent_length == 1
+                    || parts.parent_length == 2 && parts.substituents.is_empty()
+                {
+                    mol.mark_name(NameStatus::NotPreferred(NameReason::UnretainedParent));
+                } else if parts.parent_length == 2 {
+                    mol.mark_name(NameStatus::Unverified(
+                        NameReason::SubstitutedRetainedParent,
+                    ));
+                }
+            }
+            if parts.parent_length == 2 && group.key == "amide" && group.locants.len() == 2 {
+                mol.mark_name(NameStatus::NotPreferred(NameReason::UnretainedParent));
+            }
+        }
+    }
+    // Substituted formic acids are carbamic or carbonic acid derivatives.
+    if name == "methoxybenzene"
+        || matches!(
+            parts.retained_name.as_deref(),
+            Some("formic acid" | "formate")
+        ) && !parts.substituents.is_empty()
+    {
+        mol.mark_name(NameStatus::NotPreferred(NameReason::UnretainedParent));
+    } else if name.ends_with("methoxybenzene") {
+        mol.mark_name(NameStatus::Unverified(
+            NameReason::SubstitutedRetainedParent,
+        ));
+    }
+    // Checked on the cited text: carbamate and sulfamoyl contractions consume
+    // a phenylamino branch.
+    if parts
+        .substituents
+        .iter()
+        .any(|item| item.name.contains("phenylamino"))
+    {
+        mol.mark_name(NameStatus::NotPreferred(NameReason::AminoPrefix));
+    }
+    super::parent_pipeline::mark_rendered_parent_status(mol, parts);
+}
 
 fn apply_data_postprocessing(name: &str) -> String {
     let mut name = name.to_owned();
@@ -575,7 +658,9 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                super::super::name_smiles(smiles).as_deref(),
+                super::super::name_smiles(smiles)
+                    .map(|name| name.text)
+                    .as_deref(),
                 Ok(expected),
                 "{smiles}"
             );
@@ -599,7 +684,9 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                super::super::name_smiles(smiles).as_deref(),
+                super::super::name_smiles(smiles)
+                    .map(|name| name.text)
+                    .as_deref(),
                 Ok(expected),
                 "{smiles}"
             );

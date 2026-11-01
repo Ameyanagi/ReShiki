@@ -13,7 +13,23 @@ use super::{
     perception::{LigandRole, PerceivedGroup},
     subgraph_tools::subgraph_component,
 };
+use crate::naming::{NameReason, NameStatus};
 use std::collections::BTreeMap;
+
+pub(super) fn mark_prefix_status(mol: &Molecule, key: &str) {
+    if matches!(
+        key,
+        "thioaldehyde"
+            | "ring_thioaldehyde"
+            | "selenoaldehyde"
+            | "telluroaldehyde"
+            | "thioketone"
+            | "selenoketone"
+            | "telluroketone"
+    ) {
+        mol.mark_name(NameStatus::NotPreferred(NameReason::ChalcogenPrefix));
+    }
+}
 
 pub struct PrefixContext<'a> {
     pub mol: &'a Molecule,
@@ -280,7 +296,10 @@ pub fn ester_prefix_from_group(
             format_multiplier(&strip_outer_parentheses(&branch), 1, false)
         ));
     }
-    Ok(format!("({}{suffix})", oxy_prefix_from_branch(&branch)))
+    Ok(format!(
+        "({}{suffix})",
+        oxy_prefix_from_branch(mol, &branch)
+    ))
 }
 
 pub fn amide_prefix_from_group(
@@ -348,6 +367,7 @@ pub fn prefix_from_group(
         }
     }
     if families.contains("direct_prefix") {
+        mark_prefix_status(context.mol, &group.key);
         return Ok(RULES
             .functional_groups
             .cited_prefix_for(&group.key)
@@ -438,6 +458,7 @@ pub fn prefix_from_group(
         return ester_prefix_from_group(context.mol, group, context.sub_exclude, "carbonyl");
     }
     Ok(if context.parent_path.contains(&group.attachment_carbon) {
+        mark_prefix_status(context.mol, &group.key);
         rule.prefix.clone().unwrap_or_default()
     } else {
         String::new()
@@ -518,14 +539,20 @@ mod tests {
                 "2-((propan-2-yl)peroxycarbonyl)acetic acid",
             ),
         ] {
-            assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
+            assert_eq!(
+                name_smiles(smiles).map(|name| name.text).as_deref(),
+                Ok(expected),
+                "{smiles}"
+            );
         }
     }
 
     #[test]
     fn peroxy_carbamate_keeps_competing_ester_prefix_route() {
         assert_eq!(
-            name_smiles("COOC(=O)N1[C@H](C=O)CC[C@H]1C(=O)O").as_deref(),
+            name_smiles("COOC(=O)N1[C@H](C=O)CC[C@H]1C(=O)O")
+                .map(|name| name.text)
+                .as_deref(),
             Ok("(2S,5S)-5-formyl-1-((methoxyoxy)carbonyl)pyrrolidine-2-carboxylic acid")
         );
     }

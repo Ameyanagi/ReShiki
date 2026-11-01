@@ -92,6 +92,9 @@ fn direct_subgraph_prefix(
             })
             .collect();
         if terminal.len() == 1 && component == &AtomSet::from([start, terminal[0]]) {
+            mol.mark_name(crate::naming::NameStatus::NotPreferred(
+                crate::naming::NameReason::ChalcogenPrefix,
+            ));
             return Ok(Some("thioformyl".into()));
         }
         let phosphorus: Vec<_> = mol
@@ -145,6 +148,7 @@ fn direct_subgraph_prefix(
             .functional_groups
             .direct_subgraph_prefix_for(&group.key)
         {
+            super::functional_prefixes::mark_prefix_status(mol, &group.key);
             return Ok(Some(prefix.into()));
         }
     }
@@ -209,6 +213,7 @@ fn collect_subgraph_substituents(
             };
             super::functional_prefixes::prefix_from_group(&context, group)?
         } else {
+            super::functional_prefixes::mark_prefix_status(mol, &group.key);
             name.clone()
         };
         let mut item = SubstituentItem::new(name, Vec::new());
@@ -439,6 +444,7 @@ pub(super) fn name_subgraph_rendered(
     )?;
     let text = super::ionic_naming::apply_cationic_imino_names(&text, mol)?;
     let text = super::assembler::post_process_name(&text);
+    super::assembler::mark_assembled_name(mol, &parts, &text);
     Ok(RenderedSubstituentName {
         text,
         outer_parentheses_optional: !parts.stereo_features.is_empty(),
@@ -620,19 +626,29 @@ fn acylamino_amido_prefix(
     acid_mol.add_bond(Bond::new(bond_id, center, oxygen, 1))?;
     let mut capped = acid_atoms.clone();
     capped.insert(oxygen);
+    let status = mol.name_status();
     let acid_result = name_component(&acid_mol, &capped);
     // Upstream divergence: a speculative acid candidate cannot hide exhausted naming resources.
     mol.spend_naming_work(0)?;
     let Ok(acid_name) = acid_result else {
+        mol.set_name_status(status);
         return Ok(None);
     };
     let Some(mut amido) = RULES
         .heteroatoms
         .retained_sulfonyl_group_acids
         .get(&acid_name)
-        .map(|s| format!("{s}amino"))
+        .map(|s| {
+            if s == "tosyl" {
+                mol.mark_name(crate::naming::NameStatus::NotPreferred(
+                    crate::naming::NameReason::SulfonylPrefix,
+                ));
+            }
+            format!("{s}amino")
+        })
         .or_else(|| acid_name_to_amido(&acid_name))
     else {
+        mol.set_name_status(status);
         return Ok(None);
     };
     let n_sub: Vec<_> = neighbors.into_iter().filter(|n| *n != center).collect();
@@ -692,11 +708,14 @@ mod tests {
                 use crate::naming::openclatura::name_smiles;
 
                 assert_eq!(
-                    name_smiles(&format!("{}C", "CO".repeat(100))),
+                    name_smiles(&format!("{}C", "CO".repeat(100))).map(|name| name.text),
                     Err("openclatura: naming complexity limit exceeded".into())
                 );
                 assert!(name_smiles("COCOCOC").is_ok());
-                assert_eq!(name_smiles("CCO"), Ok("ethanol".into()));
+                assert_eq!(
+                    name_smiles("CCO").map(|name| name.text),
+                    Ok("ethanol".into())
+                );
             })
             .unwrap()
             .join()
@@ -758,7 +777,11 @@ mod tests {
                 "N-(6-phenylpyridin-2-yl)pyrazin-2-amine",
             ),
         ] {
-            assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
+            assert_eq!(
+                name_smiles(smiles).map(|name| name.text).as_deref(),
+                Ok(expected),
+                "{smiles}"
+            );
         }
     }
 
@@ -776,7 +799,11 @@ mod tests {
                 "3-((2S)-1-methylpyrrolidin-2-yl)pyridine",
             ),
         ] {
-            assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
+            assert_eq!(
+                name_smiles(smiles).map(|name| name.text).as_deref(),
+                Ok(expected),
+                "{smiles}"
+            );
         }
     }
 }

@@ -16,6 +16,7 @@ use super::nomenclature::RULES;
 use super::perception::{PerceivedGroup, perceive_groups};
 use super::rules::{elements, multipliers, retained, stems};
 use super::subgraph_tools::subgraph_component;
+use crate::naming::{NameReason, NameStatus};
 
 const SHORTCUT_STEREO_ERROR: &str =
     "openclatura: shortcut cannot preserve configured stereochemistry";
@@ -579,11 +580,14 @@ fn hydrazone_stereo_prefix(mol: &Molecule, carbon: usize, nitrogen: usize, paren
 /// anhydride elsewhere in a ligand can choose the whole-component citation.
 fn simple_azine_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, String> {
     for sides in azine_roles(mol, atoms) {
+        let status = mol.name_status();
         require_stereo_free_core(mol, &set([sides[0].nitrogen, sides[1].nitrogen]))?;
         let parents = [
             carbonyl_equivalent_side_name(mol, &sides[0], false)?,
             carbonyl_equivalent_side_name(mol, &sides[1], false)?,
         ];
+        // Only hydrazone names cite a parent, and those are marked as a whole.
+        mol.set_name_status(status);
         let ylidenes = [
             carbonyl_equivalent_side_name(mol, &sides[0], true)?,
             carbonyl_equivalent_side_name(mol, &sides[1], true)?,
@@ -604,6 +608,7 @@ fn simple_azine_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<St
                 if !ylidene.is_empty() && ylidene.ends_with("ylidene") {
                     let side = &sides[parent_side];
                     let stereo = hydrazone_stereo_prefix(mol, side.carbon, side.nitrogen, parent);
+                    mol.mark_name(NameStatus::NotPreferred(NameReason::FunctionalClass));
                     return Ok(Some(format!("{stereo}{} {ylidene}hydrazone", parent)));
                 }
             }
@@ -652,6 +657,8 @@ fn simple_azine_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<St
                     return Ok(Some(format!("1-({})-2-({})hydrazine", names[0], names[1])));
                 }
             }
+            // Side names of a skipped role are not cited.
+            mol.set_name_status(status);
             continue;
         }
         let ranks = canonical_ranks(mol, None);
@@ -685,6 +692,7 @@ fn simple_azine_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<St
         }
         let stereo =
             hydrazone_stereo_prefix(mol, side.carbon, side.nitrogen, &parents[parent_side]);
+        mol.mark_name(NameStatus::NotPreferred(NameReason::FunctionalClass));
         return Ok(Some(format!(
             "{stereo}{} {}hydrazone",
             parents[parent_side],
@@ -900,13 +908,11 @@ fn carbonyl_equivalent_side_name_unchecked(
                         }
                     });
                 if locant.is_empty() {
-                    let name = strip_outer_parentheses(&branch_name(
-                        mol,
-                        &ring,
-                        attachment,
-                        &AtomSet::new(),
-                        side.carbon,
-                    )?);
+                    let status = mol.name_status();
+                    let name = branch_name(mol, &ring, attachment, &AtomSet::new(), side.carbon);
+                    // This recursive citation only supplies a locant for the retained parent.
+                    mol.set_name_status(status);
+                    let name = strip_outer_parentheses(&name?);
                     if let Some((_, candidate)) =
                         name.strip_suffix("-yl").and_then(|s| s.rsplit_once('-'))
                         && candidate.as_bytes().first().is_some_and(u8::is_ascii_digit)
@@ -1199,6 +1205,7 @@ fn sulfoxide_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Strin
         .as_ref()
         .map(|s| format!("({s})-"))
         .unwrap_or_default();
+    mol.mark_name(NameStatus::NotPreferred(NameReason::FunctionalClass));
     Ok(Some(if ligands[0] == ligands[1] {
         format!("{stereo}di{} sulfoxide", ligands[0])
     } else {
@@ -1264,7 +1271,7 @@ fn central_ligand_name(
     if alkyl.is_empty() {
         Ok(String::new())
     } else {
-        Ok(oxy_prefix_from_branch(&alkyl))
+        Ok(oxy_prefix_from_branch(mol, &alkyl))
     }
 }
 
@@ -1379,6 +1386,11 @@ fn simple_central_parent_hydride_name(
             parent.pop();
         }
         parent.push_str("ium");
+    }
+    if oxide_oxygen.is_some() {
+        mol.mark_name(NameStatus::NotPreferred(NameReason::FunctionalClass));
+    } else if a.symbol == "N" || a.symbol == "S" && !onium && lambda.is_empty() {
+        mol.mark_name(NameStatus::NotPreferred(NameReason::HydrideParent));
     }
     Ok(Some(if !prefix.is_empty() && !lambda.is_empty() {
         format!("{prefix}-{parent}")
@@ -1562,8 +1574,10 @@ fn ester_modifier_name(
     alkyl_ligand_name(mol, atoms, root, oxygen)
 }
 fn oxoacid_ester_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>, String> {
+    let status = mol.name_status();
     let mut matches = Vec::new();
     for role in oxo_roles(mol, atoms) {
+        mol.set_name_status(status);
         if mol.atoms[&role.central].has_stereo() {
             continue;
         }
@@ -1614,7 +1628,7 @@ fn oxoacid_ester_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>,
             let modifier = ester_modifier_name(mol, atoms, roots[0], distal, &acid)?;
             if !modifier.is_empty() {
                 require_stereo_free_core(mol, &acid)?;
-                matches.push(format!("{modifier} {suffix}"));
+                matches.push((format!("{modifier} {suffix}"), mol.name_status()));
             }
             continue;
         }
@@ -1668,10 +1682,17 @@ fn oxoacid_ester_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<String>,
             };
             format!("{hydrogen} {base}")
         };
-        matches.push(format!("{} {suffix}", modifier_phrase(&names, false)));
+        matches.push((
+            format!("{} {suffix}", modifier_phrase(&names, false)),
+            mol.name_status(),
+        ));
     }
+    mol.set_name_status(status);
     Ok(if matches.len() == 1 {
-        matches.pop()
+        matches.pop().map(|(name, status)| {
+            mol.set_name_status(status);
+            name
+        })
     } else {
         None
     })
@@ -2234,6 +2255,9 @@ fn homonuclear_chain_parent_name(
     if !stereo.is_empty() {
         name = format!("({})-{name}", stereo.join(","));
     }
+    if symbol == "S" && chain.len() <= 2 && !placed.is_empty() {
+        mol.mark_name(NameStatus::NotPreferred(NameReason::HydrideParent));
+    }
     Ok(Some(name))
 }
 
@@ -2763,6 +2787,7 @@ fn nitrogen_chalcogenide_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<
     let Some(class) = section("chalcogenide_class_names")[&mol.atoms[&ch].symbol].as_str() else {
         return Ok(None);
     };
+    mol.mark_name(NameStatus::Unverified(NameReason::AmineChalcogenide));
     Ok(Some(if imine {
         format!("{parent} N-{class}")
     } else {
@@ -2877,6 +2902,7 @@ fn peroxide_linkage_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Strin
         located.sort_by_key(|s| substituent_sort_key(s));
         located.join(" ")
     };
+    mol.mark_name(NameStatus::NotPreferred(NameReason::FunctionalClass));
     Ok(Some(format!("{phrase} {class}")))
 }
 
@@ -2948,7 +2974,17 @@ pub(super) fn try_name_anhydride_component(
     groups: &[PerceivedGroup],
     principal_key: Option<&str>,
 ) -> Result<Option<String>, String> {
+    mol.candidate(|| anhydride_component_name(mol, groups, principal_key))
+}
+
+fn anhydride_component_name(
+    mol: &Molecule,
+    groups: &[PerceivedGroup],
+    principal_key: Option<&str>,
+) -> Result<Option<String>, String> {
+    let status = mol.name_status();
     for group in groups {
+        mol.set_name_status(status);
         if Some(group.key.as_str()) != principal_key
             || !group
                 .resolved_rule
@@ -3062,56 +3098,58 @@ pub(super) fn structural_replacement_parent_result(
     if let Some(name) = biphenyl_parent_result(mol, atoms) {
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
-    if let Some(name) = simple_azine_parent_name(mol, atoms)? {
+    if let Some(name) = mol.candidate(|| simple_azine_parent_name(mol, atoms))? {
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
-    if let Some(name) = phosphane_borane_zwitterion_name(mol, atoms)? {
+    if let Some(name) = mol.candidate(|| phosphane_borane_zwitterion_name(mol, atoms))? {
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
-    if let Some(name) = sulfonium_ylide_name(mol, atoms)? {
+    if let Some(name) = mol.candidate(|| sulfonium_ylide_name(mol, atoms))? {
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
-    if let Some(name) = nitrogen_chalcogenide_name(mol, atoms)? {
+    if let Some(name) = mol.candidate(|| nitrogen_chalcogenide_name(mol, atoms))? {
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
-    if let Some(name) = peroxide_linkage_name(mol, atoms)? {
+    if let Some(name) = mol.candidate(|| peroxide_linkage_name(mol, atoms))? {
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
-    if let Some(name) = hydroxyurea_parent_name(mol, atoms)? {
+    if let Some(name) = mol.candidate(|| hydroxyurea_parent_name(mol, atoms))? {
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
-    if let Some(name) = sulfamic_acid_name(mol, atoms)? {
+    if let Some(name) = mol.candidate(|| sulfamic_acid_name(mol, atoms))? {
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
-    if let Some(name) = azinic_acid_name(mol, atoms)? {
+    if let Some(name) = mol.candidate(|| azinic_acid_name(mol, atoms))? {
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
-    if let Some(name) = oxoacid_ester_name(mol, atoms)? {
+    if let Some(name) = mol.candidate(|| oxoacid_ester_name(mol, atoms))? {
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
     if let Some(name) = oxoacid_parent_name(mol, atoms) {
         require_stereo_free_core(mol, atoms)?;
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
-    if let Some(name) = organophosphorus_acid_name(mol, atoms, true)? {
+    if let Some(name) = mol.candidate(|| organophosphorus_acid_name(mol, atoms, true))? {
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
-    if let Some(name) = organophosphorus_acid_name(mol, atoms, false)? {
+    if let Some(name) = mol.candidate(|| organophosphorus_acid_name(mol, atoms, false))? {
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
-    if let Some(name) = organoboronic_acid_name(mol, atoms)? {
+    if let Some(name) = mol.candidate(|| organoboronic_acid_name(mol, atoms))? {
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
-    if let Some(name) = sulfoxide_parent_name(mol, atoms)? {
+    if let Some(name) = mol.candidate(|| sulfoxide_parent_name(mol, atoms))? {
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
-    if let Some(name) = homonuclear_chain_parent_name(mol, atoms)? {
+    if let Some(name) = mol.candidate(|| homonuclear_chain_parent_name(mol, atoms))? {
         return Ok(Some(StructuralParentName {
             name,
             is_chain: true,
         }));
     }
-    Ok(simple_central_parent_hydride_name(mol, atoms)?.map(StructuralParentName::ordinary))
+    Ok(mol
+        .candidate(|| simple_central_parent_hydride_name(mol, atoms))?
+        .map(StructuralParentName::ordinary))
 }
 
 #[cfg(test)]
@@ -3122,6 +3160,34 @@ mod tests {
     fn special(smiles: &str) -> Option<String> {
         let mol = read_smiles(smiles).unwrap();
         structural_replacement_parent_name(&mol, &all_atoms(&mol)).unwrap()
+    }
+
+    #[test]
+    fn discarded_shortcut_candidates_restore_the_previous_status() {
+        let mol = read_smiles("CS(C)=O").unwrap();
+        let atoms = all_atoms(&mol);
+        let previous = NameStatus::Unverified(NameReason::UnauditedParent);
+        mol.mark_name(previous);
+        let declined: Result<Option<String>, String> = mol.candidate(|| {
+            assert_eq!(
+                sulfoxide_parent_name(&mol, &atoms)?.as_deref(),
+                Some("dimethyl sulfoxide")
+            );
+            assert_eq!(
+                mol.name_status(),
+                NameStatus::NotPreferred(NameReason::FunctionalClass)
+            );
+            Ok(None)
+        });
+        assert_eq!(declined.unwrap(), None);
+        assert_eq!(mol.name_status(), previous);
+
+        let failed: Result<Option<String>, String> = mol.candidate(|| {
+            sulfoxide_parent_name(&mol, &atoms)?;
+            Err("discarded shortcut".into())
+        });
+        assert_eq!(failed.unwrap_err(), "discarded shortcut");
+        assert_eq!(mol.name_status(), previous);
     }
 
     #[test]
@@ -3195,8 +3261,8 @@ mod tests {
                 "{smiles}"
             );
         }
-        let left = super::super::name_smiles("C[S@](=O)CC").unwrap();
-        let right = super::super::name_smiles("C[S@@](=O)CC").unwrap();
+        let left = super::super::name_smiles("C[S@](=O)CC").unwrap().text;
+        let right = super::super::name_smiles("C[S@@](=O)CC").unwrap().text;
         assert_ne!(left, right);
         assert!(left.starts_with("(R)-") || left.starts_with("(S)-"));
         assert!(right.starts_with("(R)-") || right.starts_with("(S)-"));
@@ -3231,12 +3297,14 @@ mod tests {
         }
         let started = Instant::now();
         assert_eq!(
-            super::super::name_smiles(&format!("P(=O)(O)(O){tree}")),
+            super::super::name_smiles(&format!("P(=O)(O)(O){tree}")).map(|name| name.text),
             Err("openclatura: naming complexity limit exceeded".into())
         );
         assert!(started.elapsed() < Duration::from_secs(10));
         assert_eq!(
-            super::super::name_smiles("CCC(CC)P(=O)(O)O").as_deref(),
+            super::super::name_smiles("CCC(CC)P(=O)(O)O")
+                .map(|name| name.text)
+                .as_deref(),
             Ok("pentan-3-ylphosphonic acid")
         );
     }
@@ -3289,7 +3357,9 @@ mod tests {
         }
         for smiles in ["CCCC=NN=CC=CC", "CC=CC=NN=CCCC"] {
             assert_eq!(
-                super::super::name_smiles(smiles).as_deref(),
+                super::super::name_smiles(smiles)
+                    .map(|name| name.text)
+                    .as_deref(),
                 Ok("butanal but-2-ene-1-ylidenehydrazone"),
                 "{smiles}"
             );
@@ -3315,6 +3385,16 @@ mod tests {
     #[test]
     fn homonuclear_parent_keeps_chain_and_substituent_locants() {
         assert_eq!(special("CSSC").as_deref(), Some("1,2-dimethyldisulfane"));
+        for (smiles, expected) in [("SS", "disulfane"), ("SSS", "trisulfane")] {
+            let mol = read_smiles(smiles).unwrap();
+            assert_eq!(
+                homonuclear_chain_parent_name(&mol, &all_atoms(&mol))
+                    .unwrap()
+                    .as_deref(),
+                Some(expected)
+            );
+            assert_eq!(mol.name_status(), NameStatus::Preferred, "{smiles}");
+        }
         assert_eq!(special("NN").as_deref(), Some("hydrazine"));
         assert_eq!(
             special("Cl[SiH2][SiH2]F").as_deref(),

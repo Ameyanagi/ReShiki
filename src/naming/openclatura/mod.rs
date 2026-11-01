@@ -59,7 +59,15 @@ mod von_baeyer;
 /// The naming profile on the worker wire and in generated-name warnings.
 pub(super) const PROFILE: &str = "openclatura 0.4.3 Rust port";
 
-pub(super) fn name_smiles(smiles: &str) -> Result<String, String> {
+/// A generated name and how it relates to the preferred IUPAC name.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct Name {
+    pub text: String,
+    pub status: crate::naming::NameStatus,
+}
+
+pub(super) fn name_smiles(smiles: &str) -> Result<Name, String> {
     let mol = graph_io::read_smiles(smiles)?;
     if mol.atoms.values().any(|atom| atom.isotope.is_some()) {
         return Err("openclatura: isotopic naming not ported".into());
@@ -91,7 +99,11 @@ pub(super) fn name_smiles(smiles: &str) -> Result<String, String> {
     if components.len() != 1 {
         return Err("openclatura: expected one connected component".into());
     }
-    component_namer::name_component(&mol, &components[0])
+    let text = component_namer::name_component(&mol, &components[0])?;
+    Ok(Name {
+        text,
+        status: mol.name_status(),
+    })
 }
 
 /// Count nonbonding electrons on the main-group elements that can carry
@@ -117,6 +129,154 @@ mod tests {
     use std::io::Write;
 
     #[test]
+    fn preferred_controls_keep_their_names() {
+        use crate::naming::NameStatus;
+        for (smiles, expected) in [
+            ("CCO", "ethanol"),
+            ("O=C(O)c1ccccc1", "benzoic acid"),
+            ("c1ccc2[nH]ccc2c1", "1H-indole"),
+            ("C=CCC#C", "pent-1-en-4-yne"),
+            ("SS", "disulfane"),
+            ("SSS", "trisulfane"),
+            ("CC(=O)C#N", "acetyl cyanide"),
+            ("COC(=O)Nc1ccccc1", "methyl phenylcarbamate"),
+            ("CCC#[N+][O-]", "propanenitrile oxide"),
+            (
+                "COS(=O)(=O)c1ccc(C(=O)O)cc1",
+                "4-(methoxysulfonyl)benzoic acid",
+            ),
+            ("COS(=O)(=O)NCC(=O)O", "2-methoxysulfonylaminoacetic acid"),
+        ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, NameStatus::Preferred, "{smiles}");
+        }
+    }
+
+    #[test]
+    fn known_departures_keep_their_names_and_report_the_rule_family() {
+        use crate::naming::{NameReason as R, NameStatus};
+        for (smiles, expected, reason) in [
+            ("CCC#N", "propionitrile", R::RetainedGeneralName),
+            ("O=C(O)CC(=O)O", "malonic acid", R::RetainedGeneralName),
+            ("CC(C)Oc1ccccc1", "isopropoxybenzene", R::AlkoxyPrefix),
+            (
+                "CS(=O)(=O)c1ccccc1",
+                "(methylsulfonyl)benzene",
+                R::SulfonylPrefix,
+            ),
+            ("O=C(O)CC(=S)C", "3-thioxobutanoic acid", R::ChalcogenPrefix),
+            (
+                "O=C(O)CNc1ccccc1",
+                "2-(phenylamino)acetic acid",
+                R::AminoPrefix,
+            ),
+            ("NC(=N)NCC(=O)O", "2-guanidinoacetic acid", R::AminoPrefix),
+            ("CS(C)=O", "dimethyl sulfoxide", R::FunctionalClass),
+            ("CN(C)C", "trimethylazane", R::HydrideParent),
+            ("CP(C)(C)=O", "trimethylphosphane oxide", R::FunctionalClass),
+            ("C#[N+][O-]", "methanenitrile oxide", R::UnretainedParent),
+            (
+                "CCC(C)=NN=CC",
+                "butan-2-one ethan-1-ylidenehydrazone",
+                R::FunctionalClass,
+            ),
+            ("CO[Se]C", "dimethyl selenoperoxide", R::FunctionalClass),
+            ("CSC", "dimethylsulfane", R::HydrideParent),
+            ("CSSC", "1,2-dimethyldisulfane", R::HydrideParent),
+            ("C=O", "methanal", R::UnretainedParent),
+            ("CC=O", "ethanal", R::UnretainedParent),
+            ("COc1ccccc1", "methoxybenzene", R::UnretainedParent),
+            ("NC(=O)C(N)=O", "ethanediamide", R::UnretainedParent),
+            (
+                "CN(C=O)C(=O)O",
+                "1-(N-methylformamido)formic acid",
+                R::UnretainedParent,
+            ),
+            (
+                "O1C=NC2=NC=CC=C21",
+                "oxazolo[4,5-b]pyridine",
+                R::FusionPrefix,
+            ),
+            ("c1cnc2scnc2c1", "thiazolo[5,4-b]pyridine", R::FusionPrefix),
+            ("c1cnc2oncc2c1", "isoxazolo[5,4-b]pyridine", R::FusionPrefix),
+            (
+                "O=CO[PH](=O)O",
+                "(hydroxyphosphinoyloxy)methanal",
+                R::UnretainedParent,
+            ),
+            (
+                "O=C(O)OP(=O)(O)c1ccccn1",
+                "1-((hydroxy(pyridin-2-yl)phosphoryl)oxy)formic acid",
+                R::UnretainedParent,
+            ),
+            (
+                "COC(=O)N(C=O)c1ccsc1",
+                "methyl (N-(thiophen-3-yl)formamido)formate",
+                R::UnretainedParent,
+            ),
+            (
+                "CCNC(=O)CC(=O)NCC",
+                "N,N'-diethylpropanediamide",
+                R::DiamideLocants,
+            ),
+            ("C#CCC=C", "pent-4-en-1-yne", R::MultipleBondNumbering),
+            ("C#CCCC=C", "hex-5-en-1-yne", R::MultipleBondNumbering),
+        ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, NameStatus::NotPreferred(reason), "{smiles}");
+        }
+    }
+
+    #[test]
+    fn unchecked_paths_keep_their_names_and_report_the_uncertainty() {
+        use crate::naming::{NameReason as R, NameStatus};
+        for (smiles, expected, reason) in [
+            ("NCC=O", "2-aminoethanal", R::SubstitutedRetainedParent),
+            (
+                "COc1ccc(Cl)cc1",
+                "1-chloro-4-methoxybenzene",
+                R::SubstitutedRetainedParent,
+            ),
+            (
+                "CC[N+](C)(C)[S-]",
+                "N,N-dimethylethanamine sulfide",
+                R::AmineChalcogenide,
+            ),
+            (
+                "C1=Cc2cc3ccc(cc4nc(cc5ccc(cc1n2)[nH]5)C=C4)[nH]3",
+                "porphyrin",
+                R::UnauditedParent,
+            ),
+            (
+                "C1=C2CCC(=N2)C=C2CCC(N2)C2CCC(=N2)C=C2CCC1=N2",
+                "corrin",
+                R::UnauditedParent,
+            ),
+            (
+                "C12C(C=C(C3=CC=CC=C13)O2)=O",
+                "1,4-epoxynaphthalen-2(1H)-one",
+                R::AtomOrder,
+            ),
+            (
+                "C12=CC=C(C3=CC=CC=C13)O2",
+                "1,4-epoxynaphthalene",
+                R::BridgedFusedParent,
+            ),
+            (
+                "c1oc2cc3nc4ccccc4nc3cc2c1",
+                "benzofuro[5,6-b]benzo[e]pyrazine",
+                R::OpsinFusionLayout,
+            ),
+        ] {
+            let name = name_smiles(smiles).unwrap();
+            assert_eq!(name.text, expected, "{smiles}");
+            assert_eq!(name.status, NameStatus::Unverified(reason), "{smiles}");
+        }
+    }
+
+    #[test]
     fn retained_and_systematic_fused_parents_follow_parent_precedence() {
         for (smiles, expected) in [
             ("c1ccc2ccccc2c1", "naphthalene"),
@@ -128,10 +288,16 @@ mod tests {
             ("c1oc2ncccc2c1", "furo[2,3-b]pyridine"),
             ("C1OCC2COCC12", "tetrahydro-1H,3H-furo[3,4-c]furan"),
         ] {
-            assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
+            assert_eq!(
+                name_smiles(smiles).map(|name| name.text).as_deref(),
+                Ok(expected),
+                "{smiles}"
+            );
         }
         assert_eq!(
-            name_smiles("C1CCC2(C1)Oc1ccccc1O2").as_deref(),
+            name_smiles("C1CCC2(C1)Oc1ccccc1O2")
+                .map(|name| name.text)
+                .as_deref(),
             Ok("spiro[1,3-benzodioxole-2,1'-cyclopentane]"),
         );
     }
@@ -139,7 +305,7 @@ mod tests {
     #[test]
     fn angular_oxazole_thiazole_acetic_acid_round_trips() {
         let smiles = "O=C(O)Cc1nc2ccc3ocnc3c2s1";
-        let name = name_smiles(smiles).unwrap();
+        let name = name_smiles(smiles).unwrap().text;
         assert_eq!(
             name,
             "2-(thiazolo[4',5':1,2]benzo[3,4-d][1,3]oxazol-7-yl)acetic acid"
@@ -170,7 +336,11 @@ mod tests {
                 "benzyl (5S)-7-(4-methylphenyl)-6,8-dioxo-1,2,7-triazaspiro[4.4]non-3-ene-3-carboxylate",
             ),
         ] {
-            assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
+            assert_eq!(
+                name_smiles(smiles).map(|name| name.text).as_deref(),
+                Ok(expected),
+                "{smiles}"
+            );
         }
     }
 
@@ -234,7 +404,7 @@ mod tests {
         let input = std::fs::read_to_string(path).expect("read parity input");
         let mut output =
             std::io::BufWriter::new(std::fs::File::create(out).expect("create parity diff"));
-        writeln!(output, "class\tsmiles\texpected\tactual").unwrap();
+        writeln!(output, "class\tsmiles\texpected\tactual\tstatus\treason").unwrap();
         let (mut exact, mut different, mut declined) = (0, 0, 0);
         for (index, line) in input.lines().filter(|line| !line.is_empty()).enumerate() {
             let (smiles, expected) = line.split_once('\t').expect("SMILES and expected name");
@@ -242,10 +412,18 @@ mod tests {
                 eprintln!("parity row {index}: {smiles}");
             }
             match name_smiles(smiles) {
-                Ok(actual) if actual == expected => exact += 1,
+                Ok(actual) if actual.text == expected => exact += 1,
                 Ok(actual) => {
                     different += 1;
-                    writeln!(output, "different\t{smiles}\t{expected}\t{actual}").unwrap();
+                    let wire = serde_json::to_value(actual.status).unwrap();
+                    let status = wire["status"].as_str().unwrap();
+                    let reason = wire["reason"].as_str().unwrap_or("");
+                    writeln!(
+                        output,
+                        "different\t{smiles}\t{expected}\t{}\t{status}\t{reason}",
+                        actual.text
+                    )
+                    .unwrap();
                 }
                 Err(reason) => {
                     declined += 1;

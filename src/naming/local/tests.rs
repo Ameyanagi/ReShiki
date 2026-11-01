@@ -43,7 +43,7 @@ fn strict_adapter_rejects_semantic_loss_and_inconsistent_provenance() {
         Err(Error::Rejected(_))
     ));
     for (key, value) in [
-        ("protocol", json!(3)),
+        ("protocol", json!(worker::PROTOCOL - 1)),
         ("backend", json!("external-engine")),
         ("port_version", json!("3.0.0")),
         ("upstream_version", json!("3.0.0")),
@@ -162,7 +162,7 @@ async fn actual_parser_rejects_ambiguous_stereo_polymers_and_unknown_names() {
 #[test]
 fn parser_cannot_accept_a_rule_generation_response() {
     let response = serde_json::json!({"operation":"generate", "protocol":worker::PROTOCOL,
-        "profile":super::super::openclatura::PROFILE,"input":"CCO","result":{"Ok":"ethanol"}});
+        "profile":super::super::openclatura::PROFILE,"input":"CCO","result":{"Ok":{"text":"ethanol","status":{"status":"preferred"}}}});
     assert!(
         parse_reply(&serde_json::to_vec(&response).unwrap(), "example")
             .unwrap_err()

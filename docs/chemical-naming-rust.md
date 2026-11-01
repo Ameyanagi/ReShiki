@@ -84,8 +84,9 @@ molecule and opens the **Chemical names** inspector. It has two parts:
   check **I reviewed these warnings and the structure**. Choose **Insert** to
   add the editable structure. It is inserted without a name caption.
 - **STRUCTURE → NAME**: choose **Generate selected name**, then **Copy name** or
-  **Insert caption**. Curated aliases for the molecule appear below the
-  generated name.
+  **Insert caption**. A tag under the generated name gives its
+  [preferred IUPAC name status](#preferred-iupac-name-status). Curated aliases
+  for the molecule appear below the generated name.
 
 **‹ Properties** returns to the Properties inspector, and **Import** opens the
 Import tab.
@@ -160,8 +161,54 @@ The worker generates the name, a second worker parses it with the OPSIN Rust
 port, and the name appears only when that parse gives the same graph, charge
 and specified stereo. Otherwise you see an error and no name. Generation runs
 under the same worker limits as parsing, so a very large ring system can time
-out. Comprehensive IUPAC coverage and preferred IUPAC name (PIN) selection are
-not claimed. Unspecified stereo remains unspecified.
+out. Comprehensive IUPAC coverage is not claimed. Unspecified stereo remains
+unspecified.
+
+### Preferred IUPAC name status
+
+Every generated name carries a status that says how it relates to the
+preferred IUPAC name (PIN) of the IUPAC 2013 recommendations. The Names
+inspector shows it as a tag under the name, with the reason on hover. Copy
+name and Insert caption use the name text alone.
+
+| Tag                                           | Meaning                                                                                       |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Preferred IUPAC name                          | No rule on the name's path is known to depart from the PIN rules.                             |
+| Systematic name, not the preferred IUPAC name | The name is correct but uses a form the PIN rules do not, such as `propionitrile`.            |
+| Systematic name, preference not verified      | The name took a path whose PIN choice has not been checked, such as an OPSIN-numbered fusion. |
+
+The engine marks the status where it makes the choice, so the name text is
+unchanged. A naming attempt it discards leaves no mark. Reasons for a name
+that is not the PIN:
+
+| Reason                    | Example the engine writes                                                  | Preferred form                                                           |
+| ------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `retained_general_name`   | `propionitrile`, `malonic acid`                                            | `propanenitrile`, `propanedioic acid`                                    |
+| `alkoxy_prefix`           | `isopropoxy`, `isobutoxy`, `sec-butoxy`                                    | `(propan-2-yl)oxy`, `2-methylpropoxy`                                    |
+| `sulfonyl_prefix`         | `methylsulfonyl`, `tosyl`                                                  | `methanesulfonyl`, `4-methylbenzene-1-sulfonyl`                          |
+| `chalcogen_prefix`        | `thioxo`, `selenoxo`, `thioformyl`                                         | `sulfanylidene`, `methanethioyl`                                         |
+| `amino_prefix`            | `phenylamino`, `guanidino`                                                 | `anilino`, `carbamimidoylamino`                                          |
+| `functional_class`        | `dimethyl sulfoxide`, `acetaldehyde hydrazone`, `trimethylphosphane oxide` | substitutive names                                                       |
+| `hydride_parent`          | `dimethylsulfane`, `trimethylazane`                                        | `(methylsulfanyl)methane`, `N,N-dimethylmethanamine`                     |
+| `unretained_parent`       | `methanal`, `ethanediamide`, `methoxybenzene`, a substituted `formic acid` | `formaldehyde`, `oxamide`, `anisole`, `carbamic acid` or `carbonic acid` |
+| `fusion_prefix`           | `oxazolo[4,5-b]pyridine`, `isoxazolo`                                      | `[1,3]oxazolo[4,5-b]pyridine`, `[1,2]oxazolo`                            |
+| `diamide_locants`         | `N,N'-diethylpropanediamide`                                               | `N1,N3-diethylpropanediamide`                                            |
+| `multiple_bond_numbering` | `pent-4-en-1-yne`                                                          | `pent-1-en-4-yne`                                                        |
+
+Reasons for an unverified name: `opsin_fusion_layout` (fusion numbering chosen
+for OPSIN compatibility), `bridged_fused_parent`, `unaudited_parent`
+(porphyrin, corrin, gonane), `substituted_retained_parent` (substituted acetaldehyde and anisole), `atom_order` (bridged
+fused ketones whose added hydrogen depends on input atom order) and
+`amine_chalcogenide` (amine sulfide and similar names). The parent-selection
+rules that the port does not implement in full (heteroatom seniority,
+skeletal replacement chains, phane names) have no mark.
+
+Nested parentheses, as in `2-(4-(2-methylpropyl)phenyl)propanoic acid`, do not
+change the status. The PIN rules nest enclosing marks as `{[( )]}`, and a later
+change will write them that way.
+
+`reshiki --cli name` prints the same name, and `--json` adds the status; see
+the [command-line reference](agent-cli.md#name).
 
 ### Captions
 

@@ -10,13 +10,18 @@ use reshiki_agent::{
         budget::Budgets,
         headless::HeadlessHost,
         host::{Call, ToolHost},
+        policy::Access,
         result::ToolResult,
-        wire::{Principal, RequestId},
+        store::Documents,
+        wire::{DocHandle, Principal, RequestId},
     },
     stability::STABILITY,
 };
 use serde_json::{Map, Value, json};
-use std::io::{self, Write};
+use std::{
+    io::{self, Write},
+    sync::Arc,
+};
 
 /// Why a command failed.
 #[derive(Debug)]
@@ -114,6 +119,21 @@ impl Session {
         handle
             .cloned()
             .ok_or_else(|| CliError::Failed("internal error: import returned no document".into()))
+    }
+
+    /// Reads the stored document using the same handle and access rules as ops.
+    pub(crate) fn document(
+        &self,
+        handle: Value,
+    ) -> Result<Arc<crate::document::Document>, CliError> {
+        let handle: DocHandle = serde_json::from_value(handle).map_err(|error| {
+            CliError::Failed(format!("internal error: invalid document handle: {error}"))
+        })?;
+        self.host
+            .store()
+            .snapshot(&self.principal, &handle, Access::Read)
+            .map(|snapshot| snapshot.doc)
+            .map_err(|error| CliError::Failed(error.message))
     }
 
     /// The file at `path`, or standard input, as import text in `format`.

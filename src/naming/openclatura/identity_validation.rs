@@ -210,7 +210,11 @@ mod tests {
                 "2-((2R)-1-nitropropan-2-yl)pyridine",
             ),
         ] {
-            assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
+            assert_eq!(
+                name_smiles(smiles).map(|name| name.text).as_deref(),
+                Ok(expected),
+                "{smiles}"
+            );
         }
     }
 
@@ -277,7 +281,11 @@ mod tests {
             ("[Ca+2]", "calcium"),
             ("[N-]1[NH+]=CC=C1", "1H-pyrazol-1-ide-2-ium"),
         ] {
-            assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
+            assert_eq!(
+                name_smiles(smiles).map(|name| name.text).as_deref(),
+                Ok(expected),
+                "{smiles}"
+            );
         }
     }
 }

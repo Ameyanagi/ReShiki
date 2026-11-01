@@ -6,6 +6,91 @@ use super::molecule::{AtomSet, Molecule, bond_ids_within};
 use super::numbering::{NumberingTopology, ProvenHydrogenLocants, choose_parent_numbering};
 use super::parent_selection::ParentSelection;
 use super::ring_parent::RingParent;
+use crate::naming::{NameReason, NameStatus};
+
+/// Assess only a parent that has entered a successfully rendered name.
+/// Fusion and wrapper plans are also cached and tried speculatively, so their
+/// construction and numbering routines must not mutate the name assessment.
+pub(super) fn mark_rendered_parent_status(mol: &Molecule, parts: &AssemblyParts) {
+    if super::additive::has_atom_order_sensitive_bridge_hydrogen(parts) {
+        mol.mark_name(NameStatus::Unverified(NameReason::AtomOrder));
+    }
+    if let Some(parent) = &parts.parent_hydride {
+        mark_parent_hydride_status(mol, parent);
+    } else if let Some(plan) = &parts.fusion_plan {
+        mark_fusion_plan_status(mol, plan);
+    }
+    if let Some(name) = &parts.retained_name {
+        mark_retained_parent_status(mol, name);
+    }
+}
+
+fn mark_parent_hydride_status(mol: &Molecule, parent: &RingParent) {
+    if let Some(name) = parent.base_name() {
+        mark_retained_parent_status(mol, name);
+    }
+    if let Some(plan) = &parent.fusion_plan {
+        mark_fusion_plan_status(mol, plan);
+    }
+    if let Some(wrapper) = &parent.fusion_wrapper_plan {
+        mark_parent_hydride_status(mol, &wrapper.parent.hydride);
+        mol.mark_name(NameStatus::Unverified(NameReason::BridgedFusedParent));
+    }
+}
+
+fn mark_fusion_plan_status(mol: &Molecule, plan: &super::fusion::model::FusionParentPlan) {
+    mark_retained_parent_status(mol, &plan.rendered_base_name);
+    // Citation pieces preserve component boundaries, including the separate
+    // multiplier before a repeated attached prefix.
+    if super::fusion::descriptor::render_fusion_name_parts(
+        &plan.ast,
+        super::fusion::registry::fusion_component_registry(),
+    )
+    .is_ok_and(|pieces| {
+        pieces.iter().any(|piece| {
+            matches!(
+                piece.as_str(),
+                "oxazolo" | "thiazolo" | "isoxazolo" | "isothiazolo"
+            )
+        })
+    }) {
+        mol.mark_name(NameStatus::NotPreferred(NameReason::FusionPrefix));
+    }
+    if matches!(
+        plan.numbering.selected_layout.kind,
+        super::fusion::model::LayoutKind::OpsinEntry
+            | super::fusion::model::LayoutKind::OpsinConstruction
+    ) {
+        mol.mark_name(NameStatus::Unverified(NameReason::OpsinFusionLayout));
+    }
+}
+
+fn mark_retained_parent_status(mol: &Molecule, name: &str) {
+    if abbreviated_fusion_prefix(name) {
+        mol.mark_name(NameStatus::NotPreferred(NameReason::FusionPrefix));
+    }
+    if matches!(name, "porphyrin" | "corrin" | "gonane") {
+        mol.mark_name(NameStatus::Unverified(NameReason::UnauditedParent));
+    }
+}
+
+fn abbreviated_fusion_prefix(name: &str) -> bool {
+    ["oxazolo", "thiazolo"].iter().any(|prefix| {
+        name.match_indices(prefix).any(|(index, _)| {
+            let before = &name[..index];
+            let before = before
+                .strip_suffix("iso")
+                .or_else(|| before.strip_suffix("is"))
+                .unwrap_or(before);
+            name[index + prefix.len()..].starts_with('[')
+                && !before.ends_with("[1,3]")
+                && !before
+                    .chars()
+                    .next_back()
+                    .is_some_and(|c| c.is_ascii_alphabetic())
+        })
+    })
+}
 
 /// Apply the retained-parent eligibility checks before sharing a retained
 /// identity between component and recursive-substituent assembly.
@@ -491,6 +576,74 @@ fn relative_ring_face(
 #[cfg(test)]
 mod tests {
     use super::super::name_smiles;
+    use super::*;
+
+    #[test]
+    fn fusion_prefix_status_respects_component_spelling() {
+        for (name, expected) in [
+            ("oxazolo[4,5-b]pyridine", true),
+            ("thiazolo[4,5-d]pyrimidine", true),
+            ("benzo[3,4-d]oxazolo[4,5-b]pyridine", true),
+            ("[1,3]oxazolo[4,5-b]pyridine", false),
+            ("[1,3]thiazolo[4,5-d]pyrimidine", false),
+            ("isoxazolo[5,4-b]pyridine", true),
+            ("isothiazolo[4,5-b]pyridine", true),
+            ("benzoxazolo[4,5-b]pyridine", false),
+        ] {
+            assert_eq!(abbreviated_fusion_prefix(name), expected, "{name}");
+        }
+    }
+
+    #[test]
+    fn selected_retained_templates_keep_their_preference_status() {
+        for (name, expected) in [
+            (
+                "thiazolo[5,4-b]pyridine",
+                NameStatus::NotPreferred(NameReason::FusionPrefix),
+            ),
+            (
+                "isoxazolo[5,4-b]pyridine",
+                NameStatus::NotPreferred(NameReason::FusionPrefix),
+            ),
+            (
+                "porphyrin",
+                NameStatus::Unverified(NameReason::UnauditedParent),
+            ),
+            (
+                "corrin",
+                NameStatus::Unverified(NameReason::UnauditedParent),
+            ),
+            (
+                "gonane",
+                NameStatus::Unverified(NameReason::UnauditedParent),
+            ),
+            ("naphthalene", NameStatus::Preferred),
+        ] {
+            let mol = Molecule::new();
+            let mut parts = AssemblyParts::new(1);
+            parts.retained_name = Some(name.into());
+            mark_rendered_parent_status(&mol, &parts);
+            assert_eq!(mol.name_status(), expected, "{name}");
+        }
+    }
+
+    #[test]
+    fn fusion_layout_status_is_deferred_until_rendering() {
+        use super::super::fusion::model::{FusionParentPlan, LayoutKind};
+        for kind in [LayoutKind::OpsinEntry, LayoutKind::OpsinConstruction] {
+            let mol = Molecule::new();
+            let mut plan = FusionParentPlan::default();
+            plan.numbering.selected_layout.kind = kind;
+            let mut parts = AssemblyParts::new(1);
+            parts.fusion_plan = Some(plan);
+            assert_eq!(mol.name_status(), NameStatus::Preferred);
+            mark_rendered_parent_status(&mol, &parts);
+            assert_eq!(
+                mol.name_status(),
+                NameStatus::Unverified(NameReason::OpsinFusionLayout)
+            );
+        }
+    }
 
     #[test]
     fn relative_ring_stereo_is_independent_of_smiles_neighbor_order() {
@@ -500,7 +653,11 @@ mod tests {
             ("C[C@H]1C[C@H](C)C1", "trans-1,3-dimethylcyclobutane"),
             ("C[C@H]1C[C@@H](C1)C", "trans-1,3-dimethylcyclobutane"),
         ] {
-            assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
+            assert_eq!(
+                name_smiles(smiles).map(|name| name.text).as_deref(),
+                Ok(expected),
+                "{smiles}"
+            );
         }
     }
 
@@ -515,7 +672,11 @@ mod tests {
                 "10-bromo-1,6-dithiadispiro[3.0.4.1]decane",
             ),
         ] {
-            assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
+            assert_eq!(
+                name_smiles(smiles).map(|name| name.text).as_deref(),
+                Ok(expected),
+                "{smiles}"
+            );
         }
     }
 
@@ -539,7 +700,11 @@ mod tests {
                 "N-(3-aza-2-borabicyclo[3.1.0]hex-1(6)-en-5-yl)acetamide",
             ),
         ] {
-            assert_eq!(name_smiles(smiles).as_deref(), Ok(expected), "{smiles}");
+            assert_eq!(
+                name_smiles(smiles).map(|name| name.text).as_deref(),
+                Ok(expected),
+                "{smiles}"
+            );
         }
     }
 
@@ -578,7 +743,9 @@ mod tests {
             );
         }
         assert_eq!(
-            name_smiles("CC1C(F)CCCC2CCCC=CCC1C1CC(CC2)C1").as_deref(),
+            name_smiles("CC1C(F)CCCC2CCCC=CCC1C1CC(CC2)C1")
+                .map(|name| name.text)
+                .as_deref(),
             Ok("17-fluoro-18-methyltricyclo[6.5.5.1^{9,11}]nonadec-5-ene"),
         );
     }
@@ -586,7 +753,7 @@ mod tests {
     #[test]
     fn external_double_bond_uses_modern_cip_priority() {
         let smiles = "C/C=C\\C(=C/C)[C@H](C)/C=C\\C";
-        let name = name_smiles(smiles).unwrap();
+        let name = name_smiles(smiles).unwrap().text;
         assert_eq!(name, "(2Z,4E,5R,6Z)-4-ethylidene-5-methylocta-2,6-diene");
         let request = crate::naming::local::parse_request(&name).unwrap();
         let reply = crate::naming::worker::respond(&request).unwrap();

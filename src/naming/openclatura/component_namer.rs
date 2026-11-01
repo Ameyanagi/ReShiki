@@ -62,19 +62,23 @@ pub(super) fn build_spiro_component_parts(
     required_core: Option<&AtomSet>,
     prefix_only: bool,
 ) -> Result<Option<ParentAssemblyPlan>, String> {
-    match component_pipeline(
-        mol,
-        component_atoms,
-        None,
-        Some(SpiroProjection {
-            junction,
-            required_core,
-            prefix_only,
-        }),
-    )? {
-        ComponentResult::Shortcut(_) => Ok(None),
-        ComponentResult::Plan(plan) => Ok(Some(*plan)),
-    }
+    mol.candidate(|| {
+        Ok(
+            match component_pipeline(
+                mol,
+                component_atoms,
+                None,
+                Some(SpiroProjection {
+                    junction,
+                    required_core,
+                    prefix_only,
+                }),
+            )? {
+                ComponentResult::Shortcut(_) => None,
+                ComponentResult::Plan(plan) => Some(*plan),
+            },
+        )
+    })
 }
 
 fn component_pipeline(
@@ -118,6 +122,7 @@ fn component_pipeline(
                 })
                 .any(|g| p.atom_ids().is_disjoint(&g.atom_ids()))
         });
+    let status = mol.name_status();
     let structural = if functional_defer {
         None
     } else {
@@ -135,6 +140,7 @@ fn component_pipeline(
     {
         return Ok(ComponentResult::Shortcut(result.name));
     }
+    mol.set_name_status(status);
     if let Some(name) = try_name_anhydride_component(mol, &groups, key.as_deref())? {
         return Ok(ComponentResult::Shortcut(name));
     }
@@ -403,7 +409,9 @@ pub(super) fn render_component_parent(
     let name =
         super::ionic_naming::apply_cationic_imino_parent_prefixes(&name, mol, numbered, locants)?;
     let name = super::ionic_naming::apply_cationic_imino_names(&name, mol)?;
-    Ok(super::assembler::post_process_name(&name))
+    let name = super::assembler::post_process_name(&name);
+    super::assembler::mark_assembled_name(mol, parts, &name);
+    Ok(name)
 }
 
 fn collect_component_branch_substituents(
@@ -482,7 +490,12 @@ mod tests {
             ("c1ccc2[n-]ncc2c1", "indazol-1-ide"),
             ("C1=Cc2ccccc2[NH2+]1", "1H-indol-1-ium"),
         ] {
-            assert_eq!(super::super::name_smiles(smiles).as_deref(), Ok(name));
+            assert_eq!(
+                super::super::name_smiles(smiles)
+                    .map(|name| name.text)
+                    .as_deref(),
+                Ok(name)
+            );
         }
     }
 }

@@ -1590,12 +1590,14 @@ mod tests {
                 ["6"]
             );
             assert_eq!(
-                super::super::super::name_smiles(smiles).unwrap(),
+                super::super::super::name_smiles(smiles).unwrap().text,
                 format!("1,7-epoxy-4H-cyclohepta[c]thiophen-5(6H)-{suffix}")
             );
         }
         assert_eq!(
-            super::super::super::name_smiles("C12=CC=C(C3=CC=CC=C13)CCCCCC2").as_deref(),
+            super::super::super::name_smiles("C12=CC=C(C3=CC=CC=C13)CCCCCC2")
+                .map(|name| name.text)
+                .as_deref(),
             Ok("1,4-hexanonaphthalene")
         );
         assert!(super::super::super::name_smiles("C=C1Cc2cc3c(csc3[nH]2)C1").is_err());

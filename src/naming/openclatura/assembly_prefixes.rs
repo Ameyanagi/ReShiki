@@ -293,7 +293,9 @@ mod tests {
     #[test]
     fn sibling_diazenyl_keeps_its_carbonyl_attachment() {
         assert_eq!(
-            super::super::name_smiles("C1=CC(=C2C=C(NC2=C1)C(=O)N=N)CN=[N+]=[N-]").as_deref(),
+            super::super::name_smiles("C1=CC(=C2C=C(NC2=C1)C(=O)N=N)CN=[N+]=[N-]")
+                .map(|name| name.text)
+                .as_deref(),
             Ok("(4-(azidomethyl)-1H-indol-2-yl)(diazenyl)methanone"),
         );
     }

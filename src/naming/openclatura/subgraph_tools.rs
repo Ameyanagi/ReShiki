@@ -400,7 +400,9 @@ mod tests {
     #[test]
     fn retained_sulfur_uses_the_ordinary_valence_implied_by_its_substituents() {
         assert_eq!(
-            super::super::name_smiles("Cl[SH]1C=c2ccccc2=C1").as_deref(),
+            super::super::name_smiles("Cl[SH]1C=c2ccccc2=C1")
+                .map(|name| name.text)
+                .as_deref(),
             Ok("2-chloro-2-benzothiophene")
         );
         assert!(super::super::name_smiles("[SH2]1CCCC1").is_err());

@@ -9,6 +9,26 @@ use std::collections::{BTreeMap, BTreeSet};
 
 type Site = (String, usize);
 
+/// The bridge-prefix oxo composition is known to choose different added-H
+/// locants for equivalent input atom orders. Keep this uncertainty on that
+/// rendered route rather than all retained or additive-hydrogen parents.
+pub(super) fn has_atom_order_sensitive_bridge_hydrogen(parts: &AssemblyParts) -> bool {
+    parts
+        .parent_hydride
+        .as_ref()
+        .is_some_and(|parent| parent.kind == super::ring_parent::ParentHydrideKind::BridgedFusion)
+        && parts
+            .principal_group
+            .as_ref()
+            .is_some_and(|group| group.key == "ketone")
+        && parts.hydro_operations.iter().any(|operation| {
+            matches!(
+                operation.key.as_str(),
+                "indicated_hydrogen" | "added_hydrogen"
+            ) && !operation.locants.is_empty()
+        })
+}
+
 pub fn parent_indicated_hydrogen_quota(parts: &AssemblyParts) -> Option<usize> {
     let plan = if let Some(parent) = &parts.parent_hydride {
         parent
@@ -881,7 +901,9 @@ mod tests {
     #[test]
     fn bridge_oxo_composition_does_not_invent_hydrogenation() {
         assert_eq!(
-            super::super::name_smiles("C12C(C=C(C3=CC=CC=C13)O2)=O").as_deref(),
+            super::super::name_smiles("C12C(C=C(C3=CC=CC=C13)O2)=O")
+                .map(|name| name.text)
+                .as_deref(),
             Ok("1,4-epoxynaphthalen-2(1H)-one")
         );
     }
@@ -900,7 +922,12 @@ mod tests {
             ("O=C1C=CC2=CC=CC=C2N1", "quinolin-2(1H)-one"),
             ("C=C1C=C2C=CC=CC2=N1", "2-methylidene-2H-indole"),
         ] {
-            assert_eq!(super::super::name_smiles(smiles).as_deref(), Ok(expected));
+            assert_eq!(
+                super::super::name_smiles(smiles)
+                    .map(|name| name.text)
+                    .as_deref(),
+                Ok(expected)
+            );
         }
     }
 
@@ -964,7 +991,9 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                super::super::name_smiles(smiles).as_deref(),
+                super::super::name_smiles(smiles)
+                    .map(|name| name.text)
+                    .as_deref(),
                 Ok(expected),
                 "{smiles}"
             );

@@ -23,7 +23,12 @@ SMILES (first tab-separated column) and prints the wrong and unparseable rows;
 `S2N_EXTRA_OUT=<file>` writes every row, and `S2N_EXTRA_GIVEN=1` round-trips the
 name in the second column instead of calling the namer (e.g. upstream's names).
 `S2N_DUMP=<dir>` writes every classified row per check (class, category, SMILES,
-name, openclatura text for parity, decline reason) for analysis.
+name, openclatura text for parity, decline reason) for analysis, and
+`{fast,full}-status.tsv` with the [PIN status](chemical-naming-rust.md#preferred-iupac-name-status)
+of every named row: check, SMILES, status (`preferred`, `not_preferred` or
+`unverified`) and reason. The ignored `parity_file` test in
+`src/naming/openclatura/mod.rs` names the SMILES in `OPENCLATURA_PARITY` and
+adds the same status and reason columns to each `different` row it writes.
 
 The fast test fails on any Wrong name and when a correct count in
 `tests/fixtures/s2n/baseline.tsv` drops; it prints a reminder when one rises.

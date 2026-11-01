@@ -5,6 +5,7 @@ use crate::{
     editing,
     molecule_names::{self, IdentityRejection, MAX_NAMING_ATOMS, MAX_SMILES_BYTES, is_tetrahedral},
 };
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 mod catalog;
@@ -65,6 +66,114 @@ impl std::fmt::Display for Error {
 }
 impl std::error::Error for Error {}
 
+/// Preference assessment made by the rules that produced a generated name.
+/// This is independent of the later OPSIN structure reconstruction check.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "status", content = "reason", rename_all = "snake_case")]
+pub enum NameStatus {
+    Preferred,
+    NotPreferred(NameReason),
+    Unverified(NameReason),
+}
+impl NameStatus {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Preferred => "Preferred IUPAC name",
+            Self::NotPreferred(_) => "Systematic name, not the preferred IUPAC name",
+            Self::Unverified(_) => "Systematic name, preference not verified",
+        }
+    }
+
+    pub fn detail(self) -> &'static str {
+        match self {
+            Self::Preferred => {
+                "No rule on this name's path is known to depart from the preferred IUPAC name (IUPAC 2013)."
+            }
+            Self::NotPreferred(reason) | Self::Unverified(reason) => reason.detail(),
+        }
+    }
+}
+
+/// The naming rule family responsible for a preference assessment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NameReason {
+    RetainedGeneralName,
+    AlkoxyPrefix,
+    SulfonylPrefix,
+    ChalcogenPrefix,
+    AminoPrefix,
+    FunctionalClass,
+    HydrideParent,
+    UnretainedParent,
+    FusionPrefix,
+    DiamideLocants,
+    MultipleBondNumbering,
+    OpsinFusionLayout,
+    BridgedFusedParent,
+    UnauditedParent,
+    SubstitutedRetainedParent,
+    AtomOrder,
+    AmineChalcogenide,
+}
+impl NameReason {
+    pub fn detail(self) -> &'static str {
+        match self {
+            Self::RetainedGeneralName => {
+                "Uses a retained general name such as propionitrile or succinic acid; preferred IUPAC names use propanenitrile or butanedioic acid (P-66.5.1; P-65.1.1.2)."
+            }
+            Self::AlkoxyPrefix => {
+                "Uses a general alkoxy prefix such as isopropoxy; preferred IUPAC names use forms such as (propan-2-yl)oxy (P-63.2.2.2)."
+            }
+            Self::SulfonylPrefix => {
+                "Uses general prefixes such as methylsulfonyl or tosyl; preferred IUPAC names use methanesulfonyl or 4-methylbenzene-1-sulfonyl (P-65.3.2)."
+            }
+            Self::ChalcogenPrefix => {
+                "Uses a general chalcogen prefix such as thioxo or thioformyl; preferred IUPAC names use forms such as sulfanylidene or methanethioyl (P-64.6.1)."
+            }
+            Self::AminoPrefix => {
+                "Uses phenylamino or guanidino; preferred IUPAC names use anilino or carbamimidoylamino, respectively."
+            }
+            Self::FunctionalClass => {
+                "Uses a functional-class form such as sulfoxide, hydrazone or phosphane oxide; preferred IUPAC names use substitutive forms such as (methanesulfinyl)methane, ylidenehydrazine or λ5-phosphanone."
+            }
+            Self::HydrideParent => {
+                "Uses a substituted parent hydride such as dimethylsulfane or trimethylazane; preferred IUPAC names use (methylsulfanyl)methane or N,N-dimethylmethanamine (P-63.2.5, P-62.2.1)."
+            }
+            Self::UnretainedParent => {
+                "Uses a systematic parent such as methanal, ethanediamide, methanenitrile or a substituted formic acid; preferred IUPAC names use formaldehyde, oxamide, anisole, formonitrile, or carbamic or carbonic acid."
+            }
+            Self::FusionPrefix => {
+                "Uses a fusion prefix such as oxazolo or isoxazolo; the preferred IUPAC name cites the heteroatom locants, as in [1,3]oxazolo or [1,2]oxazolo (P-25.3.2.2.2)."
+            }
+            Self::DiamideLocants => {
+                "Uses N and N' locants for a diamide; the preferred IUPAC name uses nitrogen locants such as N1 and N2 (P-66.1.1.3.1.1)."
+            }
+            Self::MultipleBondNumbering => {
+                "For tied sets of double- and triple-bond locants, the preferred IUPAC name gives the double bond the lower locant (P-31.1.4.2.4)."
+            }
+            Self::OpsinFusionLayout => {
+                "Uses a fusion layout selected for OPSIN numbering compatibility; its preferred IUPAC numbering has not been verified."
+            }
+            Self::BridgedFusedParent => {
+                "The preferred parent choice for this bridged-fused system has not been verified."
+            }
+            Self::UnauditedParent => {
+                "Porphyrin, corrin and gonane are retained parents without a PIN designation in P-10; preferred name selection for this path has not been verified."
+            }
+            Self::SubstitutedRetainedParent => {
+                "Whether a substituted acetaldehyde or anisole keeps its retained name in the preferred IUPAC name has not been verified."
+            }
+            Self::AtomOrder => {
+                "The name can depend on input atom order; its preferred numbering has not been verified."
+            }
+            Self::AmineChalcogenide => {
+                "Amine oxide-type names (amine sulfide, selenide, telluride) have not been checked against the preferred IUPAC form."
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Provenance {
     OpsinRust,
@@ -99,6 +208,8 @@ pub struct Record {
     /// The source's systematic name. OPSIN parses the supplied name; it does
     /// not produce a new systematic name from a graph.
     pub systematic_name: Option<String>,
+    /// Only generated names carry a rule-path preference assessment.
+    pub name_status: Option<NameStatus>,
     pub smiles: String,
     pub canonical_smiles: String,
     /// Curated offline aliases, separate from the generated systematic name.

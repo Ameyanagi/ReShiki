@@ -13,7 +13,7 @@ const BAKEOFF: &str = include_str!("../../tests/fixtures/s2n/bakeoff_corpus.tsv"
 const OPENCLATURA: &str = include_str!("../../tests/fixtures/s2n/openclatura_tests.tsv");
 const RULES_CASES: &str = include_str!("../../tests/fixtures/s2n/rules_cases.tsv");
 
-fn namer(smiles: &str) -> Result<String, String> {
+fn namer(smiles: &str) -> Result<super::openclatura::Name, String> {
     super::openclatura::name_smiles(smiles)
 }
 
@@ -76,6 +76,7 @@ enum Class {
 struct Outcome {
     class: Class,
     name: String,
+    status: Option<super::NameStatus>,
     expected: String,
     actual: String,
     reason: String,
@@ -117,6 +118,7 @@ impl Measurements {
         let mut result = Outcome {
             class: Class::Declined,
             name: name.into(),
+            status: None,
             expected: super::canonical_smiles(smiles).unwrap_or_default(),
             actual: String::new(),
             reason: String::new(),
@@ -150,6 +152,7 @@ impl Measurements {
                 return Outcome {
                     class: Class::Declined,
                     name: String::new(),
+                    status: None,
                     expected: String::new(),
                     actual: String::new(),
                     reason: format!("Input canonicalization: {reason}"),
@@ -162,6 +165,7 @@ impl Measurements {
         let mut result = Outcome {
             class: Class::Declined,
             name: String::new(),
+            status: None,
             expected: expected.clone(),
             actual: String::new(),
             reason: String::new(),
@@ -173,7 +177,8 @@ impl Measurements {
         match generated {
             Err(reason) => result.reason = reason,
             Ok(name) => {
-                result.name = name;
+                result.status = Some(name.status);
+                result.name = name.text;
                 match self.parse_name(&result.name) {
                     Err(reason) => {
                         result.class = Class::Unparseable;
@@ -228,6 +233,7 @@ struct Report {
     declines: BTreeMap<String, usize>,
     details: Vec<String>,
     rows: Vec<String>,
+    status_rows: Vec<String>,
     missing_golden: usize,
 }
 
@@ -253,6 +259,15 @@ impl Report {
             field(golden.unwrap_or_default()),
             field(&outcome.reason),
         ));
+        if let Some(status) = outcome.status {
+            let status = serde_json::to_value(status).expect("serialize name status");
+            self.status_rows.push(format!(
+                "{}\t{}\t{}",
+                field(&case.smiles),
+                status["status"].as_str().expect("name status tag"),
+                status["reason"].as_str().unwrap_or_default(),
+            ));
+        }
         if outcome.class == Class::Declined {
             *self.declines.entry(outcome.reason.clone()).or_default() += 1;
         }
@@ -473,13 +488,23 @@ fn run(fast: bool) {
     }
     // Every classified row, for parity and decline analysis.
     if let Some(dir) = std::env::var_os("S2N_DUMP") {
+        let mut status_rows = Vec::new();
         for (check, report) in &reports {
             let path = Path::new(&dir).join(format!(
                 "{}-{check}.tsv",
                 if fast { "fast" } else { "full" }
             ));
             std::fs::write(path, report.rows.join("\n")).expect("write S2N_DUMP");
+            status_rows.extend(
+                report
+                    .status_rows
+                    .iter()
+                    .map(|row| format!("{check}\t{row}")),
+            );
         }
+        let path =
+            Path::new(&dir).join(format!("{}-status.tsv", if fast { "fast" } else { "full" }));
+        std::fs::write(path, status_rows.join("\n")).expect("write S2N_DUMP status");
     }
     if fast {
         ratchet(&reports);
@@ -515,7 +540,7 @@ fn s2n_rules_cases() {
         };
         match namer(smiles) {
             Ok(actual) => {
-                assert_eq!(actual, name, "{smiles}");
+                assert_eq!(actual.text, name, "{smiles}");
                 let outcome = measurements.classify_given(smiles, name);
                 assert_eq!(
                     outcome.class,

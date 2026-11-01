@@ -8,6 +8,7 @@ use super::molecule::{AtomSet, Molecule};
 use super::namer::name_subgraph_with_upstream;
 use super::nomenclature::section;
 use super::rules::{elements, multipliers};
+use crate::naming::{NameReason, NameStatus};
 use serde_json::Value;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::LazyLock;
@@ -232,7 +233,7 @@ pub fn format_amino_from_branches(
     format!("({modifier}amino)")
 }
 
-fn sulfonyl_group(branch: &str, suffix: &str) -> (String, bool) {
+fn sulfonyl_group(mol: &Molecule, branch: &str, suffix: &str) -> (String, bool) {
     let b = strip_outer_parentheses(branch);
     if let Some(rows) = section("retained_sulfonyl_group_names").as_array() {
         for row in rows {
@@ -240,6 +241,9 @@ fn sulfonyl_group(branch: &str, suffix: &str) -> (String, bool) {
                 && row["suffix"].as_str() == Some(suffix)
                 && let Some(name) = row["name"].as_str()
             {
+                if name == "tosyl" {
+                    mol.mark_name(NameStatus::NotPreferred(NameReason::SulfonylPrefix));
+                }
                 return (name.into(), true);
             }
         }
@@ -257,6 +261,13 @@ fn sulfonyl_group(branch: &str, suffix: &str) -> (String, bool) {
                 return (result, before.is_empty());
             }
         }
+    }
+    // Preferred names cite methanesulfonyl, sulfo, sulfamoyl (P-65.3.2.3);
+    // alkoxy, halo, azido and similar concatenations are preferred prefixes.
+    if (b.ends_with("yl") || b.ends_with("amino") || b == "hydroxy")
+        && matches!(suffix, "sulfonyl" | "sulfinyl")
+    {
+        mol.mark_name(NameStatus::NotPreferred(NameReason::SulfonylPrefix));
     }
     (format!("{b}{suffix}"), false)
 }
@@ -434,7 +445,7 @@ fn name_oxygen(
                     &with_atoms(exclude, [start, next].into_iter().chain(no)),
                     next,
                 )?;
-                let (g, _) = sulfonyl_group(&b, suffix);
+                let (g, _) = sulfonyl_group(mol, &b, suffix);
                 return Ok(format!("({}{g}oxy)", stereo(mol, next)));
             }
             return Ok("sulfooxy".into());
@@ -445,7 +456,7 @@ fn name_oxygen(
         return Ok(if acyl.is_empty() {
             "formyloxy".into()
         } else {
-            oxy_prefix_from_branch(&acyl)
+            oxy_prefix_from_branch(mol, &acyl)
         });
     }
     if mol.atoms[&next].is_carbon() && ns.len() == 1 {
@@ -490,7 +501,7 @@ fn name_oxygen(
     {
         return Err("openclatura: amidooxy attachment not supported".into());
     }
-    Ok(oxy_prefix_from_branch(&b))
+    Ok(oxy_prefix_from_branch(mol, &b))
 }
 
 fn name_nitrogen(
@@ -623,9 +634,11 @@ fn name_nitrogen(
             }
         }
     }
+    let status = mol.name_status();
     if let Some(name) = guanidino_prefix(mol, start, &roots, exclude)? {
         return Ok(name);
     }
+    mol.set_name_status(status);
     let mut names = Vec::new();
     for n in roots {
         let oxygen = double_bonded_neighbors(mol, n, "O");
@@ -672,6 +685,10 @@ fn name_nitrogen(
         if !b.is_empty() {
             names.push(b);
         }
+    }
+    // The uncharged multiple-imino fallback does not cite its branch names.
+    if order == 2 && atom.charge <= 0 && names.len() > 1 {
+        mol.set_name_status(status);
     }
     Ok(format_amino_from_branches(
         &names,
@@ -732,7 +749,7 @@ fn sulfur_imide_branch(
     } else {
         "sulfinyl"
     };
-    let (name, _) = sulfonyl_group(&name, suffix);
+    let (name, _) = sulfonyl_group(mol, &name, suffix);
     Ok(Some(format!("{}{name}", stereo(mol, sulfur))))
 }
 
@@ -982,7 +999,7 @@ fn name_sulfur(
             [] => Ok(format!("{sp}{suffix}")),
             [root] => {
                 let b = plain_branch(mol, *root, &blocked, start)?;
-                let (g, bare) = sulfonyl_group(&b, &suffix);
+                let (g, bare) = sulfonyl_group(mol, &b, &suffix);
                 Ok(if bare {
                     format!("{sp}{g}")
                 } else {
@@ -1005,7 +1022,11 @@ fn name_sulfur(
                 .copied()
                 .filter(|n| !blocked.contains(n) && mol.atoms[n].symbol != "H")
                 .collect();
+            let status = mol.name_status();
             let ns = branches(mol, &n_roots, &with_atoms(&blocked, [nitrogen]), nitrogen)?;
+            if ns.len() > 1 {
+                mol.set_name_status(status);
+            }
             imino.push(format_amino_from_branches(&ns, true, false, false));
         }
         if roots.is_empty() {
@@ -1021,6 +1042,7 @@ fn name_sulfur(
     if roots.is_empty() {
         return Ok(
             if order == 2 || charge_normalized_chalcogenido(mol, upstream, start) {
+                mol.mark_name(NameStatus::NotPreferred(NameReason::ChalcogenPrefix));
                 "thioxo".into()
             } else if mol.atoms[&start].charge > 0 {
                 format!("{sp}sulfaniumyl")
@@ -1286,6 +1308,7 @@ pub fn name_heteroatom_subgraph(
                 }
             } else if roots.is_empty() {
                 if order == 2 {
+                    mol.mark_name(NameStatus::NotPreferred(NameReason::ChalcogenPrefix));
                     if symbol == "Se" {
                         "selenoxo".into()
                     } else {
@@ -1514,6 +1537,7 @@ fn guanidino_prefix(
         }
     }
     if names.is_empty() {
+        mol.mark_name(NameStatus::NotPreferred(NameReason::AminoPrefix));
         return Ok(Some("guanidino".into()));
     }
     let mut ordered: Vec<_> = names.into_iter().collect();
@@ -1535,6 +1559,7 @@ fn guanidino_prefix(
         .filter(|s| matches!(s.as_str(), "E" | "Z"))
         .map(|s| format!("({s})-"))
         .unwrap_or_default();
+    mol.mark_name(NameStatus::NotPreferred(NameReason::AminoPrefix));
     Ok(Some(format!("({stereo}{prefixes}guanidino)")))
 }
 
@@ -1556,9 +1581,27 @@ fn charge_normalized_chalcogenido(mol: &Molecule, center: Option<usize>, ligand:
 #[cfg(test)]
 mod tests {
     use super::central_oxo;
+    use crate::naming::NameStatus;
     use crate::naming::openclatura::{
         graph_io::read_smiles, molecule::AtomSet, namer::name_subgraph_with_upstream,
     };
+
+    #[test]
+    fn amino_contractions_discard_the_consumed_phenylamino_status() -> Result<(), String> {
+        for (smiles, start, upstream, expected) in [
+            ("CCS(=O)(=O)Nc1ccccc1", 2, 1, "(phenylsulfamoyl)"),
+            ("CCNC(=S)Nc1ccccc1", 2, 1, "(phenylcarbamothioylamino)"),
+        ] {
+            let mol = read_smiles(smiles)?;
+            assert_eq!(
+                name_subgraph_with_upstream(&mol, start, &AtomSet::from([0, 1]), Some(upstream))?,
+                expected,
+                "{smiles}"
+            );
+            assert_eq!(mol.name_status(), NameStatus::Preferred, "{smiles}");
+        }
+        Ok(())
+    }
 
     #[test]
     fn sulfonamidooxy_keeps_the_proved_oxygen_nitrogen_sulfur_linkage() -> Result<(), String> {
@@ -1574,7 +1617,8 @@ mod tests {
         assert_eq!(
             crate::naming::openclatura::name_smiles(
                 "CCC(C1=NOC2=C1C(=C(C=C2)Br)OC)ONS(=O)(=O)C3=CC=CC=C3"
-            )?,
+            )?
+            .text,
             "3-(1-(benzenesulfonamidooxy)propyl)-5-bromo-4-methoxy-1,2-benzoxazole"
         );
         Ok(())

@@ -4,6 +4,7 @@ use super::{
     molecule::{AtomSet, Molecule},
     rules::{elements, retained},
 };
+use crate::naming::{NameReason, NameStatus};
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
@@ -126,6 +127,23 @@ impl NumberingPreference {
             .find(|order| order.is_ne())
             .unwrap_or(Ordering::Equal)
     }
+
+    fn ties_through_unsaturation(&self, other: &Self, is_ring: bool) -> bool {
+        let criteria = if is_ring {
+            &RING_CRITERIA
+        } else {
+            &CHAIN_CRITERIA
+        };
+        for &criterion in criteria.iter() {
+            if self.criterion(criterion) != other.criterion(criterion) {
+                return false;
+            }
+            if matches!(criterion, NumberingCriterion::Unsaturation) {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -180,6 +198,42 @@ fn number_parent(
         if evaluation.compare(&best_score, is_ring) == Ordering::Less {
             best = candidate.clone();
             best_score = evaluation;
+        }
+    }
+    // The implemented comparison pools ene and yne locants. Report the
+    // missing P-31.1.4.2.4 tie-break only when it would improve this chosen
+    // numbering after every preceding criterion has tied.
+    if retained_name.is_none() {
+        let (double_locants, triple_locants) = get_bond_locants(
+            mol,
+            &best,
+            topology.is_bicycle,
+            topology.is_spiro,
+            topology.is_polycycle,
+        );
+        if !double_locants.is_empty()
+            && !triple_locants.is_empty()
+            && candidates.iter().any(|candidate| {
+                let evaluation = numbering_preference(
+                    mol,
+                    candidate,
+                    principal_carbons,
+                    substituent_mapping,
+                    retained_name,
+                    topology,
+                );
+                evaluation.ties_through_unsaturation(&best_score, is_ring)
+                    && get_bond_locants(
+                        mol,
+                        candidate,
+                        topology.is_bicycle,
+                        topology.is_spiro,
+                        topology.is_polycycle,
+                    )
+                    .0 < double_locants
+            })
+        {
+            mol.mark_name(NameStatus::NotPreferred(NameReason::MultipleBondNumbering));
         }
     }
     best
@@ -536,6 +590,54 @@ mod tests {
         graph_io::read_smiles,
     };
     use super::*;
+    #[test]
+    fn ene_yne_status_requires_a_tie_before_the_missing_criterion() {
+        for (path, principal, expected) in [
+            (
+                vec![0, 1, 2, 3, 4],
+                AtomSet::new(),
+                NameStatus::NotPreferred(NameReason::MultipleBondNumbering),
+            ),
+            (vec![4, 3, 2, 1, 0], AtomSet::new(), NameStatus::Preferred),
+            (
+                vec![0, 1, 2, 3, 4],
+                AtomSet::from([0]),
+                NameStatus::Preferred,
+            ),
+        ] {
+            let mol = read_smiles("C#CCC=C").unwrap();
+            let numbered = number_parent(
+                &mol,
+                std::slice::from_ref(&path),
+                &principal,
+                &BTreeMap::new(),
+                false,
+                false,
+                None,
+                NumberingTopology::default(),
+            );
+            assert_eq!(numbered, path);
+            assert_eq!(mol.name_status(), expected);
+        }
+    }
+
+    #[test]
+    fn pooled_multiple_bond_locants_must_also_tie() {
+        let mol = read_smiles("C#CCC=CC").unwrap();
+        let numbered = number_parent(
+            &mol,
+            &[vec![0, 1, 2, 3, 4, 5]],
+            &AtomSet::new(),
+            &BTreeMap::new(),
+            false,
+            false,
+            None,
+            NumberingTopology::default(),
+        );
+        assert_eq!(numbered, vec![0, 1, 2, 3, 4, 5]);
+        assert_eq!(mol.name_status(), NameStatus::Preferred);
+    }
+
     #[test]
     fn principal_group_numbering_precedes_unsaturation() {
         let mol = read_smiles("C=CCCCO").unwrap();
