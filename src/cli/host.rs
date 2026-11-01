@@ -102,12 +102,26 @@ impl Session {
         input: Input,
         err: &mut dyn Write,
     ) -> Result<Value, CliError> {
-        let Input { source, format } = input;
-        let text = match source {
-            Source::Smiles(text) => text,
-            Source::File(path) => self.read(Some(&path), &format)?,
-            Source::Stdin => self.read(None, &format)?,
-        };
+        let text = self.text(input.source, &input.format)?;
+        self.import_text(text, input.format, err).await
+    }
+
+    /// The import text of `source`.
+    pub(crate) fn text(&self, source: Source, format: &str) -> Result<String, CliError> {
+        match source {
+            Source::Smiles(text) => Ok(text),
+            Source::File(path) => self.read(Some(&path), format),
+            Source::Stdin => self.read(None, format),
+        }
+    }
+
+    /// Imports `text` as a session document; returns the document's handle.
+    pub(crate) async fn import_text(
+        &mut self,
+        text: String,
+        format: String,
+        err: &mut dyn Write,
+    ) -> Result<Value, CliError> {
         let result = self
             .call("import", json!({"format": format, "text": text}), err)
             .await?;

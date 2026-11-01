@@ -1,6 +1,6 @@
 //! `reshiki --cli name`: import, generate locally, then verify reconstruction.
 use super::{
-    args::Name,
+    args::{Input, Name},
     host::{CliError, Session, labelled},
 };
 use crate::naming::{self, NameStatus};
@@ -13,7 +13,15 @@ pub(crate) async fn run(
     err: &mut dyn Write,
 ) -> Result<(), CliError> {
     let mut session = Session::new();
-    let handle = session.import(name.input, err).await?;
+    let Input { source, format } = name.input;
+    let text = session.text(source, &format)?;
+    // Import cleanup can drop stereo classes that naming rejects, such as
+    // allene stereo, so the raw SMILES (before any title) is checked first.
+    if format == "smiles" {
+        let smiles = text.split_whitespace().next().unwrap_or_default();
+        naming::canonical_smiles(smiles).map_err(CliError::Failed)?;
+    }
+    let handle = session.import_text(text, format, err).await?;
     let document = session.document(handle)?;
     let identity = naming::document_identity(&document).map_err(CliError::Failed)?;
     let record = naming::generate_name(&identity, naming::Cancel::default())

@@ -144,6 +144,22 @@ fn component_pipeline(
     if let Some(name) = try_name_anhydride_component(mol, &groups, key.as_deref())? {
         return Ok(ComponentResult::Shortcut(name));
     }
+    // The key is the first of equally senior groups, such as carboxylic_acid
+    // and ring_carboxylic_acid, not the P-44.1 count and ring-over-chain choice.
+    let seniority = |g: &super::perception::PerceivedGroup| {
+        g.resolved_rule.as_ref().and_then(|r| r.seniority.clone())
+    };
+    if let Some(selected) = groups
+        .iter()
+        .find(|g| Some(g.key.as_str()) == key.as_deref())
+        && groups.iter().any(|g| {
+            g.is_principal_candidate && g.key != selected.key && seniority(g) == seniority(selected)
+        })
+    {
+        mol.mark_name(crate::naming::NameStatus::Unverified(
+            crate::naming::NameReason::PrincipalGroupTie,
+        ));
+    }
 
     let base_exclude: AtomSet = mol
         .atoms

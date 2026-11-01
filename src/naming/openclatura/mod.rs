@@ -146,6 +146,12 @@ mod tests {
                 "4-(methoxysulfonyl)benzoic acid",
             ),
             ("COS(=O)(=O)NCC(=O)O", "2-methoxysulfonylaminoacetic acid"),
+            // Substituted anisoles take systematic PINs (P-63.2.3).
+            ("COc1ccc(Cl)cc1", "1-chloro-4-methoxybenzene"),
+            ("COc1ccccc1OC", "1,2-dimethoxybenzene"),
+            ("O=CCl", "formyl chloride"),
+            ("CNC=O", "N-methylformamide"),
+            ("COC=O", "methyl formate"),
         ] {
             let name = name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
@@ -201,6 +207,23 @@ mod tests {
             ("c1cnc2scnc2c1", "thiazolo[5,4-b]pyridine", R::FusionPrefix),
             ("c1cnc2oncc2c1", "isoxazolo[5,4-b]pyridine", R::FusionPrefix),
             (
+                "O=C(O)c1ccc(C=[Se])cc1",
+                "4-selenoformylbenzoic acid",
+                R::ChalcogenPrefix,
+            ),
+            (
+                "O=C(O)c1ccc(C=[Te])cc1",
+                "4-telluroformylbenzoic acid",
+                R::ChalcogenPrefix,
+            ),
+            ("O=C(O)Cl", "hydroxyformyl chloride", R::UnretainedParent),
+            ("O=C(OC)Cl", "methoxyformyl chloride", R::UnretainedParent),
+            (
+                "CNC(=O)Cl",
+                "1-chloro-N-methylformamide",
+                R::UnretainedParent,
+            ),
+            (
                 "O=CO[PH](=O)O",
                 "(hydroxyphosphinoyloxy)methanal",
                 R::UnretainedParent,
@@ -235,9 +258,14 @@ mod tests {
         for (smiles, expected, reason) in [
             ("NCC=O", "2-aminoethanal", R::SubstitutedRetainedParent),
             (
-                "COc1ccc(Cl)cc1",
-                "1-chloro-4-methoxybenzene",
-                R::SubstitutedRetainedParent,
+                "OC(=O)Cc1ccc(cc1)C(=O)O",
+                "2-(4-carboxyphenyl)acetic acid",
+                R::PrincipalGroupTie,
+            ),
+            (
+                "NC(=O)CNC(=O)c1ccccc1",
+                "2-benzamidoacetamide",
+                R::PrincipalGroupTie,
             ),
             (
                 "CC[N+](C)(C)[S-]",

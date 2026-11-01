@@ -181,27 +181,35 @@ The engine marks the status where it makes the choice, so the name text is
 unchanged. A naming attempt it discards leaves no mark. Reasons for a name
 that is not the PIN:
 
-| Reason                    | Example the engine writes                                                  | Preferred form                                                           |
-| ------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `retained_general_name`   | `propionitrile`, `malonic acid`                                            | `propanenitrile`, `propanedioic acid`                                    |
-| `alkoxy_prefix`           | `isopropoxy`, `isobutoxy`, `sec-butoxy`                                    | `(propan-2-yl)oxy`, `2-methylpropoxy`                                    |
-| `sulfonyl_prefix`         | `methylsulfonyl`, `tosyl`                                                  | `methanesulfonyl`, `4-methylbenzene-1-sulfonyl`                          |
-| `chalcogen_prefix`        | `thioxo`, `selenoxo`, `thioformyl`                                         | `sulfanylidene`, `methanethioyl`                                         |
-| `amino_prefix`            | `phenylamino`, `guanidino`                                                 | `anilino`, `carbamimidoylamino`                                          |
-| `functional_class`        | `dimethyl sulfoxide`, `acetaldehyde hydrazone`, `trimethylphosphane oxide` | substitutive names                                                       |
-| `hydride_parent`          | `dimethylsulfane`, `trimethylazane`                                        | `(methylsulfanyl)methane`, `N,N-dimethylmethanamine`                     |
-| `unretained_parent`       | `methanal`, `ethanediamide`, `methoxybenzene`, a substituted `formic acid` | `formaldehyde`, `oxamide`, `anisole`, `carbamic acid` or `carbonic acid` |
-| `fusion_prefix`           | `oxazolo[4,5-b]pyridine`, `isoxazolo`                                      | `[1,3]oxazolo[4,5-b]pyridine`, `[1,2]oxazolo`                            |
-| `diamide_locants`         | `N,N'-diethylpropanediamide`                                               | `N1,N3-diethylpropanediamide`                                            |
-| `multiple_bond_numbering` | `pent-4-en-1-yne`                                                          | `pent-1-en-4-yne`                                                        |
+| Reason                    | Example the engine writes                                                  | Preferred form                                                |
+| ------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `retained_general_name`   | `propionitrile`, `malonic acid`                                            | `propanenitrile`, `propanedioic acid`                         |
+| `alkoxy_prefix`           | `isopropoxy`, `isobutoxy`, `sec-butoxy`                                    | `(propan-2-yl)oxy`, `2-methylpropoxy`                         |
+| `sulfonyl_prefix`         | `methylsulfonyl`, `tosyl`                                                  | `methanesulfonyl`, `4-methylbenzene-1-sulfonyl`               |
+| `chalcogen_prefix`        | `thioxo`, `selenoxo`, `thioformyl`, `selenoformyl`                         | `sulfanylidene`, `methanethioyl`, `methaneselenoyl`           |
+| `amino_prefix`            | `phenylamino`, `guanidino`                                                 | `anilino`, `carbamimidoylamino`                               |
+| `functional_class`        | `dimethyl sulfoxide`, `acetaldehyde hydrazone`, `trimethylphosphane oxide` | substitutive names                                            |
+| `hydride_parent`          | `dimethylsulfane`, `trimethylazane`                                        | `(methylsulfanyl)methane`, `N,N-dimethylmethanamine`          |
+| `unretained_parent`       | `methanal`, `ethanediamide`, `methoxybenzene`, `hydroxyformyl chloride`    | `formaldehyde`, `oxamide`, `anisole`, `carbonochloridic acid` |
+| `fusion_prefix`           | `oxazolo[4,5-b]pyridine`, `isoxazolo`                                      | `[1,3]oxazolo[4,5-b]pyridine`, `[1,2]oxazolo`                 |
+| `diamide_locants`         | `N,N'-diethylpropanediamide`                                               | `N1,N3-diethylpropanediamide`                                 |
+| `multiple_bond_numbering` | `pent-4-en-1-yne`                                                          | `pent-1-en-4-yne`                                             |
 
 Reasons for an unverified name: `opsin_fusion_layout` (fusion numbering chosen
 for OPSIN compatibility), `bridged_fused_parent`, `unaudited_parent`
-(porphyrin, corrin, gonane), `substituted_retained_parent` (substituted acetaldehyde and anisole), `atom_order` (bridged
-fused ketones whose added hydrogen depends on input atom order) and
-`amine_chalcogenide` (amine sulfide and similar names). The parent-selection
-rules that the port does not implement in full (heteroatom seniority,
-skeletal replacement chains, phane names) have no mark.
+(porphyrin, corrin, gonane), `substituted_retained_parent` (substituted
+acetaldehyde), `atom_order` (bridged fused ketones whose added hydrogen depends
+on input atom order), `amine_chalcogenide` (amine sulfide and similar names) and
+`principal_group_tie` (equally senior principal groups, such as the chain and
+ring acids of `2-(4-carboxyphenyl)acetic acid`, chosen by atom order rather than
+by P-44.1). The other parent-selection rules that the port does not implement in
+full (heteroatom seniority, skeletal replacement chains, phane names) have no
+mark.
+
+`unretained_parent` also covers formic acids, formyl halides and formamides
+substituted on carbon, which are carbamic or carbonic acid derivatives
+(P-65.1.8.1). Substituted anisoles such as `1-chloro-4-methoxybenzene` are
+preferred names (P-63.2.3).
 
 Nested parentheses, as in `2-(4-(2-methylpropyl)phenyl)propanoic acid`, do not
 change the status. The PIN rules nest enclosing marks as `{[( )]}`, and a later

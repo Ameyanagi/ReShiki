@@ -812,7 +812,8 @@ async fn name_json_reports_preferred_and_nonpreferred_rule_paths() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn name_declined_inputs_fail_without_stdout() {
-    for smiles in ["CC.O", "[13CH3]CO"] {
+    // Import would drop the allene stereo; the raw SMILES check declines it.
+    for smiles in ["CC.O", "[13CH3]CO", "FC=[C@AL1]=CF"] {
         for json in [false, true] {
             let mut tokens = vec!["name", "--smiles", smiles];
             if json {

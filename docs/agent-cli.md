@@ -3,9 +3,10 @@
 **Experimental. In ReShiki 0.12.0 and later.** Commands,
 options and output may change in any build.
 
-`reshiki --cli` runs one command and exits. It converts, renders, lays out,
-analyzes and names structures with the same operations as the
-[MCP server](agent-api.md), without opening the app window. To connect an AI client instead, follow
+`reshiki --cli` runs one command and exits. It converts, renders, lays out
+and analyzes structures with the same operations as the
+[MCP server](agent-api.md), and names them with the app's local naming engine,
+without opening the app window. To connect an AI client instead, follow
 [Connect AI agents](https://reshiki.com/guide/agents/).
 
 ```text

@@ -73,18 +73,19 @@ pub(super) fn mark_assembled_name(
             }
         }
     }
-    // Substituted formic acids are carbamic or carbonic acid derivatives.
+    // Formic acids, formyl halides and formamides substituted on carbon are
+    // carbamic or carbonic acid derivatives (P-65.1.8.1).
+    let formyl_parent = parts.retained_name.as_deref().is_some_and(|name| {
+        matches!(name, "formic acid" | "formate" | "formamide") || name.starts_with("formyl ")
+    });
     if name == "methoxybenzene"
-        || matches!(
-            parts.retained_name.as_deref(),
-            Some("formic acid" | "formate")
-        ) && !parts.substituents.is_empty()
+        || formyl_parent
+            && parts
+                .substituents
+                .iter()
+                .any(|item| !item.locants.iter().any(|locant| locant.starts_with('N')))
     {
         mol.mark_name(NameStatus::NotPreferred(NameReason::UnretainedParent));
-    } else if name.ends_with("methoxybenzene") {
-        mol.mark_name(NameStatus::Unverified(
-            NameReason::SubstitutedRetainedParent,
-        ));
     }
     // Checked on the cited text: carbamate and sulfamoyl contractions consume
     // a phenylamino branch.

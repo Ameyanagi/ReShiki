@@ -115,6 +115,7 @@ pub enum NameReason {
     SubstitutedRetainedParent,
     AtomOrder,
     AmineChalcogenide,
+    PrincipalGroupTie,
 }
 impl NameReason {
     pub fn detail(self) -> &'static str {
@@ -141,7 +142,7 @@ impl NameReason {
                 "Uses a substituted parent hydride such as dimethylsulfane or trimethylazane; preferred IUPAC names use (methylsulfanyl)methane or N,N-dimethylmethanamine (P-63.2.5, P-62.2.1)."
             }
             Self::UnretainedParent => {
-                "Uses a systematic parent such as methanal, ethanediamide, methanenitrile or a substituted formic acid; preferred IUPAC names use formaldehyde, oxamide, anisole, formonitrile, or carbamic or carbonic acid."
+                "Uses a systematic parent such as methanal, ethanediamide, methanenitrile or a substituted formic acid, formyl halide or formamide; preferred IUPAC names use formaldehyde, oxamide, anisole, formonitrile, or carbamic or carbonic acid (P-65.1.8.1)."
             }
             Self::FusionPrefix => {
                 "Uses a fusion prefix such as oxazolo or isoxazolo; the preferred IUPAC name cites the heteroatom locants, as in [1,3]oxazolo or [1,2]oxazolo (P-25.3.2.2.2)."
@@ -162,13 +163,16 @@ impl NameReason {
                 "Porphyrin, corrin and gonane are retained parents without a PIN designation in P-10; preferred name selection for this path has not been verified."
             }
             Self::SubstitutedRetainedParent => {
-                "Whether a substituted acetaldehyde or anisole keeps its retained name in the preferred IUPAC name has not been verified."
+                "Whether a substituted acetaldehyde keeps its retained name in the preferred IUPAC name has not been verified."
             }
             Self::AtomOrder => {
                 "The name can depend on input atom order; its preferred numbering has not been verified."
             }
             Self::AmineChalcogenide => {
                 "Amine oxide-type names (amine sulfide, selenide, telluride) have not been checked against the preferred IUPAC form."
+            }
+            Self::PrincipalGroupTie => {
+                "Equally senior principal groups, such as a chain and a ring carboxylic acid, were chosen by atom order; the preferred parent (P-44.1) has not been verified."
             }
         }
     }
