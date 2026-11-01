@@ -697,7 +697,7 @@ mod tests {
             ),
             (
                 "CC(=O)NC12C=C1BNC2",
-                "N-(3-aza-2-borabicyclo[3.1.0]hex-1(6)-en-5-yl)acetamide",
+                "N-[3-aza-2-borabicyclo[3.1.0]hex-1(6)-en-5-yl]acetamide",
             ),
         ] {
             assert_eq!(

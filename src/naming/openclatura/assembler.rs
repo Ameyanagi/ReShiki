@@ -647,7 +647,7 @@ mod tests {
         for (smiles, expected) in [
             (
                 "CCCC1=NN(C2=C1N=C(NC2=O)C3=C(C=CC(=C3)S(=O)(=O)N4CCN(CC4)C)OCC)C",
-                "5-(2-ethoxy-5-(4-methylpiperazin-1-ylsulfonyl)phenyl)-1-methyl-3-propyl-6H-pyrazolo[4,3-d]pyrimidin-7(1H)-one",
+                "5-[2-ethoxy-5-(4-methylpiperazin-1-ylsulfonyl)phenyl]-1-methyl-3-propyl-6H-pyrazolo[4,3-d]pyrimidin-7(1H)-one",
             ),
             (
                 "CCCCCN1C(=O)COC2=C1C=C(C(=C2)F)N3C(=O)C4=CC=CC=C4N=N3",
@@ -673,11 +673,11 @@ mod tests {
         for (smiles, expected) in [
             (
                 "CC1=CC(=CC=C1)CN2C=CC=C(C2=O)C(=O)NCCCNS(=O)(=O)C",
-                "N-(3-methanesulfonamidopropyl)-1-((3-methylphenyl)methyl)-2-oxo-1,2-dihydropyridine-3-carboxamide",
+                "N-(3-methanesulfonamidopropyl)-1-[(3-methylphenyl)methyl]-2-oxo-1,2-dihydropyridine-3-carboxamide",
             ),
             (
                 "C1=CNC(=O)C(=C1)C(=O)NC2=NC(=CS2)CC(=O)NC3=CC=C(C=C3)C(=O)N",
-                "N-(4-(2-((4-carbamoylphenyl)amino)-2-oxoethyl)-1,3-thiazol-2-yl)-2-oxo-1,2-dihydropyridine-3-carboxamide",
+                "N-(4-{2-[(4-carbamoylphenyl)amino]-2-oxoethyl}-1,3-thiazol-2-yl)-2-oxo-1,2-dihydropyridine-3-carboxamide",
             ),
             (
                 "CC1=CC(=O)OC(=C1C(=O)NC2CC2)C",

@@ -770,7 +770,7 @@ mod tests {
             ),
             (
                 "CN(C)CCOC(C1=CC=CC=C1)C2=CC=CC=C2",
-                "2-((diphenylmethyl)oxy)-N,N-dimethylethan-1-amine",
+                "2-[(diphenylmethyl)oxy]-N,N-dimethylethan-1-amine",
             ),
             (
                 "c1ccc(-c2cccc(Nc3cnccn3)n2)cc1",
@@ -796,7 +796,7 @@ mod tests {
             ),
             (
                 "CN1CCC[C@H]1C2=CN=CC=C2",
-                "3-((2S)-1-methylpyrrolidin-2-yl)pyridine",
+                "3-[(2S)-1-methylpyrrolidin-2-yl]pyridine",
             ),
         ] {
             assert_eq!(

@@ -1046,11 +1046,11 @@ mod tests {
             ),
             (
                 "COC(=O)SC1C2=CC1C2",
-                "((bicyclo[1.1.1]pent-1(5)-en-2-yl)sulfanyl)(methoxy)methanone",
+                "{[bicyclo[1.1.1]pent-1(5)-en-2-yl]sulfanyl}(methoxy)methanone",
             ),
             (
                 "Cc1cc(C2(F)C3=C=C2C3)ccn1",
-                "4-(2-fluorobicyclo[1.1.1]penta-1(5),3(5)-dien-2-yl)-2-methylpyridine",
+                "4-[2-fluorobicyclo[1.1.1]penta-1(5),3(5)-dien-2-yl]-2-methylpyridine",
             ),
         ] {
             assert_eq!(

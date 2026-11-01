@@ -1126,7 +1126,7 @@ mod tests {
             )
             .map(|name| name.text)
             .as_deref(),
-            Ok("1-((1-imino-1-phenylmethyl)(((1S)-6-methyl-2-azabicyclo[4.3.1]decan-8-yl)methylidene)ammonio)ethan-1-iminium"),
+            Ok("1-[(1-imino-1-phenylmethyl){[(1S)-6-methyl-2-azabicyclo[4.3.1]decan-8-yl]methylidene}ammonio]ethan-1-iminium"),
         );
     }
 

@@ -296,7 +296,7 @@ mod tests {
             super::super::name_smiles("C1=CC(=C2C=C(NC2=C1)C(=O)N=N)CN=[N+]=[N-]")
                 .map(|name| name.text)
                 .as_deref(),
-            Ok("(4-(azidomethyl)-1H-indol-2-yl)(diazenyl)methanone"),
+            Ok("[4-(azidomethyl)-1H-indol-2-yl](diazenyl)methanone"),
         );
     }
 }

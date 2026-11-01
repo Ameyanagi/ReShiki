@@ -203,11 +203,11 @@ mod tests {
         for (smiles, expected) in [
             (
                 "O=[N+]([O-])[C@@H]1NCC[C@@H]1c1ccncc1",
-                "4-((2S,3R)-2-nitropyrrolidin-3-yl)pyridine",
+                "4-[(2S,3R)-2-nitropyrrolidin-3-yl]pyridine",
             ),
             (
                 "O=[N+]([O-])C[C@@H](C)c1ncccc1",
-                "2-((2R)-1-nitropropan-2-yl)pyridine",
+                "2-[(2R)-1-nitropropan-2-yl]pyridine",
             ),
         ] {
             assert_eq!(

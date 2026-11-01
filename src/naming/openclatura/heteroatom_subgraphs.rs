@@ -1619,7 +1619,7 @@ mod tests {
                 "CCC(C1=NOC2=C1C(=C(C=C2)Br)OC)ONS(=O)(=O)C3=CC=CC=C3"
             )?
             .text,
-            "3-(1-(benzenesulfonamidooxy)propyl)-5-bromo-4-methoxy-1,2-benzoxazole"
+            "3-[1-(benzenesulfonamidooxy)propyl]-5-bromo-4-methoxy-1,2-benzoxazole"
         );
         Ok(())
     }

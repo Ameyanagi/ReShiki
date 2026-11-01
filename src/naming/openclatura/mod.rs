@@ -101,9 +101,79 @@ pub(super) fn name_smiles(smiles: &str) -> Result<Name, String> {
     }
     let text = component_namer::name_component(&mol, &components[0])?;
     Ok(Name {
-        text,
+        text: nest_enclosing_marks(&text),
         status: mol.name_status(),
     })
+}
+
+/// Rewrite the namer's enclosing parentheses in the IUPAC nesting order
+/// `{[({[( )]})]}` (P-16.5.4), choosing each mark from what it encloses.
+///
+/// Square brackets (fusion, von Baeyer, spiro descriptors), the braces of
+/// superscripts such as `1^{3,7}` and the parentheses of indicated or added
+/// hydrogen are part of the parent name and do not count (P-16.5.4.1.1,
+/// P-16.5.4.1.2). Any other parenthesis, including stereodescriptors and
+/// compound locants, counts as a level (P-16.5.4.1.3), and a mark that would
+/// directly follow or precede one of the same kind moves up a level
+/// (P-16.5.4.1.5).
+pub(super) fn nest_enclosing_marks(name: &str) -> String {
+    // Per open group: its start, the deepest counted level inside it, and the
+    // levels of counted groups that start right after it opens and end right
+    // before it closes.
+    struct Group {
+        open: usize,
+        inner: usize,
+        first: Option<usize>,
+        last: Option<(usize, usize)>,
+    }
+    let mut out = name.to_owned();
+    let mut stack: Vec<Group> = Vec::new();
+    for (i, byte) in name.bytes().enumerate() {
+        match byte {
+            b'(' | b'[' => stack.push(Group {
+                open: i,
+                inner: 0,
+                first: None,
+                last: None,
+            }),
+            close @ (b')' | b']') => {
+                let Some(group) = stack.pop() else { continue };
+                let hydrogen = name[group.open + 1..i].split(',').all(|locant| {
+                    locant.strip_suffix('H').is_some_and(|locant| {
+                        let digits =
+                            locant.trim_end_matches(|c: char| c == '\'' || c.is_ascii_lowercase());
+                        !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit())
+                    })
+                });
+                let counted = close == b')' && !hydrogen;
+                let mut level = group.inner + usize::from(counted);
+                if counted {
+                    let last = group.last.filter(|&(end, _)| end + 1 == i).map(|(_, l)| l);
+                    while [group.first, last]
+                        .into_iter()
+                        .flatten()
+                        .any(|l| l % 3 == level % 3)
+                    {
+                        level += 1;
+                    }
+                    let mark = (level - 1) % 3;
+                    out.replace_range(group.open..=group.open, ["(", "[", "{"][mark]);
+                    out.replace_range(i..=i, [")", "]", "}"][mark]);
+                }
+                if let Some(parent) = stack.last_mut() {
+                    parent.inner = parent.inner.max(level);
+                    if counted {
+                        if group.open == parent.open + 1 {
+                            parent.first = Some(level);
+                        }
+                        parent.last = Some((i, level));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
 }
 
 /// Count nonbonding electrons on the main-group elements that can carry
@@ -125,8 +195,93 @@ fn has_nonbonding_pair(atom: &molecule::Atom, bond_order_sum: usize) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::name_smiles;
+    use super::{name_smiles, nest_enclosing_marks};
     use std::io::Write;
+
+    #[test]
+    fn enclosing_marks_nest_by_what_they_enclose() {
+        for (smiles, expected) in [
+            (
+                "CC(C)CC1=CC=C(C=C1)C(C)C(=O)O",
+                "2-[4-(2-methylpropyl)phenyl]propanoic acid",
+            ),
+            (
+                "OCCOCCOCCOCCO",
+                "2-{2-[2-(2-hydroxyethoxy)ethoxy]ethoxy}ethan-1-ol",
+            ),
+            (
+                "OCCOCCOCCOCCOCCO",
+                "2-(2-{2-[2-(2-hydroxyethoxy)ethoxy]ethoxy}ethoxy)ethan-1-ol",
+            ),
+            (
+                "CN(CC(=O)O)Nc1cnc(CO)cn1",
+                "2-({[5-(hydroxymethyl)pyrazin-2-yl]amino}(methyl)amino)acetic acid",
+            ),
+            (
+                "C[S@@](=O)CSCNN",
+                "1-[({[(R)-methylsulfinyl]methyl}sulfanyl)methyl]hydrazine",
+            ),
+            // Stereodescriptors and compound locants count as a level; fusion
+            // and von Baeyer brackets do not (P-16.5.4.1.2, P-16.5.4.1.3).
+            ("C/C=C/Cc1ccc(O)cc1", "4-[(2E)-but-2-en-1-yl]phenol"),
+            (
+                "CN(CCO)[C@H]1CCCN1",
+                "2-{methyl[(2S)-pyrrolidin-2-yl]amino}ethan-1-ol",
+            ),
+            (
+                "OC(=O)CC1CC2CCC1C2",
+                "2-(bicyclo[2.2.1]heptan-2-yl)acetic acid",
+            ),
+            (
+                "CC(=O)NC12C=C1BNC2",
+                "N-[3-aza-2-borabicyclo[3.1.0]hex-1(6)-en-5-yl]acetamide",
+            ),
+            (
+                "OC(=O)Cc1ccc(cc1)-c1c[nH]c2ncccc12",
+                "2-[4-(1H-pyrrolo[2,3-b]pyridin-3-yl)phenyl]acetic acid",
+            ),
+            (
+                "CC(=O)N[C@@H]1CCN2C=CN[C@H]12",
+                "N-[(7R,7aS)-5,6,7,7a-tetrahydro-1H-pyrrolo[1,2-a]imidazol-7-yl]acetamide",
+            ),
+        ] {
+            assert_eq!(name_smiles(smiles).unwrap().text, expected, "{smiles}");
+        }
+    }
+
+    /// The P-16.5.4 examples, given as the namer writes them before nesting.
+    #[test]
+    fn enclosing_marks_follow_the_blue_book_examples() {
+        for (enclosed, expected) in [
+            (
+                "4,4'-(3-((5-((4'-cyano[1,1'-biphenyl]-4-yl)oxy)pentyl)oxy)-3-oxopropane-1,2-diyl)dibenzoic acid",
+                "4,4'-[3-({5-[(4'-cyano[1,1'-biphenyl]-4-yl)oxy]pentyl}oxy)-3-oxopropane-1,2-diyl]dibenzoic acid",
+            ),
+            (
+                "1-(3,4-dihydroquinolin-1(2H)-yl)ethan-1-one",
+                "1-(3,4-dihydroquinolin-1(2H)-yl)ethan-1-one",
+            ),
+            (
+                "10,10'-([1,1'-biphenyl]-4,4'-diylbis(oxy))di(decanoic acid)",
+                "10,10'-[[1,1'-biphenyl]-4,4'-diylbis(oxy)]di(decanoic acid)",
+            ),
+            (
+                "1-(tricyclo[3.3.1.1^{3,7}]decan-1-yl)ethan-1-one",
+                "1-(tricyclo[3.3.1.1^{3,7}]decan-1-yl)ethan-1-one",
+            ),
+            (
+                "2-(bicyclo[6.6.1]pentadeca-8(15)-en-1-yl)ethan-1-ol",
+                "2-[bicyclo[6.6.1]pentadeca-8(15)-en-1-yl]ethan-1-ol",
+            ),
+            // P-16.5.4.1.5: `((2S)-` would put two parentheses together.
+            (
+                "(3S)-2-((2S)-2-(((2S)-1-ethoxy-1-oxo-4-phenylbutan-2-yl)amino)propanoyl)-1,2,3,4-tetrahydroisoquinoline-3-carboxylic acid",
+                "(3S)-2-[(2S)-2-{[(2S)-1-ethoxy-1-oxo-4-phenylbutan-2-yl]amino}propanoyl]-1,2,3,4-tetrahydroisoquinoline-3-carboxylic acid",
+            ),
+        ] {
+            assert_eq!(nest_enclosing_marks(enclosed), expected);
+        }
+    }
 
     #[test]
     fn preferred_controls_keep_their_names() {
@@ -134,6 +289,10 @@ mod tests {
         for (smiles, expected) in [
             ("CCO", "ethanol"),
             ("O=C(O)c1ccccc1", "benzoic acid"),
+            (
+                "CC(C)CC1=CC=C(C=C1)C(C)C(=O)O",
+                "2-[4-(2-methylpropyl)phenyl]propanoic acid",
+            ),
             ("c1ccc2[nH]ccc2c1", "1H-indole"),
             ("C=CCC#C", "pent-1-en-4-yne"),
             ("SS", "disulfane"),
@@ -230,12 +389,12 @@ mod tests {
             ),
             (
                 "O=C(O)OP(=O)(O)c1ccccn1",
-                "1-((hydroxy(pyridin-2-yl)phosphoryl)oxy)formic acid",
+                "1-{[hydroxy(pyridin-2-yl)phosphoryl]oxy}formic acid",
                 R::UnretainedParent,
             ),
             (
                 "COC(=O)N(C=O)c1ccsc1",
-                "methyl (N-(thiophen-3-yl)formamido)formate",
+                "methyl [N-(thiophen-3-yl)formamido]formate",
                 R::UnretainedParent,
             ),
             (

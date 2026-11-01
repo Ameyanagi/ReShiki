@@ -295,7 +295,7 @@ mod tests {
             .map(|name| name.text)
             .as_deref(),
             Ok(
-                "1'-(2-((2-(tert-butyl)-4-methylphenyl)oxy)acetyl)-6,7-dimethylspiro[benzo[b]pyran-2,4'-piperidine]-4-one"
+                "1'-(2-{[2-(tert-butyl)-4-methylphenyl]oxy}acetyl)-6,7-dimethylspiro[benzo[b]pyran-2,4'-piperidine]-4-one"
             )
         );
     }

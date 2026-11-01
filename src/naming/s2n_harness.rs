@@ -222,7 +222,10 @@ impl Counts {
             Class::Declined => self.declined += 1,
             Class::Unparseable => self.unparseable += 1,
         }
-        self.exact += usize::from(golden.is_some_and(|g| !g.is_empty() && g == outcome.name));
+        // Goldens are openclatura's spelling, which encloses with parentheses only.
+        self.exact += usize::from(golden.is_some_and(|g| {
+            !g.is_empty() && super::openclatura::nest_enclosing_marks(g) == outcome.name
+        }));
     }
 }
 

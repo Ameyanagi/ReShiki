@@ -211,9 +211,16 @@ substituted on carbon, which are carbamic or carbonic acid derivatives
 (P-65.1.8.1). Substituted anisoles such as `1-chloro-4-methoxybenzene` are
 preferred names (P-63.2.3).
 
-Nested parentheses, as in `2-(4-(2-methylpropyl)phenyl)propanoic acid`, do not
-change the status. The PIN rules nest enclosing marks as `{[( )]}`, and a later
-change will write them that way.
+Enclosing marks nest in the P-16.5.4 order `{[({[( )]})]}`:
+`2-[4-(2-methylpropyl)phenyl]propanoic acid`,
+`2-(2-{2-[2-(2-hydroxyethoxy)ethoxy]ethoxy}ethoxy)ethan-1-ol`. Brackets that
+belong to the parent name are ignored when choosing the level: fusion, von
+Baeyer and spiro descriptors (`2-(bicyclo[2.2.1]heptan-2-yl)acetic acid`) and
+the parentheses of indicated or added hydrogen, such as `1(2H)`.
+Stereodescriptors and compound locants count as a level
+(`4-[(2E)-but-2-en-1-yl]phenol`), and a mark that would sit next to one of the
+same kind moves up a level (P-16.5.4.1.5). The nesting does not change the
+status.
 
 `reshiki --cli name` prints the same name, and `--json` adds the status; see
 the [command-line reference](agent-cli.md#name).

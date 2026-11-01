@@ -538,7 +538,7 @@ mod tests {
             ("COOC(=O)CC(=O)O", "2-(methylperoxycarbonyl)acetic acid"),
             (
                 "CC(C)OOC(=O)CC(=O)O",
-                "2-((propan-2-yl)peroxycarbonyl)acetic acid",
+                "2-[(propan-2-yl)peroxycarbonyl]acetic acid",
             ),
         ] {
             assert_eq!(
@@ -555,7 +555,7 @@ mod tests {
             name_smiles("COOC(=O)N1[C@H](C=O)CC[C@H]1C(=O)O")
                 .map(|name| name.text)
                 .as_deref(),
-            Ok("(2S,5S)-5-formyl-1-((methoxyoxy)carbonyl)pyrrolidine-2-carboxylic acid")
+            Ok("(2S,5S)-5-formyl-1-[(methoxyoxy)carbonyl]pyrrolidine-2-carboxylic acid")
         );
     }
 }
