@@ -53,23 +53,34 @@ impl Reader<'_, '_> {
             flags & 2 != 0 || el.attribute("LineType") == Some("Dashed"),
             flags & 4 != 0 || el.attribute("LineType") == Some("Bold"),
         )?;
-        let heads = if ["ArrowheadHead", "ArrowheadTail"]
+        let visible_heads = ["ArrowheadHead", "ArrowheadTail"]
             .iter()
-            .any(|key| !matches!(el.attribute(*key).unwrap_or("None"), "None" | "Unspecified"))
-        {
-            if path.iter().any(|c| matches!(c, NativeCommand::Close))
+            .any(|key| !matches!(el.attribute(*key).unwrap_or("None"), "None" | "Unspecified"));
+        if visible_heads
+            && (path.iter().any(|c| matches!(c, NativeCommand::Close))
                 || style.fill.is_some()
                 || el.attribute("Dipole") == Some("yes")
                 || el
                     .attribute("NoGo")
                     .is_some_and(|v| !v.eq_ignore_ascii_case("none"))
                 || float(el, "ArrowShaftSpacing", "0")? != 0.
-                || float(el, "AngularSize", "0")? != 0.
-            {
-                return Err(Error::Native(
-                    "This arrowed CDXML spline is not supported yet",
-                ));
-            }
+                || float(el, "AngularSize", "0")? != 0.)
+        {
+            return Err(Error::Native(
+                "This arrowed CDXML spline is not supported yet",
+            ));
+        }
+        let heads = if [
+            "ArrowheadHead",
+            "ArrowheadTail",
+            "ArrowheadType",
+            "HeadSize",
+            "ArrowheadCenterSize",
+            "ArrowheadWidth",
+        ]
+        .iter()
+        .any(|key| el.has_attribute(*key))
+        {
             for attribute in el.attributes() {
                 self.spend(attribute.value().len())?;
             }

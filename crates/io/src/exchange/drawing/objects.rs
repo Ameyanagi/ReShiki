@@ -13,6 +13,11 @@ fn head_attributes(heads: &PathHeads, scalar: fn(f32) -> f64) -> [(&'static str,
         Head::Right => "HalfRight",
     };
     let integer = |v: f64| format!("{:.0}", v.round_ties_even());
+    let length = (scalar(heads.head_length_pt) * 100.).round_ties_even();
+    // Keep the rounded center within the importer's 0–0.9 notch range.
+    let center = (length * (1. - scalar(heads.head_notch)))
+        .round_ties_even()
+        .clamp((length / 10.).ceil(), length);
     [
         ("ArrowheadHead", head(heads.head).into()),
         ("ArrowheadTail", head(heads.tail).into()),
@@ -25,11 +30,8 @@ fn head_attributes(heads: &PathHeads, scalar: fn(f32) -> f64) -> [(&'static str,
             }
             .into(),
         ),
-        ("HeadSize", integer(scalar(heads.head_length_pt) * 100.)),
-        (
-            "ArrowheadCenterSize",
-            integer(scalar(heads.head_length_pt) * (1. - scalar(heads.head_notch)) * 100.),
-        ),
+        ("HeadSize", integer(length)),
+        ("ArrowheadCenterSize", integer(center)),
         (
             "ArrowheadWidth",
             integer(scalar(heads.head_width_pt) * 100.),

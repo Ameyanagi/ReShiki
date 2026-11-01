@@ -30,7 +30,7 @@ impl Field {
 
 impl App {
     pub(super) fn path_head_controls(&self, heads: PathHeads) -> Element<'_, Message> {
-        let number = |label: &'static str, field: Field| {
+        let number = |id: &'static str, label: &'static str, field: Field| {
             let value = self
                 .tab
                 .path_head_inputs
@@ -40,7 +40,8 @@ impl App {
             row![
                 text(label).size(11).width(Length::Fill),
                 hover_hint(
-                    crate::appearance::text_input("", value)
+                    reshiki::accessibility::text_input(id, label, "", value)
+                        .style(crate::appearance::input_style)
                         .size(12)
                         .padding(5)
                         .width(70)
@@ -82,9 +83,9 @@ impl App {
             .text_size(12)
             .padding(6)
             .width(Length::Fill),
-            number("Head length (pt)", Field::Length),
-            number("Head half-width (pt)", Field::Width),
-            number("Head notch (0–0.9)", Field::Notch),
+            number("graphic-head-length", "Head length (pt)", Field::Length),
+            number("graphic-head-width", "Head half-width (pt)", Field::Width),
+            number("graphic-head-notch", "Head notch (0–0.9)", Field::Notch),
         ]
         .spacing(8)
         .into()

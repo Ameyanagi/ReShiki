@@ -131,6 +131,53 @@ async fn multisegment_path_heads_roundtrip_as_one_curve_in_cdxml_and_cdx() {
     }
 }
 
+#[tokio::test]
+async fn disabled_path_heads_keep_settings_in_cdxml_and_cdx() {
+    let decoration = PathHeads {
+        head_length_pt: 9.,
+        ..heads(Head::None, Head::None, HeadShape::Hollow)
+    };
+    let original = drawing(Some(decoration));
+    for format in ["cdxml", "cdx"] {
+        let bytes = formats::write(original.clone(), format).await.unwrap();
+        let restored = formats::read(bytes, format).await.unwrap();
+        assert!(restored.arrows.is_empty());
+        assert_eq!(restored.graphics.len(), 1);
+        assert_eq!(restored.graphics[0].heads, Some(decoration), "{format}");
+    }
+}
+
+#[tokio::test]
+async fn path_heads_roundtrip_at_the_notch_limit_in_cdxml_and_cdx() {
+    for (length, rounded_length, notch) in [
+        (0.5, 0.5, 0.9),
+        (0.54, 0.54, 1. - 6. / 54.),
+        (0.549, 0.55, 1. - 6. / 55.),
+        (24., 24., 0.9),
+    ] {
+        let decoration = PathHeads {
+            head_length_pt: length,
+            head_notch: 0.9,
+            ..heads(Head::Full, Head::None, HeadShape::Hollow)
+        };
+        let original = drawing(Some(decoration));
+        for format in ["cdxml", "cdx"] {
+            let bytes = formats::write(original.clone(), format).await.unwrap();
+            let restored = formats::read(bytes, format).await.unwrap();
+            assert!(restored.arrows.is_empty());
+            assert_eq!(restored.graphics.len(), 1);
+            let actual = restored.graphics[0].heads.unwrap();
+            actual.validate().unwrap();
+            assert_eq!(actual.head, decoration.head);
+            assert_eq!(actual.tail, decoration.tail);
+            assert_eq!(actual.shape, decoration.shape);
+            assert_eq!(actual.head_length_pt, rounded_length);
+            assert_eq!(actual.head_width_pt, decoration.head_width_pt);
+            assert!((actual.head_notch - notch).abs() < 0.0001);
+        }
+    }
+}
+
 fn curve_xml(points: &str, attributes: &str) -> String {
     format!(
         "<CDXML BondLength='30'><page><curve ArrowheadHead='Full' CurvePoints='{points}' {attributes}/></page></CDXML>"
@@ -140,6 +187,34 @@ fn curve_xml(points: &str, attributes: &str) -> String {
 const CUBIC: &str = "0 0 0 0 0 -20 40 20 40 0 40 0";
 const ELBOW: &str = "0 0 0 0 10 0 20 0 30 0 30 10 30 20 30 30 30 30";
 const SPLINE: &str = "0 0 0 0 0 -20 20 20 30 0 40 -20 60 20 60 0 60 0";
+
+#[tokio::test]
+async fn curves_keep_explicit_head_settings_without_visible_heads() {
+    for endpoints in [
+        "",
+        "ArrowheadHead='None' ArrowheadTail='None'",
+        "ArrowheadHead='Unspecified' ArrowheadTail='Unspecified'",
+    ] {
+        for attributes in ["", "Closed='yes'", "FillType='Solid'"] {
+            let xml = format!(
+                "<CDXML BondLength='30'><page><curve CurvePoints='{SPLINE}' {endpoints} ArrowheadType='Hollow' HeadSize='900' {attributes}/></page></CDXML>"
+            );
+            let document = formats::read(xml.into_bytes(), "cdxml").await.unwrap();
+            assert!(document.arrows.is_empty());
+            assert_eq!(document.graphics.len(), 1);
+            assert_eq!(
+                document.graphics[0].heads,
+                Some(PathHeads {
+                    shape: HeadShape::Hollow,
+                    head_length_pt: 9.,
+                    head_width_pt: 2.5,
+                    head_notch: 0.,
+                    ..Default::default()
+                })
+            );
+        }
+    }
+}
 
 #[tokio::test]
 async fn cdxml_keeps_legacy_cubic_and_elbow_arrows_and_imports_curved_splines_as_paths() {

@@ -133,7 +133,7 @@ fn scalar(node: &Element, key: &str, default: &str) -> Result<f64> {
 }
 fn head(value: &str) -> Result<Head> {
     match value {
-        "None" => Ok(Head::None),
+        "None" | "Unspecified" => Ok(Head::None),
         "Full" => Ok(Head::Full),
         "HalfLeft" => Ok(Head::Left),
         "HalfRight" => Ok(Head::Right),
