@@ -671,7 +671,7 @@ fn simple_azine_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<St
         {
             return Ok(Some(
                 if let Some(stereo) = left.stereo.as_deref().filter(|s| matches!(*s, "E" | "Z")) {
-                    format!("1,2-bis[({stereo})-{}]hydrazine", ylidenes[0])
+                    format!("1,2-bis(({stereo})-{})hydrazine", ylidenes[0])
                 } else {
                     format!("1,2-bis({})hydrazine", ylidenes[0])
                 },
@@ -3337,7 +3337,11 @@ mod tests {
             let mol = read_smiles(smiles).unwrap();
             let actual =
                 super::super::component_namer::name_component(&mol, &all_atoms(&mol)).unwrap();
-            assert_eq!(actual, expected, "{smiles}");
+            assert_eq!(
+                super::super::nest_enclosing_marks(&actual),
+                expected,
+                "{smiles}"
+            );
         }
     }
 

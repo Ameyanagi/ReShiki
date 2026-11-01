@@ -138,14 +138,15 @@ pub(super) fn nest_enclosing_marks(name: &str) -> String {
             }),
             close @ (b')' | b']') => {
                 let Some(group) = stack.pop() else { continue };
-                let hydrogen = name[group.open + 1..i].split(',').all(|locant| {
-                    locant.strip_suffix('H').is_some_and(|locant| {
-                        let digits =
-                            locant.trim_end_matches(|c: char| c == '\'' || c.is_ascii_lowercase());
-                        !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit())
-                    })
-                });
-                let counted = close == b')' && !hydrogen;
+                // Indicated or added hydrogen such as `(4aH,9H)` does not count.
+                let counted = close == b')'
+                    && !name[group.open + 1..i].split(',').all(|locant| {
+                        locant.strip_suffix('H').is_some_and(|locant| {
+                            let digits = locant
+                                .trim_end_matches(|c: char| c == '\'' || c.is_ascii_lowercase());
+                            !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit())
+                        })
+                    });
                 let mut level = group.inner + usize::from(counted);
                 if counted {
                     let last = group.last.filter(|&(end, _)| end + 1 == i).map(|(_, l)| l);
