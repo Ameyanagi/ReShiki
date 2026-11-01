@@ -304,7 +304,11 @@ impl IOleObject_Impl for DrawingObject_Impl {
             .clone()
             .ok_or_else(|| E_FAIL.into())
     }
-    fn SetHostNames(&self, _: &PCWSTR, _: &PCWSTR) -> CResult<()> {
+    fn SetHostNames(&self, app: &PCWSTR, _: &PCWSTR) -> CResult<()> {
+        // Only the application names the tab: document names would show in screenshots.
+        // SAFETY: OLE passes a NUL-terminated string or null.
+        *self.state.host_app.borrow_mut() =
+            (!app.is_null()).then(|| String::from_utf16_lossy(unsafe { app.as_wide() }));
         Ok(())
     }
     fn Close(&self, save: &OLECLOSE) -> CResult<()> {

@@ -6,6 +6,9 @@ mod embedded;
 mod object;
 mod storage;
 
+#[cfg(test)]
+mod tests;
+
 use super::{Result, clipboard};
 use anyhow::Context;
 use object::{DrawingObject, Factory};
@@ -79,7 +82,7 @@ impl Drop for Apartment {
 struct Session {
     // Keep the file if Office disconnects or rejects a save. Never delete a
     // document that an editor process may still be using.
-    directory: std::path::PathBuf,
+    path: std::path::PathBuf,
     child: std::process::Child,
     last: Vec<u8>,
     refresh_preview: bool,
@@ -88,6 +91,7 @@ struct State {
     drawing: RefCell<Drawing>,
     storage: RefCell<Option<IStorage>>,
     site: RefCell<Option<IOleClientSite>>,
+    host_app: RefCell<Option<String>>,
     advise: IOleAdviseHolder,
     data_advise: IDataAdviseHolder,
     dirty: Cell<bool>,
@@ -101,6 +105,7 @@ impl State {
             drawing: RefCell::new(drawing),
             storage: RefCell::new(None),
             site: RefCell::new(None),
+            host_app: RefCell::new(None),
             advise: unsafe { CreateOleAdviseHolder()? },
             data_advise: unsafe { CreateDataAdviseHolder()? },
             dirty: Cell::new(false),
@@ -120,7 +125,9 @@ impl State {
             .prefix("ReShiki Office ")
             .tempdir()
             .map_err(error)?;
-        let path = directory.path().join("Office drawing.rsk");
+        let path = directory
+            .path()
+            .join(session_file_name(self.host_app.borrow().as_deref()));
         let document = self.drawing.borrow().document.clone();
         if document.is_empty() {
             return Err(error("The embedded drawing is empty"));
@@ -133,8 +140,9 @@ impl State {
             .arg("--office-edit")
             .spawn()
             .map_err(error)?;
+        let _ = directory.keep();
         *self.session.borrow_mut() = Some(Session {
-            directory: directory.keep(),
+            path,
             child,
             last: document,
             refresh_preview: true,
@@ -152,13 +160,13 @@ impl State {
         {
             let mut session = self.session.borrow_mut();
             if let Some(session) = session.as_mut() {
-                let path = session.directory.join("Office drawing.rsk");
+                let path = &session.path;
                 if !path.with_extension("office-saved").exists() {
                     self.pending_ack.set(true);
                 }
                 if let Ok(metadata) = path.metadata()
                     && metadata.len() <= LIMIT as u64
-                    && let Ok(bytes) = std::fs::read(&path)
+                    && let Ok(bytes) = std::fs::read(path)
                     && (bytes != session.last
                         || (session.refresh_preview && self.pending_ack.get()))
                 {
@@ -220,8 +228,9 @@ impl State {
             }
             if let Some(session) = self.session.borrow_mut().take()
                 && !self.pending_ack.get()
+                && let Some(directory) = session.path.parent()
             {
-                let _ = std::fs::remove_dir_all(session.directory);
+                let _ = std::fs::remove_dir_all(directory);
             }
             if let Some(site) = self.site.borrow().clone() {
                 unsafe {
@@ -239,10 +248,10 @@ impl State {
             .ok_or_else(|| error("Office has closed this drawing"))
             .and_then(|site| unsafe { site.SaveObject() });
         if let Some(session) = self.session.borrow().as_ref() {
-            let path = session.directory.join("Office drawing.rsk");
+            let path = &session.path;
             match &result {
                 Ok(()) => {
-                    write_ack(&path, &self.drawing.borrow().document)?;
+                    write_ack(path, &self.drawing.borrow().document)?;
                     self.pending_ack.set(false);
                     let _ = std::fs::remove_file(path.with_extension("office-error"));
                 }
@@ -258,6 +267,20 @@ impl State {
             trace("Container updated");
         }
         result
+    }
+}
+
+fn session_file_name(app: Option<&str>) -> String {
+    let app = app.unwrap_or_default();
+    let app: String = app
+        .strip_prefix("Microsoft ")
+        .unwrap_or(app)
+        .chars()
+        .filter(|&c| !c.is_control() && !r#"<>:"/\|?*"#.contains(c))
+        .collect();
+    match app.trim() {
+        "" => "Office drawing.rsk".to_owned(),
+        app => format!("Drawing in {app}.rsk"),
     }
 }
 
