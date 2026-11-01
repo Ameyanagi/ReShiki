@@ -31,6 +31,14 @@ Select a graphic to move, copy, duplicate, rotate, reflect or resize it.
 **New path** and **Finish** show while the **Pen path** tool is active. Each
 segment is one Undo step; Escape cancels the segment you are drawing.
 
+Select an open pen path or Bézier curve and use **Properties → ARROWHEADS**
+to set **End**, **Start**, shape and size. Number fields apply on Enter.
+The context row's **Start head** and **End head** add a full head; **No start
+head** and **No end head** remove it. Each change applies to all selected open
+paths and curves in one Undo step. Heads follow the end directions, and the
+line stops under each head. These paths remain free drawing objects and do
+not attach to atoms.
+
 Select pen paths, Bézier curves or curved arrows and choose **Smooth** or
 **Symmetrise** from the canvas menu or command palette. Both commands apply to
 the whole selection in one Undo step. They are also buttons in the
@@ -76,8 +84,12 @@ endpoints, attachments and arrowheads stay in place.
 
 - Node editing and continued drawing work on one continuous path. Imported
   compound paths keep a simpler point editor.
+- Closed and compound paths draw no arrowheads. Closing a path keeps its head
+  settings, which reappear when you open it.
 - CDXML does not keep the shape type. External saves may split or reorder
   objects and round colors and coordinates.
+- A single-segment curve with solid heads returns from CDXML as a curved
+  arrow.
 - Dotted strokes cannot be exported to CDXML.
 - Freehand tracing, non-proportional resizing and per-shape corner radii are
   not available.
@@ -123,8 +135,10 @@ grouped bracket strokes, change stacking values and quantize colors/coordinates.
 A subsequent import keeps the supported visible paths but may have a different
 number of graphic objects. `.rsk` files keep ReShiki's exact model.
 
-`.rsk`/SVG/PDF/PNG keep dots. Chemical polymer semantics, unsupported legacy
-shapes, arrowed/doubled/shaded curves, transparency, shadows and arbitrary
+`.rsk`/SVG/PDF/PNG keep dots. SVG/PDF/EMF/PNG draw path arrowheads, and
+CDXML/CDX keep their editable head settings on open curves.
+Chemical polymer semantics, unsupported legacy
+shapes, doubled/shaded curves, transparency, shadows and arbitrary
 external styling are not implemented.
 
 Format references: the

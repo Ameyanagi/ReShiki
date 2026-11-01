@@ -13,12 +13,9 @@ impl Reader<'_, '_> {
                 el.attribute("LineType").unwrap_or("Solid"),
                 "Solid" | "Dashed" | "Bold"
             )
-            || ["ArrowheadHead", "ArrowheadTail"]
-                .iter()
-                .any(|key| !matches!(el.attribute(*key).unwrap_or("None"), "None" | "Unspecified"))
         {
             return Err(Error::Native(
-                "Arrowed, shaded or doubled CDXML curves are not supported yet",
+                "Shaded or doubled CDXML curves are not supported yet",
             ));
         }
         let flags = flags.unwrap_or(0);
@@ -56,7 +53,42 @@ impl Reader<'_, '_> {
             flags & 2 != 0 || el.attribute("LineType") == Some("Dashed"),
             flags & 4 != 0 || el.attribute("LineType") == Some("Bold"),
         )?;
-        self.base(
+        let visible_heads = ["ArrowheadHead", "ArrowheadTail"]
+            .iter()
+            .any(|key| !matches!(el.attribute(*key).unwrap_or("None"), "None" | "Unspecified"));
+        if visible_heads
+            && (path.iter().any(|c| matches!(c, NativeCommand::Close))
+                || style.fill.is_some()
+                || el.attribute("Dipole") == Some("yes")
+                || el
+                    .attribute("NoGo")
+                    .is_some_and(|v| !v.eq_ignore_ascii_case("none"))
+                || float(el, "ArrowShaftSpacing", "0")? != 0.
+                || float(el, "AngularSize", "0")? != 0.)
+        {
+            return Err(Error::Native(
+                "This arrowed CDXML spline is not supported yet",
+            ));
+        }
+        let heads = if [
+            "ArrowheadHead",
+            "ArrowheadTail",
+            "ArrowheadType",
+            "HeadSize",
+            "ArrowheadCenterSize",
+            "ArrowheadWidth",
+        ]
+        .iter()
+        .any(|key| el.has_attribute(*key))
+        {
+            for attribute in el.attributes() {
+                self.spend(attribute.value().len())?;
+            }
+            Some(super::super::arrows::path_heads(|key| el.attribute(key))?)
+        } else {
+            None
+        };
+        let mut graphic = self.base(
             el,
             GraphicKind::Path,
             [
@@ -66,7 +98,9 @@ impl Reader<'_, '_> {
             ],
             style,
             path,
-        )
+        )?;
+        graphic.heads = heads;
+        Ok(graphic)
     }
     pub(super) fn graphic(&mut self, el: Node<'_, '_>) -> Result<NativeGraphic> {
         let text = el.attribute("BoundingBox").unwrap_or("");
