@@ -6,7 +6,9 @@ use super::{
     variable::variable_ink_clearance,
 };
 use crate::{
-    atom_labels::{bond_indicator_shown, map_indicator_shown, stereo_indicator_shown},
+    atom_labels::{
+        Settings, bond_indicator_shown, map_indicator_shown, stereo_indicator_shown, stereo_text,
+    },
     document::{Atom, Document, Point},
     highlights::{CAPSULE_RADIUS_SCALE, label_shape_from, radius},
 };
@@ -201,6 +203,11 @@ impl<'a> LabelPlan<'a> {
         if plan.skip() {
             return plan;
         }
+        let stereo_chars = if stereo_label {
+            cip_text_bytes(a.cip_label.as_deref(), &doc.atom_labels)
+        } else {
+            0
+        };
         plan.bytes = a.element.len()
             + a.cip_label.as_ref().map_or(0, String::len)
             + a.display.variable.as_ref().map_or(0, String::len)
@@ -220,16 +227,13 @@ impl<'a> LabelPlan<'a> {
         } else {
             0
         };
-        let stereo_font = if stereo_label {
-            a.display.stereo.style.family.len().saturating_mul(
-                a.cip_label
-                    .as_ref()
-                    .map_or(0, |v| v.len().saturating_add(2))
-                    .saturating_add(FUTURE_CIP_LABELS.len().saturating_mul(3)),
-            )
-        } else {
-            0
-        };
+        let stereo_font = a
+            .display
+            .stereo
+            .style
+            .family
+            .len()
+            .saturating_mul(stereo_chars);
         plan.fonts = main_font
             .saturating_add(map_font)
             .saturating_add(stereo_font)
@@ -292,6 +296,7 @@ impl<'a> LabelPlan<'a> {
                 a.cip_label.as_deref(),
                 a.display.stereo.offset,
                 &a.display.stereo.style,
+                &self.doc.atom_labels,
             );
         }
         if let Some((lo, hi)) = bounds {
@@ -310,9 +315,15 @@ pub(super) fn atom_bounds(a: &Atom, doc: &Document) -> Result<Option<(Point, Poi
 // by stereo/cip/label.rs. Native refresh may restore them after caches are
 // cleared, including on unrelated fixed components. Bound every enabled style
 // without assigning CIP, inventing a label, or altering persisted caches.
-pub(super) const FUTURE_CIP_LABELS: [&str; 12] = [
-    "(R)", "(S)", "(r)", "(s)", "(E)", "(Z)", "(e)", "(z)", "(M)", "(P)", "(m)", "(p)",
-];
+const FUTURE_CIP_CODES: [&str; 12] = ["R", "S", "r", "s", "E", "Z", "e", "z", "M", "P", "m", "p"];
+
+pub(super) fn cip_text_bytes(saved: Option<&str>, settings: &Settings) -> usize {
+    saved
+        .into_iter()
+        .chain(FUTURE_CIP_CODES)
+        .map(|code| stereo_text(code, settings).len())
+        .sum()
+}
 
 fn cip_bounds(
     bounds: &mut Option<(Point, Point)>,
@@ -320,12 +331,17 @@ fn cip_bounds(
     saved: Option<&str>,
     offset: Option<Point>,
     style: &crate::typography::TextStyle,
+    settings: &Settings,
 ) {
-    if let Some(label) = saved {
-        indicator_bounds(bounds, anchor, &format!("({label})"), offset, style, false);
-    }
-    for label in FUTURE_CIP_LABELS {
-        indicator_bounds(bounds, anchor, label, offset, style, false);
+    for code in saved.into_iter().chain(FUTURE_CIP_CODES) {
+        indicator_bounds(
+            bounds,
+            anchor,
+            &stereo_text(code, settings),
+            offset,
+            style,
+            false,
+        );
     }
 }
 
@@ -439,6 +455,7 @@ pub(super) fn object_bounds(doc: &Document) -> Result<Option<(Point, Point)>, St
                 b.cip_label.as_deref(),
                 b.indicator.offset,
                 &b.indicator.style,
+                &doc.atom_labels,
             );
         }
     }

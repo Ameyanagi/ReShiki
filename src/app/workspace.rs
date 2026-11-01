@@ -2233,17 +2233,39 @@ impl App {
         stereo: bool,
     ) -> iced::widget::Column<'a, Message> {
         use super::atom_labels::Action as A;
+        use reshiki::atom_labels::AxialDescriptors;
         body = body
             .push(horizontal_line())
             .push(section("STEREOCHEMISTRY"))
-            .push(
+            .push(hover_hint(
                 checkbox(stereo)
-                    .label("Show R/S and E/Z labels")
+                    .label("Show stereodescriptors (R/S, E/Z…)")
                     .text_size(12)
                     .on_toggle(|v| Message::Labels(A::Stereo(v))),
-            )
+                "R/S: stereocentre; swaps in the mirror image.\n\
+                     r/s: pseudoasymmetric centre; unchanged in the mirror image.\n\
+                     E/Z: double bond; unchanged in the mirror image.\n\
+                     M/P: axial or planar chirality (Ra/Sa when chosen).\n\
+                     seqCis/seqTrans: enantiomorphic double bond; swaps in the mirror image.",
+                tooltip::Position::Left,
+            ))
             .push(
                 text("Labels update after chemical edits. Unassigned centers have no R/S label.")
+                    .size(11)
+                    .style(muted_text),
+            )
+            .push(text("Axial descriptors").size(12))
+            .push(
+                crate::appearance::pick_list(
+                    AxialDescriptors::ALL,
+                    Some(self.tab.doc.atom_labels.axial_descriptors),
+                    |value| Message::Labels(A::AxialDescriptors(value)),
+                )
+                .text_size(12)
+                .width(Length::Fill),
+            )
+            .push(
+                text("Applies to the whole drawing.")
                     .size(11)
                     .style(muted_text),
             );

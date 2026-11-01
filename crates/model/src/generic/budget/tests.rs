@@ -15,6 +15,31 @@ use crate::{
 use std::collections::HashSet;
 
 #[test]
+fn stereo_descriptors_ink_precharge_pays_for_displayed_text_lengths() {
+    let mut source = chain(&["C", "C"]);
+    source.atom_labels.stereo = true;
+    let spent = |doc: &Document| {
+        let mut work = Work::new(usize::MAX);
+        charge_ink_work(doc, &mut work).unwrap();
+        usize::MAX - work.remaining
+    };
+    source.bonds[0].cip_label = Some("E".into());
+    let ordinary = spent(&source);
+    for code in ["e", "z"] {
+        source.bonds[0].cip_label = Some(code.into());
+        assert!(spent(&source) > ordinary, "{code}");
+    }
+    source.bonds[0].cip_label = Some("M".into());
+    let helicity = spent(&source);
+    source.atom_labels = serde_json::from_value(serde_json::json!({
+        "stereo": true,
+        "axial_descriptors": "ra"
+    }))
+    .unwrap();
+    assert!(spent(&source) > helicity);
+}
+
+#[test]
 fn generated_layout_shares_one_budget_and_rejects_atomically_before_expensive_work() {
     let source = atom_text::apply(&chain(&["C", "C", "C"]), 2, "[CH2]1-3", Mode::Auto).unwrap();
     let before = source.clone();

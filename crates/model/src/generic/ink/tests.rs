@@ -1,9 +1,58 @@
 use super::*;
 use crate::generic::drawing_test_support::{chain, preview, raw, same_except_positions};
 use crate::{
+    atom_labels::test_support::with_fonts,
     atom_text::{self, Mode},
     generic::{self, Limits},
 };
+
+#[test]
+fn stereo_descriptors_future_bounds_cover_displayed_sequence_and_axial_ink() {
+    with_fonts(|| {
+        for axial in ["helicity", "ra"] {
+            let mut doc = Document::default();
+            doc.drawing_style.font_family = "Liberation Sans".into();
+            doc.atom_labels = serde_json::from_value(serde_json::json!({
+                "stereo": true,
+                "axial_descriptors": axial
+            }))
+            .unwrap();
+            let a = doc.add_atom("C", Point::default());
+            let b = doc.add_atom("C", Point::new(42., 0.));
+            doc.add_bond(a, b, 2, "plain");
+            doc.bonds[0].indicator.offset = Some(Point::new(1000., 1000.));
+            doc.bonds[0].indicator.style.family = "Liberation Sans".into();
+            let before = doc.clone();
+            let (lo, hi) = object_bounds(&doc).unwrap().unwrap();
+            for text in [
+                "(seqTrans)",
+                "(seqCis)",
+                if axial == "ra" { "(Ra)" } else { "(M)" },
+                if axial == "ra" { "(sa)" } else { "(p)" },
+            ] {
+                let style = &doc.bonds[0].indicator.style;
+                let height = crate::style::DEFAULT.world(style.size_pt);
+                let width = crate::style::styled_text_width(text, height, style);
+                let center = Point::new(1021., 1000.);
+                let origin = center.offset(-width / 2., -height / 2.);
+                let ink = crate::style::text_ink_boxes(text, height, style);
+                assert!(!ink.is_empty());
+                for (ink_lo, ink_hi) in ink {
+                    let ink_lo = origin.offset(ink_lo.x, ink_lo.y);
+                    let ink_hi = origin.offset(ink_hi.x, ink_hi.y);
+                    assert!(
+                        lo.x <= ink_lo.x
+                            && lo.y <= ink_lo.y
+                            && ink_hi.x <= hi.x
+                            && ink_hi.y <= hi.y,
+                        "{axial} {text}: {ink_lo:?}..{ink_hi:?} outside {lo:?}..{hi:?}"
+                    );
+                }
+            }
+            assert_eq!(doc, before);
+        }
+    });
+}
 
 #[test]
 fn generated_paint_bounds_contain_extreme_highlights_and_joined_bonds() {

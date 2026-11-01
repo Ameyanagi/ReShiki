@@ -1,5 +1,90 @@
 use super::*;
+use crate::atom_labels::test_support::with_fonts;
 use crate::document::Point;
+
+#[test]
+fn stereo_descriptors_native_refresh_retains_enantiomorphic_double_bond_codes() {
+    with_fonts(|| {
+        for (text, expected, display) in [
+            ("C[C@@H](Cl)/C([C@H](C)Cl)=C(/C)Cl", "z", "(seqCis)"),
+            ("C[C@@H](Cl)/C([C@H](C)Cl)=C(\\C)Cl", "e", "(seqTrans)"),
+        ] {
+            let imported = crate::chemistry::smiles::read(text).unwrap();
+            let state = imported.prepared.state;
+            let positions = crate::chemistry::depict::compute(
+                &state,
+                &vec![None; state.graph.atoms.len()],
+                None,
+                Default::default(),
+            )
+            .unwrap()
+            .positions;
+            let molecule = chemistry::Molecule {
+                rdkit_version: crate::chemistry::RDKIT_VERSION,
+                ids: (1..=positions.len() as u64).collect(),
+                state,
+                positions,
+            };
+            let drawing = chemistry::for_generated(
+                &molecule,
+                &imported.prepared.dummy_labels,
+                Default::default(),
+            )
+            .unwrap();
+            let mut labels = drawing.labels().unwrap();
+            assert!(
+                labels
+                    .bonds
+                    .iter()
+                    .any(|bond| bond.code.as_deref() == Some(expected)),
+                "{text}: {:?}",
+                labels.bonds
+            );
+            assert!(
+                labels
+                    .atoms
+                    .iter()
+                    .any(|label| label.as_deref() == Some("R"))
+            );
+            assert!(
+                labels
+                    .atoms
+                    .iter()
+                    .any(|label| label.as_deref() == Some("S"))
+            );
+            // Start from valid chemical input without a derived CIP cache, as the
+            // editor does before its normal background label refresh.
+            for label in &mut labels.bonds {
+                label.code = None;
+            }
+            let mut doc = drawing.finish(labels).unwrap();
+            doc.atom_labels.stereo = true;
+            let refresh = Refresh::calculate(&doc, &Refresh::default()).unwrap();
+            assert_eq!(refresh.notice, None, "{text}: expected {expected}");
+            refresh.apply(&mut doc);
+            let double = doc.bonds.iter().find(|bond| bond.order == 2).unwrap();
+            assert_eq!(double.cip_label.as_deref(), Some(expected), "{text}");
+            doc.validate().unwrap();
+            doc.drawing_style.font_family = "Liberation Sans".into();
+            for atom in &mut doc.atoms {
+                atom.display.stereo.style.family = "Liberation Sans".into();
+            }
+            for bond in &mut doc.bonds {
+                bond.indicator.style.family = "Liberation Sans".into();
+            }
+            let double = doc.bonds.iter().find(|bond| bond.order == 2).unwrap();
+            assert!(
+                crate::atom_labels::indicators(&doc)
+                    .iter()
+                    .any(|indicator| {
+                        indicator.owner == crate::atom_labels::Owner::BondStereo(double.a, double.b)
+                            && indicator.text == display
+                            && indicator.style.italic
+                    })
+            );
+        }
+    });
+}
 
 fn alcohol() -> Document {
     let mut doc = Document::default();
