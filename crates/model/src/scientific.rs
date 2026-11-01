@@ -314,11 +314,7 @@ impl Graphic {
                 orbital_parts(kind, self.phase, self.phase_flipped, &self.style)
             }
             _ => {
-                return vec![Part {
-                    commands: self.commands(),
-                    style: self.style.clone(),
-                    filled: self.filled(),
-                }];
+                return self.path_parts();
             }
         };
         for part in &mut parts {

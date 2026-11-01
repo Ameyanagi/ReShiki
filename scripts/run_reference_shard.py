@@ -35,6 +35,7 @@ DEFAULT_SECONDS = 20
 # assignment explicit so a new workspace test can never silently disappear.
 # Shard 0 exists for every --count, so an assignment can never fall outside it.
 WORKSPACE_TARGET_SHARDS = {
+    ("reshiki-io", "path_heads"): 0,
     ("reshiki-io", "pdf_gradients"): 0,
     ("reshiki-io", "spacefill_seams"): 0,
     ("reshiki-macos", "native_print"): 0,

@@ -1,8 +1,10 @@
 //! Editable vector graphics in drawing coordinates. Shared by preview and export.
 mod arc;
+mod heads;
 mod path;
 use crate::{document::Point, style};
 pub use arc::ArcGeometry;
+pub use heads::PathHeads;
 pub use path::{MIN_CLOSED_NODES, MIN_OPEN_NODES, PathHandle, PathNodeType, PathSummary};
 use serde::{Deserialize, Serialize};
 
@@ -222,6 +224,9 @@ pub struct Graphic {
     /// Explicit node behavior in connected-path order; empty uses geometric detection.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub node_types: Vec<PathNodeType>,
+    /// Optional arrowheads on a single open curve or path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub heads: Option<PathHeads>,
 }
 fn back_layer() -> i32 {
     -1
@@ -301,6 +306,7 @@ impl Graphic {
                 },
                 path: vec![],
                 node_types: vec![],
+                heads: None,
             };
         }
         let mut dx = end.x - start.x;
@@ -343,6 +349,7 @@ impl Graphic {
             layer: -1,
             path: vec![],
             node_types: vec![],
+            heads: None,
         }
     }
     pub fn map_positions(&mut self, f: impl Fn(Point) -> Point) {
@@ -467,7 +474,7 @@ impl Graphic {
             .collect()
     }
     pub fn bounds(&self) -> (Point, Point) {
-        let commands = self.commands();
+        let commands: Vec<_> = self.parts().into_iter().flat_map(|p| p.commands).collect();
         let mut points = commands
             .iter()
             .flat_map(PathCommand::iter_points)
@@ -540,6 +547,12 @@ impl Graphic {
     }
     pub fn validate(&self) -> Result<(), String> {
         self.style.validate()?;
+        if let Some(heads) = self.heads {
+            if !matches!(self.kind, GraphicKind::Curve | GraphicKind::Path) {
+                return Err("Path arrowheads do not match the graphic kind".into());
+            }
+            heads.validate()?;
+        }
         if let Some(arc) = self.arc {
             if self.kind != GraphicKind::Arc {
                 return Err("Arc parameters do not match the graphic kind".into());
@@ -651,6 +664,8 @@ pub fn flattened(commands: &[PathCommand]) -> Vec<Vec<Point>> {
     paths
 }
 
+#[cfg(test)]
+mod heads_tests;
 #[cfg(test)]
 mod node_type_tests;
 #[cfg(test)]
