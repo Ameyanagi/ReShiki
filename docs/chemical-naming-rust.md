@@ -181,14 +181,17 @@ The engine marks the status where it makes the choice, so the name text is
 unchanged. A naming attempt it discards leaves no mark. Reasons for a name
 that is not the PIN:
 
-| Reason              | Example the engine writes                                                                | Preferred form                                                                           |
-| ------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `sulfonyl_prefix`   | `N-methyltosylamino`, `(methylsulfinyl)amino`                                            | `N,4-dimethylbenzene-1-sulfonamido`, `methanesulfinamido`                                |
-| `amino_prefix`      | `3-methylguanidino`                                                                      | `(N-methylcarbamimidoyl)amino`                                                           |
-| `functional_class`  | `acetaldehyde hydrazone`, `(S)-ethyl methyl sulfoxide`, `diphenyl selenotelluroperoxide` | `ethylidenehydrazine`, `(S)-(methanesulfinyl)ethane`, `[(phenylselanyl)tellanyl]benzene` |
-| `hydride_parent`    | `chloro(methyl)azane`, `1,2-dimethyldisulfane`, `ethoxy(methyl)sulfane`                  | `methylhypochlorous amide`, `(methyldisulfanyl)methane`, `[(methylsulfanyl)oxy]ethane`   |
-| `unretained_parent` | `N-methylethanediamide`, `hydroxyformyl chloride`                                        | `N1-methyloxamide`, `carbonochloridic acid`                                              |
-| `diamide_locants`   | `N,N'-diethylpropanediamide`                                                             | `N1,N3-diethylpropanediamide`                                                            |
+| Reason              | Example the engine writes                                                                       | Preferred form                                                                               |
+| ------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `sulfonyl_prefix`   | `N-methyltosylamino`, `(methylsulfinyl)amino`                                                   | `N,4-dimethylbenzene-1-sulfonamido`, `methanesulfinamido`                                    |
+| `amino_prefix`      | `3-methylguanidino`                                                                             | `(N-methylcarbamimidoyl)amino`                                                               |
+| `functional_class`  | `acetaldehyde hydrazone`, `(S)-ethyl methyl sulfoxide`, `diphenyl selenotelluroperoxide`        | `ethylidenehydrazine`, `(S)-(methanesulfinyl)ethane`, `[(phenylselanyl)tellanyl]benzene`     |
+| `hydride_parent`    | `chloro(methyl)azane`, `1,2-dimethyldisulfane`, `ethoxy(methyl)sulfane`                         | `methylhypochlorous amide`, `(methyldisulfanyl)methane`, `[(methylsulfanyl)oxy]ethane`       |
+| `unretained_parent` | `N-methylethanediamide`, `hydroxyformyl chloride`                                               | `N1-methyloxamide`, `carbonochloridic acid`                                                  |
+| `diamide_locants`   | `N,N'-diethylpropanediamide`, `N-methylbutanediamide`                                           | `N1,N3-diethylpropanediamide`, `N1-methylbutanediamide`                                      |
+| `fusion_component`  | `azuleno[4,5-c]isoxazole`, `benzo[d]isothiazole`                                                | `azuleno[4,5-c][1,2]oxazole`, `1,2-benzothiazole`                                            |
+| `multiplicative`    | `phenoxybenzene`, `(benzenesulfinyl)benzene`, `benzylbenzene`                                   | `1,1'-oxydibenzene`, `1,1'-sulfinyldibenzene`, `1,1'-methylenedibenzene`                     |
+| `acyl_prefix`       | `4-(cyclohexylcarbonyl)benzoic acid`, `(dimethyloxophosphanyl)`, `(methyloxophosphanyl)methane` | `4-(cyclohexanecarbonyl)benzoic acid`, `dimethylphosphinoyl`, `dimethyl-lambda5-phosphanone` |
 
 Reasons for an unverified name: `opsin_fusion_layout` (fusion numbering chosen
 for OPSIN compatibility), `bridged_fused_parent`, `unaudited_parent`
@@ -222,7 +225,19 @@ Oxazole and thiazole fusion prefixes cite their Hantzsch-Widman locants in
 square brackets (P-25.3.2.2.3): `[1,3]oxazolo[4,5-b]pyridine`,
 `[1,2]oxazolo[5,4-b]pyridine`, `[1,3]thiazolo[3,2-a]pyrimidine`. A base
 component named `isoxazole` or `isothiazole`, as in `cyclopenta[c]isoxazole`,
-still departs from the PIN (`[1,2]oxazole`) and has no mark.
+still departs from the PIN (`[1,2]oxazole`, P-25.3.2.1.2) and is marked
+`fusion_component`.
+
+The engine names every compound substitutively. Two identical rings joined
+by one `-O-`, `-S-`, `-SO-`, `-SO2-` (or Se, Te analogue) or `-CH2-` link take
+a multiplicative PIN instead (P-51.3.1, P-63.2.4.2, P-63.6), so such a
+molecule is marked `multiplicative`; rings that differ in substitution keep
+the substitutive PIN, `1-bromo-3-[(3-chlorophenyl)methyl]benzene`. Longer
+links, chains with principal groups (`2,2'-sulfanediyldiacetic acid`) and
+three or more identical parents have no mark. An acyl group on a ring written
+as `(ring-yl)carbonyl` or `-carbonothioyl`, and a P=O group with organyl
+ligands written as `oxophosphanyl`, are marked `acyl_prefix` (P-65.1.7.4.2,
+P-67.1.4.1.1.3, P-68.3.2.3.1).
 
 Alkoxy prefixes use the retained contractions `methoxy`, `ethoxy`, `propoxy`,
 `butoxy`, `phenoxy` and `tert-butoxy` (P-63.2.2.2), not isopropoxy, sec-butoxy

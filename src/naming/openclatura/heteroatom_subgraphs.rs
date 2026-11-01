@@ -1308,6 +1308,12 @@ pub fn name_heteroatom_subgraph(
             if roots.is_empty() {
                 format!("{sp}{suffix}")
             } else {
+                // Organyl-substituted P=O is an acid-derived acyl group,
+                // dimethylphosphinoyl, or a phosphanone parent (P-67.1.4.1.1.3,
+                // P-68.3.2.3.1), not a substituted oxophosphanyl.
+                if suffix == "oxophosphanyl" {
+                    mol.mark_name(NameStatus::NotPreferred(NameReason::AcylPrefix));
+                }
                 let ns = branches(
                     mol,
                     &roots,

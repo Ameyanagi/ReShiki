@@ -69,6 +69,22 @@ pub(super) fn mark_assembled_name(mol: &super::molecule::Molecule, parts: &Assem
     {
         mol.mark_name(NameStatus::NotPreferred(NameReason::UnretainedParent));
     }
+    // An acyl group on a ring is named from the ring acid, cyclohexanecarbonyl
+    // or 4-methylbenzoyl, not as a (ring-yl)carbonyl (P-65.1.7.4.2).
+    if parts.is_acyl_substituent
+        && parts.parent_length == 1
+        && parts.retained_substituent_name.is_none()
+        && let Some(&carbon) = parts.parent_atom_ids_by_locant.get("1")
+    {
+        let cyclic = super::chains::get_cyclic_atoms(mol, &Default::default());
+        if parts.substituents.iter().any(|item| {
+            item.atom_ids
+                .iter()
+                .any(|&atom| cyclic.contains(&atom) && mol.get_bond(carbon, atom).is_some())
+        }) {
+            mol.mark_name(NameStatus::NotPreferred(NameReason::AcylPrefix));
+        }
+    }
     super::parent_pipeline::mark_rendered_parent_status(mol, parts);
 }
 

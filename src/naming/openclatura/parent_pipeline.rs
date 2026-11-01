@@ -40,6 +40,13 @@ fn mark_parent_hydride_status(mol: &Molecule, parent: &RingParent) {
 
 fn mark_fusion_plan_status(mol: &Molecule, plan: &super::fusion::model::FusionParentPlan) {
     mark_retained_parent_status(mol, &plan.rendered_base_name);
+    // PIN fusion names use [1,2]oxazole and [1,2]thiazole (P-25.3.2.1.2).
+    if ["isoxazole", "isothiazole"]
+        .iter()
+        .any(|base| plan.rendered_base_name.ends_with(base))
+    {
+        mol.mark_name(NameStatus::NotPreferred(NameReason::FusionComponent));
+    }
     if matches!(
         plan.numbering.selected_layout.kind,
         super::fusion::model::LayoutKind::OpsinEntry

@@ -104,6 +104,9 @@ pub enum NameReason {
     HydrideParent,
     UnretainedParent,
     DiamideLocants,
+    FusionComponent,
+    Multiplicative,
+    AcylPrefix,
     OpsinFusionLayout,
     BridgedFusedParent,
     UnauditedParent,
@@ -131,7 +134,16 @@ impl NameReason {
                 "Uses a substituted methanal or methanenitrile oxide, an N-substituted ethanediamide, or a formic acid, formyl halide or formamide substituted on carbon; preferred IUPAC names use N-substituted oxamide (P-66.1.1.1.2.1) or carbonic and carbamic acid derivatives such as carbonochloridic acid (P-65.1.8.1)."
             }
             Self::DiamideLocants => {
-                "Uses N and N' locants for a diamide; the preferred IUPAC name uses nitrogen locants such as N1 and N2 (P-66.1.1.3.1.1)."
+                "Uses N or N' locants on a di- or polyamide; the preferred IUPAC name cites the parent locant on each nitrogen, as in N1-methylbutanediamide (P-66.1.1.3.1.1)."
+            }
+            Self::FusionComponent => {
+                "Uses isoxazole or isothiazole as a fusion parent component, as in cyclopenta[c]isoxazole or benzo[d]isothiazole; preferred IUPAC names use [1,2]oxazole and [1,2]thiazole, or a benzo name such as 1,2-benzothiazole (P-25.3.2.1.2, P-25.2.2.4)."
+            }
+            Self::Multiplicative => {
+                "Names two identical rings joined by an oxygen, chalcogen, sulfinyl, sulfonyl or methylene link substitutively, as in phenoxybenzene or (benzenesulfinyl)benzene; the preferred IUPAC name is multiplicative, as in 1,1'-oxydibenzene or 1,1'-sulfinyldibenzene (P-51.3.1, P-63.2.4.2, P-63.6)."
+            }
+            Self::AcylPrefix => {
+                "Uses an acyl prefix built from a substituent, such as (4-methylphenyl)carbonyl, cyclohexylcarbonothioyl or (dimethyloxophosphanyl), or an oxophosphanyl prefix on a parent, as in (methyloxophosphanyl)methane; preferred IUPAC names use the acid-derived forms 4-methylbenzoyl, cyclohexanecarbothioyl, dimethylphosphinoyl and dimethyl-lambda5-phosphanone (P-65.1.7.4.2, P-67.1.4.1.1.3, P-68.3.2.3.1)."
             }
             Self::OpsinFusionLayout => {
                 "Uses a fusion layout selected for OPSIN numbering compatibility; its preferred IUPAC numbering has not been verified."

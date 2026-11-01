@@ -262,11 +262,14 @@ pub fn add_component_n_substituents(
                     item.locants.clear();
                     parts.principal_suffix_modifiers.push(item);
                 } else {
-                    if selected.len() == 2
+                    // Di- and polyamides cite the parent locant on each
+                    // nitrogen, N1, N3 (P-66.1.1.3.1.1), never N or N'; an
+                    // ethanediamide is marked as the unretained oxamide.
+                    if selected.len() > 1
+                        && path.len() > 2
                         && rule.has_capability("amide_like")
                         && !rule.has_capability("urea")
                         && !rule.has_capability("hydrazide")
-                        && loc == "N'"
                     {
                         mol.mark_name(NameStatus::NotPreferred(NameReason::DiamideLocants));
                     }

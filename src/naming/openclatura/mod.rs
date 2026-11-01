@@ -100,6 +100,11 @@ pub(super) fn name_smiles(smiles: &str) -> Result<Name, String> {
         return Err("openclatura: expected one connected component".into());
     }
     let text = component_namer::name_component(&mol, &components[0])?;
+    if joins_identical_rings(&mol) {
+        mol.mark_name(crate::naming::NameStatus::NotPreferred(
+            crate::naming::NameReason::Multiplicative,
+        ));
+    }
     Ok(Name {
         text: nest_enclosing_marks(&text),
         status: mol.name_status(),
@@ -175,6 +180,35 @@ pub(super) fn nest_enclosing_marks(name: &str) -> String {
         }
     }
     out
+}
+
+/// Whether two identical rings are joined by one -O-, -S-, -SO-, -SO2- (or Se,
+/// Te analogue) or -CH2- link, whose PIN is multiplicative, 1,1'-oxydibenzene
+/// (P-51.3.1, P-63.2.4.2, P-63.6), where the namer writes phenoxybenzene.
+fn joins_identical_rings(mol: &molecule::Molecule) -> bool {
+    let cyclic = chains::get_cyclic_atoms(mol, &molecule::AtomSet::new());
+    let ranks = chains::canonical_ranks(mol, None);
+    mol.atoms.values().any(|atom| {
+        let (oxo, ends): (Vec<usize>, Vec<usize>) = mol
+            .get_neighbors(atom.idx)
+            .iter()
+            .filter(|&&n| mol.atoms[&n].symbol != "H")
+            .partition(|&&n| mol.atoms[&n].symbol == "O" && mol.bond_order(atom.idx, n) == 2);
+        let link = match atom.symbol.as_str() {
+            "O" => oxo.is_empty(),
+            "S" | "Se" | "Te" => oxo.len() <= 2,
+            "C" => oxo.is_empty() && atom.total_h_count == 2,
+            _ => false,
+        };
+        let [a, b] = ends[..] else {
+            return false;
+        };
+        link && atom.charge == 0
+            && !cyclic.contains(&atom.idx)
+            && cyclic.contains(&a)
+            && cyclic.contains(&b)
+            && ranks[&a] == ranks[&b]
+    })
 }
 
 /// Count nonbonding electrons on the main-group elements that can carry
@@ -432,6 +466,14 @@ mod tests {
             ("c1cnc2scnc2c1", "[1,3]thiazolo[5,4-b]pyridine"),
             ("c1cnc2oncc2c1", "[1,2]oxazolo[5,4-b]pyridine"),
             ("c1cnc2sncc2c1", "[1,2]thiazolo[5,4-b]pyridine"),
+            // Differently substituted rings stay substitutive (P-51.3.1), and
+            // the retained acyl and formyl prefixes need no ring acid name.
+            (
+                "Brc1cccc(Cc2cccc(Cl)c2)c1",
+                "1-bromo-3-[(3-chlorophenyl)methyl]benzene",
+            ),
+            ("O=C(O)c1ccc(cc1)C(=O)c1ccccc1", "4-benzoylbenzoic acid"),
+            ("O=C(O)c1ccc(cc1)C=O", "4-formylbenzoic acid"),
         ] {
             let name = name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
@@ -526,6 +568,48 @@ mod tests {
                 "N,N'-diethylpropanediamide",
                 R::DiamideLocants,
             ),
+            (
+                "CNC(=O)CCC(N)=O",
+                "N-methylbutanediamide",
+                R::DiamideLocants,
+            ),
+            (
+                "c1cc2cccc3conc3c-2c1",
+                "azuleno[4,5-c]isoxazole",
+                R::FusionComponent,
+            ),
+            ("c1ccc(cc1)Oc1ccccc1", "phenoxybenzene", R::Multiplicative),
+            (
+                "c1ccc(cc1)Sc1ccccc1",
+                "(phenylsulfanyl)benzene",
+                R::Multiplicative,
+            ),
+            (
+                "O=S(c1ccccc1)c1ccccc1",
+                "(benzenesulfinyl)benzene",
+                R::Multiplicative,
+            ),
+            (
+                "O=S(=O)(c1ccccc1)c1ccccc1",
+                "(benzenesulfonyl)benzene",
+                R::Multiplicative,
+            ),
+            (
+                "O=C(O)c1ccc(cc1)C(=O)C1CCCCC1",
+                "4-(cyclohexylcarbonyl)benzoic acid",
+                R::AcylPrefix,
+            ),
+            (
+                "O=C(O)c1ccc(cc1)C(=S)C1CCCCC1",
+                "4-(cyclohexylcarbonothioyl)benzoic acid",
+                R::AcylPrefix,
+            ),
+            (
+                "O=C(O)c1ccc(cc1)P(C)(C)=O",
+                "4-(dimethyloxophosphanyl)benzoic acid",
+                R::AcylPrefix,
+            ),
+            ("C[PH](C)=O", "(methyloxophosphanyl)methane", R::AcylPrefix),
         ] {
             let name = name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
