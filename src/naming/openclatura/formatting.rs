@@ -92,7 +92,7 @@ pub fn format_counted_prefixes(names: &[String]) -> String {
         .map(|(n, c)| format_multiplier(n, *c, safe))
         .collect()
 }
-pub fn format_center_ligands_by(names: &[String], sort_key: impl Fn(&str) -> String) -> String {
+pub fn format_center_ligands_by<K: Ord>(names: &[String], sort_key: impl Fn(&str) -> K) -> String {
     let counts = count_names(names);
     let mut ordered: Vec<_> = counts.keys().collect();
     ordered.sort_by_key(|s| sort_key(s));
@@ -156,8 +156,8 @@ pub fn format_element_substituent(
 ) -> String {
     let branch = strip_outer_parentheses(branch);
     let suffix = format!("{suffix}{}", if is_double { "idene" } else { "" });
-    // An acyl prefix that names a parent hydride, as methanesulfonyl, is
-    // enclosed although simple (P-16.5.1.4).
+    // An acyl prefix that names a parent hydride, as methanesulfonyl or
+    // ethanethioyl, is enclosed although simple (P-16.5.1.4).
     let names_hydride = [
         "sulfonyl",
         "sulfinyl",
@@ -166,12 +166,13 @@ pub fn format_element_substituent(
         "telluronyl",
         "tellurinyl",
         "carbonyl",
-        "carbothioyl",
-        "carboselenoyl",
-        "carbotelluroyl",
+        "thioyl",
+        "selenoyl",
+        "telluroyl",
     ]
     .iter()
     .filter_map(|acyl| branch.strip_suffix(acyl))
+    .map(|stem| stem.strip_suffix("carbo").unwrap_or(stem))
     .any(|stem| {
         ["ane", "ene", "yne", "ine"]
             .iter()

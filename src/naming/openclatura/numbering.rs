@@ -1,5 +1,6 @@
 //! Parent numbering criteria ported from Python `numbering.py`.
 use super::{
+    assembly_prefixes::substituent_sort_key,
     locants::{LocantKey, get_atom_locants, get_bond_locants, retained_locant_sort_key},
     molecule::{AtomSet, Molecule},
     rules::{elements, retained},
@@ -490,36 +491,6 @@ pub fn substituent_citation_name(name: &str) -> String {
         .filter(|c| c.is_alphabetic())
         .collect()
 }
-pub fn substituent_sort_key(name: &str) -> String {
-    let mut normalized = name.to_lowercase();
-    loop {
-        normalized = normalized
-            .trim_start_matches(['(', '[', '{', ')'])
-            .to_owned();
-        let Some(end) = normalized.find(['-', ')']) else {
-            break;
-        };
-        let prefix = &normalized[..end];
-        let locant = |part: &str| {
-            let digits = part.chars().take_while(|c| c.is_ascii_digit()).count();
-            (digits > 0 && part[digits..].chars().all(|c| c.is_ascii_lowercase())) || {
-                let mut chars = part.chars();
-                chars.next().is_some_and(|c| "nospmc".contains(c)) && chars.all(|c| c == '\'')
-            }
-        };
-        let allowed = matches!(
-            prefix,
-            "sec" | "tert" | "t" | "s" | "d" | "l" | "m" | "o" | "p" | "alpha" | "beta" | "gamma"
-        ) || (!prefix.is_empty() && prefix.chars().all(|c| "ezrs".contains(c)))
-            || prefix.split(',').all(locant);
-        if !allowed {
-            break;
-        }
-        normalized = normalized[end..].trim_start_matches(['-', ')']).to_owned();
-    }
-    normalized
-}
-
 fn substituent_citation_locants(
     path: &[usize],
     mapping: &BTreeMap<usize, Vec<String>>,

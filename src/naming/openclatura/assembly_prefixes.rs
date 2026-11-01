@@ -37,24 +37,32 @@ fn ignored_prefix_len(text: &str) -> usize {
         0
     }
 }
-pub fn substituent_sort_key(name: &str) -> String {
+/// The alphanumerical sort key of a prefix (P-14.5): its name from the first
+/// nonitalic Roman letter, then the skipped initial locants and italic
+/// prefixes, which break ties (P-14.5.3, P-14.5.4). The bracketed heteroatom
+/// locants of a fusion prefix such as [1,3]thiazolo are initial locants;
+/// stereodescriptors such as (1R) take no part.
+pub fn substituent_sort_key(name: &str) -> (String, String) {
     let lowercase = name.to_lowercase();
     let mut text = lowercase.as_str();
+    let mut initial = String::new();
     loop {
         text = text.trim_start_matches(['(', '[', '{', ')']);
-        // Roman letters come first (P-14.5), so the bracketed heteroatom
-        // locants of a fusion prefix such as [1,3]thiazolo are skipped.
-        if let Some((locants, rest)) = text.split_once(']')
-            && locants
-                .split(',')
-                .all(|l| !l.is_empty() && l.bytes().all(|b| b.is_ascii_digit()))
-        {
-            text = rest;
-            continue;
-        }
-        let n = ignored_prefix_len(text);
+        let n = match text.split_once(']') {
+            Some((locants, _))
+                if locants
+                    .split(',')
+                    .all(|l| !l.is_empty() && l.bytes().all(|b| b.is_ascii_digit())) =>
+            {
+                locants.len() + 1
+            }
+            _ => ignored_prefix_len(text),
+        };
         if n == 0 {
-            return text.to_owned();
+            return (text.to_owned(), initial);
+        }
+        if !text[..n].contains(')') {
+            initial.push_str(&text[..n]);
         }
         text = &text[n..];
     }

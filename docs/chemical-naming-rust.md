@@ -212,8 +212,9 @@ Sulfonyl and sulfinyl prefixes are named from the acid (P-65.3.2.2.2) and
 enclosed although simple (P-16.5.1.4): `(methanesulfonyl)benzene`,
 `4-(4-methylpiperazine-1-sulfonyl)benzoic acid`,
 `3-[(methanesulfonyl)oxy]propanoic acid`,
-`2-[(methanesulfonyl)sulfanyl]acetic acid`, `N-(sulfooxy)cyclohexanimine`;
-a peroxy prefix encloses a complex ligand, `2-[(propan-2-yl)peroxy]acetic acid`
+`2-[(methanesulfonyl)sulfanyl]acetic acid`, `N-(sulfooxy)cyclohexanimine`,
+and so are acyl prefixes such as `2-[(ethanethioyl)sulfanyl]acetic acid`; a
+peroxy prefix encloses a complex ligand, `2-[(propan-2-yl)peroxy]acetic acid`
 (P-16.5.1.1). The
 `sulfonyl_prefix` mark stays where the engine still concatenates: on a nitrogen
 that the PIN names as sulfonamido or sulfinamido (P-66.1.1.4.3), on an imino
@@ -238,13 +239,19 @@ still departs from the PIN (`[1,2]oxazole`, P-25.3.2.1.2) and is marked
 The engine names every compound substitutively. Two identical rings joined
 by one `-O-`, `-S-`, `-SO-`, `-SO2-` (or Se, Te analogue) or `-CH2-` link take
 a multiplicative PIN instead (P-51.3.1, P-63.2.4.2, P-63.6), so such a
-molecule is marked `multiplicative`; rings that differ in substitution keep
-the substitutive PIN, `1-bromo-3-[(3-chlorophenyl)methyl]benzene`. Longer
-links, chains with principal groups (`2,2'-sulfanediyldiacetic acid`) and
-three or more identical parents have no mark. An acyl group on a ring written
-as `(ring-yl)carbonyl` or `-carbonothioyl`, and a P=O group with organyl
-ligands written as `oxophosphanyl`, are marked `acyl_prefix` (P-65.1.7.4.2,
-P-67.1.4.1.1.3, P-68.3.2.3.1).
+molecule is marked `multiplicative`. So are two identical chains joined by one
+chalcogen link when they carry a principal group or lead to a ring,
+`2-[(2-hydroxy-2-oxoethyl)sulfanyl]acetic acid` for
+`2,2'-sulfanediyldiacetic acid`; alkane units keep the substitutive PIN,
+`ethoxyethane`, and so does an anhydride. Units that differ in substitution or
+configuration keep the substitutive PIN,
+`1-bromo-3-[(3-chlorophenyl)methyl]benzene`,
+`1-[(2R)-butan-2-yl]-4-({4-[(2S)-butan-2-yl]phenyl}sulfanyl)benzene`
+(P-45.6.2). Longer links and three or more identical parents have no mark. An
+acyl group on a ring written as `(ring-yl)carbonyl` or `-carbonothioyl`, and a
+P=O, As=O or Sb=O group with ligands written as `oxophosphanyl`, `oxoarsanyl`
+or `oxostibanyl`, are marked `acyl_prefix` (P-65.1.7.4.2, P-67.1.4.1.1.3,
+P-68.3.2.3.1).
 
 Alkoxy prefixes use the retained contractions `methoxy`, `ethoxy`, `propoxy`,
 `butoxy`, `phenoxy` and `tert-butoxy` (P-63.2.2.2), not isopropoxy, sec-butoxy
@@ -303,11 +310,15 @@ chiral sulfoxides, whose PIN cites the descriptor before the whole name as in
 `(S)-(methanesulfinyl)ethane` (P-93.3.4.1), and on mixed chalcogen peroxides
 such as `dimethyl selenoperoxide` (P-63.3.2).
 
-Prefixes are cited in alphanumerical order of their first nonitalic Roman
-letter (P-14.5), so the bracketed heteroatom locants that lead a fusion prefix
-do not count:
+Prefixes are cited and numbered in alphanumerical order of their first
+nonitalic Roman letter (P-14.5), so the bracketed heteroatom locants that lead
+a fusion prefix do not count:
 `1-(1-benzyl-3-phenyl-1H-pyrazol-4-yl)-N-[([1,2,4]triazolo[4,3-a]pyridin-3-yl)methyl]methanamine`,
-`(1R,3S)-N-methyl-3-(6H-[1,2,4]triazolo[4,3-a]pyrrolo[2,3-e]pyrazin-1-yl)cyclopentanamine`.
+`(1R,3S)-N-methyl-3-(6H-[1,2,4]triazolo[4,3-a]pyrrolo[2,3-e]pyrazin-1-yl)cyclopentanamine`,
+`3-methyl-5-([1,3]oxazolo[4,5-b]pyridin-2-yl)benzoic acid`. Initial locants
+and italic prefixes only break ties (P-14.5.3, P-14.5.4):
+`3-([1,2]oxazolo[4,5-b]pyridin-6-yl)-2-([1,3]oxazolo[4,5-b]pyridin-6-yl)propan-1-ol`,
+`1-(3-methylbutyl)-4-(pentan-2-yl)benzene`.
 
 Enclosing marks nest in the P-16.5.4 order `{[({[( )]})]}`:
 `2-[4-(2-methylpropyl)phenyl]propanoic acid`,

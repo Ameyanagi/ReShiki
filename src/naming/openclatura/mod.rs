@@ -100,7 +100,7 @@ pub(super) fn name_smiles(smiles: &str) -> Result<Name, String> {
         return Err("openclatura: expected one connected component".into());
     }
     let text = component_namer::name_component(&mol, &components[0])?;
-    if joins_identical_rings(&mol) {
+    if has_multiplicative_pin(&mol) {
         mol.mark_name(crate::naming::NameStatus::NotPreferred(
             crate::naming::NameReason::Multiplicative,
         ));
@@ -182,12 +182,34 @@ pub(super) fn nest_enclosing_marks(name: &str) -> String {
     out
 }
 
-/// Whether two identical rings are joined by one -O-, -S-, -SO-, -SO2- (or Se,
-/// Te analogue) or -CH2- link, whose PIN is multiplicative, 1,1'-oxydibenzene
-/// (P-51.3.1, P-63.2.4.2, P-63.6), where the namer writes phenoxybenzene.
-fn joins_identical_rings(mol: &molecule::Molecule) -> bool {
+/// Whether two identical units are joined by one -O-, -S-, -SO-, -SO2- (or
+/// Se, Te analogue) link, or two identical rings by -CH2-, whose PIN is
+/// multiplicative, 1,1'-oxydibenzene, 2,2'-sulfanediyldiacetic acid (P-51.3.1,
+/// P-63.2.4.2, P-63.6), where the namer writes phenoxybenzene. Alkane units
+/// and units that differ in configuration keep the substitutive PIN
+/// (P-51.3.1, P-45.6.2).
+fn has_multiplicative_pin(mol: &molecule::Molecule) -> bool {
     let cyclic = chains::get_cyclic_atoms(mol, &molecule::AtomSet::new());
     let ranks = chains::canonical_ranks(mol, None);
+    let configuration = |link: usize, end: usize| {
+        let side = subgraph_tools::subgraph_component(mol, end, &[link].into());
+        let mut atoms: Vec<_> = side
+            .iter()
+            .filter_map(|i| Some((ranks[i], mol.atoms[i].stereo.as_deref()?)))
+            .collect();
+        let mut bonds: Vec<_> = mol
+            .bonds
+            .values()
+            .filter(|b| side.contains(&b.u))
+            .filter_map(|b| {
+                let (u, v) = (ranks[&b.u], ranks[&b.v]);
+                Some((u.min(v), u.max(v), b.stereo.as_deref()?))
+            })
+            .collect();
+        atoms.sort();
+        bonds.sort();
+        (atoms, bonds)
+    };
     mol.atoms.values().any(|atom| {
         let (oxo, ends): (Vec<usize>, Vec<usize>) = mol
             .get_neighbors(atom.idx)
@@ -205,9 +227,21 @@ fn joins_identical_rings(mol: &molecule::Molecule) -> bool {
         };
         link && atom.charge == 0
             && !cyclic.contains(&atom.idx)
-            && cyclic.contains(&a)
-            && cyclic.contains(&b)
             && ranks[&a] == ranks[&b]
+            // Acyclic units are chains that carry a principal group or lead
+            // to a ring; an acyl end makes an anhydride.
+            && (cyclic.contains(&a)
+                || (!atom.is_carbon()
+                    && mol.atoms[&a].is_carbon()
+                    && mol
+                        .get_neighbors(a)
+                        .iter()
+                        .all(|&n| mol.atoms[&n].is_carbon() || mol.bond_order(a, n) == 1)
+                    && (!cyclic.is_empty()
+                        || perception::perceive_groups(mol)
+                            .iter()
+                            .any(|g| g.is_principal_candidate))))
+            && configuration(atom.idx, a) == configuration(atom.idx, b)
     })
 }
 
@@ -481,6 +515,25 @@ mod tests {
                 "2-[(methanesulfonyl)sulfanyl]acetic acid",
             ),
             ("CC(C)OOCC(=O)O", "2-[(propan-2-yl)peroxy]acetic acid"),
+            ("CC(=S)SCC(=O)O", "2-[(ethanethioyl)sulfanyl]acetic acid"),
+            ("CC(=S)OOCC(=O)O", "2-[(ethanethioyl)peroxy]acetic acid"),
+            // Prefixes are numbered and cited from their first Roman letter;
+            // bracketed initial locants only break ties (P-14.5, P-14.5.4).
+            (
+                "OC(=O)c1cc(C)cc(c2nc3ncccc3o2)c1",
+                "3-methyl-5-([1,3]oxazolo[4,5-b]pyridin-2-yl)benzoic acid",
+            ),
+            (
+                "O1N=CC2=NC=C(C=C21)CC(CO)C=2C=C1C(=NC2)N=CO1",
+                "3-([1,2]oxazolo[4,5-b]pyridin-6-yl)-2-([1,3]oxazolo[4,5-b]pyridin-6-yl)propan-1-ol",
+            ),
+            // Units that differ in configuration keep the substitutive PIN
+            // (P-45.6.2), as does an anhydride (P-65.7.1).
+            (
+                "CC[C@@H](C)c1ccc(Sc2ccc(cc2)[C@@H](C)CC)cc1",
+                "1-[(2R)-butan-2-yl]-4-({4-[(2S)-butan-2-yl]phenyl}sulfanyl)benzene",
+            ),
+            ("CC(=O)OC(C)=O", "acetic anhydride"),
         ] {
             let name = name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
@@ -617,6 +670,21 @@ mod tests {
                 R::AcylPrefix,
             ),
             ("C[PH](C)=O", "(methyloxophosphanyl)methane", R::AcylPrefix),
+            (
+                "O=C(O)c1ccc([As](=O)(C)C)cc1",
+                "4-(dimethyloxoarsanyl)benzoic acid",
+                R::AcylPrefix,
+            ),
+            (
+                "CC[C@@H](C)c1ccc(Sc2ccc(cc2)[C@H](C)CC)cc1",
+                "1-[(2R)-butan-2-yl]-4-({4-[(2R)-butan-2-yl]phenyl}sulfanyl)benzene",
+                R::Multiplicative,
+            ),
+            (
+                "S(CC(=O)O)CC(=O)O",
+                "2-[(2-hydroxy-2-oxoethyl)sulfanyl]acetic acid",
+                R::Multiplicative,
+            ),
         ] {
             let name = name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");

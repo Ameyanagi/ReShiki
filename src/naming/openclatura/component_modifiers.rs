@@ -80,7 +80,7 @@ fn nitrogen_rank(
     n: usize,
     c: usize,
     exclude: &AtomSet,
-) -> Result<(usize, String, isize), String> {
+) -> Result<(usize, (String, String), isize), String> {
     let mut blocked = exclude.clone();
     blocked.insert(n);
     let status = mol.name_status();
@@ -99,7 +99,7 @@ fn nitrogen_rank(
     Ok(if let Some(first) = names.iter().min() {
         (0, first.clone(), -(names.len() as isize))
     } else {
-        (1, String::new(), 0)
+        (1, Default::default(), 0)
     })
 }
 
