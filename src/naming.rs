@@ -121,7 +121,7 @@ impl NameReason {
                 "Uses a concatenated sulfonyl or sulfinyl prefix such as N-methyltosylamino or (methylsulfinyl)amino; preferred IUPAC names use acid-derived forms such as N,4-dimethylbenzene-1-sulfonamido or methanesulfinamido (P-65.3.2.2.2, P-66.1.1.4.3)."
             }
             Self::AminoPrefix => {
-                "Uses phenylamino or guanidino; preferred IUPAC names use anilino or carbamimidoylamino, respectively."
+                "Uses a guanidino prefix substituted on its outer nitrogens, such as 3-methylguanidino; preferred IUPAC names cite carbamimidoyl inside an amino prefix, as in (N-methylcarbamimidoyl)amino (P-66.4.1.2.1.3)."
             }
             Self::FunctionalClass => {
                 "Uses a functional-class form such as sulfoxide, hydrazone or phosphane oxide; preferred IUPAC names use substitutive forms such as (methanesulfinyl)methane, ylidenehydrazine or λ5-phosphanone."

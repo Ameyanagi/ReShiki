@@ -365,6 +365,23 @@ mod tests {
             ("O=C(O)CCCC(=O)O", "pentanedioic acid"),
             ("O=C(O)CCCCC(=O)O", "hexanedioic acid"),
             ("C#N", "formonitrile"),
+            // Anilino (P-62.2.1.1.1) and carbamimidoylamino (P-66.4.1.2.1.3)
+            // prefixes; contractions still read anilino as phenylamino.
+            ("O=C(O)CNc1ccccc1", "2-anilinoacetic acid"),
+            (
+                "OC(=O)c1ccc(N(c2ccccc2)c2ccccc2)cc1",
+                "4-(N-phenylanilino)benzoic acid",
+            ),
+            ("NC(=N)NCC(=O)O", "2-(carbamimidoylamino)acetic acid"),
+            (
+                "CN(C(=N)N)CC(=O)O",
+                "2-[carbamimidoyl(methyl)amino]acetic acid",
+            ),
+            ("COC(=O)Nc1ccccc1", "methyl phenylcarbamate"),
+            (
+                "OC(=O)c1ccc(C(=O)Nc2ccccc2)cc1",
+                "4-(phenylcarbamoyl)benzoic acid",
+            ),
         ] {
             let name = name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
@@ -387,11 +404,10 @@ mod tests {
                 R::SulfonylPrefix,
             ),
             (
-                "O=C(O)CNc1ccccc1",
-                "2-(phenylamino)acetic acid",
+                "CNC(=N)NCC(=O)O",
+                "2-(3-methylguanidino)acetic acid",
                 R::AminoPrefix,
             ),
-            ("NC(=N)NCC(=O)O", "2-guanidinoacetic acid", R::AminoPrefix),
             ("CS(C)=O", "dimethyl sulfoxide", R::FunctionalClass),
             ("CN(C)C", "trimethylazane", R::HydrideParent),
             ("CP(C)(C)=O", "trimethylphosphane oxide", R::FunctionalClass),

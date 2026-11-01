@@ -6,6 +6,15 @@ use super::{
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
+/// The phenylamino spelling of the retained anilino prefixes (P-62.2.1.1.1), for
+/// contractions that read the ligands of an amino prefix, as in phenylcarbamoyl.
+pub fn phenylamino_spelling(name: &str) -> &str {
+    match name {
+        "anilino" => "phenylamino",
+        "N-phenylanilino" => "diphenylamino",
+        _ => name,
+    }
+}
 pub fn strip_outer_parentheses(name: &str) -> String {
     if name.starts_with('(') && name.ends_with(')') {
         name[1..name.len() - 1].into()

@@ -3,7 +3,8 @@ use super::assembly_prefixes::substituent_sort_key;
 use super::chains::get_cyclic_atoms;
 use super::formatting::{
     format_center_ligands_by, format_counted_prefixes, format_element_substituent,
-    format_multiplier, is_complex_prefix, oxy_prefix_from_branch, strip_outer_parentheses,
+    format_multiplier, is_complex_prefix, oxy_prefix_from_branch, phenylamino_spelling,
+    strip_outer_parentheses,
 };
 use super::molecule::{AtomSet, Molecule};
 use super::namer::{capped_acid_name, name_subgraph_with_upstream};
@@ -207,6 +208,15 @@ pub fn format_amino_from_branches(
             )
         };
     }
+    // P-62.2.1.1.1: anilino is the preferred prefix for C6H5-NH-, with full
+    // substitution allowed, so (C6H5)2N- is N-phenylanilino.
+    if names.iter().all(|n| n == "phenyl") {
+        match names.len() {
+            1 => return "anilino".into(),
+            2 => return "(N-phenylanilino)".into(),
+            _ => {}
+        }
+    }
     if names.len() == 1 {
         let n = strip_outer_parentheses(&names[0]);
         if ["carbonyl", "sulfonyl", "sulfinyl", "carbonothioyl"]
@@ -310,7 +320,7 @@ fn sulfonyl_group(mol: &Molecule, branch: &str, suffix: &str) -> (String, bool) 
                 row["suffix"].as_str(),
                 row["name"].as_str(),
             ) && s == suffix
-                && let Some(before) = b.strip_suffix(ending)
+                && let Some(before) = phenylamino_spelling(&b).strip_suffix(ending)
             {
                 let result = format!("{before}{name}");
                 return (result, before.is_empty());
@@ -319,7 +329,7 @@ fn sulfonyl_group(mol: &Molecule, branch: &str, suffix: &str) -> (String, bool) 
     }
     // Preferred names cite methanesulfonyl, sulfo, sulfamoyl (P-65.3.2.3);
     // alkoxy, halo, azido and similar concatenations are preferred prefixes.
-    if (b.ends_with("yl") || b.ends_with("amino") || b == "hydroxy")
+    if (b.ends_with("yl") || phenylamino_spelling(&b).ends_with("amino") || b == "hydroxy")
         && matches!(suffix, "sulfonyl" | "sulfinyl")
     {
         mol.mark_name(NameStatus::NotPreferred(NameReason::SulfonylPrefix));
@@ -374,7 +384,7 @@ fn carbonyl_like_fragment(
         return Ok(fallback.into());
     }
     if let Some(base) = amino_base
-        && let Some(before) = name.strip_suffix("amino")
+        && let Some(before) = phenylamino_spelling(&name).strip_suffix("amino")
     {
         return Ok(format!("({before}{base})"));
     }
@@ -1601,9 +1611,20 @@ fn guanidino_prefix(
             names.entry(name).or_default().push(locant.into());
         }
     }
-    if names.is_empty() {
-        mol.mark_name(NameStatus::NotPreferred(NameReason::AminoPrefix));
-        return Ok(Some("guanidino".into()));
+    let stereo = mol
+        .get_bond(carbon, imino)
+        .and_then(|b| b.stereo.as_ref())
+        .filter(|s| matches!(s.as_str(), "E" | "Z"))
+        .map(|s| format!("({s})-"))
+        .unwrap_or_default();
+    // P-66.4.1.2.1.3: the preferred prefix is carbamimidoylamino, cited like any
+    // substituted amino; substitution on the other nitrogens keeps guanidino.
+    if names.is_empty() || (stereo.is_empty() && names.values().flatten().all(|l| l == "1")) {
+        let mut ligands: Vec<_> = names.into_keys().collect();
+        ligands.push("carbamimidoyl".into());
+        return Ok(Some(format_amino_from_branches(
+            &ligands, false, false, false,
+        )));
     }
     let mut ordered: Vec<_> = names.into_iter().collect();
     ordered.sort_by_key(|(name, _)| substituent_sort_key(name));
@@ -1618,12 +1639,6 @@ fn guanidino_prefix(
         })
         .collect::<Vec<_>>()
         .join("-");
-    let stereo = mol
-        .get_bond(carbon, imino)
-        .and_then(|b| b.stereo.as_ref())
-        .filter(|s| matches!(s.as_str(), "E" | "Z"))
-        .map(|s| format!("({s})-"))
-        .unwrap_or_default();
     mol.mark_name(NameStatus::NotPreferred(NameReason::AminoPrefix));
     Ok(Some(format!("({stereo}{prefixes}guanidino)")))
 }
@@ -1652,7 +1667,7 @@ mod tests {
     };
 
     #[test]
-    fn amino_contractions_discard_the_consumed_phenylamino_status() -> Result<(), String> {
+    fn amino_contractions_read_anilino_as_phenylamino() -> Result<(), String> {
         for (smiles, start, upstream, expected) in [
             ("CCS(=O)(=O)Nc1ccccc1", 2, 1, "(phenylsulfamoyl)"),
             ("CCNC(=S)Nc1ccccc1", 2, 1, "(phenylcarbamothioylamino)"),

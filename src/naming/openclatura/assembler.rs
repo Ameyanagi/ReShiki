@@ -73,15 +73,6 @@ pub(super) fn mark_assembled_name(
     {
         mol.mark_name(NameStatus::NotPreferred(NameReason::UnretainedParent));
     }
-    // Checked on the cited text: carbamate and sulfamoyl contractions consume
-    // a phenylamino branch.
-    if parts
-        .substituents
-        .iter()
-        .any(|item| item.name.contains("phenylamino"))
-    {
-        mol.mark_name(NameStatus::NotPreferred(NameReason::AminoPrefix));
-    }
     super::parent_pipeline::mark_rendered_parent_status(mol, parts);
 }
 

@@ -174,7 +174,7 @@ name and Insert caption use the name text alone.
 | Tag                                           | Meaning                                                                                       |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | Preferred IUPAC name                          | No rule on the name's path is known to depart from the PIN rules.                             |
-| Systematic name, not the preferred IUPAC name | The name is correct but uses a form the PIN rules do not, such as `phenylamino`.              |
+| Systematic name, not the preferred IUPAC name | The name is correct but uses a form the PIN rules do not, such as `methanal`.                 |
 | Systematic name, preference not verified      | The name took a path whose PIN choice has not been checked, such as an OPSIN-numbered fusion. |
 
 The engine marks the status where it makes the choice, so the name text is
@@ -184,7 +184,7 @@ that is not the PIN:
 | Reason                    | Example the engine writes                                                  | Preferred form                                                |
 | ------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | `sulfonyl_prefix`         | `N-methyltosylamino`, `(methylsulfinyl)amino`                              | `N,4-dimethylbenzene-1-sulfonamido`, `methanesulfinamido`     |
-| `amino_prefix`            | `phenylamino`, `guanidino`                                                 | `anilino`, `carbamimidoylamino`                               |
+| `amino_prefix`            | `3-methylguanidino`                                                        | `(N-methylcarbamimidoyl)amino`                                |
 | `functional_class`        | `dimethyl sulfoxide`, `acetaldehyde hydrazone`, `trimethylphosphane oxide` | substitutive names                                            |
 | `hydride_parent`          | `dimethylsulfane`, `trimethylazane`                                        | `(methylsulfanyl)methane`, `N,N-dimethylmethanamine`          |
 | `unretained_parent`       | `methanal`, `ethanediamide`, `methoxybenzene`, `hydroxyformyl chloride`    | `formaldehyde`, `oxamide`, `anisole`, `carbonochloridic acid` |
@@ -222,6 +222,12 @@ Alkoxy prefixes use the retained contractions `methoxy`, `ethoxy`, `propoxy`,
 `butoxy`, `phenoxy` and `tert-butoxy` (P-63.2.2.2), not isopropoxy, sec-butoxy
 or isobutoxy: `[(propan-2-yl)oxy]benzene`, `[(butan-2-yl)oxy]benzene`
 (P-63.2.2.1.1), `(2-methylpropoxy)benzene`.
+
+Amino prefixes use the retained `anilino` for C6H5-NH-, with full substitution
+(P-62.2.1.1.1), and `carbamimidoylamino` for guanidine as a prefix
+(P-66.4.1.2.1.3): `2-anilinoacetic acid`, `4-(N-phenylanilino)benzoic acid`,
+`2-(carbamimidoylamino)acetic acid`, `2-[carbamimidoyl(methyl)amino]acetic acid`.
+Contractions keep phenyl: `methyl phenylcarbamate`, `(phenylsulfamoyl)`.
 
 Chains take systematic names where the retained names are only for general
 nomenclature (P-65.1.1.2.2, P-66.5.1.2.3): `propanenitrile`, `butanenitrile`,

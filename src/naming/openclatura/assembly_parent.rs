@@ -7,7 +7,7 @@ use super::{
     assembly_parts::AssemblyParts,
     assembly_prefixes::substituent_sort_key,
     assembly_utils::parse_locant,
-    formatting::{is_complex_prefix, strip_outer_parentheses},
+    formatting::{is_complex_prefix, phenylamino_spelling, strip_outer_parentheses},
     nomenclature::RULES,
     principal_suffixes::render_principal_suffix,
     rules::{bonds, elision, multipliers, stems},
@@ -141,6 +141,7 @@ fn absorbed_chain_branch(
         return Some((n.into(), 0));
     }
     let text = strip_outer_parentheses(&branch.name);
+    let text = phenylamino_spelling(&text);
     if text.starts_with("N-") || text.starts_with("N,") {
         return None;
     }
@@ -334,6 +335,7 @@ fn promote_carbamimidoyl(parts: &mut AssemblyParts) {
     let (mut amine, mut imine) = (None, None);
     for item in &parts.substituents {
         let text = strip_outer_parentheses(&item.name);
+        let text = phenylamino_spelling(&text);
         if let Some(before) = text.strip_suffix("imino") {
             if imine.is_some() {
                 return;
@@ -424,6 +426,7 @@ pub fn promote_retained_substituent_name(parts: &mut AssemblyParts) {
         && kind == "acyl"
     {
         let name = strip_outer_parentheses(&branch.name);
+        let name = phenylamino_spelling(&name);
         if !name.starts_with("N-") && !name.starts_with("N,") {
             for (ending, word) in [("amino", "carbamoyl"), ("sulfonamido", "sulfonylcarbamoyl")] {
                 if let Some(prefix) = name.strip_suffix(ending) {
