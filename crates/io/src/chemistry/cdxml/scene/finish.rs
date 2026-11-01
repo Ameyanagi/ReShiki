@@ -101,6 +101,7 @@ impl CdxmlScene {
                 map_num: u32::try_from(map).map_err(|_| SceneError::Invalid("Invalid atom map"))?,
                 display: Default::default(),
                 cip_label: None,
+                undefined_stereo: false,
                 marks: Vec::new(),
                 mark_serial: 0,
                 stereo: None,

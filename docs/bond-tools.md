@@ -35,6 +35,16 @@ On an aromatic edge, solid/hashed/hollow wedges, bold, parallel hashes and wavy 
 
 This behavior is shared by bond clicks, drag previews, committed drags and Properties, with Undo/Redo. Native files and SVG/PNG/PDF retain the appearance. CDXML/CDX currently reject these projection styles explicitly; restore plain edges before editable exchange. Ordinary single-bond wedges retain their stereochemical meaning.
 
+### Checking and redrawing stereochemistry
+
+**Check drawing** reports stereobonds with no effect or a probably reversed narrow end, ambiguous wedge geometry, conflicting wedges, and undefined stereocentres or stereogenic double bonds. The notices select the affected atoms and bonds; clicking a notice in **Stereochemistry** selects that item again. **Reverse** fixes the probably reversed bonds in one Undo step. Explicitly unknown stereochemistry, such as a wavy bond, is excluded from the undefined count.
+
+Enable **IUPAC style notes in Check drawing** in Stereochemistry for optional advice about bonds between stereocentres, mixed hash styles, alternate-only depictions, wavy bonds beside alkenes, re-entrant ring atoms and T-shaped geometry. This preference starts off and does not alter how bonds are interpreted.
+
+**Redraw stereo bonds**, available in the selection context menu, command palette and stereo notices, lets the automatic wedge chooser place the wedges again. It acts on the molecules touched by the selection, or the whole drawing with no selection. It normalises solid/hollow/bold and hash depictions to solid or hashed wedges while retaining configuration, coordinates, colours and other bond properties. Wavy and projection bonds stay as drawn. The command is undoable.
+
+Under **Show R/S and E/Z labels**, enable **Mark undefined stereocentres** to show muted **(?)** markers at undefined stereocentres and stereogenic double bonds. The document option starts off. Markers appear in figure exports only while visible; they are separate from chemical CIP labels. Generated-name notices list the specific units whose configurations are left unspecified.
+
 ## Native and chemical representation
 
 Native document version **6** added `double_position`, `secondary_display` and per-bond RGB `color`, with defaults for older files. The app still accepts native versions 1–5. Order 4 means aromatic; version 6 added order values 0 hydrogen, 5 dative, 6 quadruple and 7 fractional 1.5. These numeric values belong to ReShiki's file format, not chemical bond-order notation.

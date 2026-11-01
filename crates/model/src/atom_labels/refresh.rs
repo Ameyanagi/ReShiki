@@ -17,11 +17,14 @@ const MAX_CACHED_COMPONENTS: usize = 1024;
 pub const GENERIC_NOTICE: &str =
     "Chemical labels of generic structures are calculated after expansion";
 
+/// The assigned CIP descriptor and the separate undefined-configuration flag.
+type ComputedStereo = (Option<String>, bool);
+
 #[derive(Debug, Default)]
 pub struct Refresh {
     cache: HashMap<u64, Arc<Entry>>,
-    atoms: HashMap<u64, (u32, Option<String>)>,
-    bonds: HashMap<(u64, u64), Option<String>>,
+    atoms: HashMap<u64, (u32, Option<String>, bool)>,
+    bonds: HashMap<(u64, u64), ComputedStereo>,
     pub notice: Option<String>,
 }
 
@@ -33,12 +36,34 @@ struct Entry {
 
 #[derive(Debug, Default)]
 struct Computed {
-    atoms: Vec<(u64, u32, Option<String>)>,
-    bonds: Vec<((u64, u64), Option<String>)>,
+    atoms: Vec<(u64, u32, Option<String>, bool)>,
+    bonds: Vec<((u64, u64), ComputedStereo)>,
 }
 
 fn pair(a: u64, b: u64) -> (u64, u64) {
     (a.min(b), a.max(b))
+}
+
+/// Refreshes only the optional editor markers after an analysis response has
+/// replaced computed chemical labels. Ordinary refresh keeps this off-thread.
+pub fn refresh_undefined_stereo(document: &mut Document) {
+    let undefined = if document.atom_labels.mark_undefined_stereocentres {
+        crate::chemistry::stereo_lint::undefined(document)
+    } else {
+        Default::default()
+    };
+    let atoms: HashSet<_> = undefined.atoms.into_iter().collect();
+    let bonds: HashSet<_> = undefined
+        .bonds
+        .into_iter()
+        .map(|(a, b)| pair(a, b))
+        .collect();
+    for atom in &mut document.atoms {
+        atom.undefined_stereo = atoms.contains(&atom.id);
+    }
+    for bond in &mut document.bonds {
+        bond.undefined_stereo = bonds.contains(&pair(bond.a, bond.b));
+    }
 }
 
 impl Refresh {
@@ -86,7 +111,7 @@ impl Refresh {
                         computed
                             .atoms
                             .iter()
-                            .map(|(id, h, cip)| (*id, (*h, cip.clone()))),
+                            .map(|(id, h, cip, undefined)| (*id, (*h, cip.clone(), *undefined))),
                     );
                     refresh.bonds.extend(computed.bonds.iter().cloned());
                 }
@@ -110,14 +135,18 @@ impl Refresh {
     /// remain owned by the editor. The caller must check snapshot identity.
     pub fn apply(&self, document: &mut Document) {
         for atom in &mut document.atoms {
-            if let Some((h, cip)) = self.atoms.get(&atom.id) {
+            atom.undefined_stereo = false;
+            if let Some((h, cip, undefined)) = self.atoms.get(&atom.id) {
                 atom.label_h = *h;
                 atom.cip_label.clone_from(cip);
+                atom.undefined_stereo = *undefined;
             }
         }
         for bond in &mut document.bonds {
-            if let Some(cip) = self.bonds.get(&pair(bond.a, bond.b)) {
+            bond.undefined_stereo = false;
+            if let Some((cip, undefined)) = self.bonds.get(&pair(bond.a, bond.b)) {
                 bond.cip_label.clone_from(cip);
+                bond.undefined_stereo = *undefined;
             }
         }
     }
@@ -166,7 +195,7 @@ pub fn label_hydrogens(document: &Document, id: u64) -> Option<u32> {
     computed
         .atoms
         .into_iter()
-        .find_map(|(atom, h, _)| (atom == id).then_some(h))
+        .find_map(|(atom, h, _, _)| (atom == id).then_some(h))
 }
 
 /// Works out the hydrogen labels of the molecules an edit from `before`
@@ -223,7 +252,10 @@ pub fn refresh_edited(before: &Document, document: &mut Document) {
     }
     let distance_atoms = crate::models3d::crystal::analysis_atoms(document);
     let mut hydrogens = HashMap::new();
-    for component in components(document).0 {
+    for mut component in components(document).0 {
+        // This synchronous edit repair consumes only hydrogens. Leave the
+        // optional stereogenic-unit pass to the ordinary background refresh.
+        component.atom_labels.mark_undefined_stereocentres = false;
         if component.atoms.iter().any(|a| edited.contains(&a.id))
             && !component
                 .atoms
@@ -231,7 +263,7 @@ pub fn refresh_edited(before: &Document, document: &mut Document) {
                 .any(|a| distance_atoms.contains(&a.id))
             && let Ok(computed) = compute(&component)
         {
-            hydrogens.extend(computed.atoms.into_iter().map(|(id, h, _)| (id, h)));
+            hydrogens.extend(computed.atoms.into_iter().map(|(id, h, _, _)| (id, h)));
         }
     }
     for atom in &mut document.atoms {
@@ -256,21 +288,44 @@ fn compute(source: &Document) -> Result<Computed, String> {
     let drawing = chemistry::for_drawing(&molecule, source).map_err(|e| e.to_string())?;
     let labels = drawing.labels().map_err(|e| e.to_string())?;
     let checked = drawing.finish(labels).map_err(|e| e.to_string())?;
+    // Possible-centre perception is an optional editor aid. Keep it out of
+    // ordinary label refreshes and never place a question mark in CIP output.
+    let undefined = if source.atom_labels.mark_undefined_stereocentres {
+        crate::chemistry::stereo_lint::undefined(source)
+    } else {
+        Default::default()
+    };
+    let undefined_atoms: HashSet<_> = undefined.atoms.into_iter().collect();
+    let undefined_bonds: HashSet<_> = undefined
+        .bonds
+        .into_iter()
+        .map(|(a, b)| pair(a, b))
+        .collect();
     Ok(Computed {
         atoms: checked
             .atoms
             .into_iter()
-            .map(|a| (a.id, a.label_h, a.cip_label))
+            .map(|a| {
+                (
+                    a.id,
+                    a.label_h,
+                    a.cip_label,
+                    undefined_atoms.contains(&a.id),
+                )
+            })
             .collect(),
         bonds: checked
             .bonds
             .into_iter()
-            .map(|b| (pair(b.a, b.b), b.cip_label))
+            .map(|b| {
+                let edge = pair(b.a, b.b);
+                (edge, (b.cip_label, undefined_bonds.contains(&edge)))
+            })
             .collect(),
     })
 }
 
-fn components(document: &Document) -> (Vec<Document>, bool) {
+pub(crate) fn components(document: &Document) -> (Vec<Document>, bool) {
     let mut adjacent = HashMap::<u64, Vec<u64>>::new();
     for (a, b) in document.bonds.iter().map(|b| (b.a, b.b)).chain(
         document
@@ -298,7 +353,12 @@ fn components(document: &Document) -> (Vec<Document>, bool) {
                 }
             }
         }
-        result.push(Document::default());
+        let mut part = Document::default();
+        // The optional perception pass is part of the cache key. All other
+        // presentation settings remain outside the chemical snapshot.
+        part.atom_labels.mark_undefined_stereocentres =
+            document.atom_labels.mark_undefined_stereocentres;
+        result.push(part);
     }
     // Mark dependencies using the existing atom/component index before any
     // component copy or cache comparison. Never copy large typed definitions
@@ -324,6 +384,7 @@ fn components(document: &Document) -> (Vec<Document>, bool) {
         let mut atom = atom.clone();
         atom.label_h = 0;
         atom.cip_label = None;
+        atom.undefined_stereo = false;
         atom.display = Default::default();
         atom.text_style = None;
         atom.marks.clear();
@@ -340,6 +401,7 @@ fn components(document: &Document) -> (Vec<Document>, bool) {
         }
         let mut bond = bond.clone();
         bond.cip_label = None;
+        bond.undefined_stereo = false;
         bond.color = crate::palette::Color::Ink;
         bond.indicator = Default::default();
         bond.z_order = 0;

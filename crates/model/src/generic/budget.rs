@@ -803,7 +803,11 @@ pub(super) fn charge_ink_work(doc: &Document, work: &mut Work) -> Result<(), Str
             .cip_label
             .as_ref()
             .map_or(0, |v| v.len().saturating_add(2))
-            .saturating_add(FUTURE_CIP_LABELS.len().saturating_mul(3));
+            .saturating_add(FUTURE_CIP_LABELS.len().saturating_mul(3))
+            .saturating_add(
+                usize::from(doc.atom_labels.stereo && doc.atom_labels.mark_undefined_stereocentres)
+                    * 6,
+            );
         reserve(
             labels.saturating_mul(32).saturating_add(
                 labels

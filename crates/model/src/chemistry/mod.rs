@@ -3,3 +3,4 @@ pub use reshiki_chemistry::*;
 
 pub mod abbreviations;
 pub mod document;
+pub mod stereo_lint;

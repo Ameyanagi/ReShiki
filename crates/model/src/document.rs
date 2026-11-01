@@ -53,6 +53,9 @@ pub struct Atom {
     pub display: crate::atom_labels::AtomDisplay,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cip_label: Option<String>,
+    /// Computed editor aid; never an assigned stereochemical descriptor.
+    #[serde(skip)]
+    pub undefined_stereo: bool,
     pub id: u64,
     pub element: String,
     pub position: Point,
@@ -119,6 +122,9 @@ pub struct Bond {
     pub indicator: crate::atom_labels::StereoDisplay,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cip_label: Option<String>,
+    /// Computed editor aid; never an assigned stereochemical descriptor.
+    #[serde(skip)]
+    pub undefined_stereo: bool,
     pub a: u64,
     pub b: u64,
     /// 0 = hydrogen interaction; 1–3 = order; 4 = aromatic; 5 = dative;
@@ -439,6 +445,7 @@ impl Document {
         self.atoms.push(Atom {
             display: Default::default(),
             cip_label: None,
+            undefined_stereo: false,
             id,
             element: element.into(),
             position,

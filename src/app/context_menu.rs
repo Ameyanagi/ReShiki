@@ -404,6 +404,11 @@ impl App {
         let submenu = Entry::page;
         let mut entries = vec![];
         if atoms {
+            entries.push(command(
+                "Redraw stereo bonds",
+                Message::Stereo(super::stereo::Action::Redraw),
+                !self.tab.busy,
+            ));
             entries.extend(
                 self.selected_join_commands()
                     .into_iter()

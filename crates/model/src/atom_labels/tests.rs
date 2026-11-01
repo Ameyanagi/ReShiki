@@ -1,6 +1,113 @@
 use super::*;
 
 #[test]
+fn undefined_marker_setting_defaults_off_and_round_trips_only_when_enabled() {
+    let legacy: Settings = serde_json::from_value(serde_json::json!({ "stereo": true })).unwrap();
+    assert!(!legacy.mark_undefined_stereocentres);
+    let saved = serde_json::to_value(&legacy).unwrap();
+    assert!(saved.get("mark_undefined_stereocentres").is_none());
+    let enabled = Settings {
+        mark_undefined_stereocentres: true,
+        ..legacy
+    };
+    let saved = serde_json::to_value(&enabled).unwrap();
+    assert_eq!(saved["mark_undefined_stereocentres"], true);
+    assert_eq!(serde_json::from_value::<Settings>(saved).unwrap(), enabled);
+}
+
+#[test]
+fn existing_native_document_round_trips_without_marker_fields() {
+    let document = Document::from_json(include_bytes!(
+        "../../../../tests/fixtures/chemical-naming-rust/r-lactic-rust-native.rsk"
+    ))
+    .unwrap()
+    .current();
+    assert!(!document.atom_labels.mark_undefined_stereocentres);
+    let saved = document.file_json().unwrap();
+    let text = std::str::from_utf8(&saved).unwrap();
+    assert!(!text.contains("mark_undefined_stereocentres"));
+    assert!(!text.contains("undefined_stereo"));
+    let reopened = Document::from_json(&saved).unwrap();
+    assert_eq!(reopened, document);
+    assert_eq!(reopened.file_json().unwrap(), saved);
+}
+
+#[test]
+fn undefined_markers_follow_stereo_visibility_and_keep_cip_labels_separate() {
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::default());
+    let b = doc.add_atom("C", Point::new(42., 0.));
+    doc.add_bond(a, b, 2, "plain");
+    doc.atoms[0].undefined_stereo = true;
+    doc.atoms[0].display.stereo.offset = Some(Point::new(-10., -20.));
+    doc.bonds[0].undefined_stereo = true;
+    doc.bonds[0].indicator.offset = Some(Point::new(0., 20.));
+    for stereo in [false, true] {
+        for mark in [false, true] {
+            for show in [None, Some(false), Some(true)] {
+                doc.atom_labels.stereo = stereo;
+                doc.atom_labels.mark_undefined_stereocentres = mark;
+                doc.atoms[0].display.stereo.show = show;
+                doc.bonds[0].indicator.show = show;
+                let labels = indicators(&doc);
+                assert_eq!(
+                    labels.len(),
+                    if stereo && mark && show != Some(false) {
+                        2
+                    } else {
+                        0
+                    }
+                );
+                assert!(
+                    labels.iter().all(|i| i.text == "(?)"
+                        && i.style.color == crate::palette::Color::Custom([128; 3]))
+                );
+                assert_eq!(
+                    serde_json::to_value(&labels).unwrap(),
+                    serde_json::to_value(layout_indicators(&doc)).unwrap()
+                );
+                assert!(doc.atoms[0].cip_label.is_none() && doc.bonds[0].cip_label.is_none());
+            }
+        }
+    }
+    let labels = indicators(&doc);
+    assert_eq!(labels[0].owner, Owner::AtomStereo(a));
+    assert_eq!(labels[0].center, Point::new(-10., -20.));
+    assert_eq!(labels[1].owner, Owner::BondStereo(a, b));
+    assert_eq!(labels[1].center, Point::new(21., 20.));
+
+    doc.atoms[0].cip_label = Some("R".into());
+    doc.bonds[0].cip_label = Some("E".into());
+    let labels = indicators(&doc);
+    assert_eq!(labels[0].text, "(R)");
+    assert_eq!(labels[1].text, "(E)");
+    assert_eq!(labels[0].style, doc.atoms[0].display.stereo.style);
+    assert_eq!(labels[1].style, doc.bonds[0].indicator.style);
+}
+
+#[test]
+fn computed_undefined_flags_are_not_persisted_and_clear_with_other_stereo_labels() {
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::default());
+    let b = doc.add_atom("C", Point::new(42., 0.));
+    doc.add_bond(a, b, 2, "plain");
+    doc.atom_labels.mark_undefined_stereocentres = true;
+    let plain = doc.clone();
+    doc.atoms[0].undefined_stereo = true;
+    doc.bonds[0].undefined_stereo = true;
+    assert!(!crate::transaction::chemistry_changed(&plain, &doc));
+    let json = serde_json::to_value(&doc).unwrap();
+    assert!(json["atoms"][0].get("undefined_stereo").is_none());
+    assert!(json["bonds"][0].get("undefined_stereo").is_none());
+    let opened: Document = serde_json::from_value(json).unwrap();
+    assert!(!opened.atoms[0].undefined_stereo && !opened.bonds[0].undefined_stereo);
+    assert!(opened.atom_labels.mark_undefined_stereocentres);
+    assert!(!crate::transaction::chemistry_changed(&opened, &doc));
+    clear_computed(&mut doc);
+    assert!(!doc.atoms[0].undefined_stereo && !doc.bonds[0].undefined_stereo);
+}
+
+#[test]
 fn isolated_hydrogen_halides_read_hydrogen_first_and_respect_overrides() {
     for element in ["F", "Cl", "Br", "I"] {
         let mut doc = Document::default();

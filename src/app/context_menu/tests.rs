@@ -30,6 +30,23 @@ fn labels(app: &App, page: Page) -> Vec<&'static str> {
 }
 
 #[test]
+fn redraw_stereo_bonds_is_available_for_atom_selections_and_dispatches() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    assert!(!labels(&app, Page::Main).contains(&"Redraw stereo bonds"));
+    let atom = app.tab.doc.add_atom("C", World::default());
+    app.tab.selected = vec![atom];
+    assert!(labels(&app, Page::Main).contains(&"Redraw stereo bonds"));
+    run_item(&mut app, Page::Main, "Redraw stereo bonds").unwrap();
+    assert_eq!(app.status, "No stereocentres to redraw");
+    app.tab.busy = true;
+    assert_eq!(
+        enabled(&app, Page::Main, "Redraw stereo bonds"),
+        Some(false)
+    );
+}
+
+#[test]
 fn path_cleanup_entries_follow_eligible_selection_and_run_through_menu() {
     let (mut app, _) = App::new();
     app.tab.busy = false;

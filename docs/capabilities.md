@@ -34,6 +34,8 @@ The [scientific-symbols update](scientific-symbols.md) adds seven orbital shapes
 
 The [ring and catalog update](ring-presets.md) adds Chair A/B and Cyclopentadiene tools with previews, rotation, fusion and Alt connection by a bond. The library has **81 built-ins**, including 20 amino acids and five nucleobases, with frozen PubChem identity checks. Computed labels and molecular properties refresh automatically after edits; **Check structure** in Molecular properties recalculates them without adding an Undo step. The header **Check drawing** button runs the chemistry check. Current validation is **111 Rust and 32 Python tests**. These are drawing projections and molecular building blocks; there is no 3D conformational solver or peptide/nucleotide assembly workflow.
 
+[Stereo drawing checks](bond-tools.md#checking-and-redrawing-stereochemistry) flag ineffective, probably reversed, ambiguous or conflicting wedges and list undefined stereogenic units. Optional IUPAC style notes and **(?)** indicators start off. **Reverse** repairs the flagged bond directions, and **Redraw stereo bonds** reassigns wedges on selected molecules without moving atoms or changing configurations; both actions support Undo.
+
 The subsequent [JACS / ACS default-style update](jacs-style.md) adds publication dimensions, measured atom labels, inset ring double bonds and 1200 dpi PNG output. That update passed 20 Rust tests and 10 Python tests; the historical counts below describe earlier builds.
 
 The [workspace redesign](workspace-review.md) adds an original vector palette, contextual controls, inspector tabs, import drawer and tool shortcuts. That update passed 21 Rust tests and 10 Python tests, including actual-viewport fitting and preservation of manual camera movement.

@@ -13,6 +13,7 @@ impl App {
             self.tab.history.redo(&mut self.tab.doc)
         };
         if changed {
+            self.tab.stereo_notes.clear();
             self.tab
                 .nmr
                 .invalidate_if_changed(&self.tab.doc, self.tab.file_epoch);

@@ -367,7 +367,7 @@ fn chemistry_changed_ignores_display_only_fields() {
         assert_ne!(doc, base);
         doc
     };
-    let display: [(&str, Edit); 8] = [
+    let display: [(&str, Edit); 10] = [
         ("z_order", &|doc| doc.bonds[0].z_order = 3),
         ("color", &|doc| doc.bonds[0].color = BLUE),
         ("highlight", &|doc| doc.bonds[0].highlight = Some(BLUE)),
@@ -376,6 +376,12 @@ fn chemistry_changed_ignores_display_only_fields() {
         }),
         ("atom cip_label", &|doc| {
             doc.atom_mut(a).unwrap().cip_label = Some("R".into())
+        }),
+        ("bond undefined_stereo", &|doc| {
+            doc.bonds[0].undefined_stereo = true
+        }),
+        ("atom undefined_stereo", &|doc| {
+            doc.atom_mut(a).unwrap().undefined_stereo = true
         }),
         ("label_h", &|doc| doc.atom_mut(a).unwrap().label_h = 2),
         ("text_style", &|doc| {

@@ -58,6 +58,7 @@ pub fn replace(doc: &Document, selection: &[u64], label: &str) -> Result<Documen
         atom.aromatic = false;
         atom.stereo = None;
         atom.cip_label = None;
+        atom.undefined_stereo = false;
     }
     for bond in &mut result.bonds {
         if members.contains(&bond.a) && members.contains(&bond.b) {

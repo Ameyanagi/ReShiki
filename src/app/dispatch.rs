@@ -172,6 +172,7 @@ impl App {
             Message::Import => return Some(self.import_input()),
             Message::Example(smiles) => return Some(self.insert_example(smiles)),
             Message::Analyze => return Some(self.analyze_drawing()),
+            Message::Stereo(action) => self.stereo_action(action),
             Message::Cleanup(action) => return Some(self.cleanup_action(action)),
             Message::Undo => self.step_history(false),
             Message::Redo => self.step_history(true),

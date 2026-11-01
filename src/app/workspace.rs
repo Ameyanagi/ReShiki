@@ -2243,7 +2243,13 @@ impl App {
                     .on_toggle(|v| Message::Labels(A::Stereo(v))),
             )
             .push(
-                text("Labels update after chemical edits. Unassigned centers have no R/S label.")
+                checkbox(self.tab.doc.atom_labels.mark_undefined_stereocentres)
+                    .label("Mark undefined stereocentres")
+                    .text_size(12)
+                    .on_toggle_maybe((stereo && self.tab.doc.atom_labels.stereo).then_some(|v| Message::Labels(A::MarkUndefined(v)))),
+            )
+            .push(
+                text("Labels update after chemical edits. (?) marks undefined configuration when enabled.")
                     .size(11)
                     .style(muted_text),
             );
@@ -2255,6 +2261,47 @@ impl App {
             } else {
                 line.style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61)))
             });
+        }
+        body = body
+            .push(
+                command("Check drawing", Message::Analyze)
+                    .on_press_maybe((!self.tab.busy).then_some(Message::Analyze)),
+            )
+            .push(
+                checkbox(self.appearance.iupac_style_notes)
+                    .label("IUPAC style notes in Check drawing")
+                    .text_size(12)
+                    .on_toggle(|v| Message::Stereo(super::stereo::Action::IupacStyleNotes(v))),
+            );
+        self.stereo_note_lines(body)
+    }
+
+    pub(super) fn stereo_note_lines<'a>(
+        &'a self,
+        mut body: iced::widget::Column<'a, Message>,
+    ) -> iced::widget::Column<'a, Message> {
+        use super::stereo::Action;
+        for (index, note) in self.tab.stereo_notes.iter().enumerate() {
+            body = body.push(
+                button(text(&note.message).size(11).style(muted_text))
+                    .on_press(Message::Stereo(Action::Select(index)))
+                    .padding([4, 0])
+                    .style(button::text),
+            );
+        }
+        if self
+            .tab
+            .stereo_notes
+            .iter()
+            .any(|note| note.kind == reshiki::chemistry::stereo_lint::Kind::Reversed)
+        {
+            body = body.push(command("Reverse", Message::Stereo(Action::Reverse)));
+        }
+        if !self.tab.stereo_notes.is_empty() {
+            body = body.push(command(
+                "Redraw stereo bonds",
+                Message::Stereo(Action::Redraw),
+            ));
         }
         body
     }

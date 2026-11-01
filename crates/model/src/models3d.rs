@@ -1929,6 +1929,7 @@ fn chemistry(doc: &Document, ids: &HashSet<u64>) -> (Vec<Atom>, Vec<Bond>) {
         .map(|a| Atom {
             display: Default::default(),
             cip_label: None,
+            undefined_stereo: false,
             position: Point::default(),
             depth: 0.,
             marks: vec![],
@@ -1952,6 +1953,7 @@ fn chemistry(doc: &Document, ids: &HashSet<u64>) -> (Vec<Atom>, Vec<Bond>) {
             z_order: 0,
             indicator: Default::default(),
             cip_label: None,
+            undefined_stereo: false,
             double_position: Default::default(),
             secondary_display: None,
             color: Default::default(),
