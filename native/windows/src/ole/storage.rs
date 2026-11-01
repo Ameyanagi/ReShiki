@@ -351,7 +351,7 @@ impl Drawing {
             pointl: POINTL::default(),
             dwStatus: OLEMISC_CANTLINKINSIDE.0 as u32,
             dwFullUserTypeName: header_size as u32,
-            dwSrcOfCopy: 0,
+            dwSrcOfCopy: header_size as u32,
         };
         let mut bytes = descriptor_header_bytes(&descriptor);
         bytes.extend(label.into_iter().flat_map(u16::to_le_bytes));

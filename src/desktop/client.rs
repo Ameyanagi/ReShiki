@@ -202,6 +202,8 @@ fn watch_session(session: PreparedSession, mut extras: Vec<NativePath>) -> i32 {
         Command::Commit { token },
     );
     let _ = client.call(&commit, HANDOFF);
+    #[cfg(windows)]
+    native::end_launch_feedback();
     let query = Request::new(
         token,
         Some(generation),
