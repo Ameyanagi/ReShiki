@@ -79,9 +79,14 @@ fn retained_chain_name(length: usize, key: &str, count: usize) -> Option<String>
         (1, "thiourea", 1) => "thiourea",
         (1, "nitrile", 1) => "formonitrile",
         (2, "nitrile", 1) => "acetonitrile",
+        (1, "nitrile_O", 1) => "formonitrile oxide",
+        (2, "nitrile_O", 1) => "acetonitrile oxide",
+        (1, "aldehyde", 1) => "formaldehyde",
+        (2, "aldehyde", 1) => "acetaldehyde",
         (1, "ester" | "carboxylate", 1) => "formate",
         (2, "ester" | "carboxylate", 1) => "acetate",
         (2, "carboxylic_acid", 2) => "oxalic acid",
+        (2, "amide", 2) => "oxamide",
         _ => "",
     };
     if !name.is_empty() {
@@ -173,6 +178,17 @@ pub fn promote_benzene_retained_name(parts: &mut AssemblyParts) {
             parts.unsaturations.clear();
         }
     }
+    // Unsubstituted anisole is the PIN (P-34.1.1.4).
+    if parts.retained_name.as_deref() == Some("benzene")
+        && !parts.is_substituent
+        && parts.principal_group.is_none()
+        && let [item] = parts.substituents.as_slice()
+        && item.name == "methoxy"
+        && item.locants.len() == 1
+    {
+        parts.retained_name = Some("anisole".into());
+        parts.substituents.clear();
+    }
 }
 pub fn promote_retained_functional_parent(parts: &mut AssemblyParts) -> Result<(), String> {
     let Some(group) = parts.principal_group.as_ref() else {
@@ -227,7 +243,19 @@ pub fn promote_retained_functional_parent(parts: &mut AssemblyParts) -> Result<(
             retained = retained_chain_name(parts.parent_length, &group.key, locs.len());
         }
         if let Some(name) = retained.as_deref() {
-            if !parts.substituents.is_empty() && ["oxalic acid", "formonitrile"].contains(&name) {
+            // Substituted formyl parents follow P-65.1.8; substituted acetaldehyde
+            // and N-substituted oxamide keep their systematic names here.
+            if !parts.substituents.is_empty()
+                && [
+                    "oxalic acid",
+                    "formonitrile",
+                    "formonitrile oxide",
+                    "formaldehyde",
+                    "acetaldehyde",
+                    "oxamide",
+                ]
+                .contains(&name)
+            {
                 return Ok(());
             }
             if [

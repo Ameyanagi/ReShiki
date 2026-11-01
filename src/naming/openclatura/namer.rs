@@ -439,7 +439,7 @@ pub(super) fn name_subgraph_rendered(
     )?;
     let text = super::ionic_naming::apply_cationic_imino_names(&text, mol)?;
     let text = super::assembler::post_process_name(&text);
-    super::assembler::mark_assembled_name(mol, &parts, &text);
+    super::assembler::mark_assembled_name(mol, &parts);
     Ok(RenderedSubstituentName {
         text,
         outer_parentheses_optional: !parts.stereo_features.is_empty(),

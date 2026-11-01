@@ -426,7 +426,7 @@ pub(super) fn render_component_parent(
         super::ionic_naming::apply_cationic_imino_parent_prefixes(&name, mol, numbered, locants)?;
     let name = super::ionic_naming::apply_cationic_imino_names(&name, mol)?;
     let name = super::assembler::post_process_name(&name);
-    super::assembler::mark_assembled_name(mol, parts, &name);
+    super::assembler::mark_assembled_name(mol, parts);
     Ok(name)
 }
 

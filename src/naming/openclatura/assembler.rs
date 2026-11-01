@@ -17,11 +17,7 @@ use crate::naming::{NameReason, NameStatus};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Record departures only after promotions and final text selection have run.
-pub(super) fn mark_assembled_name(
-    mol: &super::molecule::Molecule,
-    parts: &AssemblyParts,
-    name: &str,
-) {
+pub(super) fn mark_assembled_name(mol: &super::molecule::Molecule, parts: &AssemblyParts) {
     if let Some(group) = &parts.principal_group {
         let rule = group
             .resolved_rule
@@ -30,10 +26,11 @@ pub(super) fn mark_assembled_name(
         if rule.is_some_and(|rule| rule.families.contains("hydrazone")) {
             mol.mark_name(NameStatus::NotPreferred(NameReason::FunctionalClass));
         }
-        // Acyl cyanides and nitrile oxides keep these names in preferred names,
-        // but formonitrile and acetonitrile are retained parents.
+        // Formonitrile and acetonitrile oxide are retained (P-66.5.4.1);
+        // substituted formonitrile oxide stays systematic (P-65.1.8).
         if !parts.is_ring
             && parts.parent_length <= 2
+            && !parts.retained_absorbs_principal_group
             && rule.is_some_and(|rule| rule.suffix.as_deref() == Some("nitrile oxide"))
         {
             mol.mark_name(NameStatus::NotPreferred(NameReason::UnretainedParent));
@@ -64,12 +61,11 @@ pub(super) fn mark_assembled_name(
     let formyl_parent = parts.retained_name.as_deref().is_some_and(|name| {
         matches!(name, "formic acid" | "formate" | "formamide") || name.starts_with("formyl ")
     });
-    if name == "methoxybenzene"
-        || formyl_parent
-            && parts
-                .substituents
-                .iter()
-                .any(|item| !item.locants.iter().any(|locant| locant.starts_with('N')))
+    if formyl_parent
+        && parts
+            .substituents
+            .iter()
+            .any(|item| !item.locants.iter().any(|locant| locant.starts_with('N')))
     {
         mol.mark_name(NameStatus::NotPreferred(NameReason::UnretainedParent));
     }

@@ -130,7 +130,7 @@ impl NameReason {
                 "Uses a substituted parent hydride such as dimethylsulfane or trimethylazane; preferred IUPAC names use (methylsulfanyl)methane or N,N-dimethylmethanamine (P-63.2.5, P-62.2.1)."
             }
             Self::UnretainedParent => {
-                "Uses a systematic parent such as methanal, ethanediamide, methanenitrile or a substituted formic acid, formyl halide or formamide; preferred IUPAC names use formaldehyde, oxamide, anisole, formonitrile, or carbamic or carbonic acid (P-65.1.8.1)."
+                "Uses a substituted methanal or methanenitrile oxide, an N-substituted ethanediamide, or a formic acid, formyl halide or formamide substituted on carbon; preferred IUPAC names use N-substituted oxamide (P-66.1.1.1.2.1) or carbonic and carbamic acid derivatives such as carbonochloridic acid (P-65.1.8.1)."
             }
             Self::FusionPrefix => {
                 "Uses a fusion prefix such as oxazolo or isoxazolo; the preferred IUPAC name cites the heteroatom locants, as in [1,3]oxazolo or [1,2]oxazolo (P-25.3.2.2.2)."

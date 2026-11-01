@@ -174,23 +174,23 @@ name and Insert caption use the name text alone.
 | Tag                                           | Meaning                                                                                       |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | Preferred IUPAC name                          | No rule on the name's path is known to depart from the PIN rules.                             |
-| Systematic name, not the preferred IUPAC name | The name is correct but uses a form the PIN rules do not, such as `methanal`.                 |
+| Systematic name, not the preferred IUPAC name | The name is correct but uses a form the PIN rules do not, such as `dimethyl sulfoxide`.       |
 | Systematic name, preference not verified      | The name took a path whose PIN choice has not been checked, such as an OPSIN-numbered fusion. |
 
 The engine marks the status where it makes the choice, so the name text is
 unchanged. A naming attempt it discards leaves no mark. Reasons for a name
 that is not the PIN:
 
-| Reason                    | Example the engine writes                                                  | Preferred form                                                |
-| ------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `sulfonyl_prefix`         | `N-methyltosylamino`, `(methylsulfinyl)amino`                              | `N,4-dimethylbenzene-1-sulfonamido`, `methanesulfinamido`     |
-| `amino_prefix`            | `3-methylguanidino`                                                        | `(N-methylcarbamimidoyl)amino`                                |
-| `functional_class`        | `dimethyl sulfoxide`, `acetaldehyde hydrazone`, `trimethylphosphane oxide` | substitutive names                                            |
-| `hydride_parent`          | `dimethylsulfane`, `trimethylazane`                                        | `(methylsulfanyl)methane`, `N,N-dimethylmethanamine`          |
-| `unretained_parent`       | `methanal`, `ethanediamide`, `methoxybenzene`, `hydroxyformyl chloride`    | `formaldehyde`, `oxamide`, `anisole`, `carbonochloridic acid` |
-| `fusion_prefix`           | `oxazolo[4,5-b]pyridine`, `isoxazolo`                                      | `[1,3]oxazolo[4,5-b]pyridine`, `[1,2]oxazolo`                 |
-| `diamide_locants`         | `N,N'-diethylpropanediamide`                                               | `N1,N3-diethylpropanediamide`                                 |
-| `multiple_bond_numbering` | `pent-4-en-1-yne`                                                          | `pent-1-en-4-yne`                                             |
+| Reason                    | Example the engine writes                                                  | Preferred form                                            |
+| ------------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `sulfonyl_prefix`         | `N-methyltosylamino`, `(methylsulfinyl)amino`                              | `N,4-dimethylbenzene-1-sulfonamido`, `methanesulfinamido` |
+| `amino_prefix`            | `3-methylguanidino`                                                        | `(N-methylcarbamimidoyl)amino`                            |
+| `functional_class`        | `dimethyl sulfoxide`, `acetaldehyde hydrazone`, `trimethylphosphane oxide` | substitutive names                                        |
+| `hydride_parent`          | `dimethylsulfane`, `trimethylazane`                                        | `(methylsulfanyl)methane`, `N,N-dimethylmethanamine`      |
+| `unretained_parent`       | `N-methylethanediamide`, `hydroxyformyl chloride`                          | `N1-methyloxamide`, `carbonochloridic acid`               |
+| `fusion_prefix`           | `oxazolo[4,5-b]pyridine`, `isoxazolo`                                      | `[1,3]oxazolo[4,5-b]pyridine`, `[1,2]oxazolo`             |
+| `diamide_locants`         | `N,N'-diethylpropanediamide`                                               | `N1,N3-diethylpropanediamide`                             |
+| `multiple_bond_numbering` | `pent-4-en-1-yne`                                                          | `pent-1-en-4-yne`                                         |
 
 Reasons for an unverified name: `opsin_fusion_layout` (fusion numbering chosen
 for OPSIN compatibility), `bridged_fused_parent`, `unaudited_parent`
@@ -235,10 +235,16 @@ nomenclature (P-65.1.1.2.2, P-66.5.1.2.3): `propanenitrile`, `butanenitrile`,
 `hexanedioic acid`, not propionitrile, butyronitrile, malonic, succinic,
 glutaric or adipic acid. HCN is `formonitrile` (P-66.5.1.2.1).
 
-`unretained_parent` also covers formic acids, formyl halides and formamides
+The retained PINs `formaldehyde`, `acetaldehyde` (P-66.6.1.2.1), `anisole`
+(P-34.1.1.4), `oxamide` (P-66.1.1.1.2.1), `formonitrile oxide` and
+`acetonitrile oxide` (P-66.5.4.1) name the unsubstituted compounds;
+`2-chloroacetonitrile oxide` is substituted like acetonitrile. Substituted
+anisoles such as `1-chloro-4-methoxybenzene` are preferred names (P-63.2.3).
+`unretained_parent` stays on substituted methanal and methanenitrile oxide,
+N-substituted ethanediamides, and formic acids, formyl halides and formamides
 substituted on carbon, which are carbamic or carbonic acid derivatives
-(P-65.1.8.1). Substituted anisoles such as `1-chloro-4-methoxybenzene` are
-preferred names (P-63.2.3).
+(P-65.1.8.1): the engine writes `methyl (thiophene-2-carboxamido)formate`
+for methyl (thiophene-2-carbonyl)carbamate.
 
 Enclosing marks nest in the P-16.5.4 order `{[({[( )]})]}`:
 `2-[4-(2-methylpropyl)phenyl]propanoic acid`,

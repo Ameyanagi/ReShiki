@@ -365,6 +365,14 @@ mod tests {
             ("O=C(O)CCCC(=O)O", "pentanedioic acid"),
             ("O=C(O)CCCCC(=O)O", "hexanedioic acid"),
             ("C#N", "formonitrile"),
+            // Retained PINs (P-66.6.1.2.1, P-34.1.1.4, P-66.1.1.1.2.1, P-66.5.4.1).
+            ("C=O", "formaldehyde"),
+            ("CC=O", "acetaldehyde"),
+            ("COc1ccccc1", "anisole"),
+            ("NC(=O)C(N)=O", "oxamide"),
+            ("C#[N+][O-]", "formonitrile oxide"),
+            ("CC#[N+][O-]", "acetonitrile oxide"),
+            ("ClCC#[N+][O-]", "2-chloroacetonitrile oxide"),
             // Anilino (P-62.2.1.1.1) and carbamimidoylamino (P-66.4.1.2.1.3)
             // prefixes; contractions still read anilino as phenylamino.
             ("O=C(O)CNc1ccccc1", "2-anilinoacetic acid"),
@@ -411,7 +419,11 @@ mod tests {
             ("CS(C)=O", "dimethyl sulfoxide", R::FunctionalClass),
             ("CN(C)C", "trimethylazane", R::HydrideParent),
             ("CP(C)(C)=O", "trimethylphosphane oxide", R::FunctionalClass),
-            ("C#[N+][O-]", "methanenitrile oxide", R::UnretainedParent),
+            (
+                "ClC#[N+][O-]",
+                "chloromethanenitrile oxide",
+                R::UnretainedParent,
+            ),
             (
                 "CCC(C)=NN=CC",
                 "butan-2-one ethan-1-ylidenehydrazone",
@@ -420,10 +432,11 @@ mod tests {
             ("CO[Se]C", "dimethyl selenoperoxide", R::FunctionalClass),
             ("CSC", "dimethylsulfane", R::HydrideParent),
             ("CSSC", "1,2-dimethyldisulfane", R::HydrideParent),
-            ("C=O", "methanal", R::UnretainedParent),
-            ("CC=O", "ethanal", R::UnretainedParent),
-            ("COc1ccccc1", "methoxybenzene", R::UnretainedParent),
-            ("NC(=O)C(N)=O", "ethanediamide", R::UnretainedParent),
+            (
+                "CNC(=O)C(N)=O",
+                "N-methylethanediamide",
+                R::UnretainedParent,
+            ),
             (
                 "CN(C=O)C(=O)O",
                 "1-(N-methylformamido)formic acid",
