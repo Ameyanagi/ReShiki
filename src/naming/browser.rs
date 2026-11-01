@@ -74,13 +74,20 @@ pub async fn generate_name(identity: &Identity, cancel: Cancel) -> Result<Record
     let request = reverse::generate_request(&expected)?;
     let output = exchange(&request, &cancel, GENERATE_CANCELLED).await?;
     let candidate = reverse::parse_response(&output, &expected)?;
-    let reconstructed = resolve_name(&candidate, cancel)
-        .await
-        .map_err(|error| match error {
-            Error::Cancelled(_) => Error::Cancelled(GENERATE_CANCELLED.into()),
-            error => error,
-        })?;
-    reverse::generated_record(identity, expected, candidate, &reconstructed)
+    let reconstructed =
+        resolve_name(&candidate.text, cancel)
+            .await
+            .map_err(|error| match error {
+                Error::Cancelled(_) => Error::Cancelled(GENERATE_CANCELLED.into()),
+                error => error,
+            })?;
+    reverse::generated_record(
+        identity,
+        expected,
+        candidate.text,
+        candidate.status,
+        &reconstructed,
+    )
 }
 
 /// What the worker posted: `null` once loaded, then the response bytes or

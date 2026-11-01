@@ -971,6 +971,36 @@ impl App {
         }
         commands.extend(self.selected_join_commands());
         commands.extend(self.selected_attach_commands());
+        if let Some(graphic) = self.selected_open_paths().next() {
+            use reshiki::arrows::Head;
+            let heads = graphic.heads.unwrap_or_default();
+            for (start, current) in [(true, heads.tail), (false, heads.head)] {
+                let add = current == Head::None;
+                let label = match (start, add) {
+                    (true, true) => "Start head",
+                    (true, false) => "No start head",
+                    (false, true) => "End head",
+                    (false, false) => "No end head",
+                };
+                let head = if add { Head::Full } else { Head::None };
+                commands.push(RowCommand {
+                    label,
+                    menu: label,
+                    hint: match (start, add) {
+                        (true, true) => "Add an arrowhead at the path's start",
+                        (true, false) => "Remove the arrowhead at the path's start",
+                        (false, true) => "Add an arrowhead at the path's end",
+                        (false, false) => "Remove the arrowhead at the path's end",
+                    },
+                    message: Message::Graphics(if start {
+                        super::graphics::Action::Tail(head)
+                    } else {
+                        super::graphics::Action::Head(head)
+                    }),
+                    enabled: true,
+                });
+            }
+        }
         commands.push(RowCommand {
             label: "Group",
             menu: "Group",

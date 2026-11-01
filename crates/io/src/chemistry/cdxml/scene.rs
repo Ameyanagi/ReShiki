@@ -552,6 +552,7 @@ fn read_captions_and_arrows(
                             "None" | "Unspecified"
                         )
                     })
+                    && arrows.legacy_curve(ordinal, prepared.source_scale)?
             {
                 base.arrows.push(arrows.read(
                     ordinal,

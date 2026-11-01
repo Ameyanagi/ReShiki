@@ -476,7 +476,7 @@ fn every_posix_recipe_parses_and_the_example_is_a_raw_compose_proposal() {
         assert!(args::parse(command, rest).is_ok(), "{line}");
         count += 1;
     }
-    assert_eq!(count, 10);
+    assert_eq!(count, 11);
     let example: Value = serde_json::from_str(include_str!("esterification.json")).unwrap();
     assert!(
         reshiki_agent::ops::catalog::decode_check(

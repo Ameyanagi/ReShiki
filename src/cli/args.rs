@@ -29,6 +29,7 @@ pub(crate) enum Command {
     Render(Render),
     Compose(Compose),
     Analyze(Input),
+    Name(Name),
 }
 
 /// A schema the CLI can print without a tool host.
@@ -50,6 +51,13 @@ pub(crate) enum Source {
 pub(crate) struct Input {
     pub(crate) source: Source,
     pub(crate) format: String,
+}
+
+/// `name`: one structure, with optional preference status in JSON.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Name {
+    pub(crate) input: Input,
+    pub(crate) json: bool,
 }
 
 /// Where the output goes.
@@ -132,6 +140,13 @@ pub(crate) fn parse(name: &OsStr, rest: &[OsString]) -> Result<Command, String> 
         "render" => render(&options(spec, rest)?),
         "compose" => compose(&options(spec, rest)?),
         "analyze" => input(spec.name, &options(spec, rest)?).map(Command::Analyze),
+        "name" => {
+            let options = options(spec, rest)?;
+            Ok(Command::Name(Name {
+                input: input(spec.name, &options)?,
+                json: options.json,
+            }))
+        }
         _ => Err(unknown_command(&lossy)),
     }
 }
@@ -143,7 +158,8 @@ fn unknown_command(name: &str) -> String {
 
 /// The usage message for an option `command` does not take: a file command's
 /// flag names the command; any other flag, such as help's --json, stays an
-/// unknown option there, as it was before another command took it.
+/// unknown option there, as it was before another command took it. `name`
+/// is excluded from FILE_COMMANDS to preserve these errors for --json.
 fn foreign_option(command: &str, token: &OsStr) -> String {
     match commands::FILE_COMMANDS
         .iter()
@@ -213,6 +229,7 @@ struct Options {
     pages: bool,
     force: bool,
     receipt: bool,
+    json: bool,
 }
 
 /// Splits `tokens` into the command's options and one positional input.
@@ -266,6 +283,7 @@ fn options(spec: &CommandSpec, tokens: &[OsString]) -> Result<Options, String> {
                 "--pages" => options.pages = true,
                 "--force" => options.force = true,
                 "--receipt" => options.receipt = true,
+                "--json" => options.json = true,
                 _ => {}
             }
         }

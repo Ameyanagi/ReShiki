@@ -1,9 +1,43 @@
 use super::*;
 use crate::{
     arrows::{Head, HeadShape, NoGo},
-    graphics::{GraphicKind, LinePattern},
+    graphics::{GraphicKind, LinePattern, PathHeads},
     scientific::MarkKind,
 };
+
+fn head_attributes(heads: &PathHeads, scalar: fn(f32) -> f64) -> [(&'static str, String); 6] {
+    let head = |h| match h {
+        Head::Full => "Full",
+        Head::None => "None",
+        Head::Left => "HalfLeft",
+        Head::Right => "HalfRight",
+    };
+    let integer = |v: f64| format!("{:.0}", v.round_ties_even());
+    let length = (scalar(heads.head_length_pt) * 100.).round_ties_even();
+    // Keep the rounded center within the importer's 0–0.9 notch range.
+    let center = (length * (1. - scalar(heads.head_notch)))
+        .round_ties_even()
+        .clamp((length / 10.).ceil(), length);
+    [
+        ("ArrowheadHead", head(heads.head).into()),
+        ("ArrowheadTail", head(heads.tail).into()),
+        (
+            "ArrowheadType",
+            match heads.shape {
+                HeadShape::Solid => "Solid",
+                HeadShape::Hollow => "Hollow",
+                HeadShape::Open => "Angle",
+            }
+            .into(),
+        ),
+        ("HeadSize", integer(length)),
+        ("ArrowheadCenterSize", integer(center)),
+        (
+            "ArrowheadWidth",
+            integer(scalar(heads.head_width_pt) * 100.),
+        ),
+    ]
+}
 
 impl Writer<'_> {
     pub(super) fn arrows(&mut self) -> Result<()> {
@@ -59,55 +93,39 @@ impl Writer<'_> {
                     "This curved arrow decoration requires native or image export",
                 ));
             }
-            let head = |h| match h {
-                Head::Full => "Full",
-                Head::None => "None",
-                Head::Left => "HalfLeft",
-                Head::Right => "HalfRight",
-            };
             let integer = |v: f64| format!("{:.0}", v.round_ties_even());
             let id = self.id()?;
             let color = self.color(s.color)?;
             let n = self.tree.add(
                 Some(self.page),
                 if curved { "curve" } else { "arrow" },
-                [
-                    ("id", id),
-                    ("ArrowheadHead", head(s.head).into()),
-                    ("ArrowheadTail", head(s.tail).into()),
-                    (
-                        "ArrowheadType",
-                        match s.shape {
-                            HeadShape::Solid => "Solid",
-                            HeadShape::Hollow => "Hollow",
-                            HeadShape::Open => "Angle",
-                        }
-                        .into(),
-                    ),
-                    ("HeadSize", integer(style_real(s.head_length_pt) * 100.)),
-                    (
-                        "ArrowheadCenterSize",
-                        integer(
-                            style_real(s.head_length_pt) * (1. - style_real(s.head_notch)) * 100.,
+                [("id", id)]
+                    .into_iter()
+                    .chain(head_attributes(
+                        &PathHeads {
+                            head: s.head,
+                            tail: s.tail,
+                            shape: s.shape,
+                            head_length_pt: s.head_length_pt,
+                            head_width_pt: s.head_width_pt,
+                            head_notch: s.head_notch,
+                        },
+                        style_real,
+                    ))
+                    .chain([
+                        ("LineWidth", number(style_real(s.width_pt))),
+                        (
+                            "LineType",
+                            if s.pattern == LinePattern::Dashed {
+                                "Dashed"
+                            } else {
+                                "Solid"
+                            }
+                            .into(),
                         ),
-                    ),
-                    (
-                        "ArrowheadWidth",
-                        integer(style_real(s.head_width_pt) * 100.),
-                    ),
-                    ("LineWidth", number(style_real(s.width_pt))),
-                    (
-                        "LineType",
-                        if s.pattern == LinePattern::Dashed {
-                            "Dashed"
-                        } else {
-                            "Solid"
-                        }
-                        .into(),
-                    ),
-                    ("FillType", "None".into()),
-                    ("color", color),
-                ],
+                        ("FillType", "None".into()),
+                        ("color", color),
+                    ]),
             )?;
             if s.no_go != NoGo::None {
                 self.tree.set(
@@ -462,6 +480,11 @@ impl Writer<'_> {
                 }
                 parsed.push((part.style, paths));
             }
+            // Closed and compound paths draw no heads.
+            let heads = match parsed.as_slice() {
+                [(_, paths)] if matches!(paths.as_slice(), [(_, false)]) => g.heads.as_ref(),
+                _ => None,
+            };
             let parent = if parsed.len() > 1
                 || parsed
                     .iter()
@@ -498,6 +521,11 @@ impl Writer<'_> {
                             paint.pattern == LinePattern::Dashed,
                             z,
                         )?;
+                        if let Some(heads) = heads {
+                            for (name, value) in head_attributes(heads, real) {
+                                self.tree.set(n, name, value)?;
+                            }
+                        }
                         object = Some(if parent != self.page { parent } else { n });
                     }
                 }

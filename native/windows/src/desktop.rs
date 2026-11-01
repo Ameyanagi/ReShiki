@@ -11,7 +11,8 @@ use windows::{
     Win32::{
         Foundation::{
             ERROR_BROKEN_PIPE, ERROR_IO_PENDING, ERROR_PIPE_CONNECTED, FILETIME, GENERIC_READ,
-            GENERIC_WRITE, HANDLE, HLOCAL, LocalFree, WAIT_ABANDONED, WAIT_OBJECT_0, WAIT_TIMEOUT,
+            GENERIC_WRITE, HANDLE, HLOCAL, LPARAM, LocalFree, WAIT_ABANDONED, WAIT_OBJECT_0,
+            WAIT_TIMEOUT, WPARAM,
         },
         Security::{
             Authorization::{
@@ -36,9 +37,13 @@ use windows::{
             RemoteDesktop::ProcessIdToSessionId,
             Threading::{
                 CreateEventW, CreateMutexW, GetCurrentProcess, GetCurrentProcessId,
-                GetProcessTimes, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
-                PROCESS_SYNCHRONIZE, ReleaseMutex, WaitForSingleObject,
+                GetCurrentThreadId, GetProcessTimes, OpenProcess, OpenProcessToken,
+                PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, ReleaseMutex,
+                WaitForSingleObject,
             },
+        },
+        UI::WindowsAndMessaging::{
+            GetMessageW, MSG, PM_NOREMOVE, PeekMessageW, PostThreadMessageW, WM_NULL,
         },
     },
     core::{PCWSTR, PWSTR},
@@ -47,6 +52,18 @@ use windows::{
 const PIPE_INSTANCES: u32 = 16;
 const PIPE_BUFFER_SIZE: u32 = 4096;
 const RETRY_SLEEP: Duration = Duration::from_millis(10);
+
+/// Ends the app-starting cursor Windows shows while this windowless process
+/// runs: launch feedback stops at the first GetMessage.
+pub fn end_launch_feedback() {
+    let mut message = MSG::default();
+    // SAFETY: The message buffer is live; WM_NULL is posted to this thread's queue.
+    unsafe {
+        let _ = PeekMessageW(&mut message, None, 0, 0, PM_NOREMOVE);
+        let _ = PostThreadMessageW(GetCurrentThreadId(), WM_NULL, WPARAM(0), LPARAM(0));
+        let _ = GetMessageW(&mut message, None, 0, 0);
+    }
+}
 
 fn error(error: windows::core::Error) -> io::Error {
     io::Error::other(error.to_string())

@@ -9,6 +9,7 @@ of adaptations, copyright notices, and license texts are recorded in:
 
   crates/opsin/           OPSIN algorithms, resources, and fixtures, main after 2.9.0 (MIT)
   licenses/rdkit/          Molecular algorithms, data, and reference fixtures
+  licenses/openclatura/    Structure-to-name port, rule tables, and fixtures (MIT)
   licenses/cdxml-native/   Molecular interchange parser adaptations
   licenses/inchi/          InChIKey adaptations and the Rust InChI kernel
   licenses/cpython/        Numerical algorithm adaptations

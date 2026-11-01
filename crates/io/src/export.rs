@@ -1,11 +1,39 @@
 use crate::{document::Document, scene};
 
 pub fn parse_svg(svg: String) -> Result<resvg::usvg::Tree, String> {
+    parse_svg_with_fontdb(&svg, crate::style::fontdb())
+}
+
+fn parse_svg_with_fontdb(
+    svg: &str,
+    fontdb: std::sync::Arc<resvg::usvg::fontdb::Database>,
+) -> Result<resvg::usvg::Tree, String> {
+    let default_selector = resvg::usvg::FontResolver::default_font_selector();
     let options = resvg::usvg::Options {
-        fontdb: crate::style::fontdb(),
+        fontdb,
+        font_resolver: resvg::usvg::FontResolver {
+            select_font: Box::new(move |font, db| {
+                default_selector(font, db).or_else(|| {
+                    let family = font.families().iter().find_map(|family| match family {
+                        resvg::usvg::FontFamily::Named(name) => Some(name.as_str()),
+                        _ => None,
+                    })?;
+                    // usvg selects the base face before it exposes characters;
+                    // its default glyph fallback handles the rest of the span.
+                    crate::style::resolve_font(
+                        db,
+                        family,
+                        resvg::usvg::fontdb::Weight(font.weight()),
+                        font.style().into(),
+                        'N',
+                    )
+                })
+            }),
+            ..Default::default()
+        },
         ..Default::default()
     };
-    resvg::usvg::Tree::from_str(&svg, &options).map_err(|error| error.to_string())
+    resvg::usvg::Tree::from_str(svg, &options).map_err(|error| error.to_string())
 }
 
 /// Office's SVG importer does not honor the editor's text-before-edge baseline.

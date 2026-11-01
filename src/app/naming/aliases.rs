@@ -1,5 +1,5 @@
 //! Source-labelled aliases share the Import dock and normal linked captions.
-use super::super::workspace::{accessible_command, control, muted_text, section};
+use super::super::workspace::{accessible_command, control, hover_hint, muted_text, section};
 use super::*;
 use iced::widget::column;
 
@@ -152,7 +152,7 @@ impl App {
         }
         if let Some((ticket, record)) = &self.tab.naming.structure {
             let current = ticket.is_current(self.tab.revision, self.tab.file_epoch);
-            content = content.push(section("GENERATED SYSTEMATIC NAME · LOCAL RULES"));
+            content = content.push(section("GENERATED SYSTEMATIC NAME · OPENCLATURA"));
             if !current {
                 content = content.push(
                     text("Drawing changed · Generate the name again")
@@ -162,6 +162,16 @@ impl App {
             }
             if let Some(name) = &record.systematic_name {
                 content = content.push(text(name).size(13));
+            }
+            if let Some(status) = record.name_status {
+                content = content.push(hover_hint(
+                    container(text(status.label()).size(11).style(muted_text))
+                        .id("naming.name-status")
+                        .padding([3, 6])
+                        .style(container::rounded_box),
+                    status.detail(),
+                    iced::widget::tooltip::Position::Top,
+                ));
             }
             content = content.push(text(record.provenance.label()).size(11).style(muted_text));
             for warning in &record.warnings {

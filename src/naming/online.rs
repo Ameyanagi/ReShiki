@@ -192,6 +192,7 @@ fn parse_record(name: &str, cid: u64, bytes: &[u8]) -> Result<Record, Error> {
     Ok(Record {
         title: name.into(),
         systematic_name,
+        name_status: None,
         smiles: property.smiles.clone(),
         canonical_smiles: canonical,
         synonyms: vec![],

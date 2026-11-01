@@ -43,7 +43,7 @@ The same confirmation flow is available in the Chemical names inspector.
 ### Show a molecule's name
 
 1. Right-click a molecule and choose **Show chemical name**. The name appears
-   centered below the molecule; for ethanol it is `ethan-1-ol`.
+   centered below the molecule; for ethanol it is `ethanol`.
 2. Choose **Hide chemical name** in the same menu to remove it.
 
 Show and Hide are each one Undo step. The clicked molecule is named even when
@@ -66,7 +66,7 @@ or **Insert caption**.
    the next insertion. **Use original name below** switches back to the typed
    name.
 4. To name a drawn molecule, select it and choose **Generate selected name** in
-   the same Details area. **GENERATED SYSTEMATIC NAME · LOCAL RULES** shows the
+   the same Details area. **GENERATED SYSTEMATIC NAME · OPENCLATURA** shows the
    result with **Copy name** and **Insert caption**.
 
 Opening Details does not open the preview or insert anything. Changing the
@@ -84,8 +84,9 @@ molecule and opens the **Chemical names** inspector. It has two parts:
   check **I reviewed these warnings and the structure**. Choose **Insert** to
   add the editable structure. It is inserted without a name caption.
 - **STRUCTURE → NAME**: choose **Generate selected name**, then **Copy name** or
-  **Insert caption**. Curated aliases for the molecule appear below the
-  generated name.
+  **Insert caption**. A tag under the generated name gives its
+  [preferred IUPAC name status](#preferred-iupac-name-status). Curated aliases
+  for the molecule appear below the generated name.
 
 **‹ Properties** returns to the Properties inspector, and **Import** opens the
 Import tab.
@@ -100,9 +101,11 @@ Import tab.
   under Import → Structure." rather than as an ambiguous name.
 - Optical rotation signs are not turned into R/S. The one exception is
   `(+)-lactic acid`, which reads as `(2S)-2-hydroxypropanoic acid`.
-- Generated names cover neutral organic molecules with up to 64 heavy atoms.
-  Charged or isotope-labeled molecules and fused, spiro or bicyclic parents
-  give an error.
+- Generated names cover one connected molecule: chains, rings, ring
+  assemblies, spiro, bridged and fused ring systems, with charges and R/S and
+  E/Z stereo. Salts and mixtures, isotope-labeled molecules and a few stereo,
+  charge and ring states that the name could misdescribe give an error
+  instead of a name.
 - Generated names are systematic. They are not always the preferred IUPAC name.
 - The alias catalog matches the exact structure, so stereo, charge and
   isotopes count. **No curated aliases available in the bundled catalog.** only
@@ -136,18 +139,214 @@ outdated results.
 ### Structure to name
 
 Abbreviated groups are expanded for naming. Showing an already named molecule
-reuses its caption. The **ReShiki organic rules 1** profile covers supported
-neutral organic structures with at most 64 heavy atoms. Its declared subset
-includes carbon chains with supported branching and unsaturation, simple
-cycloalkanes, benzene and selected heteroaromatic parents; acids, simple esters,
-primary amides, nitriles, aldehydes, ketones, alcohols, primary amines, ethers
-and halogen substituents; and supported parent R/S and E/Z configurations.
-Carbon stems are limited to 20 atoms and substituent nesting to three levels.
-Unsupported functional groups and stereo contexts return an error. A generated
-name appears only after the local Rust parser reconstructs the same graph and
-specified stereo. Parent selection and naming rules also have independently
-expected tests. Comprehensive IUPAC coverage and preferred IUPAC name (PIN)
-selection are not claimed. Unspecified stereo remains unspecified.
+reuses its caption. Names come from a Rust port of
+[openclatura](https://github.com/lamalab-org/openclatura) 0.4.3 by lamalab-org
+(MIT license; commit `90dc5bcb`), in `src/naming/openclatura/`. The port follows
+the Python modules and rule order, and its JSON rule tables in
+`src/naming/openclatura/data/` are byte-identical to upstream. RDKit's part is
+done by `crates/chemistry`: SMILES parsing, kekulization, ring perception,
+stereo perception and the CIP labeler, including r/s. The copyright and license
+are in `licenses/openclatura/` and `NOTICE`.
+
+The port names one connected molecule of up to 512 atoms: chains, monocycles,
+heterocycles, ring assemblies, spiro systems, von Baeyer (bicyclo, tricyclo)
+systems and fused ring systems, including retained names such as `naphthalene`
+or `1H-indole`, fusion names such as `pyrazolo[3,4-d]pyrimidine`, hydro
+prefixes, indicated hydrogen and bridged fused parents. It covers functional
+groups, charges and ions, and R/S, r/s and E/Z. It declines salts and mixtures,
+isotope labels, and the cases where upstream's own name would describe another
+structure: nitrogen and ring lone-pair stereocentres, some ring stereo, r/s on
+von Baeyer parents, and some charge, hydrogen and localized pi states. Each
+such place is marked `Upstream divergence` in the source. The text matches
+openclatura 0.4.3 exactly for 98.6% of the test corpus; the
+[structure-to-name harness](structure-to-name-harness.md) has the numbers.
+
+The worker generates the name, a second worker parses it with the OPSIN Rust
+port, and the name appears only when that parse gives the same graph, charge
+and specified stereo. Otherwise you see an error and no name. Generation runs
+under the same worker limits as parsing, so a very large ring system can time
+out. Comprehensive IUPAC coverage is not claimed. Unspecified stereo remains
+unspecified.
+
+### Preferred IUPAC name status
+
+Every generated name carries a status that says how it relates to the
+preferred IUPAC name (PIN) of the IUPAC 2013 recommendations. The Names
+inspector shows it as a tag under the name, with the reason on hover. Copy
+name and Insert caption use the name text alone.
+
+| Tag                                           | Meaning                                                                                       |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Preferred IUPAC name                          | No rule on the name's path is known to depart from the PIN rules.                             |
+| Systematic name, not the preferred IUPAC name | The name is correct but uses a form the PIN rules do not, such as `acetaldehyde hydrazone`.   |
+| Systematic name, preference not verified      | The name took a path whose PIN choice has not been checked, such as an OPSIN-numbered fusion. |
+
+The engine marks the status where it makes the choice, so the name text is
+unchanged. A naming attempt it discards leaves no mark. Reasons for a name
+that is not the PIN:
+
+| Reason              | Example the engine writes                                                                       | Preferred form                                                                               |
+| ------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `sulfonyl_prefix`   | `N-methyltosylamino`, `(methylsulfinyl)amino`                                                   | `N,4-dimethylbenzene-1-sulfonamido`, `methanesulfinamido`                                    |
+| `amino_prefix`      | `3-methylguanidino`                                                                             | `(N-methylcarbamimidoyl)amino`                                                               |
+| `functional_class`  | `acetaldehyde hydrazone`, `(S)-ethyl methyl sulfoxide`, `diphenyl selenotelluroperoxide`        | `ethylidenehydrazine`, `(S)-(methanesulfinyl)ethane`, `[(phenylselanyl)tellanyl]benzene`     |
+| `hydride_parent`    | `chloro(methyl)azane`, `1,2-dimethyldisulfane`, `ethoxy(methyl)sulfane`                         | `methylhypochlorous amide`, `(methyldisulfanyl)methane`, `[(methylsulfanyl)oxy]ethane`       |
+| `unretained_parent` | `N-methylethanediamide`, `hydroxyformyl chloride`                                               | `N1-methyloxamide`, `carbonochloridic acid`                                                  |
+| `diamide_locants`   | `N,N'-diethylpropanediamide`, `N-methylbutanediamide`                                           | `N1,N3-diethylpropanediamide`, `N1-methylbutanediamide`                                      |
+| `fusion_component`  | `azuleno[4,5-c]isoxazole`, `benzo[d]isothiazole`                                                | `azuleno[4,5-c][1,2]oxazole`, `1,2-benzothiazole`                                            |
+| `multiplicative`    | `phenoxybenzene`, `(benzenesulfinyl)benzene`, `benzylbenzene`                                   | `1,1'-oxydibenzene`, `1,1'-sulfinyldibenzene`, `1,1'-methylenedibenzene`                     |
+| `acyl_prefix`       | `4-(cyclohexylcarbonyl)benzoic acid`, `(dimethyloxophosphanyl)`, `(methyloxophosphanyl)methane` | `4-(cyclohexanecarbonyl)benzoic acid`, `dimethylphosphinoyl`, `dimethyl-lambda5-phosphanone` |
+| `ring_assembly`     | `2-(pyridin-2-yl)pyridine`, `cyclopropylcyclopropane`, `4-phenylphenol`                         | `2,2'-bipyridine`, `1,1'-bi(cyclopropane)`, `[1,1'-biphenyl]-4-ol`                           |
+
+Reasons for an unverified name: `opsin_fusion_layout` (fusion numbering chosen
+for OPSIN compatibility), `bridged_fused_parent`, `unaudited_parent`
+(porphyrin, corrin, gonane), `substituted_retained_parent` (substituted
+acetaldehyde), `atom_order` (bridged fused ketones whose added hydrogen depends
+on input atom order), `amine_chalcogenide` (amine sulfide and similar names) and
+`principal_group_tie` (equally senior principal groups, such as the chain and
+ring acids of `2-(4-carboxyphenyl)acetic acid`, chosen by atom order rather than
+by P-44.1). The other parent-selection rules that the port does not implement in
+full (heteroatom seniority, skeletal replacement chains, phane names) have no
+mark.
+
+Sulfonyl and sulfinyl prefixes are named from the acid (P-65.3.2.2.2) and
+enclosed although simple (P-16.5.1.4): `(methanesulfonyl)benzene`,
+`4-(4-methylpiperazine-1-sulfonyl)benzoic acid`,
+`3-[(methanesulfonyl)oxy]propanoic acid`,
+`2-[(methanesulfonyl)sulfanyl]acetic acid`, `N-(sulfooxy)cyclohexanimine`,
+and so are acyl prefixes such as `2-[(ethanethioyl)sulfanyl]acetic acid`; a
+peroxy prefix encloses a complex ligand, `2-[(propan-2-yl)peroxy]acetic acid`
+(P-16.5.1.1). The
+`sulfonyl_prefix` mark stays where the engine still concatenates: on a nitrogen
+that the PIN names as sulfonamido or sulfinamido (P-66.1.1.4.3), on an imino
+nitrogen, and where another acid group in the substituent would take the acid
+suffix.
+
+Chalcogen analogues of oxo and formyl take the preferred prefixes
+`sulfanylidene`, `selanylidene` and `tellanylidene` (P-64.6.1), multiplied with
+`bis` (P-16.3.6), and `methanethioyl`, `methaneselenoyl` and `methanetelluroyl`
+(P-66.6.3); other thioacyl groups take `-thioyl` (P-65.1.5.1):
+`3-sulfanylidenebutanoic acid`, `3,5-bis(sulfanylidene)hexanoic acid`,
+`4-(methanethioyl)benzoic acid`, `4-(ethanethioyl)benzoic acid`,
+`4-(benzenecarbothioyl)benzoic acid`.
+
+Oxazole and thiazole fusion prefixes cite their Hantzsch-Widman locants in
+square brackets (P-25.3.2.2.3): `[1,3]oxazolo[4,5-b]pyridine`,
+`[1,2]oxazolo[5,4-b]pyridine`, `[1,3]thiazolo[3,2-a]pyrimidine`. A base
+component named `isoxazole` or `isothiazole`, as in `cyclopenta[c]isoxazole`,
+still departs from the PIN (`[1,2]oxazole`, P-25.3.2.1.2) and is marked
+`fusion_component`.
+
+The engine names every compound substitutively. Two identical rings joined
+by one `-O-`, `-S-`, `-SO-`, `-SO2-` (or Se, Te analogue) or `-CH2-` link take
+a multiplicative PIN instead (P-51.3.1, P-63.2.4.2, P-63.6), so such a
+molecule is marked `multiplicative`. So are two identical chains joined by one
+chalcogen link when they carry a principal group or lead to a ring,
+`2-[(2-hydroxy-2-oxoethyl)sulfanyl]acetic acid` for
+`2,2'-sulfanediyldiacetic acid`; alkane units keep the substitutive PIN,
+`ethoxyethane`, and so does an anhydride. Units that differ in substitution or
+configuration keep the substitutive PIN,
+`1-bromo-3-[(3-chlorophenyl)methyl]benzene`,
+`1-[(2R)-butan-2-yl]-4-({4-[(2S)-butan-2-yl]phenyl}sulfanyl)benzene`
+(P-45.6.2). Longer links and three or more identical parents have no mark. An
+acyl group on a ring written as `(ring-yl)carbonyl` or `-carbonothioyl`, and a
+P=O, As=O or Sb=O group with ligands written as `oxophosphanyl`, `oxoarsanyl`
+or `oxostibanyl`, are marked `acyl_prefix` (P-65.1.7.4.2, P-67.1.4.1.1.3,
+P-68.3.2.3.1).
+
+Two or more identical ring systems joined directly by a single or double bond
+form a ring assembly, whose PIN is built from the parent hydride name
+(P-28.2, P-28.3, P-52.2.7.1): `2,2'-bipyridine`, `1,1'-bi(cyclopropane)`,
+`1,1'-bi(cyclopentylidene)`, `[1,1'-biphenyl]-4-ol`, or a phane name for more
+than six (P-28.5). The engine writes `1,1'-biphenyl` itself and names every
+other assembly substitutively, so such a molecule is marked `ring_assembly`.
+Ring systems compare as parent hydrides: substituents do not count, but
+heteroatoms, charge and hydrogenation do, so `cyclohexylbenzene` and
+`4-phenylpyridine` stay substitutive (P-28.7, P-61.2.2). Assemblies of the same
+skeleton at different hydrogenation, whose PIN uses hydro prefixes or `ene`
+endings such as `1,2,3,4,5,6-hexahydro-2,2'-bipyridine` for
+`2-(piperidin-2-yl)pyridine` (P-31.1.7, P-54.3), have no mark.
+
+Alkoxy prefixes use the retained contractions `methoxy`, `ethoxy`, `propoxy`,
+`butoxy`, `phenoxy` and `tert-butoxy` (P-63.2.2.2), not isopropoxy, sec-butoxy
+or isobutoxy: `[(propan-2-yl)oxy]benzene`, `[(butan-2-yl)oxy]benzene`
+(P-63.2.2.1.1), `(2-methylpropoxy)benzene`.
+
+Amino prefixes use the retained `anilino` for C6H5-NH-, with full substitution
+(P-62.2.1.1.1), and `carbamimidoylamino` for guanidine as a prefix
+(P-66.4.1.2.1.3): `2-anilinoacetic acid`, `4-(N-phenylanilino)benzoic acid`,
+`2-(carbamimidoylamino)acetic acid`, `2-[carbamimidoyl(methyl)amino]acetic acid`.
+`amino_prefix` stays on guanidino with substituents on its other nitrogens or
+with an E/Z descriptor.
+Contractions keep phenyl: `methyl phenylcarbamate`, `(phenylsulfamoyl)`.
+
+Chains take systematic names where the retained names are only for general
+nomenclature (P-65.1.1.2.2, P-66.5.1.2.3): `propanenitrile`, `butanenitrile`,
+`propanedioic acid`, `butanedioic acid`, `pentanedioic acid` and
+`hexanedioic acid`, not propionitrile, butyronitrile, malonic, succinic,
+glutaric or adipic acid. HCN is `formonitrile` (P-66.5.1.2.1).
+
+When double and triple bonds tie for low locants as a set, the double bonds
+take the lower locants before detachable prefixes are considered (P-31.1.1.1,
+P-14.4 (e)): `pent-1-en-4-yne`, `4,4-dimethylhept-1-en-6-yne`, not
+pent-4-en-1-yne.
+
+The retained PINs `formaldehyde`, `acetaldehyde` (P-66.6.1.2.1), `anisole`
+(P-34.1.1.4), `oxamide` (P-66.1.1.1.2.1), `formonitrile oxide` and
+`acetonitrile oxide` (P-66.5.4.1) name the unsubstituted compounds;
+`2-chloroacetonitrile oxide` is substituted like acetonitrile. Substituted
+anisoles such as `1-chloro-4-methoxybenzene` are preferred names (P-63.2.3).
+`unretained_parent` stays on substituted methanal and methanenitrile oxide,
+N-substituted ethanediamides, and formic acids, formyl halides and formamides
+substituted on carbon, which are carbamic or carbonic acid derivatives
+(P-65.1.8.1): the engine writes `methyl (thiophene-2-carboxamido)formate`
+for methyl (thiophene-2-carbonyl)carbamate.
+
+Amines with only methyl groups on nitrogen, sulfides and hydrodisulfides
+(R-SSH) are named substitutively (P-62.2.2.1, P-63.2.5, P-63.4.2.1):
+`N,N-dimethylmethanamine`, `(methylsulfanyl)methane`,
+`2-methoxyethane-1-dithioperoxol`, `pyridine-2-dithioperoxol`. `hydride_parent`
+stays on halogenated azanes, which are hypohalous amides (P-68.5.3), on
+disulfides and mixed chalcogen chains such as `1,2-dimethyldisulfane` and
+`ethoxy(methyl)sulfane` (P-63.3.1, P-63.3.2), on disulfanes bonded to oxygen
+or nitrogen, and on hydrodisulfides with a phosphorus acid, which the engine
+cites as a prefix.
+
+Achiral sulfoxides are named substitutively (P-63.6), and organyl oxides and
+chalcogenides of phosphanes, arsanes and stibanes take the `-one`, `-thione`,
+`-selone` or `-tellone` suffix (P-68.3.2.3.1): `(methanesulfinyl)methane`,
+`(methanesulfinyl)ethane` (P-14.3.4.2), `trimethyl-lambda5-phosphanone`,
+`methylphosphanone`, `phenylarsanethione`. `functional_class` stays on
+hydrazones and azines, whose PINs are ylidene derivatives of hydrazine
+(P-68.3.1.2.2), on oxides with halide or alkoxy ligands, which are named from
+the acids (P-68.3.2.3.1), on
+chiral sulfoxides, whose PIN cites the descriptor before the whole name as in
+`(S)-(methanesulfinyl)ethane` (P-93.3.4.1), and on mixed chalcogen peroxides
+such as `dimethyl selenoperoxide` (P-63.3.2).
+
+Prefixes are cited and numbered in alphanumerical order of their first
+nonitalic Roman letter (P-14.5), so the bracketed heteroatom locants that lead
+a fusion prefix do not count:
+`1-(1-benzyl-3-phenyl-1H-pyrazol-4-yl)-N-[([1,2,4]triazolo[4,3-a]pyridin-3-yl)methyl]methanamine`,
+`(1R,3S)-N-methyl-3-(6H-[1,2,4]triazolo[4,3-a]pyrrolo[2,3-e]pyrazin-1-yl)cyclopentanamine`,
+`3-methyl-5-([1,3]oxazolo[4,5-b]pyridin-2-yl)benzoic acid`. Initial locants
+and italic prefixes only break ties (P-14.5.3, P-14.5.4):
+`3-([1,2]oxazolo[4,5-b]pyridin-6-yl)-2-([1,3]oxazolo[4,5-b]pyridin-6-yl)propan-1-ol`,
+`1-(3-methylbutyl)-4-(pentan-2-yl)benzene`.
+
+Enclosing marks nest in the P-16.5.4 order `{[({[( )]})]}`:
+`2-[4-(2-methylpropyl)phenyl]propanoic acid`,
+`2-(2-{2-[2-(2-hydroxyethoxy)ethoxy]ethoxy}ethoxy)ethan-1-ol`. Brackets that
+belong to the parent name are ignored when choosing the level: fusion, von
+Baeyer and spiro descriptors (`2-(bicyclo[2.2.1]heptan-2-yl)acetic acid`) and
+the parentheses of indicated or added hydrogen, such as `1(2H)`.
+Stereodescriptors and compound locants count as a level
+(`4-[(2E)-but-2-en-1-yl]phenol`), and a mark that would sit next to one of the
+same kind moves up a level (P-16.5.4.1.5). The nesting does not change the
+status.
+
+`reshiki --cli name` prints the same name, and `--json` adds the status; see
+the [command-line reference](agent-cli.md#name).
 
 ### Captions
 
