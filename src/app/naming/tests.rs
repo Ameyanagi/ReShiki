@@ -99,18 +99,18 @@ async fn generated_fusion_hydrogens_preserve_formula_inchi_and_naming_outcomes()
         naming::verify_identity(&shown_identity.smiles, &hidden_identity.smiles)?;
         // Exercise the same naming worker in-process so this check never
         // launches the application executable or a GUI.
-        let name = |identity: &naming::Identity| -> Result<Result<String, String>, String> {
+        let name = |identity: &naming::Identity| -> Result<serde_json::Value, String> {
             let request = serde_json::json!({
                 "operation": "generate",
-                "protocol": 2,
-                "profile": "ReShiki organic rules 1",
+                "protocol": 3,
+                "profile": "openclatura 0.4.3 Rust port",
                 "smiles": identity.smiles,
             });
             let response =
                 naming::worker::respond(&serde_json::to_vec(&request).map_err(|e| e.to_string())?)?;
             let response: serde_json::Value =
                 serde_json::from_slice(&response).map_err(|e| e.to_string())?;
-            serde_json::from_value(response["result"].clone()).map_err(|e| e.to_string())
+            Ok(response["result"].clone())
         };
         let shown_name = name(&shown_identity)?;
         let hidden_name = name(&hidden_identity)?;
