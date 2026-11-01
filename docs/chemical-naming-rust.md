@@ -181,16 +181,15 @@ The engine marks the status where it makes the choice, so the name text is
 unchanged. A naming attempt it discards leaves no mark. Reasons for a name
 that is not the PIN:
 
-| Reason                    | Example the engine writes                                                                | Preferred form                                                                           |
-| ------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `sulfonyl_prefix`         | `N-methyltosylamino`, `(methylsulfinyl)amino`                                            | `N,4-dimethylbenzene-1-sulfonamido`, `methanesulfinamido`                                |
-| `amino_prefix`            | `3-methylguanidino`                                                                      | `(N-methylcarbamimidoyl)amino`                                                           |
-| `functional_class`        | `acetaldehyde hydrazone`, `(S)-ethyl methyl sulfoxide`, `diphenyl selenotelluroperoxide` | `ethylidenehydrazine`, `(S)-(methanesulfinyl)ethane`, `[(phenylselanyl)tellanyl]benzene` |
-| `hydride_parent`          | `chloro(methyl)azane`, `1,2-dimethyldisulfane`, `ethoxy(methyl)sulfane`                  | `methylhypochlorous amide`, `(methyldisulfanyl)methane`, `[(methylsulfanyl)oxy]ethane`   |
-| `unretained_parent`       | `N-methylethanediamide`, `hydroxyformyl chloride`                                        | `N1-methyloxamide`, `carbonochloridic acid`                                              |
-| `fusion_prefix`           | `oxazolo[4,5-b]pyridine`, `isoxazolo`                                                    | `[1,3]oxazolo[4,5-b]pyridine`, `[1,2]oxazolo`                                            |
-| `diamide_locants`         | `N,N'-diethylpropanediamide`                                                             | `N1,N3-diethylpropanediamide`                                                            |
-| `multiple_bond_numbering` | `pent-4-en-1-yne`                                                                        | `pent-1-en-4-yne`                                                                        |
+| Reason              | Example the engine writes                                                                | Preferred form                                                                           |
+| ------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `sulfonyl_prefix`   | `N-methyltosylamino`, `(methylsulfinyl)amino`                                            | `N,4-dimethylbenzene-1-sulfonamido`, `methanesulfinamido`                                |
+| `amino_prefix`      | `3-methylguanidino`                                                                      | `(N-methylcarbamimidoyl)amino`                                                           |
+| `functional_class`  | `acetaldehyde hydrazone`, `(S)-ethyl methyl sulfoxide`, `diphenyl selenotelluroperoxide` | `ethylidenehydrazine`, `(S)-(methanesulfinyl)ethane`, `[(phenylselanyl)tellanyl]benzene` |
+| `hydride_parent`    | `chloro(methyl)azane`, `1,2-dimethyldisulfane`, `ethoxy(methyl)sulfane`                  | `methylhypochlorous amide`, `(methyldisulfanyl)methane`, `[(methylsulfanyl)oxy]ethane`   |
+| `unretained_parent` | `N-methylethanediamide`, `hydroxyformyl chloride`                                        | `N1-methyloxamide`, `carbonochloridic acid`                                              |
+| `fusion_prefix`     | `oxazolo[4,5-b]pyridine`, `isoxazolo`                                                    | `[1,3]oxazolo[4,5-b]pyridine`, `[1,2]oxazolo`                                            |
+| `diamide_locants`   | `N,N'-diethylpropanediamide`                                                             | `N1,N3-diethylpropanediamide`                                                            |
 
 Reasons for an unverified name: `opsin_fusion_layout` (fusion numbering chosen
 for OPSIN compatibility), `bridged_fused_parent`, `unaudited_parent`
@@ -234,6 +233,11 @@ nomenclature (P-65.1.1.2.2, P-66.5.1.2.3): `propanenitrile`, `butanenitrile`,
 `propanedioic acid`, `butanedioic acid`, `pentanedioic acid` and
 `hexanedioic acid`, not propionitrile, butyronitrile, malonic, succinic,
 glutaric or adipic acid. HCN is `formonitrile` (P-66.5.1.2.1).
+
+When double and triple bonds tie for low locants as a set, the double bonds
+take the lower locants before detachable prefixes are considered (P-31.1.1.1,
+P-14.4 (e)): `pent-1-en-4-yne`, `4,4-dimethylhept-1-en-6-yne`, not
+pent-4-en-1-yne.
 
 The retained PINs `formaldehyde`, `acetaldehyde` (P-66.6.1.2.1), `anisole`
 (P-34.1.1.4), `oxamide` (P-66.1.1.1.2.1), `formonitrile oxide` and

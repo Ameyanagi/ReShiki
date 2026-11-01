@@ -4,7 +4,6 @@ use super::{
     molecule::{AtomSet, Molecule},
     rules::{elements, retained},
 };
-use crate::naming::{NameReason, NameStatus};
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
@@ -28,6 +27,7 @@ pub struct NumberingPreference {
     pub indicated_hydrogen: Vec<usize>,
     pub hydro: Vec<usize>,
     pub unsaturation: Vec<usize>,
+    pub double_bonds: Vec<usize>,
     pub substituent_and_unsaturation: Vec<usize>,
     pub substituent_citation: Vec<usize>,
     pub stereochemistry: Vec<usize>,
@@ -40,6 +40,7 @@ enum NumberingCriterion {
     IndicatedHydrogen,
     Hydro,
     Unsaturation,
+    DoubleBonds,
     SubstituentAndUnsaturation,
     SubstituentCitation,
     Stereochemistry,
@@ -62,6 +63,7 @@ fn numbering_criteria(parent_kind: &str) -> Vec<NumberingCriterion> {
                 "indicated_hydrogen" => NumberingCriterion::IndicatedHydrogen,
                 "hydro" => NumberingCriterion::Hydro,
                 "unsaturation" => NumberingCriterion::Unsaturation,
+                "double_bonds" => NumberingCriterion::DoubleBonds,
                 "substituent_and_unsaturation" => NumberingCriterion::SubstituentAndUnsaturation,
                 "substituent_citation" => NumberingCriterion::SubstituentCitation,
                 "stereochemistry" => NumberingCriterion::Stereochemistry,
@@ -98,6 +100,7 @@ impl NumberingPreference {
             NumberingCriterion::IndicatedHydrogen => Criterion::Flat(&self.indicated_hydrogen),
             NumberingCriterion::Hydro => Criterion::Flat(&self.hydro),
             NumberingCriterion::Unsaturation => Criterion::Flat(&self.unsaturation),
+            NumberingCriterion::DoubleBonds => Criterion::Flat(&self.double_bonds),
             NumberingCriterion::SubstituentAndUnsaturation => {
                 Criterion::Flat(&self.substituent_and_unsaturation)
             }
@@ -126,23 +129,6 @@ impl NumberingPreference {
             })
             .find(|order| order.is_ne())
             .unwrap_or(Ordering::Equal)
-    }
-
-    fn ties_through_unsaturation(&self, other: &Self, is_ring: bool) -> bool {
-        let criteria = if is_ring {
-            &RING_CRITERIA
-        } else {
-            &CHAIN_CRITERIA
-        };
-        for &criterion in criteria.iter() {
-            if self.criterion(criterion) != other.criterion(criterion) {
-                return false;
-            }
-            if matches!(criterion, NumberingCriterion::Unsaturation) {
-                return true;
-            }
-        }
-        false
     }
 }
 
@@ -198,42 +184,6 @@ fn number_parent(
         if evaluation.compare(&best_score, is_ring) == Ordering::Less {
             best = candidate.clone();
             best_score = evaluation;
-        }
-    }
-    // The implemented comparison pools ene and yne locants. Report the
-    // missing P-31.1.4.2.4 tie-break only when it would improve this chosen
-    // numbering after every preceding criterion has tied.
-    if retained_name.is_none() {
-        let (double_locants, triple_locants) = get_bond_locants(
-            mol,
-            &best,
-            topology.is_bicycle,
-            topology.is_spiro,
-            topology.is_polycycle,
-        );
-        if !double_locants.is_empty()
-            && !triple_locants.is_empty()
-            && candidates.iter().any(|candidate| {
-                let evaluation = numbering_preference(
-                    mol,
-                    candidate,
-                    principal_carbons,
-                    substituent_mapping,
-                    retained_name,
-                    topology,
-                );
-                evaluation.ties_through_unsaturation(&best_score, is_ring)
-                    && get_bond_locants(
-                        mol,
-                        candidate,
-                        topology.is_bicycle,
-                        topology.is_spiro,
-                        topology.is_polycycle,
-                    )
-                    .0 < double_locants
-            })
-        {
-            mol.mark_name(NameStatus::NotPreferred(NameReason::MultipleBondNumbering));
         }
     }
     best
@@ -392,19 +342,21 @@ fn numbering_preference(
         .map(|(_, hydro)| get_atom_locants(path, &hydro))
         .unwrap_or_default();
     let substituent_locants = get_atom_locants(path, &substituents.keys().copied().collect());
-    let mut unsaturation = if retained_name.is_some() {
-        Vec::new()
+    // P-31.1.1.1: low locants to multiple bonds as a set, then to double bonds.
+    let (mut double_bonds, triple_bonds) = if retained_name.is_some() {
+        Default::default()
     } else {
-        let (d, t) = get_bond_locants(
+        get_bond_locants(
             mol,
             path,
             topology.is_bicycle,
             topology.is_spiro,
             topology.is_polycycle,
-        );
-        d.into_iter().chain(t).collect::<Vec<_>>()
+        )
     };
+    let mut unsaturation: Vec<_> = double_bonds.iter().chain(&triple_bonds).copied().collect();
     unsaturation.sort();
+    double_bonds.sort();
     let mut substituent_and_unsaturation: Vec<_> = substituent_locants
         .into_iter()
         .chain(unsaturation.iter().copied())
@@ -426,6 +378,7 @@ fn numbering_preference(
         indicated_hydrogen,
         hydro,
         unsaturation,
+        double_bonds,
         substituent_and_unsaturation,
         substituent_citation,
         stereochemistry,
@@ -591,24 +544,17 @@ mod tests {
     };
     use super::*;
     #[test]
-    fn ene_yne_status_requires_a_tie_before_the_missing_criterion() {
-        for (path, principal, expected) in [
-            (
-                vec![0, 1, 2, 3, 4],
-                AtomSet::new(),
-                NameStatus::NotPreferred(NameReason::MultipleBondNumbering),
-            ),
-            (vec![4, 3, 2, 1, 0], AtomSet::new(), NameStatus::Preferred),
-            (
-                vec![0, 1, 2, 3, 4],
-                AtomSet::from([0]),
-                NameStatus::Preferred,
-            ),
+    fn double_bonds_take_low_locants_only_after_multiple_bonds_tie() {
+        for (smiles, principal, expected) in [
+            ("C#CCC=C", AtomSet::new(), vec![4, 3, 2, 1, 0]),
+            ("C#CCC=C", AtomSet::from([0]), vec![0, 1, 2, 3, 4]),
+            ("C#CCC=CC", AtomSet::new(), vec![0, 1, 2, 3, 4, 5]),
         ] {
-            let mol = read_smiles("C#CCC=C").unwrap();
+            let mol = read_smiles(smiles).unwrap();
+            let path: Vec<_> = (0..mol.atoms.len()).collect();
             let numbered = number_parent(
                 &mol,
-                std::slice::from_ref(&path),
+                &[path],
                 &principal,
                 &BTreeMap::new(),
                 false,
@@ -616,26 +562,8 @@ mod tests {
                 None,
                 NumberingTopology::default(),
             );
-            assert_eq!(numbered, path);
-            assert_eq!(mol.name_status(), expected);
+            assert_eq!(numbered, expected, "{smiles}");
         }
-    }
-
-    #[test]
-    fn pooled_multiple_bond_locants_must_also_tie() {
-        let mol = read_smiles("C#CCC=CC").unwrap();
-        let numbered = number_parent(
-            &mol,
-            &[vec![0, 1, 2, 3, 4, 5]],
-            &AtomSet::new(),
-            &BTreeMap::new(),
-            false,
-            false,
-            None,
-            NumberingTopology::default(),
-        );
-        assert_eq!(numbered, vec![0, 1, 2, 3, 4, 5]);
-        assert_eq!(mol.name_status(), NameStatus::Preferred);
     }
 
     #[test]

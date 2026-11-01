@@ -105,7 +105,6 @@ pub enum NameReason {
     UnretainedParent,
     FusionPrefix,
     DiamideLocants,
-    MultipleBondNumbering,
     OpsinFusionLayout,
     BridgedFusedParent,
     UnauditedParent,
@@ -137,9 +136,6 @@ impl NameReason {
             }
             Self::DiamideLocants => {
                 "Uses N and N' locants for a diamide; the preferred IUPAC name uses nitrogen locants such as N1 and N2 (P-66.1.1.3.1.1)."
-            }
-            Self::MultipleBondNumbering => {
-                "For tied sets of double- and triple-bond locants, the preferred IUPAC name gives the double bond the lower locant (P-31.1.4.2.4)."
             }
             Self::OpsinFusionLayout => {
                 "Uses a fusion layout selected for OPSIN numbering compatibility; its preferred IUPAC numbering has not been verified."

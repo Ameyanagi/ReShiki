@@ -48,6 +48,7 @@
         "hetero_by_priority",
         "indicated_hydrogen",
         "unsaturation",
+        "double_bonds",
         "substituent_and_unsaturation",
         "substituent_citation",
         "stereochemistry"
@@ -58,6 +59,7 @@
         "principal",
         "hydro",
         "unsaturation",
+        "double_bonds",
         "substituent_and_unsaturation",
         "substituent_citation",
         "stereochemistry"

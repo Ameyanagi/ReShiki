@@ -295,7 +295,12 @@ mod tests {
                 "2-[4-(2-methylpropyl)phenyl]propanoic acid",
             ),
             ("c1ccc2[nH]ccc2c1", "1H-indole"),
+            // Double bonds take the lower locant once multiple bonds tie
+            // (P-31.1.1.1), whichever end the input starts from.
             ("C=CCC#C", "pent-1-en-4-yne"),
+            ("C#CCC=C", "pent-1-en-4-yne"),
+            ("C#CCCC=C", "hex-1-en-5-yne"),
+            ("C#CCC(C)(C)CC=C", "4,4-dimethylhept-1-en-6-yne"),
             ("SS", "disulfane"),
             ("SSS", "trisulfane"),
             ("CC(=O)C#N", "acetyl cyanide"),
@@ -494,8 +499,6 @@ mod tests {
                 "N,N'-diethylpropanediamide",
                 R::DiamideLocants,
             ),
-            ("C#CCC=C", "pent-4-en-1-yne", R::MultipleBondNumbering),
-            ("C#CCCC=C", "hex-5-en-1-yne", R::MultipleBondNumbering),
         ] {
             let name = name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
