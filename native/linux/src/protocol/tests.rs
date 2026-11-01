@@ -122,6 +122,42 @@ fn supported_chemistry_and_image_formats_map_without_claiming_editability() {
 }
 
 #[test]
+fn rich_names_publish_html_rtf_and_text_without_changing_paste() {
+    let html = "<span><i>N</i>-日本語</span>".as_bytes();
+    let offer = prepare_offer(&[
+        item("public.html", html),
+        item("public.rtf", br"{\rtf1\ansi {\i N}-ethyl}"),
+        item("public.utf8-plain-text", b"N-ethyl"),
+    ])
+    .unwrap();
+    assert_eq!(offer.get("text/html").unwrap().as_ref(), html);
+    assert_eq!(
+        offer.get("text/rtf").unwrap().as_ref(),
+        br"{\rtf1\ansi {\i N}-ethyl}"
+    );
+    assert_eq!(offer.len(), TEXT.len() + 2);
+    assert!(!priority::READABLE.contains(&"public.html"));
+    assert!(!priority::READABLE.contains(&"public.rtf"));
+    assert!(!READABLE.iter().any(|(kind, _)| *kind == "public.html"));
+    assert!(read_formats(&["public.html".into()], false).is_err());
+    assert_eq!(
+        choose_type(
+            |mime| offer.contains_key(mime),
+            &read_formats(&[], false).unwrap()
+        ),
+        Some(("public.utf8-plain-text", "text/plain;charset=utf-8"))
+    );
+    let html_only = prepare_offer(&[item("public.html", html)]).unwrap();
+    assert!(
+        choose_type(
+            |mime| html_only.contains_key(mime),
+            &read_formats(&[], false).unwrap()
+        )
+        .is_none()
+    );
+}
+
+#[test]
 fn reads_validate_remaining_formats_and_ignore_embedded_options() {
     let request = parse_request(
         br#"{"operation":"read","formats":["public.utf8-plain-text","public.png"],"skip_embedded":true}"#,

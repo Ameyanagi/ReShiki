@@ -7,6 +7,7 @@ use std::borrow::Cow;
 mod chemdoodle;
 
 const TEXT: &str = "public.utf8-plain-text";
+const NAME_REASON: &str = "Name needs one complete connected molecule.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CopyFormat {
@@ -16,6 +17,7 @@ pub enum CopyFormat {
     Mol,
     Smiles,
     Inchi,
+    Name,
     Cdxml,
     Cdx,
     Rxn,
@@ -23,13 +25,14 @@ pub enum CopyFormat {
     ChemDoodleReaction,
 }
 impl CopyFormat {
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Png,
         Self::Svg,
         Self::Pdf,
         Self::Mol,
         Self::Smiles,
         Self::Inchi,
+        Self::Name,
         Self::Cdxml,
         Self::Cdx,
         Self::Rxn,
@@ -46,6 +49,7 @@ impl CopyFormat {
             Self::Mol => "MOL",
             Self::Smiles => "SMILES",
             Self::Inchi => "InChI",
+            Self::Name => "Name",
             Self::Cdxml => "CDXML",
             Self::Cdx => "CDX",
             Self::Rxn => "RXN · V3000",
@@ -62,6 +66,7 @@ impl CopyFormat {
             Self::Mol => "mol",
             Self::Smiles => "smiles",
             Self::Inchi => "inchi",
+            Self::Name => "name",
             Self::Cdxml => "cdxml",
             Self::Cdx => "cdx",
             Self::Rxn => "rxn",
@@ -78,7 +83,7 @@ impl CopyFormat {
     }
 
     pub fn is_molecular(self) -> bool {
-        matches!(self, Self::Mol | Self::Smiles | Self::Inchi)
+        matches!(self, Self::Mol | Self::Smiles | Self::Inchi | Self::Name)
     }
 
     pub fn is_chemical(self) -> bool {
@@ -108,6 +113,9 @@ impl CopyFormat {
                 "PNG, PDF and CDX need native clipboard support; use Export."
             });
         }
+        if self == Self::Name {
+            return name_reason(doc);
+        }
         if self.is_molecular() {
             if doc.atoms.is_empty() {
                 return Some("MOL, SMILES and InChI need molecular atoms.");
@@ -125,6 +133,29 @@ impl CopyFormat {
         }
         None
     }
+
+    /// A naming snapshot must retain every bond of its source molecule.
+    pub fn unavailable_reason_for_selection(
+        self,
+        source: &Document,
+        snapshot: &Document,
+    ) -> Option<&'static str> {
+        self.unavailable_reason(snapshot).or_else(|| {
+            (self == Self::Name
+                && source
+                    .bonds
+                    .iter()
+                    .any(|bond| snapshot.atom(bond.a).is_some() != snapshot.atom(bond.b).is_some()))
+            .then_some(NAME_REASON)
+        })
+    }
+}
+
+fn name_reason(doc: &Document) -> Option<&'static str> {
+    let connected = doc.atoms.first().is_some_and(|atom| {
+        crate::molecule_names::component(doc, atom.id).len() == doc.atoms.len()
+    });
+    (!doc.reactions.is_empty() || !connected).then_some(NAME_REASON)
 }
 
 fn reaction_reason(doc: &Document) -> Option<&'static str> {
@@ -214,7 +245,7 @@ pub async fn prepare_chemical_text(
     Ok(copy)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreparedCopy {
     pub format: CopyFormat,
     pub notices: Vec<String>,
@@ -226,6 +257,17 @@ impl PreparedCopy {
     /// native clipboard helper. No credentials or external service are involved.
     pub fn text(&self) -> Option<&str> {
         self.text.as_deref()
+    }
+}
+
+/// Prepare a known chemical name without invoking the local generator.
+pub fn prepare_name(name: String) -> PreparedCopy {
+    let spans = crate::name_markup::name_markup(&name);
+    PreparedCopy {
+        format: CopyFormat::Name,
+        notices: Vec::new(),
+        representations: super::name::representations(&name, &spans),
+        text: Some(name),
     }
 }
 
@@ -241,6 +283,22 @@ pub async fn prepare_as(
     // for an explicit manual handoff). Availability is enforced by the UI/write.
     if original.all_ids().is_empty() {
         return Err("There is nothing to copy".into());
+    }
+    if format == CopyFormat::Name {
+        if let Some(reason) = name_reason(&original) {
+            return Err(reason.into());
+        }
+        let identity =
+            crate::task::spawn_blocking(move || crate::naming::document_identity(&original))
+                .await
+                .map_err(|error| format!("Could not prepare the molecule for naming: {error}"))??;
+        let record = crate::naming::generate_name(&identity, crate::naming::Cancel::default())
+            .await
+            .map_err(|error| error.to_string())?;
+        return record
+            .systematic_name
+            .map(prepare_name)
+            .ok_or_else(|| "The local generator returned no supported systematic name".into());
     }
     if format.is_reaction() {
         if let Some(reason) = reaction_reason(&original) {
@@ -338,6 +396,7 @@ fn from_output(
         CopyFormat::Cdxml => &["chemical/x-cdxml"],
         CopyFormat::Cdx => &CDX_TYPES,
         CopyFormat::Inchi
+        | CopyFormat::Name
         | CopyFormat::Rxn
         | CopyFormat::ReactionSmiles
         | CopyFormat::ChemDoodleReaction => &[],

@@ -32,6 +32,56 @@ fn expected_read(mut representation: Representation) -> Representation {
 }
 
 #[test]
+fn rich_name_formats_are_write_only() -> Result<(), String> {
+    let _lock = PASTEBOARD_TEST
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    let board = NSPasteboard::pasteboardWithUniqueName();
+    let _release = PrivatePasteboard(&board);
+    let html = "<span><i>N</i>-日本語</span>";
+    let rtf = r"{\rtf1\ansi {\i N}-ethyl}";
+    for (kind, data) in [("public.html", html), ("public.rtf", rtf)] {
+        assert_eq!(pasteboard_types(kind), Some([kind].as_slice()));
+        assert!(!READABLE.contains(&kind));
+        assert!(priority::read_formats(&[kind.into()], false).is_err());
+        write(&board, &[representation(kind, data)])?;
+        assert_eq!(
+            board
+                .dataForType(&NSString::from_str(kind))
+                .ok_or("Missing rich clipboard data")?
+                .to_vec(),
+            data.as_bytes()
+        );
+        assert!(
+            read_next(
+                &[],
+                &[],
+                false,
+                |name| name == kind,
+                |_| Err("Rich clipboard formats must not be read".into()),
+            )?
+            .is_empty()
+        );
+    }
+    write(
+        &board,
+        &[
+            representation("public.html", html),
+            representation("public.rtf", rtf),
+            representation("public.utf8-plain-text", "N-ethyl"),
+        ],
+    )?;
+    assert_eq!(
+        read(&board, false)?,
+        vec![expected_read(representation(
+            "public.utf8-plain-text",
+            "N-ethyl"
+        ))]
+    );
+    Ok(())
+}
+
+#[test]
 fn explicit_structure_copies_offer_native_data_and_plain_text() -> Result<(), String> {
     let _lock = PASTEBOARD_TEST
         .lock()
