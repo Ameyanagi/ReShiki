@@ -559,7 +559,7 @@ fn name_oxygen(
         }
         return Ok(if let Some(&n) = other.first() {
             let b = plain_branch(mol, n, &with_atoms(exclude, [start, next]), next)?;
-            format!("({b}peroxy)")
+            format_element_substituent("", &b, "peroxy", false)
         } else {
             "hydroperoxy".into()
         });

@@ -474,6 +474,13 @@ mod tests {
             ),
             ("O=C(O)c1ccc(cc1)C(=O)c1ccccc1", "4-benzoylbenzoic acid"),
             ("O=C(O)c1ccc(cc1)C=O", "4-formylbenzoic acid"),
+            // A chalcogen or peroxy prefix encloses a ligand that names a
+            // parent hydride or is complex (P-16.5.1.4, P-16.5.1.1).
+            (
+                "CS(=O)(=O)SCC(=O)O",
+                "2-[(methanesulfonyl)sulfanyl]acetic acid",
+            ),
+            ("CC(C)OOCC(=O)O", "2-[(propan-2-yl)peroxy]acetic acid"),
         ] {
             let name = name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");

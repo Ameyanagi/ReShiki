@@ -156,7 +156,28 @@ pub fn format_element_substituent(
 ) -> String {
     let branch = strip_outer_parentheses(branch);
     let suffix = format!("{suffix}{}", if is_double { "idene" } else { "" });
-    if is_complex_prefix(&branch) {
+    // An acyl prefix that names a parent hydride, as methanesulfonyl, is
+    // enclosed although simple (P-16.5.1.4).
+    let names_hydride = [
+        "sulfonyl",
+        "sulfinyl",
+        "selenonyl",
+        "seleninyl",
+        "telluronyl",
+        "tellurinyl",
+        "carbonyl",
+        "carbothioyl",
+        "carboselenoyl",
+        "carbotelluroyl",
+    ]
+    .iter()
+    .filter_map(|acyl| branch.strip_suffix(acyl))
+    .any(|stem| {
+        ["ane", "ene", "yne", "ine"]
+            .iter()
+            .any(|end| stem.ends_with(end))
+    });
+    if is_complex_prefix(&branch) || names_hydride {
         format!("({stereo_prefix}({branch}){suffix})")
     } else {
         format!("({stereo_prefix}{branch}{suffix})")

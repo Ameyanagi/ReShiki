@@ -207,7 +207,10 @@ mark.
 Sulfonyl and sulfinyl prefixes are named from the acid (P-65.3.2.2.2) and
 enclosed although simple (P-16.5.1.4): `(methanesulfonyl)benzene`,
 `4-(4-methylpiperazine-1-sulfonyl)benzoic acid`,
-`3-[(methanesulfonyl)oxy]propanoic acid`, `N-(sulfooxy)cyclohexanimine`. The
+`3-[(methanesulfonyl)oxy]propanoic acid`,
+`2-[(methanesulfonyl)sulfanyl]acetic acid`, `N-(sulfooxy)cyclohexanimine`;
+a peroxy prefix encloses a complex ligand, `2-[(propan-2-yl)peroxy]acetic acid`
+(P-16.5.1.1). The
 `sulfonyl_prefix` mark stays where the engine still concatenates: on a nitrogen
 that the PIN names as sulfonamido or sulfinamido (P-66.1.1.4.3), on an imino
 nitrogen, and where another acid group in the substituent would take the acid
