@@ -1711,17 +1711,41 @@ fn chain_double_side(faces: &FaceIndex<'_>, bond: &Bond, a: Point, b: Point) -> 
     if !matches!(bond.order, 2 | 7)
         || bond.display == "bold"
         || faces.doc().drawing_style.center_chain_double_bonds
-        || faces.graph().degree(bond.a) < 2
-        || faces.graph().degree(bond.b) < 2
     {
         return None;
+    }
+    for (id, other) in [(bond.a, bond.b), (bond.b, bond.a)] {
+        let substituted = faces.graph().bonds(id).any(|(_, neighbor)| {
+            let next = if neighbor.a == id {
+                neighbor.b
+            } else {
+                neighbor.a
+            };
+            next != other
+                && faces.doc().bond_visible(id, next)
+                && faces.atom(next).is_some_and(|atom| atom.element != "H")
+        });
+        if !substituted {
+            let atom = faces.atom(id)?;
+            // Check terminal labels before searching attached rings, so a
+            // carbonyl never walks its acyclic backbone looking for a ring.
+            // ChemDraw offsets skeletal =CH2, but centers terminal heteroatoms
+            // and explicitly labelled carbons.
+            if atom.element != "C"
+                || faces.graph().visible(atom)
+                || atom.charge != 0
+                || faces.doc().abbreviation(id).is_some()
+            {
+                return None;
+            }
+        }
     }
     let side =
         |p: Point, origin: Point| (b.x - a.x) * (p.y - origin.y) - (b.y - a.y) * (p.x - origin.x);
     let mut count: i32 = 0;
     let mut ring_side = 0.;
+    let mut any_substituted = false;
     for (id, other, origin) in [(bond.a, bond.b, a), (bond.b, bond.a, b)] {
-        let mut substituted = false;
         for (_, neighbor) in faces.graph().bonds(id) {
             let next = if neighbor.a == id {
                 neighbor.b
@@ -1734,7 +1758,10 @@ fn chain_double_side(faces: &FaceIndex<'_>, bond: &Bond, a: Point, b: Point) -> 
             let Some(atom) = faces.atom(next) else {
                 continue;
             };
-            substituted = true;
+            if atom.element == "H" {
+                continue;
+            }
+            any_substituted = true;
             let cross = side(atom.position, origin);
             if cross.abs() > 0.001 {
                 count += if cross > 0. { 1 } else { -1 };
@@ -1756,18 +1783,17 @@ fn chain_double_side(faces: &FaceIndex<'_>, bond: &Bond, a: Point, b: Point) -> 
                 }
             }
         }
-        if !substituted {
-            return None;
-        }
+    }
+    if !any_substituted {
+        return None;
     }
     Some(if ring_side != 0. {
         ring_side.signum()
     } else if count != 0 {
         count.signum() as f32
-    } else if bond.a < bond.b {
-        // A trans tie may use either side; keep the choice deterministic.
-        1.
     } else {
+        // ChemDraw's automatic tie is negative relative to B -> E. CDXML
+        // preserves that order as a -> b and keeps the downward-positive y.
         -1.
     })
 }

@@ -15,26 +15,31 @@ fn chain(points: &[(f32, f32)], edges: &[(usize, usize, u8)]) -> Document {
 
 #[test]
 fn chain_doubles_count_substituents_and_respect_the_style_and_explicit_positions() {
-    // E-but-2-ene has one substituent on each side; either offset is valid.
+    // E-but-2-ene has one substituent on each side. ChemDraw selects the
+    // negative side of the stored endpoint order, independent of atom IDs.
     let mut doc = chain(
         &[(0., 0.), (42., 0.), (-21., -36.), (63., 36.), (-21., 36.)],
         &[(0, 1, 2), (0, 2, 1), (1, 3, 1)],
     );
-    assert_ne!(
+    assert_eq!(
         effective_double_position(&doc, &doc.bonds[0]),
-        DoublePosition::Center
+        DoublePosition::Left
     );
     let mut reversed = doc.bonds[0].clone();
     reversed.reverse();
     assert_eq!(
         effective_double_position(&doc, &reversed),
-        effective_double_position(&doc, &doc.bonds[0]).reversed()
+        DoublePosition::Left
     );
     // Two methyl groups below the alkene beat the single methyl above it.
     doc.add_bond(doc.atoms[0].id, doc.atoms[4].id, 1, "plain");
     assert_eq!(
         effective_double_position(&doc, &doc.bonds[0]),
         DoublePosition::Right
+    );
+    assert_eq!(
+        effective_double_position(&doc, &reversed),
+        DoublePosition::Left
     );
     doc.bonds[0].order = 7;
     assert_eq!(
@@ -57,15 +62,74 @@ fn chain_doubles_count_substituents_and_respect_the_style_and_explicit_positions
 }
 
 #[test]
-fn terminal_doubles_keep_auto_centered() {
-    for element in ["C", "O", "N"] {
+fn terminal_carbon_doubles_offset_but_heteroatoms_and_labels_stay_centered() {
+    for element in ["C", "O", "N", "S"] {
         let mut doc = chain(&[(0., 0.), (42., 0.), (-21., 36.)], &[(0, 1, 2), (0, 2, 1)]);
         doc.atoms[1].element = element.into();
+        assert_eq!(
+            effective_double_position(&doc, &doc.bonds[0]),
+            if element == "C" {
+                DoublePosition::Right
+            } else {
+                DoublePosition::Center
+            },
+            "terminal {element}"
+        );
+        doc.atoms[1].display.carbons = Some(crate::atom_labels::Carbons::All);
         assert_eq!(
             effective_double_position(&doc, &doc.bonds[0]),
             DoublePosition::Center
         );
     }
+    let mut doc = chain(&[(0., 0.), (42., 0.), (-21., 36.)], &[(0, 1, 2), (0, 2, 1)]);
+    let mut reversed = doc.bonds[0].clone();
+    reversed.reverse();
+    assert_eq!(
+        effective_double_position(&doc, &reversed),
+        DoublePosition::Left
+    );
+    doc.drawing_style.center_chain_double_bonds = true;
+    assert_eq!(
+        effective_double_position(&doc, &doc.bonds[0]),
+        DoublePosition::Center
+    );
+    doc.drawing_style.center_chain_double_bonds = false;
+    doc.bonds[0].order = 3;
+    doc.atoms[1].element = "N".into();
+    assert_eq!(
+        effective_double_position(&doc, &doc.bonds[0]),
+        DoublePosition::Center
+    );
+}
+
+#[test]
+fn explicit_terminal_hydrogens_do_not_count_as_alkene_substituents() {
+    // Explicit H positions must not outvote the heavy substituent, even when
+    // both are drawn on the opposite side of the alkene axis.
+    let mut doc = chain(
+        &[(0., 0.), (42., 0.), (-21., 36.), (63., -36.), (21., -36.)],
+        &[(0, 1, 2), (0, 2, 1), (1, 3, 1), (1, 4, 1)],
+    );
+    doc.atoms[3].element = "H".into();
+    doc.atoms[4].element = "H".into();
+    assert_eq!(
+        effective_double_position(&doc, &doc.bonds[0]),
+        DoublePosition::Right
+    );
+    doc.atoms[1].element = "N".into();
+    assert_eq!(
+        effective_double_position(&doc, &doc.bonds[0]),
+        DoublePosition::Center
+    );
+}
+
+#[test]
+fn unsubstituted_ethene_stays_centered() {
+    let doc = chain(&[(0., 0.), (42., 0.)], &[(0, 1, 2)]);
+    assert_eq!(
+        effective_double_position(&doc, &doc.bonds[0]),
+        DoublePosition::Center
+    );
 }
 
 #[test]

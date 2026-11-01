@@ -2,10 +2,13 @@
 
 Automatic fusion double bonds now favour the ring with more other double or
 aromatic bonds, preferring six-membered rings on a tie. Substituted chain double
-bonds offset automatically; **Center chain double bonds** in Document Style
-restores centered chains. Inner-line endpoints follow adjoining angle bisectors
-in small rings and stay untrimmed at bare ends. Shared geometry keeps drawing,
-crossings, arrow attachments and exports aligned.
+bonds offset toward an attached ring or, when no attached ring selects a side,
+the side with more substituent bonds, including unlabeled terminal =CH₂. Equal
+counts then follow ChemDraw 26.1's ACS Document 1996 stored-direction tie rule.
+Terminal heteroatom doubles such as C=O remain centered. **Center chain double
+bonds** in Document Style restores centered chains. Inner-line endpoints follow
+adjoining angle bisectors in small rings and stay untrimmed at bare ends.
+Shared geometry keeps drawing, crossings, arrow attachments and exports aligned.
 ([#778](https://github.com/Ameyanagi/ReShiki/issues/778), [#779](https://github.com/Ameyanagi/ReShiki/issues/779), [#780](https://github.com/Ameyanagi/ReShiki/issues/780)).
 
 On Windows, Office drawing tabs name their application, such as
