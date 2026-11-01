@@ -247,6 +247,7 @@ pub fn text_ascent(style: &crate::typography::TextStyle) -> f32 {
             },
             ..Query::default()
         })
+        .or_else(|| glyph_face('N', style, &fonts))
         .and_then(|id| {
             fonts.db.with_face_data(id, |bytes, index| {
                 let face = font::face(bytes, index, if style.bold { 700 } else { 400 })?;
@@ -289,10 +290,92 @@ pub fn ui_font_family() -> &'static str {
 
 /// The families a label's glyph is looked up in, in order: its own, the
 /// sans-serif fallbacks, then the fonts added at runtime.
-fn fallback_families<'a>(family: &'a str, fonts: &'a Fonts) -> impl Iterator<Item = &'a str> {
+fn fallback_families<'a>(family: &'a str, added: &'a [&str]) -> impl Iterator<Item = &'a str> {
     std::iter::once(family)
         .chain(SANS_FALLBACKS.iter().copied())
-        .chain(fonts.added.iter().copied())
+        .chain(added.iter().copied())
+}
+
+/// Resolve a glyph in the measuring database's fallback order. After named
+/// families, match the canvas's last resort: the installed face nearest the
+/// requested style, stretch and weight that contains the glyph, first in
+/// database order on a tie (hidden system faces such as `.LastResort` excepted).
+pub fn resolve_font(
+    db: &resvg::usvg::fontdb::Database,
+    family: &str,
+    weight: resvg::usvg::fontdb::Weight,
+    style: resvg::usvg::fontdb::Style,
+    c: char,
+) -> Option<resvg::usvg::fontdb::ID> {
+    let added = fonts().added.clone();
+    resolve_font_in(db, family, weight, style, c, &added)
+}
+
+fn resolve_font_in(
+    db: &resvg::usvg::fontdb::Database,
+    family: &str,
+    weight: resvg::usvg::fontdb::Weight,
+    style: resvg::usvg::fontdb::Style,
+    c: char,
+    added: &[&str],
+) -> Option<resvg::usvg::fontdb::ID> {
+    use resvg::usvg::fontdb::{Family, Query};
+    let has_glyph = |id| {
+        db.with_face_data(id, |bytes, index| {
+            font::face(bytes, index, weight.0)?.glyph_index(c)
+        })
+        .flatten()
+        .is_some()
+    };
+    fallback_families(family, added)
+        .filter(|name| !name.starts_with('.'))
+        .find_map(|name| {
+            db.query(&Query {
+                families: &[Family::Name(name)],
+                weight,
+                style,
+                ..Default::default()
+            })
+            .filter(|id| has_glyph(*id))
+        })
+        .or_else(|| {
+            db.faces()
+                .filter(|face| !hidden(face) && has_glyph(face.id))
+                .min_by_key(|face| {
+                    (
+                        face.style != style,
+                        face.stretch != resvg::usvg::fontdb::Stretch::Normal,
+                        face.weight.0.abs_diff(weight.0),
+                    )
+                })
+                .map(|face| face.id)
+        })
+}
+
+fn hidden(face: &resvg::usvg::fontdb::FaceInfo) -> bool {
+    face.families
+        .first()
+        .is_none_or(|(name, _)| name.starts_with('.'))
+}
+
+fn glyph_face(
+    c: char,
+    style: &crate::typography::TextStyle,
+    fonts: &Fonts,
+) -> Option<resvg::usvg::fontdb::ID> {
+    use resvg::usvg::fontdb::{Style, Weight};
+    resolve_font_in(
+        &fonts.db,
+        &style.family,
+        Weight(if style.bold { 700 } else { 400 }),
+        if style.italic {
+            Style::Italic
+        } else {
+            Style::Normal
+        },
+        c,
+        &fonts.added,
+    )
 }
 
 type GlyphKey = (String, bool, bool, char);
@@ -302,7 +385,6 @@ static GLYPHS: LazyLock<Mutex<HashMap<GlyphKey, GlyphMetrics>>> = LazyLock::new(
 /// Resolve a font that actually contains the glyph and measure that same face.
 /// Cache bounded metrics so repeated scene layout never rereads every font file.
 pub fn glyph_metrics(c: char, style: &crate::typography::TextStyle) -> GlyphMetrics {
-    use resvg::usvg::fontdb::{Family, Query};
     let key = (style.family.clone(), style.bold, style.italic, c);
     if let Ok(cache) = GLYPHS.lock()
         && let Some(result) = cache.get(&key)
@@ -310,19 +392,26 @@ pub fn glyph_metrics(c: char, style: &crate::typography::TextStyle) -> GlyphMetr
         return *result;
     }
     let fonts = fonts();
-    let result = fallback_families(&style.family, &fonts)
-        .find_map(|name| {
+    let result = glyph_metrics_in(c, style, &fonts);
+    drop(fonts);
+    if let Ok(mut cache) = GLYPHS.lock() {
+        if cache.len() >= 16384 {
+            cache.clear();
+        }
+        cache.insert(key, result);
+    }
+    result
+}
+
+fn glyph_metrics_in(c: char, style: &crate::typography::TextStyle, fonts: &Fonts) -> GlyphMetrics {
+    glyph_face(c, style, fonts)
+        .and_then(|id| {
+            let info = fonts.db.face(id)?;
+            // Preserve a named match (including aliases) in exported SVG.
+            let name = fallback_families(&style.family, &fonts.added)
+                .find(|name| info.families.iter().any(|(n, _)| n == name))
+                .or_else(|| info.families.first().map(|(name, _)| name.as_str()))?;
             let family = fonts.names.iter().find(|n| **n == name).copied()?;
-            let id = fonts.db.query(&Query {
-                families: &[Family::Name(family)],
-                weight: resvg::usvg::fontdb::Weight(if style.bold { 700 } else { 400 }),
-                style: if style.italic {
-                    resvg::usvg::fontdb::Style::Italic
-                } else {
-                    resvg::usvg::fontdb::Style::Normal
-                },
-                ..Default::default()
-            })?;
             fonts
                 .db
                 .with_face_data(id, |bytes, index| {
@@ -335,15 +424,7 @@ pub fn glyph_metrics(c: char, style: &crate::typography::TextStyle) -> GlyphMetr
         .unwrap_or_else(|| {
             let family = fonts.names.iter().find(|n| **n == style.family);
             (family.copied().unwrap_or("Arial"), 0.6)
-        });
-    drop(fonts);
-    if let Ok(mut cache) = GLYPHS.lock() {
-        if cache.len() >= 16384 {
-            cache.clear();
-        }
-        cache.insert(key, result);
-    }
-    result
+        })
 }
 
 static GLYPH_REACH: LazyLock<Mutex<HashMap<String, Option<f32>>>> = LazyLock::new(Default::default);
@@ -358,35 +439,44 @@ pub fn label_glyph_reach(family: &str) -> Option<f32> {
         return *reach;
     }
     let fonts = fonts();
+    let chain: Vec<_> = fallback_families(family, &fonts.added)
+        .flat_map(|name| {
+            fonts
+                .db
+                .faces()
+                .filter(move |face| face.families.iter().any(|(n, _)| n == name))
+        })
+        .collect();
+    // With none of them installed, labels take any face's glyphs.
+    let faces = if chain.is_empty() {
+        fonts.db.faces().filter(|face| !hidden(face)).collect()
+    } else {
+        chain
+    };
     // Glyphs no face has are measured 0.6 em wide and 1 em tall.
     let mut reach = Some(1f32);
-    for name in fallback_families(family, &fonts) {
-        for face in fonts.db.faces() {
-            if !face.families.iter().any(|(n, _)| n == name) {
-                continue;
-            }
-            let extent = fonts
-                .db
-                .with_face_data(face.id, |bytes, index| {
-                    let face = ttf_parser::Face::parse(bytes, index).ok()?;
-                    if face.is_variable() {
-                        return None;
-                    }
-                    let advance = (0..face.number_of_glyphs())
-                        .filter_map(|g| face.glyph_hor_advance(ttf_parser::GlyphId(g)))
-                        .max()
-                        .unwrap_or(0);
-                    let abs = |v: i16| i32::from(v).unsigned_abs();
-                    let b = face.global_bounding_box();
-                    // Ink is placed from the ascent down, as in `text_ink_shapes`.
-                    let ink = abs(b.x_min)
-                        .max(abs(b.x_max))
-                        .max(abs(face.ascender()) + abs(b.y_min).max(abs(b.y_max)));
-                    Some(u32::from(advance).max(ink) as f32 / f32::from(face.units_per_em()))
-                })
-                .flatten();
-            reach = reach.zip(extent).map(|(r, e)| r.max(e));
-        }
+    for face in faces {
+        let extent = fonts
+            .db
+            .with_face_data(face.id, |bytes, index| {
+                let face = ttf_parser::Face::parse(bytes, index).ok()?;
+                if face.is_variable() {
+                    return None;
+                }
+                let advance = (0..face.number_of_glyphs())
+                    .filter_map(|g| face.glyph_hor_advance(ttf_parser::GlyphId(g)))
+                    .max()
+                    .unwrap_or(0);
+                let abs = |v: i16| i32::from(v).unsigned_abs();
+                let b = face.global_bounding_box();
+                // Ink is placed from the ascent down, as in `text_ink_shapes`.
+                let ink = abs(b.x_min)
+                    .max(abs(b.x_max))
+                    .max(abs(face.ascender()) + abs(b.y_min).max(abs(b.y_max)));
+                Some(u32::from(advance).max(ink) as f32 / f32::from(face.units_per_em()))
+            })
+            .flatten();
+        reach = reach.zip(extent).map(|(r, e)| r.max(e));
     }
     drop(fonts);
     if let Ok(mut cache) = GLYPH_REACH.lock() {
@@ -419,12 +509,11 @@ pub fn text_ink_shapes(
     style: &crate::typography::TextStyle,
 ) -> Vec<InkShape> {
     use crate::document::Point;
-    use resvg::usvg::fontdb::{Family, Query};
     let mut x = 0.;
     let mut shapes = Vec::new();
     for c in text.chars() {
-        let (family, advance) = glyph_metrics(c, style);
-        let key = (family.to_owned(), style.bold, style.italic, c);
+        let (_, advance) = glyph_metrics(c, style);
+        let key = (style.family.clone(), style.bold, style.italic, c);
         let cached = GLYPH_INK
             .lock()
             .ok()
@@ -433,18 +522,7 @@ pub fn text_ink_shapes(
             ink
         } else {
             let fonts = fonts();
-            let ink = fonts
-                .db
-                .query(&Query {
-                    families: &[Family::Name(family)],
-                    weight: resvg::usvg::fontdb::Weight(if style.bold { 700 } else { 400 }),
-                    style: if style.italic {
-                        resvg::usvg::fontdb::Style::Italic
-                    } else {
-                        resvg::usvg::fontdb::Style::Normal
-                    },
-                    ..Default::default()
-                })
+            let ink = glyph_face(c, style, &fonts)
                 .and_then(|id| {
                     fonts.db.with_face_data(id, |bytes, index| {
                         let face = font::face(bytes, index, if style.bold { 700 } else { 400 })?;
@@ -532,6 +610,7 @@ fn family_names(db: &resvg::usvg::fontdb::Database) -> &'static [&'static str] {
         .collect::<Vec<_>>()
         .leak()
 }
+
 pub fn font_families() -> &'static [&'static str] {
     fonts().names
 }
@@ -552,7 +631,6 @@ pub fn outline_text(
     origin: crate::document::Point,
 ) -> Vec<crate::graphics::PathCommand> {
     use crate::{document::Point, graphics::PathCommand};
-    use resvg::usvg::fontdb::{Family, Query};
     struct Outline {
         commands: Vec<PathCommand>,
         at: Point,
@@ -597,29 +675,27 @@ pub fn outline_text(
         }
     }
     let fonts = fonts();
-    fonts
-        .db
-        .query(&Query {
-            families: &[Family::Name(&DEFAULT.font_family), Family::SansSerif],
-            ..Query::default()
-        })
-        .and_then(|id| {
-            fonts.db.with_face_data(id, |bytes, index| {
-                let face = font::face(bytes, index, 400)?;
-                let mut b = Outline {
-                    commands: vec![],
-                    at: origin,
-                    last: origin,
-                    scale: size / face.units_per_em() as f32,
-                };
-                for c in text.chars() {
+    let style = DEFAULT.text_style();
+    let mut b = Outline {
+        commands: vec![],
+        at: origin,
+        last: origin,
+        scale: 0.,
+    };
+    for c in text.chars() {
+        let advance = glyph_face(c, &style, &fonts)
+            .and_then(|id| {
+                fonts.db.with_face_data(id, |bytes, index| {
+                    let face = font::face(bytes, index, 400)?;
                     let glyph = face.glyph_index(c)?;
+                    b.scale = size / face.units_per_em() as f32;
                     face.outline_glyph(glyph, &mut b);
-                    b.at.x += face.glyph_hor_advance(glyph).unwrap_or(0) as f32 * b.scale;
-                }
-                Some(b.commands)
+                    Some(face.glyph_hor_advance(glyph)? as f32 * b.scale)
+                })
             })
-        })
-        .flatten()
-        .unwrap_or_default()
+            .flatten()
+            .unwrap_or(size * 0.6);
+        b.at.x += advance;
+    }
+    b.commands
 }
