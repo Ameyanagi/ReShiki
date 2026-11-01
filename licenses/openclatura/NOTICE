@@ -1,0 +1,24 @@
+openclatura structure-to-name source and reference data
+======================================================
+
+src/naming/openclatura/ is a native Rust adaptation of the openclatura 0.4.3
+plain-name pipeline, from chains to fused ring systems. Its embedded
+data/ JSON registries are copied from the same upstream release. The graph
+adapter uses ReShiki's native chemistry implementation in place of RDKit;
+tests/fixtures/openclatura/graph_oracle.json records upstream read_smiles
+results with RDKit 2026.09.1 for comparison with that adapter.
+
+tests/fixtures/s2n/openclatura_tests.tsv and the openclatura_name column of
+tests/fixtures/s2n/bakeoff_corpus.tsv are derived from openclatura 0.4.3
+(lamalab-org, https://github.com/lamalab-org/openclatura), commit
+90dc5bcb4910c196122ec0405d06a32929a8f308:
+
+- SMILES strings and expected names mined from its tests/ directory;
+- names produced by openclatura 0.4.3 for those SMILES and for the bake-off
+  corpus, used as the port-parity reference.
+
+Copyright (c) 2026 lamalab-org
+Licensed under MIT; see LICENSE in this directory.
+
+The adapted source, copied registries, and derived fixtures retain their MIT
+terms and are not represented as original dual-licensed ReShiki material.

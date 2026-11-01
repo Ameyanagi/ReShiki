@@ -196,6 +196,7 @@ fn parse_reply(bytes: &[u8], name: &str) -> Result<Record, Error> {
     Ok(Record {
         title: name.into(),
         systematic_name: None,
+        name_status: None,
         smiles,
         canonical_smiles,
         synonyms,

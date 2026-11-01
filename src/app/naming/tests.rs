@@ -21,7 +21,7 @@ fn structure_naming_failures_do_not_create_name_import_notices() {
             } else {
                 assert!(matches!(pending, Pending::Caption(_)));
             }
-            let detail = "Unsupported fused-ring parent in local organic rules";
+            let detail = "openclatura: isotopic naming not ported";
             let result = if stale {
                 app.tab.revision += 1;
                 Ok(Outcome::Structure(record("CCO")))
@@ -565,8 +565,31 @@ async fn caption_requires_current_graph_and_is_undoable() -> Result<(), String> 
 #[tokio::test]
 #[ignore = "Opt-in native renderer accessibility metadata and dispatch"]
 async fn controls_publish_named_native_actions_and_editable_values() -> Result<(), String> {
-    use iced::advanced::renderer::Headless;
+    use iced::advanced::{
+        renderer::Headless,
+        widget::{Id, Operation},
+    };
     use reshiki::accessibility::{Activate, Collect};
+
+    #[derive(Default)]
+    struct StatusTag {
+        bounds: Option<iced::Rectangle>,
+        preferred_label: bool,
+    }
+    impl Operation for StatusTag {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+        fn container(&mut self, id: Option<&Id>, bounds: iced::Rectangle) {
+            if id == Some(&Id::from("naming.name-status")) {
+                self.bounds = Some(bounds);
+            }
+        }
+        fn text(&mut self, _: Option<&Id>, _: iced::Rectangle, text: &str) {
+            self.preferred_label |= text == "Preferred IUPAC name";
+        }
+    }
+
     let (mut app, _) = App::new();
     app.tab.busy = false;
     app.tab.naming.name = "ethanol".into();
@@ -600,6 +623,14 @@ async fn controls_publish_named_native_actions_and_editable_values() -> Result<(
         Default::default(),
         &mut renderer,
     );
+    let mut name_status = StatusTag::default();
+    ui.operate(&renderer, &mut name_status);
+    let bounds = name_status.bounds.ok_or("Name status tag missing")?;
+    assert!(
+        bounds.width > 0. && bounds.y + bounds.height <= size.height,
+        "{bounds:?}"
+    );
+    assert!(name_status.preferred_label);
     let mut collect = Collect::new(iced::Rectangle::with_size(size));
     ui.operate(
         &renderer,

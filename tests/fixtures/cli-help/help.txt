@@ -6,6 +6,7 @@ Commands:
   render   Render a preview image of a structure or drawing
   compose  Lay out an assistant Proposal (JSON) and write it as a file
   analyze  Print molecular properties as one JSON line
+  name     Print the systematic name of a structure
   info     Print versions, limits and formats as one JSON line
   tools    Print the agent tool catalog as one JSON line
   schema   Print a JSON Schema: reshiki --cli schema proposal
@@ -19,6 +20,7 @@ Examples:
   reshiki --cli convert scheme.rsk -o figure.pdf
   reshiki --cli render scheme.rsk -o preview.png
   reshiki --cli analyze --smiles 'c1ccccc1O'
+  reshiki --cli name --smiles 'CC(=O)O'
   reshiki --cli compose proposal.json -o scheme.svg
 
 Output:

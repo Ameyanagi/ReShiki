@@ -69,7 +69,7 @@ fn stale_or_unsupported_completion_changes_no_drawing_or_history() {
             Ok(Outcome::Structure(record("CCO")))
         } else {
             Err(naming::Error::Rejected(
-                "Unsupported fused-ring parent in local organic rules".into(),
+                "openclatura: isotopic naming not ported".into(),
             ))
         };
         let _ = app.naming_action(Action::Finished(ticket, Box::new(result)));
@@ -85,10 +85,7 @@ fn stale_or_unsupported_completion_changes_no_drawing_or_history() {
                 "The molecule changed while naming. Show its name again"
             );
         } else {
-            assert_eq!(
-                app.status,
-                "Unsupported fused-ring parent in local organic rules"
-            );
+            assert_eq!(app.status, "openclatura: isotopic naming not ported");
         }
     }
 }
@@ -105,12 +102,12 @@ async fn actual_local_worker_name_is_accepted_only_for_the_target_graph() -> Res
     let generated = naming::generate_name(&identity, naming::Cancel::default())
         .await
         .map_err(|error| error.to_string())?;
-    assert_eq!(generated.systematic_name.as_deref(), Some("ethan-1-ol"));
+    assert_eq!(generated.systematic_name.as_deref(), Some("ethanol"));
     let _ = app.naming_action(Action::Finished(
         ticket,
         Box::new(Ok(Outcome::Structure(generated))),
     ));
-    assert_eq!(app.tab.doc.annotations[0].text, "ethan-1-ol");
+    assert_eq!(app.tab.doc.annotations[0].text, "ethanol");
     assert_eq!(naming::document_identity(&app.tab.doc)?.smiles, "CCO");
     Ok(())
 }

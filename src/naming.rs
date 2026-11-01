@@ -5,6 +5,7 @@ use crate::{
     editing,
     molecule_names::{self, IdentityRejection, MAX_NAMING_ATOMS, MAX_SMILES_BYTES, is_tetrahedral},
 };
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 mod catalog;
@@ -18,8 +19,10 @@ mod client;
 mod local;
 mod online;
 pub use online::resolve_name_online;
+pub mod openclatura;
 mod reverse;
-mod rules;
+#[cfg(test)]
+mod s2n_harness;
 pub mod worker;
 #[cfg(not(target_arch = "wasm32"))]
 pub use {
@@ -63,11 +66,119 @@ impl std::fmt::Display for Error {
 }
 impl std::error::Error for Error {}
 
+/// Preference assessment made by the rules that produced a generated name.
+/// This is independent of the later OPSIN structure reconstruction check.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "status", content = "reason", rename_all = "snake_case")]
+pub enum NameStatus {
+    Preferred,
+    NotPreferred(NameReason),
+    Unverified(NameReason),
+}
+impl NameStatus {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Preferred => "Preferred IUPAC name",
+            Self::NotPreferred(_) => "Systematic name, not the preferred IUPAC name",
+            Self::Unverified(_) => "Systematic name, preference not verified",
+        }
+    }
+
+    pub fn detail(self) -> &'static str {
+        match self {
+            Self::Preferred => {
+                "No rule on this name's path is known to depart from the preferred IUPAC name (IUPAC 2013)."
+            }
+            Self::NotPreferred(reason) | Self::Unverified(reason) => reason.detail(),
+        }
+    }
+}
+
+/// The naming rule family responsible for a preference assessment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NameReason {
+    SulfonylPrefix,
+    AminoPrefix,
+    FunctionalClass,
+    HydrideParent,
+    UnretainedParent,
+    DiamideLocants,
+    FusionComponent,
+    Multiplicative,
+    AcylPrefix,
+    RingAssembly,
+    OpsinFusionLayout,
+    BridgedFusedParent,
+    UnauditedParent,
+    SubstitutedRetainedParent,
+    AtomOrder,
+    AmineChalcogenide,
+    PrincipalGroupTie,
+}
+impl NameReason {
+    pub fn detail(self) -> &'static str {
+        match self {
+            Self::SulfonylPrefix => {
+                "Uses a concatenated sulfonyl or sulfinyl prefix such as N-methyltosylamino or (methylsulfinyl)amino; preferred IUPAC names use acid-derived forms such as N,4-dimethylbenzene-1-sulfonamido or methanesulfinamido (P-65.3.2.2.2, P-66.1.1.4.3)."
+            }
+            Self::AminoPrefix => {
+                "Uses a guanidino prefix substituted on its outer nitrogens or with an E/Z descriptor, such as 3-methylguanidino; preferred IUPAC names cite carbamimidoyl inside an amino prefix, as in (N-methylcarbamimidoyl)amino (P-66.4.1.2.1.3)."
+            }
+            Self::FunctionalClass => {
+                "Uses a functional-class form such as a hydrazone, a chiral sulfoxide, a mixed chalcogen peroxide or a phosphane oxide with halide or alkoxy ligands; preferred IUPAC names use substitutive or acid-derived forms such as ethylidenehydrazine, (S)-(methanesulfinyl)ethane, [(phenylselanyl)tellanyl]benzene or dimethylphosphinic fluoride (P-68.3.1.2.2, P-93.3.4.1, P-63.3.2, P-68.3.2.3.1)."
+            }
+            Self::HydrideParent => {
+                "Uses a substituted parent hydride such as chloro(methyl)azane, 1,2-dimethyldisulfane or ethoxy(methyl)sulfane; preferred IUPAC names use methylhypochlorous amide, (methyldisulfanyl)methane or [(methylsulfanyl)oxy]ethane (P-68.5.3, P-63.3.1, P-63.3.2)."
+            }
+            Self::UnretainedParent => {
+                "Uses a substituted methanal or methanenitrile oxide, an N-substituted ethanediamide, or a formic acid, formyl halide or formamide substituted on carbon; preferred IUPAC names use N-substituted oxamide (P-66.1.1.1.2.1) or carbonic and carbamic acid derivatives such as carbonochloridic acid (P-65.1.8.1)."
+            }
+            Self::DiamideLocants => {
+                "Uses N or N' locants on a di- or polyamide; the preferred IUPAC name cites the parent locant on each nitrogen, as in N1-methylbutanediamide (P-66.1.1.3.1.1)."
+            }
+            Self::FusionComponent => {
+                "Uses isoxazole or isothiazole as a fusion parent component, as in cyclopenta[c]isoxazole or benzo[d]isothiazole; preferred IUPAC names use [1,2]oxazole and [1,2]thiazole, or a benzo name such as 1,2-benzothiazole (P-25.3.2.1.2, P-25.2.2.4)."
+            }
+            Self::Multiplicative => {
+                "Names two identical units joined by an oxygen, chalcogen, sulfinyl, sulfonyl or methylene link substitutively, as in phenoxybenzene, (benzenesulfinyl)benzene or [(carboxymethyl)sulfanyl]acetic acid; the preferred IUPAC name is multiplicative, as in 1,1'-oxydibenzene, 1,1'-sulfinyldibenzene or 2,2'-sulfanediyldiacetic acid (P-51.3.1, P-63.2.4.2, P-63.6)."
+            }
+            Self::AcylPrefix => {
+                "Uses an acyl prefix built from a substituent, such as (4-methylphenyl)carbonyl, cyclohexylcarbonothioyl, (dimethyloxophosphanyl) or (dimethyloxoarsanyl), or an oxophosphanyl prefix on a parent, as in (methyloxophosphanyl)methane; preferred IUPAC names use the acid-derived forms 4-methylbenzoyl, cyclohexanecarbothioyl, dimethylphosphinoyl, dimethylarsinoyl and dimethyl-lambda5-phosphanone (P-65.1.7.4.2, P-67.1.4.1.1.3, P-68.3.2.3.1)."
+            }
+            Self::RingAssembly => {
+                "Names identical rings or ring systems joined directly by a single or double bond substitutively, as in 2-(pyridin-2-yl)pyridine, cyclopropylcyclopropane, 1,4-diphenylbenzene or 4-phenylphenol. These are ring assemblies, and \"preferred IUPAC names for assemblies of two or more identical cyclic systems joined by a single bond are formed using the names of parent hydrides rather than the names of substituent groups, except for biphenyl and polyphenyl assemblies\" (P-52.2.7.1): 2,2'-bipyridine, 1,1'-bi(cyclopropane), 1^1,2^1:2^4,3^1-terphenyl, [1,1'-biphenyl]-4-ol, or 1,1'-bi(cyclopentylidene) for a double bond; more than six take a phane name (P-28.2, P-28.3, P-28.5)."
+            }
+            Self::OpsinFusionLayout => {
+                "Uses a fusion layout selected for OPSIN numbering compatibility; its preferred IUPAC numbering has not been verified."
+            }
+            Self::BridgedFusedParent => {
+                "The preferred parent choice for this bridged-fused system has not been verified."
+            }
+            Self::UnauditedParent => {
+                "Porphyrin, corrin and gonane are retained parents without a PIN designation in P-10; preferred name selection for this path has not been verified."
+            }
+            Self::SubstitutedRetainedParent => {
+                "Whether a substituted acetaldehyde keeps its retained name in the preferred IUPAC name has not been verified."
+            }
+            Self::AtomOrder => {
+                "The name can depend on input atom order; its preferred numbering has not been verified."
+            }
+            Self::AmineChalcogenide => {
+                "Amine oxide-type names (amine sulfide, selenide, telluride) have not been checked against the preferred IUPAC form."
+            }
+            Self::PrincipalGroupTie => {
+                "Equally senior principal groups, such as a chain and a ring carboxylic acid, were chosen by atom order; the preferred parent (P-44.1) has not been verified."
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Provenance {
     OpsinRust,
     OpsinRustRetainedName { source: &'static str },
-    LocalRules,
+    Openclatura,
     PubChem { cid: u64 },
 }
 impl Provenance {
@@ -86,7 +197,7 @@ impl Provenance {
                 format!("{source} retained name · parsed locally by OPSIN Rust port")
             }
             Self::PubChem { cid } => format!("PubChem database · CID {cid}"),
-            Self::LocalRules => "ReShiki rules 1 · verified by OPSIN Rust port".into(),
+            Self::Openclatura => "openclatura 0.4.3 Rust port · verified by OPSIN Rust port".into(),
         }
     }
 }
@@ -97,6 +208,8 @@ pub struct Record {
     /// The source's systematic name. OPSIN parses the supplied name; it does
     /// not produce a new systematic name from a graph.
     pub systematic_name: Option<String>,
+    /// Only generated names carry a rule-path preference assessment.
+    pub name_status: Option<NameStatus>,
     pub smiles: String,
     pub canonical_smiles: String,
     /// Curated offline aliases, separate from the generated systematic name.

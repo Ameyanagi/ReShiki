@@ -1197,11 +1197,16 @@ fn compare_sequences(graph: &Graph, first: &[AtomId], second: &[AtomId]) -> Orde
             return second_hetero.cmp(&first_hetero);
         }
     }
-    for (&first, &second) in non_fusion_first.iter().zip(&non_fusion_second) {
-        let result = heteroatom_priority(graph.atom(second).element)
-            .cmp(&heteroatom_priority(graph.atom(first).element));
-        if result != Ordering::Equal {
-            return result;
+    // Upstream divergence: OPSIN (2.9.0 to main) compares seniority position by
+    // position; FR-5.4(b) gives low locants to O first, then S, and so on, as in
+    // the angular oxazole/thiazole system c1nc2ccc3ocnc3c2s1.
+    for priority in (2..=24).rev() {
+        for (&first, &second) in non_fusion_first.iter().zip(&non_fusion_second) {
+            let result = (heteroatom_priority(graph.atom(second).element) == priority)
+                .cmp(&(heteroatom_priority(graph.atom(first).element) == priority));
+            if result != Ordering::Equal {
+                return result;
+            }
         }
     }
     for (&first, &second) in first.iter().zip(second) {

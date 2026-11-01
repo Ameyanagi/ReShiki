@@ -3,8 +3,9 @@
 **Experimental. In ReShiki 0.12.0 and later.** Commands,
 options and output may change in any build.
 
-`reshiki --cli` runs one command and exits. It converts, renders, lays out and
-analyzes structures with the same operations as the [MCP server](agent-api.md),
+`reshiki --cli` runs one command and exits. It converts, renders, lays out
+and analyzes structures with the same operations as the
+[MCP server](agent-api.md), and names them with the app's local naming engine,
 without opening the app window. To connect an AI client instead, follow
 [Connect AI agents](https://reshiki.com/guide/agents/).
 
@@ -27,6 +28,7 @@ has every help text as the program prints it.
 | [render](#render)   | Render a preview image of a structure or drawing                  |
 | [compose](#compose) | Lay out a Proposal (JSON) and write it as a file                  |
 | [analyze](#analyze) | Print molecular properties as one JSON line                       |
+| [name](#name)       | Print the systematic name of a structure                          |
 | [info](#info)       | Print versions, limits and formats as one JSON line               |
 | [tools](#tools)     | Print the agent tool catalog as one JSON line                     |
 | [schema](#schema)   | Print the Proposal JSON Schema                                    |
@@ -47,7 +49,7 @@ has every help text as the program prints it.
 
 ## Input
 
-`convert`, `render` and `analyze` read exactly one input:
+`convert`, `render`, `analyze` and `name` read exactly one input:
 
 | Input           | Meaning                                                           |
 | --------------- | ----------------------------------------------------------------- |
@@ -117,23 +119,24 @@ MCP server's `file_save` or the app.
 
 ## Options
 
-| Option              | Commands                 | Meaning                                                                                                  |
-| ------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------- |
-| `--smiles TEXT`     | convert, render, analyze | Read SMILES text instead of a file or standard input                                                     |
-| `--from FORMAT`     | convert, render, analyze | Set the input format                                                                                     |
-| `--to FORMAT`       | convert, render, compose | Set the output format: `svg`, `pdf`, `png`, `cdxml`, `mol`, `smiles`, `inchi`; `png` or `svg` for render |
-| `-o OUTPUT`         | convert, render, compose | Write to OUTPUT, or to standard output with `-`                                                          |
-| `--pages`           | convert, compose         | Export every publication page as one PDF; PDF output only                                                |
-| `--width N`         | render                   | The widest the PNG may be, in pixels: 1 to 8192, default 1600                                            |
-| `--height N`        | render                   | The tallest the PNG may be, in pixels: 1 to 8192, default 1000                                           |
-| `--force`           | convert, render, compose | Replace OUTPUT if it exists                                                                              |
-| `--receipt`         | convert, compose         | Print one receipt JSON line after writing OUTPUT; needs `-o OUTPUT`                                      |
-| `-o FOLDER`         | skill                    | The existing folder that receives the skill folder                                                       |
-| `--name NAME`       | skill                    | The skill's name and folder name; default `reshiki`                                                      |
-| `--executable PATH` | skill                    | The absolute path of the executable the skill runs; default this executable                              |
-| `--force`           | skill                    | Replace the generated files of an existing skill folder                                                  |
-| `--receipt`         | skill                    | Print one receipt JSON line after writing the skill                                                      |
-| `--json`            | help                     | Print the command catalog as one JSON line                                                               |
+| Option              | Commands                       | Meaning                                                                                                  |
+| ------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `--smiles TEXT`     | convert, render, analyze, name | Read SMILES text instead of a file or standard input                                                     |
+| `--from FORMAT`     | convert, render, analyze, name | Set the input format                                                                                     |
+| `--to FORMAT`       | convert, render, compose       | Set the output format: `svg`, `pdf`, `png`, `cdxml`, `mol`, `smiles`, `inchi`; `png` or `svg` for render |
+| `-o OUTPUT`         | convert, render, compose       | Write to OUTPUT, or to standard output with `-`                                                          |
+| `--pages`           | convert, compose               | Export every publication page as one PDF; PDF output only                                                |
+| `--width N`         | render                         | The widest the PNG may be, in pixels: 1 to 8192, default 1600                                            |
+| `--height N`        | render                         | The tallest the PNG may be, in pixels: 1 to 8192, default 1000                                           |
+| `--force`           | convert, render, compose       | Replace OUTPUT if it exists                                                                              |
+| `--receipt`         | convert, compose               | Print one receipt JSON line after writing OUTPUT; needs `-o OUTPUT`                                      |
+| `-o FOLDER`         | skill                          | The existing folder that receives the skill folder                                                       |
+| `--name NAME`       | skill                          | The skill's name and folder name; default `reshiki`                                                      |
+| `--executable PATH` | skill                          | The absolute path of the executable the skill runs; default this executable                              |
+| `--force`           | skill                          | Replace the generated files of an existing skill folder                                                  |
+| `--receipt`         | skill                          | Print one receipt JSON line after writing the skill                                                      |
+| `--json`            | name                           | Print the name and its status as one JSON line                                                           |
+| `--json`            | help                           | Print the command catalog as one JSON line                                                               |
 
 A rendered PNG has at most 16,000,000 pixels. A `--width` or `--height` that
 is not a whole number is a usage error. A number outside 1 to 8192 fails, as
@@ -318,6 +321,56 @@ to 9 decimal places to remove floating-point noise. This is
 
 The result has the same fields as the MCP `analyze` tool's
 [result](agent-api.md#results), plus `experimental` and `api`.
+
+## name
+
+```text
+reshiki --cli name (INPUT | - | --smiles TEXT) [--from FORMAT] [--json]
+```
+
+`reshiki --cli help name` prints the [full help](agent-reference.md#reshiki---cli-name).
+
+Prints the systematic name of one connected molecule, followed by a newline.
+The input is read as for `convert`. The name comes from the app's local
+structure-to-name engine and is printed only after the OPSIN Rust port reads
+it back to the same structure, as in the app's
+[Chemical names](chemical-naming-rust.md#structure-to-name) inspector.
+Mixtures, salts and structures the engine declines are errors (exit 1), and
+stdout stays empty.
+
+```text
+$ reshiki --cli name --smiles 'CCC#N'
+propanenitrile
+```
+
+`--json` prints one JSON line with the name and its
+[preferred IUPAC name status](chemical-naming-rust.md#preferred-iupac-name-status).
+This is `name --smiles 'CC(=NN)C' --json`, shown on several lines:
+
+```json
+{
+  "api": {
+    "operation_api": 1,
+    "stability": "experimental"
+  },
+  "experimental": true,
+  "value": {
+    "detail": "Uses a functional-class form such as a hydrazone, a chiral sulfoxide, a mixed chalcogen peroxide or a phosphane oxide with halide or alkoxy ligands; preferred IUPAC names use substitutive or acid-derived forms such as ethylidenehydrazine, (S)-(methanesulfinyl)ethane, [(phenylselanyl)tellanyl]benzene or dimethylphosphinic fluoride (P-68.3.1.2.2, P-93.3.4.1, P-63.3.2, P-68.3.2.3.1).",
+    "name": "propan-2-one hydrazone",
+    "preferred": false,
+    "reason": "functional_class",
+    "status": "not_preferred"
+  }
+}
+```
+
+| Field       | Meaning                                                                                                    |
+| ----------- | ---------------------------------------------------------------------------------------------------------- |
+| `name`      | The name, exactly as plain output prints it                                                                |
+| `preferred` | `true` only when `status` is `preferred`                                                                   |
+| `status`    | `preferred`, `not_preferred` (known not to be the preferred IUPAC name) or `unverified`                    |
+| `reason`    | The rule family behind `not_preferred` or `unverified`, such as `functional_class`; `null` for `preferred` |
+| `detail`    | One sentence that explains the status                                                                      |
 
 ## info
 
