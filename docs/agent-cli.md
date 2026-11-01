@@ -344,7 +344,7 @@ propanenitrile
 
 `--json` prints one JSON line with the name and its
 [preferred IUPAC name status](chemical-naming-rust.md#preferred-iupac-name-status).
-This is `name --smiles 'CS(C)=O' --json`, shown on several lines:
+This is `name --smiles 'CC(=NN)C' --json`, shown on several lines:
 
 ```json
 {
@@ -354,8 +354,8 @@ This is `name --smiles 'CS(C)=O' --json`, shown on several lines:
   },
   "experimental": true,
   "value": {
-    "detail": "Uses a functional-class form such as sulfoxide, hydrazone or phosphane oxide; preferred IUPAC names use substitutive forms such as (methanesulfinyl)methane, ylidenehydrazine or λ5-phosphanone.",
-    "name": "dimethyl sulfoxide",
+    "detail": "Uses a functional-class form such as a hydrazone, a chiral sulfoxide or a mixed chalcogen peroxide; preferred IUPAC names use substitutive forms such as ethylidenehydrazine, (S)-(methanesulfinyl)ethane or [(phenylselanyl)tellanyl]benzene (P-68.3.1.2.2, P-93.3.4.1, P-63.3.2).",
+    "name": "propan-2-one hydrazone",
     "preferred": false,
     "reason": "functional_class",
     "status": "not_preferred"

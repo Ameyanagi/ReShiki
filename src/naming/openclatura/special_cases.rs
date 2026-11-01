@@ -1199,18 +1199,14 @@ fn sulfoxide_parent_name(mol: &Molecule, atoms: &AtomSet) -> Result<Option<Strin
     if mol.atoms[&central].raw_stereo.is_some() {
         return Err(SHORTCUT_STEREO_ERROR.into());
     }
+    // Achiral sulfoxides take substitutive names (P-63.6); a chiral one keeps the
+    // class name, as its PIN cites the descriptor before the whole name (P-93.3.4.1).
+    let Some(stereo) = &mol.atoms[&central].stereo else {
+        return Ok(None);
+    };
     ligands.sort();
-    let stereo = mol.atoms[&central]
-        .stereo
-        .as_ref()
-        .map(|s| format!("({s})-"))
-        .unwrap_or_default();
     mol.mark_name(NameStatus::NotPreferred(NameReason::FunctionalClass));
-    Ok(Some(if ligands[0] == ligands[1] {
-        format!("{stereo}di{} sulfoxide", ligands[0])
-    } else {
-        format!("{stereo}{} sulfoxide", ligands.join(" "))
-    }))
+    Ok(Some(format!("({stereo})-{} sulfoxide", ligands.join(" "))))
 }
 
 fn has_principal_group(mol: &Molecule, atoms: &AtomSet) -> bool {
@@ -1367,10 +1363,10 @@ fn simple_central_parent_hydride_name(
         .map(|n| mol.bond_order(c, *n))
         .sum::<usize>()
         + a.total_h_count.max(a.explicit_h_count);
-    let lambda = if oxide_oxygen.is_some()
-        || onium
-        || elements::get(&a.symbol).is_some_and(|e| e.standard_valence == valence)
-    {
+    let lambda = if oxide_oxygen.is_some() {
+        // Also when the oxide is drawn charge-separated, P+-O-.
+        "lambda5-".into()
+    } else if onium || elements::get(&a.symbol).is_some_and(|e| e.standard_valence == valence) {
         String::new()
     } else {
         format!("lambda{valence}-")
@@ -1380,16 +1376,16 @@ fn simple_central_parent_hydride_name(
         RULES.components.mononuclear_parent_hydrides[&a.symbol]
     );
     if oxide_oxygen.is_some() {
-        parent.push_str(" oxide");
+        // The -one suffix is preferred to the 'oxide' class name (P-68.3.2.3.1).
+        parent.pop();
+        parent.push_str("one");
     } else if onium {
         if parent.ends_with('e') {
             parent.pop();
         }
         parent.push_str("ium");
     }
-    if oxide_oxygen.is_some() {
-        mol.mark_name(NameStatus::NotPreferred(NameReason::FunctionalClass));
-    } else if a.symbol == "N" || a.symbol == "S" && !onium && lambda.is_empty() {
+    if a.symbol == "N" || a.symbol == "S" && !onium && lambda.is_empty() {
         // Methyl-only amines and sulfides take substitutive names (P-62.2.2.1, P-63.2.5).
         if mol
             .get_neighbors(c)
@@ -3184,14 +3180,14 @@ mod tests {
 
     #[test]
     fn discarded_shortcut_candidates_restore_the_previous_status() {
-        let mol = read_smiles("CS(C)=O").unwrap();
+        let mol = read_smiles("CC[S@](C)=O").unwrap();
         let atoms = all_atoms(&mol);
         let previous = NameStatus::Unverified(NameReason::UnauditedParent);
         mol.mark_name(previous);
         let declined: Result<Option<String>, String> = mol.candidate(|| {
             assert_eq!(
                 sulfoxide_parent_name(&mol, &atoms)?.as_deref(),
-                Some("dimethyl sulfoxide")
+                Some("(S)-ethyl methyl sulfoxide")
             );
             assert_eq!(
                 mol.name_status(),
@@ -3225,10 +3221,10 @@ mod tests {
 
     #[test]
     fn graph_shortcuts_preserve_ligand_and_oxygen_roles() {
-        assert_eq!(special("CS(C)=O").as_deref(), Some("dimethyl sulfoxide"));
+        assert_eq!(special("CS(C)=O"), None);
         assert_eq!(
-            special("CCS(C)=O").as_deref(),
-            Some("ethyl methyl sulfoxide")
+            special("CC[S@@](C)=O").as_deref(),
+            Some("(R)-ethyl methyl sulfoxide")
         );
         assert_eq!(
             special("CP(=O)(O)O").as_deref(),

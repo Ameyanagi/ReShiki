@@ -134,7 +134,7 @@ CS	methanethiol	fixtures/diverse_corpus.golden.json	1
 CSC	dimethylsulfane	fixtures/diverse_corpus.golden.json	1
 CS(=O)(=O)O	methanesulfonic acid	fixtures/diverse_corpus.golden.json	1
 CS(C)(=O)=O	(methylsulfonyl)methane	fixtures/diverse_corpus.golden.json	1
-CS(C)=O	dimethyl sulfoxide	fixtures/diverse_corpus.golden.json	1
+CS(C)=O	(methanesulfinyl)methane	fixtures/diverse_corpus.golden.json	1
 N#CC#N	ethanedinitrile	fixtures/diverse_corpus.golden.json	1
 OCC(N)C(=O)O	2-amino-3-hydroxypropanoic acid	fixtures/diverse_corpus.golden.json	1
 NC(Cc1ccccc1)C(=O)O	2-amino-3-phenylpropanoic acid	fixtures/diverse_corpus.golden.json	1
@@ -600,7 +600,7 @@ OBr	hypobromous acid	roundtrip/test_replacement_parents.py
 C[BH2]	borylmethane	roundtrip/test_replacement_parents.py	
 Cl[SiH2]Cl	dichlorosilane	roundtrip/test_replacement_parents.py	
 COP(OC)OC	trimethyl phosphite	roundtrip/test_replacement_parents.py	
-CP(C)(C)=O	trimethylphosphane oxide	roundtrip/test_replacement_parents.py	
+CP(C)(C)=O	trimethyl-lambda5-phosphanone	roundtrip/test_replacement_parents.py	
 CC(C)(C)O[SiH2]OC(C)(C)C	bis(tert-butoxy)silane	roundtrip/test_replacement_parents.py	
 CC(C)(C)O[PH](OC(C)(C)C)OC(C)(C)C	tris(tert-butoxy)-lambda4-phosphane	roundtrip/test_replacement_parents.py	
 [BH3]	borane	roundtrip/test_replacement_parents.py	

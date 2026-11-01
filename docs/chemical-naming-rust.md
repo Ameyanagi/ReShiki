@@ -174,23 +174,23 @@ name and Insert caption use the name text alone.
 | Tag                                           | Meaning                                                                                       |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | Preferred IUPAC name                          | No rule on the name's path is known to depart from the PIN rules.                             |
-| Systematic name, not the preferred IUPAC name | The name is correct but uses a form the PIN rules do not, such as `dimethyl sulfoxide`.       |
+| Systematic name, not the preferred IUPAC name | The name is correct but uses a form the PIN rules do not, such as `acetaldehyde hydrazone`.   |
 | Systematic name, preference not verified      | The name took a path whose PIN choice has not been checked, such as an OPSIN-numbered fusion. |
 
 The engine marks the status where it makes the choice, so the name text is
 unchanged. A naming attempt it discards leaves no mark. Reasons for a name
 that is not the PIN:
 
-| Reason                    | Example the engine writes                                                  | Preferred form                                                                         |
-| ------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `sulfonyl_prefix`         | `N-methyltosylamino`, `(methylsulfinyl)amino`                              | `N,4-dimethylbenzene-1-sulfonamido`, `methanesulfinamido`                              |
-| `amino_prefix`            | `3-methylguanidino`                                                        | `(N-methylcarbamimidoyl)amino`                                                         |
-| `functional_class`        | `dimethyl sulfoxide`, `acetaldehyde hydrazone`, `trimethylphosphane oxide` | substitutive names                                                                     |
-| `hydride_parent`          | `chloro(methyl)azane`, `1,2-dimethyldisulfane`, `ethoxy(methyl)sulfane`    | `methylhypochlorous amide`, `(methyldisulfanyl)methane`, `[(methylsulfanyl)oxy]ethane` |
-| `unretained_parent`       | `N-methylethanediamide`, `hydroxyformyl chloride`                          | `N1-methyloxamide`, `carbonochloridic acid`                                            |
-| `fusion_prefix`           | `oxazolo[4,5-b]pyridine`, `isoxazolo`                                      | `[1,3]oxazolo[4,5-b]pyridine`, `[1,2]oxazolo`                                          |
-| `diamide_locants`         | `N,N'-diethylpropanediamide`                                               | `N1,N3-diethylpropanediamide`                                                          |
-| `multiple_bond_numbering` | `pent-4-en-1-yne`                                                          | `pent-1-en-4-yne`                                                                      |
+| Reason                    | Example the engine writes                                                                | Preferred form                                                                           |
+| ------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `sulfonyl_prefix`         | `N-methyltosylamino`, `(methylsulfinyl)amino`                                            | `N,4-dimethylbenzene-1-sulfonamido`, `methanesulfinamido`                                |
+| `amino_prefix`            | `3-methylguanidino`                                                                      | `(N-methylcarbamimidoyl)amino`                                                           |
+| `functional_class`        | `acetaldehyde hydrazone`, `(S)-ethyl methyl sulfoxide`, `diphenyl selenotelluroperoxide` | `ethylidenehydrazine`, `(S)-(methanesulfinyl)ethane`, `[(phenylselanyl)tellanyl]benzene` |
+| `hydride_parent`          | `chloro(methyl)azane`, `1,2-dimethyldisulfane`, `ethoxy(methyl)sulfane`                  | `methylhypochlorous amide`, `(methyldisulfanyl)methane`, `[(methylsulfanyl)oxy]ethane`   |
+| `unretained_parent`       | `N-methylethanediamide`, `hydroxyformyl chloride`                                        | `N1-methyloxamide`, `carbonochloridic acid`                                              |
+| `fusion_prefix`           | `oxazolo[4,5-b]pyridine`, `isoxazolo`                                                    | `[1,3]oxazolo[4,5-b]pyridine`, `[1,2]oxazolo`                                            |
+| `diamide_locants`         | `N,N'-diethylpropanediamide`                                                             | `N1,N3-diethylpropanediamide`                                                            |
+| `multiple_bond_numbering` | `pent-4-en-1-yne`                                                                        | `pent-1-en-4-yne`                                                                        |
 
 Reasons for an unverified name: `opsin_fusion_layout` (fusion numbering chosen
 for OPSIN compatibility), `bridged_fused_parent`, `unaudited_parent`
@@ -255,6 +255,15 @@ disulfides and mixed chalcogen chains such as `1,2-dimethyldisulfane` and
 `ethoxy(methyl)sulfane` (P-63.3.1, P-63.3.2), on disulfanes bonded to oxygen
 or nitrogen, and on hydrodisulfides with a phosphorus acid, which the engine
 cites as a prefix.
+
+Achiral sulfoxides are named substitutively (P-63.6), and oxides of
+phosphanes, arsanes and stibanes take the `-one` suffix (P-68.3.2.3.1):
+`(methanesulfinyl)methane`, `2-(methanesulfinyl)pentane`,
+`trimethyl-lambda5-phosphanone`. `functional_class` stays on hydrazones and
+azines, whose PINs are ylidene derivatives of hydrazine (P-68.3.1.2.2), on
+chiral sulfoxides, whose PIN cites the descriptor before the whole name as in
+`(S)-(methanesulfinyl)ethane` (P-93.3.4.1), and on mixed chalcogen peroxides
+such as `dimethyl selenoperoxide` (P-63.3.2).
 
 Enclosing marks nest in the P-16.5.4 order `{[({[( )]})]}`:
 `2-[4-(2-methylpropyl)phenyl]propanoic acid`,

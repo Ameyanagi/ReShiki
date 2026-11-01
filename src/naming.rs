@@ -124,7 +124,7 @@ impl NameReason {
                 "Uses a guanidino prefix substituted on its outer nitrogens, such as 3-methylguanidino; preferred IUPAC names cite carbamimidoyl inside an amino prefix, as in (N-methylcarbamimidoyl)amino (P-66.4.1.2.1.3)."
             }
             Self::FunctionalClass => {
-                "Uses a functional-class form such as sulfoxide, hydrazone or phosphane oxide; preferred IUPAC names use substitutive forms such as (methanesulfinyl)methane, ylidenehydrazine or λ5-phosphanone."
+                "Uses a functional-class form such as a hydrazone, a chiral sulfoxide or a mixed chalcogen peroxide; preferred IUPAC names use substitutive forms such as ethylidenehydrazine, (S)-(methanesulfinyl)ethane or [(phenylselanyl)tellanyl]benzene (P-68.3.1.2.2, P-93.3.4.1, P-63.3.2)."
             }
             Self::HydrideParent => {
                 "Uses a substituted parent hydride such as chloro(methyl)azane, 1,2-dimethyldisulfane or ethoxy(methyl)sulfane; preferred IUPAC names use methylhypochlorous amide, (methyldisulfanyl)methane or [(methylsulfanyl)oxy]ethane (P-68.5.3, P-63.3.1, P-63.3.2)."

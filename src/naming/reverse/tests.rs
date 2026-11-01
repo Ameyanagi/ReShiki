@@ -58,8 +58,8 @@ fn worker_names_with_the_port_or_declines() {
     let preferred = generate("CCO").unwrap();
     assert_eq!(preferred.text, "ethanol");
     assert_eq!(preferred.status, NameStatus::Preferred);
-    let general = generate("CS(C)=O").unwrap();
-    assert_eq!(general.text, "dimethyl sulfoxide");
+    let general = generate("CC(=NN)C").unwrap();
+    assert_eq!(general.text, "propan-2-one hydrazone");
     assert_eq!(
         general.status,
         NameStatus::NotPreferred(super::super::NameReason::FunctionalClass)

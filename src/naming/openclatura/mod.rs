@@ -301,6 +301,12 @@ mod tests {
             ("CC(=O)C#N", "acetyl cyanide"),
             ("COC(=O)Nc1ccccc1", "methyl phenylcarbamate"),
             ("CCC#[N+][O-]", "propanenitrile oxide"),
+            // Substitutive sulfoxide (P-63.6) and -one (P-68.3.2.3.1) names.
+            ("CS(C)=O", "(methanesulfinyl)methane"),
+            ("CC(C)S(C)=O", "2-(methanesulfinyl)propane"),
+            ("CP(C)(C)=O", "trimethyl-lambda5-phosphanone"),
+            ("C[P+](C)(C)[O-]", "trimethyl-lambda5-phosphanone"),
+            ("C[As](C)(C)=O", "trimethyl-lambda5-arsanone"),
             (
                 "COS(=O)(=O)c1ccc(C(=O)O)cc1",
                 "4-(methoxysulfonyl)benzoic acid",
@@ -423,9 +429,13 @@ mod tests {
                 "2-(3-methylguanidino)acetic acid",
                 R::AminoPrefix,
             ),
-            ("CS(C)=O", "dimethyl sulfoxide", R::FunctionalClass),
+            (
+                "CC[S@](C)=O",
+                "(S)-ethyl methyl sulfoxide",
+                R::FunctionalClass,
+            ),
             ("CN(C)Cl", "chlorodimethylazane", R::HydrideParent),
-            ("CP(C)(C)=O", "trimethylphosphane oxide", R::FunctionalClass),
+            ("CC=NN", "acetaldehyde hydrazone", R::FunctionalClass),
             (
                 "ClC#[N+][O-]",
                 "chloromethanenitrile oxide",

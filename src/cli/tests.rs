@@ -775,8 +775,8 @@ async fn name_json_reports_preferred_and_nonpreferred_rule_paths() {
     for (smiles, expected, status, reason) in [
         ("CCO", "ethanol", NameStatus::Preferred, Value::Null),
         (
-            "CS(C)=O",
-            "dimethyl sulfoxide",
+            "CC(=NN)C",
+            "propan-2-one hydrazone",
             NameStatus::NotPreferred(NameReason::FunctionalClass),
             json!("functional_class"),
         ),
