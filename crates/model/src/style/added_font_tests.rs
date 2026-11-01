@@ -97,6 +97,20 @@ fn last_resort_checks_glyph_weight_and_style_in_database_order() {
         super::resolve_font_in(&db, "Arial", Weight(400), Style::Normal, 'C', &[]),
         Some(ids[5])
     );
+    // A sans face wins over a serif one listed before it.
+    let mut db = Database::new();
+    let mut ids = vec![];
+    for name in ["Liberation Serif", "Liberation Sans"] {
+        db.load_font_data(include_bytes!("../../fonts/LiberationSans-Regular.ttf").to_vec());
+        let mut face = db.faces().last().unwrap().clone();
+        db.remove_face(face.id);
+        face.families = vec![(name.into(), Language::English_UnitedStates)];
+        ids.push(db.push_face_info(face));
+    }
+    assert_eq!(
+        super::resolve_font_in(&db, "Arial", Weight(400), Style::Normal, 'C', &[]),
+        Some(ids[1])
+    );
     // A lone variable face whose default weight is 100 still serves 400 and 700.
     let mut db = Database::new();
     db.load_font_data(

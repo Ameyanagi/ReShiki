@@ -298,8 +298,9 @@ fn fallback_families<'a>(family: &'a str, added: &'a [&str]) -> impl Iterator<It
 
 /// Resolve a glyph in the measuring database's fallback order. After named
 /// families, match the canvas's last resort: the installed face nearest the
-/// requested style, stretch and weight that contains the glyph, first in
-/// database order on a tie (hidden system faces such as `.LastResort` excepted).
+/// requested style, stretch and weight that contains the glyph (hidden system
+/// faces such as `.LastResort` excepted). Labels are sans-serif, so a sans
+/// family wins over serif and monospaced ones, then database order decides.
 pub fn resolve_font(
     db: &resvg::usvg::fontdb::Database,
     family: &str,
@@ -344,6 +345,8 @@ fn resolve_font_in(
                 .min_by_key(|face| {
                     (
                         face.style != style,
+                        !face.families.iter().any(|(name, _)| name.contains("Sans")),
+                        face.monospaced,
                         face.stretch != resvg::usvg::fontdb::Stretch::Normal,
                         face.weight.0.abs_diff(weight.0),
                     )
