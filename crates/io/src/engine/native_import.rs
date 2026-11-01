@@ -105,6 +105,7 @@ pub async fn execute(
     mut config: Option<native_response::Config>,
 ) -> Result<Outcome, Error> {
     let request = request.into();
+    let drawing_options = request.drawing_options.unwrap_or_default();
     // Retain the caller snapshot. Large text/document clones and chemical work
     // belong on the blocking executor; only the bounded InChI exchange is async.
     let prepared =
@@ -134,7 +135,10 @@ pub async fn execute(
                 .await
                 .map_err(native_response::Error::Helper)?;
             config = Some(reader);
-            Box::new(crate::task::spawn_blocking(move || prepare_inchi(output)).await??)
+            Box::new(
+                crate::task::spawn_blocking(move || prepare_inchi(output, drawing_options))
+                    .await??,
+            )
         }
         Preparation::Deferred(reason) => return Ok(Outcome::Deferred(reason)),
     };
@@ -176,6 +180,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
         return Ok(Preparation::Deferred(Deferred::OtherOperation));
     }
     let format = request.format.as_deref().unwrap_or("smiles");
+    let drawing_options = request.drawing_options.unwrap_or_default();
     let text = request.text.unwrap_or_default();
     if !matches!(format, "rxn" | "rsmi") && text.trim().is_empty() {
         return Err(Error::Empty);
@@ -190,7 +195,8 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             let imported = smiles::read(&text)?;
             let mut molecule = molecule(imported.prepared.state)?;
             let warnings = layout(&mut molecule, &imported.reaction_properties)?;
-            let mut prepared = finish_molecule(molecule, &imported.prepared.dummy_labels)?;
+            let mut prepared =
+                finish_molecule(molecule, &imported.prepared.dummy_labels, drawing_options)?;
             prepared.warnings.extend(warnings);
             prepared
         }
@@ -372,8 +378,9 @@ fn layout(
 fn finish_molecule(
     molecule: molecular::Molecule,
     labels: &[Option<String>],
+    options: molecular::DrawingOptions,
 ) -> Result<Prepared, Error> {
-    let drawing = molecular::for_import(&molecule, false, labels)?;
+    let drawing = molecular::for_generated(&molecule, labels, options)?;
     let labels = drawing.labels()?;
     let document = drawing.finish(labels)?;
     document.validate().map_err(Error::Document)?;
@@ -384,7 +391,10 @@ fn finish_molecule(
     })
 }
 
-fn prepare_inchi(imported: crate::chemistry::inchi::kernel::Imported) -> Result<Prepared, Error> {
+fn prepare_inchi(
+    imported: crate::chemistry::inchi::kernel::Imported,
+    options: molecular::DrawingOptions,
+) -> Result<Prepared, Error> {
     let state = imported.state.ok_or(Error::Parse)?;
     if imported.unspecified_bonds.iter().any(|&value| value) {
         return Err(Error::BondType);
@@ -392,7 +402,7 @@ fn prepare_inchi(imported: crate::chemistry::inchi::kernel::Imported) -> Result<
     let mut molecule = molecule(state)?;
     let warnings = layout(&mut molecule, &[])?;
     let labels = vec![None; molecule.ids.len()];
-    let mut prepared = finish_molecule(molecule, &labels)?;
+    let mut prepared = finish_molecule(molecule, &labels, options)?;
     prepared.warnings.extend(warnings);
     Ok(prepared)
 }

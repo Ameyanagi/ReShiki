@@ -2,6 +2,7 @@
 //! Copyright (C) 2023 Greg Landrum and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
 mod atrop;
+pub mod generated;
 mod molfile;
 pub use molfile::file_bonds;
 #[cfg(test)]

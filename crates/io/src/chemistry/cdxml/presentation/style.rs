@@ -19,7 +19,22 @@ pub struct NativeDrawingStyle {
     pub margin_width_pt: f64,
     pub hash_spacing_pt: f64,
     pub bond_spacing_ratio: f64,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub two_wedge_stereocentres: bool,
+    #[serde(default = "yes", skip_serializing_if = "is_true")]
+    pub ring_fusion_hydrogens: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub wavy_unknown_alkenes: bool,
     pub png_dpi: u32,
+}
+fn yes() -> bool {
+    true
+}
+fn is_true(value: &bool) -> bool {
+    *value
+}
+fn is_false(value: &bool) -> bool {
+    !value
 }
 impl NativeDrawingStyle {
     pub fn defaults() -> Result<Self> {
@@ -84,6 +99,9 @@ impl NativeDrawingStyle {
             margin_width_pt: self.margin_width_pt as f32,
             hash_spacing_pt: self.hash_spacing_pt as f32,
             bond_spacing_ratio: self.bond_spacing_ratio as f32,
+            two_wedge_stereocentres: self.two_wedge_stereocentres,
+            ring_fusion_hydrogens: self.ring_fusion_hydrogens,
+            wavy_unknown_alkenes: self.wavy_unknown_alkenes,
             png_dpi: self.png_dpi,
         };
         result.validate().map_err(Error::Document)?;
@@ -113,6 +131,29 @@ pub fn drawing_style(root: Node<'_, '_>) -> Result<NativeDrawingStyle> {
     style.font_family = fonts.get(root.attribute("LabelFont"));
     style.bond_spacing_ratio =
         numeric::float(root.attribute("BondSpacing").unwrap_or("18"))? / 100.0;
+    for (attribute, value) in [
+        (
+            "ReShikiTwoWedgeStereocentres",
+            &mut style.two_wedge_stereocentres,
+        ),
+        (
+            "ReShikiRingFusionHydrogens",
+            &mut style.ring_fusion_hydrogens,
+        ),
+        ("ReShikiWavyUnknownAlkenes", &mut style.wavy_unknown_alkenes),
+    ] {
+        if let Some(text) = root.attribute(attribute) {
+            *value = match text {
+                "yes" | "true" => true,
+                "no" | "false" => false,
+                _ => {
+                    return Err(Error::Document(format!(
+                        "Invalid drawing style {attribute}"
+                    )));
+                }
+            };
+        }
+    }
     style.bond_length_world = style.bond_length_pt / POINTS_PER_WORLD;
     if style != defaults {
         style.name = "Imported style".into();

@@ -89,7 +89,8 @@ impl Encoder {
         append(&mut self.out, &code.to_le_bytes())?;
         append(&mut self.out, &id.to_le_bytes())?;
         for attr in el.attributes() {
-            if attr.name() == "id" {
+            // ReShiki's CDXML style extensions have no binary CDX tag.
+            if attr.name() == "id" || attr.name().starts_with("ReShiki") {
                 continue;
             }
             if attr.namespace().is_some() {

@@ -4,6 +4,114 @@ use crate::chemistry::smiles;
 const SPHOS: &str = "COc1cccc(OC)c1-c1ccccc1P(C1CCCCC1)C1CCCCC1";
 const XPHOS: &str = "CC(C)c1cc(C(C)C)c(-c2ccccc2P(C2CCCCC2)C2CCCCC2)c(C(C)C)c1";
 
+#[test]
+fn generated_unknown_alkene_depictions_roundtrip_mol_and_cdxml() -> anyhow::Result<()> {
+    for (input, known) in [("CC=CCC", 0), ("C/C=C/C=CC", 1)] {
+        for wavy in [false, true] {
+            let imported = smiles::read(input)?;
+            let mut molecule = molecule(imported.prepared.state)?;
+            layout(&mut molecule, &imported.reaction_properties)?;
+            // SMILES cannot say "unknown"; mark the unspecified double as such.
+            let (graph, metadata) = (&molecule.state.graph, &mut molecule.state.metadata);
+            for (bond, meta) in graph.bonds.iter().zip(&mut metadata.bonds) {
+                if bond.order == 2 && meta.stereo == 0 {
+                    meta.stereo = 1;
+                }
+            }
+            let options = molecular::DrawingOptions {
+                wavy_unknown_alkenes: wavy,
+                ..Default::default()
+            };
+            let drawing =
+                molecular::for_generated(&molecule, &imported.prepared.dummy_labels, options)?;
+            let labels = drawing.labels()?;
+            let document = drawing.finish(labels)?;
+            assert_eq!(
+                document
+                    .bonds
+                    .iter()
+                    .filter(|b| b.order == 1 && b.display == "wavy")
+                    .count(),
+                usize::from(wavy)
+            );
+            assert_eq!(
+                document
+                    .bonds
+                    .iter()
+                    .filter(|b| b.order == 2 && b.display == "wavy")
+                    .count(),
+                usize::from(!wavy)
+            );
+            let molecule = molecular::prepare(&document)?;
+            assert_eq!(
+                molecule
+                    .state
+                    .metadata
+                    .bonds
+                    .iter()
+                    .filter(|b| b.stereo == 1)
+                    .count(),
+                1
+            );
+            assert_eq!(
+                molecule
+                    .state
+                    .metadata
+                    .bonds
+                    .iter()
+                    .filter(|b| b.stereo > 1)
+                    .count(),
+                known
+            );
+            for force_v3000 in [false, true] {
+                let (text, fallback) = molfile::write_drawing_absolute(
+                    &molecule,
+                    &document,
+                    molfile::Options { force_v3000 },
+                )?;
+                assert!(!fallback);
+                let imported = molfile::read(&text)?;
+                assert_eq!(
+                    imported
+                        .molecule
+                        .state
+                        .metadata
+                        .bonds
+                        .iter()
+                        .filter(|b| b.stereo == 1)
+                        .count(),
+                    1,
+                    "input={input}, wavy={wavy}, v3000={force_v3000}: {text}"
+                );
+                assert_eq!(
+                    imported
+                        .molecule
+                        .state
+                        .metadata
+                        .bonds
+                        .iter()
+                        .filter(|b| b.stereo > 1)
+                        .count(),
+                    known
+                );
+            }
+            let xml = crate::exchange::drawing::write(&document, Default::default())?;
+            let imported = cdxml::import_cdxml(&xml)?;
+            assert_eq!(
+                molecular::prepare(&imported.document)?
+                    .state
+                    .metadata
+                    .bonds
+                    .iter()
+                    .filter(|b| b.stereo == 1)
+                    .count(),
+                1
+            );
+        }
+    }
+    Ok(())
+}
+
 const MOLECULES: &str = "\
 ibuprofen CC(C)Cc1ccc(cc1)C(C)C(=O)O
 aspirin CC(=O)Oc1ccccc1C(=O)O

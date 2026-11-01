@@ -92,9 +92,14 @@ async fn online_result_requires_insert_and_keeps_identity_caption_and_history() 
         provenance: naming::Provenance::PubChem { cid: 135398745 },
         ..super::super::test_support::record(smiles)
     };
-    let preview = prepare_preview(app.engine.clone(), record.clone(), smiles.into())
-        .await
-        .map_err(|error| error.to_string())?;
+    let preview = prepare_preview(
+        app.engine.clone(),
+        record.clone(),
+        smiles.into(),
+        Default::default(),
+    )
+    .await
+    .map_err(|error| error.to_string())?;
     let _ = app.naming_action(Action::Finished(
         ticket,
         Box::new(Ok(Outcome::Names(vec![record], Some(Box::new(preview))))),
@@ -163,9 +168,14 @@ async fn stale_online_success_cannot_install_a_preview_or_change_history() -> Re
             provenance: naming::Provenance::PubChem { cid: 702 },
             ..super::super::test_support::record("CCO")
         };
-        let preview = prepare_preview(app.engine.clone(), record.clone(), "CCO".into())
-            .await
-            .map_err(|error| error.to_string())?;
+        let preview = prepare_preview(
+            app.engine.clone(),
+            record.clone(),
+            "CCO".into(),
+            Default::default(),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
         let _ = match action {
             "edit" => app.naming_action(Action::Name("clozapine".into())),
             "cancel" => app.naming_action(Action::Cancel),

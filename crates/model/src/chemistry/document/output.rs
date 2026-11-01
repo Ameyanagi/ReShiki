@@ -16,6 +16,32 @@ mod reconstruct_parity_tests;
 #[cfg(test)]
 mod tests;
 
+/// Depiction preferences for newly generated structures, independent of page metrics.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct DrawingOptions {
+    pub two_wedge_stereocentres: bool,
+    pub ring_fusion_hydrogens: bool,
+    pub wavy_unknown_alkenes: bool,
+}
+impl Default for DrawingOptions {
+    fn default() -> Self {
+        Self {
+            two_wedge_stereocentres: false,
+            ring_fusion_hydrogens: true,
+            wavy_unknown_alkenes: false,
+        }
+    }
+}
+impl From<&crate::style::DrawingStyle> for DrawingOptions {
+    fn from(style: &crate::style::DrawingStyle) -> Self {
+        Self {
+            two_wedge_stereocentres: style.two_wedge_stereocentres,
+            ring_fusion_hydrogens: style.ring_fusion_hydrogens,
+            wavy_unknown_alkenes: style.wavy_unknown_alkenes,
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Labels {
@@ -291,8 +317,9 @@ pub fn for_drawing(molecule: &Molecule, base: &Document) -> Result<Drawing, Erro
     {
         return Err(invalid("Drawing molecule dimensions or identities changed"));
     }
-    let work = wedge(molecule, false, vec![false; n])?;
-    let drawing = reconstruct(work, molecule, Some(base), &previous, None)?;
+    let options = DrawingOptions::from(&base.drawing_style);
+    let work = wedge(molecule, false, vec![false; n], options, false)?;
+    let drawing = reconstruct(work, molecule, Some(base), &previous, None, options)?;
     drawing.document.validate().map_err(Error::Drawing)?;
     Ok(drawing)
 }
@@ -345,8 +372,16 @@ pub fn for_import_with_attachments(
     if dummy_labels.len() != molecule.state.graph.atoms.len() {
         return Err(invalid("Imported label dimensions changed"));
     }
-    let work = wedge(molecule, is_3d, attachments)?;
-    let drawing = reconstruct(work, molecule, None, &HashMap::new(), Some(dummy_labels))?;
+    let options = DrawingOptions::default();
+    let work = wedge(molecule, is_3d, attachments, options, false)?;
+    let drawing = reconstruct(
+        work,
+        molecule,
+        None,
+        &HashMap::new(),
+        Some(dummy_labels),
+        options,
+    )?;
     drawing.document.validate().map_err(Error::Drawing)?;
     Ok(drawing)
 }
@@ -356,8 +391,62 @@ pub fn for_import_with_attachments(
 /// editable bonds yet. Only finish/finish_with may publish this detached draft.
 pub fn for_import_scene(molecule: &Molecule, is_3d: bool) -> Result<Drawing, Error> {
     validate_molecule(molecule)?;
-    let work = wedge(molecule, is_3d, vec![false; molecule.ids.len()])?;
-    reconstruct(work, molecule, None, &HashMap::new(), None)
+    let options = DrawingOptions::default();
+    let work = wedge(
+        molecule,
+        is_3d,
+        vec![false; molecule.ids.len()],
+        options,
+        false,
+    )?;
+    reconstruct(work, molecule, None, &HashMap::new(), None, options)
+}
+
+/// Generate publication stereobonds after layout. Unlike reconstruction of an
+/// existing drawing, this may make implicit fusion hydrogens visible.
+pub fn for_generated(
+    molecule: &Molecule,
+    dummy_labels: &[Option<String>],
+    options: DrawingOptions,
+) -> Result<Drawing, Error> {
+    validate_molecule(molecule)?;
+    if dummy_labels.len() != molecule.ids.len() {
+        return Err(invalid("Imported label dimensions changed"));
+    }
+    let mut molecule = molecule.clone();
+    let mut dummy_labels = dummy_labels.to_vec();
+    if options.ring_fusion_hydrogens {
+        let expanded =
+            wedging::generated::add_fusion_hydrogens(&molecule.state, &molecule.positions, 1.5)
+                .map_err(Error::WedgeAssignment)?;
+        let mut next = molecule.ids.iter().copied().max().unwrap_or(0);
+        for _ in expanded.parents {
+            next = next
+                .checked_add(1)
+                .ok_or_else(|| invalid("Atom ID overflow"))?;
+            molecule.ids.push(next);
+            dummy_labels.push(None);
+        }
+        molecule.state = expanded.state;
+        molecule.positions = expanded.positions;
+    }
+    let work = wedge(
+        &molecule,
+        false,
+        vec![false; molecule.ids.len()],
+        options,
+        true,
+    )?;
+    let drawing = reconstruct(
+        work,
+        &molecule,
+        None,
+        &HashMap::new(),
+        Some(&dummy_labels),
+        options,
+    )?;
+    drawing.document.validate().map_err(Error::Drawing)?;
+    Ok(drawing)
 }
 
 pub fn validate_molecule(molecule: &Molecule) -> Result<(), Error> {
@@ -396,9 +485,19 @@ fn wedge(
     molecule: &Molecule,
     is_3d: bool,
     attachment_points: Vec<bool>,
+    options: DrawingOptions,
+    generated: bool,
 ) -> Result<Molecule, Error> {
     let state = &molecule.state;
     let kekule = kekule(molecule)?;
+    let properties = wedging::WedgeProperties {
+        valences: kekule.cache.clone(),
+        attachment_points,
+    };
+    let conformer = wedging::Conformer {
+        positions: molecule.positions.clone(),
+        is_3d,
+    };
     let wedged = wedging::wedge_molecule(
         &wedging::WedgeState {
             graph: kekule.assignment.graph,
@@ -406,17 +505,17 @@ fn wedge(
             directions: kekule.assignment.directions,
             rings: state.rings.clone(),
         },
-        &wedging::WedgeProperties {
-            valences: kekule.cache.clone(),
-            attachment_points,
-        },
-        Some(&wedging::Conformer {
-            positions: molecule.positions.clone(),
-            is_3d,
-        }),
-        false,
+        &properties,
+        Some(&conformer),
+        options.two_wedge_stereocentres,
     )
     .map_err(Error::WedgeAssignment)?;
+    let wedged = if generated && !is_3d {
+        wedging::generated::prefer_ring_wedges(&wedged, &properties, &conformer)
+            .map_err(Error::WedgeAssignment)?
+    } else {
+        wedged
+    };
     let mut work = molecule.clone();
     work.state.graph = wedged.graph;
     work.state.metadata = wedged.metadata;
@@ -471,6 +570,7 @@ fn reconstruct(
     base: Option<&Document>,
     previous: &HashMap<u64, &crate::document::Atom>,
     dummy_labels: Option<&[Option<String>]>,
+    options: DrawingOptions,
 ) -> Result<Drawing, Error> {
     let state = &molecule.state;
     let (n, e) = (state.graph.atoms.len(), state.graph.bonds.len());
@@ -497,7 +597,14 @@ fn reconstruct(
         &adjacent,
     )?;
     let ordered = ordered_bonds(base, &bonds_by_pair, e)?;
-    let (bonds, bond_indices) = reconstruct_bonds(&work, molecule, ordered, e)?;
+    let (mut bonds, bond_indices) = reconstruct_bonds(&work, molecule, ordered, e)?;
+    if base.is_none() && options.wavy_unknown_alkenes {
+        for (i, bond) in work.state.graph.bonds.iter().enumerate() {
+            if bond.order == 2 && at(&work.state.metadata.bonds, i)?.stereo == 1 {
+                depict_unknown_alkene(&work, i, &mut bonds, true, |_| true)?;
+            }
+        }
+    }
     let mut document = Document {
         version: crate::document::EDITOR_BASELINE,
         atoms,
@@ -718,4 +825,100 @@ fn reconstruct_bonds(
         })
         .collect::<Result<Vec<_>, Error>>()?;
     Ok((bonds, bond_indices))
+}
+
+/// Mark an unspecified alkene, choosing an unambiguous substituent when the
+/// document prefers a wavy single bond. Returns whether that depiction was used.
+/// `can_change` protects fixed substituents during partial cleanup.
+pub fn depict_unknown_alkene(
+    molecule: &Molecule,
+    index: usize,
+    bonds: &mut [Bond],
+    wavy: bool,
+    can_change: impl Fn(&Bond) -> bool,
+) -> Result<bool, Error> {
+    let state = &molecule.state;
+    let double = at(&state.graph.bonds, index)?;
+    let double_pair = pair(*at(&molecule.ids, double.a)?, *at(&molecule.ids, double.b)?);
+    let target = bonds
+        .iter()
+        .position(|bond| pair(bond.a, bond.b) == double_pair)
+        .ok_or_else(|| invalid("Missing unknown double bond"))?;
+    let mut substituent = None;
+    if wavy {
+        // Drawing preparation does not flag unassigned stereocentres.
+        let possible = crate::chemistry::stereo::perception::perceive(
+            state,
+            crate::chemistry::stereo::perception::Options {
+                clean: false,
+                force: true,
+                flag_possible: true,
+            },
+        )
+        .map_err(Error::WedgeAssignment)?
+        .properties
+        .atoms;
+        for end in [double.a, double.b] {
+            for bond in &state.graph.bonds {
+                let other = if bond.a == end {
+                    bond.b
+                } else if bond.b == end {
+                    bond.a
+                } else {
+                    continue;
+                };
+                if bond.order != 1
+                    || state.rings.atoms.iter().any(|ring| ring.contains(&other))
+                    || at(&state.metadata.atoms, other)?.chiral_tag != 0
+                    || at(&possible, other)?.possible == Some(true)
+                    || state
+                        .graph
+                        .bonds
+                        .iter()
+                        .any(|bond| bond.order == 2 && (bond.a == other || bond.b == other))
+                {
+                    continue;
+                }
+                let endpoints = pair(*at(&molecule.ids, end)?, *at(&molecule.ids, other)?);
+                if let Some(position) = bonds.iter().position(|bond| {
+                    pair(bond.a, bond.b) == endpoints
+                        && bond.display == "plain"
+                        && !bond.projection
+                        && can_change(bond)
+                }) {
+                    substituent = Some((
+                        position,
+                        *at(&molecule.ids, end)?,
+                        *at(&molecule.ids, other)?,
+                    ));
+                    break;
+                }
+            }
+            if substituent.is_some() {
+                break;
+            }
+        }
+    }
+    let bond = bonds
+        .get_mut(target)
+        .ok_or_else(|| invalid("Missing unknown double bond"))?;
+    bond.display = if substituent.is_some() {
+        "plain"
+    } else {
+        "wavy"
+    }
+    .into();
+    bond.stereo = None;
+    bond.stereo_atoms.clear();
+    if let Some((position, a, b)) = substituent {
+        let bond = bonds
+            .get_mut(position)
+            .ok_or_else(|| invalid("Missing alkene substituent"))?;
+        bond.a = a;
+        bond.b = b;
+        bond.display = "wavy".into();
+        bond.stereo = None;
+        bond.stereo_atoms.clear();
+    }
+    Ok(substituent.is_some())
 }

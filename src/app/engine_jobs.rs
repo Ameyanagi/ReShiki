@@ -30,9 +30,12 @@ pub(super) struct Pending {
 }
 
 impl App {
-    pub(super) fn run(&mut self, request: Request, kind: Job) -> Task<Message> {
+    pub(super) fn run(&mut self, mut request: Request, kind: Job) -> Task<Message> {
         if self.tab.busy {
             return Task::none();
+        }
+        if request.operation == "import" {
+            request.drawing_options = Some((&self.tab.doc.drawing_style).into());
         }
         let engine = self.engine.clone();
         let aromatic_selection = matches!(kind, Job::AromaticDisplay);

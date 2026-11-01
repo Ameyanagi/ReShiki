@@ -16,6 +16,8 @@ pub const PROTOCOL: u32 = 1;
 #[derive(Debug, Clone, Serialize)]
 pub struct Request {
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub drawing_options: Option<crate::chemistry::document::DrawingOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub cleanup: Option<crate::cleanup::Options>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selected_ids: Option<Vec<u64>>,
@@ -48,6 +50,7 @@ impl Request {
     }
     pub fn import(format: &str, text: &str) -> Self {
         Self {
+            drawing_options: None,
             cleanup: None,
             selected_ids: None,
             atom_indicators: None,
@@ -125,6 +128,7 @@ impl Request {
                 .collect()
         });
         Self {
+            drawing_options: None,
             cleanup: None,
             selected_ids: None,
             atom_indicators: (operation == "export")

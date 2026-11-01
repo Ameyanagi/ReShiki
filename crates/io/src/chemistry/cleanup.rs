@@ -187,6 +187,7 @@ pub fn prepare(source: &Document, options: Options, selection: &[u64]) -> Result
         bases.push(Document {
             version: source.version,
             atom_labels: source.atom_labels.clone(),
+            drawing_style: source.drawing_style.clone(),
             ..Default::default()
         });
         let mut pending = vec![start];
@@ -357,6 +358,7 @@ impl Prepared {
             .map(|(i, b)| (pair(b.a, b.b), i))
             .collect();
         let mut crossed = 0usize;
+        let mut wavy = 0usize;
         let mut work = 50_000_000usize;
         for part in self.parts {
             let mut layout = compute(LayoutRequest {
@@ -435,21 +437,35 @@ impl Prepared {
                 }
             }
             let checked = molecular::prepare_at(&merged, &raw).map_err(Error::from)?;
-            for ((old, new), bond) in molecule
+            let mut unspecified = Vec::new();
+            for (i, ((old, new), bond)) in molecule
                 .state
                 .metadata
                 .bonds
                 .iter()
                 .zip(&checked.state.metadata.bonds)
-                .zip(&mut merged.bonds)
+                .zip(&merged.bonds)
+                .enumerate()
             {
                 if old.stereo <= 1
                     && new.stereo > 1
                     && (part.moving.contains(&bond.a) || part.moving.contains(&bond.b))
                 {
-                    bond.display = "wavy".into();
-                    bond.stereo = None;
-                    bond.stereo_atoms.clear();
+                    unspecified.push(i);
+                }
+            }
+            for index in unspecified {
+                if molecular::depict_unknown_alkene(
+                    &molecule,
+                    index,
+                    &mut merged.bonds,
+                    merged.drawing_style.wavy_unknown_alkenes,
+                    |bond| part.moving.contains(&bond.a) || part.moving.contains(&bond.b),
+                )
+                .map_err(Error::from)?
+                {
+                    wavy += 1;
+                } else {
                     crossed += 1;
                 }
             }
@@ -512,6 +528,11 @@ impl Prepared {
         } else {
             vec![]
         };
+        if wavy != 0 {
+            warnings.push(format!(
+                "{wavy} double bond(s) use a wavy substituent bond to keep unspecified stereochemistry."
+            ));
+        }
         if self.preserved_attachments != 0 {
             warnings.push(format!(
                 "{} attachment-containing structure(s) kept unchanged. Automatic cleanup of multi-center and variable attachments is not yet supported.",

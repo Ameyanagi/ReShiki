@@ -157,11 +157,10 @@ impl App {
             } else {
                 self.bond_style()
             };
-            if let Some(preset) = self
-                .tool
-                .bond_preset()
-                .filter(|p| p.preserves_chemistry(&b))
-            {
+            if let Some(preset) = self.tool.bond_preset().filter(|p| {
+                use reshiki::bonds::BondPreset as P;
+                p.preserves_chemistry(&b) || matches!(p, P::Wedge | P::HashedWedge | P::HollowWedge)
+            }) {
                 if b.is_dative() {
                     if let Some(bond) = self
                         .tab

@@ -1,6 +1,124 @@
 use super::test_support::{ethanol, record};
 use super::*;
 
+#[tokio::test]
+async fn name_smiles_preview_uses_the_documents_depiction_options() -> Result<(), String> {
+    let smiles = "CC[C@](C)(Br)Cl";
+    let options = DrawingOptions {
+        two_wedge_stereocentres: true,
+        ..Default::default()
+    };
+    let preview = prepare_preview(
+        LocalEngine::in_process(),
+        record(smiles),
+        smiles.into(),
+        options,
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+    assert_eq!(
+        preview
+            .document
+            .bonds
+            .iter()
+            .filter(|bond| matches!(bond.display.as_str(), "wedge" | "hash"))
+            .count(),
+        2
+    );
+    naming::verify_identity(
+        &preview.identity,
+        &naming::document_identity(&preview.document)?.smiles,
+    )?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn generated_fusion_hydrogens_preserve_formula_inchi_and_naming_outcomes()
+-> Result<(), String> {
+    let engine = LocalEngine::in_process();
+    for (smiles, expected_hydrogens, expected_formula) in [
+        ("C1CC[C@H]2CCCC[C@@H]2C1", 2, "C10H18"),
+        (
+            "C[C@]12CC[C@H]3[C@@H]([C@@H]1CC[C@@H]2O)CCC4=CC(=O)CC[C@]34C",
+            3,
+            "C19H28O2",
+        ),
+    ] {
+        let mut shown_request = Request::import_smiles(smiles);
+        shown_request.drawing_options = Some(DrawingOptions::default());
+        let shown = engine
+            .request(shown_request)
+            .await?
+            .document
+            .ok_or("Missing drawing with fusion hydrogens")?;
+        let mut hidden_request = Request::import_smiles(smiles);
+        hidden_request.drawing_options = Some(DrawingOptions {
+            ring_fusion_hydrogens: false,
+            ..Default::default()
+        });
+        let hidden = engine
+            .request(hidden_request)
+            .await?
+            .document
+            .ok_or("Missing drawing without fusion hydrogens")?;
+        assert_eq!(
+            shown
+                .atoms
+                .iter()
+                .filter(|atom| atom.element == "H")
+                .count(),
+            expected_hydrogens,
+            "{smiles}"
+        );
+        assert!(hidden.atoms.iter().all(|atom| atom.element != "H"));
+
+        // Analyze the resulting drawings, rather than the pre-depiction
+        // importer state, to catch H double-counting or changed drawn stereo.
+        let shown_analysis = engine
+            .request(Request::molecule("analyze", shown.clone()))
+            .await?
+            .analysis
+            .ok_or("Missing analysis of explicit fusion hydrogens")?;
+        let hidden_analysis = engine
+            .request(Request::molecule("analyze", hidden.clone()))
+            .await?
+            .analysis
+            .ok_or("Missing analysis without fusion hydrogens")?;
+        assert_eq!(shown_analysis.formula, expected_formula, "{smiles}");
+        assert_eq!(shown_analysis.formula, hidden_analysis.formula, "{smiles}");
+        assert!(shown_analysis.inchi.starts_with("InChI=1S/"));
+        assert_eq!(shown_analysis.inchi, hidden_analysis.inchi, "{smiles}");
+        assert_eq!(
+            shown_analysis.inchikey, hidden_analysis.inchikey,
+            "{smiles}"
+        );
+
+        let shown_identity = naming::document_identity(&shown)?;
+        let hidden_identity = naming::document_identity(&hidden)?;
+        naming::verify_identity(smiles, &shown_identity.smiles)?;
+        naming::verify_identity(&shown_identity.smiles, &hidden_identity.smiles)?;
+        // Exercise the same naming worker in-process so this check never
+        // launches the application executable or a GUI.
+        let name = |identity: &naming::Identity| -> Result<Result<String, String>, String> {
+            let request = serde_json::json!({
+                "operation": "generate",
+                "protocol": 2,
+                "profile": "ReShiki organic rules 1",
+                "smiles": identity.smiles,
+            });
+            let response =
+                naming::worker::respond(&serde_json::to_vec(&request).map_err(|e| e.to_string())?)?;
+            let response: serde_json::Value =
+                serde_json::from_slice(&response).map_err(|e| e.to_string())?;
+            serde_json::from_value(response["result"].clone()).map_err(|e| e.to_string())
+        };
+        let shown_name = name(&shown_identity)?;
+        let hidden_name = name(&hidden_identity)?;
+        assert_eq!(shown_name, hidden_name, "{smiles}");
+    }
+    Ok(())
+}
+
 #[test]
 fn structure_naming_failures_do_not_create_name_import_notices() {
     for generate in [false, true] {
@@ -211,9 +329,14 @@ fn file_epoch_clears_naming_and_old_completion_cannot_clear_a_new_request() {
 #[tokio::test]
 async fn preview_insertion_is_native_editable_and_one_history_step() -> Result<(), String> {
     let (mut app, _) = App::new();
-    let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into())
-        .await
-        .map_err(|error| error.to_string())?;
+    let preview = prepare_preview(
+        app.engine.clone(),
+        record("CCO"),
+        "CCO".into(),
+        Default::default(),
+    )
+    .await
+    .map_err(|error| error.to_string())?;
     app.tab.naming.set_preview(preview);
     let preview = app.tab.naming.preview.as_ref().unwrap();
     let atom = preview.document.atoms[0].id;
@@ -252,9 +375,14 @@ async fn exhausted_ids_report_failed_name_preview_without_changing_the_drawing()
 -> Result<(), String> {
     let (mut app, _) = App::new();
     app.tab.busy = false;
-    let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into())
-        .await
-        .map_err(|error| error.to_string())?;
+    let preview = prepare_preview(
+        app.engine.clone(),
+        record("CCO"),
+        "CCO".into(),
+        Default::default(),
+    )
+    .await
+    .map_err(|error| error.to_string())?;
     app.tab.doc.add_atom("O", Point::new(120., 80.));
     app.tab.doc.atoms[0].id = u64::MAX - 1;
     app.tab.doc.validate()?;
@@ -319,9 +447,14 @@ async fn name_preview_is_placed_beside_a_caption_only_drawing() -> Result<(), St
     });
     app.tab.camera.center = Point::new(-100., -60.);
     let before = app.tab.doc.clone();
-    let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into())
-        .await
-        .map_err(|error| error.to_string())?;
+    let preview = prepare_preview(
+        app.engine.clone(),
+        record("CCO"),
+        "CCO".into(),
+        Default::default(),
+    )
+    .await
+    .map_err(|error| error.to_string())?;
     let source = preview.document.clone();
     let center = editing::center(&source, &source.all_ids());
     let (_, existing_max) = before.bounds();
@@ -375,9 +508,14 @@ async fn native_preview_and_exchange_retain_specified_and_unspecified_stereo() -
         "[13CH3]CO",
         "CC(=O)[O-]",
     ] {
-        let preview = prepare_preview(engine.clone(), record(smiles), smiles.into())
-            .await
-            .map_err(|error| error.to_string())?;
+        let preview = prepare_preview(
+            engine.clone(),
+            record(smiles),
+            smiles.into(),
+            Default::default(),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
         naming::verify_identity(
             smiles,
             &naming::document_identity(&preview.document)?.smiles,
@@ -404,7 +542,7 @@ async fn warnings_and_unapplied_smiles_edits_block_insertion() -> Result<(), Str
     let (mut app, _) = App::new();
     let mut source = record("CCO");
     source.warnings.push("Review native import layout".into());
-    let preview = prepare_preview(app.engine.clone(), source, "CCO".into())
+    let preview = prepare_preview(app.engine.clone(), source, "CCO".into(), Default::default())
         .await
         .map_err(|error| error.to_string())?;
     app.tab.naming.set_preview(preview);
@@ -423,11 +561,16 @@ async fn warnings_and_unapplied_smiles_edits_block_insertion() -> Result<(), Str
 #[tokio::test]
 async fn changed_preview_no_longer_claims_original_chemical_name() -> Result<(), String> {
     let engine = LocalEngine::default();
-    let original = prepare_preview(engine.clone(), record("CCO"), "CCO".into())
-        .await
-        .map_err(|error| error.to_string())?;
+    let original = prepare_preview(
+        engine.clone(),
+        record("CCO"),
+        "CCO".into(),
+        Default::default(),
+    )
+    .await
+    .map_err(|error| error.to_string())?;
     assert!(!original.modified);
-    let edited = prepare_preview(engine, record("CCO"), "CCN".into())
+    let edited = prepare_preview(engine, record("CCO"), "CCN".into(), Default::default())
         .await
         .map_err(|error| error.to_string())?;
     assert!(edited.modified);
@@ -446,9 +589,14 @@ async fn typing_during_preview_rebuild_retains_new_text_and_rejects_old_completi
         } else {
             "CCO"
         };
-        let preview = prepare_preview(app.engine.clone(), record("CCO"), initial.into())
-            .await
-            .map_err(|error| error.to_string())?;
+        let preview = prepare_preview(
+            app.engine.clone(),
+            record("CCO"),
+            initial.into(),
+            Default::default(),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
         app.tab.naming.set_preview(preview);
         let _ = app.naming_action(Action::Smiles("CCN".into()));
         let result_identity = if matches!(action, Action::RestorePreview) {
@@ -460,9 +608,14 @@ async fn typing_during_preview_rebuild_retains_new_text_and_rejects_old_completi
         let stale = app.tab.naming.pending.unwrap().ticket();
         let _ = app.naming_action(Action::Smiles("CCC".into()));
         assert!(app.tab.naming.pending.is_none());
-        let old = prepare_preview(app.engine.clone(), record("CCO"), result_identity.into())
-            .await
-            .map_err(|error| error.to_string())?;
+        let old = prepare_preview(
+            app.engine.clone(),
+            record("CCO"),
+            result_identity.into(),
+            Default::default(),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
         let _ = app.naming_action(Action::Finished(
             stale,
             Box::new(Ok(Outcome::Preview(Box::new(old.clone())))),
@@ -481,9 +634,14 @@ async fn typing_during_preview_rebuild_retains_new_text_and_rejects_old_completi
         ));
         assert_eq!(app.tab.naming.pending.unwrap().ticket(), latest);
         assert_eq!(app.tab.naming.smiles, "CCC");
-        let current = prepare_preview(app.engine.clone(), record("CCO"), "CCC".into())
-            .await
-            .map_err(|error| error.to_string())?;
+        let current = prepare_preview(
+            app.engine.clone(),
+            record("CCO"),
+            "CCC".into(),
+            Default::default(),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
         let _ = app.naming_action(Action::Finished(
             latest,
             Box::new(Ok(Outcome::Preview(Box::new(current)))),
@@ -499,9 +657,14 @@ async fn typing_during_preview_rebuild_retains_new_text_and_rejects_old_completi
 async fn preview_text_edits_do_not_cancel_independent_local_name_generation() -> Result<(), String>
 {
     let (mut app, _) = App::new();
-    let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into())
-        .await
-        .map_err(|error| error.to_string())?;
+    let preview = prepare_preview(
+        app.engine.clone(),
+        record("CCO"),
+        "CCO".into(),
+        Default::default(),
+    )
+    .await
+    .map_err(|error| error.to_string())?;
     app.tab.doc = preview.document.clone();
     app.tab.selected = app.tab.doc.all_ids();
     app.tab.naming.set_preview(preview);
@@ -541,9 +704,14 @@ fn stale_results_cannot_reach_another_local_document_or_request() {
 #[tokio::test]
 async fn caption_requires_current_graph_and_is_undoable() -> Result<(), String> {
     let (mut app, _) = App::new();
-    let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into())
-        .await
-        .map_err(|error| error.to_string())?;
+    let preview = prepare_preview(
+        app.engine.clone(),
+        record("CCO"),
+        "CCO".into(),
+        Default::default(),
+    )
+    .await
+    .map_err(|error| error.to_string())?;
     app.tab.doc = preview.document;
     app.tab.selected = app.tab.doc.all_ids();
     let ticket = Ticket {
@@ -574,9 +742,14 @@ async fn controls_publish_named_native_actions_and_editable_values() -> Result<(
     source
         .warnings
         .push("Check this source interpretation".into());
-    let preview = prepare_preview(app.engine.clone(), source.clone(), "CCO".into())
-        .await
-        .map_err(|error| error.to_string())?;
+    let preview = prepare_preview(
+        app.engine.clone(),
+        source.clone(),
+        "CCO".into(),
+        Default::default(),
+    )
+    .await
+    .map_err(|error| error.to_string())?;
     app.tab.naming.set_preview(preview);
     app.tab.naming.structure = Some((
         Ticket {
@@ -652,9 +825,14 @@ async fn scrolled_insert_click_reaches_button_instead_of_preview() -> Result<(),
     use reshiki::accessibility::Collect;
     let (mut app, _) = App::new();
     app.tab.busy = false;
-    let preview = prepare_preview(app.engine.clone(), record("CCO"), "CCO".into())
-        .await
-        .map_err(|error| error.to_string())?;
+    let preview = prepare_preview(
+        app.engine.clone(),
+        record("CCO"),
+        "CCO".into(),
+        Default::default(),
+    )
+    .await
+    .map_err(|error| error.to_string())?;
     app.tab.naming.set_preview(preview);
     let size = iced::Size::new(340., 620.);
     let mut renderer = <iced::Renderer as Headless>::new(

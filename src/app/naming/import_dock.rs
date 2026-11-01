@@ -40,9 +40,11 @@ impl App {
         });
         let engine = self.engine.clone();
         let name = self.tab.naming.name.clone();
-        Task::perform(resolve_preview(engine, name, cancel), move |result| {
-            Message::Naming(Action::Finished(ticket, Box::new(result)))
-        })
+        let options = (&self.tab.doc.drawing_style).into();
+        Task::perform(
+            resolve_preview(engine, name, cancel, options),
+            move |result| Message::Naming(Action::Finished(ticket, Box::new(result))),
+        )
     }
 
     pub(super) fn insert_import_preview(&mut self, caption: bool) {
