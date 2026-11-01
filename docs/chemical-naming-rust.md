@@ -196,6 +196,7 @@ that is not the PIN:
 | `fusion_component`  | `azuleno[4,5-c]isoxazole`, `benzo[d]isothiazole`                                                | `azuleno[4,5-c][1,2]oxazole`, `1,2-benzothiazole`                                            |
 | `multiplicative`    | `phenoxybenzene`, `(benzenesulfinyl)benzene`, `benzylbenzene`                                   | `1,1'-oxydibenzene`, `1,1'-sulfinyldibenzene`, `1,1'-methylenedibenzene`                     |
 | `acyl_prefix`       | `4-(cyclohexylcarbonyl)benzoic acid`, `(dimethyloxophosphanyl)`, `(methyloxophosphanyl)methane` | `4-(cyclohexanecarbonyl)benzoic acid`, `dimethylphosphinoyl`, `dimethyl-lambda5-phosphanone` |
+| `ring_assembly`     | `2-(pyridin-2-yl)pyridine`, `cyclopropylcyclopropane`, `4-phenylphenol`                         | `2,2'-bipyridine`, `1,1'-bi(cyclopropane)`, `[1,1'-biphenyl]-4-ol`                           |
 
 Reasons for an unverified name: `opsin_fusion_layout` (fusion numbering chosen
 for OPSIN compatibility), `bridged_fused_parent`, `unaudited_parent`
@@ -252,6 +253,19 @@ acyl group on a ring written as `(ring-yl)carbonyl` or `-carbonothioyl`, and a
 P=O, As=O or Sb=O group with ligands written as `oxophosphanyl`, `oxoarsanyl`
 or `oxostibanyl`, are marked `acyl_prefix` (P-65.1.7.4.2, P-67.1.4.1.1.3,
 P-68.3.2.3.1).
+
+Two or more identical ring systems joined directly by a single or double bond
+form a ring assembly, whose PIN is built from the parent hydride name
+(P-28.2, P-28.3, P-52.2.7.1): `2,2'-bipyridine`, `1,1'-bi(cyclopropane)`,
+`1,1'-bi(cyclopentylidene)`, `[1,1'-biphenyl]-4-ol`, or a phane name for more
+than six (P-28.5). The engine writes `1,1'-biphenyl` itself and names every
+other assembly substitutively, so such a molecule is marked `ring_assembly`.
+Ring systems compare as parent hydrides: substituents do not count, but
+heteroatoms, charge and hydrogenation do, so `cyclohexylbenzene` and
+`4-phenylpyridine` stay substitutive (P-28.7, P-61.2.2). Assemblies of the same
+skeleton at different hydrogenation, whose PIN uses hydro prefixes or `ene`
+endings such as `1,2,3,4,5,6-hexahydro-2,2'-bipyridine` for
+`2-(piperidin-2-yl)pyridine` (P-31.1.7, P-54.3), have no mark.
 
 Alkoxy prefixes use the retained contractions `methoxy`, `ethoxy`, `propoxy`,
 `butoxy`, `phenoxy` and `tert-butoxy` (P-63.2.2.2), not isopropoxy, sec-butoxy

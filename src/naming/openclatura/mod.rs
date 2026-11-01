@@ -105,6 +105,12 @@ pub(super) fn name_smiles(smiles: &str) -> Result<Name, String> {
             crate::naming::NameReason::Multiplicative,
         ));
     }
+    // 1,1'-biphenyl is the only ring assembly name the namer writes.
+    if text != "1,1'-biphenyl" && has_ring_assembly(&mol) {
+        mol.mark_name(crate::naming::NameStatus::NotPreferred(
+            crate::naming::NameReason::RingAssembly,
+        ));
+    }
     Ok(Name {
         text: nest_enclosing_marks(&text),
         status: mol.name_status(),
@@ -243,6 +249,61 @@ fn has_multiplicative_pin(mol: &molecule::Molecule) -> bool {
                             .any(|g| g.is_principal_candidate))))
             && configuration(atom.idx, a) == configuration(atom.idx, b)
     })
+}
+
+/// Whether two identical ring systems are joined directly by a single or
+/// double bond, a ring assembly whose PIN is 2,2'-bipyridine,
+/// 1,1'-bi(cyclopropane) or a terphenyl (P-28.1, P-28.2, P-28.3, P-52.2.7),
+/// where the namer writes 2-(pyridin-2-yl)pyridine. Systems compare as parent
+/// hydrides, so substituents count as hydrogen (4-phenylphenol); different
+/// systems keep the substitutive PIN, cyclohexylbenzene (P-61.2.2).
+fn has_ring_assembly(mol: &molecule::Molecule) -> bool {
+    let ring_bonds: graph_kernel::EdgeSet =
+        graph_kernel::biconnected_edge_components(mol, &mol.atoms.keys().copied().collect())
+            .into_iter()
+            .filter(|block| block.len() > 1)
+            .flatten()
+            .collect();
+    let cyclic = ring_bonds.iter().flat_map(|&(u, v)| [u, v]).collect();
+    let systems = graph_kernel::connected_components(&cyclic, &ring_bonds);
+    let keys: Vec<_> = systems
+        .iter()
+        .map(|system| {
+            let ranks = chains::canonical_ranks(mol, Some(system));
+            let mut key: Vec<_> = system
+                .iter()
+                .map(|&u| {
+                    let atom = &mol.atoms[&u];
+                    let (inner, outer): (Vec<usize>, Vec<usize>) = mol
+                        .get_neighbors(u)
+                        .iter()
+                        .partition(|n| system.contains(n));
+                    let hydrogens = atom.total_h_count
+                        + outer.iter().map(|&n| mol.bond_order(u, n)).sum::<usize>();
+                    let mut inner: Vec<_> = inner.iter().map(|n| ranks[n]).collect();
+                    inner.sort();
+                    let (rank, symbol) = (ranks[&u], atom.symbol.as_str());
+                    (
+                        rank,
+                        symbol,
+                        atom.charge,
+                        atom.is_aromatic,
+                        hydrogens,
+                        inner,
+                    )
+                })
+                .collect();
+            key.sort();
+            key
+        })
+        .collect();
+    let system_of = |atom| systems.iter().position(|system| system.contains(&atom));
+    mol.bonds
+        .values()
+        .any(|bond| match (system_of(bond.u), system_of(bond.v)) {
+            (Some(a), Some(b)) => a != b && keys[a] == keys[b],
+            _ => false,
+        })
 }
 
 /// Count nonbonding electrons on the main-group elements that can carry
@@ -534,6 +595,10 @@ mod tests {
                 "1-[(2R)-butan-2-yl]-4-({4-[(2S)-butan-2-yl]phenyl}sulfanyl)benzene",
             ),
             ("CC(=O)OC(C)=O", "acetic anhydride"),
+            // Biphenyl is the ring assembly name itself (P-28.2.1); different
+            // rings are not an assembly (P-28.7, P-61.2.2).
+            ("c1ccc(cc1)-c1ccccc1", "1,1'-biphenyl"),
+            ("C1CCC(CC1)c1ccccc1", "cyclohexylbenzene"),
         ] {
             let name = name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
@@ -684,6 +749,23 @@ mod tests {
                 "S(CC(=O)O)CC(=O)O",
                 "2-[(2-hydroxy-2-oxoethyl)sulfanyl]acetic acid",
                 R::Multiplicative,
+            ),
+            (
+                "c1ccc(nc1)-c1ccccn1",
+                "2-(pyridin-2-yl)pyridine",
+                R::RingAssembly,
+            ),
+            ("C1CC1C1CC1", "cyclopropylcyclopropane", R::RingAssembly),
+            (
+                "c1ccc(cc1)-c1ccc(cc1)-c1ccccc1",
+                "1,4-diphenylbenzene",
+                R::RingAssembly,
+            ),
+            ("Oc1ccc(cc1)-c1ccccc1", "4-phenylphenol", R::RingAssembly),
+            (
+                "Cc1ccc(cc1)-c1ccccc1",
+                "1-methyl-4-phenylbenzene",
+                R::RingAssembly,
             ),
         ] {
             let name = name_smiles(smiles).unwrap();

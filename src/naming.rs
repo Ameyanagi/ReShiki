@@ -107,6 +107,7 @@ pub enum NameReason {
     FusionComponent,
     Multiplicative,
     AcylPrefix,
+    RingAssembly,
     OpsinFusionLayout,
     BridgedFusedParent,
     UnauditedParent,
@@ -144,6 +145,9 @@ impl NameReason {
             }
             Self::AcylPrefix => {
                 "Uses an acyl prefix built from a substituent, such as (4-methylphenyl)carbonyl, cyclohexylcarbonothioyl, (dimethyloxophosphanyl) or (dimethyloxoarsanyl), or an oxophosphanyl prefix on a parent, as in (methyloxophosphanyl)methane; preferred IUPAC names use the acid-derived forms 4-methylbenzoyl, cyclohexanecarbothioyl, dimethylphosphinoyl, dimethylarsinoyl and dimethyl-lambda5-phosphanone (P-65.1.7.4.2, P-67.1.4.1.1.3, P-68.3.2.3.1)."
+            }
+            Self::RingAssembly => {
+                "Names identical rings or ring systems joined directly by a single or double bond substitutively, as in 2-(pyridin-2-yl)pyridine, cyclopropylcyclopropane, 1,4-diphenylbenzene or 4-phenylphenol. These are ring assemblies, and \"preferred IUPAC names for assemblies of two or more identical cyclic systems joined by a single bond are formed using the names of parent hydrides rather than the names of substituent groups, except for biphenyl and polyphenyl assemblies\" (P-52.2.7.1): 2,2'-bipyridine, 1,1'-bi(cyclopropane), 1^1,2^1:2^4,3^1-terphenyl, [1,1'-biphenyl]-4-ol, or 1,1'-bi(cyclopentylidene) for a double bond; more than six take a phane name (P-28.2, P-28.3, P-28.5)."
             }
             Self::OpsinFusionLayout => {
                 "Uses a fusion layout selected for OPSIN numbering compatibility; its preferred IUPAC numbering has not been verified."
