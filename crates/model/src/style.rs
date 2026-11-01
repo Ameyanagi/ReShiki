@@ -20,6 +20,9 @@ pub struct DrawingStyle {
     pub hash_spacing_pt: f32,
     pub bond_spacing_ratio: f32,
     pub png_dpi: u32,
+    /// Print radical-ion charges first, as commonly used in mass spectrometry.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub charge_before_radical: bool,
 }
 impl Default for DrawingStyle {
     fn default() -> Self {
@@ -40,6 +43,7 @@ pub static DEFAULT: LazyLock<DrawingStyle> = LazyLock::new(|| {
             hash_spacing_pt: 2.5,
             bond_spacing_ratio: 0.18,
             png_dpi: 1200,
+            charge_before_radical: false,
         }
     })
 });
@@ -226,6 +230,9 @@ mod font;
 #[cfg(test)]
 #[path = "style/added_font_tests.rs"]
 mod added_font_tests;
+#[cfg(test)]
+#[path = "style/serialization_tests.rs"]
+mod serialization_tests;
 
 /// Measure advances in the same font used by the drawing renderers.
 pub fn text_width(text: &str, size: f32) -> f32 {

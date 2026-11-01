@@ -1416,6 +1416,20 @@ impl App {
                 .spacing(6),
             );
         }
+        if let Some(ring) = reshiki::aromatic::charge_circle(&self.tab.doc, &self.tab.selected) {
+            let centered = ring.atoms.iter().all(|id| {
+                self.tab
+                    .doc
+                    .atom(*id)
+                    .is_some_and(|atom| atom.display.center_charge_in_ring)
+            });
+            controls = controls.push(
+                checkbox(centered)
+                    .label("Centre charge in ring")
+                    .on_toggle(|_| Message::CenterRingCharge)
+                    .text_size(12),
+            );
+        }
         if self.has_selected_ring() {
             controls = controls.push(
                 keyed_command("Saturated ↔ Aromatic", Message::ToggleSelectedRing)
@@ -1475,6 +1489,8 @@ impl App {
                             reshiki::scientific::MarkKind::RadicalIon => "Radical ion",
                             reshiki::scientific::MarkKind::LonePair => "Lone pair",
                             reshiki::scientific::MarkKind::LonePairBar => "Lone pair bar",
+                            reshiki::scientific::MarkKind::PartialPositive => "Partial positive",
+                            reshiki::scientific::MarkKind::PartialNegative => "Partial negative",
                         })
                         .size(11)
                         .width(Length::Fill),

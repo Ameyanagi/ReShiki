@@ -24,6 +24,7 @@ fn display(value: NativeAtomDisplay) -> Result<AtomDisplay> {
         hydrogen_color: None,
         color_override: false,
         hide_charge: false,
+        center_charge_in_ring: false,
         variable: None,
         label_scripts: Vec::new(),
         carbons: Some(value.carbons),

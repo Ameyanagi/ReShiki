@@ -463,6 +463,9 @@ pub struct AtomDisplay {
     /// Suppress the printed charge only; the chemical charge is retained.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub hide_charge: bool,
+    /// Draw this charge at the centre of an isolated aromatic circle, when present.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub center_charge_in_ring: bool,
     /// A free text label on a wildcard atom, without assigning an element.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub variable: Option<String>,

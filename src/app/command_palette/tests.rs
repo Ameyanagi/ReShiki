@@ -47,6 +47,44 @@ fn top(app: &App) -> &Command {
 }
 
 #[test]
+fn ionic_and_centred_charge_commands_follow_selection_eligibility() {
+    let mut app = app();
+    let o = app.tab.doc.add_atom("O", Point::default());
+    let na = app.tab.doc.add_atom("Na", Point::new(42., 0.));
+    app.tab.doc.add_bond(o, na, 1, "plain");
+    search(&mut app, "Make ionic");
+    assert!(app.command_unavailable(top(&app)).is_some());
+    app.tab.selected = vec![o, na];
+    assert!(app.command_unavailable(top(&app)).is_none());
+    let _ = app.update(Message::Commands(Action::Submit));
+    assert_eq!(app.tab.doc.atom(na).unwrap().charge, 1);
+    assert!(app.tab.doc.bonds.is_empty());
+
+    app.tab.doc = Document::default();
+    app.tab.selected = reshiki::editing::ring(&mut app.tab.doc, Point::default(), 7, true, 5.);
+    search(&mut app, "Centre charge in ring");
+    assert!(app.command_unavailable(top(&app)).is_some());
+    app.tab.doc.atoms[0].charge = 1;
+    assert!(app.command_unavailable(top(&app)).is_none());
+    let _ = app.update(Message::Commands(Action::Submit));
+    assert!(
+        app.tab
+            .doc
+            .atoms
+            .iter()
+            .all(|a| a.display.center_charge_in_ring)
+    );
+}
+
+#[test]
+fn partial_charge_symbols_are_searchable_by_delta() {
+    let mut app = app();
+    search(&mut app, "delta");
+    row(&app, "Partial positive");
+    row(&app, "Partial negative");
+}
+
+#[test]
 fn path_cleanup_catalog_has_selection_commands_and_explicit_upright_axis() {
     for (query, name, upright) in [
         ("Smooth", "Smooth", None),

@@ -853,6 +853,8 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::InsertTemplate(_)
             | Message::Templates(_)
             | Message::AromaticDisplay
+            | Message::MakeIonic
+            | Message::CenterRingCharge
             | Message::ToggleAromaticRing
             | Message::RingSize(_)
             | Message::AromaticRing(_)

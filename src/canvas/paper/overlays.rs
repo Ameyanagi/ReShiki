@@ -457,7 +457,7 @@ impl MoleculeCanvas<'_> {
                 for m in a
                     .marks
                     .iter()
-                    .filter(|m| reshiki::scientific::mark_drawn(a, m))
+                    .filter(|m| reshiki::scientific::mark_drawn(preview, a, m))
                 {
                     let center = self
                         .camera

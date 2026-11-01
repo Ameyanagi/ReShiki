@@ -85,6 +85,7 @@ impl NativeDrawingStyle {
             hash_spacing_pt: self.hash_spacing_pt as f32,
             bond_spacing_ratio: self.bond_spacing_ratio as f32,
             png_dpi: self.png_dpi,
+            charge_before_radical: false,
         };
         result.validate().map_err(Error::Document)?;
         Ok(result)

@@ -185,7 +185,7 @@ impl MoleculeCanvas<'_> {
                 .filter(|a| self.selected.contains(&a.id) && self.doc.atom_drawn(a.id))
             {
                 if let Some(index) = a.marks.iter().position(|m| {
-                    reshiki::scientific::mark_drawn(a, m)
+                    reshiki::scientific::mark_drawn(self.doc, a, m)
                         && a.position.offset(m.offset.x, m.offset.y).distance(p)
                             < self.camera.world_len(HANDLE_PICK_PX)
                 }) {

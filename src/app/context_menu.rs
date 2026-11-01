@@ -634,6 +634,16 @@ impl App {
         let mut entries = vec![Hint("Bond appearance")];
         entries.push(command("Bond in front", Message::BondDepth(true), bonds));
         entries.push(command("Bond behind", Message::BondDepth(false), bonds));
+        if !reshiki::ionic::eligible_bonds(&self.tab.doc, &self.tab.selected).is_empty() {
+            entries.push(command("Make ionic", Message::MakeIonic, true));
+        }
+        if reshiki::aromatic::charge_circle(&self.tab.doc, &self.tab.selected).is_some() {
+            entries.push(command(
+                "Centre charge in ring",
+                Message::CenterRingCharge,
+                true,
+            ));
+        }
         if reshiki::rings::selected_cycle(&self.tab.doc, &self.tab.selected).is_some() {
             entries.push(command(
                 "Saturated ↔ Aromatic",

@@ -208,6 +208,28 @@ impl Writer<'_> {
         for atom in &doc.atoms {
             for mark in &atom.marks {
                 self.spend(doc.atoms.len())?;
+                if let Some(text) = match mark.kind {
+                    MarkKind::PartialPositive => Some("δ+"),
+                    MarkKind::PartialNegative => Some("δ−"),
+                    _ => None,
+                } {
+                    let size = crate::style::DEFAULT.world(mark.size_pt.unwrap_or_else(|| {
+                        atom.text_style
+                            .as_ref()
+                            .map_or(doc.drawing_style.font_size_pt, |s| s.size_pt)
+                            * 0.75
+                    }));
+                    self.partial_charge_text(
+                        text,
+                        P::from(atom.position.offset(mark.offset.x, mark.offset.y)),
+                        real(size),
+                        atom.text_style
+                            .as_ref()
+                            .map_or(Default::default(), |s| s.color),
+                        0,
+                    )?;
+                    continue;
+                }
                 let (symbol, attribute) = match mark.kind {
                     MarkKind::Charge | MarkKind::CircledCharge => {
                         if atom.charge == 0 {
@@ -389,6 +411,20 @@ impl Writer<'_> {
             }
             if g.kind == GraphicKind::Picture {
                 let n = self.picture(g, z)?;
+                self.objects.push((g.id, n));
+                continue;
+            }
+            if let GraphicKind::Symbol(kind) = g.kind
+                && let Some(text) = kind.partial_charge_text()
+            {
+                let x = P::from(g.axis_x);
+                let n = self.partial_charge_text(
+                    text,
+                    P::from(g.origin),
+                    x.x.hypot(x.y),
+                    g.style.stroke,
+                    z,
+                )?;
                 self.objects.push((g.id, n));
                 continue;
             }

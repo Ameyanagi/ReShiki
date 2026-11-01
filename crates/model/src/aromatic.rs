@@ -49,6 +49,91 @@ pub fn circles(doc: &Document) -> Vec<Circle> {
     ring_circles(doc, true)
 }
 
+/// A complete selected, charged ring with its own drawn aromatic circle.
+pub fn charge_circle(doc: &Document, selection: &[u64]) -> Option<Circle> {
+    if selection.len() < 3 {
+        return None;
+    }
+    let mut rings = isolated_circles(doc).into_iter().filter(|ring| {
+        ring.atoms.iter().all(|id| selection.contains(id))
+            && ring
+                .atoms
+                .iter()
+                .filter_map(|id| doc.atom(*id))
+                .map(|atom| atom.charge)
+                .sum::<i32>()
+                != 0
+    });
+    let ring = rings.next()?;
+    rings.next().is_none().then_some(ring)
+}
+
+pub fn toggle_center_charge(doc: &mut Document, selection: &[u64]) -> Result<bool, String> {
+    let ring = charge_circle(doc, selection)
+        .ok_or("Select one charged, non-fused ring with an aromatic circle")?;
+    let center = !ring.atoms.iter().all(|id| {
+        doc.atom(*id)
+            .is_some_and(|atom| atom.display.center_charge_in_ring)
+    });
+    for atom in &mut doc.atoms {
+        if ring.atoms.contains(&atom.id) {
+            atom.display.center_charge_in_ring = center;
+        }
+    }
+    Ok(center)
+}
+
+/// Aromatic circles sharing no atom with any other visible ring.
+fn isolated_circles(doc: &Document) -> Vec<Circle> {
+    let mut rings = circles(doc);
+    let mut memberships = HashMap::<u64, usize>::new();
+    let atoms = doc.atoms.iter().map(|atom| atom.id).collect::<Vec<_>>();
+    for ring in crate::ring_fills::selected_cycles(doc, &atoms) {
+        for id in ring {
+            *memberships.entry(id).or_default() += 1;
+        }
+    }
+    rings.retain(|ring| {
+        ring.atoms.iter().all(|id| memberships.get(id) == Some(&1))
+            && !doc
+                .bonds
+                .iter()
+                .any(|bond| bond.ring_arc && ring.contains_bond(bond.a, bond.b))
+    });
+    rings
+}
+
+pub(crate) fn centered_charges(doc: &Document) -> Vec<(Circle, i32)> {
+    if !doc
+        .atoms
+        .iter()
+        .any(|atom| atom.display.center_charge_in_ring)
+    {
+        return Vec::new();
+    }
+    isolated_circles(doc)
+        .into_iter()
+        .filter_map(|ring| {
+            let charge = ring
+                .atoms
+                .iter()
+                .filter_map(|id| doc.atom(*id))
+                .filter(|atom| atom.display.center_charge_in_ring)
+                .map(|atom| atom.charge)
+                .sum::<i32>();
+            (charge != 0).then_some((ring, charge))
+        })
+        .collect()
+}
+
+pub(crate) fn charge_is_centered(doc: &Document, atom: &crate::document::Atom) -> bool {
+    atom.charge != 0
+        && atom.display.center_charge_in_ring
+        && centered_charges(doc)
+            .iter()
+            .any(|(ring, _)| ring.atoms.contains(&atom.id))
+}
+
 pub(crate) fn ring_circles(doc: &Document, aromatic_only: bool) -> Vec<Circle> {
     let eligible = |b: &&crate::document::Bond| {
         (if aromatic_only {
@@ -294,5 +379,7 @@ pub(crate) fn ring_plane(doc: &Document, ids: &[u64]) -> Option<(Vec<Point>, [Po
     let [vx, vy, _] = v;
     Some((projected, [Point::new(ux, uy), Point::new(vx, vy)]))
 }
+#[cfg(test)]
+mod charge_tests;
 #[cfg(test)]
 mod projection_tests;

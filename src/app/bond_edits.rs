@@ -3,6 +3,28 @@ use super::App;
 use crate::canvas::Tool;
 
 impl App {
+    pub(super) fn make_ionic(&mut self) {
+        let before = self.tab.doc.clone();
+        match reshiki::ionic::make_ionic(&mut self.tab.doc, &self.tab.selected) {
+            Ok(_) => self.changed(before),
+            Err(error) => {
+                self.status = error;
+                self.error = true;
+            }
+        }
+    }
+
+    pub(super) fn center_ring_charge(&mut self) {
+        let before = self.tab.doc.clone();
+        match reshiki::aromatic::toggle_center_charge(&mut self.tab.doc, &self.tab.selected) {
+            Ok(_) => self.changed(before),
+            Err(error) => {
+                self.status = error;
+                self.error = true;
+            }
+        }
+    }
+
     pub(super) fn reset_bond_drawing(&mut self) {
         self.tab.bond_drawing = Default::default();
         self.tab.bond_drawing.length = self.tab.doc.drawing_style.bond_length_world;

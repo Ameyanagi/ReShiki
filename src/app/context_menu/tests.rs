@@ -99,6 +99,71 @@ fn enabled(app: &App, page: Page, label: &str) -> Option<bool> {
 }
 
 #[test]
+fn make_ionic_menu_is_eligible_only_and_one_undo_step() {
+    for (metal, order, eligible) in [("Na", 1, true), ("Mg", 1, false), ("Na", 2, false)] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let c = app.tab.doc.add_atom("C", World::new(-42., 0.));
+        let o = app.tab.doc.add_atom("O", World::default());
+        let m = app.tab.doc.add_atom(metal, World::new(42., 0.));
+        app.tab.doc.add_bond(c, o, 1, "plain");
+        app.tab.doc.add_bond(o, m, order, "plain");
+        app.tab.selected = vec![o, m];
+        assert_eq!(
+            enabled(&app, Page::Bonds, "Make ionic"),
+            eligible.then_some(true)
+        );
+        if !eligible {
+            continue;
+        }
+        let before = app.tab.doc.clone();
+        run_item(&mut app, Page::Bonds, "Make ionic").unwrap();
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(app.tab.doc.atom(o).unwrap().charge, -1);
+        assert_eq!(app.tab.doc.atom(m).unwrap().charge, 1);
+        assert_eq!(app.tab.doc.atom(o).unwrap().label_h, 0);
+        assert!(app.tab.doc.bond_between(o, m).is_none());
+        assert!((app.tab.doc.atom(m).unwrap().position.x - 84.).abs() < 0.001);
+        let after = app.tab.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, after);
+    }
+}
+
+#[test]
+fn centre_ring_charge_menu_requires_a_complete_charged_circle_and_is_undoable() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let ids = reshiki::editing::ring(&mut app.tab.doc, World::default(), 5, true, 5.);
+    app.tab.selected = ids.clone();
+    assert!(!labels(&app, Page::Bonds).contains(&"Centre charge in ring"));
+    app.tab.doc.atom_mut(ids[0]).unwrap().charge = -1;
+    assert_eq!(
+        enabled(&app, Page::Bonds, "Centre charge in ring"),
+        Some(true)
+    );
+    let before = app.tab.doc.clone();
+    run_item(&mut app, Page::Bonds, "Centre charge in ring").unwrap();
+    assert!(!app.error, "{}", app.status);
+    assert!(
+        app.tab
+            .doc
+            .atoms
+            .iter()
+            .all(|a| a.display.center_charge_in_ring)
+    );
+    assert_eq!(app.tab.doc.atom(ids[0]).unwrap().charge, -1);
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    app.tab.selected.pop();
+    assert!(!labels(&app, Page::Bonds).contains(&"Centre charge in ring"));
+}
+
+#[test]
 fn marked_atom_menu_starts_positioning_without_changing_the_drawing() -> Result<(), String> {
     use reshiki::scientific::{AtomMark, MarkKind};
     let (mut app, _) = App::new();
