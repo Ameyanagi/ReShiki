@@ -264,85 +264,51 @@ fn every_preset_survives_editor_fields_without_becoming_custom() {
 }
 
 #[test]
-fn chain_double_bond_centering_stays_in_the_draft_until_apply_and_has_one_undo_step() {
+fn stereochemistry_style_choices_apply_cancel_and_undo_with_the_document() {
     let (mut app, _) = App::new();
-    app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
     app.tab.busy = false;
-    app.tab.history = Default::default();
-    let before = app.tab.doc.clone();
-    app.tab.saved = before.clone();
+    let original = app.tab.doc.clone();
     send(&mut app, Action::Open);
-    send(&mut app, Action::CenterChainDoubleBonds(false));
-    let editor = app.tab.styles.editor.as_ref().unwrap();
-    assert!(!editor.apply_semantics_requested);
-    assert_eq!(editor.candidate().unwrap(), before.drawing_style);
-    send(&mut app, Action::CenterChainDoubleBonds(true));
-    let editor = app.tab.styles.editor.as_ref().unwrap();
-    let draft = editor.candidate().unwrap();
-    assert!(draft.center_chain_double_bonds);
+    send(&mut app, Action::TwoWedgeStereocentres(true));
+    send(&mut app, Action::RingFusionHydrogens(false));
+    send(&mut app, Action::WavyUnknownAlkenes(true));
+    let draft = app.tab.styles.editor.as_ref().unwrap().candidate().unwrap();
     assert_eq!(draft.name, "Custom");
-    assert_eq!(app.tab.doc, before);
-    assert!(!app.dirty());
-    assert!(!app.tab.history.can_undo());
+    assert!(draft.two_wedge_stereocentres);
+    assert!(!draft.ring_fusion_hydrogens);
+    assert!(draft.wavy_unknown_alkenes);
+    assert_eq!(app.tab.doc, original);
     send(&mut app, Action::Cancel);
-    assert_eq!(app.tab.doc, before);
+    assert_eq!(app.tab.doc, original);
 
     send(&mut app, Action::Open);
-    send(&mut app, Action::CenterChainDoubleBonds(true));
+    send(&mut app, Action::TwoWedgeStereocentres(true));
+    send(&mut app, Action::RingFusionHydrogens(false));
+    send(&mut app, Action::WavyUnknownAlkenes(true));
     send(&mut app, Action::Apply);
-    let after = app.tab.doc.clone();
-    assert_eq!(after.drawing_style, draft);
-    assert_eq!(after.atoms, before.atoms);
-    assert_eq!(after.bonds, before.bonds);
-    assert!(app.dirty());
+    assert!(!app.error, "{}", app.status);
+    assert_eq!(app.tab.doc.drawing_style, draft);
     let _ = app.update(Message::Undo);
-    assert_eq!(app.tab.doc, before);
-    assert!(!app.tab.history.can_undo());
+    assert_eq!(app.tab.doc, original);
     let _ = app.update(Message::Redo);
-    assert_eq!(app.tab.doc, after);
-    let revision = app.tab.revision;
+    assert_eq!(app.tab.doc.drawing_style, draft);
+
     send(&mut app, Action::Open);
+    assert_eq!(
+        app.tab.styles.editor.as_ref().unwrap().candidate().unwrap(),
+        draft
+    );
+    send(&mut app, Action::Preset(Preset::Jacs));
     assert!(
         app.tab
             .styles
             .editor
             .as_ref()
             .unwrap()
-            .center_chain_double_bonds
+            .candidate()
+            .unwrap()
+            .is_default()
     );
-    send(&mut app, Action::Apply);
-    assert_eq!(app.tab.doc, after);
-    assert_eq!(app.tab.revision, revision);
-}
-
-#[test]
-fn chain_double_bond_centering_resets_with_presets_and_loads_from_native_styles() {
-    let (mut app, _) = App::new();
-    app.tab.busy = false;
-    send(&mut app, Action::Open);
-    for preset in Preset::ALL {
-        send(&mut app, Action::CenterChainDoubleBonds(true));
-        send(&mut app, Action::Preset(preset));
-        let editor = app.tab.styles.editor.as_ref().unwrap();
-        assert!(!editor.center_chain_double_bonds);
-        assert_eq!(editor.candidate().unwrap(), preset.style());
-    }
-    send(&mut app, Action::CenterChainDoubleBonds(true));
-    let draft = app.tab.styles.editor.as_ref().unwrap().candidate().unwrap();
-    let name = std::path::Path::new("centered.reshiki-style");
-    let bytes = reshiki::document_styles::to_bytes(name, &draft).unwrap();
-    let loaded = reshiki::document_styles::load_bytes(name, bytes).unwrap();
-    assert_eq!(loaded, draft);
-    send(&mut app, Action::Preset(Preset::Jacs));
-    let (serial, epoch) = (app.tab.styles.serial, app.tab.file_epoch);
-    send(&mut app, Action::Loaded(serial, epoch, Ok(Some(loaded))));
-    assert_eq!(
-        app.tab.styles.editor.as_ref().unwrap().candidate().unwrap(),
-        draft
-    );
-    assert!(!app.tab.doc.drawing_style.center_chain_double_bonds);
-    send(&mut app, Action::Apply);
-    assert_eq!(app.tab.doc.drawing_style, draft);
 }
 
 #[test]
@@ -1420,4 +1386,86 @@ async fn drawing_style_headless_snapshot() {
             "Save icon stays visible and clickable at {width}×{height}"
         );
     }
+}
+
+#[test]
+fn chain_double_bond_centering_stays_in_the_draft_until_apply_and_has_one_undo_step() {
+    let (mut app, _) = App::new();
+    app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+    app.tab.busy = false;
+    app.tab.history = Default::default();
+    let before = app.tab.doc.clone();
+    app.tab.saved = before.clone();
+    send(&mut app, Action::Open);
+    send(&mut app, Action::CenterChainDoubleBonds(false));
+    let editor = app.tab.styles.editor.as_ref().unwrap();
+    assert!(!editor.apply_semantics_requested);
+    assert_eq!(editor.candidate().unwrap(), before.drawing_style);
+    send(&mut app, Action::CenterChainDoubleBonds(true));
+    let editor = app.tab.styles.editor.as_ref().unwrap();
+    let draft = editor.candidate().unwrap();
+    assert!(draft.center_chain_double_bonds);
+    assert_eq!(draft.name, "Custom");
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.dirty());
+    assert!(!app.tab.history.can_undo());
+    send(&mut app, Action::Cancel);
+    assert_eq!(app.tab.doc, before);
+
+    send(&mut app, Action::Open);
+    send(&mut app, Action::CenterChainDoubleBonds(true));
+    send(&mut app, Action::Apply);
+    let after = app.tab.doc.clone();
+    assert_eq!(after.drawing_style, draft);
+    assert_eq!(after.atoms, before.atoms);
+    assert_eq!(after.bonds, before.bonds);
+    assert!(app.dirty());
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, after);
+    let revision = app.tab.revision;
+    send(&mut app, Action::Open);
+    assert!(
+        app.tab
+            .styles
+            .editor
+            .as_ref()
+            .unwrap()
+            .center_chain_double_bonds
+    );
+    send(&mut app, Action::Apply);
+    assert_eq!(app.tab.doc, after);
+    assert_eq!(app.tab.revision, revision);
+}
+
+#[test]
+fn chain_double_bond_centering_resets_with_presets_and_loads_from_native_styles() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    send(&mut app, Action::Open);
+    for preset in Preset::ALL {
+        send(&mut app, Action::CenterChainDoubleBonds(true));
+        send(&mut app, Action::Preset(preset));
+        let editor = app.tab.styles.editor.as_ref().unwrap();
+        assert!(!editor.center_chain_double_bonds);
+        assert_eq!(editor.candidate().unwrap(), preset.style());
+    }
+    send(&mut app, Action::CenterChainDoubleBonds(true));
+    let draft = app.tab.styles.editor.as_ref().unwrap().candidate().unwrap();
+    let name = std::path::Path::new("centered.reshiki-style");
+    let bytes = reshiki::document_styles::to_bytes(name, &draft).unwrap();
+    let loaded = reshiki::document_styles::load_bytes(name, bytes).unwrap();
+    assert_eq!(loaded, draft);
+    send(&mut app, Action::Preset(Preset::Jacs));
+    let (serial, epoch) = (app.tab.styles.serial, app.tab.file_epoch);
+    send(&mut app, Action::Loaded(serial, epoch, Ok(Some(loaded))));
+    assert_eq!(
+        app.tab.styles.editor.as_ref().unwrap().candidate().unwrap(),
+        draft
+    );
+    assert!(!app.tab.doc.drawing_style.center_chain_double_bonds);
+    send(&mut app, Action::Apply);
+    assert_eq!(app.tab.doc.drawing_style, draft);
 }

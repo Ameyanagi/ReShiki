@@ -8,6 +8,34 @@ use reshiki::{
 };
 use std::{sync::Arc, time::Instant};
 
+#[tokio::test]
+async fn imports_snapshot_the_originating_documents_wedge_preference() -> Result<(), String> {
+    use iced::futures::StreamExt;
+    for two_wedges in [false, true] {
+        let (mut app, _) = App::new();
+        app.engine = reshiki::engine::LocalEngine::in_process();
+        app.tab.busy = false;
+        app.tab.doc.drawing_style.two_wedge_stereocentres = two_wedges;
+        let task = app.run(Request::import_smiles("CC[C@](C)(Br)Cl"), Job::Insert);
+        // A later style change must not alter a request already launched.
+        app.tab.doc.drawing_style.two_wedge_stereocentres = !two_wedges;
+        let mut stream = iced_runtime::task::into_stream(task).ok_or("Missing import task")?;
+        let Some(iced_runtime::Action::Output(Message::EngineFinished { result, .. })) =
+            stream.next().await
+        else {
+            return Err("Missing import result".into());
+        };
+        let drawing = (*result)?.document.ok_or("Missing imported drawing")?;
+        let wedges = drawing
+            .bonds
+            .iter()
+            .filter(|bond| matches!(bond.display.as_str(), "wedge" | "hash"))
+            .count();
+        assert_eq!(wedges, if two_wedges { 2 } else { 1 });
+    }
+    Ok(())
+}
+
 fn elapsed(stages: &mut Vec<(&'static str, f64)>, name: &'static str, started: Instant) {
     stages.push((name, started.elapsed().as_secs_f64()));
 }

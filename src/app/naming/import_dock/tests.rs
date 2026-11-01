@@ -21,9 +21,14 @@ fn record() -> Record {
 }
 
 async fn preview(app: &App, smiles: &str) -> Result<Preview, String> {
-    prepare_preview(app.engine.clone(), record(), smiles.into())
-        .await
-        .map_err(|error| error.to_string())
+    prepare_preview(
+        app.engine.clone(),
+        record(),
+        smiles.into(),
+        Default::default(),
+    )
+    .await
+    .map_err(|error| error.to_string())
 }
 
 #[tokio::test]
@@ -455,9 +460,14 @@ async fn actual_salt_names_explain_the_salt_limit_and_unknown_names_stay_ambiguo
         let before = app.tab.doc.clone();
         let _ = app.insert_input();
         let ticket = app.tab.naming.pending.unwrap().ticket();
-        let error = resolve_preview(app.engine.clone(), name.into(), naming::Cancel::default())
-            .await
-            .expect_err(name);
+        let error = resolve_preview(
+            app.engine.clone(),
+            name.into(),
+            naming::Cancel::default(),
+            Default::default(),
+        )
+        .await
+        .expect_err(name);
         let _ = app.naming_action(Action::Finished(ticket, Box::new(Err(error))));
         let notice = app.tab.naming.notice.as_ref().unwrap();
         assert_eq!(notice.kind, kind, "{name}");
@@ -602,6 +612,7 @@ async fn actual_local_parser_result_inserts_directly_with_verified_source_title(
         app.engine.clone(),
         "ethanol".into(),
         naming::Cancel::default(),
+        Default::default(),
     )
     .await
     .map_err(|error| error.to_string())?;
@@ -753,9 +764,14 @@ async fn retained_plus_lactic_import_keeps_stereo_caption_and_atomic_history() -
     let _ = app.naming_action(Action::Name(name.into()));
     let _ = app.insert_input();
     let ticket = app.tab.naming.pending.unwrap().ticket();
-    let outcome = resolve_preview(app.engine.clone(), name.into(), naming::Cancel::default())
-        .await
-        .map_err(|error| error.to_string())?;
+    let outcome = resolve_preview(
+        app.engine.clone(),
+        name.into(),
+        naming::Cancel::default(),
+        Default::default(),
+    )
+    .await
+    .map_err(|error| error.to_string())?;
     let _ = app.naming_action(Action::Finished(ticket, Box::new(Ok(outcome))));
     assert!(!app.error);
     assert_eq!(app.tab.doc.atoms.len(), 6);
@@ -787,6 +803,7 @@ async fn retained_plus_lactic_import_keeps_stereo_caption_and_atomic_history() -
         app.engine.clone(),
         unsupported.into(),
         naming::Cancel::default(),
+        Default::default(),
     )
     .await
     .expect_err("unrelated optical rotation must not assign R/S");

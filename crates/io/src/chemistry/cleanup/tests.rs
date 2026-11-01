@@ -5,6 +5,244 @@ use std::f64::consts::PI;
 const PROPYLBENZENE: &str = "CCCc1ccccc1";
 const ASPIRIN: &str = "CC(=O)Oc1ccccc1C(=O)O";
 
+#[test]
+fn unspecified_alkene_cleanup_uses_document_depiction_and_notice() -> anyhow::Result<()> {
+    for wavy in [false, true] {
+        let mut source = Document::default();
+        source.drawing_style.wavy_unknown_alkenes = wavy;
+        let atoms = (0..5)
+            .map(|i| source.add_atom("C", crate::document::Point::new(i as f32 * 42., 0.)))
+            .collect::<Vec<_>>();
+        for (i, pair) in atoms.windows(2).enumerate() {
+            source.add_bond(pair[0], pair[1], if i == 1 { 2 } else { 1 }, "plain");
+        }
+        let cleaned = clean(&source, Options::default(), &[], 0.)?;
+        assert_eq!(cleaned.document.atoms.len(), source.atoms.len());
+        let expected = if wavy {
+            "wavy substituent bond"
+        } else {
+            "crossed depiction"
+        };
+        assert!(
+            cleaned
+                .warnings
+                .iter()
+                .any(|warning| warning.contains(expected)),
+            "{:?}",
+            cleaned.warnings
+        );
+        assert_eq!(
+            cleaned
+                .document
+                .bonds
+                .iter()
+                .filter(|bond| bond.order == 1 && bond.display == "wavy")
+                .count(),
+            usize::from(wavy)
+        );
+        assert_eq!(
+            cleaned
+                .document
+                .bonds
+                .iter()
+                .filter(|bond| bond.order == 2 && bond.display == "wavy")
+                .count(),
+            usize::from(!wavy)
+        );
+        assert!(
+            cleaned
+                .molecule
+                .unwrap()
+                .state
+                .metadata
+                .bonds
+                .iter()
+                .all(|bond| bond.stereo <= 1)
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn crossed_alkene_cleanup_updates_and_reuses_the_wavy_depiction() -> anyhow::Result<()> {
+    let mut source = Document::default();
+    source.drawing_style.wavy_unknown_alkenes = true;
+    let atoms = (0..5)
+        .map(|i| source.add_atom("C", crate::document::Point::new(i as f32 * 42., 0.)))
+        .collect::<Vec<_>>();
+    for (i, pair) in atoms.windows(2).enumerate() {
+        source.add_bond(
+            pair[0],
+            pair[1],
+            if i == 1 { 2 } else { 1 },
+            if i == 1 { "wavy" } else { "plain" },
+        );
+    }
+    assert_eq!(
+        molecular::prepare(&source)?.state.metadata.bonds[1].stereo,
+        1
+    );
+    for _ in 0..3 {
+        let cleaned = clean(&source, Options::default(), &[], 0.)?;
+        assert_eq!(cleaned.document.bonds[1].display, "plain");
+        assert_eq!(
+            cleaned
+                .document
+                .bonds
+                .iter()
+                .filter(|bond| bond.order == 1 && bond.display == "wavy")
+                .count(),
+            1
+        );
+        assert!(
+            cleaned
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("wavy substituent bond"))
+        );
+        if source.bonds[1].display == "plain" {
+            assert_eq!(cleaned.document.bonds, source.bonds);
+        }
+        source = cleaned.document;
+    }
+    source.drawing_style.wavy_unknown_alkenes = false;
+    let cleaned = clean(&source, Options::default(), &[], 0.)?;
+    assert_eq!(cleaned.document.bonds[1].display, "wavy");
+    assert!(
+        cleaned
+            .document
+            .bonds
+            .iter()
+            .all(|bond| bond.order != 1 || bond.display != "wavy")
+    );
+    Ok(())
+}
+
+#[test]
+fn existing_unknown_alkene_cleanup_preserves_fixed_atoms_and_bonds() -> anyhow::Result<()> {
+    for marker in [0, 1] {
+        for wavy in [false, true] {
+            let mut source = Document::default();
+            source.drawing_style.wavy_unknown_alkenes = wavy;
+            let atoms = (0..5)
+                .map(|i| source.add_atom("C", crate::document::Point::new(i as f32 * 42., 0.)))
+                .collect::<Vec<_>>();
+            for (i, pair) in atoms.windows(2).enumerate() {
+                source.add_bond(
+                    pair[0],
+                    pair[1],
+                    if i == 1 { 2 } else { 1 },
+                    if i == marker { "wavy" } else { "plain" },
+                );
+            }
+            let cleaned = clean(
+                &source,
+                Options {
+                    scope: Scope::SelectedAtoms,
+                    ..Default::default()
+                },
+                &atoms[2..],
+                0.,
+            )?;
+            assert_eq!(cleaned.document.atoms[..2], source.atoms[..2]);
+            assert_eq!(cleaned.document.bonds[0], source.bonds[0]);
+            assert_eq!(
+                cleaned.document.bonds[1].display,
+                if wavy { "plain" } else { "wavy" }
+            );
+            assert_eq!(
+                cleaned
+                    .document
+                    .bonds
+                    .iter()
+                    .filter(|bond| bond.order == 1 && bond.display == "wavy")
+                    .count(),
+                usize::from(wavy || marker == 0)
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn wavy_alkene_cleanup_falls_back_to_crossed_between_stereocentres() -> anyhow::Result<()> {
+    // FC(Cl)C=CC(Br)I drawn collinear: both substituents are unassigned
+    // stereocentres, so no single bond may carry the wavy marker.
+    let mut source = Document::default();
+    source.drawing_style.wavy_unknown_alkenes = true;
+    let point = crate::document::Point::new;
+    let chain = (0..4)
+        .map(|i| source.add_atom("C", point(i as f32 * 42., 0.)))
+        .collect::<Vec<_>>();
+    for (i, pair) in chain.windows(2).enumerate() {
+        source.add_bond(pair[0], pair[1], if i == 1 { 2 } else { 1 }, "plain");
+    }
+    for (element, at, y) in [
+        ("F", 0, -42.),
+        ("Cl", 0, 42.),
+        ("Br", 3, -42.),
+        ("I", 3, 42.),
+    ] {
+        let x = at as f32 * 42.;
+        let atom = source.add_atom(element, point(x, y));
+        source.add_bond(chain[at], atom, 1, "plain");
+    }
+    let cleaned = clean(&source, Options::default(), &[], 0.)?;
+    assert!(
+        cleaned
+            .document
+            .bonds
+            .iter()
+            .all(|bond| bond.order != 1 || bond.display != "wavy")
+    );
+    assert!(
+        cleaned
+            .document
+            .bonds
+            .iter()
+            .any(|bond| bond.order == 2 && bond.display == "wavy"),
+        "{:?}",
+        cleaned.warnings
+    );
+    Ok(())
+}
+
+#[test]
+fn partial_alkene_cleanup_keeps_the_wavy_marker_on_a_moving_bond() -> anyhow::Result<()> {
+    let mut source = Document::default();
+    source.drawing_style.wavy_unknown_alkenes = true;
+    let atoms = (0..5)
+        .map(|i| source.add_atom("C", crate::document::Point::new(i as f32 * 42., 0.)))
+        .collect::<Vec<_>>();
+    for (i, pair) in atoms.windows(2).enumerate() {
+        source.add_bond(pair[0], pair[1], if i == 1 { 2 } else { 1 }, "plain");
+    }
+    let cleaned = clean(
+        &source,
+        Options {
+            scope: Scope::SelectedAtoms,
+            ..Default::default()
+        },
+        &atoms[2..],
+        0.,
+    )?;
+    assert_eq!(cleaned.document.bonds[0], source.bonds[0]);
+    assert!(cleaned.document.bonds.iter().any(|bond| bond.order == 1
+        && bond.display == "wavy"
+        && (atoms[2..].contains(&bond.a) || atoms[2..].contains(&bond.b))));
+    assert!(
+        cleaned
+            .molecule
+            .unwrap()
+            .state
+            .metadata
+            .bonds
+            .iter()
+            .all(|bond| bond.stereo <= 1)
+    );
+    Ok(())
+}
+
 fn rotate(points: &mut [Point3], angle: f64, center: Point3) {
     let (s, c) = angle.sin_cos();
     for point in points {

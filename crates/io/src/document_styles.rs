@@ -116,6 +116,8 @@ fn from_chemdraw_xml(xml: &str, name: &str) -> Result<DrawingStyle, String> {
         .find(|n| n.has_tag_name("font") && n.attribute("id") == Some(font_id))
         .and_then(|n| n.attribute("name"))
         .ok_or("Stationery label font is missing from its font table")?;
+    let presentation = crate::chemistry::cdxml::presentation::drawing_style(root)
+        .map_err(|error| error.to_string())?;
     let mut style = DrawingStyle {
         name: name.chars().take(120).collect(),
         font_family: font.into(),
@@ -125,6 +127,9 @@ fn from_chemdraw_xml(xml: &str, name: &str) -> Result<DrawingStyle, String> {
         margin_width_pt: number("MarginWidth")?,
         hash_spacing_pt: number("HashSpacing")?,
         bond_spacing_ratio: number("BondSpacing")? / 100.,
+        two_wedge_stereocentres: presentation.two_wedge_stereocentres,
+        ring_fusion_hydrogens: presentation.ring_fusion_hydrogens,
+        wavy_unknown_alkenes: presentation.wavy_unknown_alkenes,
         ..Default::default()
     };
     style.set_bond_length(number("BondLength")?);

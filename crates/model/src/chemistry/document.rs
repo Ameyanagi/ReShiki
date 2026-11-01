@@ -14,7 +14,10 @@ use std::collections::{HashMap, HashSet};
 mod aromatic;
 pub use aromatic::{Aromatic, AromaticEdit, aromatic_display};
 mod output;
-pub use output::{BondLabel, Drawing, Labels, for_drawing, for_import};
+pub use output::{
+    BondLabel, Drawing, DrawingOptions, Labels, depict_unknown_alkene, for_drawing, for_generated,
+    for_import,
+};
 pub use output::{for_import_scene, for_import_with_attachments, kekule, validate_molecule};
 
 /// Drawing world units per depiction (RDKit coordinate) unit.

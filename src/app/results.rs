@@ -395,6 +395,9 @@ fn completion(message: &Message) -> Option<Completion> {
                 | Action::DisplayUnit(..)
                 | Action::Advanced(..)
                 | Action::CenterChainDoubleBonds(..)
+                | Action::TwoWedgeStereocentres(..)
+                | Action::RingFusionHydrogens(..)
+                | Action::WavyUnknownAlkenes(..)
                 | Action::Matching(..)
                 | Action::Scale(..)
                 | Action::Load

@@ -231,6 +231,7 @@ impl BondPreset {
     /// Shared by committed bond gestures and their live canvas preview. Avoid
     /// replacing an aromatic edge before deciding whether this is only styling.
     pub fn place(self, doc: &mut Document, a: u64, b: u64) {
+        let (a, b) = self.initial_wedge_endpoints(doc, a, b);
         if let Some(bond) = doc
             .bonds
             .iter_mut()
@@ -258,6 +259,42 @@ impl BondPreset {
             self.apply(bond);
         }
     }
+    /// A first wedge on a plain single bond should point from its plausible
+    /// stereocenter. Ambiguous endpoints retain the existing bond direction;
+    /// new bonds and existing stereo/projection styles retain gesture direction.
+    fn initial_wedge_endpoints(self, doc: &Document, a: u64, b: u64) -> (u64, u64) {
+        if !matches!(self, Self::Wedge | Self::HashedWedge | Self::HollowWedge) {
+            return (a, b);
+        }
+        let Some(bond) = doc.bonds.iter().find(|bond| bond.connects(a, b)) else {
+            return (a, b);
+        };
+        if bond.order != 1 || bond.display != "plain" || bond.projection {
+            return (a, b);
+        }
+        let degree = |id| {
+            doc.bonds
+                .iter()
+                .filter(|bond| bond.is_covalent() && (bond.a == id || bond.b == id))
+                .count()
+        };
+        let a_degree = degree(bond.a);
+        let b_degree = degree(bond.b);
+        let qualifies = |id, degree, other_id| {
+            !doc.bonds
+                .iter()
+                .any(|bond| bond.is_covalent() && bond.order != 1 && (bond.a == id || bond.b == id))
+                && (heavy_neighbor_count(doc, id) > 1 && heavy_neighbor_count(doc, other_id) == 1
+                    || tetrahedral_endpoint(doc, id, degree))
+        };
+        match (
+            qualifies(bond.a, a_degree, bond.b),
+            qualifies(bond.b, b_degree, bond.a),
+        ) {
+            (false, true) => (bond.b, bond.a),
+            _ => (bond.a, bond.b),
+        }
+    }
     pub fn name(self) -> &'static str {
         match self {
             Self::Single => "Single",
@@ -279,6 +316,83 @@ impl BondPreset {
             Self::Quadruple => "Quadruple",
         }
     }
+}
+
+fn heavy_neighbor_count(doc: &Document, id: u64) -> usize {
+    doc.bonds
+        .iter()
+        .filter(|bond| bond.is_covalent() && (bond.a == id || bond.b == id))
+        .filter(|bond| {
+            doc.atom(if bond.a == id { bond.b } else { bond.a })
+                .is_some_and(|neighbor| neighbor.element != "H")
+        })
+        .count()
+}
+
+/// Local property-cache valence avoids depending on stale hydrogen labels or
+/// running stereo perception on the entire drawing during a pointer gesture.
+fn tetrahedral_endpoint(doc: &Document, id: u64, degree: usize) -> bool {
+    use crate::chemistry::{ELEMENTS, graph};
+    let Some(atom) = doc.atom(id) else {
+        return false;
+    };
+    let phosphorus_or_sulfur = matches!(atom.element.as_str(), "P" | "S");
+    // IUPAC's test counts heavy neighbours; a drawn H is not a substituent.
+    let heavy = heavy_neighbor_count(doc, id);
+    if heavy < 3
+        || degree > if phosphorus_or_sulfur { 6 } else { 4 }
+        || atom.aromatic
+        || atom.radical_electrons != 0
+    {
+        return false;
+    }
+    let Some(atomic_number) = ELEMENTS.iter().position(|e| e.symbol == atom.element) else {
+        return false;
+    };
+    let (Ok(atomic_number), Ok(charge), Ok(explicit_hydrogens)) = (
+        u8::try_from(atomic_number),
+        i8::try_from(atom.charge),
+        u8::try_from(atom.explicit_h),
+    ) else {
+        return false;
+    };
+    // Only the focus atom's environment matters. Inert placeholders give each
+    // of its explicit single-bond neighbors without their incomplete valences.
+    let mut atoms = vec![
+        graph::Atom {
+            no_implicit: true,
+            ..Default::default()
+        };
+        degree + 1
+    ];
+    if let Some(focus) = atoms.first_mut() {
+        *focus = graph::Atom {
+            atomic_number,
+            charge,
+            explicit_hydrogens,
+            no_implicit: atom.no_implicit,
+            ..Default::default()
+        };
+    }
+    let local = graph::Graph {
+        atoms,
+        bonds: (1..=degree)
+            .map(|b| graph::Bond {
+                a: 0,
+                b,
+                order: 1,
+                aromatic: false,
+            })
+            .collect(),
+    };
+    let Ok(valences) = local.valences() else {
+        return false;
+    };
+    let Some(valence) = valences.first() else {
+        return false;
+    };
+    let total = degree as u32 + atom.explicit_h + valence.implicit_hydrogens;
+    total == 4 || phosphorus_or_sulfur && total >= 3
 }
 impl std::fmt::Display for BondPreset {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

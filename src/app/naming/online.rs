@@ -58,11 +58,12 @@ impl App {
         self.tab.naming.candidates.clear();
         self.tab.naming.preview_open = true;
         let engine = self.engine.clone();
+        let options = (&self.tab.doc.drawing_style).into();
         Task::perform(
             async move {
                 let record = naming::resolve_name_online(&name, cancel).await?;
                 let preview =
-                    prepare_preview(engine, record.clone(), record.smiles.clone()).await?;
+                    prepare_preview(engine, record.clone(), record.smiles.clone(), options).await?;
                 Ok(Outcome::Names(vec![record], Some(Box::new(preview))))
             },
             move |result| Message::Naming(Action::Finished(ticket, Box::new(result))),
