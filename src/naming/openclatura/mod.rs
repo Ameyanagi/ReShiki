@@ -312,6 +312,15 @@ mod tests {
             ("CP(C)(C)=O", "trimethyl-lambda5-phosphanone"),
             ("C[P+](C)(C)[O-]", "trimethyl-lambda5-phosphanone"),
             ("C[As](C)(C)=O", "trimethyl-lambda5-arsanone"),
+            ("CP=O", "methylphosphanone"),
+            ("c1ccccc1[As]=S", "phenylarsanethione"),
+            ("C[As](C)(C)=[Te]", "trimethyl-lambda5-arsanetellone"),
+            ("CP(C)(C)=S", "trimethyl-lambda5-phosphanethione"),
+            // Monosubstituted ethane and ethene cite no locants (P-14.3.4).
+            ("CCS(C)=O", "(methanesulfinyl)ethane"),
+            ("CCSC", "(methylsulfanyl)ethane"),
+            ("C=CSS", "ethenedithioperoxol"),
+            ("C=CS(=O)(=O)O", "ethenesulfonic acid"),
             (
                 "COS(=O)(=O)c1ccc(C(=O)O)cc1",
                 "4-(methoxysulfonyl)benzoic acid",
@@ -358,6 +367,15 @@ mod tests {
             ("O=C(O)c1ccc(C=S)cc1", "4-(methanethioyl)benzoic acid"),
             ("O=C(O)c1ccc(C=[Se])cc1", "4-(methaneselenoyl)benzoic acid"),
             ("O=C(O)c1ccc(C=[Te])cc1", "4-(methanetelluroyl)benzoic acid"),
+            ("O=C(O)c1ccc(C(=S)C)cc1", "4-(ethanethioyl)benzoic acid"),
+            (
+                "CC(=S)C(C(C)=S)C(C)=S",
+                "3-(ethanethioyl)pentane-2,4-dithione",
+            ),
+            (
+                "O=C(O)c1ccc(C(=S)c2ccccc2)cc1",
+                "4-(benzenecarbothioyl)benzoic acid",
+            ),
             // Amines, sulfides and hydrodisulfides are named substitutively
             // (P-62.2.2.1, P-63.2.5, P-63.4.2.1).
             ("CNC", "N-methylmethanamine"),
@@ -435,8 +453,18 @@ mod tests {
                 R::AminoPrefix,
             ),
             (
+                "N/C(=N/[H])NCC(=O)O",
+                "2-[(Z)-guanidino]acetic acid",
+                R::AminoPrefix,
+            ),
+            (
                 "CC[S@](C)=O",
                 "(S)-ethyl methyl sulfoxide",
+                R::FunctionalClass,
+            ),
+            (
+                "CP(C)(F)=O",
+                "fluorodimethylphosphane oxide",
                 R::FunctionalClass,
             ),
             ("CN(C)Cl", "chlorodimethylazane", R::HydrideParent),

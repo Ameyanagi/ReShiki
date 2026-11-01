@@ -354,7 +354,7 @@ This is `name --smiles 'CC(=NN)C' --json`, shown on several lines:
   },
   "experimental": true,
   "value": {
-    "detail": "Uses a functional-class form such as a hydrazone, a chiral sulfoxide or a mixed chalcogen peroxide; preferred IUPAC names use substitutive forms such as ethylidenehydrazine, (S)-(methanesulfinyl)ethane or [(phenylselanyl)tellanyl]benzene (P-68.3.1.2.2, P-93.3.4.1, P-63.3.2).",
+    "detail": "Uses a functional-class form such as a hydrazone, a chiral sulfoxide, a mixed chalcogen peroxide or a phosphane oxide with halide or alkoxy ligands; preferred IUPAC names use substitutive or acid-derived forms such as ethylidenehydrazine, (S)-(methanesulfinyl)ethane, [(phenylselanyl)tellanyl]benzene or dimethylphosphinic fluoride (P-68.3.1.2.2, P-93.3.4.1, P-63.3.2, P-68.3.2.3.1).",
     "name": "propan-2-one hydrazone",
     "preferred": false,
     "reason": "functional_class",

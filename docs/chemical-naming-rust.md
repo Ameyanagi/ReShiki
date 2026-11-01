@@ -214,8 +214,10 @@ suffix.
 Chalcogen analogues of oxo and formyl take the preferred prefixes
 `sulfanylidene`, `selanylidene` and `tellanylidene` (P-64.6.1), multiplied with
 `bis` (P-16.3.6), and `methanethioyl`, `methaneselenoyl` and `methanetelluroyl`
-(P-66.6.3): `3-sulfanylidenebutanoic acid`,
-`3,5-bis(sulfanylidene)hexanoic acid`, `4-(methanethioyl)benzoic acid`.
+(P-66.6.3); other thioacyl groups take `-thioyl` (P-65.1.5.1):
+`3-sulfanylidenebutanoic acid`, `3,5-bis(sulfanylidene)hexanoic acid`,
+`4-(methanethioyl)benzoic acid`, `4-(ethanethioyl)benzoic acid`,
+`4-(benzenecarbothioyl)benzoic acid`.
 
 Alkoxy prefixes use the retained contractions `methoxy`, `ethoxy`, `propoxy`,
 `butoxy`, `phenoxy` and `tert-butoxy` (P-63.2.2.2), not isopropoxy, sec-butoxy
@@ -226,6 +228,8 @@ Amino prefixes use the retained `anilino` for C6H5-NH-, with full substitution
 (P-62.2.1.1.1), and `carbamimidoylamino` for guanidine as a prefix
 (P-66.4.1.2.1.3): `2-anilinoacetic acid`, `4-(N-phenylanilino)benzoic acid`,
 `2-(carbamimidoylamino)acetic acid`, `2-[carbamimidoyl(methyl)amino]acetic acid`.
+`amino_prefix` stays on guanidino with substituents on its other nitrogens or
+with an E/Z descriptor.
 Contractions keep phenyl: `methyl phenylcarbamate`, `(phenylsulfamoyl)`.
 
 Chains take systematic names where the retained names are only for general
@@ -260,11 +264,14 @@ disulfides and mixed chalcogen chains such as `1,2-dimethyldisulfane` and
 or nitrogen, and on hydrodisulfides with a phosphorus acid, which the engine
 cites as a prefix.
 
-Achiral sulfoxides are named substitutively (P-63.6), and oxides of
-phosphanes, arsanes and stibanes take the `-one` suffix (P-68.3.2.3.1):
-`(methanesulfinyl)methane`, `2-(methanesulfinyl)pentane`,
-`trimethyl-lambda5-phosphanone`. `functional_class` stays on hydrazones and
-azines, whose PINs are ylidene derivatives of hydrazine (P-68.3.1.2.2), on
+Achiral sulfoxides are named substitutively (P-63.6), and organyl oxides and
+chalcogenides of phosphanes, arsanes and stibanes take the `-one`, `-thione`,
+`-selone` or `-tellone` suffix (P-68.3.2.3.1): `(methanesulfinyl)methane`,
+`(methanesulfinyl)ethane` (P-14.3.4.2), `trimethyl-lambda5-phosphanone`,
+`methylphosphanone`, `phenylarsanethione`. `functional_class` stays on
+hydrazones and azines, whose PINs are ylidene derivatives of hydrazine
+(P-68.3.1.2.2), on oxides with halide or alkoxy ligands, which are named from
+the acids (P-68.3.2.3.1), on
 chiral sulfoxides, whose PIN cites the descriptor before the whole name as in
 `(S)-(methanesulfinyl)ethane` (P-93.3.4.1), and on mixed chalcogen peroxides
 such as `dimethyl selenoperoxide` (P-63.3.2).

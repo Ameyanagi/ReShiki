@@ -89,6 +89,8 @@ pub struct AssemblyParts {
     pub is_substituent: bool,
     pub attachment_order: usize,
     pub is_acyl_substituent: bool,
+    /// The chalcogen infix of a thio-, seleno- or telluroacyl substituent ("thio").
+    pub acyl_infix: &'static str,
     pub attachment_locant: String,
     pub principal_citation_mode: Option<String>,
     pub retained_name: Option<String>,
@@ -148,6 +150,7 @@ impl AssemblyParts {
             is_substituent: false,
             attachment_order: 1,
             is_acyl_substituent: false,
+            acyl_infix: "",
             attachment_locant: "1".into(),
             principal_citation_mode: None,
             retained_name: None,

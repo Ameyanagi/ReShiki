@@ -1618,8 +1618,8 @@ fn guanidino_prefix(
         .map(|s| format!("({s})-"))
         .unwrap_or_default();
     // P-66.4.1.2.1.3: the preferred prefix is carbamimidoylamino, cited like any
-    // substituted amino; substitution on the other nitrogens keeps guanidino.
-    if names.is_empty() || (stereo.is_empty() && names.values().flatten().all(|l| l == "1")) {
+    // substituted amino; substitution on the other nitrogens or E/Z keeps guanidino.
+    if stereo.is_empty() && names.values().flatten().all(|l| l == "1") {
         let mut ligands: Vec<_> = names.into_keys().collect();
         ligands.push("carbamimidoyl".into());
         return Ok(Some(format_amino_from_branches(

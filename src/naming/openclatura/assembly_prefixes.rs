@@ -100,7 +100,8 @@ pub fn substituent_locant_string(
             .substituents
             .iter()
             .all(|s| !is_complex_prefix(&s.name));
-        if simple && grouped_count == 1 && (locs.len() == 1 || total == capacity) {
+        // P-14.3.4.2(b): a monosubstituted ethane cites no locant, as in (methylsulfanyl)ethane.
+        if grouped_count == 1 && (total == 1 || simple && total == capacity) {
             return String::new();
         }
     }

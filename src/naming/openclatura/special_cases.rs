@@ -1299,11 +1299,19 @@ fn simple_central_parent_hydride_name(
         a.symbol.as_str(),
         "P" | "As" | "Sb" | "Bi" | "Si" | "Ge" | "Sn" | "Pb" | "B" | "Al" | "Ga" | "In" | "Tl"
     );
+    let is_chalcogen = |n: usize| matches!(mol.atoms[&n].symbol.as_str(), "O" | "S" | "Se" | "Te");
+    let organyl = |n: usize| {
+        mol.get_neighbors(c)
+            .iter()
+            .all(|&o| o == n || mol.atoms[&o].is_carbon())
+    };
+    // P+-O- and its S, Se and Te analogues stand for P=O.
     let oxide = a.charge == 1
         && matches!(a.symbol.as_str(), "P" | "As" | "Sb")
-        && mol.get_neighbors(c).iter().any(|n| {
-            mol.atoms[n].symbol == "O" && mol.atoms[n].charge == -1 && mol.degree(*n) == 1
-        });
+        && mol
+            .get_neighbors(c)
+            .iter()
+            .any(|&n| is_chalcogen(n) && mol.atoms[&n].charge == -1 && mol.degree(n) == 1);
     let onium = a.charge == 1
         && senior
         && !oxide
@@ -1317,21 +1325,22 @@ fn simple_central_parent_hydride_name(
     }
     let hydrocarbyl = senior && !has_principal_group(mol, atoms);
     let mut names = Vec::new();
-    let mut oxide_oxygen = None;
+    let mut chalcogen = None;
     for &n in mol.get_neighbors(c) {
         if !atoms.contains(&n) {
             continue;
         }
         if hydrocarbyl
-            && oxide_oxygen.is_none()
+            && chalcogen.is_none()
             && matches!(a.symbol.as_str(), "P" | "As" | "Sb")
             && a.total_h_count == 0
-            && mol.atoms[&n].symbol == "O"
+            && is_chalcogen(n)
             && mol.degree(n) == 1
             && (mol.bond_order(c, n) == 2
                 || (mol.bond_order(c, n) == 1 && mol.atoms[&n].charge == -1))
+            && (mol.atoms[&n].symbol == "O" || organyl(n))
         {
-            oxide_oxygen = Some(n);
+            chalcogen = Some(n);
             continue;
         }
         let mut name = central_ligand_name(mol, atoms, c, n)?;
@@ -1357,16 +1366,19 @@ fn simple_central_parent_hydride_name(
         return Ok(None);
     }
     let prefix = center_ligands(&names);
+    // Halides, pseudohalides and esters are named from the acids (P-68.3.2.3.1),
+    // so they keep the oxide class name.
+    let class_oxide = chalcogen.is_some_and(|n| !organyl(n));
     let valence: usize = mol
         .get_neighbors(c)
         .iter()
         .map(|n| mol.bond_order(c, *n))
         .sum::<usize>()
-        + a.total_h_count.max(a.explicit_h_count);
-    let lambda = if oxide_oxygen.is_some() {
-        // Also when the oxide is drawn charge-separated, P+-O-.
-        "lambda5-".into()
-    } else if onium || elements::get(&a.symbol).is_some_and(|e| e.standard_valence == valence) {
+        + a.total_h_count.max(a.explicit_h_count)
+        + usize::from(oxide)
+        - if class_oxide { 2 } else { 0 };
+    let lambda = if onium || elements::get(&a.symbol).is_some_and(|e| e.standard_valence == valence)
+    {
         String::new()
     } else {
         format!("lambda{valence}-")
@@ -1375,10 +1387,20 @@ fn simple_central_parent_hydride_name(
         "{lambda}{}",
         RULES.components.mononuclear_parent_hydrides[&a.symbol]
     );
-    if oxide_oxygen.is_some() {
-        // The -one suffix is preferred to the 'oxide' class name (P-68.3.2.3.1).
-        parent.pop();
-        parent.push_str("one");
+    if class_oxide {
+        parent.push_str(" oxide");
+        mol.mark_name(NameStatus::NotPreferred(NameReason::FunctionalClass));
+    } else if let Some(n) = chalcogen {
+        // The suffix is preferred to the oxide or sulfide class name (P-68.3.2.3.1).
+        match mol.atoms[&n].symbol.as_str() {
+            "O" => {
+                parent.pop();
+                parent.push_str("one");
+            }
+            "S" => parent.push_str("thione"),
+            "Se" => parent.push_str("selone"),
+            _ => parent.push_str("tellone"),
+        }
     } else if onium {
         if parent.ends_with('e') {
             parent.pop();

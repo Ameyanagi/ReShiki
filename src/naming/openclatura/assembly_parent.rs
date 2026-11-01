@@ -327,8 +327,16 @@ pub fn promote_acyl_substituent_name(parts: &mut AssemblyParts) {
         .substituents
         .iter()
         .enumerate()
-        .filter(|(_, s)| s.name == "oxo" && s.locants == ["1"])
-        .map(|(i, _)| i)
+        .filter_map(|(i, s)| {
+            let infix = match s.name.as_str() {
+                "oxo" => "",
+                "sulfanylidene" => "thio",
+                "selanylidene" => "seleno",
+                "tellanylidene" => "telluro",
+                _ => return None,
+            };
+            (s.locants == ["1"]).then_some((i, infix))
+        })
         .collect();
     if carbonyls.len() != 1
         || parts
@@ -340,8 +348,11 @@ pub fn promote_acyl_substituent_name(parts: &mut AssemblyParts) {
     {
         return;
     }
+    // P-65.1.5.1: thio-, seleno- and telluroacyl groups, as in ethanethioyl.
+    let (index, infix) = carbonyls[0];
     parts.is_acyl_substituent = true;
-    parts.substituents.remove(carbonyls[0]);
+    parts.acyl_infix = infix;
+    parts.substituents.remove(index);
 }
 fn promote_carbamimidoyl(parts: &mut AssemblyParts) {
     if !parts.is_substituent
@@ -445,7 +456,10 @@ pub fn promote_retained_substituent_name(parts: &mut AssemblyParts) {
     ) {
         (1, "1", "phenyl", "1", "single") => Some("benzyl".to_owned()),
         (3, "2", "methyl", "2", "single") => Some("tert-butyl".to_owned()),
-        (1, "1", "phenyl", "1", "acyl") => Some("benzoyl".to_owned()),
+        (1, "1", "phenyl", "1", "acyl") => Some(match parts.acyl_infix {
+            "" => "benzoyl".to_owned(),
+            infix => format!("benzenecarbo{infix}yl"),
+        }),
         _ => None,
     };
     if retained.is_none()
@@ -456,9 +470,9 @@ pub fn promote_retained_substituent_name(parts: &mut AssemblyParts) {
         let name = strip_outer_parentheses(&branch.name);
         let name = phenylamino_spelling(&name);
         if !name.starts_with("N-") && !name.starts_with("N,") {
-            for (ending, word) in [("amino", "carbamoyl"), ("sulfonamido", "sulfonylcarbamoyl")] {
+            for (ending, word) in [("amino", "carbamo"), ("sulfonamido", "sulfonylcarbamo")] {
                 if let Some(prefix) = name.strip_suffix(ending) {
-                    retained = Some(format!("{prefix}{word}"));
+                    retained = Some(format!("{prefix}{word}{}yl", parts.acyl_infix));
                     break;
                 }
             }
@@ -647,10 +661,29 @@ pub(super) fn format_substituent_tail(parts: &AssemblyParts, stem: &str) -> Pare
         suffix = RULES.assembly.substituent_attachment_suffixes["acyl_on_branch"].clone();
     }
     if parts.is_acyl_substituent {
+        let infix = parts.acyl_infix;
         if suffix == RULES.assembly.substituent_attachment_suffixes["acyl_on_branch"] {
             return ParentTail {
-                terminal: suffix,
+                terminal: if infix.is_empty() {
+                    suffix
+                } else {
+                    format!("carbono{infix}yl")
+                },
                 ..Default::default()
+            };
+        }
+        if !infix.is_empty() {
+            let (stem, unsaturation) = if parts.unsaturations.is_empty() {
+                (stem.to_owned(), "ane".into())
+            } else {
+                let (stem, unsaturation) = format_unsaturations(parts, stem, false);
+                (stem, format!("{unsaturation}e"))
+            };
+            return ParentTail {
+                stem,
+                unsaturation,
+                terminal: format!("{infix}yl"),
+                suffix: String::new(),
             };
         }
         if parts.parent_length == 1 || parts.parent_length == 2 {
@@ -847,13 +880,8 @@ fn redundant_unsaturation(parts: &AssemblyParts) -> bool {
         return false;
     }
     if !parts.is_ring {
-        return parts.parent_length == 2
-            && parts.principal_group.as_ref().is_none_or(|g| {
-                [
-                    "alcohol", "thiol", "amine", "ketone", "olate", "thiolate", "aminium",
-                ]
-                .contains(&g.key.as_str())
-            });
+        // No isomer can move the bond of ethene or ethyne (P-14.3.4.4: ethenesulfinylium).
+        return parts.parent_length == 2;
     }
     !parts.is_bicycle
         && !parts.is_spiro
