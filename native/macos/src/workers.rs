@@ -1,5 +1,10 @@
 //! Standard-I/O entry points used by the application's isolated worker modes.
-use std::io::{self, Read, Write};
+use std::{
+    io::{self, Read, Write},
+    os::unix::process::parent_id,
+    thread,
+    time::Duration,
+};
 
 fn exchange(limit: usize, operation: fn(&[u8]) -> Result<Vec<u8>, String>) -> Result<(), String> {
     let mut input = Vec::new();
@@ -19,5 +24,14 @@ pub fn clipboard() -> Result<(), String> {
 }
 
 pub fn print() -> Result<(), String> {
+    let parent = parent_id();
+    // The print panel is modal, and stdin EOF already ends the request.
+    thread::spawn(move || {
+        // The editor may already have exited during worker startup.
+        while parent != 1 && parent_id() == parent {
+            thread::sleep(Duration::from_millis(250));
+        }
+        std::process::exit(0);
+    });
     exchange(65536, crate::printing::execute)
 }
