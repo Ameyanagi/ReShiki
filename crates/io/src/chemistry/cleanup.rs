@@ -447,8 +447,9 @@ impl Prepared {
                 .zip(&merged.bonds)
                 .enumerate()
             {
-                if old.stereo <= 1
-                    && new.stereo > 1
+                if bond.order == 2
+                    && old.stereo <= 1
+                    && (old.stereo == 1 || new.stereo > 1)
                     && (part.moving.contains(&bond.a) || part.moving.contains(&bond.b))
                 {
                     unspecified.push(i);

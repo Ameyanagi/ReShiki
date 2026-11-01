@@ -280,15 +280,16 @@ impl BondPreset {
         };
         let a_degree = degree(bond.a);
         let b_degree = degree(bond.b);
-        let qualifies = |id, degree, other_degree| {
+        let qualifies = |id, degree, other_id| {
             !doc.bonds
                 .iter()
                 .any(|bond| bond.is_covalent() && bond.order != 1 && (bond.a == id || bond.b == id))
-                && (degree > 1 && other_degree == 1 || tetrahedral_endpoint(doc, id, degree))
+                && (heavy_neighbor_count(doc, id) > 1 && heavy_neighbor_count(doc, other_id) == 1
+                    || tetrahedral_endpoint(doc, id, degree))
         };
         match (
-            qualifies(bond.a, a_degree, b_degree),
-            qualifies(bond.b, b_degree, a_degree),
+            qualifies(bond.a, a_degree, bond.b),
+            qualifies(bond.b, b_degree, bond.a),
         ) {
             (false, true) => (bond.b, bond.a),
             _ => (bond.a, bond.b),
@@ -317,6 +318,17 @@ impl BondPreset {
     }
 }
 
+fn heavy_neighbor_count(doc: &Document, id: u64) -> usize {
+    doc.bonds
+        .iter()
+        .filter(|bond| bond.is_covalent() && (bond.a == id || bond.b == id))
+        .filter(|bond| {
+            doc.atom(if bond.a == id { bond.b } else { bond.a })
+                .is_some_and(|neighbor| neighbor.element != "H")
+        })
+        .count()
+}
+
 /// Local property-cache valence avoids depending on stale hydrogen labels or
 /// running stereo perception on the entire drawing during a pointer gesture.
 fn tetrahedral_endpoint(doc: &Document, id: u64, degree: usize) -> bool {
@@ -326,15 +338,7 @@ fn tetrahedral_endpoint(doc: &Document, id: u64, degree: usize) -> bool {
     };
     let phosphorus_or_sulfur = matches!(atom.element.as_str(), "P" | "S");
     // IUPAC's test counts heavy neighbours; a drawn H is not a substituent.
-    let heavy = doc
-        .bonds
-        .iter()
-        .filter(|bond| bond.is_covalent() && (bond.a == id || bond.b == id))
-        .filter(|bond| {
-            doc.atom(if bond.a == id { bond.b } else { bond.a })
-                .is_some_and(|neighbor| neighbor.element != "H")
-        })
-        .count();
+    let heavy = heavy_neighbor_count(doc, id);
     if heavy < 3
         || degree > if phosphorus_or_sulfur { 6 } else { 4 }
         || atom.aromatic

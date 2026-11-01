@@ -385,6 +385,42 @@ fn first_wedge_prefers_nonterminal_end_but_never_an_endpoint_with_multiple_bonds
 }
 
 #[test]
+fn first_wedge_terminal_fallback_ignores_drawn_hydrogens() {
+    for preset in [
+        BondPreset::Wedge,
+        BondPreset::HashedWedge,
+        BondPreset::HollowWedge,
+    ] {
+        for drawn_hydrogens in [0, 1, 3] {
+            for reversed_gesture in [false, true] {
+                let mut doc = Document::default();
+                let terminal = doc.add_atom("C", Point::default());
+                let middle = doc.add_atom("C", Point::new(84., 0.));
+                let tail = doc.add_atom("C", Point::new(168., 0.));
+                doc.add_bond(terminal, middle, 1, "plain");
+                doc.add_bond(middle, tail, 1, "plain");
+                for n in 0..drawn_hydrogens {
+                    let h = doc.add_atom("H", Point::new(-84., n as f32 * 42.));
+                    doc.add_bond(terminal, h, 1, "plain");
+                }
+                let (a, b) = if reversed_gesture {
+                    (middle, terminal)
+                } else {
+                    (terminal, middle)
+                };
+                preset.place(&mut doc, a, b);
+                assert_eq!(
+                    (doc.bonds[0].a, doc.bonds[0].b),
+                    (middle, terminal),
+                    "{preset}, {drawn_hydrogens} drawn H, reversed gesture {reversed_gesture}"
+                );
+                assert_eq!(doc.bonds[0].display, preset.parts().1);
+            }
+        }
+    }
+}
+
+#[test]
 fn first_wedge_endpoint_choice_excludes_existing_styles_projection_and_new_bonds() {
     for (order, display, projection) in [
         (1, "wedge", false),

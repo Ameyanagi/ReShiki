@@ -849,8 +849,12 @@ pub fn depict_unknown_alkene(
         .iter()
         .position(|bond| pair(bond.a, bond.b) == double_pair)
         .ok_or_else(|| invalid("Missing unknown double bond"))?;
-    let mut substituent = None;
-    if wavy {
+    let mut candidates = Vec::new();
+    if wavy
+        || bonds
+            .iter()
+            .any(|bond| bond.order == 1 && bond.display == "wavy")
+    {
         // Drawing preparation does not flag unassigned stereocentres.
         let possible = crate::chemistry::stereo::perception::perceive(
             state,
@@ -887,21 +891,45 @@ pub fn depict_unknown_alkene(
                 let endpoints = pair(*at(&molecule.ids, end)?, *at(&molecule.ids, other)?);
                 if let Some(position) = bonds.iter().position(|bond| {
                     pair(bond.a, bond.b) == endpoints
-                        && bond.display == "plain"
+                        && matches!(bond.display.as_str(), "plain" | "wavy")
                         && !bond.projection
-                        && can_change(bond)
+                        && (bond.display == "wavy" || can_change(bond))
                 }) {
-                    substituent = Some((
+                    candidates.push((
                         position,
                         *at(&molecule.ids, end)?,
                         *at(&molecule.ids, other)?,
                     ));
-                    break;
                 }
             }
-            if substituent.is_some() {
-                break;
-            }
+        }
+    }
+    // Reuse an existing marker, including a fixed one, before changing a plain
+    // substituent. Remove obsolete markers only where cleanup permits edits.
+    let substituent = if wavy {
+        candidates
+            .iter()
+            .find(|&&(position, _, _)| {
+                bonds
+                    .get(position)
+                    .is_some_and(|bond| bond.display == "wavy")
+            })
+            .or_else(|| candidates.first())
+            .copied()
+    } else {
+        None
+    };
+    for &(position, _, _) in &candidates {
+        let bond = bonds
+            .get_mut(position)
+            .ok_or_else(|| invalid("Missing alkene substituent"))?;
+        if bond.display == "wavy"
+            && substituent.is_none_or(|(chosen, _, _)| chosen != position)
+            && can_change(bond)
+        {
+            bond.display = "plain".into();
+            bond.stereo = None;
+            bond.stereo_atoms.clear();
         }
     }
     let bond = bonds
@@ -919,11 +947,13 @@ pub fn depict_unknown_alkene(
         let bond = bonds
             .get_mut(position)
             .ok_or_else(|| invalid("Missing alkene substituent"))?;
-        bond.a = a;
-        bond.b = b;
-        bond.display = "wavy".into();
-        bond.stereo = None;
-        bond.stereo_atoms.clear();
+        if can_change(bond) {
+            bond.a = a;
+            bond.b = b;
+            bond.display = "wavy".into();
+            bond.stereo = None;
+            bond.stereo_atoms.clear();
+        }
     }
     Ok(substituent.is_some())
 }
