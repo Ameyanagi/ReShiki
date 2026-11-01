@@ -42,6 +42,7 @@ pub mod graphics;
 pub mod grouping;
 pub mod haworth;
 pub mod highlights;
+pub mod ionic;
 pub mod joining;
 pub mod ligands;
 pub mod models3d;

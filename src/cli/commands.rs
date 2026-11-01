@@ -156,6 +156,11 @@ const JSON: OptionSpec = OptionSpec {
     equivalent: None,
 };
 
+const NAME_JSON: OptionSpec = OptionSpec {
+    help: "Print the name and its status as one JSON line.",
+    ..JSON
+};
+
 const INPUT: Operand = Operand {
     name: "INPUT",
     help: "Read a file, or standard input with -; --smiles TEXT supplies text instead.",
@@ -215,6 +220,16 @@ const ANALYZE: CommandSpec = CommandSpec {
     tools: &["import", "analyze"],
     operand: Some(INPUT),
     body: analyze_help,
+};
+
+const NAME: CommandSpec = CommandSpec {
+    name: "name",
+    summary: "Print the systematic name of a structure",
+    usage: "reshiki --cli name (INPUT | - | --smiles TEXT) [--from FORMAT] [--json]",
+    options: &[SMILES, FROM, NAME_JSON],
+    tools: &["import"],
+    operand: Some(INPUT),
+    body: name_help,
 };
 
 /// The commands whose flags another command rejects by name ("X does not
@@ -323,7 +338,7 @@ const HELP: CommandSpec = CommandSpec {
 
 /// Commands in overview-help order; option order is the parsing grammar.
 pub(crate) const COMMANDS: &[CommandSpec] = &[
-    CONVERT, RENDER, COMPOSE, ANALYZE, INFO, TOOLS, SCHEMA, SKILL, HELP,
+    CONVERT, RENDER, COMPOSE, ANALYZE, NAME, INFO, TOOLS, SCHEMA, SKILL, HELP,
 ];
 
 const OVERVIEW_USAGE: &str = "reshiki --cli <command> [options]";
@@ -430,6 +445,7 @@ Examples:
   reshiki --cli convert scheme.rsk -o figure.pdf
   reshiki --cli render scheme.rsk -o preview.png
   reshiki --cli analyze --smiles 'c1ccccc1O'
+  reshiki --cli name --smiles 'CC(=O)O'
   reshiki --cli compose proposal.json -o scheme.svg
 
 Output:
@@ -589,6 +605,29 @@ A ReShiki drawing (.rsk) cannot be written.
 
 fn analyze_help() -> String {
     format!("Usage: {}\n\n{ANALYZE_HELP}", ANALYZE.usage)
+}
+
+fn name_help() -> String {
+    let body = "\
+Prints the systematic name of one connected molecule. The input is read as
+for convert (reshiki --cli help convert). The name is generated locally by
+the openclatura port and printed only after the OPSIN port reconstructs
+the same structure.
+
+Options:
+  --json  Print the name and its status as one JSON line.
+
+Without --json, prints only the name followed by a newline. With --json,
+value contains name, preferred, status, reason and detail:
+  preferred      true only when status is preferred.
+  status         preferred = the preferred IUPAC name (IUPAC 2013);
+                 not_preferred = systematic, known not to be the preferred
+                 IUPAC name, with the reason;
+                 unverified = systematic, preference not verified.
+  reason         The snake_case naming-rule reason, or null for preferred.
+  detail         The status detail sentence.
+";
+    format!("Usage: {}\n\n{body}", NAME.usage)
 }
 
 fn info_help() -> String {

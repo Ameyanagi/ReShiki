@@ -22,7 +22,7 @@ use reshiki::{
 const PANEL_INTRO: &str = "Parse names locally, or confirm an online lookup.";
 const NAME_HINT: &str = "Ambiguous names and unsupported stereo are rejected.";
 const PREVIEW_HINT: &str = "Drag atoms to arrange the layout.";
-const STRUCTURE_HINT: &str = "Neutral C, N, O and halogen molecules, up to 64 heavy atoms.";
+const STRUCTURE_HINT: &str = "One connected molecule; each name is checked by parsing it back.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ticket {

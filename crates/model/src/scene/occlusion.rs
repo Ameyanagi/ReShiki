@@ -85,7 +85,7 @@ pub(crate) fn occlusion_ink(doc: &Document) -> Vec<OcclusionSource> {
             }
         }
         parts.extend(
-            crate::scientific::styled_mark_parts(atom, &doc.drawing_style)
+            crate::scientific::document_mark_parts(atom, doc)
                 .into_iter()
                 .map(|p| Primitive::Path {
                     commands: p.commands,

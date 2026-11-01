@@ -11,6 +11,7 @@ Commands:
   render   Render a preview image of a structure or drawing
   compose  Lay out an assistant Proposal (JSON) and write it as a file
   analyze  Print molecular properties as one JSON line
+  name     Print the systematic name of a structure
   info     Print versions, limits and formats as one JSON line
   tools    Print the agent tool catalog as one JSON line
   schema   Print a JSON Schema: reshiki --cli schema proposal
@@ -24,6 +25,7 @@ Examples:
   reshiki --cli convert scheme.rsk -o figure.pdf
   reshiki --cli render scheme.rsk -o preview.png
   reshiki --cli analyze --smiles 'c1ccccc1O'
+  reshiki --cli name --smiles 'CC(=O)O'
   reshiki --cli compose proposal.json -o scheme.svg
 
 Output:
@@ -153,6 +155,31 @@ Prints the molecular properties of a structure or drawing as one JSON line:
 SMILES, formula, mass, exact mass, logP, TPSA, hydrogen-bond donors and
 acceptors, rings, unpaired electrons, InChI and InChIKey, under
 value.analysis. The input is read as for convert (reshiki --cli help convert).
+```
+
+## reshiki --cli name
+
+```text
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli name (INPUT | - | --smiles TEXT) [--from FORMAT] [--json]
+
+Prints the systematic name of one connected molecule. The input is read as
+for convert (reshiki --cli help convert). The name is generated locally by
+the openclatura port and printed only after the OPSIN port reconstructs
+the same structure.
+
+Options:
+  --json  Print the name and its status as one JSON line.
+
+Without --json, prints only the name followed by a newline. With --json,
+value contains name, preferred, status, reason and detail:
+  preferred      true only when status is preferred.
+  status         preferred = the preferred IUPAC name (IUPAC 2013);
+                 not_preferred = systematic, known not to be the preferred
+                 IUPAC name, with the reason;
+                 unverified = systematic, preference not verified.
+  reason         The snake_case naming-rule reason, or null for preferred.
+  detail         The status detail sentence.
 ```
 
 ## reshiki --cli info

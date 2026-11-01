@@ -508,6 +508,55 @@ fn aromatic_shortcut_keeps_tool_size_and_selected_ring_topology() {
     assert_eq!(app.tab.doc, before);
 }
 
+#[tokio::test]
+async fn aromatic_ion_circle_action_supports_cyclopentadienide_and_tropylium() {
+    use super::super::{Job, Request};
+    for (size, charge) in [(5, -1), (7, 1)] {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.tab.selected = reshiki::editing::ring(
+            &mut app.tab.doc,
+            reshiki::document::Point::default(),
+            size,
+            false,
+            5.,
+        );
+        app.tab.doc.atoms[0].charge = charge;
+        for (i, bond) in app.tab.doc.bonds.iter_mut().enumerate() {
+            bond.order = if i % 2 == 1 { 2 } else { 1 };
+        }
+        let revision = app.tab.revision;
+        let _ = app.update(Message::AromaticDisplay);
+        assert!(app.tab.busy);
+        let mut request = Request::molecule("aromatic", app.tab.doc.clone());
+        request.selected_ids = Some(app.tab.selected.clone());
+        let response = app.engine.request(request).await.unwrap();
+        let _ = app.update(Message::EngineDone {
+            revision,
+            kind: Job::AromaticDisplay,
+            result: Box::new(Ok(response)),
+        });
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(reshiki::aromatic::circles(&app.tab.doc).len(), 1);
+        assert_eq!(
+            app.tab.doc.atoms.iter().map(|a| a.label_h).sum::<u32>(),
+            u32::from(size)
+        );
+        let circle = app.tab.doc.clone();
+        let _ = app.update(Message::CenterRingCharge);
+        assert!(
+            app.tab
+                .doc
+                .atoms
+                .iter()
+                .all(|a| a.display.center_charge_in_ring)
+        );
+        assert_eq!(app.tab.doc.atoms[0].charge, charge);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, circle);
+    }
+}
+
 #[test]
 fn tilted_ring_and_centroid_are_atomic_undoable_edits() {
     let (mut app, _) = App::new();

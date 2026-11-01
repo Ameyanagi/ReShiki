@@ -1,5 +1,5 @@
 use super::{
-    args::{Compose, Convert, Export, Input, Output, Render, Schema, Skill, Source, parse},
+    args::{Compose, Convert, Export, Input, Name, Output, Render, Schema, Skill, Source, parse},
     *,
 };
 use reshiki_agent::ops::{
@@ -71,6 +71,7 @@ async fn help_describes_one_command() {
         ("render", "Usage: reshiki --cli render "),
         ("compose", "Usage: reshiki --cli compose "),
         ("analyze", "Usage: reshiki --cli analyze "),
+        ("name", "Usage: reshiki --cli name "),
         ("info", "Usage: reshiki --cli info"),
         ("tools", "Usage: reshiki --cli tools"),
         ("schema", "Usage: reshiki --cli schema NAME"),
@@ -100,6 +101,7 @@ async fn help_shows_the_examples() {
         "reshiki --cli convert scheme.rsk -o figure.pdf",
         "reshiki --cli render scheme.rsk -o preview.png",
         "reshiki --cli analyze --smiles 'c1ccccc1O'",
+        "reshiki --cli name --smiles 'CC(=O)O'",
         "reshiki --cli compose proposal.json -o scheme.svg",
     ] {
         assert!(
@@ -173,6 +175,7 @@ fn discovery_command_lines_parse() {
         for (tokens, topic, json) in [
             (vec![alias], None, false),
             (vec![alias, "convert"], commands::find("convert"), false),
+            (vec![alias, "name"], commands::find("name"), false),
             (vec![alias, "--json"], None, true),
             (
                 vec![alias, "--json", "convert"],
@@ -184,6 +187,8 @@ fn discovery_command_lines_parse() {
                 commands::find("convert"),
                 true,
             ),
+            (vec![alias, "--json", "name"], commands::find("name"), true),
+            (vec![alias, "name", "--json"], commands::find("name"), true),
         ] {
             assert_eq!(
                 parsed(&tokens),
@@ -419,23 +424,23 @@ async fn skill_name_and_executable_require_utf8() {
 #[tokio::test(flavor = "multi_thread")]
 async fn json_help_for_one_command_preserves_the_other_fields() {
     let (_, out, _) = call(&["help", "--json"]).await;
-    let mut full: Value = serde_json::from_str(&out).unwrap();
-    let convert = full["commands"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|command| command["name"] == "convert")
-        .unwrap()
-        .clone();
-    full["commands"] = json!([convert]);
-    for tokens in [
-        &["help", "--json", "convert"][..],
-        &["help", "convert", "--json"],
-    ] {
-        let (code, out, err) = call(tokens).await;
-        assert_eq!(code, SUCCESS);
-        assert!(err.is_empty(), "{err}");
-        assert_eq!(serde_json::from_str::<Value>(&out).unwrap(), full);
+    let full: Value = serde_json::from_str(&out).unwrap();
+    for name in ["convert", "name"] {
+        let command = full["commands"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|command| command["name"] == name)
+            .unwrap()
+            .clone();
+        let mut expected = full.clone();
+        expected["commands"] = json!([command]);
+        for tokens in [["help", "--json", name], ["help", name, "--json"]] {
+            let (code, out, err) = call(&tokens).await;
+            assert_eq!(code, SUCCESS, "{tokens:?}");
+            assert!(err.is_empty(), "{tokens:?}: {err}");
+            assert_eq!(serde_json::from_str::<Value>(&out).unwrap(), expected);
+        }
     }
 }
 
@@ -559,13 +564,13 @@ async fn crystal_inputs_are_usage_errors_before_io() {
         "POSCAR.relaxed",
         "CONTCAR.1",
     ] {
-        for command in ["convert", "render", "analyze"] {
+        for command in ["convert", "render", "analyze", "name"] {
             for automatic in [false, true] {
                 let mut args = vec![OsString::from(command), folder.path().join(name).into()];
                 if automatic {
                     args.extend([OsString::from("--from"), OsString::from("auto")]);
                 }
-                if command != "analyze" {
+                if !matches!(command, "analyze" | "name") {
                     args.extend([OsString::from("-o"), output.clone().into()]);
                 }
                 let (code, out, err) = call_os(args).await;
@@ -710,6 +715,116 @@ fn analyze_command_lines_parse() {
             format: "inchi".into(),
         }))
     );
+}
+
+#[test]
+fn name_command_lines_parse() {
+    for (tokens, source, format, json) in [
+        (
+            &["name", "--smiles", "CCO"][..],
+            Source::Smiles("CCO".into()),
+            "smiles",
+            false,
+        ),
+        (&["name", "-", "--from", "mol"], Source::Stdin, "mol", false),
+        (
+            &["name", "--smiles", "C", "--json"],
+            Source::Smiles("C".into()),
+            "smiles",
+            true,
+        ),
+        (
+            &["name", "a.MOL"],
+            Source::File("a.MOL".into()),
+            "mol",
+            false,
+        ),
+        (
+            &["name", "misnamed.cif", "--from", "smiles"],
+            Source::File("misnamed.cif".into()),
+            "smiles",
+            false,
+        ),
+    ] {
+        assert_eq!(
+            parsed(tokens),
+            Ok(Command::Name(Name {
+                input: Input {
+                    source,
+                    format: format.into(),
+                },
+                json,
+            })),
+            "{tokens:?}"
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn name_prints_one_plain_name_without_a_banner() {
+    let (code, out, err) = call(&["name", "--smiles", "CC(=O)O"]).await;
+    assert_eq!(code, SUCCESS, "{err}");
+    assert_eq!(out, "acetic acid\n");
+    assert!(err.is_empty(), "{err}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn name_json_reports_preferred_and_nonpreferred_rule_paths() {
+    use crate::naming::{NameReason, NameStatus};
+
+    for (smiles, expected, status, reason) in [
+        ("CCO", "ethanol", NameStatus::Preferred, Value::Null),
+        (
+            "CC(=NN)C",
+            "propan-2-one hydrazone",
+            NameStatus::NotPreferred(NameReason::FunctionalClass),
+            json!("functional_class"),
+        ),
+    ] {
+        let (code, out, err) = call(&["name", "--smiles", smiles, "--json"]).await;
+        assert_eq!(code, SUCCESS, "{smiles}: {err}");
+        assert!(err.is_empty(), "{smiles}: {err}");
+        let line = out.strip_suffix('\n').unwrap();
+        let result: Value = serde_json::from_str(line).unwrap();
+        assert_eq!(line, result.to_string(), "one minified JSON line");
+        let value = &result["value"];
+        assert_eq!(value["name"], expected, "{smiles}");
+        assert_eq!(
+            value["preferred"],
+            status == NameStatus::Preferred,
+            "{smiles}"
+        );
+        assert_eq!(
+            value["status"],
+            serde_json::to_value(status).unwrap()["status"],
+            "{smiles}"
+        );
+        assert_eq!(value["reason"], reason, "{smiles}");
+        assert_eq!(value["detail"], status.detail(), "{smiles}");
+        assert_eq!(result["experimental"], true);
+        assert_eq!(result["api"]["stability"], "experimental");
+        assert_eq!(
+            result["api"]["operation_api"],
+            crate::envelope::OPERATION_API_VERSION
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn name_declined_inputs_fail_without_stdout() {
+    // Import would drop the allene stereo; the raw SMILES check declines it.
+    for smiles in ["CC.O", "[13CH3]CO", "FC=[C@AL1]=CF"] {
+        for json in [false, true] {
+            let mut tokens = vec!["name", "--smiles", smiles];
+            if json {
+                tokens.push("--json");
+            }
+            let (code, out, err) = call(&tokens).await;
+            assert_eq!(code, FAILURE, "{tokens:?}: {err}");
+            assert!(out.is_empty(), "{tokens:?}: {out}");
+            assert!(err.starts_with("reshiki: error: "), "{tokens:?}: {err}");
+        }
+    }
 }
 
 #[test]
@@ -863,9 +978,11 @@ async fn usage_errors_exit_2_before_any_work() {
             &["help", "--", "convert"],
             "help takes at most one command".into(),
         ),
-        // Flags only help takes stay unknown options to the file commands.
+        // --json stays unknown to file commands other than name.
         (&["convert", "--json"], "unknown option `--json`".into()),
         (&["analyze", "--json"], "unknown option `--json`".into()),
+        (&["render", "--json"], "unknown option `--json`".into()),
+        (&["compose", "--json"], "unknown option `--json`".into()),
         (
             &["convert"],
             "convert needs an input: a file, - for standard input, or --smiles TEXT".into(),
@@ -946,6 +1063,22 @@ async fn usage_errors_exit_2_before_any_work() {
         (
             &["convert", "a.mol", "--to", "svg", "-o", "-", "--receipt"],
             "--receipt needs -o FILE".into(),
+        ),
+        (
+            &["name"],
+            "name needs an input: a file, - for standard input, or --smiles TEXT".into(),
+        ),
+        (
+            &["name", "--smiles", "C", "--to", "mol"],
+            "name does not take --to".into(),
+        ),
+        (
+            &["name", "--smiles", "C", "-o", "x.mol"],
+            "name does not take -o".into(),
+        ),
+        (
+            &["name", "--smiles", "C", "--json", "--json"],
+            "--json given more than once".into(),
         ),
         (
             &["analyze"],
@@ -1284,6 +1417,10 @@ const HELP_GOLDENS: &[(&str, &str)] = &[
     (
         "analyze",
         include_str!("../../tests/fixtures/cli-help/analyze.txt"),
+    ),
+    (
+        "name",
+        include_str!("../../tests/fixtures/cli-help/name.txt"),
     ),
     (
         "info",

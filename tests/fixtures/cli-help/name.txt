@@ -1,0 +1,20 @@
+Experimental: ReShiki's agent tools, schemas and results may change between releases.
+Usage: reshiki --cli name (INPUT | - | --smiles TEXT) [--from FORMAT] [--json]
+
+Prints the systematic name of one connected molecule. The input is read as
+for convert (reshiki --cli help convert). The name is generated locally by
+the openclatura port and printed only after the OPSIN port reconstructs
+the same structure.
+
+Options:
+  --json  Print the name and its status as one JSON line.
+
+Without --json, prints only the name followed by a newline. With --json,
+value contains name, preferred, status, reason and detail:
+  preferred      true only when status is preferred.
+  status         preferred = the preferred IUPAC name (IUPAC 2013);
+                 not_preferred = systematic, known not to be the preferred
+                 IUPAC name, with the reason;
+                 unverified = systematic, preference not verified.
+  reason         The snake_case naming-rule reason, or null for preferred.
+  detail         The status detail sentence.

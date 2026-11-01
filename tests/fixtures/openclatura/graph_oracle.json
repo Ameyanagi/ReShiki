@@ -1,0 +1,1636 @@
+[
+  {
+    "smiles": "CCO",
+    "atoms": [
+      {
+        "idx": 0,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 3,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 1,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 2,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 2,
+        "symbol": "O",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      }
+    ],
+    "bonds": [
+      {
+        "idx": 1,
+        "u": 0,
+        "v": 1,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 2,
+        "u": 1,
+        "v": 2,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      }
+    ],
+    "accurate_cip": {},
+    "legacy_cip": {},
+    "adjacency": {
+      "0": [1],
+      "1": [0, 2],
+      "2": [1]
+    }
+  },
+  {
+    "smiles": "[15NH3+][C@@H](C)C(=O)[O-]",
+    "atoms": [
+      {
+        "idx": 0,
+        "symbol": "N",
+        "charge": 1,
+        "isotope": 15,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 3,
+        "total_h_count": 3,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 1,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": "S",
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 1,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 2,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 3,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 3,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 0,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 4,
+        "symbol": "O",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 0,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 5,
+        "symbol": "O",
+        "charge": -1,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 0,
+        "radical_electrons": 0
+      }
+    ],
+    "bonds": [
+      {
+        "idx": 1,
+        "u": 0,
+        "v": 1,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 2,
+        "u": 1,
+        "v": 2,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 3,
+        "u": 1,
+        "v": 3,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 4,
+        "u": 3,
+        "v": 4,
+        "order": 2,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 5,
+        "u": 3,
+        "v": 5,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      }
+    ],
+    "accurate_cip": {
+      "1": "S"
+    },
+    "legacy_cip": {
+      "1": "S"
+    },
+    "adjacency": {
+      "0": [1],
+      "1": [0, 2, 3],
+      "2": [1],
+      "3": [1, 4, 5],
+      "4": [3],
+      "5": [3]
+    }
+  },
+  {
+    "smiles": "F/C=C/F",
+    "atoms": [
+      {
+        "idx": 0,
+        "symbol": "F",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 0,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 1,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 2,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 3,
+        "symbol": "F",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 0,
+        "radical_electrons": 0
+      }
+    ],
+    "bonds": [
+      {
+        "idx": 1,
+        "u": 0,
+        "v": 1,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 2,
+        "u": 1,
+        "v": 2,
+        "order": 2,
+        "stereo": "E",
+        "in_small_ring": false
+      },
+      {
+        "idx": 3,
+        "u": 2,
+        "v": 3,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      }
+    ],
+    "accurate_cip": {},
+    "legacy_cip": {},
+    "adjacency": {
+      "0": [1],
+      "1": [0, 2],
+      "2": [1, 3],
+      "3": [2]
+    }
+  },
+  {
+    "smiles": "F/C=C\\F",
+    "atoms": [
+      {
+        "idx": 0,
+        "symbol": "F",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 0,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 1,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 2,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 3,
+        "symbol": "F",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 0,
+        "radical_electrons": 0
+      }
+    ],
+    "bonds": [
+      {
+        "idx": 1,
+        "u": 0,
+        "v": 1,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 2,
+        "u": 1,
+        "v": 2,
+        "order": 2,
+        "stereo": "Z",
+        "in_small_ring": false
+      },
+      {
+        "idx": 3,
+        "u": 2,
+        "v": 3,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      }
+    ],
+    "accurate_cip": {},
+    "legacy_cip": {},
+    "adjacency": {
+      "0": [1],
+      "1": [0, 2],
+      "2": [1, 3],
+      "3": [2]
+    }
+  },
+  {
+    "smiles": "c1ccccc1",
+    "atoms": [
+      {
+        "idx": 0,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": true,
+        "explicit_h_count": 0,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 1,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": true,
+        "explicit_h_count": 0,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 2,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": true,
+        "explicit_h_count": 0,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 3,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": true,
+        "explicit_h_count": 0,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 4,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": true,
+        "explicit_h_count": 0,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 5,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": true,
+        "explicit_h_count": 0,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      }
+    ],
+    "bonds": [
+      {
+        "idx": 1,
+        "u": 0,
+        "v": 1,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 2,
+        "u": 1,
+        "v": 2,
+        "order": 2,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 3,
+        "u": 2,
+        "v": 3,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 4,
+        "u": 3,
+        "v": 4,
+        "order": 2,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 5,
+        "u": 4,
+        "v": 5,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 6,
+        "u": 5,
+        "v": 0,
+        "order": 2,
+        "stereo": null,
+        "in_small_ring": true
+      }
+    ],
+    "accurate_cip": {},
+    "legacy_cip": {},
+    "adjacency": {
+      "0": [1, 5],
+      "1": [0, 2],
+      "2": [1, 3],
+      "3": [2, 4],
+      "4": [3, 5],
+      "5": [4, 0]
+    }
+  },
+  {
+    "smiles": "c1cc[nH]c1",
+    "atoms": [
+      {
+        "idx": 0,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": true,
+        "explicit_h_count": 0,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 1,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": true,
+        "explicit_h_count": 0,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 2,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": true,
+        "explicit_h_count": 0,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 3,
+        "symbol": "N",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": true,
+        "explicit_h_count": 1,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 4,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": true,
+        "explicit_h_count": 0,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      }
+    ],
+    "bonds": [
+      {
+        "idx": 1,
+        "u": 0,
+        "v": 1,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 2,
+        "u": 1,
+        "v": 2,
+        "order": 2,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 3,
+        "u": 2,
+        "v": 3,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 4,
+        "u": 3,
+        "v": 4,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 5,
+        "u": 4,
+        "v": 0,
+        "order": 2,
+        "stereo": null,
+        "in_small_ring": true
+      }
+    ],
+    "accurate_cip": {},
+    "legacy_cip": {},
+    "adjacency": {
+      "0": [1, 4],
+      "1": [0, 2],
+      "2": [1, 3],
+      "3": [2, 4],
+      "4": [3, 0]
+    }
+  },
+  {
+    "smiles": "C[S@](=O)CC",
+    "atoms": [
+      {
+        "idx": 0,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 3,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 1,
+        "symbol": "S",
+        "charge": 0,
+        "isotope": null,
+        "stereo": "S",
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 0,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 2,
+        "symbol": "O",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 0,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 3,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 2,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 4,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 3,
+        "radical_electrons": 0
+      }
+    ],
+    "bonds": [
+      {
+        "idx": 1,
+        "u": 0,
+        "v": 1,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 2,
+        "u": 1,
+        "v": 2,
+        "order": 2,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 3,
+        "u": 1,
+        "v": 3,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 4,
+        "u": 3,
+        "v": 4,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      }
+    ],
+    "accurate_cip": {
+      "1": "S"
+    },
+    "legacy_cip": {
+      "1": "R"
+    },
+    "adjacency": {
+      "0": [1],
+      "1": [0, 2, 3],
+      "2": [1],
+      "3": [1, 4],
+      "4": [3]
+    }
+  },
+  {
+    "smiles": "C[C@H]1CC[C@@H](C)C1",
+    "atoms": [
+      {
+        "idx": 0,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 3,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 1,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": "S",
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 1,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 2,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 2,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 3,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 2,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 4,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": "R",
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 1,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 5,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 3,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 6,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 2,
+        "radical_electrons": 0
+      }
+    ],
+    "bonds": [
+      {
+        "idx": 1,
+        "u": 0,
+        "v": 1,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 2,
+        "u": 1,
+        "v": 2,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 3,
+        "u": 2,
+        "v": 3,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 4,
+        "u": 3,
+        "v": 4,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 5,
+        "u": 4,
+        "v": 5,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 6,
+        "u": 4,
+        "v": 6,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 7,
+        "u": 6,
+        "v": 1,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      }
+    ],
+    "accurate_cip": {
+      "1": "S",
+      "4": "R"
+    },
+    "legacy_cip": {
+      "1": "S",
+      "4": "R"
+    },
+    "adjacency": {
+      "0": [1],
+      "1": [0, 2, 6],
+      "2": [1, 3],
+      "3": [2, 4],
+      "4": [3, 5, 6],
+      "5": [4],
+      "6": [4, 1]
+    }
+  },
+  {
+    "smiles": "C[C@H]1CCC[C@@H]1C",
+    "atoms": [
+      {
+        "idx": 0,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 3,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 1,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": "S",
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 1,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 2,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 2,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 3,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 2,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 4,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 2,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 5,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": "S",
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 1,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 6,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 3,
+        "radical_electrons": 0
+      }
+    ],
+    "bonds": [
+      {
+        "idx": 1,
+        "u": 0,
+        "v": 1,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 2,
+        "u": 1,
+        "v": 2,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 3,
+        "u": 2,
+        "v": 3,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 4,
+        "u": 3,
+        "v": 4,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 5,
+        "u": 4,
+        "v": 5,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 6,
+        "u": 5,
+        "v": 6,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 7,
+        "u": 5,
+        "v": 1,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      }
+    ],
+    "accurate_cip": {
+      "1": "S",
+      "5": "S"
+    },
+    "legacy_cip": {
+      "1": "S",
+      "5": "S"
+    },
+    "adjacency": {
+      "0": [1],
+      "1": [0, 2, 5],
+      "2": [1, 3],
+      "3": [2, 4],
+      "4": [3, 5],
+      "5": [4, 6, 1],
+      "6": [5]
+    }
+  },
+  {
+    "smiles": "[H][C@](F)(Cl)Br",
+    "atoms": [
+      {
+        "idx": 0,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": "S",
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 1,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 1,
+        "symbol": "F",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 0,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 2,
+        "symbol": "Cl",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 0,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 3,
+        "symbol": "Br",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 0,
+        "radical_electrons": 0
+      }
+    ],
+    "bonds": [
+      {
+        "idx": 1,
+        "u": 0,
+        "v": 1,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 2,
+        "u": 0,
+        "v": 2,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 3,
+        "u": 0,
+        "v": 3,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      }
+    ],
+    "accurate_cip": {
+      "0": "S"
+    },
+    "legacy_cip": {
+      "0": "S"
+    },
+    "adjacency": {
+      "0": [1, 2, 3],
+      "1": [0],
+      "2": [0],
+      "3": [0]
+    }
+  },
+  {
+    "smiles": "C1CC=CCCC1",
+    "atoms": [
+      {
+        "idx": 0,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 2,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 1,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 2,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 2,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 3,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 4,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 2,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 5,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 2,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 6,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 2,
+        "radical_electrons": 0
+      }
+    ],
+    "bonds": [
+      {
+        "idx": 1,
+        "u": 0,
+        "v": 1,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 2,
+        "u": 1,
+        "v": 2,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 3,
+        "u": 2,
+        "v": 3,
+        "order": 2,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 4,
+        "u": 3,
+        "v": 4,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 5,
+        "u": 4,
+        "v": 5,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 6,
+        "u": 5,
+        "v": 6,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 7,
+        "u": 6,
+        "v": 0,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      }
+    ],
+    "accurate_cip": {},
+    "legacy_cip": {},
+    "adjacency": {
+      "0": [1, 6],
+      "1": [0, 2],
+      "2": [1, 3],
+      "3": [2, 4],
+      "4": [3, 5],
+      "5": [4, 6],
+      "6": [5, 0]
+    }
+  },
+  {
+    "smiles": "C1CCC=CCCC1",
+    "atoms": [
+      {
+        "idx": 0,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 2,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 1,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 2,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 2,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 2,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 3,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 4,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 5,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 2,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 6,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 2,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 7,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 2,
+        "radical_electrons": 0
+      }
+    ],
+    "bonds": [
+      {
+        "idx": 1,
+        "u": 0,
+        "v": 1,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 2,
+        "u": 1,
+        "v": 2,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 3,
+        "u": 2,
+        "v": 3,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 4,
+        "u": 3,
+        "v": 4,
+        "order": 2,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 5,
+        "u": 4,
+        "v": 5,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 6,
+        "u": 5,
+        "v": 6,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 7,
+        "u": 6,
+        "v": 7,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 8,
+        "u": 7,
+        "v": 0,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      }
+    ],
+    "accurate_cip": {},
+    "legacy_cip": {},
+    "adjacency": {
+      "0": [1, 7],
+      "1": [0, 2],
+      "2": [1, 3],
+      "3": [2, 4],
+      "4": [3, 5],
+      "5": [4, 6],
+      "6": [5, 7],
+      "7": [6, 0]
+    }
+  },
+  {
+    "smiles": "C[C@H]1C[C@@H](C)C1",
+    "atoms": [
+      {
+        "idx": 0,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 3,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 1,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": "CW",
+        "is_aromatic": false,
+        "explicit_h_count": 1,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 2,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 2,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 3,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": "CW",
+        "is_aromatic": false,
+        "explicit_h_count": 1,
+        "total_h_count": 1,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 4,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 3,
+        "radical_electrons": 0
+      },
+      {
+        "idx": 5,
+        "symbol": "C",
+        "charge": 0,
+        "isotope": null,
+        "stereo": null,
+        "raw_stereo": null,
+        "is_aromatic": false,
+        "explicit_h_count": 0,
+        "total_h_count": 2,
+        "radical_electrons": 0
+      }
+    ],
+    "bonds": [
+      {
+        "idx": 1,
+        "u": 0,
+        "v": 1,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 2,
+        "u": 1,
+        "v": 2,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 3,
+        "u": 2,
+        "v": 3,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 4,
+        "u": 3,
+        "v": 4,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": false
+      },
+      {
+        "idx": 5,
+        "u": 3,
+        "v": 5,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      },
+      {
+        "idx": 6,
+        "u": 5,
+        "v": 1,
+        "order": 1,
+        "stereo": null,
+        "in_small_ring": true
+      }
+    ],
+    "accurate_cip": {
+      "1": "s",
+      "3": "s"
+    },
+    "legacy_cip": {},
+    "adjacency": {
+      "0": [1],
+      "1": [0, 2, 5],
+      "2": [1, 3],
+      "3": [2, 4, 5],
+      "4": [3],
+      "5": [3, 1]
+    }
+  }
+]

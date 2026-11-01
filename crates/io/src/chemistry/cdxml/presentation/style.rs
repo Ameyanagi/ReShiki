@@ -86,6 +86,7 @@ impl NativeDrawingStyle {
             bond_spacing_ratio: self.bond_spacing_ratio as f32,
             center_chain_double_bonds: false,
             png_dpi: self.png_dpi,
+            charge_before_radical: false,
         };
         result.validate().map_err(Error::Document)?;
         Ok(result)

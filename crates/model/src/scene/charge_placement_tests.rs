@@ -381,26 +381,29 @@ fn nitro_oxygen_charge_stays_nearer_its_own_ink_than_nitrogen() {
 
 #[test]
 fn moved_charge_and_automatic_radical_remain_one_superscript_cluster() {
-    let mut doc = chelate(true);
-    doc.atom_mut(1).unwrap().radical_electrons = 1;
-    let old =
-        atom_label_runs_with_charge_layout(doc.atom(1).unwrap(), &doc, ChargeLayout::Unplaced);
-    let old_position = |label: &str| {
-        old.iter()
-            .find_map(|run| match run {
-                Primitive::Text { position, text, .. } if text == label => Some(*position),
-                _ => None,
-            })
-            .unwrap()
-    };
-    let charge = charge_run(&doc, 1, "3+");
-    let radical = charge_run(&doc, 1, "•");
-    let old_charge = old_position("3+");
-    let old_radical = old_position("•");
-    assert_ne!(charge, old_charge, "Obstructing charge should move");
-    assert!((charge.x - old_charge.x - radical.x + old_radical.x).abs() < 0.002);
-    assert!((charge.y - old_charge.y - radical.y + old_radical.y).abs() < 0.002);
-    assert_contacts_painted(&doc, 2);
+    for charge_first in [false, true] {
+        let mut doc = chelate(true);
+        doc.drawing_style.charge_before_radical = charge_first;
+        doc.atom_mut(1).unwrap().radical_electrons = 1;
+        let old =
+            atom_label_runs_with_charge_layout(doc.atom(1).unwrap(), &doc, ChargeLayout::Unplaced);
+        let old_position = |label: &str| {
+            old.iter()
+                .find_map(|run| match run {
+                    Primitive::Text { position, text, .. } if text == label => Some(*position),
+                    _ => None,
+                })
+                .unwrap()
+        };
+        let charge = charge_run(&doc, 1, "3+");
+        let radical = charge_run(&doc, 1, "•");
+        let old_charge = old_position("3+");
+        let old_radical = old_position("•");
+        assert_ne!(charge, old_charge, "Obstructing charge should move");
+        assert!((charge.x - old_charge.x - radical.x + old_radical.x).abs() < 0.002);
+        assert!((charge.y - old_charge.y - radical.y + old_radical.y).abs() < 0.002);
+        assert_contacts_painted(&doc, 2);
+    }
 }
 
 #[test]
