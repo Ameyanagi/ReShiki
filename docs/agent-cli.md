@@ -275,9 +275,9 @@ reshiki --cli analyze (INPUT | - | --smiles TEXT) [--from FORMAT]
 
 Prints the molecular properties of a structure or drawing as one JSON line.
 The properties are under `value.analysis`, and `value.analyzed_atoms` lists the
-IDs of the atoms analyzed. `mass` is rounded to 3 decimal places, `exact_mass`
-to 5, and `logp` and `tpsa` to 2. This is `analyze --smiles 'c1ccccc1O'`, shown
-on several lines:
+IDs of the atoms analyzed. `mass`, `exact_mass`, `logp` and `tpsa` are rounded
+to 9 decimal places to remove floating-point noise. This is
+`analyze --smiles 'c1ccccc1O'`, shown on several lines:
 
 ```json
 {
@@ -293,11 +293,11 @@ on several lines:
     "analysis": {
       "acceptors": 1,
       "donors": 1,
-      "exact_mass": 94.04186,
+      "exact_mass": 94.041864812,
       "formula": "C6H6O",
       "inchi": "InChI=1S/C6H6O/c7-6-4-2-1-3-5-6/h1-5,7H",
       "inchikey": "ISWSIDIOOBJBQZ-UHFFFAOYSA-N",
-      "logp": 1.39,
+      "logp": 1.3922,
       "mass": 94.113,
       "rings": 1,
       "smiles": "Oc1ccccc1",

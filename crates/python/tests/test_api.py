@@ -228,10 +228,6 @@ def test_aspirin_properties() -> None:
         value.mass = 1.0  # type: ignore[misc]
 
 
-# The CLI rounds its analysis floats to the inspector's places.
-PLACES = {"mass": 3, "exact_mass": 5, "logp": 2, "tpsa": 2}
-
-
 def test_properties_match_cli() -> None:
     # Captured from this source with:
     # reshiki --cli analyze --smiles 'CC(=O)Oc1ccccc1C(=O)O'
@@ -240,9 +236,7 @@ def test_properties_match_cli() -> None:
     actual = asdict(reshiki.properties(ASPIRIN))
     assert actual.keys() == analysis.keys()
     for field, value in actual.items():
-        assert analysis[field] == (
-            round(value, PLACES[field]) if isinstance(value, float) else value
-        )
+        assert analysis[field] == (round(value, 9) if isinstance(value, float) else value)
 
 
 def test_properties_match_live_cli() -> None:
@@ -261,9 +255,7 @@ def test_properties_match_live_cli() -> None:
     result = json.loads(completed.stdout)
     analysis = result["value"]["analysis"]
     for field, value in asdict(reshiki.properties(ASPIRIN)).items():
-        assert analysis[field] == (
-            round(value, PLACES[field]) if isinstance(value, float) else value
-        )
+        assert analysis[field] == (round(value, 9) if isinstance(value, float) else value)
 
 
 def test_batch_errors_and_order() -> None:

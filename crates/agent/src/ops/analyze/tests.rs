@@ -138,26 +138,27 @@ async fn the_whole_drawing_is_analyzed_without_changing_it() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn analysis_numbers_use_inspector_precision() {
+async fn analysis_numbers_drop_float_noise() {
     let host = HeadlessHost::new("9.8.7", Budgets::default());
     for (smiles, expected) in [
         (
             "CNCCC(Oc1ccc(cc1)C(F)(F)F)c1ccccc1",
-            [("mass", "309.331"), ("logp", "4.44"), ("tpsa", "21.26")].as_slice(),
+            [("mass", "309.331"), ("logp", "4.435"), ("tpsa", "21.26")].as_slice(),
         ),
         (
             "c1ccccc1O",
             [
                 ("mass", "94.113"),
-                ("exact_mass", "94.04186"),
-                ("logp", "1.39"),
+                ("exact_mass", "94.041864812"),
+                ("logp", "1.3922"),
                 ("tpsa", "20.23"),
             ]
             .as_slice(),
         ),
-        ("CCO", [("logp", "0.0")].as_slice()),
-        // 0.855 is stored just below the tie, so it rounds down like `{:.2}`.
-        ("CCl", [("logp", "0.85")].as_slice()),
+        (
+            "[13CH4]",
+            [("mass", "17.03535484"), ("exact_mass", "17.034654968")].as_slice(),
+        ),
     ] {
         let imported = host
             .call(call("import", json!({"format": "smiles", "text": smiles})))

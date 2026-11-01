@@ -280,8 +280,8 @@ pub(crate) fn warnings(messages: Vec<String>) -> Vec<Warning> {
         .collect()
 }
 
-/// Engine [`Analysis`] on the wire, with mass rounded to 3 decimal places,
-/// exact_mass to 5, and logp and tpsa to 2.
+/// Engine [`Analysis`] on the wire, with mass, exact_mass, logp and tpsa
+/// rounded to 9 decimal places to remove floating-point noise.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AnalysisJson {
     pub smiles: String,
@@ -300,10 +300,7 @@ pub struct AnalysisJson {
 
 impl From<Analysis> for AnalysisJson {
     fn from(analysis: Analysis) -> Self {
-        // Rounds as the inspector's `{:.N}` does; `+ 0.0` turns -0.0
-        // (ethanol's logP) into 0.0.
-        let round =
-            |value: f64, places: usize| format!("{value:.places$}").parse().unwrap_or(value) + 0.0;
+        let round = |value: f64| (value * 1e9).round() / 1e9;
         let Analysis {
             smiles,
             formula,
@@ -321,10 +318,10 @@ impl From<Analysis> for AnalysisJson {
         Self {
             smiles,
             formula,
-            mass: round(mass, 3),
-            exact_mass: round(exact_mass, 5),
-            logp: round(logp, 2),
-            tpsa: round(tpsa, 2),
+            mass: round(mass),
+            exact_mass: round(exact_mass),
+            logp: round(logp),
+            tpsa: round(tpsa),
             donors,
             acceptors,
             rings,
