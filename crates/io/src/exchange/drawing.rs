@@ -13,6 +13,7 @@ mod groups;
 mod labels;
 mod ligands;
 mod objects;
+mod partial_charges;
 mod tree;
 pub use clipboard::write as write_clipboard;
 use tree::{Key, Tree};

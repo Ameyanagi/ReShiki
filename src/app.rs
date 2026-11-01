@@ -295,6 +295,8 @@ pub enum Message {
     Transform(Transform),
     Arrange(Arrange),
     ReverseBonds,
+    MakeIonic,
+    CenterRingCharge,
     BondDepth(bool),
     RingSize(u8),
     AromaticRing(bool),

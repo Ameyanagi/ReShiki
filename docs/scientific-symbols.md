@@ -8,9 +8,9 @@ to the page. Orbitals are editable drawing shapes that can snap to an atom.
 ### Add a mark to an atom
 
 1. Open the **Chemical symbols** palette button and choose a symbol. It offers
-   18 choices: circled and plain charges, radicals and diradicals, lone pairs
+   20 choices: circled and plain charges, radicals and diradicals, lone pairs
    and bars, radical ions, H-dot and H-dash, attachment diamond, star, wave and
-   bead, and single and double daggers.
+   bead, single and double daggers, and partial positive (δ+) and partial negative (δ−).
 2. With **Attach to atoms** on, click an atom to add the mark. The symbol tool
    stays active for more placements; press Escape or choose another tool to stop. Drag from the
    atom to choose its side: the mark orbits the atom in 15° steps, just
@@ -27,10 +27,13 @@ dots sit side by side around the label, also when placed freely. Charges and
 radicals stay upright.
 
 Charges and radicals change the atom's chemistry, and ReShiki refreshes its
-hydrogen label and unpaired electrons. Lone pairs and bars are annotations
-only. Marks move, copy and transform with their atom, take the atom label's
+hydrogen label and unpaired electrons. Lone pairs, bars and partial charges are
+annotations only. Partial charges leave formal charge and valence unchanged;
+choose them explicitly when a figure needs to emphasize charge distribution.
+Marks move, copy and transform with their atom, take the atom label's
 color, and each edit is one Undo step. Rotating or flipping a molecule turns
-its lone pairs with it; charges stay upright.
+its lone pairs with it; formal and partial charges stay upright. Diradical
+dots have a wider separation than lone-pair dots.
 
 ### Draw an orbital
 
@@ -129,7 +132,11 @@ the whole lobe without a halo.
   filled orbital lobes and rotated marks.
 - SMILES/MOL/CDXML keep supported one/two-unpaired-electron chemistry;
   molecular formats omit drawing annotations.
-- Free symbols and orbitals export to CDXML/CDX as grouped editable vector
+- Partial charges export to CDXML/CDX as uninterpreted δ+ / δ− text. An attached
+  partial charge becomes a free caption in those formats; `.rsk` retains its
+  atom attachment. A stretched or mirrored free partial charge exports as
+  upright, unstretched text.
+- Other free symbols and orbitals export to CDXML/CDX as grouped editable vector
   curves with whole lobes. A front orbital that reaches an atom label is
   stacked just behind the molecule, so the reading application draws the
   labels (and, unlike the canvas, the bonds) over it, and a re-import places

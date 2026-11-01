@@ -103,6 +103,7 @@ impl NativeDrawingStyle {
             ring_fusion_hydrogens: self.ring_fusion_hydrogens,
             wavy_unknown_alkenes: self.wavy_unknown_alkenes,
             png_dpi: self.png_dpi,
+            charge_before_radical: false,
         };
         result.validate().map_err(Error::Document)?;
         Ok(result)

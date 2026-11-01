@@ -142,6 +142,8 @@ impl App {
             Message::Arrange(arrange) => self.arrange_selection(arrange),
             Message::BondDepth(front) => self.layer_objects(front, false, true),
             Message::ReverseBonds => self.reverse_selected_bonds(),
+            Message::MakeIonic => self.make_ionic(),
+            Message::CenterRingCharge => self.center_ring_charge(),
             Message::InsertTemplate(index) => self.insert_template(index),
             Message::Tick => self.request_drafts(),
             Message::Restore if self.pending.is_some() => {}

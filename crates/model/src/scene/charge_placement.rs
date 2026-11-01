@@ -82,7 +82,7 @@ pub(super) fn place_automatic_charge(
     };
     let mut occupied = Vec::new();
     let mut reserve_marks = |atom: &Atom| {
-        for part in crate::scientific::styled_mark_parts(atom, &doc.drawing_style) {
+        for part in crate::scientific::document_mark_parts(atom, doc) {
             let points: Vec<_> = part
                 .commands
                 .iter()

@@ -1,5 +1,5 @@
-//! Chemical marks and orbital diagrams. Attached marks use the atom's actual
-//! charge/radical state; free symbols and orbitals are drawing objects.
+//! Chemical marks and orbital diagrams. Charge/radical marks use the atom's
+//! chemical state; partial charges and lone pairs are attached annotations.
 use crate::{
     document::{Atom, Point},
     graphics::{Graphic, GraphicKind, GraphicStyle, PathCommand},
@@ -14,6 +14,8 @@ mod mark_placement;
 mod mark_placement_tests;
 #[cfg(test)]
 mod orbital_tests;
+#[cfg(test)]
+mod symbol_tests;
 pub(crate) use label_halo::orbital_halos;
 pub use label_halo::{LABEL_HALO_PT, OrbitalHalos, label_halo_radius};
 
@@ -39,7 +41,16 @@ macro_rules! choices {
         impl std::fmt::Display for $name {fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result {f.write_str(match self {Self::$first=>$label,$(Self::$variant=>$text),*})}}
     }
 }
-choices!(SymbolKind {CirclePlus=>"Circled plus",CircleMinus=>"Circled minus",Plus=>"Plus",Minus=>"Minus",Radical=>"Radical",Diradical=>"Diradical",LonePair=>"Lone pair",LonePairBar=>"Lone pair bar",RadicalCation=>"Radical cation",RadicalAnion=>"Radical anion",HydrogenDot=>"H-dot",HydrogenDash=>"H-dash",Diamond=>"Attachment diamond",Star=>"Attachment star",Wavy=>"Wavy attachment",Bead=>"Polymer bead",Dagger=>"Dagger",DoubleDagger=>"Double dagger"});
+choices!(SymbolKind {CirclePlus=>"Circled plus",CircleMinus=>"Circled minus",Plus=>"Plus",Minus=>"Minus",Radical=>"Radical",Diradical=>"Diradical",LonePair=>"Lone pair",LonePairBar=>"Lone pair bar",RadicalCation=>"Radical cation",RadicalAnion=>"Radical anion",HydrogenDot=>"H-dot",HydrogenDash=>"H-dash",Diamond=>"Attachment diamond",Star=>"Attachment star",Wavy=>"Wavy attachment",Bead=>"Polymer bead",Dagger=>"Dagger",DoubleDagger=>"Double dagger",PartialPositive=>"Partial positive",PartialNegative=>"Partial negative"});
+impl SymbolKind {
+    pub fn partial_charge_text(self) -> Option<&'static str> {
+        match self {
+            Self::PartialPositive => Some("δ+"),
+            Self::PartialNegative => Some("δ−"),
+            _ => None,
+        }
+    }
+}
 choices!(OrbitalKind {S=>"s orbital",Sigma=>"σ orbital",Lobe=>"Single lobe",P=>"p orbital",Hybrid=>"sp³ hybrid",Dxy=>"dxy orbital",Dz2=>"dz² orbital"});
 choices!(Phase {Solid=>"Solid phase",Open=>"Outline",Shaded=>"Gray phase"});
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -51,6 +62,8 @@ pub enum MarkKind {
     RadicalIon,
     LonePair,
     LonePairBar,
+    PartialPositive,
+    PartialNegative,
 }
 impl MarkKind {
     pub fn charge(self) -> bool {
@@ -177,6 +190,18 @@ pub fn symbol_parts(kind: SymbolKind, amount: u8, style: &GraphicStyle) -> Vec<P
 /// and sign arms 0.24 of it. Plain signs and free symbols keep 0.52 and 0.3.
 fn glyph_parts(kind: SymbolKind, amount: u8, style: &GraphicStyle, mark: bool) -> Vec<Part> {
     use PathCommand::*;
+    if let Some(text) = kind.partial_charge_text() {
+        let width = crate::style::text_width(text, 0.85);
+        return vec![Part {
+            commands: crate::style::outline_text(text, 0.85, p(-width * 0.5, 0.3)),
+            style: GraphicStyle {
+                fill: Some(style.stroke),
+                width_pt: 0.,
+                ..style.clone()
+            },
+            filled: true,
+        }];
+    }
     let circled = matches!(kind, SymbolKind::CirclePlus | SymbolKind::CircleMinus);
     let (radius, arm) = if mark && circled {
         (0.4, 0.24)
@@ -235,8 +260,13 @@ fn glyph_parts(kind: SymbolKind, amount: u8, style: &GraphicStyle, mark: bool) -
     match kind {
         SymbolKind::Radical => add(circle(0., 0., 0.11, 0.11), true),
         SymbolKind::Diradical | SymbolKind::LonePair => {
-            add(circle(-0.2, 0., 0.1, 0.1), true);
-            add(circle(0.2, 0., 0.1, 0.1), true);
+            let gap = if kind == SymbolKind::Diradical {
+                0.45
+            } else {
+                0.2
+            };
+            add(circle(-gap, 0., 0.1, 0.1), true);
+            add(circle(gap, 0., 0.1, 0.1), true);
         }
         SymbolKind::LonePairBar => add(vec![Move(p(-0.35, 0.)), Line(p(0.35, 0.))], false),
         SymbolKind::HydrogenDot | SymbolKind::HydrogenDash => {
@@ -331,12 +361,24 @@ impl Graphic {
 pub fn mark_parts(atom: &Atom) -> Vec<Part> {
     styled_mark_parts(atom, &DEFAULT)
 }
+/// Visible attached marks, including the document's ring-charge placement.
+pub fn document_mark_parts(atom: &Atom, doc: &crate::document::Document) -> Vec<Part> {
+    if atom.marks.iter().any(|mark| mark.kind.charge())
+        && crate::aromatic::charge_is_centered(doc, atom)
+    {
+        let mut shown = atom.clone();
+        shown.display.hide_charge = true;
+        styled_mark_parts(&shown, &doc.drawing_style)
+    } else {
+        styled_mark_parts(atom, &doc.drawing_style)
+    }
+}
 /// Whether `mark` draws anything on `atom`; a charge hidden with the
 /// atom's charge label, for instance, does not.
-pub fn mark_drawn(atom: &Atom, mark: &AtomMark) -> bool {
+pub fn mark_drawn(doc: &crate::document::Document, atom: &Atom, mark: &AtomMark) -> bool {
     let mut single = atom.clone();
     single.marks = vec![mark.clone()];
-    !styled_mark_parts(&single, &DEFAULT).is_empty()
+    !document_mark_parts(&single, doc).is_empty()
 }
 pub fn styled_mark_parts(atom: &Atom, drawing_style: &crate::style::DrawingStyle) -> Vec<Part> {
     let default_size = atom
@@ -396,6 +438,8 @@ pub fn styled_mark_parts(atom: &Atom, drawing_style: &crate::style::DrawingStyle
             ),
             MarkKind::LonePair => (SymbolKind::LonePair, 1),
             MarkKind::LonePairBar => (SymbolKind::LonePairBar, 1),
+            MarkKind::PartialPositive => (SymbolKind::PartialPositive, 1),
+            MarkKind::PartialNegative => (SymbolKind::PartialNegative, 1),
             _ => continue,
         };
         let mut parts = glyph_parts(kind, amount, &style, true);
@@ -421,7 +465,7 @@ pub fn styled_mark_parts(atom: &Atom, drawing_style: &crate::style::DrawingStyle
     }
     out
 }
-/// Charges and radicals are chemical edits; lone pairs are explicit annotations.
+/// Charges and radicals are chemical edits; other attached marks are annotations.
 pub fn attach(atom: &mut Atom, kind: SymbolKind, offset: Point) -> Result<(), String> {
     let mut candidate = atom.clone();
     attach_inner(&mut candidate, kind, offset)?;
@@ -440,6 +484,7 @@ fn attach_inner(atom: &mut Atom, kind: SymbolKind, offset: Point) -> Result<(), 
         SymbolKind::Radical|SymbolKind::Diradical=>{atom.radical_electrons=if kind==SymbolKind::Radical {1} else {2};atom.marks.retain(|m|!m.kind.radical());MarkKind::Radical}
         SymbolKind::RadicalCation|SymbolKind::RadicalAnion=>{atom.radical_electrons=1;atom.charge=if kind==SymbolKind::RadicalCation {1} else {-1};atom.marks.retain(|m|!m.kind.radical()&&!m.kind.charge());MarkKind::RadicalIon}
         SymbolKind::LonePair=>MarkKind::LonePair,SymbolKind::LonePairBar=>MarkKind::LonePairBar,
+        SymbolKind::PartialPositive=>MarkKind::PartialPositive,SymbolKind::PartialNegative=>MarkKind::PartialNegative,
         _=>return Err("This symbol is a drawing annotation. Use free placement; explicit H bonds carry stereochemistry.".into()),
     };
     if atom.marks.len() >= 12 {
@@ -479,7 +524,7 @@ pub fn orbit_mark(
     free: bool,
 ) -> AtomMark {
     // A mark that draws nothing has no shape to orbit with; keep its offset.
-    if !mark_drawn(atom, mark) {
+    if !mark_drawn(doc, atom, mark) {
         return mark.clone();
     }
     let offset = Point::new(to.x - atom.position.x, to.y - atom.position.y);
@@ -517,7 +562,7 @@ pub fn mark_orbit_guide(
     atom: &Atom,
     mark: &AtomMark,
 ) -> (Vec<Vec<Point>>, Vec<Point>) {
-    if !mark_drawn(atom, mark) {
+    if !mark_drawn(doc, atom, mark) {
         return (vec![], vec![]);
     }
     let center = |m: &AtomMark| atom.position.offset(m.offset.x, m.offset.y);
@@ -676,7 +721,11 @@ impl Drawing {
             {
                 mark.angle = angle;
             }
-            if !matches!(kind, SymbolKind::LonePair | SymbolKind::LonePairBar) {
+            if atom
+                .marks
+                .last()
+                .is_some_and(|m| m.kind.charge() || m.kind.radical())
+            {
                 doc.invalidate_chemistry(&[id]);
                 // Orbit the label the refresh will show, hydrogens included.
                 let hydrogens = *hydrogens

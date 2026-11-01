@@ -314,6 +314,14 @@ impl App {
                 .bonds
                 .is_empty()
                 .then_some("Select or point at a bond first"),
+            Need::IonicBond => reshiki::ionic::eligible_bonds(&self.tab.doc, &self.tab.selected)
+                .is_empty()
+                .then_some("Select an eligible metal–heteroatom single bond first"),
+            Need::ChargedRing => {
+                reshiki::aromatic::charge_circle(&self.tab.doc, &self.tab.selected)
+                    .is_none()
+                    .then_some("Select one charged, non-fused ring with an aromatic circle")
+            }
             Need::Atom => target
                 .atoms
                 .is_empty()

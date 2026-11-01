@@ -1,6 +1,41 @@
 use super::*;
 
 #[test]
+fn radical_order_is_a_previewed_document_style_with_undo() {
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let before = app.tab.doc.clone();
+    let send = |app: &mut App, action| {
+        let _ = app.update(Message::DrawingStyle(action));
+    };
+    send(&mut app, Action::Open);
+    send(&mut app, Action::ChargeBeforeRadical(true));
+    assert_eq!(app.tab.doc, before);
+    let draft = app.tab.styles.editor.as_ref().unwrap().candidate().unwrap();
+    assert!(draft.charge_before_radical);
+    assert_eq!(draft.name, "Custom");
+    send(&mut app, Action::Cancel);
+    assert_eq!(app.tab.doc, before);
+    send(&mut app, Action::Open);
+    assert!(
+        !app.tab
+            .styles
+            .editor
+            .as_ref()
+            .unwrap()
+            .charge_before_radical
+    );
+    send(&mut app, Action::ChargeBeforeRadical(true));
+    send(&mut app, Action::Apply);
+    assert!(app.tab.doc.drawing_style.charge_before_radical);
+    let after = app.tab.doc.clone();
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, before);
+    let _ = app.update(Message::Redo);
+    assert_eq!(app.tab.doc, after);
+}
+
+#[test]
 fn background_style_loads_and_save_status_stay_with_their_editor() {
     let (mut app, _) = App::new();
     app.tab.busy = false;

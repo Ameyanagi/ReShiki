@@ -73,3 +73,30 @@ fn malformed_documents_still_report_invalid() {
         Err(Error::Invalid(_))
     ));
 }
+
+#[test]
+fn centered_aromatic_charge_export_retains_atom_charge_without_extra_center_text() {
+    let mut doc = Document::default();
+    let ids = crate::editing::ring(&mut doc, Point::default(), 7, false, 5.);
+    doc.atom_mut(ids[0]).unwrap().charge = 1;
+    for (i, bond) in doc.bonds.iter_mut().enumerate() {
+        bond.order = if i % 2 == 1 { 2 } else { 1 };
+    }
+    let mut doc = crate::chemistry::document::aromatic_display(&doc, &ids)
+        .unwrap()
+        .finish()
+        .unwrap()
+        .document;
+    assert!(crate::aromatic::toggle_center_charge(&mut doc, &ids).unwrap());
+    let before = doc.clone();
+    let xml = write(&doc, Options::default()).unwrap();
+    let tree = roxmltree::Document::parse(&xml).unwrap();
+    let charges: Vec<_> = tree
+        .descendants()
+        .filter(|node| node.has_tag_name("n"))
+        .filter_map(|node| node.attribute("Charge"))
+        .collect();
+    assert_eq!(charges, ["1"]);
+    assert!(!tree.descendants().any(|node| node.has_tag_name("t")));
+    assert_eq!(doc, before);
+}
