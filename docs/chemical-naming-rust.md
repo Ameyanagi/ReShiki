@@ -188,7 +188,6 @@ that is not the PIN:
 | `functional_class`  | `acetaldehyde hydrazone`, `(S)-ethyl methyl sulfoxide`, `diphenyl selenotelluroperoxide` | `ethylidenehydrazine`, `(S)-(methanesulfinyl)ethane`, `[(phenylselanyl)tellanyl]benzene` |
 | `hydride_parent`    | `chloro(methyl)azane`, `1,2-dimethyldisulfane`, `ethoxy(methyl)sulfane`                  | `methylhypochlorous amide`, `(methyldisulfanyl)methane`, `[(methylsulfanyl)oxy]ethane`   |
 | `unretained_parent` | `N-methylethanediamide`, `hydroxyformyl chloride`                                        | `N1-methyloxamide`, `carbonochloridic acid`                                              |
-| `fusion_prefix`     | `oxazolo[4,5-b]pyridine`, `isoxazolo`                                                    | `[1,3]oxazolo[4,5-b]pyridine`, `[1,2]oxazolo`                                            |
 | `diamide_locants`   | `N,N'-diethylpropanediamide`                                                             | `N1,N3-diethylpropanediamide`                                                            |
 
 Reasons for an unverified name: `opsin_fusion_layout` (fusion numbering chosen
@@ -218,6 +217,12 @@ Chalcogen analogues of oxo and formyl take the preferred prefixes
 `3-sulfanylidenebutanoic acid`, `3,5-bis(sulfanylidene)hexanoic acid`,
 `4-(methanethioyl)benzoic acid`, `4-(ethanethioyl)benzoic acid`,
 `4-(benzenecarbothioyl)benzoic acid`.
+
+Oxazole and thiazole fusion prefixes cite their Hantzsch-Widman locants in
+square brackets (P-25.3.2.2.3): `[1,3]oxazolo[4,5-b]pyridine`,
+`[1,2]oxazolo[5,4-b]pyridine`, `[1,3]thiazolo[3,2-a]pyrimidine`. A base
+component named `isoxazole` or `isothiazole`, as in `cyclopenta[c]isoxazole`,
+still departs from the PIN (`[1,2]oxazole`) and has no mark.
 
 Alkoxy prefixes use the retained contractions `methoxy`, `ethoxy`, `propoxy`,
 `butoxy`, `phenoxy` and `tert-butoxy` (P-63.2.2.2), not isopropoxy, sec-butoxy

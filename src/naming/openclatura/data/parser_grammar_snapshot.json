@@ -119,7 +119,7 @@
       "indazole",
       "indolizine",
       "isoquinoline",
-      "isoxazolo[5,4-b]pyridine",
+      "[1,2]oxazolo[5,4-b]pyridine",
       "tetracene",
       "naphthalene",
       "naphtho[1,2-b]thiophene",
@@ -144,8 +144,8 @@
       "quinoxaline",
       "s-indacene",
       "thianthrene",
-      "thiazolo[4,5-d]pyrimidine",
-      "thiazolo[5,4-b]pyridine",
+      "[1,3]thiazolo[4,5-d]pyrimidine",
+      "[1,3]thiazolo[5,4-b]pyridine",
       "thieno[2,3-b]pyridine",
       "thieno[2,3-d]pyrimidine",
       "thieno[3,2-b]thiophene",
@@ -1402,12 +1402,12 @@
       ],
       "derivative_status": "production_safe"
     },
-    "isoxazolo[5,4-b]pyridine": {
+    "[1,2]oxazolo[5,4-b]pyridine": {
       "parent_stems": [
-        "isoxazolo[5,4-b]pyridin"
+        "[1,2]oxazolo[5,4-b]pyridin"
       ],
       "substituent_stems": [
-        "isoxazolo[5,4-b]pyridin"
+        "[1,2]oxazolo[5,4-b]pyridin"
       ],
       "fusion_stems": [],
       "derivative_status": "production_safe"
@@ -1681,22 +1681,22 @@
       ],
       "derivative_status": "production_safe"
     },
-    "thiazolo[4,5-d]pyrimidine": {
+    "[1,3]thiazolo[4,5-d]pyrimidine": {
       "parent_stems": [
-        "thiazolo[4,5-d]pyrimidin"
+        "[1,3]thiazolo[4,5-d]pyrimidin"
       ],
       "substituent_stems": [
-        "thiazolo[4,5-d]pyrimidin"
+        "[1,3]thiazolo[4,5-d]pyrimidin"
       ],
       "fusion_stems": [],
       "derivative_status": "production_safe"
     },
-    "thiazolo[5,4-b]pyridine": {
+    "[1,3]thiazolo[5,4-b]pyridine": {
       "parent_stems": [
-        "thiazolo[5,4-b]pyridin"
+        "[1,3]thiazolo[5,4-b]pyridin"
       ],
       "substituent_stems": [
-        "thiazolo[5,4-b]pyridin"
+        "[1,3]thiazolo[5,4-b]pyridin"
       ],
       "fusion_stems": [],
       "derivative_status": "production_safe"

@@ -29363,12 +29363,12 @@
       }
     },
     {
-      "name": "isoxazolo[5,4-b]pyridine",
+      "name": "[1,2]oxazolo[5,4-b]pyridine",
       "pin": true,
       "priority": 332,
       "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "isoxazolo[5,4-b]pyridin",
+      "derivative_stem": "[1,2]oxazolo[5,4-b]pyridin",
       "template": {
         "atoms": [
           {
@@ -29986,12 +29986,12 @@
       }
     },
     {
-      "name": "thiazolo[5,4-b]pyridine",
+      "name": "[1,3]thiazolo[5,4-b]pyridine",
       "pin": true,
       "priority": 340,
       "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "thiazolo[5,4-b]pyridin",
+      "derivative_stem": "[1,3]thiazolo[5,4-b]pyridin",
       "template": {
         "atoms": [
           {
@@ -30142,12 +30142,12 @@
       }
     },
     {
-      "name": "thiazolo[4,5-d]pyrimidine",
+      "name": "[1,3]thiazolo[4,5-d]pyrimidine",
       "pin": true,
       "priority": 341,
       "aliases": [],
       "attached_prefix": null,
-      "derivative_stem": "thiazolo[4,5-d]pyrimidin",
+      "derivative_stem": "[1,3]thiazolo[4,5-d]pyrimidin",
       "template": {
         "atoms": [
           {

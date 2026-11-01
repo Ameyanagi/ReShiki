@@ -40,22 +40,6 @@ fn mark_parent_hydride_status(mol: &Molecule, parent: &RingParent) {
 
 fn mark_fusion_plan_status(mol: &Molecule, plan: &super::fusion::model::FusionParentPlan) {
     mark_retained_parent_status(mol, &plan.rendered_base_name);
-    // Citation pieces preserve component boundaries, including the separate
-    // multiplier before a repeated attached prefix.
-    if super::fusion::descriptor::render_fusion_name_parts(
-        &plan.ast,
-        super::fusion::registry::fusion_component_registry(),
-    )
-    .is_ok_and(|pieces| {
-        pieces.iter().any(|piece| {
-            matches!(
-                piece.as_str(),
-                "oxazolo" | "thiazolo" | "isoxazolo" | "isothiazolo"
-            )
-        })
-    }) {
-        mol.mark_name(NameStatus::NotPreferred(NameReason::FusionPrefix));
-    }
     if matches!(
         plan.numbering.selected_layout.kind,
         super::fusion::model::LayoutKind::OpsinEntry
@@ -66,30 +50,9 @@ fn mark_fusion_plan_status(mol: &Molecule, plan: &super::fusion::model::FusionPa
 }
 
 fn mark_retained_parent_status(mol: &Molecule, name: &str) {
-    if abbreviated_fusion_prefix(name) {
-        mol.mark_name(NameStatus::NotPreferred(NameReason::FusionPrefix));
-    }
     if matches!(name, "porphyrin" | "corrin" | "gonane") {
         mol.mark_name(NameStatus::Unverified(NameReason::UnauditedParent));
     }
-}
-
-fn abbreviated_fusion_prefix(name: &str) -> bool {
-    ["oxazolo", "thiazolo"].iter().any(|prefix| {
-        name.match_indices(prefix).any(|(index, _)| {
-            let before = &name[..index];
-            let before = before
-                .strip_suffix("iso")
-                .or_else(|| before.strip_suffix("is"))
-                .unwrap_or(before);
-            name[index + prefix.len()..].starts_with('[')
-                && !before.ends_with("[1,3]")
-                && !before
-                    .chars()
-                    .next_back()
-                    .is_some_and(|c| c.is_ascii_alphabetic())
-        })
-    })
 }
 
 /// Apply the retained-parent eligibility checks before sharing a retained
@@ -579,32 +542,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn fusion_prefix_status_respects_component_spelling() {
-        for (name, expected) in [
-            ("oxazolo[4,5-b]pyridine", true),
-            ("thiazolo[4,5-d]pyrimidine", true),
-            ("benzo[3,4-d]oxazolo[4,5-b]pyridine", true),
-            ("[1,3]oxazolo[4,5-b]pyridine", false),
-            ("[1,3]thiazolo[4,5-d]pyrimidine", false),
-            ("isoxazolo[5,4-b]pyridine", true),
-            ("isothiazolo[4,5-b]pyridine", true),
-            ("benzoxazolo[4,5-b]pyridine", false),
-        ] {
-            assert_eq!(abbreviated_fusion_prefix(name), expected, "{name}");
-        }
-    }
-
-    #[test]
     fn selected_retained_templates_keep_their_preference_status() {
         for (name, expected) in [
-            (
-                "thiazolo[5,4-b]pyridine",
-                NameStatus::NotPreferred(NameReason::FusionPrefix),
-            ),
-            (
-                "isoxazolo[5,4-b]pyridine",
-                NameStatus::NotPreferred(NameReason::FusionPrefix),
-            ),
+            ("[1,3]thiazolo[5,4-b]pyridine", NameStatus::Preferred),
+            ("[1,2]oxazolo[5,4-b]pyridine", NameStatus::Preferred),
             (
                 "porphyrin",
                 NameStatus::Unverified(NameReason::UnauditedParent),

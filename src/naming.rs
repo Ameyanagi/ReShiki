@@ -103,7 +103,6 @@ pub enum NameReason {
     FunctionalClass,
     HydrideParent,
     UnretainedParent,
-    FusionPrefix,
     DiamideLocants,
     OpsinFusionLayout,
     BridgedFusedParent,
@@ -130,9 +129,6 @@ impl NameReason {
             }
             Self::UnretainedParent => {
                 "Uses a substituted methanal or methanenitrile oxide, an N-substituted ethanediamide, or a formic acid, formyl halide or formamide substituted on carbon; preferred IUPAC names use N-substituted oxamide (P-66.1.1.1.2.1) or carbonic and carbamic acid derivatives such as carbonochloridic acid (P-65.1.8.1)."
-            }
-            Self::FusionPrefix => {
-                "Uses a fusion prefix such as oxazolo or isoxazolo; the preferred IUPAC name cites the heteroatom locants, as in [1,3]oxazolo or [1,2]oxazolo (P-25.3.2.2.2)."
             }
             Self::DiamideLocants => {
                 "Uses N and N' locants for a diamide; the preferred IUPAC name uses nitrogen locants such as N1 and N2 (P-66.1.1.3.1.1)."

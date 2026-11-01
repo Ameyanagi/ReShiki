@@ -1962,6 +1962,7 @@ pub fn render_fusion_name_parts(
                     let s = &self.specs[&m.occurrence_id];
                     s.multiplicative_prefix_style == "complex"
                         || s.template.family == "generated_hw_monocycle"
+                        || s.attached_prefix.starts_with('[')
                 });
                 let multiplier = if complex {
                     multipliers::complex_(members.len())

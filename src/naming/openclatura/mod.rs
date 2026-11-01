@@ -426,6 +426,12 @@ mod tests {
                 "OC(=O)c1ccc(C(=O)Nc2ccccc2)cc1",
                 "4-(phenylcarbamoyl)benzoic acid",
             ),
+            // Oxazole and thiazole fusion prefixes cite their Hantzsch-Widman
+            // locants (P-25.3.2.2.3).
+            ("O1C=NC2=NC=CC=C21", "[1,3]oxazolo[4,5-b]pyridine"),
+            ("c1cnc2scnc2c1", "[1,3]thiazolo[5,4-b]pyridine"),
+            ("c1cnc2oncc2c1", "[1,2]oxazolo[5,4-b]pyridine"),
+            ("c1cnc2sncc2c1", "[1,2]thiazolo[5,4-b]pyridine"),
         ] {
             let name = name_smiles(smiles).unwrap();
             assert_eq!(name.text, expected, "{smiles}");
@@ -493,13 +499,6 @@ mod tests {
                 "1-(N-methylformamido)formic acid",
                 R::UnretainedParent,
             ),
-            (
-                "O1C=NC2=NC=CC=C21",
-                "oxazolo[4,5-b]pyridine",
-                R::FusionPrefix,
-            ),
-            ("c1cnc2scnc2c1", "thiazolo[5,4-b]pyridine", R::FusionPrefix),
-            ("c1cnc2oncc2c1", "isoxazolo[5,4-b]pyridine", R::FusionPrefix),
             ("O=C(O)Cl", "hydroxyformyl chloride", R::UnretainedParent),
             ("O=C(OC)Cl", "methoxyformyl chloride", R::UnretainedParent),
             (
@@ -618,7 +617,7 @@ mod tests {
         let name = name_smiles(smiles).unwrap().text;
         assert_eq!(
             name,
-            "2-(thiazolo[4',5':1,2]benzo[3,4-d][1,3]oxazol-7-yl)acetic acid"
+            "2-([1,3]thiazolo[4',5':1,2]benzo[3,4-d][1,3]oxazol-7-yl)acetic acid"
         );
         let request = crate::naming::local::parse_request(&name).unwrap();
         let reply = crate::naming::worker::respond(&request).unwrap();
