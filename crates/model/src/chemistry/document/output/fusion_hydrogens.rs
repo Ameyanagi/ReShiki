@@ -48,7 +48,7 @@ pub(super) fn place(
         let original = at(&doc.atoms, hydrogen)?.position;
         let vector = Point::new(original.x - center.x, original.y - center.y);
         let (lo, hi) = at(&boxes, hydrogen)?.ok_or_else(|| invalid("Missing fusion H label"))?;
-        let mut best = (f32::INFINITY, f32::INFINITY, original);
+        let mut best = (false, f32::INFINITY, f32::INFINITY, original);
         for length in [1., 0.9, 0.8, 0.7, 0.6, 0.5] {
             for step in 0_i32..=16 {
                 let degrees = ((step + 1) / 2) * if step % 2 == 0 { -10 } else { 10 };
@@ -59,21 +59,30 @@ pub(super) fn place(
                 );
                 let (dx, dy) = (point.x - original.x, point.y - original.y);
                 let (low, high) = (lo.offset(dx, dy), hi.offset(dx, dy));
+                let mut clear = true;
                 let mut penalty = 0.;
-                for (other, (atom, bounds)) in
-                    doc.atoms.iter().zip(&boxes).take(hydrogen).enumerate()
-                {
+                // Reserve unplaced H labels too, so an earlier H leaves room.
+                for (other, (atom, bounds)) in doc.atoms.iter().zip(&boxes).enumerate() {
+                    if other == hydrogen {
+                        continue;
+                    }
                     let p = atom.position;
-                    penalty += (0.5 - (point.x - p.x).hypot(point.y - p.y) / bond_length)
-                        .max(0.)
-                        .powi(2);
+                    let separation = (point.x - p.x).hypot(point.y - p.y) / bond_length;
+                    clear &= separation >= 0.5 - 1e-6;
+                    penalty += (0.5 - separation).max(0.).powi(2);
                     if p.x >= low.x && p.x <= high.x && p.y >= low.y && p.y <= high.y {
+                        clear = false;
                         penalty += 1.;
                     }
                     if let Some((a, b)) = *bounds {
-                        let overlap = (high.x.min(b.x + pad) - low.x.max(a.x - pad)).max(0.)
-                            * (high.y.min(b.y + pad) - low.y.max(a.y - pad)).max(0.);
-                        penalty += overlap / bond_length.powi(2);
+                        // Labels need a visible gap, or neighbouring H read as "HH".
+                        let gap = bond_length * 0.25;
+                        let separation = (low.x - b.x)
+                            .max(a.x - high.x)
+                            .max(0.)
+                            .hypot((low.y - b.y).max(a.y - high.y).max(0.));
+                        clear &= separation >= gap;
+                        penalty += ((gap - separation) / bond_length).max(0.).powi(2);
                         if other != parent
                             && segment_hits_rect(
                                 center,
@@ -82,6 +91,7 @@ pub(super) fn place(
                                 b.offset(pad, pad),
                             )
                         {
+                            clear = false;
                             penalty += 1.;
                         }
                     }
@@ -111,6 +121,7 @@ pub(super) fn place(
                         low.offset(-bond_pad, -bond_pad),
                         high.offset(bond_pad, bond_pad),
                     ) {
+                        clear = false;
                         penalty += 1.;
                     }
                     if bond.a != parent && bond.b != parent {
@@ -127,26 +138,29 @@ pub(super) fn place(
                         penalty += ((pad + bond_pad - gap) / bond_length).max(0.).powi(2);
                     }
                 }
-                // Clearance wins, then stay near the natural exterior ray.
+                // Clear atoms, labels and bonds are mandatory when possible; otherwise
+                // keep the least-bad placement, then prefer the exterior ray.
                 // Shorten a crowded terminal bond before making a large turn.
                 let preference = (degrees as f32).abs() / 90. + (1. - length) * 0.2;
-                if penalty < best.0 - 1e-7
-                    || (penalty - best.0).abs() <= 1e-7 && preference < best.1
+                if clear && !best.0
+                    || clear == best.0
+                        && (penalty < best.1 - 1e-7
+                            || (penalty - best.1).abs() <= 1e-7 && preference < best.2)
                 {
-                    best = (penalty, preference, point);
+                    best = (clear, penalty, preference, point);
                 }
             }
         }
         doc.atoms
             .get_mut(hydrogen)
             .ok_or_else(|| invalid("Missing fusion H atom"))?
-            .position = best.2;
+            .position = best.3;
         let position = molecule
             .positions
             .get_mut(hydrogen)
             .ok_or_else(|| invalid("Missing fusion H position"))?;
-        position.x = f64::from(best.2.x) / WORLD_PER_DEPICT_UNIT;
-        position.y = -f64::from(best.2.y) / WORLD_PER_DEPICT_UNIT;
+        position.x = f64::from(best.3.x) / WORLD_PER_DEPICT_UNIT;
+        position.y = -f64::from(best.3.y) / WORLD_PER_DEPICT_UNIT;
     }
     Ok(())
 }

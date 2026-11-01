@@ -135,6 +135,7 @@ fn generated_fusion_hydrogens_are_optional_and_cleanup_does_not_add_them() -> an
 
 #[test]
 fn fusion_hydrogens_clear_atoms_labels_and_bonds_preserving_stereo() -> anyhow::Result<()> {
+    let label_gap = (1.5 * WORLD_PER_DEPICT_UNIT * 0.25) as f32;
     for (text, expected) in [
         (
             "C[C@]12CC[C@H]3[C@H]([C@@H]1CC[C@@H]2O)CCC4=CC(=O)CC[C@H]34",
@@ -156,18 +157,6 @@ fn fusion_hydrogens_clear_atoms_labels_and_bonds_preserving_stereo() -> anyhow::
         ("C1CC[C@H]2CCC[C@H]2C1", vec!["hash", "hash"]),
     ] {
         let doc = generated(text, DrawingOptions::default())?;
-        for (index, atom) in doc.atoms.iter().enumerate() {
-            for other in &doc.atoms[index + 1..] {
-                let distance =
-                    (atom.position.x - other.position.x).hypot(atom.position.y - other.position.y);
-                assert!(
-                    distance >= 21. - 1e-4,
-                    "{text}: atoms {} and {} at {distance}",
-                    atom.id,
-                    other.id
-                );
-            }
-        }
         let hydrogens = doc
             .atoms
             .iter()
@@ -207,9 +196,13 @@ fn fusion_hydrogens_clear_atoms_labels_and_bonds_preserving_stereo() -> anyhow::
                     other.id
                 );
                 for (a, b) in crate::scene::atom_label_ink_boxes(other, &doc) {
+                    let gap = (lo.x - b.x)
+                        .max(a.x - hi.x)
+                        .max(0.)
+                        .hypot((lo.y - b.y).max(a.y - hi.y).max(0.));
                     assert!(
-                        hi.x <= a.x || lo.x >= b.x || hi.y <= a.y || lo.y >= b.y,
-                        "{text}: H{} label overlaps label {}",
+                        gap >= label_gap - 1e-4,
+                        "{text}: H{} label gap to label {} is {gap}, expected at least {label_gap}",
                         hydrogen.id,
                         other.id
                     );
@@ -228,6 +221,18 @@ fn fusion_hydrogens_clear_atoms_labels_and_bonds_preserving_stereo() -> anyhow::
                     hydrogen.id,
                     bond.a,
                     bond.b
+                );
+            }
+        }
+        for (index, atom) in doc.atoms.iter().enumerate() {
+            for other in &doc.atoms[index + 1..] {
+                let distance =
+                    (atom.position.x - other.position.x).hypot(atom.position.y - other.position.y);
+                assert!(
+                    distance >= 21. - 1e-4,
+                    "{text}: atoms {} and {} at {distance}",
+                    atom.id,
+                    other.id
                 );
             }
         }
