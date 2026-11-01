@@ -1736,7 +1736,8 @@ fn chain_double_side(faces: &FaceIndex<'_>, bond: &Bond, a: Point, b: Point) -> 
             } else {
                 neighbor.a
             };
-            next != other
+            neighbor.is_covalent()
+                && next != other
                 && faces.doc().bond_visible(id, next)
                 && faces.atom(next).is_some_and(|atom| atom.element != "H")
         });
@@ -1767,7 +1768,7 @@ fn chain_double_side(faces: &FaceIndex<'_>, bond: &Bond, a: Point, b: Point) -> 
             } else {
                 neighbor.a
             };
-            if next == other || !faces.doc().bond_visible(id, next) {
+            if !neighbor.is_covalent() || next == other || !faces.doc().bond_visible(id, next) {
                 continue;
             }
             let Some(atom) = faces.atom(next) else {

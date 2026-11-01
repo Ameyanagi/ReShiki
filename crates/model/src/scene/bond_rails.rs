@@ -69,7 +69,10 @@ pub(crate) fn bond_rails(faces: &FaceIndex<'_>, bond: &Bond) -> Vec<BondRail> {
                                 } else {
                                     neighbor.a
                                 };
-                                if next == other || !faces.doc().bond_visible(id, next) {
+                                if !neighbor.is_covalent()
+                                    || next == other
+                                    || !faces.doc().bond_visible(id, next)
+                                {
                                     return None;
                                 }
                                 let atom = faces.atom(next)?;

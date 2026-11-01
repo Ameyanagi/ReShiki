@@ -244,6 +244,86 @@ fn acute_projected_face_clipping_can_only_shorten_and_can_omit_a_rail() {
     assert!(clip(first, last, &crossed, 0.5).is_none());
 }
 
+fn narrow_projected_ring() -> Document {
+    let mut doc = Document::default();
+    let ids: Vec<_> = [
+        Point::new(0., 0.),
+        Point::new(16., 0.),
+        Point::new(9., 40.),
+        Point::new(7., 40.),
+    ]
+    .into_iter()
+    .map(|position| {
+        let id = doc.add_atom("C", position);
+        doc.atom_mut(id).unwrap().depth = position.y;
+        id
+    })
+    .collect();
+    for (index, (a, b)) in closed_edges(&ids).enumerate() {
+        doc.add_bond(a, b, if index == 0 { 2 } else { 1 }, "plain");
+    }
+    doc
+}
+
+#[test]
+fn overlapping_projected_rail_setbacks_omit_reversed_and_tiny_forward_spans() {
+    let doc = narrow_projected_ring();
+    let bond = &doc.bonds[0];
+    let index = FaceIndex::new(&doc);
+    let face = index.face(bond).unwrap();
+    let inner = scene::bond_rails(&index, bond)[1];
+    let start = doc.atom(bond.a).unwrap().position;
+    let end = doc.atom(bond.b).unwrap().position;
+    let half_width = doc.drawing_style.line_width() / 2.;
+    assert!(inner.trim.0 + inner.trim.1 > start.distance(end));
+    let tiny_trim = (start.distance(end) - 0.05) / 2.;
+    for trim in [inner.trim, (tiny_trim, tiny_trim)] {
+        let d = inner.offset.0 * face.side;
+        let first = start.offset(face.inward.x * d + trim.0, face.inward.y * d);
+        let last = end.offset(face.inward.x * d - trim.1, face.inward.y * d);
+        // Both endpoints survive face clipping even when the setbacks cross.
+        assert_inside(&face, first, half_width);
+        assert_inside(&face, last, half_width);
+        assert!(
+            matches!(
+                index.rail_depth(bond, start, end, inner.offset.0, trim, half_width),
+                Some(None)
+            ),
+            "A projected rail with no drawable forward span must be omitted"
+        );
+    }
+    let visible_trim = (start.distance(end) - 0.2) / 2.;
+    assert!(matches!(
+        index.rail_depth(
+            bond,
+            start,
+            end,
+            inner.offset.0,
+            (visible_trim, visible_trim),
+            half_width,
+        ),
+        Some(Some(_))
+    ));
+}
+
+#[test]
+fn omitted_projected_inner_rail_does_not_cut_a_phantom_crossing_gap() {
+    let mut doc = narrow_projected_ring();
+    let a = doc.add_atom("C", Point::new(8., 7.));
+    let b = doc.add_atom("C", Point::new(8., 11.));
+    for id in [a, b] {
+        doc.atom_mut(id).unwrap().depth = -20.;
+    }
+    doc.add_bond(a, b, 1, "plain");
+    let rear = doc.bonds.len() - 1;
+    assert!(
+        crate::crossings::gaps(&doc)[rear].is_empty(),
+        "The omitted inner rail cut a rear bond beyond the backbone's ink"
+    );
+    doc.bonds[0].order = 1;
+    assert!(crate::crossings::gaps(&doc)[rear].is_empty());
+}
+
 #[test]
 fn dense_graphs_and_long_cycles_use_the_bounded_legacy_fallback() {
     let mut dense = Document::default();

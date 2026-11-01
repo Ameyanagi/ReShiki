@@ -124,6 +124,61 @@ fn explicit_terminal_hydrogens_do_not_count_as_alkene_substituents() {
 }
 
 #[test]
+fn non_covalent_neighbors_leave_terminal_carbonyls_centered() {
+    for (order, display) in [(0, "dotted"), (5, "plain")] {
+        let mut doc = chain(
+            &[(0., 0.), (42., 0.), (-21., -36.), (-21., 36.), (63., 36.)],
+            &[(0, 1, 2), (0, 2, 1), (0, 3, 1)],
+        );
+        doc.atoms[1].element = "O".into();
+        doc.atoms[4].element = "N".into();
+        doc.atoms[4].label_h = 1;
+        // An N-H···O interaction must not make acetone's oxygen substituted.
+        doc.add_bond(doc.atoms[4].id, doc.atoms[1].id, order, display);
+        assert_eq!(
+            effective_double_position(&doc, &doc.bonds[0]),
+            DoublePosition::Center,
+            "non-covalent order {order}"
+        );
+    }
+}
+
+#[test]
+fn non_covalent_neighbors_do_not_vote_on_chain_double_side() {
+    for (order, display) in [(0, "dotted"), (5, "plain")] {
+        let mut doc = chain(
+            &[(0., 0.), (42., 0.), (-21., -36.), (63., 36.), (21., 36.)],
+            &[(0, 1, 2), (0, 2, 1), (1, 3, 1)],
+        );
+        doc.atoms[4].element = "N".into();
+        doc.add_bond(doc.atoms[0].id, doc.atoms[4].id, order, display);
+        assert_eq!(
+            effective_double_position(&doc, &doc.bonds[0]),
+            DoublePosition::Left,
+            "non-covalent order {order}"
+        );
+    }
+}
+
+#[test]
+fn non_covalent_neighbors_do_not_trim_an_explicit_carbonyl_offset() {
+    for (order, display) in [(0, "dotted"), (5, "plain")] {
+        let mut doc = chain(&[(0., 0.), (42., 0.), (-21., 36.)], &[(0, 1, 2), (0, 2, 1)]);
+        doc.atoms[1].element = "O".into();
+        doc.bonds[0].double_position = DoublePosition::Right;
+        let donor = doc.add_atom("N", Point::new(63., 36.));
+        let expected = bond_rails(&FaceIndex::new(&doc), &doc.bonds[0])[1].trim;
+        assert_eq!(expected.1, 0.);
+        doc.add_bond(donor, doc.atoms[1].id, order, display);
+        assert_eq!(
+            bond_rails(&FaceIndex::new(&doc), &doc.bonds[0])[1].trim,
+            expected,
+            "non-covalent order {order}"
+        );
+    }
+}
+
+#[test]
 fn unsubstituted_ethene_stays_centered() {
     let doc = chain(&[(0., 0.), (42., 0.)], &[(0, 1, 2)]);
     assert_eq!(

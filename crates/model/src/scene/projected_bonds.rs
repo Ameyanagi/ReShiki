@@ -426,6 +426,12 @@ impl FaceIndex<'_> {
         if length <= 0.000001 || !length.is_finite() {
             return Some(None);
         }
+        if let Some((first, last)) = points {
+            let (ux, uy) = (axis.x / length.sqrt(), axis.y / length.sqrt());
+            if (last.x - first.x) * ux + (last.y - first.y) * uy <= 0.1 {
+                return Some(None);
+            }
+        }
         let lift = |p: Point| {
             let delta = minus(p, xy(face.origin));
             let t = (delta.x * axis.x + delta.y * axis.y) / length;
