@@ -16,7 +16,7 @@ The initial small-molecule selection used OPSIN 2.9.0 at commit
 b91b610af5ab07560fedb20730d7aef46bb2bca0; provenance.json retains that pin.
 Biochemical reference graphs come from the bundled template and Haworth sugar
 catalogs. All aliases are checked against the current bundled OPSIN resources.
-The catalog contains 70 independently specified chemical identities and 82
+The catalog contains 85 independently specified chemical identities and 97
 curated names. Separate strict OPSIN default graphs for L-histidine, L-arginine
 and cytosine retain those plain aliases, while the frozen template tautomers
 retain their own explicit aliases. No tautomer equivalence is inferred.

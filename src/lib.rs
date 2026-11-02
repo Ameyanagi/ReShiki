@@ -21,7 +21,7 @@ static ALLOCATOR: allocation_metrics::MeasuredAllocator<std::alloc::System> =
 
 pub use reshiki_model::{
     abbreviations, aromatic, arrow_anchors, arrow_labels, arrows, atom_labels, atom_text,
-    attachments, bonds, canvas_theme, chains, color_contrast, common_groups, crossings,
+    attachments, bonds, canvas_theme, chains, color_contrast, common_groups, crossings, depiction,
     depth_appearance, document, editing, erasing, generic, graphics, grouping, haworth, highlights,
     ionic, joining, ligands, models3d, molecule_names, name_markup, pages, palette, pictures,
     projection, reaction_mapping, reactions, rear_opacity, ring_arcs, ring_fills, rings, scene,

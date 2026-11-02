@@ -181,7 +181,7 @@ value contains name, preferred, status, reason, detail, alternatives and aliases
   reason         The snake_case naming-rule reason, or null for preferred.
   detail         The status detail sentence.
   aliases        Curated names matching the exact isomeric graph, or [].
-  alternatives   Generated names independently reconstructed to the exact graph, or [].
+  alternatives   Other verified names, each with name, status and reason.
 ```
 
 ## reshiki --cli info

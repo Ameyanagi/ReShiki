@@ -6,6 +6,33 @@ use std::{
     sync::{Arc, LazyLock, Mutex, PoisonError, RwLock, RwLockReadGuard},
 };
 
+/// Display notation for hydrogen-2 and hydrogen-3; atom isotopes stay numeric.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HydrogenIsotopes {
+    /// Use D/T unless another labelled nuclide occurs in the molecule.
+    #[default]
+    Auto,
+    Letters,
+    MassNumbers,
+}
+impl HydrogenIsotopes {
+    pub const ALL: [Self; 3] = [Self::Auto, Self::Letters, Self::MassNumbers];
+
+    pub fn is_auto(&self) -> bool {
+        *self == Self::Auto
+    }
+}
+impl std::fmt::Display for HydrogenIsotopes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Auto => "Auto",
+            Self::Letters => "D, T",
+            Self::MassNumbers => "²H, ³H",
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DrawingStyle {
@@ -34,6 +61,9 @@ pub struct DrawingStyle {
     /// Print radical-ion charges first, as commonly used in mass spectrometry.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub charge_before_radical: bool,
+    /// Choose hydrogen isotope labels without changing chemical identity.
+    #[serde(default, skip_serializing_if = "HydrogenIsotopes::is_auto")]
+    pub hydrogen_isotopes: HydrogenIsotopes,
 }
 fn yes() -> bool {
     true
@@ -68,6 +98,7 @@ pub static DEFAULT: LazyLock<DrawingStyle> = LazyLock::new(|| {
             wavy_unknown_alkenes: false,
             png_dpi: 1200,
             charge_before_radical: false,
+            hydrogen_isotopes: HydrogenIsotopes::Auto,
         }
     })
 });

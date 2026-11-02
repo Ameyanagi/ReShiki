@@ -165,18 +165,24 @@ impl App {
                 }
             } else {
                 let id = self.tab.doc.next_id();
-                self.tab.doc.graphics.push(
-                    Graphic::dragged(
-                        id,
-                        kind,
-                        start,
-                        end,
-                        self.tab.graphic_style.clone(),
-                        self.tab.bracket_sides,
-                        constrain,
-                    )
-                    .with_arc(self.tab.arc_editor.geometry),
-                );
+                let mut graphic = Graphic::dragged(
+                    id,
+                    kind,
+                    start,
+                    end,
+                    self.tab.graphic_style.clone(),
+                    self.tab.bracket_sides,
+                    constrain,
+                )
+                .with_arc(self.tab.arc_editor.geometry);
+                if kind.brackets() {
+                    graphic.superscript = self
+                        .tab
+                        .bracket_superscript
+                        .text(&self.tab.bracket_superscript_input)
+                        .map(str::to_owned);
+                }
+                self.tab.doc.graphics.push(graphic);
                 self.tab.selected = vec![id];
             }
             if !matches!(kind, reshiki::graphics::GraphicKind::Symbol(_)) {

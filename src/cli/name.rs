@@ -41,7 +41,14 @@ pub(crate) async fn run(
                 "reason": assessment.get("reason"),
                 "detail": status.detail(),
                 "aliases": record.synonyms.iter().map(|alias| &alias.name).collect::<Vec<_>>(),
-                "alternatives": record.alternative_names,
+                "alternatives": record.alternatives.iter().map(|alternative| {
+                    let assessment = json!(alternative.status);
+                    json!({
+                        "name": alternative.name,
+                        "status": assessment.get("status"),
+                        "reason": assessment.get("reason"),
+                    })
+                }).collect::<Vec<_>>(),
             }),
         )]);
         writeln!(out, "{}", labelled(value)).map_err(CliError::Stdout)

@@ -4,6 +4,63 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 #[tokio::test]
+async fn analysis_preserves_display_formula_and_element_mass_percent() {
+    let engine = LocalEngine::in_process();
+    for (smiles, formula, display) in [
+        ("CCO", "C2H6O", "C₂H₆O"),
+        ("C[13CH2]O", "C2H6O", "C¹³CH₆O"),
+        ("[2H]C([2H])([2H])CO", "C2H6O", "C₂H₃D₃O"),
+        ("[2H]C([2H])([2H])O[2H]", "CH4O", "CD₄O"),
+        ("[18OH2]", "H2O", "H₂¹⁸O"),
+        ("[13CH4]", "CH4", "¹³CH₄"),
+        ("[13CH3][2H]", "CH4", "¹³CH₃²H"),
+        ("[NH4+]", "H4N+", "H₄N⁺"),
+        ("[O-]S(=O)(=O)[O-]", "O4S-2", "O₄S²⁻"),
+    ] {
+        let response = engine
+            .request(Request::import_smiles(smiles))
+            .await
+            .unwrap();
+        let analysis = serde_json::to_value(response.analysis.unwrap()).unwrap();
+        assert_eq!(analysis["formula"], formula);
+        assert_eq!(analysis["display_formula"], display);
+        let fractions = analysis["mass_percent"].as_array().unwrap();
+        let total: f64 = fractions
+            .iter()
+            .map(|entry| entry[1].as_f64().unwrap())
+            .sum();
+        assert!((total - 100.).abs() < 1e-12);
+
+        let mut legacy = analysis;
+        legacy.as_object_mut().unwrap().remove("display_formula");
+        legacy.as_object_mut().unwrap().remove("mass_percent");
+        let legacy: Analysis = serde_json::from_value(legacy).unwrap();
+        let legacy = serde_json::to_value(legacy).unwrap();
+        assert_eq!(legacy["display_formula"], "");
+        assert_eq!(legacy["mass_percent"], serde_json::json!([]));
+    }
+}
+
+#[tokio::test]
+async fn pertechnetate_uses_iupac_technetium_average() {
+    let response = LocalEngine::in_process()
+        .request(Request::import_smiles("[O-][Tc](=O)(=O)=O"))
+        .await
+        .unwrap();
+    let analysis = response.analysis.unwrap();
+    assert_eq!(analysis.formula, "O4Tc-");
+    assert_eq!(analysis.display_formula, "O₄Tc⁻");
+    assert!((analysis.mass - 160.996).abs() < 1e-12);
+    let technetium = analysis
+        .mass_percent
+        .iter()
+        .find(|(symbol, _)| symbol == "Tc")
+        .unwrap()
+        .1;
+    assert!((technetium - 97. / analysis.mass * 100.).abs() < 1e-12);
+}
+
+#[tokio::test]
 async fn embedded_engine_preserves_identifiers_across_formats_and_cleanup() {
     let engine = LocalEngine::in_process();
     let expected = "InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3";

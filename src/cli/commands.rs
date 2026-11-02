@@ -157,7 +157,7 @@ const JSON: OptionSpec = OptionSpec {
 };
 
 const NAME_JSON: OptionSpec = OptionSpec {
-    help: "Print the name and its status as one JSON line.",
+    help: "Print the name, its status and verified alternatives as one JSON line.",
     ..JSON
 };
 
@@ -627,7 +627,7 @@ value contains name, preferred, status, reason, detail, alternatives and aliases
   reason         The snake_case naming-rule reason, or null for preferred.
   detail         The status detail sentence.
   aliases        Curated names matching the exact isomeric graph, or [].
-  alternatives   Generated names independently reconstructed to the exact graph, or [].
+  alternatives   Other verified names, each with name, status and reason.
 ";
     format!("Usage: {}\n\n{body}", NAME.usage)
 }

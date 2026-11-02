@@ -5,8 +5,8 @@ Generated names gain an alternative phane name for simple cyclophanes, such as
 before. Each phane name must parse back to the same structure. Because the
 preferred IUPAC name of a cyclophane is a phane name (P-52.2.5), an ordinary
 name shown next to one is marked not preferred. The curated alias catalog adds
-the 20 amino acids (such as `L-alanine`), nucleobases and ten sugar anomers
-(such as `β-D-glucopyranose`), with exact stereo and tautomer matching.
+the 21 amino-acid templates (such as `L-alanine`), nucleobases and 24 sugar
+anomers (such as `β-D-glucopyranose`), with exact stereo and tautomer matching.
 Molecular properties gains a **Classes** row: chips such as lactam, amide and
 ester, each with a one-line definition.
 ([issue #860](https://github.com/Ameyanagi/ReShiki/issues/860),

@@ -1,9 +1,9 @@
 {
   "catalog": "ReShiki retained aliases 1",
   "schema": 1,
-  "entry_count": 70,
-  "alias_count": 82,
-  "data_sha256": "8db090eaff160c08bb02aa5234bcf990f3fccebf8db1259841c2ed7396318243",
+  "entry_count": 85,
+  "alias_count": 97,
+  "data_sha256": "f49943ea10c21c8d49c4b743acbbe84a0903117ddc2d934b7c4b16dc1aec7769",
   "opsin": {
     "version": "3.0-SNAPSHOT",
     "commit": "42e87ac6efb1bd9f578986f5ea7ee1faa8e93c91",
@@ -113,11 +113,11 @@
   "reference_graphs": [
     {
       "path": "assets/template-catalog.json",
-      "sha256": "eb7ad684eb754bdd4a41d5281d0b1f46c86f568d85e99481edff251f1bba4744"
+      "sha256": "eb3b61b2f6dd3bcec156f7d6e6891615b7ab0aea0205d2989177032ccaa25117"
     },
     {
       "path": "assets/haworth-sugars.json",
-      "sha256": "e48b6b997f4b52bdee24ca9cba41ffed63b4cc49f363830917f7e90ec1ce1016"
+      "sha256": "d3af187a3d466f9d5891260c117f0e1b4d69f2ed1d9449d7adac5906349d25f3"
     }
   ]
 }

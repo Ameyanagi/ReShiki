@@ -4,9 +4,12 @@ use crate::{
     document::{Document, Point},
     engine::{Request, TextMetrics},
     graphics::PathCommand,
+    style::HydrogenIsotopes,
     typography::{TextFormat, TextStyle},
 };
 use std::collections::HashMap;
+#[cfg(test)]
+mod bracket_superscript_tests;
 mod clipboard;
 mod generic;
 mod groups;
@@ -273,8 +276,10 @@ fn write_impl(
         // Bold double bonds have an ordinary two-rail CDXML representation;
         // unlike a bold single bond, it cannot imply tetrahedral stereo.
         let bold_double = bond.order == 2 && bond.display == "bold";
-        // Dative projection is an explicit drawing display; B/E still records donor→metal.
-        let coordination_projection = bond.order == 5;
+        // Dative B/E records donor→metal. Covalent frame wedges narrow at a
+        // metal and carry projection appearance without atom stereochemistry.
+        let coordination_projection =
+            bond.order == 5 || crate::coordination_geometry::frame_bond(document, bond);
         bond.projection
             && bond.display != "plain"
             && !haworth.contains(&i)
@@ -516,6 +521,13 @@ impl<'a> Writer<'a> {
         ] {
             if value != default {
                 tree.set(0, attribute, if value { "yes" } else { "no" })?;
+            }
+        }
+        match style.hydrogen_isotopes {
+            HydrogenIsotopes::Auto => {}
+            HydrogenIsotopes::Letters => tree.set(0, "ReShikiHydrogenIsotopes", "letters")?,
+            HydrogenIsotopes::MassNumbers => {
+                tree.set(0, "ReShikiHydrogenIsotopes", "mass_numbers")?;
             }
         }
         let fonts = tree.add(Some(0), "fonttable", [])?;

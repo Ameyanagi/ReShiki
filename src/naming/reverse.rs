@@ -1,6 +1,6 @@
 #[cfg(not(target_arch = "wasm32"))]
 use super::{Cancel, client, client::CancelOnDrop};
-use super::{Error, Identity, NameStatus, Provenance, Record, openclatura, worker};
+use super::{Error, Identity, Provenance, Record, openclatura, worker};
 
 #[cfg(not(target_arch = "wasm32"))]
 static SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
@@ -64,7 +64,7 @@ pub(super) fn parse_response(bytes: &[u8], smiles: &str) -> Result<openclatura::
         .map_err(Error::Worker)?;
     for alternative in &name.alternatives {
         worker::check_name(
-            alternative,
+            &alternative.name,
             "Local name generation returned an invalid alternative",
         )
         .map_err(Error::Worker)?;
@@ -72,10 +72,74 @@ pub(super) fn parse_response(bytes: &[u8], smiles: &str) -> Result<openclatura::
     Ok(name)
 }
 
+/// A name is returned only after the pinned local decoder exactly reconstructs
+/// the native graph. Decoder equivalence is separate from the rule tests.
+#[cfg(not(target_arch = "wasm32"))]
+pub async fn generate_name(identity: &Identity, cancel: Cancel) -> Result<Record, Error> {
+    let expected = super::canonical_smiles(&identity.smiles).map_err(Error::Rejected)?;
+    let stop = CancelOnDrop(cancel.clone());
+    let input = identity.naming_smiles.as_deref().unwrap_or(&expected);
+    let candidate = client::on_slot(
+        input,
+        &cancel,
+        &SLOTS,
+        "Local name generation is unavailable",
+        "Local name generation was cancelled",
+        "Local naming worker failed",
+        generate_worker,
+    )
+    .await?;
+    let record = reconstruct(identity, expected, candidate, &cancel).await;
+    drop(stop);
+    record
+}
+
+/// Check every name independently, then apply the Ξ/ξ preference.
+/// The browser uses the same selection and reconstruction gate.
+pub(super) async fn reconstruct(
+    identity: &Identity,
+    expected: String,
+    mut candidate: openclatura::Name,
+    cancel: &super::Cancel,
+) -> Result<Record, Error> {
+    let primary = reconstruct_name(&candidate.text, cancel).await?;
+    let mut alternatives = vec![];
+    for alternative in std::mem::take(&mut candidate.alternatives) {
+        match reconstruct_name(&alternative.name, cancel).await {
+            Ok(parsed) if super::verify_identity(&expected, &parsed.smiles).is_ok() => {
+                alternatives.push(alternative);
+            }
+            Err(error @ Error::Cancelled(_)) => return Err(error),
+            _ => {}
+        }
+    }
+    // Only a verified Ξ/ξ name can replace the primary name, which has the
+    // same identity as `primary`.
+    if identity.write_unknown_stereo
+        && let Some(alternative) = alternatives
+            .iter_mut()
+            .find(|alternative| alternative.name.contains(['Ξ', 'ξ']))
+    {
+        std::mem::swap(&mut candidate.text, &mut alternative.name);
+        std::mem::swap(&mut candidate.status, &mut alternative.status);
+        candidate.omitted_stereo.clear();
+        candidate.omitted_units = 0;
+    }
+    let mut record = generated_record(identity, expected, candidate, &primary)?;
+    record.alternatives = alternatives;
+    Ok(record)
+}
+
 async fn reconstruct_name(name: &str, cancel: &super::Cancel) -> Result<Record, Error> {
+    if cancel.stopped() {
+        return Err(Error::Cancelled(
+            "Local name generation was cancelled".into(),
+        ));
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    let decoder = super::Cancel::default();
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let decoder = super::Cancel::default();
         tokio::select! {
             result = super::resolve_name(name, decoder.clone()) => result,
             () = cancel.cancelled() => {
@@ -85,65 +149,9 @@ async fn reconstruct_name(name: &str, cancel: &super::Cancel) -> Result<Record, 
         }
     }
     #[cfg(target_arch = "wasm32")]
-    super::resolve_name(name, cancel.clone())
-        .await
-        .map_err(|error| match error {
-            Error::Cancelled(_) => Error::Cancelled("Local name generation was cancelled".into()),
-            error => error,
-        })
-}
-
-pub(super) async fn verified_alternatives(
-    expected: &str,
-    alternatives: &[String],
-    cancel: &super::Cancel,
-) -> Result<Vec<String>, Error> {
-    let mut verified = vec![];
-    for name in alternatives {
-        match reconstruct_name(name, cancel).await {
-            Ok(record) if super::verify_identity(expected, &record.smiles).is_ok() => {
-                verified.push(name.clone());
-            }
-            Err(error @ Error::Cancelled(_)) => return Err(error),
-            _ => {}
-        }
+    {
+        super::resolve_name(name, cancel.clone()).await
     }
-    Ok(verified)
-}
-
-/// A name is returned only after the pinned local decoder exactly reconstructs
-/// the native graph. Decoder equivalence is separate from the rule tests.
-#[cfg(not(target_arch = "wasm32"))]
-pub async fn generate_name(identity: &Identity, cancel: Cancel) -> Result<Record, Error> {
-    let expected = super::canonical_smiles(&identity.smiles).map_err(Error::Rejected)?;
-    let stop = CancelOnDrop(cancel.clone());
-    let candidate = client::on_slot(
-        &expected,
-        &cancel,
-        &SLOTS,
-        "Local name generation is unavailable",
-        "Local name generation was cancelled",
-        "Local naming worker failed",
-        generate_worker,
-    )
-    .await?;
-    if cancel.stopped() {
-        return Err(Error::Cancelled(
-            "Local name generation was cancelled".into(),
-        ));
-    }
-    let reconstructed = reconstruct_name(&candidate.text, &cancel).await?;
-    let alternatives = verified_alternatives(&expected, &candidate.alternatives, &cancel).await?;
-    let record = generated_record(
-        identity,
-        expected,
-        candidate.text,
-        candidate.status,
-        alternatives,
-        &reconstructed,
-    );
-    drop(stop);
-    record
 }
 
 /// The generated name's record, once the parser's `reconstructed` record of
@@ -151,9 +159,7 @@ pub async fn generate_name(identity: &Identity, cancel: Cancel) -> Result<Record
 pub(super) fn generated_record(
     identity: &Identity,
     expected: String,
-    candidate: String,
-    status: NameStatus,
-    alternative_names: Vec<String>,
+    candidate: openclatura::Name,
     reconstructed: &Record,
 ) -> Result<Record, Error> {
     super::verify_identity(&expected, &reconstructed.smiles)
@@ -164,10 +170,12 @@ pub(super) fn generated_record(
         openclatura::PROFILE
     ));
     Ok(Record {
-        title: candidate.clone(),
-        systematic_name: Some(candidate),
-        name_status: Some(status),
-        alternative_names,
+        title: candidate.text.clone(),
+        systematic_name: Some(candidate.text),
+        name_status: Some(candidate.status),
+        alternatives: vec![],
+        omitted_stereo: candidate.omitted_stereo,
+        omitted_units: candidate.omitted_units,
         smiles: expected.clone(),
         canonical_smiles: expected,
         synonyms: super::aliases_for_smiles(&reconstructed.smiles).map_err(Error::Worker)?,

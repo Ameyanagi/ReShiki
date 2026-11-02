@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    atom_labels::{Carbons, HydrogenPosition, Owner, stereo_text},
+    atom_labels::{Carbons, HydrogenIsotopeLabels, HydrogenPosition, Owner, stereo_text},
     typography::{Script, TextAlign, TextSpan},
 };
 
@@ -91,10 +91,16 @@ impl Writer<'_> {
     pub(super) fn atoms(&mut self, graph: &crate::chemistry::graph::Graph) -> Result<()> {
         let doc = self.doc;
         let valences = graph.provisional_valences().map_err(invalid)?;
+        let isotope_labels = HydrogenIsotopeLabels::new(doc);
         let mut degrees: HashMap<u64, usize> = HashMap::new();
+        // Metals whose wedges/hashes all show frame projection.
+        let mut frame_metals: HashMap<u64, bool> = HashMap::new();
         for b in &doc.bonds {
             for id in [b.a, b.b] {
                 *degrees.entry(id).or_default() += 1;
+            }
+            if crate::coordination_geometry::frame_bond(doc, b) {
+                *frame_metals.entry(b.a).or_insert(true) &= b.projection;
             }
         }
         for (i, a) in doc.atoms.iter().enumerate() {
@@ -124,6 +130,11 @@ impl Writer<'_> {
             )?;
             self.atom_nodes.push(node);
             self.objects.push((a.id, node));
+            // ChemDraw's "not a stereocentre" tells import that this metal's
+            // wedges are frame projection, not tetrahedral stereo.
+            if frame_metals.get(&a.id) == Some(&true) {
+                self.tree.set(node, "AS", "N")?;
+            }
             if let Some(color) = a.display.highlight {
                 let color = self.color(color)?;
                 self.tree.set(node, "highlightColor", color)?;
@@ -142,6 +153,7 @@ impl Writer<'_> {
                     "Radical",
                     match a.radical_electrons {
                         1 => "Doublet",
+                        2 if a.singlet => "Singlet",
                         2 => "Triplet",
                         _ => return Err(invalid("Unsupported radical count")),
                     },
@@ -278,12 +290,13 @@ impl Writer<'_> {
                 .unwrap_or_else(|| doc.drawing_style.text_style());
             s.script = Script::Normal;
             s.formula = false;
-            let isotope = if a.isotope != 0 {
+            let isotope_symbol = isotope_labels.symbol(a);
+            let isotope = if a.isotope != 0 && isotope_symbol.is_none() {
                 a.isotope.to_string()
             } else {
                 String::new()
             };
-            let mut label = format!("{isotope}{}", a.element);
+            let mut label = format!("{isotope}{}", isotope_symbol.unwrap_or(a.element.as_str()));
             let mut spans = Vec::new();
             if !isotope.is_empty() {
                 spans.push(TextSpan {

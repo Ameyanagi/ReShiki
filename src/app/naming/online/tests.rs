@@ -87,6 +87,9 @@ async fn online_result_requires_insert_and_keeps_identity_caption_and_history() 
     let record = Record {
         title: "olanzapine".into(),
         name_status: None,
+        alternatives: vec![],
+        omitted_stereo: vec![],
+        omitted_units: 0,
         systematic_name: Some(
             "2-methyl-4-(4-methylpiperazin-1-yl)-10H-thieno[2,3-b][1,5]benzodiazepine".into(),
         ),
@@ -167,6 +170,9 @@ async fn stale_online_success_cannot_install_a_preview_or_change_history() -> Re
         let record = Record {
             title: "ethanol".into(),
             name_status: None,
+            alternatives: vec![],
+            omitted_stereo: vec![],
+            omitted_units: 0,
             provenance: naming::Provenance::PubChem { cid: 702 },
             ..super::super::test_support::record("CCO")
         };

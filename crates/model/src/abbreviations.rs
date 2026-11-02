@@ -313,9 +313,9 @@ impl Abbreviation {
 /// Substituent nicknames inside a label. They never take the bond, even when
 /// they spell an element symbol (Ac, Pr, Ts, Ar).
 pub const NICKNAMES: &[&str] = &[
-    "Ac", "All", "Ar", "Bn", "Boc", "Bu", "Bz", "Cbz", "Cy", "Et", "Fmoc", "iBu", "iPr", "Me",
-    "MEM", "Mes", "MOM", "Ms", "nBu", "nPr", "Ns", "Ph", "Piv", "PMB", "Pr", "sBu", "SEM", "TBDPS",
-    "TBS", "tBu", "TES", "Tf", "THP", "TIPS", "TMS", "Tol", "Tr", "Ts",
+    "Ac", "All", "Ar", "Bn", "Boc", "Bu", "But", "Bz", "Bzl", "Cbz", "Cy", "Et", "Fmoc", "iBu",
+    "iPr", "Me", "MEM", "Mes", "MOM", "Ms", "nBu", "nPr", "Ns", "Ph", "Piv", "PMB", "Pr", "sBu",
+    "SEM", "TBDPS", "TBS", "tBu", "TES", "Tf", "THP", "TIPS", "TMS", "Tol", "Tr", "Ts",
 ];
 
 /// Guidance for naming a contracted fragment without conflicting with element

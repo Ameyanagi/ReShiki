@@ -2,6 +2,30 @@ use super::*;
 use iced::widget::canvas::Program;
 
 #[test]
+fn bracket_superscript_hit_uses_the_documents_text_size() {
+    let mut doc = Document::default();
+    doc.drawing_style.font_size_pt = 60.;
+    let mut bracket = reshiki::graphics::Graphic::dragged(
+        1,
+        reshiki::graphics::GraphicKind::Brackets,
+        World::default(),
+        World::new(80., 60.),
+        Default::default(),
+        BracketSides::Both,
+        false,
+    );
+    bracket.superscript = Some("XXXXX".into());
+    let label = bracket
+        .superscript_label(&doc.drawing_style.text_style())
+        .unwrap();
+    let (lo, hi) = label.ink_boxes().last().copied().unwrap();
+    let point = lo.lerp(hi, 0.5);
+    assert!(!bracket.hit(point, 0.));
+    doc.graphics.push(bracket);
+    assert_eq!(hit::hit_object(&doc, point, 0.), Some(1));
+}
+
+#[test]
 fn unbounded_canvas_edges_accept_input_with_or_without_crosshair() -> Result<(), String> {
     let doc = Document::default();
     let bounds = Rectangle::new(Point::new(20., 50.), iced::Size::new(400., 300.));
@@ -1106,6 +1130,7 @@ pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_
             attach: true,
             snap: true,
             bracket_sides: BracketSides::Both,
+            superscript: None,
             revision: 0,
         },
         bond_drawing: Default::default(),

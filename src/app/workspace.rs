@@ -304,6 +304,10 @@ impl App {
                 attach: self.tab.attach_symbols,
                 snap: self.tab.snap_orbitals,
                 bracket_sides: self.tab.bracket_sides,
+                superscript: self
+                    .tab
+                    .bracket_superscript
+                    .text(&self.tab.bracket_superscript_input),
                 revision: self.tab.revision,
             },
             arrows: ArrowOptions {
@@ -2457,6 +2461,15 @@ impl App {
                         .size(14)
                         .text_size(12),
                     "Snap dragged objects to other objects' edges, centers and equal gaps · Hold Option/Alt to move freely",
+                    tooltip::Position::Top,
+                ),
+                hover_hint(
+                    checkbox(self.appearance.two_decimal_weight)
+                        .label("2-decimal MW")
+                        .on_toggle(|on| Message::View(super::view_settings::Action::TwoDecimalWeight(on)))
+                        .size(14)
+                        .text_size(12),
+                    "Show molecular weight with 2 decimal places instead of 3; exact mass keeps 5 decimal places",
                     tooltip::Position::Top,
                 ),
                 hover_hint(

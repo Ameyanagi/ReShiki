@@ -61,6 +61,16 @@ fn equal_with_source(
 ) -> anyhow::Result<()> {
     let mut actual = serde_json::to_value(actual)?;
     let mut expected = serde_json::to_value(expected)?;
+    // The Python reference has no display formula or mass percentages.
+    for side in [&mut actual, &mut expected] {
+        if let Some(analysis) = side
+            .get_mut("analysis")
+            .and_then(|value| value.as_object_mut())
+        {
+            analysis.remove("display_formula");
+            analysis.remove("mass_percent");
+        }
+    }
     let mut failures = Vec::new();
     if let Err(error) =
         reference_presentation::compare_export_with_source(&actual, &mut expected, source_document)

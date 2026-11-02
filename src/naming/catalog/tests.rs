@@ -41,13 +41,13 @@ fn catalog_identity_is_order_invariant_without_relaxing_stereo_charge_or_isotope
 fn every_curated_alias_has_pinned_evidence_and_decodes_to_its_independent_graph()
 -> Result<(), String> {
     let data: Catalog = serde_json::from_str(DATA).unwrap();
-    assert_eq!(data.entries.len(), 70);
+    assert_eq!(data.entries.len(), 85);
     assert_eq!(
         data.entries
             .iter()
             .map(|entry| entry.aliases.len())
             .sum::<usize>(),
-        82
+        97
     );
     let parser = opsin::Parser::new().map_err(|error| error.to_string())?;
     for entry in &data.entries {
@@ -242,8 +242,8 @@ fn biochemical_aliases_match_the_exact_template_and_haworth_asset_graphs() -> Re
         .iter()
         .filter(|entry| entry["group"] == "Amino acids" || entry["group"] == "Nucleobases")
         .collect();
-    assert_eq!(templates.len(), 25);
-    assert_eq!(sugars.as_array().unwrap().len(), 10);
+    assert_eq!(templates.len(), 26);
+    assert_eq!(sugars.as_array().unwrap().len(), 24);
     for entry in templates.into_iter().chain(sugars.as_array().unwrap()) {
         let asset_name = entry["name"].as_str().unwrap();
         let alias = match asset_name {
@@ -252,7 +252,8 @@ fn biochemical_aliases_match_the_exact_template_and_haworth_asset_graphs() -> Re
             "Cytosine" => "3H-cytosine",
             "L-Histidine" => "3-(1H-imidazol-5-yl)-L-alanine",
             "L-Arginine" => "N(5)-(diaminomethylidene)-L-ornithine",
-            _ => asset_name,
+            // Drop a trailing abbreviation such as " (GlcNAc)".
+            _ => asset_name.split(" (").next().unwrap(),
         };
         let smiles = entry["tautomer_smiles"]
             .as_str()

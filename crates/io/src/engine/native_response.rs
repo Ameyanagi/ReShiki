@@ -481,6 +481,8 @@ fn complete_analysis(
     Ok(Analysis {
         smiles,
         formula: properties.formula,
+        display_formula: properties.display_formula,
+        mass_percent: properties.mass_percent,
         mass: properties.mass,
         exact_mass: properties.exact_mass,
         logp: descriptors.logp,

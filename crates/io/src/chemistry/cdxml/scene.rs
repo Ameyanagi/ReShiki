@@ -107,6 +107,8 @@ pub struct CdxmlScene {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub attachments: Vec<crate::attachments::Attachment>,
     pub molecule: Molecule,
+    #[serde(skip)]
+    pub singlets: Vec<bool>,
     pub conformer_3d: Option<bool>,
     pub base: NativeScene,
     /// Object identities remain ordinals in PreparedCdxml::expanded_xml, even
@@ -942,6 +944,12 @@ fn scene_result(
         generic_labels,
         attachments: prepared.attachments.clone(),
         molecule: prepared.molecule.clone(),
+        singlets: prepared
+            .fragments
+            .iter()
+            .flat_map(|part| &part.singlets)
+            .copied()
+            .collect(),
         conformer_3d: prepared.conformer_3d,
         base,
         objects: objects.entries,

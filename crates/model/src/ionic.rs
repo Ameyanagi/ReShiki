@@ -4,6 +4,56 @@
 use crate::document::{Document, Point};
 use std::collections::{HashMap, HashSet};
 
+/// The atoms and net-charge annotation of exactly one complete selected
+/// chemical component. Selected captions and other drawing objects are ignored.
+pub fn bracket_charge(
+    document: &Document,
+    selection: &[u64],
+) -> Result<(Vec<u64>, String), String> {
+    let atoms: Vec<_> = document
+        .expand_groups(selection)
+        .into_iter()
+        .filter(|id| document.atom(*id).is_some())
+        .collect();
+    let reason = "Select exactly one complete connected component to bracket an ion";
+    let Some(&start) = atoms.first() else {
+        return Err(reason.into());
+    };
+    let mut adjacent = HashMap::<u64, Vec<u64>>::new();
+    for bond in &document.bonds {
+        adjacent.entry(bond.a).or_default().push(bond.b);
+        adjacent.entry(bond.b).or_default().push(bond.a);
+    }
+    let mut component = HashSet::from([start]);
+    let mut pending = vec![start];
+    while let Some(id) = pending.pop() {
+        for &neighbor in adjacent.get(&id).into_iter().flatten() {
+            if component.insert(neighbor) {
+                pending.push(neighbor);
+            }
+        }
+    }
+    if component.len() != atoms.len() || !atoms.iter().all(|id| component.contains(id)) {
+        return Err(reason.into());
+    }
+    let charge: i64 = document
+        .atoms
+        .iter()
+        .filter(|atom| component.contains(&atom.id))
+        .map(|atom| i64::from(atom.charge))
+        .sum();
+    if charge == 0 {
+        return Err("The selected component has no net formal charge".into());
+    }
+    let sign = if charge > 0 { '+' } else { '−' };
+    let text = if charge.abs() == 1 {
+        sign.to_string()
+    } else {
+        format!("{}{sign}", charge.abs())
+    };
+    Ok((atoms, text))
+}
+
 /// Selected single drawn lines joining Li, Na, K, Rb, Cs, Ca, Sr or Ba to O,
 /// N, S or a halogen, as (metal, partner) pairs in document order. Mg, Zn, B
 /// and transition metals are left covalent, as are text labels.

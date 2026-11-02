@@ -3,7 +3,7 @@ use reshiki::{
     document::{Document, Point},
     editing::{self, Transform},
     engine::{Analysis, ChemistryEngine, LocalEngine, Request},
-    haworth::{Anomer, Ring, Sugar, sugar_document},
+    haworth::{Anomer, HaworthOptions, Ring, Sugar, sugar_document, sugar_document_with_options},
     rings::Preset,
     templates::{self, LIBRARY},
 };
@@ -38,7 +38,7 @@ async fn observed_chemdraw_clipboard_outputs_retain_all_ten_sugar_identities() -
     }
     let fixture: Fixture = serde_json::from_str(include_str!("fixtures/haworth-chemdraw.json"))?;
     let references = references()?;
-    assert_eq!(fixture.results.len(), references.len());
+    assert_eq!(fixture.results.len(), 10);
     for captured in fixture.results {
         let reference = references
             .iter()
@@ -66,7 +66,7 @@ async fn analyze(doc: Document) -> Result<Analysis> {
 }
 
 #[tokio::test]
-async fn all_ten_anomers_match_independent_pubchem_identities() -> Result<()> {
+async fn all_twenty_four_anomers_match_independent_pubchem_identities() -> Result<()> {
     let mut keys = std::collections::HashSet::new();
     for reference in references()? {
         let doc =
@@ -97,7 +97,7 @@ async fn all_ten_anomers_match_independent_pubchem_identities() -> Result<()> {
             "Anomers must remain distinct"
         );
     }
-    assert_eq!(keys.len(), 10);
+    assert_eq!(keys.len(), 24);
     Ok(())
 }
 
@@ -189,7 +189,7 @@ async fn chemical_export_retains_anomers_and_figure_export_retains_perspective()
     for reference in references()? {
         let doc =
             sugar_document(reference.sugar, reference.anomer, 42.).map_err(anyhow::Error::msg)?;
-        for format in ["mol", "smiles"] {
+        for format in ["mol", "smiles", "cdxml", "cdx"] {
             let mut request = Request::molecule("export", doc.clone());
             request.format = Some(format.into());
             let output = LocalEngine::default()
@@ -319,11 +319,10 @@ fn substituent_directions_and_condensed_groups_match_haworth_conventions() -> Re
         assert_eq!(oxygen.element, "O");
         assert_eq!(
             oxygen.position.y < anomeric.position.y,
-            reference.anomer == Anomer::Beta
+            (reference.anomer == Anomer::Beta)
+                != matches!(reference.sugar, Sugar::Fucose | Sugar::Rhamnose)
         );
         for group in &doc.abbreviations {
-            assert_eq!(group.label, "CH2OH");
-            assert_eq!(group.members.len(), 2);
             let mut elements = group
                 .members
                 .iter()
@@ -331,17 +330,112 @@ fn substituent_directions_and_condensed_groups_match_haworth_conventions() -> Re
                 .collect::<Option<Vec<_>>>()
                 .context("Missing abbreviated atoms")?;
             elements.sort_unstable();
-            assert_eq!(elements, ["C", "O"]);
+            assert_eq!(
+                elements,
+                match group.label.as_str() {
+                    "CH2OH" => vec!["C", "O"],
+                    "CO2H" => vec!["C", "O", "O"],
+                    "NHAc" => vec!["C", "C", "N", "O"],
+                    other => anyhow::bail!("Unexpected sugar group {other}"),
+                }
+            );
         }
         assert_eq!(
             doc.atoms.iter().filter(|a| a.element == "C").count(),
-            if matches!(reference.sugar, Sugar::Ribose) {
-                5
-            } else {
-                6
+            match reference.sugar {
+                Sugar::Ribose | Sugar::Deoxyribose | Sugar::Xylose => 5,
+                Sugar::GlcNAc | Sugar::GalNAc => 8,
+                _ => 6,
             }
         );
+        if matches!(reference.sugar, Sugar::Fucose | Sugar::Rhamnose) {
+            let methyl = doc
+                .atoms
+                .iter()
+                .find(|a| a.label_h == 3)
+                .context("Visible methyl carbon")?;
+            assert_eq!(methyl.element, "C");
+            assert_eq!(
+                methyl.display.carbons,
+                Some(reshiki::atom_labels::Carbons::All)
+            );
+            let c5 = &doc.atoms[4];
+            assert!(methyl.position.y > c5.position.y, "L-sugar C6 points down");
+        }
         reshiki::exchange::drawing::write(&doc, Default::default())?;
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn full_ring_h_variants_preserve_all_pubchem_identities_and_editable_exchange() -> Result<()>
+{
+    for reference in references()? {
+        let mut doc = sugar_document_with_options(
+            reference.sugar,
+            reference.anomer,
+            42.,
+            HaworthOptions {
+                ring_hydrogens: true,
+            },
+        )
+        .map_err(anyhow::Error::msg)?;
+        let analysis = analyze(doc.clone()).await?;
+        assert_eq!(
+            analysis.inchikey, reference.inchikey,
+            "{} full ring H",
+            reference.name
+        );
+        assert_eq!(
+            analysis.formula, reference.formula,
+            "{} full ring H formula",
+            reference.name
+        );
+        let template = LIBRARY
+            .iter()
+            .find(|t| t.name == format!("{} · Haworth, ring H", reference.name))
+            .context("Missing full ring H template")?;
+        assert_eq!(template.document, doc);
+        let ids: Vec<_> = doc.atoms.iter().map(|a| a.id).collect();
+        editing::transform(&mut doc, &ids, Transform::Rotate(37.));
+        let mut appended = Document::default();
+        editing::append(&mut appended, &doc, Point::new(120., -65.));
+        let saved: Document = serde_json::from_str(&serde_json::to_string(&appended)?)?;
+        assert_eq!(analyze(saved.clone()).await?.inchikey, reference.inchikey);
+        let cleaned = LocalEngine::default()
+            .execute(Request::molecule("clean", saved.clone()))
+            .await
+            .map_err(anyhow::Error::msg)?
+            .analysis
+            .context("Missing clean result")?;
+        assert_eq!(
+            cleaned.inchikey, reference.inchikey,
+            "{} full H cleanup",
+            reference.name
+        );
+        for format in ["mol", "smiles", "cdxml", "cdx"] {
+            let mut request = Request::molecule("export", saved.clone());
+            request.format = Some(format.into());
+            let output = LocalEngine::default()
+                .execute(request)
+                .await
+                .map_err(anyhow::Error::msg)?
+                .output
+                .context("Missing full H export")?;
+            let response = LocalEngine::default()
+                .execute(Request::import(format, &output))
+                .await
+                .map_err(anyhow::Error::msg)?;
+            assert_eq!(
+                response
+                    .analysis
+                    .context("Missing full H reimport")?
+                    .inchikey,
+                reference.inchikey,
+                "{} full H {format}",
+                reference.name
+            );
+        }
     }
     Ok(())
 }

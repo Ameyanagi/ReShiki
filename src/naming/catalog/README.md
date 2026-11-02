@@ -1,7 +1,7 @@
 # Offline retained-name catalog
 
-`ReShiki retained aliases 1` is a finite local index: 70 chemical identities and
-82 curated names. It supplements the existing systematic-name generator;
+`ReShiki retained aliases 1` is a finite local index: 85 chemical identities and
+97 curated names. It supplements the existing systematic-name generator;
 it is not a general synonym database or a preferred-name authority.
 
 The application matches canonical isomeric graph identity, including specified
@@ -27,9 +27,11 @@ complete alias: for example, `ethyl alcohol` combines `eth`, `yl` and `alcohol`.
 These selections do not modify or exhaust the upstream vocabulary.
 
 The biochemical reference graphs and spellings come from the frozen
-[template catalog](../../../assets/template-catalog.json) (20 neutral free
-amino acids and five nucleobases) and
-[Haworth sugars](../../../assets/haworth-sugars.json) (ten explicit anomers).
+[template catalog](../../../assets/template-catalog.json) (21 neutral free
+amino acids, including L-selenocysteine, and five nucleobases) and
+[Haworth sugars](../../../assets/haworth-sugars.json) (24 explicit anomers).
+An asset name's trailing abbreviation, such as `(GlcNAc)`, is not part of the
+alias.
 `tautomer_smiles` takes precedence where the template specifies it, matching
 the graph used by the application. Both asset files have pinned hashes in the
 provenance. Amino-acid names retain their `L-` designation except achiral
@@ -106,48 +108,63 @@ specified; names are not reverse-generated to manufacture the expected graph.
 The order here follows the appended catalog records. Configuration and tautomer
 labels describe distinct graph identities, rather than display-only qualifiers.
 
-| Record                  | Curated names                           | Explicit reference graph                           |
-| ----------------------- | --------------------------------------- | -------------------------------------------------- |
-| l-alanine               | `L-alanine`                             | `C[C@@H](C(=O)O)N`                                 |
-| l-arginine              | `N(5)-(diaminomethylidene)-L-ornithine` | `C(C[C@@H](C(=O)O)N)CN=C(N)N`                      |
-| l-asparagine            | `L-asparagine`                          | `C([C@@H](C(=O)O)N)C(=O)N`                         |
-| l-aspartic-acid         | `L-aspartic acid`                       | `C([C@@H](C(=O)O)N)C(=O)O`                         |
-| l-cysteine              | `L-cysteine`                            | `C([C@@H](C(=O)O)N)S`                              |
-| l-glutamine             | `L-glutamine`                           | `C(CC(=O)N)[C@@H](C(=O)O)N`                        |
-| l-glutamic-acid         | `L-glutamic acid`                       | `C(CC(=O)O)[C@@H](C(=O)O)N`                        |
-| glycine                 | `glycine`                               | `C(C(=O)O)N`                                       |
-| l-histidine-3h          | `3-(1H-imidazol-5-yl)-L-alanine`        | `C1=C(NC=N1)C[C@@H](C(=O)O)N`                      |
-| l-isoleucine            | `L-isoleucine`                          | `CC[C@H](C)[C@@H](C(=O)O)N`                        |
-| l-leucine               | `L-leucine`                             | `CC(C)C[C@@H](C(=O)O)N`                            |
-| l-lysine                | `L-lysine`                              | `C(CCN)C[C@@H](C(=O)O)N`                           |
-| l-methionine            | `L-methionine`                          | `CSCC[C@@H](C(=O)O)N`                              |
-| l-phenylalanine         | `L-phenylalanine`                       | `C1=CC=C(C=C1)C[C@@H](C(=O)O)N`                    |
-| l-proline               | `L-proline`                             | `C1C[C@H](NC1)C(=O)O`                              |
-| l-serine                | `L-serine`                              | `C([C@@H](C(=O)O)N)O`                              |
-| l-threonine             | `L-threonine`                           | `C[C@H]([C@@H](C(=O)O)N)O`                         |
-| l-tryptophan            | `L-tryptophan`                          | `C1=CC=C2C(=C1)C(=CN2)C[C@@H](C(=O)O)N`            |
-| l-tyrosine              | `L-tyrosine`                            | `C1=CC(=CC=C1C[C@@H](C(=O)O)N)O`                   |
-| l-valine                | `L-valine`                              | `CC(C)[C@@H](C(=O)O)N`                             |
-| adenine-9h              | `9H-adenine`                            | `Nc1ncnc2[nH]cnc12`                                |
-| adenine-7h              | `adenine`, `7H-adenine`                 | `C1=NC2=NC=NC(=C2N1)N`                             |
-| guanine-9h              | `9H-guanine`                            | `Nc1nc2[nH]cnc2c(=O)[nH]1`                         |
-| guanine-7h              | `guanine`, `7H-guanine`                 | `C1=NC2=C(N1)C(=O)NC(=N2)N`                        |
-| cytosine-3h             | `3H-cytosine`                           | `C1=C(NC(=O)N=C1)N`                                |
-| thymine                 | `thymine`                               | `CC1=CNC(=O)NC1=O`                                 |
-| uracil                  | `uracil`                                | `C1=CNC(=O)NC1=O`                                  |
-| alpha-d-glucopyranose   | `α-D-glucopyranose`                     | `C([C@@H]1[C@H]([C@@H]([C@H]([C@H](O1)O)O)O)O)O`   |
-| beta-d-glucopyranose    | `β-D-glucopyranose`                     | `C([C@@H]1[C@H]([C@@H]([C@H]([C@@H](O1)O)O)O)O)O`  |
-| alpha-d-galactopyranose | `α-D-galactopyranose`                   | `C([C@@H]1[C@@H]([C@@H]([C@H]([C@H](O1)O)O)O)O)O`  |
-| beta-d-galactopyranose  | `β-D-galactopyranose`                   | `C([C@@H]1[C@@H]([C@@H]([C@H]([C@@H](O1)O)O)O)O)O` |
-| alpha-d-mannopyranose   | `α-D-mannopyranose`                     | `C([C@@H]1[C@H]([C@@H]([C@@H]([C@H](O1)O)O)O)O)O`  |
-| beta-d-mannopyranose    | `β-D-mannopyranose`                     | `C([C@@H]1[C@H]([C@@H]([C@@H]([C@@H](O1)O)O)O)O)O` |
-| alpha-d-ribofuranose    | `α-D-ribofuranose`                      | `C([C@@H]1[C@H]([C@H]([C@H](O1)O)O)O)O`            |
-| beta-d-ribofuranose     | `β-D-ribofuranose`                      | `C([C@@H]1[C@H]([C@H]([C@@H](O1)O)O)O)O`           |
-| alpha-d-fructofuranose  | `α-D-fructofuranose`                    | `C([C@@H]1[C@H]([C@@H]([C@@](O1)(CO)O)O)O)O`       |
-| beta-d-fructofuranose   | `β-D-fructofuranose`                    | `C([C@@H]1[C@H]([C@@H]([C@](O1)(CO)O)O)O)O`        |
-| l-histidine-opsin       | `L-histidine`                           | `N[C@@H](CC1=CNC=N1)C(=O)O`                        |
-| l-arginine-opsin        | `L-arginine`                            | `N[C@@H](CCCNC(N)=N)C(=O)O`                        |
-| cytosine-opsin          | `cytosine`                              | `N1C(=O)N=C(N)C=C1`                                |
+| Record                         | Curated names                           | Explicit reference graph                             |
+| ------------------------------ | --------------------------------------- | ---------------------------------------------------- |
+| l-alanine                      | `L-alanine`                             | `C[C@@H](C(=O)O)N`                                   |
+| l-arginine                     | `N(5)-(diaminomethylidene)-L-ornithine` | `C(C[C@@H](C(=O)O)N)CN=C(N)N`                        |
+| l-asparagine                   | `L-asparagine`                          | `C([C@@H](C(=O)O)N)C(=O)N`                           |
+| l-aspartic-acid                | `L-aspartic acid`                       | `C([C@@H](C(=O)O)N)C(=O)O`                           |
+| l-cysteine                     | `L-cysteine`                            | `C([C@@H](C(=O)O)N)S`                                |
+| l-glutamine                    | `L-glutamine`                           | `C(CC(=O)N)[C@@H](C(=O)O)N`                          |
+| l-glutamic-acid                | `L-glutamic acid`                       | `C(CC(=O)O)[C@@H](C(=O)O)N`                          |
+| glycine                        | `glycine`                               | `C(C(=O)O)N`                                         |
+| l-histidine-3h                 | `3-(1H-imidazol-5-yl)-L-alanine`        | `C1=C(NC=N1)C[C@@H](C(=O)O)N`                        |
+| l-isoleucine                   | `L-isoleucine`                          | `CC[C@H](C)[C@@H](C(=O)O)N`                          |
+| l-leucine                      | `L-leucine`                             | `CC(C)C[C@@H](C(=O)O)N`                              |
+| l-lysine                       | `L-lysine`                              | `C(CCN)C[C@@H](C(=O)O)N`                             |
+| l-methionine                   | `L-methionine`                          | `CSCC[C@@H](C(=O)O)N`                                |
+| l-phenylalanine                | `L-phenylalanine`                       | `C1=CC=C(C=C1)C[C@@H](C(=O)O)N`                      |
+| l-proline                      | `L-proline`                             | `C1C[C@H](NC1)C(=O)O`                                |
+| l-serine                       | `L-serine`                              | `C([C@@H](C(=O)O)N)O`                                |
+| l-threonine                    | `L-threonine`                           | `C[C@H]([C@@H](C(=O)O)N)O`                           |
+| l-tryptophan                   | `L-tryptophan`                          | `C1=CC=C2C(=C1)C(=CN2)C[C@@H](C(=O)O)N`              |
+| l-tyrosine                     | `L-tyrosine`                            | `C1=CC(=CC=C1C[C@@H](C(=O)O)N)O`                     |
+| l-valine                       | `L-valine`                              | `CC(C)[C@@H](C(=O)O)N`                               |
+| adenine-9h                     | `9H-adenine`                            | `Nc1ncnc2[nH]cnc12`                                  |
+| adenine-7h                     | `adenine`, `7H-adenine`                 | `C1=NC2=NC=NC(=C2N1)N`                               |
+| guanine-9h                     | `9H-guanine`                            | `Nc1nc2[nH]cnc2c(=O)[nH]1`                           |
+| guanine-7h                     | `guanine`, `7H-guanine`                 | `C1=NC2=C(N1)C(=O)NC(=N2)N`                          |
+| cytosine-3h                    | `3H-cytosine`                           | `C1=C(NC(=O)N=C1)N`                                  |
+| thymine                        | `thymine`                               | `CC1=CNC(=O)NC1=O`                                   |
+| uracil                         | `uracil`                                | `C1=CNC(=O)NC1=O`                                    |
+| alpha-d-glucopyranose          | `α-D-glucopyranose`                     | `C([C@@H]1[C@H]([C@@H]([C@H]([C@H](O1)O)O)O)O)O`     |
+| beta-d-glucopyranose           | `β-D-glucopyranose`                     | `C([C@@H]1[C@H]([C@@H]([C@H]([C@@H](O1)O)O)O)O)O`    |
+| alpha-d-galactopyranose        | `α-D-galactopyranose`                   | `C([C@@H]1[C@@H]([C@@H]([C@H]([C@H](O1)O)O)O)O)O`    |
+| beta-d-galactopyranose         | `β-D-galactopyranose`                   | `C([C@@H]1[C@@H]([C@@H]([C@H]([C@@H](O1)O)O)O)O)O`   |
+| alpha-d-mannopyranose          | `α-D-mannopyranose`                     | `C([C@@H]1[C@H]([C@@H]([C@@H]([C@H](O1)O)O)O)O)O`    |
+| beta-d-mannopyranose           | `β-D-mannopyranose`                     | `C([C@@H]1[C@H]([C@@H]([C@@H]([C@@H](O1)O)O)O)O)O`   |
+| alpha-d-ribofuranose           | `α-D-ribofuranose`                      | `C([C@@H]1[C@H]([C@H]([C@H](O1)O)O)O)O`              |
+| beta-d-ribofuranose            | `β-D-ribofuranose`                      | `C([C@@H]1[C@H]([C@H]([C@@H](O1)O)O)O)O`             |
+| alpha-d-fructofuranose         | `α-D-fructofuranose`                    | `C([C@@H]1[C@H]([C@@H]([C@@](O1)(CO)O)O)O)O`         |
+| beta-d-fructofuranose          | `β-D-fructofuranose`                    | `C([C@@H]1[C@H]([C@@H]([C@](O1)(CO)O)O)O)O`          |
+| l-histidine-opsin              | `L-histidine`                           | `N[C@@H](CC1=CNC=N1)C(=O)O`                          |
+| l-arginine-opsin               | `L-arginine`                            | `N[C@@H](CCCNC(N)=N)C(=O)O`                          |
+| cytosine-opsin                 | `cytosine`                              | `N1C(=O)N=C(N)C=C1`                                  |
+| l-selenocysteine               | `L-selenocysteine`                      | `N[C@@H](C[SeH])C(=O)O`                              |
+| 2-deoxy-alpha-d-ribofuranose   | `2-deoxy-α-D-ribofuranose`              | `C1[C@@H]([C@H](O[C@@H]1O)CO)O`                      |
+| 2-deoxy-beta-d-ribofuranose    | `2-deoxy-β-D-ribofuranose`              | `C1[C@@H]([C@H](O[C@H]1O)CO)O`                       |
+| alpha-d-xylopyranose           | `α-D-xylopyranose`                      | `C1[C@H]([C@@H]([C@H]([C@H](O1)O)O)O)O`              |
+| beta-d-xylopyranose            | `β-D-xylopyranose`                      | `C1[C@H]([C@@H]([C@H]([C@@H](O1)O)O)O)O`             |
+| alpha-l-fucopyranose           | `α-L-fucopyranose`                      | `C[C@H]1[C@H]([C@H]([C@@H]([C@@H](O1)O)O)O)O`        |
+| beta-l-fucopyranose            | `β-L-fucopyranose`                      | `C[C@H]1[C@H]([C@H]([C@@H]([C@H](O1)O)O)O)O`         |
+| alpha-l-rhamnopyranose         | `α-L-rhamnopyranose`                    | `C[C@H]1[C@@H]([C@H]([C@H]([C@@H](O1)O)O)O)O`        |
+| beta-l-rhamnopyranose          | `β-L-rhamnopyranose`                    | `C[C@H]1[C@@H]([C@H]([C@H]([C@H](O1)O)O)O)O`         |
+| n-acetyl-alpha-d-glucosamine   | `N-acetyl-α-D-glucosamine`              | `CC(=O)N[C@@H]1[C@H]([C@@H]([C@H](O[C@@H]1O)CO)O)O`  |
+| n-acetyl-beta-d-glucosamine    | `N-acetyl-β-D-glucosamine`              | `CC(=O)N[C@@H]1[C@H]([C@@H]([C@H](O[C@H]1O)CO)O)O`   |
+| n-acetyl-alpha-d-galactosamine | `N-acetyl-α-D-galactosamine`            | `CC(=O)N[C@@H]1[C@H]([C@H]([C@H](O[C@@H]1O)CO)O)O`   |
+| n-acetyl-beta-d-galactosamine  | `N-acetyl-β-D-galactosamine`            | `CC(=O)N[C@@H]1[C@H]([C@H]([C@H](O[C@H]1O)CO)O)O`    |
+| alpha-d-glucopyranuronic-acid  | `α-D-glucopyranuronic acid`             | `[C@@H]1([C@@H]([C@H](O[C@@H]([C@@H]1O)O)C(=O)O)O)O` |
+| beta-d-glucopyranuronic-acid   | `β-D-glucopyranuronic acid`             | `[C@@H]1([C@@H]([C@H](O[C@H]([C@@H]1O)O)C(=O)O)O)O`  |
 
 ## Validation
 

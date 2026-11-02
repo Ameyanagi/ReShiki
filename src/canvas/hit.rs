@@ -257,7 +257,7 @@ fn hit_object_with_orbital(
                     && !(orbital_label.flatten().is_some()
                         && matches!(g.kind, reshiki::graphics::GraphicKind::Orbital(_)))
                     && !label_rank.is_some_and(|rank| (g.layer, *i) <= rank)
-                    && g.hit(p, r)
+                    && g.hit_with_text_style(p, r, &doc.drawing_style.text_style())
             })
             .max_by_key(|(i, g)| (g.layer, *i))
             .map(|(_, g)| g.id)

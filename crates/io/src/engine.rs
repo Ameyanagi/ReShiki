@@ -166,6 +166,10 @@ pub fn text_format(text: &str) -> &'static str {
 pub struct Analysis {
     pub smiles: String,
     pub formula: String,
+    #[serde(default)]
+    pub display_formula: String,
+    #[serde(default)]
+    pub mass_percent: Vec<(String, f64)>,
     pub mass: f64,
     pub exact_mass: f64,
     pub logp: f64,

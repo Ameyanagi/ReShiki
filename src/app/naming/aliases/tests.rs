@@ -89,10 +89,12 @@ fn edited_name_can_resolve_current_aliases_without_reopening_details() {
         title: "(R)-lactic acid".into(),
         systematic_name: Some("(2R)-2-hydroxypropanoic acid".into()),
         name_status: None,
+        alternatives: vec![],
+        omitted_stereo: vec![],
+        omitted_units: 0,
         smiles: identity.into(),
         canonical_smiles: identity.into(),
         synonyms: naming::aliases_for_smiles(identity).unwrap(),
-        alternative_names: vec![],
         warnings: vec![],
         provenance: naming::Provenance::Openclatura,
     };
@@ -457,17 +459,26 @@ async fn name_copy_preserves_engine_ascii_and_formatted_copy_uses_unicode() {
     );
 }
 
+fn phane(name: &str) -> naming::AlternativeName {
+    naming::AlternativeName {
+        name: name.into(),
+        status: naming::NameStatus::Unverified(naming::NameReason::Phane),
+    }
+}
+
 #[tokio::test]
 async fn alternative_name_copy_requires_a_current_record_and_preserves_the_drawing() {
     use iced::futures::StreamExt;
     let mut app = ready();
     let name = "1,4(1,4)-dibenzenacyclohexaphane";
     let generated = &mut app.tab.naming.structure.as_mut().unwrap().1;
-    generated.alternative_names = vec![name.into()];
+    generated.alternatives = vec![phane(name)];
     let generated_before = generated.clone();
     let before = app.tab.doc.clone();
-    let mut stream =
-        iced_runtime::task::into_stream(app.naming_action(Action::CopyAlternativeName(0))).unwrap();
+    let mut stream = iced_runtime::task::into_stream(
+        app.naming_action(Action::Alias(AliasAction::CopyAlternative(0))),
+    )
+    .unwrap();
     let Some(iced_runtime::Action::Clipboard(iced_runtime::clipboard::Action::Write {
         contents,
         ..
@@ -477,30 +488,44 @@ async fn alternative_name_copy_requires_a_current_record_and_preserves_the_drawi
     };
     assert_eq!(contents, name);
     assert_eq!(
-        app.naming_action(Action::CopyAlternativeName(999)).units(),
+        app.naming_action(Action::Alias(AliasAction::CopyAlternative(999)))
+            .units(),
         0
     );
     let ticket = app.tab.naming.structure.as_ref().unwrap().0;
     app.tab.naming.pending = Some(Pending::Generate(ticket));
-    assert_eq!(app.naming_action(Action::CopyAlternativeName(0)).units(), 0);
+    assert_eq!(
+        app.naming_action(Action::Alias(AliasAction::CopyAlternative(0)))
+            .units(),
+        0
+    );
     app.tab.naming.pending = None;
     app.tab.revision += 1;
-    assert_eq!(app.naming_action(Action::CopyAlternativeName(0)).units(), 0);
+    assert_eq!(
+        app.naming_action(Action::Alias(AliasAction::CopyAlternative(0)))
+            .units(),
+        0
+    );
     app.tab.revision -= 1;
     app.tab.file_epoch += 1;
-    assert_eq!(app.naming_action(Action::CopyAlternativeName(0)).units(), 0);
+    assert_eq!(
+        app.naming_action(Action::Alias(AliasAction::CopyAlternative(0)))
+            .units(),
+        0
+    );
     assert_eq!(app.tab.doc, before);
     assert!(!app.tab.history.can_undo());
     let generated = &app.tab.naming.structure.as_ref().unwrap().1;
     assert_eq!(generated.systematic_name, generated_before.systematic_name);
     assert_eq!(generated.name_status, generated_before.name_status);
     assert_eq!(generated.synonyms, generated_before.synonyms);
-    assert_eq!(
-        generated.alternative_names,
-        generated_before.alternative_names
-    );
+    assert_eq!(generated.alternatives, generated_before.alternatives);
     app.tab.naming.structure = None;
-    assert_eq!(app.naming_action(Action::CopyAlternativeName(0)).units(), 0);
+    assert_eq!(
+        app.naming_action(Action::Alias(AliasAction::CopyAlternative(0)))
+            .units(),
+        0
+    );
 }
 
 #[tokio::test]
@@ -531,13 +556,8 @@ async fn alternative_names_render_with_accessible_copy_actions_without_font_snap
         "1,4(1,4)-dibenzenacyclohexaphane",
         "1,5(1,4)-dibenzenacyclooctaphane",
     ];
-    app.tab
-        .naming
-        .structure
-        .as_mut()
-        .unwrap()
-        .1
-        .alternative_names = names.iter().map(|name| (*name).into()).collect();
+    app.tab.naming.structure.as_mut().unwrap().1.alternatives =
+        names.into_iter().map(phane).collect();
     let font = include_bytes!("../../../../crates/model/fonts/LiberationSans-Regular.ttf");
     reshiki::style::add_font(font.to_vec())?;
     iced::advanced::graphics::text::font_system()
@@ -562,15 +582,11 @@ async fn alternative_names_render_with_accessible_copy_actions_without_font_snap
     );
     let mut text = PanelText::default();
     ui.operate(&renderer, &mut text);
-    assert!(
-        text.0
-            .iter()
-            .any(|value| value == "ALTERNATIVE NAME · PHANE NOMENCLATURE")
-    );
+    assert!(text.0.iter().any(|value| value == "OTHER NAMES"));
     assert_eq!(
         text.0
             .iter()
-            .filter(|value| *value == "Phane name (P-51.4) · preference not verified")
+            .filter(|value| *value == "Systematic name, preference not verified")
             .count(),
         names.len()
     );
@@ -582,13 +598,13 @@ async fn alternative_names_render_with_accessible_copy_actions_without_font_snap
     let snapshot = collect.snapshot();
     assert!(snapshot.duplicate_ids.is_empty());
     for (index, name) in names.iter().enumerate() {
-        let id = format!("naming.alternative-copy-{index}");
+        let id = format!("naming-alternative-copy-{index}");
         let node = snapshot.nodes.iter().find(|node| node.id == id).ok_or(id)?;
-        assert_eq!(node.name, format!("Copy phane name {name}"));
+        assert_eq!(node.name, format!("Copy alternative {name}"));
         assert!(node.enabled);
         assert!(node.visible_bounds.is_some());
     }
-    let mut activate = Activate::<Message>::new("naming.alternative-copy-0");
+    let mut activate = Activate::<Message>::new("naming-alternative-copy-0");
     ui.operate(
         &renderer,
         &mut iced::advanced::widget::operation::black_box(&mut activate),
@@ -596,7 +612,7 @@ async fn alternative_names_render_with_accessible_copy_actions_without_font_snap
     let message = activate.message().cloned().ok_or("No copy action")?;
     assert!(matches!(
         message,
-        Message::Naming(Action::CopyAlternativeName(0))
+        Message::Naming(Action::Alias(AliasAction::CopyAlternative(0)))
     ));
     drop(ui);
     let mut stream = iced_runtime::task::into_stream(app.update(message)).ok_or("No copy task")?;
@@ -617,7 +633,7 @@ async fn alternative_names_render_with_accessible_copy_actions_without_font_snap
         .as_mut()
         .unwrap()
         .1
-        .alternative_names
+        .alternatives
         .clear();
     let mut ui = iced_runtime::UserInterface::build(
         app.generated_name_controls(),
@@ -627,12 +643,7 @@ async fn alternative_names_render_with_accessible_copy_actions_without_font_snap
     );
     let mut text = PanelText::default();
     ui.operate(&renderer, &mut text);
-    assert!(
-        !text
-            .0
-            .iter()
-            .any(|value| value == "ALTERNATIVE NAME · PHANE NOMENCLATURE")
-    );
+    assert!(!text.0.iter().any(|value| value == "OTHER NAMES"));
     let mut collect = Collect::new(iced::Rectangle::with_size(size));
     ui.operate(
         &renderer,
@@ -643,7 +654,7 @@ async fn alternative_names_render_with_accessible_copy_actions_without_font_snap
             .snapshot()
             .nodes
             .iter()
-            .all(|node| !node.id.starts_with("naming.alternative-copy-"))
+            .all(|node| !node.id.starts_with("naming-alternative-copy-"))
     );
     Ok(())
 }

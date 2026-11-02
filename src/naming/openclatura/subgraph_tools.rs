@@ -66,10 +66,22 @@ pub fn emit_bond_stereo(
             } else {
                 loc_u
             };
+            if !parts.is_substituent && matches!(stereo.as_str(), "Ξ" | "ξ") {
+                let unit = if let Some(loc_v) = locants.get(&v) {
+                    if parse_locant(loc_u) <= parse_locant(loc_v) {
+                        format!("{loc_u}={loc_v}")
+                    } else {
+                        format!("{loc_v}={loc_u}")
+                    }
+                } else {
+                    loc.clone()
+                };
+                mol.record_unknown_unit(unit);
+            }
             if !parts
                 .stereo_features
                 .iter()
-                .any(|(l, s)| l == loc && matches!(s.as_str(), "E" | "Z"))
+                .any(|(l, s)| l == loc && matches!(s.as_str(), "E" | "Z" | "Ξ" | "ξ"))
             {
                 parts.stereo_features.push((loc.clone(), stereo.clone()));
             }

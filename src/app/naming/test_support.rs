@@ -17,10 +17,12 @@ pub(super) fn record(smiles: &str) -> Record {
         title: "ethan-1-ol".into(),
         systematic_name: Some("ethan-1-ol".into()),
         name_status: Some(naming::NameStatus::Preferred),
+        alternatives: vec![],
+        omitted_stereo: vec![],
+        omitted_units: 0,
         canonical_smiles: naming::canonical_smiles(smiles).unwrap(),
         smiles: smiles.into(),
         synonyms: vec![],
-        alternative_names: vec![],
         warnings: vec![],
         provenance: Provenance::Openclatura,
     }

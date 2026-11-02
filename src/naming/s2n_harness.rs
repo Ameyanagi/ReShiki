@@ -177,7 +177,7 @@ impl Measurements {
         match generated {
             Err(reason) => result.reason = reason,
             Ok(name) => {
-                for alternative in &name.alternatives {
+                for alternative in name.alternatives.iter().map(|n| &n.name) {
                     let actual = self
                         .parse_name(alternative)
                         .unwrap_or_else(|error| panic!("{alternative}: {error}"));
@@ -395,6 +395,9 @@ fn ratchet(reports: &BTreeMap<&str, Report>) {
     }
     // Preserve both guarantees: correct chemistry and progress toward the
     // exact openclatura spelling. Text differences never become Wrong graphs.
+    // The frozen upstream goldens retain cis/trans ring names. The intentional
+    // r/s departures are pinned, with complete identity roundtrips, by
+    // ring_r_s_names_intentionally_depart_from_upstream_spelling below.
     for (category, counts) in reports["parity"].rows() {
         current.insert(
             ("parity_text".into(), category.into()),
@@ -530,6 +533,55 @@ fn run(fast: bool) {
 #[test]
 fn s2n_fast_subset() {
     run(true);
+}
+
+#[test]
+fn ring_r_s_names_intentionally_depart_from_upstream_spelling() {
+    let mut measurements = Measurements::default();
+    for (smiles, expected, alternative) in [
+        (
+            "C[C@H]1CC[C@@H](C)CC1",
+            "(1s,4s)-1,4-dimethylcyclohexane",
+            Some("cis-1,4-dimethylcyclohexane"),
+        ),
+        (
+            "CC(C)(C)[C@H]1CC[C@@H](O)CC1",
+            "(1s,4s)-4-(tert-butyl)cyclohexanol",
+            Some("cis-4-(tert-butyl)cyclohexanol"),
+        ),
+        (
+            "C[C@H]1C[C@H](C)C1",
+            "(1r,3r)-1,3-dimethylcyclobutane",
+            Some("trans-1,3-dimethylcyclobutane"),
+        ),
+    ] {
+        let name = namer(smiles).unwrap();
+        assert_eq!(name.text, expected, "{smiles}");
+        assert_ne!(
+            name.status,
+            super::NameStatus::NotPreferred(super::NameReason::RelativeRingStereo),
+            "{smiles}"
+        );
+        assert_eq!(
+            name.alternatives
+                .iter()
+                .map(|name| name.name.as_str())
+                .collect::<Vec<_>>(),
+            alternative.into_iter().collect::<Vec<_>>(),
+            "{smiles}"
+        );
+        for alternative in &name.alternatives {
+            assert_eq!(
+                alternative.status,
+                super::NameStatus::NotPreferred(super::NameReason::RelativeRingStereo),
+                "{smiles}"
+            );
+        }
+        let identity = super::canonical_smiles(smiles).unwrap();
+        for text in std::iter::once(&name.text).chain(name.alternatives.iter().map(|n| &n.name)) {
+            assert_eq!(measurements.parse_name(text).unwrap(), identity, "{text}");
+        }
+    }
 }
 
 #[test]

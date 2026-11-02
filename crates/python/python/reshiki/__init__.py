@@ -190,6 +190,7 @@ class Properties:
     """Molecular descriptors returned by the headless ReShiki engine."""
 
     formula: str
+    display_formula: str
     mass: float
     exact_mass: float
     logp: float
@@ -348,7 +349,10 @@ class Drawing:
         return destination
 
     def properties(self) -> Properties:
-        return Properties(**json.loads(_native.properties(self._data)))
+        fields = json.loads(_native.properties(self._data))
+        # Like the CLI analysis JSON, the public descriptors leave out the inspector's mass percentages.
+        del fields["mass_percent"]
+        return Properties(**fields)
 
     def _repr_svg_(self) -> str:
         return self.svg()

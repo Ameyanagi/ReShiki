@@ -57,6 +57,13 @@ pub enum AliasAction {
     Copy(AliasTarget, usize),
     UseBelow(Option<usize>),
     Caption(usize),
+    CopyAlternative(usize),
+    AlternativeCaption(usize),
+}
+
+pub(super) enum CaptionName {
+    Alias(usize),
+    Alternative(usize),
 }
 
 impl App {
@@ -98,7 +105,20 @@ impl App {
                     self.tab.naming.add_name_below = true;
                 }
             }
-            AliasAction::Caption(index) => self.insert_name_caption(Some(index)),
+            AliasAction::Caption(index) => {
+                self.insert_name_caption(Some(CaptionName::Alias(index)))
+            }
+            AliasAction::CopyAlternative(index) => {
+                if let Some(alternative) = self
+                    .alias_record(AliasTarget::Structure)
+                    .and_then(|record| record.alternatives.get(index))
+                {
+                    return iced::clipboard::write(alternative.name.clone());
+                }
+            }
+            AliasAction::AlternativeCaption(index) => {
+                self.insert_name_caption(Some(CaptionName::Alternative(index)));
+            }
         }
         Task::none()
     }
@@ -219,6 +239,14 @@ impl App {
                     iced::widget::tooltip::Position::Top,
                 ));
             }
+            if let Some(note) = record.omitted_stereo_note() {
+                content = content.push(
+                    container(text(note).size(11).style(muted_text))
+                        .id("naming.omitted-stereo")
+                        .padding([3, 6])
+                        .style(container::rounded_box),
+                );
+            }
             content = content.push(text(record.provenance.label()).size(11).style(muted_text));
             for warning in &record.warnings {
                 content = content.push(text(warning).size(11));
@@ -246,32 +274,51 @@ impl App {
                 .spacing(4)
                 .wrap(),
             );
-            if !record.alternative_names.is_empty() {
-                let available = self.alias_record(AliasTarget::Structure).is_some();
+            if !record.alternatives.is_empty() {
+                content = content.push(section("OTHER NAMES"));
                 let family = reshiki::style::font_name(&self.tab.doc.drawing_style.font_family);
-                let mut alternatives =
-                    column![section("ALTERNATIVE NAME · PHANE NOMENCLATURE")].spacing(6);
-                for (index, name) in record.alternative_names.iter().enumerate() {
-                    alternatives = alternatives.push(
+                for (index, alternative) in record.alternatives.iter().enumerate() {
+                    content = content.push(
                         column![
-                            rich_text(chemical_name_spans(name, 12., family)),
-                            text("Phane name (P-51.4) · preference not verified")
-                                .size(11)
-                                .style(muted_text),
-                            accessible_command(
-                                format!("naming.alternative-copy-{index}"),
-                                format!("Copy phane name {name}"),
-                                "Copy"
-                            )
-                            .on_press_maybe(
-                                available
-                                    .then_some(Message::Naming(Action::CopyAlternativeName(index)))
+                            rich_text(chemical_name_spans(&alternative.name, 12., family)),
+                            hover_hint(
+                                container(
+                                    text(alternative.status.label()).size(11).style(muted_text)
+                                )
+                                .padding([3, 6])
+                                .style(container::rounded_box),
+                                alternative.status.detail(),
+                                iced::widget::tooltip::Position::Top,
                             ),
+                            row![
+                                accessible_command(
+                                    format!("naming-alternative-copy-{index}"),
+                                    format!("Copy alternative {}", alternative.name),
+                                    "Copy",
+                                )
+                                .on_press_maybe(current.then_some(
+                                    Message::Naming(Action::Alias(AliasAction::CopyAlternative(
+                                        index
+                                    ),))
+                                )),
+                                accessible_command(
+                                    format!("naming-alternative-caption-{index}"),
+                                    format!("Insert alternative caption {}", alternative.name),
+                                    "Insert caption",
+                                )
+                                .on_press_maybe(
+                                    (current && self.naming_can_show_molecule()).then_some(
+                                        Message::Naming(Action::Alias(
+                                            AliasAction::AlternativeCaption(index)
+                                        )),
+                                    ),
+                                ),
+                            ]
+                            .spacing(4),
                         ]
                         .spacing(3),
                     );
                 }
-                content = content.push(alternatives);
             }
             content = content.push(self.alias_controls(AliasTarget::Structure, record));
         }

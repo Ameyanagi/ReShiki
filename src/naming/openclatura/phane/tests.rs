@@ -166,7 +166,11 @@ fn ordinary_names_with_phane_alternatives_are_never_preferred() -> Result<(), St
         assert!(!named.text.contains("phane"));
         round_trip(smiles, &named.text)?;
         for alternative in named.alternatives {
-            round_trip(smiles, &alternative)?;
+            assert_eq!(
+                alternative.status,
+                NameStatus::Unverified(NameReason::Phane)
+            );
+            round_trip(smiles, &alternative.name)?;
         }
     }
     Ok(())

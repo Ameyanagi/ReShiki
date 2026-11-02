@@ -55,6 +55,7 @@ mod small_ring_stereo;
 mod special_cases;
 mod spiro_subgraph;
 mod subgraph_tools;
+mod unknown_stereo;
 mod von_baeyer;
 
 /// The naming profile on the worker wire and in generated-name warnings.
@@ -66,11 +67,15 @@ pub(super) const PROFILE: &str = "openclatura 0.4.3 Rust port";
 pub(super) struct Name {
     pub text: String,
     pub status: crate::naming::NameStatus,
-    #[serde(default)]
-    pub alternatives: Vec<String>,
+    pub alternatives: Vec<crate::naming::AlternativeName>,
+    pub omitted_stereo: Vec<String>,
+    pub omitted_units: usize,
 }
 
 pub(super) fn name_smiles(smiles: &str) -> Result<Name, String> {
+    if let Some(name) = unknown_stereo::name_smiles(smiles)? {
+        return Ok(name);
+    }
     let mol = graph_io::read_smiles(smiles)?;
     if mol.atoms.values().any(|atom| atom.isotope.is_some()) {
         return Err("openclatura: isotopic naming not ported".into());
@@ -111,6 +116,8 @@ pub(super) fn name_smiles(smiles: &str) -> Result<Name, String> {
                     text,
                     status: crate::naming::NameStatus::Unverified(crate::naming::NameReason::Phane),
                     alternatives: vec![],
+                    omitted_stereo: vec![],
+                    omitted_units: 0,
                 })
             });
         }
@@ -131,10 +138,32 @@ pub(super) fn name_smiles(smiles: &str) -> Result<Name, String> {
             crate::naming::NameReason::Phane,
         ));
     }
+    let status = mol.name_status();
+    let mut alternatives = vec![];
+    if mol.has_relative_ring_alternative() {
+        mol.set_relative_ring_names(true);
+        mol.set_name_status(status);
+        if let Ok(relative) = component_namer::name_component(&mol, &components[0])
+            && relative != text
+        {
+            alternatives.push(crate::naming::AlternativeName {
+                name: nest_enclosing_marks(&relative),
+                status: crate::naming::NameStatus::NotPreferred(
+                    crate::naming::NameReason::RelativeRingStereo,
+                ),
+            });
+        }
+    }
+    alternatives.extend(phane.map(|name| crate::naming::AlternativeName {
+        name,
+        status: crate::naming::NameStatus::Unverified(crate::naming::NameReason::Phane),
+    }));
     Ok(Name {
         text: nest_enclosing_marks(&text),
-        status: mol.name_status(),
-        alternatives: phane.into_iter().collect(),
+        status,
+        alternatives,
+        omitted_stereo: vec![],
+        omitted_units: 0,
     })
 }
 
@@ -923,8 +952,6 @@ mod tests {
             "[c-]1ccccc1-c1ccccc1",
             "C1CCC2(CC1)CCCC2.C",
             "[13CH2]1CCC2(CC1)CCCC2",
-            "C[C@H]1C2(CC2)[C@@H](C)C13CC3",
-            "C[C@H]1C2(CC2)[C@H](C)C13CC3",
         ] {
             assert!(name_smiles(smiles).is_err(), "{smiles}");
         }

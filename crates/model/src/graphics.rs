@@ -2,11 +2,13 @@
 mod arc;
 mod heads;
 mod path;
+mod superscript;
 use crate::{document::Point, style};
 pub use arc::ArcGeometry;
 pub use heads::PathHeads;
 pub use path::{MIN_CLOSED_NODES, MIN_OPEN_NODES, PathHandle, PathNodeType, PathSummary};
 use serde::{Deserialize, Serialize};
+pub use superscript::GraphicLabel;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -211,6 +213,9 @@ pub struct Graphic {
     pub style: GraphicStyle,
     #[serde(default)]
     pub sides: BracketSides,
+    /// An annotation attached to the closing bracket, without chemical meaning.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub superscript: Option<String>,
     #[serde(default)]
     pub phase: crate::scientific::Phase,
     #[serde(default)]
@@ -297,6 +302,7 @@ impl Graphic {
                 axis_y: Point::new(-axis.y, axis.x),
                 style,
                 sides,
+                superscript: None,
                 phase: Default::default(),
                 phase_flipped: false,
                 layer: if matches!(kind, GraphicKind::Symbol(_)) {
@@ -344,6 +350,7 @@ impl Graphic {
             axis_y,
             style,
             sides,
+            superscript: None,
             phase: Default::default(),
             phase_flipped: false,
             layer: -1,
@@ -474,6 +481,26 @@ impl Graphic {
             .collect()
     }
     pub fn bounds(&self) -> (Point, Point) {
+        self.bounds_with_text_style(&crate::typography::TextStyle::default())
+    }
+    /// Visible graphic extents using the drawing's font for bracket annotations.
+    pub fn bounds_with_text_style(
+        &self,
+        text_style: &crate::typography::TextStyle,
+    ) -> (Point, Point) {
+        let (mut lo, mut hi) = self.shape_bounds();
+        if let Some(label) = self.superscript_label(text_style) {
+            for (a, b) in label.ink_boxes() {
+                lo.x = lo.x.min(a.x);
+                lo.y = lo.y.min(a.y);
+                hi.x = hi.x.max(b.x);
+                hi.y = hi.y.max(b.y);
+            }
+        }
+        (lo, hi)
+    }
+    /// Vector extents, excluding an attached superscript.
+    pub fn shape_bounds(&self) -> (Point, Point) {
         let commands: Vec<_> = self.parts().into_iter().flat_map(|p| p.commands).collect();
         let mut points = commands
             .iter()
@@ -503,6 +530,21 @@ impl Graphic {
                     .any(|c| matches!(c, PathCommand::Close)))
     }
     pub fn hit(&self, p: Point, r: f32) -> bool {
+        self.hit_with_text_style(p, r, &crate::typography::TextStyle::default())
+    }
+    pub fn hit_with_text_style(
+        &self,
+        p: Point,
+        r: f32,
+        text_style: &crate::typography::TextStyle,
+    ) -> bool {
+        if self.superscript_label(text_style).is_some_and(|label| {
+            label.ink_boxes().into_iter().any(|(lo, hi)| {
+                p.x >= lo.x - r && p.x <= hi.x + r && p.y >= lo.y - r && p.y <= hi.y + r
+            })
+        }) {
+            return true;
+        }
         if self.kind == GraphicKind::Picture {
             return flattened(&self.commands()).iter().any(|path| {
                 inside_polygon(p, path)
@@ -540,6 +582,7 @@ impl Graphic {
             });
         }
         self.kind = GraphicKind::Path;
+        self.superscript = None;
         self.reset_frame();
         self.path = commands;
         self.node_types.clear();
@@ -547,6 +590,9 @@ impl Graphic {
     }
     pub fn validate(&self) -> Result<(), String> {
         self.style.validate()?;
+        if self.superscript.is_some() && !self.kind.brackets() {
+            return Err("A superscript requires a bracket graphic".into());
+        }
         if let Some(heads) = self.heads {
             if !matches!(self.kind, GraphicKind::Curve | GraphicKind::Path) {
                 return Err("Path arrowheads do not match the graphic kind".into());
