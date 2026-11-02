@@ -110,10 +110,9 @@ pub enum Action {
 }
 
 #[derive(Debug, Clone)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "Message::Finished already boxes each outcome once"
-)]
+// Message::Finished already boxes each outcome once. Only 64-bit targets
+// reach the lint's size threshold.
+#[allow(clippy::large_enum_variant)]
 pub enum Outcome {
     Names(Vec<Record>, Option<Box<Preview>>),
     Preview(Box<Preview>),
