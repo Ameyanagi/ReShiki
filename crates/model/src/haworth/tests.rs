@@ -28,14 +28,14 @@ fn recognized_haworth_atoms_include_ring_and_direct_substituents() -> anyhow::Re
 }
 
 #[test]
-fn ring_h_labels_clear_each_other_and_unrelated_bonds() -> anyhow::Result<()> {
+fn inward_pyranose_labels_clear_each_other_and_unrelated_bonds() -> anyhow::Result<()> {
     use anyhow::Context;
     let length = crate::style::DEFAULT.bond_length_world;
     let mut checked = 0;
     for template in templates()
         .map_err(anyhow::Error::msg)?
         .into_iter()
-        .filter(|t| t.name.ends_with(", ring H"))
+        .filter(|t| t.name.ends_with(", ring H") || t.name.contains("-L-"))
     {
         let doc = &template.document;
         // Include condensed-group anchors and explicit methyl carbons, but
@@ -77,7 +77,7 @@ fn ring_h_labels_clear_each_other_and_unrelated_bonds() -> anyhow::Result<()> {
         }
         checked += 1;
     }
-    assert_eq!(checked, 24);
+    assert_eq!(checked, 28);
     Ok(())
 }
 
