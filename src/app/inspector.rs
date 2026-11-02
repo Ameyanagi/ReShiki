@@ -1129,7 +1129,7 @@ impl App {
                 body = body
                     .push(text("Elemental analysis").size(11).style(muted_text))
                     .push(
-                        text(analysis)
+                        text(analysis.replace(", ", ",\u{a0}"))
                             .size(12)
                             .wrapping(text::Wrapping::WordOrGlyph),
                     )
