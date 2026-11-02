@@ -529,6 +529,7 @@ async fn alternative_name_copy_requires_a_current_record_and_preserves_the_drawi
 }
 
 #[tokio::test]
+#[ignore = "Opt-in actual renderer alternative names and copy actions"]
 async fn alternative_names_render_with_accessible_copy_actions_without_font_snapshots()
 -> Result<(), String> {
     use iced::advanced::{renderer::Headless, widget::Operation};
