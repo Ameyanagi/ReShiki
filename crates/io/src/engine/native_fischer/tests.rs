@@ -4,6 +4,56 @@ use crate::{
     fischer::{self, Compound},
 };
 
+#[test]
+fn wedge_conversion_reorients_condensed_terminal_labels() -> anyhow::Result<()> {
+    for compound in [Compound::LAlanine, Compound::DGlucose] {
+        let source = fischer::document(compound, 42.).map_err(anyhow::Error::msg)?;
+        let mut document = wedge_request(&Request::molecule("fischer_wedge", source))?
+            .document
+            .unwrap();
+        for group in document.abbreviations.clone() {
+            let reverse = match group.label.as_str() {
+                "CH3" => "H3C",
+                "COOH" => "HOOC",
+                "CHO" => "OHC",
+                "CH2OH" => "HOH2C",
+                _ => unreachable!(),
+            };
+            let neighbor = document
+                .bonds
+                .iter()
+                .find_map(|bond| {
+                    let other = if bond.a == group.anchor {
+                        bond.b
+                    } else if bond.b == group.anchor {
+                        bond.a
+                    } else {
+                        return None;
+                    };
+                    (!group.members.contains(&other)).then_some(other)
+                })
+                .unwrap();
+            let anchor = document.atom(group.anchor).unwrap().position;
+            for (x, expected) in [(42., reverse), (-42., group.label.as_str())] {
+                document.atom_mut(neighbor).unwrap().position = anchor.offset(x, 0.);
+                assert_eq!(group.text(&document), expected);
+                let (lo, hi) = crate::scene::atom_label_bounds(
+                    document.atom(group.anchor).unwrap(),
+                    &document,
+                )
+                .unwrap();
+                // The attachment carbon stays at the end facing its bond.
+                if x > 0. {
+                    assert!(anchor.x - lo.x > hi.x - anchor.x);
+                } else {
+                    assert!(hi.x - anchor.x > anchor.x - lo.x);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 #[tokio::test]
 async fn every_fischer_template_converts_to_ordinary_bond_angles_and_keeps_key()
 -> anyhow::Result<()> {

@@ -164,6 +164,19 @@ pub fn wedge_request(request: &Request) -> Result<Request> {
         .bonds
         .retain(|b| !removed.contains(&b.a) && !removed.contains(&b.b));
 
+    // Fischer labels are centered on vertical arms and pin horizontal H sides.
+    // Let the ordinary renderer orient them for the new bond directions.
+    for atom in &mut document.atoms {
+        if members.contains(&atom.id) {
+            atom.display.hydrogen_position = crate::atom_labels::HydrogenPosition::Auto;
+        }
+    }
+    for group in &mut document.abbreviations {
+        if members.contains(&group.anchor) {
+            group.alignment = crate::abbreviations::LabelAlignment::Auto;
+        }
+    }
+
     // A folded centre is no longer a four-arm Fischer object. Give cleanup's
     // independent visible-stereo check conventional wedges to read.
     if !removed.is_empty() {

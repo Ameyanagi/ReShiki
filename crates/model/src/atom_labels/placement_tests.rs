@@ -140,18 +140,74 @@ fn assert_stereo_clear(doc: &Document, indicator: &super::Indicator) {
     }
 }
 
+fn assert_rendered_bonds_clear(doc: &Document, indicator: &super::Indicator) {
+    let check_segment = |a, b, half_width: f32| {
+        let lo = indicator.origin.offset(-half_width, -half_width);
+        let hi = indicator
+            .origin
+            .offset(indicator.width + half_width, indicator.height + half_width);
+        assert!(
+            !segment_hits_rect(a, b, lo, hi),
+            "{indicator:?} overlaps rendered bond {a:?}..{b:?} with half-width {half_width}"
+        );
+    };
+    for primitive in crate::scene::primitives(doc) {
+        match primitive {
+            crate::scene::Primitive::Line(a, b, width) => check_segment(a, b, width / 2.),
+            crate::scene::Primitive::Polygon(points) => {
+                for (&a, &b) in points.iter().zip(points.iter().cycle().skip(1)) {
+                    check_segment(a, b, 0.);
+                }
+            }
+            crate::scene::Primitive::Path {
+                commands, style, ..
+            } => {
+                for path in crate::graphics::flattened(&commands) {
+                    for pair in path.windows(2) {
+                        check_segment(pair[0], pair[1], style.width() / 2.);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 #[test]
 fn dl_cysteine_stereo_stays_with_its_alpha_carbon() {
     super::test_support::with_fonts(|| {
         let template = crate::templates::LIBRARY
             .iter()
-            .find(|template| template.name == "L-Cysteine")
+            .find(|template| template.group == "Amino acids" && template.name == "L-Cysteine")
             .unwrap();
-        let mut doc = stereo_document(template.document.clone());
+        let (placed, _) = template
+            .place(
+                &Document::default(),
+                Point::new(0., 0.),
+                None,
+                10.,
+                crate::templates::Anchor::Auto,
+                crate::templates::Connection::Connect,
+            )
+            .unwrap();
+        let mut doc = stereo_document(placed);
         let [indicator] = indicators(&doc).try_into().unwrap();
         assert_eq!(indicator.owner, Owner::AtomStereo(2));
         assert_eq!(indicator.text, "L (R)");
+        let own = doc.atom(2).unwrap().position;
+        assert!(
+            indicator.center.x > own.x && indicator.center.y > own.y,
+            "{indicator:?} must stay in the open lower-right slot beside {own:?}"
+        );
+        for atom in doc.atoms.iter().filter(|atom| atom.id != 2) {
+            assert!(
+                indicator.center.distance(own) + 3. < indicator.center.distance(atom.position),
+                "{indicator:?} must clearly belong to the alpha carbon, not atom {}",
+                atom.id
+            );
+        }
         assert_stereo_clear(&doc, &indicator);
+        assert_rendered_bonds_clear(&doc, &indicator);
         let hash = doc
             .bonds
             .iter()
@@ -162,33 +218,25 @@ fn dl_cysteine_stereo_stays_with_its_alpha_carbon() {
         let b = doc.atom(hash.b).unwrap().position;
         let mut bars = 0;
         for primitive in crate::scene::primitives(&doc) {
-            let crate::scene::Primitive::Line(start, end, width) = primitive else {
+            let crate::scene::Primitive::Line(start, end, _) = primitive else {
                 continue;
             };
             let midpoint = Point::new((start.x + end.x) / 2., (start.y + end.y) / 2.);
-            // Select the rendered hash bars, including their stroke width,
-            // rather than checking only the underlying bond centerline.
+            // Keep the actual hash in this fixture; all its rendered bars and
+            // stroke widths are checked by assert_rendered_bonds_clear above.
             if crate::graphics::segment_distance(midpoint, a, b) > 0.01 {
                 continue;
             }
             bars += 1;
-            let gap = 3. + width / 2.;
-            let lo = indicator.origin.offset(-gap, -gap);
-            let hi = indicator
-                .origin
-                .offset(indicator.width + gap, indicator.height + gap);
-            assert!(
-                !segment_hits_rect(start, end, lo, hi),
-                "{indicator:?} is too close to hashed C–N bar {start:?}..{end:?}"
-            );
         }
         assert!(bars >= 3, "the C–N hash must have visible bars");
-        let own = doc.atom(2).unwrap().position;
         doc.atom_labels.dl_descriptors = false;
         let [plain] = indicators(&doc).try_into().unwrap();
         assert_eq!(plain.text, "(R)");
         assert!(plain.center.x > own.x && plain.center.y > own.y);
+        assert_eq!(indicator.center, plain.center);
         assert_stereo_clear(&doc, &plain);
+        assert_rendered_bonds_clear(&doc, &plain);
         doc.atom_labels.dl_descriptors = true;
         indicator
             .owner

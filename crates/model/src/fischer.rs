@@ -246,31 +246,31 @@ fn terminal(
         members.push(atom);
         atom
     };
-    let label = match kind {
+    let (label, reverse) = match kind {
         Terminal::Aldehyde => {
             add(doc, "O", Point::new(0.7, -0.5), carbon, 2);
-            "CHO"
+            ("CHO", "OHC")
         }
         Terminal::Hydroxymethyl => {
             add(doc, "O", Point::new(0.7, 0.5), carbon, 1);
-            "CH2OH"
+            ("CH2OH", "HOH2C")
         }
         Terminal::Carboxyl => {
             add(doc, "O", Point::new(0.7, -0.5), carbon, 2);
             add(doc, "O", Point::new(-0.7, -0.5), carbon, 1);
-            "COOH"
+            ("COOH", "HOOC")
         }
-        Terminal::Methyl => "CH3",
+        Terminal::Methyl => ("CH3", "H3C"),
         Terminal::Phosphoryloxymethyl => {
             let oxygen = add(doc, "O", Point::new(0.7, 0.5), carbon, 1);
             let phosphorus = add(doc, "P", Point::new(1.4, 1.), oxygen, 1);
             add(doc, "O", Point::new(2.1, 1.5), phosphorus, 2);
             add(doc, "O", Point::new(1.4, 2.), phosphorus, 1);
             add(doc, "O", Point::new(2.1, 0.5), phosphorus, 1);
-            "CH2OPO3H2"
+            ("CH2OPO3H2", "H2O3POH2C")
         }
     };
-    doc.contract(&members, label, label)?;
+    doc.contract(&members, label, reverse)?;
     if let Some(group) = doc.abbreviations.iter_mut().find(|g| g.anchor == carbon) {
         group.alignment = crate::abbreviations::LabelAlignment::Center;
     }

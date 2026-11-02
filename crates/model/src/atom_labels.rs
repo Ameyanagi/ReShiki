@@ -1204,19 +1204,23 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
                     }
                     for &(a, b, order, display) in &segments {
                         // Include space for the secondary line of double bonds.
-                        // Wider D/L labels can use the existing 3-unit clearance
-                        // around plain single bonds. Wedges and hashes need room
-                        // for the ink extending beyond their centerline.
-                        let padding = if dl && order == 1 && display == "plain" {
-                            0.
+                        // Wider D/L labels can stay near single bonds: 3 units
+                        // for plain lines, 2 for wedges and hashes. Other bonds
+                        // retain the 3-unit text margin plus 4 for extra ink.
+                        let padding = if dl && order == 1 {
+                            match display {
+                                "plain" => 3.,
+                                "wedge" | "hash" => 2.,
+                                _ => 7.,
+                            }
                         } else {
-                            4.
+                            7.
                         };
                         if segment_hits_rect(
                             a,
                             b,
-                            lo.offset(-padding, -padding),
-                            hi.offset(padding, padding),
+                            center.offset(-width / 2. - padding, -height / 2. - padding),
+                            center.offset(width / 2. + padding, height / 2. + padding),
                         ) {
                             score += 2000.;
                         }

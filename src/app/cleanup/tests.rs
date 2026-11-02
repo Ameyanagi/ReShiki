@@ -33,7 +33,7 @@ async fn dispatch(app: &mut App, message: Message) {
     }
 }
 
-async fn placed_fischer_converts_to_three_arm_centers(name: &str, count: usize) {
+async fn placed_fischer_converts_to_three_arm_centers(name: &str, count: usize) -> Document {
     let mut app = app(Document::default());
     let index = app
         .templates
@@ -108,11 +108,51 @@ async fn placed_fischer_converts_to_three_arm_centers(name: &str, count: usize) 
             }
         }
     }
+    app.tab.doc
 }
 
 #[tokio::test]
 async fn placed_alanine_fischer_converts_to_three_arm_centers() {
-    placed_fischer_converts_to_three_arm_centers("L-alanine · Fischer", 1).await;
+    let doc = placed_fischer_converts_to_three_arm_centers("L-alanine · Fischer", 1).await;
+    let methyl = doc.abbreviations.iter().find(|g| g.label == "CH3").unwrap();
+    let carbon = doc.atom(methyl.anchor).unwrap();
+    let bond = doc
+        .bonds
+        .iter()
+        .find(|b| b.a == carbon.id || b.b == carbon.id)
+        .unwrap();
+    let center = doc
+        .atom(if bond.a == carbon.id { bond.b } else { bond.a })
+        .unwrap();
+    assert!(center.position.x > carbon.position.x);
+    assert_eq!(methyl.text(&doc), "H3C");
+    let runs = reshiki::scene::primitives(&doc);
+    let hydrogen = runs
+        .iter()
+        .filter_map(|run| match run {
+            reshiki::scene::Primitive::Text { position, text, .. } if text == "H" => Some(position),
+            _ => None,
+        })
+        .min_by(|a, b| {
+            a.distance(carbon.position)
+                .total_cmp(&b.distance(carbon.position))
+        })
+        .unwrap();
+    assert!(hydrogen.x < carbon.position.x);
+    let labels: Vec<_> = doc
+        .atoms
+        .iter()
+        .filter_map(|atom| {
+            reshiki::scene::atom_label_bounds(atom, &doc).map(|bounds| (atom.id, bounds))
+        })
+        .collect();
+    for (index, &(id, (lo, hi))) in labels.iter().enumerate() {
+        for &(other, (a, b)) in &labels[index + 1..] {
+            let dx = (lo.x - b.x).max(a.x - hi.x).max(0.);
+            let dy = (lo.y - b.y).max(a.y - hi.y).max(0.);
+            assert!(dx.hypot(dy) >= 2., "labels {id} and {other} nearly touch");
+        }
+    }
 }
 
 #[tokio::test]
