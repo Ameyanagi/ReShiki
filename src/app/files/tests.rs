@@ -144,6 +144,59 @@ fn native_open_raises_old_versions_and_clears_computed_labels() {
 }
 
 #[test]
+fn arrow_semantics_native_open_preserves_legacy_roles_and_warns() {
+    use reshiki::{
+        arrows::{ArrowStyle, Preset},
+        document::Arrow,
+        reactions::{Participant, Reaction},
+    };
+    for count in 0..=2 {
+        let mut document = Document::default();
+        for index in 0..=count + 1 {
+            let preset = if index == 0 {
+                Preset::Forward
+            } else {
+                Preset::Resonance
+            };
+            let atom = document.add_atom("C", Point::new(0., index as f32 * 60.));
+            let arrow = document.next_id();
+            document.arrows.push(Arrow::new(
+                arrow,
+                Point::new(80., index as f32 * 60.),
+                Point::new(160., index as f32 * 60.),
+                preset,
+                ArrowStyle::preset(preset),
+            ));
+            let mut reaction = Reaction::new(arrow);
+            // The final resonance arrow retains a cleared reaction record.
+            if index <= count {
+                reaction.reactants.push(Participant {
+                    atoms: vec![atom],
+                    coefficient: 1,
+                });
+            }
+            document.reactions.push(reaction);
+        }
+        document.version = reshiki::document::REACTIONS;
+        document.validate().unwrap();
+        let path = PathBuf::from(format!("legacy-{count}.rsk"));
+        let prepared = prepare(&path, serde_json::to_vec(&document).unwrap()).unwrap();
+        let (mut app, _) = App::new();
+        let _ = app.update(Message::FilePrepared(Some((path, Ok(prepared)))));
+        assert_eq!(app.tab.doc, document);
+        assert!(!app.error && !app.dirty());
+        assert_eq!(
+            app.status,
+            match count {
+                0 => "Document opened",
+                1 => "Document opened · Warning: 1 arrow has incompatible reaction roles",
+                _ => "Document opened · Warning: 2 arrows have incompatible reaction roles",
+            }
+        );
+    }
+}
+
+#[test]
 fn save_dialog_answers_map_to_save_discard_and_cancel() {
     for answer in [Answer::Custom(SAVE.into()), Answer::Yes] {
         assert!(matches!(save_answer(answer), Message::Save));

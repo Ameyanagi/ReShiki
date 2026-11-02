@@ -947,7 +947,18 @@ fn analysis() -> Vec<Command> {
         Command::new(name, Analyze, detail, synonyms, Run::Send(messages)).need(Need::Molecule)
     };
     let mut list = vec![
-        // The Properties panel's "Predict NMR…" button sends Open, which predicts.
+        molecule(
+            "Check drawing",
+            "Check chemistry and stereochemical drawing notices",
+            "analyze stereo lint wedges hashes undefined",
+            vec![Message::Analyze],
+        ),
+        molecule(
+            "Redraw stereo bonds",
+            "Choose wedges for the selected molecules while preserving configurations",
+            "stereo wedges hashes redraw iupac",
+            vec![Message::Stereo(super::super::stereo::Action::Redraw)],
+        ),
         molecule(
             "Predict NMR",
             "Predict ¹H or ¹³C NMR shifts for the selected molecule",
@@ -1248,6 +1259,15 @@ fn view(app: &App) -> Vec<Command> {
     use super::super::atom_labels::{Action as Labels, Scope};
     use Category::View;
     let mut list = vec![
+        send(
+            "Toggle IUPAC style notes",
+            View,
+            "Include optional stereochemical style advice in Check drawing",
+            "stereo lint drawing check iupac wedges hashes",
+            Message::Stereo(super::super::stereo::Action::IupacStyleNotes(
+                !app.appearance.iupac_style_notes,
+            )),
+        ),
         send(
             "Fit drawing",
             View,

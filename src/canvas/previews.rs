@@ -61,17 +61,82 @@ impl<Message> canvas::Program<Message> for DrawingThumbnail {
 pub struct TemplateAnchorPreview<'a> {
     pub document: &'a Document,
     pub anchor: reshiki::templates::Anchor,
+    /// Only the template's detail view supplies parent-ring numbering.
+    pub locants: Option<&'a std::collections::HashMap<u64, String>>,
 }
 impl TemplateAnchorPreview<'_> {
     pub(super) fn camera(&self, bounds: Rectangle) -> Camera {
         let (lo, hi) = reshiki::scene::selection_bounds(self.document, &self.document.all_ids())
             .unwrap_or_else(|| self.document.bounds());
+        let margin = if self.locants.is_some_and(|locants| !locants.is_empty()) {
+            52.
+        } else {
+            30.
+        };
         Camera {
             center: World::new((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5),
-            zoom: ((bounds.width - 30.) / (hi.x - lo.x).max(60.))
-                .min((bounds.height - 30.) / (hi.y - lo.y).max(50.))
+            zoom: ((bounds.width - margin) / (hi.x - lo.x).max(60.))
+                .min((bounds.height - margin) / (hi.y - lo.y).max(50.))
                 .min(1.2),
         }
+    }
+    pub(super) fn locant_labels(&self, camera: Camera, bounds: Rectangle) -> Vec<(&str, Point)> {
+        let Some(locants) = self.locants else {
+            return vec![];
+        };
+        self.document
+            .atoms
+            .iter()
+            .filter_map(|atom| {
+                let locant = locants.get(&atom.id)?;
+                // The widest bond gap; equal gaps (fusion atoms) prefer the one facing outward.
+                let (ox, oy) = (
+                    atom.position.x - camera.center.x,
+                    atom.position.y - camera.center.y,
+                );
+                let angle = reshiki::templates::connection_directions(self.document, atom)
+                    .into_iter()
+                    .max_by(|a, b| {
+                        (a.cos() * ox + a.sin() * oy).total_cmp(&(b.cos() * ox + b.sin() * oy))
+                    })?;
+                let p = camera.screen(atom.position, bounds);
+                let base = if atom.element == "C" { 14. } else { 19. };
+                // A cramped gap (e.g. the inner bridge of a drawn cage) can put the
+                // locant nearer another numbered atom; read it from the other side.
+                let near = Point::new(p.x + angle.cos() * base, p.y + angle.sin() * base);
+                let angle = if self.document.atoms.iter().any(|other| {
+                    other.id != atom.id
+                        && locants.contains_key(&other.id)
+                        && near.distance(camera.screen(other.position, bounds)) < base
+                }) {
+                    angle + std::f32::consts::PI
+                } else {
+                    angle
+                };
+                let (dx, dy) = (angle.cos(), angle.sin());
+                // Step past the atom's whole label (e.g. the H of N-H), padded by
+                // the 9 px locant's half extents, where the ray leaves that box.
+                let half = (locant.chars().count() as f32 * 2.75 + 2., 6.5);
+                let offset = reshiki::scene::atom_label_ink_bounds(atom, self.document)
+                    .map(|(lo, hi)| {
+                        let (lo, hi) = (camera.screen(lo, bounds), camera.screen(hi, bounds));
+                        [
+                            (dx, p.x, lo.x - half.0, hi.x + half.0),
+                            (dy, p.y, lo.y - half.1, hi.y + half.1),
+                        ]
+                        .into_iter()
+                        .filter(|(d, ..)| d.abs() > 1e-3)
+                        .map(|(d, p, lo, hi)| (if d > 0. { hi } else { lo } - p) / d)
+                        .fold(f32::INFINITY, f32::min)
+                    })
+                    .unwrap_or(0.)
+                    .max(base);
+                Some((
+                    locant.as_str(),
+                    Point::new(p.x + dx * offset, p.y + dy * offset),
+                ))
+            })
+            .collect()
     }
     fn hit(&self, p: Point, bounds: Rectangle) -> Option<reshiki::templates::Anchor> {
         let camera = self.camera(bounds);
@@ -147,6 +212,17 @@ impl canvas::Program<reshiki::templates::Anchor> for TemplateAnchorPreview<'_> {
         let camera = self.camera(bounds);
         frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
         draw_document(&mut frame, self.document, camera, bounds);
+        for (locant, position) in self.locant_labels(camera, bounds) {
+            frame.fill_text(canvas::Text {
+                content: locant.into(),
+                position,
+                size: 9.into(),
+                color: Color::from_rgba8(110, 116, 120, 0.8),
+                align_x: iced::advanced::text::Alignment::Center,
+                align_y: iced::alignment::Vertical::Center,
+                ..Default::default()
+            });
+        }
         for (anchor, color) in [
             (Some(self.anchor), Color::from_rgb8(17, 126, 108)),
             (*state, Color::from_rgba8(17, 126, 108, 0.45)),

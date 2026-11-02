@@ -106,6 +106,7 @@ impl NativeBond {
                 .map_err(|_| Error::ColorBoundary)?,
             indicator: Default::default(),
             cip_label: None,
+            undefined_stereo: false,
             stereo: None,
             stereo_atoms: Vec::new(),
         })

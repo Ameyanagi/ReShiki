@@ -653,7 +653,7 @@ impl App {
                             Action::ArrowVariant(*preset, style.clone())
                         },
                     )),
-                    label.clone(),
+                    format!("{label}\n{}", preset.meaning()),
                     tooltip::Position::Bottom,
                 ));
             }

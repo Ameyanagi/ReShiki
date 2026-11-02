@@ -1,5 +1,220 @@
 use super::*;
 
+#[tokio::test]
+async fn retrosynthesis_arrows_roundtrip_through_cdxml_and_cdx() {
+    use crate::{
+        arrows::{ArrowStyle, Head, HeadShape, Preset},
+        document::Arrow,
+        graphics::LinePattern,
+        grouping::Group,
+        palette::Color,
+    };
+
+    for style in [
+        None,
+        Some(ArrowStyle {
+            width_pt: 1.25,
+            head_length_pt: 8.,
+            head_width_pt: 3.,
+            head_notch: 0.25,
+            gap_pt: 3.25,
+            pattern: LinePattern::Dashed,
+            color: Color::Custom([32, 80, 145]),
+            ..ArrowStyle::preset(Preset::Retro)
+        }),
+        Some(ArrowStyle {
+            shape: HeadShape::Hollow,
+            ..ArrowStyle::preset(Preset::Retro)
+        }),
+        Some(ArrowStyle {
+            head: Head::Right,
+            tail: Head::Full,
+            shape: HeadShape::Solid,
+            ..ArrowStyle::preset(Preset::Retro)
+        }),
+    ] {
+        let mut document = Document::default();
+        document.arrows.push(Arrow {
+            id: 1,
+            kind: Preset::Retro.kind().into(),
+            start: Point::new(-30., 20.),
+            end: Point::new(150., -40.),
+            start_anchor: None,
+            end_anchor: None,
+            control: None,
+            cubic: None,
+            style,
+        });
+        document.arrows.push(Arrow {
+            id: 2,
+            kind: "forward".into(),
+            start: Point::new(-30., 80.),
+            end: Point::new(150., 80.),
+            style: None,
+            ..document.arrows[0].clone()
+        });
+        document.groups.push(Group {
+            id: 3,
+            members: vec![1, 2],
+            integral: true,
+        });
+        for format in ["cdxml", "cdx"] {
+            let bytes = crate::formats::write(document.clone(), format)
+                .await
+                .unwrap();
+            let xml = if format == "cdx" {
+                crate::exchange::from_cdx(&bytes).unwrap()
+            } else {
+                String::from_utf8(bytes.clone()).unwrap()
+            };
+            let tree = roxmltree::Document::parse(&xml).unwrap();
+            let arrow = tree
+                .descendants()
+                .find(|n| n.has_tag_name("arrow"))
+                .unwrap();
+            if document.arrows[0].style.is_none() {
+                assert_eq!(arrow.attribute("ArrowheadHead"), Some("Full"));
+                assert_eq!(arrow.attribute("ArrowheadTail"), Some("None"));
+                assert_eq!(arrow.attribute("ArrowheadType"), Some("Angle"));
+            }
+            assert_eq!(
+                arrow.attribute("ArrowShaftSpacing"),
+                Some(if document.arrows[0].appearance().gap_pt == 3.25 {
+                    "325"
+                } else {
+                    "140"
+                })
+            );
+            let legacy = tree
+                .descendants()
+                .find(|n| n.has_tag_name("graphic"))
+                .unwrap();
+            assert_eq!(legacy.attribute("GraphicType"), Some("Line"));
+            assert_eq!(legacy.attribute("ArrowType"), Some("RetroSynthetic"));
+            assert_eq!(legacy.attribute("SupersededBy"), arrow.attribute("id"));
+            for attribute in ["Z", "HeadSize", "color"] {
+                assert_eq!(legacy.attribute(attribute), arrow.attribute(attribute));
+            }
+            let head = arrow
+                .attribute("Head3D")
+                .unwrap()
+                .split_whitespace()
+                .take(2);
+            let tail = arrow
+                .attribute("Tail3D")
+                .unwrap()
+                .split_whitespace()
+                .take(2);
+            assert_eq!(
+                legacy
+                    .attribute("BoundingBox")
+                    .unwrap()
+                    .split_whitespace()
+                    .collect::<Vec<_>>(),
+                head.chain(tail).collect::<Vec<_>>()
+            );
+            assert_eq!(legacy.parent(), arrow.parent());
+
+            let restored = crate::formats::read(bytes, format).await.unwrap();
+            assert_eq!(restored.arrows.len(), 2);
+            assert!(restored.graphics.is_empty());
+            assert_eq!(restored.groups.len(), 1);
+            assert_eq!(
+                restored.groups[0].members,
+                restored.arrows.iter().map(|a| a.id).collect::<Vec<_>>()
+            );
+            let actual = &restored.arrows[0];
+            let expected = &document.arrows[0];
+            assert_eq!(actual.kind, "retro");
+            let mut actual_style = actual.appearance();
+            let expected_style = expected.appearance();
+            assert!((actual_style.width_pt - expected_style.width_pt).abs() < 1. / 65536.);
+            actual_style.width_pt = expected_style.width_pt;
+            assert_eq!(actual_style, expected_style);
+            // Editable exchange translates the page; preserve relative geometry.
+            assert!((actual.end.x - actual.start.x - 180.).abs() < 0.001);
+            assert!((actual.end.y - actual.start.y + 60.).abs() < 0.001);
+            assert_eq!(actual.control, None);
+            assert_eq!(actual.cubic, None);
+        }
+    }
+}
+
+#[test]
+fn retrosynthesis_exchange_refuses_curves() {
+    use crate::{
+        arrows::{ArrowStyle, Preset},
+        document::Arrow,
+    };
+    for (control, cubic) in [
+        (Some(Point::new(60., -30.)), None),
+        (Some(Point::new(180., 0.)), None),
+        (None, Some([Point::new(30., -30.), Point::new(90., -30.)])),
+        (None, Some([Point::new(40., 0.), Point::new(80., 0.)])),
+    ] {
+        let document = Document {
+            arrows: vec![Arrow {
+                id: 1,
+                kind: "retro".into(),
+                start: Point::default(),
+                end: Point::new(120., 0.),
+                start_anchor: None,
+                end_anchor: None,
+                control,
+                cubic,
+                style: Some(ArrowStyle::preset(Preset::Retro)),
+            }],
+            ..Default::default()
+        };
+        let message = write(&document, Options::default())
+            .unwrap_err()
+            .to_string();
+        assert!(message.contains("Curved retrosynthesis"), "{message}");
+    }
+}
+
+#[tokio::test]
+async fn straightened_retrosynthesis_exports_as_a_straight_arrow() {
+    use crate::{
+        arrows::{ArrowStyle, Preset},
+        document::Arrow,
+    };
+    let mut arrow = Arrow::new(
+        1,
+        Point::new(-30., 20.),
+        Point::new(150., -40.),
+        Preset::Retro,
+        ArrowStyle::preset(Preset::Retro),
+    );
+    arrow.control = Some(Point::new(60., -80.));
+    arrow.straighten();
+    assert_eq!(arrow.control, Some(arrow.start.lerp(arrow.end, 0.5)));
+    for control in [
+        arrow.control.unwrap(),
+        arrow.start.lerp(arrow.end, 0.3).offset(0., 0.0005),
+    ] {
+        arrow.control = Some(control);
+        let document = Document {
+            arrows: vec![arrow.clone()],
+            ..Default::default()
+        };
+        for format in ["cdxml", "cdx"] {
+            let bytes = crate::formats::write(document.clone(), format)
+                .await
+                .unwrap();
+            let restored = crate::formats::read(bytes, format).await.unwrap();
+            assert_eq!(restored.arrows.len(), 1);
+            assert!(restored.graphics.is_empty());
+            let actual = &restored.arrows[0];
+            assert_eq!(actual.kind, "retro");
+            assert_eq!(actual.control, None);
+            assert_eq!(actual.cubic, None);
+            assert!((actual.end.x - actual.start.x - 180.).abs() < 0.001);
+            assert!((actual.end.y - actual.start.y + 60.).abs() < 0.001);
+        }
+    }
+}
+
 fn text_document(label: &str) -> Document {
     let mut document = Document::default();
     let left = document.add_atom("*", Point::default());

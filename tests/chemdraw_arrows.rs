@@ -7,6 +7,41 @@ use reshiki::{
     exchange::{from_cdx, to_cdx},
 };
 
+#[tokio::test]
+async fn constructed_chemdraw_retrosynthesis_and_hollow_arrows_keep_their_kinds()
+-> anyhow::Result<()> {
+    let response = LocalEngine::default()
+        .request(Request::import(
+            "cdxml",
+            include_str!("fixtures/chemdraw-arrows/retrosynthetic.cdxml"),
+        ))
+        .await
+        .map_err(anyhow::Error::msg)?;
+    let document = response.document.context("Missing arrow drawing")?;
+    assert_eq!(document.arrows.len(), 2);
+    assert!(document.graphics.is_empty());
+    assert!(document.reactions.is_empty());
+    assert_eq!(response.warnings.len(), 1);
+    assert!(response.warnings[0].contains("external reaction roles"));
+    let retro = &document.arrows[0];
+    assert_eq!(retro.kind, "retro");
+    assert_eq!(retro.appearance().head, Head::Full);
+    assert_eq!(retro.appearance().tail, Head::None);
+    assert_eq!(retro.appearance().shape, HeadShape::Open);
+    assert_eq!(retro.appearance().head_length_pt, 6.);
+    assert_eq!(retro.appearance().head_width_pt, 1.5);
+    assert_eq!(retro.appearance().gap_pt, 2.);
+    let hollow = &document.arrows[1];
+    assert_eq!(hollow.kind, "forward");
+    assert_eq!(hollow.appearance().head, Head::Full);
+    assert_eq!(hollow.appearance().tail, Head::None);
+    assert_eq!(hollow.appearance().shape, HeadShape::Hollow);
+    assert_eq!(hollow.appearance().head_length_pt, 6.);
+    assert_eq!(hollow.appearance().head_width_pt, 1.5);
+    assert_eq!(hollow.appearance().gap_pt, 6.);
+    Ok(())
+}
+
 #[test]
 fn binary_arrows_use_chemdraw_code_and_migrate_legacy_files() -> anyhow::Result<()> {
     let xml = r#"<CDXML><page id="1"><arrow id="2" Tail3D="10 20 0" Head3D="70 20 0" ArrowheadHead="Full" ArrowheadType="Solid"/></page></CDXML>"#;
