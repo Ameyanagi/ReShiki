@@ -89,23 +89,128 @@ fn components(document: &Document, selection: &[u64]) -> Result<(Adjacent, Vec<V
 }
 
 /// Prepare an ordinary cleanup request for entire selected Fischer molecules.
-/// The cleanup pipeline reads Fischer chemistry before replacing its crosses
-/// with native wedges, and verifies both chemical and visible stereochemistry.
+/// Fold ordinary terminal H and materialize the stored configuration as wedges
+/// before cleanup verifies both chemical and visible stereochemistry.
 pub fn wedge_request(request: &Request) -> Result<Request> {
     if request.protocol != super::PROTOCOL {
         return Err(Error::Protocol);
     }
     let source = request.document.as_ref().ok_or(Error::MissingDocument)?;
-    let (_, components) = components(source, request.selected_ids.as_deref().unwrap_or_default())?;
+    let (adjacent, components) =
+        components(source, request.selected_ids.as_deref().unwrap_or_default())?;
     let centers = crate::fischer::marked_centers(source);
     let mut selected = Vec::new();
+    let mut members = HashSet::new();
     for component in components {
-        selected.extend(component.into_iter().filter(|id| centers.contains(id)));
+        if component.iter().any(|id| centers.contains(id)) {
+            selected.extend(component.iter().copied().filter(|id| centers.contains(id)));
+            members.extend(component);
+        }
     }
     if selected.is_empty() {
         return Err(Error::NoFischer);
     }
-    let mut clean = Request::molecule("clean", source.clone());
+    let selected_centers: HashSet<_> = selected.iter().copied().collect();
+    let mut document = source.clone();
+    let mut removed = HashSet::new();
+    for hydrogen in &source.atoms {
+        if hydrogen.element != "H"
+            || hydrogen.isotope != 0
+            || hydrogen.charge != 0
+            || hydrogen.radical_electrons != 0
+            || hydrogen.map_num != 0
+            || !hydrogen.display.is_default()
+            || hydrogen.text_style.is_some()
+        {
+            continue;
+        }
+        let Some([center]) = adjacent.get(&hydrogen.id).map(Vec::as_slice) else {
+            continue;
+        };
+        if !selected_centers.contains(center) {
+            continue;
+        }
+        let (_, bond) = source
+            .bond_between(*center, hydrogen.id)
+            .ok_or(Error::Selection)?;
+        let mut plain = crate::document::Bond::plain(bond.a, bond.b, 1, "plain");
+        plain.projection = true;
+        if *bond != plain {
+            continue;
+        }
+        // Cleanup validation rejects other dangling references, but does not
+        // check model links or inactive bond stereo references.
+        if crate::models3d::model_of(source, hydrogen.id).is_some()
+            || source
+                .bonds
+                .iter()
+                .any(|b| b.stereo_atoms.contains(&hydrogen.id))
+        {
+            continue;
+        }
+        let value = document.atom_mut(*center).ok_or(Error::Selection)?;
+        let stereo = value.stereo.as_mut().ok_or(Error::Stereo)?;
+        let position = stereo
+            .neighbors
+            .iter()
+            .position(|id| *id == hydrogen.id)
+            .ok_or(Error::Stereo)?;
+        // Moving H to the last of four ligands flips winding for even indices.
+        if position % 2 == 0 {
+            stereo.winding = if stereo.winding == "cw" { "ccw" } else { "cw" }.into();
+        }
+        stereo.neighbors.remove(position);
+        value.explicit_h = value.explicit_h.checked_add(1).ok_or(Error::Unsupported)?;
+        removed.insert(hydrogen.id);
+    }
+    document.atoms.retain(|a| !removed.contains(&a.id));
+    document
+        .bonds
+        .retain(|b| !removed.contains(&b.a) && !removed.contains(&b.b));
+
+    // A folded centre is no longer a four-arm Fischer object. Give cleanup's
+    // independent visible-stereo check conventional wedges to read.
+    if !removed.is_empty() {
+        let isolated = Document {
+            version: document.version,
+            atoms: document
+                .atoms
+                .iter()
+                .filter(|a| members.contains(&a.id))
+                .cloned()
+                .collect(),
+            bonds: document
+                .bonds
+                .iter()
+                .filter(|b| members.contains(&b.a))
+                .cloned()
+                .collect(),
+            drawing_style: document.drawing_style.clone(),
+            ..Default::default()
+        };
+        let molecule = molecular::prepare(&isolated)?;
+        let drawing = molecular::for_generated(
+            &molecule,
+            &vec![None; molecule.ids.len()],
+            molecular::DrawingOptions {
+                ring_fusion_hydrogens: false,
+                ..molecular::DrawingOptions::from(&document.drawing_style)
+            },
+        )?;
+        let labels = drawing.labels()?;
+        let drawing = drawing.finish(labels)?;
+        for bond in &mut document.bonds {
+            if !selected_centers.contains(&bond.a) && !selected_centers.contains(&bond.b) {
+                continue;
+            }
+            let (_, native) = drawing.bond_between(bond.a, bond.b).ok_or(Error::Stereo)?;
+            bond.a = native.a;
+            bond.b = native.b;
+            bond.display.clone_from(&native.display);
+            bond.projection = false;
+        }
+    }
+    let mut clean = Request::molecule("clean", document);
     clean.selected_ids = Some(selected);
     clean.cleanup = Some(crate::cleanup::Options {
         scope: crate::cleanup::Scope::SelectedMolecules,
@@ -122,7 +227,8 @@ pub async fn execute(
         return Err(Error::Protocol);
     }
     if request.operation == "fischer_wedge" {
-        return Ok(native_cleanup::execute(wedge_request(&request)?, config).await?);
+        let clean = crate::task::spawn_blocking(move || wedge_request(&request)).await??;
+        return Ok(native_cleanup::execute(clean, config).await?);
     }
     if request.operation != "fischer" {
         return Err(Error::Operation);

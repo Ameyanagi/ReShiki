@@ -5,6 +5,110 @@ use crate::{
 };
 
 #[tokio::test]
+async fn every_fischer_template_converts_to_ordinary_bond_angles_and_keeps_key()
+-> anyhow::Result<()> {
+    let engine = LocalEngine::in_process();
+    for template in fischer::templates().map_err(anyhow::Error::msg)? {
+        let centers = fischer::marked_centers(&template.document);
+        let before = engine
+            .request(Request::molecule("analyze", template.document.clone()))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let converted = engine
+            .request(Request::molecule("fischer_wedge", template.document))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(
+            converted.analysis.unwrap().inchikey,
+            before.analysis.unwrap().inchikey,
+            "{}",
+            template.name
+        );
+        let document = converted.document.unwrap();
+        assert!(
+            document.atoms.iter().all(|a| a.element != "H"),
+            "{}",
+            template.name
+        );
+        assert!(
+            document.bonds.iter().all(|b| !b.projection),
+            "{}",
+            template.name
+        );
+        for center in centers {
+            let atom = document.atom(center).unwrap();
+            assert_eq!(
+                atom.stereo.as_ref().unwrap().neighbors.len(),
+                3,
+                "{}",
+                template.name
+            );
+            let vectors: Vec<_> = document
+                .bonds
+                .iter()
+                .filter_map(|bond| {
+                    if bond.a == center {
+                        Some(bond.b)
+                    } else if bond.b == center {
+                        Some(bond.a)
+                    } else {
+                        None
+                    }
+                })
+                .map(|id| {
+                    let p = document.atom(id).unwrap().position;
+                    (
+                        f64::from(p.x - atom.position.x),
+                        f64::from(p.y - atom.position.y),
+                    )
+                })
+                .collect();
+            assert_eq!(vectors.len(), 3, "{} centre {center}", template.name);
+            for (index, &(ax, ay)) in vectors.iter().enumerate() {
+                for &(bx, by) in &vectors[index + 1..] {
+                    let cosine = (ax * bx + ay * by) / (ax.hypot(ay) * bx.hypot(by));
+                    assert!(
+                        cosine >= 165_f64.to_radians().cos(),
+                        "{} centre {center} retains an angle of {} degrees",
+                        template.name,
+                        cosine.clamp(-1., 1.).acos().to_degrees()
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn folding_one_center_keeps_a_neighboring_isotopic_hydrogen_and_key() -> anyhow::Result<()> {
+    let engine = LocalEngine::in_process();
+    let mut source = fischer::document(Compound::DGlucose, 42.).map_err(anyhow::Error::msg)?;
+    let hydrogen = source.atoms.iter().find(|a| a.element == "H").unwrap().id;
+    source.atom_mut(hydrogen).unwrap().isotope = 2;
+    let before = engine
+        .request(Request::molecule("analyze", source.clone()))
+        .await
+        .map_err(anyhow::Error::msg)?;
+    let converted = engine
+        .request(Request::molecule("fischer_wedge", source))
+        .await
+        .map_err(anyhow::Error::msg)?;
+    assert_eq!(
+        converted.analysis.unwrap().inchikey,
+        before.analysis.unwrap().inchikey
+    );
+    let document = converted.document.unwrap();
+    assert_eq!(
+        document.atoms.iter().filter(|a| a.element == "H").count(),
+        1
+    );
+    assert_eq!(document.atom(hydrogen).unwrap().isotope, 2);
+    assert!(document.bonds.iter().all(|b| !b.projection));
+    Ok(())
+}
+
+#[tokio::test]
 async fn fischer_to_wedge_keeps_key_and_emits_chemical_wedges() -> anyhow::Result<()> {
     let engine = LocalEngine::in_process();
     for compound in [Compound::LAlanine, Compound::DGlucose] {
@@ -284,11 +388,13 @@ async fn reverse_moves_phosphate_subtree_rigidly_and_keeps_key() -> anyhow::Resu
 }
 
 #[tokio::test]
-async fn wedge_conversion_preserves_unselected_molecule_geometry() -> anyhow::Result<()> {
+async fn wedge_conversion_preserves_unselected_invalid_molecule_geometry() -> anyhow::Result<()> {
     let engine = LocalEngine::in_process();
     let mut source = fischer::document(Compound::LAlanine, 42.).map_err(anyhow::Error::msg)?;
     let selected = source.atoms[0].id;
-    let other = source.add_atom("C", Point::new(800., 100.));
+    // The selected component is convertible even when another component cannot
+    // be analyzed as a molecule.
+    let other = source.add_atom("Xx", Point::new(800., 100.));
     let snapshot = source.atom(other).unwrap().clone();
     let mut request = Request::molecule("fischer_wedge", source);
     request.selected_ids = Some(vec![selected]);

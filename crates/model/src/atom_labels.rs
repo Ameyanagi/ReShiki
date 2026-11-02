@@ -1097,7 +1097,7 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
     let segments: Vec<_> = doc
         .bonds
         .iter()
-        .filter_map(|b| Some((*positions.get(&b.a)?, *positions.get(&b.b)?)))
+        .filter_map(|b| Some((*positions.get(&b.a)?, *positions.get(&b.b)?, b.order)))
         .collect();
     // Atoms hidden in collapsed groups cannot claim a map number.
     let visible: Vec<_> = doc
@@ -1114,6 +1114,8 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
         let height = crate::style::DEFAULT.world(style.size_pt);
         let format = owned_indicator_format(owner, &text, &style, roman_parentheses);
         let width = indicator_width(&text, height, &format);
+        let dl = matches!(owner, Owner::AtomStereo(_))
+            && (text.starts_with("D (") || text.starts_with("L ("));
         let outward = if matches!(owner, Owner::Number(_)) {
             outward_extent(width, height)
         } else {
@@ -1175,12 +1177,15 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
                                 && center.x - width / 2. < b.x
                                 && center.x + width / 2. > a.x
                         });
-                        let distance2 =
-                            |p: &Point| (p.x - center.x).powi(2) + (p.y - center.y).powi(2);
-                        let own = distance2(&anchor);
                         if !stacked {
                             score += 500.;
                         }
+                    }
+                    if mapping.is_some() || dl {
+                        // Extended stereo labels must still read as this atom's.
+                        let distance2 =
+                            |p: &Point| (p.x - center.x).powi(2) + (p.y - center.y).powi(2);
+                        let own = distance2(&anchor);
                         if visible.iter().any(|p| distance2(p) < own) {
                             score += 1000.;
                         }
@@ -1190,9 +1195,17 @@ fn layout_indicators(doc: &Document) -> Vec<Indicator> {
                             * (hi.y.min(b.y) - lo.y.max(a.y)).max(0.);
                         score += overlap * 10.;
                     }
-                    for &(a, b) in &segments {
+                    for &(a, b, order) in &segments {
                         // Include space for the secondary line of double bonds.
-                        if segment_hits_rect(a, b, lo.offset(-4., -4.), hi.offset(4., 4.)) {
+                        // Wider D/L labels can use the existing 3-unit clearance
+                        // around single bonds without reserving a second line.
+                        let padding = if dl && order == 1 { 0. } else { 4. };
+                        if segment_hits_rect(
+                            a,
+                            b,
+                            lo.offset(-padding, -padding),
+                            hi.offset(padding, padding),
+                        ) {
                             score += 2000.;
                         }
                     }
