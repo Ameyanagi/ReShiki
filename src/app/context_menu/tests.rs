@@ -246,6 +246,7 @@ fn atom_menu_groups_editing_naming_connecting_and_clipboard_commands() -> Result
             "Chemical names…",
             "Select molecule",
             "—",
+            "Redraw stereo bonds",
             "Join selected atoms or bonds",
             "Merge selected atoms",
             "Show as",
