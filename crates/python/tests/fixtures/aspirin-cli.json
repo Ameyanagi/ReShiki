@@ -10,6 +10,7 @@
   "value": {
     "analysis": {
       "acceptors": 3,
+      "display_formula": "C₉H₈O₄",
       "donors": 1,
       "exact_mass": 180.042258736,
       "formula": "C9H8O4",
