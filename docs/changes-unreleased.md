@@ -1,5 +1,17 @@
 # Unreleased changes
 
+Fischer projection templates retain defined configurations in native files,
+MOL, isomeric SMILES and InChI. **Convert to Wedge Drawing** and **Convert to
+Fischer Projection** preserve configuration in one Undo step for supported
+acyclic chains. **Invert Configuration Here** switches a selected Haworth
+anomer or epimer, Fischer centre or ordinary tetrahedral configuration in one
+Undo step. Atom labels offer an optional **Show D/L for amino acids and
+sugars** setting alongside R/S, including L-cysteine's L (R).
+([#866](https://github.com/Ameyanagi/ReShiki/issues/866),
+[#867](https://github.com/Ameyanagi/ReShiki/issues/867),
+[#868](https://github.com/Ameyanagi/ReShiki/issues/868));
+[projection guide](haworth-projections.md#fischer-projections).
+
 Automatic fusion double bonds now favour the ring with more other double or
 aromatic bonds, preferring six-membered rings on a tie. Substituted chain double
 bonds offset toward an attached ring or, when no attached ring selects a side,

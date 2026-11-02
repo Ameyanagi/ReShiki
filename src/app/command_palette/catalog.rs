@@ -736,6 +736,27 @@ fn edits() -> Vec<Command> {
             Message::Cleanup(cleanup::Action::Begin),
         )
         .keys(keys(Modifiers::COMMAND | Modifiers::SHIFT, "K")),
+        send(
+            "Convert to Wedge Drawing",
+            Edit,
+            "Replace Fischer projections with ordinary stereochemical drawings",
+            "fischer mills stereochemistry projection cleanup",
+            Message::Cleanup(cleanup::Action::ToWedge),
+        ),
+        selection(
+            "Convert to Fischer Projection",
+            "Arrange a selected acyclic molecule as a Fischer projection",
+            "wedge carbohydrate amino acid stereochemistry vertical chain",
+            Message::Cleanup(cleanup::Action::ToFischer),
+        ),
+        Command::new(
+            "Invert Configuration Here",
+            Edit,
+            "Invert the configuration of one selected stereocentre",
+            "stereochemistry enantiomer epimer anomer alpha beta fischer haworth",
+            Run::OnAtoms(Message::Stereo(super::super::stereo::Action::Invert)),
+        )
+        .need(Need::OneAtom),
         selection(
             "3D optimization",
             "Generate an optimized 3D conformer",
@@ -1401,6 +1422,19 @@ fn view(app: &App) -> Vec<Command> {
                 Message::Labels(Labels::Stereo(!app.tab.doc.atom_labels.stereo)),
                 Message::Labels(Labels::Scope(app.tab.labels.scope)),
             ]),
+        ),
+        send(
+            if app.tab.doc.atom_labels.dl_descriptors {
+                "Hide D/L for amino acids and sugars"
+            } else {
+                "Show D/L for amino acids and sugars"
+            },
+            View,
+            "Add D/L names to visible amino acid and sugar stereodescriptors throughout the drawing",
+            "D/L amino acid sugar carbohydrate Fischer Haworth chirality descriptor",
+            Message::Labels(Labels::DlDescriptors(
+                !app.tab.doc.atom_labels.dl_descriptors,
+            )),
         ),
         send(
             "Help & shortcuts",

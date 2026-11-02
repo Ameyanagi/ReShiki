@@ -423,6 +423,40 @@ impl App {
         let mut entries = vec![];
         if atoms {
             let molecules = reshiki::reactions::molecules(&self.tab.doc, &self.tab.selected);
+            let fischer = reshiki::fischer::marked_centers(&self.tab.doc);
+            let in_molecules = |id: &u64| molecules.iter().any(|ids| ids.contains(id));
+            if fischer.iter().any(in_molecules) {
+                entries.push(command(
+                    "Convert to Wedge Drawing",
+                    Message::Cleanup(super::cleanup::Action::ToWedge),
+                    !self.tab.busy,
+                ));
+            } else if self
+                .tab
+                .doc
+                .atoms
+                .iter()
+                .any(|a| matches!(a.cip_label.as_deref(), Some("R" | "S")) && in_molecules(&a.id))
+            {
+                entries.push(command(
+                    "Convert to Fischer Projection",
+                    Message::Cleanup(super::cleanup::Action::ToFischer),
+                    !self.tab.busy,
+                ));
+            }
+            if let [id] = self.tab.selected.as_slice()
+                && self
+                    .tab
+                    .doc
+                    .atom(*id)
+                    .is_some_and(|a| a.stereo.is_some() || a.cip_label.is_some())
+            {
+                entries.push(command(
+                    "Invert Configuration Here",
+                    Message::Stereo(super::stereo::Action::Invert),
+                    !self.tab.busy,
+                ));
+            }
             if self.tab.doc.bonds.iter().any(|bond| {
                 stereo_lint::stereobond(bond) && molecules.iter().any(|ids| ids.contains(&bond.a))
             }) {

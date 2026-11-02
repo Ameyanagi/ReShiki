@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 pub(crate) mod export_notices;
 pub mod native_aromatic;
 pub mod native_cleanup;
+pub mod native_fischer;
 pub mod native_import;
 pub mod native_response;
 #[cfg(feature = "rdkit-reference")]
@@ -261,6 +262,13 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
         use base64::{Engine, engine::general_purpose::STANDARD};
         if request.protocol != PROTOCOL {
             return Err("Unsupported protocol version".into());
+        }
+        if self.native_responses
+            && matches!(request.operation.as_str(), "fischer" | "fischer_wedge")
+        {
+            return native_fischer::execute(request, self.inchi.clone())
+                .await
+                .map_err(|error| error.to_string());
         }
         if self.native_responses && request.operation == "clean" {
             return native_cleanup::execute(request, self.inchi.clone())

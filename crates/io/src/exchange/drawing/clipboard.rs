@@ -4,6 +4,11 @@ use super::*;
 
 pub fn write(source: &Document) -> Result<(String, Vec<String>)> {
     source.validate().map_err(invalid)?;
+    // Plain projected crosses carry stereochemistry. The external clipboard
+    // must not flatten them; the native clipboard retains the source exactly.
+    if !crate::fischer::marked_centers(source).is_empty() {
+        return Err(invalid(FISCHER_EXPORT_ADVICE));
+    }
     let haworth = crate::haworth::interchange::export_bonds(source).map_err(invalid)?;
     let opacity = crate::rear_opacity::present(source);
     let mut document = source.clone();

@@ -7,6 +7,41 @@ use crate::{
 };
 
 #[test]
+fn dl_descriptors_fit_the_generic_ink_envelope() {
+    for roman in [false, true] {
+        for inverted in [false, true] {
+            let mut doc =
+                crate::fischer::document(crate::fischer::Compound::LAlanine, 42.).unwrap();
+            let center = crate::fischer::recognize(&doc).crosses[0].center;
+            if inverted {
+                let stereo = doc.atom_mut(center).unwrap().stereo.as_mut().unwrap();
+                stereo.winding = if stereo.winding == "ccw" { "cw" } else { "ccw" }.into();
+            }
+            doc.atom_labels.stereo = true;
+            doc.atom_labels.dl_descriptors = true;
+            doc.atom_labels.roman_stereo_parentheses = roman;
+            let refresh =
+                crate::atom_labels::refresh::Refresh::calculate(&doc, &Default::default()).unwrap();
+            assert!(refresh.notice.is_none());
+            refresh.apply(&mut doc);
+            let before = doc.clone();
+            let (lo, hi) = atom_bounds(doc.atom(center).unwrap(), &doc)
+                .unwrap()
+                .unwrap();
+            let indicator = crate::atom_labels::indicators(&doc)
+                .into_iter()
+                .find(|i| i.owner == crate::atom_labels::Owner::AtomStereo(center))
+                .unwrap();
+            assert_eq!(indicator.text, if inverted { "D (R)" } else { "L (S)" });
+            assert!(indicator.origin.x >= lo.x && indicator.origin.y >= lo.y);
+            assert!(indicator.origin.x + indicator.width <= hi.x);
+            assert!(indicator.origin.y + indicator.height <= hi.y);
+            assert_eq!(doc, before);
+        }
+    }
+}
+
+#[test]
 fn optional_unknown_indicators_fit_the_generic_ink_envelope() {
     let mut doc = chain(&["C", "C"]);
     doc.atom_labels.stereo = true;

@@ -384,6 +384,7 @@ pub enum Job {
     Insert,
     Analyze,
     Clean(cleanup::CleanupJob),
+    Projection(&'static str),
     Export(&'static str),
 }
 /// What the save dialog's answer continues.

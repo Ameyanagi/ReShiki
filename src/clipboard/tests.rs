@@ -1,6 +1,52 @@
 use super::*;
 
 #[tokio::test]
+async fn fischer_copy_keeps_native_configuration_and_offers_external_picture() {
+    let source = crate::fischer::document(crate::fischer::Compound::LAlanine, 42.).unwrap();
+    let (outcome, representations) = prepare_copy(LocalEngine::in_process(), source.clone(), false)
+        .await
+        .unwrap();
+    assert!(!outcome.external_editable);
+    assert!(
+        outcome
+            .notices
+            .iter()
+            .any(|notice| { notice.contains("Convert to wedge drawing") }),
+        "{:?}",
+        outcome.notices
+    );
+    let native = representations
+        .iter()
+        .find(|item| item.kind == NATIVE)
+        .unwrap();
+    let native = Document::from_json(&native.bytes().unwrap()).unwrap();
+    assert_eq!(native.atoms.len(), source.atoms.len());
+    for (original, copied) in source.atoms.iter().zip(&native.atoms) {
+        assert_eq!(copied.id, original.id);
+        assert_eq!(copied.position, original.position);
+        assert_eq!(copied.stereo, original.stereo);
+    }
+    assert_eq!(native.bonds, source.bonds);
+    assert!(
+        representations
+            .iter()
+            .any(|item| item.kind == "public.svg-image")
+    );
+    assert!(representations.iter().any(|item| item.kind == "public.png"));
+    let external = representations
+        .iter()
+        .find(|item| item.kind == CDX_TYPES[0])
+        .unwrap();
+    let xml = crate::exchange::from_cdx(&external.bytes().unwrap()).unwrap();
+    let tree = roxmltree::Document::parse(&xml).unwrap();
+    assert!(
+        tree.descendants()
+            .any(|node| node.has_tag_name("embeddedobject"))
+    );
+    assert!(!tree.descendants().any(|node| node.has_tag_name("n")));
+}
+
+#[tokio::test]
 async fn embedded_chemdraw_payload_imports_editable_chemistry_and_rejects_corruption() {
     let cdx = include_bytes!("../../tests/fixtures/native-ethyl-clipboard.cdx");
     let mut png = std::io::Cursor::new(Vec::new());

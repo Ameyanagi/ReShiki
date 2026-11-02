@@ -330,8 +330,19 @@ pub(super) fn cip_text_bytes(saved: Option<&str>, settings: &Settings) -> usize 
     saved
         .into_iter()
         .chain(future_codes(settings))
-        .map(|code| stereo_text(code, settings).len())
+        .flat_map(|code| cip_text_variants(code, settings))
+        .map(|text| text.len())
         .sum()
+}
+
+fn cip_text_variants(code: &str, settings: &Settings) -> impl Iterator<Item = String> {
+    let text = stereo_text(code, settings);
+    let dl = settings.dl_descriptors && matches!(code, "R" | "S");
+    let names = [
+        dl.then(|| format!("D {text}")),
+        dl.then(|| format!("L {text}")),
+    ];
+    std::iter::once(text).chain(names.into_iter().flatten())
 }
 
 fn cip_bounds(
@@ -343,15 +354,19 @@ fn cip_bounds(
     settings: &Settings,
 ) {
     for code in saved.into_iter().chain(future_codes(settings)) {
-        indicator_bounds(
-            bounds,
-            anchor,
-            &stereo_text(code, settings),
-            offset,
-            style,
-            false,
-            settings.roman_stereo_parentheses,
-        );
+        // A later chemistry refresh may recognize D/L. Reserve both names and
+        // the plain CIP label without assigning configuration to a generic.
+        for text in cip_text_variants(code, settings) {
+            indicator_bounds(
+                bounds,
+                anchor,
+                &text,
+                offset,
+                style,
+                false,
+                settings.roman_stereo_parentheses,
+            );
+        }
     }
 }
 
@@ -365,7 +380,14 @@ fn indicator_bounds(
     roman_parentheses: bool,
 ) {
     let height = crate::style::DEFAULT.world(style.size_pt);
-    let format = crate::atom_labels::indicator_format(text, style, roman_parentheses);
+    let format = if number {
+        crate::typography::TextFormat {
+            style: style.clone(),
+            ..Default::default()
+        }
+    } else {
+        crate::atom_labels::indicator_format(text, style, roman_parentheses)
+    };
     let width = crate::atom_labels::indicator_width(text, height, &format);
     // Automatic indicator candidates have five fixed radii, ending at 3.25h+6,
     // and long atom numbers are justified outward by up to `outward_extent`.
