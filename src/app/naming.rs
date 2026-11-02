@@ -584,12 +584,11 @@ impl App {
                 if let Some((_, record)) = &self.tab.naming.structure
                     && let Some(name) = &record.systematic_name
                 {
-                    let text = if matches!(action, Action::CopyFormattedName) {
-                        reshiki::typography::name_markup(name).unicode().text
-                    } else {
-                        name.clone()
-                    };
-                    return iced::clipboard::write(text);
+                    if matches!(action, Action::CopyFormattedName) {
+                        let text = reshiki::typography::name_markup(name).unicode().text;
+                        return iced::clipboard::write(text);
+                    }
+                    return self.copy_name(name.clone());
                 }
             }
             Action::Caption => self.insert_name_caption(None),

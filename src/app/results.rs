@@ -749,6 +749,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Charge(..)
         | Message::Isotope(..)
         | Message::ApplyIsotope
+        | Message::SetIsotope(..)
         | Message::Tabs(..)
         | Message::Close(..)
         | Message::Discard

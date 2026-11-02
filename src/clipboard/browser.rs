@@ -25,6 +25,8 @@ pub(super) fn web_items(
             html(&png, find(NATIVE)?.as_deref()).into_bytes(),
         ));
         items.push(("image/png", png));
+    } else if let Some(html) = find("public.html")? {
+        items.push(("text/html", html));
     }
     if let Some(svg) = find("public.svg-image")? {
         items.push(("image/svg+xml", svg));
@@ -186,7 +188,9 @@ mod transport {
                 clipboard.write(&js_sys::Array::of1(&item))
             }
             // Older browsers write text only.
-            (None, [("text/plain", text)]) => clipboard.write_text(&String::from_utf8_lossy(text)),
+            (None, [("text/plain", text)] | [("text/html", _), ("text/plain", text)]) => {
+                clipboard.write_text(&String::from_utf8_lossy(text))
+            }
             (None, _) => {
                 return Err("This browser cannot put pictures on the clipboard; use Export".into());
             }

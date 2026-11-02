@@ -424,25 +424,25 @@ async fn name_copy_preserves_engine_ascii_and_formatted_copy_uses_unicode() {
     let ascii = "N,N'-5lambda^6-tricyclo[3.2.2.0^{1,5}]nonane";
     app.tab.naming.structure.as_mut().unwrap().1.systematic_name = Some(ascii.into());
     let before = app.tab.doc.clone();
-    for (action, expected) in [
-        (Action::CopyName, ascii),
-        (
-            Action::CopyFormattedName,
-            "N,N′-5λ⁶-tricyclo[3.2.2.0¹,⁵]nonane",
-        ),
-    ] {
-        let mut stream = iced_runtime::task::into_stream(app.naming_action(action)).unwrap();
-        let Some(iced_runtime::Action::Clipboard(iced_runtime::clipboard::Action::Write {
-            contents,
-            ..
-        })) = stream.next().await
-        else {
-            panic!("Name copy writes text to the clipboard");
-        };
-        assert_eq!(contents, expected);
-        assert_eq!(app.tab.doc, before);
-        assert!(!app.tab.history.can_undo());
-    }
+    let mut stream =
+        iced_runtime::task::into_stream(app.naming_action(Action::CopyFormattedName)).unwrap();
+    let Some(iced_runtime::Action::Clipboard(iced_runtime::clipboard::Action::Write {
+        contents,
+        ..
+    })) = stream.next().await
+    else {
+        panic!("Formatted name copy writes text to the clipboard");
+    };
+    assert_eq!(contents, "N,N′-5λ⁶-tricyclo[3.2.2.0¹,⁵]nonane");
+    let mut stream = iced_runtime::task::into_stream(app.naming_action(Action::CopyName)).unwrap();
+    let Some(iced_runtime::Action::Output(Message::CopyAsPrepared(_, result))) =
+        stream.next().await
+    else {
+        panic!("Name copy prepares the rich name");
+    };
+    assert_eq!(result.unwrap().text(), Some(ascii));
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
     assert_eq!(
         app.tab
             .naming

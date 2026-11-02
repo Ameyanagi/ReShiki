@@ -177,8 +177,7 @@ where
             carbons: carbons(&root_attrs)?,
             hydrogens: !yes(&root_attrs, "HideImplicitHydrogens")?,
             stereo: yes(&root_attrs, "ShowAtomStereo")?,
-            maps: true,
-            roman_stereo_parentheses: false,
+            ..Default::default()
         },
         atoms: Vec::new(),
         bonds: Vec::new(),

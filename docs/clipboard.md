@@ -29,7 +29,9 @@ The command palette's **Copy SMILES**, **Copy CDXML** and **Copy MOL** rows copy
 
 ## Copy as
 
-Right-click and choose **Copy as…** to choose one format: **PNG**, **SVG**, **PDF**, **MOL**, **SMILES**, **InChI**, **CDXML**, **CDX**, **RXN · V3000**, **Reaction SMILES**, or **ChemDoodle JSON · reaction**. The submenu says **selected objects** when there is a selection and **whole drawing** otherwise. It uses the same selection rules as ordinary Copy, retaining required abbreviation and attachment members. It does not automatically select the rest of a partially selected molecule; use **Select molecule** first when that is what you need.
+Right-click and choose **Copy as…** to choose one format: **PNG**, **SVG**, **PDF**, **MOL**, **SMILES**, **InChI**, **Name**, **CDXML**, **CDX**, **RXN · V3000**, **Reaction SMILES**, or **ChemDoodle JSON · reaction**. The submenu says **selected objects** when there is a selection and **whole drawing** otherwise. It uses the same selection rules as ordinary Copy, retaining required abbreviation and attachment members. It does not automatically select the rest of a partially selected molecule; use **Select molecule** first when that is what you need.
+
+**Name** requires one complete connected molecule and generates its name locally, accepting it only when parsing the name reconstructs the same structure. It copies unchanged plain text alongside HTML with italic descriptors and superscript element locants, and RTF in the desktop app. **Copy name** in the Chemical names inspector uses the same rich text formats. Text fields can use the plain name, while rich text editors can retain its typography.
 
 PNG, SVG and PDF copy the visible figure without the canvas background. Molecular formats copy chemical data, not captions or figure layout. Select a molecule within a reaction for MOL, SMILES or InChI. RXN and reaction SMILES require one complete, explicitly defined reaction with reactants and products; a drawn arrow alone does not assign roles. The submenu explains unavailable formats. CDXML and CDX use the strict drawing exporters and do not silently substitute a picture when a feature cannot be represented.
 

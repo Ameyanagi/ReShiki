@@ -47,6 +47,7 @@ pub mod joining;
 pub mod ligands;
 pub mod models3d;
 pub mod molecule_names;
+pub mod name_markup;
 pub mod pages;
 pub mod palette;
 pub mod pictures;

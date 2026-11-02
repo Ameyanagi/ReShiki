@@ -85,6 +85,34 @@ fn partial_charge_symbols_are_searchable_by_delta() {
 }
 
 #[test]
+fn stereodescriptors_are_searchable_and_toggle_the_whole_drawing() {
+    use crate::app::atom_labels::Scope;
+
+    let mut app = app();
+    let _ = app.update(Message::New);
+    app.tab.doc.add_atom("C", Point::default());
+    app.tab.labels.scope = Scope::Selection;
+    app.tab.history = Default::default();
+    for query in ["pseudoasymmetric", "CIP", "r/s", "seqCis", "Ra/Sa"] {
+        search(&mut app, query);
+        assert_eq!(top(&app).name, "Show stereodescriptors", "{query}");
+    }
+    let _ = app.update(Message::Commands(Action::Submit));
+    assert!(app.tab.doc.atom_labels.stereo);
+    assert_eq!(app.tab.labels.scope, Scope::Selection);
+    assert_eq!(app.tab.doc.atoms[0].display.stereo.show, None);
+    let _ = app.update(Message::Undo);
+    assert!(!app.tab.doc.atom_labels.stereo);
+    assert!(!app.tab.history.can_undo());
+
+    run(&mut app, "CIP");
+    search(&mut app, "pseudoasymmetric");
+    assert_eq!(top(&app).name, "Hide stereodescriptors");
+    let _ = app.update(Message::Commands(Action::Submit));
+    assert!(!app.tab.doc.atom_labels.stereo);
+}
+
+#[test]
 fn path_cleanup_catalog_has_selection_commands_and_explicit_upright_axis() {
     for (query, name, upright) in [
         ("Smooth", "Smooth", None),
