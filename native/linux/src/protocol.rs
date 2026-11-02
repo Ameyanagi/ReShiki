@@ -92,6 +92,8 @@ const CDXML: &[&str] = &[
     "public.cdxml",
 ];
 const TEXT: &[&str] = &["text/plain;charset=utf-8", "text/plain", "UTF8_STRING"];
+const HTML: &[&str] = &["text/html"];
+const RTF: &[&str] = &["text/rtf"];
 
 // MIME aliases only. The app's shared portable list determines read priority.
 pub const READABLE: &[(&str, &[&str])] = &[
@@ -163,7 +165,13 @@ pub fn prepare_offer(representations: &[Representation]) -> Result<Offer, String
         if representation.read_error.is_some() {
             return Err("Clipboard writes cannot include read failures".into());
         }
-        let types = mime_types(&representation.kind).ok_or_else(|| {
+        // Rich text is write-only: paste never reads these types.
+        let types = match representation.kind.as_str() {
+            "public.html" => Some(HTML),
+            "public.rtf" => Some(RTF),
+            kind => mime_types(kind),
+        }
+        .ok_or_else(|| {
             format!(
                 "Unsupported Linux clipboard format: {}",
                 representation.kind

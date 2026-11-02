@@ -179,6 +179,10 @@ impl App {
             Message::SelectAll => self.select_all_objects(),
             Message::Charge(delta) => self.change_charge(delta),
             Message::ApplyIsotope => self.apply_isotope(),
+            Message::SetIsotope(value) => {
+                self.tab.isotope = value.to_string();
+                self.apply_isotope();
+            }
             Message::CopySmiles => return Some(self.copy_smiles()),
             Message::CopyAnalysis => return Some(self.copy_analysis()),
             Message::CopyChemicalText => return Some(self.copy_chemical_text()),

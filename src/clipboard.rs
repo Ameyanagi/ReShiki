@@ -29,9 +29,10 @@ const JSON_LIMIT: usize = LIMIT * 2;
 #[cfg(test)]
 mod browser_tests;
 mod copy_as;
+mod name;
 pub use copy_as::{
     CopyFormat, PreparedCopy, chemical_snapshot, chemical_text_snapshot, prepare_as,
-    prepare_chemical_text, selection_or_drawing, write_prepared,
+    prepare_chemical_text, prepare_name, selection_or_drawing, write_prepared,
 };
 const CDX_TYPES: [&str; 3] = [
     "com.revvity.chemdraw.cdx-clipboard",
@@ -39,7 +40,7 @@ const CDX_TYPES: [&str; 3] = [
     "com.cambridgesoft.cdx",
 ];
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct Representation {
     #[serde(rename = "type")]
     kind: String,

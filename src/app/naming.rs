@@ -583,7 +583,7 @@ impl App {
                 if let Some((_, record)) = &self.tab.naming.structure
                     && let Some(name) = &record.systematic_name
                 {
-                    return iced::clipboard::write(name.clone());
+                    return self.copy_name(name.clone());
                 }
             }
             Action::Caption => self.insert_name_caption(None),

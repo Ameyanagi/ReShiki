@@ -904,6 +904,29 @@ fn copy_as_menu_names_scope_and_explains_disabled_reactions() -> Result<(), Stri
 }
 
 #[test]
+fn copy_as_name_menu_requires_a_complete_molecule() {
+    use reshiki::clipboard::CopyFormat;
+
+    let (mut app, _) = App::new();
+    let carbon = app.tab.doc.add_atom("C", World::default());
+    let oxygen = app.tab.doc.add_atom("O", World::new(42., 0.));
+    app.tab.doc.add_bond(carbon, oxygen, 1, "plain");
+    for (selected, expected) in [(vec![carbon], false), (vec![carbon, oxygen], true)] {
+        app.tab.selected = selected;
+        assert!(app.context_entries(Page::CopyAs).iter().any(|entry| {
+            matches!(entry, Entry::Item { action: Action::Run(message), enabled, .. }
+                if matches!(message.as_ref(), Message::CopyAs(CopyFormat::Name))
+                && *enabled == expected)
+        }));
+        if !expected {
+            assert!(app.context_entries(Page::CopyAs).iter().any(|entry| {
+                matches!(entry, Entry::Hint(reason) if reason.contains("complete connected molecule"))
+            }));
+        }
+    }
+}
+
+#[test]
 fn copy_as_menu_and_command_share_inference_and_explicit_selection_guards() {
     use reshiki::clipboard::CopyFormat;
     let (mut app, _) = App::new();

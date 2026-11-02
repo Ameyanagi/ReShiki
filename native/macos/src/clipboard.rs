@@ -22,13 +22,14 @@ const CDXML_TYPES: &[&str] = &[
 fn pasteboard_types(kind: &str) -> Option<&'static [&'static str]> {
     // NSPasteboardItem accepts UTI identifiers, not MIME strings. These aliases
     // are ChemDraw's declared CDXML types; the worker protocol stays portable.
-    if kind == "chemical/x-cdxml" {
-        Some(CDXML_TYPES)
-    } else {
-        READABLE
+    match kind {
+        "chemical/x-cdxml" => Some(CDXML_TYPES),
+        "public.html" => Some(&["public.html"]),
+        "public.rtf" => Some(&["public.rtf"]),
+        _ => READABLE
             .iter()
             .find(|&&name| name == kind)
-            .map(std::slice::from_ref)
+            .map(std::slice::from_ref),
     }
 }
 
