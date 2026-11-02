@@ -186,6 +186,7 @@ impl App {
                 self.apply_isotope();
             }
             Message::CopySmiles => return Some(self.copy_smiles()),
+            Message::CopyAnalysis => return Some(self.copy_analysis()),
             Message::CopyChemicalText => return Some(self.copy_chemical_text()),
             // Tabs wait while the save dialog asks about the tab in front.
             Message::New | Message::Open if self.pending.is_some() => {}

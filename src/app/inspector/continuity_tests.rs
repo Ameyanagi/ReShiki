@@ -151,19 +151,19 @@ async fn end_bond_shortcut_keeps_styrene_whole_summary_and_capped_selection() {
         }
         let first = app.tab.doc.atoms[0].id;
         let second = app.tab.doc.atoms[1].id;
-        assert!(app.property_summary().contains("Whole drawing · C8H10"));
+        assert!(app.property_summary().contains("Whole drawing · C₈H₁₀"));
         let _ = app.context_key_at("2", reshiki::keyboard_drawing::Target::Bond(first, second));
         assert_eq!(app.tab.selected, [first, second]);
         assert!(app.property_analysis().is_none());
         assert!(
-            !app.property_summary().contains("C8H10"),
+            !app.property_summary().contains("C₈H₁₀"),
             "Previous revision must disappear immediately"
         );
         assert_eq!(app.next_property_request(), Some(app.whole_property_key()));
         settle(&mut app, true).await;
         assert!(
             app.property_summary()
-                .contains("Whole drawing · C8H8 · 104.152\u{a0}g/\u{2060}mol")
+                .contains("Whole drawing · C₈H₈ · 104.152\u{a0}g/\u{2060}mol")
         );
         assert_eq!(
             app.next_property_request(),
@@ -172,7 +172,7 @@ async fn end_bond_shortcut_keeps_styrene_whole_summary_and_capped_selection() {
         settle(&mut app, false).await;
         assert!(
             app.property_summary()
-                .contains("Selection · C2H4 · 28.054\u{a0}g/\u{2060}mol")
+                .contains("Selection · C₂H₄ · 28.054\u{a0}g/\u{2060}mol")
         );
         assert_eq!(app.whole_property_analysis().unwrap().formula, "C8H8");
         assert_eq!(app.tab.inspector_ui.expanded(Section::Molecule), explicit);
@@ -180,8 +180,8 @@ async fn end_bond_shortcut_keeps_styrene_whole_summary_and_capped_selection() {
         let before = app.tab.doc.clone();
         app.tab.doc.atom_mut(first).unwrap().element = "O".into();
         app.changed(before);
-        assert!(!app.property_summary().contains("C8H8"));
-        assert!(!app.property_summary().contains("C2H4"));
+        assert!(!app.property_summary().contains("C₈H₈"));
+        assert!(!app.property_summary().contains("C₂H₄"));
     }
 }
 
@@ -267,7 +267,7 @@ async fn tagged_whole_job_finishes_in_its_background_tab_and_is_ready_on_return(
     select(&mut app, id);
     assert!(
         app.property_summary()
-            .contains("Whole drawing · H2O · 18.015\u{a0}g/\u{2060}mol")
+            .contains("Whole drawing · H₂O · 18.015\u{a0}g/\u{2060}mol")
     );
     assert!(app.next_property_request().is_none());
 }
@@ -298,7 +298,7 @@ async fn atom_editor_admits_automatic_property_refresh_and_completion() {
     assert!(app.tab.inspector_ui.pending.is_none());
     assert_eq!(
         app.property_summary(),
-        "Whole drawing · H2O · 18.015\u{a0}g/\u{2060}mol\nSelection · H2O · 18.015\u{a0}g/\u{2060}mol"
+        "Whole drawing · H₂O · 18.015\u{a0}g/\u{2060}mol\nSelection · H₂O · 18.015\u{a0}g/\u{2060}mol"
     );
 }
 
@@ -355,7 +355,7 @@ async fn view_edits_preserve_cached_and_in_flight_properties_until_chemistry_cha
         settle(&mut app, true).await;
         settle(&mut app, false).await;
         let summary = app.property_summary();
-        assert!(summary.contains("Selection · H2O · 18.015\u{a0}g/\u{2060}mol"));
+        assert!(summary.contains("Selection · H₂O · 18.015\u{a0}g/\u{2060}mol"));
         let task = pending.then(|| app.update(Message::InspectorAction(Action::RefreshProperties)));
         let before = app.tab.doc.clone();
         let revision = app.tab.revision;
@@ -412,7 +412,7 @@ async fn view_edits_preserve_cached_and_in_flight_properties_until_chemistry_cha
         assert!(app.tab.inspector_ui.pending.is_none());
         assert!(app.whole_property_analysis().is_none());
         assert!(app.property_analysis().is_none());
-        assert!(!app.property_summary().contains("H2O · 18.015"));
+        assert!(!app.property_summary().contains("H₂O · 18.015"));
     }
 }
 
@@ -504,8 +504,8 @@ async fn rendered_panel_keeps_whole_mass_and_uses_singular_counts() {
             choose(&mut app, expanded);
         }
         let text = panel_text(&app, &mut renderer);
-        assert!(text.contains("Whole drawing · C8H8 · 104.152\u{a0}g/\u{2060}mol"));
-        assert!(text.contains("Selection · C2H4 · 28.054\u{a0}g/\u{2060}mol"));
+        assert!(text.contains("Whole drawing · C₈H₈ · 104.152\u{a0}g/\u{2060}mol"));
+        assert!(text.contains("Selection · C₂H₄ · 28.054\u{a0}g/\u{2060}mol"));
     }
     app.tab.selected = vec![first];
     choose(&mut app, true);

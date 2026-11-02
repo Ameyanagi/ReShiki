@@ -722,6 +722,7 @@ fn completion(message: &Message) -> Option<Completion> {
         | Message::Save
         | Message::Export(..)
         | Message::CopySmiles
+        | Message::CopyAnalysis
         | Message::CopyChemicalText
         | Message::Copy(..)
         | Message::CopyImage

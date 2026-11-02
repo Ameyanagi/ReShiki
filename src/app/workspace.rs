@@ -2460,6 +2460,15 @@ impl App {
                     tooltip::Position::Top,
                 ),
                 hover_hint(
+                    checkbox(self.appearance.two_decimal_weight)
+                        .label("2-decimal MW")
+                        .on_toggle(|on| Message::View(super::view_settings::Action::TwoDecimalWeight(on)))
+                        .size(14)
+                        .text_size(12),
+                    "Show molecular weight with 2 decimal places instead of 3; exact mass keeps 5 decimal places",
+                    tooltip::Position::Top,
+                ),
+                hover_hint(
                     checkbox(self.appearance.name_typography)
                         .label("Chemical name typography")
                         .on_toggle(|on| Message::View(super::view_settings::Action::NameTypography(on)))

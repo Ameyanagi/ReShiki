@@ -717,6 +717,17 @@ fn analyze_command_lines_parse() {
     );
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn analyze_json_preserves_rdkit_formula_and_adds_display_formula() {
+    let (code, out, err) = call(&["analyze", "--smiles", "[13CH3][2H]"]).await;
+    assert_eq!(code, SUCCESS, "{err}");
+    let result: Value = serde_json::from_str(&out).unwrap();
+    let analysis = &result["value"]["analysis"];
+    assert_eq!(analysis["formula"], "CH4");
+    assert_eq!(analysis["display_formula"], "¹³CH₃²H");
+    assert!(analysis.get("mass_percent").is_none());
+}
+
 #[test]
 fn name_command_lines_parse() {
     for (tokens, source, format, json) in [

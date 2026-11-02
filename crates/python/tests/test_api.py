@@ -229,6 +229,7 @@ def test_aspirin_properties() -> None:
     value = reshiki.properties(ASPIRIN)
     assert isinstance(value, reshiki.Properties)
     assert value.formula == "C9H8O4"
+    assert value.display_formula == "C₉H₈O₄"
     assert value.mass == pytest.approx(180.16, abs=0.02)
     assert value.exact_mass == pytest.approx(180.04226, abs=0.0001)
     assert value.donors == 1 and value.acceptors == 3 and value.rings == 1

@@ -564,6 +564,13 @@ pub(crate) fn entries() -> Vec<Entry> {
             &["guides", "view", "measure"],
         ),
         entry(
+            "View → 2-decimal MW",
+            "Molecular weight precision",
+            "Show molecular weight with 2 decimal places instead of the default 3; exact mass keeps 5 decimal places",
+            Anywhere,
+            &["mass", "MW", "rounding", "decimals", "inspector"],
+        ),
+        entry(
             if crate::platform::mac() {
                 format!(
                     "{} / {} scroll",
