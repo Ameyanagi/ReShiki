@@ -42,6 +42,7 @@ pub enum Action {
     Position(HydrogenPosition),
     Attachment(LabelAttachment),
     Stereo(bool),
+    RomanStereoParentheses(bool),
     AxialDescriptors(AxialDescriptors),
     Seed(String),
     Number,
@@ -174,6 +175,9 @@ impl App {
                     b.indicator.show = (self.tab.labels.scope == Scope::Selection).then_some(value);
                 }
                 self.tab.labels_dirty = true;
+            }
+            Action::RomanStereoParentheses(value) => {
+                self.tab.doc.atom_labels.roman_stereo_parentheses = value;
             }
             Action::AxialDescriptors(value) => self.tab.doc.atom_labels.axial_descriptors = value,
             Action::Number => {

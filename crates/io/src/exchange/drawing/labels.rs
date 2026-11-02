@@ -694,13 +694,16 @@ impl Writer<'_> {
                 ("TagType", "Unknown".into()),
             ],
         )?;
+        let format = crate::atom_labels::indicator_format(
+            text,
+            &style,
+            self.doc.atom_labels.roman_stereo_parentheses
+                && matches!(owner, Owner::AtomStereo(_) | Owner::BondStereo(..)),
+        );
         self.text(
             tag,
             text,
-            &TextFormat {
-                style,
-                ..Default::default()
-            },
+            &format,
             [
                 ("p", self.position(origin.add(0., height * 0.9))),
                 (

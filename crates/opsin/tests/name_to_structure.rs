@@ -2,6 +2,19 @@
 use opsin::{ParseOptions, Parser, Status};
 
 #[test]
+fn unicode_superscript_bridge_locants_round_trip_to_the_ascii_structure() {
+    let parser = Parser::new().unwrap();
+    let ascii = parser.parse("tricyclo[3.2.1.0^{2,4}]octane", &ParseOptions::strict());
+    let formatted = parser.parse("tricyclo[3.2.1.0²,⁴]octane", &ParseOptions::strict());
+    assert_eq!(ascii.status, Status::Success, "{}", ascii.message);
+    assert_eq!(formatted.status, Status::Success, "{}", formatted.message);
+    assert_eq!(
+        formatted.structure.unwrap().semantic_cxsmiles().unwrap(),
+        ascii.structure.unwrap().semantic_cxsmiles().unwrap()
+    );
+}
+
+#[test]
 fn isotope_specification_between_fusion_components_fails_cleanly() {
     let result = Parser::new()
         .unwrap()

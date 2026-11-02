@@ -261,6 +261,7 @@ fn a_linked_caption_moves_clear_of_stereo_labels_as_they_land() {
         "butan-2-ol".into(),
         smiles,
         Default::default(),
+        true,
     )
     .unwrap();
     app.tab.doc = doc;
