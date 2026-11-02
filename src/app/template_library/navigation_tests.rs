@@ -694,3 +694,37 @@ fn browser_mouse_buttons_have_the_correct_direction() {
         None
     );
 }
+
+#[test]
+fn informal_nucleoside_search_aliases_rank_below_exact_symbols() {
+    let (mut app, _) = App::new();
+    for (symbol, alias) in [
+        ("Ado", "A"),
+        ("Guo", "G"),
+        ("Cyd", "C"),
+        ("Urd", "U"),
+        ("dAdo", "dA"),
+        ("dGuo", "dG"),
+        ("dCyd", "dC"),
+        ("dThd", "dT"),
+    ] {
+        let (index, template) = app
+            .templates
+            .library
+            .iter()
+            .enumerate()
+            .find(|(_, t)| t.group == "Nucleosides" && t.keywords.iter().any(|k| k == symbol))
+            .unwrap();
+        let template = template.clone();
+        app.templates.query = alias.into();
+        assert!(app.templates.matches(index, &template));
+        let informal_rank = app.templates.search_rank(&template);
+        let mut exact = template.clone();
+        exact.name = alias.into();
+        assert!(informal_rank > app.templates.search_rank(&exact), "{alias}");
+        app.templates.query = symbol.into();
+        assert_eq!(app.templates.search_rank(&template), 0, "{symbol}");
+        app.templates.query = template.name.clone();
+        assert_eq!(app.templates.search_rank(&template), 0);
+    }
+}

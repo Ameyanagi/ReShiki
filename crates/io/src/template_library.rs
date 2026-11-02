@@ -74,6 +74,8 @@ impl Library {
             if t.note.chars().count() > 500
                 || t.keywords.len() > 32
                 || t.keywords.iter().any(|s| s.chars().count() > 100)
+                || t.low_rank_keywords.len() > 32
+                || t.low_rank_keywords.iter().any(|s| s.chars().count() > 100)
             {
                 return Err("Template descriptions/keywords are too long".into());
             }
@@ -103,6 +105,7 @@ impl Library {
             group: group.trim().into(),
             smiles: String::new(),
             keywords: vec![],
+            low_rank_keywords: Vec::new(),
             note: String::new(),
             document,
             anchor,

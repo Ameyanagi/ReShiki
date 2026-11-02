@@ -8,6 +8,23 @@ fn template(name: &str) -> &'static Document {
     &LIBRARY.iter().find(|t| t.name == name).unwrap().document
 }
 
+#[test]
+fn biological_template_collections_have_the_documented_coverage() {
+    assert_eq!(LIBRARY.len(), 176);
+    for (group, count) in [
+        ("Amino acids", 21),
+        ("Carbohydrates", 50),
+        ("Nucleosides", 15),
+        ("Steroids", 16),
+    ] {
+        assert_eq!(
+            LIBRARY.iter().filter(|t| t.group == group).count(),
+            count,
+            "{group}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn every_thumbnail_is_the_structure_that_gets_placed()
 -> Result<(), Box<dyn std::error::Error>> {
@@ -32,8 +49,17 @@ async fn every_thumbnail_is_the_structure_that_gets_placed()
             .unwrap()
             .analysis
             .unwrap();
-        assert_eq!(actual.smiles, expected.smiles, "{}", item.name);
-        if matches!(item.group.as_str(), "Macrocycles" | "Ligands") {
+        assert_eq!(actual.formula, expected.formula, "{}", item.name);
+        assert_eq!(actual.inchikey, expected.inchikey, "{}", item.name);
+        // A full Haworth/steroid drawing retains real H atoms in its SMILES;
+        // its reference SMILES can express those same hydrogens implicitly.
+        if !item.document.atoms.iter().any(|a| a.element == "H") {
+            assert_eq!(actual.smiles, expected.smiles, "{}", item.name);
+        }
+        if matches!(
+            item.group.as_str(),
+            "Amino acids" | "Macrocycles" | "Ligands"
+        ) {
             let facts = catalog
                 .iter()
                 .find(|f| f.get("name").and_then(|v| v.as_str()) == Some(item.name.as_str()))
@@ -487,3 +513,6 @@ fn connected_phenyl_ring_has_120_degree_angles_at_every_source_vertex() {
         }
     }
 }
+
+#[path = "templates/nucleosides.rs"]
+mod nucleosides;

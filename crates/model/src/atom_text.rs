@@ -144,7 +144,13 @@ pub fn suggestion(text: &str, mode: Mode) -> Option<String> {
 
 /// Automatic entry turns these labels into a chemical group, not one atom.
 fn group_label(text: &str) -> bool {
-    formula_group(text).is_some() || known_group(text) && !ELEMENTS.contains(&text)
+    formula_group(text).is_some()
+        || known_group(text) && !ELEMENTS.contains(&text) && !chemical_only_alias(text)
+}
+
+/// IUPAC peptide aliases with other meanings need an explicit chemical choice.
+fn chemical_only_alias(text: &str) -> bool {
+    matches!(text, "Z" | "Tos")
 }
 
 /// The finite link-node spelling that Apply turns into a repeat of one atom
@@ -243,7 +249,7 @@ fn apply_entry(
     if replaced_group.is_none()
         && (mode == Mode::Group
             || formula.is_some()
-            || mode == Mode::Auto && !element && !sided && known_group(text))
+            || mode == Mode::Auto && !sided && group_label(text))
     {
         let selected = doc
             .abbreviation(id)
@@ -481,6 +487,7 @@ fn manual_chemical_entry(text: &str, runs: &[ScriptRun]) -> Result<Option<String
         // Lowered counts in a known group (CO2Me) are its ordinary formula
         // look, so the label stays the real group rather than dummy text.
         if !element
+            && !chemical_only_alias(&chemical)
             && (known_group(&chemical) || formula_group(&chemical).is_some())
             && runs
                 .iter()

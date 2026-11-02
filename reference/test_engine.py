@@ -197,12 +197,12 @@ class ChemistryTests(unittest.TestCase):
     def test_builtin_catalog_matches_frozen_pubchem_formula_and_stereochemistry(self):
         catalog = json.loads((ROOT / "assets/template-catalog.json").read_text(encoding="utf-8"))
         library = json.loads((ROOT / "assets/templates.json").read_text(encoding="utf-8"))
-        self.assertEqual(len(catalog), 92)
+        self.assertEqual(len(catalog), 93)
         model_catalog = [item for item in catalog if item.get("geometry") == "model:porphine"]
         generated_catalog = [item for item in catalog if item.get("geometry") != "model:porphine"]
         self.assertEqual([item["name"] for item in model_catalog], ["Porphine (21H,23H)"])
         self.assertEqual(len(library), len(generated_catalog))
-        self.assertEqual(sum(item["group"] == "Amino acids" for item in catalog), 20)
+        self.assertEqual(sum(item["group"] == "Amino acids" for item in catalog), 21)
         for expected, item in zip(generated_catalog, library):
             with self.subTest(name=expected["name"]):
                 self.assertEqual(item["name"], expected["name"])
@@ -212,7 +212,7 @@ class ChemistryTests(unittest.TestCase):
                     )
                     self.assertEqual(result["analysis"]["formula"], expected["formula"])
                     self.assertEqual(result["analysis"]["inchikey"], expected["inchikey"])
-                if expected.get("sequence"):
+                if expected.get("sequence") or expected["name"] == "L-Selenocysteine":
                     mol = handle(
                         dict(
                             protocol=1, operation="export", format="mol", document=item["document"]

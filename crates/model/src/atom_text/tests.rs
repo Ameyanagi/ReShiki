@@ -1362,6 +1362,126 @@ fn catalog_aliases_create_the_same_group_under_the_typed_spelling()
 }
 
 #[test]
+fn peptide_aliases_keep_typed_labels_and_require_explicit_chemical_mode_when_ambiguous()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut doc = Document::default();
+    let methyl = doc.add_atom("C", Point::new(0., 0.));
+    let endpoint = doc.add_atom("C", Point::new(42., 0.));
+    doc.add_bond(methyl, endpoint, 1, "plain");
+    for (alias, label, expected) in [
+        ("Z", "Cbz", "C9H10O2"),
+        ("Tos", "Ts", "C8H10O2S"),
+        ("Bzl", "Bn", "C8H10"),
+        ("OBzl", "OBn", "C8H10O"),
+        ("BzlO", "OBn", "C8H10O"),
+        ("OBut", "OtBu", "C5H12O"),
+        ("ButO", "OtBu", "C5H12O"),
+    ] {
+        let explicit_only = matches!(alias, "Z" | "Tos");
+        let canonical = apply(&doc, endpoint, label, Mode::Group)?;
+        for mode in [Mode::Auto, Mode::Group, Mode::Text] {
+            let typed = apply(&doc, endpoint, alias, mode)?;
+            if mode == Mode::Text || mode == Mode::Auto && explicit_only {
+                assert!(typed.abbreviations.is_empty(), "{alias}: {mode}");
+                let atom = typed.atom(endpoint).ok_or(alias)?;
+                assert_eq!(atom.element, "*", "{alias}: {mode}");
+                assert_eq!(atom.display.variable.as_deref(), Some(alias));
+                assert!(description(alias, &[], mode).starts_with("Text on a dummy atom"));
+                continue;
+            }
+            let group = typed.abbreviation(endpoint).ok_or(alias)?;
+            assert_eq!(group.label, alias);
+            assert!(group.reverse_label.is_empty(), "{alias}");
+            assert_eq!(group.text(&typed), alias);
+            assert_eq!(formula(&typed)?, expected, "{alias}: {mode}");
+            let chemistry = |drawing: &Document| -> Result<String, Box<dyn std::error::Error>> {
+                let molecule = crate::chemistry::document::prepare(drawing)?;
+                Ok(
+                    crate::chemistry::smiles::write::write(&molecule.state, Default::default())?
+                        .text,
+                )
+            };
+            assert_eq!(chemistry(&typed)?, chemistry(&canonical)?, "{alias}");
+
+            // Detection continues to use the established labels, never an alias.
+            let mut expanded = typed.clone();
+            expanded.expand_abbreviations(&[endpoint]);
+            let molecule = crate::chemistry::document::prepare(&expanded)?;
+            let contracted =
+                crate::chemistry::abbreviations::find(&expanded, &molecule, &[], Some(label))?;
+            let found = contracted.abbreviations.first().ok_or(label)?;
+            assert_eq!(found.label, label, "{alias}");
+            assert_eq!(formula(&contracted)?, expected);
+            if label != "OtBu" {
+                let automatic = crate::chemistry::abbreviations::find(
+                    &expanded,
+                    &molecule,
+                    &group.members,
+                    None,
+                )?;
+                let found = automatic.abbreviations.first().ok_or(label)?;
+                assert_eq!(found.label, label, "{alias} automatic contraction");
+                assert_eq!(found.members.len(), group.members.len());
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn peptide_groups_are_real_atoms_and_formyl_keeps_its_established_display()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut doc = Document::default();
+    let methyl = doc.add_atom("C", Point::new(0., 0.));
+    let endpoint = doc.add_atom("C", Point::new(42., 0.));
+    doc.add_bond(methyl, endpoint, 1, "plain");
+    for (label, expected, atoms) in [
+        ("Dns", "C13H15NO2S", 16),
+        ("Suc", "C5H8O3", 7),
+        ("For", "C2H4O", 2),
+    ] {
+        for mode in [Mode::Auto, Mode::Group] {
+            let typed = apply(&doc, endpoint, label, mode)?;
+            let group = typed.abbreviation(endpoint).ok_or(label)?;
+            assert_eq!(group.label, label);
+            assert_eq!(group.members.len(), atoms);
+            assert_eq!(formula(&typed)?, expected, "{label}");
+            let mut expanded = typed.clone();
+            expanded.expand_abbreviations(&[endpoint]);
+            assert_eq!(formula(&expanded)?, expected);
+        }
+        assert!(
+            apply(&doc, endpoint, label, Mode::Text)?
+                .abbreviations
+                .is_empty()
+        );
+    }
+    for label in ["CHO", "For"] {
+        let typed = apply(&doc, endpoint, label, Mode::Group)?;
+        let group = typed.abbreviation(endpoint).ok_or(label)?;
+        assert_eq!(group.label, label);
+        assert_eq!(group.reverse_label, if label == "CHO" { "OHC" } else { "" });
+        let mut expanded = typed.clone();
+        expanded.expand_abbreviations(&[endpoint]);
+        assert!(
+            contracted(&expanded)?
+                .iter()
+                .all(|(label, _)| label != "For")
+        );
+        let molecule = crate::chemistry::document::prepare(&expanded)?;
+        let detected =
+            crate::chemistry::abbreviations::find(&expanded, &molecule, &[], Some("CHO"))?;
+        let formyl = detected.abbreviations.first().ok_or("CHO")?;
+        assert_eq!(
+            (formyl.label.as_str(), formyl.reverse_label.as_str()),
+            ("CHO", "OHC")
+        );
+        assert_eq!(formula(&detected)?, "C2H4O");
+    }
+    Ok(())
+}
+
+#[test]
 fn the_public_group_list_covers_every_typed_group() {
     let groups: Vec<_> = crate::abbreviations::groups().collect();
     let tbs = groups.iter().find(|g| g.label == "TBS").unwrap();
@@ -1428,10 +1548,9 @@ fn every_bundled_spelling_types_as_its_group() -> Result<(), Box<dyn std::error:
     let mut checked = 0;
     for preset in catalog.iter() {
         for spelling in preset.spellings() {
-            // Acetyl and tosyl predate the catalog: "Ac" and "Ts" alone type
-            // actinium and tennessine, so these groups need Chemical
-            // abbreviation mode. No other spelling may shadow an element.
-            let mode = if ["Ac", "Ts"].contains(&spelling) {
+            // Element symbols and ambiguous IUPAC peptide aliases need an
+            // explicit Chemical abbreviation choice.
+            let mode = if ["Ac", "Ts", "Z", "Tos"].contains(&spelling) {
                 Mode::Group
             } else {
                 Mode::Auto

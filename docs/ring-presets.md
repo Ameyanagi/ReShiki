@@ -1,6 +1,6 @@
 # Ring presets and expanded template catalog
 
-The current library contains 106 built-in templates, including the [Haworth carbohydrates](haworth-projections.md), macrocycles, free-base porphine and ligands. The original 81-entry milestone is described below.
+The current library contains 176 built-in templates, including the [Haworth carbohydrates](haworth-projections.md), nucleosides/nucleotides, steroids, macrocycles, free-base porphine and ligands. The original 81-entry milestone is described below.
 
 JACS / ACS remains the default. The new chair and cyclopentadiene tools use 14.4 pt edges (42 world units), Arial 10 pt labels and 0.6 pt lines unless the user changes the preferred bond length.
 
@@ -22,7 +22,7 @@ The regular 3–8 member tool rotates the same way when dragged on empty space o
 
 ## Catalog
 
-There are 79 chemical catalog entries plus the two generated chair projections, for **81 built-ins**. Collections cover the original rings/small molecules, additional cycloalkanes and unsaturated rings, common heterocycles, bicyclic/cage structures, all 20 standard amino acids and five nucleobases.
+The original milestone comprised 79 chemical catalog entries plus the two generated chair projections, for **81 built-ins**. Those collections covered the original rings/small molecules, additional cycloalkanes and unsaturated rings, common heterocycles, bicyclic/cage structures, all 20 standard amino acids and five nucleobases. The current library adds the biological collections described in [Template library](template-library.md#biological-templates).
 
 Names, formulas, standard InChIKeys, SMILES and source URLs are frozen in [template-catalog.json](../assets/template-catalog.json). These chemical facts were retrieved from the [PubChem PUG REST service](https://pubchem.ncbi.nlm.nih.gov/docs/pug-rest). The amino-acid generator uses RDKit's documented [L-protein sequence flavor](https://www.rdkit.org/docs/source/rdkit.Chem.rdmolfiles.html). Its formula and standard InChIKey must agree with the corresponding PubChem record before generation succeeds. Glycine is achiral; the other amino-acid entries retain L stereochemistry. Entries are neutral free amino acids, not connected peptide residues.
 
@@ -30,13 +30,13 @@ Names, formulas, standard InChIKeys, SMILES and source URLs are frozen in [templ
 
 Search includes amino-acid three-letter codes and other stored keywords. Exact names/codes rank before prefix and substring matches, so `Phe` brings phenylalanine ahead of thiophene. Entry notes state meaningful distinctions such as L configuration and unspecified decalin ring-junction stereochemistry. Built-in IDs retain the original group/name identity, so existing favorites continue working; user-authored templates remain in the separate local collection.
 
-The catalog does not yet provide sugar stereoisomer families, DNA/RNA assemblies, peptide synthesis/sequence assembly, semantic protecting-group nicknames, polymer templates or many specialized chemical families.
+The catalog includes named D/L sugar stereoisomers, nucleosides/nucleotides, steroid parents and common peptide protecting-group aliases. DNA/RNA chain assembly, peptide synthesis/sequence assembly, polymer templates and many specialized chemical families remain unavailable.
 
 ## Verification
 
 A CDXML fixture in `tests/fixtures/` contains both chair orientations and a cyclopentadiene: 17 atoms, 17 bonds, three rings and formula C17H30. Its atom coordinates and molecular identity survive interchange.
 
-Automated tests cover equal JACS edge lengths, mirrored/reflex chair geometry, free rotation, shared-atom/fused-bond attachment at nondefault scale, whole-ring connection through oxygen, full-valence rejection, shifted diene bonds, native/CDXML geometry, input gestures and Undo/Redo. Every catalog structure is checked through analyze/cleanup against its frozen PubChem formula and standard InChIKey; all 20 amino acids additionally retain identity through MOL exchange. The complete suite passes **111 Rust and 32 Python tests**.
+Automated tests cover equal JACS edge lengths, mirrored/reflex chair geometry, free rotation, shared-atom/fused-bond attachment at nondefault scale, whole-ring connection through oxygen, full-valence rejection, shifted diene bonds, native/CDXML geometry, input gestures and Undo/Redo. Every catalog structure is checked through analyze/cleanup against its frozen PubChem formula and standard InChIKey; all 21 amino acids additionally retain identity through MOL exchange. The original milestone passed **111 Rust and 32 Python tests**; the suites have since expanded.
 
 ReShiki desktop verification created a chair fused onto a drawn bond, a freely rotated second chair, cyclopentadiene and an Option-dragged chair connected through oxygen. The saved drawing has 24 atoms, 24 bonds and formula C23H42O; all bond lengths measure 42 world units within 0.001. The oxygen remains oxygen. A separate library placement of L-phenylalanine preserves its formula and standard InChIKey. Evidence is in `artifacts/rings-qa-20260920/desktop-rings.reshiki`, `desktop-phenylalanine.reshiki` and `option-chair-preview.png`. The ring drawing's PNG and rendered PDF were visually inspected.
 

@@ -574,3 +574,20 @@ fn nc_and_ocn_captions_are_read_toward_the_bond_being_drawn() -> Result<(), Stri
     }
     Ok(())
 }
+#[test]
+fn automatic_caption_preview_keeps_ambiguous_peptide_aliases_as_text() {
+    for text in ["Z", "Tos", "Bzl", "OBzl", "BzlO", "OBut", "ButO"] {
+        let mut preview = Document::default();
+        let atom = preview.add_atom("*", Point::new(0., 0.));
+        preview_entry(&mut preview, atom, text, true).unwrap();
+        if matches!(text, "Z" | "Tos") {
+            assert!(preview.abbreviations.is_empty(), "{text}");
+            assert_eq!(
+                preview.atom(atom).unwrap().display.variable.as_deref(),
+                Some(text)
+            );
+        } else {
+            assert_eq!(preview.abbreviations[0].label, text);
+        }
+    }
+}

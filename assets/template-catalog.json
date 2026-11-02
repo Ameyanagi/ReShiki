@@ -655,6 +655,21 @@
   },
   {
     "group": "Amino acids",
+    "name": "L-Selenocysteine",
+    "query": "L-Selenocysteine",
+    "keywords": [
+      "Sec",
+      "U"
+    ],
+    "note": "Neutral free amino acid. L stereochemistry (2R).",
+    "smiles": "N[C@@H](C[SeH])C(=O)O",
+    "formula": "C3H7NO2Se",
+    "inchikey": "ZKZBPNGNEQAJSX-REOHCLBHSA-N",
+    "pubchem_cid": 25076,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/25076"
+  },
+  {
+    "group": "Amino acids",
     "name": "L-Cysteine",
     "query": "L-Cysteine",
     "sequence": "C",

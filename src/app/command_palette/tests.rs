@@ -650,6 +650,7 @@ fn duplicate_titles_prefer_the_direct_insert() {
         name: "Benzene".into(),
         smiles: "c1ccccc1".into(),
         keywords: vec![],
+        low_rank_keywords: Vec::new(),
         note: String::new(),
         document: reshiki::rings::Preset::Benzene.document(42., false),
         anchor: Default::default(),

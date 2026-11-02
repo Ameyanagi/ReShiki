@@ -252,3 +252,145 @@ fn retyping_a_group_keeps_its_alignment() -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn original_ten_sugar_documents_are_byte_identical() -> anyhow::Result<()> {
+    let documents: Vec<_> = [
+        Sugar::Glucose,
+        Sugar::Galactose,
+        Sugar::Mannose,
+        Sugar::Ribose,
+        Sugar::Fructose,
+    ]
+    .into_iter()
+    .flat_map(|sugar| {
+        [Anomer::Alpha, Anomer::Beta]
+            .into_iter()
+            .map(move |anomer| sugar_document(sugar, anomer, 42.))
+    })
+    .collect::<Result<_, _>>()
+    .map_err(anyhow::Error::msg)?;
+    assert_eq!(
+        serde_json::to_vec(&documents)?,
+        include_bytes!("../../../../tests/fixtures/haworth-original-documents.json")
+    );
+    Ok(())
+}
+
+#[test]
+fn explicit_ring_hydrogens_are_opposite_and_have_complete_neighbor_orders() -> anyhow::Result<()> {
+    for sugar in [
+        Sugar::Glucose,
+        Sugar::Galactose,
+        Sugar::Mannose,
+        Sugar::Ribose,
+        Sugar::Fructose,
+        Sugar::Deoxyribose,
+        Sugar::Xylose,
+        Sugar::Fucose,
+        Sugar::Rhamnose,
+        Sugar::GlcNAc,
+        Sugar::GalNAc,
+        Sugar::GlucuronicAcid,
+    ] {
+        for anomer in [Anomer::Alpha, Anomer::Beta] {
+            let omitted = sugar_document(sugar, anomer, 42.).map_err(anyhow::Error::msg)?;
+            let full = sugar_document_with_options(
+                sugar,
+                anomer,
+                42.,
+                HaworthOptions {
+                    ring_hydrogens: true,
+                },
+            )
+            .map_err(anyhow::Error::msg)?;
+            let ring_size = if sugar.ring() == Ring::Five { 5 } else { 6 };
+            for atom in full.atoms.iter().take(ring_size - 1) {
+                let branches: Vec<_> = full
+                    .bonds
+                    .iter()
+                    .filter_map(|b| {
+                        let other = if b.a == atom.id {
+                            b.b
+                        } else if b.b == atom.id {
+                            b.a
+                        } else {
+                            return None;
+                        };
+                        (!full
+                            .bonds
+                            .iter()
+                            .filter(|b| b.projection)
+                            .any(|b| b.a == other || b.b == other))
+                        .then(|| full.atom(other))
+                        .flatten()
+                    })
+                    .collect();
+                assert_eq!(branches.len(), 2, "{sugar:?} {anomer:?} ring C{}", atom.id);
+                assert!(
+                    (branches[0].position.y - atom.position.y)
+                        * (branches[1].position.y - atom.position.y)
+                        < 0.
+                );
+                assert!(branches.iter().all(|b| b.position.x == atom.position.x));
+                assert_eq!(
+                    branches.iter().filter(|a| a.element == "H").count(),
+                    if branches.iter().all(|a| a.element == "H") {
+                        2
+                    } else if matches!(sugar, Sugar::Fructose) && atom.id == full.atoms[0].id {
+                        0
+                    } else {
+                        1
+                    }
+                );
+                if let Some(stereo) = &atom.stereo {
+                    assert_eq!(stereo.neighbors.len(), 4);
+                    assert_eq!(
+                        stereo.winding,
+                        omitted
+                            .atom(atom.id)
+                            .unwrap()
+                            .stereo
+                            .as_ref()
+                            .unwrap()
+                            .winding
+                    );
+                    for id in &stereo.neighbors {
+                        assert!(
+                            full.bonds
+                                .iter()
+                                .any(|b| b.a == atom.id && b.b == *id
+                                    || b.b == atom.id && b.a == *id)
+                        );
+                    }
+                } else {
+                    assert!(branches.iter().all(|a| a.element == "H"));
+                }
+            }
+            assert_eq!(
+                full.atoms.iter().filter(|a| a.stereo.is_some()).count(),
+                omitted.atoms.iter().filter(|a| a.stereo.is_some()).count()
+            );
+            assert_eq!(
+                interchange::export_bonds(&full)
+                    .map_err(anyhow::Error::msg)?
+                    .len(),
+                ring_size
+            );
+            let mut restored = full.clone();
+            for atom in &mut restored.atoms {
+                atom.stereo = None;
+            }
+            assert!(interchange::restore(&mut restored));
+            for atom in &full.atoms {
+                assert_eq!(
+                    atom.stereo,
+                    restored.atom(atom.id).unwrap().stereo,
+                    "{sugar:?} {anomer:?} {}",
+                    atom.id
+                );
+            }
+        }
+    }
+    Ok(())
+}

@@ -25,6 +25,7 @@ fn merge_compares_all_content_fields_ignoring_only_identity_and_keeps_first_matc
         group: "Reagents".into(),
         smiles: "CCO".into(),
         keywords: vec!["alcohol".into()],
+        low_rank_keywords: Vec::new(),
         note: "Reference fragment".into(),
         document: ethanol(),
         anchor: Anchor::Atom(2),
@@ -46,7 +47,7 @@ fn merge_compares_all_content_fields_ignoring_only_identity_and_keeps_first_matc
     assert_eq!(library.favorites, ["first"]);
     assert_eq!(library.templates[0], entry);
     assert_eq!(library.merge(incoming).unwrap(), 0);
-    for field in 0..7 {
+    for field in 0..8 {
         let mut changed = entry.clone();
         match field {
             0 => changed.name.push('!'),
@@ -55,7 +56,8 @@ fn merge_compares_all_content_fields_ignoring_only_identity_and_keeps_first_matc
             3 => changed.keywords.push("new".into()),
             4 => changed.note.push('!'),
             5 => changed.document.atoms[0].position.x += 1.,
-            _ => changed.anchor = Anchor::Atom(1),
+            6 => changed.anchor = Anchor::Atom(1),
+            _ => changed.low_rank_keywords.push("alias".into()),
         }
         let mut target = Library::default();
         let initial = Library {
