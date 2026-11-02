@@ -93,6 +93,18 @@ impl App {
         self.copy_as_snapshot(snapshot, format, false)
     }
 
+    pub(super) fn copy_name(&mut self, name: String) -> Task<Message> {
+        if self.clipboard_working() {
+            self.status = "A clipboard operation is already in progress".into();
+            return Task::none();
+        }
+        let key = self.start_copy_as(CopyFormat::Name);
+        Task::done(Message::CopyAsPrepared(
+            key,
+            Box::new(Ok(reshiki::clipboard::prepare_name(name))),
+        ))
+    }
+
     pub(super) fn copy_chemical_text(&mut self) -> Task<Message> {
         if self.clipboard_working() {
             self.status = "A clipboard operation is already in progress".into();
@@ -117,32 +129,22 @@ impl App {
         format: CopyFormat,
         chemical_text: bool,
     ) -> Task<Message> {
-        if let Some(reason) = format.unavailable_reason(&snapshot) {
+        if let Some(reason) = format.unavailable_reason_for_selection(&self.tab.doc, &snapshot) {
             self.status = reason.into();
             self.error = true;
             return Task::none();
         }
-        let key = CopyAsKey {
-            epoch: self.tab.file_epoch,
-            revision: self.tab.revision,
-            format,
-            selected: self.tab.selected.clone(),
-        };
-        self.start_copy_as(key, snapshot, chemical_text)
+        let key = self.start_copy_as(format);
+        self.queue_copy_as(key, snapshot, chemical_text)
     }
 
-    /// Admission and platform availability are checked before acquiring work.
-    fn start_copy_as(
+    fn queue_copy_as(
         &mut self,
         key: CopyAsKey,
         snapshot: Document,
         chemical_text: bool,
     ) -> Task<Message> {
         let format = key.format;
-        self.copy_as_busy = true;
-        self.tab.clipboard_busy = true;
-        self.error = false;
-        self.status = format!("Preparing {} for the clipboard…", format.label());
         if format == CopyFormat::Pdf {
             self.pdf_copy.serial = self.pdf_copy.serial.wrapping_add(1);
             let serial = self.pdf_copy.serial;
@@ -162,6 +164,20 @@ impl App {
             };
         }
         self.prepare_copy_as(key, snapshot, chemical_text)
+    }
+
+    /// Admission and platform availability are checked before acquiring work.
+    fn start_copy_as(&mut self, format: CopyFormat) -> CopyAsKey {
+        self.copy_as_busy = true;
+        self.tab.clipboard_busy = true;
+        self.error = false;
+        self.status = format!("Preparing {} for the clipboard…", format.label());
+        CopyAsKey {
+            epoch: self.tab.file_epoch,
+            revision: self.tab.revision,
+            format,
+            selected: self.tab.selected.clone(),
+        }
     }
 
     fn prepare_copy_as(

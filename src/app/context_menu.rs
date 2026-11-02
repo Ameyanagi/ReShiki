@@ -535,7 +535,7 @@ impl App {
             }
             let reason = if format.is_chemical() {
                 match &chemical {
-                    Ok(doc) => format.unavailable_reason(doc),
+                    Ok(doc) => format.unavailable_reason_for_selection(&self.tab.doc, doc),
                     Err(reason) => Some(*reason),
                 }
             } else {
