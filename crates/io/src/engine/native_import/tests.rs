@@ -5,6 +5,74 @@ const SPHOS: &str = "COc1cccc(OC)c1-c1ccccc1P(C1CCCCC1)C1CCCCC1";
 const XPHOS: &str = "CC(C)c1cc(C(C)C)c(-c2ccccc2P(C2CCCCC2)C2CCCCC2)c(C(C)C)c1";
 
 #[test]
+fn private_naming_smiles_import_draws_and_reperceives_biaryl_axes() -> anyhow::Result<()> {
+    use crate::molecule_names::{apply_axis_markers, canonical_identity};
+    for (marker, expected) in [(900_004, "M"), (900_008, "P")] {
+        let text = format!("Oc1ccc2ccccc2[c:{marker}]1-[c:{marker}]1c(O)ccc2ccccc12");
+        let source = apply_axis_markers(&smiles::read(&text)?.prepared.state).unwrap();
+        let identity = canonical_identity(&source).unwrap();
+        let Preparation::Complete(prepared) = prepare(Request::import("naming_smiles", &text))?
+        else {
+            panic!("Private naming import must complete natively");
+        };
+        assert!(
+            prepared
+                .document
+                .bonds
+                .iter()
+                .any(|bond| matches!(bond.display.as_str(), "wedge" | "hash"))
+        );
+        assert!(prepared.document.atoms.iter().all(|atom| atom.map_num == 0));
+        let reconstructed = molecular::prepare(&prepared.document)?;
+        assert_eq!(canonical_identity(&reconstructed.state).unwrap(), identity);
+        let assigned =
+            chemistry::stereo::cip::label::assign(&reconstructed.state, &Default::default())?;
+        assert_eq!(
+            assigned
+                .state
+                .properties
+                .bond_codes
+                .iter()
+                .filter_map(Option::as_deref)
+                .filter(|code| matches!(*code, "M" | "P"))
+                .collect::<Vec<_>>(),
+            [expected]
+        );
+
+        let Preparation::Complete(public) = prepare(Request::import("smiles", &text))? else {
+            panic!("Public SMILES import must complete natively");
+        };
+        assert!(
+            public
+                .molecule
+                .state
+                .metadata
+                .bonds
+                .iter()
+                .all(|bond| bond.stereo == 0)
+        );
+        assert!(
+            public
+                .document
+                .bonds
+                .iter()
+                .all(|bond| !matches!(bond.display.as_str(), "wedge" | "hash"))
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn private_naming_smiles_import_rejects_malformed_axis_maps() {
+    for text in ["[CH3:900004][CH3:900004]", "[c:900004]1ccccc1-c1ccccc1"] {
+        assert!(matches!(
+            prepare(Request::import("naming_smiles", text)),
+            Err(Error::AxisMarkers)
+        ));
+    }
+}
+
+#[test]
 fn generated_unknown_alkene_depictions_roundtrip_mol_and_cdxml() -> anyhow::Result<()> {
     for (input, known) in [("CC=CCC", 0), ("C/C=C/C=CC", 1)] {
         for wavy in [false, true] {

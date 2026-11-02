@@ -656,9 +656,7 @@ pub fn write_semantic_cxsmiles(
     graph: &Graph,
     fragment: FragmentId,
 ) -> Result<String, SerializationError> {
-    Writer::new(graph, fragment)?
-        .write()
-        .map(|(smiles, _)| smiles)
+    write_semantic_cxsmiles_with_locants(graph, fragment, &[]).map(|(smiles, _)| smiles)
 }
 
 /// Serializes principal-parent locants alongside the same semantic CXSMILES,
@@ -668,7 +666,45 @@ pub fn write_semantic_cxsmiles_with_locants(
     fragment: FragmentId,
     principal_parent_atoms: &[AtomId],
 ) -> Result<(String, Vec<Option<String>>), SerializationError> {
+    let (smiles, locants, axes) =
+        write_semantic_cxsmiles_with_locants_and_axes(graph, fragment, principal_parent_atoms)?;
+    if !axes.is_empty() {
+        return Err(SerializationError(
+            "Axial stereochemistry requires export with the accompanying axes".into(),
+        ));
+    }
+    Ok((smiles, locants))
+}
+
+/// Axes and locants are projected through a single SMILES traversal.
+pub fn write_semantic_cxsmiles_with_locants_and_axes(
+    graph: &Graph,
+    fragment: FragmentId,
+    principal_parent_atoms: &[AtomId],
+) -> Result<crate::SerializedStructure, SerializationError> {
     let (smiles, output_order) = Writer::new(graph, fragment)?.write()?;
+    let indices: HashMap<_, _> = output_order
+        .iter()
+        .enumerate()
+        .map(|(index, atom)| (*atom, index))
+        .collect();
+    let mut axes = Vec::new();
+    for &id in &graph.fragment(fragment).bonds {
+        let bond = graph.bond(id);
+        let Some(stereo) = &bond.axial_stereo else {
+            continue;
+        };
+        let index = |atom| {
+            indices.get(&atom).copied().ok_or_else(|| {
+                SerializationError("Axial stereo references an unwritten atom".into())
+            })
+        };
+        axes.push(crate::Axis {
+            atoms: [index(bond.from)?, index(bond.to)?],
+            refs: [index(stereo.refs[0])?, index(stereo.refs[1])?],
+            clockwise: stereo.clockwise,
+        });
+    }
     let parent: HashSet<_> = principal_parent_atoms.iter().copied().collect();
     let locants = output_order
         .into_iter()
@@ -679,7 +715,7 @@ pub fn write_semantic_cxsmiles_with_locants(
                 .flatten()
         })
         .collect();
-    Ok((smiles, locants))
+    Ok((smiles, locants, axes))
 }
 
 struct Writer<'a> {

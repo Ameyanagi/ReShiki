@@ -45,6 +45,8 @@ pub enum Error {
     Empty,
     #[error("Could not parse this structure")]
     Parse,
+    #[error("Invalid axial stereo identity markers")]
+    AxisMarkers,
     #[error("Imported molecule exceeds the stable atom ID limit")]
     AtomIds,
     #[error("This bond type is not supported yet.")]
@@ -194,8 +196,13 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             let (document, warnings) = crate::crystal::read(format, &text)?;
             return Ok(Preparation::Drawing(Box::new(document), warnings));
         }
-        "smiles" => {
-            let imported = smiles::read(&text)?;
+        "smiles" | "naming_smiles" => {
+            let mut imported = smiles::read(&text)?;
+            if format == "naming_smiles" {
+                imported.prepared.state =
+                    crate::molecule_names::apply_axis_markers(&imported.prepared.state)
+                        .map_err(|_| Error::AxisMarkers)?;
+            }
             let mut molecule = molecule(imported.prepared.state)?;
             let warnings = layout(&mut molecule, &imported.reaction_properties)?;
             let mut prepared =

@@ -15,7 +15,7 @@
     "purpose": "development-only DFA migration and differential verification"
   },
   "resources": {
-    "resources/automata.bin": "9bd0b6ce5e893750e02aecd6778989afbe10a80245574086f93153013942d1af",
+    "resources/automata.bin": "acf781da67465746404ab7b75b518492f51f4ac9f72e9bbe2f040e6d49a126d1",
     "resources/xml/alkanes.xml": "2b047195ac805959da5410d3b96f896abb98ec51e502714f8cb6dbed08241fb8",
     "resources/xml/aminoAcids.xml": "2829fc6ba1562f090f38c2f89488255fc6d0a709251a502005759121462880fd",
     "resources/xml/arylGroups.xml": "16b7b7c03673499fcfd6ee0bee17c7bd1583224cebf2fd9e409e6610e840a7e8",
@@ -46,7 +46,7 @@
     "resources/xml/nonCarboxylicAcids.xml": "732921fafe01c2d19c4793d83b91f6bec6f7d05ce7cf47fa2b01a70e691be30a",
     "resources/xml/phanes.xml": "09a2c3d671b2fe77f585eb0b721ce49729fa403973b57f2d2bff0a4a8069adb4",
     "resources/xml/regexTokenList.dtd": "b4549d79af7361662fd2b01d764e15e930126502367a4004c19042a00b9c0486",
-    "resources/xml/regexTokens.xml": "bf6d499eda0b16d8a23f355ab1381f5f174e2bcc175ec6d796e9ebce4217f555",
+    "resources/xml/regexTokens.xml": "68932262d9503f13de48d5e9086444dd7c72a348691db5b47e82af60fe5ea547",
     "resources/xml/regexes.dtd": "ca576a00c60ba99c54954294999528c73ef8c190b6f64c8fa03e983be9c3d02e",
     "resources/xml/regexes.xml": "9db20e76b9b8ab4bd0ca876ca3baa4ba11ca859c5956609333001a9fa8737a23",
     "resources/xml/simpleCyclicGroups.xml": "9d2529668f7c1e59ba3d0b2ac276b4b9f11f31467f26295362729aec608e586d",
@@ -67,7 +67,7 @@
   },
   "resource_fingerprint": {
     "algorithm": "SHA256 of sorted resource UTF8 path, NUL, raw bytes, NUL for every resources entry",
-    "sha256": "bc977c95bd647cd90048215a2a82baa7d173c5373991ebc01690a0fe4137b062"
+    "sha256": "f3f43feb27d1ffa596bf154497a6efc427de195f781996cb64bd5ddf1405c711"
   },
   "development_export_sources": {
     "provenance/ExportComponents.java.txt": "8012e1f6090e0d3f594457f5d248193844dbc225d92437a3371c23af1169aae2",
@@ -270,5 +270,12 @@
     "structure_oracle_records": 348,
     "uninterpretable_names": 21,
     "commits": ["836038e0", "945df68f", "a37ddaf6"]
+  },
+  "native_extensions": {
+    "locanted_biaryl_axial_stereo": {
+      "grammar": "Optional locantTypes before M/P/Ra/Sa/Rp/Sp in axialStereoTerm; graph interpretation accepts M/P/Ra/Sa only",
+      "automata": ["token-69", "token-reversed-69"],
+      "exporter": "ExportDfa.java.txt with the checked regexTokens.xml resource override; all other DFA entries retained"
+    }
   }
 }

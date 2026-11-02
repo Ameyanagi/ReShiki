@@ -7,8 +7,10 @@ copyright 2017 Daniel Lowe. The original port was based on OPSIN 2.9.0,
 affects parsing or structures is ported through the pinned main commit,
 including phane nomenclature (see `../PORTING.md`).
 `../LICENSE` is an unmodified upstream copy. `manifest.json` records every
-XML/DTD file, migrated table, exporter and fixture hash. All 41 XML and seven
-DTD files are byte-equal to the pinned main checkout.
+XML/DTD file, migrated table, exporter and fixture hash. The seven DTD files
+and 40 XML files are byte-equal to the pinned main checkout. The native
+`regexTokens.xml` extension permits a locant before an axial descriptor;
+`native_extensions` in the manifest records that change.
 
 The development oracle is the main build
 `opsin-core-3.0-SNAPSHOT-jar-with-dependencies.jar`, SHA256
@@ -32,6 +34,15 @@ reject. Adjacent equal-target intervals are merged. Original state IDs and
 annotation-interval ordering are retained. The exported table SHA256 is recorded
 in `manifest.json`; the regenerated tables include the forward/reverse `phaneLocants` recognizer and shared locant
 and stereochemistry grammar changes.
+
+For the native locanted axial extension, `token-69` (the stereochemistry
+bracket recognizer) and `token-reversed-69` are generated with the checked
+`regexTokens.xml`; all other entries retain their pinned binary tables. Use
+the existing exporter with that XML copied to
+`resources/uk/ac/cam/ch/wwmm/opsin/resources/regexTokens.xml` in its fresh
+working directory, then retain only those two entries from the resulting
+table. The override is a development-only input; Cargo reads the checked
+binary directly. Frozen upstream oracle fixtures are unchanged.
 
 To reproduce the migration with an already available trusted JDK, use a fresh
 empty working directory so OPSIN's development `./resources` override cannot
@@ -102,7 +113,7 @@ Compressed JSONL uses gzip level 9 with timestamp zero and an empty filename.
 The resource fingerprint is SHA256 over each resource in sorted UTF-8 path
 order, concatenating path, NUL, raw file bytes, NUL. This independently covers
 all XML/DTD files and the neutral DFA table. The exported crate constant is
-`bc977c95bd647cd90048215a2a82baa7d173c5373991ebc01690a0fe4137b062`.
+`f3f43feb27d1ffa596bf154497a6efc427de195f781996cb64bd5ddf1405c711`.
 
 `ExportGraphResources.java.txt` captures every distinct literal resource
 `(value, type, labels)` triple. The current gate checks 2,643 ordered graph

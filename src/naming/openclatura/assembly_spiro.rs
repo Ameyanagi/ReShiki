@@ -1547,7 +1547,7 @@ fn extract_spiro_side_prefixes(side_name: &str) -> ExtractedSide {
             .map(|term| {
                 let descriptor = term.chars().last()?;
                 let locant = &term[..term.len() - descriptor.len_utf8()];
-                (component_locant(locant, true) && "RSEZ".contains(descriptor))
+                (component_locant(locant, true) && "RSEZMP".contains(descriptor))
                     .then(|| (prime_side_locant(locant), descriptor.to_string()))
             })
             .collect::<Option<Vec<_>>>();
@@ -1691,5 +1691,11 @@ mod tests {
         assert_eq!(extracted.parent_name, "cyclopentane");
         assert_eq!(extracted.prefixes, ["2'-(2,6-difluorophenyl)-3'-methyl"]);
         assert_eq!(extracted.stereo, [("2'".into(), "R".into())]);
+        let extracted = extract_spiro_side_prefixes("(2R,4M)-4-phenylcyclopentane");
+        assert_eq!(extracted.prefixes, ["4'-phenyl"]);
+        assert_eq!(
+            extracted.stereo,
+            [("2'".into(), "R".into()), ("4'".into(), "M".into())]
+        );
     }
 }

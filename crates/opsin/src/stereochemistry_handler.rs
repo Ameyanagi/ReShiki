@@ -9,13 +9,13 @@ use crate::WarningKind;
 use crate::build_state::BuildState;
 use crate::cip::{CipOrderingError, CipSequenceRules};
 use crate::graph::{
-    AtomId, AtomParity, BondId, BondStereo, BondStereoValue, Element, FragmentId, Graph,
-    GraphError, StereoGroup, StereoGroupType, StereoReference,
+    AtomId, AtomParity, AxialStereo, BondId, BondStereo, BondStereoValue, Element, FragmentId,
+    Graph, GraphError, StereoGroup, StereoGroupType, StereoReference,
 };
 use crate::parse_tree::{Arena, NodeId};
 use crate::stereo_analyser::{StereoBond, StereoCentre};
 use crate::xml_declarations::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 
 /// Upstream warning mode catches StereochemistryException (including CIP
@@ -243,10 +243,11 @@ impl<'a> StereochemistryHandler<'a> {
         let kind = self.attr(id, TYPE_ATR);
         match kind.as_str() {
             R_OR_S_TYPE_VAL=>self.assign_stereo_centre(id)?,E_OR_Z_TYPE_VAL=>self.assign_stereo_bond(id)?,
+            AXIAL_TYPE_VAL=>self.assign_axial_stereo(id)?,
             CISORTRANS_TYPE_VAL=>{if !self.assign_cis_trans_on_ring(id)?{self.assign_stereo_bond(id)?}},
             ALPHA_OR_BETA_TYPE_VAL=>self.assign_alpha_beta_xi_stereochem(id)?,DLSTEREOCHEMISTRY_TYPE_VAL=>self.assign_dl_stereochem(id)?,
             RAC_TYPE_VAL=>self.apply_global_rac_or_rel(id,StereoGroupType::Racemic)?,REL_TYPE_VAL=>self.apply_global_rac_or_rel(id,StereoGroupType::Relative)?,
-            ENDO_EXO_SYN_ANTI_TYPE_VAL|RELATIVECISTRANS_TYPE_VAL|AXIAL_TYPE_VAL=>return stereo(format!("{kind} stereochemistry is not currently interpretable by OPSIN")),
+            ENDO_EXO_SYN_ANTI_TYPE_VAL|RELATIVECISTRANS_TYPE_VAL=>return stereo(format!("{kind} stereochemistry is not currently interpretable by OPSIN")),
             OPTICALROTATION_TYPE_VAL=>self.state.add_warning(WarningKind::StereochemistryIgnored,format!("Optical rotation cannot be algorithmically used to assign stereochemistry. This term was ignored: {}",self.arena.value(id))),
             _=>return structure(format!("Unexpected stereochemistry type: {kind}"))
         }
@@ -427,6 +428,144 @@ impl<'a> StereochemistryHandler<'a> {
         }
         Ok(())
     }
+    fn assign_axial_stereo(&mut self, id: NodeId) -> Result {
+        let value = self.attr(id, VALUE_ATR);
+        let clockwise = match value.as_str() {
+            "M" | "Ra" => false,
+            "P" | "Sa" => true,
+            _ => {
+                return stereo(format!(
+                    "{AXIAL_TYPE_VAL} stereochemistry is not currently interpretable by OPSIN"
+                ));
+            }
+        };
+        let Some(locant) = self.attribute(id, LOCANT_ATR) else {
+            return stereo(format!(
+                "{AXIAL_TYPE_VAL} stereochemistry is not currently interpretable by OPSIN"
+            ));
+        };
+        let (native, indices) = crate::modern_cip::state(self.graph())?;
+        let rings = reshiki_chemistry::rings::perceive(
+            &native.graph,
+            reshiki_chemistry::rings::Options::default(),
+        )
+        .map_err(|error| StereochemistryError::Uninterpretable(error.to_string()))?;
+        let aromatic = reshiki_chemistry::aromaticity::perceive(&native.graph, &rings.atoms)
+            .map_err(StereochemistryError::Uninterpretable)?;
+        // The upstream CIP traversal uses a fixed Kekulé form. Aromatic
+        // symmetry must therefore be checked before trusting its ligand order.
+        let symmetry = reshiki_chemistry::ranking::rank(
+            &aromatic.graph,
+            &rings.atoms,
+            &reshiki_chemistry::ranking::Metadata::unspecified(&aromatic.graph),
+            reshiki_chemistry::ranking::Options {
+                break_ties: false,
+                include_chirality: false,
+                ..Default::default()
+            },
+        )
+        .map_err(StereochemistryError::Uninterpretable)?;
+        let aryl_atoms: HashMap<_, _> = indices
+            .into_iter()
+            .filter_map(|(atom, index)| {
+                aromatic.graph.atoms[index]
+                    .aromatic
+                    .then_some((atom, symmetry[index]))
+            })
+            .collect();
+        for fragment in self.possible_fragments(id)? {
+            if self.attempt_assign_axial_stereo(fragment, &locant, clockwise, &aryl_atoms)? {
+                return Ok(());
+            }
+        }
+        let parent = self.parent(id)?;
+        if let Some(word) = self.arena[parent].parent.filter(|&w| {
+            self.arena[w].name == WORD_EL
+                && self.arena[w].attribute(TYPE_ATR) == Some("substituent")
+        }) && let Some(outer) = self.arena[word].parent
+        {
+            for full in self
+                .arena
+                .children_with_attribute(outer, WORD_EL, TYPE_ATR, "full")
+            {
+                for group in self
+                    .arena
+                    .descendants_named(full, GROUP_EL)
+                    .into_iter()
+                    .rev()
+                {
+                    if self.attempt_assign_axial_stereo(
+                        self.fragment(group)?,
+                        &locant,
+                        clockwise,
+                        &aryl_atoms,
+                    )? {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+        stereo(format!("Could not find a biaryl axis at locant {locant}"))
+    }
+
+    fn attempt_assign_axial_stereo(
+        &mut self,
+        fragment: FragmentId,
+        locant: &str,
+        clockwise: bool,
+        aryl_atoms: &HashMap<AtomId, u32>,
+    ) -> Result<bool> {
+        let Some(atom) = self.graph().atom_by_locant(fragment, locant) else {
+            return Ok(false);
+        };
+        let candidates: Vec<_> = self
+            .graph()
+            .atom(atom)
+            .bonds
+            .iter()
+            .copied()
+            .filter(|&id| {
+                let bond = self.graph().bond(id);
+                bond.order == 1
+                    && !crate::cycle_detector::is_bond_in_cycle(self.graph(), id)
+                    && [bond.from, bond.to].into_iter().all(|end| {
+                        aryl_atoms.contains_key(&end)
+                            && self.graph().neighbours(end).len() == 3
+                            && self
+                                .graph()
+                                .neighbours(end)
+                                .into_iter()
+                                .all(|other| self.graph().atom(other).element != Element::H)
+                    })
+            })
+            .collect();
+        let bond = match candidates.as_slice() {
+            [] => return Ok(false),
+            [bond] => *bond,
+            _ => return stereo(format!("More than one biaryl axis at locant {locant}")),
+        };
+        let axis = self.graph().bond(bond);
+        if axis.axial_stereo.is_some() {
+            return stereo(format!(
+                "Duplicate or conflicting axial stereochemistry at locant {locant}"
+            ));
+        }
+        let first = CipSequenceRules::for_axis(self.graph(), axis.from)
+            .get_neighbouring_atoms_in_cip_order_ignoring_given_neighbour(axis.to)?;
+        let second = CipSequenceRules::for_axis(self.graph(), axis.to)
+            .get_neighbouring_atoms_in_cip_order_ignoring_given_neighbour(axis.from)?;
+        if aryl_atoms.get(&first[0]) == aryl_atoms.get(&first[1])
+            || aryl_atoms.get(&second[0]) == aryl_atoms.get(&second[1])
+        {
+            return Err(CipOrderingError::UnresolvedTie.into());
+        }
+        self.state.graph_mut().bond_mut(bond).axial_stereo = Some(AxialStereo {
+            refs: [*first.last().unwrap(), *second.last().unwrap()],
+            clockwise,
+        });
+        Ok(true)
+    }
+
     fn assign_stereo_bond(&mut self, id: NodeId) -> Result {
         let locant = self.attribute(id, LOCANT_ATR);
         let mut value = self.attr(id, VALUE_ATR);

@@ -3139,6 +3139,9 @@ pub(super) fn structural_replacement_parent_result(
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
     if let Some(name) = biphenyl_parent_result(mol, atoms) {
+        // Isotope-created axes can remain on the isotope-stripped parent.
+        // This fixed spelling supplies no locants for their descriptor.
+        require_stereo_free_core(mol, atoms)?;
         return Ok(Some(StructuralParentName::ordinary(name)));
     }
     if let Some(name) = mol.candidate(|| simple_azine_parent_name(mol, atoms))? {
@@ -3286,6 +3289,18 @@ mod tests {
                 "{smiles}"
             );
         }
+    }
+
+    #[test]
+    fn fixed_biphenyl_shortcut_refuses_an_isotope_created_axis() {
+        let mut mol = read_smiles("[13cH]1cccc[c:900004]1-[c:900004]1cccc[13cH]1").unwrap();
+        for atom in mol.atoms.values_mut() {
+            atom.isotope = None;
+        }
+        assert_eq!(
+            structural_replacement_parent_result(&mol, &all_atoms(&mol)).unwrap_err(),
+            SHORTCUT_STEREO_ERROR,
+        );
     }
 
     #[test]

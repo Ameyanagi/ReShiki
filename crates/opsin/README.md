@@ -43,3 +43,13 @@ This port preserves the pinned upstream revision’s interpretation choices and 
 including its CIP rules 1–2 and unsupported stereochemistry behavior. The
 frozen gates establish the checked corpus and configurations; they do not
 promise interpretation of every possible chemical name or newer OPSIN behavior.
+
+The native biaryl extension also interprets locanted M/P and Ra/Sa axial
+descriptors (Ra = M, Sa = P). Use
+`Structure::semantic_cxsmiles_with_locants_and_axes` to export these structures:
+its axes and principal-parent locants share the accompanying SMILES atom order.
+Each axis includes its two endpoints, the higher-CIP reference at each end,
+and clockwise rotation for P. The SMILES-only semantic methods return an error
+when the structure has an axis, because SMILES cannot retain that configuration.
+Unlocanted helicity, planar Rp/Sp and unresolved ligand priorities remain
+uninterpretable. See the native resource extension in [provenance](provenance/README.md).

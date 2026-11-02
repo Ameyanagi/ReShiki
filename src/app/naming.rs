@@ -314,7 +314,7 @@ async fn prepare_preview(
     options: DrawingOptions,
 ) -> Result<Preview, naming::Error> {
     let identity = naming::canonical_smiles(&smiles).map_err(naming::Error::Rejected)?;
-    let mut request = Request::import_smiles(&smiles);
+    let mut request = Request::import("naming_smiles", &smiles);
     request.drawing_options = Some(options);
     let response = engine
         .request(request)

@@ -47,7 +47,7 @@ pub fn needs_hyphen(left: &str, right: &str) -> bool {
             inner.split(',').all(|term| {
                 let letters = term.trim_start_matches(|c: char| c.is_ascii_digit());
                 letters.len() < term.len()
-                    && letters.ends_with(['R', 'S', 'E', 'Z'])
+                    && letters.ends_with(['R', 'S', 'E', 'Z', 'M', 'P'])
                     && letters
                         .chars()
                         .all(|c| c.is_ascii_alphabetic() || c == '\'')
@@ -83,6 +83,8 @@ mod tests {
     fn only_a_leading_stereo_descriptor_takes_a_hyphen() {
         assert!(needs_hyphen("methyl", "(1R,2E)-but-2-enyl"));
         assert!(needs_hyphen("methyl", "(5'E)-1'-butyl"));
+        assert!(needs_hyphen("methyl", "(1M)-biphenyl-2-yl"));
+        assert!(needs_hyphen("methyl", "(1'P,2R)-biphenyl-2-yl"));
         assert!(!needs_hyphen(
             "(cyclopentyl)",
             "(4-(((3R)-thiolan-3-yl)sulfanyl)pyridin-3-yl)"

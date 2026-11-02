@@ -19,7 +19,8 @@ pub fn read_smiles(text: &str) -> Result<Molecule, String> {
         return Err("Openclatura requires a single connected molecule".into());
     }
     let prepared = smiles::prepare(text).map_err(|error| error.to_string())?;
-    let mut state = prepared.state;
+    let mut state = reshiki_model::molecule_names::apply_axis_markers(&prepared.state)
+        .map_err(|_| "openclatura: invalid biaryl axis markers".to_owned())?;
     // Upstream divergence: aromatic atom endpoints cannot identify localized
     // inter-ring bonds; retain bond aromaticity for the final fusion pi audit.
     let aromatic_bonds: Vec<_> = state.graph.bonds.iter().map(|b| b.aromatic).collect();
@@ -157,8 +158,9 @@ pub fn read_smiles(text: &str) -> Result<Molecule, String> {
             .as_ref()
             .and_then(|state| state.properties.bond_codes.get(idx))
             .and_then(|code| code.as_ref());
-        // Upstream divergence: pseudoasymmetric e/z bonds must not silently become ordinary E/Z.
-        if modern_stereo.is_some_and(|code| !matches!(code.as_str(), "E" | "Z")) {
+        // Upstream divergence: pseudoasymmetric e/z/m/p descriptors must not
+        // silently become ordinary E/Z or M/P.
+        if modern_stereo.is_some_and(|code| !matches!(code.as_str(), "E" | "Z" | "M" | "P")) {
             return Err(
                 "openclatura: pseudoasymmetric bond stereochemistry is not supported".into(),
             );
@@ -377,6 +379,32 @@ mod tests {
             .map(|&idx| (idx.to_string(), json!(mol.get_neighbors(idx))))
             .collect::<serde_json::Map<_, _>>();
         json!({"smiles": text, "atoms": atoms, "bonds": bonds, "accurate_cip": mol.accurate_cip, "legacy_cip": mol.legacy_cip, "adjacency": adjacency})
+    }
+
+    #[test]
+    fn marked_biaryl_axes_survive_kekulization_and_full_cip() {
+        for (marker, descriptor) in [(900_004, "M"), (900_008, "P")] {
+            let input = format!("Oc1ccc2ccccc2[c:{marker}]1-[c:{marker}]1c(O)ccc2ccccc12");
+            let mol = read_smiles(&input).unwrap();
+            let axes: Vec<_> = mol
+                .bonds
+                .values()
+                .filter(|b| b.stereo.as_deref() == Some(descriptor))
+                .collect();
+            assert_eq!(axes.len(), 1, "{input}");
+            let axis = axes[0];
+            assert_eq!(axis.order, 1);
+            assert!(!axis.in_small_ring);
+            assert!(mol.atoms[&axis.u].is_aromatic);
+            assert!(mol.atoms[&axis.v].is_aromatic);
+        }
+        for input in [
+            "Oc1cccc[c:900004]1-[c:900008]1ccccc1O",
+            "Oc1cccc[c:900004]1-c1ccccc1O",
+            "[c:900004]1ccccc1-[c:900004]1ccccc1",
+        ] {
+            assert!(read_smiles(input).is_err(), "{input}");
+        }
     }
 
     #[test]
